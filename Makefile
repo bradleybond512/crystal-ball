@@ -1,4 +1,4 @@
-.PHONY: help lint generate breaking format check clean deps install install-buf install-plugins install-npm install-playwright
+.PHONY: help lint generate breaking format check clean deps install install-buf install-plugins install-npm install-playwright build-mac build-mac-prod version-check version-sync release-prep clean-tauri
 .DEFAULT_GOAL := help
 
 # Variables
@@ -70,3 +70,25 @@ clean: ## Clean generated files
 	@rm -rf $(GEN_SERVER_DIR)
 	@rm -rf $(DOCS_API_DIR)
 	@echo "Clean complete!"
+
+# ── Desktop build targets ──────────────────────────────────────────────────
+
+VERSION := $(shell node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
+
+build-mac: ## Build macOS desktop app (development)
+	npm run desktop:build:full
+
+build-mac-prod: ## Build macOS desktop app (production, optimized)
+	npm run version:sync && npm run desktop:build:full
+
+version-check: ## Validate version is in sync across package.json, tauri.conf.json, and Cargo.toml
+	@npm run version:check
+
+version-sync: ## Sync version from package.json to tauri.conf.json and Cargo.toml
+	@npm run version:sync
+
+release-prep: version-sync build-mac-prod ## Sync versions and build production macOS binary
+	@echo "Release ready: v$(VERSION)"
+
+clean-tauri: ## Remove Tauri build artifacts
+	rm -rf src-tauri/target

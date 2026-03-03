@@ -63,9 +63,46 @@
 
 ### Installation
 
-1. Download the latest `.dmg` from [GitHub Releases](https://github.com/bradleybond512/crystal-ball/releases/latest)
-2. Open the DMG, drag **Crystal Ball** to `/Applications`
-3. Launch the app — on first run macOS may prompt you to allow it (System Settings → Privacy & Security → Open Anyway)
+#### macOS (Recommended)
+
+1. **Download:** Visit [GitHub Releases](https://github.com/bradleybond512/crystal-ball/releases/latest) and download `crystal-ball_X.Y.Z_macos_universal.dmg`
+2. **Install:** Open the DMG, drag **Crystal Ball** to `/Applications`, then eject the DMG
+3. **Launch:** Open the app — on first run macOS may prompt you to allow it (System Settings → Privacy & Security → Open Anyway)
+
+**Verify checksum (optional):**
+
+```bash
+shasum -a 256 crystal-ball_X.Y.Z_macos_universal.dmg
+# Compare the hash with CHECKSUMS.txt from the same GitHub Release
+```
+
+**Uninstall:**
+
+```bash
+rm -rf /Applications/Crystal\ Ball.app
+```
+
+#### From Source
+
+1. Clone the repo and install dependencies:
+
+   ```bash
+   git clone https://github.com/bradleybond512/crystal-ball.git
+   cd crystal-ball
+   npm install
+   ```
+
+2. Run in development mode:
+
+   ```bash
+   npm run tauri dev
+   ```
+
+3. Build a release binary:
+
+   ```bash
+   npm run desktop:build:full
+   ```
 
 ### First Steps
 

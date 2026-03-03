@@ -1,0 +1,48 @@
+name: Build
+
+on:
+  push:
+    branches: [main, develop]
+    tags-ignore:
+      - 'v*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check version consistency
+        run: npm run version:check
+
+      - name: Typecheck
+        run: npm run typecheck:all
+
+      - name: Build frontend
+        run: npm run build:full
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: crystal-ball-frontend-${{ github.sha }}
+          path: dist/
+          retention-days: 7

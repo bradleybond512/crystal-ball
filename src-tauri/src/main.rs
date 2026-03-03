@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod commands;
+
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -57,6 +59,7 @@ const SUPPORTED_SECRET_KEYS: [&str; 25] = [
     "WTO_API_KEY",
     "AVIATIONSTACK_API",
     "ICAO_API_KEY",
+    "VIRUSTOTAL_API_KEY",
 ];
 
 // Rate-limit native notifications: no more than 1 per 30 seconds across all threads.
@@ -1575,7 +1578,10 @@ fn main() {
             open_youtube_logout,
             fetch_polymarket,
             send_notification,
-            install_update
+            install_update,
+            commands::osint::lookup_domain,
+            commands::osint::search_username,
+            commands::osint::clear_osint_cache
         ])
         .setup(|app| {
             // Load persistent cache into memory (avoids 14MB file I/O on every IPC call)

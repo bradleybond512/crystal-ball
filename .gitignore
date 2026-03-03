@@ -25,6 +25,11 @@ test-results/
 src-tauri/sidecar/node/*
 !src-tauri/sidecar/node/.gitkeep
 
+# Compiled OSINT engine binaries (built by src-tauri/go/Makefile)
+src-tauri/sidecar/osint-engine
+src-tauri/sidecar/osint-engine-*
+src-tauri/sidecar/osint-engine.exe
+
 # AI planning session state
 .planning/
 

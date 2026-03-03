@@ -601,6 +601,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "crystal-ball"
+version = "2.5.25"
+dependencies = [
+ "getrandom 0.2.17",
+ "keyring",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
 name = "cssparser"
 version = "0.29.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5419,19 +5432,6 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser",
-]
-
-[[package]]
-name = "world-monitor"
-version = "2.5.25"
-dependencies = [
- "getrandom 0.2.17",
- "keyring",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
 ]
 
 [[package]]

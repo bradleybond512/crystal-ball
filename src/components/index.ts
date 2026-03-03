@@ -51,3 +51,4 @@ export * from './BreakingNewsBanner';
 export * from './SpaceWeatherPanel';
 export * from './DiseaseOutbreakPanel';
 export * from './AirQualityPanel';
+export * from './OsintInvestigationPanel';

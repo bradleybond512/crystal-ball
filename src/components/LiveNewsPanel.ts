@@ -384,7 +384,7 @@ export class LiveNewsPanel extends Panel {
       } else if (msg.type === 'yt-error') {
         this.clearBotCheckTimeout();
         const code = Number(msg.code ?? 0);
-        if (code === 153 && this.activeChannel.fallbackVideoId &&
+        if ((code === 150 || code === 153) && this.activeChannel.fallbackVideoId &&
           this.activeChannel.videoId !== this.activeChannel.fallbackVideoId) {
           this.activeChannel.videoId = this.activeChannel.fallbackVideoId;
           this.renderDesktopEmbed(true);

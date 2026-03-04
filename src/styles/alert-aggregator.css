@@ -1,0 +1,204 @@
+/* ==========================================================
+   Alert Aggregator Panel
+   Unified critical alerts from all data sources.
+   ========================================================== */
+
+/* Controls bar */
+.agg-controls {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.agg-select {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 11px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.agg-select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.agg-export-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--surface-hover);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.agg-export-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* Alert list */
+.agg-list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  max-height: 480px;
+}
+
+/* Alert item */
+.agg-item {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+
+.agg-item:hover {
+  background: var(--surface-hover);
+}
+
+.agg-sev-critical {
+  border-left-color: var(--threat-critical, #e74c3c);
+  background: color-mix(in srgb, var(--threat-critical, #e74c3c) 5%, transparent);
+}
+
+.agg-sev-critical:hover {
+  background: color-mix(in srgb, var(--threat-critical, #e74c3c) 10%, transparent);
+}
+
+.agg-sev-high {
+  border-left-color: var(--threat-high, #e67e22);
+}
+
+.agg-sev-medium {
+  border-left-color: var(--semantic-medium, #f39c12);
+}
+
+.agg-sev-low {
+  border-left-color: var(--border);
+}
+
+/* Item header row */
+.agg-item-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.agg-sev-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.agg-type-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--overlay-medium, rgba(255,255,255,0.08));
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.agg-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agg-age {
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Item body row */
+.agg-item-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.agg-location {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.agg-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agg-source {
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.agg-coords {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  .agg-controls {
+    gap: 4px;
+    padding: 4px 6px;
+  }
+
+  .agg-select {
+    font-size: 12px;
+    padding: 4px 6px;
+  }
+
+  .agg-export-btn {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+
+  .agg-list {
+    max-height: 360px;
+  }
+
+  .agg-title {
+    font-size: 13px;
+  }
+
+  .agg-location,
+  .agg-desc {
+    font-size: 12px;
+  }
+}

@@ -117,6 +117,7 @@ import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
 import { AlertCenterPanel } from '@/components/AlertCenterPanel';
+import { AlertAggregatorPanel } from '@/components/AlertAggregatorPanel';
 import { SpaceWeatherPanel } from '@/components/SpaceWeatherPanel';
 import { DiseaseOutbreakPanel } from '@/components/DiseaseOutbreakPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
@@ -953,6 +954,7 @@ export class DataLoaderManager implements AppModule {
       this.ctx.map?.setEarthquakes(earthquakeResult.value);
       ingestEarthquakes(earthquakeResult.value);
       (this.ctx.panels['earthquakes'] as EarthquakesPanel)?.update(earthquakeResult.value);
+      (this.ctx.panels['alert-aggregator'] as AlertAggregatorPanel)?.updateEarthquakes(earthquakeResult.value);
       this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
       dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
     } else {
@@ -1041,6 +1043,7 @@ export class DataLoaderManager implements AppModule {
       const alerts = await fetchWeatherAlerts();
       this.ctx.map?.setWeatherAlerts(alerts);
       this.ctx.map?.setLayerReady('weather', alerts.length > 0);
+      (this.ctx.panels['alert-aggregator'] as AlertAggregatorPanel)?.updateWeather(alerts);
       this.ctx.statusPanel?.updateFeed('Weather', { status: 'ok', itemCount: alerts.length });
       dataFreshness.recordUpdate('weather', alerts.length);
     } catch (error) {
@@ -1060,6 +1063,7 @@ export class DataLoaderManager implements AppModule {
         ingestOutagesForCII(outages);
         signalAggregator.ingestOutages(outages);
         dataFreshness.recordUpdate('outages', outages.length);
+        (this.ctx.panels['alert-aggregator'] as AlertAggregatorPanel)?.updateOutages(outages);
         if (this.ctx.mapLayers.outages) {
           this.ctx.map?.setOutages(outages);
           this.ctx.map?.setLayerReady('outages', outages.length > 0);
@@ -1078,6 +1082,7 @@ export class DataLoaderManager implements AppModule {
         ingestProtests(protestData.events);
         ingestProtestsForCII(protestData.events);
         signalAggregator.ingestProtests(protestData.events);
+        (this.ctx.panels['alert-aggregator'] as AlertAggregatorPanel)?.updateProtests(protestData.events);
         const protestCount = protestData.sources.acled + protestData.sources.gdelt;
         if (protestCount > 0) dataFreshness.recordUpdate('acled', protestCount);
         if (protestData.sources.gdelt > 0) dataFreshness.recordUpdate('gdelt', protestData.sources.gdelt);
@@ -1157,6 +1162,7 @@ export class DataLoaderManager implements AppModule {
         ingestMilitaryForCII(flightData.flights, vesselData.vessels);
         signalAggregator.ingestFlights(flightData.flights);
         signalAggregator.ingestVessels(vesselData.vessels);
+        (this.ctx.panels['alert-aggregator'] as AlertAggregatorPanel)?.updateMilitary(flightData.flights, vesselData.vessels);
         dataFreshness.recordUpdate('opensky', flightData.flights.length);
         updateAndCheck([
           { type: 'military_flights', region: 'global', count: flightData.flights.length },
@@ -1400,6 +1406,7 @@ export class DataLoaderManager implements AppModule {
       ingestCyberThreatsForCII(this.ctx.cyberThreatsCache);
       (this.ctx.panels['cii'] as CIIPanel)?.refresh();
       (this.ctx.panels['cyber-threats'] as CyberThreatPanel)?.update(this.ctx.cyberThreatsCache);
+      (this.ctx.panels['alert-aggregator'] as AlertAggregatorPanel)?.updateCyberThreats(this.ctx.cyberThreatsCache);
       this.ctx.statusPanel?.updateFeed('Cyber Threats', { status: 'ok', itemCount: this.ctx.cyberThreatsCache.length });
       return;
     }
@@ -1412,6 +1419,7 @@ export class DataLoaderManager implements AppModule {
       ingestCyberThreatsForCII(threats);
       (this.ctx.panels['cii'] as CIIPanel)?.refresh();
       (this.ctx.panels['cyber-threats'] as CyberThreatPanel)?.update(threats);
+      (this.ctx.panels['alert-aggregator'] as AlertAggregatorPanel)?.updateCyberThreats(threats);
       this.ctx.statusPanel?.updateFeed('Cyber Threats', { status: 'ok', itemCount: threats.length });
       this.ctx.statusPanel?.updateApi('Cyber Threats API', { status: 'ok' });
       dataFreshness.recordUpdate('cyber_threats', threats.length);
@@ -1631,6 +1639,7 @@ export class DataLoaderManager implements AppModule {
       this.ctx.intelligenceCache.flightDelays = delays;
       const severe = delays.filter(d => d.severity === 'major' || d.severity === 'severe' || d.delayType === 'closure');
       if (severe.length > 0) ingestAviationForCII(severe);
+      (this.ctx.panels['alert-aggregator'] as AlertAggregatorPanel)?.updateFlightDelays(delays);
       this.ctx.statusPanel?.updateFeed('Flights', {
         status: 'ok',
         itemCount: delays.length,
@@ -2016,6 +2025,7 @@ export class DataLoaderManager implements AppModule {
         this.ctx.map?.setFires(toMapFires(flat));
 
         (this.ctx.panels['satellite-fires'] as SatelliteFiresPanel)?.update(stats, totalCount);
+        (this.ctx.panels['alert-aggregator'] as AlertAggregatorPanel)?.updateFires(stats, totalCount);
 
         dataFreshness.recordUpdate('firms', totalCount);
 

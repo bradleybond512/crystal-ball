@@ -40,6 +40,7 @@ import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
 import { AlertCenterPanel } from '@/components/AlertCenterPanel';
+import { AlertAggregatorPanel } from '@/components/AlertAggregatorPanel';
 import { SpaceWeatherPanel } from '@/components/SpaceWeatherPanel';
 import { DiseaseOutbreakPanel } from '@/components/DiseaseOutbreakPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
@@ -800,6 +801,12 @@ export class PanelLayoutManager implements AppModule {
 
     const insightsPanel = new InsightsPanel();
     this.ctx.panels['insights'] = insightsPanel;
+
+    // Alert Aggregator panel (all non-happy variants)
+    if (SITE_VARIANT !== 'happy') {
+      const alertAggregatorPanel = new AlertAggregatorPanel();
+      this.ctx.panels['alert-aggregator'] = alertAggregatorPanel;
+    }
 
     // Global Giving panel (all variants)
     this.ctx.panels['giving'] = new GivingPanel();

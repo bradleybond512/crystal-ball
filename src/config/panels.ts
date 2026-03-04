@@ -60,6 +60,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'space-weather': { name: 'Space Weather', enabled: true, priority: 2 },
   'disease-outbreaks': { name: 'Disease Outbreaks', enabled: true, priority: 2 },
   'air-quality': { name: 'Air Quality', enabled: true, priority: 2 },
+  'alert-aggregator': { name: 'Alert Aggregator', enabled: true, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {
@@ -204,6 +205,7 @@ const TECH_PANELS: Record<string, PanelConfig> = {
   'etf-flows': { name: 'BTC ETF Tracker', enabled: true, priority: 2 },
   stablecoins: { name: 'Stablecoins', enabled: true, priority: 2 },
   monitors: { name: 'My Monitors', enabled: true, priority: 2 },
+  'alert-aggregator': { name: 'Alert Aggregator', enabled: true, priority: 1 },
 };
 
 const TECH_MAP_LAYERS: MapLayers = {
@@ -345,6 +347,7 @@ const FINANCE_PANELS: Record<string, PanelConfig> = {
   gccNews: { name: 'GCC Business News', enabled: true, priority: 2 },
   polymarket: { name: 'Predictions', enabled: true, priority: 2 },
   monitors: { name: 'My Monitors', enabled: true, priority: 2 },
+  'alert-aggregator': { name: 'Alert Aggregator', enabled: true, priority: 1 },
 };
 
 const FINANCE_MAP_LAYERS: MapLayers = {
@@ -603,7 +606,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   // All variants — essential panels
   core: {
     labelKey: 'header.panelCatCore',
-    panelKeys: ['map', 'live-news', 'live-webcams', 'insights', 'strategic-posture'],
+    panelKeys: ['map', 'live-news', 'live-webcams', 'insights', 'strategic-posture', 'alert-aggregator'],
   },
 
   // Full (geopolitical) variant

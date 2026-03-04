@@ -32,6 +32,7 @@ export * from './SatelliteFiresPanel';
 export * from './EarthquakesPanel';
 export * from './CyberThreatPanel';
 export * from './AlertCenterPanel';
+export * from './AlertAggregatorPanel';
 export * from './MacroSignalsPanel';
 export * from './ETFFlowsPanel';
 export * from './StablecoinPanel';

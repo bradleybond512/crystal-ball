@@ -1,5 +1,6 @@
 @import './rtl-overrides.css';
 @import './panels.css';
+@import './alert-aggregator.css';
 @import './macos-native.css';
 
 /* ============================================================

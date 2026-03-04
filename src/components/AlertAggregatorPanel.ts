@@ -37,7 +37,7 @@ const TYPE_ICONS: Record<AlertType, string> = {
   outage: '📡',
   military: '✈️',
   cyber: '🛡️',
-  delay: '✈',
+  delay: '🕐',
   wildfire: '🔥',
 };
 
@@ -305,7 +305,7 @@ export class AlertAggregatorPanel extends Panel {
           <option value="outage"${this.typeFilter === 'outage' ? ' selected' : ''}>📡 Outages</option>
           <option value="military"${this.typeFilter === 'military' ? ' selected' : ''}>✈️ Military</option>
           <option value="cyber"${this.typeFilter === 'cyber' ? ' selected' : ''}>🛡️ Cyber</option>
-          <option value="delay"${this.typeFilter === 'delay' ? ' selected' : ''}>✈ Delays</option>
+          <option value="delay"${this.typeFilter === 'delay' ? ' selected' : ''}>🕐 Delays</option>
           <option value="wildfire"${this.typeFilter === 'wildfire' ? ' selected' : ''}>🔥 Wildfires</option>
         </select>
         <button class="agg-export-btn" data-agg-action="export" aria-label="Export alerts to CSV">⬇ CSV</button>

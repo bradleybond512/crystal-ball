@@ -78,7 +78,7 @@
     "@deck.gl/mapbox": "^9.2.6",
     "@sentry/browser": "^10.39.0",
     "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.36.1",
+    "@upstash/redis": "^1.37.0",
     "@vercel/analytics": "^1.6.1",
     "@xenova/transformers": "^2.17.2",
     "canvas-confetti": "^1.9.4",

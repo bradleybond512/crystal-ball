@@ -377,6 +377,12 @@ export class MapContainer {
  }
   }
 
+  public setAlertPulses(pulses: Array<{ id: string; lat: number; lon: number; severity: 'critical' | 'high' | 'medium' | 'low' | 'info' }>): void {
+ if (this.useDeckGL) {
+ this.deckGLMap?.setAlertPulses(pulses);
+ }
+  }
+
   public setIranEvents(events: import('@/services/conflict').IranEvent[]): void {
  if (this.useDeckGL) {
  this.deckGLMap?.setIranEvents(events);

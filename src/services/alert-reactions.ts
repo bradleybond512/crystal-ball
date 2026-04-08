@@ -50,6 +50,21 @@ function flashWindowBorder(): void {
 const seen = new Set<string>();
 let started = false;
 
+interface PulseTarget { id: string; lat: number; lon: number; severity: UnifiedAlert['severity']; expiresAt: number; }
+const pulses: PulseTarget[] = [];
+const PULSE_TTL_MS = 60_000;
+
+function publishPulses(): void {
+  const now = Date.now();
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const p = pulses[i];
+    if (p && p.expiresAt <= now) pulses.splice(i, 1);
+  }
+  document.dispatchEvent(new CustomEvent('cb:alert-pulses', {
+    detail: pulses.map(p => ({ id: p.id, lat: p.lat, lon: p.lon, severity: p.severity })),
+  }));
+}
+
 /** Wire reactions to the unified alert store. Idempotent. */
 export function startAlertReactions(): void {
   if (started) return;
@@ -78,6 +93,19 @@ export function startAlertReactions(): void {
 
     const panelId = panelForAlert(top);
     flashPanel(panelId);
+    // Add a map pulse for any fresh hot alert that has coordinates.
+    for (const a of fresh) {
+      if (scoreAlert(a, now) < REACT_THRESHOLD) continue;
+      if (!a.location) continue;
+      pulses.push({
+        id: a.id,
+        lat: a.location.lat,
+        lon: a.location.lon,
+        severity: a.severity,
+        expiresAt: now + PULSE_TTL_MS,
+      });
+    }
+    publishPulses();
     // Ghost Mode: visual triage stays, but no audio + no border flash.
     if (!isGhostMode()) {
       flashWindowBorder();

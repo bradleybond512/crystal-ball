@@ -648,6 +648,10 @@ export class PanelLayoutManager implements AppModule {
  const todayView = new TodayView();
  todayView.mount(document.body);
  document.addEventListener('cb:toggle-today', () => todayView.toggle());
+ document.addEventListener('cb:alert-pulses', ((e: Event) => {
+ const detail = (e as CustomEvent).detail as Array<{ id: string; lat: number; lon: number; severity: 'critical' | 'high' | 'medium' | 'low' | 'info' }>;
+ this.ctx.map?.setAlertPulses(detail);
+ }) as EventListener);
 
  const mapContainer = document.getElementById('mapContainer') as HTMLElement;
  this.ctx.map = new MapContainer(mapContainer, {

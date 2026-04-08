@@ -51,6 +51,9 @@ const SOURCE_LABELS: Record<AlertSource, string> = {
   cyber: 'Cyber',
   resource: 'Resource',
   'local-ids': 'IDS',
+  earthquake: 'Quake',
+  fire: 'Fire',
+  cyclone: 'Cyclone',
 };
 
 export class UnifiedAlertInboxPanel extends Panel {

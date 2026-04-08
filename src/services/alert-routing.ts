@@ -17,6 +17,28 @@ const SEVERITY_WEIGHT: Record<AlertSeverity, number> = {
   info: 3,
 };
 
+/**
+ * Per-source severity multiplier. Lets us calibrate noisy sources without
+ * changing their raw classification (e.g. dial down IDS chatter, boost OREF).
+ * 1.0 = neutral.
+ */
+const SOURCE_MULT: Record<UnifiedAlert['source'], number> = {
+  'breaking-news': 1.0,
+  'nws': 1.0,
+  'gdacs': 1.1,
+  'tsunami': 1.3,
+  'volcano': 1.0,
+  'oref': 1.4,
+  'hazard': 1.2,
+  'correlation': 1.2,
+  'cyber': 0.7,
+  'resource': 0.8,
+  'local-ids': 0.5,
+  'earthquake': 1.0,
+  'fire': 0.8,
+  'cyclone': 1.1,
+};
+
 /** Half-life for recency decay, in minutes. After this many minutes, score halves. */
 const RECENCY_HALFLIFE_MIN = 20;
 
@@ -40,24 +62,44 @@ const SOURCE_TO_PANEL: Record<UnifiedAlert['source'], string> = {
   'cyber': 'cyber-threats',
   'resource': 'resource-inventory',
   'local-ids': 'local-ids',
+  'earthquake': 'earthquakes',
+  'fire': 'satellite-fires',
+  'cyclone': 'tropical-cyclones',
 };
 
 export function panelForAlert(a: UnifiedAlert): string {
   return SOURCE_TO_PANEL[a.source] ?? 'unified-alert-inbox';
 }
 
-/** Compute current hotness score for a single alert. */
-export function scoreAlert(a: UnifiedAlert, nowMs: number = Date.now()): number {
-  if (a.acknowledged) return 0;
+/** Detailed score breakdown — used by tooltips and debug logging. */
+export interface ScoreBreakdown {
+  base: number;
+  decay: number;
+  sourceMult: number;
+  proximityMult: number;
+  watchlistMult: number;
+  pinMult: number;
+  total: number;
+}
+
+export function scoreBreakdown(a: UnifiedAlert, nowMs: number = Date.now()): ScoreBreakdown {
+  if (a.acknowledged) {
+    return { base: 0, decay: 0, sourceMult: 0, proximityMult: 1, watchlistMult: 1, pinMult: 1, total: 0 };
+  }
   const base = SEVERITY_WEIGHT[a.severity] ?? 0;
   const ageMin = Math.max(0, (nowMs - a.timestamp) / 60_000);
   const decay = Math.pow(0.5, ageMin / RECENCY_HALFLIFE_MIN);
-  let score = base * decay;
-  if (typeof a.distanceKm === 'number' && a.distanceKm <= PROXIMITY_KM) score *= PROXIMITY_MULT;
-  if (a.pinned) score *= 1.25;
-  // Watchlist boost: encoded by ingestor via relevanceScore >= 100
-  if (a.relevanceScore >= 100) score *= WATCHLIST_MULT;
-  return score;
+  const sourceMult = SOURCE_MULT[a.source] ?? 1.0;
+  const proximityMult = (typeof a.distanceKm === 'number' && a.distanceKm <= PROXIMITY_KM) ? PROXIMITY_MULT : 1;
+  const watchlistMult = a.relevanceScore >= 100 ? WATCHLIST_MULT : 1;
+  const pinMult = a.pinned ? 1.25 : 1;
+  const total = base * decay * sourceMult * proximityMult * watchlistMult * pinMult;
+  return { base, decay, sourceMult, proximityMult, watchlistMult, pinMult, total };
+}
+
+/** Compute current hotness score for a single alert. */
+export function scoreAlert(a: UnifiedAlert, nowMs: number = Date.now()): number {
+  return scoreBreakdown(a, nowMs).total;
 }
 
 /** Sort alerts by descending hotness score. */

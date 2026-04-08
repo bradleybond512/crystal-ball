@@ -282,6 +282,7 @@ import { detectCompoundThreats, toHazardSignal } from '@/services/compound-threa
 import { fetchSatelliteCatalog } from '@/services/satellite-catalog';
 import { satellitePropagator } from '@/services/satellite-propagator';
 import { unifiedAlertStore } from '@/services/unified-alerts';
+import { ingestEarthquakesUnified, ingestCyberThreatsUnified } from '@/services/unified-ingestors';
 import {
   normalizeBreakingAlert,
   normalizeNWSAlert,
@@ -1261,6 +1262,7 @@ export class DataLoaderManager implements AppModule {
  ingestEarthquakesToPoL(earthquakeResult.value);
  ingestEarthquakesToTimeline(earthquakeResult.value);
  ingestEarthquakesToMatrix(earthquakeResult.value);
+ ingestEarthquakesUnified(earthquakeResult.value);
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
  dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
@@ -1796,6 +1798,7 @@ export class DataLoaderManager implements AppModule {
  ingestCyberToGraph(allThreats);
  ingestCyberToTimeline(allThreats);
  ingestCyberToMatrix(allThreats);
+ ingestCyberThreatsUnified(allThreats);
  (this.ctx.panels.cii as CIIPanel)?.refresh();
  (this.ctx.panels['cyber-threats'] as CyberThreatPanel)?.update(allThreats);
  this.ctx.statusPanel?.updateFeed('Cyber Threats', { status: 'ok', itemCount: allThreats.length });

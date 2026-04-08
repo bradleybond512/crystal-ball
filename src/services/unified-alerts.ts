@@ -21,7 +21,10 @@ export type AlertSource =
   | 'correlation'
   | 'cyber'
   | 'resource'
-  | 'local-ids';
+  | 'local-ids'
+  | 'earthquake'
+  | 'fire'
+  | 'cyclone';
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 

@@ -58,6 +58,7 @@ import { TodayView } from '@/components/TodayView';
 import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalette } from '@/components/CommandPalette';
 import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
+import { startSilenceDetector } from '@/services/silence-detector';
 import { startAlertReactions } from '@/services/alert-reactions';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
@@ -653,6 +654,7 @@ export class PanelLayoutManager implements AppModule {
  startSidebarHeat();
  startAlertCorrelator();
  startSituationAlertBridge();
+ startSilenceDetector();
 
  // Mount Today view + wire ⌘⇧T toggle
  const todayView = new TodayView();

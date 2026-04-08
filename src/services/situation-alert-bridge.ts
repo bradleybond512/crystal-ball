@@ -45,11 +45,21 @@ export function startSituationAlertBridge(): void {
   if (started) return;
   started = true;
 
+  // Track last-seen phase/confidence per situation so we only re-ingest
+  // when something meaningful changed (phase flip, or confidence moved ≥0.1).
+  const lastSeen = new Map<string, { phase: string; confidence: number }>();
   const sync = (): void => {
     const actionable = situationEngine.getActionableSituations();
     if (actionable.length === 0) return;
-    const alerts = actionable.map(s => toAlert(s));
-    unifiedAlertStore.ingest(alerts);
+    const changed = actionable.filter(s => {
+      const prev = lastSeen.get(s.id);
+      if (!prev) return true;
+      if (prev.phase !== s.phase) return true;
+      return Math.abs(prev.confidence - s.confidence) >= 0.1;
+    });
+    if (changed.length === 0) return;
+    for (const s of changed) lastSeen.set(s.id, { phase: s.phase, confidence: s.confidence });
+    unifiedAlertStore.ingest(changed.map(s => toAlert(s)));
   };
 
   // Subscribe + initial sync.

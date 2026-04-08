@@ -671,6 +671,14 @@ export class PanelLayoutManager implements AppModule {
  });
  }, 30_000);
  }
+ // On-demand digest (triggered from Cmd+K "brief").
+ document.addEventListener('cb:show-digest', () => {
+   digestOverlay.show('Generating brief…');
+   void generateDigest().then(text => {
+     if (text) { markDigestShown(); digestOverlay.show(text); }
+     else digestOverlay.show('No recent activity to summarize.');
+   });
+ });
 
  // Mount Today view + wire ⌘⇧T toggle
  const todayView = new TodayView();

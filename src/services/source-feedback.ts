@@ -50,8 +50,10 @@ export function getSourceFeedbackMult(source: AlertSource): number {
   const s = stats.get(source);
   if (!s || s.ackCount < MIN_SAMPLES) return 1;
   const fastRatio = s.fastAckCount / s.ackCount;
-  // Linear: 0% fast = 1.0, 100% fast = 0.5
-  return Math.max(0.5, 1 - (fastRatio * 0.5));
+  // Snoozes count as a stronger "not now" signal than a fast-ack.
+  const snoozeRatio = s.snoozeCount / Math.max(1, s.ackCount + s.snoozeCount);
+  const noise = Math.min(1, (fastRatio * 0.5) + (snoozeRatio * 0.7));
+  return Math.max(0.5, 1 - (noise * 0.5));
 }
 
 let started = false;

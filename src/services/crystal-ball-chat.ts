@@ -48,7 +48,9 @@ function loadHistory(): ChatMessage[] {
     return JSON.parse(raw) as ChatMessage[];
   } catch { return []; }
 }
+const MAX_STORED_HISTORY = 200;
 function saveHistory(): void {
+  if (history.length > MAX_STORED_HISTORY) history = history.slice(-MAX_STORED_HISTORY);
   try { localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history)); } catch { /* noop */ }
 }
 

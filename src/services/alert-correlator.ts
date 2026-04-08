@@ -47,13 +47,15 @@ function pairKey(a: AlertSource, b: AlertSource): string {
 
 const CAUSAL_KEYS = new Set(CAUSAL_PAIRS.map(([a, b]) => pairKey(a, b)));
 
-function hasCausalPair(sources: AlertSource[]): boolean {
+function findCausalPair(sources: AlertSource[]): [AlertSource, AlertSource] | null {
   for (let i = 0; i < sources.length; i++) {
     for (let j = i + 1; j < sources.length; j++) {
-      if (CAUSAL_KEYS.has(pairKey(sources[i]!, sources[j]!))) return true;
+      if (CAUSAL_KEYS.has(pairKey(sources[i]!, sources[j]!))) {
+        return [sources[i]!, sources[j]!];
+      }
     }
   }
-  return false;
+  return null;
 }
 
 function cellKey(lat: number, lon: number): string {
@@ -105,7 +107,8 @@ function scan(): void {
   for (const members of cells.values()) {
     const sources = [...new Set(members.map(m => m.source))];
     if (sources.length < 2) continue;
-    if (!hasCausalPair(sources)) continue; // gate
+    const causalPair = findCausalPair(sources);
+    if (!causalPair) continue; // gate
 
     // Stable id from sorted member ids — same cluster = same id, no re-fire.
     const idHash = members.map(m => m.id).sort().join(',');
@@ -128,6 +131,8 @@ function scan(): void {
       relevanceScore: 100,
       acknowledged: false,
       pinned: false,
+      correlationMembers: members.map(m => m.id),
+      correlationPair: causalPair,
     });
   }
 

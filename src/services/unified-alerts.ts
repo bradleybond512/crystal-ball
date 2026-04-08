@@ -45,6 +45,10 @@ export interface UnifiedAlert {
   link?: string;
   evidence?: EvidencePack;
   raw?: unknown;
+  /** For `correlation` alerts: IDs of member alerts that triggered synthesis. */
+  correlationMembers?: string[];
+  /** For `correlation` alerts: the causal pair that matched, e.g. ['earthquake','tsunami']. */
+  correlationPair?: [AlertSource, AlertSource];
 }
 
 const STORAGE_KEY = 'wm-unified-alerts-v1';

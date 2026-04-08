@@ -80,6 +80,7 @@ export class CommandPalette {
       { id: 'preset-visual', label: 'Alerting: Visual', run: () => setPreset('visual') },
       { id: 'preset-silent', label: 'Alerting: Silent', run: () => setPreset('silent') },
       { id: 'ack-all', label: 'Acknowledge ALL alerts', run: () => unifiedAlertStore.acknowledgeAll() },
+      { id: 'brief', label: 'Show daily brief (digest)', run: () => document.dispatchEvent(new CustomEvent('cb:show-digest')) },
     ];
     // Panels
     document.querySelectorAll<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]').forEach(item => {

@@ -667,6 +667,11 @@ export class PanelLayoutManager implements AppModule {
  cmdk.mount(document.body);
  document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
 
+ document.addEventListener('cb:focus-map', ((e: Event) => {
+ const d = (e as CustomEvent).detail as { lat: number; lon: number; zoom?: number };
+ this.ctx.map?.setCenter(d.lat, d.lon, d.zoom);
+ }) as EventListener);
+
  document.addEventListener('cb:alert-pulses', ((e: Event) => {
  const detail = (e as CustomEvent).detail as Array<{ id: string; lat: number; lon: number; severity: 'critical' | 'high' | 'medium' | 'low' | 'info' }>;
  this.ctx.map?.setAlertPulses(detail);

@@ -6,9 +6,10 @@
  * Auto-hides when there's nothing hot.
  */
 
+/* eslint-disable sonarjs/void-use, sonarjs/no-nested-conditional */
 import { unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
 import { rankAlerts, panelForAlert, scoreBreakdown } from '@/services/alert-routing';
-import { flashPanel, jumpToPanel } from '@/services/alert-reactions';
+import { flashPanel, jumpToPanel, pulseAlertOnMap } from '@/services/alert-reactions';
 import { getPreset, setPreset, type AlertingPreset } from '@/services/alerting-prefs';
 import { getWatchlist, saveWatchlist } from '@/services/watchlist';
 
@@ -48,10 +49,10 @@ export class TriageBar {
   private render(): void {
     const ranked = rankAlerts(unifiedAlertStore.getAll());
     // Group consecutive alerts from the same source so storms collapse to one row.
-    const grouped: Array<{ leader: UnifiedAlert; rest: UnifiedAlert[] }> = [];
+    const grouped: { leader: UnifiedAlert; rest: UnifiedAlert[] }[] = [];
     for (const a of ranked) {
       const last = grouped[grouped.length - 1];
-      if (last && last.leader.source === a.source) last.rest.push(a);
+      if (last?.leader.source === a.source) last.rest.push(a);
       else grouped.push({ leader: a, rest: [] });
       if (grouped.length >= MAX_VISIBLE) break;
     }
@@ -66,7 +67,7 @@ export class TriageBar {
     label.textContent = '⚡ TRIAGE';
     const items = document.createElement('div');
     items.className = 'triage-bar-items';
-    for (const g of grouped) items.appendChild(this.makeItem(g.leader, g.rest.length));
+    for (const g of grouped) items.append(this.makeItem(g.leader, g.rest.length));
     const ack = document.createElement('button');
     ack.className = 'triage-bar-ack';
     ack.id = 'triageAckAll';
@@ -103,7 +104,7 @@ export class TriageBar {
       `prox ${sb.proximityMult} × watch ${sb.watchlistMult} × pin ${sb.pinMult}\n` +
       `(right-click to snooze)`;
     const ageMin = Math.max(0, Math.round((Date.now() - a.timestamp) / 60_000));
-    const ageLabel = ageMin < 1 ? 'now' : ageMin < 60 ? `${ageMin}m` : `${Math.floor(ageMin / 60)}h`;
+    const ageLabel = ageMin < 1 ? 'now' : (ageMin < 60 ? `${ageMin}m` : `${Math.floor(ageMin / 60)}h`);
     const dot = document.createElement('span'); dot.className = 'triage-sev-dot';
     const src = document.createElement('span'); src.className = 'triage-source';
     src.textContent = extraCount > 0 ? `${a.source} +${extraCount}` : a.source;
@@ -114,6 +115,12 @@ export class TriageBar {
       const panelId = panelForAlert(a);
       jumpToPanel(panelId);
       flashPanel(panelId);
+      if (a.location) {
+        document.dispatchEvent(new CustomEvent('cb:focus-map', {
+          detail: { lat: a.location.lat, lon: a.location.lon, zoom: 5 },
+        }));
+        pulseAlertOnMap(a);
+      }
     });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -129,7 +136,7 @@ export class TriageBar {
     menu.className = 'triage-snooze-menu';
     menu.style.left = `${e.clientX}px`;
     menu.style.top = `${e.clientY}px`;
-    const items: Array<[string, () => void]> = [
+    const items: [string, () => void][] = [
       ['Snooze 15 min', () => unifiedAlertStore.snooze(alert.id, 15 * 60_000)],
       ['Snooze 1 hour', () => unifiedAlertStore.snooze(alert.id, 60 * 60_000)],
       ['Snooze until tomorrow', () => unifiedAlertStore.snooze(alert.id, 12 * 60 * 60_000)],
@@ -151,9 +158,9 @@ export class TriageBar {
       const btn = document.createElement('button');
       btn.textContent = label;
       btn.addEventListener('click', () => { action(); menu.remove(); });
-      menu.appendChild(btn);
+      menu.append(btn);
     }
-    document.body.appendChild(menu);
+    document.body.append(menu);
     const dismiss = (ev: MouseEvent) => {
       if (!menu.contains(ev.target as Node)) {
         menu.remove();

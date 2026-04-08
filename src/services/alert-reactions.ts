@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity */
 /**
  * Alert reactions — multi-pronged response to high-score alerts.
  *
@@ -65,6 +66,19 @@ function publishPulses(): void {
   document.dispatchEvent(new CustomEvent('cb:alert-pulses', {
     detail: pulses.map(p => ({ id: p.id, lat: p.lat, lon: p.lon, severity: p.severity })),
   }));
+}
+
+/** Add a one-shot pulse on the map for a specific alert (e.g. user click). */
+export function pulseAlertOnMap(alert: UnifiedAlert): void {
+  if (!alert.location) return;
+  pulses.push({
+    id: alert.id,
+    lat: alert.location.lat,
+    lon: alert.location.lon,
+    severity: alert.severity,
+    expiresAt: Date.now() + PULSE_TTL_MS,
+  });
+  publishPulses();
 }
 
 /** Wire reactions to the unified alert store. Idempotent. */

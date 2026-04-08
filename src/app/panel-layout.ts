@@ -59,6 +59,9 @@ import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalette } from '@/components/CommandPalette';
 import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
 import { startSilenceDetector } from '@/services/silence-detector';
+import { startSourceFeedback } from '@/services/source-feedback';
+import { unifiedAlertStore } from '@/services/unified-alerts';
+import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
 import { startAlertReactions } from '@/services/alert-reactions';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
@@ -655,6 +658,27 @@ export class PanelLayoutManager implements AppModule {
  startAlertCorrelator();
  startSituationAlertBridge();
  startSilenceDetector();
+ startSourceFeedback();
+ // Proactive digest — once per 8h, after data has had a chance to load.
+ if (shouldShowDigest()) {
+ window.setTimeout(() => {
+ void generateDigest().then(text => {
+ if (!text) return;
+ markDigestShown();
+ unifiedAlertStore.ingest([{
+ id: `digest-${Date.now()}`,
+ source: 'correlation',
+ severity: 'info',
+ title: 'Crystal Ball digest',
+ body: text,
+ timestamp: Date.now(),
+ relevanceScore: 80,
+ acknowledged: false,
+ pinned: true,
+ }]);
+ });
+ }, 30_000);
+ }
 
  // Mount Today view + wire ⌘⇧T toggle
  const todayView = new TodayView();

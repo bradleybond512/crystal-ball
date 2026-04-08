@@ -101,7 +101,8 @@ export class TriageBar {
       `${a.body}\n\n` +
       `score ${sb.total.toFixed(1)} = ` +
       `base ${sb.base} × decay ${sb.decay.toFixed(2)} × source ${sb.sourceMult} × ` +
-      `prox ${sb.proximityMult} × watch ${sb.watchlistMult} × pin ${sb.pinMult}\n` +
+      `trust ${sb.trustMult.toFixed(2)} × prox ${sb.proximityMult} × ` +
+      `watch ${sb.watchlistMult} × pin ${sb.pinMult}\n` +
       `(right-click to snooze)`;
     const ageMin = Math.max(0, Math.round((Date.now() - a.timestamp) / 60_000));
     const ageLabel = ageMin < 1 ? 'now' : (ageMin < 60 ? `${ageMin}m` : `${Math.floor(ageMin / 60)}h`);

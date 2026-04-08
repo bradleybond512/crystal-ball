@@ -14,6 +14,8 @@ import { unifiedAlertStore } from './unified-alerts';
 import type { UnifiedAlert } from './unified-alerts';
 import { loadProximityConfig } from './proximity-filter';
 import { runClaudeAgent } from './claude-agent';
+import { getActivity } from './alert-activity-log';
+import { rankAlerts } from './alert-routing';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,7 +39,20 @@ export const QUICK_ASK_PRESETS: string[] = [
 
 // ── Conversation history ─────────────────────────────────────────────────────
 
-let history: ChatMessage[] = [];
+const HISTORY_STORAGE_KEY = 'crystalball-chat-history-v1';
+
+function loadHistory(): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as ChatMessage[];
+  } catch { return []; }
+}
+function saveHistory(): void {
+  try { localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history)); } catch { /* noop */ }
+}
+
+let history: ChatMessage[] = loadHistory();
 
 export function getHistory(): ChatMessage[] {
   return [...history];
@@ -45,6 +60,7 @@ export function getHistory(): ChatMessage[] {
 
 export function clearHistory(): void {
   history = [];
+  saveHistory();
 }
 
 // ── Context builder ──────────────────────────────────────────────────────────
@@ -89,12 +105,25 @@ function buildLocationContext(): string {
   }
 }
 
+function buildActivityContext(): string {
+  try {
+    const recent = getActivity().slice(0, 15);
+    if (recent.length === 0) return '';
+    const lines = recent.map(e => {
+      const ago = Math.max(0, Math.round((Date.now() - e.t) / 60_000));
+      return `- ${e.kind} [${e.severity}] ${e.title} (${ago}m ago)`;
+    });
+    return `User-visible activity in the last hour (kind = new/ack/snooze/correlate/react):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+
 function buildSystemContext(): string {
   const mode = getMode();
   const parts = [
  `Current app mode: ${(mode ?? 'default').toUpperCase()}`,
  buildSituationContext(),
  buildAlertContext(),
+ buildActivityContext(),
  buildLocationContext(),
   ].filter(Boolean);
   return parts.join('\n\n');
@@ -249,6 +278,53 @@ export async function* sendMessage(
 
   if (fullResponse) {
  addToHistory('assistant', fullResponse);
+ saveHistory();
+  }
+}
+
+// ── Proactive digest ────────────────────────────────────────────────────────
+
+const DIGEST_LAST_KEY = 'crystalball-digest-last-shown';
+
+/** True if a fresh digest has not yet been shown today. */
+export function shouldShowDigest(): boolean {
+  try {
+    const last = Number(localStorage.getItem(DIGEST_LAST_KEY) ?? '0');
+    if (!Number.isFinite(last)) return true;
+    return Date.now() - last > 8 * 3_600_000;
+  } catch { return true; }
+}
+export function markDigestShown(): void {
+  try { localStorage.setItem(DIGEST_LAST_KEY, String(Date.now())); } catch { /* noop */ }
+}
+
+/**
+ * Build a "since you last looked" prompt for the chat agent. The agent
+ * generates a 3-bullet digest using the same context the chat does.
+ */
+export function buildDigestPrompt(): string {
+  const ranked = rankAlerts(unifiedAlertStore.getAll()).slice(0, 8);
+  const recent = getActivity().slice(0, 15);
+  const top = ranked.map(a => `- [${a.severity}] ${a.title}`).join('\n');
+  const activity = recent.map(e => `- ${e.kind}: ${e.title}`).join('\n');
+  return [
+    'You are the Crystal Ball intelligence analyst. Generate a 3-bullet "since you last looked" digest.',
+    'Be terse, factual, and actionable. No headers, no preamble — just three bullets.',
+    '',
+    `Top active alerts (ranked):\n${top || '(none)'}`,
+    '',
+    `Recent activity:\n${activity || '(none)'}`,
+  ].join('\n');
+}
+
+/** Run the digest prompt through Claude and return the assistant text. */
+export async function generateDigest(signal?: AbortSignal): Promise<string> {
+  const prompt = buildDigestPrompt();
+  try {
+    const { response } = await runClaudeAgent(prompt, signal);
+    return response;
+  } catch {
+    return '';
   }
 }
 

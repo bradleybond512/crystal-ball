@@ -60,7 +60,7 @@ import { CommandPalette } from '@/components/CommandPalette';
 import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
-import { unifiedAlertStore } from '@/services/unified-alerts';
+import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
 import { startAlertReactions } from '@/services/alert-reactions';
 import { startSidebarHeat } from '@/services/sidebar-heat';
@@ -659,23 +659,15 @@ export class PanelLayoutManager implements AppModule {
  startSituationAlertBridge();
  startSilenceDetector();
  startSourceFeedback();
+ const digestOverlay = new DigestOverlay();
+ digestOverlay.mount(document.body);
  // Proactive digest — once per 8h, after data has had a chance to load.
  if (shouldShowDigest()) {
  window.setTimeout(() => {
  void generateDigest().then(text => {
  if (!text) return;
  markDigestShown();
- unifiedAlertStore.ingest([{
- id: `digest-${Date.now()}`,
- source: 'correlation',
- severity: 'info',
- title: 'Crystal Ball digest',
- body: text,
- timestamp: Date.now(),
- relevanceScore: 80,
- acknowledged: false,
- pinned: true,
- }]);
+ digestOverlay.show(text);
  });
  }, 30_000);
  }

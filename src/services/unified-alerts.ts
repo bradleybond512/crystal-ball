@@ -20,7 +20,8 @@ export type AlertSource =
   | 'hazard'
   | 'correlation'
   | 'cyber'
-  | 'resource';
+  | 'resource'
+  | 'local-ids';
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 

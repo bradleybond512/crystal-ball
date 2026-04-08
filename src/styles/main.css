@@ -2,6 +2,7 @@
 @import './panels.css';
 @import './macos-native.css';
 @import './gods-vision.css';
+@import './alerts.css';
 
 /* ============================================================
  Theme Colors — overridden by [data-theme="light"] below

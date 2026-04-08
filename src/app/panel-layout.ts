@@ -53,6 +53,8 @@ import {
   DailyWisdomPanel,
 } from '@/components';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
+import { TriageBar } from '@/components/TriageBar';
+import { startAlertReactions } from '@/services/alert-reactions';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
 import { LocalIDSPanel } from '@/components/LocalIDSPanel';
@@ -633,6 +635,11 @@ export class PanelLayoutManager implements AppModule {
 
   private createPanels(): void {
  const panelsGrid = document.getElementById('panelsGrid')!;
+
+ // Mount the triage bar above the panel grid (auto-hides when nothing is hot).
+ const triageBar = new TriageBar();
+ triageBar.mount(panelsGrid.parentElement ?? panelsGrid);
+ startAlertReactions();
 
  const mapContainer = document.getElementById('mapContainer') as HTMLElement;
  this.ctx.map = new MapContainer(mapContainer, {

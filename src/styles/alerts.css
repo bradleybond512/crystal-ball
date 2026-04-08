@@ -1,0 +1,108 @@
+/* Triage bar + alert reaction styles */
+
+.triage-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  margin: 0 0 10px 0;
+  background: linear-gradient(90deg, rgba(40, 0, 0, 0.85), rgba(20, 20, 30, 0.85));
+  border: 1px solid rgba(255, 80, 80, 0.4);
+  border-radius: 8px;
+  font: 12px/1.2 -apple-system, system-ui, sans-serif;
+  color: #f5f5f7;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(10px);
+}
+.triage-bar[hidden] { display: none; }
+
+.triage-bar-label {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #ffb84d;
+  flex-shrink: 0;
+}
+
+.triage-bar-items {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.triage-bar-items::-webkit-scrollbar { display: none; }
+
+.triage-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.triage-bar-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.triage-sev-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #888;
+  flex-shrink: 0;
+}
+.triage-sev-critical .triage-sev-dot { background: #ff3b30; box-shadow: 0 0 6px #ff3b30; }
+.triage-sev-high .triage-sev-dot { background: #ff9500; }
+.triage-sev-medium .triage-sev-dot { background: #ffcc00; }
+.triage-sev-low .triage-sev-dot { background: #34c759; }
+.triage-sev-info .triage-sev-dot { background: #5ac8fa; }
+
+.triage-source {
+  font-size: 10px;
+  text-transform: uppercase;
+  opacity: 0.7;
+  letter-spacing: 0.04em;
+}
+.triage-title { font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.triage-age { font-size: 10px; opacity: 0.6; font-variant-numeric: tabular-nums; }
+
+.triage-bar-ack {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f5f5f7;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font: 11px/1 -apple-system, system-ui, sans-serif;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.triage-bar-ack:hover { background: rgba(255, 255, 255, 0.16); }
+
+/* Panel flash — outline pulse on the affected panel */
+@keyframes panel-alert-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.85); }
+  50%  { box-shadow: 0 0 0 8px rgba(255, 59, 48, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+}
+.panel-alert-flash {
+  animation: panel-alert-pulse 1.2s ease-out 2;
+  border-color: rgba(255, 59, 48, 0.7) !important;
+}
+
+/* Window border flash — body-level edge glow */
+@keyframes window-alert-pulse {
+  0%   { box-shadow: inset 0 0 0 0 rgba(255, 59, 48, 0); }
+  30%  { box-shadow: inset 0 0 0 4px rgba(255, 59, 48, 0.7); }
+  100% { box-shadow: inset 0 0 0 0 rgba(255, 59, 48, 0); }
+}
+.window-alert-flash {
+  animation: window-alert-pulse 2.4s ease-out 1;
+}

@@ -50,6 +50,7 @@ const SOURCE_LABELS: Record<AlertSource, string> = {
   correlation: 'Signal',
   cyber: 'Cyber',
   resource: 'Resource',
+  'local-ids': 'IDS',
 };
 
 export class UnifiedAlertInboxPanel extends Panel {

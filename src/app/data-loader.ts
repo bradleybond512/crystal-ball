@@ -1814,6 +1814,22 @@ export class DataLoaderManager implements AppModule {
  try {
  const alerts = await fetchLocalIDSAlerts();
  (this.ctx.panels['local-ids'] as LocalIDSPanel)?.update(alerts);
+ // Mirror high/critical IDS alerts into the unified store so triage bar,
+ // notifications, and reactions pick them up.
+ const unified = alerts
+ .filter(a => a.severity === 'high' || a.severity === 'critical')
+ .map(a => ({
+ id: `localids-${a.id}`,
+ source: 'local-ids' as const,
+ severity: a.severity,
+ title: a.signature || a.category || 'IDS alert',
+ body: `${a.source} · ${a.srcIp} → ${a.destIp} (${a.proto}) ${a.action}`,
+ timestamp: Date.parse(a.ts) || Date.now(),
+ relevanceScore: 50,
+ acknowledged: false,
+ pinned: false,
+ }));
+ if (unified.length > 0) unifiedAlertStore.ingest(unified);
  } catch {
  (this.ctx.panels['local-ids'] as LocalIDSPanel)?.update([]);
  }

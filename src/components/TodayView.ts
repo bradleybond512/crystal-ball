@@ -8,6 +8,7 @@
 import { unifiedAlertStore, type UnifiedAlert, type AlertSource } from '@/services/unified-alerts';
 import { rankAlerts, panelForAlert } from '@/services/alert-routing';
 import { flashPanel, jumpToPanel } from '@/services/alert-reactions';
+import { getActivity, subscribeActivity, type ActivityEntry } from '@/services/alert-activity-log';
 
 const SOURCE_LABELS: Record<AlertSource, string> = {
   'breaking-news': 'News',
@@ -46,11 +47,16 @@ export class TodayView {
 
   toggle(): void { this.visible ? this.hide() : this.show(); }
 
+  private unsubscribeActivity: (() => void) | null = null;
+
   show(): void {
     this.visible = true;
     this.overlay.hidden = false;
     if (!this.unsubscribe) {
       this.unsubscribe = unifiedAlertStore.subscribe(() => this.render());
+    }
+    if (!this.unsubscribeActivity) {
+      this.unsubscribeActivity = subscribeActivity(() => this.render());
     }
     this.render();
   }
@@ -60,6 +66,8 @@ export class TodayView {
     this.overlay.hidden = true;
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.unsubscribeActivity?.();
+    this.unsubscribeActivity = null;
   }
 
   private render(): void {
@@ -102,7 +110,40 @@ export class TodayView {
       }
     }
 
+    // Activity log section
+    const activity = getActivity().slice(0, 40);
+    if (activity.length > 0) {
+      const section = document.createElement('section');
+      section.className = 'today-view-section';
+      const label = document.createElement('h3');
+      label.textContent = `Recent activity · ${activity.length}`;
+      section.appendChild(label);
+      for (const e of activity) section.appendChild(this.makeActivityRow(e));
+      body.appendChild(section);
+    }
+
     this.overlay.replaceChildren(header, body);
+  }
+
+  private makeActivityRow(e: ActivityEntry): HTMLElement {
+    const row = document.createElement('div');
+    row.className = `today-activity-row today-activity-${e.kind}`;
+    const ago = Math.max(0, Math.round((Date.now() - e.t) / 1000));
+    const agoLabel = ago < 60 ? `${ago}s` : ago < 3600 ? `${Math.round(ago / 60)}m` : `${Math.round(ago / 3600)}h`;
+    const KIND_LABEL: Record<ActivityEntry['kind'], string> = {
+      new: '+ NEW', ack: '✓ ACK', snooze: '⏸ SNOOZE', correlate: '⚡ CORR', react: '🔔 FIRE',
+    };
+    const kind = document.createElement('span');
+    kind.className = 'today-activity-kind';
+    kind.textContent = KIND_LABEL[e.kind];
+    const title = document.createElement('span');
+    title.className = 'today-activity-title';
+    title.textContent = e.title;
+    const meta = document.createElement('span');
+    meta.className = 'today-activity-meta';
+    meta.textContent = `${e.source} · ${agoLabel}`;
+    row.append(kind, title, meta);
+    return row;
   }
 
   private makeRow(a: UnifiedAlert): HTMLElement {

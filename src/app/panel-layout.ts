@@ -60,6 +60,7 @@ import { startAlertReactions } from '@/services/alert-reactions';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
 import { startAlertDebug } from '@/services/alert-debug';
+import { startAlertActivityLog } from '@/services/alert-activity-log';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
 import { LocalIDSPanel } from '@/components/LocalIDSPanel';
@@ -645,6 +646,7 @@ export class PanelLayoutManager implements AppModule {
  const triageBar = new TriageBar();
  triageBar.mount(panelsGrid.parentElement ?? panelsGrid);
  startAlertDebug();
+ startAlertActivityLog();
  startAlertReactions();
  startSidebarHeat();
  startAlertCorrelator();

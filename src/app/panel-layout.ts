@@ -56,6 +56,7 @@ import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { TriageBar } from '@/components/TriageBar';
 import { TodayView } from '@/components/TodayView';
 import { WatchlistEditor } from '@/components/WatchlistEditor';
+import { CommandPalette } from '@/components/CommandPalette';
 import { startAlertReactions } from '@/services/alert-reactions';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
@@ -660,6 +661,11 @@ export class PanelLayoutManager implements AppModule {
  const watchlistEditor = new WatchlistEditor();
  watchlistEditor.mount(document.body);
  document.addEventListener('cb:toggle-watchlist', () => watchlistEditor.toggle());
+
+ // Mount Cmd+K command palette
+ const cmdk = new CommandPalette();
+ cmdk.mount(document.body);
+ document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
 
  document.addEventListener('cb:alert-pulses', ((e: Event) => {
  const detail = (e as CustomEvent).detail as Array<{ id: string; lat: number; lon: number; severity: 'critical' | 'high' | 'medium' | 'low' | 'info' }>;

@@ -54,7 +54,9 @@ import {
 } from '@/components';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { TriageBar } from '@/components/TriageBar';
+import { TodayView } from '@/components/TodayView';
 import { startAlertReactions } from '@/services/alert-reactions';
+import { startSidebarHeat } from '@/services/sidebar-heat';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
 import { LocalIDSPanel } from '@/components/LocalIDSPanel';
@@ -640,6 +642,12 @@ export class PanelLayoutManager implements AppModule {
  const triageBar = new TriageBar();
  triageBar.mount(panelsGrid.parentElement ?? panelsGrid);
  startAlertReactions();
+ startSidebarHeat();
+
+ // Mount Today view + wire ⌘⇧T toggle
+ const todayView = new TodayView();
+ todayView.mount(document.body);
+ document.addEventListener('cb:toggle-today', () => todayView.toggle());
 
  const mapContainer = document.getElementById('mapContainer') as HTMLElement;
  this.ctx.map = new MapContainer(mapContainer, {

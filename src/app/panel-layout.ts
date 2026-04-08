@@ -55,8 +55,10 @@ import {
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { TriageBar } from '@/components/TriageBar';
 import { TodayView } from '@/components/TodayView';
+import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { startAlertReactions } from '@/services/alert-reactions';
 import { startSidebarHeat } from '@/services/sidebar-heat';
+import { startAlertCorrelator } from '@/services/alert-correlator';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
 import { LocalIDSPanel } from '@/components/LocalIDSPanel';
@@ -643,11 +645,18 @@ export class PanelLayoutManager implements AppModule {
  triageBar.mount(panelsGrid.parentElement ?? panelsGrid);
  startAlertReactions();
  startSidebarHeat();
+ startAlertCorrelator();
 
  // Mount Today view + wire ⌘⇧T toggle
  const todayView = new TodayView();
  todayView.mount(document.body);
  document.addEventListener('cb:toggle-today', () => todayView.toggle());
+
+ // Mount Watchlist editor + wire ⌘⇧W toggle
+ const watchlistEditor = new WatchlistEditor();
+ watchlistEditor.mount(document.body);
+ document.addEventListener('cb:toggle-watchlist', () => watchlistEditor.toggle());
+
  document.addEventListener('cb:alert-pulses', ((e: Event) => {
  const detail = (e as CustomEvent).detail as Array<{ id: string; lat: number; lon: number; severity: 'critical' | 'high' | 'medium' | 'low' | 'info' }>;
  this.ctx.map?.setAlertPulses(detail);

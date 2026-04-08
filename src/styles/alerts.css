@@ -234,3 +234,100 @@
   font: 12px/1 -apple-system, system-ui, sans-serif;
 }
 .triage-snooze-menu button:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* Triage preset cycle button */
+.triage-bar-preset {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f5f5f7;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font: 11px/1 -apple-system, system-ui, sans-serif;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.triage-bar-preset:hover { background: rgba(255, 255, 255, 0.14); }
+
+/* Watchlist editor */
+.watchlist-editor {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 60px 20px;
+  overflow-y: auto;
+  color: #f5f5f7;
+  font: 13px/1.4 -apple-system, system-ui, sans-serif;
+}
+.watchlist-editor[hidden] { display: none; }
+.watchlist-editor > * { width: 100%; max-width: 800px; }
+.watchlist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+}
+.watchlist-header h2 { margin: 0; font: 700 24px/1 -apple-system, system-ui, sans-serif; }
+.watchlist-close {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f5f5f7;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  width: 32px; height: 32px;
+  border-radius: 16px;
+  cursor: pointer;
+}
+.watchlist-help { opacity: 0.7; margin: 0 0 16px 0; }
+.watchlist-list { display: flex; flex-direction: column; gap: 12px; }
+.watchlist-empty { opacity: 0.5; padding: 24px; text-align: center; }
+.watchlist-row {
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 1fr 1fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.watchlist-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.watchlist-field span { font-size: 10px; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.05em; }
+.watchlist-field input {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f5f5f7;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font: 12px/1 -apple-system, system-ui, sans-serif;
+  width: 100%;
+  box-sizing: border-box;
+}
+.watchlist-remove-btn {
+  background: rgba(255, 59, 48, 0.15);
+  border: 1px solid rgba(255, 59, 48, 0.3);
+  color: #ff6b60;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font: 11px/1 -apple-system, system-ui, sans-serif;
+}
+.watchlist-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+.watchlist-add-btn, .watchlist-save-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #f5f5f7;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: 12px/1 -apple-system, system-ui, sans-serif;
+}
+.watchlist-save-btn { background: rgba(52, 199, 89, 0.2); border-color: rgba(52, 199, 89, 0.5); }
+.watchlist-add-btn:hover, .watchlist-save-btn:hover { filter: brightness(1.2); }

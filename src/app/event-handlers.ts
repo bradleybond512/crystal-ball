@@ -342,6 +342,13 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  document.dispatchEvent(new CustomEvent('cb:toggle-today'));
  }
+ // Cmd+Shift+W — toggle Watchlist editor
+ if (e.metaKey && e.shiftKey && e.key === 'W' && !e.altKey) {
+ const active = document.activeElement;
+ if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return;
+ e.preventDefault();
+ document.dispatchEvent(new CustomEvent('cb:toggle-watchlist'));
+ }
  // G key (no modifiers) — toggle God's Eye mode
  if (e.key === 'g' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
  const target = e.target as HTMLElement;

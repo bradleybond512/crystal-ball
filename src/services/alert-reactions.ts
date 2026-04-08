@@ -13,6 +13,7 @@ import { unifiedAlertStore, type UnifiedAlert } from './unified-alerts';
 import { scoreAlert, panelForAlert } from './alert-routing';
 import { playAlertPing, playSonarPing } from './sound-manager';
 import { isGhostMode } from './mode-manager';
+import { getChannels } from './alerting-prefs';
 
 const FLASH_CLASS = 'panel-alert-flash';
 const FLASH_MS = 2400;
@@ -92,23 +93,29 @@ export function startAlertReactions(): void {
     if (!top || topScore < REACT_THRESHOLD) return;
 
     const panelId = panelForAlert(top);
-    flashPanel(panelId);
+    // Ghost Mode forces silent regardless of preset.
+    const ch = isGhostMode() ? { sound: false, borderFlash: false, desktopNotif: false, mapPulse: true, panelFlash: true } : getChannels();
+
+    if (ch.panelFlash) flashPanel(panelId);
+
     // Add a map pulse for any fresh hot alert that has coordinates.
-    for (const a of fresh) {
-      if (scoreAlert(a, now) < REACT_THRESHOLD) continue;
-      if (!a.location) continue;
-      pulses.push({
-        id: a.id,
-        lat: a.location.lat,
-        lon: a.location.lon,
-        severity: a.severity,
-        expiresAt: now + PULSE_TTL_MS,
-      });
+    if (ch.mapPulse) {
+      for (const a of fresh) {
+        if (scoreAlert(a, now) < REACT_THRESHOLD) continue;
+        if (!a.location) continue;
+        pulses.push({
+          id: a.id,
+          lat: a.location.lat,
+          lon: a.location.lon,
+          severity: a.severity,
+          expiresAt: now + PULSE_TTL_MS,
+        });
+      }
+      publishPulses();
     }
-    publishPulses();
-    // Ghost Mode: visual triage stays, but no audio + no border flash.
-    if (!isGhostMode()) {
-      flashWindowBorder();
+
+    if (ch.borderFlash) flashWindowBorder();
+    if (ch.sound) {
       if (top.severity === 'critical') playAlertPing();
       else playSonarPing();
     }
@@ -118,8 +125,10 @@ export function startAlertReactions(): void {
       window.setTimeout(() => {
         const still = unifiedAlertStore.getAll().find(a => a.id === top.id);
         if (still && !still.acknowledged) {
-          flashPanel(panelId);
-          if (!isGhostMode()) { flashWindowBorder(); playAlertPing(); }
+          const ch2 = isGhostMode() ? { sound: false, borderFlash: false } : getChannels();
+          if (ch.panelFlash) flashPanel(panelId);
+          if (ch2.borderFlash) flashWindowBorder();
+          if (ch2.sound) playAlertPing();
         }
       }, 5 * 60_000);
     }

@@ -9,6 +9,7 @@
 import { unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
 import { rankAlerts, panelForAlert, scoreBreakdown } from '@/services/alert-routing';
 import { flashPanel, jumpToPanel } from '@/services/alert-reactions';
+import { getPreset, setPreset, type AlertingPreset } from '@/services/alerting-prefs';
 
 const MAX_VISIBLE = 5;
 
@@ -76,7 +77,17 @@ export class TriageBar {
         for (const r of g.rest) unifiedAlertStore.acknowledge(r.id);
       }
     });
-    this.element.replaceChildren(label, items, ack);
+    const presetBtn = document.createElement('button');
+    presetBtn.className = 'triage-bar-preset';
+    presetBtn.title = 'Cycle alerting preset (Loud → Visual → Silent)';
+    const PRESET_LABEL: Record<AlertingPreset, string> = { loud: '🔊 Loud', visual: '👁 Visual', silent: '🤫 Silent' };
+    const PRESET_NEXT: Record<AlertingPreset, AlertingPreset> = { loud: 'visual', visual: 'silent', silent: 'loud' };
+    presetBtn.textContent = PRESET_LABEL[getPreset()];
+    presetBtn.addEventListener('click', () => {
+      setPreset(PRESET_NEXT[getPreset()]);
+      presetBtn.textContent = PRESET_LABEL[getPreset()];
+    });
+    this.element.replaceChildren(label, items, ack, presetBtn);
   }
 
   private makeItem(a: UnifiedAlert, extraCount: number): HTMLElement {

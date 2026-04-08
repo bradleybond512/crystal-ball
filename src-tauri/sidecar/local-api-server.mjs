@@ -5236,11 +5236,13 @@ async function dispatch(requestUrl, req, routes, context) {
  const fastPath = '/opt/homebrew/var/log/suricata/fast.log';
  if (existsSync(fastPath)) {
  const re = /^(\d{2})\/(\d{2})\/(\d{4})-(\d{2}:\d{2}:\d{2})\.\d+\s+\[\*\*\]\s+\[\d+:\d+:\d+\]\s+(.+?)\s+\[\*\*\]\s+\[Classification:\s+(.+?)\]\s+\[Priority:\s+(\d+)\]\s+\{(\w+)\}\s+(\S+?):(\d+)\s+->\s+(\S+?):(\d+)/;
+ const SURICATA_NOISE = /SURICATA STREAM|SURICATA HTTP Response excessive header/;
  for (const line of _tailFile(fastPath, 262_144)) {
  const m = re.exec(line);
  if (!m) continue;
  const [, mo, day, yr, hms, signature, category, prio, proto, srcIp, srcPort, destIp, destPort] = m;
  const p = parseInt(prio, 10);
+ if (p >= 3 && SURICATA_NOISE.test(signature)) continue;
  const severity = p === 1 ? 'critical' : p === 2 ? 'high' : p === 3 ? 'medium' : 'low';
  alerts.push({
  id: `suricata-${yr}${mo}${day}-${hms}-${srcIp}-${destPort}`,
@@ -5270,23 +5272,29 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!fields) continue;
  if (!fields.includes('ts')) continue;
  const [tsI, noteI, msgI, srcI, dstI] = ['ts', 'note', 'msg', 'src', 'dst'].map(f => fields.indexOf(f));
+ const NOTICE_DROP = /^(PacketFilter::Dropped_Packets|Weird::|ProtocolDetector::)/;
+ const INTEL_BENIGN_DOMAINS = /(github\.com|githubusercontent\.com|jsdelivr\.net|cloudflare\.com|gstatic\.com|googleapis\.com|akamai|fastly|cloudfront|microsoft\.com|apple\.com|amazonaws\.com|cdn\.|fonts\.)/i;
  for (const line of lines) {
  if (line.startsWith('#')) continue;
  try {
  const cols = line.split('\t');
  const ts = cols[tsI];
  if (!ts || ts === '-') continue;
+ const note = cols[noteI] ?? '';
+ const msg = cols[msgI] ?? '';
+ if (NOTICE_DROP.test(note)) continue;
+ if (note.startsWith('Intel::') && INTEL_BENIGN_DOMAINS.test(msg)) continue;
  alerts.push({
  id: `zeek-notice-${ts}-${Math.random().toString(36).slice(2, 6)}`,
  source: 'zeek_notice',
  ts: new Date(parseFloat(ts) * 1000).toISOString(),
- severity: 'medium',
+ severity: note.startsWith('Intel::') ? 'high' : 'medium',
  category: 'Network Notice',
- signature: cols[noteI] ?? '',
+ signature: note,
  srcIp: cols[srcI] ?? '',
  destIp: cols[dstI] ?? '',
  proto: '',
- action: (cols[msgI] ?? '').slice(0, 120),
+ action: msg.slice(0, 120),
  });
  } catch { /* skip malformed row */ }
  }
@@ -5299,7 +5307,7 @@ async function dispatch(requestUrl, req, routes, context) {
  '/opt/homebrew/Cellar/zeek/8.1.1/spool/manager/conn.log',
  '/opt/homebrew/var/log/zeek/current/conn.log',
  ];
- const SUSPICIOUS_STATES = new Set(['S0', 'REJ', 'RSTRH', 'RSTOS0', 'OTH']);
+ const SUSPICIOUS_STATES = new Set(['S0', 'REJ', 'RSTRH', 'RSTOS0']);
  for (const p of connCandidates) {
  if (!existsSync(p)) continue;
  const lines = _tailFile(p, 131072);
@@ -5315,7 +5323,11 @@ async function dispatch(requestUrl, req, routes, context) {
  const cols = line.split('\t');
  const state = cols[stateI];
  const bytes = parseInt(cols[bytesI], 10) || 0;
- if (!SUSPICIOUS_STATES.has(state) && bytes < 5_000_000) continue;
+ // Only flag big transfers (≥50MB) or genuinely failed connection attempts to non-RFC1918 destinations
+ if (bytes < 50_000_000 && !SUSPICIOUS_STATES.has(state)) continue;
+ const dstIp = cols[respI] ?? '';
+ const isPrivate = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|fe80:|fd|::1)/i.test(dstIp);
+ if (SUSPICIOUS_STATES.has(state) && isPrivate) continue;
  const ts = cols[tsI];
  if (!ts || ts === '-') continue;
  const severity = bytes > 50_000_000 ? 'high' : SUSPICIOUS_STATES.has(state) ? 'medium' : 'low';

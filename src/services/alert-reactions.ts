@@ -14,6 +14,7 @@ import { scoreAlert, panelForAlert } from './alert-routing';
 import { playAlertPing, playSonarPing } from './sound-manager';
 import { isGhostMode } from './mode-manager';
 import { getChannels } from './alerting-prefs';
+import { logEvent } from './alert-debug';
 
 const FLASH_CLASS = 'panel-alert-flash';
 const FLASH_MS = 2400;
@@ -90,7 +91,11 @@ export function startAlertReactions(): void {
       const s = scoreAlert(a, now);
       if (s > topScore) { topScore = s; top = a; }
     }
+    for (const a of fresh) {
+      logEvent({ kind: 'ingest', alertId: a.id, source: a.source, severity: a.severity, score: scoreAlert(a, now) });
+    }
     if (!top || topScore < REACT_THRESHOLD) return;
+    logEvent({ kind: 'react', alertId: top.id, source: top.source, severity: top.severity, score: topScore });
 
     const panelId = panelForAlert(top);
     // Ghost Mode forces silent regardless of preset.

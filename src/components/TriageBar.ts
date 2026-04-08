@@ -10,6 +10,7 @@ import { unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts'
 import { rankAlerts, panelForAlert, scoreBreakdown } from '@/services/alert-routing';
 import { flashPanel, jumpToPanel } from '@/services/alert-reactions';
 import { getPreset, setPreset, type AlertingPreset } from '@/services/alerting-prefs';
+import { getWatchlist, saveWatchlist } from '@/services/watchlist';
 
 const MAX_VISIBLE = 5;
 
@@ -116,30 +117,40 @@ export class TriageBar {
     });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      this.showSnoozeMenu(e as MouseEvent, a.id);
+      this.showContextMenu(e as MouseEvent, a);
     });
     void escapeHtml;
     return el;
   }
 
-  private showSnoozeMenu(e: MouseEvent, alertId: string): void {
+  private showContextMenu(e: MouseEvent, alert: UnifiedAlert): void {
     document.querySelectorAll('.triage-snooze-menu').forEach(m => m.remove());
     const menu = document.createElement('div');
     menu.className = 'triage-snooze-menu';
     menu.style.left = `${e.clientX}px`;
     menu.style.top = `${e.clientY}px`;
-    const opts: Array<[string, number]> = [
-      ['Snooze 15 min', 15 * 60_000],
-      ['Snooze 1 hour', 60 * 60_000],
-      ['Snooze until tomorrow', 12 * 60 * 60_000],
+    const items: Array<[string, () => void]> = [
+      ['Snooze 15 min', () => unifiedAlertStore.snooze(alert.id, 15 * 60_000)],
+      ['Snooze 1 hour', () => unifiedAlertStore.snooze(alert.id, 60 * 60_000)],
+      ['Snooze until tomorrow', () => unifiedAlertStore.snooze(alert.id, 12 * 60 * 60_000)],
+      ['Pin to top', () => unifiedAlertStore.togglePin(alert.id)],
+      ['Watch this entity', () => {
+        const list = getWatchlist();
+        list.push({
+          id: `wl-${Date.now()}`,
+          label: alert.title.slice(0, 40),
+          keywords: [alert.title.split(/[—:·,]/)[0]?.trim() ?? alert.title.slice(0, 20)],
+          lat: alert.location?.lat,
+          lon: alert.location?.lon,
+          radiusKm: alert.location ? 100 : undefined,
+        });
+        saveWatchlist(list);
+      }],
     ];
-    for (const [label, ms] of opts) {
+    for (const [label, action] of items) {
       const btn = document.createElement('button');
       btn.textContent = label;
-      btn.addEventListener('click', () => {
-        unifiedAlertStore.snooze(alertId, ms);
-        menu.remove();
-      });
+      btn.addEventListener('click', () => { action(); menu.remove(); });
       menu.appendChild(btn);
     }
     document.body.appendChild(menu);

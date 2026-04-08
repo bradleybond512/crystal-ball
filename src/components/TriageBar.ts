@@ -113,6 +113,10 @@ export class TriageBar {
     const age = document.createElement('span'); age.className = 'triage-age'; age.textContent = ageLabel;
     el.append(dot, src, title, age);
     el.addEventListener('click', () => {
+      if (a.source === 'correlation' && a.correlationMembers && a.correlationMembers.length > 0) {
+        this.showCorrelationDetails(a);
+        return;
+      }
       const panelId = panelForAlert(a);
       jumpToPanel(panelId);
       flashPanel(panelId);
@@ -129,6 +133,45 @@ export class TriageBar {
     });
     void escapeHtml;
     return el;
+  }
+
+  private showCorrelationDetails(a: UnifiedAlert): void {
+    const all = unifiedAlertStore.getAll();
+    const byId = new Map(all.map(x => [x.id, x]));
+    const members = (a.correlationMembers ?? []).map(id => byId.get(id)).filter((x): x is UnifiedAlert => !!x);
+    const overlay = document.createElement('div');
+    overlay.className = 'corr-overlay';
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    const card = document.createElement('div');
+    card.className = 'corr-card';
+    const h = document.createElement('div'); h.className = 'corr-header';
+    const title = document.createElement('h3'); title.textContent = a.title;
+    const close = document.createElement('button'); close.className = 'corr-close'; close.textContent = '✕';
+    close.addEventListener('click', () => overlay.remove());
+    h.append(title, close);
+    const meta = document.createElement('div'); meta.className = 'corr-meta';
+    const pair = a.correlationPair ? `${a.correlationPair[0]} → ${a.correlationPair[1]}` : '—';
+    meta.textContent = `Causal pair: ${pair}  ·  members: ${members.length}  ·  confidence ${a.relevanceScore}%`;
+    const list = document.createElement('div'); list.className = 'corr-list';
+    for (const m of members) {
+      const row = document.createElement('div'); row.className = 'corr-row';
+      const src = document.createElement('span'); src.className = 'corr-row-src'; src.textContent = m.source;
+      const mt = document.createElement('span'); mt.className = 'corr-row-title'; mt.textContent = m.title;
+      row.append(src, mt);
+      row.addEventListener('click', () => {
+        const pid = panelForAlert(m);
+        jumpToPanel(pid); flashPanel(pid);
+        if (m.location) {
+          document.dispatchEvent(new CustomEvent('cb:focus-map', { detail: { lat: m.location.lat, lon: m.location.lon, zoom: 5 } }));
+          pulseAlertOnMap(m);
+        }
+        overlay.remove();
+      });
+      list.append(row);
+    }
+    card.append(h, meta, list);
+    overlay.append(card);
+    document.body.append(overlay);
   }
 
   private showContextMenu(e: MouseEvent, alert: UnifiedAlert): void {

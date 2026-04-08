@@ -7,7 +7,7 @@
  */
 
 import { unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
-import { rankAlerts, panelForAlert } from '@/services/alert-routing';
+import { rankAlerts, panelForAlert, scoreBreakdown } from '@/services/alert-routing';
 import { flashPanel, jumpToPanel } from '@/services/alert-reactions';
 
 const MAX_VISIBLE = 5;
@@ -44,8 +44,16 @@ export class TriageBar {
   getElement(): HTMLElement { return this.element; }
 
   private render(): void {
-    const ranked = rankAlerts(unifiedAlertStore.getAll()).slice(0, MAX_VISIBLE);
-    if (ranked.length === 0) {
+    const ranked = rankAlerts(unifiedAlertStore.getAll());
+    // Group consecutive alerts from the same source so storms collapse to one row.
+    const grouped: Array<{ leader: UnifiedAlert; rest: UnifiedAlert[] }> = [];
+    for (const a of ranked) {
+      const last = grouped[grouped.length - 1];
+      if (last && last.leader.source === a.source) last.rest.push(a);
+      else grouped.push({ leader: a, rest: [] });
+      if (grouped.length >= MAX_VISIBLE) break;
+    }
+    if (grouped.length === 0) {
       this.element.hidden = true;
       this.element.replaceChildren();
       return;
@@ -56,27 +64,37 @@ export class TriageBar {
     label.textContent = '⚡ TRIAGE';
     const items = document.createElement('div');
     items.className = 'triage-bar-items';
-    for (const a of ranked) items.appendChild(this.makeItem(a));
+    for (const g of grouped) items.appendChild(this.makeItem(g.leader, g.rest.length));
     const ack = document.createElement('button');
     ack.className = 'triage-bar-ack';
     ack.id = 'triageAckAll';
     ack.title = 'Acknowledge all visible';
     ack.textContent = 'Ack all';
     ack.addEventListener('click', () => {
-      for (const a of ranked) unifiedAlertStore.acknowledge(a.id);
+      for (const g of grouped) {
+        unifiedAlertStore.acknowledge(g.leader.id);
+        for (const r of g.rest) unifiedAlertStore.acknowledge(r.id);
+      }
     });
     this.element.replaceChildren(label, items, ack);
   }
 
-  private makeItem(a: UnifiedAlert): HTMLElement {
+  private makeItem(a: UnifiedAlert, extraCount: number): HTMLElement {
     const el = document.createElement('div');
     el.className = `triage-bar-item triage-sev-${a.severity}`;
     el.dataset.alertId = a.id;
-    el.title = a.body;
+    const sb = scoreBreakdown(a);
+    el.title =
+      `${a.body}\n\n` +
+      `score ${sb.total.toFixed(1)} = ` +
+      `base ${sb.base} × decay ${sb.decay.toFixed(2)} × source ${sb.sourceMult} × ` +
+      `prox ${sb.proximityMult} × watch ${sb.watchlistMult} × pin ${sb.pinMult}\n` +
+      `(right-click to snooze)`;
     const ageMin = Math.max(0, Math.round((Date.now() - a.timestamp) / 60_000));
     const ageLabel = ageMin < 1 ? 'now' : ageMin < 60 ? `${ageMin}m` : `${Math.floor(ageMin / 60)}h`;
     const dot = document.createElement('span'); dot.className = 'triage-sev-dot';
-    const src = document.createElement('span'); src.className = 'triage-source'; src.textContent = a.source;
+    const src = document.createElement('span'); src.className = 'triage-source';
+    src.textContent = extraCount > 0 ? `${a.source} +${extraCount}` : a.source;
     const title = document.createElement('span'); title.className = 'triage-title'; title.textContent = a.title;
     const age = document.createElement('span'); age.className = 'triage-age'; age.textContent = ageLabel;
     el.append(dot, src, title, age);
@@ -85,8 +103,41 @@ export class TriageBar {
       jumpToPanel(panelId);
       flashPanel(panelId);
     });
-    // Reference escapeHtml so unused-import lint doesn't fire (HTML-escaping reserved for future templated rendering)
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.showSnoozeMenu(e as MouseEvent, a.id);
+    });
     void escapeHtml;
     return el;
+  }
+
+  private showSnoozeMenu(e: MouseEvent, alertId: string): void {
+    document.querySelectorAll('.triage-snooze-menu').forEach(m => m.remove());
+    const menu = document.createElement('div');
+    menu.className = 'triage-snooze-menu';
+    menu.style.left = `${e.clientX}px`;
+    menu.style.top = `${e.clientY}px`;
+    const opts: Array<[string, number]> = [
+      ['Snooze 15 min', 15 * 60_000],
+      ['Snooze 1 hour', 60 * 60_000],
+      ['Snooze until tomorrow', 12 * 60 * 60_000],
+    ];
+    for (const [label, ms] of opts) {
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        unifiedAlertStore.snooze(alertId, ms);
+        menu.remove();
+      });
+      menu.appendChild(btn);
+    }
+    document.body.appendChild(menu);
+    const dismiss = (ev: MouseEvent) => {
+      if (!menu.contains(ev.target as Node)) {
+        menu.remove();
+        document.removeEventListener('mousedown', dismiss);
+      }
+    };
+    setTimeout(() => document.addEventListener('mousedown', dismiss), 0);
   }
 }

@@ -40,6 +40,8 @@ export interface UnifiedAlert {
   relevanceScore: number;
   acknowledged: boolean;
   pinned: boolean;
+  /** If set, alert is suppressed from triage/score until this Unix-ms timestamp. */
+  snoozedUntil?: number;
   link?: string;
   evidence?: EvidencePack;
   raw?: unknown;
@@ -178,6 +180,15 @@ class UnifiedAlertStore {
  }
  }
  if (changed) {
+ this.persist();
+ this.notify();
+ }
+  }
+
+  snooze(id: string, ms: number): void {
+ const alert = this.alerts.get(id);
+ if (alert) {
+ alert.snoozedUntil = Date.now() + ms;
  this.persist();
  this.notify();
  }

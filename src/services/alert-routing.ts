@@ -83,7 +83,7 @@ export interface ScoreBreakdown {
 }
 
 export function scoreBreakdown(a: UnifiedAlert, nowMs: number = Date.now()): ScoreBreakdown {
-  if (a.acknowledged) {
+  if (a.acknowledged || (typeof a.snoozedUntil === 'number' && a.snoozedUntil > nowMs)) {
     return { base: 0, decay: 0, sourceMult: 0, proximityMult: 1, watchlistMult: 1, pinMult: 1, total: 0 };
   }
   const base = SEVERITY_WEIGHT[a.severity] ?? 0;

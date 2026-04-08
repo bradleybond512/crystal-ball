@@ -12,6 +12,7 @@
 import { unifiedAlertStore, type UnifiedAlert } from './unified-alerts';
 import { scoreAlert, panelForAlert } from './alert-routing';
 import { playAlertPing, playSonarPing } from './sound-manager';
+import { isGhostMode } from './mode-manager';
 
 const FLASH_CLASS = 'panel-alert-flash';
 const FLASH_MS = 2400;
@@ -77,8 +78,22 @@ export function startAlertReactions(): void {
 
     const panelId = panelForAlert(top);
     flashPanel(panelId);
-    flashWindowBorder();
-    if (top.severity === 'critical') playAlertPing();
-    else playSonarPing();
+    // Ghost Mode: visual triage stays, but no audio + no border flash.
+    if (!isGhostMode()) {
+      flashWindowBorder();
+      if (top.severity === 'critical') playAlertPing();
+      else playSonarPing();
+    }
+
+    // Re-escalation: critical alerts get re-fired after 5 minutes if still unacked.
+    if (top.severity === 'critical') {
+      window.setTimeout(() => {
+        const still = unifiedAlertStore.getAll().find(a => a.id === top.id);
+        if (still && !still.acknowledged) {
+          flashPanel(panelId);
+          if (!isGhostMode()) { flashWindowBorder(); playAlertPing(); }
+        }
+      }, 5 * 60_000);
+    }
   });
 }

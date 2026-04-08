@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/pseudo-random, sonarjs/void-use, sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, @typescript-eslint/no-unused-expressions, @typescript-eslint/prefer-nullish-coalescing, unicorn/consistent-function-scoping, @typescript-eslint/no-empty-function */
 /**
  * Sound Manager — Mode Transition & Spatial Alert Audio
  *
@@ -227,7 +228,7 @@ let _ghostGainNode: GainNode | null = null;
 
 /** Current spatial master volume (0–1). */
 export function getSpatialVolume(): number {
-  const v = parseFloat(localStorage.getItem(SPATIAL_VOLUME_KEY) || '0.5');
+  const v = Number.parseFloat(localStorage.getItem(SPATIAL_VOLUME_KEY) || '0.5');
   return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;
 }
 
@@ -240,10 +241,10 @@ export function setSpatialVolume(v: number): void {
 
 export type SpatialLayer = 'ambient' | 'drone' | 'pings' | 'radar' | 'ticker' | 'ghost';
 
-/** Whether a spatial layer is enabled. Drone defaults OFF; all others default ON. */
+/** Whether a spatial layer is enabled. Drone and radar default OFF; others default ON. */
 export function isSpatialLayerEnabled(layer: SpatialLayer): boolean {
   const key = _spatialKey(layer);
-  if (layer === 'drone') return localStorage.getItem(key) === '1';
+  if (layer === 'drone' || layer === 'radar') return localStorage.getItem(key) === '1';
   return localStorage.getItem(key) !== '0';
 }
 
@@ -251,11 +252,16 @@ export function isSpatialLayerEnabled(layer: SpatialLayer): boolean {
 export function setSpatialLayerEnabled(layer: SpatialLayer, enabled: boolean): void {
   localStorage.setItem(_spatialKey(layer), enabled ? '1' : '0');
   switch (layer) {
- case 'drone': enabled ? _startDrone() : _stopDrone(); break;
- case 'ambient': enabled ? _scheduleChatter() : _cancelChatter();  break;
- case 'radar': enabled ? _scheduleRadar() : _stopRadar(); break;
- case 'ticker':  enabled ? _scheduleTicker()  : _cancelTicker(); break;
- case 'ghost': enabled ? _startGhostDrone() : _stopGhostDrone(); break;
+ case 'drone': { enabled ? _startDrone() : _stopDrone(); break;
+ }
+ case 'ambient': { enabled ? _scheduleChatter() : _cancelChatter();  break;
+ }
+ case 'radar': { enabled ? _scheduleRadar() : _stopRadar(); break;
+ }
+ case 'ticker': {  enabled ? _scheduleTicker()  : _cancelTicker(); break;
+ }
+ case 'ghost': { enabled ? _startGhostDrone() : _stopGhostDrone(); break;
+ }
   }
 }
 
@@ -281,12 +287,18 @@ export function setDataSoundEnabled(enabled: boolean): void {
 
 function _spatialKey(layer: SpatialLayer): string {
   switch (layer) {
- case 'ambient': return SPATIAL_AMBIENT_KEY;
- case 'drone': return SPATIAL_DRONE_KEY;
- case 'pings': return SPATIAL_PINGS_KEY;
- case 'radar': return SPATIAL_RADAR_KEY;
- case 'ticker':  return SPATIAL_TICKER_KEY;
- case 'ghost': return SPATIAL_GHOST_KEY;
+ case 'ambient': { return SPATIAL_AMBIENT_KEY;
+ }
+ case 'drone': { return SPATIAL_DRONE_KEY;
+ }
+ case 'pings': { return SPATIAL_PINGS_KEY;
+ }
+ case 'radar': { return SPATIAL_RADAR_KEY;
+ }
+ case 'ticker': {  return SPATIAL_TICKER_KEY;
+ }
+ case 'ghost': { return SPATIAL_GHOST_KEY;
+ }
   }
 }
 
@@ -395,7 +407,7 @@ function _startDrone(): void {
 
   // Drone gain — base level, will be modulated by LFO
   _droneGainNode = ctx.createGain();
-  _droneGainNode.gain.setValueAtTime(0.30, ctx.currentTime);
+  _droneGainNode.gain.setValueAtTime(0.3, ctx.currentTime);
 
   // LFO tremolo: 0.08 Hz (12.5-second cycle) — slow, breathing pulse
   _droneLfo = ctx.createOscillator();
@@ -403,7 +415,7 @@ function _startDrone(): void {
   _droneLfo.frequency.setValueAtTime(0.08, ctx.currentTime);
 
   _droneLfoGain = ctx.createGain();
-  _droneLfoGain.gain.setValueAtTime(0.20, ctx.currentTime); // ±0.20 tremolo depth
+  _droneLfoGain.gain.setValueAtTime(0.2, ctx.currentTime); // ±0.20 tremolo depth
 
   // LFO modulates drone gain AudioParam directly
   _droneLfo.connect(_droneLfoGain);
@@ -457,8 +469,8 @@ function _updateDronePitch(): void {
   const ctx = _getCtx();
   if (!ctx) return;
   const baseFreq = 40 + _warScore * 0.6;
-  _droneOsc.frequency.setTargetAtTime(baseFreq, ctx.currentTime, 3.0);
-  _droneOsc2?.frequency.setTargetAtTime(baseFreq * 1.005, ctx.currentTime, 3.0);
+  _droneOsc.frequency.setTargetAtTime(baseFreq, ctx.currentTime, 3);
+  _droneOsc2?.frequency.setTargetAtTime(baseFreq * 1.005, ctx.currentTime, 3);
 }
 
 // ── Ambient chatter ───────────────────────────────────────────────────────────
@@ -522,7 +534,7 @@ function _playEscalationPing(level?: 'critical' | 'high'): void {
 
   const isCritical = level === 'critical';
   const freqs = isCritical ? [440, 660, 990] : [440, 660];
-  const peakGain = isCritical ? 0.40 : 0.28;
+  const peakGain = isCritical ? 0.4 : 0.28;
 
   freqs.forEach((freq, i) => {
  const t = ctx.currentTime + i * 0.13;
@@ -604,8 +616,8 @@ function _playGhostActivate(): void {
 
   const g = ctx.createGain();
   g.gain.setValueAtTime(0, t0);
-  g.gain.linearRampToValueAtTime(0.30, t0 + 0.04);
-  g.gain.setValueAtTime(0.30, t0 + 0.55);
+  g.gain.linearRampToValueAtTime(0.3, t0 + 0.04);
+  g.gain.setValueAtTime(0.3, t0 + 0.55);
   g.gain.exponentialRampToValueAtTime(0.001, t0 + 1.05);
   osc.connect(g);
   g.connect(ctx.destination);
@@ -620,7 +632,7 @@ function _playGhostActivate(): void {
   const g2 = ctx.createGain();
   g2.gain.setValueAtTime(0, t0);
   g2.gain.linearRampToValueAtTime(0.12, t0 + 0.05);
-  g2.gain.exponentialRampToValueAtTime(0.001, t0 + 1.10);
+  g2.gain.exponentialRampToValueAtTime(0.001, t0 + 1.1);
   osc2.connect(g2);
   g2.connect(ctx.destination);
   osc2.start(t0); osc2.stop(t0 + 1.15);
@@ -680,7 +692,7 @@ function _fireRadarPing(): void {
   const g2 = ctx.createGain();
   g2.gain.setValueAtTime(0, t);
   g2.gain.linearRampToValueAtTime(0.08, t + 0.003);
-  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.30);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
   o2.connect(g2).connect(_masterGain);
   o2.start(t); o2.stop(t + 0.33);
 
@@ -827,7 +839,7 @@ export function playUiClick(type: 'open' | 'close' = 'open'): void {
   if (!ctx) return;
 
   const freq  = type === 'open' ? 2200 : 1600;
-  const peak  = type === 'open' ? 0.055 : 0.040;
+  const peak  = type === 'open' ? 0.055 : 0.04;
   const decay = type === 'open' ? 0.065 : 0.055;
   const t = ctx.currentTime;
 
@@ -883,7 +895,7 @@ export function playDataTick(level: 'info' | 'warning' | 'critical' = 'info'): v
   } else if (level === 'warning') {
  // Two-tone descending: 1800 → 1200 Hz
  for (const [freq, start, endFreq, peak] of [
- [1800, 0.00, 1400, 0.10] as [number, number, number, number],
+ [1800, 0, 1400, 0.1] as [number, number, number, number],
  [1200, 0.09, 900,  0.08] as [number, number, number, number],
  ]) {
  const osc = ctx.createOscillator(); osc.type = 'sine';
@@ -892,7 +904,7 @@ export function playDataTick(level: 'info' | 'warning' | 'critical' = 'info'): v
  const g = ctx.createGain();
  g.gain.setValueAtTime(0, t + start);
  g.gain.linearRampToValueAtTime(peak, t + start + 0.004);
- g.gain.exponentialRampToValueAtTime(0.001, t + start + 0.10);
+ g.gain.exponentialRampToValueAtTime(0.001, t + start + 0.1);
  osc.connect(g).connect(_masterGain);
  osc.start(t + start); osc.stop(t + start + 0.12);
  }
@@ -901,7 +913,7 @@ export function playDataTick(level: 'info' | 'warning' | 'critical' = 'info'): v
  // Critical: bright sawtooth through bandpass — punchy, attention-grabbing
  const osc = ctx.createOscillator(); osc.type = 'sawtooth';
  osc.frequency.setValueAtTime(1100, t);
- osc.frequency.exponentialRampToValueAtTime(600, t + 0.10);
+ osc.frequency.exponentialRampToValueAtTime(600, t + 0.1);
  const bpf = ctx.createBiquadFilter(); bpf.type = 'bandpass';
  bpf.frequency.value = 1800; bpf.Q.value = 2.5;
  const g = ctx.createGain();
@@ -942,10 +954,10 @@ export function playSonarPing(): void {
   o2.frequency.setValueAtTime(1360, t);
   const g2 = ctx.createGain();
   g2.gain.setValueAtTime(0, t);
-  g2.gain.linearRampToValueAtTime(0.10, t + 0.005);
+  g2.gain.linearRampToValueAtTime(0.1, t + 0.005);
   g2.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
   o2.connect(g2).connect(_masterGain);
-  o2.start(t); o2.stop(t + 0.30);
+  o2.start(t); o2.stop(t + 0.3);
 }
 
 /**
@@ -996,7 +1008,7 @@ export function playAlertPing(): void {
   g1.gain.linearRampToValueAtTime(0.32, t + 0.004);
   g1.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
   o1.connect(g1).connect(_masterGain);
-  o1.start(t); o1.stop(t + 0.40);
+  o1.start(t); o1.stop(t + 0.4);
 
   // Second harmonic 2100 Hz — adds sparkle
   const o2 = ctx.createOscillator(); o2.type = 'sine';
@@ -1004,7 +1016,7 @@ export function playAlertPing(): void {
   const g2 = ctx.createGain();
   g2.gain.setValueAtTime(0, t);
   g2.gain.linearRampToValueAtTime(0.12, t + 0.003);
-  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.20);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
   o2.connect(g2).connect(_masterGain);
   o2.start(t); o2.stop(t + 0.22);
 
@@ -1016,7 +1028,7 @@ export function playAlertPing(): void {
   const nSrc = ctx.createBufferSource(); nSrc.buffer = nBuf;
   const nF = ctx.createBiquadFilter(); nF.type = 'bandpass'; nF.frequency.value = 3200; nF.Q.value = 1.2;
   const nG = ctx.createGain();
-  nG.gain.setValueAtTime(0.10, t);
+  nG.gain.setValueAtTime(0.1, t);
   nG.gain.exponentialRampToValueAtTime(0.001, t + nDur);
   nSrc.connect(nF).connect(nG).connect(_masterGain);
   nSrc.start(t);

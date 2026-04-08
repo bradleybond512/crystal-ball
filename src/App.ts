@@ -74,7 +74,7 @@ export class App {
   private desktopUpdater: DesktopUpdater;
   private desktopNotifications: DesktopNotifications;
 
-  private godsEyeView: GodsVisionView | null = null;
+  private godsVisionView: GodsVisionView | null = null;
   private modules: { destroy(): void }[] = [];
   private unsubAiFlow: (() => void) | null = null;
 
@@ -428,8 +428,8 @@ export class App {
  this.countryIntel.init();
 
  // God's Eye toggle (keyboard shortcut + sidebar button dispatch this)
- document.addEventListener('wm:toggle-gods-eye', () => {
- this.toggleGodsEye().catch(() => {/* error handled in GodsVisionView */});
+ document.addEventListener('cb:toggle-gods-vision', () => {
+ this.toggleGodsVision().catch(() => {/* error handled in GodsVisionView */});
  });
 
  // Phase 5: Event listeners + URL sync
@@ -493,22 +493,22 @@ export class App {
  disconnectAisStream();
   }
 
-  async toggleGodsEye(): Promise<void> {
- if (!this.godsEyeView) {
+  async toggleGodsVision(): Promise<void> {
+ if (!this.godsVisionView) {
  // Cesium reads CESIUM_BASE_URL at module init — must be set before dynamic import
  (window as unknown as Record<string, unknown>).CESIUM_BASE_URL = '/cesium';
  try {
  const { GodsVisionView } = await import('@/components/GodsVisionView');
  const ionToken = getRuntimeConfigSnapshot().secrets.CESIUM_ION_TOKEN?.value;
- this.godsEyeView = new GodsVisionView(ionToken);
+ this.godsVisionView = new GodsVisionView(ionToken);
  } catch (error) {
  // Surface the real failure to desktop.log instead of letting it bubble
  // up to vite:preloadError → chunkReloadGuard → page reload → vault loop.
- console.error('[GodsEye] dynamic import failed:', error, (error as Error)?.stack);
+ console.error('[GodsVision] dynamic import failed:', error, (error as Error)?.stack);
  return;
  }
  }
- this.godsEyeView.toggle();
+ this.godsVisionView.toggle();
   }
 
   private handleDeepLinks(): void {

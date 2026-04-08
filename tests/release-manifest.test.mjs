@@ -55,7 +55,7 @@ test('release manifest verification treats dot-vs-space app names as equivalent'
  {
  assets: [{ name: 'Crystal Ball_2.7.3_x64.dmg' }],
  },
- ['/tmp/World.Monitor_2.7.3_x64.dmg'],
+ ['/tmp/Crystal.Ball_2.7.3_x64.dmg'],
  ),
  [],
   );

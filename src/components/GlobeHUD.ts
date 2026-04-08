@@ -1,4 +1,4 @@
-import { loadGodsEyeLayers, saveGodsEyeLayers, type GodsEyeLayers } from '@/config/gods-eye-layers';
+import { loadGodsVisionLayers, saveGodsVisionLayers, type GodsVisionLayers } from '@/config/gods-vision-layers';
 import type { FollowTarget } from '@/components/gods-vision/AutoFollowEngine';
 import type { FlyModeStatus } from '@/components/gods-vision/FlyMode/FlyModeController';
 import { FLY_SUB_MODE_NAMES } from '@/components/gods-vision/FlyMode/flyModeKeybinds';
@@ -63,7 +63,7 @@ const THEATER_HINTS = [
 
 export class GlobeHUD {
   private element: HTMLElement;
-  private layers: GodsEyeLayers;
+  private layers: GodsVisionLayers;
   private onLayerToggle: ((layerKey: string, enabled: boolean) => void) | null = null;
   private onExit: (() => void) | null = null;
   private onAutoFollowSkip: (() => void) | null = null;
@@ -122,9 +122,9 @@ export class GlobeHUD {
   private readonly SPARKLINE_MAX = 30;
 
   constructor(container: HTMLElement) {
- this.layers = loadGodsEyeLayers();
+ this.layers = loadGodsVisionLayers();
  this.element = document.createElement('div');
- this.element.className = 'gods-eye-hud';
+ this.element.className = 'gods-vision-hud';
  this.element.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:10;';
  container.append(this.element);
  this.buildDOM();
@@ -497,7 +497,7 @@ export class GlobeHUD {
  if (!layer) return;
  layer.enabled = !layer.enabled;
  btn.classList.toggle('ge-layer-active', layer.enabled);
- saveGodsEyeLayers(this.layers);
+ saveGodsVisionLayers(this.layers);
  this.onLayerToggle?.(key, layer.enabled);
  });
  bar.append(btn);

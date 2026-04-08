@@ -1455,7 +1455,7 @@ export class GlobeDataManager {
  // Disabled: Iowa State TMS layer name `goes_conus_geocolor` returns a pink
  // "Invalid TMS Request" PNG for every tile, which Cesium renders as a
  // magenta overlay across the entire globe. Original fix in commit 44a56901,
- // lost in godseye-tier1 integration merge (#171). Re-enable once a working
+ // lost in godsvision-tier1 integration merge (#171). Re-enable once a working
  // tile source is wired up in satellite-weather.ts.
   }
 

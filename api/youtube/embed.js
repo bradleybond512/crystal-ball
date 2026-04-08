@@ -12,7 +12,7 @@ function sanitizeVideoId(value) {
 
 const ALLOWED_ORIGINS = [
   /^https:\/\/(.*\.)?crystalball\.app$/,
-  /^https:\/\/crystalball-[a-z0-9-]+-elie-habib-projects\.vercel\.app$/,
+  /^https:\/\/crystalball-[a-z0-9-]+-bradleybond-projects\.vercel\.app$/,
   /^https:\/\/crystalball-[a-z0-9-]+\.vercel\.app$/,
   /^https?:\/\/localhost(:\d+)?$/,
   /^https?:\/\/127\.0\.0\.1(:\d+)?$/,

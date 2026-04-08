@@ -7,32 +7,32 @@ test.describe("God's Eye Mode", () => {
   });
 
   test("God's Eye button exists in sidebar", async ({ page }) => {
- const btn = page.locator('#godsEyeBtn');
+ const btn = page.locator('#godsVisionBtn');
  await expect(btn).toBeVisible();
   });
 
   test('activates on button click and deactivates on ESC', async ({ page }) => {
- await page.click('#godsEyeBtn');
+ await page.click('#godsVisionBtn');
 
- const container = page.locator('.gods-eye-container');
- await expect(container).toHaveClass(/gods-eye-active/, { timeout: 5000 });
+ const container = page.locator('.gods-vision-container');
+ await expect(container).toHaveClass(/gods-vision-active/, { timeout: 5000 });
 
  await expect(page.locator('#geExitBtn')).toBeVisible();
 
  await page.keyboard.press('Escape');
- await expect(container).not.toHaveClass(/gods-eye-active/, { timeout: 2000 });
+ await expect(container).not.toHaveClass(/gods-vision-active/, { timeout: 2000 });
   });
 
   test('activates on G key press', async ({ page }) => {
  await page.keyboard.press('g');
 
- const container = page.locator('.gods-eye-container');
- await expect(container).toHaveClass(/gods-eye-active/, { timeout: 5000 });
+ const container = page.locator('.gods-vision-container');
+ await expect(container).toHaveClass(/gods-vision-active/, { timeout: 5000 });
   });
 
   test('HUD displays camera information', async ({ page }) => {
- await page.click('#godsEyeBtn');
- await page.waitForSelector('.gods-eye-active', { timeout: 5000 });
+ await page.click('#godsVisionBtn');
+ await page.waitForSelector('.gods-vision-active', { timeout: 5000 });
 
  await expect(page.locator('.ge-hud-threat')).toBeVisible();
  await expect(page.locator('.ge-hud-camera')).toBeVisible();
@@ -40,8 +40,8 @@ test.describe("God's Eye Mode", () => {
   });
 
   test('layer toggle bar has expected layers', async ({ page }) => {
- await page.click('#godsEyeBtn');
- await page.waitForSelector('.gods-eye-active', { timeout: 5000 });
+ await page.click('#godsVisionBtn');
+ await page.waitForSelector('.gods-vision-active', { timeout: 5000 });
 
  const layerButtons = page.locator('.ge-layer-btn');
  const count = await layerButtons.count();
@@ -49,8 +49,8 @@ test.describe("God's Eye Mode", () => {
   });
 
   test('mode badge is visible and shows PEACE by default', async ({ page }) => {
- await page.click('#godsEyeBtn');
- await page.waitForSelector('.gods-eye-active', { timeout: 5000 });
+ await page.click('#godsVisionBtn');
+ await page.waitForSelector('.gods-vision-active', { timeout: 5000 });
 
  const badge = page.locator('.ge-mode-badge');
  await expect(badge).toBeVisible();
@@ -58,16 +58,16 @@ test.describe("God's Eye Mode", () => {
   });
 
   test('auto-follow layer button exists', async ({ page }) => {
- await page.click('#godsEyeBtn');
- await page.waitForSelector('.gods-eye-active', { timeout: 5000 });
+ await page.click('#godsVisionBtn');
+ await page.waitForSelector('.gods-vision-active', { timeout: 5000 });
 
  const afBtn = page.locator('.ge-layer-btn[data-layer="autoFollow"]');
  await expect(afBtn).toBeVisible();
   });
 
   test('auto-follow card is hidden by default', async ({ page }) => {
- await page.click('#godsEyeBtn');
- await page.waitForSelector('.gods-eye-active', { timeout: 5000 });
+ await page.click('#godsVisionBtn');
+ await page.waitForSelector('.gods-vision-active', { timeout: 5000 });
 
  const card = page.locator('.ge-autofollow-card');
  await expect(card).toHaveClass(/ge-hidden/);

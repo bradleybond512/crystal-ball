@@ -63,7 +63,7 @@ src/                        # TypeScript frontend (Vite)
     Panel.ts                # base Panel class
     GlobeHUD.ts             # God's Eye HUD overlay
     GlobeDataManager.ts     # God's Eye Cesium layer manager
-    GodsEyeView.ts          # God's Eye 3D globe view
+    GodsVisionView.ts          # God's Eye 3D globe view
   config/
     panels.ts               # FULL_PANELS, PANEL_CATEGORY_MAP, FULL_MAP_LAYERS
   services/

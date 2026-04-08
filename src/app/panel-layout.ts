@@ -318,47 +318,6 @@ export class PanelLayoutManager implements AppModule {
  });
   }
 
-  private buildVariantSwitcherItems(): string {
- const local = this.ctx.isDesktopApp || location.hostname === '127.0.0.1';
- const vHref = (v: string, prod: string) => local || SITE_VARIANT === v ? '#' : prod;
- const vTarget = (v: string) => !local && SITE_VARIANT !== v ? 'target="_blank" rel="noopener"' : '';
- return `
- <a href="${vHref('full', 'https://crystalball.app')}"
- class="variant-option ${SITE_VARIANT === 'full' ? 'active' : ''}"
- data-variant="full"
- ${vTarget('full')}
- title="${t('header.world')}${SITE_VARIANT === 'full' ? ` ${t('common.currentVariant')}` : ''}">
- <span class="variant-icon">🌍</span>
- <span class="variant-label">${t('header.world')}</span>
- </a>
- <span class="variant-divider"></span>
- <a href="${vHref('tech', 'https://tech.crystalball.app')}"
- class="variant-option ${SITE_VARIANT === 'tech' ? 'active' : ''}"
- data-variant="tech"
- ${vTarget('tech')}
- title="${t('header.tech')}${SITE_VARIANT === 'tech' ? ` ${t('common.currentVariant')}` : ''}">
- <span class="variant-icon">💻</span>
- <span class="variant-label">${t('header.tech')}</span>
- </a>
- <span class="variant-divider"></span>
- <a href="${vHref('finance', 'https://finance.crystalball.app')}"
- class="variant-option ${SITE_VARIANT === 'finance' ? 'active' : ''}"
- data-variant="finance"
- ${vTarget('finance')}
- title="${t('header.finance')}${SITE_VARIANT === 'finance' ? ` ${t('common.currentVariant')}` : ''}">
- <span class="variant-icon">📈</span>
- <span class="variant-label">${t('header.finance')}</span>
- </a>
- ${SITE_VARIANT === 'happy' ? `<span class="variant-divider"></span>
- <a href="${vHref('happy', 'https://happy.crystalball.app')}"
- class="variant-option active"
- data-variant="happy"
- ${vTarget('happy')}
- title="Good News ${t('common.currentVariant')}">
- <span class="variant-icon">☀️</span>
- <span class="variant-label">Good News</span>
- </a>` : ''}`;
-  }
 
   private buildMapSection(): string {
  return `
@@ -428,7 +387,6 @@ export class PanelLayoutManager implements AppModule {
  <!-- Original header kept for compatibility; hidden via CSS on desktop -->
  <div class="header" aria-hidden="true" style="display:none">
  <div class="header-left">
- <div class="variant-switcher">${this.buildVariantSwitcherItems()}</div>
  <span class="logo">MONITOR</span><span class="version">v${__APP_VERSION__}</span>
  <div class="status-indicator"><span class="status-dot"></span><span>${t('header.live')}</span></div>
  <div class="region-selector" style="display:none"></div>
@@ -449,13 +407,8 @@ export class PanelLayoutManager implements AppModule {
  <!-- Drag region / traffic-lights safe area — JS drag via _setupWindowDragRegions() -->
  <div class="mac-sidebar-drag" data-tauri-drag-region></div>
 
- <!-- Navigation: variant pills + live panel list -->
+ <!-- Navigation: live panel list -->
  <nav class="mac-sidebar-nav">
- <div class="mac-variant-pills">
- <button class="mac-variant-pill ${SITE_VARIANT === 'full' ? 'active' : ''}" data-variant="full" title="${t('header.world')}">🌍 World</button>
- <button class="mac-variant-pill ${SITE_VARIANT === 'tech' ? 'active' : ''}" data-variant="tech" title="${t('header.tech')}">💻 Tech</button>
- <button class="mac-variant-pill ${SITE_VARIANT === 'finance' ? 'active' : ''}" data-variant="finance" title="${t('header.finance')}">📈 Fin</button>
- </div>
  ${this.buildSidebarNav()}
  ${SITE_VARIANT === 'happy' ? `
  <div class="mac-sidebar-section">
@@ -469,7 +422,7 @@ export class PanelLayoutManager implements AppModule {
  ${SITE_VARIANT === 'happy' ? '' : `<div class="mac-mode-section" id="modeSelectorSection">
  <button class="mac-alert-family-btn" id="alertFamilyBtn">⚠ Alert Family</button>
  <button class="mac-ghost-mode-btn${getMode() === 'ghost' ? ' mac-ghost-mode-active' : ''}" id="ghostModeBtn" title="Ghost Mode — Reduce polling, suppress notifications (⌘⇧G)">👻 Ghost Mode</button>
- <button class="mac-ghost-mode-btn" id="godsEyeBtn" title="God's Vision — 3D globe view (G)">🌍 God's Vision</button>
+ <button class="mac-ghost-mode-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)">🌍 God's Vision</button>
  </div>`}
 
  <!-- Footer: theme, low-power, settings, version, collapse -->
@@ -542,7 +495,6 @@ export class PanelLayoutManager implements AppModule {
  return `
  <div class="header">
  <div class="header-left">
- <div class="variant-switcher">${this.buildVariantSwitcherItems()}</div>
  <span class="logo">MONITOR</span><span class="version">v${__APP_VERSION__}</span>${BETA_MODE ? '<span class="beta-badge">BETA</span>' : ''}
  <a href="https://github.com/bradleybond512/crystal-ball" target="_blank" rel="noopener" class="github-link" title="${t('header.viewOnGitHub')}">
  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -1368,9 +1320,9 @@ export class PanelLayoutManager implements AppModule {
  });
  // God's Eye button — use delegation to survive any DOM rebuilds
  document.addEventListener('click', (e) => {
- const target = (e.target as HTMLElement).closest('#godsEyeBtn');
+ const target = (e.target as HTMLElement).closest('#godsVisionBtn');
  if (target) {
- document.dispatchEvent(new CustomEvent('wm:toggle-gods-eye'));
+ document.dispatchEvent(new CustomEvent('cb:toggle-gods-vision'));
  }
  });
  document.addEventListener('wm:toggle-ghost-mode', () => {

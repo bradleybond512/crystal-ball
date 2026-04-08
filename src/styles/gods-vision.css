@@ -18,13 +18,13 @@
 }
 
 /* ── Body lock ───────────────────────────────────── */
-body.gods-eye-lock {
+body.gods-vision-lock {
   overflow: hidden !important;
   overscroll-behavior: none !important;
 }
 
 /* ── Container ───────────────────────────────────── */
-.gods-eye-container {
+.gods-vision-container {
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -37,7 +37,7 @@ body.gods-eye-lock {
   transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.gods-eye-container.gods-eye-active {
+.gods-vision-container.gods-vision-active {
   opacity: 1;
   pointer-events: auto;
 }
@@ -449,27 +449,27 @@ body.gods-eye-lock {
 }
 
 /* ── Mode-aware container tinting ──────────────── */
-.gods-eye-container.ge-mode-war .ge-hud-card {
+.gods-vision-container.ge-mode-war .ge-hud-card {
   border-color: rgba(var(--ge-red), 0.2);
   box-shadow: 0 0 20px rgba(var(--ge-red), 0.08), 0 0 60px rgba(var(--ge-red), 0.03);
 }
 
-.gods-eye-container.ge-mode-disaster .ge-hud-card {
+.gods-vision-container.ge-mode-disaster .ge-hud-card {
   border-color: rgba(var(--ge-amber), 0.2);
   box-shadow: 0 0 20px rgba(var(--ge-amber), 0.08), 0 0 60px rgba(var(--ge-amber), 0.03);
 }
 
-.gods-eye-container.ge-mode-finance .ge-hud-card {
+.gods-vision-container.ge-mode-finance .ge-hud-card {
   border-color: rgba(var(--ge-cyan), 0.2);
   box-shadow: 0 0 20px rgba(var(--ge-cyan), 0.08), 0 0 60px rgba(var(--ge-cyan), 0.03);
 }
 
-.gods-eye-container.ge-mode-ghost .ge-hud-card {
+.gods-vision-container.ge-mode-ghost .ge-hud-card {
   border-color: rgba(180, 120, 200, 0.15);
   box-shadow: 0 0 20px rgba(180, 120, 200, 0.06);
 }
 
-.gods-eye-container.ge-mode-war .ge-vignette {
+.gods-vision-container.ge-mode-war .ge-vignette {
   background: radial-gradient(
  ellipse at center,
  transparent 55%,
@@ -478,7 +478,7 @@ body.gods-eye-lock {
   );
 }
 
-.gods-eye-container.ge-mode-disaster .ge-vignette {
+.gods-vision-container.ge-mode-disaster .ge-vignette {
   background: radial-gradient(
  ellipse at center,
  transparent 55%,
@@ -545,15 +545,15 @@ body.gods-eye-lock {
 }
 
 /* ── Cesium widget cleanup ───────────────────────── */
-.gods-eye-container .cesium-viewer,
-.gods-eye-container .cesium-viewer-cesiumWidgetContainer,
-.gods-eye-container .cesium-widget {
+.gods-vision-container .cesium-viewer,
+.gods-vision-container .cesium-viewer-cesiumWidgetContainer,
+.gods-vision-container .cesium-widget {
   position: absolute !important;
   inset: 0 !important;
 }
 
-.gods-eye-container .cesium-viewer .cesium-widget-credits,
-.gods-eye-container .cesium-viewer-bottom {
+.gods-vision-container .cesium-viewer .cesium-widget-credits,
+.gods-vision-container .cesium-viewer-bottom {
   display: none !important;
 }
 

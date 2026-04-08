@@ -16,12 +16,12 @@ async function loadHandler() {
   return module.default;
 }
 
-test('matches full variant for dotted World.Monitor AppImage asset names', async () => {
+test('matches full variant for dotted Crystal.Ball AppImage asset names', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => makeGitHubReleaseResponse([
  {
- name: 'World.Monitor_2.5.7_amd64.AppImage',
- browser_download_url: 'https://downloads.example/World.Monitor_2.5.7_amd64.AppImage',
+ name: 'Crystal.Ball_2.5.7_amd64.AppImage',
+ browser_download_url: 'https://downloads.example/Crystal.Ball_2.5.7_amd64.AppImage',
  },
   ]);
 
@@ -33,7 +33,7 @@ test('matches full variant for dotted World.Monitor AppImage asset names', async
  assert.equal(response.status, 302);
  assert.equal(
  response.headers.get('location'),
- 'https://downloads.example/World.Monitor_2.5.7_amd64.AppImage'
+ 'https://downloads.example/Crystal.Ball_2.5.7_amd64.AppImage'
  );
   } finally {
  globalThis.fetch = originalFetch;
@@ -48,8 +48,8 @@ test('matches tech variant for dashed Tech-Monitor AppImage asset names', async 
  browser_download_url: 'https://downloads.example/Tech-Monitor_2.5.7_amd64.AppImage',
  },
  {
- name: 'World.Monitor_2.5.7_amd64.AppImage',
- browser_download_url: 'https://downloads.example/World.Monitor_2.5.7_amd64.AppImage',
+ name: 'Crystal.Ball_2.5.7_amd64.AppImage',
+ browser_download_url: 'https://downloads.example/Crystal.Ball_2.5.7_amd64.AppImage',
  },
   ]);
 
@@ -72,8 +72,8 @@ test('falls back to release page when requested variant has no matching asset', 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => makeGitHubReleaseResponse([
  {
- name: 'World.Monitor_2.5.7_amd64.AppImage',
- browser_download_url: 'https://downloads.example/World.Monitor_2.5.7_amd64.AppImage',
+ name: 'Crystal.Ball_2.5.7_amd64.AppImage',
+ browser_download_url: 'https://downloads.example/Crystal.Ball_2.5.7_amd64.AppImage',
  },
   ]);
 

@@ -84,7 +84,7 @@ export class GodsVisionView {
   constructor(ionToken?: string) {
  this.ionToken = ionToken;
  this.container = document.createElement('div');
- this.container.className = 'gods-eye-container';
+ this.container.className = 'gods-vision-container';
  document.body.append(this.container);
   }
 
@@ -96,8 +96,8 @@ export class GodsVisionView {
  if (this.active) return;
  this.active = true;
 
- this.container.classList.add('gods-eye-active');
- document.body.classList.add('gods-eye-lock');
+ this.container.classList.add('gods-vision-active');
+ document.body.classList.add('gods-vision-lock');
 
  try {
  this.globe = new CesiumGlobe({
@@ -111,8 +111,8 @@ export class GodsVisionView {
  this.globe?.destroy();
  this.globe = null;
  this.active = false;
- this.container.classList.remove('gods-eye-active');
- document.body.classList.remove('gods-eye-lock');
+ this.container.classList.remove('gods-vision-active');
+ document.body.classList.remove('gods-vision-lock');
  return;
  }
 
@@ -298,8 +298,8 @@ export class GodsVisionView {
  for (const fn of this.cleanupHandlers) fn();
  this.cleanupHandlers = [];
 
- this.container.classList.remove('gods-eye-active');
- document.body.classList.remove('gods-eye-lock');
+ this.container.classList.remove('gods-vision-active');
+ document.body.classList.remove('gods-vision-lock');
 
  if (this.hudTickId != null) { clearInterval(this.hudTickId); this.hudTickId = null; }
 

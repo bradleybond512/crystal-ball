@@ -1,13 +1,13 @@
-export interface GodsEyeLayerConfig {
+export interface GodsVisionLayerConfig {
   name: string;
   category: 'spatial' | 'intelligence' | 'aesthetic' | 'analytical';
   enabled: boolean;
   description: string;
 }
 
-export type GodsEyeLayers = Record<string, GodsEyeLayerConfig>;
+export type GodsVisionLayers = Record<string, GodsVisionLayerConfig>;
 
-export const DEFAULT_GODS_EYE_LAYERS: GodsEyeLayers = {
+export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
   // ── Data Layers (shown in HUD bar) ──
   earthquakes: {
  name: 'Earthquakes',
@@ -242,14 +242,14 @@ export const DEFAULT_GODS_EYE_LAYERS: GodsEyeLayers = {
   },
 };
 
-const STORAGE_KEY = 'crystalball-gods-eye-layers';
+const STORAGE_KEY = 'crystalball-gods-vision-layers';
 
-export function loadGodsEyeLayers(): GodsEyeLayers {
+export function loadGodsVisionLayers(): GodsVisionLayers {
   try {
  const stored = localStorage.getItem(STORAGE_KEY);
- if (!stored) return structuredClone(DEFAULT_GODS_EYE_LAYERS);
+ if (!stored) return structuredClone(DEFAULT_GODS_VISION_LAYERS);
  const parsed = JSON.parse(stored) as Record<string, boolean>;
- const layers = structuredClone(DEFAULT_GODS_EYE_LAYERS);
+ const layers = structuredClone(DEFAULT_GODS_VISION_LAYERS);
  for (const [key, enabled] of Object.entries(parsed)) {
  if (key in layers) {
  layers[key]!.enabled = enabled;
@@ -257,11 +257,11 @@ export function loadGodsEyeLayers(): GodsEyeLayers {
  }
  return layers;
   } catch {
- return structuredClone(DEFAULT_GODS_EYE_LAYERS);
+ return structuredClone(DEFAULT_GODS_VISION_LAYERS);
   }
 }
 
-export function saveGodsEyeLayers(layers: GodsEyeLayers): void {
+export function saveGodsVisionLayers(layers: GodsVisionLayers): void {
   const simplified: Record<string, boolean> = {};
   for (const [key, config] of Object.entries(layers)) {
  simplified[key] = config.enabled;

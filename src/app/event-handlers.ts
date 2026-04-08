@@ -341,7 +341,7 @@ export class EventHandlerManager implements AppModule {
  const tag = target.tagName;
  if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
  e.preventDefault();
- document.dispatchEvent(new CustomEvent('wm:toggle-gods-eye'));
+ document.dispatchEvent(new CustomEvent('cb:toggle-gods-vision'));
  }
  // Cmd+\ — toggle sidebar
  if (e.metaKey && e.key === '\\' && !e.shiftKey && !e.altKey) {

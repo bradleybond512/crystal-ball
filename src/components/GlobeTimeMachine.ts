@@ -34,7 +34,7 @@ export class GlobeTimeMachine {
 
   mount(): void {
  const root = document.createElement('div');
- root.className = 'godseye-time-machine';
+ root.className = 'godsvision-time-machine';
 
  const liveWrap = document.createElement('div');
  liveWrap.className = 'gtm-live-wrap';

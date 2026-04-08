@@ -132,7 +132,7 @@ export default tseslint.config(
  'src/components/DeckGLMap.ts',
  'src-tauri/sidecar/local-api-server.mjs',
  'src/services/runtime.ts',
- 'src/components/GodsEyeView.ts',
+ 'src/components/GodsVisionView.ts',
  'src/types/index.ts',
  'src/types/**/*.ts',
  'src/config/variants/**/*.ts',

@@ -59,14 +59,14 @@ The 3D immersive features degrade gracefully based on available keys:
 
 | Tier | Requirement | Behavior |
 |------|-------------|----------|
-| 1 | `GOOGLE_MAPS_API_KEY` | Photorealistic 3D building tiles on God's Eye globe |
-| 2 | `CESIUM_ION_TOKEN` (no Google key) | Cesium OSM Buildings on God's Eye globe |
+| 1 | `GOOGLE_MAPS_API_KEY` | Photorealistic 3D building tiles on God's Vision globe |
+| 2 | `CESIUM_ION_TOKEN` (no Google key) | Cesium OSM Buildings on God's Vision globe |
 | 3 | Neither key | 2D map building extrusions only (zoom 14+) |
 | 4 | Extrusions disabled | Flat map, no building geometry |
 
 **3D Aircraft**
 
-No API key required. Aircraft are rendered as 3D meshes using locally bundled GLTF models on both the 2D DeckGL map and the God's Eye globe. Mesh rendering is limited to 200 aircraft instances for performance.
+No API key required. Aircraft are rendered as 3D meshes using locally bundled GLTF models on both the 2D DeckGL map and the God's Vision globe. Mesh rendering is limited to 200 aircraft instances for performance.
 
 **Satellite Tracking**
 

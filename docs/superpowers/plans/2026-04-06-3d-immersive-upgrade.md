@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add 3D buildings (5-tier redundant fallback), detailed glTF aircraft models at real altitude, and real-time satellite tracking with SGP4 propagation to both the 2D DeckGL map and God's Eye Cesium globe.
+**Goal:** Add 3D buildings (5-tier redundant fallback), detailed glTF aircraft models at real altitude, and real-time satellite tracking with SGP4 propagation to both the 2D DeckGL map and God's Vision Cesium globe.
 
 **Architecture:** Unified 3D Asset Pipeline — shared services (`model-loader`, `satellite-catalog`, `satellite-propagator`, `building-tiles`) consumed by both DeckGL and Cesium renderers. Satellite propagation runs in a Web Worker to keep the main thread free.
 
@@ -100,7 +100,7 @@ git commit -m "feat: add satellite.js, mesh-layers deps and GOOGLE_MAPS_API_KEY 
 
 ---
 
-## Task 2: Add MapLayers Toggles & God's Eye Layer Config
+## Task 2: Add MapLayers Toggles & God's Vision Layer Config
 
 **Files:**
 
@@ -112,7 +112,7 @@ git commit -m "feat: add satellite.js, mesh-layers deps and GOOGLE_MAPS_API_KEY 
 - Modify: `src/config/variants/happy.ts` — add defaults
 - Modify: `src/e2e/map-harness.ts` — add defaults
 - Modify: `src/e2e/mobile-map-integration-harness.ts` — add defaults
-- Modify: `src/config/gods-eye-layers.ts` — add layer entries
+- Modify: `src/config/gods-vision-layers.ts` — add layer entries
 
 - [ ] **Step 1: Add MapLayers keys**
 
@@ -144,9 +144,9 @@ Files to update (add to each MapLayers object):
 - `src/e2e/map-harness.ts` — 2 objects
 - `src/e2e/mobile-map-integration-harness.ts` — 1 object
 
-- [ ] **Step 3: Add God's Eye layer entries**
+- [ ] **Step 3: Add God's Vision layer entries**
 
-In `src/config/gods-eye-layers.ts`, the `satellites` and `terrain` entries may already exist. Check first. Add or verify these entries exist:
+In `src/config/gods-vision-layers.ts`, the `satellites` and `terrain` entries may already exist. Check first. Add or verify these entries exist:
 
 ```typescript
 buildings: {
@@ -185,8 +185,8 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/types/index.ts src/config/panels.ts src/config/variants/ src/e2e/ src/config/gods-eye-layers.ts
-git commit -m "feat: add 3D buildings, satellites, aircraft3d MapLayers toggles and God's Eye config"
+git add src/types/index.ts src/config/panels.ts src/config/variants/ src/e2e/ src/config/gods-vision-layers.ts
+git commit -m "feat: add 3D buildings, satellites, aircraft3d MapLayers toggles and God's Vision config"
 ```
 
 ---
@@ -410,7 +410,7 @@ git commit -m "feat: add 3D building extrusions on 2D map via MapLibre fill-extr
 
 ---
 
-## Task 5: Integrate BuildingTileManager into God's Eye Globe
+## Task 5: Integrate BuildingTileManager into God's Vision Globe
 
 **Files:**
 
@@ -466,7 +466,7 @@ Expected: PASS
 
 ```bash
 git add src/components/GlobeDataManager.ts
-git commit -m "feat: integrate BuildingTileManager into God's Eye globe"
+git commit -m "feat: integrate BuildingTileManager into God's Vision globe"
 ```
 
 ---
@@ -1202,7 +1202,7 @@ git commit -m "feat: add satellite position, label, and orbit path layers to 2D 
 
 ---
 
-## Task 10: Satellite Layers on God's Eye Globe
+## Task 10: Satellite Layers on God's Vision Globe
 
 **Files:**
 
@@ -1316,7 +1316,7 @@ Expected: PASS
 
 ```bash
 git add src/components/GlobeDataManager.ts
-git commit -m "feat: add real-time satellite visualization on God's Eye globe with SGP4 propagation"
+git commit -m "feat: add real-time satellite visualization on God's Vision globe with SGP4 propagation"
 ```
 
 ---
@@ -1491,7 +1491,7 @@ git commit -m "feat: add 3D aircraft rendering with SimpleMeshLayer on 2D map"
 
 ---
 
-## Task 13: 3D Aircraft on God's Eye Globe (ModelGraphics)
+## Task 13: 3D Aircraft on God's Vision Globe (ModelGraphics)
 
 **Files:**
 
@@ -1557,7 +1557,7 @@ Expected: PASS
 
 ```bash
 git add src/components/GlobeDataManager.ts
-git commit -m "feat: replace flight billboard icons with 3D glTF models on God's Eye globe"
+git commit -m "feat: replace flight billboard icons with 3D glTF models on God's Vision globe"
 ```
 
 ---

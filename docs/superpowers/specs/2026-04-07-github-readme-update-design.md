@@ -15,7 +15,7 @@ Complete structural rewrite. Same content sources as current README, reorganized
 **New section order:**
 
 1. **Hero** — Dense technical one-liner, badge row, screenshot placeholder
-2. **God's Eye** — Flagship feature, full capability list (HUD, Fly Mode, Time Machine, 22 layers, satellite tracking, 3D buildings)
+2. **God's Vision** — Flagship feature, full capability list (HUD, Fly Mode, Time Machine, 22 layers, satellite tracking, 3D buildings)
 3. **Intelligence Coverage** — Domain-organized table (Conflict, Weather, Cyber, Markets, Space, Infrastructure, Disasters)
 4. **What Makes This Hard** — Six non-trivial engineering challenges explained concisely
 5. **Architecture** — Stack table
@@ -51,13 +51,13 @@ Ghost Mode with analytics suppression.
 
 <a href="https://github.com/bradleybond512/crystal-ball/releases/latest"><strong>Download Latest Release</strong></a>
 
-<!-- screenshot: God's Eye 3D globe with HUD overlay and active layers -->
+<!-- screenshot: God's Vision 3D globe with HUD overlay and active layers -->
 ```
 
-### 2. God's Eye
+### 2. God's Vision
 
 ```markdown
-## God's Eye
+## God's Vision
 
 Full-viewport Cesium.js 3D globe mode. Activate with `G` or the sidebar.
 
@@ -83,7 +83,7 @@ weather satellites. No API key required, TLE data from CelesTrak.
 
 **Imagery:** Bing satellite (Cesium Ion token) → ArcGIS World Imagery fallback.
 
-<!-- screenshot: God's Eye with HUD overlay and active layers -->
+<!-- screenshot: God's Vision with HUD overlay and active layers -->
 ```
 
 ### 3. Intelligence Coverage
@@ -106,7 +106,7 @@ Six engineering challenges:
 
 1. **Local-first desktop security boundary** — Keys in OS keychain, injected into Node.js sidecar, proxied through bearer-authenticated localhost. Renderer resolves port dynamically.
 
-2. **CSP under real constraints** — `script-src 'unsafe-eval'` required by Cesium GLSL shader compilation. Removing it silently breaks God's Eye (dynamic import failure → reload loop). Compensating controls: trusted-window IPC gating, sidecar bearer auth, no `'unsafe-inline'`, devtools disabled in production.
+2. **CSP under real constraints** — `script-src 'unsafe-eval'` required by Cesium GLSL shader compilation. Removing it silently breaks God's Vision (dynamic import failure → reload loop). Compensating controls: trusted-window IPC gating, sidecar bearer auth, no `'unsafe-inline'`, devtools disabled in production.
 
 3. **Variant architecture without forking** — Four product variants share one application shell. Panel inventory, map layer defaults, feed config swap through `src/config/panels.ts` and `src/config/variant.ts`.
 
@@ -134,7 +134,7 @@ Six engineering challenges:
 | Product variants | 4 | `src/config/variant.ts` |
 | Desktop build targets | 3 | `package.json` |
 | Default panel inventory | 181 full / 35 tech / 31 finance / 10 happy | `src/config/panels.ts` |
-| God's Eye data layers | 22 | `src/components/GodsEyeView.ts` |
+| God's Vision data layers | 22 | `src/components/GodsVisionView.ts` |
 | Supported secret keys | 47 | `src-tauri/src/main.rs` |
 | Locales | 19 | `src/services/i18n.ts` |
 | Generated OpenAPI specs | 21 | `docs/api/` |

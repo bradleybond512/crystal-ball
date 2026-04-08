@@ -1,14 +1,14 @@
-# God's Eye Mode — Foundation Implementation Plan
+# God's Vision Mode — Foundation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the Cesium + Three.js hybrid globe shell with God's Eye full-viewport mode, entry/exit transitions, and the rendering bridge that all subsequent features depend on.
+**Goal:** Build the Cesium + Three.js hybrid globe shell with God's Vision full-viewport mode, entry/exit transitions, and the rendering bridge that all subsequent features depend on.
 
-**Architecture:** CesiumJS renders the base globe (WGS84, terrain, imagery). Three.js overlays custom effects into the same canvas via camera matrix sync. An HTML HUD layer composites on top. God's Eye mode is a full-viewport takeover activated by keyboard shortcut or button, with the existing dashboard preserved underneath.
+**Architecture:** CesiumJS renders the base globe (WGS84, terrain, imagery). Three.js overlays custom effects into the same canvas via camera matrix sync. An HTML HUD layer composites on top. God's Vision mode is a full-viewport takeover activated by keyboard shortcut or button, with the existing dashboard preserved underneath.
 
 **Tech Stack:** CesiumJS, Three.js 0.183, TypeScript (strict, `@/` path alias), node:test for unit tests, Playwright for e2e.
 
-**Spec:** `docs/superpowers/specs/2026-04-05-gods-eye-3d-globe-design.md`
+**Spec:** `docs/superpowers/specs/2026-04-05-gods-vision-3d-globe-design.md`
 
 ---
 
@@ -16,15 +16,15 @@
 
 | File | Responsibility |
 |------|---------------|
-| `src/components/GodsEyeView.ts` | Top-level orchestrator — lifecycle, entry/exit transitions, manages CesiumGlobe + ThreeOverlay + GlobeHUD |
+| `src/components/GodsVisionView.ts` | Top-level orchestrator — lifecycle, entry/exit transitions, manages CesiumGlobe + ThreeOverlay + GlobeHUD |
 | `src/components/CesiumGlobe.ts` | Cesium.Viewer wrapper — imagery provider, camera, terrain, resize handling, cleanup |
 | `src/components/ThreeOverlay.ts` | Three.js scene synced to Cesium — post-processing pipeline (bloom, vignette), placeholder for future layers |
 | `src/components/GlobeHUD.ts` | HTML overlay — status readouts, layer toggle bar, camera position display |
 | `src/services/cesium-three-bridge.ts` | Pure functions: ECEF to Three.js coordinate transforms, Cesium to Three.js camera matrix extraction |
-| `src/config/gods-eye-layers.ts` | Layer registry — boolean flags + metadata for all God's Eye layers (satellites, terrain, imagery, RF, etc.) |
+| `src/config/gods-vision-layers.ts` | Layer registry — boolean flags + metadata for all God's Vision layers (satellites, terrain, imagery, RF, etc.) |
 | `tests/cesium-three-bridge.test.mts` | Unit tests for coordinate transforms + camera matrix extraction |
-| `tests/gods-eye-layers.test.mts` | Unit tests for layer registry |
-| `e2e/gods-eye-mode.spec.ts` | E2E: God's Eye button appears, mode activates, ESC exits |
+| `tests/gods-vision-layers.test.mts` | Unit tests for layer registry |
+| `e2e/gods-vision-mode.spec.ts` | E2E: God's Vision button appears, mode activates, ESC exits |
 
 ---
 
@@ -107,7 +107,7 @@ git add package.json package-lock.json vite.config.ts src/config/cesium-init.ts
 git commit -m "$(cat <<'EOF'
 build: add CesiumJS dependency and Vite static asset config
 
-Foundation for God's Eye 3D globe mode. Configures Cesium
+Foundation for God's Vision 3D globe mode. Configures Cesium
 worker/asset copying and ion token initialization.
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
@@ -282,27 +282,27 @@ EOF
 
 ---
 
-### Task 3: God's Eye Layer Registry
+### Task 3: God's Vision Layer Registry
 
 **Files:**
 
-- Create: `src/config/gods-eye-layers.ts`
-- Create: `tests/gods-eye-layers.test.mts`
+- Create: `src/config/gods-vision-layers.ts`
+- Create: `tests/gods-vision-layers.test.mts`
 
 - [ ] **Step 1: Write failing test**
 
-Create `tests/gods-eye-layers.test.mts`:
+Create `tests/gods-vision-layers.test.mts`:
 
 ```typescript
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-describe('gods-eye-layers', () => {
+describe('gods-vision-layers', () => {
   it('exports default layer state with all layers disabled', async () => {
- const { DEFAULT_GODS_EYE_LAYERS } = await import(
- '../src/config/gods-eye-layers.ts'
+ const { DEFAULT_GODS_VISION_LAYERS } = await import(
+ '../src/config/gods-vision-layers.ts'
  );
- const allDisabled = Object.values(DEFAULT_GODS_EYE_LAYERS).every(
+ const allDisabled = Object.values(DEFAULT_GODS_VISION_LAYERS).every(
  (layer) => !layer.enabled,
  );
  assert.equal(
@@ -313,10 +313,10 @@ describe('gods-eye-layers', () => {
   });
 
   it('every layer has required metadata fields', async () => {
- const { DEFAULT_GODS_EYE_LAYERS } = await import(
- '../src/config/gods-eye-layers.ts'
+ const { DEFAULT_GODS_VISION_LAYERS } = await import(
+ '../src/config/gods-vision-layers.ts'
  );
- for (const [key, layer] of Object.entries(DEFAULT_GODS_EYE_LAYERS)) {
+ for (const [key, layer] of Object.entries(DEFAULT_GODS_VISION_LAYERS)) {
  assert.ok(layer.name, `${key} missing name`);
  assert.ok(layer.category, `${key} missing category`);
  assert.equal(typeof layer.enabled, 'boolean', `${key} enabled not boolean`);
@@ -324,10 +324,10 @@ describe('gods-eye-layers', () => {
   });
 
   it('has layers for all 8 planned features', async () => {
- const { DEFAULT_GODS_EYE_LAYERS } = await import(
- '../src/config/gods-eye-layers.ts'
+ const { DEFAULT_GODS_VISION_LAYERS } = await import(
+ '../src/config/gods-vision-layers.ts'
  );
- const keys = Object.keys(DEFAULT_GODS_EYE_LAYERS);
+ const keys = Object.keys(DEFAULT_GODS_VISION_LAYERS);
  const required = [
  'satellites',
  'terrain',
@@ -350,26 +350,26 @@ describe('gods-eye-layers', () => {
 Run:
 
 ```bash
-npx tsx --test tests/gods-eye-layers.test.mts
+npx tsx --test tests/gods-vision-layers.test.mts
 ```
 
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement layer registry**
 
-Create `src/config/gods-eye-layers.ts`:
+Create `src/config/gods-vision-layers.ts`:
 
 ```typescript
-export interface GodsEyeLayerConfig {
+export interface GodsVisionLayerConfig {
   name: string;
   category: 'spatial' | 'intelligence' | 'aesthetic' | 'analytical';
   enabled: boolean;
   description: string;
 }
 
-export type GodsEyeLayers = Record<string, GodsEyeLayerConfig>;
+export type GodsVisionLayers = Record<string, GodsVisionLayerConfig>;
 
-export const DEFAULT_GODS_EYE_LAYERS: GodsEyeLayers = {
+export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
   satellites: {
  name: 'Satellite Tracking',
  category: 'spatial',
@@ -438,14 +438,14 @@ export const DEFAULT_GODS_EYE_LAYERS: GodsEyeLayers = {
   },
 };
 
-const STORAGE_KEY = 'crystalball-gods-eye-layers';
+const STORAGE_KEY = 'crystalball-gods-vision-layers';
 
-export function loadGodsEyeLayers(): GodsEyeLayers {
+export function loadGodsVisionLayers(): GodsVisionLayers {
   try {
  const stored = localStorage.getItem(STORAGE_KEY);
- if (!stored) return structuredClone(DEFAULT_GODS_EYE_LAYERS);
+ if (!stored) return structuredClone(DEFAULT_GODS_VISION_LAYERS);
  const parsed = JSON.parse(stored) as Record<string, boolean>;
- const layers = structuredClone(DEFAULT_GODS_EYE_LAYERS);
+ const layers = structuredClone(DEFAULT_GODS_VISION_LAYERS);
  for (const [key, enabled] of Object.entries(parsed)) {
  if (key in layers) {
  layers[key]!.enabled = enabled;
@@ -453,11 +453,11 @@ export function loadGodsEyeLayers(): GodsEyeLayers {
  }
  return layers;
   } catch {
- return structuredClone(DEFAULT_GODS_EYE_LAYERS);
+ return structuredClone(DEFAULT_GODS_VISION_LAYERS);
   }
 }
 
-export function saveGodsEyeLayers(layers: GodsEyeLayers): void {
+export function saveGodsVisionLayers(layers: GodsVisionLayers): void {
   const simplified: Record<string, boolean> = {};
   for (const [key, config] of Object.entries(layers)) {
  simplified[key] = config.enabled;
@@ -471,7 +471,7 @@ export function saveGodsEyeLayers(layers: GodsEyeLayers): void {
 Run:
 
 ```bash
-npx tsx --test tests/gods-eye-layers.test.mts
+npx tsx --test tests/gods-vision-layers.test.mts
 ```
 
 Expected: 3 tests PASS.
@@ -479,11 +479,11 @@ Expected: 3 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/config/gods-eye-layers.ts tests/gods-eye-layers.test.mts
+git add src/config/gods-vision-layers.ts tests/gods-vision-layers.test.mts
 git commit -m "$(cat <<'EOF'
-feat: add God's Eye layer registry with persistence
+feat: add God's Vision layer registry with persistence
 
-Config-driven layer system for all God's Eye features (satellites,
+Config-driven layer system for all God's Vision features (satellites,
 terrain, buildings, imagery, HUD, entity graph, RF, timeline).
 Persists to localStorage.
 
@@ -621,7 +621,7 @@ git commit -m "$(cat <<'EOF'
 feat: add CesiumGlobe component — dark-styled 3D globe viewer
 
 Wraps Cesium.Viewer with dark imagery, disabled UI chrome,
-resize handling, and cleanup. Base layer for God's Eye mode.
+resize handling, and cleanup. Base layer for God's Vision mode.
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 EOF
@@ -696,7 +696,7 @@ export class ThreeOverlay {
 
   /**
  * Sync Three.js camera to match Cesium's view.
- * Called each frame from GodsEyeView render loop.
+ * Called each frame from GodsVisionView render loop.
  */
   syncCamera(
  viewMatrix: ArrayLike<number>,
@@ -815,7 +815,7 @@ EOF
 The HUD uses DOM manipulation via safe methods (textContent, classList) rather than string-based HTML injection. Create `src/components/GlobeHUD.ts`:
 
 ```typescript
-import { loadGodsEyeLayers, saveGodsEyeLayers, type GodsEyeLayers } from '@/config/gods-eye-layers';
+import { loadGodsVisionLayers, saveGodsVisionLayers, type GodsVisionLayers } from '@/config/gods-vision-layers';
 
 export interface HUDState {
   cameraAltitude: number;
@@ -828,7 +828,7 @@ export interface HUDState {
 
 export class GlobeHUD {
   private element: HTMLElement;
-  private layers: GodsEyeLayers;
+  private layers: GodsVisionLayers;
   private onLayerToggle: ((layerKey: string, enabled: boolean) => void) | null = null;
   private onExit: (() => void) | null = null;
 
@@ -840,9 +840,9 @@ export class GlobeHUD {
   private coordsEl: HTMLElement | null = null;
 
   constructor(container: HTMLElement) {
- this.layers = loadGodsEyeLayers();
+ this.layers = loadGodsVisionLayers();
  this.element = document.createElement('div');
- this.element.className = 'gods-eye-hud';
+ this.element.className = 'gods-vision-hud';
  this.element.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:10;';
  container.appendChild(this.element);
  this.buildDOM();
@@ -949,7 +949,7 @@ export class GlobeHUD {
  if (!layer) return;
  layer.enabled = !layer.enabled;
  btn.classList.toggle('ge-layer-active', layer.enabled);
- saveGodsEyeLayers(this.layers);
+ saveGodsVisionLayers(this.layers);
  this.onLayerToggle?.(key, layer.enabled);
  });
  bar.appendChild(btn);
@@ -1008,7 +1008,7 @@ git add src/components/GlobeHUD.ts
 git commit -m "$(cat <<'EOF'
 feat: add GlobeHUD — floating status cards and layer toggles
 
-HTML overlay for God's Eye mode using safe DOM construction.
+HTML overlay for God's Vision mode using safe DOM construction.
 Threat level readout, camera coords, satellite count, layer
 toggle bar, and exit button.
 
@@ -1019,21 +1019,21 @@ EOF
 
 ---
 
-### Task 7: God's Eye CSS
+### Task 7: God's Vision CSS
 
 **Files:**
 
-- Create: `src/styles/gods-eye.css`
+- Create: `src/styles/gods-vision.css`
 - Modify: `src/styles/main.css` (import)
 
-- [ ] **Step 1: Create gods-eye.css**
+- [ ] **Step 1: Create gods-vision.css**
 
-Create `src/styles/gods-eye.css`:
+Create `src/styles/gods-vision.css`:
 
 ```css
-/* God's Eye Mode — full-viewport 3D globe */
+/* God's Vision Mode — full-viewport 3D globe */
 
-.gods-eye-container {
+.gods-vision-container {
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -1043,7 +1043,7 @@ Create `src/styles/gods-eye.css`:
   transition: opacity 0.6s ease;
 }
 
-.gods-eye-container.gods-eye-active {
+.gods-vision-container.gods-vision-active {
   opacity: 1;
   pointer-events: auto;
 }
@@ -1150,7 +1150,7 @@ Create `src/styles/gods-eye.css`:
 Read `src/styles/main.css` to find the existing import section, then add at the end of any existing `@import` block:
 
 ```css
-@import './gods-eye.css';
+@import './gods-vision.css';
 ```
 
 - [ ] **Step 3: Verify build**
@@ -1166,9 +1166,9 @@ Expected: Zero errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/styles/gods-eye.css src/styles/main.css
+git add src/styles/gods-vision.css src/styles/main.css
 git commit -m "$(cat <<'EOF'
-feat: add God's Eye HUD styles — dark tactical theme
+feat: add God's Vision HUD styles — dark tactical theme
 
 Monospace fonts, glassmorphism cards, layer toggle bar,
 threat readouts. Matches existing dark theme palette.
@@ -1180,15 +1180,15 @@ EOF
 
 ---
 
-### Task 8: GodsEyeView Orchestrator
+### Task 8: GodsVisionView Orchestrator
 
 **Files:**
 
-- Create: `src/components/GodsEyeView.ts`
+- Create: `src/components/GodsVisionView.ts`
 
-- [ ] **Step 1: Create GodsEyeView.ts**
+- [ ] **Step 1: Create GodsVisionView.ts**
 
-Create `src/components/GodsEyeView.ts`:
+Create `src/components/GodsVisionView.ts`:
 
 ```typescript
 import { CesiumGlobe } from '@/components/CesiumGlobe';
@@ -1196,7 +1196,7 @@ import { ThreeOverlay } from '@/components/ThreeOverlay';
 import { GlobeHUD, type HUDState } from '@/components/GlobeHUD';
 import { Cartographic, Math as CesiumMath, Cartesian3 } from 'cesium';
 
-export class GodsEyeView {
+export class GodsVisionView {
   private container: HTMLElement;
   private globe: CesiumGlobe | null = null;
   private threeOverlay: ThreeOverlay | null = null;
@@ -1208,7 +1208,7 @@ export class GodsEyeView {
   constructor(ionToken?: string) {
  this.ionToken = ionToken;
  this.container = document.createElement('div');
- this.container.className = 'gods-eye-container';
+ this.container.className = 'gods-vision-container';
  document.body.appendChild(this.container);
   }
 
@@ -1254,7 +1254,7 @@ export class GodsEyeView {
 
  // Animate in
  requestAnimationFrame(() => {
- this.container.classList.add('gods-eye-active');
+ this.container.classList.add('gods-vision-active');
  });
   }
 
@@ -1263,7 +1263,7 @@ export class GodsEyeView {
  this.active = false;
 
  // Animate out
- this.container.classList.remove('gods-eye-active');
+ this.container.classList.remove('gods-vision-active');
 
  // Cleanup after animation completes
  setTimeout(() => {
@@ -1363,9 +1363,9 @@ Expected: Zero errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/components/GodsEyeView.ts
+git add src/components/GodsVisionView.ts
 git commit -m "$(cat <<'EOF'
-feat: add GodsEyeView orchestrator — full God's Eye lifecycle
+feat: add GodsVisionView orchestrator — full God's Vision lifecycle
 
 Manages Cesium globe + Three.js overlay + HUD lifecycle.
 Entry/exit transitions, render loop with camera sync,
@@ -1378,7 +1378,7 @@ EOF
 
 ---
 
-### Task 9: Wire God's Eye Into App
+### Task 9: Wire God's Vision Into App
 
 **Files:**
 
@@ -1396,29 +1396,29 @@ Read these files to locate the exact lines:
 - `src/app/panel-layout.ts` lines 460-475 — sidebar footer buttons (Ghost Mode button area)
 - `src-tauri/src/main.rs` — find `SUPPORTED_SECRET_KEYS` array
 
-- [ ] **Step 2: Add GodsEyeView to App.ts**
+- [ ] **Step 2: Add GodsVisionView to App.ts**
 
 Add import at the top of `src/App.ts`:
 
 ```typescript
-import { GodsEyeView } from '@/components/GodsEyeView';
+import { GodsVisionView } from '@/components/GodsVisionView';
 ```
 
 Add property alongside other manager declarations (near line 63-70):
 
 ```typescript
-private godsEyeView: GodsEyeView | null = null;
+private godsVisionView: GodsVisionView | null = null;
 ```
 
 Add a public method to the App class:
 
 ```typescript
-toggleGodsEye(): void {
-  if (!this.godsEyeView) {
+toggleGodsVision(): void {
+  if (!this.godsVisionView) {
  const ionToken = this.getSecretSync?.('CESIUM_ION_TOKEN') ?? undefined;
- this.godsEyeView = new GodsEyeView(ionToken);
+ this.godsVisionView = new GodsVisionView(ionToken);
   }
-  this.godsEyeView.toggle();
+  this.godsVisionView.toggle();
 }
 ```
 
@@ -1429,13 +1429,13 @@ toggleGodsEye(): void {
 Find the keyboard handler function (around the Ghost Mode shortcut, line 331-336). Add nearby:
 
 ```typescript
-// G key (no modifiers, not in text input) — toggle God's Eye mode
+// G key (no modifiers, not in text input) — toggle God's Vision mode
 if (e.key === 'g' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
   const target = e.target as HTMLElement;
   const tag = target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
   e.preventDefault();
-  this.app.toggleGodsEye();
+  this.app.toggleGodsVision();
 }
 ```
 
@@ -1443,21 +1443,21 @@ if (e.key === 'g' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
 
 - [ ] **Step 4: Add sidebar button in panel-layout.ts**
 
-Find the Ghost Mode button section (around line 465). Add a God's Eye button above it using the same button pattern:
+Find the Ghost Mode button section (around line 465). Add a God's Vision button above it using the same button pattern:
 
 ```typescript
-const godsEyeBtn = document.createElement('button');
-godsEyeBtn.className = 'mac-ghost-mode-btn';
-godsEyeBtn.id = 'godsEyeBtn';
-godsEyeBtn.title = 'God\'s Eye \u2014 3D Globe Mode (G)';
-godsEyeBtn.textContent = 'God\'s Eye';
+const godsVisionBtn = document.createElement('button');
+godsVisionBtn.className = 'mac-ghost-mode-btn';
+godsVisionBtn.id = 'godsVisionBtn';
+godsVisionBtn.title = 'God\'s Eye \u2014 3D Globe Mode (G)';
+godsVisionBtn.textContent = 'God\'s Eye';
 ```
 
 Wire up the click handler using the same delegation pattern as Ghost Mode:
 
 ```typescript
-godsEyeBtn.addEventListener('click', () => {
-  this.app.toggleGodsEye();
+godsVisionBtn.addEventListener('click', () => {
+  this.app.toggleGodsVision();
 });
 ```
 
@@ -1486,9 +1486,9 @@ Expected: Zero errors.
 ```bash
 git add src/App.ts src/app/event-handlers.ts src/app/panel-layout.ts src-tauri/src/main.rs
 git commit -m "$(cat <<'EOF'
-feat: wire God's Eye mode into app — sidebar button + G shortcut
+feat: wire God's Vision mode into app — sidebar button + G shortcut
 
-God's Eye toggles via sidebar button or G key. Lazy-initializes
+God's Vision toggles via sidebar button or G key. Lazy-initializes
 CesiumJS on first activation. Cesium ion token added to keychain.
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
@@ -1498,15 +1498,15 @@ EOF
 
 ---
 
-### Task 10: E2E Test — God's Eye Mode Toggle
+### Task 10: E2E Test — God's Vision Mode Toggle
 
 **Files:**
 
-- Create: `e2e/gods-eye-mode.spec.ts`
+- Create: `e2e/gods-vision-mode.spec.ts`
 
 - [ ] **Step 1: Create e2e test**
 
-Create `e2e/gods-eye-mode.spec.ts`:
+Create `e2e/gods-vision-mode.spec.ts`:
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -1518,32 +1518,32 @@ test.describe('God\'s Eye Mode', () => {
   });
 
   test('God\'s Eye button exists in sidebar', async ({ page }) => {
- const btn = page.locator('#godsEyeBtn');
+ const btn = page.locator('#godsVisionBtn');
  await expect(btn).toBeVisible();
   });
 
   test('activates on button click and deactivates on ESC', async ({ page }) => {
- await page.click('#godsEyeBtn');
+ await page.click('#godsVisionBtn');
 
- const container = page.locator('.gods-eye-container');
- await expect(container).toHaveClass(/gods-eye-active/, { timeout: 5000 });
+ const container = page.locator('.gods-vision-container');
+ await expect(container).toHaveClass(/gods-vision-active/, { timeout: 5000 });
 
  await expect(page.locator('#geExitBtn')).toBeVisible();
 
  await page.keyboard.press('Escape');
- await expect(container).not.toHaveClass(/gods-eye-active/, { timeout: 2000 });
+ await expect(container).not.toHaveClass(/gods-vision-active/, { timeout: 2000 });
   });
 
   test('activates on G key press', async ({ page }) => {
  await page.keyboard.press('g');
 
- const container = page.locator('.gods-eye-container');
- await expect(container).toHaveClass(/gods-eye-active/, { timeout: 5000 });
+ const container = page.locator('.gods-vision-container');
+ await expect(container).toHaveClass(/gods-vision-active/, { timeout: 5000 });
   });
 
   test('HUD displays camera information', async ({ page }) => {
- await page.click('#godsEyeBtn');
- await page.waitForSelector('.gods-eye-active', { timeout: 5000 });
+ await page.click('#godsVisionBtn');
+ await page.waitForSelector('.gods-vision-active', { timeout: 5000 });
 
  await expect(page.locator('.ge-hud-threat')).toBeVisible();
  await expect(page.locator('.ge-hud-camera')).toBeVisible();
@@ -1551,8 +1551,8 @@ test.describe('God\'s Eye Mode', () => {
   });
 
   test('layer toggle bar has expected layers', async ({ page }) => {
- await page.click('#godsEyeBtn');
- await page.waitForSelector('.gods-eye-active', { timeout: 5000 });
+ await page.click('#godsVisionBtn');
+ await page.waitForSelector('.gods-vision-active', { timeout: 5000 });
 
  const layerButtons = page.locator('.ge-layer-btn');
  const count = await layerButtons.count();
@@ -1566,17 +1566,17 @@ test.describe('God\'s Eye Mode', () => {
 Run:
 
 ```bash
-npx cross-env VITE_VARIANT=full playwright test e2e/gods-eye-mode.spec.ts
+npx cross-env VITE_VARIANT=full playwright test e2e/gods-vision-mode.spec.ts
 ```
 
-Expected: Tests should pass if the dev server is running. If WebGL is unavailable in headless mode, the God's Eye container will still mount (DOM-level tests pass).
+Expected: Tests should pass if the dev server is running. If WebGL is unavailable in headless mode, the God's Vision container will still mount (DOM-level tests pass).
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add e2e/gods-eye-mode.spec.ts
+git add e2e/gods-vision-mode.spec.ts
 git commit -m "$(cat <<'EOF'
-test: add God's Eye e2e tests — toggle, HUD, layer bar
+test: add God's Vision e2e tests — toggle, HUD, layer bar
 
 Verifies sidebar button, G key shortcut, ESC exit, HUD
 visibility, and layer toggle bar presence.
@@ -1636,13 +1636,13 @@ Fix typecheck or build issues. Commit each fix separately with descriptive messa
 | 4 | CesiumGlobe component | 1 created | typecheck |
 | 5 | ThreeOverlay component | 1 created | typecheck |
 | 6 | GlobeHUD component | 1 created | typecheck |
-| 7 | God's Eye CSS | 1 created, 1 modified | build verification |
-| 8 | GodsEyeView orchestrator | 1 created | typecheck |
+| 7 | God's Vision CSS | 1 created, 1 modified | build verification |
+| 8 | GodsVisionView orchestrator | 1 created | typecheck |
 | 9 | Wire into App (button, shortcut, secret) | 4 modified | typecheck |
 | 10 | E2E tests | 1 created | 5 e2e tests |
 | 11 | Full build validation | none | build + typecheck + data tests |
 
 **Next plans after this foundation ships:**
 
-- `2026-04-05-gods-eye-visual-track.md` — Satellites, Terrain, Imagery, HUD
-- `2026-04-05-gods-eye-analytical-track.md` — Entity Graph, RF/SIGINT, Timeline
+- `2026-04-05-gods-vision-visual-track.md` — Satellites, Terrain, Imagery, HUD
+- `2026-04-05-gods-vision-analytical-track.md` — Entity Graph, RF/SIGINT, Timeline

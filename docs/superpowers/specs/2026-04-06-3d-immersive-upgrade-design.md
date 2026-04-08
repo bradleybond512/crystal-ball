@@ -2,13 +2,13 @@
 
 **Date:** 2026-04-06
 **Scope:** 3D buildings, 3D aircraft models, real-time satellite tracking
-**Approach:** Unified 3D Asset Pipeline (Approach A) — shared services consumed by both DeckGL (2D map) and Cesium (God's Eye globe)
+**Approach:** Unified 3D Asset Pipeline (Approach A) — shared services consumed by both DeckGL (2D map) and Cesium (God's Vision globe)
 
 ---
 
 ## 1. 3D Building Tiles — Redundant Fallback Chain
 
-### God's Eye Globe (Cesium)
+### God's Vision Globe (Cesium)
 
 A `BuildingTileManager` class manages a 5-tier fallback chain. On initialization it tries each provider in order, skipping any that lack a configured API key or fail to load:
 
@@ -84,7 +84,7 @@ A lookup table in `model-loader.ts` maps:
 - Common ADS-B ICAO type codes (e.g., `B738`, `A320`, `C17`) → model files
 - Unknown types → generic fallback
 
-### God's Eye Globe (Cesium)
+### God's Vision Globe (Cesium)
 
 Each flight entity uses `ModelGraphics` instead of the current `Billboard`:
 
@@ -163,7 +163,7 @@ Orbit path computation: when user clicks/selects a satellite, Worker computes ne
 
 Performance: SGP4 on 5,000 objects takes ~10-15ms per tick — well within the Worker's budget and completely off the main thread.
 
-### God's Eye Globe (Cesium)
+### God's Vision Globe (Cesium)
 
 - `PointPrimitiveCollection` (not entities — much faster for thousands of objects) at real orbital altitude
 - Notable satellites: billboard icons + labels with `DistanceDisplayCondition`
@@ -193,9 +193,9 @@ satellites: boolean; // Satellite ground positions on 2D map
 aircraft3d: boolean; // 3D mesh aircraft on 2D map (vs 2D icons)
 ```
 
-### New God's Eye Layer Config
+### New God's Vision Layer Config
 
-Added to `src/config/gods-eye-layers.ts`:
+Added to `src/config/gods-vision-layers.ts`:
 
 - `buildings` — 3D building tiles on globe (category: aesthetic)
 - `satellites` — orbital objects (category: intelligence)
@@ -239,7 +239,7 @@ public/models/aircraft/*.glb — ~15 glTF model files
 src/types/index.ts — 3 new MapLayers boolean keys
 src/config/panels.ts — new layer defaults in all MapLayers objects
 src/config/variants/*.ts — new layer defaults (all variants)
-src/config/gods-eye-layers.ts — 3 new layer entries
+src/config/gods-vision-layers.ts — 3 new layer entries
 src/e2e/map-harness.ts — 3 new MapLayers keys
 src/e2e/mobile-map-integration-harness.ts — 3 new MapLayers keys
 src/components/DeckGLMap.ts — SimpleMeshLayer, fill-extrusion, satellite layers

@@ -8,8 +8,8 @@ These keys unlock the most impactful features and are free with simple registrat
 
 | Key | What It Unlocks | Signup |
 |-----|----------------|--------|
-| `GOOGLE_MAPS_API_KEY` | Photorealistic 3D building tiles on the God's Eye globe | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
-| `CESIUM_ION_TOKEN` | God's Eye 3D globe with Bing satellite imagery | [ion.cesium.com](https://ion.cesium.com/signup/) |
+| `GOOGLE_MAPS_API_KEY` | Photorealistic 3D building tiles on the God's Vision globe | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
+| `CESIUM_ION_TOKEN` | God's Vision 3D globe with Bing satellite imagery | [ion.cesium.com](https://ion.cesium.com/signup/) |
 | `NASA_FIRMS_API_KEY` | 7,000+ satellite fire detections worldwide | [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/api/area/) |
 | `OWM_API_KEY` | Weather map tiles (temperature, precipitation, clouds, wind, pressure) | [openweathermap.org](https://openweathermap.org/api) |
 | `FINNHUB_API_KEY` | Real-time stock market data | [finnhub.io](https://finnhub.io/register) |
@@ -83,8 +83,8 @@ These keys unlock the most impactful features and are free with simple registrat
 
 | Key | Label | Free? | What It Enables | Signup |
 |-----|-------|-------|-----------------|--------|
-| `GOOGLE_MAPS_API_KEY` | Google Maps Key | Free tier ($200/mo credit, ~28,500 session loads/mo) | Photorealistic 3D building tiles on the God's Eye globe. Enable "Map Tiles API" in Google Cloud Console. Without this key, falls back to Cesium OSM Buildings (needs `CESIUM_ION_TOKEN`), then no 3D buildings. 2D map building extrusions work without any key. | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
-| `CESIUM_ION_TOKEN` | Cesium Ion Token | Free | God's Eye 3D globe (Bing satellite tiles); also used as fallback for 3D buildings when `GOOGLE_MAPS_API_KEY` is absent | [ion.cesium.com](https://ion.cesium.com/signup/) |
+| `GOOGLE_MAPS_API_KEY` | Google Maps Key | Free tier ($200/mo credit, ~28,500 session loads/mo) | Photorealistic 3D building tiles on the God's Vision globe. Enable "Map Tiles API" in Google Cloud Console. Without this key, falls back to Cesium OSM Buildings (needs `CESIUM_ION_TOKEN`), then no 3D buildings. 2D map building extrusions work without any key. | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
+| `CESIUM_ION_TOKEN` | Cesium Ion Token | Free | God's Vision 3D globe (Bing satellite tiles); also used as fallback for 3D buildings when `GOOGLE_MAPS_API_KEY` is absent | [ion.cesium.com](https://ion.cesium.com/signup/) |
 | `OWM_API_KEY` | OpenWeatherMap Key | Free (limited) | Weather map tiles (temperature, precipitation, clouds, wind, pressure) | [openweathermap.org](https://openweathermap.org/api) |
 
 ### AI Summarization

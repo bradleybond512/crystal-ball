@@ -1,4 +1,4 @@
-# God's Eye Mode — 3D Globe, Satellite Tracking & Intelligence Platform
+# God's Vision Mode — 3D Globe, Satellite Tracking & Intelligence Platform
 
 **Date:** 2026-04-05
 **Status:** Draft
@@ -8,9 +8,9 @@
 
 ## Overview
 
-Transform Crystal Ball from a 2D panel-based intelligence dashboard into a full 3D geospatial intelligence platform inspired by Palantir Gotham and God's Eye. The centerpiece is a new "God's Eye Mode" — a full-viewport Cesium + Three.js hybrid globe with satellite tracking, 3D terrain, entity link analysis, RF/SIGINT visualization, temporal playback, satellite imagery, and a cinematic HUD overlay.
+Transform Crystal Ball from a 2D panel-based intelligence dashboard into a full 3D geospatial intelligence platform inspired by Palantir Gotham and God's Vision. The centerpiece is a new "God's Vision Mode" — a full-viewport Cesium + Three.js hybrid globe with satellite tracking, 3D terrain, entity link analysis, RF/SIGINT visualization, temporal playback, satellite imagery, and a cinematic HUD overlay.
 
-The existing 2D MapLibre + deck.gl dashboard remains untouched as the default workspace. God's Eye Mode is a dedicated immersive experience activated by a button or keyboard shortcut.
+The existing 2D MapLibre + deck.gl dashboard remains untouched as the default workspace. God's Vision Mode is a dedicated immersive experience activated by a button or keyboard shortcut.
 
 ---
 
@@ -19,7 +19,7 @@ The existing 2D MapLibre + deck.gl dashboard remains untouched as the default wo
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Globe engine | Cesium + Three.js hybrid | Cesium for geospatial accuracy (terrain, imagery, time); Three.js for sci-fi aesthetic (shaders, effects, force graph). Defense-contractor pattern. |
-| Integration model | Full-screen God's Eye Mode | Separate immersive mode, not a map replacement. Dashboard for work, globe for command presence. Panels become floating HUD elements. |
+| Integration model | Full-screen God's Vision Mode | Separate immersive mode, not a map replacement. Dashboard for work, globe for command presence. Panels become floating HUD elements. |
 | Satellite depth | Full SIGINT/IMINT correlation | Not just dots — pass prediction, imaging windows, GPS health, ADS-B blackout correlation, sat-event linking. |
 | Entity types | All 6 (Geo, Actors, Events, Assets, Financial, Cyber) | Maximizes graph richness. All types already have data sources feeding them. |
 | Rollout strategy | Parallel streams after foundation | Globe foundation first, then visual track and analytical track proceed independently. |
@@ -30,7 +30,7 @@ The existing 2D MapLibre + deck.gl dashboard remains untouched as the default wo
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ GOD'S EYE MODE │
+│ GOD'S VISION MODE │
 │ (full viewport) │
 │ │
 │  ┌──────────────────────────────────────────────────┐ │
@@ -102,18 +102,18 @@ Existing `three` (v0.183) stays. deck.gl/MapLibre remain for 2D dashboard — un
 
 | File | Purpose |
 |------|---------|
-| `src/components/GodsEyeView.ts` | Top-level orchestrator — manages Cesium, Three.js overlay, HUD, entry/exit transitions |
+| `src/components/GodsVisionView.ts` | Top-level orchestrator — manages Cesium, Three.js overlay, HUD, entry/exit transitions |
 | `src/components/CesiumGlobe.ts` | Cesium viewer setup, imagery providers, camera controls, entity management |
 | `src/components/ThreeOverlay.ts` | Three.js scene synced to Cesium camera — all custom 3D rendering |
 | `src/components/GlobeHUD.ts` | HTML overlay layer — floating panels, status readouts, layer controls |
 | `src/services/cesium-three-bridge.ts` | Coordinate transforms (ECEF ↔ Three.js), camera sync, render loop coordination |
-| `src/config/gods-eye-layers.ts` | Layer registry — data sources mapped to globe rendering |
+| `src/config/gods-vision-layers.ts` | Layer registry — data sources mapped to globe rendering |
 
 ### Key Details
 
 - **Globe imagery:** Dark-styled base (Mapbox Dark or custom dark Blue Marble) matching existing theme. Toggle to satellite imagery (Sentinel/Mapbox Satellite).
 - **Cesium ion:** Free tier provides terrain + imagery (100K monthly tile requests). Token stored in Tauri keychain alongside other API keys.
-- **God's Eye button:** Added to existing toolbar/header. Keyboard shortcut: `G` (when not in text input).
+- **God's Vision button:** Added to existing toolbar/header. Keyboard shortcut: `G` (when not in text input).
 
 ---
 
@@ -193,7 +193,7 @@ Existing `three` (v0.183) stays. deck.gl/MapLibre remain for 2D dashboard — un
 
 **Features:**
 
-- Toggle imagery provider from God's Eye layer controls
+- Toggle imagery provider from God's Vision layer controls
 - Date picker — view imagery from specific past dates
 - False color band composites (NDVI vegetation health, thermal, etc.)
 - Before/after comparison for watchlist locations
@@ -277,7 +277,7 @@ Existing `three` (v0.183) stays. deck.gl/MapLibre remain for 2D dashboard — un
 **Rendering:**
 
 - `3d-force-graph` library — Three.js native force-directed layout
-- Opens as resizable overlay panel within God's Eye mode (not full viewport)
+- Opens as resizable overlay panel within God's Vision mode (not full viewport)
 - Click node → expand connections (lazy load 1 hop from IndexedDB)
 - Double-click node → fly globe camera to entity's geo coordinates
 - Right-click → "Investigate" context menu (show related panels, expand graph, add to watchlist)
@@ -323,7 +323,7 @@ Existing `three` (v0.183) stays. deck.gl/MapLibre remain for 2D dashboard — un
 **Architecture:**
 
 - Cesium Clock — native temporal engine drives all time-aware layers
-- Time slider UI anchored to bottom of God's Eye viewport
+- Time slider UI anchored to bottom of God's Vision viewport
 - Controls: play/pause, speed (1x, 10x, 100x, 1000x), scrub to any recorded point
 - All temporal layers respond simultaneously: satellite positions recompute, events appear/disappear, vessel/flight tracks animate
 
@@ -354,12 +354,12 @@ Existing `three` (v0.183) stays. deck.gl/MapLibre remain for 2D dashboard — un
 
 ### Phase 1 (Foundation) — 6 files
 
-- `src/components/GodsEyeView.ts`
+- `src/components/GodsVisionView.ts`
 - `src/components/CesiumGlobe.ts`
 - `src/components/ThreeOverlay.ts`
 - `src/components/GlobeHUD.ts`
 - `src/services/cesium-three-bridge.ts`
-- `src/config/gods-eye-layers.ts`
+- `src/config/gods-vision-layers.ts`
 
 ### Phase 2A (Visual Track) — 12 files
 

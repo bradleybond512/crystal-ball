@@ -31,9 +31,9 @@ Tauri 2 + TypeScript + Rust desktop app: 181+ live data panels across 4 product 
 
 <a href="https://github.com/bradleybond512/crystal-ball/releases/latest"><strong>Download Latest Release</strong></a>
 
-<!-- screenshot: God's Eye 3D globe with HUD overlay and active layers -->
+<!-- screenshot: God's Vision 3D globe with HUD overlay and active layers -->
 
-## God's Eye
+## God's Vision
 
 Full-viewport Cesium.js 3D globe mode. Activate with `G` or the sidebar.
 
@@ -51,7 +51,7 @@ Full-viewport Cesium.js 3D globe mode. Activate with `G` or the sidebar.
 
 **Imagery:** Bing satellite (Cesium Ion token) → ArcGIS World Imagery fallback.
 
-<!-- screenshot: God's Eye with HUD overlay and active layers -->
+<!-- screenshot: God's Vision with HUD overlay and active layers -->
 
 ## Intelligence Coverage
 
@@ -71,7 +71,7 @@ Full-viewport Cesium.js 3D globe mode. Activate with `G` or the sidebar.
 The renderer never touches API keys directly. Keys are stored in the OS keychain via Tauri's secret store, injected into a Node.js sidecar at startup, and proxied through a bearer-authenticated localhost port. The renderer resolves the sidecar port dynamically — no hardcoded assumptions about the runtime environment.
 
 **CSP under real constraints**
-`script-src` requires `'unsafe-eval'` because Cesium compiles GLSL shaders dynamically. Removing it silently breaks God's Eye (dynamic import failure → reload loop, no visible error). Compensating controls: trusted-window IPC gating, sidecar bearer auth, no `'unsafe-inline'` on script-src, devtools disabled in production builds.
+`script-src` requires `'unsafe-eval'` because Cesium compiles GLSL shaders dynamically. Removing it silently breaks God's Vision (dynamic import failure → reload loop, no visible error). Compensating controls: trusted-window IPC gating, sidecar bearer auth, no `'unsafe-inline'` on script-src, devtools disabled in production builds.
 
 **Variant architecture without forking**
 Four product variants (Full, Tech, Finance, Happy) share one application shell. Panel inventory, map layer defaults, and feed configuration swap through `src/config/panels.ts` and `src/config/variant.ts` — not separate builds or conditional compilation.
@@ -103,7 +103,7 @@ CSS `-webkit-app-region: drag` is silently ignored. Window dragging requires JS 
 | Product variants | 4 | `src/config/variant.ts` |
 | Desktop build targets | 3 | `package.json` |
 | Default panel inventory | 181 full / 35 tech / 31 finance / 10 happy | `src/config/panels.ts` |
-| God's Eye data layers | 22 | `src/components/GodsEyeView.ts` |
+| God's Vision data layers | 22 | `src/components/GodsVisionView.ts` |
 | Supported secret keys | 47 | `src-tauri/src/main.rs` |
 | Locales | 19 | `src/locales/` |
 | Generated OpenAPI specs | 21 | `docs/api/` |
@@ -169,7 +169,7 @@ git add README.md
 git commit -m "docs: portfolio-optimized README rewrite
 
 - Lead with dense technical hero paragraph
-- God's Eye as flagship section (HUD, Fly Mode, Time Machine, 22 layers)
+- God's Vision as flagship section (HUD, Fly Mode, Time Machine, 22 layers)
 - Intelligence coverage table organized by domain
 - What Makes This Hard: 6 non-trivial engineering challenges
 - Corrected panel count: 181 full (was 134), secret keys: 47 (was 46)
@@ -258,7 +258,7 @@ gh pr create \
 
 ## Changes
 - Dense technical hero paragraph leading with full stack
-- God's Eye promoted to section 2 (was section 6)
+- God's Vision promoted to section 2 (was section 6)
 - Intelligence coverage table organized by domain
 - New 'What Makes This Hard' section: 6 non-trivial engineering challenges explained
 - Corrected stale numbers: 181 full panels (was 134), 47 secret keys (was 46)

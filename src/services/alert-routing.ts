@@ -39,6 +39,8 @@ const SOURCE_MULT: Record<UnifiedAlert['source'], number> = {
   'earthquake': 1,
   'fire': 0.8,
   'cyclone': 1.1,
+  'power-grid': 1.2,
+  'comms-health': 1.1,
 };
 
 /** Half-life for recency decay, in minutes. After this many minutes, score halves. */
@@ -67,6 +69,8 @@ const SOURCE_TO_PANEL: Record<UnifiedAlert['source'], string> = {
   'earthquake': 'earthquakes',
   'fire': 'satellite-fires',
   'cyclone': 'tropical-cyclones',
+  'power-grid': 'unified-alert-inbox',
+  'comms-health': 'comms-health',
 };
 
 export function panelForAlert(a: UnifiedAlert): string {

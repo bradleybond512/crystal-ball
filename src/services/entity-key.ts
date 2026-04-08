@@ -30,6 +30,8 @@ const SOURCE_EVENT_TYPE: Record<AlertSource, string> = {
   'earthquake': 'earthquake',
   'fire': 'fire',
   'cyclone': 'cyclone',
+  'power-grid': 'infrastructure',
+  'comms-health': 'infrastructure',
 };
 
 export function canonicalEntityKey(a: UnifiedAlert): string {

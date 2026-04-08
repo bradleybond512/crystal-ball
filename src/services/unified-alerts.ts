@@ -24,7 +24,9 @@ export type AlertSource =
   | 'local-ids'
   | 'earthquake'
   | 'fire'
-  | 'cyclone';
+  | 'cyclone'
+  | 'power-grid'
+  | 'comms-health';
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 

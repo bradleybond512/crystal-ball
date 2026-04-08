@@ -49,6 +49,10 @@ const CAUSAL_RULES: readonly CausalRule[] = [
   { cause: 'nws',        effect: 'breaking-news', maxLagMs: 2 * 60 * 60_000, radiusKm: 500 },
   { cause: 'gdacs',      effect: 'breaking-news', maxLagMs: 6 * 60 * 60_000, radiusKm: 1000 },
   { cause: 'hazard',     effect: 'breaking-news', maxLagMs: 2 * 60 * 60_000, radiusKm: 500 },
+  { cause: 'power-grid', effect: 'breaking-news', maxLagMs: 6 * 60 * 60_000, radiusKm: 800 },
+  { cause: 'power-grid', effect: 'comms-health',  maxLagMs: 2 * 60 * 60_000, radiusKm: 5000 },
+  { cause: 'cyclone',    effect: 'power-grid',    maxLagMs: 12 * 60 * 60_000, radiusKm: 800 },
+  { cause: 'cyber',      effect: 'power-grid',    maxLagMs: 6 * 60 * 60_000, radiusKm: 5000 },
 ];
 
 /** Match a directional pair against rules, order-sensitive. Returns rule or null. */

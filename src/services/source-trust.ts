@@ -24,6 +24,8 @@ export const SOURCE_TRUST: Record<AlertSource, number> = {
   'earthquake': 1,
   'fire': 0.9,
   'cyclone': 1,
+  'power-grid': 0.85,
+  'comms-health': 0.8,
 };
 
 export function getSourceTrust(source: AlertSource): number {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-expressions, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional */
 /**
  * TodayView — full-screen overlay summarizing what matters right now.
  *
@@ -25,6 +26,8 @@ const SOURCE_LABELS: Record<AlertSource, string> = {
   earthquake: 'Quake',
   fire: 'Fire',
   cyclone: 'Cyclone',
+  'power-grid': 'Grid',
+  'comms-health': 'Comms',
 };
 
 export class TodayView {
@@ -42,7 +45,7 @@ export class TodayView {
   }
 
   mount(parent: HTMLElement): void {
-    parent.appendChild(this.overlay);
+    parent.append(this.overlay);
   }
 
   toggle(): void { this.visible ? this.hide() : this.show(); }
@@ -90,7 +93,7 @@ export class TodayView {
       const empty = document.createElement('div');
       empty.className = 'today-view-empty';
       empty.textContent = 'All quiet. No active alerts.';
-      body.appendChild(empty);
+      body.append(empty);
     } else {
       // Group by source
       const groups = new Map<AlertSource, UnifiedAlert[]>();
@@ -104,9 +107,9 @@ export class TodayView {
         section.className = 'today-view-section';
         const label = document.createElement('h3');
         label.textContent = `${SOURCE_LABELS[source] ?? source} · ${items.length}`;
-        section.appendChild(label);
-        for (const a of items) section.appendChild(this.makeRow(a));
-        body.appendChild(section);
+        section.append(label);
+        for (const a of items) section.append(this.makeRow(a));
+        body.append(section);
       }
     }
 
@@ -117,9 +120,9 @@ export class TodayView {
       section.className = 'today-view-section';
       const label = document.createElement('h3');
       label.textContent = `Recent activity · ${activity.length}`;
-      section.appendChild(label);
-      for (const e of activity) section.appendChild(this.makeActivityRow(e));
-      body.appendChild(section);
+      section.append(label);
+      for (const e of activity) section.append(this.makeActivityRow(e));
+      body.append(section);
     }
 
     this.overlay.replaceChildren(header, body);
@@ -129,7 +132,7 @@ export class TodayView {
     const row = document.createElement('div');
     row.className = `today-activity-row today-activity-${e.kind}`;
     const ago = Math.max(0, Math.round((Date.now() - e.t) / 1000));
-    const agoLabel = ago < 60 ? `${ago}s` : ago < 3600 ? `${Math.round(ago / 60)}m` : `${Math.round(ago / 3600)}h`;
+    const agoLabel = ago < 60 ? `${ago}s` : (ago < 3600 ? `${Math.round(ago / 60)}m` : `${Math.round(ago / 3600)}h`);
     const KIND_LABEL: Record<ActivityEntry['kind'], string> = {
       new: '+ NEW', ack: '✓ ACK', snooze: '⏸ SNOOZE', correlate: '⚡ CORR', react: '🔔 FIRE',
     };

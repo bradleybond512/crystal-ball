@@ -61,6 +61,8 @@ import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
 import { startCorrelationFeedback } from '@/services/correlation-feedback';
+import { startInfrastructureAlertBridge } from '@/services/infrastructure-alert-bridge';
+import { startBlackoutSignature } from '@/services/blackout-signature';
 import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
 import { startAlertReactions } from '@/services/alert-reactions';
@@ -661,6 +663,8 @@ export class PanelLayoutManager implements AppModule {
  startSilenceDetector();
  startSourceFeedback();
  startCorrelationFeedback();
+ startInfrastructureAlertBridge();
+ startBlackoutSignature();
  const digestOverlay = new DigestOverlay();
  digestOverlay.mount(document.body);
  // Proactive digest — once per 8h, after data has had a chance to load.

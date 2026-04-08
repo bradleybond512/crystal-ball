@@ -5232,33 +5232,34 @@ async function dispatch(requestUrl, req, routes, context) {
  try {
  const alerts = [];
 
- // ── Suricata eve.json ──────────────────────────────────────────────
- const evePath = '/opt/homebrew/var/log/suricata/eve.json';
- if (existsSync(evePath)) {
- for (const line of _tailFile(evePath, 131072)) {
- try {
- const evt = JSON.parse(line);
- if (evt.event_type !== 'alert') continue;
- const sev = evt.alert?.severity;
- const severity = sev === 1 ? 'critical' : sev === 2 ? 'high' : sev === 3 ? 'medium' : 'low';
+ // ── Suricata fast.log (alerts only — small and append-only) ──────
+ const fastPath = '/opt/homebrew/var/log/suricata/fast.log';
+ if (existsSync(fastPath)) {
+ const re = /^(\d{2})\/(\d{2})\/(\d{4})-(\d{2}:\d{2}:\d{2})\.\d+\s+\[\*\*\]\s+\[\d+:\d+:\d+\]\s+(.+?)\s+\[\*\*\]\s+\[Classification:\s+(.+?)\]\s+\[Priority:\s+(\d+)\]\s+\{(\w+)\}\s+(\S+?):(\d+)\s+->\s+(\S+?):(\d+)/;
+ for (const line of _tailFile(fastPath, 262_144)) {
+ const m = re.exec(line);
+ if (!m) continue;
+ const [, mo, day, yr, hms, signature, category, prio, proto, srcIp, srcPort, destIp, destPort] = m;
+ const p = parseInt(prio, 10);
+ const severity = p === 1 ? 'critical' : p === 2 ? 'high' : p === 3 ? 'medium' : 'low';
  alerts.push({
- id: `suricata-${evt.flow_id ?? Math.random().toString(36).slice(2)}-${evt.timestamp}`,
+ id: `suricata-${yr}${mo}${day}-${hms}-${srcIp}-${destPort}`,
  source: 'suricata',
- ts: evt.timestamp ?? new Date().toISOString(),
+ ts: `${yr}-${mo}-${day}T${hms}`,
  severity,
- category: evt.alert?.category ?? 'Unknown',
- signature: evt.alert?.signature ?? '',
- srcIp: evt.src_ip ?? '',
- destIp: evt.dest_ip ?? '',
- proto: evt.proto ?? '',
- action: evt.alert?.action ?? 'alert',
+ category,
+ signature,
+ srcIp,
+ destIp,
+ proto: proto.toLowerCase(),
+ action: `${srcPort} → ${destPort}`,
  });
- } catch { /* skip malformed */ }
  }
  }
 
  // ── Zeek notice.log ────────────────────────────────────────────────
  const noticeCandidates = [
+ '/opt/homebrew/var/log/zeek/notice.log',
  '/opt/homebrew/Cellar/zeek/8.1.1/spool/manager/notice.log',
  '/opt/homebrew/var/log/zeek/current/notice.log',
  ];
@@ -5294,6 +5295,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
  // ── Zeek conn.log (suspicious states + large transfers) ───────────
  const connCandidates = [
+ '/opt/homebrew/var/log/zeek/conn.log',
  '/opt/homebrew/Cellar/zeek/8.1.1/spool/manager/conn.log',
  '/opt/homebrew/var/log/zeek/current/conn.log',
  ];

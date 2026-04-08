@@ -1,0 +1,543 @@
+// Non-sebuf: returns XML/HTML, stays as standalone Vercel function
+import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+
+export const config = { runtime: 'edge' };
+
+let rssProxyRatelimit = null;
+
+function getRssProxyRatelimit() {
+  if (rssProxyRatelimit) return rssProxyRatelimit;
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+
+  rssProxyRatelimit = new Ratelimit({
+ redis: new Redis({ url, token }),
+ limiter: Ratelimit.slidingWindow(120, '60 s'),
+ prefix: 'rl:rss-proxy',
+ analytics: false,
+  });
+  return rssProxyRatelimit;
+}
+
+function getClientIp(request) {
+  return (
+ request.headers.get('x-real-ip')
+ || request.headers.get('cf-connecting-ip')
+ || '0.0.0.0'
+  );
+}
+
+async function checkRateLimit(request, corsHeaders) {
+  const rl = getRssProxyRatelimit();
+  if (!rl) return null;
+
+  try {
+ const { success, limit, reset } = await rl.limit(getClientIp(request));
+ if (success) return null;
+ return new Response(JSON.stringify({ error: 'Too many requests' }), {
+ status: 429,
+ headers: {
+ 'Content-Type': 'application/json',
+ 'X-RateLimit-Limit': String(limit),
+ 'X-RateLimit-Remaining': '0',
+ 'X-RateLimit-Reset': String(reset),
+ 'Retry-After': String(Math.ceil((reset - Date.now()) / 1000)),
+ ...corsHeaders,
+ },
+ });
+  } catch {
+ return new Response(JSON.stringify({ error: 'Rate limit unavailable' }), {
+ status: 503,
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Retry-After': '1',
+ ...corsHeaders,
+ },
+ });
+  }
+}
+
+// Fetch with timeout
+async function fetchWithTimeout(url, options, timeoutMs = 15_000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+ const response = await fetch(url, { ...options, signal: controller.signal });
+ return response;
+  } finally {
+ clearTimeout(timeout);
+  }
+}
+
+function getRelayBaseUrl() {
+  const relayUrl = process.env.WS_RELAY_URL || '';
+  if (!relayUrl) return '';
+  return relayUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace(/\/$/, '');
+}
+
+function getRelayHeaders(baseHeaders = {}) {
+  const headers = { ...baseHeaders };
+  const relaySecret = process.env.RELAY_SHARED_SECRET || '';
+  if (relaySecret) {
+ const relayHeader = (process.env.RELAY_AUTH_HEADER || 'x-relay-key').toLowerCase();
+ headers[relayHeader] = relaySecret;
+ headers.Authorization = `Bearer ${relaySecret}`;
+  }
+  return headers;
+}
+
+async function fetchViaRailway(feedUrl, timeoutMs) {
+  const relayBaseUrl = getRelayBaseUrl();
+  if (!relayBaseUrl) return null;
+  const relayUrl = `${relayBaseUrl}/rss?url=${encodeURIComponent(feedUrl)}`;
+  return fetchWithTimeout(relayUrl, {
+ headers: getRelayHeaders({
+ 'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+ 'User-Agent': 'CrystalBall-RSS-Proxy/1.0',
+ }),
+  }, timeoutMs);
+}
+
+// Allowed RSS feed domains for security
+const ALLOWED_DOMAINS = new Set([
+  'feeds.bbci.co.uk',
+  'www.theguardian.com',
+  'feeds.npr.org',
+  'news.google.com',
+  'www.aljazeera.com',
+  'www.aljazeera.net',
+  'rss.cnn.com',
+  'hnrss.org',
+  'feeds.arstechnica.com',
+  'www.theverge.com',
+  'www.cnbc.com',
+  'feeds.marketwatch.com',
+  'www.defenseone.com',
+  'breakingdefense.com',
+  'www.bellingcat.com',
+  'techcrunch.com',
+  'huggingface.co',
+  'www.technologyreview.com',
+  'rss.arxiv.org',
+  'export.arxiv.org',
+  'www.federalreserve.gov',
+  'www.sec.gov',
+  'www.whitehouse.gov',
+  'www.state.gov',
+  'www.defense.gov',
+  'home.treasury.gov',
+  'www.justice.gov',
+  'tools.cdc.gov',
+  'www.fema.gov',
+  'www.dhs.gov',
+  'www.thedrive.com',
+  'krebsonsecurity.com',
+  'finance.yahoo.com',
+  'thediplomat.com',
+  'venturebeat.com',
+  'foreignpolicy.com',
+  'www.ft.com',
+  'openai.com',
+  'www.reutersagency.com',
+  'feeds.reuters.com',
+  'rsshub.app',
+  'asia.nikkei.com',
+  'www.cfr.org',
+  'www.csis.org',
+  'www.politico.com',
+  'www.brookings.edu',
+  'layoffs.fyi',
+  'www.defensenews.com',
+  'www.militarytimes.com',
+  'taskandpurpose.com',
+  'news.usni.org',
+  'www.oryxspioenkop.com',
+  'www.gov.uk',
+  'www.foreignaffairs.com',
+  'www.atlanticcouncil.org',
+  // Tech variant domains
+  'www.zdnet.com',
+  'www.techmeme.com',
+  'www.darkreading.com',
+  'www.schneier.com',
+  'www.ransomware.live',
+  'rss.politico.com',
+  'www.anandtech.com',
+  'www.tomshardware.com',
+  'www.semianalysis.com',
+  'feed.infoq.com',
+  'thenewstack.io',
+  'devops.com',
+  'dev.to',
+  'lobste.rs',
+  'changelog.com',
+  'seekingalpha.com',
+  'news.crunchbase.com',
+  'www.saastr.com',
+  'feeds.feedburner.com',
+  // Additional tech variant domains
+  'www.producthunt.com',
+  'www.axios.com',
+  'api.axios.com',
+  'github.blog',
+  'githubnext.com',
+  'mshibanami.github.io',
+  'www.engadget.com',
+  'news.mit.edu',
+  'dev.events',
+  // VC blogs
+  'www.ycombinator.com',
+  'a16z.com',
+  'review.firstround.com',
+  'www.sequoiacap.com',
+  'www.nfx.com',
+  'www.aaronsw.com',
+  'bothsidesofthetable.com',
+  'www.lennysnewsletter.com',
+  'stratechery.com',
+  // Regional startup news
+  'www.eu-startups.com',
+  'tech.eu',
+  'sifted.eu',
+  'www.techinasia.com',
+  'kr-asia.com',
+  'techcabal.com',
+  'disrupt-africa.com',
+  'lavca.org',
+  'contxto.com',
+  'inc42.com',
+  'yourstory.com',
+  // Funding & VC
+  'pitchbook.com',
+  'www.cbinsights.com',
+  // Accelerators
+  'www.techstars.com',
+  // Middle East & Regional News
+  'english.alarabiya.net',
+  'www.arabnews.com',
+  'www.timesofisrael.com',
+  'www.haaretz.com',
+  'www.scmp.com',
+  'kyivindependent.com',
+  'www.themoscowtimes.com',
+  'feeds.24.com',
+  'feeds.news24.com',  // News24 main feed domain
+  'feeds.capi24.com',  // News24 redirect destination
+  // International News Sources
+  'www.france24.com',
+  'www.euronews.com',
+  'de.euronews.com',
+  'es.euronews.com',
+  'fr.euronews.com',
+  'it.euronews.com',
+  'pt.euronews.com',
+  'ru.euronews.com',
+  'www.lemonde.fr',
+  'rss.dw.com',
+  'www.bild.de',
+  'www.africanews.com',
+  'fr.africanews.com',
+  // Nigeria
+  'www.premiumtimesng.com',
+  'www.vanguardngr.com',
+  'www.channelstv.com',
+  'dailytrust.com',
+  'www.thisdaylive.com',
+  // Greek
+  'www.naftemporiki.gr',
+  'www.in.gr',
+  'www.iefimerida.gr',
+  'www.lasillavacia.com',
+  'www.channelnewsasia.com',
+  'japantoday.com',
+  'www.thehindu.com',
+  'indianexpress.com',
+  'www.twz.com',
+  'gcaptain.com',
+  // International Organizations
+  'news.un.org',
+  'www.iaea.org',
+  'www.who.int',
+  'www.cisa.gov',
+  'www.crisisgroup.org',
+  // Think Tanks & Research (Added 2026-01-29)
+  'rusi.org',
+  'warontherocks.com',
+  'www.aei.org',
+  'responsiblestatecraft.org',
+  'www.fpri.org',
+  'jamestown.org',
+  'www.chathamhouse.org',
+  'ecfr.eu',
+  'www.gmfus.org',
+  'www.wilsoncenter.org',
+  'www.lowyinstitute.org',
+  'www.mei.edu',
+  'www.stimson.org',
+  'www.cnas.org',
+  'carnegieendowment.org',
+  'www.rand.org',
+  'fas.org',
+  'www.armscontrol.org',
+  'www.nti.org',
+  'thebulletin.org',
+  'www.iss.europa.eu',
+  // Economic & Food Security
+  'www.fao.org',
+  'worldbank.org',
+  'www.imf.org',
+  // International news (various languages)
+  'www.bbc.com',
+  'www.spiegel.de',
+  'www.tagesschau.de',
+  'newsfeed.zeit.de',
+  'feeds.elpais.com',
+  'e00-elmundo.uecdn.es',
+  'www.repubblica.it',
+  'www.ansa.it',
+  'xml2.corriereobjects.it',
+  'feeds.nos.nl',
+  'www.nrc.nl',
+  'www.telegraaf.nl',
+  'www.dn.se',
+  'www.svd.se',
+  'www.svt.se',
+  'www.asahi.com',
+  'www.clarin.com',
+  'oglobo.globo.com',
+  'feeds.folha.uol.com.br',
+  'www.eltiempo.com',
+  'www.eluniversal.com.mx',
+  'www.jeuneafrique.com',
+  'www.lorientlejour.com',
+  // Regional locale feeds (tr, pl, ru, th, vi, pt)
+  'www.hurriyet.com.tr',
+  'tvn24.pl',
+  'www.polsatnews.pl',
+  'www.rp.pl',
+  'meduza.io',
+  'novayagazeta.eu',
+  'www.bangkokpost.com',
+  'vnexpress.net',
+  'www.abc.net.au',
+  'islandtimes.org',
+  'www.brasilparalelo.com.br',
+  // Mexico & LatAm Security
+  'mexiconewsdaily.com',
+  'animalpolitico.com',
+  'www.proceso.com.mx',
+  'www.milenio.com',
+  'insightcrime.org',
+  // Additional
+  'news.ycombinator.com',
+  // Finance variant
+  'seekingalpha.com',
+  'www.coindesk.com',
+  'cointelegraph.com',
+  // Security advisories — government travel advisory feeds
+  'travel.state.gov',
+  'www.smartraveller.gov.au',
+  'www.safetravel.govt.nz',
+  // US Embassy security alerts
+  'th.usembassy.gov',
+  'ae.usembassy.gov',
+  'de.usembassy.gov',
+  'ua.usembassy.gov',
+  'mx.usembassy.gov',
+  'in.usembassy.gov',
+  'pk.usembassy.gov',
+  'co.usembassy.gov',
+  'pl.usembassy.gov',
+  'bd.usembassy.gov',
+  'it.usembassy.gov',
+  'do.usembassy.gov',
+  'mm.usembassy.gov',
+  // Health advisories
+  'wwwnc.cdc.gov',
+  'www.ecdc.europa.eu',
+  'www.who.int',
+  'www.afro.who.int',
+  // Happy variant — positive news sources
+  'www.goodnewsnetwork.org',
+  'www.positive.news',
+  'reasonstobecheerful.world',
+  'www.optimistdaily.com',
+  'www.upworthy.com',
+  'www.dailygood.org',
+  'www.goodgoodgood.co',
+  'www.good.is',
+  'www.sunnyskyz.com',
+  'thebetterindia.com',
+  'singularityhub.com',
+  'humanprogress.org',
+  'greatergood.berkeley.edu',
+  'www.onlygoodnewsdaily.com',
+  'www.sciencedaily.com',
+  'feeds.nature.com',
+  'www.nature.com',
+  'www.livescience.com',
+  'www.newscientist.com',
+  // Emergency alert services
+  'www.tsunami.gov', // NOAA Pacific & Atlantic Tsunami Warning Centers
+  'tfr.faa.gov', // FAA Temporary Flight Restrictions
+  'www.nrc.gov', // NRC Nuclear Regulatory Commission
+  'promedmail.org', // ProMED disease surveillance
+  // Global emergency services (round 2)
+  'www.metoc.navy.mil', // JTWC tropical cyclone advisories
+  'www.iaea.org', // IAEA nuclear safety news
+  'fews.net', // FEWS NET famine early warning
+  'www.fews.net', // FEWS NET (www variant)
+  'www.nerc.com', // NERC power grid reliability alerts
+  'www.energy.gov', // DOE CESER energy emergency alerts
+  'www.csb.gov', // Chemical Safety Board incident reports
+  'www.phmsa.dot.gov', // PHMSA pipeline/hazmat incidents
+  'www.ferc.gov', // FERC hydropower/dam safety
+  // Emergency round 3
+  'emergency.copernicus.eu', // EU Copernicus Emergency Management Service
+  'www.cisa.gov', // CISA critical infrastructure advisories
+  'inciweb.wildfire.gov',  // InciWeb wildfire incidents (official US)
+  'www.nhc.noaa.gov', // NHC hurricane recon VDMs RSS
+]);
+
+export default async function handler(req) {
+  if (isDisallowedOrigin(req)) {
+ return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+ status: 403,
+ headers: { 'Content-Type': 'application/json' },
+ });
+  }
+
+  const corsHeaders = getCorsHeaders(req, 'GET, OPTIONS');
+
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+ return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
+  if (req.method !== 'GET') {
+ return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+ status: 405,
+ headers: { 'Content-Type': 'application/json', ...corsHeaders },
+ });
+  }
+
+  const rateLimitResponse = await checkRateLimit(req, corsHeaders);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const requestUrl = new URL(req.url);
+  const feedUrl = requestUrl.searchParams.get('url');
+
+  if (!feedUrl) {
+ return Response.json({ error: 'Missing url parameter' }, {
+ status: 400,
+ headers: { 'Content-Type': 'application/json', ...corsHeaders },
+ });
+  }
+
+  try {
+ const parsedUrl = new URL(feedUrl);
+
+ // Security: Check if domain is allowed (normalize www prefix)
+ const hostname = parsedUrl.hostname;
+ const bare = hostname.replace(/^www\./, '');
+ const withWww = hostname.startsWith('www.') ? hostname : `www.${hostname}`;
+ if (!ALLOWED_DOMAINS.has(hostname) && !ALLOWED_DOMAINS.has(bare) && !ALLOWED_DOMAINS.has(withWww)) {
+ return Response.json({ error: 'Domain not allowed' }, {
+ status: 403,
+ headers: { 'Content-Type': 'application/json', ...corsHeaders },
+ });
+ }
+
+ // Google News is slow - use longer timeout
+ const isGoogleNews = feedUrl.includes('news.google.com');
+ const timeout = isGoogleNews ? 20_000 : 12_000;
+
+ const RSS_HEADERS = {
+ 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+ 'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+ 'Accept-Language': 'en-US,en;q=0.9',
+ };
+ const MAX_REDIRECTS = 3;
+
+ const fetchDirect = async () => {
+ let currentUrl = feedUrl;
+ let redirectCount = 0;
+
+ while (true) {
+ const response = await fetchWithTimeout(currentUrl, {
+ headers: RSS_HEADERS,
+ redirect: 'manual',
+ }, timeout);
+
+ if (response.status >= 300 && response.status < 400) {
+ if (redirectCount >= MAX_REDIRECTS) throw new Error('Too many redirects');
+ const location = response.headers.get('location');
+ if (!location) break;
+ const redirectUrl = new URL(location, currentUrl);
+ const rHost = redirectUrl.hostname;
+ const rBare = rHost.replace(/^www\./, '');
+ const rWithWww = rHost.startsWith('www.') ? rHost : `www.${rHost}`;
+ if (!ALLOWED_DOMAINS.has(rHost) && !ALLOWED_DOMAINS.has(rBare) && !ALLOWED_DOMAINS.has(rWithWww)) {
+ throw new Error('Redirect to disallowed domain');
+ }
+ currentUrl = redirectUrl.href;
+ redirectCount++;
+ continue;
+ }
+
+ return response;
+ }
+
+ // No location header on a 3xx — follow as non-redirect
+ return fetchWithTimeout(currentUrl, { headers: RSS_HEADERS }, timeout);
+ };
+
+ let response;
+ let usedRelay = false;
+ try {
+ response = await fetchDirect();
+ } catch (directError) {
+ response = await fetchViaRailway(feedUrl, timeout);
+ usedRelay = !!response;
+ if (!response) throw directError;
+ }
+
+ if (!response.ok && !usedRelay) {
+ const relayResponse = await fetchViaRailway(feedUrl, timeout);
+ if (relayResponse && relayResponse.ok) {
+ response = relayResponse;
+ }
+ }
+
+ const data = await response.text();
+ const isSuccess = response.status >= 200 && response.status < 300;
+ return new Response(data, {
+ status: response.status,
+ headers: {
+ 'Content-Type': response.headers.get('content-type') || 'application/xml',
+ 'Cache-Control': isSuccess
+ ? 'public, max-age=120, s-maxage=300, stale-while-revalidate=600'
+ : 'public, max-age=10, s-maxage=30, stale-while-revalidate=60',
+ ...(isSuccess && { 'CDN-Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' }),
+ ...corsHeaders,
+ },
+ });
+  } catch (error) {
+ const isTimeout = error.name === 'AbortError';
+ console.error('RSS proxy error:', feedUrl, error.message);
+ // Strip query params before echoing the URL to avoid leaking any secrets embedded in them
+ let safeUrl = feedUrl;
+ try { safeUrl = new URL(feedUrl).origin + new URL(feedUrl).pathname; } catch { /* keep as-is */ }
+ return Response.json({
+ error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed',
+ details: error.message,
+ url: safeUrl,
+ }, {
+ status: isTimeout ? 504 : 502,
+ headers: { 'Content-Type': 'application/json', ...corsHeaders },
+ });
+  }
+}

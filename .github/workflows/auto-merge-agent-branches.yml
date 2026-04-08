@@ -1,0 +1,172 @@
+name: Auto-PR for AI agent branches
+
+on:
+  push:
+ branches:
+ - 'claude/**'
+ - 'codex/**'
+ - 'copilot/**'
+ - 'feat/**'
+ - 'fix/**'
+ - 'ui/**'
+ - 'chore/**'
+ - 'perf/**'
+ - 'docs/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-pr:
+ name: Create or update PR
+ runs-on: ubuntu-latest
+ steps:
+ - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+ with:
+ fetch-depth: 0
+
+ - name: Generate PR metadata
+ id: meta
+ shell: bash
+ run: |
+ BRANCH="${{ github.ref_name }}"
+ COMMITS=$(git log origin/main..HEAD --oneline --no-merges | head -20)
+ FILE_COUNT=$(git diff --name-only origin/main...HEAD | wc -l | tr -d ' ')
+ TITLE=${BRANCH##*/}
+ TITLE=${TITLE//-/ }
+ {
+ echo "title=auto: $TITLE"
+ echo "branch=$BRANCH"
+ echo "file_count=$FILE_COUNT"
+ } >> "$GITHUB_OUTPUT"
+ cat > /tmp/pr-body.md << PREOF
+ ## Auto-generated PR from \`$BRANCH\`
+
+ **Files changed:** $FILE_COUNT
+
+ ### Commits
+ \`\`\`
+ $COMMITS
+ \`\`\`
+
+ ---
+ > This PR was created automatically when the branch was pushed. Review and merge when ready, or close if superseded.
+ PREOF
+
+ - name: Create or update pull request
+ id: create-pr
+ uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+ with:
+ github-token: ${{ secrets.GITHUB_TOKEN }}
+ script: |
+ const fs = require('fs');
+ const body = fs.readFileSync('/tmp/pr-body.md', 'utf8');
+ const branch = '${{ steps.meta.outputs.branch }}';
+ const title = '${{ steps.meta.outputs.title }}';
+
+ const { data: prs } = await github.rest.pulls.list({
+ owner: context.repo.owner,
+ repo: context.repo.repo,
+ head: `${context.repo.owner}:${branch}`,
+ state: 'open'
+ });
+
+ if (prs.length > 0) {
+ await github.rest.pulls.update({
+ owner: context.repo.owner,
+ repo: context.repo.repo,
+ pull_number: prs[0].number,
+ body: body
+ });
+ console.log(`Updated PR #${prs[0].number}`);
+ core.setOutput('pr_number', String(prs[0].number));
+ } else {
+ const { data: pr } = await github.rest.pulls.create({
+ owner: context.repo.owner,
+ repo: context.repo.repo,
+ title: title,
+ head: branch,
+ base: 'main',
+ body: body,
+ draft: false
+ });
+ console.log(`Created PR #${pr.number}: ${pr.html_url}`);
+ core.setOutput('pr_number', String(pr.number));
+ }
+
+ - name: Label PR by branch prefix
+ if: steps.create-pr.outputs.pr_number != ''
+ uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+ with:
+ github-token: ${{ secrets.GITHUB_TOKEN }}
+ script: |
+ const branch = '${{ steps.meta.outputs.branch }}';
+ const prNumber = parseInt('${{ steps.create-pr.outputs.pr_number }}');
+ const labelMap = {
+ 'claude/':  ['ai-generated', 'claude'],
+ 'codex/': ['ai-generated', 'codex'],
+ 'copilot/': ['ai-generated', 'copilot'],
+ 'feat/': ['feature'],
+ 'fix/': ['bug'],
+ 'ui/': ['ui'],
+ 'chore/': ['chore'],
+ 'perf/': ['performance'],
+ 'docs/': ['documentation']
+ };
+ const labels = [];
+ for (const [prefix, tags] of Object.entries(labelMap)) {
+ if (branch.startsWith(prefix)) { labels.push(...tags); break; }
+ }
+ if (labels.length > 0) {
+ try {
+ await github.rest.issues.addLabels({
+ owner: context.repo.owner,
+ repo: context.repo.repo,
+ issue_number: prNumber,
+ labels: labels
+ });
+ } catch (e) {
+ console.log('Labels may not exist yet:', e.message);
+ }
+ }
+
+  auto-merge:
+ name: Auto-merge when checks pass
+ needs: auto-pr
+ runs-on: ubuntu-latest
+ if: startsWith(github.ref_name, 'claude/') || startsWith(github.ref_name, 'codex/') || startsWith(github.ref_name, 'copilot/') || startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'fix/') || startsWith(github.ref_name, 'chore/')
+ steps:
+ - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+ with:
+ fetch-depth: 0
+
+ - name: Enable GitHub auto-merge
+ uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+ with:
+ github-token: ${{ secrets.GITHUB_TOKEN }}
+ script: |
+ const branch = '${{ github.ref_name }}';
+ const { data: prs } = await github.rest.pulls.list({
+ owner: context.repo.owner,
+ repo: context.repo.repo,
+ head: `${context.repo.owner}:${branch}`,
+ state: 'open'
+ });
+ if (prs.length > 0) {
+ const prNodeId = prs[0].node_id;
+ const mutation = `
+ mutation EnablePullRequestAutoMerge($pullRequestId: ID!) {
+ enablePullRequestAutoMerge(input: {
+ pullRequestId: $pullRequestId
+ mergeMethod: SQUASH
+ }) {
+ pullRequest {
+ number
+ }
+ }
+ }
+ `;
+ await github.graphql(mutation, { pullRequestId: prNodeId });
+ console.log(`Enabled GitHub auto-merge for PR #${prs[0].number}`);
+ }

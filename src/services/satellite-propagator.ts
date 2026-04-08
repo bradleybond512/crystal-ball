@@ -1,0 +1,109 @@
+/**
+ * Satellite Propagator — main-thread API wrapping the SGP4 Web Worker
+ *
+ * Sends TLE data to the worker, receives position updates at 1Hz,
+ * and dispatches them to registered listeners.
+ */
+
+import type { SatelliteTLE } from '@/services/satellite-catalog';
+
+export interface SatellitePosition {
+  noradId: number;
+  lat: number;
+  lon: number;
+  altKm: number;
+  velocityKmS: number;
+}
+
+export interface OrbitPath {
+  noradId: number;
+  points: [number, number, number][]; // [lon, lat, altKm]
+}
+
+type PositionListener = (positions: SatellitePosition[]) => void;
+type OrbitPathListener = (path: OrbitPath) => void;
+
+class SatellitePropagator {
+  private worker: Worker | null = null;
+  private positionListeners: PositionListener[] = [];
+  private orbitPathListeners: OrbitPathListener[] = [];
+  private latestPositions: SatellitePosition[] = [];
+
+  start(catalog: SatelliteTLE[]): void {
+ this.stop();
+
+ this.worker = new Worker(
+ new URL('@/workers/satellite-propagator.worker.ts', import.meta.url),
+ { type: 'module' },
+ );
+
+ this.worker.addEventListener('message', (e: MessageEvent) => {
+ const msg = e.data as { type: string; positions?: SatellitePosition[]; noradId?: number; points?: [number, number, number][] };
+
+ if (msg.type === 'positions' && msg.positions) {
+ this.latestPositions = msg.positions;
+ for (const listener of this.positionListeners) {
+ listener(msg.positions);
+ }
+ }
+
+ if (msg.type === 'orbitPath' && msg.noradId != null && msg.points) {
+ const path: OrbitPath = { noradId: msg.noradId, points: msg.points };
+ for (const listener of this.orbitPathListeners) {
+ listener(path);
+ }
+ }
+ });
+
+ this.worker.postMessage({
+ type: 'loadTLEs',
+ tles: catalog.map(s => ({
+ noradId: s.noradId,
+ name: s.name,
+ line1: s.line1,
+ line2: s.line2,
+ })),
+ });
+  }
+
+  stop(): void {
+ if (this.worker) {
+ this.worker.postMessage({ type: 'stop' });
+ this.worker.terminate();
+ this.worker = null;
+ }
+ this.latestPositions = [];
+  }
+
+  requestOrbitPath(satellite: SatelliteTLE, durationMinutes = 90): void {
+ this.worker?.postMessage({
+ type: 'requestOrbitPath',
+ request: {
+ noradId: satellite.noradId,
+ line1: satellite.line1,
+ line2: satellite.line2,
+ durationMinutes,
+ },
+ });
+  }
+
+  onPositions(listener: PositionListener): () => void {
+ this.positionListeners.push(listener);
+ return () => {
+ this.positionListeners = this.positionListeners.filter(l => l !== listener);
+ };
+  }
+
+  onOrbitPath(listener: OrbitPathListener): () => void {
+ this.orbitPathListeners.push(listener);
+ return () => {
+ this.orbitPathListeners = this.orbitPathListeners.filter(l => l !== listener);
+ };
+  }
+
+  getLatestPositions(): SatellitePosition[] {
+ return this.latestPositions;
+  }
+}
+
+export const satellitePropagator = new SatellitePropagator();

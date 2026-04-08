@@ -1,0 +1,53 @@
+node_modules/
+.idea/
+dist/
+.DS_Store
+*.log
+.env
+.env.local
+scripts/telegram/telegram-session.txt
+.playwright-mcp/
+.vercel
+api/\[domain\]/v1/\[rpc\].js
+api/\[\[...path\]\].js
+.claude/
+.cursor/
+.env.vercel-backup
+.env.vercel-export
+.agent/
+.factory/
+.windsurf/
+skills/
+ideas/
+docs/internal/
+internal/
+test-results/
+src-tauri/sidecar/node/*
+!src-tauri/sidecar/node/.gitkeep
+
+# AI planning session state
+.planning/
+
+# Compiled sebuf gateway bundle (built by scripts/build-sidecar-sebuf.mjs)
+api/[[][[].*.js
+.claudedocs/
+
+# Vault animation frames/videos (replaced by Three.js 3D renderer)
+public/vault-idle-frames*.png
+public/vault-open-frames*.png
+public/vault-idle.mp4
+public/vault-open.mp4
+
+# Codex permission probe (ephemeral, never commit)
+.codex-perm-test
+
+# Large generated data files (reproduced by scripts/)
+scripts/data/pizzint-processed.json
+scripts/data/osm-military-processed.json
+scripts/data/military-bases-final.json
+scripts/data/dedup-dropped-pairs.json
+scripts/data/gpsjam-latest.json
+.claude.local.md
+.superpowers/
+research/runs/
+.worktrees/

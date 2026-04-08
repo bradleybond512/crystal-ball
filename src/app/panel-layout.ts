@@ -1,0 +1,1795 @@
+import type { AppContext, AppModule } from '@/app/app-context';
+import type { RelatedAsset } from '@/types';
+import type { TheaterPostureSummary } from '@/services/military-surge';
+import {
+  MapContainer,
+  NewsPanel,
+  MarketPanel,
+  HeatmapPanel,
+  CommoditiesPanel,
+  CryptoPanel,
+  PredictionPanel,
+  MonitorPanel,
+  EconomicPanel,
+  GdeltIntelPanel,
+  LiveNewsPanel,
+  LiveWebcamsPanel,
+  CIIPanel,
+  CascadePanel,
+  StrategicRiskPanel,
+  StrategicPosturePanel,
+  TechEventsPanel,
+  ServiceStatusPanel,
+  InsightsPanel,
+  TechReadinessPanel,
+  MacroSignalsPanel,
+  ETFFlowsPanel,
+  StablecoinPanel,
+  UcdpEventsPanel,
+  DisplacementPanel,
+  ClimateAnomalyPanel,
+  PopulationExposurePanel,
+  TsunamiAlertsPanel,
+  TropicalCyclonesPanel,
+  FoodInsecurityPanel,
+  OfflineMapPanel,
+  EvacuationPanel,
+  FamilyTrackerPanel,
+  InvestmentsPanel,
+  TradePolicyPanel,
+  SupplyChainPanel,
+  SecurityAdvisoriesPanel,
+  OrefSirensPanel,
+  TelegramIntelPanel,
+  WatchlistPanel,
+  SavedPlacesPanel,
+  WatchlistLocationsPanel,
+  LocalLogisticsPanel,
+  CommsPlanPanel,
+  StoicQuotePanel,
+  BiblicalQuotePanel,
+  AlanWattsQuotePanel,
+  McKennaQuotePanel,
+  DailyWisdomPanel,
+} from '@/components';
+import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
+import { EarthquakesPanel } from '@/components/EarthquakesPanel';
+import { CyberThreatPanel } from '@/components/CyberThreatPanel';
+import { LocalIDSPanel } from '@/components/LocalIDSPanel';
+import { AlertCenterPanel } from '@/components/AlertCenterPanel';
+import { SituationPanel } from '@/components/SituationPanel';
+import { SpaceWeatherPanel } from '@/components/SpaceWeatherPanel';
+import { SpaceflightNewsPanel } from '@/components/SpaceflightNewsPanel';
+import { SpaceLaunchesPanel } from '@/components/SpaceLaunchesPanel';
+import { DiseaseOutbreakPanel } from '@/components/DiseaseOutbreakPanel';
+import { HumanitarianCrisisPanel } from '@/components/HumanitarianCrisisPanel';
+import { GlobalWeatherPanel } from '@/components/GlobalWeatherPanel';
+import { ExtendedForecastPanel } from '@/components/ExtendedForecastPanel';
+import { WeatherRadarPanel } from '@/components/WeatherRadarPanel';
+import { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
+import { PollenPanel } from '@/components/PollenPanel';
+import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
+import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
+import { AirQualityPanel } from '@/components/AirQualityPanel';
+import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
+import { HazmatIncidentsPanel } from '@/components/HazmatIncidentsPanel';
+import { OilSpillPanel } from '@/components/OilSpillPanel';
+import { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
+import { InfrastructurePanel } from '@/components/InfrastructurePanel';
+import { AirstrikesPanel } from '@/components/AirstrikesPanel';
+import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
+import { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
+import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
+import { IswReportsPanel } from '@/components/IswReportsPanel';
+import { NatoNewsPanel } from '@/components/NatoNewsPanel';
+import { DodNewsPanel } from '@/components/DodNewsPanel';
+import { ReliefWebPanel } from '@/components/ReliefWebPanel';
+import { BellingcatPanel } from '@/components/BellingcatPanel';
+import { FcdoWarningsPanel } from '@/components/FcdoWarningsPanel';
+import { DfatWarningsPanel } from '@/components/DfatWarningsPanel';
+import { GacWarningsPanel } from '@/components/GacWarningsPanel';
+import { GovConvergencePanel } from '@/components/GovConvergencePanel';
+import { EmscSeismicPanel } from '@/components/EmscSeismicPanel';
+import { AcapsPanel } from '@/components/AcapsPanel';
+import { LiveUaMapPanel } from '@/components/LiveUaMapPanel';
+import { AerospaceReentryPanel } from '@/components/AerospaceReentryPanel';
+import { AmtrakAlertsPanel } from '@/components/AmtrakAlertsPanel';
+import { AvalancheHazardPanel } from '@/components/AvalancheHazardPanel';
+import { DscaArmsPanel } from '@/components/DscaArmsPanel';
+import { EcdcSurveillancePanel } from '@/components/EcdcSurveillancePanel';
+import { FdicFailuresPanel } from '@/components/FdicFailuresPanel';
+import { HabsosPanel } from '@/components/HabsosPanel';
+import { UnSecurityCouncilPanel } from '@/components/UnSecurityCouncilPanel';
+import { WildfireSmokePanel } from '@/components/WildfireSmokePanel';
+import { CentralBankCalendarPanel } from '@/components/CentralBankCalendarPanel';
+import { CongressDefensePanel } from '@/components/CongressDefensePanel';
+import { CombatantCommandsPanel } from '@/components/CombatantCommandsPanel';
+import { ForeignMilNewsPanel } from '@/components/ForeignMilNewsPanel';
+import { SpcMesoscalePanel } from '@/components/SpcMesoscalePanel';
+import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
+import { CommsHealthPanel } from '@/components/CommsHealthPanel';
+import { PowerGridPanel } from '@/components/PowerGridPanel';
+import { FearGreedPanel } from '@/components/FearGreedPanel';
+import { InternetDisruptionsPanel } from '@/components/InternetDisruptionsPanel';
+import { NationalDebtPanel } from '@/components/NationalDebtPanel';
+import { FuelPricesPanel } from '@/components/FuelPricesPanel';
+import { AirTrafficPanel } from '@/components/AirTrafficPanel';
+import { ThreatIntelHubPanel } from '@/components/ThreatIntelHubPanel';
+import { GeoIntelPanel } from '@/components/GeoIntelPanel';
+import { DarkWebPanel } from '@/components/DarkWebPanel';
+import { IntelligenceBriefingPanel } from '@/components/IntelligenceBriefingPanel';
+import { AskCrystalBallPanel } from '@/components/AskCrystalBallPanel';
+import { SurvivalAdvisorPanel } from '@/components/SurvivalAdvisorPanel';
+import { ThreatSynthesisPanel } from '@/components/ThreatSynthesisPanel';
+import { ScenarioSimulatorPanel } from '@/components/ScenarioSimulatorPanel';
+import { EscalationForecastPanel } from '@/components/EscalationForecastPanel';
+import { AnomalyDetectionPanel } from '@/components/AnomalyDetectionPanel';
+import { FinancialContagionPanel } from '@/components/FinancialContagionPanel';
+import { SupplyChainImpactPanel } from '@/components/SupplyChainImpactPanel';
+import { WaterQualityPanel } from '@/components/WaterQualityPanel';
+import { NuclearMonitorPanel } from '@/components/NuclearMonitorPanel';
+import { NotificationDigestPanel } from '@/components/NotificationDigestPanel';
+import { PatternOfLifePanel } from '@/components/PatternOfLifePanel';
+import { SigintPanel } from '@/components/SigintPanel';
+import { DarkVesselPanel } from '@/components/DarkVesselPanel';
+import { CourseOfActionPanel } from '@/components/CourseOfActionPanel';
+import { KillChainPanel } from '@/components/KillChainPanel';
+import { IcsOtDashboardPanel } from '@/components/IcsOtDashboardPanel';
+import { IocManagerPanel } from '@/components/IocManagerPanel';
+import { OrbatPanel } from '@/components/OrbatPanel';
+import { AarPanel } from '@/components/AarPanel';
+import { NetworkTopologyPanel } from '@/components/NetworkTopologyPanel';
+import { GeofencePanel } from '@/components/GeofencePanel';
+import { StixTaxiiPanel } from '@/components/StixTaxiiPanel';
+import { EntityLinkGraphPanel } from '@/components/EntityLinkGraphPanel';
+import { TimelineScrubberPanel } from '@/components/TimelineScrubberPanel';
+import { IntelReportPanel } from '@/components/IntelReportPanel';
+import { SanctionsCrossRefPanel } from '@/components/SanctionsCrossRefPanel';
+import { CompoundThreatPanel } from '@/components/CompoundThreatPanel';
+import { CorrelationMatrixPanel } from '@/components/CorrelationMatrixPanel';
+import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
+import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
+import { SatelliteChangePanel } from '@/components/SatelliteChangePanel';
+import { EconomicStressPanel } from '@/components/EconomicStressPanel';
+import { FederalRegisterPanel } from '@/components/FederalRegisterPanel';
+import { NuclearRiskPanel } from '@/components/NuclearRiskPanel';
+import { RadiationDecayPanel } from '@/components/RadiationDecayPanel';
+import { ResourceInventoryPanel } from '@/components/ResourceInventoryPanel';
+import { WorldClockPanel } from '@/components/WorldClockPanel';
+import { PinnedWebcamsPanel } from '@/components/PinnedWebcamsPanel';
+import { PositiveNewsFeedPanel } from '@/components/PositiveNewsFeedPanel';
+import { CountersPanel } from '@/components/CountersPanel';
+import { ProgressChartsPanel } from '@/components/ProgressChartsPanel';
+import { BreakthroughsTickerPanel } from '@/components/BreakthroughsTickerPanel';
+import { HeroSpotlightPanel } from '@/components/HeroSpotlightPanel';
+import { GoodThingsDigestPanel } from '@/components/GoodThingsDigestPanel';
+import { SpeciesComebackPanel } from '@/components/SpeciesComebackPanel';
+import { RenewableEnergyPanel } from '@/components/RenewableEnergyPanel';
+import { GeoHubsPanel } from '@/components/GeoHubsPanel';
+import { TechHubsPanel } from '@/components/TechHubsPanel';
+import { RegulationPanel } from '@/components/RegulationPanel';
+import { GivingPanel } from '@/components';
+import { UnifiedAlertInboxPanel } from '@/components/UnifiedAlertInboxPanel';
+import { AlertRulesPanel } from '@/components/AlertRulesPanel';
+import { StalenessBanner } from '@/components/StalenessBanner';
+import { focusInvestmentOnMap } from '@/services/investments-focus';
+import { debounce, saveToStorage } from '@/utils';
+import { escapeHtml } from '@/utils/sanitize';
+import {
+  FEEDS,
+  INTEL_SOURCES,
+  DEFAULT_PANELS,
+  STORAGE_KEYS,
+  SITE_VARIANT,
+} from '@/config';
+import { PANEL_CATEGORY_MAP } from '@/config/panels';
+import { BETA_MODE } from '@/config/beta';
+import { t } from '@/services/i18n';
+import { getCurrentTheme } from '@/utils';
+import { trackCriticalBannerAction } from '@/services/analytics';
+import { alertFamily, getMode, toggleGhostMode, type AppMode } from '@/services/mode-manager';
+import { isLowPowerMode, setLowPowerMode } from '@/services/low-power';
+import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
+import { initModeTransitionCards } from '@/services/mode-transition-card';
+import { initPanelCorrelation } from '@/services/panel-correlation';
+import { getPrimarySavedPlace, getSavedPlace } from '@/services/saved-places';
+import { SavedPlaceModal } from '@/components/SavedPlaceModal';
+import type { GeoHubActivity } from '@/services/geo-activity';
+import type { TechHubActivity } from '@/services/tech-activity';
+
+export interface PanelLayoutCallbacks {
+  openCountryStory: (code: string, name: string) => void;
+  openCountryBriefByCode: (code: string, country: string) => void;
+  getCountryWatchSnapshot: (code: string, country: string) => import('@/components/WatchlistPanel').WatchCountrySnapshot | null;
+  loadAllData: () => Promise<void>;
+  updateMonitorResults: () => void;
+  loadSecurityAdvisories?: () => Promise<void>;
+}
+
+export class PanelLayoutManager implements AppModule {
+  private ctx: AppContext;
+  private callbacks: PanelLayoutCallbacks;
+  private panelDragCleanupHandlers: (() => void)[] = [];
+  private criticalBannerEl: HTMLElement | null = null;
+  private readonly applyTimeRangeFilterDebounced: () => void;
+  private readonly _onUpdateState = () => { this.renderSidebarUpdateBtn(); };
+
+  /** Saved panel order from before a mode switch so Peace Mode can restore it. */
+  private _preModeOrder: string[] = [];
+
+  /** Panels always kept at the top regardless of mode (video feeds / live streams). */
+  private static readonly MODE_ANCHORS = ['watchlist', 'alert-center', 'live-news', 'live-webcams'];
+
+  /** Panels floated to top in Finance Mode. */
+  private static readonly FINANCE_PRIORITY = [
+ 'crypto', 'markets', 'stablecoins', 'commodities',
+ 'macro-signals', 'heatmap', 'etf-flows', 'economic', 'economic-stress',
+  ];
+
+  /** Panels floated to top in War Mode. */
+  private static readonly WAR_PRIORITY = [
+ 'alert-center', 'cyber-threats', 'oref-sirens', 'telegram-intel',
+ 'gdelt-intel', 'cascade', 'strategic-posture', 'strategic-risk',
+ 'cii', 'satellite-fires', 'ucdp-events', 'displacement', 'space-weather', 'comms-health',
+  ];
+
+  /** Panels floated to top in Disaster Mode. */
+  private static readonly DISASTER_PRIORITY = [
+ 'hazard-alerts',
+ 'alert-center', 'saved-places', 'tropical-cyclones', 'nws-alerts',
+ 'weather', 'earthquakes', 'gdacs-alerts', 'satellite-fires',
+ 'volcano-alerts', 'displacement', 'oref-sirens', 'air-quality',
+ 'wildfire-incidents', 'hazmat-incidents', 'oil-spill',
+ 'comms-health', 'economic-stress',
+  ];
+
+  constructor(ctx: AppContext, callbacks: PanelLayoutCallbacks) {
+ this.ctx = ctx;
+ this.callbacks = callbacks;
+ this.applyTimeRangeFilterDebounced = debounce(() => {
+ this.applyTimeRangeFilterToNewsPanels();
+ }, 120);
+  }
+
+  private stalenessBanner: StalenessBanner | null = null;
+
+  init(): void {
+ this.renderLayout();
+ document.addEventListener('wm:update-state', this._onUpdateState);
+ this.stalenessBanner = StalenessBanner.mount();
+  }
+
+  destroy(): void {
+ document.removeEventListener('wm:update-state', this._onUpdateState);
+ this.panelDragCleanupHandlers.forEach((cleanup) => cleanup());
+ this.panelDragCleanupHandlers = [];
+ if (this.criticalBannerEl) {
+ this.criticalBannerEl.remove();
+ this.criticalBannerEl = null;
+ }
+ if (this.stalenessBanner) {
+ this.stalenessBanner.destroy();
+ this.stalenessBanner = null;
+ }
+ // Clean up happy variant panels
+ this.ctx.tvMode?.destroy();
+ this.ctx.tvMode = null;
+ this.ctx.countersPanel?.destroy();
+ this.ctx.progressPanel?.destroy();
+ this.ctx.breakthroughsPanel?.destroy();
+ this.ctx.heroPanel?.destroy();
+ this.ctx.digestPanel?.destroy();
+ this.ctx.speciesPanel?.destroy();
+ this.ctx.renewablePanel?.destroy();
+  }
+
+  renderLayout(): void {
+ this.ctx.container.innerHTML = this.ctx.isDesktopApp ? this.buildDesktopLayout() : this.buildWebLayout();
+ if (this.ctx.isDesktopApp) {
+ document.title = `Crystal Ball v${__APP_VERSION__}`;
+ }
+ this.createPanels();
+ if (this.ctx.isDesktopApp) {
+ this.renderSidebarUpdateBtn();
+ }
+  }
+
+  renderSidebarUpdateBtn(): void {
+ const container = document.getElementById('sidebarUpdateBtn');
+ if (!container) return;
+ // Safe: buildSidebarUpdateBtnHtml() uses escapeHtml() on all API-sourced strings.
+ // Only other content is hardcoded markup (class names, "Installing…", "✓", button structure).
+ container.innerHTML = this.buildSidebarUpdateBtnHtml(); // safe-html: escapeHtml applied to all dynamic strings
+
+ const installBtn = container.querySelector<HTMLButtonElement>('#sidebarUpdateInstall');
+ if (!installBtn) return;
+
+ const state = this.ctx.updateState;
+ if (state?.phase !== 'available' || !state.downloadUrl) return;
+
+ const { version, downloadUrl } = state;
+ installBtn.addEventListener('click', () => {
+ this.ctx.updateState = { phase: 'installing' };
+ this.renderSidebarUpdateBtn();
+ invokeTauri<void>('install_update', { downloadUrl }).catch(() => {
+ this.ctx.updateState = { phase: 'available', version, downloadUrl };
+ this.renderSidebarUpdateBtn();
+ });
+ });
+  }
+
+  private buildVariantSwitcherItems(): string {
+ const local = this.ctx.isDesktopApp || location.hostname === '127.0.0.1';
+ const vHref = (v: string, prod: string) => local || SITE_VARIANT === v ? '#' : prod;
+ const vTarget = (v: string) => !local && SITE_VARIANT !== v ? 'target="_blank" rel="noopener"' : '';
+ return `
+ <a href="${vHref('full', 'https://crystalball.app')}"
+ class="variant-option ${SITE_VARIANT === 'full' ? 'active' : ''}"
+ data-variant="full"
+ ${vTarget('full')}
+ title="${t('header.world')}${SITE_VARIANT === 'full' ? ` ${t('common.currentVariant')}` : ''}">
+ <span class="variant-icon">🌍</span>
+ <span class="variant-label">${t('header.world')}</span>
+ </a>
+ <span class="variant-divider"></span>
+ <a href="${vHref('tech', 'https://tech.crystalball.app')}"
+ class="variant-option ${SITE_VARIANT === 'tech' ? 'active' : ''}"
+ data-variant="tech"
+ ${vTarget('tech')}
+ title="${t('header.tech')}${SITE_VARIANT === 'tech' ? ` ${t('common.currentVariant')}` : ''}">
+ <span class="variant-icon">💻</span>
+ <span class="variant-label">${t('header.tech')}</span>
+ </a>
+ <span class="variant-divider"></span>
+ <a href="${vHref('finance', 'https://finance.crystalball.app')}"
+ class="variant-option ${SITE_VARIANT === 'finance' ? 'active' : ''}"
+ data-variant="finance"
+ ${vTarget('finance')}
+ title="${t('header.finance')}${SITE_VARIANT === 'finance' ? ` ${t('common.currentVariant')}` : ''}">
+ <span class="variant-icon">📈</span>
+ <span class="variant-label">${t('header.finance')}</span>
+ </a>
+ ${SITE_VARIANT === 'happy' ? `<span class="variant-divider"></span>
+ <a href="${vHref('happy', 'https://happy.crystalball.app')}"
+ class="variant-option active"
+ data-variant="happy"
+ ${vTarget('happy')}
+ title="Good News ${t('common.currentVariant')}">
+ <span class="variant-icon">☀️</span>
+ <span class="variant-label">Good News</span>
+ </a>` : ''}`;
+  }
+
+  private buildMapSection(): string {
+ return `
+ <div class="map-section" id="mapSection">
+ <div class="panel-header">
+ <div class="panel-header-left">
+ <span class="panel-title">${SITE_VARIANT === 'tech' ? t('panels.techMap') : (SITE_VARIANT === 'happy' ? 'Good News Map' : t('panels.map'))}</span>
+ </div>
+ <span class="header-clock" id="headerClock"></span>
+ <button class="map-pin-btn" id="mapPinBtn" title="${t('header.pinMap')}">
+ <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+ <path d="M12 17v5M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a1 1 0 001 1h12a1 1 0 001-1v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V7a1 1 0 011-1 1 1 0 001-1V4a1 1 0 00-1-1H8a1 1 0 00-1 1v1a1 1 0 001 1 1 1 0 011 1v3.76z"/>
+ </svg>
+ </button>
+ </div>
+ <div class="map-container" id="mapContainer"></div>
+ ${SITE_VARIANT === 'happy' ? '<button class="tv-exit-btn" id="tvExitBtn">Exit TV Mode</button>' : ''}
+ <div class="map-resize-handle" id="mapResizeHandle"></div>
+ </div>`;
+  }
+
+  private buildThemeIcon(): string {
+ return getCurrentTheme() === 'dark'
+ ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>'
+ : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
+  }
+
+  private buildSidebarUpdateBtnHtml(): string {
+ const versionLabel = escapeHtml(`v${__APP_VERSION__}${BETA_MODE ? ' β' : ''}`);
+ const state = this.ctx.updateState;
+ if (!state || state.phase === 'checking') {
+ return `<span class="mac-sidebar-version">${versionLabel}</span>`;
+ }
+ if (state.phase === 'up-to-date') {
+ return `<span class="mac-sidebar-version mac-sidebar-version--ok">${versionLabel} ✓</span>`;
+ }
+ if (state.phase === 'available' && state.version) {
+ const remoteLabel = escapeHtml(`v${state.version}`);
+ return `<button class="mac-sidebar-update-btn" id="sidebarUpdateInstall">${versionLabel} → ${remoteLabel}</button>`;
+ }
+ if (state.phase === 'installing') {
+ return `<span class="mac-sidebar-version mac-sidebar-version--installing">Installing…</span>`;
+ }
+ return `<span class="mac-sidebar-version">${versionLabel}</span>`;
+  }
+
+  private buildSidebarNav(): string {
+ let html = '';
+ for (const [, cat] of Object.entries(PANEL_CATEGORY_MAP)) {
+ if (cat.variants && !cat.variants.includes(SITE_VARIANT)) continue;
+ const keys = cat.panelKeys.filter(k => k !== 'map' && k in this.ctx.panelSettings);
+ if (keys.length === 0) continue;
+ html += `<div class="mac-sidebar-section"><span class="mac-sidebar-section-label">${t(cat.labelKey)}</span>`;
+ for (const key of keys) {
+ const cfg = this.ctx.panelSettings[key];
+ if (!cfg) continue;
+ const disabled = cfg.enabled ? '' : ' is-disabled';
+ html += `<button class="mac-sidebar-panel-item${disabled}" data-panel-key="${key}"><span class="mac-sidebar-panel-dot"></span>${cfg.name}</button>`;
+ }
+ html += `</div>`;
+ }
+ return html;
+  }
+
+  private buildDesktopLayout(): string {
+ return String.raw`
+ <!-- Original header kept for compatibility; hidden via CSS on desktop -->
+ <div class="header" aria-hidden="true" style="display:none">
+ <div class="header-left">
+ <div class="variant-switcher">${this.buildVariantSwitcherItems()}</div>
+ <span class="logo">MONITOR</span><span class="version">v${__APP_VERSION__}</span>
+ <div class="status-indicator"><span class="status-dot"></span><span>${t('header.live')}</span></div>
+ <div class="region-selector" style="display:none"></div>
+ </div>
+ <div class="header-right">
+ <button class="search-btn" id="searchBtn" style="display:none"><kbd>⌘K</kbd> ${t('header.search')}</button>
+ <button class="theme-toggle-btn" id="headerThemeToggle" style="display:none" title="${t('header.toggleTheme')}">${this.buildThemeIcon()}</button>
+ ${SITE_VARIANT === 'happy' ? '<button class="tv-mode-btn" id="tvModeBtn" style="display:none"></button>' : ''}
+ <span style="display:none"></span>
+ </div>
+ </div>
+
+ <!-- macOS native shell -->
+ <div class="mac-shell">
+
+ <!-- Sidebar -->
+ <aside class="mac-sidebar">
+ <!-- Drag region / traffic-lights safe area — JS drag via _setupWindowDragRegions() -->
+ <div class="mac-sidebar-drag" data-tauri-drag-region></div>
+
+ <!-- Navigation: variant pills + live panel list -->
+ <nav class="mac-sidebar-nav">
+ <div class="mac-variant-pills">
+ <button class="mac-variant-pill ${SITE_VARIANT === 'full' ? 'active' : ''}" data-variant="full" title="${t('header.world')}">🌍 World</button>
+ <button class="mac-variant-pill ${SITE_VARIANT === 'tech' ? 'active' : ''}" data-variant="tech" title="${t('header.tech')}">💻 Tech</button>
+ <button class="mac-variant-pill ${SITE_VARIANT === 'finance' ? 'active' : ''}" data-variant="finance" title="${t('header.finance')}">📈 Fin</button>
+ </div>
+ ${this.buildSidebarNav()}
+ ${SITE_VARIANT === 'happy' ? `
+ <div class="mac-sidebar-section">
+ <button class="mac-sidebar-panel-item" id="tvModeBtn">
+ <span class="mac-sidebar-panel-dot" style="background:var(--mac-orange)"></span>TV Mode
+ </button>
+ </div>` : ''}
+ </nav>
+
+ <!-- Mode Selector: Ghost + God's Vision only -->
+ ${SITE_VARIANT === 'happy' ? '' : `<div class="mac-mode-section" id="modeSelectorSection">
+ <button class="mac-alert-family-btn" id="alertFamilyBtn">⚠ Alert Family</button>
+ <button class="mac-ghost-mode-btn${getMode() === 'ghost' ? ' mac-ghost-mode-active' : ''}" id="ghostModeBtn" title="Ghost Mode — Reduce polling, suppress notifications (⌘⇧G)">👻 Ghost Mode</button>
+ <button class="mac-ghost-mode-btn" id="godsEyeBtn" title="God's Vision — 3D globe view (G)">🌍 God's Vision</button>
+ </div>`}
+
+ <!-- Footer: theme, low-power, settings, version, collapse -->
+ <div class="mac-sidebar-footer">
+ <button class="mac-sidebar-footer-btn theme-toggle-btn" id="headerThemeToggle" title="${t('header.toggleTheme')}">
+ ${this.buildThemeIcon()}
+ </button>
+ <button class="mac-sidebar-footer-btn" id="lowPowerBtn" title="Low Power Mode — disable animations and spatial audio">⚡</button>
+ <span id="unifiedSettingsMount"></span>
+ <span id="sidebarUpdateBtn">${this.buildSidebarUpdateBtnHtml()}</span>
+ </div>
+ </aside>
+
+ <!-- Main content: toolbar + map/panels -->
+ <main class="mac-content">
+ <!-- Draggable toolbar (title bar area) — drag via JS _setupToolbarDrag() -->
+ <div class="mac-content-toolbar" data-tauri-drag-region>
+ <button class="mac-sidebar-toggle-btn" id="sidebarCollapseBtn" title="Toggle sidebar (⌘\)" aria-label="Toggle sidebar">
+ <svg width="14" height="12" viewBox="0 0 14 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+ <rect x="0" y="0" width="4" height="12" rx="1.5" fill="currentColor" opacity="0.5"/>
+ <rect x="6" y="0" width="8" height="2" rx="1" fill="currentColor"/>
+ <rect x="6" y="5" width="8" height="2" rx="1" fill="currentColor"/>
+ <rect x="6" y="10" width="8" height="2" rx="1" fill="currentColor"/>
+ </svg>
+ </button>
+ <span class="mac-toolbar-title" data-tauri-drag-region>
+ ${SITE_VARIANT === 'tech' ? 'Tech Monitor' : SITE_VARIANT === 'finance' ? 'Finance Monitor' : SITE_VARIANT === 'happy' ? 'Good News' : 'Crystal Ball'}<span class="mac-toolbar-version">v${__APP_VERSION__}${BETA_MODE ? ' β' : ''}</span>
+ </span>
+ <div class="mac-toolbar-status">
+ <span class="status-dot"></span>
+ <span>${t('header.live')}</span>
+ </div>
+ <div class="mac-toolbar-spacer" data-tauri-drag-region></div>
+ <div class="region-selector">
+ <select id="regionSelect" class="region-select">
+ <option value="global">${t('components.deckgl.views.global')}</option>
+ <option value="america">${t('components.deckgl.views.americas')}</option>
+ <option value="mena">${t('components.deckgl.views.mena')}</option>
+ <option value="eu">${t('components.deckgl.views.europe')}</option>
+ <option value="asia">${t('components.deckgl.views.asia')}</option>
+ <option value="latam">${t('components.deckgl.views.latam')}</option>
+ <option value="africa">${t('components.deckgl.views.africa')}</option>
+ <option value="oceania">${t('components.deckgl.views.oceania')}</option>
+ </select>
+ </div>
+ <!-- Toolbar overflow — only visible when sidebar is collapsed -->
+ <div class="mac-toolbar-sidebar-overflow" id="toolbarSidebarOverflow">
+ <button class="mac-toolbar-overflow-btn" id="toolbarSettingsBtn" title="Settings (⌘,)">⚙</button>
+ <button class="mac-toolbar-overflow-btn" id="toolbarThemeBtn" title="Toggle theme">☀</button>
+ <button class="mac-toolbar-overflow-btn" id="toolbarModeBtn" title="Cycle mode (⌘M)">🕊</button>
+ </div>
+ <span class="header-clock" id="headerClock" data-tauri-drag-region></span>
+ <button class="search-btn" id="searchBtn"><kbd>⌘K</kbd> ${t('header.search')}</button>
+ </div>
+
+ <!-- Map + panels -->
+ <div class="mac-content-body">
+ <div class="main-content">
+ ${this.buildMapSection()}
+ <div class="panels-grid" id="panelsGrid"></div>
+ </div>
+ </div>
+ </main>
+
+ </div>
+ `;
+  }
+
+  private buildWebLayout(): string {
+ return `
+ <div class="header">
+ <div class="header-left">
+ <div class="variant-switcher">${this.buildVariantSwitcherItems()}</div>
+ <span class="logo">MONITOR</span><span class="version">v${__APP_VERSION__}</span>${BETA_MODE ? '<span class="beta-badge">BETA</span>' : ''}
+ <a href="https://github.com/bradleybond512/crystal-ball" target="_blank" rel="noopener" class="github-link" title="${t('header.viewOnGitHub')}">
+ <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+ </a>
+ <div class="status-indicator">
+ <span class="status-dot"></span>
+ <span>${t('header.live')}</span>
+ </div>
+ <div class="region-selector">
+ <select id="regionSelect" class="region-select">
+ <option value="global">${t('components.deckgl.views.global')}</option>
+ <option value="america">${t('components.deckgl.views.americas')}</option>
+ <option value="mena">${t('components.deckgl.views.mena')}</option>
+ <option value="eu">${t('components.deckgl.views.europe')}</option>
+ <option value="asia">${t('components.deckgl.views.asia')}</option>
+ <option value="latam">${t('components.deckgl.views.latam')}</option>
+ <option value="africa">${t('components.deckgl.views.africa')}</option>
+ <option value="oceania">${t('components.deckgl.views.oceania')}</option>
+ </select>
+ </div>
+ </div>
+ <div class="header-right">
+ ${this.ctx.isDesktopApp ? '' : `<div class="download-wrapper" id="downloadWrapper">
+ <button class="download-btn" id="downloadBtn" title="${t('header.downloadApp')}">
+ <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+ <span id="downloadBtnLabel">${t('header.downloadApp')}</span>
+ </button>
+ <div class="download-dropdown" id="downloadDropdown"></div>
+ </div>`}
+ <button class="search-btn" id="searchBtn"><kbd>⌘K</kbd> ${t('header.search')}</button>
+ ${this.ctx.isDesktopApp ? '' : `<button class="copy-link-btn" id="copyLinkBtn">${t('header.copyLink')}</button>`}
+ <button class="theme-toggle-btn" id="headerThemeToggle" title="${t('header.toggleTheme')}">
+ ${this.buildThemeIcon()}
+ </button>
+ ${this.ctx.isDesktopApp ? '' : `<button class="fullscreen-btn" id="fullscreenBtn" title="${t('header.fullscreen')}">⛶</button>`}
+ ${SITE_VARIANT === 'happy' ? `<button class="tv-mode-btn" id="tvModeBtn" title="TV Mode (Shift+T)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>` : ''}
+ <span id="unifiedSettingsMount"></span>
+ </div>
+ </div>
+ <div class="main-content">
+ ${this.buildMapSection()}
+ <div class="panels-grid" id="panelsGrid"></div>
+ </div>
+ `;
+  }
+
+  renderCriticalBanner(postures: TheaterPostureSummary[]): void {
+ if (this.ctx.isMobile) {
+ if (this.criticalBannerEl) {
+ this.criticalBannerEl.remove();
+ this.criticalBannerEl = null;
+ }
+ document.body.classList.remove('has-critical-banner');
+ return;
+ }
+
+ const dismissedAt = sessionStorage.getItem('banner-dismissed');
+ if (dismissedAt && Date.now() - Number.parseInt(dismissedAt, 10) < 30 * 60 * 1000) {
+ return;
+ }
+
+ const critical = postures.filter(
+ (p) => p.postureLevel === 'critical' || (p.postureLevel === 'elevated' && p.strikeCapable)
+ );
+
+ if (critical.length === 0) {
+ if (this.criticalBannerEl) {
+ this.criticalBannerEl.remove();
+ this.criticalBannerEl = null;
+ document.body.classList.remove('has-critical-banner');
+ }
+ return;
+ }
+
+ const top = critical[0]!;
+ const isCritical = top.postureLevel === 'critical';
+
+ if (!this.criticalBannerEl) {
+ this.criticalBannerEl = document.createElement('div');
+ this.criticalBannerEl.className = 'critical-posture-banner';
+ const header = document.querySelector('.header');
+ if (header) header.insertAdjacentElement('afterend', this.criticalBannerEl);
+ }
+
+ document.body.classList.add('has-critical-banner');
+ this.criticalBannerEl.className = `critical-posture-banner ${isCritical ? 'severity-critical' : 'severity-elevated'}`;
+ this.criticalBannerEl.innerHTML = `
+ <div class="banner-content">
+ <span class="banner-icon">${isCritical ? '🚨' : '⚠️'}</span>
+ <span class="banner-headline">${escapeHtml(top.headline)}</span>
+ <span class="banner-stats">${top.totalAircraft} aircraft • ${escapeHtml(top.summary)}</span>
+ ${top.strikeCapable ? '<span class="banner-strike">STRIKE CAPABLE</span>' : ''}
+ </div>
+ <button class="banner-view" data-lat="${top.centerLat}" data-lon="${top.centerLon}">View Region</button>
+ <button class="banner-dismiss">×</button>
+ `;
+
+ this.criticalBannerEl.querySelector('.banner-view')?.addEventListener('click', () => {
+ console.log('[Banner] View Region clicked:', top.theaterId, 'lat:', top.centerLat, 'lon:', top.centerLon);
+ trackCriticalBannerAction('view', top.theaterId);
+ if (typeof top.centerLat === 'number' && typeof top.centerLon === 'number') {
+ this.ctx.map?.setCenter(top.centerLat, top.centerLon, 4);
+ } else {
+ console.error('[Banner] Missing coordinates for', top.theaterId);
+ }
+ });
+
+ this.criticalBannerEl.querySelector('.banner-dismiss')?.addEventListener('click', () => {
+ trackCriticalBannerAction('dismiss', top.theaterId);
+ this.criticalBannerEl?.classList.add('dismissed');
+ document.body.classList.remove('has-critical-banner');
+ sessionStorage.setItem('banner-dismissed', Date.now().toString());
+ });
+  }
+
+  applyPanelSettings(): void {
+ Object.entries(this.ctx.panelSettings).forEach(([key, config]) => {
+ if (key === 'map') {
+ const mapSection = document.getElementById('mapSection');
+ if (mapSection) {
+ mapSection.classList.toggle('hidden', !config.enabled);
+ }
+ return;
+ }
+ const panel = this.ctx.panels[key];
+ panel?.toggle(config.enabled);
+ });
+ // Sync sidebar dot states when panels are toggled
+ document.querySelectorAll<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]').forEach(item => {
+ const key = item.dataset.panelKey;
+ if (!key) return;
+ const enabled = this.ctx.panelSettings[key]?.enabled ?? false;
+ item.classList.toggle('is-disabled', !enabled);
+ });
+  }
+
+  private createPanels(): void {
+ const panelsGrid = document.getElementById('panelsGrid')!;
+
+ const mapContainer = document.getElementById('mapContainer') as HTMLElement;
+ this.ctx.map = new MapContainer(mapContainer, {
+ zoom: this.ctx.isMobile ? 2.5 : 1,
+ pan: { x: 0, y: 0 },
+ view: this.ctx.isMobile ? this.ctx.resolvedLocation : 'global',
+ layers: this.ctx.mapLayers,
+ timeRange: '7d',
+ });
+
+ this.ctx.map.initEscalationGetters();
+ this.ctx.currentTimeRange = this.ctx.map.getTimeRange();
+
+ const politicsPanel = new NewsPanel('politics', t('panels.politics'));
+ this.attachRelatedAssetHandlers(politicsPanel);
+ this.ctx.newsPanels.politics = politicsPanel;
+ this.ctx.panels.politics = politicsPanel;
+
+ const techPanel = new NewsPanel('tech', t('panels.tech'));
+ this.attachRelatedAssetHandlers(techPanel);
+ this.ctx.newsPanels.tech = techPanel;
+ this.ctx.panels.tech = techPanel;
+
+ const financePanel = new NewsPanel('finance', t('panels.finance'));
+ this.attachRelatedAssetHandlers(financePanel);
+ this.ctx.newsPanels.finance = financePanel;
+ this.ctx.panels.finance = financePanel;
+
+ const heatmapPanel = new HeatmapPanel();
+ this.ctx.panels.heatmap = heatmapPanel;
+
+ const marketsPanel = new MarketPanel();
+ this.ctx.panels.markets = marketsPanel;
+
+ const monitorPanel = new MonitorPanel(this.ctx.monitors);
+ this.ctx.panels.monitors = monitorPanel;
+ monitorPanel.onChanged((monitors) => {
+ this.ctx.monitors = monitors;
+ saveToStorage(STORAGE_KEYS.monitors, monitors);
+ this.callbacks.updateMonitorResults();
+ });
+
+ const commoditiesPanel = new CommoditiesPanel();
+ this.ctx.panels.commodities = commoditiesPanel;
+
+ const predictionPanel = new PredictionPanel();
+ this.ctx.panels.polymarket = predictionPanel;
+
+ const govPanel = new NewsPanel('gov', t('panels.gov'));
+ this.attachRelatedAssetHandlers(govPanel);
+ this.ctx.newsPanels.gov = govPanel;
+ this.ctx.panels.gov = govPanel;
+
+ const intelPanel = new NewsPanel('intel', t('panels.intel'));
+ this.attachRelatedAssetHandlers(intelPanel);
+ this.ctx.newsPanels.intel = intelPanel;
+ this.ctx.panels.intel = intelPanel;
+
+ const cryptoPanel = new CryptoPanel();
+ this.ctx.panels.crypto = cryptoPanel;
+
+ const middleeastPanel = new NewsPanel('middleeast', t('panels.middleeast'));
+ this.attachRelatedAssetHandlers(middleeastPanel);
+ this.ctx.newsPanels.middleeast = middleeastPanel;
+ this.ctx.panels.middleeast = middleeastPanel;
+
+ const layoffsPanel = new NewsPanel('layoffs', t('panels.layoffs'));
+ this.attachRelatedAssetHandlers(layoffsPanel);
+ this.ctx.newsPanels.layoffs = layoffsPanel;
+ this.ctx.panels.layoffs = layoffsPanel;
+
+ const aiPanel = new NewsPanel('ai', t('panels.ai'));
+ this.attachRelatedAssetHandlers(aiPanel);
+ this.ctx.newsPanels.ai = aiPanel;
+ this.ctx.panels.ai = aiPanel;
+
+ const startupsPanel = new NewsPanel('startups', t('panels.startups'));
+ this.attachRelatedAssetHandlers(startupsPanel);
+ this.ctx.newsPanels.startups = startupsPanel;
+ this.ctx.panels.startups = startupsPanel;
+
+ const vcblogsPanel = new NewsPanel('vcblogs', t('panels.vcblogs'));
+ this.attachRelatedAssetHandlers(vcblogsPanel);
+ this.ctx.newsPanels.vcblogs = vcblogsPanel;
+ this.ctx.panels.vcblogs = vcblogsPanel;
+
+ const regionalStartupsPanel = new NewsPanel('regionalStartups', t('panels.regionalStartups'));
+ this.attachRelatedAssetHandlers(regionalStartupsPanel);
+ this.ctx.newsPanels.regionalStartups = regionalStartupsPanel;
+ this.ctx.panels.regionalStartups = regionalStartupsPanel;
+
+ const unicornsPanel = new NewsPanel('unicorns', t('panels.unicorns'));
+ this.attachRelatedAssetHandlers(unicornsPanel);
+ this.ctx.newsPanels.unicorns = unicornsPanel;
+ this.ctx.panels.unicorns = unicornsPanel;
+
+ const acceleratorsPanel = new NewsPanel('accelerators', t('panels.accelerators'));
+ this.attachRelatedAssetHandlers(acceleratorsPanel);
+ this.ctx.newsPanels.accelerators = acceleratorsPanel;
+ this.ctx.panels.accelerators = acceleratorsPanel;
+
+ const fundingPanel = new NewsPanel('funding', t('panels.funding'));
+ this.attachRelatedAssetHandlers(fundingPanel);
+ this.ctx.newsPanels.funding = fundingPanel;
+ this.ctx.panels.funding = fundingPanel;
+
+ const producthuntPanel = new NewsPanel('producthunt', t('panels.producthunt'));
+ this.attachRelatedAssetHandlers(producthuntPanel);
+ this.ctx.newsPanels.producthunt = producthuntPanel;
+ this.ctx.panels.producthunt = producthuntPanel;
+
+ const securityPanel = new NewsPanel('security', t('panels.security'));
+ this.attachRelatedAssetHandlers(securityPanel);
+ this.ctx.newsPanels.security = securityPanel;
+ this.ctx.panels.security = securityPanel;
+
+ const policyPanel = new NewsPanel('policy', t('panels.policy'));
+ this.attachRelatedAssetHandlers(policyPanel);
+ this.ctx.newsPanels.policy = policyPanel;
+ this.ctx.panels.policy = policyPanel;
+
+ const hardwarePanel = new NewsPanel('hardware', t('panels.hardware'));
+ this.attachRelatedAssetHandlers(hardwarePanel);
+ this.ctx.newsPanels.hardware = hardwarePanel;
+ this.ctx.panels.hardware = hardwarePanel;
+
+ const cloudPanel = new NewsPanel('cloud', t('panels.cloud'));
+ this.attachRelatedAssetHandlers(cloudPanel);
+ this.ctx.newsPanels.cloud = cloudPanel;
+ this.ctx.panels.cloud = cloudPanel;
+
+ const devPanel = new NewsPanel('dev', t('panels.dev'));
+ this.attachRelatedAssetHandlers(devPanel);
+ this.ctx.newsPanels.dev = devPanel;
+ this.ctx.panels.dev = devPanel;
+
+ const githubPanel = new NewsPanel('github', t('panels.github'));
+ this.attachRelatedAssetHandlers(githubPanel);
+ this.ctx.newsPanels.github = githubPanel;
+ this.ctx.panels.github = githubPanel;
+
+ const ipoPanel = new NewsPanel('ipo', t('panels.ipo'));
+ this.attachRelatedAssetHandlers(ipoPanel);
+ this.ctx.newsPanels.ipo = ipoPanel;
+ this.ctx.panels.ipo = ipoPanel;
+
+ const thinktanksPanel = new NewsPanel('thinktanks', t('panels.thinktanks'));
+ this.attachRelatedAssetHandlers(thinktanksPanel);
+ this.ctx.newsPanels.thinktanks = thinktanksPanel;
+ this.ctx.panels.thinktanks = thinktanksPanel;
+
+ const economicPanel = new EconomicPanel();
+ this.ctx.panels.economic = economicPanel;
+
+ if (SITE_VARIANT === 'full' || SITE_VARIANT === 'finance') {
+ const tradePolicyPanel = new TradePolicyPanel();
+ this.ctx.panels['trade-policy'] = tradePolicyPanel;
+
+ const supplyChainPanel = new SupplyChainPanel();
+ this.ctx.panels['supply-chain'] = supplyChainPanel;
+ }
+
+ if (SITE_VARIANT === 'tech') {
+ this.ctx.panels.regulation = new RegulationPanel('regulation');
+ }
+
+ const africaPanel = new NewsPanel('africa', t('panels.africa'));
+ this.attachRelatedAssetHandlers(africaPanel);
+ this.ctx.newsPanels.africa = africaPanel;
+ this.ctx.panels.africa = africaPanel;
+
+ const latamPanel = new NewsPanel('latam', t('panels.latam'));
+ this.attachRelatedAssetHandlers(latamPanel);
+ this.ctx.newsPanels.latam = latamPanel;
+ this.ctx.panels.latam = latamPanel;
+
+ const asiaPanel = new NewsPanel('asia', t('panels.asia'));
+ this.attachRelatedAssetHandlers(asiaPanel);
+ this.ctx.newsPanels.asia = asiaPanel;
+ this.ctx.panels.asia = asiaPanel;
+
+ const energyPanel = new NewsPanel('energy', t('panels.energy'));
+ this.attachRelatedAssetHandlers(energyPanel);
+ this.ctx.newsPanels.energy = energyPanel;
+ this.ctx.panels.energy = energyPanel;
+
+ for (const key of Object.keys(FEEDS)) {
+ if (this.ctx.newsPanels[key]) continue;
+ if (!Array.isArray((FEEDS as Record<string, unknown>)[key])) continue;
+ const altPanelKey = `${key}-news`;
+ const panelKey = this.ctx.panels[key] && !this.ctx.newsPanels[key]
+ ? (altPanelKey in DEFAULT_PANELS ? altPanelKey : '')
+ : key;
+ if (!panelKey) continue;
+ if (this.ctx.panels[panelKey]) continue;
+ const panelConfig = DEFAULT_PANELS[panelKey] ?? DEFAULT_PANELS[key];
+ const label = panelConfig?.name ?? key.charAt(0).toUpperCase() + key.slice(1);
+ const panel = new NewsPanel(panelKey, label);
+ this.attachRelatedAssetHandlers(panel);
+ this.ctx.newsPanels[key] = panel;
+ this.ctx.panels[panelKey] = panel;
+ }
+
+ if (SITE_VARIANT === 'full') {
+ let localLogisticsPanel: LocalLogisticsPanel | null = null;
+ let commsPlanPanel: CommsPlanPanel | null = null;
+ const focusGeoHub = (hub: GeoHubActivity) => {
+ this.ctx.map?.setCenter(hub.lat, hub.lon, 4);
+ this.ctx.map?.flashLocation(hub.lat, hub.lon, 3000);
+ };
+ const focusSavedPlace = (placeId: string) => {
+ const place = getSavedPlace(placeId);
+ if (!place) return;
+ localLogisticsPanel?.setPlaceId(placeId);
+ commsPlanPanel?.setPlaceId(placeId);
+ this.ctx.map?.setCenter(place.lat, place.lon, 6);
+ this.ctx.map?.flashLocation(place.lat, place.lon, 3000);
+ };
+
+ const watchlistPanel = new WatchlistPanel({
+ getCountrySnapshot: (code, country) => this.callbacks.getCountryWatchSnapshot(code, country),
+ openCountryBrief: (code, country) => this.callbacks.openCountryBriefByCode(code, country),
+ });
+ this.ctx.panels.watchlist = watchlistPanel;
+
+ const savedPlaceModal = new SavedPlaceModal({
+ onPickLocationMode: (active, callback) => {
+ this.ctx.map?.setPickLocationMode(active ? callback : null);
+ },
+ });
+
+ const openCreate = () => savedPlaceModal.openCreate();
+ const openEdit = (placeId: string) => {
+ const place = getSavedPlace(placeId);
+ if (place) savedPlaceModal.openEdit(place);
+ };
+
+ const savedPlacesPanel = new SavedPlacesPanel({
+ focusPlace: focusSavedPlace,
+ createPlace: openCreate,
+ editPlace: openEdit,
+ });
+ this.ctx.panels['saved-places'] = savedPlacesPanel;
+
+ const watchlistLocationsPanel = new WatchlistLocationsPanel();
+ this.ctx.panels['watchlist-locations'] = watchlistLocationsPanel;
+
+ this.ctx.unifiedSettings?.setPlaceCallbacks(openCreate, openEdit);
+
+ localLogisticsPanel = new LocalLogisticsPanel({
+ focusNode: (lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 9);
+ this.ctx.map?.flashLocation(lat, lon, 3000);
+ },
+ });
+ localLogisticsPanel.setPlaceId(getPrimarySavedPlace()?.id ?? null);
+ this.ctx.panels['local-logistics'] = localLogisticsPanel;
+
+ commsPlanPanel = new CommsPlanPanel();
+ commsPlanPanel.setPlaceId(getPrimarySavedPlace()?.id ?? null);
+ this.ctx.panels['comms-plan'] = commsPlanPanel;
+
+ const gdeltIntelPanel = new GdeltIntelPanel();
+ this.ctx.panels['gdelt-intel'] = gdeltIntelPanel;
+
+ const geoHubsPanel = new GeoHubsPanel();
+ geoHubsPanel.setOnHubClick(focusGeoHub);
+ this.ctx.map?.setOnGeoHubClick(focusGeoHub);
+ this.ctx.panels['geo-hubs'] = geoHubsPanel;
+
+ const ciiPanel = new CIIPanel();
+ ciiPanel.setShareStoryHandler((code, name) => {
+ this.callbacks.openCountryStory(code, name);
+ });
+ this.ctx.panels.cii = ciiPanel;
+
+ const cascadePanel = new CascadePanel();
+ this.ctx.panels.cascade = cascadePanel;
+
+ const satelliteFiresPanel = new SatelliteFiresPanel();
+ this.ctx.panels['satellite-fires'] = satelliteFiresPanel;
+
+ const earthquakesPanel = new EarthquakesPanel();
+ this.ctx.panels.earthquakes = earthquakesPanel;
+
+ const cyberThreatPanel = new CyberThreatPanel();
+ this.ctx.panels['cyber-threats'] = cyberThreatPanel;
+
+ const localIDSPanel = new LocalIDSPanel();
+ this.ctx.panels['local-ids'] = localIDSPanel;
+
+ const situationPanel = new SituationPanel();
+ this.ctx.panels['situation-awareness'] = situationPanel;
+
+ const alertCenterPanel = new AlertCenterPanel();
+ this.ctx.panels['alert-center'] = alertCenterPanel;
+
+ const spaceWeatherPanel = new SpaceWeatherPanel();
+ this.ctx.panels['space-weather'] = spaceWeatherPanel;
+
+ const spaceflightNewsPanel = new SpaceflightNewsPanel();
+ this.ctx.panels['spaceflight-news'] = spaceflightNewsPanel;
+
+ const spaceLaunchesPanel = new SpaceLaunchesPanel();
+ this.ctx.panels['space-launches'] = spaceLaunchesPanel;
+
+ const diseaseOutbreakPanel = new DiseaseOutbreakPanel();
+ this.ctx.panels['disease-outbreaks'] = diseaseOutbreakPanel;
+
+ const humanitarianCrisisPanel = new HumanitarianCrisisPanel();
+ this.ctx.panels['humanitarian-crisis'] = humanitarianCrisisPanel;
+
+ const globalWeatherPanel = new GlobalWeatherPanel();
+ this.ctx.panels['global-weather'] = globalWeatherPanel;
+
+ const openSanctionsPanel = new OpenSanctionsPanel();
+ this.ctx.panels['opensanctions'] = openSanctionsPanel;
+
+ const edgarFilingsPanel = new EdgarFilingsPanel();
+ this.ctx.panels['edgar-filings'] = edgarFilingsPanel;
+
+ const airQualityPanel = new AirQualityPanel();
+ this.ctx.panels['air-quality'] = airQualityPanel;
+
+ const wildfireIncidentsPanel = new WildfireIncidentsPanel();
+ this.ctx.panels['wildfire-incidents'] = wildfireIncidentsPanel;
+
+ const hazmatIncidentsPanel = new HazmatIncidentsPanel();
+ this.ctx.panels['hazmat-incidents'] = hazmatIncidentsPanel;
+
+ const oilSpillPanel = new OilSpillPanel();
+ this.ctx.panels['oil-spill'] = oilSpillPanel;
+
+ const hazardAlertsPanel = new HazardAlertsPanel();
+ this.ctx.panels['hazard-alerts'] = hazardAlertsPanel;
+
+ const infrastructurePanel = new InfrastructurePanel();
+ this.ctx.panels['infrastructure'] = infrastructurePanel;
+
+ const strategicRiskPanel = new StrategicRiskPanel();
+ strategicRiskPanel.setLocationClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 4);
+ });
+ this.ctx.panels['strategic-risk'] = strategicRiskPanel;
+
+ const strategicPosturePanel = new StrategicPosturePanel();
+ strategicPosturePanel.setLocationClickHandler((lat, lon) => {
+ console.log('[App] StrategicPosture handler called:', { lat, lon, hasMap: !!this.ctx.map });
+ this.ctx.map?.setCenter(lat, lon, 4);
+ });
+ this.ctx.panels['strategic-posture'] = strategicPosturePanel;
+
+ const ucdpEventsPanel = new UcdpEventsPanel();
+ ucdpEventsPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 5);
+ });
+ this.ctx.panels['ucdp-events'] = ucdpEventsPanel;
+
+ this.ctx.panels['nuclear-risk'] = new NuclearRiskPanel('nuclear-risk', 'Nuclear Risk Tracker');
+
+ const airstrikesPanel = new AirstrikesPanel();
+ airstrikesPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 6);
+ });
+ this.ctx.panels.airstrikes = airstrikesPanel;
+
+ const gdacsAlertsPanel = new GDACSAlertsPanel();
+ gdacsAlertsPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 5);
+ });
+ this.ctx.panels['gdacs-alerts'] = gdacsAlertsPanel;
+
+ this.ctx.panels['unified-inbox'] = new UnifiedAlertInboxPanel();
+ this.ctx.panels['alert-rules'] = new AlertRulesPanel();
+
+ const volcanoAlertsPanel = new VolcanoAlertsPanel();
+ volcanoAlertsPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 7);
+ });
+ this.ctx.panels['volcano-alerts'] = volcanoAlertsPanel;
+
+ const nwsAlertsPanel = new NWSAlertsPanel();
+ this.ctx.panels['nws-alerts'] = nwsAlertsPanel;
+
+ this.ctx.panels['faa-weather-cams'] = new FAAWeatherCamsPanel();
+
+ this.ctx.panels['tsunami-alerts'] = new TsunamiAlertsPanel();
+ this.ctx.panels['tropical-cyclones'] = new TropicalCyclonesPanel();
+ this.ctx.panels['food-insecurity'] = new FoodInsecurityPanel();
+ this.ctx.panels['offline-maps'] = new OfflineMapPanel();
+ this.ctx.panels['evacuation'] = new EvacuationPanel();
+ this.ctx.panels['family-tracker'] = new FamilyTrackerPanel();
+ this.ctx.panels['comms-health'] = new CommsHealthPanel();
+ this.ctx.panels['power-grid'] = new PowerGridPanel();
+ this.ctx.panels['economic-stress'] = new EconomicStressPanel();
+ this.ctx.panels['federal-register'] = new FederalRegisterPanel();
+ this.ctx.panels['fear-greed'] = new FearGreedPanel();
+ this.ctx.panels['internet-disruptions'] = new InternetDisruptionsPanel();
+ this.ctx.panels['national-debt'] = new NationalDebtPanel();
+ this.ctx.panels['fuel-prices'] = new FuelPricesPanel();
+ this.ctx.panels['air-traffic'] = new AirTrafficPanel();
+ this.ctx.panels['threat-intel-hub'] = new ThreatIntelHubPanel();
+ this.ctx.panels['geo-intel'] = new GeoIntelPanel();
+ this.ctx.panels['dark-web'] = new DarkWebPanel();
+ this.ctx.panels['intelligence-briefing'] = new IntelligenceBriefingPanel();
+ this.ctx.panels['ask-crystal-ball'] = new AskCrystalBallPanel();
+ const survivalAdvisor = new SurvivalAdvisorPanel();
+ this.ctx.panels['survival-advisor'] = survivalAdvisor;
+ this.ctx.panels['threat-synthesis'] = new ThreatSynthesisPanel();
+ this.ctx.panels['scenario-simulator'] = new ScenarioSimulatorPanel();
+ this.ctx.panels['escalation-forecast'] = new EscalationForecastPanel();
+ this.ctx.panels['anomaly-detection'] = new AnomalyDetectionPanel();
+ const financialContagion = new FinancialContagionPanel();
+ this.ctx.panels['financial-contagion'] = financialContagion;
+ const supplyChainImpact = new SupplyChainImpactPanel();
+ this.ctx.panels['supply-chain-impact'] = supplyChainImpact;
+ // Defer heavy init (AI/network calls) until after layout completes
+ queueMicrotask(() => { survivalAdvisor.init(); financialContagion.init(); supplyChainImpact.init(); });
+ this.ctx.panels['water-quality'] = new WaterQualityPanel();
+ this.ctx.panels['nuclear-monitor'] = new NuclearMonitorPanel();
+ this.ctx.panels['notification-digest'] = new NotificationDigestPanel();
+ // Worldview / Palantir / Dragos-inspired panels
+ this.ctx.panels['pattern-of-life'] = new PatternOfLifePanel();
+ this.ctx.panels['sigint-panel'] = new SigintPanel();
+ this.ctx.panels['dark-vessel'] = new DarkVesselPanel();
+ this.ctx.panels['course-of-action'] = new CourseOfActionPanel();
+ this.ctx.panels['kill-chain'] = new KillChainPanel();
+ this.ctx.panels['ics-ot-dashboard'] = new IcsOtDashboardPanel();
+ this.ctx.panels['ioc-manager'] = new IocManagerPanel();
+ this.ctx.panels['orbat'] = new OrbatPanel();
+ this.ctx.panels['after-action-review'] = new AarPanel();
+ this.ctx.panels['network-topology'] = new NetworkTopologyPanel();
+ this.ctx.panels['custom-geofence'] = new GeofencePanel();
+ this.ctx.panels['stix-taxii'] = new StixTaxiiPanel();
+ this.ctx.panels['entity-link-graph'] = new EntityLinkGraphPanel();
+ this.ctx.panels['timeline-scrubber'] = new TimelineScrubberPanel();
+ this.ctx.panels['intel-report'] = new IntelReportPanel();
+ this.ctx.panels['sanctions-crossref'] = new SanctionsCrossRefPanel();
+ this.ctx.panels['compound-threat'] = new CompoundThreatPanel();
+ this.ctx.panels['correlation-matrix'] = new CorrelationMatrixPanel();
+ this.ctx.panels['cascade-simulator'] = new CascadeSimulatorPanel();
+ this.ctx.panels['emergency-broadcast'] = new EmergencyBroadcastPanel();
+ this.ctx.panels['satellite-change'] = new SatelliteChangePanel();
+
+ // Weather upgrade panels
+ this.ctx.panels['extended-forecast'] = new ExtendedForecastPanel();
+ this.ctx.panels['weather-radar'] = new WeatherRadarPanel();
+ this.ctx.panels['tide-predictions'] = new TidePredictionsPanel();
+ this.ctx.panels['pollen'] = new PollenPanel();
+
+ this.ctx.panels['stoic-reflections'] = new StoicQuotePanel();
+ this.ctx.panels['biblical-encouragement'] = new BiblicalQuotePanel();
+ this.ctx.panels['alan-watts-reflections'] = new AlanWattsQuotePanel();
+ this.ctx.panels['mckenna-visions'] = new McKennaQuotePanel();
+ this.ctx.panels['daily-wisdom'] = new DailyWisdomPanel();
+
+ this.ctx.panels['radiation-decay'] = new RadiationDecayPanel();
+ this.ctx.panels['resource-inventory'] = new ResourceInventoryPanel();
+ this.ctx.panels['world-clock'] = new WorldClockPanel();
+ this.ctx.panels['pinned-webcams'] = new PinnedWebcamsPanel();
+
+ const displacementPanel = new DisplacementPanel();
+ displacementPanel.setCountryClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 4);
+ });
+ this.ctx.panels.displacement = displacementPanel;
+
+ const climatePanel = new ClimateAnomalyPanel();
+ climatePanel.setZoneClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 4);
+ });
+ this.ctx.panels.climate = climatePanel;
+
+ const populationExposurePanel = new PopulationExposurePanel();
+ this.ctx.panels['population-exposure'] = populationExposurePanel;
+
+ const securityAdvisoriesPanel = new SecurityAdvisoriesPanel();
+ securityAdvisoriesPanel.setRefreshHandler(() => {
+ void this.callbacks.loadSecurityAdvisories?.();
+ });
+ this.ctx.panels['security-advisories'] = securityAdvisoriesPanel;
+
+ const orefSirensPanel = new OrefSirensPanel();
+ this.ctx.panels['oref-sirens'] = orefSirensPanel;
+
+ const telegramIntelPanel = new TelegramIntelPanel();
+ this.ctx.panels['telegram-intel'] = telegramIntelPanel;
+
+ // WW3 escalation intel panels
+ this.ctx.panels['isw-reports'] = new IswReportsPanel();
+ this.ctx.panels['nato-news'] = new NatoNewsPanel();
+ this.ctx.panels['dod-news'] = new DodNewsPanel();
+ this.ctx.panels['reliefweb-crises'] = new ReliefWebPanel();
+ this.ctx.panels['bellingcat-osint'] = new BellingcatPanel();
+ this.ctx.panels['fcdo-warnings'] = new FcdoWarningsPanel();
+ this.ctx.panels['dfat-warnings'] = new DfatWarningsPanel();
+ this.ctx.panels['gac-warnings'] = new GacWarningsPanel();
+ this.ctx.panels['gov-warning-convergence'] = new GovConvergencePanel();
+ this.ctx.panels['emsc-seismic'] = new EmscSeismicPanel();
+ this.ctx.panels['acaps-crises'] = new AcapsPanel();
+ this.ctx.panels['liveuamap'] = new LiveUaMapPanel();
+
+ // Previously orphaned services now wired
+ this.ctx.panels['aerospace-reentry'] = new AerospaceReentryPanel();
+ this.ctx.panels['amtrak-alerts'] = new AmtrakAlertsPanel();
+ this.ctx.panels['avalanche-hazard'] = new AvalancheHazardPanel();
+ this.ctx.panels['dsca-arms-transfers'] = new DscaArmsPanel();
+ this.ctx.panels['ecdc-surveillance'] = new EcdcSurveillancePanel();
+ this.ctx.panels['fdic-failures'] = new FdicFailuresPanel();
+ this.ctx.panels['habsos'] = new HabsosPanel();
+ this.ctx.panels['un-security-council'] = new UnSecurityCouncilPanel();
+ this.ctx.panels['wildfire-smoke'] = new WildfireSmokePanel();
+ this.ctx.panels['central-bank-calendar'] = new CentralBankCalendarPanel();
+ this.ctx.panels['congress-defense'] = new CongressDefensePanel();
+ this.ctx.panels['combatant-commands'] = new CombatantCommandsPanel();
+ this.ctx.panels['foreign-mil-news'] = new ForeignMilNewsPanel();
+ this.ctx.panels['spc-mesoscale'] = new SpcMesoscalePanel();
+ }
+
+ if (SITE_VARIANT === 'finance') {
+ const investmentsPanel = new InvestmentsPanel((inv) => {
+ focusInvestmentOnMap(this.ctx.map, this.ctx.mapLayers, inv.lat, inv.lon);
+ });
+ this.ctx.panels['gcc-investments'] = investmentsPanel;
+ }
+
+ if (SITE_VARIANT !== 'happy') {
+ const liveNewsPanel = new LiveNewsPanel();
+ this.ctx.panels['live-news'] = liveNewsPanel;
+
+ const liveWebcamsPanel = new LiveWebcamsPanel();
+ this.ctx.panels['live-webcams'] = liveWebcamsPanel;
+
+ const focusTechHub = (hub: TechHubActivity) => {
+ this.ctx.map?.setCenter(hub.lat, hub.lon, 4);
+ this.ctx.map?.flashLocation(hub.lat, hub.lon, 3000);
+ };
+
+ const techHubsPanel = new TechHubsPanel();
+ techHubsPanel.setOnHubClick(focusTechHub);
+ this.ctx.map?.setOnTechHubClick(focusTechHub);
+ this.ctx.panels['tech-hubs'] = techHubsPanel;
+
+ this.ctx.panels.events = new TechEventsPanel('events');
+
+ const serviceStatusPanel = new ServiceStatusPanel();
+ this.ctx.panels['service-status'] = serviceStatusPanel;
+
+ const techReadinessPanel = new TechReadinessPanel();
+ this.ctx.panels['tech-readiness'] = techReadinessPanel;
+
+ this.ctx.panels['macro-signals'] = new MacroSignalsPanel();
+ this.ctx.panels['etf-flows'] = new ETFFlowsPanel();
+ this.ctx.panels.stablecoins = new StablecoinPanel();
+ }
+
+ const insightsPanel = new InsightsPanel();
+ this.ctx.panels.insights = insightsPanel;
+
+ // Global Giving panel (all variants)
+ this.ctx.panels.giving = new GivingPanel();
+
+ // Happy variant panels
+ if (SITE_VARIANT === 'happy') {
+ this.ctx.positivePanel = new PositiveNewsFeedPanel();
+ this.ctx.panels['positive-feed'] = this.ctx.positivePanel;
+
+ this.ctx.countersPanel = new CountersPanel();
+ this.ctx.panels.counters = this.ctx.countersPanel;
+ this.ctx.countersPanel.startTicking();
+
+ this.ctx.progressPanel = new ProgressChartsPanel();
+ this.ctx.panels.progress = this.ctx.progressPanel;
+
+ this.ctx.breakthroughsPanel = new BreakthroughsTickerPanel();
+ this.ctx.panels.breakthroughs = this.ctx.breakthroughsPanel;
+
+ this.ctx.heroPanel = new HeroSpotlightPanel();
+ this.ctx.panels.spotlight = this.ctx.heroPanel;
+ this.ctx.heroPanel.onLocationRequest = (lat: number, lon: number) => {
+ this.ctx.map?.setCenter(lat, lon, 4);
+ this.ctx.map?.flashLocation(lat, lon, 3000);
+ };
+
+ this.ctx.digestPanel = new GoodThingsDigestPanel();
+ this.ctx.panels.digest = this.ctx.digestPanel;
+
+ this.ctx.speciesPanel = new SpeciesComebackPanel();
+ this.ctx.panels.species = this.ctx.speciesPanel;
+
+ this.ctx.renewablePanel = new RenewableEnergyPanel();
+ this.ctx.panels.renewable = this.ctx.renewablePanel;
+ }
+
+ const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');
+ const savedOrder = this.getSavedPanelOrder();
+ let panelOrder = defaultOrder;
+ if (savedOrder.length > 0) {
+ const missing = defaultOrder.filter(k => !savedOrder.includes(k));
+ const valid = savedOrder.filter(k => defaultOrder.includes(k));
+ const monitorsIdx = valid.indexOf('monitors');
+ if (monitorsIdx !== -1) valid.splice(monitorsIdx, 1);
+ const insertIdx = valid.indexOf('politics') + 1 || 0;
+ const newPanels = missing.filter(k => k !== 'monitors');
+ valid.splice(insertIdx, 0, ...newPanels);
+ if (SITE_VARIANT !== 'happy') {
+ valid.push('monitors');
+ }
+ panelOrder = valid;
+ }
+
+ if (SITE_VARIANT !== 'happy') {
+ const anchors = PanelLayoutManager.MODE_ANCHORS.filter((key) => panelOrder.includes(key));
+ const rest = panelOrder.filter((key) => !anchors.includes(key));
+ panelOrder = [...anchors, ...rest];
+ }
+
+ panelOrder.forEach((key: string) => {
+ const panel = this.ctx.panels[key];
+ if (panel) {
+ const el = panel.getElement();
+ this.makeDraggable(el, key);
+ panelsGrid.append(el);
+ }
+ });
+
+ // Wire sidebar panel items → scroll to panel
+ if (this.ctx.isDesktopApp) {
+ document.querySelectorAll<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]').forEach(item => {
+ item.addEventListener('click', () => {
+ const key = item.dataset.panelKey;
+ if (!key) return;
+ const panel = this.ctx.panels[key];
+ panel?.getElement().scrollIntoView({ behavior: 'smooth', block: 'start' });
+ });
+ });
+
+ // Wire mode selector buttons
+ this._initModeSelector();
+
+ // Set up JS-based window drag on toolbar + sidebar drag zone
+ this._setupWindowDragRegions();
+
+ // Wire Low Power Mode toggle
+ const lpBtn = document.getElementById('lowPowerBtn');
+ if (lpBtn) {
+ lpBtn.classList.toggle('low-power-active', isLowPowerMode());
+ lpBtn.addEventListener('click', () => {
+ setLowPowerMode(!isLowPowerMode());
+ lpBtn.classList.toggle('low-power-active', isLowPowerMode());
+ });
+ document.addEventListener('wm:low-power-changed', ((e: CustomEvent) => {
+ lpBtn.classList.toggle('low-power-active', e.detail as boolean);
+ }) as EventListener);
+ }
+ }
+
+ this.ctx.map.onTimeRangeChanged((range) => {
+ this.ctx.currentTimeRange = range;
+ this.applyTimeRangeFilterDebounced();
+ });
+
+ this.applyPanelSettings();
+ this.applyInitialUrlState();
+  }
+
+  private _initModeSelector(): void {
+ // Apply initial body class for CSS accent theming
+ document.body.dataset.appMode = getMode() ?? '';
+
+ // Alert Family button (always visible — formerly gated on War mode)
+ document.getElementById('alertFamilyBtn')?.addEventListener('click', () => {
+ alertFamily();
+ const btn = document.getElementById('alertFamilyBtn');
+ if (btn) {
+ const orig = btn.textContent;
+ btn.textContent = '✓ Copied to clipboard';
+ setTimeout(() => { btn.textContent = orig; }, 2000);
+ }
+ });
+
+ // Ghost Mode button + Tauri menu event
+ document.getElementById('ghostModeBtn')?.addEventListener('click', () => {
+ toggleGhostMode();
+ });
+ // God's Eye button — use delegation to survive any DOM rebuilds
+ document.addEventListener('click', (e) => {
+ const target = (e.target as HTMLElement).closest('#godsEyeBtn');
+ if (target) {
+ document.dispatchEvent(new CustomEvent('wm:toggle-gods-eye'));
+ }
+ });
+ document.addEventListener('wm:toggle-ghost-mode', () => {
+ toggleGhostMode();
+ });
+ document.addEventListener('wm:open-settings', () => {
+ this.ctx.unifiedSettings?.open();
+ });
+
+ // React to mode changes: update body class + ghost button state
+ document.addEventListener('wm:mode-changed', ((e: CustomEvent) => {
+ const { mode } = e.detail as { mode: AppMode | null };
+ document.body.dataset.appMode = mode ?? '';
+
+ // Sync macOS menu bar mode indicator
+ if (this.ctx.isDesktopApp) {
+ tryInvokeTauri('update_mode_label', { mode: mode ?? '' }).catch(() => {/* silent */});
+ }
+
+ const ghostBtn = document.getElementById('ghostModeBtn');
+ if (ghostBtn) ghostBtn.classList.toggle('mac-ghost-mode-active', mode === 'ghost');
+ }) as EventListener);
+
+ // EMA forecast sparklines — show top high-risk regions near the war mode button
+ document.addEventListener('wm:ema-forecast', ((e: CustomEvent) => {
+ const { regions } = e.detail as { regions: Array<{ region: string; risk24h: number; trending: string }> };
+ let widget = document.getElementById('wm-ema-forecast-widget');
+ if (!regions || regions.length === 0) {
+ widget?.remove();
+ return;
+ }
+ if (!widget) {
+ widget = document.createElement('div');
+ widget.id = 'wm-ema-forecast-widget';
+ Object.assign(widget.style, {
+ fontSize: '10px',
+ color: '#9ca3af',
+ padding: '4px 6px',
+ marginTop: '4px',
+ background: 'rgba(255,255,255,0.03)',
+ borderRadius: '6px',
+ lineHeight: '1.6',
+ });
+ const section = document.getElementById('modeSelectorSection');
+ section?.appendChild(widget);
+ }
+ const trendIcon = (t: string) => t === 'up' ? '\u2197' : t === 'down' ? '\u2198' : '\u2192';
+ const riskColor = (r: number) => r >= 80 ? '#ef4444' : r >= 65 ? '#f97316' : '#f59e0b';
+ widget.innerHTML = regions.slice(0, 4).map(r =>
+ `<span style="display:inline-block;margin-right:8px">` +
+ `<span style="color:${riskColor(r.risk24h)}">${trendIcon(r.trending)}</span> ` +
+ `${r.region} <span style="color:${riskColor(r.risk24h)};font-weight:600">${r.risk24h}%</span>` +
+ `</span>`
+ ).join('');
+ }) as EventListener);
+
+ // Sync initial mode to macOS menu bar
+ if (this.ctx.isDesktopApp) {
+ tryInvokeTauri('update_mode_label', { mode: getMode() ?? '' }).catch(() => {/* silent */});
+ }
+
+ // Apply panel reorder for the initial mode on startup
+ this._applyModePanelOrder(getMode());
+
+ // Reorder panels whenever mode changes
+ document.addEventListener('wm:mode-changed', ((e: CustomEvent) => {
+ this._applyModePanelOrder((e.detail as { mode: AppMode | null }).mode);
+ }) as EventListener);
+
+ // Mode transition "why" cards — explains auto-triggered mode changes
+ initModeTransitionCards();
+
+ // Panel correlation detector — fires compound alerts when 3+ panels are elevated
+ initPanelCorrelation();
+
+ // Auto-mode-activation notifications deleted in mode collapse —
+ // war/disaster modes no longer exist as triggerable states.
+  }
+
+  /**
+ * Set up JS-based window dragging for all drag zones.
+ *
+ * Rationale: In Tauri 2 + WKWebView on macOS, `-webkit-app-region: drag`
+ * intercepts mousedown events at the WebKit layer *before* JS fires, so
+ * calling startDragging() from JS never gets a chance to run. The fix is to
+ * remove all `-webkit-app-region` CSS from drag zones and use an explicit
+ * mousedown → IPC approach instead. Also requires the
+ * `core:window:allow-start-dragging` capability (not included in core:default).
+ */
+  private _setupWindowDragRegions(): void {
+ // Interactive selectors — clicks on these must NOT start a window drag
+ const NO_DRAG_SELECTOR = 'button, select, input, a, label, [role="button"], [role="option"]';
+
+ const attachDrag = (el: Element | null, allowInteractive = false) => {
+ if (!el) return;
+ el.addEventListener('mousedown', (ev: Event) => {
+ const e = ev as MouseEvent;
+ if (e.button !== 0) return; // left button only
+ if (!allowInteractive) {
+ const target = e.target as Element | null;
+ if (target?.closest(NO_DRAG_SELECTOR)) return;
+ }
+ tryInvokeTauri('plugin:window|start_dragging').catch(() => {/* silent */});
+ });
+ };
+
+ // Content toolbar — skip interactive children (region select, search btn)
+ attachDrag(document.querySelector('.mac-content-toolbar'));
+
+ // Sidebar drag zone — empty div, all clicks are drag
+ attachDrag(document.querySelector('.mac-sidebar-drag'), true);
+  }
+
+  /**
+ * Reorder the panels grid to surface the most relevant panels for the
+ * active mode. Anchors (live-news, live-webcams) always stay at the top.
+ * Returning to Peace Mode restores the user's original order.
+ */
+  private _applyModePanelOrder(_mode: AppMode | null): void {
+ const grid = document.getElementById('panelsGrid');
+ if (!grid) return;
+
+ // Keys of panels currently in the DOM, in order
+ const currentKeys = [...grid.children]
+ .map(el => (el as HTMLElement).dataset.panel ?? '')
+ .filter(k => k.length > 0);
+
+ // Mode collapse: former per-mode panel priorities (Finance / War / Disaster)
+ // are now merged into a single always-on priority list. Anchors stay first,
+ // then the union of all elevated-mode priority panels, then the rest.
+ if (this._preModeOrder.length === 0) {
+ this._preModeOrder = [...currentKeys];
+ }
+
+ const mergedPriority = [
+ ...PanelLayoutManager.DISASTER_PRIORITY,
+ ...PanelLayoutManager.WAR_PRIORITY,
+ ...PanelLayoutManager.FINANCE_PRIORITY,
+ ];
+ const seen = new Set<string>();
+ const priority = mergedPriority.filter(k => {
+ if (seen.has(k)) return false;
+ seen.add(k);
+ return true;
+ });
+
+ const anchors = PanelLayoutManager.MODE_ANCHORS.filter(k => currentKeys.includes(k));
+ const priorityPresent = priority.filter(k => currentKeys.includes(k) && !anchors.includes(k));
+ const rest = currentKeys.filter(k => !anchors.includes(k) && !priorityPresent.includes(k));
+
+ [...anchors, ...priorityPresent, ...rest].forEach(key => {
+ const panel = this.ctx.panels[key];
+ if (panel) grid.append(panel.getElement());
+ });
+  }
+
+  private applyTimeRangeFilterToNewsPanels(): void {
+ Object.entries(this.ctx.newsByCategory).forEach(([category, items]) => {
+ const panel = this.ctx.newsPanels[category];
+ if (!panel) return;
+ const filtered = this.filterItemsByTimeRange(items);
+ if (filtered.length === 0 && items.length > 0) {
+ panel.renderFilteredEmpty(`No items in ${this.getTimeRangeLabel()}`);
+ return;
+ }
+ panel.renderNews(filtered);
+ });
+  }
+
+  private filterItemsByTimeRange(items: import('@/types').NewsItem[], range: import('@/components').TimeRange = this.ctx.currentTimeRange): import('@/types').NewsItem[] {
+ if (range === 'all') return items;
+ const ranges: Record<string, number> = {
+ '1h': 60 * 60 * 1000, '6h': 6 * 60 * 60 * 1000,
+ '24h': 24 * 60 * 60 * 1000, '48h': 48 * 60 * 60 * 1000,
+ '7d': 7 * 24 * 60 * 60 * 1000, 'all': Infinity,
+ };
+ const cutoff = Date.now() - (ranges[range] ?? Infinity);
+ return items.filter((item) => {
+ const ts = item.pubDate instanceof Date ? item.pubDate.getTime() : new Date(item.pubDate).getTime();
+ return Number.isFinite(ts) ? ts >= cutoff : true;
+ });
+  }
+
+  private getTimeRangeLabel(): string {
+ const labels: Record<string, string> = {
+ '1h': 'the last hour', '6h': 'the last 6 hours',
+ '24h': 'the last 24 hours', '48h': 'the last 48 hours',
+ '7d': 'the last 7 days', 'all': 'all time',
+ };
+ return labels[this.ctx.currentTimeRange] ?? 'the last 7 days';
+  }
+
+  private applyInitialUrlState(): void {
+ if (!this.ctx.initialUrlState || !this.ctx.map) return;
+
+ const { view, zoom, lat, lon, timeRange, layers } = this.ctx.initialUrlState;
+
+ if (view) {
+ this.ctx.map.setView(view);
+ }
+
+ if (timeRange) {
+ this.ctx.map.setTimeRange(timeRange);
+ }
+
+ if (layers) {
+ this.ctx.mapLayers = layers;
+ saveToStorage(STORAGE_KEYS.mapLayers, this.ctx.mapLayers);
+ this.ctx.map.setLayers(layers);
+ }
+
+ if (lat !== undefined && lon !== undefined) {
+ const effectiveZoom = zoom ?? this.ctx.map.getState().zoom;
+ if (effectiveZoom > 2) this.ctx.map.setCenter(lat, lon, zoom);
+ } else if (!view && zoom !== undefined) {
+ this.ctx.map.setZoom(zoom);
+ }
+
+ const regionSelect = document.getElementById('regionSelect') as HTMLSelectElement;
+ const currentView = this.ctx.map.getState().view;
+ if (regionSelect && currentView) {
+ regionSelect.value = currentView;
+ }
+  }
+
+  private getSavedPanelOrder(): string[] {
+ try {
+ const saved = localStorage.getItem(this.ctx.PANEL_ORDER_KEY);
+ return saved ? JSON.parse(saved) : [];
+ } catch {
+ return [];
+ }
+  }
+
+  savePanelOrder(): void {
+ const grid = document.getElementById('panelsGrid');
+ if (!grid) return;
+ const order = [...grid.children]
+ .map((el) => (el as HTMLElement).dataset.panel)
+ .filter((key): key is string => !!key);
+ localStorage.setItem(this.ctx.PANEL_ORDER_KEY, JSON.stringify(order));
+  }
+
+  private attachRelatedAssetHandlers(panel: NewsPanel): void {
+ panel.setRelatedAssetHandlers({
+ onRelatedAssetClick: (asset) => this.handleRelatedAssetClick(asset),
+ onRelatedAssetsFocus: (assets) => this.ctx.map?.highlightAssets(assets),
+ onRelatedAssetsClear: () => this.ctx.map?.highlightAssets(null),
+ });
+  }
+
+  private handleRelatedAssetClick(asset: RelatedAsset): void {
+ if (!this.ctx.map) return;
+
+ switch (asset.type) {
+ case 'pipeline': {
+ this.ctx.map.enableLayer('pipelines');
+ this.ctx.mapLayers.pipelines = true;
+ saveToStorage(STORAGE_KEYS.mapLayers, this.ctx.mapLayers);
+ this.ctx.map.triggerPipelineClick(asset.id);
+ break;
+ }
+ case 'cable': {
+ this.ctx.map.enableLayer('cables');
+ this.ctx.mapLayers.cables = true;
+ saveToStorage(STORAGE_KEYS.mapLayers, this.ctx.mapLayers);
+ this.ctx.map.triggerCableClick(asset.id);
+ break;
+ }
+ case 'datacenter': {
+ this.ctx.map.enableLayer('datacenters');
+ this.ctx.mapLayers.datacenters = true;
+ saveToStorage(STORAGE_KEYS.mapLayers, this.ctx.mapLayers);
+ this.ctx.map.triggerDatacenterClick(asset.id);
+ break;
+ }
+ case 'base': {
+ this.ctx.map.enableLayer('bases');
+ this.ctx.mapLayers.bases = true;
+ saveToStorage(STORAGE_KEYS.mapLayers, this.ctx.mapLayers);
+ this.ctx.map.triggerBaseClick(asset.id);
+ break;
+ }
+ case 'nuclear': {
+ this.ctx.map.enableLayer('nuclear');
+ this.ctx.mapLayers.nuclear = true;
+ saveToStorage(STORAGE_KEYS.mapLayers, this.ctx.mapLayers);
+ this.ctx.map.triggerNuclearClick(asset.id);
+ break;
+ }
+ }
+  }
+
+  private makeDraggable(el: HTMLElement, key: string): void {
+ el.dataset.panel = key;
+ let isDragging = false;
+ let dragStarted = false;
+ let startX = 0;
+ let startY = 0;
+ let rafId = 0;
+ const DRAG_THRESHOLD = 8;
+
+ const onMouseDown = (e: MouseEvent) => {
+ if (e.button !== 0) return;
+ const target = e.target as HTMLElement;
+ if (el.dataset.resizing === 'true') return;
+ if (
+ target.classList?.contains('panel-resize-handle') ||
+ target.closest?.('.panel-resize-handle') ||
+ target.classList?.contains('panel-col-resize-handle') ||
+ target.closest?.('.panel-col-resize-handle')
+ ) return;
+ if (target.closest('button, a, input, select, textarea, .panel-content')) return;
+
+ isDragging = true;
+ dragStarted = false;
+ startX = e.clientX;
+ startY = e.clientY;
+ e.preventDefault();
+ };
+
+ const onMouseMove = (e: MouseEvent) => {
+ if (!isDragging) return;
+ if (!dragStarted) {
+ const dx = Math.abs(e.clientX - startX);
+ const dy = Math.abs(e.clientY - startY);
+ if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
+ dragStarted = true;
+ el.classList.add('dragging');
+ }
+ const cx = e.clientX;
+ const cy = e.clientY;
+ if (rafId) cancelAnimationFrame(rafId);
+ rafId = requestAnimationFrame(() => {
+ this.handlePanelDragMove(el, cx, cy);
+ rafId = 0;
+ });
+ };
+
+ const onMouseUp = () => {
+ if (!isDragging) return;
+ isDragging = false;
+ if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+ if (dragStarted) {
+ el.classList.remove('dragging');
+ this.savePanelOrder();
+ }
+ dragStarted = false;
+ };
+
+ el.addEventListener('mousedown', onMouseDown);
+ document.addEventListener('mousemove', onMouseMove);
+ document.addEventListener('mouseup', onMouseUp);
+
+ this.panelDragCleanupHandlers.push(() => {
+ el.removeEventListener('mousedown', onMouseDown);
+ document.removeEventListener('mousemove', onMouseMove);
+ document.removeEventListener('mouseup', onMouseUp);
+ if (rafId) {
+ cancelAnimationFrame(rafId);
+ rafId = 0;
+ }
+ isDragging = false;
+ dragStarted = false;
+ el.classList.remove('dragging');
+ });
+  }
+
+  private handlePanelDragMove(dragging: HTMLElement, clientX: number, clientY: number): void {
+ const grid = document.getElementById('panelsGrid');
+ if (!grid) return;
+
+ dragging.style.pointerEvents = 'none';
+ const target = document.elementFromPoint(clientX, clientY);
+ dragging.style.pointerEvents = '';
+
+ if (!target) return;
+ const targetPanel = target.closest('.panel') as HTMLElement | null;
+ if (!targetPanel || targetPanel === dragging || targetPanel.classList.contains('hidden')) return;
+ if (targetPanel.parentElement !== grid) return;
+
+ const targetRect = targetPanel.getBoundingClientRect();
+ const draggingRect = dragging.getBoundingClientRect();
+
+ const children = [...grid.children];
+ const dragIdx = children.indexOf(dragging);
+ const targetIdx = children.indexOf(targetPanel);
+ if (dragIdx === -1 || targetIdx === -1) return;
+
+ const sameRow = Math.abs(draggingRect.top - targetRect.top) < 30;
+ const targetMid = sameRow
+ ? targetRect.left + targetRect.width / 2
+ : targetRect.top + targetRect.height / 2;
+ const cursorPos = sameRow ? clientX : clientY;
+
+ if (dragIdx < targetIdx) {
+ if (cursorPos > targetMid) {
+ grid.insertBefore(dragging, targetPanel.nextSibling);
+ }
+ } else {
+ if (cursorPos < targetMid) {
+ targetPanel.before(dragging);
+ }
+ }
+  }
+
+  getLocalizedPanelName(panelKey: string, fallback: string): string {
+ const key = panelKey.replace(/-([a-z])/g, (_match, group: string) => group.toUpperCase());
+ const lookup = `panels.${key}`;
+ const localized = t(lookup);
+ return localized === lookup ? fallback : localized;
+  }
+
+  getAllSourceNames(): string[] {
+ const sources = new Set<string>();
+ Object.values(FEEDS).forEach(feeds => {
+ if (feeds) feeds.forEach(f => sources.add(f.name));
+ });
+ INTEL_SOURCES.forEach(f => sources.add(f.name));
+ return [...sources].sort((a, b) => a.localeCompare(b));
+  }
+}

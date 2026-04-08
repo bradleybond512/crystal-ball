@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package crystalball.economic.v1;
+
+import "sebuf/http/annotations.proto";
+import "crystalball/economic/v1/economic_data.proto";
+
+// GetEnergyPricesRequest specifies which energy commodities to retrieve.
+message GetEnergyPricesRequest {
+  // Optional commodity filter. Empty returns all tracked commodities.
+  repeated string commodities = 1 [(sebuf.http.query) = { name: "commodities" }];
+}
+
+// GetEnergyPricesResponse contains energy price data.
+message GetEnergyPricesResponse {
+  // The list of energy prices.
+  repeated EnergyPrice prices = 1;
+}

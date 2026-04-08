@@ -1,0 +1,43 @@
+{
+  "version": 8,
+  "name": "Satellite",
+  "sources": {
+ "esri-satellite": {
+ "type": "raster",
+ "tiles": [
+ "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/500m/{z}/{y}/{x}.jpeg"
+ ],
+ "tileSize": 256,
+ "maxzoom": 8,
+ "attribution": "Imagery &copy; NASA EOSDIS GIBS / Blue Marble Next Generation"
+ },
+ "esri-labels": {
+ "type": "raster",
+ "tiles": [
+ "https://cartodb-basemaps-a.global.ssl.fastly.net/rastertiles/voyager_only_labels/{z}/{x}/{y}.png"
+ ],
+ "tileSize": 256,
+ "maxzoom": 19,
+ "attribution": "Labels &copy; CARTO &mdash; OpenStreetMap contributors"
+ }
+  },
+  "layers": [
+ {
+ "id": "satellite-tiles",
+ "type": "raster",
+ "source": "esri-satellite",
+ "minzoom": 0,
+ "maxzoom": 22
+ },
+ {
+ "id": "label-tiles",
+ "type": "raster",
+ "source": "esri-labels",
+ "minzoom": 2,
+ "maxzoom": 22,
+ "paint": {
+ "raster-opacity": 0.85
+ }
+ }
+  ]
+}

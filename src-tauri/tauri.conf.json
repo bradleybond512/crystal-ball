@@ -1,0 +1,81 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Crystal Ball",
+  "mainBinaryName": "crystalball",
+  "version": "2.10.4",
+  "identifier": "com.bradleybond.crystalball",
+  "build": {
+ "beforeDevCommand": "npm run build:sidecar-sebuf && npm run dev",
+ "beforeBuildCommand": "npm run build:desktop",
+ "frontendDist": "../dist",
+ "devUrl": "http://localhost:3000"
+  },
+  "app": {
+ "windows": [
+ {
+ "title": "Crystal Ball",
+ "width": 1440,
+ "height": 960,
+ "minWidth": 1200,
+ "minHeight": 720,
+ "resizable": true,
+ "fullscreen": false,
+ "titleBarStyle": "Overlay",
+ "hiddenTitle": true,
+ "backgroundColor": [
+ 28,
+ 28,
+ 30,
+ 255
+ ]
+ }
+ ],
+ "security": {
+ "csp": "default-src 'self'; connect-src 'self' https: http://127.0.0.1:* ws: wss:; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; worker-src 'self' blob:; font-src 'self' data: https:; media-src 'self' data: blob: https:; frame-src 'self' http://127.0.0.1:* https://crystalball.app https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self';"
+ }
+  },
+  "bundle": {
+ "active": true,
+ "targets": [
+ "app",
+ "dmg",
+ "nsis",
+ "msi",
+ "appimage"
+ ],
+ "category": "Productivity",
+ "shortDescription": "Crystal Ball desktop app — real-time global intelligence (AGPL-3.0)",
+ "longDescription": "Crystal Ball is a free, open-source macOS desktop app for real-time global intelligence.",
+ "icon": [
+ "icons/32x32.png",
+ "icons/128x128.png",
+ "icons/128x128@2x.png",
+ "icons/icon.icns",
+ "icons/icon.ico"
+ ],
+ "resources": [
+ "../api",
+ "sidecar/local-api-server.mjs",
+ "sidecar/package.json",
+ "sidecar/node",
+ "../data",
+ "../src/config"
+ ],
+ "windows": {
+ "digestAlgorithm": "sha256",
+ "timestampUrl": "https://timestamp.digicert.com",
+ "nsis": {
+ "installerHooks": "nsis/installer-hooks.nsh"
+ }
+ },
+ "macOS": {
+ "hardenedRuntime": true,
+ "infoPlist": "./Info.plist"
+ },
+ "linux": {
+ "appimage": {
+ "bundleMediaFramework": true
+ }
+ }
+  }
+}

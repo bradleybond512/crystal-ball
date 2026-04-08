@@ -1,0 +1,215 @@
+/**
+ * Notification Dispatcher — macOS native + web fallback
+ *
+ * Routes UnifiedAlert notifications through Tauri's native notification plugin
+ * when running as a desktop app, or falls back to the Web Notifications API
+ * in browser contexts.
+ *
+ * Features:
+ *  - Ghost Mode suppression (reads `wm-app-mode` from localStorage)
+ *  - Rate limiting: max 1 notification per source per 2 minutes
+ *  - Quiet hours: suppresses non-critical alerts during configured hours
+ */
+
+import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
+
+/**
+ * Tauri notification plugin module name. Indirected through a variable so
+ * TypeScript does not attempt static module resolution (the package may not
+ * be installed — the dynamic import handles absence at runtime via .catch()).
+ */
+const TAURI_NOTIFICATION_MODULE = '@tauri-apps/plugin-notification';
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Types
+// ──────────────────────────────────────────────────────────────────────────────
+
+export type NotificationAction = 'sound+banner' | 'banner' | 'badge' | 'silent';
+
+interface QuietHoursConfig {
+  enabled: boolean;
+  start: string; // "HH:MM" 24h format
+  end: string; // "HH:MM" 24h format
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Constants
+// ──────────────────────────────────────────────────────────────────────────────
+
+const MODE_STORAGE_KEY = 'wm-app-mode';
+const QUIET_HOURS_KEY = 'wm-quiet-hours';
+
+/** Minimum interval between notifications from the same source (ms). */
+const RATE_LIMIT_MS = 2 * 60 * 1000; // 2 minutes
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Map alert severity to the appropriate notification action. */
+export function actionForSeverity(severity: AlertSeverity): NotificationAction {
+  if (severity === 'critical') return 'sound+banner';
+  if (severity === 'high') return 'banner';
+  if (severity === 'medium') return 'badge';
+  return 'silent';
+}
+
+/** Parse "HH:MM" into minutes since midnight. Returns NaN on bad input. */
+function parseTimeToMinutes(time: string): number {
+  const parts = time.split(':');
+  if (parts.length !== 2) return Number.NaN;
+  const h = Number.parseInt(parts[0] ?? '', 10);
+  const m = Number.parseInt(parts[1] ?? '', 10);
+  if (Number.isNaN(h) || Number.isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) return Number.NaN;
+  return h * 60 + m;
+}
+
+/** Check whether the current time falls within quiet hours. */
+function isQuietHoursActive(): boolean {
+  try {
+ const raw = localStorage.getItem(QUIET_HOURS_KEY);
+ if (!raw) return false;
+ const config = JSON.parse(raw) as QuietHoursConfig;
+ if (!config.enabled) return false;
+
+ const startMin = parseTimeToMinutes(config.start);
+ const endMin = parseTimeToMinutes(config.end);
+ if (Number.isNaN(startMin) || Number.isNaN(endMin)) return false;
+
+ const now = new Date();
+ const nowMin = now.getHours() * 60 + now.getMinutes();
+
+ // Handle overnight ranges (e.g. 22:00 → 07:00)
+ if (startMin <= endMin) {
+ return nowMin >= startMin && nowMin < endMin;
+ }
+ return nowMin >= startMin || nowMin < endMin;
+  } catch {
+ return false;
+  }
+}
+
+/** Return true when app is in Ghost Mode. */
+function isGhostMode(): boolean {
+  try {
+ return localStorage.getItem(MODE_STORAGE_KEY) === 'ghost';
+  } catch {
+ return false;
+  }
+}
+
+/** Detect Tauri runtime (desktop app context). */
+function isTauriContext(): boolean {
+  return '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Dispatcher class
+// ──────────────────────────────────────────────────────────────────────────────
+
+class NotificationDispatcher {
+  /** source → last notification timestamp */
+  private rateLimitMap = new Map<string, number>();
+
+  /**
+ * Dispatch a notification for the given alert.
+ *
+ * Applies Ghost Mode suppression, rate limiting, and quiet hours before
+ * sending through the appropriate channel (Tauri native or Web API).
+ */
+  dispatchNotification(alert: UnifiedAlert, action: NotificationAction): void {
+ // ── Silent action — nothing to do ──
+ if (action === 'silent') return;
+
+ // ── Ghost Mode — suppress ALL notifications ──
+ if (isGhostMode()) return;
+
+ // ── Quiet hours — suppress unless critical ──
+ if (isQuietHoursActive() && alert.severity !== 'critical') return;
+
+ // ── Rate limiting — max 1 per source per RATE_LIMIT_MS ──
+ const now = Date.now();
+ const lastTime = this.rateLimitMap.get(alert.source);
+ if (lastTime !== undefined && now - lastTime < RATE_LIMIT_MS) return;
+ this.rateLimitMap.set(alert.source, now);
+
+ // ── Badge-only — no visible notification ──
+ if (action === 'badge') {
+ this.incrementBadge();
+ return;
+ }
+
+ // ── Send notification (sound+banner or banner) ──
+ const withSound = action === 'sound+banner';
+
+ if (isTauriContext()) {
+ this.sendTauriNotification(alert, withSound);
+ } else {
+ this.sendWebNotification(alert, withSound);
+ }
+  }
+
+  // ── Tauri native notification ──────────────────────────────────────────────
+
+  private sendTauriNotification(alert: UnifiedAlert, withSound: boolean): void {
+ (import(/* @vite-ignore */ TAURI_NOTIFICATION_MODULE) as Promise<Record<string, unknown>>)
+ .then(mod => {
+ const send = mod.sendNotification ?? mod.notify;
+ if (typeof send === 'function') {
+ (send as (opts: Record<string, unknown>) => void)({
+ title: alert.title,
+ body: alert.body,
+ sound: withSound ? 'default' : undefined,
+ });
+ }
+ })
+ .catch(() => {
+ // Plugin not available — fall back to web
+ this.sendWebNotification(alert, withSound);
+ });
+  }
+
+  // ── Web Notifications API fallback ─────────────────────────────────────────
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private sendWebNotification(alert: UnifiedAlert, _withSound?: boolean): void {
+ try {
+ if (!('Notification' in window)) return;
+
+ if (Notification.permission === 'granted') {
+ this.createWebNotification(alert);
+ } else if (Notification.permission !== 'denied') {
+ Notification.requestPermission()
+ .then(perm => {
+ if (perm === 'granted') this.createWebNotification(alert);
+ })
+ .catch(() => { /* permission request failed */ });
+ }
+ } catch {
+ // Notifications unavailable in this environment
+ }
+  }
+
+  private createWebNotification(alert: UnifiedAlert): void {
+ new Notification(alert.title, {
+ body: alert.body,
+ tag: `wm-${alert.source}-${alert.id}`,
+ requireInteraction: alert.severity === 'critical',
+ });
+  }
+
+  // ── Badge management ───────────────────────────────────────────────────────
+
+  private incrementBadge(): void {
+ if (!isTauriContext()) return;
+ // Badge management would use a Tauri badge plugin if available.
+ // For now this is a no-op placeholder — the badge count is tracked
+ // by the unifiedAlertStore.getUnacknowledgedCount() in the UI.
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Singleton export
+// ──────────────────────────────────────────────────────────────────────────────
+
+export const notificationDispatcher = new NotificationDispatcher();

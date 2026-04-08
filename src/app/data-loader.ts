@@ -1,0 +1,3550 @@
+import type { AppContext, AppModule } from '@/app/app-context';
+import type { NewsItem, MapLayers, SocialUnrestEvent } from '@/types';
+import type { MarketData } from '@/types';
+import type { TimeRange } from '@/components';
+import {
+  FEEDS,
+  INTEL_SOURCES,
+  SECTORS,
+  COMMODITIES,
+  MARKET_SYMBOLS,
+  SITE_VARIANT,
+  LAYER_TO_SOURCE,
+} from '@/config';
+import { INTEL_HOTSPOTS, CONFLICT_ZONES } from '@/config/geo';
+import { tokenizeForMatch, matchKeyword } from '@/utils/keyword-match';
+import {
+  fetchCategoryFeeds,
+  getFeedFailures,
+  fetchMultipleStocks,
+  fetchCrypto,
+  fetchPredictions,
+  fetchEarthquakes,
+  fetchWeatherAlerts,
+  fetchFredData,
+  fetchInternetOutages,
+  isOutagesConfigured,
+  fetchAisSignals,
+  getAisStatus,
+  isAisConfigured,
+  fetchCableActivity,
+  fetchCableHealth,
+  fetchProtestEvents,
+  getProtestStatus,
+  fetchFlightDelays,
+  fetchMilitaryFlights,
+  fetchMilitaryVessels,
+  initMilitaryVesselStream,
+  isMilitaryVesselTrackingConfigured,
+  fetchUSNIFleetReport,
+  updateBaseline,
+  calculateDeviation,
+  addToSignalHistory,
+  analysisWorker,
+  fetchPizzIntStatus,
+  fetchGdeltTensions,
+  fetchNaturalEvents,
+  fetchRecentAwards,
+  fetchOilAnalytics,
+  fetchBisData,
+  fetchCyberThreats,
+  drainTrendingSignals,
+  fetchTradeRestrictions,
+  fetchTariffTrends,
+  fetchTradeFlows,
+  fetchTradeBarriers,
+  fetchShippingRates,
+  fetchChokepointStatus,
+  fetchCriticalMinerals,
+  fetchTropicalCyclones,
+  fetchSpcSummary,
+  fetchMarineHazards,
+  fetchExcessiveRainfallOutlooks,
+  fetchWinterWeatherOutlooks,
+  fetchBuoyAlerts,
+  fetchHurricaneRecon,
+  fetchSavedPlaceWeather,
+  getSavedPlaces,
+  getStormPreparednessContext,
+  getStormPreparednessSummary,
+  updateStormPreparednessContext,
+} from '@/services';
+import { checkBatchForBreakingAlerts } from '@/services/breaking-news-alerts';
+import { evaluateWarThreat, evaluateFinanceTrigger, evaluateCommodityTrigger, evaluateDisasterTrigger, checkFinanceAutoTriggerTimeout } from '@/services/mode-manager';
+import { reportElevatedPanel } from '@/services/panel-correlation';
+import { fetchGDACSEvents } from '@/services/gdacs';
+import { mlWorker } from '@/services/ml-worker';
+import { clusterNewsHybrid } from '@/services/clustering';
+import { ingestProtests, ingestFlights, ingestVessels, ingestEarthquakes, detectGeoConvergence, geoConvergenceToSignal } from '@/services/geo-convergence';
+import { signalAggregator } from '@/services/signal-aggregator';
+import { updateAndCheck } from '@/services/temporal-baseline';
+import { fetchAllFires, flattenFires, computeRegionStats, toMapFires } from '@/services/wildfires';
+import { fetchInpeFires } from '@/services/inpe-fires';
+import { analyzeFlightsForSurge, surgeAlertToSignal, detectForeignMilitaryPresence, foreignPresenceToSignal, getTheaterPostureSummaries, type TheaterPostureSummary } from '@/services/military-surge';
+import { fetchCachedTheaterPosture, ingestLocalPostures } from '@/services/cached-theater-posture';
+import { ingestProtestsForCII, ingestMilitaryForCII, ingestNewsForCII, ingestOutagesForCII, ingestConflictsForCII, ingestUcdpForCII, ingestHapiForCII, ingestDisplacementForCII, ingestClimateForCII, ingestStrikesForCII, ingestOrefForCII, ingestAviationForCII, ingestAdvisoriesForCII, ingestGpsJammingForCII, ingestAisDisruptionsForCII, ingestSatelliteFiresForCII, ingestCyberThreatsForCII, ingestTemporalAnomaliesForCII, isInLearningMode } from '@/services/country-instability';
+import { fetchGpsInterference } from '@/services/gps-interference';
+import { fetchLocalIDSAlerts } from '@/services/local-ids';
+import { situationEngine } from '@/services/situation-engine';
+import { dataFreshness, type DataSourceId } from '@/services/data-freshness';
+import { fetchConflictEvents, fetchUcdpClassifications, fetchHapiSummary, fetchUcdpEvents, deduplicateAgainstAcled, fetchIranEvents } from '@/services/conflict';
+import { fetchUnhcrPopulation } from '@/services/displacement';
+import { fetchClimateAnomalies } from '@/services/climate';
+import { fetchSecurityAdvisories } from '@/services/security-advisories';
+import { fetchTelegramFeed } from '@/services/telegram-intel';
+import { fetchOrefAlerts, startOrefPolling, stopOrefPolling, onOrefAlertsUpdate } from '@/services/oref-alerts';
+import { enrichEventsWithExposure } from '@/services/population-exposure';
+import { getTopActiveGeoHubs } from '@/services/geo-activity';
+import { getTopActiveHubs } from '@/services/tech-activity';
+import { debounce, getCircuitBreakerCooldownInfo } from '@/utils';
+import { isFeatureAvailable } from '@/services/runtime-config';
+import { getApiBaseUrl } from '@/services/runtime';
+import { getAiFlowSettings } from '@/services/ai-flow-settings';
+import { t, getCurrentLanguage } from '@/services/i18n';
+import { getHydratedData } from '@/services/bootstrap';
+import { canQueueAiClassification, AI_CLASSIFY_MAX_PER_FEED } from '@/services/ai-classify-queue';
+import { classifyWithAI } from '@/services/threat-classifier';
+import { ingestHeadlines } from '@/services/trending-keywords';
+import type { ListFeedDigestResponse } from '@/generated/client/crystalball/news/v1/service_client';
+import type { GetSectorSummaryResponse } from '@/generated/client/crystalball/market/v1/service_client';
+import { maybeShowDownloadBanner } from '@/components/DownloadBanner';
+import { mountCommunityWidget } from '@/components/CommunityWidget';
+import { ResearchServiceClient } from '@/generated/client/crystalball/research/v1/service_client';
+import {
+  MarketPanel,
+  HeatmapPanel,
+  CommoditiesPanel,
+  CryptoPanel,
+  PredictionPanel,
+  MonitorPanel,
+  InsightsPanel,
+  CIIPanel,
+  StrategicPosturePanel,
+  EconomicPanel,
+  TechReadinessPanel,
+  UcdpEventsPanel,
+  DisplacementPanel,
+  ClimateAnomalyPanel,
+  PopulationExposurePanel,
+  TsunamiAlertsPanel,
+  TropicalCyclonesPanel,
+  FoodInsecurityPanel,
+  TradePolicyPanel,
+  SupplyChainPanel,
+  SecurityAdvisoriesPanel,
+  OrefSirensPanel,
+  TelegramIntelPanel,
+} from '@/components';
+import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
+import { EarthquakesPanel } from '@/components/EarthquakesPanel';
+import { CyberThreatPanel } from '@/components/CyberThreatPanel';
+import { LocalIDSPanel } from '@/components/LocalIDSPanel';
+import { AlertCenterPanel } from '@/components/AlertCenterPanel';
+import { SpaceWeatherPanel } from '@/components/SpaceWeatherPanel';
+import { DiseaseOutbreakPanel } from '@/components/DiseaseOutbreakPanel';
+import { AirQualityPanel } from '@/components/AirQualityPanel';
+import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
+import { HazmatIncidentsPanel } from '@/components/HazmatIncidentsPanel';
+import { OilSpillPanel } from '@/components/OilSpillPanel';
+import { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
+import { InfrastructurePanel } from '@/components/InfrastructurePanel';
+import { fetchNearbyInfrastructure } from '@/services/infrastructure/hifld';
+import { AirstrikesPanel } from '@/components/AirstrikesPanel';
+import { fetchAirstrikes } from '@/services/airstrikes';
+import { fetchS2Underground } from '@/services/s2-underground';
+import { fetchThreatFoxIOCs, fetchOpenPhishFeed, fetchSpamhausDrop, fetchCisaKev, fetchOtxIOCs, fetchPhishStatsFeed } from '@/services/cyber-extra';
+import { fetchSpaceWeather, fetchDonkiEvents } from '@/services/space-weather';
+import { fetchSpaceflightNews } from '@/services/spaceflight-news';
+import { SpaceflightNewsPanel } from '@/components/SpaceflightNewsPanel';
+import { fetchSpaceLaunches } from '@/services/space-launches';
+import { SpaceLaunchesPanel } from '@/components/SpaceLaunchesPanel';
+import { fetchDiseaseOutbreaks, fetchGlobalDiseaseSnapshots, fetchCdcSurveillance } from '@/services/disease-outbreak';
+import { fetchDiseaseIntel } from '@/services/disease-intel';
+import { DiseaseIntelPanel } from '@/components/DiseaseIntelPanel';
+import { fetchHdxCrises } from '@/services/hdx-crisis';
+import { HumanitarianCrisisPanel } from '@/components/HumanitarianCrisisPanel';
+import { fetchGlobalAirQuality } from '@/services/air-quality';
+import { fetchInciwebIncidents } from '@/services/inciweb';
+import { fetchHazmatIncidents } from '@/services/hazmat-incidents';
+import { fetchOilSpills } from '@/services/oil-spill-tracker';
+import { proximityAlertService } from '@/services/proximity-alerts';
+import { classifyNewsItem } from '@/services/positive-classifier';
+import { fetchGivingSummary } from '@/services/giving';
+import { fetchVolcanoAlerts } from '@/services/volcano-alerts';
+import { fetchNWSAlerts } from '@/services/nws-alerts';
+import { fetchFAACameras, scoreCamerasAgainstAlerts, getDisasterProximateCameras } from '@/services/faa-cameras';
+import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
+import { fetchAdsbSnapshot } from '@/services/adsb';
+import type { AirTrafficPanel } from '@/components/AirTrafficPanel';
+import { fetchCommsHealth } from '@/services/comms-health';
+import { fetchGridStatus } from '@/services/power-grid';
+import { fetchEconomicStress } from '@/services/economic-stress';
+import { fetchWsbSentiment } from '@/services/wsb-sentiment';
+import { fetchFederalRegister } from '@/services/federal-register';
+import { FederalRegisterPanel } from '@/components/FederalRegisterPanel';
+import { updateRegionCount, getHighRiskRegions } from '@/services/ema-forecast';
+import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
+import { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
+import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
+import { CommsHealthPanel } from '@/components/CommsHealthPanel';
+import { PowerGridPanel } from '@/components/PowerGridPanel';
+import { EconomicStressPanel } from '@/components/EconomicStressPanel';
+import { GivingPanel } from '@/components';
+import { GeoHubsPanel } from '@/components/GeoHubsPanel';
+import { TechHubsPanel } from '@/components/TechHubsPanel';
+import { fetchProgressData } from '@/services/progress-data';
+import { fetchConservationWins } from '@/services/conservation-data';
+import { fetchRenewableEnergyData, fetchEnergyCapacity } from '@/services/renewable-energy-data';
+import { checkMilestones } from '@/services/celebration';
+import { fetchHappinessScores } from '@/services/happiness-data';
+import { fetchRenewableInstallations } from '@/services/renewable-installations';
+import { filterBySentiment } from '@/services/sentiment-gate';
+import { fetchAllPositiveTopicIntelligence } from '@/services/gdelt-intel';
+import { fetchPositiveGeoEvents, geocodePositiveNewsItems } from '@/services/positive-events-geo';
+import { fetchKindnessData } from '@/services/kindness-data';
+import { getPersistentCache, setPersistentCache } from '@/services/persistent-cache';
+import { withOfflineCache, registerCriticalSources } from '@/services/offline-alert-cache';
+import {
+  ingestCyberToIoc, ingestCisaKevToIoc,
+  ingestAisToDarkVessel, ingestMilVesselsToDarkVessel,
+  checkGeofenceEarthquakes, checkGeofenceProtests, checkGeofenceCyber, checkGeofenceAirstrikes, checkGeofenceMilitary,
+  ingestGpsToSigint, ingestCableToSigint, ingestOutagesToSigint,
+  ingestEarthquakesToPoL, ingestProtestsToPoL, ingestCyberToPoL, rollPoLBaseline,
+  ingestCyberToKillChain,
+  ingestCyberToConvergence, ingestOutagesToConvergence, ingestAirstrikesToConvergence,
+  ingestMilFlightsToOrbat, ingestMilVesselsToOrbat,
+  ingestOutagesToTopology, ingestCableToTopology,
+  ingestCisaToIcsOt,
+  initModeTracking,
+  ingestCyberToGraph, ingestMilFlightsToGraph, ingestMilVesselsToGraph,
+  ingestEarthquakesToTimeline, ingestCyberToTimeline, ingestAirstrikesToTimeline,
+  updateCompoundThreatLevels,
+  ingestEarthquakesToMatrix, ingestCyberToMatrix, ingestAirstrikesToMatrix,
+  checkVesselsAgainstSanctions,
+} from '@/services/intel-pipeline';
+import { fetchNewsApiHeadlines } from '@/services/newsapi';
+import { fetchNewsDataFeed } from '@/services/newsdata';
+import type { ThreatLevel as ClientThreatLevel } from '@/services/threat-classifier';
+import type { NewsItem as ProtoNewsItem, ThreatLevel as ProtoThreatLevel } from '@/generated/client/crystalball/news/v1/service_client';
+import { fetchIswReports } from '@/services/isw-reports';
+import { IswReportsPanel } from '@/components/IswReportsPanel';
+import { NatoNewsPanel } from '@/components/NatoNewsPanel';
+import { DodNewsPanel } from '@/components/DodNewsPanel';
+import { ReliefWebPanel } from '@/components/ReliefWebPanel';
+import { BellingcatPanel } from '@/components/BellingcatPanel';
+import { FcdoWarningsPanel } from '@/components/FcdoWarningsPanel';
+import { DfatWarningsPanel } from '@/components/DfatWarningsPanel';
+import { GacWarningsPanel } from '@/components/GacWarningsPanel';
+import { GovConvergencePanel } from '@/components/GovConvergencePanel';
+import { EmscSeismicPanel } from '@/components/EmscSeismicPanel';
+import { AcapsPanel } from '@/components/AcapsPanel';
+import { LiveUaMapPanel } from '@/components/LiveUaMapPanel';
+import { AerospaceReentryPanel } from '@/components/AerospaceReentryPanel';
+import { AmtrakAlertsPanel } from '@/components/AmtrakAlertsPanel';
+import { AvalancheHazardPanel } from '@/components/AvalancheHazardPanel';
+import { DscaArmsPanel } from '@/components/DscaArmsPanel';
+import { EcdcSurveillancePanel } from '@/components/EcdcSurveillancePanel';
+import { FdicFailuresPanel } from '@/components/FdicFailuresPanel';
+import { HabsosPanel } from '@/components/HabsosPanel';
+import { UnSecurityCouncilPanel } from '@/components/UnSecurityCouncilPanel';
+import { WildfireSmokePanel } from '@/components/WildfireSmokePanel';
+import { CentralBankCalendarPanel } from '@/components/CentralBankCalendarPanel';
+import { fetchNatoNews } from '@/services/nato-news';
+import { fetchDodNews } from '@/services/dod-news';
+import { fetchReliefWebCrises } from '@/services/reliefweb';
+import { fetchBellingcatOsint } from '@/services/bellingcat';
+import { fetchFcdoWarnings, fetchDfatWarnings, fetchGacWarnings, fetchGovWarningConvergence, getConvergenceAlerts } from '@/services/travel-warnings';
+import { fetchEmscSeismic } from '@/services/emsc-seismic';
+import { fetchAcapsCrises } from '@/services/acaps';
+import { fetchLiveUaMap } from '@/services/liveuamap';
+import { fetchDebrisReentries } from '@/services/aerospace-reentry';
+import { fetchAmtrakAlerts } from '@/services/amtrak-alerts';
+import { fetchAvalancheHazard } from '@/services/avalanche-hazard';
+import { fetchArmsTransfers } from '@/services/dsca-arms-transfers';
+import { fetchEcdcAlerts } from '@/services/ecdc-surveillance';
+import { fetchBankFailures } from '@/services/fdic-failures';
+import { fetchHabObservations } from '@/services/habsos';
+import { fetchUnSecurityCouncil } from '@/services/un-security-council';
+import { fetchWildfireSmoke } from '@/services/wildfire-smoke';
+import { getUpcomingMeetings } from '@/services/central-bank-calendar';
+import { fetchCongressDefense } from '@/services/congress-defense';
+import { fetchCombatantCommands } from '@/services/combatant-commands';
+import { fetchForeignMilNews } from '@/services/foreign-mil-news';
+import { fetchMesoscaleDiscussions } from '@/services/spc-mesoscale';
+import { GlobalWeatherPanel } from '@/components/GlobalWeatherPanel';
+import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
+import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
+import { fetchGlobalWeather } from '@/services/global-weather';
+import { fetchRecentSanctions } from '@/services/opensanctions';
+import { fetchRecentEdgarFilings } from '@/services/sec-edgar';
+import { showApiKeyGate } from '@/components/api-key-gate';
+import { detectCompoundThreats, toHazardSignal } from '@/services/compound-threat';
+import { fetchSatelliteCatalog } from '@/services/satellite-catalog';
+import { satellitePropagator } from '@/services/satellite-propagator';
+import { unifiedAlertStore } from '@/services/unified-alerts';
+import {
+  normalizeBreakingAlert,
+  normalizeNWSAlert,
+  normalizeGDACSEvent,
+  normalizeTsunamiAlert,
+  normalizeResourceAlert,
+} from '@/services/alert-normalizer';
+import type { ResourceAlertDetail } from '@/services/alert-normalizer';
+import type { BreakingAlert } from '@/services/breaking-news-alerts';
+import { fetchFloodGauges } from '@/services/flood-gauges';
+import { fetchExtendedForecast } from '@/services/extended-forecast';
+import { fetchRadarFrames } from '@/services/rainviewer-radar';
+import { fetchTidePredictions, TIDE_STATIONS } from '@/services/tide-predictions';
+import { fetchPollenData } from '@/services/pollen';
+import { fetchRedFlagWarnings, fetchFireWeatherOutlook } from '@/services/red-flag-warnings';
+import { fetchLightningStrikes } from '@/services/lightning';
+import type { ExtendedForecastPanel } from '@/components/ExtendedForecastPanel';
+import type { WeatherRadarPanel } from '@/components/WeatherRadarPanel';
+import type { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
+import type { PollenPanel } from '@/components/PollenPanel';
+import { fetchDamSafetyAlerts } from '@/services/dam-safety';
+import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
+import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
+import { fetchAcledEvents, fetchAdsbMilitary } from '@/services/osint';
+import { fetchHibpBreaches, fetchTorMetrics } from '@/services/osint';
+import type { ThreatIntelHubPanel } from '@/components/ThreatIntelHubPanel';
+import type { GeoIntelPanel } from '@/components/GeoIntelPanel';
+import type { DarkWebPanel } from '@/components/DarkWebPanel';
+
+const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
+  THREAT_LEVEL_UNSPECIFIED: 'info',
+  THREAT_LEVEL_LOW: 'low',
+  THREAT_LEVEL_MEDIUM: 'medium',
+  THREAT_LEVEL_HIGH: 'high',
+  THREAT_LEVEL_CRITICAL: 'critical',
+};
+
+function protoItemToNewsItem(p: ProtoNewsItem): NewsItem {
+  const level = PROTO_TO_CLIENT_LEVEL[p.threat?.level ?? 'THREAT_LEVEL_UNSPECIFIED'];
+  return {
+ source: p.source,
+ title: p.title,
+ link: p.link,
+ pubDate: new Date(p.publishedAt),
+ isAlert: p.isAlert,
+ threat: p.threat ? {
+ level,
+ category: p.threat.category as import('@/services/threat-classifier').EventCategory,
+ confidence: p.threat.confidence,
+ source: (p.threat.source || 'keyword') as 'keyword' | 'ml' | 'llm',
+ } : undefined,
+ ...(p.locationName && { locationName: p.locationName }),
+ ...(p.location && { lat: p.location.latitude, lon: p.location.longitude }),
+  };
+}
+
+const CYBER_LAYER_ENABLED = import.meta.env.VITE_ENABLE_CYBER_LAYER === 'true';
+
+export interface DataLoaderCallbacks {
+  renderCriticalBanner: (postures: TheaterPostureSummary[]) => void;
+}
+
+export class DataLoaderManager implements AppModule {
+  private ctx: AppContext;
+  private callbacks: DataLoaderCallbacks;
+
+  private mapFlashCache = new Map<string, number>();
+  private readonly MAP_FLASH_COOLDOWN_MS = 10 * 60 * 1000;
+  private readonly applyTimeRangeFilterToNewsPanelsDebounced = debounce(() => {
+ this.applyTimeRangeFilterToNewsPanels();
+  }, 120);
+
+  public updateSearchIndex: () => void = () => {};
+
+  private digestBreaker = { state: 'closed' as 'closed' | 'open' | 'half-open', failures: 0, cooldownUntil: 0 };
+  private lastGoodDigest: ListFeedDigestResponse | null = null;
+
+  constructor(ctx: AppContext, callbacks: DataLoaderCallbacks) {
+ this.ctx = ctx;
+ this.callbacks = callbacks;
+  }
+
+  init(): void {
+ // Pre-register critical data sources for offline cache status tracking
+ registerCriticalSources();
+
+ // Wire AAR auto-creation on mode transitions
+ initModeTracking();
+
+ // Bridge breaking-news events into the unified alert store
+ document.addEventListener('wm:breaking-news', (e: Event) => {
+ const alert = (e as CustomEvent<BreakingAlert>).detail;
+ if (alert) unifiedAlertStore.ingest([normalizeBreakingAlert(alert)]);
+ });
+
+ // Bridge resource depletion alerts into the unified alert store
+ document.addEventListener('wm:resource-alert', (e: Event) => {
+ const detail = (e as CustomEvent<ResourceAlertDetail>).detail;
+ if (detail) unifiedAlertStore.ingest([normalizeResourceAlert(detail)]);
+ });
+
+ // Disaster-proximate FAA cameras — formerly gated on disaster mode entry,
+ // now loaded unconditionally once at startup so the user always has the
+ // most-active camera set. Re-runs are unnecessary (mode triggers removed).
+ void (async () => {
+ try {
+ const [raw, nwsResult, gdacsResult] = await Promise.all([
+ fetchFAACameras(),
+ withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
+ withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000),
+ ]);
+ const proximate = getDisasterProximateCameras(raw, nwsResult.data, gdacsResult.data);
+ this.ctx.map?.setFAACameras(proximate);
+ (this.ctx.panels['faa-weather-cams'] as FAAWeatherCamsPanel | undefined)?.setDisasterMode(true, proximate);
+ } catch { /* non-critical */ }
+ })();
+  }
+
+  destroy(): void {
+ stopOrefPolling();
+  }
+
+  private async tryFetchDigest(): Promise<ListFeedDigestResponse | null> {
+ const now = Date.now();
+
+ if (this.digestBreaker.state === 'open') {
+ if (now < this.digestBreaker.cooldownUntil) {
+ return this.lastGoodDigest ?? await this.loadPersistedDigest();
+ }
+ this.digestBreaker.state = 'half-open';
+ }
+
+ try {
+ const resp = await fetch(
+ `/api/news/v1/list-feed-digest?variant=${SITE_VARIANT}&lang=${getCurrentLanguage()}`,
+ { signal: AbortSignal.timeout(3000) },
+ );
+ if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+ const data = await resp.json() as ListFeedDigestResponse;
+ const catCount = Object.keys(data.categories ?? {}).length;
+ console.info(`[News] Digest fetched: ${catCount} categories`);
+ this.lastGoodDigest = data;
+ this.persistDigest(data);
+ this.digestBreaker = { state: 'closed', failures: 0, cooldownUntil: 0 };
+ return data;
+ } catch (error) {
+ console.warn('[News] Digest fetch failed, using fallback:', error);
+ this.digestBreaker.failures++;
+ if (this.digestBreaker.failures >= 2) {
+ this.digestBreaker.state = 'open';
+ this.digestBreaker.cooldownUntil = now + 60_000;
+ }
+ return this.lastGoodDigest ?? await this.loadPersistedDigest();
+ }
+  }
+
+  private persistDigest(data: ListFeedDigestResponse): void {
+ setPersistentCache('digest:last-good', data).catch(() => {});
+  }
+
+  private async loadPersistedDigest(): Promise<ListFeedDigestResponse | null> {
+ try {
+ const envelope = await getPersistentCache<ListFeedDigestResponse>('digest:last-good');
+ if (!envelope) return null;
+ if (Date.now() - envelope.updatedAt > 30 * 60 * 1000) return null;
+ this.lastGoodDigest = envelope.data;
+ return envelope.data;
+ } catch { return null; }
+  }
+
+  private shouldShowIntelligenceNotifications(): boolean {
+ return !this.ctx.isMobile && !!this.ctx.findingsBadge?.isPopupEnabled();
+  }
+
+  async loadAllData(): Promise<void> {
+ const runGuarded = async (name: string, fn: () => Promise<void>): Promise<void> => {
+ if (this.ctx.isDestroyed || this.ctx.inFlight.has(name)) return;
+ this.ctx.inFlight.add(name);
+ try {
+ await fn();
+ } catch (error) {
+ if (!this.ctx.isDestroyed) console.error(`[App] ${name} failed:`, error);
+ } finally {
+ this.ctx.inFlight.delete(name);
+ }
+ };
+
+ const tasks: { name: string; task: Promise<void> }[] = [
+ { name: 'news', task: runGuarded('news', () => this.loadNews()) },
+ ];
+
+ // Happy variant only loads news data -- skip all geopolitical/financial/military data
+ if (SITE_VARIANT !== 'happy') {
+ tasks.push({ name: 'markets', task: runGuarded('markets', () => this.loadMarkets()) });
+ tasks.push({ name: 'predictions', task: runGuarded('predictions', () => this.loadPredictions()) });
+ tasks.push({ name: 'pizzint', task: runGuarded('pizzint', () => this.loadPizzInt()) });
+ tasks.push({ name: 'fred', task: runGuarded('fred', () => this.loadFredData()) });
+ tasks.push({ name: 'oil', task: runGuarded('oil', () => this.loadOilAnalytics()) });
+ tasks.push({ name: 'spending', task: runGuarded('spending', () => this.loadGovernmentSpending()) });
+ tasks.push({ name: 'bis', task: runGuarded('bis', () => this.loadBisData()) });
+
+ // Trade policy data (FULL and FINANCE only)
+ if (SITE_VARIANT === 'full' || SITE_VARIANT === 'finance') {
+ tasks.push({ name: 'tradePolicy', task: runGuarded('tradePolicy', () => this.loadTradePolicy()) });
+ tasks.push({ name: 'supplyChain', task: runGuarded('supplyChain', () => this.loadSupplyChain()) });
+ }
+ }
+
+ // Progress charts data (happy variant only)
+ if (SITE_VARIANT === 'happy') {
+ tasks.push({
+ name: 'progress',
+ task: runGuarded('progress', () => this.loadProgressData()),
+ });
+ tasks.push({
+ name: 'species',
+ task: runGuarded('species', () => this.loadSpeciesData()),
+ });
+ tasks.push({
+ name: 'renewable',
+ task: runGuarded('renewable', () => this.loadRenewableData()),
+ });
+ tasks.push({
+ name: 'happinessMap',
+ task: runGuarded('happinessMap', async () => {
+ const data = await fetchHappinessScores();
+ this.ctx.map?.setHappinessScores(data);
+ }),
+ });
+ tasks.push({
+ name: 'renewableMap',
+ task: runGuarded('renewableMap', async () => {
+ const installations = await fetchRenewableInstallations();
+ this.ctx.map?.setRenewableInstallations(installations);
+ }),
+ });
+ }
+
+ // Global giving activity data (all variants)
+ tasks.push({
+ name: 'giving',
+ task: runGuarded('giving', async () => {
+ const givingResult = await fetchGivingSummary();
+ if (!givingResult.ok) {
+ dataFreshness.recordError('giving', 'Giving data unavailable (retaining prior state)');
+ return;
+ }
+ const data = givingResult.data;
+ (this.ctx.panels.giving as GivingPanel)?.setData(data);
+ if (data.platforms.length > 0) dataFreshness.recordUpdate('giving', data.platforms.length);
+ }),
+ });
+
+ if (SITE_VARIANT === 'full') {
+ tasks.push({ name: 'intelligence', task: runGuarded('intelligence', () => this.loadIntelligenceSignals()) });
+ }
+
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'firms', task: runGuarded('firms', () => this.loadFirmsData()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'inpeFires', task: runGuarded('inpeFires', () => this.loadInpeFires()) });
+ if (this.ctx.mapLayers.natural) tasks.push({ name: 'natural', task: runGuarded('natural', () => this.loadNatural()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.weather) tasks.push({ name: 'weather', task: runGuarded('weather', () => this.loadWeatherAlerts()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.ais) tasks.push({ name: 'ais', task: runGuarded('ais', () => this.loadAisSignals()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.adsb) tasks.push({ name: 'adsb', task: runGuarded('adsb', () => this.loadAdsb()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.cables) tasks.push({ name: 'cables', task: runGuarded('cables', () => this.loadCableActivity()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.cables) tasks.push({ name: 'cableHealth', task: runGuarded('cableHealth', () => this.loadCableHealth()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.flights) tasks.push({ name: 'flights', task: runGuarded('flights', () => this.loadFlightDelays()) });
+ if (SITE_VARIANT !== 'happy' && CYBER_LAYER_ENABLED && this.ctx.mapLayers.cyberThreats) tasks.push({ name: 'cyberThreats', task: runGuarded('cyberThreats', () => this.loadCyberThreats()) });
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'iranAttacks', task: runGuarded('iranAttacks', () => this.loadIranEvents()) });
+ if (SITE_VARIANT !== 'happy' && (this.ctx.mapLayers.techEvents || SITE_VARIANT === 'tech')) tasks.push({ name: 'techEvents', task: runGuarded('techEvents', () => this.loadTechEvents()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'spaceWeather', task: runGuarded('spaceWeather', () => this.loadSpaceWeather()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'spaceflightNews', task: runGuarded('spaceflightNews', () => this.loadSpaceflightNews()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'spaceLaunches', task: runGuarded('spaceLaunches', () => this.loadSpaceLaunches()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'diseaseOutbreaks', task: runGuarded('diseaseOutbreaks', () => this.loadDiseaseOutbreaks()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'diseaseIntel', task: runGuarded('diseaseIntel', () => this.loadDiseaseIntel()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'humanitarianCrises', task: runGuarded('humanitarianCrises', () => this.loadHumanitarianCrises()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'federalRegister', task: runGuarded('federalRegister', () => this.loadFederalRegister()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'airQuality', task: runGuarded('airQuality', () => this.loadAirQuality()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'wildfireIncidents', task: runGuarded('wildfireIncidents', () => this.loadWildfireIncidents()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'hazmatIncidents', task: runGuarded('hazmatIncidents', () => this.loadHazmatIncidents()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'oilSpills', task: runGuarded('oilSpills', () => this.loadOilSpills()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'gdacsAlerts', task: runGuarded('gdacsAlerts', () => this.loadGDACSAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoAlerts', task: runGuarded('volcanoAlerts', () => this.loadVolcanoAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'nwsAlerts', task: runGuarded('nwsAlerts', () => this.loadNWSAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'faaCameras', task: runGuarded('faaCameras', () => this.loadFAACameras()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'savedPlaceWeather', task: runGuarded('savedPlaceWeather', () => this.loadSavedPlaceWeather()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'emaForecast', task: runGuarded('emaForecast', () => this.runEMAForecast()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'globalWeather', task: runGuarded('globalWeather', () => this.loadGlobalWeather()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'openSanctions', task: runGuarded('openSanctions', () => this.loadOpenSanctions()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'edgarFilings', task: runGuarded('edgarFilings', () => this.loadEdgarFilings()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'infrastructure', task: runGuarded('infrastructure', () => this.loadInfrastructure()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'iswReports', task: runGuarded('iswReports', () => this.loadIswReports()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'natoNews', task: runGuarded('natoNews', () => this.loadNatoNews()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'dodNews', task: runGuarded('dodNews', () => this.loadDodNews()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'reliefWeb', task: runGuarded('reliefWeb', () => this.loadReliefWebCrises()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'bellingcat', task: runGuarded('bellingcat', () => this.loadBellingcat()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'travelWarnings', task: runGuarded('travelWarnings', () => this.loadTravelWarnings()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'emscSeismic', task: runGuarded('emscSeismic', () => this.loadEmscSeismic()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'acapsCrises', task: runGuarded('acapsCrises', () => this.loadAcapsCrises()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'liveUaMap', task: runGuarded('liveUaMap', () => this.loadLiveUaMap()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'debrisReentries', task: runGuarded('debrisReentries', () => this.loadDebrisReentries()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'amtrakAlerts', task: runGuarded('amtrakAlerts', () => this.loadAmtrakAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'avalancheHazard', task: runGuarded('avalancheHazard', () => this.loadAvalancheHazard()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'armsTransfers', task: runGuarded('armsTransfers', () => this.loadArmsTransfers()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'ecdcSurveillance', task: runGuarded('ecdcSurveillance', () => this.loadEcdcSurveillance()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'fdicFailures', task: runGuarded('fdicFailures', () => this.loadFdicFailures()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'habsos', task: runGuarded('habsos', () => this.loadHabsos()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'unSecurityCouncil', task: runGuarded('unSecurityCouncil', () => this.loadUnSecurityCouncil()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'wildfireSmoke', task: runGuarded('wildfireSmoke', () => this.loadWildfireSmoke()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'centralBankCalendar', task: runGuarded('centralBankCalendar', () => this.loadCentralBankCalendar()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'congressDefense', task: runGuarded('congressDefense', () => this.loadCongressDefense()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'combatantCommands', task: runGuarded('combatantCommands', () => this.loadCombatantCommands()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'foreignMilNews', task: runGuarded('foreignMilNews', () => this.loadForeignMilNews()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'spcMesoscale', task: runGuarded('spcMesoscale', () => this.loadSpcMesoscale()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'extendedForecast', task: runGuarded('extendedForecast', () => this.loadExtendedForecast()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'weatherRadar', task: runGuarded('weatherRadar', () => this.loadWeatherRadar()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'tidePredictions', task: runGuarded('tidePredictions', () => this.loadTidePredictions()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'pollenData', task: runGuarded('pollenData', () => this.loadPollenData()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'lightning', task: runGuarded('lightning', () => this.loadLightning()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'redFlagWarnings', task: runGuarded('redFlagWarnings', () => this.loadRedFlagWarnings()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'satellites', task: runGuarded('satellites', () => this.loadSatellites()) });
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'threat-intel-hub', task: runGuarded('threat-intel-hub', () => this.loadThreatIntelHub()) });
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'geo-intel', task: runGuarded('geo-intel', () => this.loadGeoIntel()) });
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'dark-web', task: runGuarded('dark-web', () => this.loadDarkWeb()) });
+
+ if (SITE_VARIANT === 'tech') {
+ tasks.push({ name: 'techReadiness', task: runGuarded('techReadiness', () => (this.ctx.panels['tech-readiness'] as TechReadinessPanel)?.refresh()) });
+ }
+
+ const results = await Promise.allSettled(tasks.map(t => t.task));
+
+ results.forEach((result, idx) => {
+ if (result.status === 'rejected') {
+ console.error(`[App] ${tasks[idx]?.name} load failed:`, result.reason);
+ }
+ });
+
+ this.updateSearchIndex();
+ document.dispatchEvent(new CustomEvent('wm:data-refreshed'));
+  }
+
+  async loadDataForLayer(layer: keyof MapLayers): Promise<void> {
+ if (this.ctx.isDestroyed || this.ctx.inFlight.has(layer)) return;
+ this.ctx.inFlight.add(layer);
+ this.ctx.map?.setLayerLoading(layer, true);
+ try {
+ switch (layer) {
+ case 'natural': {
+ await this.loadNatural();
+ break;
+ }
+ case 'fires': {
+ await this.loadFirmsData();
+ break;
+ }
+ case 'weather': {
+ await this.loadWeatherAlerts();
+ break;
+ }
+ case 'outages': {
+ await this.loadOutages();
+ break;
+ }
+ case 'cyberThreats': {
+ await this.loadCyberThreats();
+ break;
+ }
+ case 'ais': {
+ await this.loadAisSignals();
+ break;
+ }
+ case 'cables': {
+ await Promise.all([this.loadCableActivity(), this.loadCableHealth()]);
+ break;
+ }
+ case 'protests': {
+ await this.loadProtests();
+ break;
+ }
+ case 'flights': {
+ await this.loadFlightDelays();
+ break;
+ }
+ case 'military': {
+ await this.loadMilitary();
+ break;
+ }
+ case 'techEvents': {
+ console.log('[loadDataForLayer] Loading techEvents...');
+ await this.loadTechEvents();
+ console.log('[loadDataForLayer] techEvents loaded');
+ break;
+ }
+ case 'positiveEvents': {
+ await this.loadPositiveEvents();
+ break;
+ }
+ case 'kindness': {
+ this.loadKindnessData();
+ break;
+ }
+ case 'iranAttacks': {
+ await this.loadIranEvents();
+ break;
+ }
+ case 'ucdpEvents':
+ case 'displacement':
+ case 'climate':
+ case 'gpsJamming': {
+ await this.loadIntelligenceSignals();
+ break;
+ }
+ case 'adsb': {
+ await this.loadAdsb();
+ break;
+ }
+ case 'acledEvents':
+ case 'militaryFlights': {
+ await this.loadGeoIntel();
+ break;
+ }
+ }
+ } finally {
+ this.ctx.inFlight.delete(layer);
+ this.ctx.map?.setLayerLoading(layer, false);
+ }
+  }
+
+  private findFlashLocation(title: string): { lat: number; lon: number } | null {
+ const tokens = tokenizeForMatch(title);
+ let bestMatch: { lat: number; lon: number; matches: number } | null = null;
+
+ const countKeywordMatches = (keywords: string[] | undefined): number => {
+ if (!keywords) return 0;
+ let matches = 0;
+ for (const keyword of keywords) {
+ const cleaned = keyword.trim().toLowerCase();
+ if (cleaned.length >= 3 && matchKeyword(tokens, cleaned)) {
+ matches++;
+ }
+ }
+ return matches;
+ };
+
+ for (const hotspot of INTEL_HOTSPOTS) {
+ const matches = countKeywordMatches(hotspot.keywords);
+ if (matches > 0 && (!bestMatch || matches > bestMatch.matches)) {
+ bestMatch = { lat: hotspot.lat, lon: hotspot.lon, matches };
+ }
+ }
+
+ for (const conflict of CONFLICT_ZONES) {
+ const matches = countKeywordMatches(conflict.keywords);
+ if (matches > 0 && (!bestMatch || matches > bestMatch.matches)) {
+ bestMatch = { lat: conflict.center[1], lon: conflict.center[0], matches };
+ }
+ }
+
+ return bestMatch;
+  }
+
+  private flashMapForNews(items: NewsItem[]): void {
+ if (!this.ctx.map || !this.ctx.initialLoadComplete) return;
+ if (!getAiFlowSettings().mapNewsFlash) return;
+ const now = Date.now();
+
+ for (const [key, timestamp] of this.mapFlashCache.entries()) {
+ if (now - timestamp > this.MAP_FLASH_COOLDOWN_MS) {
+ this.mapFlashCache.delete(key);
+ }
+ }
+
+ for (const item of items) {
+ const cacheKey = `${item.source}|${item.link || item.title}`;
+ const lastSeen = this.mapFlashCache.get(cacheKey);
+ if (lastSeen && now - lastSeen < this.MAP_FLASH_COOLDOWN_MS) {
+ continue;
+ }
+
+ const location = this.findFlashLocation(item.title);
+ if (!location) continue;
+
+ this.ctx.map.flashLocation(location.lat, location.lon);
+ this.mapFlashCache.set(cacheKey, now);
+ }
+  }
+
+  getTimeRangeWindowMs(range: TimeRange): number {
+ const ranges: Record<TimeRange, number> = {
+ '1h': 60 * 60 * 1000,
+ '6h': 6 * 60 * 60 * 1000,
+ '24h': 24 * 60 * 60 * 1000,
+ '48h': 48 * 60 * 60 * 1000,
+ '7d': 7 * 24 * 60 * 60 * 1000,
+ 'all': Infinity,
+ };
+ return ranges[range];
+  }
+
+  filterItemsByTimeRange(items: NewsItem[], range: TimeRange = this.ctx.currentTimeRange): NewsItem[] {
+ if (range === 'all') return items;
+ const cutoff = Date.now() - this.getTimeRangeWindowMs(range);
+ return items.filter((item) => {
+ const ts = item.pubDate instanceof Date ? item.pubDate.getTime() : new Date(item.pubDate).getTime();
+ return Number.isFinite(ts) ? ts >= cutoff : true;
+ });
+  }
+
+  getTimeRangeLabel(range: TimeRange = this.ctx.currentTimeRange): string {
+ const labels: Record<TimeRange, string> = {
+ '1h': 'the last hour',
+ '6h': 'the last 6 hours',
+ '24h': 'the last 24 hours',
+ '48h': 'the last 48 hours',
+ '7d': 'the last 7 days',
+ 'all': 'all time',
+ };
+ return labels[range];
+  }
+
+  renderNewsForCategory(category: string, items: NewsItem[]): void {
+ this.ctx.newsByCategory[category] = items;
+ const panel = this.ctx.newsPanels[category];
+ if (!panel) return;
+ const filteredItems = this.filterItemsByTimeRange(items);
+ if (filteredItems.length === 0 && items.length > 0) {
+ panel.renderFilteredEmpty(`No items in ${this.getTimeRangeLabel()}`);
+ return;
+ }
+ panel.renderNews(filteredItems);
+  }
+
+  applyTimeRangeFilterToNewsPanels(): void {
+ Object.entries(this.ctx.newsByCategory).forEach(([category, items]) => {
+ this.renderNewsForCategory(category, items);
+ });
+  }
+
+  applyTimeRangeFilterDebounced(): void {
+ this.applyTimeRangeFilterToNewsPanelsDebounced();
+  }
+
+  private async loadNewsCategory(category: string, feeds: typeof FEEDS.politics, digest?: ListFeedDigestResponse | null): Promise<NewsItem[]> {
+ try {
+ const panel = this.ctx.newsPanels[category];
+
+ const enabledFeeds = (feeds ?? []).filter(f => !this.ctx.disabledSources.has(f.name));
+ if (enabledFeeds.length === 0) {
+ delete this.ctx.newsByCategory[category];
+ if (panel) panel.showError(t('common.allSourcesDisabled'));
+ this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+ status: 'ok',
+ itemCount: 0,
+ });
+ return [];
+ }
+
+ // Digest branch: server already aggregated feeds — map proto items to client types
+ if (digest?.categories && category in digest.categories) {
+ const enabledNames = new Set(enabledFeeds.map(f => f.name));
+ const items = (digest.categories[category]?.items ?? [])
+ .map(protoItemToNewsItem)
+ .filter(i => enabledNames.has(i.source));
+
+ ingestHeadlines(items.map(i => ({ title: i.title, pubDate: i.pubDate, source: i.source, link: i.link })));
+
+ const aiCandidates = items
+ .filter(i => i.threat?.source === 'keyword')
+ .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
+ .slice(0, AI_CLASSIFY_MAX_PER_FEED);
+ for (const item of aiCandidates) {
+ if (!canQueueAiClassification(item.title)) continue;
+ classifyWithAI(item.title, SITE_VARIANT).then(ai => {
+ if (ai && item.threat && ai.confidence > item.threat.confidence) {
+ item.threat = ai;
+ item.isAlert = ai.level === 'critical' || ai.level === 'high';
+ }
+ }).catch(() => {});
+ }
+
+ checkBatchForBreakingAlerts(items);
+ this.flashMapForNews(items);
+ this.renderNewsForCategory(category, items);
+
+ this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+ status: 'ok',
+ itemCount: items.length,
+ });
+
+ if (panel) {
+ try {
+ const baseline = await updateBaseline(`news:${category}`, items.length);
+ const deviation = calculateDeviation(items.length, baseline);
+ panel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
+ } catch (error) { console.warn(`[Baseline] news:${category} write failed:`, error); }
+ }
+
+ return items;
+ }
+
+ // Per-feed fallback: fetch each feed individually (first load or digest unavailable)
+ const renderIntervalMs = 100;
+ let lastRenderTime = 0;
+ let renderTimeout: ReturnType<typeof setTimeout> | null = null;
+ let pendingItems: NewsItem[] | null = null;
+
+ const flushPendingRender = () => {
+ if (!pendingItems) return;
+ this.renderNewsForCategory(category, pendingItems);
+ pendingItems = null;
+ lastRenderTime = Date.now();
+ };
+
+ const scheduleRender = (partialItems: NewsItem[]) => {
+ if (!panel) return;
+ pendingItems = partialItems;
+ const elapsed = Date.now() - lastRenderTime;
+ if (elapsed >= renderIntervalMs) {
+ if (renderTimeout) {
+ clearTimeout(renderTimeout);
+ renderTimeout = null;
+ }
+ flushPendingRender();
+ return;
+ }
+
+ if (!renderTimeout) {
+ renderTimeout = setTimeout(() => {
+ renderTimeout = null;
+ flushPendingRender();
+ }, renderIntervalMs - elapsed);
+ }
+ };
+
+ const { data: items } = await withOfflineCache(`news-rss:${category}`, () => fetchCategoryFeeds(enabledFeeds, {
+ onBatch: (partialItems) => {
+ scheduleRender(partialItems);
+ this.flashMapForNews(partialItems);
+ checkBatchForBreakingAlerts(partialItems);
+ },
+ }), 2 * 60 * 60 * 1000);
+
+ this.renderNewsForCategory(category, items);
+ if (panel) {
+ if (renderTimeout) {
+ clearTimeout(renderTimeout);
+ renderTimeout = null;
+ pendingItems = null;
+ }
+
+ if (items.length === 0) {
+ const failures = getFeedFailures();
+ const failedFeeds = enabledFeeds.filter(f => failures.has(f.name));
+ if (failedFeeds.length > 0) {
+ const names = failedFeeds.map(f => f.name).join(', ');
+ panel.showError(`${t('common.noNewsAvailable')} (${names} failed)`);
+ }
+ }
+
+ try {
+ const baseline = await updateBaseline(`news:${category}`, items.length);
+ const deviation = calculateDeviation(items.length, baseline);
+ panel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
+ } catch (error) { console.warn(`[Baseline] news:${category} write failed:`, error); }
+ }
+
+ this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+ status: 'ok',
+ itemCount: items.length,
+ });
+ this.ctx.statusPanel?.updateApi('RSS2JSON', { status: 'ok' });
+
+ return items;
+ } catch (error) {
+ this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+ status: 'error',
+ errorMessage: String(error),
+ });
+ this.ctx.statusPanel?.updateApi('RSS2JSON', { status: 'error' });
+ delete this.ctx.newsByCategory[category];
+ return [];
+ }
+  }
+
+  async loadNews(): Promise<void> {
+ // Reset happy variant accumulator for fresh pipeline run
+ if (SITE_VARIANT === 'happy') {
+ this.ctx.happyAllItems = [];
+ }
+
+ // Fire digest fetch early (non-blocking) — await before category loop
+ const digestPromise = this.tryFetchDigest();
+
+ const categories = Object.entries(FEEDS)
+ .filter((entry): entry is [string, typeof FEEDS[keyof typeof FEEDS]] => Array.isArray(entry[1]) && entry[1].length > 0)
+ .map(([key, feeds]) => ({ key, feeds }));
+
+ const digest = await digestPromise;
+
+ const maxCategoryConcurrency = SITE_VARIANT === 'tech' ? 4 : 5;
+ const categoryConcurrency = Math.max(1, Math.min(maxCategoryConcurrency, categories.length));
+ const categoryResults: PromiseSettledResult<NewsItem[]>[] = [];
+ for (let i = 0; i < categories.length; i += categoryConcurrency) {
+ const chunk = categories.slice(i, i + categoryConcurrency);
+ const chunkResults = await Promise.allSettled(
+ chunk.map(({ key, feeds }) => this.loadNewsCategory(key, feeds, digest))
+ );
+ categoryResults.push(...chunkResults);
+ }
+
+ const collectedNews: NewsItem[] = [];
+ categoryResults.forEach((result, idx) => {
+ if (result.status === 'fulfilled') {
+ const items = result.value;
+ // Tag items with content categories for happy variant
+ if (SITE_VARIANT === 'happy') {
+ for (const item of items) {
+ item.happyCategory = classifyNewsItem(item.source, item.title);
+ }
+ // Accumulate curated items for the positive news pipeline
+ this.ctx.happyAllItems = this.ctx.happyAllItems.concat(items);
+ }
+ collectedNews.push(...items);
+ } else {
+ console.error(`[App] News category ${categories[idx]?.key} failed:`, result.reason);
+ }
+ });
+
+ if (SITE_VARIANT === 'full') {
+ const enabledIntelSources = INTEL_SOURCES.filter(f => !this.ctx.disabledSources.has(f.name));
+ const intelPanel = this.ctx.newsPanels.intel;
+ if (enabledIntelSources.length === 0) {
+ delete this.ctx.newsByCategory.intel;
+ if (intelPanel) intelPanel.showError(t('common.allIntelSourcesDisabled'));
+ this.ctx.statusPanel?.updateFeed('Intel', { status: 'ok', itemCount: 0 });
+ } else if (digest?.categories && 'intel' in digest.categories) {
+ // Digest branch for intel
+ const enabledNames = new Set(enabledIntelSources.map(f => f.name));
+ const intel = (digest.categories.intel?.items ?? [])
+ .map(protoItemToNewsItem)
+ .filter(i => enabledNames.has(i.source));
+ checkBatchForBreakingAlerts(intel);
+ this.renderNewsForCategory('intel', intel);
+ if (intelPanel) {
+ try {
+ const baseline = await updateBaseline('news:intel', intel.length);
+ const deviation = calculateDeviation(intel.length, baseline);
+ intelPanel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
+ } catch (error) { console.warn('[Baseline] news:intel write failed:', error); }
+ }
+ this.ctx.statusPanel?.updateFeed('Intel', { status: 'ok', itemCount: intel.length });
+ collectedNews.push(...intel);
+ this.flashMapForNews(intel);
+ } else {
+ const intelResult = await Promise.allSettled([fetchCategoryFeeds(enabledIntelSources)]);
+ if (intelResult[0]?.status === 'fulfilled') {
+ const intel = intelResult[0].value;
+ checkBatchForBreakingAlerts(intel);
+ this.renderNewsForCategory('intel', intel);
+ if (intelPanel) {
+ try {
+ const baseline = await updateBaseline('news:intel', intel.length);
+ const deviation = calculateDeviation(intel.length, baseline);
+ intelPanel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
+ } catch (error) { console.warn('[Baseline] news:intel write failed:', error); }
+ }
+ this.ctx.statusPanel?.updateFeed('Intel', { status: 'ok', itemCount: intel.length });
+ collectedNews.push(...intel);
+ this.flashMapForNews(intel);
+ } else {
+ delete this.ctx.newsByCategory.intel;
+ console.error('[App] Intel feed failed:', intelResult[0]?.reason);
+ }
+ }
+ }
+
+ // Augment with NewsAPI and NewsData headlines (non-blocking, best-effort)
+ const [newsApiItems, newsDataItems] = await Promise.all([
+ fetchNewsApiHeadlines('geopolitics world conflict crisis', 15).catch(() => [] as typeof collectedNews),
+ fetchNewsDataFeed('world news geopolitics').catch(() => [] as typeof collectedNews),
+ ]);
+ collectedNews.push(...newsApiItems, ...newsDataItems);
+
+ this.ctx.allNews = collectedNews;
+ this.ctx.initialLoadComplete = true;
+ maybeShowDownloadBanner();
+ mountCommunityWidget();
+ updateAndCheck([
+ { type: 'news', region: 'global', count: collectedNews.length },
+ ]).then(anomalies => {
+ if (anomalies.length > 0) {
+ signalAggregator.ingestTemporalAnomalies(anomalies);
+ ingestTemporalAnomaliesForCII(anomalies);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ }
+ }).catch(() => {});
+
+ this.ctx.map?.updateHotspotActivity(this.ctx.allNews);
+
+ this.updateMonitorResults();
+
+ try {
+ this.ctx.latestClusters = mlWorker.isAvailable
+ ? await clusterNewsHybrid(this.ctx.allNews)
+ : await analysisWorker.clusterNews(this.ctx.allNews);
+
+ if (this.ctx.latestClusters.length > 0) {
+ const insightsPanel = this.ctx.panels.insights as InsightsPanel | undefined;
+ insightsPanel?.updateInsights(this.ctx.latestClusters);
+ }
+
+ const geoLocated = this.ctx.latestClusters
+ .filter((c): c is typeof c & { lat: number; lon: number } => c.lat != undefined && c.lon != undefined)
+ .map(c => ({
+ lat: c.lat,
+ lon: c.lon,
+ title: c.primaryTitle,
+ threatLevel: c.threat?.level ?? 'info',
+ timestamp: c.lastUpdated,
+ }));
+ if (geoLocated.length > 0) {
+ this.ctx.map?.setNewsLocations(geoLocated);
+ }
+
+ if (SITE_VARIANT === 'tech') {
+ const techActivities = getTopActiveHubs(this.ctx.latestClusters);
+ this.ctx.map?.setTechActivity(techActivities);
+ (this.ctx.panels['tech-hubs'] as TechHubsPanel | undefined)?.setActivities(techActivities);
+ }
+
+ if (SITE_VARIANT === 'full') {
+ const geoActivities = getTopActiveGeoHubs(this.ctx.latestClusters);
+ this.ctx.map?.setGeoActivity(geoActivities);
+ (this.ctx.panels['geo-hubs'] as GeoHubsPanel | undefined)?.setActivities(geoActivities);
+ }
+ } catch (error) {
+ console.error('[App] Clustering failed, clusters unchanged:', error);
+ }
+
+ // Happy variant: run multi-stage positive news pipeline + map layers
+ if (SITE_VARIANT === 'happy') {
+ await this.loadHappySupplementaryAndRender();
+ await Promise.allSettled([
+ this.ctx.mapLayers.positiveEvents ? this.loadPositiveEvents() : Promise.resolve(),
+ this.ctx.mapLayers.kindness ? Promise.resolve(this.loadKindnessData()) : Promise.resolve(),
+ ]);
+ }
+  }
+
+  async loadMarkets(): Promise<void> {
+ try {
+ const { data: stocksResult } = await withOfflineCache('market-data', () => fetchMultipleStocks(MARKET_SYMBOLS, {
+ onBatch: (partialStocks) => {
+ this.ctx.latestMarkets = partialStocks;
+ (this.ctx.panels.markets as MarketPanel).renderMarkets(partialStocks);
+ },
+ }), 4 * 60 * 60 * 1000);
+
+ this.ctx.latestMarkets = stocksResult.data;
+ (this.ctx.panels.markets as MarketPanel).renderMarkets(stocksResult.data, stocksResult.rateLimited);
+
+ if (stocksResult.rateLimited && stocksResult.data.length === 0) {
+ const rlMsg = 'Market data temporarily unavailable (rate limited) — retrying shortly';
+ this.ctx.panels.heatmap?.showError(rlMsg);
+ this.ctx.panels.commodities?.showError(rlMsg);
+ } else if (stocksResult.skipped) {
+ this.ctx.statusPanel?.updateApi('Finnhub', { status: 'error' });
+ if (stocksResult.data.length === 0) {
+ const marketsPanel = this.ctx.panels.markets;
+ if (marketsPanel) showApiKeyGate(marketsPanel, 'FINNHUB_API_KEY', () => { void this.loadMarkets(); });
+ }
+ const heatmapPanel = this.ctx.panels.heatmap;
+ if (heatmapPanel) showApiKeyGate(heatmapPanel, 'FINNHUB_API_KEY', () => { void this.loadMarkets(); });
+ } else {
+ this.ctx.statusPanel?.updateApi('Finnhub', { status: 'ok' });
+
+ const hydratedSectors = getHydratedData('sectors') as GetSectorSummaryResponse | undefined;
+ if (hydratedSectors?.sectors?.length) {
+ const mapped = hydratedSectors.sectors.map((s) => ({ name: s.name, change: s.change }));
+ (this.ctx.panels.heatmap as HeatmapPanel).renderHeatmap(mapped);
+ } else {
+ const sectorsResult = await fetchMultipleStocks(
+ SECTORS.map((s) => ({ ...s, display: s.name })),
+ {
+ onBatch: (partialSectors) => {
+ (this.ctx.panels.heatmap as HeatmapPanel).renderHeatmap(
+ partialSectors.map((s) => ({ name: s.name, change: s.change }))
+ );
+ },
+ }
+ );
+ (this.ctx.panels.heatmap as HeatmapPanel).renderHeatmap(
+ sectorsResult.data.map((s) => ({ name: s.name, change: s.change }))
+ );
+ }
+ }
+
+ const commoditiesPanel = this.ctx.panels.commodities as CommoditiesPanel;
+ const mapCommodity = (c: MarketData) => ({ display: c.display, price: c.price, change: c.change, sparkline: c.sparkline });
+
+ let commoditiesLoaded = stocksResult.rateLimited && stocksResult.data.length === 0;
+ for (let attempt = 0; attempt < 3 && !commoditiesLoaded; attempt++) {
+ if (attempt > 0) {
+ commoditiesPanel.showRetrying();
+ await new Promise(r => setTimeout(r, 20_000));
+ }
+ const commoditiesResult = await fetchMultipleStocks(COMMODITIES, {
+ onBatch: (partial) => commoditiesPanel.renderCommodities(partial.map(mapCommodity)),
+ });
+ const mapped = commoditiesResult.data.map(mapCommodity);
+ if (mapped.some(d => d.price !== null)) {
+ commoditiesPanel.renderCommodities(mapped);
+ commoditiesLoaded = true;
+ // Auto-trigger Finance Mode on large Oil or Gold moves
+ evaluateCommodityTrigger(commoditiesResult.data);
+ }
+ }
+ if (!commoditiesLoaded) {
+ commoditiesPanel.renderCommodities([]);
+ }
+ } catch {
+ this.ctx.statusPanel?.updateApi('Finnhub', { status: 'error' });
+ // Finnhub is down — market data unavailable. Still check whether an
+ // auto-triggered Finance Mode has exceeded its quiet window so it can
+ // de-escalate back to Peace without needing live market data.
+ checkFinanceAutoTriggerTimeout();
+ }
+
+ try {
+ let crypto = await fetchCrypto();
+ if (crypto.length === 0) {
+ (this.ctx.panels.crypto as CryptoPanel).showRetrying();
+ await new Promise(r => setTimeout(r, 20_000));
+ crypto = await fetchCrypto();
+ }
+ (this.ctx.panels.crypto as CryptoPanel).renderCrypto(crypto);
+ this.ctx.statusPanel?.updateApi('CoinGecko', { status: crypto.length > 0 ? 'ok' : 'error' });
+ // Auto-trigger Finance Mode if S&P 500 or BTC makes a significant move
+ if (this.ctx.latestMarkets.length > 0 || crypto.length > 0) {
+ evaluateFinanceTrigger(this.ctx.latestMarkets, crypto);
+ }
+ } catch {
+ this.ctx.statusPanel?.updateApi('CoinGecko', { status: 'error' });
+ }
+  }
+
+  async loadPredictions(): Promise<void> {
+ try {
+ const predictions = await fetchPredictions();
+ this.ctx.latestPredictions = predictions;
+ (this.ctx.panels.polymarket as PredictionPanel).renderPredictions(predictions);
+
+ this.ctx.statusPanel?.updateFeed('Polymarket', { status: 'ok', itemCount: predictions.length });
+ this.ctx.statusPanel?.updateApi('Polymarket', { status: 'ok' });
+ dataFreshness.recordUpdate('polymarket', predictions.length);
+ dataFreshness.recordUpdate('predictions', predictions.length);
+
+ void this.runCorrelationAnalysis();
+ } catch (error) {
+ this.ctx.statusPanel?.updateFeed('Polymarket', { status: 'error', errorMessage: String(error) });
+ this.ctx.statusPanel?.updateApi('Polymarket', { status: 'error' });
+ dataFreshness.recordError('polymarket', String(error));
+ dataFreshness.recordError('predictions', String(error));
+ }
+  }
+
+  async loadNatural(): Promise<void> {
+ const [earthquakeResult, eonetResult] = await Promise.allSettled([
+ withOfflineCache('earthquake-data', () => fetchEarthquakes(), 1 * 60 * 60 * 1000).then(r => r.data),
+ fetchNaturalEvents(30),
+ ]);
+
+ if (earthquakeResult.status === 'fulfilled') {
+ this.ctx.intelligenceCache.earthquakes = earthquakeResult.value;
+ this.ctx.map?.setEarthquakes(earthquakeResult.value);
+ ingestEarthquakes(earthquakeResult.value);
+ checkGeofenceEarthquakes(earthquakeResult.value);
+ ingestEarthquakesToPoL(earthquakeResult.value);
+ ingestEarthquakesToTimeline(earthquakeResult.value);
+ ingestEarthquakesToMatrix(earthquakeResult.value);
+ (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
+ this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
+ dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
+ } else {
+ this.ctx.intelligenceCache.earthquakes = [];
+ this.ctx.map?.setEarthquakes([]);
+ (this.ctx.panels.earthquakes as EarthquakesPanel)?.update([]);
+ this.ctx.statusPanel?.updateApi('USGS', { status: 'error' });
+ dataFreshness.recordError('usgs', String(earthquakeResult.reason));
+ }
+
+ if (eonetResult.status === 'fulfilled') {
+ this.ctx.map?.setNaturalEvents(eonetResult.value);
+ this.ctx.statusPanel?.updateFeed('EONET', {
+ status: 'ok',
+ itemCount: eonetResult.value.length,
+ });
+ this.ctx.statusPanel?.updateApi('NASA EONET', { status: 'ok' });
+ } else {
+ this.ctx.map?.setNaturalEvents([]);
+ this.ctx.statusPanel?.updateFeed('EONET', { status: 'error', errorMessage: String(eonetResult.reason) });
+ this.ctx.statusPanel?.updateApi('NASA EONET', { status: 'error' });
+ }
+
+ const hasEarthquakes = earthquakeResult.status === 'fulfilled' && earthquakeResult.value.length > 0;
+ const hasEonet = eonetResult.status === 'fulfilled' && eonetResult.value.length > 0;
+ this.ctx.map?.setLayerReady('natural', hasEarthquakes || hasEonet);
+
+ // Evaluate disaster auto-trigger (uses cached GDACS data — no extra fetch)
+ const earthquakes = earthquakeResult.status === 'fulfilled' ? earthquakeResult.value : [];
+
+ // Report elevated panels for correlation detector
+ if (earthquakes.some(eq => eq.magnitude >= 6.5)) {
+ reportElevatedPanel('earthquakes', 'Earthquakes');
+ }
+
+ withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000).then(({ data: gdacs }) => {
+ evaluateDisasterTrigger(gdacs, earthquakes);
+ if (gdacs.some(e => e.alertLevel === 'Red')) {
+ reportElevatedPanel('gdacs-alerts', 'GDACS Disaster Alerts');
+ }
+ }).catch(() => {});
+  }
+
+  async loadTechEvents(): Promise<void> {
+ console.log('[loadTechEvents] Called. SITE_VARIANT:', SITE_VARIANT, 'techEvents layer:', this.ctx.mapLayers.techEvents);
+ if (SITE_VARIANT !== 'tech' && !this.ctx.mapLayers.techEvents) {
+ console.log('[loadTechEvents] Skipping - not tech variant and layer disabled');
+ return;
+ }
+
+ try {
+ const client = new ResearchServiceClient('', { fetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args) });
+ const data = await client.listTechEvents({
+ type: 'conference',
+ mappable: true,
+ days: 90,
+ limit: 50,
+ });
+ if (!data.success) throw new Error(data.error || 'Unknown error');
+
+ const now = new Date();
+ const mapEvents = data.events.map((e: any) => ({
+ id: e.id,
+ title: e.title,
+ location: e.location,
+ lat: e.coords?.lat ?? 0,
+ lng: e.coords?.lng ?? 0,
+ country: e.coords?.country ?? '',
+ startDate: e.startDate,
+ endDate: e.endDate,
+ url: e.url,
+ daysUntil: Math.ceil((new Date(e.startDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+ }));
+
+ this.ctx.map?.setTechEvents(mapEvents);
+ this.ctx.map?.setLayerReady('techEvents', mapEvents.length > 0);
+ this.ctx.statusPanel?.updateFeed('Tech Events', { status: 'ok', itemCount: mapEvents.length });
+
+ if (SITE_VARIANT === 'tech' && this.ctx.searchModal) {
+ this.ctx.searchModal.registerSource('techevent', mapEvents.map((e: { id: string; title: string; location: string; startDate: string }) => ({
+ id: e.id,
+ title: e.title,
+ subtitle: `${e.location} • ${new Date(e.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+ data: e,
+ })));
+ }
+ } catch (error) {
+ console.error('[App] Failed to load tech events:', error);
+ this.ctx.map?.setTechEvents([]);
+ this.ctx.map?.setLayerReady('techEvents', false);
+ this.ctx.statusPanel?.updateFeed('Tech Events', { status: 'error', errorMessage: String(error) });
+ }
+  }
+
+  async loadWeatherAlerts(): Promise<void> {
+ try {
+ const { data: alerts } = await withOfflineCache('weather-alerts', () => fetchWeatherAlerts(), 1 * 60 * 60 * 1000);
+ this.ctx.map?.setWeatherAlerts(alerts);
+ this.ctx.map?.setLayerReady('weather', alerts.length > 0);
+ this.ctx.statusPanel?.updateFeed('Weather', { status: 'ok', itemCount: alerts.length });
+ dataFreshness.recordUpdate('weather', alerts.length);
+ updateStormPreparednessContext({ weatherAlerts: alerts });
+ void evaluateDisasterTrigger(
+ this.ctx.intelligenceCache.gdacsAlerts ?? [],
+ this.ctx.intelligenceCache.earthquakes ?? [],
+ getStormPreparednessSummary(),
+ );
+ } catch (error) {
+ this.ctx.map?.setLayerReady('weather', false);
+ this.ctx.statusPanel?.updateFeed('Weather', { status: 'error' });
+ dataFreshness.recordError('weather', String(error));
+ }
+  }
+
+  async loadIntelligenceSignals(): Promise<void> {
+ const tasks: Promise<void>[] = [];
+
+ tasks.push((async () => {
+ try {
+ const outages = await fetchInternetOutages();
+ this.ctx.intelligenceCache.outages = outages;
+ ingestOutagesForCII(outages);
+ signalAggregator.ingestOutages(outages);
+ ingestOutagesToSigint(outages);
+ ingestOutagesToConvergence(outages);
+ ingestOutagesToTopology(outages);
+ dataFreshness.recordUpdate('outages', outages.length);
+ if (this.ctx.mapLayers.outages) {
+ this.ctx.map?.setOutages(outages);
+ this.ctx.map?.setLayerReady('outages', outages.length > 0);
+ this.ctx.statusPanel?.updateFeed('NetBlocks', { status: 'ok', itemCount: outages.length });
+ }
+ } catch (error) {
+ console.error('[Intelligence] Outages fetch failed:', error);
+ dataFreshness.recordError('outages', String(error));
+ }
+ })());
+
+ const protestsTask = (async (): Promise<SocialUnrestEvent[]> => {
+ try {
+ const protestData = await fetchProtestEvents();
+ this.ctx.intelligenceCache.protests = protestData;
+ ingestProtests(protestData.events);
+ ingestProtestsForCII(protestData.events);
+ signalAggregator.ingestProtests(protestData.events);
+ checkGeofenceProtests(protestData.events);
+ ingestProtestsToPoL(protestData.events);
+ const protestCount = protestData.sources.acled + protestData.sources.gdelt;
+ if (protestCount > 0) dataFreshness.recordUpdate('acled', protestCount);
+ if (protestData.sources.gdelt > 0) dataFreshness.recordUpdate('gdelt', protestData.sources.gdelt);
+ if (protestData.sources.gdelt > 0) dataFreshness.recordUpdate('gdelt_doc', protestData.sources.gdelt);
+ if (this.ctx.mapLayers.protests) {
+ this.ctx.map?.setProtests(protestData.events);
+ this.ctx.map?.setLayerReady('protests', protestData.events.length > 0);
+ const status = getProtestStatus();
+ this.ctx.statusPanel?.updateFeed('Protests', {
+ status: 'ok',
+ itemCount: protestData.events.length,
+ errorMessage: status.acledConfigured === false ? 'ACLED not configured - using GDELT only' : undefined,
+ });
+ }
+ return protestData.events;
+ } catch (error) {
+ console.error('[Intelligence] Protests fetch failed:', error);
+ dataFreshness.recordError('acled', String(error));
+ return [];
+ }
+ })();
+ tasks.push(protestsTask.then(() => undefined));
+
+ tasks.push((async () => {
+ try {
+ const { data: conflictData } = await withOfflineCache('conflict-events', () => fetchConflictEvents(), 1 * 60 * 60 * 1000);
+ ingestConflictsForCII(conflictData.events);
+ if (conflictData.count > 0) dataFreshness.recordUpdate('acled_conflict', conflictData.count);
+ } catch (error) {
+ console.error('[Intelligence] Conflict events fetch failed:', error);
+ dataFreshness.recordError('acled_conflict', String(error));
+ }
+ })());
+
+ tasks.push((async () => {
+ try {
+ const classifications = await fetchUcdpClassifications();
+ ingestUcdpForCII(classifications);
+ if (classifications.size > 0) dataFreshness.recordUpdate('ucdp', classifications.size);
+ } catch (error) {
+ console.error('[Intelligence] UCDP fetch failed:', error);
+ dataFreshness.recordError('ucdp', String(error));
+ }
+ })());
+
+ tasks.push((async () => {
+ try {
+ const summaries = await fetchHapiSummary();
+ ingestHapiForCII(summaries);
+ if (summaries.size > 0) dataFreshness.recordUpdate('hapi', summaries.size);
+ } catch (error) {
+ console.error('[Intelligence] HAPI fetch failed:', error);
+ dataFreshness.recordError('hapi', String(error));
+ }
+ })());
+
+ tasks.push((async () => {
+ try {
+ if (isMilitaryVesselTrackingConfigured()) {
+ initMilitaryVesselStream();
+ }
+ const [flightResult, vesselResult] = await Promise.all([
+ withOfflineCache('military-signals', () => fetchMilitaryFlights(), 1 * 60 * 60 * 1000),
+ withOfflineCache('military-vessels', () => fetchMilitaryVessels(), 1 * 60 * 60 * 1000),
+ ]);
+ const flightData = flightResult.data;
+ const vesselData = vesselResult.data;
+ this.ctx.intelligenceCache.military = {
+ flights: flightData.flights,
+ flightClusters: flightData.clusters,
+ vessels: vesselData.vessels,
+ vesselClusters: vesselData.clusters,
+ };
+ fetchUSNIFleetReport().then((report) => {
+ if (report) this.ctx.intelligenceCache.usniFleet = report;
+ }).catch(() => {});
+ ingestFlights(flightData.flights);
+ ingestVessels(vesselData.vessels);
+ ingestMilitaryForCII(flightData.flights, vesselData.vessels);
+ signalAggregator.ingestFlights(flightData.flights);
+ signalAggregator.ingestVessels(vesselData.vessels);
+ ingestMilFlightsToOrbat(flightData.flights);
+ ingestMilVesselsToOrbat(vesselData.vessels);
+ ingestMilVesselsToDarkVessel(vesselData.vessels);
+ checkGeofenceMilitary(flightData.flights);
+ ingestMilFlightsToGraph(flightData.flights);
+ ingestMilVesselsToGraph(vesselData.vessels);
+ checkVesselsAgainstSanctions(vesselData.vessels);
+ dataFreshness.recordUpdate('opensky', flightData.flights.length);
+ updateAndCheck([
+ { type: 'military_flights', region: 'global', count: flightData.flights.length },
+ { type: 'vessels', region: 'global', count: vesselData.vessels.length },
+ ]).then(anomalies => {
+ if (anomalies.length > 0) {
+ signalAggregator.ingestTemporalAnomalies(anomalies);
+ ingestTemporalAnomaliesForCII(anomalies);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ }
+ }).catch(() => {});
+ if (this.ctx.mapLayers.military) {
+ this.ctx.map?.setMilitaryFlights(flightData.flights, flightData.clusters);
+ this.ctx.map?.setMilitaryVessels(vesselData.vessels, vesselData.clusters);
+ this.ctx.map?.updateMilitaryForEscalation(flightData.flights, vesselData.vessels);
+ const militaryCount = flightData.flights.length + vesselData.vessels.length;
+ this.ctx.statusPanel?.updateFeed('Military', {
+ status: militaryCount > 0 ? 'ok' : 'warning',
+ itemCount: militaryCount,
+ });
+ }
+ if (!isInLearningMode()) {
+ const surgeAlerts = analyzeFlightsForSurge(flightData.flights);
+ if (surgeAlerts.length > 0) {
+ const surgeSignals = surgeAlerts.map(surgeAlertToSignal);
+ addToSignalHistory(surgeSignals);
+ situationEngine.observeSignals(surgeSignals);
+ evaluateWarThreat(surgeSignals);
+ (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(surgeSignals);
+ if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(surgeSignals);
+ }
+ const foreignAlerts = detectForeignMilitaryPresence(flightData.flights);
+ if (foreignAlerts.length > 0) {
+ const foreignSignals = foreignAlerts.map(foreignPresenceToSignal);
+ addToSignalHistory(foreignSignals);
+ situationEngine.observeSignals(foreignSignals);
+ evaluateWarThreat(foreignSignals);
+ (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(foreignSignals);
+ if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(foreignSignals);
+ }
+ }
+ } catch (error) {
+ console.error('[Intelligence] Military fetch failed:', error);
+ dataFreshness.recordError('opensky', String(error));
+ }
+ })());
+
+ tasks.push((async () => {
+ try {
+ const protestEvents = await protestsTask;
+ let result = await fetchUcdpEvents();
+ for (let attempt = 1; attempt < 3 && !result.success; attempt++) {
+ await new Promise(r => setTimeout(r, 15_000));
+ result = await fetchUcdpEvents();
+ }
+ if (!result.success) {
+ dataFreshness.recordError('ucdp_events', 'UCDP events unavailable (retaining prior event state)');
+ return;
+ }
+ const acledEvents = protestEvents.map(e => ({
+ latitude: e.lat, longitude: e.lon, event_date: e.time.toISOString(), fatalities: e.fatalities ?? 0,
+ }));
+ const events = deduplicateAgainstAcled(result.data, acledEvents);
+ (this.ctx.panels['ucdp-events'] as UcdpEventsPanel)?.setEvents(events);
+ if (this.ctx.mapLayers.ucdpEvents) {
+ this.ctx.map?.setUcdpEvents(events);
+ }
+ if (events.length > 0) dataFreshness.recordUpdate('ucdp_events', events.length);
+ } catch (error) {
+ console.error('[Intelligence] UCDP events fetch failed:', error);
+ dataFreshness.recordError('ucdp_events', String(error));
+ }
+ })());
+
+ // Air strikes & drone events (ACLED)
+ tasks.push((async () => {
+ try {
+ const events = await fetchAirstrikes();
+ (this.ctx.panels.airstrikes as AirstrikesPanel)?.update(events);
+ if (this.ctx.mapLayers.airstrikes) {
+ this.ctx.map?.setAirstrikes(events);
+ }
+ checkGeofenceAirstrikes(events);
+ ingestAirstrikesToConvergence(events);
+ ingestAirstrikesToTimeline(events);
+ ingestAirstrikesToMatrix(events);
+ if (events.length > 0) dataFreshness.recordUpdate('acled_airstrikes', events.length);
+ } catch (error) {
+ console.error('[Intelligence] Airstrikes fetch failed:', error);
+ dataFreshness.recordError('acled_airstrikes', String(error));
+ }
+ })());
+
+ // S2 Underground intelligence (GhostMaps / ArcGIS CIP)
+ tasks.push((async () => {
+ try {
+ const events = await fetchS2Underground();
+ if (this.ctx.mapLayers.s2pimu) {
+ this.ctx.map?.setS2Underground(events);
+ }
+ if (events.length > 0) dataFreshness.recordUpdate('s2_underground', events.length);
+ } catch (error) {
+ console.error('[Intelligence] S2 Underground fetch failed:', error);
+ dataFreshness.recordError('s2_underground', String(error));
+ }
+ })());
+
+ tasks.push((async () => {
+ try {
+ const unhcrResult = await fetchUnhcrPopulation();
+ if (!unhcrResult.ok) {
+ dataFreshness.recordError('unhcr', 'UNHCR displacement unavailable (retaining prior displacement state)');
+ return;
+ }
+ const data = unhcrResult.data;
+ (this.ctx.panels.displacement as DisplacementPanel)?.setData(data);
+ ingestDisplacementForCII(data.countries);
+ if (this.ctx.mapLayers.displacement && data.topFlows) {
+ this.ctx.map?.setDisplacementFlows(data.topFlows);
+ }
+ if (data.countries.length > 0) dataFreshness.recordUpdate('unhcr', data.countries.length);
+ } catch (error) {
+ console.error('[Intelligence] UNHCR displacement fetch failed:', error);
+ dataFreshness.recordError('unhcr', String(error));
+ }
+ })());
+
+ tasks.push((async () => {
+ try {
+ const climateResult = await fetchClimateAnomalies();
+ if (!climateResult.ok) {
+ dataFreshness.recordError('climate', 'Climate anomalies unavailable (retaining prior climate state)');
+ return;
+ }
+ const anomalies = climateResult.anomalies;
+ (this.ctx.panels.climate as ClimateAnomalyPanel)?.setAnomalies(anomalies);
+ ingestClimateForCII(anomalies);
+ if (this.ctx.mapLayers.climate) {
+ this.ctx.map?.setClimateAnomalies(anomalies);
+ }
+ if (anomalies.length > 0) dataFreshness.recordUpdate('climate', anomalies.length);
+ } catch (error) {
+ console.error('[Intelligence] Climate anomalies fetch failed:', error);
+ dataFreshness.recordError('climate', String(error));
+ }
+ })());
+
+ // Security advisories
+ tasks.push(this.loadSecurityAdvisories());
+
+ // Telegram Intel
+ tasks.push(this.loadTelegramIntel());
+
+ // OREF sirens
+ tasks.push((async () => {
+ try {
+ const data = await fetchOrefAlerts();
+ (this.ctx.panels['oref-sirens'] as OrefSirensPanel)?.setData(data);
+ const alertCount = data.alerts?.length ?? 0;
+ const historyCount24h = data.historyCount24h ?? 0;
+ ingestOrefForCII(alertCount, historyCount24h);
+ this.ctx.intelligenceCache.orefAlerts = { alertCount, historyCount24h };
+ onOrefAlertsUpdate((update) => {
+ (this.ctx.panels['oref-sirens'] as OrefSirensPanel)?.setData(update);
+ const updAlerts = update.alerts?.length ?? 0;
+ const updHistory = update.historyCount24h ?? 0;
+ ingestOrefForCII(updAlerts, updHistory);
+ this.ctx.intelligenceCache.orefAlerts = { alertCount: updAlerts, historyCount24h: updHistory };
+ });
+ startOrefPolling();
+ } catch (error) {
+ console.error('[Intelligence] OREF alerts fetch failed:', error);
+ }
+ })());
+
+ // GPS/GNSS jamming
+ tasks.push((async () => {
+ try {
+ const data = await fetchGpsInterference();
+ if (!data) {
+ ingestGpsJammingForCII([]);
+ this.ctx.map?.setLayerReady('gpsJamming', false);
+ return;
+ }
+ ingestGpsJammingForCII(data.hexes);
+ ingestGpsToSigint(data.hexes);
+ if (this.ctx.mapLayers.gpsJamming) {
+ this.ctx.map?.setGpsJamming(data.hexes);
+ this.ctx.map?.setLayerReady('gpsJamming', data.hexes.length > 0);
+ }
+ this.ctx.statusPanel?.updateFeed('GPS Jam', { status: 'ok', itemCount: data.hexes.length });
+ dataFreshness.recordUpdate('gpsjam', data.hexes.length);
+ } catch (error) {
+ this.ctx.map?.setLayerReady('gpsJamming', false);
+ this.ctx.statusPanel?.updateFeed('GPS Jam', { status: 'error' });
+ dataFreshness.recordError('gpsjam', String(error));
+ }
+ })());
+
+ await Promise.allSettled(tasks);
+
+ try {
+ const ucdpEvts = (this.ctx.panels['ucdp-events'] as UcdpEventsPanel)?.getEvents?.() || [];
+ const events = [
+ ...(this.ctx.intelligenceCache.protests?.events || []).slice(0, 10).map(e => ({
+ id: e.id, lat: e.lat, lon: e.lon, type: 'conflict' as const, name: e.title || 'Protest',
+ })),
+ ...ucdpEvts.slice(0, 10).map(e => ({
+ id: e.id, lat: e.latitude, lon: e.longitude, type: e.type_of_violence as string, name: `${e.side_a} vs ${e.side_b}`,
+ })),
+ ];
+ if (events.length > 0) {
+ const exposures = await enrichEventsWithExposure(events);
+ (this.ctx.panels['population-exposure'] as PopulationExposurePanel)?.setExposures(exposures);
+ if (exposures.length > 0) dataFreshness.recordUpdate('worldpop', exposures.length);
+ } else {
+ (this.ctx.panels['population-exposure'] as PopulationExposurePanel)?.setExposures([]);
+ }
+ } catch (error) {
+ console.error('[Intelligence] Population exposure fetch failed:', error);
+ dataFreshness.recordError('worldpop', String(error));
+ }
+
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ rollPoLBaseline();
+ updateCompoundThreatLevels(
+ this.ctx.cyberThreatsCache ?? [],
+ this.ctx.intelligenceCache.earthquakes ?? [],
+ (this.ctx.intelligenceCache.outages ?? []).map(o => ({ score: o.severity === 'total' ? 10 : o.severity === 'major' ? 7 : 3 })),
+ );
+ console.log('[Intelligence] All signals loaded for CII calculation');
+  }
+
+  async loadOutages(): Promise<void> {
+ if (this.ctx.intelligenceCache.outages) {
+ const outages = this.ctx.intelligenceCache.outages;
+ this.ctx.map?.setOutages(outages);
+ this.ctx.map?.setLayerReady('outages', outages.length > 0);
+ this.ctx.statusPanel?.updateFeed('NetBlocks', { status: 'ok', itemCount: outages.length });
+ return;
+ }
+ try {
+ const outages = await fetchInternetOutages();
+ this.ctx.intelligenceCache.outages = outages;
+ this.ctx.map?.setOutages(outages);
+ this.ctx.map?.setLayerReady('outages', outages.length > 0);
+ ingestOutagesForCII(outages);
+ signalAggregator.ingestOutages(outages);
+ this.ctx.statusPanel?.updateFeed('NetBlocks', { status: 'ok', itemCount: outages.length });
+ dataFreshness.recordUpdate('outages', outages.length);
+ } catch (error) {
+ this.ctx.map?.setLayerReady('outages', false);
+ this.ctx.statusPanel?.updateFeed('NetBlocks', { status: 'error' });
+ dataFreshness.recordError('outages', String(error));
+ }
+  }
+
+  async loadCyberThreats(): Promise<void> {
+ if (!CYBER_LAYER_ENABLED) {
+ this.ctx.mapLayers.cyberThreats = false;
+ this.ctx.map?.setLayerReady('cyberThreats', false);
+ return;
+ }
+
+ if (this.ctx.cyberThreatsCache) {
+ this.ctx.map?.setCyberThreats(this.ctx.cyberThreatsCache);
+ this.ctx.map?.setLayerReady('cyberThreats', this.ctx.cyberThreatsCache.length > 0);
+ ingestCyberThreatsForCII(this.ctx.cyberThreatsCache);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ (this.ctx.panels['cyber-threats'] as CyberThreatPanel)?.update(this.ctx.cyberThreatsCache);
+ this.ctx.statusPanel?.updateFeed('Cyber Threats', { status: 'ok', itemCount: this.ctx.cyberThreatsCache.length });
+ return;
+ }
+
+ try {
+ const [threats, tfIocs, openPhish, spamhaus, cisaKev, otxIocs, phishStats] = await Promise.all([
+ fetchCyberThreats({ limit: 500, days: 14 }),
+ fetchThreatFoxIOCs(),
+ fetchOpenPhishFeed(),
+ fetchSpamhausDrop(),
+ fetchCisaKev(),
+ fetchOtxIOCs(),
+ fetchPhishStatsFeed(),
+ ]);
+ const allThreats = [...threats, ...tfIocs, ...openPhish, ...spamhaus, ...cisaKev, ...otxIocs, ...phishStats];
+ this.ctx.cyberThreatsCache = allThreats;
+ this.ctx.map?.setCyberThreats(allThreats);
+ this.ctx.map?.setLayerReady('cyberThreats', allThreats.length > 0);
+ ingestCyberThreatsForCII(allThreats);
+ ingestCyberToIoc(allThreats);
+ ingestCisaKevToIoc(allThreats);
+ ingestCyberToKillChain(allThreats);
+ checkGeofenceCyber(allThreats);
+ ingestCyberToPoL(allThreats);
+ ingestCyberToConvergence(allThreats);
+ ingestCisaToIcsOt(allThreats);
+ ingestCyberToGraph(allThreats);
+ ingestCyberToTimeline(allThreats);
+ ingestCyberToMatrix(allThreats);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ (this.ctx.panels['cyber-threats'] as CyberThreatPanel)?.update(allThreats);
+ this.ctx.statusPanel?.updateFeed('Cyber Threats', { status: 'ok', itemCount: allThreats.length });
+ this.ctx.statusPanel?.updateApi('Cyber Threats API', { status: 'ok' });
+ dataFreshness.recordUpdate('cyber_threats', allThreats.length);
+ } catch (error) {
+ (this.ctx.panels['cyber-threats'] as CyberThreatPanel)?.update([]);
+ this.ctx.map?.setLayerReady('cyberThreats', false);
+ this.ctx.statusPanel?.updateFeed('Cyber Threats', { status: 'error', errorMessage: String(error) });
+ this.ctx.statusPanel?.updateApi('Cyber Threats API', { status: 'error' });
+ dataFreshness.recordError('cyber_threats', String(error));
+ }
+  }
+
+  async loadLocalIDS(): Promise<void> {
+ try {
+ const alerts = await fetchLocalIDSAlerts();
+ (this.ctx.panels['local-ids'] as LocalIDSPanel)?.update(alerts);
+ } catch {
+ (this.ctx.panels['local-ids'] as LocalIDSPanel)?.update([]);
+ }
+  }
+
+  async loadSpaceWeather(): Promise<void> {
+ try {
+ const [data, donkiEvents] = await Promise.all([fetchSpaceWeather(), fetchDonkiEvents()]);
+ (this.ctx.panels['space-weather'] as SpaceWeatherPanel)?.update({ ...data, donkiEvents });
+ } catch (error) {
+ console.warn('[space-weather] fetch failed', error);
+ (this.ctx.panels['space-weather'] as SpaceWeatherPanel)?.update({
+ kpIndex: null, kpClass: 'quiet', solarWindSpeed: null, solarWindDensity: null,
+ bz: null, xrayClass: null, alertMessages: [], fetchedAt: new Date(), donkiEvents: [],
+ });
+ }
+  }
+
+  async loadSpaceflightNews(): Promise<void> {
+ try {
+ const articles = await fetchSpaceflightNews();
+ (this.ctx.panels['spaceflight-news'] as SpaceflightNewsPanel)?.update(articles);
+ } catch (error) {
+ console.warn('[spaceflight-news] fetch failed', error);
+ (this.ctx.panels['spaceflight-news'] as SpaceflightNewsPanel)?.update([]);
+ }
+  }
+
+  async loadSpaceLaunches(): Promise<void> {
+ try {
+ const launches = await fetchSpaceLaunches();
+ (this.ctx.panels['space-launches'] as SpaceLaunchesPanel)?.update(launches);
+ } catch (error) {
+ console.warn('[space-launches] fetch failed', error);
+ (this.ctx.panels['space-launches'] as SpaceLaunchesPanel)?.update([]);
+ }
+  }
+
+  async loadDiseaseOutbreaks(): Promise<void> {
+ try {
+ const [outbreaks, snapshots, cdcSignals] = await Promise.all([
+ fetchDiseaseOutbreaks(),
+ fetchGlobalDiseaseSnapshots(),
+ fetchCdcSurveillance(),
+ ]);
+ const cdcOutbreaks = cdcSignals.map((s, i) => ({
+ id: `cdc-${i}-${s.date}`,
+ title: `${s.disease}: ${s.metric}${s.value !== null ? ` (${s.value})` : ''}`,
+ country: s.region,
+ disease: s.disease,
+ date: new Date(s.date),
+ url: s.url,
+ source: (s.source === 'WHO' ? 'WHO' : 'ReliefWeb') as 'WHO' | 'ReliefWeb' | 'ProMED',
+ severity: (s.severity === 'alert' ? 'high' : 'medium') as 'critical' | 'high' | 'medium' | 'low',
+ }));
+ (this.ctx.panels['disease-outbreaks'] as DiseaseOutbreakPanel)?.update(
+ [...outbreaks, ...cdcOutbreaks],
+ snapshots,
+ );
+ } catch (error) {
+ console.warn('[disease-outbreaks] fetch failed', error);
+ (this.ctx.panels['disease-outbreaks'] as DiseaseOutbreakPanel)?.update([]);
+ }
+  }
+
+  async loadDiseaseIntel(): Promise<void> {
+ try {
+ const data = await fetchDiseaseIntel();
+ (this.ctx.panels['disease-intel'] as DiseaseIntelPanel)?.update(data);
+ if (this.ctx.mapLayers.diseaseIntel) {
+ this.ctx.map?.setDiseaseIntel(data);
+ }
+ } catch (error) {
+ // eslint-disable-next-line no-console
+ console.warn('[disease-intel] fetch failed', error);
+ (this.ctx.panels['disease-intel'] as DiseaseIntelPanel)?.update(null);
+ }
+  }
+
+  async loadHumanitarianCrises(): Promise<void> {
+ try {
+ const crises = await fetchHdxCrises();
+ (this.ctx.panels['humanitarian-crisis'] as HumanitarianCrisisPanel)?.update(crises);
+ } catch (error) {
+ console.warn('[humanitarian-crisis] fetch failed', error);
+ (this.ctx.panels['humanitarian-crisis'] as HumanitarianCrisisPanel)?.update([]);
+ }
+  }
+
+  async loadAirQuality(): Promise<void> {
+ try {
+ const readings = await fetchGlobalAirQuality();
+ (this.ctx.panels['air-quality'] as AirQualityPanel)?.update(readings);
+ void proximityAlertService.checkAirQuality(readings);
+ (this.ctx.panels['hazard-alerts'] as HazardAlertsPanel)?.refresh();
+ void this.evaluateCompoundThreats();
+ } catch (error) {
+ console.warn('[air-quality] fetch failed', error);
+ (this.ctx.panels['air-quality'] as AirQualityPanel)?.update([]);
+ }
+  }
+
+  async loadWildfireIncidents(): Promise<void> {
+ try {
+ const incidents = await fetchInciwebIncidents();
+ (this.ctx.panels['wildfire-incidents'] as WildfireIncidentsPanel)?.update(incidents);
+ void proximityAlertService.checkWildfires(incidents);
+ (this.ctx.panels['hazard-alerts'] as HazardAlertsPanel)?.refresh();
+ void this.evaluateCompoundThreats();
+ } catch (error) {
+ console.warn('[wildfire-incidents] fetch failed', error);
+ (this.ctx.panels['wildfire-incidents'] as WildfireIncidentsPanel)?.update([]);
+ }
+  }
+
+  async loadHazmatIncidents(): Promise<void> {
+ try {
+ const incidents = await fetchHazmatIncidents();
+ (this.ctx.panels['hazmat-incidents'] as HazmatIncidentsPanel)?.update(incidents);
+ void proximityAlertService.checkHazmat(incidents);
+ (this.ctx.panels['hazard-alerts'] as HazardAlertsPanel)?.refresh();
+ void this.evaluateCompoundThreats();
+ } catch (error) {
+ console.warn('[hazmat-incidents] fetch failed', error);
+ (this.ctx.panels['hazmat-incidents'] as HazmatIncidentsPanel)?.update([]);
+ }
+  }
+
+  async loadOilSpills(): Promise<void> {
+ try {
+ const incidents = await fetchOilSpills();
+ (this.ctx.panels['oil-spill'] as OilSpillPanel)?.update(incidents);
+ void proximityAlertService.checkOilSpills(incidents);
+ (this.ctx.panels['hazard-alerts'] as HazardAlertsPanel)?.refresh();
+ } catch (error) {
+ console.warn('[oil-spills] fetch failed', error);
+ (this.ctx.panels['oil-spill'] as OilSpillPanel)?.update([]);
+ }
+  }
+
+  async evaluateCompoundThreats(): Promise<void> {
+ try {
+ const [wildfires, aqReadings, hazmat, floodGauges, damAlerts, gridAlerts] = await Promise.allSettled([
+ fetchInciwebIncidents(),
+ fetchGlobalAirQuality(),
+ fetchHazmatIncidents(),
+ fetchFloodGauges(),
+ fetchDamSafetyAlerts(),
+ fetchPowerGridAlerts(),
+ ]);
+
+ const signals = [];
+
+ // Wildfire signals
+ if (wildfires.status === 'fulfilled') {
+ for (const inc of wildfires.value) {
+ if (inc.lat === null || inc.lon === null) continue;
+ if (inc.severity === 'low') continue;
+ signals.push(toHazardSignal(inc.id, 'wildfire', inc.severity, inc.lat, inc.lon, inc.name, 'inciweb'));
+ }
+ }
+
+ // Air quality signals — unhealthy or worse
+ if (aqReadings.status === 'fulfilled') {
+ for (const r of aqReadings.value) {
+ if (r.aqiLevel === 'good' || r.aqiLevel === 'moderate' || r.aqiLevel === 'sensitive') continue;
+ const sev = r.aqiLevel === 'hazardous' ? 'critical' : r.aqiLevel === 'very_unhealthy' ? 'high' : 'medium';
+ signals.push(toHazardSignal(`aq-${r.city}`, 'air_quality', sev, r.lat, r.lon, `${r.city} AQI ${r.aqi}`, 'air-quality'));
+ }
+ }
+
+ // Hazmat signals
+ if (hazmat.status === 'fulfilled') {
+ for (const inc of hazmat.value) {
+ if (inc.lat === null || inc.lon === null) continue;
+ if (inc.severity === 'low') continue;
+ signals.push(toHazardSignal(inc.id, 'industrial', inc.severity, inc.lat, inc.lon, inc.title, 'hazmat'));
+ }
+ }
+
+ // Flood gauge signals — major or moderate only
+ if (floodGauges.status === 'fulfilled') {
+ for (const g of floodGauges.value) {
+ if (g.floodCategory !== 'major' && g.floodCategory !== 'moderate') continue;
+ const sev = g.floodCategory === 'major' ? 'critical' : 'high';
+ signals.push(toHazardSignal(g.id, 'flood', sev, g.lat, g.lon, g.siteName, 'flood-gauges'));
+ }
+ }
+
+ // Dam safety signals
+ if (damAlerts.status === 'fulfilled') {
+ for (const a of damAlerts.value) {
+ if (a.lat === null || a.lon === null) continue;
+ signals.push(toHazardSignal(a.id, 'flood', a.severity, a.lat, a.lon, a.damName, 'dam-safety'));
+ }
+ }
+
+ // Grid alerts — map to approximate US region centroid
+ const REGION_COORDS: Record<string, [number, number]> = {
+ WECC: [37.5, -110.0], SERC: [33.0, -86.0], RFC: [41.0, -80.0],
+ NPCC: [42.5, -73.0], MRO: [45.0, -93.0], FRCC: [27.0, -81.0],
+ Texas: [31.0, -99.0], California: [36.5, -119.0], PJM: [40.0, -77.0],
+ MISO: [42.0, -89.0], SPP: [38.0, -97.0], NYISO: [43.0, -75.0],
+ ISONE: [43.5, -71.5],
+ };
+ if (gridAlerts.status === 'fulfilled') {
+ for (const a of gridAlerts.value) {
+ if (a.severity === 'low' || a.alertType === 'info') continue;
+ const regionKey = Object.keys(REGION_COORDS).find(k => a.region.includes(k));
+ const [lat, lon] = REGION_COORDS[regionKey ?? ''] ?? [38.0, -97.0];
+ signals.push(toHazardSignal(a.id, 'grid', a.severity, lat, lon, a.title, 'power-grid'));
+ }
+ }
+
+ // Cyber threat signals from cached layer data
+ if (this.ctx.cyberThreatsCache) {
+ const highCyber = this.ctx.cyberThreatsCache.filter(t => t.severity === 'critical' || t.severity === 'high');
+ for (const t of highCyber.slice(0, 20)) {
+ signals.push(toHazardSignal(t.id, 'cyber', t.severity as 'critical' | 'high', t.lat, t.lon, t.indicator, 'cyber-threats'));
+ }
+ }
+
+ const threats = detectCompoundThreats(signals);
+ if (threats.length > 0) {
+ document.dispatchEvent(new CustomEvent('wm:compound-threats-updated', { detail: threats }));
+ }
+ } catch (error) {
+ console.warn('[compound-threats] evaluation failed', error);
+ }
+  }
+
+  async loadGDACSAlerts(): Promise<void> {
+ try {
+ const { data: events } = await withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000);
+ this.ctx.intelligenceCache.gdacsAlerts = events;
+ (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update(events);
+ unifiedAlertStore.ingest(events.map(normalizeGDACSEvent));
+ // Note: intelligenceCache.earthquakes is only populated when the natural
+ // events map layer is enabled. When that layer is disabled the array will
+ // be empty, so the M≥6.5 earthquake trigger path is unavailable — the
+ // GDACS Red/Orange alert path (first argument) still works normally.
+ // The earthquake trigger remains reachable via loadNatural() when the
+ // natural layer is active.
+ void evaluateDisasterTrigger(
+ events,
+ this.ctx.intelligenceCache?.earthquakes ?? [],
+ getStormPreparednessSummary(),
+ );
+ } catch (error) {
+ console.warn('[gdacs-alerts] fetch failed', error);
+ (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update([]);
+ }
+  }
+
+  async loadVolcanoAlerts(): Promise<void> {
+ try {
+ const alerts = await fetchVolcanoAlerts();
+ (this.ctx.panels['volcano-alerts'] as VolcanoAlertsPanel)?.update(alerts);
+ } catch (error) {
+ console.warn('[volcano-alerts] fetch failed', error);
+ (this.ctx.panels['volcano-alerts'] as VolcanoAlertsPanel)?.update([]);
+ }
+  }
+
+  async loadNWSAlerts(): Promise<void> {
+ try {
+ const stormContext = getStormPreparednessContext();
+ const [alertsResult, spcResult, marineResult, rainfallResult, winterResult] = await Promise.allSettled([
+ withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000).then(r => r.data),
+ fetchSpcSummary(),
+ fetchMarineHazards(),
+ fetchExcessiveRainfallOutlooks(),
+ fetchWinterWeatherOutlooks(),
+ ]);
+ const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : stormContext.nwsAlerts;
+ const spcSummary = spcResult.status === 'fulfilled' ? spcResult.value : stormContext.spcSummary;
+ const marineHazards = marineResult.status === 'fulfilled' ? marineResult.value : stormContext.marineHazards;
+ const excessiveRainfallOutlooks = rainfallResult.status === 'fulfilled'
+ ? rainfallResult.value
+ : stormContext.excessiveRainfallOutlooks;
+ const winterWeatherOutlooks = winterResult.status === 'fulfilled'
+ ? winterResult.value
+ : stormContext.winterWeatherOutlooks;
+ (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update(alerts);
+ unifiedAlertStore.ingest(alerts.map(normalizeNWSAlert));
+ updateStormPreparednessContext({
+ nwsAlerts: alerts,
+ spcSummary,
+ excessiveRainfallOutlooks,
+ winterWeatherOutlooks,
+ marineHazards,
+ });
+ void evaluateDisasterTrigger(
+ this.ctx.intelligenceCache.gdacsAlerts ?? [],
+ this.ctx.intelligenceCache.earthquakes ?? [],
+ getStormPreparednessSummary(),
+ );
+ } catch (error) {
+ console.warn('[nws-alerts] fetch failed', error);
+ (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update([]);
+ }
+  }
+
+  async loadSavedPlaceWeather(): Promise<void> {
+ const places = getSavedPlaces().slice(0, 6);
+ if (places.length === 0) return;
+
+ const results = await Promise.allSettled(
+ places.map((place) => fetchSavedPlaceWeather(place)),
+ );
+
+ const failures = results.filter((result) => result.status === 'rejected');
+ if (failures.length === results.length) {
+ throw new Error('saved-place weather refresh failed');
+ }
+  }
+
+  async loadCommsHealth(): Promise<void> {
+ try {
+ const data = await fetchCommsHealth();
+ (this.ctx.panels['comms-health'] as CommsHealthPanel)?.update(data);
+ } catch (error) {
+ console.warn('[comms-health] fetch failed', error);
+ (this.ctx.panels['comms-health'] as CommsHealthPanel)?.update(null);
+ }
+  }
+
+  async loadPowerGrid(): Promise<void> {
+ try {
+ const data = await fetchGridStatus();
+ (this.ctx.panels['power-grid'] as PowerGridPanel)?.update(data);
+ } catch (error) {
+ console.warn('[power-grid] fetch failed', error);
+ (this.ctx.panels['power-grid'] as PowerGridPanel)?.update(null);
+ }
+  }
+
+  async loadEconomicStress(): Promise<void> {
+ try {
+ const [data, snapshots] = await Promise.all([fetchEconomicStress(), fetchWsbSentiment()]);
+ (this.ctx.panels['economic-stress'] as EconomicStressPanel)?.update(data, snapshots);
+ } catch (error) {
+ console.warn('[economic-stress] fetch failed', error);
+ (this.ctx.panels['economic-stress'] as EconomicStressPanel)?.update(null);
+ }
+  }
+
+  async loadFederalRegister(): Promise<void> {
+ const panel = this.ctx.panels['federal-register'] as FederalRegisterPanel | undefined;
+ if (!panel) return;
+ const docs = await fetchFederalRegister();
+ panel.update(docs);
+  }
+
+  async runEMAForecast(): Promise<void> {
+ // Accumulate event counts per country from cached intelligence data
+ const regionCounts = new Map<string, number>();
+
+ const protests = this.ctx.intelligenceCache?.protests?.events ?? [];
+ for (const e of protests) {
+ const key = e.country || e.region || 'Unknown';
+ regionCounts.set(key, (regionCounts.get(key) ?? 0) + 1);
+ }
+
+ const earthquakes = this.ctx.intelligenceCache?.earthquakes ?? [];
+ for (const eq of earthquakes) {
+ if (eq.magnitude >= 5 && eq.place) {
+ // Use the full place string as the EMA key rather than the trailing
+ // component (e.g. "CA" or "Japan region") to avoid false merging with
+ // protest-event region series that use ISO country codes.  Each seismic
+ // zone gets its own independent EMA series this way.
+ const key = eq.place;
+ regionCounts.set(key, (regionCounts.get(key) ?? 0) + 1);
+ }
+ }
+
+ // Update EMA for each tracked region
+ for (const [region, count] of regionCounts.entries()) {
+ updateRegionCount(region, count);
+ }
+
+ // Check for high-risk regions and emit velocity_spike signals into war threat evaluation
+ const highRisk = getHighRiskRegions();
+
+ // Dispatch EMA forecast event for sidebar sparklines
+ document.dispatchEvent(new CustomEvent('wm:ema-forecast', {
+ detail: {
+ regions: highRisk.slice(0, 6).map(r => ({
+ region:  r.region,
+ risk24h: r.risk24h,
+ trending: r.trending,
+ })),
+ },
+ }));
+
+ if (highRisk.length >= 2) {
+ // 2+ high-risk regions = elevated conflict intelligence signal
+ reportElevatedPanel('ucdp-events', 'UCDP Conflict Events');
+ }
+ if (highRisk.length > 0) {
+ const signals = highRisk.slice(0, 3).map(forecast => ({
+ id: `ema-forecast-${forecast.region}-${Date.now()}`,
+ type: 'velocity_spike' as const,
+ title: `EMA Forecast: ${forecast.region}`,
+ description: `Risk ${forecast.risk24h}% (${forecast.trending}, ${forecast.deviation.toFixed(1)}σ above baseline)`,
+ confidence: Math.min(0.95, forecast.risk24h / 100),
+ timestamp: new Date(),
+ data: {
+ newsVelocity: forecast.currentCount,
+ baseline: forecast.ema,
+ multiplier: forecast.deviation,
+ relatedTopics: [forecast.region],
+ explanation: `EMA deviation ${forecast.deviation.toFixed(1)}σ — 24h escalation risk ${forecast.risk24h}%`,
+ },
+ }));
+ addToSignalHistory(signals);
+ situationEngine.observeSignals(signals);
+ evaluateWarThreat(signals);
+ }
+  }
+
+  async loadGlobalWeather(): Promise<void> {
+ try {
+ const readings = await fetchGlobalWeather();
+ (this.ctx.panels['global-weather'] as GlobalWeatherPanel)?.update(readings);
+ } catch (error) {
+ console.warn('[global-weather] fetch failed', error);
+ (this.ctx.panels['global-weather'] as GlobalWeatherPanel)?.update([]);
+ }
+  }
+
+  async loadOpenSanctions(): Promise<void> {
+ try {
+ const entities = await fetchRecentSanctions();
+ (this.ctx.panels['opensanctions'] as OpenSanctionsPanel)?.update(entities);
+ } catch (error) {
+ console.warn('[opensanctions] fetch failed', error);
+ (this.ctx.panels['opensanctions'] as OpenSanctionsPanel)?.update([]);
+ }
+  }
+
+  async loadEdgarFilings(): Promise<void> {
+ try {
+ const filings = await fetchRecentEdgarFilings();
+ (this.ctx.panels['edgar-filings'] as EdgarFilingsPanel)?.update(filings);
+ } catch (error) {
+ console.warn('[edgar-filings] fetch failed', error);
+ (this.ctx.panels['edgar-filings'] as EdgarFilingsPanel)?.update([]);
+ }
+  }
+
+  async loadIranEvents(): Promise<void> {
+ try {
+ const events = await fetchIranEvents();
+ this.ctx.intelligenceCache.iranEvents = events;
+ this.ctx.map?.setIranEvents(events);
+ this.ctx.map?.setLayerReady('iranAttacks', events.length > 0);
+ signalAggregator.ingestConflictEvents(events);
+ ingestStrikesForCII(events);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ } catch {
+ this.ctx.map?.setLayerReady('iranAttacks', false);
+ }
+  }
+
+  async loadAisSignals(): Promise<void> {
+ try {
+ const { disruptions, density } = await fetchAisSignals();
+ const aisStatus = getAisStatus();
+ console.log('[Ships] Events:', { disruptions: disruptions.length, density: density.length, vessels: aisStatus.vessels });
+ this.ctx.map?.setAisData(disruptions, density);
+ signalAggregator.ingestAisDisruptions(disruptions);
+ ingestAisDisruptionsForCII(disruptions);
+ ingestAisToDarkVessel(disruptions);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ updateAndCheck([
+ { type: 'ais_gaps', region: 'global', count: disruptions.length },
+ ]).then(anomalies => {
+ if (anomalies.length > 0) {
+ signalAggregator.ingestTemporalAnomalies(anomalies);
+ ingestTemporalAnomaliesForCII(anomalies);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ }
+ }).catch(() => {});
+
+ const hasData = disruptions.length > 0 || density.length > 0;
+ this.ctx.map?.setLayerReady('ais', hasData);
+
+ const shippingCount = disruptions.length + density.length;
+ const shippingStatus = shippingCount > 0 ? 'ok' : (aisStatus.connected ? 'warning' : 'error');
+ this.ctx.statusPanel?.updateFeed('Shipping', {
+ status: shippingStatus,
+ itemCount: shippingCount,
+ errorMessage: !aisStatus.connected && shippingCount === 0 ? 'AIS snapshot unavailable' : undefined,
+ });
+ this.ctx.statusPanel?.updateApi('AISStream', {
+ status: aisStatus.connected ? 'ok' : 'warning',
+ });
+ if (hasData) {
+ dataFreshness.recordUpdate('ais', shippingCount);
+ }
+ } catch (error) {
+ this.ctx.map?.setLayerReady('ais', false);
+ this.ctx.statusPanel?.updateFeed('Shipping', { status: 'error', errorMessage: String(error) });
+ this.ctx.statusPanel?.updateApi('AISStream', { status: 'error' });
+ dataFreshness.recordError('ais', String(error));
+ }
+  }
+
+  waitForAisData(): void {
+ const maxAttempts = 30;
+ let attempts = 0;
+
+ const checkData = () => {
+ if (this.ctx.isDestroyed) return;
+ attempts++;
+ const status = getAisStatus();
+
+ if (status.vessels > 0 || status.connected) {
+ this.loadAisSignals();
+ this.ctx.map?.setLayerLoading('ais', false);
+ return;
+ }
+
+ if (attempts >= maxAttempts) {
+ this.ctx.map?.setLayerLoading('ais', false);
+ this.ctx.map?.setLayerReady('ais', false);
+ this.ctx.statusPanel?.updateFeed('Shipping', {
+ status: 'error',
+ errorMessage: 'Connection timeout'
+ });
+ return;
+ }
+
+ setTimeout(checkData, 1000);
+ };
+
+ checkData();
+  }
+
+  async loadCableActivity(): Promise<void> {
+ try {
+ const activity = await fetchCableActivity();
+ this.ctx.map?.setCableActivity(activity.advisories, activity.repairShips);
+ const itemCount = activity.advisories.length + activity.repairShips.length;
+ this.ctx.statusPanel?.updateFeed('CableOps', { status: 'ok', itemCount });
+ } catch {
+ this.ctx.statusPanel?.updateFeed('CableOps', { status: 'error' });
+ }
+  }
+
+  async loadCableHealth(): Promise<void> {
+ try {
+ const healthData = await fetchCableHealth();
+ this.ctx.map?.setCableHealth(healthData.cables);
+ ingestCableToSigint(healthData.cables);
+ ingestCableToTopology(healthData.cables);
+ const cableIds = Object.keys(healthData.cables);
+ const faultCount = cableIds.filter((id) => healthData.cables[id]?.status === 'fault').length;
+ const degradedCount = cableIds.filter((id) => healthData.cables[id]?.status === 'degraded').length;
+ this.ctx.statusPanel?.updateFeed('CableHealth', { status: 'ok', itemCount: faultCount + degradedCount });
+ } catch {
+ this.ctx.statusPanel?.updateFeed('CableHealth', { status: 'error' });
+ }
+  }
+
+  async loadProtests(): Promise<void> {
+ if (this.ctx.intelligenceCache.protests) {
+ const protestData = this.ctx.intelligenceCache.protests;
+ this.ctx.map?.setProtests(protestData.events);
+ this.ctx.map?.setLayerReady('protests', protestData.events.length > 0);
+ const status = getProtestStatus();
+ this.ctx.statusPanel?.updateFeed('Protests', {
+ status: 'ok',
+ itemCount: protestData.events.length,
+ errorMessage: status.acledConfigured === false ? 'ACLED not configured - using GDELT only' : undefined,
+ });
+ if (status.acledConfigured === true) {
+ this.ctx.statusPanel?.updateApi('ACLED', { status: 'ok' });
+ } else if (status.acledConfigured === null) {
+ this.ctx.statusPanel?.updateApi('ACLED', { status: 'warning' });
+ }
+ this.ctx.statusPanel?.updateApi('GDELT Doc', { status: 'ok' });
+ if (protestData.sources.gdelt > 0) dataFreshness.recordUpdate('gdelt_doc', protestData.sources.gdelt);
+ return;
+ }
+ try {
+ const protestData = await fetchProtestEvents();
+ this.ctx.intelligenceCache.protests = protestData;
+ this.ctx.map?.setProtests(protestData.events);
+ this.ctx.map?.setLayerReady('protests', protestData.events.length > 0);
+ ingestProtests(protestData.events);
+ ingestProtestsForCII(protestData.events);
+ signalAggregator.ingestProtests(protestData.events);
+ const protestCount = protestData.sources.acled + protestData.sources.gdelt;
+ if (protestCount > 0) dataFreshness.recordUpdate('acled', protestCount);
+ if (protestData.sources.gdelt > 0) dataFreshness.recordUpdate('gdelt', protestData.sources.gdelt);
+ if (protestData.sources.gdelt > 0) dataFreshness.recordUpdate('gdelt_doc', protestData.sources.gdelt);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ const status = getProtestStatus();
+ this.ctx.statusPanel?.updateFeed('Protests', {
+ status: 'ok',
+ itemCount: protestData.events.length,
+ errorMessage: status.acledConfigured === false ? 'ACLED not configured - using GDELT only' : undefined,
+ });
+ if (status.acledConfigured === true) {
+ this.ctx.statusPanel?.updateApi('ACLED', { status: 'ok' });
+ } else if (status.acledConfigured === null) {
+ this.ctx.statusPanel?.updateApi('ACLED', { status: 'warning' });
+ }
+ this.ctx.statusPanel?.updateApi('GDELT Doc', { status: 'ok' });
+ } catch (error) {
+ this.ctx.map?.setLayerReady('protests', false);
+ this.ctx.statusPanel?.updateFeed('Protests', { status: 'error', errorMessage: String(error) });
+ this.ctx.statusPanel?.updateApi('ACLED', { status: 'error' });
+ this.ctx.statusPanel?.updateApi('GDELT Doc', { status: 'error' });
+ dataFreshness.recordError('gdelt_doc', String(error));
+ }
+  }
+
+  async loadFlightDelays(): Promise<void> {
+ try {
+ const delays = await fetchFlightDelays();
+ this.ctx.map?.setFlightDelays(delays);
+ this.ctx.map?.setLayerReady('flights', delays.length > 0);
+ this.ctx.intelligenceCache.flightDelays = delays;
+ const severe = delays.filter(d => d.severity === 'major' || d.severity === 'severe' || d.delayType === 'closure');
+ if (severe.length > 0) ingestAviationForCII(severe);
+ this.ctx.statusPanel?.updateFeed('Flights', {
+ status: 'ok',
+ itemCount: delays.length,
+ });
+ this.ctx.statusPanel?.updateApi('FAA', { status: 'ok' });
+ } catch (error) {
+ this.ctx.map?.setLayerReady('flights', false);
+ this.ctx.statusPanel?.updateFeed('Flights', { status: 'error', errorMessage: String(error) });
+ this.ctx.statusPanel?.updateApi('FAA', { status: 'error' });
+ }
+  }
+
+  async loadMilitary(): Promise<void> {
+ if (this.ctx.intelligenceCache.military) {
+ const { flights, flightClusters, vessels, vesselClusters } = this.ctx.intelligenceCache.military;
+ this.ctx.map?.setMilitaryFlights(flights, flightClusters);
+ this.ctx.map?.setMilitaryVessels(vessels, vesselClusters);
+ this.ctx.map?.updateMilitaryForEscalation(flights, vessels);
+ this.loadCachedPosturesForBanner();
+ const insightsPanel = this.ctx.panels.insights as InsightsPanel | undefined;
+ insightsPanel?.setMilitaryFlights(flights);
+ const hasData = flights.length > 0 || vessels.length > 0;
+ this.ctx.map?.setLayerReady('military', hasData);
+ const militaryCount = flights.length + vessels.length;
+ this.ctx.statusPanel?.updateFeed('Military', {
+ status: militaryCount > 0 ? 'ok' : 'warning',
+ itemCount: militaryCount,
+ errorMessage: militaryCount === 0 ? 'No military activity in view' : undefined,
+ });
+ this.ctx.statusPanel?.updateApi('OpenSky', { status: 'ok' });
+ return;
+ }
+ try {
+ if (isMilitaryVesselTrackingConfigured()) {
+ initMilitaryVesselStream();
+ }
+ const [flightResult, vesselResult] = await Promise.all([
+ withOfflineCache('military-signals', () => fetchMilitaryFlights(), 1 * 60 * 60 * 1000),
+ withOfflineCache('military-vessels', () => fetchMilitaryVessels(), 1 * 60 * 60 * 1000),
+ ]);
+ const flightData = flightResult.data;
+ const vesselData = vesselResult.data;
+ this.ctx.intelligenceCache.military = {
+ flights: flightData.flights,
+ flightClusters: flightData.clusters,
+ vessels: vesselData.vessels,
+ vesselClusters: vesselData.clusters,
+ };
+ fetchUSNIFleetReport().then((report) => {
+ if (report) this.ctx.intelligenceCache.usniFleet = report;
+ }).catch(() => {});
+ this.ctx.map?.setMilitaryFlights(flightData.flights, flightData.clusters);
+ this.ctx.map?.setMilitaryVessels(vesselData.vessels, vesselData.clusters);
+ ingestFlights(flightData.flights);
+ ingestVessels(vesselData.vessels);
+ ingestMilitaryForCII(flightData.flights, vesselData.vessels);
+ signalAggregator.ingestFlights(flightData.flights);
+ signalAggregator.ingestVessels(vesselData.vessels);
+ updateAndCheck([
+ { type: 'military_flights', region: 'global', count: flightData.flights.length },
+ { type: 'vessels', region: 'global', count: vesselData.vessels.length },
+ ]).then(anomalies => {
+ if (anomalies.length > 0) {
+ signalAggregator.ingestTemporalAnomalies(anomalies);
+ ingestTemporalAnomaliesForCII(anomalies);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ }
+ }).catch(() => {});
+ this.ctx.map?.updateMilitaryForEscalation(flightData.flights, vesselData.vessels);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ if (!isInLearningMode()) {
+ const surgeAlerts = analyzeFlightsForSurge(flightData.flights);
+ if (surgeAlerts.length > 0) {
+ const surgeSignals = surgeAlerts.map(surgeAlertToSignal);
+ addToSignalHistory(surgeSignals);
+ situationEngine.observeSignals(surgeSignals);
+ evaluateWarThreat(surgeSignals);
+ (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(surgeSignals);
+ if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(surgeSignals);
+ }
+ const foreignAlerts = detectForeignMilitaryPresence(flightData.flights);
+ if (foreignAlerts.length > 0) {
+ const foreignSignals = foreignAlerts.map(foreignPresenceToSignal);
+ addToSignalHistory(foreignSignals);
+ situationEngine.observeSignals(foreignSignals);
+ evaluateWarThreat(foreignSignals);
+ (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(foreignSignals);
+ if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(foreignSignals);
+ }
+ }
+
+ // Compute local theater postures from live flight data — used as fallback
+ // when the upstream cloud API is unreachable.
+ ingestLocalPostures(getTheaterPostureSummaries(flightData.flights));
+
+ this.loadCachedPosturesForBanner();
+ const insightsPanel = this.ctx.panels.insights as InsightsPanel | undefined;
+ insightsPanel?.setMilitaryFlights(flightData.flights);
+
+ const hasData = flightData.flights.length > 0 || vesselData.vessels.length > 0;
+ this.ctx.map?.setLayerReady('military', hasData);
+ const militaryCount = flightData.flights.length + vesselData.vessels.length;
+ this.ctx.statusPanel?.updateFeed('Military', {
+ status: militaryCount > 0 ? 'ok' : 'warning',
+ itemCount: militaryCount,
+ errorMessage: militaryCount === 0 ? 'No military activity in view' : undefined,
+ });
+ this.ctx.statusPanel?.updateApi('OpenSky', { status: 'ok' });
+ dataFreshness.recordUpdate('opensky', flightData.flights.length);
+ } catch (error) {
+ this.ctx.map?.setLayerReady('military', false);
+ this.ctx.statusPanel?.updateFeed('Military', { status: 'error', errorMessage: String(error) });
+ this.ctx.statusPanel?.updateApi('OpenSky', { status: 'error' });
+ dataFreshness.recordError('opensky', String(error));
+ }
+  }
+
+  private async loadCachedPosturesForBanner(): Promise<void> {
+ try {
+ const data = await fetchCachedTheaterPosture();
+ if (data && data.postures.length > 0) {
+ this.callbacks.renderCriticalBanner(data.postures);
+ const posturePanel = this.ctx.panels['strategic-posture'] as StrategicPosturePanel | undefined;
+ posturePanel?.updatePostures(data);
+ }
+ } catch (error) {
+ console.warn('[App] Failed to load cached postures for banner:', error);
+ }
+  }
+
+  async loadFredData(): Promise<void> {
+ const economicPanel = this.ctx.panels.economic as EconomicPanel;
+ const cbInfo = getCircuitBreakerCooldownInfo('FRED Economic');
+ if (cbInfo.onCooldown) {
+ economicPanel?.setErrorState(true, `Temporarily unavailable (retry in ${cbInfo.remainingSeconds}s)`);
+ this.ctx.statusPanel?.updateApi('FRED', { status: 'error' });
+ return;
+ }
+
+ try {
+ economicPanel?.setLoading(true);
+ const { data } = await withOfflineCache('economic-data', () => fetchFredData(), 4 * 60 * 60 * 1000);
+
+ const postInfo = getCircuitBreakerCooldownInfo('FRED Economic');
+ if (postInfo.onCooldown) {
+ economicPanel?.setErrorState(true, `Temporarily unavailable (retry in ${postInfo.remainingSeconds}s)`);
+ this.ctx.statusPanel?.updateApi('FRED', { status: 'error' });
+ return;
+ }
+
+ if (data.length === 0) {
+ if (!isFeatureAvailable('economicFred')) {
+ if (economicPanel) showApiKeyGate(economicPanel, 'FRED_API_KEY', () => { void this.loadFredData(); });
+ this.ctx.statusPanel?.updateApi('FRED', { status: 'error' });
+ return;
+ }
+ economicPanel?.showRetrying();
+ await new Promise(r => setTimeout(r, 20_000));
+ const retryData = await fetchFredData();
+ if (retryData.length === 0) {
+ economicPanel?.setErrorState(true, 'FRED data temporarily unavailable — will retry');
+ this.ctx.statusPanel?.updateApi('FRED', { status: 'error' });
+ return;
+ }
+ economicPanel?.setErrorState(false);
+ economicPanel?.update(retryData);
+ this.ctx.statusPanel?.updateApi('FRED', { status: 'ok' });
+ dataFreshness.recordUpdate('economic', retryData.length);
+ return;
+ }
+
+ economicPanel?.setErrorState(false);
+ economicPanel?.update(data);
+ this.ctx.statusPanel?.updateApi('FRED', { status: 'ok' });
+ dataFreshness.recordUpdate('economic', data.length);
+ } catch {
+ if (isFeatureAvailable('economicFred')) {
+ economicPanel?.showRetrying();
+ try {
+ await new Promise(r => setTimeout(r, 20_000));
+ const retryData = await fetchFredData();
+ if (retryData.length > 0) {
+ economicPanel?.setErrorState(false);
+ economicPanel?.update(retryData);
+ this.ctx.statusPanel?.updateApi('FRED', { status: 'ok' });
+ dataFreshness.recordUpdate('economic', retryData.length);
+ return;
+ }
+ } catch { /* fall through */ }
+ }
+ this.ctx.statusPanel?.updateApi('FRED', { status: 'error' });
+ economicPanel?.setErrorState(true, 'FRED data temporarily unavailable — will retry');
+ economicPanel?.setLoading(false);
+ }
+  }
+
+  async loadOilAnalytics(): Promise<void> {
+ const economicPanel = this.ctx.panels.economic as EconomicPanel;
+ try {
+ const data = await fetchOilAnalytics();
+ economicPanel?.updateOil(data);
+ const hasData = !!(data.wtiPrice || data.brentPrice || data.usProduction || data.usInventory);
+ this.ctx.statusPanel?.updateApi('EIA', { status: hasData ? 'ok' : 'error' });
+ if (hasData) {
+ const metricCount = [data.wtiPrice, data.brentPrice, data.usProduction, data.usInventory].filter(Boolean).length;
+ dataFreshness.recordUpdate('oil', metricCount || 1);
+ } else {
+ dataFreshness.recordError('oil', 'Oil analytics returned no values');
+ }
+ } catch (error) {
+ console.error('[App] Oil analytics failed:', error);
+ this.ctx.statusPanel?.updateApi('EIA', { status: 'error' });
+ dataFreshness.recordError('oil', String(error));
+ }
+  }
+
+  async loadGovernmentSpending(): Promise<void> {
+ const economicPanel = this.ctx.panels.economic as EconomicPanel;
+ try {
+ const data = await fetchRecentAwards({ daysBack: 7, limit: 15 });
+ economicPanel?.updateSpending(data);
+ this.ctx.statusPanel?.updateApi('USASpending', { status: data.awards.length > 0 ? 'ok' : 'error' });
+ if (data.awards.length > 0) {
+ dataFreshness.recordUpdate('spending', data.awards.length);
+ } else {
+ dataFreshness.recordError('spending', 'No awards returned');
+ }
+ } catch (error) {
+ console.error('[App] Government spending failed:', error);
+ this.ctx.statusPanel?.updateApi('USASpending', { status: 'error' });
+ dataFreshness.recordError('spending', String(error));
+ }
+  }
+
+  async loadBisData(): Promise<void> {
+ const economicPanel = this.ctx.panels.economic as EconomicPanel;
+ try {
+ const data = await fetchBisData();
+ economicPanel?.updateBis(data);
+ const hasData = data.policyRates.length > 0;
+ this.ctx.statusPanel?.updateApi('BIS', { status: hasData ? 'ok' : 'error' });
+ if (hasData) {
+ dataFreshness.recordUpdate('bis', data.policyRates.length);
+ }
+ } catch (error) {
+ console.error('[App] BIS data failed:', error);
+ this.ctx.statusPanel?.updateApi('BIS', { status: 'error' });
+ dataFreshness.recordError('bis', String(error));
+ }
+  }
+
+  async loadTradePolicy(): Promise<void> {
+ const tradePanel = this.ctx.panels['trade-policy'] as TradePolicyPanel | undefined;
+ if (!tradePanel) return;
+
+ try {
+ const [restrictions, tariffs, flows, barriers] = await Promise.all([
+ fetchTradeRestrictions([], 50),
+ fetchTariffTrends('840', '156', '', 10),
+ fetchTradeFlows('840', '156', 10),
+ fetchTradeBarriers([], '', 50),
+ ]);
+
+ tradePanel.updateRestrictions(restrictions);
+ tradePanel.updateTariffs(tariffs);
+ tradePanel.updateFlows(flows);
+ tradePanel.updateBarriers(barriers);
+
+ const totalItems = restrictions.restrictions.length + tariffs.datapoints.length + flows.flows.length + barriers.barriers.length;
+ const anyUnavailable = restrictions.upstreamUnavailable || tariffs.upstreamUnavailable || flows.upstreamUnavailable || barriers.upstreamUnavailable;
+
+ this.ctx.statusPanel?.updateApi('WTO', { status: anyUnavailable ? 'warning' : (totalItems > 0 ? 'ok' : 'error') });
+
+ if (totalItems > 0) {
+ dataFreshness.recordUpdate('wto_trade', totalItems);
+ } else if (anyUnavailable) {
+ dataFreshness.recordError('wto_trade', 'WTO upstream temporarily unavailable');
+ }
+ } catch (error) {
+ console.error('[App] Trade policy failed:', error);
+ this.ctx.statusPanel?.updateApi('WTO', { status: 'error' });
+ dataFreshness.recordError('wto_trade', String(error));
+ }
+  }
+
+  async loadSupplyChain(): Promise<void> {
+ const scPanel = this.ctx.panels['supply-chain'] as SupplyChainPanel | undefined;
+ if (!scPanel) return;
+
+ try {
+ const [shipping, chokepoints, minerals] = await Promise.allSettled([
+ fetchShippingRates(),
+ fetchChokepointStatus(),
+ fetchCriticalMinerals(),
+ ]);
+
+ const shippingData = shipping.status === 'fulfilled' ? shipping.value : null;
+ const chokepointData = chokepoints.status === 'fulfilled' ? chokepoints.value : null;
+ const mineralsData = minerals.status === 'fulfilled' ? minerals.value : null;
+
+ if (shippingData) scPanel.updateShippingRates(shippingData);
+ if (chokepointData) scPanel.updateChokepointStatus(chokepointData);
+ if (mineralsData) scPanel.updateCriticalMinerals(mineralsData);
+
+ const totalItems = (shippingData?.indices.length || 0) + (chokepointData?.chokepoints.length || 0) + (mineralsData?.minerals.length || 0);
+ const anyUnavailable = shippingData?.upstreamUnavailable || chokepointData?.upstreamUnavailable || mineralsData?.upstreamUnavailable;
+
+ this.ctx.statusPanel?.updateApi('SupplyChain', { status: anyUnavailable ? 'warning' : (totalItems > 0 ? 'ok' : 'error') });
+
+ if (totalItems > 0) {
+ dataFreshness.recordUpdate('supply_chain', totalItems);
+ } else if (anyUnavailable) {
+ dataFreshness.recordError('supply_chain', 'Supply chain upstream temporarily unavailable');
+ }
+ } catch (error) {
+ console.error('[App] Supply chain failed:', error);
+ this.ctx.statusPanel?.updateApi('SupplyChain', { status: 'error' });
+ dataFreshness.recordError('supply_chain', String(error));
+ }
+  }
+
+  updateMonitorResults(): void {
+ const monitorPanel = this.ctx.panels.monitors as MonitorPanel;
+ monitorPanel.renderResults(this.ctx.allNews);
+  }
+
+  async runCorrelationAnalysis(): Promise<void> {
+ try {
+ if (this.ctx.latestClusters.length === 0 && this.ctx.allNews.length > 0) {
+ this.ctx.latestClusters = mlWorker.isAvailable
+ ? await clusterNewsHybrid(this.ctx.allNews)
+ : await analysisWorker.clusterNews(this.ctx.allNews);
+ }
+
+ if (this.ctx.latestClusters.length > 0) {
+ ingestNewsForCII(this.ctx.latestClusters);
+ dataFreshness.recordUpdate('gdelt', this.ctx.latestClusters.length);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ }
+
+ const signals = await analysisWorker.analyzeCorrelations(
+ this.ctx.latestClusters,
+ this.ctx.latestPredictions,
+ this.ctx.latestMarkets
+ );
+
+ let geoSignals: ReturnType<typeof geoConvergenceToSignal>[] = [];
+ if (!isInLearningMode()) {
+ const geoAlerts = detectGeoConvergence(this.ctx.seenGeoAlerts);
+ geoSignals = geoAlerts.map(geoConvergenceToSignal);
+ }
+
+ const keywordSpikeSignals = drainTrendingSignals();
+ const allSignals = [...signals, ...geoSignals, ...keywordSpikeSignals];
+ if (allSignals.length > 0) {
+ addToSignalHistory(allSignals);
+ situationEngine.observeSignals(allSignals);
+ evaluateWarThreat(allSignals);
+ (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(allSignals);
+ if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(allSignals);
+ }
+ } catch (error) {
+ console.error('[App] Correlation analysis failed:', error);
+ }
+  }
+
+  async loadFirmsData(): Promise<void> {
+ try {
+ const fireResult = await fetchAllFires(1);
+ if (fireResult.skipped) {
+ const firesPanel = this.ctx.panels['satellite-fires'];
+ if (firesPanel) {
+ showApiKeyGate(firesPanel, 'NASA_FIRMS_API_KEY', () => { void this.loadFirmsData(); });
+ }
+ this.ctx.statusPanel?.updateApi('FIRMS', { status: 'error' });
+ return;
+ }
+ const { regions, totalCount } = fireResult;
+ if (totalCount > 0) {
+ const flat = flattenFires(regions);
+ const stats = computeRegionStats(regions);
+ const satelliteFires = flat.map(f => ({
+ lat: f.location?.latitude ?? 0,
+ lon: f.location?.longitude ?? 0,
+ brightness: f.brightness,
+ frp: f.frp,
+ region: f.region,
+ acq_date: new Date(f.detectedAt).toISOString().slice(0, 10),
+ }));
+
+ signalAggregator.ingestSatelliteFires(satelliteFires);
+ ingestSatelliteFiresForCII(satelliteFires);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+
+ this.ctx.map?.setFires(toMapFires(flat));
+
+ (this.ctx.panels['satellite-fires'] as SatelliteFiresPanel)?.update(stats, totalCount);
+
+ dataFreshness.recordUpdate('firms', totalCount);
+
+ updateAndCheck([
+ { type: 'satellite_fires', region: 'global', count: totalCount },
+ ]).then(anomalies => {
+ if (anomalies.length > 0) {
+ signalAggregator.ingestTemporalAnomalies(anomalies);
+ ingestTemporalAnomaliesForCII(anomalies);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ }
+ }).catch(() => {});
+ } else {
+ ingestSatelliteFiresForCII([]);
+ (this.ctx.panels.cii as CIIPanel)?.refresh();
+ (this.ctx.panels['satellite-fires'] as SatelliteFiresPanel)?.update([], 0);
+ }
+ this.ctx.statusPanel?.updateApi('FIRMS', { status: 'ok' });
+ } catch (error) {
+ console.warn('[App] FIRMS load failed:', error);
+ (this.ctx.panels['satellite-fires'] as SatelliteFiresPanel)?.update([], 0);
+ this.ctx.statusPanel?.updateApi('FIRMS', { status: 'error' });
+ dataFreshness.recordError('firms', String(error));
+ }
+  }
+
+  async loadInpeFires(): Promise<void> {
+ try {
+ const hotspots = await fetchInpeFires();
+ (this.ctx.panels['satellite-fires'] as SatelliteFiresPanel | undefined)?.updateInpe(hotspots);
+ } catch (error) {
+ console.warn('[inpe-fires] fetch failed', error);
+ (this.ctx.panels['satellite-fires'] as SatelliteFiresPanel | undefined)?.updateInpe([]);
+ }
+  }
+
+  async loadPizzInt(): Promise<void> {
+ try {
+ const [status, tensions] = await Promise.all([
+ fetchPizzIntStatus(),
+ fetchGdeltTensions()
+ ]);
+
+ if (status.locationsMonitored === 0) {
+ this.ctx.pizzintIndicator?.hide();
+ this.ctx.statusPanel?.updateApi('PizzINT', { status: 'error' });
+ dataFreshness.recordError('pizzint', 'No monitored locations returned');
+ return;
+ }
+
+ this.ctx.pizzintIndicator?.show();
+ this.ctx.pizzintIndicator?.updateStatus(status);
+ this.ctx.pizzintIndicator?.updateTensions(tensions);
+ this.ctx.statusPanel?.updateApi('PizzINT', { status: 'ok' });
+ dataFreshness.recordUpdate('pizzint', Math.max(status.locationsMonitored, tensions.length));
+ } catch (error) {
+ console.error('[App] PizzINT load failed:', error);
+ this.ctx.pizzintIndicator?.hide();
+ this.ctx.statusPanel?.updateApi('PizzINT', { status: 'error' });
+ dataFreshness.recordError('pizzint', String(error));
+ }
+  }
+
+  syncDataFreshnessWithLayers(): void {
+ for (const [layer, sourceIds] of Object.entries(LAYER_TO_SOURCE)) {
+ const enabled = this.ctx.mapLayers[layer as keyof MapLayers] ?? false;
+ for (const sourceId of sourceIds) {
+ dataFreshness.setEnabled(sourceId as DataSourceId, enabled);
+ }
+ }
+
+ if (!isAisConfigured()) {
+ dataFreshness.setEnabled('ais', false);
+ }
+ if (isOutagesConfigured() === false) {
+ dataFreshness.setEnabled('outages', false);
+ }
+  }
+
+  private static readonly HAPPY_ITEMS_CACHE_KEY = 'happy-all-items';
+
+  async hydrateHappyPanelsFromCache(): Promise<void> {
+ try {
+ type CachedItem = Omit<NewsItem, 'pubDate'> & { pubDate: number };
+ const entry = await getPersistentCache<CachedItem[]>(DataLoaderManager.HAPPY_ITEMS_CACHE_KEY);
+ if (!entry?.data || entry.data.length === 0) return;
+ if (Date.now() - entry.updatedAt > 24 * 60 * 60 * 1000) return;
+
+ const items: NewsItem[] = entry.data.map(item => ({
+ ...item,
+ pubDate: new Date(item.pubDate),
+ }));
+
+ const scienceSources = new Set(['GNN Science', 'ScienceDaily', 'Nature News', 'Live Science', 'New Scientist', 'Singularity Hub', 'Human Progress', 'Greater Good (Berkeley)']);
+ this.ctx.breakthroughsPanel?.setItems(
+ items.filter(item => scienceSources.has(item.source) || item.happyCategory === 'science-health')
+ );
+ this.ctx.heroPanel?.setHeroStory(
+ items.filter(item => item.happyCategory === 'humanity-kindness')
+ .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())[0]
+ );
+ this.ctx.digestPanel?.setStories(
+ [...items].sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime()).slice(0, 5)
+ );
+ this.ctx.positivePanel?.renderPositiveNews(items);
+ } catch (error) {
+ console.warn('[App] Happy panel cache hydration failed:', error);
+ }
+  }
+
+  private async loadHappySupplementaryAndRender(): Promise<void> {
+ if (!this.ctx.positivePanel) return;
+
+ const curated = [...this.ctx.happyAllItems];
+ this.ctx.positivePanel.renderPositiveNews(curated);
+
+ let supplementary: NewsItem[] = [];
+ try {
+ const gdeltTopics = await fetchAllPositiveTopicIntelligence();
+ const gdeltItems: NewsItem[] = gdeltTopics.flatMap(topic =>
+ topic.articles.map(article => ({
+ source: 'GDELT',
+ title: article.title,
+ link: article.url,
+ pubDate: article.date ? new Date(article.date) : new Date(),
+ isAlert: false,
+ imageUrl: article.image || undefined,
+ happyCategory: classifyNewsItem('GDELT', article.title),
+ }))
+ );
+
+ supplementary = await filterBySentiment(gdeltItems);
+ } catch (error) {
+ console.warn('[App] Happy supplementary pipeline failed, using curated only:', error);
+ }
+
+ if (supplementary.length > 0) {
+ const merged = [...curated, ...supplementary];
+ merged.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+ this.ctx.positivePanel.renderPositiveNews(merged);
+ }
+
+ const scienceSources = new Set(['GNN Science', 'ScienceDaily', 'Nature News', 'Live Science', 'New Scientist', 'Singularity Hub', 'Human Progress', 'Greater Good (Berkeley)']);
+ const scienceItems = this.ctx.happyAllItems.filter(item =>
+ scienceSources.has(item.source) || item.happyCategory === 'science-health'
+ );
+ this.ctx.breakthroughsPanel?.setItems(scienceItems);
+
+ const heroItem = this.ctx.happyAllItems
+ .filter(item => item.happyCategory === 'humanity-kindness')
+ .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())[0];
+ this.ctx.heroPanel?.setHeroStory(heroItem);
+
+ const digestItems = [...this.ctx.happyAllItems]
+ .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
+ .slice(0, 5);
+ this.ctx.digestPanel?.setStories(digestItems);
+
+ setPersistentCache(
+ DataLoaderManager.HAPPY_ITEMS_CACHE_KEY,
+ this.ctx.happyAllItems.map(item => ({ ...item, pubDate: item.pubDate.getTime() }))
+ ).catch(() => {});
+  }
+
+  private async loadPositiveEvents(): Promise<void> {
+ const gdeltEvents = await fetchPositiveGeoEvents();
+ const rssEvents = geocodePositiveNewsItems(
+ this.ctx.happyAllItems.map(item => ({
+ title: item.title,
+ category: item.happyCategory,
+ }))
+ );
+ const seen = new Set<string>();
+ const merged = [...gdeltEvents, ...rssEvents].filter(e => {
+ if (seen.has(e.name)) return false;
+ seen.add(e.name);
+ return true;
+ });
+ this.ctx.map?.setPositiveEvents(merged);
+  }
+
+  private loadKindnessData(): void {
+ const kindnessItems = fetchKindnessData(
+ this.ctx.happyAllItems.map(item => ({
+ title: item.title,
+ happyCategory: item.happyCategory,
+ }))
+ );
+ this.ctx.map?.setKindnessData(kindnessItems);
+  }
+
+  private async loadProgressData(): Promise<void> {
+ const datasets = await fetchProgressData();
+ this.ctx.progressPanel?.setData(datasets);
+  }
+
+  private async loadSpeciesData(): Promise<void> {
+ const species = await fetchConservationWins();
+ this.ctx.speciesPanel?.setData(species);
+ this.ctx.map?.setSpeciesRecoveryZones(species);
+ if (SITE_VARIANT === 'happy' && species.length > 0) {
+ checkMilestones({
+ speciesRecoveries: species.map(s => ({ name: s.commonName, status: s.recoveryStatus })),
+ newSpeciesCount: species.length,
+ });
+ }
+  }
+
+  private async loadRenewableData(): Promise<void> {
+ const data = await fetchRenewableEnergyData();
+ this.ctx.renewablePanel?.setData(data);
+ if (SITE_VARIANT === 'happy' && data?.globalPercentage) {
+ checkMilestones({
+ renewablePercent: data.globalPercentage,
+ });
+ }
+ try {
+ const capacity = await fetchEnergyCapacity();
+ this.ctx.renewablePanel?.setCapacityData(capacity);
+ } catch {
+ // EIA failure does not break the existing World Bank gauge
+ }
+  }
+
+  async loadSecurityAdvisories(): Promise<void> {
+ try {
+ const result = await fetchSecurityAdvisories();
+ if (result.ok) {
+ (this.ctx.panels['security-advisories'] as SecurityAdvisoriesPanel)?.setData(result.advisories);
+ this.ctx.intelligenceCache.advisories = result.advisories;
+ ingestAdvisoriesForCII(result.advisories);
+ }
+ } catch (error) {
+ console.error('[App] Security advisories fetch failed:', error);
+ }
+  }
+
+  async loadTelegramIntel(): Promise<void> {
+ try {
+ const result = await fetchTelegramFeed();
+ (this.ctx.panels['telegram-intel'] as TelegramIntelPanel)?.setData(result);
+ } catch (error) {
+ console.error('[App] Telegram intel fetch failed:', error);
+ }
+  }
+
+  async loadTsunamiAlerts(): Promise<void> {
+ try {
+ const { fetchTsunamiAlerts } = await import('@/services/tsunami-alerts');
+ const { data } = await withOfflineCache('tsunami-alerts', () => fetchTsunamiAlerts(), 1 * 60 * 60 * 1000);
+ (this.ctx.panels['tsunami-alerts'] as TsunamiAlertsPanel | undefined)?.update(data);
+ unifiedAlertStore.ingest(data.map(normalizeTsunamiAlert));
+ } catch (error) {
+ console.error('[App] Tsunami alerts fetch failed:', error);
+ }
+  }
+
+  async loadTropicalCyclones(): Promise<void> {
+ try {
+ const stormContext = getStormPreparednessContext();
+ const [cyclonesResult, buoyResult, reconResult] = await Promise.allSettled([
+ fetchTropicalCyclones(),
+ fetchBuoyAlerts(),
+ fetchHurricaneRecon(),
+ ]);
+ const data = cyclonesResult.status === 'fulfilled' ? cyclonesResult.value : stormContext.tropicalCyclones;
+ const buoyAlerts = buoyResult.status === 'fulfilled' ? buoyResult.value : stormContext.buoyAlerts;
+ const reconFixes = reconResult.status === 'fulfilled' ? reconResult.value : stormContext.reconFixes;
+ (this.ctx.panels['tropical-cyclones'] as TropicalCyclonesPanel | undefined)?.update(data);
+ updateStormPreparednessContext({
+ tropicalCyclones: data,
+ buoyAlerts,
+ reconFixes,
+ });
+ void evaluateDisasterTrigger(
+ this.ctx.intelligenceCache.gdacsAlerts ?? [],
+ this.ctx.intelligenceCache.earthquakes ?? [],
+ getStormPreparednessSummary(),
+ );
+ } catch (error) {
+ console.error('[App] Tropical cyclones fetch failed:', error);
+ }
+  }
+
+  async loadFoodInsecurity(): Promise<void> {
+ try {
+ const { fetchFoodInsecurityAlerts: fetchFoodInsecurity } = await import('@/services/food-insecurity');
+ const data = await fetchFoodInsecurity();
+ (this.ctx.panels['food-insecurity'] as FoodInsecurityPanel | undefined)?.update(data);
+ } catch (error) {
+ console.error('[App] Food insecurity fetch failed:', error);
+ }
+  }
+
+  async loadAdsb(): Promise<void> {
+ try {
+ const snapshot = await fetchAdsbSnapshot();
+ this.ctx.map?.setAdsbFlights(snapshot.flights);
+ this.ctx.map?.setLayerReady?.('adsb', snapshot.flights.length > 0);
+ (this.ctx.panels['air-traffic'] as AirTrafficPanel | undefined)?.update(snapshot);
+ } catch (error) {
+ this.ctx.map?.setLayerReady?.('adsb', false);
+ dataFreshness.recordError('adsb', error instanceof Error ? error.message : 'Unknown error');
+ }
+  }
+
+  async loadFAACameras(): Promise<void> {
+ try {
+ const [raw, nwsResult, gdacsResult] = await Promise.all([
+ fetchFAACameras(),
+ withOfflineCache('nws-alerts', () => fetchNWSAlerts(), 1 * 60 * 60 * 1000),
+ withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000),
+ ]);
+ const scored = scoreCamerasAgainstAlerts(raw, nwsResult.data, gdacsResult.data);
+ this.ctx.map?.setFAACameras(scored);
+ (this.ctx.panels['faa-weather-cams'] as FAAWeatherCamsPanel | undefined)?.refresh();
+ const alertCams = scored.filter(c => c.alertProximityMi !== null);
+ if (alertCams.length >= 2) {
+ void fetch(`${getApiBaseUrl()}/api/faa-cam-digest`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({
+ cameras: alertCams.slice(0, 6).map(c => ({
+ name: c.name,
+ location: c.state,
+ alertLabel: c.alertLabel,
+ })),
+ }),
+ signal: AbortSignal.timeout(25000),
+ })
+ .then(r => r.ok ? r.json() : null)
+ .then((data: { digest?: string } | null) => {
+ if (data?.digest) {
+ (this.ctx.panels['faa-weather-cams'] as FAAWeatherCamsPanel | undefined)
+ ?.setDigest(data.digest);
+ }
+ })
+ .catch(() => {});
+ }
+ } catch (error) {
+ console.error('[App] FAA cameras fetch failed:', error);
+ }
+  }
+
+  async loadInfrastructure(): Promise<void> {
+ try {
+ const assets = await fetchNearbyInfrastructure(50);
+ (this.ctx.panels['infrastructure'] as InfrastructurePanel | undefined)?.update(assets);
+ } catch (error) {
+ console.warn('[infrastructure] fetch failed', error);
+ (this.ctx.panels['infrastructure'] as InfrastructurePanel | undefined)?.update([]);
+ }
+  }
+
+  async loadIswReports(): Promise<void> {
+ try {
+ const reports = await fetchIswReports();
+ (this.ctx.panels['isw-reports'] as IswReportsPanel | undefined)?.updateReports(reports);
+ } catch (error) {
+ console.warn('[isw-reports] fetch failed', error);
+ (this.ctx.panels['isw-reports'] as IswReportsPanel | undefined)?.updateReports([]);
+ }
+  }
+
+  async loadNatoNews(): Promise<void> {
+ try {
+ const items = await fetchNatoNews();
+ (this.ctx.panels['nato-news'] as NatoNewsPanel | undefined)?.updateNews(items);
+ } catch (error) {
+ console.warn('[nato-news] fetch failed', error);
+ (this.ctx.panels['nato-news'] as NatoNewsPanel | undefined)?.updateNews([]);
+ }
+  }
+
+  async loadDodNews(): Promise<void> {
+ try {
+ const items = await fetchDodNews();
+ (this.ctx.panels['dod-news'] as DodNewsPanel | undefined)?.updateNews(items);
+ } catch (error) {
+ console.warn('[dod-news] fetch failed', error);
+ (this.ctx.panels['dod-news'] as DodNewsPanel | undefined)?.updateNews([]);
+ }
+  }
+
+  async loadReliefWebCrises(): Promise<void> {
+ try {
+ const crises = await fetchReliefWebCrises();
+ (this.ctx.panels['reliefweb'] as ReliefWebPanel | undefined)?.updateReports(crises);
+ } catch (error) {
+ console.warn('[reliefweb] fetch failed', error);
+ (this.ctx.panels['reliefweb'] as ReliefWebPanel | undefined)?.updateReports([]);
+ }
+  }
+
+  async loadBellingcat(): Promise<void> {
+ try {
+ const posts = await fetchBellingcatOsint();
+ (this.ctx.panels['bellingcat'] as BellingcatPanel | undefined)?.updatePosts(posts);
+ } catch (error) {
+ console.warn('[bellingcat] fetch failed', error);
+ (this.ctx.panels['bellingcat'] as BellingcatPanel | undefined)?.updatePosts([]);
+ }
+  }
+
+  async loadTravelWarnings(): Promise<void> {
+ try {
+ const [fcdo, dfat, gac, convergence] = await Promise.all([
+ fetchFcdoWarnings(),
+ fetchDfatWarnings(),
+ fetchGacWarnings(),
+ fetchGovWarningConvergence(),
+ ]);
+ const alerts = getConvergenceAlerts(convergence);
+ (this.ctx.panels['fcdo-warnings'] as FcdoWarningsPanel | undefined)?.updateWarnings(fcdo);
+ (this.ctx.panels['dfat-warnings'] as DfatWarningsPanel | undefined)?.updateWarnings(dfat);
+ (this.ctx.panels['gac-warnings'] as GacWarningsPanel | undefined)?.updateWarnings(gac);
+ (this.ctx.panels['gov-convergence'] as GovConvergencePanel | undefined)?.updateResults(alerts);
+ } catch (error) {
+ console.warn('[travel-warnings] fetch failed', error);
+ }
+  }
+
+  async loadEmscSeismic(): Promise<void> {
+ try {
+ const events = await fetchEmscSeismic();
+ (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents(events);
+ } catch (error) {
+ console.warn('[emsc-seismic] fetch failed', error);
+ (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents([]);
+ }
+  }
+
+  async loadAcapsCrises(): Promise<void> {
+ try {
+ const crises = await fetchAcapsCrises();
+ (this.ctx.panels['acaps'] as AcapsPanel | undefined)?.updateCrises(crises);
+ } catch (error) {
+ console.warn('[acaps] fetch failed', error);
+ (this.ctx.panels['acaps'] as AcapsPanel | undefined)?.updateCrises([]);
+ }
+  }
+
+  async loadLiveUaMap(): Promise<void> {
+ try {
+ const events = await fetchLiveUaMap();
+ (this.ctx.panels['liveuamap'] as LiveUaMapPanel | undefined)?.updateEvents(events);
+ } catch (error) {
+ console.warn('[liveuamap] fetch failed', error);
+ (this.ctx.panels['liveuamap'] as LiveUaMapPanel | undefined)?.updateEvents([]);
+ }
+  }
+
+  async loadDebrisReentries(): Promise<void> {
+ try {
+ const report = await fetchDebrisReentries();
+ (this.ctx.panels['aerospace-reentry'] as AerospaceReentryPanel | undefined)?.updatePredictions(report.predictions);
+ } catch (error) {
+ console.warn('[aerospace-reentry] fetch failed', error);
+ (this.ctx.panels['aerospace-reentry'] as AerospaceReentryPanel | undefined)?.updatePredictions([]);
+ }
+  }
+
+  async loadAmtrakAlerts(): Promise<void> {
+ try {
+ const alerts = await fetchAmtrakAlerts();
+ (this.ctx.panels['amtrak-alerts'] as AmtrakAlertsPanel | undefined)?.updateAlerts(alerts);
+ } catch (error) {
+ console.warn('[amtrak-alerts] fetch failed', error);
+ (this.ctx.panels['amtrak-alerts'] as AmtrakAlertsPanel | undefined)?.updateAlerts([]);
+ }
+  }
+
+  async loadAvalancheHazard(): Promise<void> {
+ try {
+ const report = await fetchAvalancheHazard();
+ (this.ctx.panels['avalanche-hazard'] as AvalancheHazardPanel | undefined)?.updateForecasts(report.forecasts);
+ } catch (error) {
+ console.warn('[avalanche-hazard] fetch failed', error);
+ (this.ctx.panels['avalanche-hazard'] as AvalancheHazardPanel | undefined)?.updateForecasts([]);
+ }
+  }
+
+  async loadArmsTransfers(): Promise<void> {
+ try {
+ const transfers = await fetchArmsTransfers();
+ (this.ctx.panels['dsca-arms'] as DscaArmsPanel | undefined)?.updateTransfers(transfers);
+ } catch (error) {
+ console.warn('[dsca-arms] fetch failed', error);
+ (this.ctx.panels['dsca-arms'] as DscaArmsPanel | undefined)?.updateTransfers([]);
+ }
+  }
+
+  async loadEcdcSurveillance(): Promise<void> {
+ try {
+ const alerts = await fetchEcdcAlerts();
+ (this.ctx.panels['ecdc-surveillance'] as EcdcSurveillancePanel | undefined)?.updateAlerts(alerts);
+ } catch (error) {
+ console.warn('[ecdc-surveillance] fetch failed', error);
+ (this.ctx.panels['ecdc-surveillance'] as EcdcSurveillancePanel | undefined)?.updateAlerts([]);
+ }
+  }
+
+  async loadFdicFailures(): Promise<void> {
+ try {
+ const summary = await fetchBankFailures();
+ (this.ctx.panels['fdic-failures'] as FdicFailuresPanel | undefined)?.updateSummary(summary);
+ } catch (error) {
+ console.warn('[fdic-failures] fetch failed', error);
+ }
+  }
+
+  async loadHabsos(): Promise<void> {
+ try {
+ const observations = await fetchHabObservations();
+ (this.ctx.panels['habsos'] as HabsosPanel | undefined)?.updateObservations(observations);
+ } catch (error) {
+ console.warn('[habsos] fetch failed', error);
+ (this.ctx.panels['habsos'] as HabsosPanel | undefined)?.updateObservations([]);
+ }
+  }
+
+  async loadUnSecurityCouncil(): Promise<void> {
+ try {
+ const items = await fetchUnSecurityCouncil();
+ (this.ctx.panels['un-security-council'] as UnSecurityCouncilPanel | undefined)?.updateItems(items);
+ } catch (error) {
+ console.warn('[un-security-council] fetch failed', error);
+ (this.ctx.panels['un-security-council'] as UnSecurityCouncilPanel | undefined)?.updateItems([]);
+ }
+  }
+
+  async loadWildfireSmoke(): Promise<void> {
+ try {
+ const report = await fetchWildfireSmoke();
+ (this.ctx.panels['wildfire-smoke'] as WildfireSmokePanel | undefined)?.updateReport(report);
+ } catch (error) {
+ console.warn('[wildfire-smoke] fetch failed', error);
+ }
+  }
+
+  async loadCentralBankCalendar(): Promise<void> {
+ try {
+ const meetings = getUpcomingMeetings();
+ (this.ctx.panels['central-bank-calendar'] as CentralBankCalendarPanel | undefined)?.updateMeetings(meetings);
+ } catch (error) {
+ console.warn('[central-bank-calendar] load failed', error);
+ }
+  }
+
+  async loadCongressDefense(): Promise<void> {
+ try {
+ const items = await fetchCongressDefense();
+ (this.ctx.panels['congress-defense'] as any)?.update(items);
+ } catch (error) {
+ console.warn('[congress-defense] fetch failed', error);
+ (this.ctx.panels['congress-defense'] as any)?.update([]);
+ }
+  }
+
+  async loadCombatantCommands(): Promise<void> {
+ try {
+ const releases = await fetchCombatantCommands();
+ (this.ctx.panels['combatant-commands'] as any)?.update(releases);
+ } catch (error) {
+ console.warn('[combatant-commands] fetch failed', error);
+ (this.ctx.panels['combatant-commands'] as any)?.update([]);
+ }
+  }
+
+  async loadForeignMilNews(): Promise<void> {
+ try {
+ const items = await fetchForeignMilNews();
+ (this.ctx.panels['foreign-mil-news'] as any)?.update(items);
+ } catch (error) {
+ console.warn('[foreign-mil-news] fetch failed', error);
+ (this.ctx.panels['foreign-mil-news'] as any)?.update([]);
+ }
+  }
+
+  async loadSpcMesoscale(): Promise<void> {
+ try {
+ const discussions = await fetchMesoscaleDiscussions();
+ (this.ctx.panels['spc-mesoscale'] as any)?.update(discussions);
+ } catch (error) {
+ console.warn('[spc-mesoscale] fetch failed', error);
+ (this.ctx.panels['spc-mesoscale'] as any)?.update([]);
+ }
+  }
+
+  async loadThreatIntelHub(): Promise<void> {
+ try {
+ const [greyNoise, otxPulses, abuseIp, urlscan] = await Promise.all([
+ fetchGreyNoise(),
+ fetchOtxPulses(),
+ fetchAbuseIpDb(),
+ fetchUrlscanFeed(),
+ ]);
+ (this.ctx.panels['threat-intel-hub'] as ThreatIntelHubPanel | undefined)?.update({
+ greyNoise, otxPulses, abuseIp, urlscan,
+ });
+ } catch (error) {
+ console.error('[ThreatIntelHub] load error:', error);
+ }
+  }
+
+  async loadGeoIntel(): Promise<void> {
+ try {
+ const [acled, military] = await Promise.all([
+ fetchAcledEvents(),
+ fetchAdsbMilitary(),
+ ]);
+ this.ctx.acledEvents = acled;
+ this.ctx.adsbMilitary = military;
+ (this.ctx.panels['geo-intel'] as GeoIntelPanel | undefined)?.update({
+ acled,
+ military,
+ });
+ } catch (error) {
+ console.error('[GeoIntel] load error:', error);
+ }
+  }
+
+  async loadExtendedForecast(): Promise<void> {
+ try {
+ const forecast = await fetchExtendedForecast(40.71, -74.01, 'New York');
+ (this.ctx.panels['extended-forecast'] as ExtendedForecastPanel | undefined)?.update(forecast);
+ } catch (error) {
+ console.warn('[extended-forecast] fetch failed', error);
+ }
+  }
+
+  async loadWeatherRadar(): Promise<void> {
+ try {
+ const state = await fetchRadarFrames();
+ (this.ctx.panels['weather-radar'] as WeatherRadarPanel | undefined)?.update(state);
+ this.ctx.map?.setRadarState(state);
+ } catch (error) {
+ console.warn('[weather-radar] fetch failed', error);
+ }
+  }
+
+  async loadTidePredictions(): Promise<void> {
+ try {
+ const defaultStation = TIDE_STATIONS[0]!;
+ const data = await fetchTidePredictions(defaultStation.id);
+ (this.ctx.panels['tide-predictions'] as TidePredictionsPanel | undefined)?.update(data);
+ } catch (error) {
+ console.warn('[tide-predictions] fetch failed', error);
+ }
+  }
+
+  async loadPollenData(): Promise<void> {
+ try {
+ const readings = await fetchPollenData();
+ (this.ctx.panels['pollen'] as PollenPanel | undefined)?.update(readings);
+ } catch (error) {
+ console.warn('[pollen] fetch failed', error);
+ }
+  }
+
+  async loadLightning(): Promise<void> {
+ try {
+ const strikes = await fetchLightningStrikes();
+ this.ctx.map?.setLightningStrikes(strikes);
+ } catch (error) {
+ console.warn('[lightning] fetch failed', error);
+ }
+  }
+
+  async loadRedFlagWarnings(): Promise<void> {
+ try {
+ const [warnings] = await Promise.all([
+ fetchRedFlagWarnings(),
+ fetchFireWeatherOutlook(),
+ ]);
+ this.ctx.map?.setRedFlagWarnings(warnings);
+ } catch (error) {
+ console.warn('[red-flag-warnings] fetch failed', error);
+ }
+  }
+
+  async loadSatellites(): Promise<void> {
+ try {
+ const catalog = await fetchSatelliteCatalog();
+ if (catalog.length === 0) return;
+
+ satellitePropagator.start(catalog);
+ satellitePropagator.onPositions((positions) => {
+ this.ctx.map?.setSatellitePositions(positions, catalog);
+ });
+ } catch (error) {
+ console.warn('[satellites] fetch failed', error);
+ }
+  }
+
+  async loadDarkWeb(): Promise<void> {
+ try {
+ const [breaches, tor] = await Promise.all([
+ fetchHibpBreaches(),
+ fetchTorMetrics(),
+ ]);
+ (this.ctx.panels['dark-web'] as DarkWebPanel | undefined)?.update({
+ breaches, tor,
+ });
+ } catch (error) {
+ console.error('[DarkWeb] load error:', error);
+ }
+  }
+}

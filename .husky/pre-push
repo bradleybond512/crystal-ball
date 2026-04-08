@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+echo "Running version sync check..."
+npm run version:check || exit 1
+
+echo "Running repo secret scan..."
+npm run secrets:scan || exit 1
+
+REMOTE_NAME="${1:-}"
+PUSH_REFS="$(cat)"
+
+echo "Running release push guard..."
+printf '%s\n' "$PUSH_REFS" | node scripts/release-push-guard.mjs --remote "$REMOTE_NAME" || exit 1

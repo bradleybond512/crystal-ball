@@ -1,0 +1,1157 @@
+import { FEEDS, INTEL_SOURCES, SOURCE_REGION_MAP } from '@/config/feeds';
+import { PANEL_CATEGORY_MAP } from '@/config/panels';
+import { SITE_VARIANT } from '@/config/variant';
+import { LANGUAGES, changeLanguage, getCurrentLanguage, t } from '@/services/i18n';
+import { getAiFlowSettings, setAiFlowSetting, getStreamQuality, setStreamQuality, STREAM_QUALITY_OPTIONS } from '@/services/ai-flow-settings';
+import type { StreamQuality } from '@/services/ai-flow-settings';
+import { escapeHtml } from '@/utils/sanitize';
+import { trackLanguageChange } from '@/services/analytics';
+import type { PanelConfig } from '@/types';
+import { RuntimeConfigPanel } from './RuntimeConfigPanel';
+import type { StatusPanel } from './StatusPanel';
+import { isYouTubeConnected, signInToYouTube, signOutOfYouTube, initYouTubeAccountListeners } from '@/services/youtube-account';
+import { getApiBaseUrl } from '@/services/runtime';
+import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
+import {
+  getSavedPlaces,
+  removeSavedPlace,
+  setPrimarySavedPlace,
+  subscribeSavedPlaces,
+} from '@/services/saved-places';
+import {
+  loadProximityConfig,
+  saveProximityConfig,
+  setLocationFromGps,
+  setLocationManual,
+} from '@/services/proximity-filter';
+
+const GEAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+
+const DESKTOP_RELEASES_URL = 'https://github.com/bradleybond512/crystal-ball/releases';
+
+export interface UnifiedSettingsConfig {
+  getPanelSettings: () => Record<string, PanelConfig>;
+  togglePanel: (key: string) => void;
+  setPanelsEnabled: (keys: string[], enabled: boolean) => void;
+  getDisabledSources: () => Set<string>;
+  toggleSource: (name: string) => void;
+  setSourcesEnabled: (names: string[], enabled: boolean) => void;
+  getAllSourceNames: () => string[];
+  getLocalizedPanelName: (key: string, fallback: string) => string;
+  isDesktopApp: boolean;
+  statusPanel?: StatusPanel | null;
+  openCreatePlace?: () => void;
+  openEditPlace?: (placeId: string) => void;
+}
+
+type TabId = 'general' | 'panels' | 'sources' | 'api-keys' | 'places' | 'status' | 'help' | 'debug';
+
+export class UnifiedSettings {
+  private overlay: HTMLElement;
+  private config: UnifiedSettingsConfig;
+  private activeTab: TabId = 'general';
+  private activeSourceRegion = 'all';
+  private sourceFilter = '';
+  private activePanelCategory = 'all';
+  private panelFilter = '';
+  private escapeHandler: (e: KeyboardEvent) => void;
+  private apiConfigPanel: RuntimeConfigPanel | null = null;
+  private _diagToken: string | null = null;
+  private _diagRefreshInterval: ReturnType<typeof setInterval> | null = null;
+  private placesDeleteConfirm: string | null = null;
+  private _gpsPermissionDenied = false;
+
+  constructor(config: UnifiedSettingsConfig) {
+ this.config = config;
+
+ this.overlay = document.createElement('div');
+ this.overlay.className = 'modal-overlay';
+ this.overlay.id = 'unifiedSettingsModal';
+ this.overlay.setAttribute('role', 'dialog');
+ this.overlay.setAttribute('aria-label', t('header.settings'));
+
+ this.escapeHandler = (e: KeyboardEvent) => {
+ if (e.key === 'Escape') this.close();
+ };
+
+ // Event delegation on stable overlay element
+ // eslint-disable-next-line sonarjs/cognitive-complexity
+ this.overlay.addEventListener('click', (e) => {
+ const target = e.target as HTMLElement;
+
+ // Close on overlay background click
+ if (target === this.overlay) {
+ this.close();
+ return;
+ }
+
+ // Close button
+ if (target.closest('.unified-settings-close')) {
+ this.close();
+ return;
+ }
+
+ // Tab switching
+ const tab = target.closest<HTMLElement>('.unified-settings-tab');
+ if (tab?.dataset.tab) {
+ this.switchTab(tab.dataset.tab as TabId);
+ return;
+ }
+
+ // Panel category pill
+ const panelCatPill = target.closest<HTMLElement>('[data-panel-cat]');
+ if (panelCatPill?.dataset.panelCat) {
+ this.activePanelCategory = panelCatPill.dataset.panelCat;
+ this.panelFilter = '';
+ const searchInput = this.overlay.querySelector<HTMLInputElement>('.panels-search input');
+ if (searchInput) searchInput.value = '';
+ this.renderPanelCategoryPills();
+ this.renderPanelsTab();
+ return;
+ }
+
+ // Panel toggle
+ const panelItem = target.closest<HTMLElement>('.panel-toggle-item');
+ if (panelItem?.dataset.panel) {
+ this.config.togglePanel(panelItem.dataset.panel);
+ this.renderPanelsTab();
+ return;
+ }
+
+ if (target.closest('.panels-select-all')) {
+ this.config.setPanelsEnabled(this.getVisiblePanelKeys(), true);
+ this.renderPanelsTab();
+ return;
+ }
+
+ if (target.closest('.panels-select-none')) {
+ this.config.setPanelsEnabled(this.getVisiblePanelKeys(), false);
+ this.renderPanelsTab();
+ return;
+ }
+
+ // Source toggle
+ const sourceItem = target.closest<HTMLElement>('.source-toggle-item');
+ if (sourceItem?.dataset.source) {
+ this.config.toggleSource(sourceItem.dataset.source);
+ this.renderSourcesGrid();
+ this.updateSourcesCounter();
+ return;
+ }
+
+ // Region pill
+ const pill = target.closest<HTMLElement>('.unified-settings-region-pill');
+ if (pill?.dataset.region) {
+ this.activeSourceRegion = pill.dataset.region;
+ this.sourceFilter = '';
+ const searchInput = this.overlay.querySelector<HTMLInputElement>('.sources-search input');
+ if (searchInput) searchInput.value = '';
+ this.renderRegionPills();
+ this.renderSourcesGrid();
+ this.updateSourcesCounter();
+ return;
+ }
+
+ // Select All
+ if (target.closest('.sources-select-all')) {
+ const visible = this.getVisibleSourceNames();
+ this.config.setSourcesEnabled(visible, true);
+ this.renderSourcesGrid();
+ this.updateSourcesCounter();
+ return;
+ }
+
+ // Select None
+ if (target.closest('.sources-select-none')) {
+ const visible = this.getVisibleSourceNames();
+ this.config.setSourcesEnabled(visible, false);
+ this.renderSourcesGrid();
+ this.updateSourcesCounter();
+ return;
+ }
+
+ // Home Location
+ if (target.id === 'us-gps-location') {
+ const btn = target as HTMLButtonElement;
+ btn.textContent = 'Detecting…';
+ btn.disabled = true;
+ this._gpsPermissionDenied = false;
+ setLocationFromGps()
+ .then(() => { this._gpsPermissionDenied = false; this.refreshGeneralTab(); })
+ .catch((error: unknown) => {
+ const msg = error instanceof Error ? error.message : 'Could not detect location.';
+ this._gpsPermissionDenied = msg.includes('permission denied') || msg.includes('Permission denied');
+ this.refreshGeneralTab();
+ });
+ return;
+ }
+ if (target.id === 'us-open-location-settings') {
+ void invokeTauri<void>('open_system_prefs_location').catch(() => {
+ alert('Couldn\'t open System Settings. Go to System Settings \u2192 Privacy & Security \u2192 Location Services and enable Crystal Ball.');
+ });
+ return;
+ }
+ if (target.id === 'us-manual-location') {
+ const latInput = this.overlay.querySelector<HTMLInputElement>('#us-home-lat');
+ const lonInput = this.overlay.querySelector<HTMLInputElement>('#us-home-lon');
+ const labelInput = this.overlay.querySelector<HTMLInputElement>('#us-home-label');
+ const lat = Number.parseFloat(latInput?.value ?? '');
+ const lon = Number.parseFloat(lonInput?.value ?? '');
+ // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+ const label = labelInput?.value.trim() || `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+ if (!Number.isNaN(lat) && !Number.isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+ setLocationManual(lat, lon, label);
+ this.refreshGeneralTab();
+ }
+ return;
+ }
+ if (target.id === 'us-clear-location') {
+ const config = loadProximityConfig();
+ saveProximityConfig({ ...config, location: null, enabled: false });
+ this.refreshGeneralTab();
+ return;
+ }
+
+ // YouTube connect / disconnect
+ if (target.id === 'us-yt-connect') {
+ signInToYouTube();
+ return;
+ }
+ if (target.id === 'us-yt-disconnect') {
+ signOutOfYouTube();
+ return;
+ }
+
+ // Places tab actions
+ const placesAction = target.closest<HTMLElement>('[data-places-action]')?.dataset.placesAction;
+ if (placesAction) {
+ const placeId = target.closest<HTMLElement>('[data-place-id]')?.dataset.placeId;
+ if (placesAction === 'add') {
+ this.config.openCreatePlace?.();
+ return;
+ }
+ if (placesAction === 'edit' && placeId) {
+ this.config.openEditPlace?.(placeId);
+ return;
+ }
+ if (placesAction === 'delete' && placeId) {
+ this.placesDeleteConfirm = placeId;
+ this.renderPlacesTab();
+ return;
+ }
+ if (placesAction === 'delete-confirm' && placeId) {
+ removeSavedPlace(placeId);
+ this.placesDeleteConfirm = null;
+ return;
+ }
+ if (placesAction === 'delete-cancel') {
+ this.placesDeleteConfirm = null;
+ this.renderPlacesTab();
+ return;
+ }
+ if (placesAction === 'set-primary' && placeId) {
+ setPrimarySavedPlace(placeId);
+ return;
+ }
+ // eslint-disable-next-line sonarjs/no-redundant-jump
+ return;
+ }
+
+ // Debug tab buttons
+ if (target.id === 'us-open-logs') {
+ void tryInvokeTauri<string>('open_logs_folder');
+ return;
+ }
+ if (target.id === 'us-open-api-log') {
+ void tryInvokeTauri<string>('open_sidecar_log_file');
+ return;
+ }
+ if (target.id === 'us-refresh-traffic') {
+ void this._refreshTrafficLog();
+ return;
+ }
+ if (target.id === 'us-clear-traffic') {
+ void this._clearTrafficLog();
+ // eslint-disable-next-line sonarjs/no-redundant-jump
+ return;
+ }
+ });
+
+ // Handle input events for search
+ this.overlay.addEventListener('input', (e) => {
+ const target = e.target as HTMLInputElement;
+ if (target.closest('.panels-search')) {
+ this.panelFilter = target.value;
+ this.renderPanelsTab();
+ } else if (target.closest('.sources-search')) {
+ this.sourceFilter = target.value;
+ this.renderSourcesGrid();
+ this.updateSourcesCounter();
+ }
+ });
+
+ // Handle change events for toggles and language select
+ // eslint-disable-next-line sonarjs/cognitive-complexity
+ this.overlay.addEventListener('change', (e) => {
+ const target = e.target as HTMLInputElement;
+
+ // Stream quality select
+ if (target.id === 'us-stream-quality') {
+ setStreamQuality(target.value as StreamQuality);
+ return;
+ }
+
+ // Language select
+ if (target.closest('.unified-settings-lang-select')) {
+ trackLanguageChange(target.value);
+ void changeLanguage(target.value);
+ return;
+ }
+
+ if (target.id === 'us-cloud') {
+ setAiFlowSetting('cloudLlm', target.checked);
+ this.updateAiStatus();
+ } else if (target.id === 'us-browser') {
+ setAiFlowSetting('browserModel', target.checked);
+ const warn = this.overlay.querySelector('.ai-flow-toggle-warn') as HTMLElement;
+ if (warn) warn.style.display = target.checked ? 'block' : 'none';
+ this.updateAiStatus();
+ } else if (target.id === 'us-map-flash') {
+ setAiFlowSetting('mapNewsFlash', target.checked);
+ } else if (target.id === 'us-verbose-log') {
+ void this._toggleVerboseLog(target.checked);
+ } else if (target.id === 'us-fetch-debug') {
+ localStorage.setItem('wm-debug-log', target.checked ? '1' : '0');
+ } else if (target.id === 'us-auto-refresh') {
+ if (target.checked) this._startDebugAutoRefresh(); else this._stopDebugAutoRefresh();
+ }
+ });
+
+ this.render();
+ document.body.append(this.overlay);
+
+ if (this.config.isDesktopApp) {
+ initYouTubeAccountListeners(() => this.refreshGeneralTab());
+ }
+
+ subscribeSavedPlaces(() => {
+ if (this.activeTab === 'places') this.renderPlacesTab();
+ });
+  }
+
+  public open(tab?: TabId): void {
+ if (tab) this.activeTab = tab;
+ this.render();
+ this.overlay.classList.add('active');
+ localStorage.setItem('wm-settings-open', '1');
+ document.addEventListener('keydown', this.escapeHandler);
+  }
+
+  public close(): void {
+ this._stopDebugAutoRefresh();
+ this.overlay.classList.remove('active');
+ localStorage.removeItem('wm-settings-open');
+ document.removeEventListener('keydown', this.escapeHandler);
+  }
+
+  public refreshPanelToggles(): void {
+ if (this.activeTab === 'panels') this.renderPanelsTab();
+  }
+
+  private refreshGeneralTab(): void {
+ if (this.activeTab !== 'general') return;
+ const content = this.overlay.querySelector('[data-panel-id="general"]');
+ if (content) content.innerHTML = this.renderGeneralContent();
+  }
+
+  public getButton(): HTMLButtonElement {
+ const btn = document.createElement('button');
+ btn.className = 'unified-settings-btn';
+ btn.id = 'unifiedSettingsBtn';
+ btn.setAttribute('aria-label', t('header.settings'));
+ btn.innerHTML = GEAR_SVG;
+ btn.addEventListener('click', () => this.open());
+ return btn;
+  }
+
+  public destroy(): void {
+ this._stopDebugAutoRefresh();
+ document.removeEventListener('keydown', this.escapeHandler);
+ this.apiConfigPanel?.destroy();
+ this.apiConfigPanel = null;
+ this.overlay.remove();
+  }
+
+  private tabClass(id: TabId): string {
+ return `unified-settings-tab${this.activeTab === id ? ' active' : ''}`;
+  }
+
+  // eslint-disable-next-line sonarjs/cognitive-complexity
+  private render(): void {
+ const apiKeyPanelClass = `unified-settings-tab-panel${this.activeTab === 'api-keys' ? ' active' : ''}`;
+ const debugPanelClass = `unified-settings-tab-panel${this.activeTab === 'debug' ? ' active' : ''}`;
+
+ this.overlay.innerHTML = `
+ <div class="modal unified-settings-modal">
+ <div class="modal-header">
+ <span class="modal-title">${t('header.settings')}</span>
+ <button class="modal-close unified-settings-close">×</button>
+ </div>
+ <div class="unified-settings-tabs">
+ <button class="${this.tabClass('general')}" data-tab="general">${t('header.tabGeneral')}</button>
+ <button class="${this.tabClass('panels')}" data-tab="panels">${t('header.tabPanels')}</button>
+ <button class="${this.tabClass('sources')}" data-tab="sources">${t('header.tabSources')}</button>
+ ${this.config.isDesktopApp ? `<button class="${this.tabClass('api-keys')}" data-tab="api-keys">${t('header.tabApiKeys')}</button>` : ''}
+ <button class="${this.tabClass('places')}" data-tab="places">Places</button>
+ <button class="${this.tabClass('status')}" data-tab="status">${t('panels.status')}</button>
+ <button class="${this.tabClass('help')}" data-tab="help">Help</button>
+ ${this.config.isDesktopApp ? `<button class="${this.tabClass('debug')}" data-tab="debug">Debug</button>` : ''}
+ </div>
+ <div class="unified-settings-tab-panel${this.activeTab === 'general' ? ' active' : ''}" data-panel-id="general">
+ ${this.renderGeneralContent()}
+ </div>
+ <div class="unified-settings-tab-panel${this.activeTab === 'panels' ? ' active' : ''}" data-panel-id="panels">
+ <div class="unified-settings-region-wrapper">
+ <div class="unified-settings-region-bar" id="usPanelCatBar"></div>
+ </div>
+ <div class="panels-search">
+ <input type="text" placeholder="${t('header.filterPanels')}" value="${escapeHtml(this.panelFilter)}" />
+ </div>
+ <div class="panel-toggle-grid" id="usPanelToggles"></div>
+ <div class="sources-footer panels-footer">
+ <span class="sources-counter panels-counter" id="usPanelsCounter"></span>
+ <button class="panels-select-all">${t('common.selectAll')}</button>
+ <button class="panels-select-none">${t('common.selectNone')}</button>
+ </div>
+ </div>
+ <div class="unified-settings-tab-panel${this.activeTab === 'sources' ? ' active' : ''}" data-panel-id="sources">
+ <div class="unified-settings-region-wrapper">
+ <div class="unified-settings-region-bar" id="usRegionBar"></div>
+ </div>
+ <div class="sources-search">
+ <input type="text" placeholder="${t('header.filterSources')}" value="${escapeHtml(this.sourceFilter)}" />
+ </div>
+ <div class="sources-toggle-grid" id="usSourceToggles"></div>
+ <div class="sources-footer">
+ <span class="sources-counter" id="usSourcesCounter"></span>
+ <button class="sources-select-all">${t('common.selectAll')}</button>
+ <button class="sources-select-none">${t('common.selectNone')}</button>
+ </div>
+ </div>
+ ${this.config.isDesktopApp ? `<div class="${apiKeyPanelClass}" data-panel-id="api-keys"></div>` : ''}
+ <div class="unified-settings-tab-panel${this.activeTab === 'places' ? ' active' : ''}" data-panel-id="places">
+ <div class="us-places-content" id="usPlacesContent"></div>
+ </div>
+ <div class="unified-settings-tab-panel${this.activeTab === 'status' ? ' active' : ''}" data-panel-id="status">
+ <div class="us-status-content" id="usStatusContent"></div>
+ </div>
+ <div class="unified-settings-tab-panel${this.activeTab === 'help' ? ' active' : ''}" data-panel-id="help">
+ ${this.renderHelpContent()}
+ </div>
+ ${this.config.isDesktopApp ? `<div class="${debugPanelClass}" data-panel-id="debug">${this.renderDebugContent()}</div>` : ''}
+ </div>
+ `;
+
+ // Mount RuntimeConfigPanel content into API Keys tab (desktop only)
+ if (this.config.isDesktopApp) {
+ const apiContainer = this.overlay.querySelector<HTMLElement>('[data-panel-id="api-keys"]');
+ if (apiContainer) {
+ this.apiConfigPanel ??= new RuntimeConfigPanel({ mode: 'full', buffered: false });
+ apiContainer.append(this.apiConfigPanel.getContentElement());
+ }
+ }
+
+ // Populate dynamic sections after innerHTML is set
+ this.renderPanelCategoryPills();
+ this.renderPanelsTab();
+ this.renderRegionPills();
+ this.renderSourcesGrid();
+ this.updateSourcesCounter();
+ this.renderStatusTab();
+ this.renderPlacesTab();
+ if (!this.config.isDesktopApp) this.updateAiStatus();
+  }
+
+  private switchTab(tab: TabId): void {
+ if (this.activeTab === 'debug' && tab !== 'debug') {
+ this._stopDebugAutoRefresh();
+ }
+ this.activeTab = tab;
+
+ // Update tab buttons
+ this.overlay.querySelectorAll('.unified-settings-tab').forEach(el => {
+ el.classList.toggle('active', (el as HTMLElement).dataset.tab === tab);
+ });
+
+ // Update tab panels
+ this.overlay.querySelectorAll('.unified-settings-tab-panel').forEach(el => {
+ el.classList.toggle('active', (el as HTMLElement).dataset.panelId === tab);
+ });
+
+ if (tab === 'debug') {
+ void this._refreshTrafficLog();
+ void this._syncVerboseState();
+ this._startDebugAutoRefresh();
+ }
+ if (tab === 'places') {
+ this.placesDeleteConfirm = null;
+ this.renderPlacesTab();
+ }
+  }
+
+  // eslint-disable-next-line sonarjs/cognitive-complexity
+  private renderGeneralContent(): string {
+ const settings = getAiFlowSettings();
+ const currentLang = getCurrentLanguage();
+
+ let html = '';
+
+ // Map section
+ html += `<div class="ai-flow-section-label">${t('components.insights.sectionMap')}</div>`;
+ html += this.toggleRowHtml('us-map-flash', t('components.insights.mapFlashLabel'), t('components.insights.mapFlashDesc'), settings.mapNewsFlash);
+
+ // AI Analysis section (web-only)
+ if (!this.config.isDesktopApp) {
+ html += `<div class="ai-flow-section-label">${t('components.insights.sectionAi')}</div>`;
+ html += this.toggleRowHtml('us-cloud', t('components.insights.aiFlowCloudLabel'), t('components.insights.aiFlowCloudDesc'), settings.cloudLlm);
+
+ html += this.toggleRowHtml('us-browser', t('components.insights.aiFlowBrowserLabel'), t('components.insights.aiFlowBrowserDesc'), settings.browserModel);
+ html += `<div class="ai-flow-toggle-warn" style="display:${settings.browserModel ? 'block' : 'none'}">${t('components.insights.aiFlowBrowserWarn')}</div>`;
+
+ // Ollama CTA
+ html += `
+ <div class="ai-flow-cta">
+ <div class="ai-flow-cta-title">${t('components.insights.aiFlowOllamaCta')}</div>
+ <div class="ai-flow-cta-desc">${t('components.insights.aiFlowOllamaCtaDesc')}</div>
+ <a href="${DESKTOP_RELEASES_URL}" target="_blank" rel="noopener noreferrer" class="ai-flow-cta-link">${t('components.insights.aiFlowDownloadDesktop')}</a>
+ </div>
+ `;
+ }
+
+ // Streaming quality section
+ const currentQuality = getStreamQuality();
+ html += `<div class="ai-flow-section-label">${t('components.insights.sectionStreaming')}</div>`;
+ html += `<div class="ai-flow-toggle-row">
+ <div class="ai-flow-toggle-label-wrap">
+ <div class="ai-flow-toggle-label">${t('components.insights.streamQualityLabel')}</div>
+ <div class="ai-flow-toggle-desc">${t('components.insights.streamQualityDesc')}</div>
+ </div>
+ </div>`;
+ html += `<select class="unified-settings-lang-select" id="us-stream-quality">`;
+ for (const opt of STREAM_QUALITY_OPTIONS) {
+ const selected = opt.value === currentQuality ? ' selected' : '';
+ html += `<option value="${opt.value}"${selected}>${opt.label}</option>`;
+ }
+ html += `</select>`;
+
+ // Home Location section
+ {
+ const proxConfig = loadProximityConfig();
+ const loc = proxConfig.location;
+ const locLabel = loc ? escapeHtml(loc.label) : 'Not set';
+ const locSource = loc ? ` (${escapeHtml(loc.source)})` : '';
+ const latVal = loc ? escapeHtml(String(loc.lat)) : '';
+ const lonVal = loc ? escapeHtml(String(loc.lon)) : '';
+ const labelVal = loc ? escapeHtml(loc.label) : '';
+ let deniedHtml = '';
+ if (this._gpsPermissionDenied) {
+ const openBtn = this.config.isDesktopApp
+ ? '<button id="us-open-location-settings" class="yt-account-btn connect" style="font-size:10px;padding:2px 8px;min-width:0;margin-left:4px;">Open Location Settings</button>'
+ : '';
+ deniedHtml = `<div style="font-size:11px;color:#ef4444;margin-top:4px;">Location permission denied.${openBtn}</div>`;
+ }
+ html += `<div class="ai-flow-section-label">Home Location</div>`;
+ html += `
+ <div class="ai-flow-toggle-row" style="flex-direction:column;align-items:stretch;">
+ <div style="display:flex;align-items:center;justify-content:space-between;">
+ <div class="ai-flow-toggle-label-wrap">
+ <div class="ai-flow-toggle-label">Current location</div>
+ <div class="ai-flow-toggle-desc">${locLabel}${locSource}</div>
+ </div>
+ <button id="us-gps-location" class="yt-account-btn connect" style="min-width:100px">Use GPS</button>
+ </div>
+ ${deniedHtml}
+ </div>
+ <div class="ai-flow-toggle-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+ <div class="ai-flow-toggle-label">Set manually</div>
+ <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+ <input id="us-home-lat" type="number" step="any" placeholder="Latitude" value="${latVal}" style="width:100px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <input id="us-home-lon" type="number" step="any" placeholder="Longitude" value="${lonVal}" style="width:110px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <input id="us-home-label" type="text" placeholder="Label (e.g. Home)" value="${labelVal}" style="width:130px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <button id="us-manual-location" class="yt-account-btn connect" style="min-width:50px">Set</button>
+ ${loc ? `<button id="us-clear-location" class="yt-account-btn disconnect" style="min-width:55px">Clear</button>` : ''}
+ </div>
+ </div>
+ `;
+ }
+
+ // YouTube Account section (desktop only)
+ if (this.config.isDesktopApp) {
+ const connected = isYouTubeConnected();
+ html += `<div class="ai-flow-section-label">YouTube Account</div>`;
+ html += `<div class="ai-flow-toggle-row yt-account-row">
+ <div class="ai-flow-toggle-label-wrap">
+ <div class="ai-flow-toggle-label">Sign in to YouTube</div>
+ <div class="ai-flow-toggle-desc">Use your subscription to avoid ads in live streams. Optional — cookies are shared with embedded players.</div>
+ </div>
+ <div class="yt-account-status">
+ ${connected
+ ? `<span class="yt-status-dot connected"></span><span class="yt-status-text">Connected</span><button id="us-yt-disconnect" class="yt-account-btn disconnect">Disconnect</button>`
+ : `<button id="us-yt-connect" class="yt-account-btn connect">Connect</button>`
+ }
+ </div>
+ </div>`;
+ }
+
+ // Language section
+ html += `<div class="ai-flow-section-label">${t('header.languageLabel')}</div>`;
+ html += `<select class="unified-settings-lang-select">`;
+ for (const lang of LANGUAGES) {
+ const selected = lang.code === currentLang ? ' selected' : '';
+ html += `<option value="${lang.code}"${selected}>${lang.flag} ${lang.label}</option>`;
+ }
+ html += `</select>`;
+
+ html += `<div class="ai-flow-section-label">Build Identity</div>`;
+ html += `
+ <div class="ai-flow-toggle-row">
+ <div class="ai-flow-toggle-label-wrap">
+ <div class="ai-flow-toggle-label">Version</div>
+ <div class="ai-flow-toggle-desc">v${escapeHtml(__APP_VERSION__)} • ${escapeHtml(__BUILD_VARIANT__)}</div>
+ </div>
+ </div>
+ <div class="ai-flow-toggle-row">
+ <div class="ai-flow-toggle-label-wrap">
+ <div class="ai-flow-toggle-label">Release tag</div>
+ <div class="ai-flow-toggle-desc">${escapeHtml(__BUILD_TAG__)}</div>
+ </div>
+ </div>
+ <div class="ai-flow-toggle-row">
+ <div class="ai-flow-toggle-label-wrap">
+ <div class="ai-flow-toggle-label">Commit</div>
+ <div class="ai-flow-toggle-desc">${escapeHtml(__BUILD_COMMIT_SHA__.slice(0, 12))}</div>
+ </div>
+ </div>
+ <div class="ai-flow-toggle-row">
+ <div class="ai-flow-toggle-label-wrap">
+ <div class="ai-flow-toggle-label">Build timestamp</div>
+ <div class="ai-flow-toggle-desc">${escapeHtml(__BUILD_TIMESTAMP__)}</div>
+ </div>
+ </div>
+ `;
+
+ // AI status footer (web-only)
+ if (!this.config.isDesktopApp) {
+ html += `<div class="ai-flow-popup-footer"><span class="ai-flow-status-dot" id="usStatusDot"></span><span class="ai-flow-status-text" id="usStatusText"></span></div>`;
+ }
+
+ return html;
+  }
+
+  private toggleRowHtml(id: string, label: string, desc: string, checked: boolean): string {
+ return `
+ <div class="ai-flow-toggle-row">
+ <div class="ai-flow-toggle-label-wrap">
+ <div class="ai-flow-toggle-label">${label}</div>
+ <div class="ai-flow-toggle-desc">${desc}</div>
+ </div>
+ <label class="ai-flow-switch">
+ <input type="checkbox" id="${id}"${checked ? ' checked' : ''}>
+ <span class="ai-flow-slider"></span>
+ </label>
+ </div>
+ `;
+  }
+
+  private updateAiStatus(): void {
+ const settings = getAiFlowSettings();
+ const dot = this.overlay.querySelector('#usStatusDot');
+ const text = this.overlay.querySelector('#usStatusText');
+ if (!dot || !text) return;
+
+ dot.className = 'ai-flow-status-dot';
+ if (settings.cloudLlm && settings.browserModel) {
+ dot.classList.add('active');
+ text.textContent = t('components.insights.aiFlowStatusCloudAndBrowser');
+ } else if (settings.cloudLlm) {
+ dot.classList.add('active');
+ text.textContent = t('components.insights.aiFlowStatusActive');
+ } else if (settings.browserModel) {
+ dot.classList.add('browser-only');
+ text.textContent = t('components.insights.aiFlowStatusBrowserOnly');
+ } else {
+ dot.classList.add('disabled');
+ text.textContent = t('components.insights.aiFlowStatusDisabled');
+ }
+  }
+
+  public setPlaceCallbacks(openCreate: () => void, openEdit: (placeId: string) => void): void {
+ this.config.openCreatePlace = openCreate;
+ this.config.openEditPlace = openEdit;
+  }
+
+  public refreshStatusTab(): void {
+ if (this.activeTab === 'status') this.renderStatusTab();
+  }
+
+  private renderHelpContent(): string {
+ return `<div class="us-help-content">
+ <div class="us-help-section">
+ <h3>Getting Started</h3>
+ <p>Crystal Ball is a free, open-source geopolitical intelligence dashboard. It pulls live data from dozens of public APIs and displays them on an interactive map and sidebar panels.</p>
+ <ul>
+ <li><strong>Sidebar panels</strong> — click any panel tab on the left to expand it. Panels with a badge show new unread items.</li>
+ <li><strong>Map</strong> — use the layer toggles in Settings → Sources to show/hide map overlays. Click any map marker for details.</li>
+ <li><strong>Gear icon</strong> — opens this Settings dialog where you configure panels, map layers, and API keys.</li>
+ </ul>
+ </div>
+
+ <div class="us-help-section">
+ <h3>Setting Up API Keys</h3>
+ <p>Many data sources require free API keys. Go to <strong>Settings → API Keys</strong> to configure them.</p>
+ <ul>
+ <li><strong>ACLED</strong> — Air strikes, drone events, conflict data. Register free at <a href="https://developer.acleddata.com/" target="_blank" rel="noopener">developer.acleddata.com</a>. You need both an Access Token and your registered email.</li>
+ <li><strong>NASA FIRMS</strong> — Satellite wildfire detection. Free key at <a href="https://firms.modaps.eosdis.nasa.gov/api/area/" target="_blank" rel="noopener">NASA FIRMS</a>.</li>
+ <li><strong>Finnhub</strong> — Stock market & sector heatmap. Free tier at <a href="https://finnhub.io/register" target="_blank" rel="noopener">finnhub.io</a>.</li>
+ <li><strong>AISStream</strong> — Live ship tracking. Free at <a href="https://aisstream.io/authenticate" target="_blank" rel="noopener">aisstream.io</a>.</li>
+ <li><strong>OpenSky</strong> — Military flight tracking. Free account at <a href="https://opensky-network.org/" target="_blank" rel="noopener">opensky-network.org</a>.</li>
+ <li><strong>Wingbits</strong> — Aircraft enrichment for ADS-B data. Free at <a href="https://wingbits.com/register" target="_blank" rel="noopener">wingbits.com</a>.</li>
+ <li><strong>AI Summarization</strong> — Every panel has an AI summary button (✦). Use Ollama (local/free), Groq (free tier), or OpenRouter.</li>
+ </ul>
+ </div>
+
+ <div class="us-help-section">
+ <h3>Monitoring Modes</h3>
+ <ul>
+ <li><strong>Peace Mode</strong> — Default balanced view. All panels visible.</li>
+ <li><strong>Finance Mode</strong> — Auto-triggers when S&amp;P 500 moves ≥2.5% or BTC ≥5% in a day. Prioritizes markets, economy, trade panels.</li>
+ <li><strong>War Mode</strong> — Auto-triggers on geopolitical escalation signals. Prioritizes military, conflict, threat intelligence panels.</li>
+ <li>Switch modes manually using the mode button in the bottom-left of the sidebar.</li>
+ </ul>
+ </div>
+
+ <div class="us-help-section">
+ <h3>Map Controls</h3>
+ <ul>
+ <li><strong>Scroll/pinch</strong> — zoom in/out.</li>
+ <li><strong>Click + drag</strong> — pan the map.</li>
+ <li><strong>Click a marker</strong> — opens a detail popup for that event.</li>
+ <li><strong>Basemap</strong> — switch between street, satellite, and terrain views via the map controls.</li>
+ <li><strong>Low Power Mode (⚡)</strong> — disables animations and spatial audio to reduce CPU/GPU load.</li>
+ <li><strong>Time range filter</strong> — filter map events to the last 1h, 6h, 24h, 48h, or 7 days.</li>
+ </ul>
+ </div>
+
+ <div class="us-help-section">
+ <h3>Panel Tips</h3>
+ <ul>
+ <li><strong>AI Summary (✦)</strong> — every panel (except live video) has an AI summary button. Click it to get a 2–3 sentence intelligence briefing from the panel's data.</li>
+ <li><strong>Click-to-fly</strong> — clicking an event row in most panels (ACLED, Airstrikes, UCDP, Earthquakes, etc.) flies the map to that location.</li>
+ <li><strong>Drag panels</strong> — drag panel tabs to reorder them in the sidebar.</li>
+ <li><strong>Panel counts</strong> — the badge on each tab shows the item count. A pulsing badge indicates new unread items.</li>
+ </ul>
+ </div>
+
+ <div class="us-help-section">
+ <h3>Open Source &amp; Contributing</h3>
+ <p>Crystal Ball is free and open source under the AGPL-3.0 License. Originally forked from <a href="https://github.com/bradleybond512/crystal-ball" target="_blank" rel="noopener">bradleybond512/crystal-ball</a>.</p>
+ <ul>
+ <li><a href="https://github.com/bradleybond512/crystal-ball" target="_blank" rel="noopener">GitHub Repository</a></li>
+ <li><a href="https://github.com/bradleybond512/crystal-ball/discussions" target="_blank" rel="noopener">Community Discussions</a></li>
+ <li><a href="https://github.com/bradleybond512/crystal-ball/issues" target="_blank" rel="noopener">Report a Bug</a></li>
+ </ul>
+ </div>
+ </div>`;
+  }
+
+  private renderStatusTab(): void {
+ const container = this.overlay.querySelector('#usStatusContent');
+ if (!container) return;
+ const sp = this.config.statusPanel;
+ if (!sp) {
+ container.innerHTML = `<div style="padding:16px;color:var(--text-dim)">${t('components.status.storageUnavailable')}</div>`;
+ return;
+ }
+
+ const feeds = sp.getFeeds();
+ const apis = sp.getApis();
+
+ let html = `<div class="us-status-section">
+ <div class="us-status-section-title">${t('components.status.dataFeeds')}</div>`;
+ for (const feed of feeds.values()) {
+ html += `<div class="status-row">
+ <span class="status-dot ${feed.status}"></span>
+ <span class="status-name">${escapeHtml(feed.name)}</span>
+ <span class="status-detail">${feed.itemCount} items</span>
+ <span class="status-time">${feed.lastUpdate ? sp.formatTime(feed.lastUpdate) : 'Never'}</span>
+ </div>`;
+ }
+ html += `</div>`;
+
+ html += `<div class="us-status-section">
+ <div class="us-status-section-title">${t('components.status.apiStatus')}</div>`;
+ for (const api of apis.values()) {
+ html += `<div class="status-row">
+ <span class="status-dot ${api.status}"></span>
+ <span class="status-name">${escapeHtml(api.name)}</span>
+ ${api.latency ? `<span class="status-detail">${api.latency}ms</span>` : ''}
+ </div>`;
+ }
+ html += `</div>`;
+
+ html += `<div class="us-status-section">
+ <div class="us-status-section-title">${t('components.status.storage')}</div>
+ <div id="usStorageInfo"></div>
+ </div>`;
+
+ html += `<div class="us-status-footer">${t('components.status.updatedAt', { time: sp.formatTime(new Date()) })}</div>`;
+
+ container.innerHTML = html;
+ void this.updateStorageInfo();
+  }
+
+  private async updateStorageInfo(): Promise<void> {
+ const container = this.overlay.querySelector('#usStorageInfo');
+ if (!container) return;
+ try {
+ if ('storage' in navigator && 'estimate' in navigator.storage) {
+ const estimate = await navigator.storage.estimate();
+ const used = estimate.usage ? (estimate.usage / 1024 / 1024).toFixed(2) : '0';
+ const quota = estimate.quota ? (estimate.quota / 1024 / 1024).toFixed(0) : 'N/A';
+ container.innerHTML = `<div class="status-row">
+ <span class="status-name">IndexedDB</span>
+ <span class="status-detail">${used} MB / ${quota} MB</span>
+ </div>`;
+ } else {
+ container.innerHTML = `<div class="status-row">${t('components.status.storageUnavailable')}</div>`;
+ }
+ } catch {
+ container.innerHTML = `<div class="status-row">${t('components.status.storageUnavailable')}</div>`;
+ }
+  }
+
+  private getAvailablePanelCategories(): { key: string; label: string }[] {
+ const panelKeys = new Set(Object.keys(this.config.getPanelSettings()));
+ const variant = SITE_VARIANT || 'full';
+ const categories: { key: string; label: string }[] = [
+ { key: 'all', label: t('header.sourceRegionAll') }
+ ];
+
+ for (const [catKey, catDef] of Object.entries(PANEL_CATEGORY_MAP)) {
+ if (catDef.variants && !catDef.variants.includes(variant)) continue;
+ const hasPanel = catDef.panelKeys.some(pk => panelKeys.has(pk));
+ if (hasPanel) {
+ categories.push({ key: catKey, label: t(catDef.labelKey) });
+ }
+ }
+
+ return categories;
+  }
+
+  private getVisiblePanelEntries(): [string, PanelConfig][] {
+ const panelSettings = this.config.getPanelSettings();
+ const variant = SITE_VARIANT || 'full';
+ let entries = Object.entries(panelSettings)
+ .filter(([key]) => key !== 'runtime-config' || this.config.isDesktopApp);
+
+ if (this.activePanelCategory !== 'all') {
+ const catDef = PANEL_CATEGORY_MAP[this.activePanelCategory];
+ if (catDef && (!catDef.variants || catDef.variants.includes(variant))) {
+ const allowed = new Set(catDef.panelKeys);
+ entries = entries.filter(([key]) => allowed.has(key));
+ }
+ }
+
+ if (this.panelFilter) {
+ const lower = this.panelFilter.toLowerCase();
+ entries = entries.filter(([key, panel]) =>
+ key.toLowerCase().includes(lower) ||
+ panel.name.toLowerCase().includes(lower) ||
+ this.config.getLocalizedPanelName(key, panel.name).toLowerCase().includes(lower)
+ );
+ }
+
+ return entries;
+  }
+
+  private getVisiblePanelKeys(): string[] {
+ return this.getVisiblePanelEntries().map(([key]) => key);
+  }
+
+  private renderPanelCategoryPills(): void {
+ const bar = this.overlay.querySelector('#usPanelCatBar');
+ if (!bar) return;
+
+ const categories = this.getAvailablePanelCategories();
+ bar.innerHTML = categories.map(c =>
+ `<button class="unified-settings-region-pill${this.activePanelCategory === c.key ? ' active' : ''}" data-panel-cat="${c.key}">${escapeHtml(c.label)}</button>`
+ ).join('');
+  }
+
+  private renderPlacesTab(): void {
+ const container = this.overlay.querySelector('#usPlacesContent');
+ if (!container) return;
+
+ const places = getSavedPlaces();
+ const MAX = 20;
+ let html = `<div class="us-places-header"><span class="us-places-count">${places.length} / ${MAX} places</span><button class="spm-btn spm-btn--primary spm-btn--sm" data-places-action="add" type="button">+ Add Place</button></div>`;
+
+ if (places.length === 0) {
+ html += `<div class="us-places-empty">No saved places yet. Add your home, work, and other key locations.</div>`;
+ } else {
+ html += `<div class="us-places-list">`;
+ for (const place of places) {
+ const isConfirming = this.placesDeleteConfirm === place.id;
+ const tags = place.tags.map((tag) => `<span class="watchlist-panel-chip">${escapeHtml(tag)}</span>`).join('');
+ const primaryStar = place.primary ? '<span class="us-place-star">&#x2605;</span>' : '';
+ // eslint-disable-next-line unicorn/no-negated-condition
+ const setPrimaryBtn = !place.primary
+ ? `<button class="spm-btn spm-btn--ghost spm-btn--sm" data-places-action="set-primary" data-place-id="${escapeHtml(place.id)}" type="button" title="Set as primary">&#x2606;</button>`
+ : '';
+ const deleteArea = isConfirming
+ ? `<button class="spm-btn spm-btn--danger spm-btn--sm" data-places-action="delete-confirm" data-place-id="${escapeHtml(place.id)}" type="button">Confirm</button><button class="spm-btn spm-btn--ghost spm-btn--sm" data-places-action="delete-cancel" type="button">No</button>`
+ : `<button class="spm-btn spm-btn--ghost spm-btn--sm spm-btn--danger-ghost" data-places-action="delete" data-place-id="${escapeHtml(place.id)}" type="button">&#xD7;</button>`;
+ html += `<div class="us-place-row" data-place-id="${escapeHtml(place.id)}"><div class="us-place-info"><div class="us-place-name">${primaryStar}${escapeHtml(place.name)}</div><div class="us-place-meta">${place.lat.toFixed(4)}, ${place.lon.toFixed(4)} &bull; ${place.radiusKm} km ${tags}</div></div><div class="us-place-actions">${setPrimaryBtn}<button class="spm-btn spm-btn--ghost spm-btn--sm" data-places-action="edit" data-place-id="${escapeHtml(place.id)}" type="button">Edit</button>${deleteArea}</div></div>`;
+ }
+ html += `</div>`;
+ }
+
+ container.innerHTML = html;
+  }
+
+  private renderPanelsTab(): void {
+ const container = this.overlay.querySelector('#usPanelToggles');
+ if (!container) return;
+
+ const entries = this.getVisiblePanelEntries();
+ container.innerHTML = entries.map(([key, panel]) => `
+ <div class="panel-toggle-item ${panel.enabled ? 'active' : ''}" data-panel="${escapeHtml(key)}">
+ <div class="panel-toggle-checkbox">${panel.enabled ? '✓' : ''}</div>
+ <span class="panel-toggle-label">${escapeHtml(this.config.getLocalizedPanelName(key, panel.name))}</span>
+ </div>
+ `).join('');
+ this.updatePanelsCounter();
+  }
+
+  private getAvailableRegions(): { key: string; label: string }[] {
+ const feedKeys = new Set(Object.keys(FEEDS));
+ const regions: { key: string; label: string }[] = [
+ { key: 'all', label: t('header.sourceRegionAll') }
+ ];
+
+ for (const [regionKey, regionDef] of Object.entries(SOURCE_REGION_MAP)) {
+ if (regionKey === 'intel') {
+ if (INTEL_SOURCES.length > 0) {
+ regions.push({ key: regionKey, label: t(regionDef.labelKey) });
+ }
+ continue;
+ }
+ const hasFeeds = regionDef.feedKeys.some(fk => feedKeys.has(fk));
+ if (hasFeeds) {
+ regions.push({ key: regionKey, label: t(regionDef.labelKey) });
+ }
+ }
+
+ return regions;
+  }
+
+  private getSourcesByRegion(): Map<string, string[]> {
+ const map = new Map<string, string[]>();
+ const feedKeys = new Set(Object.keys(FEEDS));
+
+ for (const [regionKey, regionDef] of Object.entries(SOURCE_REGION_MAP)) {
+ const sources: string[] = [];
+ if (regionKey === 'intel') {
+ INTEL_SOURCES.forEach(f => sources.push(f.name));
+ } else {
+ for (const fk of regionDef.feedKeys) {
+ if (feedKeys.has(fk)) {
+ FEEDS[fk]!.forEach(f => sources.push(f.name));
+ }
+ }
+ }
+ if (sources.length > 0) {
+ // eslint-disable-next-line sonarjs/no-misleading-array-reverse
+ map.set(regionKey, [...sources].sort((a, b) => a.localeCompare(b)));
+ }
+ }
+
+ return map;
+  }
+
+  private getVisibleSourceNames(): string[] {
+ let sources: string[];
+ if (this.activeSourceRegion === 'all') {
+ sources = this.config.getAllSourceNames();
+ } else {
+ const byRegion = this.getSourcesByRegion();
+ sources = byRegion.get(this.activeSourceRegion) ?? [];
+ }
+
+ if (this.sourceFilter) {
+ const lower = this.sourceFilter.toLowerCase();
+ sources = sources.filter(s => s.toLowerCase().includes(lower));
+ }
+
+ return sources;
+  }
+
+  private renderRegionPills(): void {
+ const bar = this.overlay.querySelector('#usRegionBar');
+ if (!bar) return;
+
+ const regions = this.getAvailableRegions();
+ bar.innerHTML = regions.map(r =>
+ `<button class="unified-settings-region-pill${this.activeSourceRegion === r.key ? ' active' : ''}" data-region="${r.key}">${escapeHtml(r.label)}</button>`
+ ).join('');
+  }
+
+  private renderSourcesGrid(): void {
+ const container = this.overlay.querySelector('#usSourceToggles');
+ if (!container) return;
+
+ const sources = this.getVisibleSourceNames();
+ const disabled = this.config.getDisabledSources();
+
+ container.innerHTML = sources.map(source => {
+ const isEnabled = !disabled.has(source);
+ const escaped = escapeHtml(source);
+ return `
+ <div class="source-toggle-item ${isEnabled ? 'active' : ''}" data-source="${escaped}">
+ <div class="source-toggle-checkbox">${isEnabled ? '✓' : ''}</div>
+ <span class="source-toggle-label">${escaped}</span>
+ </div>
+ `;
+ }).join('');
+  }
+
+  private updateSourcesCounter(): void {
+ const counter = this.overlay.querySelector('#usSourcesCounter');
+ if (!counter) return;
+
+ const disabled = this.config.getDisabledSources();
+ const allSources = this.config.getAllSourceNames();
+ const enabledTotal = allSources.length - disabled.size;
+
+ counter.textContent = t('header.sourcesEnabled', { enabled: String(enabledTotal), total: String(allSources.length) });
+  }
+
+  private updatePanelsCounter(): void {
+ const counter = this.overlay.querySelector('#usPanelsCounter');
+ if (!counter) return;
+
+ const allPanels = Object.entries(this.config.getPanelSettings())
+ .filter(([key]) => key !== 'runtime-config' || this.config.isDesktopApp)
+ .map(([, panel]) => panel);
+ const enabledTotal = allPanels.filter((panel) => panel.enabled).length;
+
+ counter.textContent = `${enabledTotal}/${allPanels.length} enabled`;
+  }
+
+  // ── Debug tab ──────────────────────────────────────────────────────────────
+
+  private renderDebugContent(): string {
+ const fetchDebug = localStorage.getItem('wm-debug-log') === '1';
+ return `
+ <div class="us-debug-content">
+ <div class="us-debug-section-label">Logs</div>
+ <div class="us-debug-actions">
+ <button id="us-open-logs" class="us-debug-btn">Open Logs Folder</button>
+ <button id="us-open-api-log" class="us-debug-btn">Open API Log</button>
+ </div>
+ <div class="us-debug-section-label">Diagnostics</div>
+ <div class="us-debug-toggles">
+ <label class="us-debug-toggle-row"><input type="checkbox" id="us-verbose-log"> Verbose Sidecar Log</label>
+ <label class="us-debug-toggle-row"><input type="checkbox" id="us-fetch-debug" ${fetchDebug ? 'checked' : ''}> Frontend Fetch Debug</label>
+ </div>
+ <div class="us-debug-traffic-header">
+ <span class="us-debug-traffic-title">API Traffic <span id="us-traffic-count"></span></span>
+ <div class="us-debug-traffic-controls">
+ <label><input type="checkbox" id="us-auto-refresh" checked> Auto</label>
+ <button id="us-refresh-traffic" class="us-debug-btn">Refresh</button>
+ <button id="us-clear-traffic" class="us-debug-btn">Clear</button>
+ </div>
+ </div>
+ <div id="us-traffic-log" class="us-debug-traffic-log"><p class="us-debug-empty">Loading…</p></div>
+ </div>
+ `;
+  }
+
+  private async _diagFetch(path: string, init?: RequestInit): Promise<Response> {
+ if (!this._diagToken) {
+ try { this._diagToken = await tryInvokeTauri<string>('get_local_api_token'); } catch { /* unavailable */ }
+ }
+ const headers = new Headers(init?.headers);
+ if (this._diagToken) headers.set('Authorization', `Bearer ${this._diagToken}`);
+ const base = getApiBaseUrl() || '';
+ return fetch(`${base}${path}`, { ...init, headers });
+  }
+
+  private async _syncVerboseState(): Promise<void> {
+ const toggle = this.overlay.querySelector<HTMLInputElement>('#us-verbose-log');
+ if (!toggle) return;
+ try {
+ const res = await this._diagFetch('/api/local-debug-toggle');
+ const data = await res.json() as { verboseMode: boolean };
+ toggle.checked = data.verboseMode;
+ } catch { /* sidecar not running */ }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private async _toggleVerboseLog(_enabled: boolean): Promise<void> {
+ try {
+ const res = await this._diagFetch('/api/local-debug-toggle', { method: 'POST' });
+ const data = await res.json() as { verboseMode: boolean };
+ const toggle = this.overlay.querySelector<HTMLInputElement>('#us-verbose-log');
+ if (toggle) toggle.checked = data.verboseMode;
+ } catch { /* sidecar not running */ }
+  }
+
+  private async _refreshTrafficLog(): Promise<void> {
+ const logEl = this.overlay.querySelector<HTMLElement>('#us-traffic-log');
+ const countEl = this.overlay.querySelector<HTMLElement>('#us-traffic-count');
+ if (!logEl) return;
+ try {
+ const res = await this._diagFetch('/api/local-traffic-log');
+ const data = await res.json() as { entries?: { timestamp: string; method: string; path: string; status: number; durationMs: number }[] };
+ const entries = data.entries ?? [];
+ if (countEl) countEl.textContent = `(${entries.length})`;
+ if (entries.length === 0) {
+ logEl.innerHTML = '<p class="us-debug-empty">No traffic recorded.</p>';
+ return;
+ }
+ // eslint-disable-next-line unicorn/no-array-reverse
+ const rows = [...entries].reverse().map(e => {
+ const ts = e.timestamp.split('T')[1]?.replace('Z', '') ?? e.timestamp;
+ let cls: string;
+ if (e.status < 300) cls = 'ok';
+ else if (e.status < 500) cls = 'warn';
+ else cls = 'err';
+ return `<tr class="us-diag-${cls}"><td>${escapeHtml(ts)}</td><td>${escapeHtml(e.method)}</td><td title="${escapeHtml(e.path)}">${escapeHtml(e.path)}</td><td>${e.status}</td><td>${e.durationMs}ms</td></tr>`;
+ }).join('');
+ logEl.innerHTML = `<table class="us-debug-table"><thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>Duration</th></tr></thead><tbody>${rows}</tbody></table>`;
+ } catch {
+ logEl.innerHTML = '<p class="us-debug-empty">Sidecar unreachable.</p>';
+ }
+  }
+
+  private async _clearTrafficLog(): Promise<void> {
+ try { await this._diagFetch('/api/local-traffic-log', { method: 'DELETE' }); } catch { /* ignore */ }
+ const logEl = this.overlay.querySelector<HTMLElement>('#us-traffic-log');
+ const countEl = this.overlay.querySelector<HTMLElement>('#us-traffic-count');
+ if (logEl) logEl.innerHTML = '<p class="us-debug-empty">Log cleared.</p>';
+ if (countEl) countEl.textContent = '(0)';
+  }
+
+  private _startDebugAutoRefresh(): void {
+ this._stopDebugAutoRefresh();
+ this._diagRefreshInterval = setInterval(() => void this._refreshTrafficLog(), 3000);
+  }
+
+  private _stopDebugAutoRefresh(): void {
+ if (this._diagRefreshInterval) {
+ clearInterval(this._diagRefreshInterval);
+ this._diagRefreshInterval = null;
+ }
+  }
+}

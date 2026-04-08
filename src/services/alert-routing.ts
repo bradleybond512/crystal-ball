@@ -7,6 +7,7 @@
  */
 
 import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
+import { getSourceTrust } from './source-trust';
 
 // ─── Tunable weights (start values; we'll iterate) ────────────────────────
 const SEVERITY_WEIGHT: Record<AlertSeverity, number> = {
@@ -23,18 +24,18 @@ const SEVERITY_WEIGHT: Record<AlertSeverity, number> = {
  * 1.0 = neutral.
  */
 const SOURCE_MULT: Record<UnifiedAlert['source'], number> = {
-  'breaking-news': 1.0,
-  'nws': 1.0,
+  'breaking-news': 1,
+  'nws': 1,
   'gdacs': 1.1,
   'tsunami': 1.3,
-  'volcano': 1.0,
+  'volcano': 1,
   'oref': 1.4,
   'hazard': 1.2,
   'correlation': 1.2,
   'cyber': 0.7,
   'resource': 0.8,
   'local-ids': 0.5,
-  'earthquake': 1.0,
+  'earthquake': 1,
   'fire': 0.8,
   'cyclone': 1.1,
 };
@@ -47,7 +48,7 @@ const PROXIMITY_MULT = 1.5;
 const PROXIMITY_KM = 250;
 
 /** Multiplier when alert touches a watchlist entity. */
-const WATCHLIST_MULT = 2.0;
+const WATCHLIST_MULT = 2;
 
 // ─── Source → panel routing ──────────────────────────────────────────────
 const SOURCE_TO_PANEL: Record<UnifiedAlert['source'], string> = {
@@ -76,6 +77,7 @@ export interface ScoreBreakdown {
   base: number;
   decay: number;
   sourceMult: number;
+  trustMult: number;
   proximityMult: number;
   watchlistMult: number;
   pinMult: number;
@@ -84,17 +86,18 @@ export interface ScoreBreakdown {
 
 export function scoreBreakdown(a: UnifiedAlert, nowMs: number = Date.now()): ScoreBreakdown {
   if (a.acknowledged || (typeof a.snoozedUntil === 'number' && a.snoozedUntil > nowMs)) {
-    return { base: 0, decay: 0, sourceMult: 0, proximityMult: 1, watchlistMult: 1, pinMult: 1, total: 0 };
+    return { base: 0, decay: 0, sourceMult: 0, trustMult: 1, proximityMult: 1, watchlistMult: 1, pinMult: 1, total: 0 };
   }
   const base = SEVERITY_WEIGHT[a.severity] ?? 0;
   const ageMin = Math.max(0, (nowMs - a.timestamp) / 60_000);
   const decay = Math.pow(0.5, ageMin / RECENCY_HALFLIFE_MIN);
-  const sourceMult = SOURCE_MULT[a.source] ?? 1.0;
+  const sourceMult = SOURCE_MULT[a.source] ?? 1;
+  const trustMult = getSourceTrust(a.source);
   const proximityMult = (typeof a.distanceKm === 'number' && a.distanceKm <= PROXIMITY_KM) ? PROXIMITY_MULT : 1;
   const watchlistMult = a.relevanceScore >= 100 ? WATCHLIST_MULT : 1;
   const pinMult = a.pinned ? 1.25 : 1;
-  const total = base * decay * sourceMult * proximityMult * watchlistMult * pinMult;
-  return { base, decay, sourceMult, proximityMult, watchlistMult, pinMult, total };
+  const total = base * decay * sourceMult * trustMult * proximityMult * watchlistMult * pinMult;
+  return { base, decay, sourceMult, trustMult, proximityMult, watchlistMult, pinMult, total };
 }
 
 /** Compute current hotness score for a single alert. */

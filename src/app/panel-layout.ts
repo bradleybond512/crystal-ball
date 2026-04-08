@@ -57,6 +57,7 @@ import { TriageBar } from '@/components/TriageBar';
 import { TodayView } from '@/components/TodayView';
 import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalette } from '@/components/CommandPalette';
+import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
 import { startAlertReactions } from '@/services/alert-reactions';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
@@ -651,6 +652,7 @@ export class PanelLayoutManager implements AppModule {
  startAlertReactions();
  startSidebarHeat();
  startAlertCorrelator();
+ startSituationAlertBridge();
 
  // Mount Today view + wire ⌘⇧T toggle
  const todayView = new TodayView();

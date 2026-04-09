@@ -28,6 +28,14 @@ const SOURCE_LABELS: Record<AlertSource, string> = {
   cyclone: 'Cyclone',
   'power-grid': 'Grid',
   'comms-health': 'Comms',
+  'space-weather': 'Space Wx',
+  spc: 'SPC',
+  disease: 'Disease',
+  maritime: 'Maritime',
+  'travel-advisory': 'Travel',
+  radiation: 'Radiation',
+  'air-quality': 'Air',
+  'aviation-hazard': 'Aviation',
 };
 
 export class TodayView {

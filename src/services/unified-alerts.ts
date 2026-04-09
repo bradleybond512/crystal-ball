@@ -26,7 +26,15 @@ export type AlertSource =
   | 'fire'
   | 'cyclone'
   | 'power-grid'
-  | 'comms-health';
+  | 'comms-health'
+  | 'space-weather'
+  | 'spc'
+  | 'disease'
+  | 'maritime'
+  | 'travel-advisory'
+  | 'radiation'
+  | 'air-quality'
+  | 'aviation-hazard';
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 

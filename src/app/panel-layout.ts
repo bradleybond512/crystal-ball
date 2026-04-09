@@ -64,6 +64,7 @@ import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
 import { startCorrelationFeedback } from '@/services/correlation-feedback';
 import { startInfrastructureAlertBridge } from '@/services/infrastructure-alert-bridge';
+import { startIntelChannelsBridge } from '@/services/intel-channels-bridge';
 import { startBlackoutSignature } from '@/services/blackout-signature';
 import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
@@ -669,6 +670,7 @@ export class PanelLayoutManager implements AppModule {
  startSourceFeedback();
  startCorrelationFeedback();
  startInfrastructureAlertBridge();
+  startIntelChannelsBridge();
  startBlackoutSignature();
  const digestOverlay = new DigestOverlay();
  digestOverlay.mount(document.body);

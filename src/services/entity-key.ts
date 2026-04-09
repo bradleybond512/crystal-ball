@@ -32,6 +32,14 @@ const SOURCE_EVENT_TYPE: Record<AlertSource, string> = {
   'cyclone': 'cyclone',
   'power-grid': 'infrastructure',
   'comms-health': 'infrastructure',
+  'space-weather': 'space-weather',
+  'spc': 'weather',
+  'disease': 'health',
+  'maritime': 'maritime',
+  'travel-advisory': 'travel',
+  'radiation': 'radiation',
+  'air-quality': 'air-quality',
+  'aviation-hazard': 'aviation',
 };
 
 export function canonicalEntityKey(a: UnifiedAlert): string {

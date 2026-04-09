@@ -41,6 +41,14 @@ const SOURCE_MULT: Record<UnifiedAlert['source'], number> = {
   'cyclone': 1.1,
   'power-grid': 1.2,
   'comms-health': 1.1,
+  'space-weather': 0.9,
+  'spc': 1.1,
+  'disease': 1,
+  'maritime': 0.9,
+  'travel-advisory': 0.8,
+  'radiation': 1.3,
+  'air-quality': 0.7,
+  'aviation-hazard': 0.9,
 };
 
 /** Half-life for recency decay, in minutes. After this many minutes, score halves. */
@@ -71,6 +79,14 @@ const SOURCE_TO_PANEL: Record<UnifiedAlert['source'], string> = {
   'cyclone': 'tropical-cyclones',
   'power-grid': 'unified-alert-inbox',
   'comms-health': 'comms-health',
+  'space-weather': 'space-weather',
+  'spc': 'spc-outlook',
+  'disease': 'disease-outbreak',
+  'maritime': 'maritime-safety',
+  'travel-advisory': 'travel-warnings',
+  'radiation': 'radiation-monitoring',
+  'air-quality': 'air-quality',
+  'aviation-hazard': 'aviation-hazards',
 };
 
 export function panelForAlert(a: UnifiedAlert): string {

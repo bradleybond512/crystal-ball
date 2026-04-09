@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Unified Alert Inbox Panel
  *
@@ -22,6 +23,7 @@ import {
 } from '@/services/unified-alerts';
 import { scoreAndSort } from '@/services/relevance-scoring';
 import { EvidenceDrawer } from './EvidenceDrawer';
+import { computeEntityHeat } from '@/services/entity-heat';
 
 type SortMode = 'relevance' | 'severity' | 'time' | 'distance';
 type FilterShow = 'unread' | 'all';
@@ -360,6 +362,45 @@ export class UnifiedAlertInboxPanel extends Panel {
 
   // ── Render ──────────────────────────────────────────────────────────────
 
+  private dedupByEntity(alerts: UnifiedAlert[]): { leader: UnifiedAlert; relatedCount: number }[] {
+    const entityHeat = computeEntityHeat();
+    const entityAlertMap = new Map<string, Set<string>>();
+    for (const ent of entityHeat) {
+      entityAlertMap.set(ent.name, new Set(ent.alertIds));
+    }
+
+    const assigned = new Set<string>();
+    const groups: { leader: UnifiedAlert; relatedCount: number }[] = [];
+
+    for (const a of alerts) {
+      if (assigned.has(a.id)) continue;
+      let bestEntity: string | null = null;
+      let bestCount = 0;
+      for (const [name, ids] of entityAlertMap) {
+        if (ids.has(a.id) && ids.size > bestCount) {
+          bestEntity = name;
+          bestCount = ids.size;
+        }
+      }
+      if (bestEntity && bestCount >= 3) {
+        const entityIds = entityAlertMap.get(bestEntity)!;
+        let relatedCount = 0;
+        for (const other of alerts) {
+          if (other.id !== a.id && entityIds.has(other.id) && !assigned.has(other.id)) {
+            assigned.add(other.id);
+            relatedCount++;
+          }
+        }
+        assigned.add(a.id);
+        groups.push({ leader: a, relatedCount });
+      } else {
+        assigned.add(a.id);
+        groups.push({ leader: a, relatedCount: 0 });
+      }
+    }
+    return groups;
+  }
+
   private render(): void {
  const alerts = this.getFilteredAlerts();
  const totalCount = unifiedAlertStore.getAll().length;
@@ -372,7 +413,8 @@ export class UnifiedAlertInboxPanel extends Panel {
  }
 
  const toolbar = this.renderToolbar();
- const rows = alerts.map((a, i) => this.renderRow(a, i)).join('');
+ const deduped = this.dedupByEntity(alerts);
+ const rows = deduped.map((g, i) => this.renderRow(g.leader, i, g.relatedCount)).join('');
 
  this.setContent(`
  <div class="uai-container">
@@ -459,7 +501,7 @@ export class UnifiedAlertInboxPanel extends Panel {
  `;
   }
 
-  private renderRow(alert: UnifiedAlert, index: number): string {
+  private renderRow(alert: UnifiedAlert, index: number, relatedCount = 0): string {
  const sevPill = `<span class="ac-pill ac-pill-${alert.severity}">${SEVERITY_LABELS[alert.severity]}</span>`;
  const srcTag = `<span class="uai-src-tag uai-src-${alert.source}" data-filter-src="${alert.source}" title="Filter: ${alert.source}">${SOURCE_LABELS[alert.source] ?? alert.source}</span>`;
 
@@ -476,6 +518,10 @@ export class UnifiedAlertInboxPanel extends Panel {
  const title = safeLink
  ? `<a href="${esc(safeLink)}" target="_blank" rel="noopener noreferrer">${esc(alert.title)}</a>`
  : esc(alert.title);
+
+ const relatedBadge = relatedCount > 0
+ ? `<span class="uai-related-badge">+${relatedCount} related</span>`
+ : '';
 
  const whyBtn = alert.evidence
  ? `<button class="uai-why-btn" data-alert-id="${esc(alert.id)}" type="button">Why</button>`
@@ -497,7 +543,7 @@ export class UnifiedAlertInboxPanel extends Panel {
  <td class="ac-sev">${sevPill}</td>
  <td class="uai-src-cell">${srcTag}</td>
  <td class="uai-title-cell">
- <div class="uai-title">${title}</div>
+ <div class="uai-title">${title}${relatedBadge}</div>
  <div class="uai-body">${esc(alert.body)}${whyBtn}</div>
  </td>
  <td class="uai-score-cell">${scoreBar}</td>

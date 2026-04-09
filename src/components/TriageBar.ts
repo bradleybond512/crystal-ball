@@ -12,6 +12,8 @@ import { rankAlerts, panelForAlert, scoreBreakdown } from '@/services/alert-rout
 import { flashPanel, jumpToPanel, pulseAlertOnMap } from '@/services/alert-reactions';
 import { getPreset, setPreset, type AlertingPreset } from '@/services/alerting-prefs';
 import { getWatchlist, saveWatchlist } from '@/services/watchlist';
+import { groupIntoStories, type AlertStory } from '@/services/alert-stories';
+import { getLifecyclePhase, type LifecyclePhase } from '@/services/alert-lifecycle';
 
 const MAX_VISIBLE = 5;
 
@@ -36,10 +38,6 @@ function loadFacet(): Domain {
 }
 function saveFacet(d: Domain): void {
   try { localStorage.setItem(FACET_KEY, d); } catch { /* noop */ }
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
 
 export class TriageBar {
@@ -75,15 +73,11 @@ export class TriageBar {
     const ranked = this.facet === 'all'
       ? all
       : all.filter(a => SOURCE_DOMAIN[a.source] === this.facet || a.source === 'correlation');
-    // Group consecutive alerts from the same source so storms collapse to one row.
-    const grouped: { leader: UnifiedAlert; rest: UnifiedAlert[] }[] = [];
-    for (const a of ranked) {
-      const last = grouped[grouped.length - 1];
-      if (last?.leader.source === a.source) last.rest.push(a);
-      else grouped.push({ leader: a, rest: [] });
-      if (grouped.length >= MAX_VISIBLE) break;
-    }
-    if (grouped.length === 0 && this.facet === 'all') {
+
+    // Story-based grouping: cluster related alerts into narratives.
+    const stories = groupIntoStories(ranked).slice(0, MAX_VISIBLE);
+
+    if (stories.length === 0 && this.facet === 'all') {
       this.element.hidden = true;
       this.element.replaceChildren();
       return;
@@ -108,16 +102,17 @@ export class TriageBar {
     }
     const items = document.createElement('div');
     items.className = 'triage-bar-items';
-    for (const g of grouped) items.append(this.makeItem(g.leader, g.rest.length));
+    for (const story of stories) {
+      items.append(this.makeStoryItem(story));
+    }
     const ack = document.createElement('button');
     ack.className = 'triage-bar-ack';
     ack.id = 'triageAckAll';
     ack.title = 'Acknowledge all visible';
     ack.textContent = 'Ack all';
     ack.addEventListener('click', () => {
-      for (const g of grouped) {
-        unifiedAlertStore.acknowledge(g.leader.id);
-        for (const r of g.rest) unifiedAlertStore.acknowledge(r.id);
+      for (const story of stories) {
+        for (const a of story.alerts) unifiedAlertStore.acknowledge(a.id);
       }
     });
     const presetBtn = document.createElement('button');
@@ -133,27 +128,36 @@ export class TriageBar {
     this.element.replaceChildren(label, facets, items, ack, presetBtn);
   }
 
-  private makeItem(a: UnifiedAlert, extraCount: number): HTMLElement {
+  private makeStoryItem(story: AlertStory): HTMLElement {
+    const a = story.leadAlert;
     const el = document.createElement('div');
     el.className = `triage-bar-item triage-sev-${a.severity}`;
     el.dataset.alertId = a.id;
+
+    const phase = getLifecyclePhase(a.id);
+    const PHASE_ICON: Record<LifecyclePhase, string> = { rising: '↑', peaked: '●', cooling: '↓', resolved: '○' };
+
     const sb = scoreBreakdown(a);
     el.title =
-      `${a.body}\n\n` +
-      `score ${sb.total.toFixed(1)} = ` +
-      `base ${sb.base} × decay ${sb.decay.toFixed(2)} × source ${sb.sourceMult} × ` +
-      `trust ${sb.trustMult.toFixed(2)} × prox ${sb.proximityMult} × ` +
-      `watch ${sb.watchlistMult} × pin ${sb.pinMult}\n` +
-      `(right-click to snooze)`;
+      `${a.body}\n\nscore ${sb.total.toFixed(1)}\nlifecycle: ${phase}\n(right-click to snooze)`;
     const ageMin = Math.max(0, Math.round((Date.now() - a.timestamp) / 60_000));
     const ageLabel = ageMin < 1 ? 'now' : (ageMin < 60 ? `${ageMin}m` : `${Math.floor(ageMin / 60)}h`);
     const dot = document.createElement('span'); dot.className = 'triage-sev-dot';
+    const lc = document.createElement('span'); lc.className = `triage-lifecycle triage-lc-${phase}`;
+    lc.textContent = PHASE_ICON[phase];
+    lc.title = phase;
     const src = document.createElement('span'); src.className = 'triage-source';
-    src.textContent = extraCount > 0 ? `${a.source} +${extraCount}` : a.source;
+    src.textContent = story.alerts.length > 1 ? `${story.label} (${story.alerts.length})` : a.source;
     const title = document.createElement('span'); title.className = 'triage-title'; title.textContent = a.title;
     const age = document.createElement('span'); age.className = 'triage-age'; age.textContent = ageLabel;
-    el.append(dot, src, title, age);
+    el.append(dot, lc, src, title, age);
     el.addEventListener('click', () => {
+      if (story.alerts.length > 1 && story.entityName) {
+        document.dispatchEvent(new CustomEvent('cb:entity-filter', {
+          detail: { entity: story.entityName, alertIds: story.alerts.map(sa => sa.id) },
+        }));
+        return;
+      }
       if (a.source === 'correlation' && a.correlationMembers && a.correlationMembers.length > 0) {
         this.showCorrelationDetails(a);
         return;
@@ -172,7 +176,6 @@ export class TriageBar {
       e.preventDefault();
       this.showContextMenu(e as MouseEvent, a);
     });
-    void escapeHtml;
     return el;
   }
 

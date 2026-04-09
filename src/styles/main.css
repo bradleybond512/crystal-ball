@@ -18924,3 +18924,30 @@ body.has-breaking-alert .panels-grid {
   font-weight: 600;
 }
 .status-wl-form button:hover { background: rgba(100, 200, 255, 0.3); }
+
+/* ── Lifecycle indicator in Triage ─────────────────────────────────── */
+.triage-lifecycle {
+  font-size: 10px;
+  font-weight: 700;
+  margin-right: 4px;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.triage-lc-rising { color: #ff4444; }
+.triage-lc-peaked { color: #ff8800; }
+.triage-lc-cooling { color: #88cc44; }
+.triage-lc-resolved { color: #666; }
+
+/* ── Related badge in Inbox ─────────────────────────────────────── */
+.uai-related-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(100, 180, 255, 0.2);
+  color: rgba(100, 180, 255, 0.9);
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: middle;
+}

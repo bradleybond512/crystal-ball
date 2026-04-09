@@ -67,6 +67,7 @@ import { startInfrastructureAlertBridge } from '@/services/infrastructure-alert-
 import { startIntelChannelsBridge } from '@/services/intel-channels-bridge';
 import { startAnomalyBaselines } from '@/services/anomaly-baselines';
 import { startCompoundAlertBridge } from '@/services/compound-alert-bridge';
+import { startAlertLifecycle } from '@/services/alert-lifecycle';
 import { EntityHeatRail } from '@/components/EntityHeatRail';
 import { AlertTimeline } from '@/components/AlertTimeline';
 import { StatusOverlay } from '@/components/StatusOverlay';
@@ -678,6 +679,7 @@ export class PanelLayoutManager implements AppModule {
   startIntelChannelsBridge();
  startAnomalyBaselines();
  startCompoundAlertBridge();
+ startAlertLifecycle();
  const entityRail = new EntityHeatRail();
  entityRail.mount(document.body);
  const alertTimeline = new AlertTimeline();

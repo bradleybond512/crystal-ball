@@ -26,6 +26,8 @@ const WINDOW_MS = 30 * 60_000;            // widened so chain links can catch up
 const SCAN_INTERVAL_MS = 60_000;
 const PRUNE_INTERVAL_MS = 60 * 60_000;
 const SYNTH_TTL_MS = 6 * 60 * 60_000;
+const NEG_EVIDENCE_KEY = 'crystalball-neg-evidence-v1';
+const CHAIN_SYNTH_PREFIX = 'chain-';
 
 interface CausalRule {
   cause: AlertSource;
@@ -111,6 +113,218 @@ const CAUSAL_RULES: readonly CausalRule[] = [
   // Fire → air quality downwind
   { cause: 'fire',       effect: 'air-quality',     maxLagMs: 24 * 60 * 60_000, radiusKm: 800 },
 ];
+
+// ── Negative evidence decay ──────────────────────────────────────────────
+// When a cause fires but the expected effect doesn't arrive within the lag
+// window, we record a miss. Repeated misses shrink the rule's effective
+// confidence multiplier (0.5–1.0). Hits restore it.
+
+interface NegEvidence { hits: number; misses: number; }
+const negEvidence = new Map<string, NegEvidence>();
+/** Pending causes waiting for effects. Keyed by `cause|effect`, value = cause timestamps. */
+const pendingCauses = new Map<string, number[]>();
+
+function loadNegEvidence(): void {
+  try {
+    const raw = localStorage.getItem(NEG_EVIDENCE_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw) as Record<string, NegEvidence>;
+    for (const [k, v] of Object.entries(obj)) negEvidence.set(k, v);
+  } catch { /* noop */ }
+}
+function saveNegEvidence(): void {
+  const obj: Record<string, NegEvidence> = {};
+  for (const [k, v] of negEvidence) obj[k] = v;
+  try { localStorage.setItem(NEG_EVIDENCE_KEY, JSON.stringify(obj)); } catch { /* noop */ }
+}
+
+function negEvidenceMult(pairKey: string): number {
+  const ne = negEvidence.get(pairKey);
+  if (!ne || (ne.hits + ne.misses) < 3) return 1;
+  const missRatio = ne.misses / (ne.hits + ne.misses);
+  return Math.max(0.5, 1 - missRatio * 0.5);
+}
+
+function recordNegHit(pairKey: string): void {
+  const cur = negEvidence.get(pairKey) ?? { hits: 0, misses: 0 };
+  cur.hits += 1;
+  negEvidence.set(pairKey, cur);
+}
+
+function recordNegMiss(pairKey: string): void {
+  const cur = negEvidence.get(pairKey) ?? { hits: 0, misses: 0 };
+  cur.misses += 1;
+  negEvidence.set(pairKey, cur);
+}
+
+/** Track pending causes and check for expired expectations. */
+function updateNegativeEvidence(alerts: UnifiedAlert[]): void {
+  const now = Date.now();
+  const sourceSet = new Set(alerts.map(a => a.source));
+
+  // Register new pending causes for each rule.
+  for (const r of CAUSAL_RULES) {
+    const pk = `${r.cause}|${r.effect}`;
+    const causesPresent = alerts.filter(a => a.source === r.cause);
+    if (causesPresent.length > 0) {
+      const pending = pendingCauses.get(pk) ?? [];
+      for (const c of causesPresent) {
+        if (!pending.some(t => Math.abs(t - c.timestamp) < 60_000)) {
+          pending.push(c.timestamp);
+        }
+      }
+      pendingCauses.set(pk, pending);
+    }
+  }
+
+  // Check for expired expectations or fulfilled ones.
+  for (const [pk, timestamps] of pendingCauses) {
+    const [, effect] = pk.split('|') as [string, AlertSource];
+    const rule = CAUSAL_RULES.find(r => `${r.cause}|${r.effect}` === pk);
+    if (!rule) continue;
+    const remaining: number[] = [];
+    for (const ts of timestamps) {
+      if (now - ts > rule.maxLagMs) {
+        // Window expired — did the effect arrive?
+        if (sourceSet.has(effect)) recordNegHit(pk);
+        else recordNegMiss(pk);
+      } else {
+        remaining.push(ts);
+      }
+    }
+    if (remaining.length > 0) pendingCauses.set(pk, remaining);
+    else pendingCauses.delete(pk);
+  }
+  saveNegEvidence();
+}
+
+// ── Temporal chain detection ────────────────────────────────────────────
+// Compose pairwise rules: if A→B and B→C exist, detect A→B→C.
+// Emit early-warning chain alerts when A→B fires and B→C is expected.
+
+interface CausalChain {
+  steps: AlertSource[];           // e.g. ['earthquake', 'tsunami', 'gdacs']
+  rules: CausalRule[];            // the 2+ rules composing this chain
+  totalMaxLagMs: number;
+}
+
+/** Pre-compute all 3-step chains from the pairwise rules. */
+function buildChainIndex(): CausalChain[] {
+  const chains: CausalChain[] = [];
+  const rulesByEffect = new Map<AlertSource, CausalRule[]>();
+  for (const r of CAUSAL_RULES) {
+    const arr = rulesByEffect.get(r.cause) ?? [];
+    arr.push(r);
+    rulesByEffect.set(r.cause, arr);
+  }
+  for (const r1 of CAUSAL_RULES) {
+    const nextRules = rulesByEffect.get(r1.effect);
+    if (!nextRules) continue;
+    for (const r2 of nextRules) {
+      // Avoid trivial loops.
+      if (r2.effect === r1.cause) continue;
+      chains.push({
+        steps: [r1.cause, r1.effect, r2.effect],
+        rules: [r1, r2],
+        totalMaxLagMs: r1.maxLagMs + r2.maxLagMs,
+      });
+    }
+  }
+  return chains;
+}
+
+const CHAIN_INDEX = buildChainIndex();
+
+/** Detect chains where the first link has fired (A→B present) but the last
+ *  step (C) hasn't yet. Emit an early-warning synthetic alert. */
+function detectChains(leaders: UnifiedAlert[], now: number): UnifiedAlert[] {
+  const bySource = new Map<AlertSource, UnifiedAlert[]>();
+  for (const a of leaders) {
+    const arr = bySource.get(a.source) ?? [];
+    arr.push(a);
+    bySource.set(a.source, arr);
+  }
+
+  const chainAlerts: UnifiedAlert[] = [];
+  for (const chain of CHAIN_INDEX) {
+    const [stepA, stepB, stepC] = chain.steps as [AlertSource, AlertSource, AlertSource];
+    const aAlerts = bySource.get(stepA);
+    const bAlerts = bySource.get(stepB);
+    if (!aAlerts || !bAlerts) continue;
+
+    // Check if we already have stepC alerts (chain already materialized — skip).
+    const cAlerts = bySource.get(stepC);
+
+    for (const a of aAlerts) {
+      for (const b of bAlerts) {
+        if (!a.location || !b.location) continue;
+        const dtAB = b.timestamp - a.timestamp;
+        if (dtAB < 0 || dtAB > chain.rules[0]!.maxLagMs) continue;
+        const r0 = chain.rules[0]!;
+        const radius0 = r0.radiusFn ? r0.radiusFn(a) : r0.radiusKm;
+        const dist = computeDistanceKm(a.location.lat, a.location.lon, b.location.lat, b.location.lon);
+        if (dist > radius0) continue;
+        if (r0.guard && !r0.guard(a)) continue;
+
+        // A→B link confirmed. Check if C already exists nearby.
+        const r1 = chain.rules[1]!;
+        const radius1 = r1.radiusFn ? r1.radiusFn(b) : r1.radiusKm;
+        const cExists = cAlerts?.some(c => {
+          if (!c.location || !b.location) return false;
+          const dtBC = c.timestamp - b.timestamp;
+          if (dtBC < 0 || dtBC > r1.maxLagMs) return false;
+          return computeDistanceKm(b.location.lat, b.location.lon, c.location.lat, c.location.lon) <= radius1;
+        });
+
+        const id = `${CHAIN_SYNTH_PREFIX}${stepA}-${stepB}-${stepC}-${hashString(a.id + b.id)}`;
+        if (synthesized.has(id)) continue;
+
+        const negMult = negEvidenceMult(`${stepA}|${stepB}`) * negEvidenceMult(`${stepB}|${stepC}`);
+        const confidence = Math.max(0.15, 0.6 * negMult);
+
+        if (cExists) {
+          // Full chain materialized — emit a confirmed chain alert.
+          synthesized.set(id, { ts: now, alertId: id, memberIds: [a.id, b.id] });
+          chainAlerts.push({
+            id,
+            source: 'correlation',
+            severity: 'high',
+            title: `Chain: ${stepA} → ${stepB} → ${stepC}`,
+            body: `Causal chain confirmed.\n• [${stepA}] ${a.title}\n• [${stepB}] ${b.title}\nDownstream ${stepC} already observed.`,
+            timestamp: now,
+            location: b.location,
+            relevanceScore: Math.round(100 * Math.min(1, confidence * 1.3)),
+            acknowledged: false,
+            pinned: false,
+            correlationMembers: [a.id, b.id],
+            correlationPair: [stepA, stepC],
+          });
+        } else {
+          // Early warning — C expected but not yet seen.
+          synthesized.set(id, { ts: now, alertId: id, memberIds: [a.id, b.id] });
+          const remainMs = r1.maxLagMs - (now - b.timestamp);
+          const remainLabel = remainMs > 0 ? `${Math.round(remainMs / 60_000)}min` : 'overdue';
+          chainAlerts.push({
+            id,
+            source: 'correlation',
+            severity: 'medium',
+            title: `Chain warning: ${stepA} → ${stepB} → ${stepC}?`,
+            body: `${stepA} → ${stepB} confirmed. Downstream ${stepC} expected within ${remainLabel} (${radius1}km radius).\n• [${stepA}] ${a.title}\n• [${stepB}] ${b.title}`,
+            timestamp: now,
+            location: b.location,
+            relevanceScore: Math.round(100 * confidence),
+            acknowledged: false,
+            pinned: false,
+            correlationMembers: [a.id, b.id],
+            correlationPair: [stepB, stepC],
+          });
+        }
+        break; // one chain alert per A→B pair
+      }
+    }
+  }
+  return chainAlerts;
+}
 
 /** Auto-disable rules whose user-feedback multiplier has collapsed (sustained dismissals). */
 function ruleEnabled(r: CausalRule): boolean {
@@ -285,6 +499,13 @@ function scan(): void {
     });
   }
 
+  // Temporal chain detection: compose pairwise rules into A→B→C.
+  const chainAlerts = detectChains(leaders, now);
+  synthetic.push(...chainAlerts);
+
+  // Negative evidence tracking: record misses when expected effects don't arrive.
+  updateNegativeEvidence(recent);
+
   if (synthetic.length > 0) {
     unifiedAlertStore.ingest(synthetic);
     void validateWithLlm(synthetic);
@@ -335,6 +556,7 @@ let started = false;
 export function startAlertCorrelator(): void {
   if (started) return;
   started = true;
+  loadNegEvidence();
   window.setInterval(scan, SCAN_INTERVAL_MS);
   window.setInterval(pruneSynth, PRUNE_INTERVAL_MS);
   unifiedAlertStore.subscribe(decayAcked);

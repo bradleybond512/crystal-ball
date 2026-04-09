@@ -31,20 +31,48 @@ interface CausalRule {
   cause: AlertSource;
   effect: AlertSource;
   maxLagMs: number;     // effect must arrive within this window after cause
-  radiusKm: number;     // spatial tolerance between cause and effect
+  radiusKm: number;     // spatial tolerance (or fallback for radiusFn)
+  /** Negative-evidence guard: return false to reject the cause for this rule. */
+  guard?: (cause: UnifiedAlert) => boolean;
+  /** Magnitude-aware radius override. Returns km. */
+  radiusFn?: (cause: UnifiedAlert) => number;
+}
+
+/** Parse a quake magnitude from a title like "M6.5 — 30km off Honshu". */
+function parseMagnitude(a: UnifiedAlert): number | null {
+  const m = /\bM\s*(\d+(?:\.\d+)?)/i.exec(a.title);
+  return m ? Number.parseFloat(m[1]!) : null;
+}
+
+/** Tsunami requires a large quake. Severity proxies "shallow + offshore". */
+function tsunamiGuard(cause: UnifiedAlert): boolean {
+  const mag = parseMagnitude(cause);
+  if (mag !== null && mag < 6.5) return false;
+  return cause.severity === 'critical' || cause.severity === 'high';
+}
+
+/** Quake-magnitude-scaled radius. M<6.5 → 15%, M6.5+ → 40%, M7.5+ → 75%, M8.5+ → 100%. */
+function quakeRadius(base: number): (cause: UnifiedAlert) => number {
+  return (cause: UnifiedAlert) => {
+    const mag = parseMagnitude(cause);
+    if (mag === null) return base * 0.3;
+    if (mag >= 8.5) return base;
+    if (mag >= 7.5) return base * 0.75;
+    if (mag >= 6.5) return base * 0.4;
+    return base * 0.15;
+  };
 }
 
 /** Directional causal rules — cause precedes effect within maxLagMs. */
 const CAUSAL_RULES: readonly CausalRule[] = [
-  { cause: 'earthquake', effect: 'tsunami',       maxLagMs: 60 * 60_000, radiusKm: 2000 }, // basin-scale
-  { cause: 'earthquake', effect: 'gdacs',         maxLagMs: 6 * 60 * 60_000, radiusKm: 300 },
-  { cause: 'earthquake', effect: 'volcano',       maxLagMs: 24 * 60 * 60_000, radiusKm: 200 },
+  { cause: 'earthquake', effect: 'tsunami',       maxLagMs: 60 * 60_000, radiusKm: 2000, guard: tsunamiGuard, radiusFn: quakeRadius(2000) },
+  { cause: 'earthquake', effect: 'gdacs',         maxLagMs: 6 * 60 * 60_000, radiusKm: 300, radiusFn: quakeRadius(300) },
+  { cause: 'earthquake', effect: 'volcano',       maxLagMs: 24 * 60 * 60_000, radiusKm: 200, radiusFn: quakeRadius(200) },
   { cause: 'volcano',    effect: 'gdacs',         maxLagMs: 6 * 60 * 60_000, radiusKm: 300 },
   { cause: 'cyclone',    effect: 'gdacs',         maxLagMs: 12 * 60 * 60_000, radiusKm: 500 },
   { cause: 'cyclone',    effect: 'nws',           maxLagMs: 12 * 60 * 60_000, radiusKm: 500 },
   { cause: 'fire',       effect: 'gdacs',         maxLagMs: 6 * 60 * 60_000, radiusKm: 200 },
   { cause: 'fire',       effect: 'nws',           maxLagMs: 6 * 60 * 60_000, radiusKm: 200 },
-  { cause: 'cyber',      effect: 'local-ids',     maxLagMs: 30 * 60_000, radiusKm: 50 },
   { cause: 'cyber',      effect: 'breaking-news', maxLagMs: 6 * 60 * 60_000, radiusKm: 10_000 },
   { cause: 'oref',       effect: 'breaking-news', maxLagMs: 2 * 60 * 60_000, radiusKm: 500 },
   { cause: 'nws',        effect: 'breaking-news', maxLagMs: 2 * 60 * 60_000, radiusKm: 500 },
@@ -61,30 +89,27 @@ const CAUSAL_RULES: readonly CausalRule[] = [
   { cause: 'gdacs',      effect: 'oref',          maxLagMs: 6 * 60 * 60_000, radiusKm: 200 },
 ];
 
+/** Auto-disable rules whose user-feedback multiplier has collapsed (sustained dismissals). */
+function ruleEnabled(r: CausalRule): boolean {
+  return getPairFeedbackMult(`${r.cause}|${r.effect}`) >= 0.55;
+}
+
+function tryRule(r: CausalRule, cause: UnifiedAlert, effect: UnifiedAlert, dt: number): boolean {
+  if (dt < 0 || dt > r.maxLagMs) return false;
+  if (r.guard && !r.guard(cause)) return false;
+  if (!ruleEnabled(r)) return false;
+  const radius = r.radiusFn ? r.radiusFn(cause) : r.radiusKm;
+  const d = computeDistanceKm(cause.location!.lat, cause.location!.lon, effect.location!.lat, effect.location!.lon);
+  return d <= radius;
+}
+
 /** Match a directional pair against rules, order-sensitive. Returns rule or null. */
 function matchRule(a: UnifiedAlert, b: UnifiedAlert): CausalRule | null {
-  const dt = b.timestamp - a.timestamp;
   if (!a.location || !b.location) return null;
-  // a is cause, b is effect
-  if (dt >= 0) {
-    for (const r of CAUSAL_RULES) {
-      if (r.cause !== a.source || r.effect !== b.source) continue;
-      if (dt > r.maxLagMs) continue;
-      const d = computeDistanceKm(a.location.lat, a.location.lon, b.location.lat, b.location.lon);
-      if (d > r.radiusKm) continue;
-      return r;
-    }
-  }
-  // b is cause, a is effect
-  const dt2 = a.timestamp - b.timestamp;
-  if (dt2 >= 0) {
-    for (const r of CAUSAL_RULES) {
-      if (r.cause !== b.source || r.effect !== a.source) continue;
-      if (dt2 > r.maxLagMs) continue;
-      const d = computeDistanceKm(a.location.lat, a.location.lon, b.location.lat, b.location.lon);
-      if (d > r.radiusKm) continue;
-      return r;
-    }
+  const dt = b.timestamp - a.timestamp;
+  for (const r of CAUSAL_RULES) {
+    if (r.cause === a.source && r.effect === b.source && tryRule(r, a, b, dt)) return r;
+    if (r.cause === b.source && r.effect === a.source && tryRule(r, b, a, -dt)) return r;
   }
   return null;
 }
@@ -185,6 +210,16 @@ function scan(): void {
     const idHash = members.map(m => m.id).sort().join(',');
     const id = `corr-${members.length}-${hashString(idHash)}`;
     if (synthesized.has(id)) continue;
+    // Member-set dedup: skip if a recent synth shares ≥70% of these members.
+    const memberSet = new Set(members.map(m => m.id));
+    let dup = false;
+    for (const v of synthesized.values()) {
+      if (now - v.ts > 30 * 60_000) continue;
+      const inter = v.memberIds.filter(mid => memberSet.has(mid)).length;
+      const union = new Set([...v.memberIds, ...memberSet]).size;
+      if (union > 0 && inter / union >= 0.7) { dup = true; break; }
+    }
+    if (dup) continue;
 
     const sevRank: Record<UnifiedAlert['severity'], number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
     const top = members.reduce((a, b) => sevRank[b.severity] > sevRank[a.severity] ? b : a);

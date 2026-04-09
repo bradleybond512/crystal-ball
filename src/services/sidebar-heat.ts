@@ -23,24 +23,43 @@ function countByPanel(): Map<string, number> {
   return counts;
 }
 
+const SEV_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+function maxSeverityByPanel(): Map<string, string> {
+  const out = new Map<string, string>();
+  const now = Date.now();
+  for (const a of unifiedAlertStore.getAll()) {
+    if (a.acknowledged) continue;
+    if (scoreAlert(a, now) <= 0) continue;
+    const pid = panelForAlert(a);
+    const cur = out.get(pid);
+    if (!cur || (SEV_RANK[a.severity] ?? 0) > (SEV_RANK[cur] ?? 0)) out.set(pid, a.severity);
+  }
+  return out;
+}
+
 function applyHeat(): void {
   const heat = panelHeatMap(unifiedAlertStore.getAll());
   const counts = countByPanel();
+  const maxSev = maxSeverityByPanel();
 
   // Sidebar items
   document.querySelectorAll<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]').forEach(item => {
     const key = item.dataset.panelKey!;
     const score = heat.get(key) ?? 0;
     const count = counts.get(key) ?? 0;
+    const sev = maxSev.get(key);
     item.classList.toggle('is-hot', score > 0);
+    item.classList.remove('heat-critical', 'heat-high', 'heat-medium', 'heat-low');
+    if (sev) item.classList.add(`heat-${sev}`);
     let badge = item.querySelector<HTMLElement>(`.${HEAT_BADGE_CLASS}`);
     if (count > 0) {
       if (!badge) {
         badge = document.createElement('span');
         badge.className = HEAT_BADGE_CLASS;
-        item.appendChild(badge);
+        item.append(badge);
       }
       badge.textContent = String(count);
+      if (sev) badge.dataset.sev = sev;
     } else if (badge) {
       badge.remove();
     }

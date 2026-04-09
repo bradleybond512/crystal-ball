@@ -54,6 +54,8 @@ import {
 } from '@/components';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { TriageBar } from '@/components/TriageBar';
+import { JustInRail } from '@/components/JustInRail';
+import { startPanelNarrator } from '@/services/panel-narrator';
 import { TodayView } from '@/components/TodayView';
 import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -654,6 +656,9 @@ export class PanelLayoutManager implements AppModule {
  // Mount the triage bar above the panel grid (auto-hides when nothing is hot).
  const triageBar = new TriageBar();
  triageBar.mount(panelsGrid.parentElement ?? panelsGrid);
+ const justInRail = new JustInRail();
+ justInRail.mount(document.body);
+ startPanelNarrator();
  startAlertDebug();
  startAlertActivityLog();
  startAlertReactions();

@@ -13,7 +13,7 @@ import { situationEngine } from './situation-engine';
 import { unifiedAlertStore } from './unified-alerts';
 import type { UnifiedAlert } from './unified-alerts';
 import { loadProximityConfig } from './proximity-filter';
-import { runClaudeAgent } from './claude-agent';
+import { runIntel } from './intel-provider';
 import { getActivity } from './alert-activity-log';
 import { rankAlerts } from './alert-routing';
 
@@ -271,7 +271,7 @@ export async function* sendMessage(
 
   try {
  const prompt = buildFullPrompt(text);
- const agentResult = await runClaudeAgent(prompt, signal);
+ const agentResult = await runIntel(prompt, { signal, maxTokens: 600 });
  fullResponse = agentResult.response;
  yield fullResponse;
   } catch (claudeError) {
@@ -323,7 +323,7 @@ export function buildDigestPrompt(): string {
 export async function generateDigest(signal?: AbortSignal): Promise<string> {
   const prompt = buildDigestPrompt();
   try {
-    const { response } = await runClaudeAgent(prompt, signal);
+    const { response } = await runIntel(prompt, { signal, maxTokens: 300 });
     return response;
   } catch {
     return '';

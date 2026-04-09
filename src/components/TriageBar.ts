@@ -6,7 +6,7 @@
  * Auto-hides when there's nothing hot.
  */
 
-/* eslint-disable sonarjs/void-use, sonarjs/no-nested-conditional */
+/* eslint-disable sonarjs/void-use, sonarjs/no-nested-conditional, sonarjs/no-nested-template-literals, sonarjs/regex-complexity */
 import { unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
 import { rankAlerts, panelForAlert, scoreBreakdown } from '@/services/alert-routing';
 import { flashPanel, jumpToPanel, pulseAlertOnMap } from '@/services/alert-reactions';
@@ -138,7 +138,9 @@ export class TriageBar {
   private showCorrelationDetails(a: UnifiedAlert): void {
     const all = unifiedAlertStore.getAll();
     const byId = new Map(all.map(x => [x.id, x]));
-    const members = (a.correlationMembers ?? []).map(id => byId.get(id)).filter((x): x is UnifiedAlert => !!x);
+    const memberIds = a.correlationMembers ?? [];
+    const members = memberIds.map(id => byId.get(id)).filter((x): x is UnifiedAlert => !!x);
+    const staleCount = memberIds.length - members.length;
     const overlay = document.createElement('div');
     overlay.className = 'corr-overlay';
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
@@ -151,7 +153,7 @@ export class TriageBar {
     h.append(title, close);
     const meta = document.createElement('div'); meta.className = 'corr-meta';
     const pair = a.correlationPair ? `${a.correlationPair[0]} → ${a.correlationPair[1]}` : '—';
-    meta.textContent = `Causal pair: ${pair}  ·  members: ${members.length}  ·  confidence ${a.relevanceScore}%`;
+    meta.textContent = `Causal pair: ${pair}  ·  members: ${members.length}${staleCount > 0 ? ` (${staleCount} expired)` : ''}  ·  confidence ${a.relevanceScore}%`;
     const list = document.createElement('div'); list.className = 'corr-list';
     for (const m of members) {
       const row = document.createElement('div'); row.className = 'corr-row';
@@ -172,6 +174,10 @@ export class TriageBar {
     card.append(h, meta, list);
     overlay.append(card);
     document.body.append(overlay);
+    const onKey = (ev: KeyboardEvent): void => {
+      if (ev.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKey); }
+    };
+    document.addEventListener('keydown', onKey);
   }
 
   private showContextMenu(e: MouseEvent, alert: UnifiedAlert): void {

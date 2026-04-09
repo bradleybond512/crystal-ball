@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity, sonarjs/no-alphabetical-sort, sonarjs/reduce-initial-value, unicorn/prefer-math-trunc, unicorn/prefer-code-point, sonarjs/no-nested-conditional, @typescript-eslint/prefer-for-of, @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity, sonarjs/no-alphabetical-sort, sonarjs/reduce-initial-value, unicorn/prefer-math-trunc, unicorn/prefer-code-point, sonarjs/no-nested-conditional, @typescript-eslint/prefer-for-of, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-template-literals */
 /**
  * Alert correlator — synthesize `correlation` alerts when ≥2 alerts from
  * causally-compatible sources cluster in space and time.
@@ -20,6 +20,7 @@ import { getSourceTrust } from './source-trust';
 import { canonicalEntityKey } from './entity-key';
 import { recordCoOccurrence } from './pair-discovery';
 import { getPairFeedbackMult } from './correlation-feedback';
+import { runIntel } from './intel-provider';
 
 const WINDOW_MS = 30 * 60_000;            // widened so chain links can catch up
 const SCAN_INTERVAL_MS = 60_000;
@@ -53,6 +54,11 @@ const CAUSAL_RULES: readonly CausalRule[] = [
   { cause: 'power-grid', effect: 'comms-health',  maxLagMs: 2 * 60 * 60_000, radiusKm: 5000 },
   { cause: 'cyclone',    effect: 'power-grid',    maxLagMs: 12 * 60 * 60_000, radiusKm: 800 },
   { cause: 'cyber',      effect: 'power-grid',    maxLagMs: 6 * 60 * 60_000, radiusKm: 5000 },
+  // Cyber kill-chain: a known threat seen by your local sensors = it's hitting you.
+  { cause: 'cyber',      effect: 'local-ids',     maxLagMs: 24 * 60 * 60_000, radiusKm: 50 },
+  // Conflict escalation: airstrike then rocket alert nearby = active engagement.
+  { cause: 'oref',       effect: 'gdacs',         maxLagMs: 6 * 60 * 60_000, radiusKm: 200 },
+  { cause: 'gdacs',      effect: 'oref',          maxLagMs: 6 * 60 * 60_000, radiusKm: 200 },
 ];
 
 /** Match a directional pair against rules, order-sensitive. Returns rule or null. */
@@ -146,6 +152,7 @@ function scan(): void {
   const now = Date.now();
   const recent = unifiedAlertStore.getAll().filter(a =>
     !a.acknowledged
+    && (!a.snoozedUntil || a.snoozedUntil < now)
     && a.source !== 'correlation'
     && a.location
     && now - a.timestamp < WINDOW_MS,
@@ -220,7 +227,27 @@ function scan(): void {
     });
   }
 
-  if (synthetic.length > 0) unifiedAlertStore.ingest(synthetic);
+  if (synthetic.length > 0) {
+    unifiedAlertStore.ingest(synthetic);
+    void validateWithLlm(synthetic);
+  }
+}
+
+async function validateWithLlm(alerts: UnifiedAlert[]): Promise<void> {
+  for (const a of alerts) {
+    if (!a.correlationPair) continue;
+    const prompt = `You are a situational-awareness analyst. A system clustered these alerts as causally related (${a.correlationPair[0]} -> ${a.correlationPair[1]}):\n\n${a.body}\n\nIs this a real causal correlation or coincidence? Respond with exactly one line:\nVERDICT: <REAL|WEAK|COINCIDENCE>\nREASON: <one short sentence>`;
+    try {
+      const r = await runIntel(prompt, { maxTokens: 80, temperature: 0.1 });
+      const m = /VERDICT:\s*(REAL|WEAK|COINCIDENCE)/i.exec(r.response);
+      if (!m) continue;
+      const verdict = m[1]!.toUpperCase();
+      const mult = verdict === 'REAL' ? 1.15 : (verdict === 'COINCIDENCE' ? 0.5 : 0.85);
+      const newScore = Math.round(Math.max(10, Math.min(100, (a.relevanceScore ?? 50) * mult)));
+      const reason = /REASON:\s*(.+)/i.exec(r.response)?.[1]?.trim() ?? '';
+      unifiedAlertStore.ingest([{ ...a, relevanceScore: newScore, body: `${a.body}\n\nLLM ${verdict}${reason ? `: ${reason}` : ''}` }]);
+    } catch { /* local model unavailable */ }
+  }
 }
 
 /** Prune synthesized cache entries older than TTL. */

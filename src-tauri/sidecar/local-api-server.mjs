@@ -1515,6 +1515,79 @@ async function handleOllamaStream(requestUrl, req, res, context) {
   }
 }
 
+// Generic non-streaming intel generation. Accepts { prompt, system?, maxTokens?,
+// temperature? } and returns { response, model } from OLLAMA_API_URL (any
+// OpenAI-compatible local endpoint, e.g. LM Studio at http://localhost:1234).
+async function handleIntelGenerate(req, res, context) {
+  const cors = getSidecarCorsOrigin(req);
+  const headers = { 'content-type': 'application/json', 'access-control-allow-origin': cors, 'vary': 'Origin' };
+  const body = await readBody(req);
+  if (!body) { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'expected JSON body' })); return; }
+  let parsed;
+  try { parsed = JSON.parse(body.toString()); }
+  catch { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'invalid JSON' })); return; }
+
+  const baseUrl = process.env.OLLAMA_API_URL || 'http://localhost:1234';
+  const rawModel = process.env.OLLAMA_MODEL || 'local-model';
+  const model = /^[a-zA-Z0-9._:/-]{1,80}$/.test(rawModel) ? rawModel : 'local-model';
+  const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.slice(0, 8000) : '';
+  const system = typeof parsed.system === 'string' ? parsed.system.slice(0, 2000) : 'You are a concise intelligence analyst. Be factual, direct, no preamble.';
+  const maxTokens = Math.min(2048, Math.max(16, Number(parsed.maxTokens) || 400));
+  const temperature = Math.min(1, Math.max(0, Number(parsed.temperature) || 0.3));
+  if (!prompt) { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'prompt required' })); return; }
+
+  let apiUrl;
+  try { apiUrl = new URL('/v1/chat/completions', baseUrl).toString(); }
+  catch { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'invalid OLLAMA_API_URL' })); return; }
+
+  const requestBody = JSON.stringify({
+    model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: prompt },
+    ],
+    temperature,
+    max_tokens: maxTokens,
+    stream: false,
+  });
+
+  try {
+    const u = new URL(apiUrl);
+    const mod = u.protocol === 'https:' ? https : http;
+    const reqOptions = {
+      hostname: u.hostname,
+      port: u.port || (u.protocol === 'https:' ? 443 : 80),
+      path: u.pathname + u.search,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(requestBody) },
+      family: 4,
+    };
+    const result = await new Promise((resolve, reject) => {
+      const r = mod.request(reqOptions, (resp) => {
+        const chunks = [];
+        resp.on('data', c => chunks.push(c));
+        resp.on('end', () => {
+          const text = Buffer.concat(chunks).toString();
+          if (resp.statusCode !== 200) return reject(new Error(`upstream ${resp.statusCode}: ${text.slice(0, 200)}`));
+          try { resolve(JSON.parse(text)); } catch (error) { reject(error); }
+        });
+        resp.on('error', reject);
+      });
+      r.on('error', reject);
+      r.setTimeout(60_000, () => { r.destroy(new Error('timeout')); });
+      r.write(requestBody);
+      r.end();
+    });
+    const response = result?.choices?.[0]?.message?.content ?? '';
+    res.writeHead(200, headers);
+    res.end(JSON.stringify({ response, model }));
+  } catch (error) {
+    context.logger.warn('[intel-generate] error:', error.message);
+    res.writeHead(502, headers);
+    res.end(JSON.stringify({ error: error.message }));
+  }
+}
+
 function extractAlertCentroid(feature) {
   const geom = feature?.geometry;
   if (!geom) return null;
@@ -5235,6 +5308,7 @@ async function dispatch(requestUrl, req, routes, context) {
  // ── Suricata fast.log (alerts only — small and append-only) ──────
  const fastPath = '/opt/homebrew/var/log/suricata/fast.log';
  if (existsSync(fastPath)) {
+ // eslint-disable-next-line sonarjs/regex-complexity
  const re = /^(\d{2})\/(\d{2})\/(\d{4})-(\d{2}:\d{2}:\d{2})\.\d+\s+\[\*\*\]\s+\[\d+:\d+:\d+\]\s+(.+?)\s+\[\*\*\]\s+\[Classification:\s+(.+?)\]\s+\[Priority:\s+(\d+)\]\s+\{(\w+)\}\s+(\S+?):(\d+)\s+->\s+(\S+?):(\d+)/;
  const SURICATA_NOISE = /SURICATA STREAM|SURICATA HTTP Response excessive header/;
  for (const line of _tailFile(fastPath, 262_144)) {
@@ -5968,6 +6042,22 @@ export async function createLocalApiServer(options = {}) {
  }
  }
  await handleOllamaStream(requestUrl, req, res, context);
+ return;
+ }
+
+ // Generic intel generation — proxies arbitrary prompt/system to a local
+ // OpenAI-compatible endpoint (LM Studio, Ollama, etc.) at OLLAMA_API_URL.
+ if (requestUrl.pathname === '/api/intel-generate' && req.method === 'POST') {
+ const expectedToken = process.env.LOCAL_API_TOKEN;
+ if (expectedToken) {
+ const authHeader = req.headers['authorization'] || '';
+ if (authHeader !== `Bearer ${expectedToken}`) {
+ res.writeHead(401, { 'content-type': 'application/json' });
+ res.end(JSON.stringify({ error: 'Unauthorized' }));
+ return;
+ }
+ }
+ await handleIntelGenerate(req, res, context);
  return;
  }
 

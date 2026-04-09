@@ -165,6 +165,7 @@ export class TriageBar {
       const panelId = panelForAlert(a);
       jumpToPanel(panelId);
       flashPanel(panelId);
+      document.dispatchEvent(new CustomEvent('cb:show-related', { detail: { alertId: a.id, title: a.title } }));
       if (a.location) {
         document.dispatchEvent(new CustomEvent('cb:focus-map', {
           detail: { lat: a.location.lat, lon: a.location.lon, zoom: 5 },

@@ -11,6 +11,8 @@
 import { getSourceHealth, type SourceHealth } from '@/services/source-health';
 import { getWatchlist, saveWatchlist, type WatchlistEntry } from '@/services/watchlist';
 import { getForecastAccuracy } from '@/services/forecast-accuracy';
+import { getSourceTrust } from '@/services/source-trust';
+import { getSourceFeedbackMult } from '@/services/source-feedback';
 
 export class StatusOverlay {
   private overlay: HTMLElement;
@@ -135,7 +137,21 @@ export class StatusOverlay {
     const lastOkAgo = h.lastOk ? `${Math.round((Date.now() - h.lastOk) / 60_000)}m ago` : 'never';
     stat.textContent = `${h.successCount}/${total} · ${lastOkAgo}`;
     const badge = document.createElement('span'); badge.className = 'status-badge'; badge.textContent = h.status.toUpperCase();
-    row.append(dot, name, stat, badge);
+    // Trust score bar
+    const sourceName = h.name as import('@/services/unified-alerts').AlertSource;
+    const baseTrust = getSourceTrust(sourceName);
+    const feedbackMult = getSourceFeedbackMult(sourceName);
+    const effectiveTrust = Math.min(1, baseTrust * feedbackMult);
+    const trustBar = document.createElement('div'); trustBar.className = 'status-trust-bar';
+    const trustFill = document.createElement('div'); trustFill.className = 'status-trust-fill';
+    trustFill.style.width = `${Math.round(effectiveTrust * 100)}%`;
+    let trustColor = '#ff4444';
+    if (effectiveTrust >= 0.8) trustColor = '#44cc88';
+    else if (effectiveTrust >= 0.5) trustColor = '#ffcc00';
+    trustFill.style.background = trustColor;
+    trustBar.append(trustFill);
+    trustBar.title = `Trust: ${(effectiveTrust * 100).toFixed(0)}% (base ${(baseTrust * 100).toFixed(0)}% × feedback ${feedbackMult.toFixed(2)})`;
+    row.append(dot, name, stat, badge, trustBar);
     return row;
   }
 

@@ -19017,6 +19017,65 @@ body.has-breaking-alert .panels-grid {
   color: rgba(255, 255, 255, 0.6);
 }
 
+/* ── Related Strip ──────────────────────────────────────────────── */
+.related-strip {
+  position: fixed;
+  top: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1060;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(10, 15, 30, 0.94);
+  border: 1px solid rgba(100, 200, 255, 0.3);
+  border-radius: 8px;
+  backdrop-filter: blur(12px);
+  max-width: 90vw;
+  overflow-x: auto;
+}
+.rs-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rs-chip {
+  background: rgba(100, 200, 255, 0.15);
+  border: 1px solid rgba(100, 200, 255, 0.3);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  color: rgba(100, 200, 255, 0.9);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rs-chip:hover { background: rgba(100, 200, 255, 0.3); }
+.rs-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+/* ── Source trust bar in Status Overlay ─────────────────────────── */
+.status-trust-bar {
+  width: 40px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.status-trust-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
 /* ── Related badge in Inbox ─────────────────────────────────────── */
 .uai-related-badge {
   display: inline-block;

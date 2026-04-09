@@ -72,6 +72,8 @@ import { startSituationFeed } from '@/services/situation-feed';
 import { startForecastAccuracy } from '@/services/forecast-accuracy';
 import { startWatchlistProximity } from '@/services/watchlist-proximity';
 import { CrystalBallSays } from '@/components/CrystalBallSays';
+import { RelatedStrip } from '@/components/RelatedStrip';
+import { startAlertGeoClustering } from '@/services/alert-geo-cluster';
 import { EntityHeatRail } from '@/components/EntityHeatRail';
 import { AlertTimeline } from '@/components/AlertTimeline';
 import { StatusOverlay } from '@/components/StatusOverlay';
@@ -689,6 +691,9 @@ export class PanelLayoutManager implements AppModule {
  startWatchlistProximity();
  const cbSays = new CrystalBallSays();
  cbSays.mount(document.body);
+ const relatedStrip = new RelatedStrip();
+ relatedStrip.mount(document.body);
+ startAlertGeoClustering();
  const entityRail = new EntityHeatRail();
  entityRail.mount(document.body);
  const alertTimeline = new AlertTimeline();

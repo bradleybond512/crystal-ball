@@ -18619,3 +18619,153 @@ body.has-breaking-alert .panels-grid {
   border: 1px solid rgba(255, 255, 255, 0.6);
   flex-shrink: 0;
 }
+
+/* ─── Triage bar domain facets ─── */
+.triage-bar-facets {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-right: 8px;
+}
+.triage-facet {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.65);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+}
+.triage-facet:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.triage-facet.active { background: rgba(100, 200, 255, 0.2); border-color: rgba(100, 200, 255, 0.6); color: #fff; }
+
+/* ─── Entity heat rail ─── */
+.entity-heat-rail {
+  position: fixed;
+  top: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(12, 16, 24, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  backdrop-filter: blur(12px);
+  z-index: 45;
+  max-width: 90vw;
+  overflow-x: auto;
+  font-size: 11px;
+}
+.ehr-label {
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  color: rgba(100, 200, 255, 0.9);
+  padding-right: 2px;
+}
+.ehr-anomaly-label { color: rgba(255, 180, 80, 0.9); }
+.ehr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ehr-chip:hover { background: rgba(100, 200, 255, 0.15); }
+.ehr-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(100, 200, 255, 0.8);
+}
+.ehr-name { color: rgba(255, 255, 255, 0.9); font-weight: 500; }
+.ehr-count { color: rgba(255, 255, 255, 0.6); font-variant-numeric: tabular-nums; }
+.ehr-anomaly { background: rgba(255, 140, 40, 0.15); border-color: rgba(255, 140, 40, 0.4); }
+.ehr-anomaly .ehr-dot { background: #ff8c28; }
+.ehr-anomaly-burst { animation: pulse-orange 1.5s infinite; }
+@keyframes pulse-orange {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 140, 40, 0.6); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 140, 40, 0); }
+}
+
+/* ─── Alert timeline ─── */
+.alert-timeline {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 6px 8px;
+  background: rgba(12, 16, 24, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  backdrop-filter: blur(12px);
+  z-index: 44;
+}
+.at-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.5px;
+  padding-bottom: 2px;
+}
+.at-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 28px;
+  width: 220px;
+}
+.at-bar {
+  flex: 1;
+  min-height: 2px;
+  background: rgba(120, 120, 140, 0.4);
+  border-radius: 1px;
+  cursor: default;
+}
+.at-bar.at-sev-1 { background: rgba(150, 200, 255, 0.6); }
+.at-bar.at-sev-2 { background: rgba(255, 210, 60, 0.7); cursor: pointer; }
+.at-bar.at-sev-3 { background: rgba(255, 140, 40, 0.85); cursor: pointer; }
+.at-bar.at-sev-4 { background: rgba(255, 60, 60, 0.95); cursor: pointer; }
+.at-bar:hover { filter: brightness(1.3); }
+.at-dropdown {
+  position: fixed;
+  background: rgba(12, 16, 24, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 6px;
+  max-width: 360px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 200;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.at-row {
+  display: flex;
+  gap: 6px;
+  padding: 4px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.at-row:hover { background: rgba(100, 200, 255, 0.15); }
+.at-row-src {
+  color: rgba(100, 200, 255, 0.8);
+  font-weight: 600;
+  font-size: 9px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+.at-row-title { color: rgba(255, 255, 255, 0.9); }
+.at-row-critical .at-row-src { color: #ff4040; }
+.at-row-high .at-row-src { color: #ff8c28; }

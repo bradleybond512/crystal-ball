@@ -16,6 +16,7 @@ import { fetchRadiationAlerts } from './radiation-monitoring';
 import { fetchVolcanoAlerts } from './volcano-alerts';
 import { fetchAirQualityAlerts } from './air-quality';
 import { fetchAviationHazards } from './aviation-hazards';
+import { recordFetch } from './source-health';
 
 const POLL_SLOW_MS = 15 * 60_000;   // 15 min — most intel
 const POLL_FAST_MS = 5 * 60_000;    // 5 min — space weather, aviation
@@ -298,12 +299,30 @@ async function pollAviation(): Promise<void> {
   } catch { /* noop */ }
 }
 
+function tracked(name: string, fn: () => Promise<void>): () => Promise<void> {
+  return async () => {
+    try { await fn(); recordFetch(name, true); }
+    catch { recordFetch(name, false); }
+  };
+}
+
 let started = false;
 export function startIntelChannelsBridge(): void {
   if (started) return;
   started = true;
-  const slow = [pollSpc, pollDisease, pollMaritime, pollTravel, pollRadiation, pollVolcano, pollAirQuality];
-  const fast = [pollSpaceWeather, pollAviation];
+  const slow = [
+    tracked('spc', pollSpc),
+    tracked('disease', pollDisease),
+    tracked('maritime', pollMaritime),
+    tracked('travel-advisory', pollTravel),
+    tracked('radiation', pollRadiation),
+    tracked('volcano', pollVolcano),
+    tracked('air-quality', pollAirQuality),
+  ];
+  const fast = [
+    tracked('space-weather', pollSpaceWeather),
+    tracked('aviation-hazard', pollAviation),
+  ];
   for (const fn of [...slow, ...fast]) void fn();
   window.setInterval(() => { for (const fn of slow) void fn(); }, POLL_SLOW_MS);
   window.setInterval(() => { for (const fn of fast) void fn(); }, POLL_FAST_MS);

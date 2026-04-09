@@ -15,6 +15,29 @@ import { getWatchlist, saveWatchlist } from '@/services/watchlist';
 
 const MAX_VISIBLE = 5;
 
+type Domain = 'all' | 'weather' | 'conflict' | 'cyber' | 'health' | 'infra' | 'space';
+const DOMAIN_LABELS: Record<Domain, string> = {
+  all: 'All', weather: 'Weather', conflict: 'Conflict', cyber: 'Cyber',
+  health: 'Health', infra: 'Infra', space: 'Space',
+};
+const SOURCE_DOMAIN: Record<string, Exclude<Domain, 'all'>> = {
+  nws: 'weather', gdacs: 'weather', tsunami: 'weather', cyclone: 'weather', fire: 'weather',
+  earthquake: 'weather', volcano: 'weather', spc: 'weather', hazard: 'weather', 'air-quality': 'weather',
+  oref: 'conflict', 'breaking-news': 'conflict',
+  cyber: 'cyber', 'local-ids': 'cyber',
+  disease: 'health', radiation: 'health',
+  'power-grid': 'infra', 'comms-health': 'infra', maritime: 'infra',
+  'aviation-hazard': 'infra', 'travel-advisory': 'infra', resource: 'infra',
+  'space-weather': 'space',
+};
+const FACET_KEY = 'crystalball-triage-facet-v1';
+function loadFacet(): Domain {
+  try { return (localStorage.getItem(FACET_KEY) as Domain) || 'all'; } catch { return 'all'; }
+}
+function saveFacet(d: Domain): void {
+  try { localStorage.setItem(FACET_KEY, d); } catch { /* noop */ }
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
@@ -23,6 +46,7 @@ export class TriageBar {
   private element: HTMLElement;
   private unsubscribe: (() => void) | null = null;
   private refreshTimer: number | null = null;
+  private facet: Domain = loadFacet();
 
   constructor() {
     this.element = document.createElement('div');
@@ -47,7 +71,10 @@ export class TriageBar {
   getElement(): HTMLElement { return this.element; }
 
   private render(): void {
-    const ranked = rankAlerts(unifiedAlertStore.getAll());
+    const all = rankAlerts(unifiedAlertStore.getAll());
+    const ranked = this.facet === 'all'
+      ? all
+      : all.filter(a => SOURCE_DOMAIN[a.source] === this.facet || a.source === 'correlation');
     // Group consecutive alerts from the same source so storms collapse to one row.
     const grouped: { leader: UnifiedAlert; rest: UnifiedAlert[] }[] = [];
     for (const a of ranked) {
@@ -56,7 +83,7 @@ export class TriageBar {
       else grouped.push({ leader: a, rest: [] });
       if (grouped.length >= MAX_VISIBLE) break;
     }
-    if (grouped.length === 0) {
+    if (grouped.length === 0 && this.facet === 'all') {
       this.element.hidden = true;
       this.element.replaceChildren();
       return;
@@ -65,6 +92,20 @@ export class TriageBar {
     const label = document.createElement('div');
     label.className = 'triage-bar-label';
     label.textContent = '⚡ TRIAGE';
+    // Domain facet pills
+    const facets = document.createElement('div');
+    facets.className = 'triage-bar-facets';
+    for (const d of Object.keys(DOMAIN_LABELS) as Domain[]) {
+      const pill = document.createElement('button');
+      pill.className = `triage-facet${this.facet === d ? ' active' : ''}`;
+      pill.textContent = DOMAIN_LABELS[d];
+      pill.addEventListener('click', () => {
+        this.facet = d;
+        saveFacet(d);
+        this.render();
+      });
+      facets.append(pill);
+    }
     const items = document.createElement('div');
     items.className = 'triage-bar-items';
     for (const g of grouped) items.append(this.makeItem(g.leader, g.rest.length));
@@ -89,7 +130,7 @@ export class TriageBar {
       setPreset(PRESET_NEXT[getPreset()]);
       presetBtn.textContent = PRESET_LABEL[getPreset()];
     });
-    this.element.replaceChildren(label, items, ack, presetBtn);
+    this.element.replaceChildren(label, facets, items, ack, presetBtn);
   }
 
   private makeItem(a: UnifiedAlert, extraCount: number): HTMLElement {

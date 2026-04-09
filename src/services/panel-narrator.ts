@@ -53,9 +53,33 @@ async function narrateNext(): Promise<void> {
   } catch { /* local LLM unavailable — silently skip */ }
 }
 
+async function narrateDailyRollup(): Promise<void> {
+  // One rolling cross-panel summary dispatched to the top-of-app bar.
+  const tiles = [...document.querySelectorAll<HTMLElement>('#panelsGrid [data-panel]')];
+  const snippets: string[] = [];
+  for (const t of tiles.slice(0, 12)) {
+    const id = t.dataset.panel!;
+    if (SKIP_PANELS.has(id)) continue;
+    const txt = extractText(id).slice(0, 300);
+    if (txt.length < MIN_TEXT_LEN) continue;
+    snippets.push(`[${id}] ${txt}`);
+  }
+  if (snippets.length === 0) return;
+  const prompt = `You are a situational analyst. In 3 short bullets (max 15 words each), summarize the most important cross-panel developments right now. No preamble.\n\n${snippets.join('\n\n').slice(0, 3500)}`;
+  try {
+    const r = await runIntel(prompt, { maxTokens: 180, temperature: 0.2 });
+    const text = r.response.trim();
+    if (!text) return;
+    document.dispatchEvent(new CustomEvent('cb:daily-rollup', { detail: { text } }));
+  } catch { /* noop */ }
+}
+
 export function startPanelNarrator(): void {
   if (started) return;
   started = true;
   window.setTimeout(() => { void narrateNext(); }, 15_000);
   window.setInterval(() => { void narrateNext(); }, CYCLE_MS);
+  // Daily rollup every 15 minutes
+  window.setTimeout(() => { void narrateDailyRollup(); }, 45_000);
+  window.setInterval(() => { void narrateDailyRollup(); }, 15 * 60_000);
 }

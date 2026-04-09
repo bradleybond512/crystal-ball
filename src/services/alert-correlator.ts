@@ -87,6 +87,29 @@ const CAUSAL_RULES: readonly CausalRule[] = [
   // Conflict escalation: airstrike then rocket alert nearby = active engagement.
   { cause: 'oref',       effect: 'gdacs',         maxLagMs: 6 * 60 * 60_000, radiusKm: 200 },
   { cause: 'gdacs',      effect: 'oref',          maxLagMs: 6 * 60 * 60_000, radiusKm: 200 },
+  // Cross-channel rules unlocked by intel-channels-bridge:
+  // Geomagnetic storm → grid stress (global effect, huge radius)
+  { cause: 'space-weather', effect: 'power-grid', maxLagMs: 12 * 60 * 60_000, radiusKm: 20_000 },
+  { cause: 'space-weather', effect: 'comms-health', maxLagMs: 12 * 60 * 60_000, radiusKm: 20_000 },
+  { cause: 'space-weather', effect: 'aviation-hazard', maxLagMs: 12 * 60 * 60_000, radiusKm: 20_000 },
+  // Volcano → aviation ash SIGMETs + nearby air quality
+  { cause: 'volcano',    effect: 'aviation-hazard', maxLagMs: 24 * 60 * 60_000, radiusKm: 1500 },
+  { cause: 'volcano',    effect: 'air-quality',    maxLagMs: 24 * 60 * 60_000, radiusKm: 500 },
+  // Major quake → radiation (reactor proximity heuristic, small radius)
+  { cause: 'earthquake', effect: 'radiation',       maxLagMs: 24 * 60 * 60_000, radiusKm: 150, guard: tsunamiGuard },
+  // Disease outbreak → travel advisory
+  { cause: 'disease',    effect: 'travel-advisory', maxLagMs: 7 * 24 * 60 * 60_000, radiusKm: 2000 },
+  // SPC severe convective outlook → grid stress
+  { cause: 'spc',        effect: 'power-grid',      maxLagMs: 12 * 60 * 60_000, radiusKm: 600 },
+  { cause: 'spc',        effect: 'nws',             maxLagMs: 6 * 60 * 60_000, radiusKm: 400 },
+  // Cyclone → maritime + aviation + travel
+  { cause: 'cyclone',    effect: 'maritime',        maxLagMs: 24 * 60 * 60_000, radiusKm: 1500 },
+  { cause: 'cyclone',    effect: 'aviation-hazard', maxLagMs: 24 * 60 * 60_000, radiusKm: 1500 },
+  { cause: 'cyclone',    effect: 'travel-advisory', maxLagMs: 48 * 60 * 60_000, radiusKm: 1500 },
+  // Radiation spike → disease/health + travel
+  { cause: 'radiation',  effect: 'travel-advisory', maxLagMs: 48 * 60 * 60_000, radiusKm: 500 },
+  // Fire → air quality downwind
+  { cause: 'fire',       effect: 'air-quality',     maxLagMs: 24 * 60 * 60_000, radiusKm: 800 },
 ];
 
 /** Auto-disable rules whose user-feedback multiplier has collapsed (sustained dismissals). */

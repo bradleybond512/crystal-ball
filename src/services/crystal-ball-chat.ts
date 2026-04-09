@@ -305,15 +305,30 @@ export function markDigestShown(): void {
  * generates a 3-bullet digest using the same context the chat does.
  */
 export function buildDigestPrompt(): string {
-  const ranked = rankAlerts(unifiedAlertStore.getAll()).slice(0, 8);
+  const ranked = rankAlerts(unifiedAlertStore.getAll()).slice(0, 20);
   const recent = getActivity().slice(0, 15);
-  const top = ranked.map(a => `- [${a.severity}] ${a.title}`).join('\n');
+  // Group by domain so the model sees cross-channel spread.
+  const byDomain = new Map<string, string[]>();
+  for (const a of ranked) {
+    const d = a.source;
+    const arr = byDomain.get(d) ?? [];
+    arr.push(`[${a.severity}] ${a.title}`);
+    byDomain.set(d, arr);
+  }
+  const domainSummary = [...byDomain.entries()]
+    .map(([d, lines]) => `${d} (${lines.length}): ${lines.slice(0, 2).join(' | ')}`)
+    .join('\n');
+  const top = ranked.slice(0, 10).map(a => `- [${a.severity}] (${a.source}) ${a.title}`).join('\n');
   const activity = recent.map(e => `- ${e.kind}: ${e.title}`).join('\n');
   return [
-    'You are the Crystal Ball intelligence analyst. Generate a 3-bullet "since you last looked" digest.',
-    'Be terse, factual, and actionable. No headers, no preamble — just three bullets.',
+    'You are the Crystal Ball intelligence analyst. Generate a 5-bullet daily brief for the operator.',
+    'Each bullet = ONE story. Lead with the fact, then WHY it matters (1 short clause), then implication for the operator.',
+    'Prioritize cross-domain stories (e.g. space weather + grid, quake + tsunami). Call out if multiple sources converge.',
+    'Be terse and factual. No headers, no preamble — exactly five bullets starting with "•".',
     '',
-    `Top active alerts (ranked):\n${top || '(none)'}`,
+    `Top active alerts (ranked by hotness):\n${top || '(none)'}`,
+    '',
+    `Cross-domain spread:\n${domainSummary || '(none)'}`,
     '',
     `Recent activity:\n${activity || '(none)'}`,
   ].join('\n');

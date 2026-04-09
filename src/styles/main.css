@@ -18579,3 +18579,43 @@ body.has-breaking-alert .panels-grid {
   0%, 100% { box-shadow: 0 0 6px rgba(239, 68, 68, 0.5); }
   50% { box-shadow: 0 0 14px rgba(239, 68, 68, 0.95); }
 }
+
+/* ── SIGINT legend chip ───────────────────────────────────────────── */
+.sigint-legend {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: rgba(20, 22, 30, 0.88);
+  border: 1px solid rgba(200, 40, 255, 0.35);
+  border-radius: 6px;
+  font-size: 10px;
+  color: #ddd;
+  backdrop-filter: blur(8px);
+  z-index: 5;
+  pointer-events: none;
+}
+.sigint-legend .legend-label-title {
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
+.sigint-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sigint-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  flex-shrink: 0;
+}

@@ -4318,6 +4318,34 @@ export class DeckGLMap {
  `;
 
  this.container.append(legend);
+
+ // SIGINT legend chip — only visible when the SIGINT layer is active.
+ const sigintLegend = document.createElement('div');
+ sigintLegend.className = 'map-legend deckgl-legend sigint-legend';
+ sigintLegend.id = 'sigintLegend';
+ sigintLegend.hidden = true;
+ const swatch = (rgb: string, label: string): HTMLElement => {
+ const item = document.createElement('span');
+ item.className = 'legend-item';
+ const sw = document.createElement('span');
+ sw.className = 'sigint-swatch';
+ sw.style.background = rgb;
+ const lbl = document.createElement('span');
+ lbl.className = 'legend-label';
+ lbl.textContent = label;
+ item.append(sw, lbl);
+ return item;
+ };
+ const title = document.createElement('span');
+ title.className = 'legend-label-title';
+ title.textContent = 'SIGINT clusters';
+ sigintLegend.append(
+ title,
+ swatch('rgb(200, 40, 255)', 'GPS jamming'),
+ swatch('rgb(40, 180, 255)', 'BGP anomaly'),
+ swatch('rgb(255, 140, 30)', 'Cable outage'),
+ );
+ this.container.append(sigintLegend);
   }
 
   // Public API methods (matching MapComponent interface)
@@ -4361,6 +4389,8 @@ export class DeckGLMap {
  this.deckOverlay?.setProps({ layers: this.buildLayers() });
  this.syncWeatherRasterLayers();
  this.syncBuildingExtrusions();
+ const sigintLegend = this.container.querySelector<HTMLElement>('#sigintLegend');
+ if (sigintLegend) sigintLegend.hidden = !this.state.layers.sigintConvergence;
  } catch { /* map may be mid-teardown (null.getProjection) */ }
  const elapsed = performance.now() - startTime;
  if (import.meta.env.DEV && elapsed > 16) {

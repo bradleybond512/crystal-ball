@@ -10,6 +10,7 @@
 
 import { getSourceHealth, type SourceHealth } from '@/services/source-health';
 import { getWatchlist, saveWatchlist, type WatchlistEntry } from '@/services/watchlist';
+import { getForecastAccuracy } from '@/services/forecast-accuracy';
 
 export class StatusOverlay {
   private overlay: HTMLElement;
@@ -72,6 +73,9 @@ export class StatusOverlay {
     rollupSec.append(rb);
     card.append(rollupSec);
 
+    // Forecast accuracy section
+    card.append(this.renderForecastSection());
+
     // Source health section
     card.append(this.renderHealthSection());
 
@@ -79,6 +83,28 @@ export class StatusOverlay {
     card.append(this.renderWatchlistSection());
 
     this.overlay.append(card);
+  }
+
+  private renderForecastSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'status-section';
+    const h = document.createElement('h3'); h.textContent = 'Forecast Accuracy';
+    sec.append(h);
+    const acc = getForecastAccuracy();
+    if (acc.totalPredictions === 0) {
+      const empty = document.createElement('p'); empty.className = 'status-empty';
+      empty.textContent = '(no predictions logged yet)';
+      sec.append(empty);
+      return sec;
+    }
+    const bar = document.createElement('div'); bar.className = 'status-forecast-bar';
+    const fill = document.createElement('div'); fill.className = 'status-forecast-fill';
+    fill.style.width = `${acc.accuracy}%`;
+    bar.append(fill);
+    const label = document.createElement('div'); label.className = 'status-forecast-label';
+    label.textContent = `${acc.accuracy}% accuracy (${acc.hits} hits / ${acc.hits + acc.misses} resolved, ${acc.pending} pending)`;
+    sec.append(bar, label);
+    return sec;
   }
 
   private renderHealthSection(): HTMLElement {

@@ -18940,6 +18940,84 @@ body.has-breaking-alert .panels-grid {
 .triage-lc-resolved { color: #666; }
 
 /* ── Related badge in Inbox ─────────────────────────────────────── */
+/* ── Crystal Ball Says strip ────────────────────────────────────── */
+.cbs-strip {
+  position: fixed;
+  bottom: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: rgba(10, 15, 30, 0.92);
+  border: 1px solid rgba(120, 80, 255, 0.3);
+  border-radius: 8px;
+  backdrop-filter: blur(12px);
+  max-width: 90vw;
+  overflow-x: auto;
+}
+.cbs-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: rgba(180, 140, 255, 0.9);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cbs-items { display: flex; gap: 8px; }
+.cbs-card {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(120, 80, 255, 0.1);
+  border-left: 2px solid rgba(120, 80, 255, 0.4);
+  min-width: 180px;
+  max-width: 300px;
+}
+.cbs-header { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.cbs-title { font-size: 11px; font-weight: 600; color: #e0e0e0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.cbs-phase-badge { font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 3px; }
+.cbs-badge-active { background: rgba(255, 60, 60, 0.3); color: #ff6666; }
+.cbs-badge-developing { background: rgba(255, 180, 0, 0.3); color: #ffbb33; }
+.cbs-badge-emerging { background: rgba(100, 200, 255, 0.3); color: #88ccff; }
+.cbs-confidence { font-size: 10px; color: rgba(255, 255, 255, 0.5); }
+.cbs-body { font-size: 10px; color: rgba(255, 255, 255, 0.7); }
+.cbs-scenario { display: flex; gap: 4px; align-items: center; margin-bottom: 1px; }
+.cbs-prob { font-size: 9px; font-weight: 700; padding: 0 3px; border-radius: 2px; }
+.cbs-sev-catastrophic { color: #ff4444; }
+.cbs-sev-severe { color: #ff8800; }
+.cbs-sev-moderate { color: #ffcc00; }
+.cbs-sev-minor { color: #88cc44; }
+.cbs-sev-positive { color: #44cc88; }
+.cbs-scenario-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cbs-action { display: flex; gap: 4px; align-items: center; }
+.cbs-action-icon { font-size: 9px; font-weight: 700; width: 12px; text-align: center; }
+.cbs-urgency-immediate .cbs-action-icon { color: #ff4444; }
+.cbs-urgency-soon .cbs-action-icon { color: #ff8800; }
+.cbs-urgency-monitor .cbs-action-icon { color: #88ccff; }
+.cbs-action-headline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Forecast accuracy in Status Overlay ───────────────────────── */
+.status-forecast-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 6px 0 4px;
+}
+.status-forecast-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff4444, #ffcc00, #44cc88);
+  border-radius: 3px;
+  transition: width 0.5s;
+}
+.status-forecast-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* ── Related badge in Inbox ─────────────────────────────────────── */
 .uai-related-badge {
   display: inline-block;
   margin-left: 6px;

@@ -68,6 +68,7 @@ import { startIntelChannelsBridge } from '@/services/intel-channels-bridge';
 import { startAnomalyBaselines } from '@/services/anomaly-baselines';
 import { EntityHeatRail } from '@/components/EntityHeatRail';
 import { AlertTimeline } from '@/components/AlertTimeline';
+import { StatusOverlay } from '@/components/StatusOverlay';
 import { startBlackoutSignature } from '@/services/blackout-signature';
 import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
@@ -679,6 +680,15 @@ export class PanelLayoutManager implements AppModule {
  entityRail.mount(document.body);
  const alertTimeline = new AlertTimeline();
  alertTimeline.mount(document.body);
+ const statusOverlay = new StatusOverlay();
+ statusOverlay.mount(document.body);
+ document.addEventListener('cb:toggle-status', () => statusOverlay.toggle());
+ document.addEventListener('keydown', (ev) => {
+   if (ev.metaKey && ev.shiftKey && (ev.key === 'S' || ev.key === 's')) {
+     ev.preventDefault();
+     statusOverlay.toggle();
+   }
+ });
  startBlackoutSignature();
  const digestOverlay = new DigestOverlay();
  digestOverlay.mount(document.body);

@@ -71,6 +71,7 @@ export class UnifiedAlertInboxPanel extends Panel {
   private filterShow: FilterShow = 'unread';
   private filterSources: Set<AlertSource> | null = null; // null = all
   private filterMinSeverity: AlertSeverity = 'info';
+  private filterEntityIds: Set<string> | null = null;
   private nearMeActive: boolean;
   private nearMeRadiusMi: number;
   private selectedIndex = -1;
@@ -110,6 +111,15 @@ export class UnifiedAlertInboxPanel extends Panel {
 
  this.updateBadge();
  this.render();
+
+ // Listen for cross-component entity filter (EntityHeatRail chip click)
+ document.addEventListener('cb:entity-filter', (e) => {
+   const det = (e as CustomEvent<{ entity: string; alertIds: string[] }>).detail;
+   if (!det) return;
+   this.filterEntityIds = new Set(det.alertIds);
+   this.filterShow = 'all';
+   this.render();
+ });
   }
 
   override destroy(): void {
@@ -149,6 +159,12 @@ export class UnifiedAlertInboxPanel extends Panel {
  const minSev = SEVERITY_ORDER[this.filterMinSeverity];
  if (minSev > 1) {
  alerts = alerts.filter(a => SEVERITY_ORDER[a.severity] >= minSev);
+ }
+
+ // Filter: entity (from EntityHeatRail chip click)
+ if (this.filterEntityIds) {
+   const ids = this.filterEntityIds;
+   alerts = alerts.filter(a => ids.has(a.id));
  }
 
  // Filter: Near Me radius

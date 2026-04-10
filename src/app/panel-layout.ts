@@ -74,6 +74,12 @@ import { startWatchlistProximity } from '@/services/watchlist-proximity';
 import { CrystalBallSays } from '@/components/CrystalBallSays';
 import { RelatedStrip } from '@/components/RelatedStrip';
 import { startAlertGeoClustering } from '@/services/alert-geo-cluster';
+import { startSeverityRecalibration } from '@/services/severity-recalibration';
+import { startAlertFatigue } from '@/services/alert-fatigue';
+import { initSnoozeLearning } from '@/services/snooze-learning';
+import { initCustomCorrelationRules } from '@/services/custom-correlation-rules';
+import { ShiftHandoffCard } from '@/components/ShiftHandoffCard';
+import { AlertReplayScrubber } from '@/components/AlertReplayScrubber';
 import { EntityHeatRail } from '@/components/EntityHeatRail';
 import { AlertTimeline } from '@/components/AlertTimeline';
 import { StatusOverlay } from '@/components/StatusOverlay';
@@ -689,6 +695,10 @@ export class PanelLayoutManager implements AppModule {
  startSituationFeed();
  startForecastAccuracy();
  startWatchlistProximity();
+ startSeverityRecalibration();
+ startAlertFatigue();
+ initSnoozeLearning();
+ initCustomCorrelationRules();
  const cbSays = new CrystalBallSays();
  cbSays.mount(document.body);
  const relatedStrip = new RelatedStrip();
@@ -701,6 +711,8 @@ export class PanelLayoutManager implements AppModule {
  const statusOverlay = new StatusOverlay();
  statusOverlay.mount(document.body);
  document.addEventListener('cb:toggle-status', () => statusOverlay.toggle());
+ const shiftCard = new ShiftHandoffCard(); shiftCard.mount(document.body);
+ const replayScrubber = new AlertReplayScrubber(); replayScrubber.mount(document.body);
  document.addEventListener('keydown', (ev) => {
    if (ev.metaKey && ev.shiftKey && (ev.key === 'S' || ev.key === 's')) {
      ev.preventDefault();

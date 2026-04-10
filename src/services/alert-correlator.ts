@@ -21,6 +21,7 @@ import { canonicalEntityKey } from './entity-key';
 import { recordCoOccurrence } from './pair-discovery';
 import { getPairFeedbackMult } from './correlation-feedback';
 import { runIntel } from './intel-provider';
+import { getEnabledCustomRules } from './custom-correlation-rules';
 
 const WINDOW_MS = 30 * 60_000;            // widened so chain links can catch up
 const SCAN_INTERVAL_MS = 60_000;
@@ -347,6 +348,12 @@ function matchRule(a: UnifiedAlert, b: UnifiedAlert): CausalRule | null {
   for (const r of CAUSAL_RULES) {
     if (r.cause === a.source && r.effect === b.source && tryRule(r, a, b, dt)) return r;
     if (r.cause === b.source && r.effect === a.source && tryRule(r, b, a, -dt)) return r;
+  }
+  // Check user-defined custom rules.
+  for (const cr of getEnabledCustomRules()) {
+    const customRule: CausalRule = { cause: cr.cause, effect: cr.effect, maxLagMs: cr.maxLagMs, radiusKm: cr.radiusKm };
+    if (cr.cause === a.source && cr.effect === b.source && tryRule(customRule, a, b, dt)) return customRule;
+    if (cr.cause === b.source && cr.effect === a.source && tryRule(customRule, b, a, -dt)) return customRule;
   }
   return null;
 }

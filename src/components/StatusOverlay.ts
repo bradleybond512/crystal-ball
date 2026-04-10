@@ -14,6 +14,7 @@ import { getForecastAccuracy } from '@/services/forecast-accuracy';
 import { getSourceTrust } from '@/services/source-trust';
 import { getSourceFeedbackMult } from '@/services/source-feedback';
 import { buildCooccurrenceGraph } from '@/services/entity-cooccurrence';
+import { getCustomRules, addCustomRule, removeCustomRule, toggleCustomRule, type CustomCausalRule } from '@/services/custom-correlation-rules';
 
 export class StatusOverlay {
   private overlay: HTMLElement;
@@ -84,6 +85,9 @@ export class StatusOverlay {
 
     // Entity co-occurrence graph
     card.append(this.renderCooccurrenceSection());
+
+    // Custom correlation rules
+    card.append(this.renderCustomRulesSection());
 
     // Watchlist section
     card.append(this.renderWatchlistSection());
@@ -231,6 +235,71 @@ export class StatusOverlay {
 
     sec.append(svg);
     return sec;
+  }
+
+  private renderCustomRulesSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'status-section';
+    const h = document.createElement('h3'); h.textContent = 'Custom Correlation Rules';
+    sec.append(h);
+
+    const rules = getCustomRules();
+    if (rules.length === 0) {
+      const empty = document.createElement('p'); empty.className = 'status-empty';
+      empty.textContent = '(no custom rules — add cause→effect pairs below)';
+      sec.append(empty);
+    } else {
+      const list = document.createElement('div'); list.className = 'status-rules-list';
+      for (const rule of rules) {
+        list.append(this.buildRuleRow(rule));
+      }
+      sec.append(list);
+    }
+
+    // Add form
+    const form = document.createElement('div'); form.className = 'status-rules-form';
+    const causeInput = document.createElement('input'); causeInput.placeholder = 'Cause (e.g. earthquake)';
+    const effectInput = document.createElement('input'); effectInput.placeholder = 'Effect (e.g. tsunami)';
+    const lagInput = document.createElement('input'); lagInput.placeholder = 'Lag (min)'; lagInput.type = 'number'; lagInput.value = '60';
+    const radiusInput = document.createElement('input'); radiusInput.placeholder = 'Radius (km)'; radiusInput.type = 'number'; radiusInput.value = '500';
+    const addBtn = document.createElement('button'); addBtn.textContent = '+ Add';
+    addBtn.addEventListener('click', () => {
+      const cause = causeInput.value.trim();
+      const effect = effectInput.value.trim();
+      const lag = Number(lagInput.value) || 60;
+      const radius = Number(radiusInput.value) || 500;
+      if (!cause || !effect) return;
+      addCustomRule({
+        cause: cause as import('@/services/unified-alerts').AlertSource,
+        effect: effect as import('@/services/unified-alerts').AlertSource,
+        maxLagMs: lag * 60_000,
+        radiusKm: radius,
+        label: `${cause} → ${effect}`,
+      });
+      causeInput.value = ''; effectInput.value = '';
+      this.render();
+    });
+    form.append(causeInput, effectInput, lagInput, radiusInput, addBtn);
+    sec.append(form);
+    return sec;
+  }
+
+  private buildRuleRow(rule: CustomCausalRule): HTMLElement {
+    const row = document.createElement('div');
+    row.className = `status-rule-row${rule.enabled ? '' : ' status-rule-disabled'}`;
+    const label = document.createElement('span');
+    label.className = 'status-rule-label';
+    label.textContent = `${rule.cause} → ${rule.effect} (${Math.round(rule.maxLagMs / 60_000)}m, ${rule.radiusKm}km)`;
+    const toggle = document.createElement('button');
+    toggle.className = 'status-rule-toggle';
+    toggle.textContent = rule.enabled ? 'ON' : 'OFF';
+    toggle.addEventListener('click', () => { toggleCustomRule(rule.id); this.render(); });
+    const del = document.createElement('button');
+    del.className = 'status-wl-del';
+    del.textContent = '\u2715';
+    del.addEventListener('click', () => { removeCustomRule(rule.id); this.render(); });
+    row.append(label, toggle, del);
+    return row;
   }
 
   private renderWatchlistSection(): HTMLElement {

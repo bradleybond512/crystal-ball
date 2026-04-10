@@ -19128,3 +19128,64 @@ body.has-breaking-alert .panels-grid {
   font-weight: 600;
   vertical-align: middle;
 }
+
+/* ── Shift Handoff Card ─────────────────────────────────────────�� */
+.shift-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
+}
+.shift-card {
+  background: var(--bg-surface, #1a1a2e); border-radius: 12px; padding: 20px;
+  max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; color: #ddd;
+}
+.shift-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.shift-header h2 { flex: 1; margin: 0; font-size: 16px; }
+.shift-time { font-size: 11px; color: #888; }
+.shift-close { background: none; border: none; color: #888; cursor: pointer; font-size: 16px; }
+.shift-stats { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.shift-stat-pill {
+  display: flex; flex-direction: column; align-items: center; padding: 6px 12px;
+  background: rgba(255,255,255,0.05); border-radius: 8px; min-width: 50px;
+}
+.shift-stat-val { font-size: 18px; font-weight: 700; }
+.shift-stat-label { font-size: 9px; color: #888; text-transform: uppercase; }
+.shift-section { margin-bottom: 12px; }
+.shift-section h3 { font-size: 12px; color: #888; margin: 0 0 6px; text-transform: uppercase; }
+.shift-section-warn { border-left: 3px solid #ef4444; padding-left: 8px; }
+.shift-story-row { display: flex; gap: 8px; padding: 2px 0; font-size: 12px; }
+.shift-sev { font-size: 10px; font-weight: 700; padding: 1px 4px; border-radius: 3px; }
+.shift-sev-critical { color: #ef4444; }
+.shift-sev-high { color: #f97316; }
+.shift-sev-medium { color: #eab308; }
+.shift-sit-row { font-size: 12px; padding: 2px 0; }
+
+/* ── Alert Replay Scrubber ─────────────────────────────────────── */
+.replay-scrubber {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 1040;
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+  background: rgba(26,26,46,0.95); border-top: 1px solid rgba(255,255,255,0.1);
+}
+.replay-title { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+.replay-slider { flex: 1; height: 4px; accent-color: #60a5fa; }
+.replay-label { font-size: 12px; font-weight: 600; color: #60a5fa; min-width: 60px; text-align: center; }
+.replay-close { background: none; border: none; color: #888; cursor: pointer; font-size: 14px; }
+
+/* ── Custom Correlation Rules ──────────────────────────────────── */
+.status-rules-list { display: flex; flex-direction: column; gap: 4px; }
+.status-rule-row { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 0; }
+.status-rule-disabled { opacity: 0.5; }
+.status-rule-label { flex: 1; }
+.status-rule-toggle {
+  background: none; border: 1px solid #888; color: #ddd; font-size: 10px;
+  padding: 1px 6px; border-radius: 3px; cursor: pointer;
+}
+.status-rules-form { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+.status-rules-form input {
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px; color: #ddd; padding: 4px 6px; font-size: 11px; flex: 1; min-width: 60px;
+}
+.status-rules-form input[type="number"] { max-width: 70px; }
+.status-rules-form button {
+  background: rgba(100,180,255,0.15); border: 1px solid rgba(100,180,255,0.3);
+  border-radius: 4px; color: #60a5fa; padding: 4px 10px; font-size: 11px; cursor: pointer;
+}

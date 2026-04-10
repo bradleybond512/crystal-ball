@@ -1,10 +1,10 @@
-/* eslint-disable sonarjs/void-use, sonarjs/no-nested-template-literals */
+/* eslint-disable sonarjs/void-use, sonarjs/no-nested-template-literals, sonarjs/cognitive-complexity */
 /**
  * Crystal Ball Says — lightweight strip below the Triage bar showing
  * the top actionable Situation from the OODA-loop Situation Engine.
  *
  * Displays: situation title, phase badge, confidence, top scenario,
- * and first action card. Collapses when no active situations.
+ * and first action card. Shows diff indicators when situations change.
  */
 
 import type { Situation, ActionCard, Scenario } from '@/services/situation-types';
@@ -12,9 +12,16 @@ import { situationEngine } from '@/services/situation-engine';
 
 const REFRESH_MS = 30_000;
 
+interface SitSnapshot {
+  id: string;
+  confidence: number;
+  scenarioIds: Set<string>;
+}
+
 export class CrystalBallSays {
   private element: HTMLElement;
   private timer: number | null = null;
+  private prevSnapshots = new Map<string, SitSnapshot>();
 
   constructor() {
     this.element = document.createElement('div');
@@ -55,40 +62,97 @@ export class CrystalBallSays {
     const items = document.createElement('div');
     items.className = 'cbs-items';
 
+    const currentIds = new Set<string>();
     for (const sit of situations.slice(0, 3)) {
-      items.append(this.buildSitCard(sit));
+      currentIds.add(sit.id);
+      const prev = this.prevSnapshots.get(sit.id);
+      items.append(this.buildSitCard(sit, prev ?? null));
+    }
+
+    // Show removed situations briefly (struck through).
+    for (const [id] of this.prevSnapshots) {
+      if (!currentIds.has(id)) {
+        const ghost = document.createElement('div');
+        ghost.className = 'cbs-card cbs-removed';
+        ghost.textContent = `\u2014 ${id.slice(0, 20)} resolved`;
+        items.append(ghost);
+      }
     }
 
     this.element.append(items);
+
+    // Update snapshots for next diff.
+    const nextSnapshots = new Map<string, SitSnapshot>();
+    for (const sit of situations.slice(0, 3)) {
+      nextSnapshots.set(sit.id, {
+        id: sit.id,
+        confidence: sit.confidence,
+        scenarioIds: new Set(sit.scenarios.map(s => s.id)),
+      });
+    }
+    this.prevSnapshots = nextSnapshots;
   }
 
-  private buildSitCard(sit: Situation): HTMLElement {
+  private buildSitCard(sit: Situation, prev: SitSnapshot | null): HTMLElement {
     const card = document.createElement('div');
-    card.className = `cbs-card cbs-phase-${sit.phase}`;
+    const isNew = !prev;
+    card.className = `cbs-card cbs-phase-${sit.phase}${isNew ? ' cbs-new' : ''}`;
 
     const header = document.createElement('div');
     header.className = 'cbs-header';
     const title = document.createElement('span');
     title.className = 'cbs-title';
     title.textContent = sit.title;
+    if (isNew) {
+      const newBadge = document.createElement('span');
+      newBadge.className = 'cbs-new-badge';
+      newBadge.textContent = 'NEW';
+      title.append(newBadge);
+    }
     const phase = document.createElement('span');
     phase.className = `cbs-phase-badge cbs-badge-${sit.phase}`;
     phase.textContent = sit.phase.toUpperCase();
     const conf = document.createElement('span');
     conf.className = 'cbs-confidence';
     conf.textContent = `${Math.round(sit.confidence * 100)}%`;
+
+    // Confidence delta arrow.
+    if (prev) {
+      const delta = sit.confidence - prev.confidence;
+      if (Math.abs(delta) >= 0.02) {
+        const arrow = document.createElement('span');
+        arrow.className = delta > 0 ? 'cbs-delta-up' : 'cbs-delta-down';
+        arrow.textContent = delta > 0 ? '\u2191' : '\u2193';
+        conf.append(arrow);
+      }
+    }
+
     header.append(title, phase, conf);
 
     const body = document.createElement('div');
     body.className = 'cbs-body';
 
-    // Top scenario
+    // Top scenario with diff markers.
     const topScenario = sit.scenarios[0];
     if (topScenario) {
-      body.append(this.buildScenarioLine(topScenario));
+      const isScenarioNew = prev ? !prev.scenarioIds.has(topScenario.id) : false;
+      body.append(this.buildScenarioLine(topScenario, isScenarioNew));
     }
 
-    // Top action
+    // Show removed scenarios.
+    if (prev) {
+      const currentScenarioIds = new Set(sit.scenarios.map(s => s.id));
+      for (const oldId of prev.scenarioIds) {
+        if (!currentScenarioIds.has(oldId)) {
+          const removed = document.createElement('div');
+          removed.className = 'cbs-scenario cbs-scenario-removed';
+          removed.textContent = `\u2014 scenario removed`;
+          body.append(removed);
+        }
+      }
+    }
+
+    // Top action.
     const topAction = sit.actions.find(a => !a.dismissed);
     if (topAction) {
       body.append(this.buildActionLine(topAction));
@@ -98,9 +162,9 @@ export class CrystalBallSays {
     return card;
   }
 
-  private buildScenarioLine(s: Scenario): HTMLElement {
+  private buildScenarioLine(s: Scenario, isNew: boolean): HTMLElement {
     const el = document.createElement('div');
-    el.className = 'cbs-scenario';
+    el.className = `cbs-scenario${isNew ? ' cbs-scenario-new' : ''}`;
     const prob = document.createElement('span');
     prob.className = `cbs-prob cbs-sev-${s.severity}`;
     prob.textContent = `${Math.round(s.probability * 100)}%`;

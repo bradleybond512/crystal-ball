@@ -24,6 +24,7 @@ import {
 import { scoreAndSort } from '@/services/relevance-scoring';
 import { EvidenceDrawer } from './EvidenceDrawer';
 import { computeEntityHeat } from '@/services/entity-heat';
+import { buildStoryTimelineHtml } from '@/components/StoryTimeline';
 
 type SortMode = 'relevance' | 'severity' | 'time' | 'distance';
 type FilterShow = 'unread' | 'all';
@@ -362,7 +363,7 @@ export class UnifiedAlertInboxPanel extends Panel {
 
   // ── Render ──────────────────────────────────────────────────────────────
 
-  private dedupByEntity(alerts: UnifiedAlert[]): { leader: UnifiedAlert; relatedCount: number }[] {
+  private dedupByEntity(alerts: UnifiedAlert[]): { leader: UnifiedAlert; relatedCount: number; relatedAlerts: UnifiedAlert[] }[] {
     const entityHeat = computeEntityHeat();
     const entityAlertMap = new Map<string, Set<string>>();
     for (const ent of entityHeat) {
@@ -370,7 +371,7 @@ export class UnifiedAlertInboxPanel extends Panel {
     }
 
     const assigned = new Set<string>();
-    const groups: { leader: UnifiedAlert; relatedCount: number }[] = [];
+    const groups: { leader: UnifiedAlert; relatedCount: number; relatedAlerts: UnifiedAlert[] }[] = [];
 
     for (const a of alerts) {
       if (assigned.has(a.id)) continue;
@@ -384,18 +385,18 @@ export class UnifiedAlertInboxPanel extends Panel {
       }
       if (bestEntity && bestCount >= 3) {
         const entityIds = entityAlertMap.get(bestEntity)!;
-        let relatedCount = 0;
+        const related: UnifiedAlert[] = [];
         for (const other of alerts) {
           if (other.id !== a.id && entityIds.has(other.id) && !assigned.has(other.id)) {
             assigned.add(other.id);
-            relatedCount++;
+            related.push(other);
           }
         }
         assigned.add(a.id);
-        groups.push({ leader: a, relatedCount });
+        groups.push({ leader: a, relatedCount: related.length, relatedAlerts: related });
       } else {
         assigned.add(a.id);
-        groups.push({ leader: a, relatedCount: 0 });
+        groups.push({ leader: a, relatedCount: 0, relatedAlerts: [] });
       }
     }
     return groups;
@@ -414,7 +415,14 @@ export class UnifiedAlertInboxPanel extends Panel {
 
  const toolbar = this.renderToolbar();
  const deduped = this.dedupByEntity(alerts);
- const rows = deduped.map((g, i) => this.renderRow(g.leader, i, g.relatedCount)).join('');
+ const rows = deduped.map((g, i) => {
+ const row = this.renderRow(g.leader, i, g.relatedCount);
+ if (g.relatedAlerts.length > 0) {
+ const tl = buildStoryTimelineHtml([g.leader, ...g.relatedAlerts]);
+ if (tl) return row + `<tr class="story-tl-row"><td colspan="7">${tl}</td></tr>`;
+ }
+ return row;
+ }).join('');
 
  this.setContent(`
  <div class="uai-container">

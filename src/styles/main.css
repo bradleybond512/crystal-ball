@@ -18940,6 +18940,29 @@ body.has-breaking-alert .panels-grid {
 .triage-lc-resolved { color: #666; }
 .triage-sparkline { flex-shrink: 0; opacity: 0.7; margin: 0 4px; vertical-align: middle; }
 
+/* ── Story Timeline ────────────────────────────────────────────── */
+.story-timeline {
+  display: flex; align-items: center; gap: 6px; padding: 4px 12px;
+  font-size: 10px; color: var(--text-secondary, #999);
+}
+.story-tl-track {
+  flex: 1; position: relative; height: 8px;
+  background: rgba(255,255,255,0.06); border-radius: 4px;
+}
+.story-tl-marker {
+  position: absolute; top: 0; width: 8px; height: 8px;
+  border-radius: 50%; border: 2px solid #888;
+  background: var(--bg-surface, #1a1a2e); transform: translateX(-50%);
+}
+.story-tl-sev-critical { background: #ef4444; }
+.story-tl-sev-high { background: #f97316; }
+.story-tl-sev-medium { background: #eab308; }
+.story-tl-sev-low { background: #22c55e; }
+.story-tl-sev-info { background: #60a5fa; }
+.story-tl-axis { white-space: nowrap; }
+.story-tl-axis-right { text-align: right; }
+.story-tl-row td { padding: 0 !important; }
+
 /* ── Related badge in Inbox ─────────────────────────────────────── */
 /* ── Crystal Ball Says strip ────────────────────────────────────── */
 .cbs-strip {
@@ -18998,6 +19021,17 @@ body.has-breaking-alert .panels-grid {
 .cbs-urgency-soon .cbs-action-icon { color: #ff8800; }
 .cbs-urgency-monitor .cbs-action-icon { color: #88ccff; }
 .cbs-action-headline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cbs-new { border-left: 3px solid #22c55e; }
+.cbs-new-badge {
+  display: inline-block; font-size: 9px; font-weight: 700; color: #22c55e;
+  margin-left: 6px; padding: 0 4px; border: 1px solid #22c55e; border-radius: 3px;
+  vertical-align: middle;
+}
+.cbs-removed { text-decoration: line-through; opacity: 0.5; font-style: italic; padding: 4px 8px; }
+.cbs-scenario-new { border-left: 2px solid #22c55e; padding-left: 4px; }
+.cbs-scenario-removed { text-decoration: line-through; opacity: 0.4; font-style: italic; }
+.cbs-delta-up { color: #ef4444; font-weight: 700; margin-left: 2px; }
+.cbs-delta-down { color: #22c55e; font-weight: 700; margin-left: 2px; }
 
 /* ── Forecast accuracy in Status Overlay ───────────────────────── */
 .status-forecast-bar {
@@ -19075,6 +19109,11 @@ body.has-breaking-alert .panels-grid {
   height: 100%;
   border-radius: 2px;
   transition: width 0.3s;
+}
+
+/* ── Entity co-occurrence graph ────────────────────────────────── */
+.cooc-graph {
+  display: block; margin: 8px auto; background: rgba(0,0,0,0.2); border-radius: 8px;
 }
 
 /* ── Related badge in Inbox ─────────────────────────────────────── */

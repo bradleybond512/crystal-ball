@@ -13,6 +13,7 @@ import { getWatchlist, saveWatchlist, type WatchlistEntry } from '@/services/wat
 import { getForecastAccuracy } from '@/services/forecast-accuracy';
 import { getSourceTrust } from '@/services/source-trust';
 import { getSourceFeedbackMult } from '@/services/source-feedback';
+import { buildCooccurrenceGraph } from '@/services/entity-cooccurrence';
 
 export class StatusOverlay {
   private overlay: HTMLElement;
@@ -80,6 +81,9 @@ export class StatusOverlay {
 
     // Source health section
     card.append(this.renderHealthSection());
+
+    // Entity co-occurrence graph
+    card.append(this.renderCooccurrenceSection());
 
     // Watchlist section
     card.append(this.renderWatchlistSection());
@@ -153,6 +157,80 @@ export class StatusOverlay {
     trustBar.title = `Trust: ${(effectiveTrust * 100).toFixed(0)}% (base ${(baseTrust * 100).toFixed(0)}% × feedback ${feedbackMult.toFixed(2)})`;
     row.append(dot, name, stat, badge, trustBar);
     return row;
+  }
+
+  private renderCooccurrenceSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'status-section';
+    const h = document.createElement('h3'); h.textContent = 'Entity Network';
+    sec.append(h);
+
+    const graph = buildCooccurrenceGraph();
+    if (graph.nodes.length === 0) {
+      const empty = document.createElement('p'); empty.className = 'status-empty';
+      empty.textContent = '(no co-occurring entities yet)';
+      sec.append(empty);
+      return sec;
+    }
+
+    const W = 320; const H = 200;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', String(W));
+    svg.setAttribute('height', String(H));
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.classList.add('cooc-graph');
+
+    // Position nodes in a circle.
+    const nodes = graph.nodes;
+    const posMap = new Map<string, { x: number; y: number }>();
+    const cx = W / 2; const cy = H / 2; const r = Math.min(W, H) * 0.35;
+    for (let i = 0; i < nodes.length; i++) {
+      const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
+      posMap.set(nodes[i]!.name, { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
+    }
+
+    // Draw edges.
+    const maxW = Math.max(...graph.edges.map(e => e.weight), 1);
+    for (const edge of graph.edges) {
+      const pa = posMap.get(edge.a);
+      const pb = posMap.get(edge.b);
+      if (!pa || !pb) continue;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', pa.x.toFixed(1));
+      line.setAttribute('y1', pa.y.toFixed(1));
+      line.setAttribute('x2', pb.x.toFixed(1));
+      line.setAttribute('y2', pb.y.toFixed(1));
+      line.setAttribute('stroke', 'rgba(96,165,250,0.3)');
+      line.setAttribute('stroke-width', String(Math.max(1, (edge.weight / maxW) * 3)));
+      svg.append(line);
+    }
+
+    // Draw nodes.
+    const maxMentions = Math.max(...nodes.map(n => n.mentions), 1);
+    for (const node of nodes) {
+      const pos = posMap.get(node.name);
+      if (!pos) continue;
+      const nodeR = 4 + (node.mentions / maxMentions) * 8;
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', pos.x.toFixed(1));
+      circle.setAttribute('cy', pos.y.toFixed(1));
+      circle.setAttribute('r', nodeR.toFixed(1));
+      circle.setAttribute('fill', '#60a5fa');
+      circle.setAttribute('opacity', '0.8');
+      svg.append(circle);
+
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', pos.x.toFixed(1));
+      label.setAttribute('y', (pos.y + nodeR + 10).toFixed(1));
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('fill', '#ccc');
+      label.setAttribute('font-size', '9');
+      label.textContent = node.name;
+      svg.append(label);
+    }
+
+    sec.append(svg);
+    return sec;
   }
 
   private renderWatchlistSection(): HTMLElement {

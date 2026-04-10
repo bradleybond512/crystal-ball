@@ -13,7 +13,8 @@ import { flashPanel, jumpToPanel, pulseAlertOnMap } from '@/services/alert-react
 import { getPreset, setPreset, type AlertingPreset } from '@/services/alerting-prefs';
 import { getWatchlist, saveWatchlist } from '@/services/watchlist';
 import { groupIntoStories, type AlertStory } from '@/services/alert-stories';
-import { getLifecyclePhase, type LifecyclePhase } from '@/services/alert-lifecycle';
+import { getLifecyclePhase, getLifecycleSamples, type LifecyclePhase } from '@/services/alert-lifecycle';
+import { recordSnooze, getSnoozeSuggestion, formatSnoozeDuration } from '@/services/snooze-learning';
 
 const MAX_VISIBLE = 5;
 
@@ -150,7 +151,8 @@ export class TriageBar {
     src.textContent = story.alerts.length > 1 ? `${story.label} (${story.alerts.length})` : a.source;
     const title = document.createElement('span'); title.className = 'triage-title'; title.textContent = a.title;
     const age = document.createElement('span'); age.className = 'triage-age'; age.textContent = ageLabel;
-    el.append(dot, lc, src, title, age);
+    const spark = this.buildSparkline(a.id);
+    el.append(dot, lc, src, title, spark, age);
     el.addEventListener('click', () => {
       if (story.alerts.length > 1 && story.entityName) {
         document.dispatchEvent(new CustomEvent('cb:entity-filter', {
@@ -178,6 +180,32 @@ export class TriageBar {
       this.showContextMenu(e as MouseEvent, a);
     });
     return el;
+  }
+
+  private buildSparkline(alertId: string): SVGSVGElement {
+    const samples = getLifecycleSamples(alertId);
+    const w = 40; const h = 16;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', String(w));
+    svg.setAttribute('height', String(h));
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    svg.classList.add('triage-sparkline');
+    if (samples.length < 2) return svg;
+    const max = Math.max(...samples, 1);
+    const pts = samples.map((s, i) => {
+      const x = (i / (samples.length - 1)) * w;
+      const y = h - (s / max) * (h - 2) - 1;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    path.setAttribute('points', pts.join(' '));
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'currentColor');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.append(path);
+    return svg;
   }
 
   private showCorrelationDetails(a: UnifiedAlert): void {
@@ -231,10 +259,20 @@ export class TriageBar {
     menu.className = 'triage-snooze-menu';
     menu.style.left = `${e.clientX}px`;
     menu.style.top = `${e.clientY}px`;
+    const snoozeAndRecord = (ms: number) => {
+      unifiedAlertStore.snooze(alert.id, ms);
+      recordSnooze(alert.source, alert.severity, ms);
+    };
     const items: [string, () => void][] = [
-      ['Snooze 15 min', () => unifiedAlertStore.snooze(alert.id, 15 * 60_000)],
-      ['Snooze 1 hour', () => unifiedAlertStore.snooze(alert.id, 60 * 60_000)],
-      ['Snooze until tomorrow', () => unifiedAlertStore.snooze(alert.id, 12 * 60 * 60_000)],
+      ['Snooze 15 min', () => snoozeAndRecord(15 * 60_000)],
+      ['Snooze 1 hour', () => snoozeAndRecord(60 * 60_000)],
+      ['Snooze until tomorrow', () => snoozeAndRecord(12 * 60 * 60_000)],
+    ];
+    const suggested = getSnoozeSuggestion(alert.source, alert.severity);
+    if (suggested) {
+      items.unshift([`Snooze ${formatSnoozeDuration(suggested)} (learned)`, () => snoozeAndRecord(suggested)]);
+    }
+    items.push(
       ['Pin to top', () => unifiedAlertStore.togglePin(alert.id)],
       ['Watch this entity', () => {
         const list = getWatchlist();
@@ -248,7 +286,7 @@ export class TriageBar {
         });
         saveWatchlist(list);
       }],
-    ];
+    );
     for (const [label, action] of items) {
       const btn = document.createElement('button');
       btn.textContent = label;

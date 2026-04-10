@@ -18938,6 +18938,7 @@ body.has-breaking-alert .panels-grid {
 .triage-lc-peaked { color: #ff8800; }
 .triage-lc-cooling { color: #88cc44; }
 .triage-lc-resolved { color: #666; }
+.triage-sparkline { flex-shrink: 0; opacity: 0.7; margin: 0 4px; vertical-align: middle; }
 
 /* ── Related badge in Inbox ─────────────────────────────────────── */
 /* ── Crystal Ball Says strip ────────────────────────────────────── */

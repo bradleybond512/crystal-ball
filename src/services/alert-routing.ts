@@ -9,6 +9,7 @@
 import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
 import { getSourceTrust } from './source-trust';
 import { getSourceFeedbackMult } from './source-feedback';
+import { getRecalMult } from './severity-recalibration';
 
 // ─── Tunable weights (start values; we'll iterate) ────────────────────────
 const SEVERITY_WEIGHT: Record<AlertSeverity, number> = {
@@ -112,7 +113,7 @@ export function scoreBreakdown(a: UnifiedAlert, nowMs: number = Date.now()): Sco
   const base = SEVERITY_WEIGHT[a.severity] ?? 0;
   const ageMin = Math.max(0, (nowMs - a.timestamp) / 60_000);
   const decay = Math.pow(0.5, ageMin / RECENCY_HALFLIFE_MIN);
-  const sourceMult = SOURCE_MULT[a.source] ?? 1;
+  const sourceMult = (SOURCE_MULT[a.source] ?? 1) * getRecalMult(a.source);
   const trustMult = getSourceTrust(a.source) * getSourceFeedbackMult(a.source);
   const proximityMult = (typeof a.distanceKm === 'number' && a.distanceKm <= PROXIMITY_KM) ? PROXIMITY_MULT : 1;
   const watchlistMult = a.relevanceScore >= 100 ? WATCHLIST_MULT : 1;

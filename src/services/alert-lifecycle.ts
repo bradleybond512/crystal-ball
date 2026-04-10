@@ -101,6 +101,11 @@ export function getLifecyclePhase(alertId: string): LifecyclePhase {
   return lifecycles.get(alertId)?.phase ?? 'rising';
 }
 
+/** Get the raw sample history for a specific alert (for sparklines). */
+export function getLifecycleSamples(alertId: string): number[] {
+  return lifecycles.get(alertId)?.samples ?? [];
+}
+
 /** Get lifecycle data for all tracked alerts. */
 export function getAllLifecycles(): Map<string, LifecyclePhase> {
   const result = new Map<string, LifecyclePhase>();

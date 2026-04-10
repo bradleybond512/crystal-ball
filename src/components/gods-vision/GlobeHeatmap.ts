@@ -1,5 +1,15 @@
 import { Cartesian3, SceneTransforms, type Viewer } from 'cesium';
 import type { GlobeDataManager } from '@/components/GlobeDataManager';
+import { unifiedAlertStore } from '@/services/unified-alerts';
+import { scoreAlert } from '@/services/alert-routing';
+
+const SEV_COLORS: Record<string, [number, number, number]> = {
+  critical: [239, 68, 68],
+  high:     [249, 115, 22],
+  medium:   [234, 179, 8],
+  low:      [34, 197, 94],
+  info:     [96, 165, 250],
+};
 
 export class GlobeHeatmap {
   private canvas: HTMLCanvasElement | null = null;
@@ -60,28 +70,44 @@ export class GlobeHeatmap {
  if (!ctx) return;
  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
- const alerts = this.dataManager.getTopAlerts(100).filter(
+ // Primary: data manager alerts (globe layer entities).
+ const dmAlerts = this.dataManager.getTopAlerts(100).filter(
  a => a.lat !== undefined && a.lon !== undefined,
  );
-
- for (const alert of alerts) {
+ for (const alert of dmAlerts) {
  if (alert.lat === undefined || alert.lon === undefined) continue;
  const worldPos = Cartesian3.fromDegrees(alert.lon, alert.lat, 0);
  const screenPos = SceneTransforms.worldToWindowCoordinates(
  this.viewer.scene, worldPos,
  );
  if (!screenPos) continue;
- const r = alert.severity * 6;
- const grad = ctx.createRadialGradient(
- screenPos.x, screenPos.y, 0,
- screenPos.x, screenPos.y, r,
+ const r = Math.max(20, alert.severity * 8);
+ this.drawBlob(ctx, screenPos.x, screenPos.y, r, [248, 113, 113]);
+ }
+
+ // Secondary: unified alert store (severity-weighted).
+ const unified = unifiedAlertStore.getAll().filter(a => a.location && !a.acknowledged);
+ for (const a of unified) {
+ if (!a.location) continue;
+ const worldPos = Cartesian3.fromDegrees(a.location.lon, a.location.lat, 0);
+ const screenPos = SceneTransforms.worldToWindowCoordinates(
+ this.viewer.scene, worldPos,
  );
- grad.addColorStop(0, 'rgba(248,113,113,0.35)');
- grad.addColorStop(1, 'rgba(248,113,113,0)');
+ if (!screenPos) continue;
+ const score = scoreAlert(a);
+ const r = Math.max(15, Math.min(80, score * 0.8));
+ const rgb: [number, number, number] = SEV_COLORS[a.severity] ?? [96, 165, 250];
+ this.drawBlob(ctx, screenPos.x, screenPos.y, r, rgb);
+ }
+  }
+
+  private drawBlob(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rgb: [number, number, number]): void {
+ const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+ grad.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.35)`);
+ grad.addColorStop(1, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`);
  ctx.beginPath();
- ctx.arc(screenPos.x, screenPos.y, r, 0, Math.PI * 2);
+ ctx.arc(x, y, r, 0, Math.PI * 2);
  ctx.fillStyle = grad;
  ctx.fill();
- }
   }
 }

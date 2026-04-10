@@ -18781,6 +18781,7 @@ body.has-breaking-alert .panels-grid {
   align-items: center;
   justify-content: center;
 }
+.status-overlay[hidden] { display: none; }
 .status-card {
   background: rgba(16, 20, 28, 0.97);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -19178,6 +19179,7 @@ body.has-breaking-alert .panels-grid {
   position: fixed; inset: 0; z-index: 1200;
   background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
 }
+.shift-overlay[hidden] { display: none; }
 .shift-card {
   background: var(--bg-surface, #1a1a2e); border-radius: 12px; padding: 20px;
   max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; color: #ddd;

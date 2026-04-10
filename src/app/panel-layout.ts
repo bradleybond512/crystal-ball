@@ -78,6 +78,16 @@ import { startSeverityRecalibration } from '@/services/severity-recalibration';
 import { startAlertFatigue } from '@/services/alert-fatigue';
 import { initSnoozeLearning } from '@/services/snooze-learning';
 import { initCustomCorrelationRules } from '@/services/custom-correlation-rules';
+import { startPatternMemory } from '@/services/pattern-memory';
+import { initSourceReliability } from '@/services/source-reliability';
+import { initAlertAnnotations } from '@/services/alert-annotations';
+import { initAlertBookmarks } from '@/services/alert-bookmarks';
+import { initExportBriefing, exportBriefingToClipboard } from '@/services/export-briefing';
+import { startGeofenceAlerts } from '@/services/geofence-alerts';
+import { startProximityCascade } from '@/services/proximity-cascade';
+import { startThreatCorridor } from '@/services/threat-corridor';
+import { startPeriodicityDetector } from '@/services/periodicity-detector';
+import { startSilenceAnomaly } from '@/services/silence-anomaly';
 import { ShiftHandoffCard } from '@/components/ShiftHandoffCard';
 import { AlertReplayScrubber } from '@/components/AlertReplayScrubber';
 import { EntityHeatRail } from '@/components/EntityHeatRail';
@@ -699,6 +709,22 @@ export class PanelLayoutManager implements AppModule {
  startAlertFatigue();
  initSnoozeLearning();
  initCustomCorrelationRules();
+ startPatternMemory();
+ initSourceReliability();
+ initAlertAnnotations();
+ initAlertBookmarks();
+ initExportBriefing();
+ startGeofenceAlerts();
+ startProximityCascade();
+ startThreatCorridor();
+ startPeriodicityDetector();
+ startSilenceAnomaly();
+ document.addEventListener('keydown', (e: KeyboardEvent) => {
+   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
+     e.preventDefault();
+     exportBriefingToClipboard();
+   }
+ });
  const cbSays = new CrystalBallSays();
  cbSays.mount(document.body);
  const relatedStrip = new RelatedStrip();

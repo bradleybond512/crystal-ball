@@ -19111,6 +19111,50 @@ body.has-breaking-alert .panels-grid {
   transition: width 0.3s;
 }
 
+/* ── Source Reliability Leaderboard ────────────────────────────── */
+.status-reliability-grid { display: flex; flex-direction: column; gap: 2px; }
+.status-reliability-row {
+  display: grid; grid-template-columns: 28px 1fr 48px 20px 64px 52px;
+  align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px;
+  background: rgba(255,255,255,0.03); font-size: 12px;
+}
+.status-reliability-row:nth-child(-n+3) { background: rgba(100,180,255,0.06); }
+.status-rel-rank { color: #60a5fa; font-weight: 700; }
+.status-rel-name { color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-rel-acc { color: #44cc88; font-weight: 600; text-align: right; }
+.status-rel-trend { text-align: center; }
+.status-rel-up { color: #44cc88; }
+.status-rel-down { color: #ff4444; }
+.status-rel-stable { color: #888; }
+.status-rel-ct { color: #aaa; font-size: 10px; text-align: right; }
+.status-rel-count { color: #666; font-size: 10px; text-align: right; }
+
+/* ── Learned Patterns ─────────────────────────────────────────── */
+.status-patterns-list { display: flex; flex-direction: column; gap: 2px; }
+.status-pattern-row {
+  display: grid; grid-template-columns: 1fr 90px 80px;
+  align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px;
+  background: rgba(255,255,255,0.03); font-size: 12px;
+}
+.status-pattern-pair { color: #c084fc; font-weight: 600; }
+.status-pattern-rate { color: #44cc88; text-align: right; }
+.status-pattern-lag { color: #888; text-align: right; font-size: 10px; }
+
+/* ── Silence anomaly warning ──────────────────────────────────── */
+.status-silence-warn {
+  padding: 6px 10px; border-radius: 6px; margin-bottom: 8px;
+  background: rgba(255,68,68,0.15); border: 1px solid rgba(255,68,68,0.3);
+  color: #ff6666; font-size: 12px; font-weight: 600;
+}
+.status-overdue { background: rgba(255,68,68,0.08) !important; }
+
+/* ── Escalation badge in triage ───────────────────────────────── */
+.triage-esc-badge {
+  display: inline-block; padding: 1px 6px; border-radius: 8px;
+  background: rgba(255,68,68,0.2); color: #ff6666; font-size: 10px;
+  font-weight: 700; white-space: nowrap;
+}
+
 /* ── Entity co-occurrence graph ────────────────────────────────── */
 .cooc-graph {
   display: block; margin: 8px auto; background: rgba(0,0,0,0.2); border-radius: 8px;

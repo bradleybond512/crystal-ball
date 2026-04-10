@@ -15,6 +15,9 @@ import { getWatchlist, saveWatchlist } from '@/services/watchlist';
 import { groupIntoStories, type AlertStory } from '@/services/alert-stories';
 import { getLifecyclePhase, getLifecycleSamples, type LifecyclePhase } from '@/services/alert-lifecycle';
 import { recordSnooze, getSnoozeSuggestion, formatSnoozeDuration } from '@/services/snooze-learning';
+import { estimateEscalation } from '@/services/escalation-predictor';
+import { getAnnotation, setAnnotation } from '@/services/alert-annotations';
+import { getCollections, addToCollection, createCollection } from '@/services/alert-bookmarks';
 
 const MAX_VISIBLE = 5;
 
@@ -152,7 +155,17 @@ export class TriageBar {
     const title = document.createElement('span'); title.className = 'triage-title'; title.textContent = a.title;
     const age = document.createElement('span'); age.className = 'triage-age'; age.textContent = ageLabel;
     const spark = this.buildSparkline(a.id);
-    el.append(dot, lc, src, title, spark, age);
+    const esc = estimateEscalation(a);
+    const elements: (HTMLElement | SVGSVGElement)[] = [dot, lc, src, title, spark];
+    if (esc.likelyToEscalate) {
+      const escBadge = document.createElement('span');
+      escBadge.className = 'triage-esc-badge';
+      escBadge.textContent = `\u26A0 ${esc.probability}%`;
+      escBadge.title = `${esc.probability}% chance of escalating to critical`;
+      elements.push(escBadge);
+    }
+    elements.push(age);
+    el.append(...elements);
     el.addEventListener('click', () => {
       if (story.alerts.length > 1 && story.entityName) {
         document.dispatchEvent(new CustomEvent('cb:entity-filter', {
@@ -274,6 +287,33 @@ export class TriageBar {
     }
     items.push(
       ['Pin to top', () => unifiedAlertStore.togglePin(alert.id)],
+      ['Annotate', () => {
+        const existing = getAnnotation(alert.id) ?? '';
+        const note = prompt('Add note to this alert:', existing);
+        if (note !== null) setAnnotation(alert.id, note);
+      }],
+      ['Bookmark', () => {
+        const cols = getCollections();
+        if (cols.length === 0) {
+          const name = prompt('Create a collection name:', 'Important');
+          if (name) {
+            const col = createCollection(name);
+            addToCollection(col.id, alert.id);
+          }
+        } else {
+          const names = cols.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+          const choice = prompt(`Add to collection:\n${names}\n\nEnter number (or new name):`, '1');
+          if (choice) {
+            const idx = Number.parseInt(choice, 10) - 1;
+            if (idx >= 0 && idx < cols.length) {
+              addToCollection(cols[idx]!.id, alert.id);
+            } else {
+              const col = createCollection(choice);
+              addToCollection(col.id, alert.id);
+            }
+          }
+        }
+      }],
       ['Watch this entity', () => {
         const list = getWatchlist();
         list.push({

@@ -15,6 +15,13 @@ import { getSourceTrust } from '@/services/source-trust';
 import { getSourceFeedbackMult } from '@/services/source-feedback';
 import { buildCooccurrenceGraph } from '@/services/entity-cooccurrence';
 import { getCustomRules, addCustomRule, removeCustomRule, toggleCustomRule, type CustomCausalRule } from '@/services/custom-correlation-rules';
+import { getReliabilityLeaderboard } from '@/services/source-reliability';
+import { getLearnedPatterns } from '@/services/pattern-memory';
+import { getGeofences, addGeofence, removeGeofence, toggleGeofence } from '@/services/geofence-alerts';
+import { getPeriodicSources } from '@/services/periodicity-detector';
+import { getSilenceStatus } from '@/services/silence-anomaly';
+import { projectEntityHeat } from '@/services/entity-heat-projection';
+import { getCollections, deleteCollection } from '@/services/alert-bookmarks';
 
 export class StatusOverlay {
   private overlay: HTMLElement;
@@ -86,8 +93,26 @@ export class StatusOverlay {
     // Entity co-occurrence graph
     card.append(this.renderCooccurrenceSection());
 
+    // Source reliability leaderboard
+    card.append(this.renderReliabilitySection());
+
+    // Learned patterns
+    card.append(this.renderPatternsSection());
+
     // Custom correlation rules
     card.append(this.renderCustomRulesSection());
+
+    // Geofences
+    card.append(this.renderGeofenceSection());
+
+    // Bookmark collections
+    card.append(this.renderBookmarksSection());
+
+    // Periodicity + silence
+    card.append(this.renderPeriodicitySection());
+
+    // Entity heat projection
+    card.append(this.renderHeatProjectionSection());
 
     // Watchlist section
     card.append(this.renderWatchlistSection());
@@ -237,6 +262,75 @@ export class StatusOverlay {
     return sec;
   }
 
+  private renderReliabilitySection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'status-section';
+    const h = document.createElement('h3'); h.textContent = 'Source Reliability';
+    sec.append(h);
+
+    const entries = getReliabilityLeaderboard();
+    if (entries.length === 0) {
+      const empty = document.createElement('p'); empty.className = 'status-empty';
+      empty.textContent = '(need ≥3 predictions per source to rank)';
+      sec.append(empty);
+      return sec;
+    }
+
+    const grid = document.createElement('div'); grid.className = 'status-reliability-grid';
+    for (const [i, entry] of entries.entries()) {
+      const e = entry!;
+      const row = document.createElement('div'); row.className = 'status-reliability-row';
+      const rank = document.createElement('span'); rank.className = 'status-rel-rank';
+      rank.textContent = `#${i + 1}`;
+      const name = document.createElement('span'); name.className = 'status-rel-name';
+      name.textContent = e.source;
+      const acc = document.createElement('span'); acc.className = 'status-rel-acc';
+      acc.textContent = `${e.accuracy}%`;
+      const trend = document.createElement('span'); trend.className = `status-rel-trend status-rel-${e.trend}`;
+      const TREND_ICON: Record<string, string> = { up: '↑', down: '↓', stable: '→' };
+      trend.textContent = TREND_ICON[e.trend] ?? '→';
+      const ct = document.createElement('span'); ct.className = 'status-rel-ct';
+      ct.textContent = `trust ${(e.compositeTrust * 100).toFixed(0)}%`;
+      const count = document.createElement('span'); count.className = 'status-rel-count';
+      count.textContent = `${e.total} pred`;
+      row.append(rank, name, acc, trend, ct, count);
+      grid.append(row);
+    }
+    sec.append(grid);
+    return sec;
+  }
+
+  private renderPatternsSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'status-section';
+    const h = document.createElement('h3'); h.textContent = 'Learned Patterns';
+    sec.append(h);
+
+    const patterns = getLearnedPatterns();
+    if (patterns.length === 0) {
+      const empty = document.createElement('p'); empty.className = 'status-empty';
+      empty.textContent = '(no recurring patterns detected yet)';
+      sec.append(empty);
+      return sec;
+    }
+
+    const list = document.createElement('div'); list.className = 'status-patterns-list';
+    for (const p of patterns) {
+      const row = document.createElement('div'); row.className = 'status-pattern-row';
+      const pair = document.createElement('span'); pair.className = 'status-pattern-pair';
+      pair.textContent = `${p.cause} → ${p.effect}`;
+      const rate = document.createElement('span'); rate.className = 'status-pattern-rate';
+      const hitRate = p.hits / (p.hits + p.misses);
+      rate.textContent = `${Math.round(hitRate * 100)}% (${p.hits}/${p.hits + p.misses})`;
+      const lag = document.createElement('span'); lag.className = 'status-pattern-lag';
+      lag.textContent = `~${Math.round(p.avgLagMs / 60_000)}m lag`;
+      row.append(pair, rate, lag);
+      list.append(row);
+    }
+    sec.append(list);
+    return sec;
+  }
+
   private renderCustomRulesSection(): HTMLElement {
     const sec = document.createElement('section');
     sec.className = 'status-section';
@@ -300,6 +394,157 @@ export class StatusOverlay {
     del.addEventListener('click', () => { removeCustomRule(rule.id); this.render(); });
     row.append(label, toggle, del);
     return row;
+  }
+
+  private renderGeofenceSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'status-section';
+    const h = document.createElement('h3'); h.textContent = 'Geofences';
+    sec.append(h);
+
+    const fences = getGeofences();
+    if (fences.length > 0) {
+      const list = document.createElement('div'); list.className = 'status-rules-list';
+      for (const f of fences) {
+        const row = document.createElement('div');
+        row.className = `status-rule-row${f.enabled ? '' : ' status-rule-disabled'}`;
+        const label = document.createElement('span'); label.className = 'status-rule-label';
+        label.textContent = `${f.label} (${f.lat.toFixed(2)}, ${f.lon.toFixed(2)}) ${f.radiusKm}km`;
+        const toggle = document.createElement('button'); toggle.className = 'status-rule-toggle';
+        toggle.textContent = f.enabled ? 'ON' : 'OFF';
+        toggle.addEventListener('click', () => { toggleGeofence(f.id); this.render(); });
+        const del = document.createElement('button'); del.className = 'status-wl-del'; del.textContent = '\u2715';
+        del.addEventListener('click', () => { removeGeofence(f.id); this.render(); });
+        row.append(label, toggle, del);
+        list.append(row);
+      }
+      sec.append(list);
+    }
+
+    const form = document.createElement('div'); form.className = 'status-rules-form';
+    const labelIn = document.createElement('input'); labelIn.placeholder = 'Label';
+    const latIn = document.createElement('input'); latIn.placeholder = 'Lat'; latIn.type = 'number'; latIn.step = 'any';
+    const lonIn = document.createElement('input'); lonIn.placeholder = 'Lon'; lonIn.type = 'number'; lonIn.step = 'any';
+    const radIn = document.createElement('input'); radIn.placeholder = 'Radius km'; radIn.type = 'number'; radIn.value = '100';
+    const addBtn = document.createElement('button'); addBtn.textContent = '+ Add';
+    addBtn.addEventListener('click', () => {
+      const lbl = labelIn.value.trim();
+      const lat = Number(latIn.value);
+      const lon = Number(lonIn.value);
+      const rad = Number(radIn.value) || 100;
+      if (!lbl || Number.isNaN(lat) || Number.isNaN(lon)) return;
+      addGeofence(lbl, lat, lon, rad);
+      labelIn.value = ''; latIn.value = ''; lonIn.value = '';
+      this.render();
+    });
+    form.append(labelIn, latIn, lonIn, radIn, addBtn);
+    sec.append(form);
+    return sec;
+  }
+
+  private renderBookmarksSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'status-section';
+    const h = document.createElement('h3'); h.textContent = 'Bookmark Collections';
+    sec.append(h);
+
+    const cols = getCollections();
+    if (cols.length === 0) {
+      const empty = document.createElement('p'); empty.className = 'status-empty';
+      empty.textContent = '(no collections — right-click an alert to bookmark)';
+      sec.append(empty);
+      return sec;
+    }
+
+    const list = document.createElement('div'); list.className = 'status-rules-list';
+    for (const col of cols) {
+      const row = document.createElement('div'); row.className = 'status-rule-row';
+      const label = document.createElement('span'); label.className = 'status-rule-label';
+      label.textContent = `${col.name} (${col.alertIds.length} alerts)`;
+      const del = document.createElement('button'); del.className = 'status-wl-del'; del.textContent = '\u2715';
+      del.addEventListener('click', () => { deleteCollection(col.id); this.render(); });
+      row.append(label, del);
+      list.append(row);
+    }
+    sec.append(list);
+    return sec;
+  }
+
+  private renderPeriodicitySection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'status-section';
+    const h = document.createElement('h3'); h.textContent = 'Source Periodicity & Silence';
+    sec.append(h);
+
+    const silence = getSilenceStatus();
+    if (silence.isSilent) {
+      const warn = document.createElement('div'); warn.className = 'status-silence-warn';
+      warn.textContent = `Alert rate at ${Math.round(silence.ratio * 100)}% of baseline (${silence.currentRate} vs ~${silence.baselineRate} expected)`;
+      sec.append(warn);
+    }
+
+    const periodic = getPeriodicSources();
+    if (periodic.length === 0) {
+      const empty = document.createElement('p'); empty.className = 'status-empty';
+      empty.textContent = '(no periodic sources detected yet)';
+      sec.append(empty);
+      return sec;
+    }
+
+    const grid = document.createElement('div'); grid.className = 'status-reliability-grid';
+    for (const p of periodic) {
+      const row = document.createElement('div');
+      row.className = `status-reliability-row${p.overdue ? ' status-overdue' : ''}`;
+      const name = document.createElement('span'); name.className = 'status-rel-name'; name.textContent = p.source;
+      const interval = document.createElement('span'); interval.className = 'status-rel-acc';
+      interval.textContent = `~${p.meanIntervalMin}m`;
+      const last = document.createElement('span'); last.className = 'status-rel-ct';
+      last.textContent = `${p.lastSeenAgoMin}m ago`;
+      const badge = document.createElement('span');
+      badge.className = p.overdue ? 'status-rel-down' : 'status-rel-up';
+      badge.textContent = p.overdue ? 'OVERDUE' : 'OK';
+      row.append(name, interval, last, badge);
+      grid.append(row);
+    }
+    sec.append(grid);
+    return sec;
+  }
+
+  private renderHeatProjectionSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'status-section';
+    const h = document.createElement('h3'); h.textContent = 'Entity Heat Projection (4h)';
+    sec.append(h);
+
+    const projections = projectEntityHeat().slice(0, 10);
+    if (projections.length === 0) {
+      const empty = document.createElement('p'); empty.className = 'status-empty';
+      empty.textContent = '(no entity data yet)';
+      sec.append(empty);
+      return sec;
+    }
+
+    const grid = document.createElement('div'); grid.className = 'status-reliability-grid';
+    for (const p of projections) {
+      const row = document.createElement('div'); row.className = 'status-reliability-row';
+      const name = document.createElement('span'); name.className = 'status-rel-name'; name.textContent = p.name;
+      const current = document.createElement('span'); current.className = 'status-rel-acc';
+      current.textContent = String(p.currentHeat);
+      const arrow = document.createElement('span');
+      const TREND_ICON: Record<string, string> = { rising: '↑', falling: '↓', stable: '→' };
+      const TREND_CLASS: Record<string, string> = { rising: 'up', falling: 'down', stable: 'stable' };
+      const trendClass = TREND_CLASS[p.trend] ?? 'stable';
+      arrow.className = `status-rel-${trendClass}`;
+      arrow.textContent = TREND_ICON[p.trend] ?? '→';
+      const projected = document.createElement('span'); projected.className = 'status-rel-ct';
+      projected.textContent = `→ ${p.projectedHeat}`;
+      const conf = document.createElement('span'); conf.className = 'status-rel-count';
+      conf.textContent = `${p.confidence}%`;
+      row.append(name, current, arrow, projected, conf);
+      grid.append(row);
+    }
+    sec.append(grid);
+    return sec;
   }
 
   private renderWatchlistSection(): HTMLElement {

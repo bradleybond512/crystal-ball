@@ -18966,6 +18966,9 @@ body.has-breaking-alert .panels-grid {
 
 /* ── Related badge in Inbox ─────────────────────────────────────── */
 /* ── Crystal Ball Says strip ────────────────────────────────────── */
+body.gods-vision-lock .cbs-strip,
+body.gods-vision-lock .related-strip,
+body.gods-vision-lock .replay-scrubber { display: none; }
 .cbs-strip {
   position: fixed;
   bottom: 44px;

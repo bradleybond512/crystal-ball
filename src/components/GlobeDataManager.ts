@@ -420,7 +420,6 @@ export class GlobeDataManager {
  positions,
  width: cable.major ? 1.5 : 0.8,
  material: new ColorMaterialProperty(cable.major ? C.cableMajor : C.cable),
- clampToGround: true,
  },
  description: cable.capacityTbps
  ? cable.name + ' — ' + String(cable.capacityTbps) + ' Tbps'
@@ -1024,7 +1023,6 @@ export class GlobeDataManager {
  positions: trailPositions,
  width: 1.5,
  material: new ColorMaterialProperty(C.flightTrail),
- clampToGround: true,
  },
  });
  }
@@ -1092,7 +1090,6 @@ export class GlobeDataManager {
  positions: trailPositions,
  width: 1.5,
  material: new ColorMaterialProperty(isDark ? C.vesselDarkTrail : C.vesselTrail),
- clampToGround: true,
  },
  });
  }
@@ -1379,7 +1376,6 @@ export class GlobeDataManager {
  ],
  width: Math.min(4, 1 + Math.log10(flow.refugees) * 0.3),
  material: new ColorMaterialProperty(C.displacementFlow),
- clampToGround: true,
  },
  description: `${flow.originName} → ${flow.asylumName}: ${flow.refugees.toLocaleString()} refugees`,
  });

@@ -69,7 +69,6 @@ export class GlobeArcs {
  width: new ConstantProperty(1.5),
  material: new ColorMaterialProperty(Color.fromCssColorString('#f87171').withAlpha(0.5)),
  arcType: ArcType.GEODESIC,
- clampToGround: true,
  }),
  }));
  }

@@ -64,7 +64,7 @@ export class LiveWebcamsPanel extends Panel {
   private idleTimeout: ReturnType<typeof setTimeout> | null = null;
   private boundIdleResetHandler!: () => void;
   private boundVisibilityHandler!: () => void;
-  private readonly IDLE_PAUSE_MS = 5 * 60 * 1000;
+  private readonly IDLE_PAUSE_MS = 60 * 60 * 1000; // 60 minutes
   private isIdle = false;
   private _boundYtMsg!: (e: MessageEvent) => void;
 

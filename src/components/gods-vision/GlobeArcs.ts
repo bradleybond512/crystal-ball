@@ -1,6 +1,7 @@
 import {
-  Cartesian3, Color, ColorMaterialProperty, CustomDataSource, Entity,
+  Cartesian3, Cartographic, Color, ColorMaterialProperty, CustomDataSource, Entity,
   PolylineGraphics, ArcType, ConstantProperty, type Viewer,
+  Math as CesiumMath,
 } from 'cesium';
 import type { GlobeDataManager } from '@/components/GlobeDataManager';
 
@@ -14,6 +15,24 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
  Math.cos((lat2 * Math.PI) / 180) *
  Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function densifyGeodesic(p0: Cartesian3, p1: Cartesian3, maxDeg = 2): Cartesian3[] {
+  const c0 = Cartographic.fromCartesian(p0);
+  const c1 = Cartographic.fromCartesian(p1);
+  const dLon = Math.abs(CesiumMath.toDegrees(c1.longitude - c0.longitude));
+  const dLat = Math.abs(CesiumMath.toDegrees(c1.latitude - c0.latitude));
+  const steps = Math.max(1, Math.ceil(Math.max(dLon, dLat) / maxDeg));
+  const result: Cartesian3[] = [p0];
+  for (let s = 1; s <= steps; s++) {
+    const t = s / steps;
+    result.push(Cartesian3.fromRadians(
+ CesiumMath.lerp(c0.longitude, c1.longitude, t),
+ CesiumMath.lerp(c0.latitude, c1.latitude, t),
+ 0,
+    ));
+  }
+  return result;
 }
 
 export class GlobeArcs {
@@ -60,15 +79,14 @@ export class GlobeArcs {
  if (dist < nearestDist) { nearest = d; nearestDist = dist; }
  }
  if (nearest?.lat === undefined || nearest.lon === undefined) continue;
+ const p0 = Cartesian3.fromDegrees(c.lon, c.lat);
+ const p1 = Cartesian3.fromDegrees(nearest.lon, nearest.lat);
  this.source.entities.add(new Entity({
  polyline: new PolylineGraphics({
- positions: new ConstantProperty([
- Cartesian3.fromDegrees(c.lon, c.lat),
- Cartesian3.fromDegrees(nearest.lon, nearest.lat),
- ]),
+ positions: new ConstantProperty(densifyGeodesic(p0, p1)),
  width: new ConstantProperty(1.5),
  material: new ColorMaterialProperty(Color.fromCssColorString('#f87171').withAlpha(0.5)),
- arcType: ArcType.GEODESIC,
+ arcType: ArcType.NONE,
  }),
  }));
  }

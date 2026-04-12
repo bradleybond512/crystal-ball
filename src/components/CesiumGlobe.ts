@@ -96,7 +96,10 @@ export class CesiumGlobe {
  }
 
  // ── Terrain ────────────────────────────────────────
- scene.verticalExaggeration = 1.5;
+ // verticalExaggeration removed — with terrain disabled, it causes
+ // ground-clamped entities (cables, arcs, dots) to float above the
+ // rendered ellipsoid surface.
+ scene.verticalExaggeration = 1;
  scene.verticalExaggerationRelativeHeight = 0;
 
  // ── Fog & Depth ────────────────────────────────────

@@ -3,9 +3,11 @@ import {
   IonImageryProvider,
   ImageryLayer,
   UrlTemplateImageryProvider,
+  EllipsoidTerrainProvider,
   SceneMode,
   Color,
   Cartesian3,
+  Cartographic,
   HeadingPitchRange,
   Matrix4,
   Math as CesiumMath,
@@ -45,9 +47,11 @@ export class CesiumGlobe {
  animation: false,
  baseLayerPicker: false,
  baseLayer: false,
- // Terrain disabled — was implicated in pink-globe bug alongside HDR.
- // Re-enable with Terrain.fromWorldTerrain() once the root cause is confirmed.
- terrain: undefined,
+ // Explicit EllipsoidTerrainProvider — gives clampToGround a surface to
+ // drape onto without real terrain data (which triggers pink-globe on Mac GPUs).
+ // Setting terrain: undefined killed the default provider, making ground
+ // polylines float at arbitrary heights.
+ terrainProvider: new EllipsoidTerrainProvider(),
  fullscreenButton: false,
  geocoder: false,
  homeButton: false,
@@ -244,6 +248,70 @@ export class CesiumGlobe {
  }
  this.viewer?.scene.requestRender();
  }, false);
+
+ // ── Entity Height Auditor ────────────────────────────
+ // After data loads, sample entity positions across all dataSources and
+ // log any polyline/point that sits above the ellipsoid. This catches
+ // "floating cable" regressions at runtime instead of waiting for user reports.
+ setTimeout(() => this.auditEntityHeights(), 10_000);
+  }
+
+  /* eslint-disable sonarjs/cognitive-complexity -- audit needs nested iteration */
+  private auditEntityHeights(): void {
+ const viewer = this.viewer;
+ if (!viewer) return;
+ const now = viewer.clock.currentTime;
+ const stats = { total: 0, floating: 0, details: [] as string[] };
+
+ for (let ds = 0; ds < viewer.dataSources.length; ds++) {
+ const source = viewer.dataSources.get(ds);
+ for (const entity of source.entities.values) {
+ this.auditPoint(entity, source.name, now, stats);
+ this.auditPolyline(entity, source.name, now, stats);
+ }
+ }
+
+ if (stats.floating > 0) {
+ this.log('ERROR',
+ `[globe-audit] ${stats.floating}/${stats.total} entities floating: ${stats.details.join('; ')}`,
+ );
+ } else {
+ this.log('INFO', `[globe-audit] ${stats.total} entities checked — none floating`);
+ }
+ this.log('INFO',
+ `[globe-audit] terrainProvider=${viewer.terrainProvider?.constructor?.name ?? 'none'}`,
+ );
+  }
+  /* eslint-enable sonarjs/cognitive-complexity */
+
+  private auditPoint(
+ entity: import('cesium').Entity, sourceName: string,
+ now: import('cesium').JulianDate, stats: { total: number; floating: number; details: string[] },
+  ): void {
+ const pos = entity.position?.getValue(now);
+ if (!pos) return;
+ stats.total++;
+ const carto = Cartographic.fromCartesian(pos);
+ if (carto && carto.height > 100 && stats.details.length < 5) {
+ stats.floating++;
+ stats.details.push(`${sourceName}/${entity.id}: h=${Math.round(carto.height)}m`);
+ }
+  }
+
+  private auditPolyline(
+ entity: import('cesium').Entity, sourceName: string,
+ now: import('cesium').JulianDate, stats: { total: number; floating: number; details: string[] },
+  ): void {
+ const raw = entity.polyline?.positions?.getValue(now) as Cartesian3[] | undefined;
+ if (!raw || raw.length === 0) return;
+ const first = raw[0];
+ if (!first) return;
+ stats.total++;
+ const carto = Cartographic.fromCartesian(first);
+ if (carto && carto.height > 100 && stats.details.length < 5) {
+ stats.floating++;
+ stats.details.push(`${sourceName}/${entity.id} polyline: h=${Math.round(carto.height)}m`);
+ }
   }
 
   private async addPrimaryIonImagery(): Promise<void> {

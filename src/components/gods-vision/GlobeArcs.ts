@@ -1,5 +1,5 @@
 import {
-  Cartesian3, Color, CustomDataSource, Entity,
+  Cartesian3, Color, ColorMaterialProperty, CustomDataSource, Entity,
   PolylineGraphics, ArcType, ConstantProperty, type Viewer,
 } from 'cesium';
 import type { GlobeDataManager } from '@/components/GlobeDataManager';
@@ -67,7 +67,7 @@ export class GlobeArcs {
  Cartesian3.fromDegrees(nearest.lon, nearest.lat),
  ]),
  width: new ConstantProperty(1.5),
- material: Color.fromCssColorString('#f87171').withAlpha(0.5),
+ material: new ColorMaterialProperty(Color.fromCssColorString('#f87171').withAlpha(0.5)),
  arcType: ArcType.GEODESIC,
  clampToGround: true,
  }),

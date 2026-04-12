@@ -9,7 +9,6 @@ import {
   type Viewer,
   NearFarScalar,
   DistanceDisplayCondition,
-  PolylineDashMaterialProperty,
   ColorMaterialProperty,
   ConstantProperty,
   PropertyBag,
@@ -420,10 +419,7 @@ export class GlobeDataManager {
  polyline: {
  positions,
  width: cable.major ? 1.5 : 0.8,
- material: new PolylineDashMaterialProperty({
- color: cable.major ? C.cable : C.cable.withAlpha(0.25),
- dashLength: 12,
- }),
+ material: new ColorMaterialProperty(cable.major ? C.cableMajor : C.cable),
  clampToGround: true,
  },
  description: cable.capacityTbps

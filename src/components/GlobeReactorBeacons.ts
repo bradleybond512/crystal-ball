@@ -3,6 +3,7 @@ import {
   Cartesian2,
   Cartesian3,
   Color,
+  ColorMaterialProperty,
   CustomDataSource,
   DistanceDisplayCondition,
   Entity,
@@ -126,7 +127,7 @@ export class GlobeReactorBeacons {
  semiMinorAxis: new CallbackProperty(pulseRadius, false),
  semiMajorAxis: new CallbackProperty(pulseRadius, false),
  height: 0,
- material: color.withAlpha(0.3),
+ material: new ColorMaterialProperty(color.withAlpha(0.3)),
  outline: false,
  },
  label: {

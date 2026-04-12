@@ -1,5 +1,5 @@
 import {
-  Cartesian3, Color, CustomDataSource, CallbackProperty,
+  Cartesian3, Color, ColorMaterialProperty, CustomDataSource, CallbackProperty,
   EllipseGraphics, ConstantPositionProperty, Entity,
   HeightReference,
   type Viewer,
@@ -66,11 +66,11 @@ export class GlobePulse {
  const t = (Date.now() - startMs) % PULSE_DURATION_MS;
  return (t / PULSE_DURATION_MS) * PULSE_MAX_RADIUS_M;
  }, false),
- material: new CallbackProperty(() => {
+ material: new ColorMaterialProperty(new CallbackProperty(() => {
  const t = (Date.now() - startMs) % PULSE_DURATION_MS;
  const alpha = 0.5 * (1 - t / PULSE_DURATION_MS);
  return Color.fromCssColorString('#60a5fa').withAlpha(alpha);
- }, false) as unknown as import('cesium').MaterialProperty,
+ }, false)),
  outline: false,
  height: 0,
  heightReference: HeightReference.CLAMP_TO_GROUND,

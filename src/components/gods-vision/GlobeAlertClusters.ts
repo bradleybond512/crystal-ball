@@ -6,7 +6,7 @@
  */
 
 import {
-  Cartesian3, Color, CustomDataSource, Entity,
+  Cartesian3, Color, ColorMaterialProperty, CustomDataSource, Entity,
   ConstantPositionProperty, EllipseGraphics, CallbackProperty,
   HeightReference,
   type Viewer,
@@ -67,11 +67,11 @@ export class GlobeAlertClusters {
             const t = (Date.now() - startMs) % 4000;
             return radiusM * (0.6 + 0.4 * (t / 4000));
           }, false),
-          material: new CallbackProperty(() => {
+          material: new ColorMaterialProperty(new CallbackProperty(() => {
             const t = (Date.now() - startMs) % 4000;
             const alpha = 0.35 * (1 - t / 4000);
             return baseColor.withAlpha(alpha);
-          }, false) as unknown as import('cesium').MaterialProperty,
+          }, false)),
           outline: true,
           outlineColor: new CallbackProperty(() => {
             const t = (Date.now() - startMs) % 4000;

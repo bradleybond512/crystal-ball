@@ -23,32 +23,6 @@ import {
   Transforms,
 } from 'cesium';
 
-/**
- * Interpolate along the geodesic between consecutive positions so that
- * non-clamped polylines hug the WGS84 ellipsoid instead of cutting
- * straight through Earth's interior (which looks like floating lines
- * when terrain is disabled).
- */
-function densifyOnEllipsoid(positions: Cartesian3[], maxSegDeg = 2): Cartesian3[] {
-  if (positions.length < 2) return positions;
-  const result: Cartesian3[] = [positions[0]!];
-  for (let i = 1; i < positions.length; i++) {
-    const c0 = Cartographic.fromCartesian(positions[i - 1]!);
-    const c1 = Cartographic.fromCartesian(positions[i]!);
-    const dLon = Math.abs(CesiumMath.toDegrees(c1.longitude - c0.longitude));
-    const dLat = Math.abs(CesiumMath.toDegrees(c1.latitude - c0.latitude));
-    const span = Math.max(dLon, dLat);
-    const steps = Math.max(1, Math.ceil(span / maxSegDeg));
-    for (let s = 1; s <= steps; s++) {
-      const t = s / steps;
-      const lon = CesiumMath.lerp(c0.longitude, c1.longitude, t);
-      const lat = CesiumMath.lerp(c0.latitude, c1.latitude, t);
-      result.push(Cartesian3.fromRadians(lon, lat, 0));
-    }
-  }
-  return result;
-}
-
 import { applyClustering } from '@/components/globeClustering';
 import { modelLoader } from '@/services/model-loader';
 import { BuildingTileManager } from '@/services/building-tiles';
@@ -437,16 +411,16 @@ export class GlobeDataManager {
 
  for (const cable of UNDERSEA_CABLES) {
  if (cable.points.length < 2) continue;
- const raw = cable.points.map(([lon, lat]: [number, number]) =>
+ const positions = cable.points.map(([lon, lat]: [number, number]) =>
  Cartesian3.fromDegrees(lon, lat),
  );
- const positions = densifyOnEllipsoid(raw);
 
  layer.source.entities.add({
  polyline: {
  positions,
  width: cable.major ? 1.5 : 0.8,
  material: new ColorMaterialProperty(cable.major ? C.cableMajor : C.cable),
+ clampToGround: true,
  },
  description: cable.capacityTbps
  ? cable.name + ' — ' + String(cable.capacityTbps) + ' Tbps'
@@ -1050,6 +1024,7 @@ export class GlobeDataManager {
  positions: trailPositions,
  width: 1.5,
  material: new ColorMaterialProperty(C.flightTrail),
+ clampToGround: true,
  },
  });
  }
@@ -1117,6 +1092,7 @@ export class GlobeDataManager {
  positions: trailPositions,
  width: 1.5,
  material: new ColorMaterialProperty(isDark ? C.vesselDarkTrail : C.vesselTrail),
+ clampToGround: true,
  },
  });
  }
@@ -1397,12 +1373,13 @@ export class GlobeDataManager {
 
  layer.source.entities.add({
  polyline: {
- positions: densifyOnEllipsoid([
+ positions: [
  Cartesian3.fromDegrees(flow.originLon, flow.originLat),
  Cartesian3.fromDegrees(flow.asylumLon, flow.asylumLat),
- ]),
+ ],
  width: Math.min(4, 1 + Math.log10(flow.refugees) * 0.3),
  material: new ColorMaterialProperty(C.displacementFlow),
+ clampToGround: true,
  },
  description: `${flow.originName} → ${flow.asylumName}: ${flow.refugees.toLocaleString()} refugees`,
  });

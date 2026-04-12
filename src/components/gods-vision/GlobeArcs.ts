@@ -63,13 +63,13 @@ export class GlobeArcs {
  this.source.entities.add(new Entity({
  polyline: new PolylineGraphics({
  positions: new ConstantProperty([
- Cartesian3.fromDegrees(c.lon, c.lat, 10_000),
- Cartesian3.fromDegrees(nearest.lon, nearest.lat, 10_000),
+ Cartesian3.fromDegrees(c.lon, c.lat),
+ Cartesian3.fromDegrees(nearest.lon, nearest.lat),
  ]),
  width: new ConstantProperty(1.5),
  material: Color.fromCssColorString('#f87171').withAlpha(0.5),
  arcType: ArcType.GEODESIC,
- clampToGround: false,
+ clampToGround: true,
  }),
  }));
  }

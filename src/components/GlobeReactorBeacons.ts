@@ -6,6 +6,7 @@ import {
   CustomDataSource,
   DistanceDisplayCondition,
   Entity,
+  HeightReference,
   LabelStyle,
   NearFarScalar,
   type Viewer,
@@ -112,13 +113,14 @@ export class GlobeReactorBeacons {
  const color = severityColor(severity);
 
  const entity = this.dataSource.entities.add({
- position: Cartesian3.fromDegrees(lon, lat, 0),
+ position: Cartesian3.fromDegrees(lon, lat),
  point: {
  pixelSize: 12,
  color,
  outlineColor: Color.WHITE,
  outlineWidth: 2,
  scaleByDistance: new NearFarScalar(1.5e2, 2, 1.5e7, 0.5),
+ heightReference: HeightReference.CLAMP_TO_GROUND,
  },
  ellipse: {
  semiMinorAxis: new CallbackProperty(pulseRadius, false),

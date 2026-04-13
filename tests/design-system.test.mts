@@ -51,7 +51,7 @@ describe('design-system.css tokens', () => {
 
 describe('design-system.css component primitives', () => {
   const requiredClasses = [
-    '.cb-card', '.cb-badge', '.cb-button', '.cb-list-row',
+    '.cb-card', '.cb-badge', '.cb-button', '.cb-input', '.cb-list-row',
     '.cb-separator', '.cb-skeleton', '.cb-pill-group',
   ];
 

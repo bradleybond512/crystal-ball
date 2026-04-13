@@ -1,4 +1,4 @@
-import { animateIn, animateOut } from '@/services/motion';
+import { animateIn, animateOut, prefersReducedMotion } from '@/services/motion';
 
 const ONBOARDING_KEY = 'cb:onboarding-complete';
 
@@ -9,6 +9,8 @@ const INTERESTS = [
   'Markets',
   'Infrastructure',
   'Military',
+  'Health',
+  'Space',
 ] as const;
 
 const FREE_APIS = [
@@ -348,9 +350,27 @@ export class WelcomeFlow {
   }
 
   private advance(): void {
-    this.step++;
-    this.renderDots();
-    this.renderStep();
+    if (prefersReducedMotion()) {
+      this.step++;
+      this.renderDots();
+      this.renderStep();
+      return;
+    }
+
+    this.stepEl.style.transition = 'transform 350ms var(--ease-out), opacity 350ms var(--ease-out)';
+    this.stepEl.style.transform = 'translateX(-40px)';
+    this.stepEl.style.opacity = '0';
+
+    this.stepEl.addEventListener('transitionend', () => {
+      this.step++;
+      this.renderDots();
+      this.renderStep();
+      this.stepEl.style.transform = 'translateX(40px)';
+      requestAnimationFrame(() => {
+        this.stepEl.style.transform = 'translateX(0)';
+        this.stepEl.style.opacity = '1';
+      });
+    }, { once: true });
   }
 
   private complete(): void {

@@ -279,6 +279,38 @@
   background-size: 200% 100%;
 }
 
+.cb-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-family: var(--font-ui);
+  color: #e5e5e5;
+  background: var(--surface-raised);
+  border: var(--border-medium);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-default),
+              box-shadow var(--duration-fast) var(--ease-default);
+}
+
+.cb-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.cb-input::placeholder {
+  color: #555;
+}
+
+[data-theme="light"] .cb-input {
+  color: #1c1c1e;
+  background: var(--surface-raised);
+}
+
+[data-theme="light"] .cb-input::placeholder {
+  color: #999;
+}
+
 .cb-pill-group {
   display: inline-flex;
   gap: 2px;
@@ -316,6 +348,11 @@
 *:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
+}
+
+/* Yield to macOS native focus ring when present */
+body.is-desktop-macos *:focus-visible {
+  box-shadow: none;
 }
 
 /* ── Scrollbar ── */

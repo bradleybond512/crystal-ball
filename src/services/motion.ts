@@ -69,7 +69,7 @@ export function animateNumber(
 }
 
 export function animateIn(
-  el: HTMLElement, animation: 'slide-up' | 'fade' | 'scale' = 'slide-up',
+  el: HTMLElement, animation: 'slide-up' | 'fade' | 'scale' | 'slide-right' = 'slide-up',
 ): Promise<void> {
   if (prefersReducedMotion()) {
     el.style.opacity = '1';
@@ -79,6 +79,7 @@ export function animateIn(
     'slide-up': 'cb-animate-slide-up',
     'fade': 'cb-animate-fade-in',
     'scale': 'cb-animate-scale-in',
+    'slide-right': 'cb-animate-slide-in-right',
   };
   return new Promise((resolve) => {
     el.classList.add(classMap[animation]);

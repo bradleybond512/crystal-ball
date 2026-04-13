@@ -159,7 +159,7 @@ export class Toast {
     activeToasts.push(this);
     const container = getContainer();
     container.append(this.el);
-    void animateIn(this.el, 'slide-up');
+    void animateIn(this.el, 'slide-right');
 
     // Kick off progress bar shrink on next frame
     requestAnimationFrame(() => {

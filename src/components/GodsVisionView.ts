@@ -344,6 +344,9 @@ export class GodsVisionView {
  if (!this.active) return;
  this.active = false;
 
+ this.container.classList.add('ge-exiting');
+ setTimeout(() => this.container.classList.remove('ge-exiting'), 500);
+
  for (const fn of this.cleanupHandlers) fn();
  this.cleanupHandlers = [];
 

@@ -173,4 +173,16 @@ export const HINTS = {
       target,
       message: 'Press Cmd+Shift+G to enter Ghost Mode',
     }),
+  mapNavigation: (target: HTMLElement) =>
+    showHint({
+      id: 'map-nav',
+      target,
+      message: 'Use region pills to fly between theaters, scroll to zoom',
+    }),
+  settings: (target: HTMLElement) =>
+    showHint({
+      id: 'settings',
+      target,
+      message: 'Configure API keys and preferences here',
+    }),
 };

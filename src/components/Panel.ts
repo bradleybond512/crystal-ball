@@ -167,6 +167,7 @@ export class Panel {
   protected element: HTMLElement;
   protected content: HTMLElement;
   protected header: HTMLElement;
+  protected panelOptions!: PanelOptions;
   protected heartbeatEl: HTMLElement | null = null;
   protected narrativeEl: HTMLElement | null = null;
   private lastTickAt = 0;
@@ -225,6 +226,7 @@ export class Panel {
   ]);
 
   constructor(options: PanelOptions) {
+ this.panelOptions = options;
  this.panelId = options.id;
  this.element = document.createElement('div');
  this.element.className = `panel ${options.className || ''}`;
@@ -358,6 +360,54 @@ export class Panel {
  this.reconcileColSpanAfterAttach();
 
  this.showLoading();
+  }
+
+  protected buildStandardHeader(opts: {
+ subtitle?: string;
+ freshness?: { dotColor?: string; label?: string };
+ rightSlot?: HTMLElement;
+  }): HTMLElement {
+ const header = document.createElement('div');
+ header.className = 'cb-panel-header';
+ header.style.cssText = `
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: var(--space-3) var(--space-4);
+    `;
+
+ const left = document.createElement('div');
+ const title = document.createElement('div');
+ title.style.cssText = `
+      font-size: var(--text-base); font-weight: var(--fw-semibold);
+      color: #e5e5e5; letter-spacing: -0.01em;
+    `;
+ title.textContent = this.panelOptions.title;
+ left.append(title);
+
+ if (opts.subtitle) {
+ const sub = document.createElement('div');
+ sub.style.cssText = 'font-size: var(--text-xs); color: #666; margin-top: 2px;';
+ sub.textContent = opts.subtitle;
+ left.append(sub);
+ }
+
+ header.append(left);
+
+ if (opts.freshness) {
+ const right = document.createElement('div');
+ right.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+ const dot = document.createElement('div');
+ dot.style.cssText = `width: 6px; height: 6px; border-radius: 50%; background: ${opts.freshness.dotColor || '#22c55e'};`;
+ right.append(dot);
+ const label = document.createElement('span');
+ label.style.cssText = 'font-size: var(--text-2xs); color: #666;';
+ label.textContent = opts.freshness.label || '';
+ right.append(label);
+ header.append(right);
+ } else if (opts.rightSlot) {
+ header.append(opts.rightSlot);
+ }
+
+ return header;
   }
 
   private restoreSavedColSpan(): void {

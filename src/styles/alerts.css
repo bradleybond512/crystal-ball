@@ -4,12 +4,12 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 14px;
+  padding: var(--space-2) 14px;
   margin: 0 0 10px 0;
   background: linear-gradient(90deg, rgba(40, 0, 0, 0.85), rgba(20, 20, 30, 0.85));
   border: 1px solid rgba(255, 80, 80, 0.4);
-  border-radius: 8px;
-  font: 12px/1.2 -apple-system, system-ui, sans-serif;
+  border-radius: var(--radius-md);
+  font: var(--text-sm)/1.2 -apple-system, system-ui, sans-serif;
   color: #f5f5f7;
   position: sticky;
   top: 0;
@@ -38,7 +38,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: var(--space-1) 10px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -59,11 +59,11 @@
   background: #888;
   flex-shrink: 0;
 }
-.triage-sev-critical .triage-sev-dot { background: #ff3b30; box-shadow: 0 0 6px #ff3b30; }
-.triage-sev-high .triage-sev-dot { background: #ff9500; }
-.triage-sev-medium .triage-sev-dot { background: #ffcc00; }
-.triage-sev-low .triage-sev-dot { background: #34c759; }
-.triage-sev-info .triage-sev-dot { background: #5ac8fa; }
+.triage-sev-critical .triage-sev-dot { background: var(--severity-critical); box-shadow: 0 0 6px var(--severity-critical-glow); }
+.triage-sev-high .triage-sev-dot { background: var(--severity-high); }
+.triage-sev-medium .triage-sev-dot { background: var(--severity-elevated); }
+.triage-sev-low .triage-sev-dot { background: var(--severity-positive); }
+.triage-sev-info .triage-sev-dot { background: var(--severity-normal); }
 
 .triage-source {
   font-size: 10px;
@@ -78,8 +78,8 @@
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #f5f5f7;
-  padding: 4px 10px;
-  border-radius: 6px;
+  padding: var(--space-1) 10px;
+  border-radius: var(--radius-sm);
   font: 11px/1 -apple-system, system-ui, sans-serif;
   cursor: pointer;
   flex-shrink: 0;
@@ -237,10 +237,10 @@
 /* Snooze context menu */
 .triage-snooze-menu {
   position: fixed;
-  background: rgba(28, 28, 32, 0.98);
+  background: var(--surface-overlay);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  padding: 4px;
+  border-radius: var(--radius-md);
+  padding: var(--space-1);
   z-index: 10000;
   display: flex;
   flex-direction: column;
@@ -252,10 +252,10 @@
   border: none;
   color: #f5f5f7;
   text-align: left;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font: 12px/1 -apple-system, system-ui, sans-serif;
+  font: var(--text-sm)/1 -apple-system, system-ui, sans-serif;
 }
 .triage-snooze-menu button:hover { background: rgba(255, 255, 255, 0.12); }
 
@@ -264,8 +264,8 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #f5f5f7;
-  padding: 4px 10px;
-  border-radius: 6px;
+  padding: var(--space-1) 10px;
+  border-radius: var(--radius-sm);
   font: 11px/1 -apple-system, system-ui, sans-serif;
   cursor: pointer;
   flex-shrink: 0;

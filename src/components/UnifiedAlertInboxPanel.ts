@@ -510,7 +510,7 @@ export class UnifiedAlertInboxPanel extends Panel {
   }
 
   private renderRow(alert: UnifiedAlert, index: number, relatedCount = 0): string {
- const sevPill = `<span class="ac-pill ac-pill-${alert.severity}">${SEVERITY_LABELS[alert.severity]}</span>`;
+ const sevPill = `<span class="cb-badge" data-severity="${sevToBadge(alert.severity)}">${SEVERITY_LABELS[alert.severity]}</span>`;
  const srcTag = `<span class="uai-src-tag uai-src-${alert.source}" data-filter-src="${alert.source}" title="Filter: ${alert.source}">${SOURCE_LABELS[alert.source] ?? alert.source}</span>`;
 
  const scoreBar = this.renderScoreBar(alert.relevanceScore);
@@ -539,6 +539,7 @@ export class UnifiedAlertInboxPanel extends Panel {
  const ackIcon = alert.acknowledged ? '&#10003;' : '&#10005;';
 
  const rowClasses = [
+ 'cb-list-row',
  rowSevClass(alert.severity),
  alert.pinned ? 'uai-pinned' : '',
  alert.acknowledged ? 'uai-acked' : '',
@@ -584,6 +585,18 @@ function esc(s: string): string {
  .replace(/</g, '&lt;')
  .replace(/>/g, '&gt;')
  .replace(/"/g, '&quot;');
+}
+
+function sevToBadge(s: AlertSeverity): string {
+  return (
+ {
+ critical: 'critical',
+ high: 'high',
+ medium: 'elevated',
+ low: 'normal',
+ info: 'positive',
+ }[s] ?? 'normal'
+  );
 }
 
 function rowSevClass(s: AlertSeverity): string {

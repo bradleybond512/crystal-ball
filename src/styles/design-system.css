@@ -1,0 +1,122 @@
+/* src/styles/design-system.css */
+/* Crystal Ball Design System — Apple-Native Tokens */
+
+:root {
+  /* ── Typography ── */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* ── Spacing (4px grid) ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ── Border Radius ── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* ── Motion ── */
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-moderate: 350ms;
+  --duration-slow: 500ms;
+
+  --ease-default: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+
+  /* ── Surfaces (dark) ── */
+  --surface-base: #0a0a0a;
+  --surface-raised: #141414;
+  --surface-overlay: #1c1c1e;
+  --surface-popover: #2c2c2e;
+
+  /* ── Interactive States ── */
+  --accent: #3b82f6;
+  --hover-bg: rgba(255, 255, 255, 0.06);
+  --active-bg: rgba(255, 255, 255, 0.1);
+  --focus-ring: 0 0 0 2px rgba(59, 130, 246, 0.5), 0 0 0 4px rgba(59, 130, 246, 0.15);
+
+  /* ── Severity: Critical ── */
+  --severity-critical: #ef4444;
+  --severity-critical-bg: rgba(239, 68, 68, 0.1);
+  --severity-critical-border: rgba(239, 68, 68, 0.25);
+  --severity-critical-glow: rgba(239, 68, 68, 0.3);
+
+  /* ── Severity: High ── */
+  --severity-high: #f97316;
+  --severity-high-bg: rgba(249, 115, 22, 0.1);
+  --severity-high-border: rgba(249, 115, 22, 0.25);
+  --severity-high-glow: rgba(249, 115, 22, 0.3);
+
+  /* ── Severity: Elevated ── */
+  --severity-elevated: #eab308;
+  --severity-elevated-bg: rgba(234, 179, 8, 0.1);
+  --severity-elevated-border: rgba(234, 179, 8, 0.25);
+  --severity-elevated-glow: rgba(234, 179, 8, 0.3);
+
+  /* ── Severity: Normal ── */
+  --severity-normal: #3b82f6;
+  --severity-normal-bg: rgba(59, 130, 246, 0.08);
+  --severity-normal-border: rgba(59, 130, 246, 0.2);
+  --severity-normal-glow: rgba(59, 130, 246, 0.2);
+
+  /* ── Severity: Positive ── */
+  --severity-positive: #22c55e;
+  --severity-positive-bg: rgba(34, 197, 94, 0.08);
+  --severity-positive-border: rgba(34, 197, 94, 0.2);
+  --severity-positive-glow: rgba(34, 197, 94, 0.2);
+
+  /* ── Elevation ── */
+  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --elevation-2: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --elevation-3: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --elevation-4: 0 16px 48px rgba(0, 0, 0, 0.6);
+
+  --border-subtle: 1px solid rgba(255, 255, 255, 0.06);
+  --border-medium: 1px solid rgba(255, 255, 255, 0.08);
+  --border-strong: 1px solid rgba(255, 255, 255, 0.1);
+  --border-accent: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+/* ── Light theme overrides ── */
+[data-theme="light"] {
+  --surface-base: #f5f5f7;
+  --surface-raised: #ffffff;
+  --surface-overlay: #f2f2f7;
+  --surface-popover: #ffffff;
+
+  --hover-bg: rgba(0, 0, 0, 0.04);
+  --active-bg: rgba(0, 0, 0, 0.08);
+
+  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --elevation-2: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --elevation-3: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --elevation-4: 0 16px 48px rgba(0, 0, 0, 0.15);
+
+  --border-subtle: 1px solid rgba(0, 0, 0, 0.06);
+  --border-medium: 1px solid rgba(0, 0, 0, 0.1);
+  --border-strong: 1px solid rgba(0, 0, 0, 0.15);
+}

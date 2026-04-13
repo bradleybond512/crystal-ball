@@ -1,3 +1,4 @@
+@import './design-system.css';
 @import './rtl-overrides.css';
 @import './panels.css';
 @import './macos-native.css';

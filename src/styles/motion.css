@@ -1,0 +1,102 @@
+/* src/styles/motion.css */
+
+@keyframes cb-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cb-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cb-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cb-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes cb-scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cb-scale-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.98); }
+}
+
+@keyframes cb-slide-in-right {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes cb-slide-out-right {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(100%); }
+}
+
+@keyframes cb-pulse-scale {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes cb-ripple {
+  from { transform: scale(1); opacity: 0.4; }
+  to { transform: scale(2.5); opacity: 0; }
+}
+
+/* ══ Utility Classes ══ */
+
+@media (prefers-reduced-motion: no-preference) {
+  .cb-animate-slide-up { animation: cb-slide-up var(--duration-moderate) var(--ease-out) both; }
+  .cb-animate-slide-down { animation: cb-slide-down var(--duration-moderate) var(--ease-out) both; }
+  .cb-animate-fade-in { animation: cb-fade-in var(--duration-normal) var(--ease-default) both; }
+  .cb-animate-fade-out { animation: cb-fade-out var(--duration-normal) var(--ease-in) both; }
+  .cb-animate-scale-in { animation: cb-scale-in var(--duration-moderate) var(--ease-out) both; }
+  .cb-animate-scale-out { animation: cb-scale-out var(--duration-normal) var(--ease-in) both; }
+  .cb-animate-slide-in-right { animation: cb-slide-in-right var(--duration-moderate) var(--ease-spring) both; }
+  .cb-animate-slide-out-right { animation: cb-slide-out-right var(--duration-normal) var(--ease-in) both; }
+  .cb-animate-pulse { animation: cb-pulse-scale var(--duration-moderate) var(--ease-spring); }
+  .cb-stagger-item { animation: cb-slide-up var(--duration-moderate) var(--ease-out) both; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-animate-slide-up, .cb-animate-slide-down, .cb-animate-scale-in,
+  .cb-animate-slide-in-right, .cb-stagger-item { animation: cb-fade-in 1ms both; }
+  .cb-animate-fade-out, .cb-animate-scale-out, .cb-animate-slide-out-right { animation: cb-fade-out 1ms both; }
+  .cb-animate-pulse { animation: none; }
+}
+
+body.animations-paused .cb-animate-slide-up,
+body.animations-paused .cb-animate-slide-down,
+body.animations-paused .cb-animate-fade-in,
+body.animations-paused .cb-animate-fade-out,
+body.animations-paused .cb-animate-scale-in,
+body.animations-paused .cb-animate-scale-out,
+body.animations-paused .cb-animate-slide-in-right,
+body.animations-paused .cb-animate-slide-out-right,
+body.animations-paused .cb-animate-pulse,
+body.animations-paused .cb-stagger-item { animation: none !important; }
+
+/* ══ Modal / Overlay ══ */
+
+.cb-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9998;
+}
+
+.cb-modal-content { z-index: 9999; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .cb-backdrop { animation: cb-fade-in var(--duration-normal) var(--ease-default) both; }
+  .cb-backdrop.closing { animation: cb-fade-out var(--duration-normal) var(--ease-in) both; }
+  .cb-modal-content { animation: cb-scale-in var(--duration-moderate) var(--ease-out) both; }
+  .cb-modal-content.closing { animation: cb-scale-out var(--duration-normal) var(--ease-in) both; }
+}

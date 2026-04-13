@@ -402,6 +402,7 @@ export class DeckGLMap {
   private weatherAlerts: WeatherAlert[] = [];
   private outages: InternetOutage[] = [];
   private cyberThreats: CyberThreat[] = [];
+  private alertPulses: Array<{ id: string; lat: number; lon: number; severity: 'critical' | 'high' | 'medium' | 'low' | 'info' }> = [];
   private aptGroups: import('@/types').APTGroup[] = [];
   private aptGroupsLoaded = false;
   private iranEvents: IranEvent[] = [];
@@ -1316,6 +1317,35 @@ export class DeckGLMap {
  // Cyber threat IOC layer
  if (mapLayers.cyberThreats && this.cyberThreats.length > 0) {
  layers.push(this.createCyberThreatsLayer());
+ }
+
+ // Alert pulse beacons — top of stack so they're never occluded
+ if (this.alertPulses.length > 0) {
+ const t = (Date.now() % 2000) / 2000; // 0..1 over 2 seconds
+ const sevColor = (s: string): [number, number, number, number] =>
+ s === 'critical' ? [255, 59, 48, 255]
+ : s === 'high' ? [255, 149, 0, 255]
+ : [255, 204, 0, 255];
+ layers.push(new ScatterplotLayer({
+ id: 'alert-pulses',
+ data: this.alertPulses,
+ pickable: false,
+ stroked: true,
+ filled: false,
+ lineWidthMinPixels: 2,
+ radiusUnits: 'pixels',
+ getPosition: (d: { lat: number; lon: number }) => [d.lon, d.lat],
+ getRadius: () => 8 + t * 28,
+ getLineColor: (d: { severity: string }) => {
+ const c = sevColor(d.severity);
+ return [c[0], c[1], c[2], Math.round(255 * (1 - t))];
+ },
+ updateTriggers: { getRadius: t, getLineColor: t },
+ }));
+ // Schedule a repaint for the next animation frame so the pulse animates.
+ if (typeof requestAnimationFrame === 'function') {
+ requestAnimationFrame(() => this.render());
+ }
  }
 
  // AIS density layer
@@ -4288,6 +4318,34 @@ export class DeckGLMap {
  `;
 
  this.container.append(legend);
+
+ // SIGINT legend chip — only visible when the SIGINT layer is active.
+ const sigintLegend = document.createElement('div');
+ sigintLegend.className = 'map-legend deckgl-legend sigint-legend';
+ sigintLegend.id = 'sigintLegend';
+ sigintLegend.hidden = true;
+ const swatch = (rgb: string, label: string): HTMLElement => {
+ const item = document.createElement('span');
+ item.className = 'legend-item';
+ const sw = document.createElement('span');
+ sw.className = 'sigint-swatch';
+ sw.style.background = rgb;
+ const lbl = document.createElement('span');
+ lbl.className = 'legend-label';
+ lbl.textContent = label;
+ item.append(sw, lbl);
+ return item;
+ };
+ const title = document.createElement('span');
+ title.className = 'legend-label-title';
+ title.textContent = 'SIGINT clusters';
+ sigintLegend.append(
+ title,
+ swatch('rgb(200, 40, 255)', 'GPS jamming'),
+ swatch('rgb(40, 180, 255)', 'BGP anomaly'),
+ swatch('rgb(255, 140, 30)', 'Cable outage'),
+ );
+ this.container.append(sigintLegend);
   }
 
   // Public API methods (matching MapComponent interface)
@@ -4331,6 +4389,8 @@ export class DeckGLMap {
  this.deckOverlay?.setProps({ layers: this.buildLayers() });
  this.syncWeatherRasterLayers();
  this.syncBuildingExtrusions();
+ const sigintLegend = this.container.querySelector<HTMLElement>('#sigintLegend');
+ if (sigintLegend) sigintLegend.hidden = !this.state.layers.sigintConvergence;
  } catch { /* map may be mid-teardown (null.getProjection) */ }
  const elapsed = performance.now() - startTime;
  if (import.meta.env.DEV && elapsed > 16) {
@@ -4714,6 +4774,11 @@ export class DeckGLMap {
 
   public setCyberThreats(threats: CyberThreat[]): void {
  this.cyberThreats = threats;
+ this.render();
+  }
+
+  public setAlertPulses(pulses: Array<{ id: string; lat: number; lon: number; severity: 'critical' | 'high' | 'medium' | 'low' | 'info' }>): void {
+ this.alertPulses = pulses;
  this.render();
   }
 

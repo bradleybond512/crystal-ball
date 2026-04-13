@@ -26,6 +26,7 @@ import { GlobeSearch } from '@/components/gods-vision/GlobeSearch';
 import { GlobeSatellites } from '@/components/gods-vision/GlobeSatellites';
 import { GlobeMiniMap } from '@/components/gods-vision/GlobeMiniMap';
 import { GlobeAudio } from '@/components/gods-vision/GlobeAudio';
+import { GlobeAlertClusters } from '@/components/gods-vision/GlobeAlertClusters';
 
 // ── Theater camera presets (lat, lon, altitude meters, pitch degrees) ──
 const THEATERS = {
@@ -73,6 +74,7 @@ export class GodsVisionView {
   private globeSatellites: GlobeSatellites | null = null;
   private globeMiniMap: GlobeMiniMap | null = null;
   private globeAudio: GlobeAudio | null = null;
+  private globeAlertClusters: GlobeAlertClusters | null = null;
   private waypointTour: WaypointTour | null = null;
   private hudTickId: number | null = null;
   private eventHandler: ScreenSpaceEventHandler | null = null;
@@ -144,6 +146,9 @@ export class GodsVisionView {
  this.globeHeatmap = new GlobeHeatmap(viewer, this.container, this.dataManager);
  this.globeHeatmap.mount();
  this.cleanupHandlers.push(() => { this.globeHeatmap?.destroy(); this.globeHeatmap = null; });
+ this.globeAlertClusters = new GlobeAlertClusters(viewer);
+ this.globeAlertClusters.mount();
+ this.cleanupHandlers.push(() => { this.globeAlertClusters?.destroy(); this.globeAlertClusters = null; });
  this.reactorBeacons = new GlobeReactorBeacons(viewer);
  this.reactorBeacons.mount();
  }

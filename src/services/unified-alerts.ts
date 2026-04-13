@@ -20,7 +20,21 @@ export type AlertSource =
   | 'hazard'
   | 'correlation'
   | 'cyber'
-  | 'resource';
+  | 'resource'
+  | 'local-ids'
+  | 'earthquake'
+  | 'fire'
+  | 'cyclone'
+  | 'power-grid'
+  | 'comms-health'
+  | 'space-weather'
+  | 'spc'
+  | 'disease'
+  | 'maritime'
+  | 'travel-advisory'
+  | 'radiation'
+  | 'air-quality'
+  | 'aviation-hazard';
 
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
@@ -36,9 +50,15 @@ export interface UnifiedAlert {
   relevanceScore: number;
   acknowledged: boolean;
   pinned: boolean;
+  /** If set, alert is suppressed from triage/score until this Unix-ms timestamp. */
+  snoozedUntil?: number;
   link?: string;
   evidence?: EvidencePack;
   raw?: unknown;
+  /** For `correlation` alerts: IDs of member alerts that triggered synthesis. */
+  correlationMembers?: string[];
+  /** For `correlation` alerts: the causal pair that matched, e.g. ['earthquake','tsunami']. */
+  correlationPair?: [AlertSource, AlertSource];
 }
 
 const STORAGE_KEY = 'wm-unified-alerts-v1';
@@ -174,6 +194,15 @@ class UnifiedAlertStore {
  }
  }
  if (changed) {
+ this.persist();
+ this.notify();
+ }
+  }
+
+  snooze(id: string, ms: number): void {
+ const alert = this.alerts.get(id);
+ if (alert) {
+ alert.snoozedUntil = Date.now() + ms;
  this.persist();
  this.notify();
  }

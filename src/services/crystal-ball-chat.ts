@@ -13,7 +13,9 @@ import { situationEngine } from './situation-engine';
 import { unifiedAlertStore } from './unified-alerts';
 import type { UnifiedAlert } from './unified-alerts';
 import { loadProximityConfig } from './proximity-filter';
-import { runClaudeAgent } from './claude-agent';
+import { runIntel } from './intel-provider';
+import { getActivity } from './alert-activity-log';
+import { rankAlerts } from './alert-routing';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,7 +39,22 @@ export const QUICK_ASK_PRESETS: string[] = [
 
 // ── Conversation history ─────────────────────────────────────────────────────
 
-let history: ChatMessage[] = [];
+const HISTORY_STORAGE_KEY = 'crystalball-chat-history-v1';
+
+function loadHistory(): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as ChatMessage[];
+  } catch { return []; }
+}
+const MAX_STORED_HISTORY = 200;
+function saveHistory(): void {
+  if (history.length > MAX_STORED_HISTORY) history = history.slice(-MAX_STORED_HISTORY);
+  try { localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history)); } catch { /* noop */ }
+}
+
+let history: ChatMessage[] = loadHistory();
 
 export function getHistory(): ChatMessage[] {
   return [...history];
@@ -45,6 +62,7 @@ export function getHistory(): ChatMessage[] {
 
 export function clearHistory(): void {
   history = [];
+  saveHistory();
 }
 
 // ── Context builder ──────────────────────────────────────────────────────────
@@ -89,12 +107,25 @@ function buildLocationContext(): string {
   }
 }
 
+function buildActivityContext(): string {
+  try {
+    const recent = getActivity().slice(0, 15);
+    if (recent.length === 0) return '';
+    const lines = recent.map(e => {
+      const ago = Math.max(0, Math.round((Date.now() - e.t) / 60_000));
+      return `- ${e.kind} [${e.severity}] ${e.title} (${ago}m ago)`;
+    });
+    return `User-visible activity in the last hour (kind = new/ack/snooze/correlate/react):\n${lines.join('\n')}`;
+  } catch { return ''; }
+}
+
 function buildSystemContext(): string {
   const mode = getMode();
   const parts = [
  `Current app mode: ${(mode ?? 'default').toUpperCase()}`,
  buildSituationContext(),
  buildAlertContext(),
+ buildActivityContext(),
  buildLocationContext(),
   ].filter(Boolean);
   return parts.join('\n\n');
@@ -240,7 +271,7 @@ export async function* sendMessage(
 
   try {
  const prompt = buildFullPrompt(text);
- const agentResult = await runClaudeAgent(prompt, signal);
+ const agentResult = await runIntel(prompt, { signal, maxTokens: 600 });
  fullResponse = agentResult.response;
  yield fullResponse;
   } catch (claudeError) {
@@ -249,6 +280,68 @@ export async function* sendMessage(
 
   if (fullResponse) {
  addToHistory('assistant', fullResponse);
+ saveHistory();
+  }
+}
+
+// ── Proactive digest ────────────────────────────────────────────────────────
+
+const DIGEST_LAST_KEY = 'crystalball-digest-last-shown';
+
+/** True if a fresh digest has not yet been shown today. */
+export function shouldShowDigest(): boolean {
+  try {
+    const last = Number(localStorage.getItem(DIGEST_LAST_KEY) ?? '0');
+    if (!Number.isFinite(last)) return true;
+    return Date.now() - last > 8 * 3_600_000;
+  } catch { return true; }
+}
+export function markDigestShown(): void {
+  try { localStorage.setItem(DIGEST_LAST_KEY, String(Date.now())); } catch { /* noop */ }
+}
+
+/**
+ * Build a "since you last looked" prompt for the chat agent. The agent
+ * generates a 3-bullet digest using the same context the chat does.
+ */
+export function buildDigestPrompt(): string {
+  const ranked = rankAlerts(unifiedAlertStore.getAll()).slice(0, 20);
+  const recent = getActivity().slice(0, 15);
+  // Group by domain so the model sees cross-channel spread.
+  const byDomain = new Map<string, string[]>();
+  for (const a of ranked) {
+    const d = a.source;
+    const arr = byDomain.get(d) ?? [];
+    arr.push(`[${a.severity}] ${a.title}`);
+    byDomain.set(d, arr);
+  }
+  const domainSummary = [...byDomain.entries()]
+    .map(([d, lines]) => `${d} (${lines.length}): ${lines.slice(0, 2).join(' | ')}`)
+    .join('\n');
+  const top = ranked.slice(0, 10).map(a => `- [${a.severity}] (${a.source}) ${a.title}`).join('\n');
+  const activity = recent.map(e => `- ${e.kind}: ${e.title}`).join('\n');
+  return [
+    'You are the Crystal Ball intelligence analyst. Generate a 5-bullet daily brief for the operator.',
+    'Each bullet = ONE story. Lead with the fact, then WHY it matters (1 short clause), then implication for the operator.',
+    'Prioritize cross-domain stories (e.g. space weather + grid, quake + tsunami). Call out if multiple sources converge.',
+    'Be terse and factual. No headers, no preamble — exactly five bullets starting with "•".',
+    '',
+    `Top active alerts (ranked by hotness):\n${top || '(none)'}`,
+    '',
+    `Cross-domain spread:\n${domainSummary || '(none)'}`,
+    '',
+    `Recent activity:\n${activity || '(none)'}`,
+  ].join('\n');
+}
+
+/** Run the digest prompt through Claude and return the assistant text. */
+export async function generateDigest(signal?: AbortSignal): Promise<string> {
+  const prompt = buildDigestPrompt();
+  try {
+    const { response } = await runIntel(prompt, { signal, maxTokens: 300 });
+    return response;
+  } catch {
+    return '';
   }
 }
 

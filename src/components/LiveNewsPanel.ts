@@ -73,6 +73,22 @@ const FULL_LIVE_CHANNELS: LiveChannel[] = [
   { id: 'nhk-world', name: 'NHK World Japan', handle: '@NHKWORLDJAPAN', fallbackVideoId: 'coYw-eVU0Ks' },
   { id: 'euronews', name: 'Euronews', handle: '@euronews', fallbackVideoId: 'pykpO5kQJ98' },
   { id: 'alarabiya', name: 'Al Arabiya', handle: '@AlArabiya', fallbackVideoId: 'n7eQejkXbnM', useFallbackOnly: true },
+  // ── Geopolitics / OSINT ──────────────────────────────────────────────────
+  { id: 'caspian-report', name: 'CaspianReport', handle: '@CaspianReport', autoPlaylist: true },
+  { id: 'covert-cabal', name: 'Covert Cabal', handle: '@CovertCabal', autoPlaylist: true },
+  { id: 'peter-zeihan', name: 'Peter Zeihan', handle: '@PeterZeihan', autoPlaylist: true },
+  { id: 'militarysummary', name: 'Military Summary', handle: '@MilitarySummaryChannel', fallbackVideoId: 'hQ2sB_bFLWE', autoPlaylist: true },
+  // ── More Weather ─────────────────────────────────────────────────────────
+  { id: 'dutchsinse', name: 'Dutchsinse', handle: '@dutchsinse', autoPlaylist: true },
+  { id: 'tropical-tidbits', name: 'Tropical Tidbits', handle: '@TropicalTidbits', autoPlaylist: true },
+  { id: 'force-thirteen', name: 'Force Thirteen', handle: '@ForceThirteen', autoPlaylist: true },
+  // ── Additional Global News ───────────────────────────────────────────────
+  { id: 'bbc-news', name: 'BBC News', handle: '@BBCNews', fallbackVideoId: 'bjgQzJzCZKs' },
+  { id: 'abc-news', name: 'ABC News', handle: '@ABCNews', fallbackVideoId: 'mD7t1mTtAss' },
+  { id: 'livenow-fox', name: 'LiveNOW from FOX', handle: '@LiveNOWfromFOX', fallbackVideoId: 'QaftgYkG-ek' },
+  { id: 'wion', name: 'WION', handle: '@WION', fallbackVideoId: 'LqMPBFXTCJM' },
+  { id: 'cna-asia', name: 'CNA (NewsAsia)', handle: '@channelnewsasia', fallbackVideoId: 'XWq5kBlakcQ' },
+  { id: 'trt-world', name: 'TRT World', handle: '@TRTWorld', fallbackVideoId: 'ABfFhWzWs0s' },
   // ── Finance / Markets ─────────────────────────────────────────────────────
   { id: 'bloomberg', name: 'Bloomberg', handle: '@markets', fallbackVideoId: 'iEpJwprxDdk' },
   { id: 'cnbc', name: 'CNBC', handle: '@CNBC', fallbackVideoId: '9NyxcX3rhQs' },
@@ -89,29 +105,20 @@ const TECH_LIVE_CHANNELS: LiveChannel[] = [
 // Optional channels users can add from the "Available Channels" tab UI
 export const OPTIONAL_LIVE_CHANNELS: LiveChannel[] = [
   // ── Severe Weather / Natural Disasters ───────────────────────────────────
-  { id: 'dutchsinse', name: 'Dutchsinse', handle: '@dutchsinse', autoPlaylist: true },
-  { id: 'tropical-tidbits', name: 'Tropical Tidbits', handle: '@TropicalTidbits', autoPlaylist: true },
   { id: 'mrmbb333', name: 'MrMBB333', handle: '@MrMBB333', autoPlaylist: true },
   { id: 'max-velocity', name: 'Max Velocity Weather', handle: '@prior2themax', autoPlaylist: true },
   { id: 'reed-timmer', name: 'Reed Timmer', handle: '@ReedTimmerAccuWeather', autoPlaylist: true },
-  { id: 'force-thirteen', name: 'Force Thirteen', handle: '@ForceThirteen', autoPlaylist: true },
   { id: 'storm-chasing', name: 'StormChasingVideo', handle: '@StormChasingVideo', autoPlaylist: true },
   { id: 'weather-channel', name: 'The Weather Channel', handle: '@weatherchannel', fallbackVideoId: 'oRPVh0FGGro' },
   // ── Geopolitics / OSINT ──────────────────────────────────────────────────
-  { id: 'caspian-report', name: 'CaspianReport', handle: '@CaspianReport', autoPlaylist: true },
-  { id: 'covert-cabal', name: 'Covert Cabal', handle: '@CovertCabal', autoPlaylist: true },
-  { id: 'peter-zeihan', name: 'Peter Zeihan', handle: '@PeterZeihan', autoPlaylist: true },
   { id: 'operations-room', name: 'The Operations Room', handle: '@TheOperationsRoom', autoPlaylist: true },
   // North America
-  { id: 'livenow-fox', name: 'LiveNOW from FOX', handle: '@LiveNOWfromFOX', fallbackVideoId: 'QaftgYkG-ek' },
   { id: 'fox-news', name: 'Fox News', handle: '@FoxNews', fallbackVideoId: 'QaftgYkG-ek', useFallbackOnly: true },
   { id: 'newsmax', name: 'Newsmax', handle: '@NEWSMAX', fallbackVideoId: 'S-lFBzloL2Y', useFallbackOnly: true },
-  { id: 'abc-news', name: 'ABC News', handle: '@ABCNews', fallbackVideoId: 'mD7t1mTtAss' },
   { id: 'cbs-news', name: 'CBS News', handle: '@CBSNews', fallbackVideoId: 'R9L8sDK8iEc' },
   { id: 'nbc-news', name: 'NBC News', handle: '@NBCNews', fallbackVideoId: 'yMr0neQhu6c' },
   { id: 'cbc-news', name: 'CBC News', handle: '@CBCNews', fallbackVideoId: 'jxP_h3V-Dv8' },
   // Europe
-  { id: 'bbc-news', name: 'BBC News', handle: '@BBCNews', fallbackVideoId: 'bjgQzJzCZKs' },
   { id: 'france24-en', name: 'France 24 English', handle: '@France24_en', fallbackVideoId: 'Ap-UM1O9RBU' },
   { id: 'welt', name: 'WELT', handle: '@WELTVideoTV', fallbackVideoId: 'L-TNmYmaAKQ' },
   { id: 'rtve', name: 'RTVE 24H', handle: '@RTVENoticias', fallbackVideoId: '7_srED6k0bE' },
@@ -138,13 +145,10 @@ export const OPTIONAL_LIVE_CHANNELS: LiveChannel[] = [
   { id: 'ann-news', name: 'ANN News', handle: '@ANNnewsCH' },
   { id: 'ntv-news', name: 'NTV News (Japan)', handle: '@ntv_news' },
   { id: 'cti-news', name: 'CTI News (Taiwan)', handle: '@中天新聞CtiNews' },
-  { id: 'wion', name: 'WION', handle: '@WION', fallbackVideoId: 'LqMPBFXTCJM' },
-  { id: 'cna-asia', name: 'CNA (NewsAsia)', handle: '@channelnewsasia', fallbackVideoId: 'XWq5kBlakcQ' },
   { id: 'nhk-world', name: 'NHK World Japan', handle: '@NHKWORLDJAPAN' },
   // Middle East
   { id: 'al-hadath', name: 'Al Hadath', handle: '@AlHadath', fallbackVideoId: 'xWXpl7azI8k', useFallbackOnly: true },
   { id: 'sky-news-arabia', name: 'Sky News Arabia', handle: '@skynewsarabia', fallbackVideoId: 'U--OjmpjF5o' },
-  { id: 'trt-world', name: 'TRT World', handle: '@TRTWorld', fallbackVideoId: 'ABfFhWzWs0s' },
   { id: 'iran-intl', name: 'Iran International', handle: '@IranIntl' },
   { id: 'cgtn-arabic', name: 'CGTN Arabic', handle: '@CGTNArabic' },
   // Africa
@@ -273,7 +277,7 @@ export class LiveNewsPanel extends Panel {
   private muteBtn: HTMLButtonElement | null = null;
   private liveBtn: HTMLButtonElement | null = null;
   private idleTimeout: ReturnType<typeof setTimeout> | null = null;
-  private readonly IDLE_PAUSE_MS = 5 * 60 * 1000; // 5 minutes
+  private readonly IDLE_PAUSE_MS = 60 * 60 * 1000; // 60 minutes — keep streams alive during passive monitoring
   private boundVisibilityHandler!: () => void;
   private boundIdleResetHandler!: () => void;
 

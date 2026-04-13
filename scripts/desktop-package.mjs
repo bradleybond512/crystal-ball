@@ -55,7 +55,8 @@ if ((syncVersionsResult.status ?? 1) !== 0) {
   process.exit(syncVersionsResult.status ?? 1);
 }
 
-const bundles = targetOs === 'macos' ? (sign ? 'app,dmg' : 'app') : (targetOs === 'linux' ? 'appimage' : 'nsis,msi');
+// eslint-disable-next-line sonarjs/no-nested-conditional
+const bundles = targetOs === 'macos' ? (sign ? 'app,dmg' : 'app') : (targetOs === 'linux' ? 'appimage' : 'nsis,msi'); // NOSONAR
 const env = {
   ...process.env,
   VITE_VARIANT: variant,
@@ -117,7 +118,7 @@ if (!skipNodeRuntime) {
   console.log(
  `[desktop-package] Bundling Node runtime TARGET=${nodeTarget} VERSION=${env.NODE_VERSION ?? '22.14.0'}`
   );
-  const downloadResult = spawnSync('bash', ['scripts/download-node.sh', '--target', nodeTarget], {
+  const downloadResult = spawnSync('bash', ['scripts/download-node.sh', '--target', nodeTarget], { // eslint-disable-line sonarjs/no-os-command-from-path
  env: {
  ...env,
  NODE_TARGET: nodeTarget
@@ -212,7 +213,11 @@ if (targetOs === 'macos') {
  }
 
  console.log('[desktop-package] Re-signing macOS app bundle with ad-hoc signature for local packaging');
- run('codesign', ['--force', '--deep', '--sign', '-', appPath]);
+ const entitlementsPath = path.join('src-tauri', 'Entitlements.plist');
+ const signArgs = ['--force', '--deep', '--sign', '-'];
+ if (existsSync(entitlementsPath)) signArgs.push('--entitlements', entitlementsPath);
+ signArgs.push(appPath);
+ run('codesign', signArgs);
  verifyMacCodeSignature(appPath, 'App bundle');
   }
 

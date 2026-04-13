@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/consistent-function-scoping, @typescript-eslint/no-empty-function, sonarjs/void-use, sonarjs/no-nested-conditional, sonarjs/no-selector-parameter, sonarjs/cognitive-complexity, @typescript-eslint/no-floating-promises, sonarjs/no-try-promise, @typescript-eslint/no-unsafe-return, @typescript-eslint/prefer-nullish-coalescing */
 import { isDesktopRuntime, getApiBaseUrl } from '../services/runtime';
 import { invokeTauri } from '../services/tauri-bridge';
 import { t } from '../services/i18n';
@@ -166,6 +167,12 @@ export class Panel {
   protected element: HTMLElement;
   protected content: HTMLElement;
   protected header: HTMLElement;
+  protected heartbeatEl: HTMLElement | null = null;
+  protected narrativeEl: HTMLElement | null = null;
+  private lastTickAt = 0;
+  private static instances = new Set<Panel>();
+  private static tickerStarted = false;
+  public getPanelId(): string { return this.panelId; }
 
   /** Returns the panel's content element for external mounting (e.g. embedding in settings modal). */
   public getContentElement(): HTMLElement { return this.content; }
@@ -281,12 +288,32 @@ export class Panel {
  this.header.append(aiBtn);
  }
 
+ // Heartbeat: pulsing dot + "updated Xs ago"
+ this.heartbeatEl = document.createElement('span');
+ this.heartbeatEl.className = 'panel-heartbeat';
+ const hbDot = document.createElement('span');
+ hbDot.className = 'panel-heartbeat-dot';
+ const hbText = document.createElement('span');
+ hbText.className = 'panel-heartbeat-text';
+ hbText.textContent = '—';
+ this.heartbeatEl.append(hbDot, hbText);
+ this.header.append(this.heartbeatEl);
+
  this.content = document.createElement('div');
  this.content.className = 'panel-content';
  this.content.id = `${options.id}Content`;
 
+ // Narrative line: 1-sentence LLM summary, hidden until set
+ this.narrativeEl = document.createElement('div');
+ this.narrativeEl.className = 'panel-narrative';
+ this.narrativeEl.style.display = 'none';
+
  this.element.append(this.header);
+ this.element.append(this.narrativeEl);
  this.element.append(this.content);
+
+ Panel.instances.add(this);
+ Panel.startHeartbeatTicker();
 
  // Add resize handle
  this.resizeHandle = document.createElement('div');
@@ -730,7 +757,57 @@ export class Panel {
  this.pendingContentHtml = null;
  if (this.content.innerHTML !== html) {
  this.content.innerHTML = html;
+ this.markFresh();
  }
+  }
+
+  /** Mark the panel as freshly updated — flashes the content and resets the heartbeat. */
+  public markFresh(): void {
+ this.lastTickAt = Date.now();
+ this.content.classList.remove('panel-fresh-flash');
+ // Force reflow so the animation restarts.
+ void this.content.offsetWidth;
+ this.content.classList.add('panel-fresh-flash');
+ this.updateHeartbeat();
+  }
+
+  /** Render the LLM-generated narrative line above content. */
+  public setNarrative(text: string): void {
+ if (!this.narrativeEl) return;
+ if (!text) {
+ this.narrativeEl.style.display = 'none';
+ this.narrativeEl.textContent = '';
+ return;
+ }
+ this.narrativeEl.textContent = text;
+ this.narrativeEl.style.display = '';
+  }
+
+  private updateHeartbeat(): void {
+ if (!this.heartbeatEl) return;
+ const text = this.heartbeatEl.querySelector<HTMLElement>('.panel-heartbeat-text');
+ if (!text) return;
+ if (this.lastTickAt === 0) { text.textContent = '—'; return; }
+ const ago = Math.max(0, Math.round((Date.now() - this.lastTickAt) / 1000));
+ text.textContent = ago < 60 ? `${ago}s` : (ago < 3600 ? `${Math.floor(ago / 60)}m` : `${Math.floor(ago / 3600)}h`);
+ // Stale tiers via class for CSS color.
+ this.heartbeatEl.classList.toggle('stale', ago > 300);
+ this.heartbeatEl.classList.toggle('very-stale', ago > 1800);
+  }
+
+  private static startHeartbeatTicker(): void {
+ if (Panel.tickerStarted) return;
+ Panel.tickerStarted = true;
+ window.setInterval(() => {
+ for (const p of Panel.instances) p.updateHeartbeat();
+ }, 5000);
+ document.addEventListener('cb:panel-narrative', (ev: Event) => {
+ const detail = (ev as CustomEvent<{ panelId: string; text: string }>).detail;
+ if (!detail) return;
+ for (const p of Panel.instances) {
+ if (p.panelId === detail.panelId) p.setNarrative(detail.text);
+ }
+ });
   }
 
   public show(): void {

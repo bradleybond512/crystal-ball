@@ -173,15 +173,25 @@ export class UnifiedSettings {
  // Home Location
  if (target.id === 'us-gps-location') {
  const btn = target as HTMLButtonElement;
- btn.textContent = 'Detecting…';
+ btn.textContent = 'Getting GPS…';
  btn.disabled = true;
  this._gpsPermissionDenied = false;
+ // Show status next to button
+ const statusSpan = btn.parentElement?.querySelector('#us-gps-status') as HTMLElement | null;
+ if (statusSpan) { statusSpan.textContent = 'Waiting for location (up to 10s)…'; statusSpan.style.color = 'var(--text-tertiary)'; }
  setLocationFromGps()
- .then(() => { this._gpsPermissionDenied = false; this.refreshGeneralTab(); })
+ .then((loc) => {
+  this._gpsPermissionDenied = false;
+  if (statusSpan) { statusSpan.textContent = `Saved: ${loc.label}`; statusSpan.style.color = '#22c55e'; }
+  btn.textContent = '\u2705 Saved!';
+  setTimeout(() => this.refreshGeneralTab(), 1000);
+ })
  .catch((error: unknown) => {
- const msg = error instanceof Error ? error.message : 'Could not detect location.';
- this._gpsPermissionDenied = msg.includes('permission denied') || msg.includes('Permission denied');
- this.refreshGeneralTab();
+  const msg = error instanceof Error ? error.message : 'Could not detect location.';
+  this._gpsPermissionDenied = msg.includes('permission denied') || msg.includes('Permission denied');
+  if (statusSpan) { statusSpan.textContent = msg; statusSpan.style.color = '#ef4444'; }
+  btn.textContent = 'Use GPS';
+  btn.disabled = false;
  });
  return;
  }
@@ -569,6 +579,7 @@ export class UnifiedSettings {
  <div class="ai-flow-toggle-desc">${locLabel}${locSource}</div>
  </div>
  <button id="us-gps-location" class="yt-account-btn connect" style="min-width:100px">Use GPS</button>
+ <span id="us-gps-status" style="font-size:11px;display:block;margin-top:4px;min-height:16px;"></span>
  </div>
  ${deniedHtml}
  </div>

@@ -47,15 +47,23 @@ export function showLocationGate(
 
   gpsBtn.addEventListener('click', () => {
  gpsBtn.disabled = true;
- gpsBtn.textContent = 'Detecting\u2026';
+ gpsBtn.textContent = 'Requesting permission\u2026';
  statusEl.textContent = '';
+ statusEl.style.color = 'var(--text-tertiary)';
  void (async () => {
  try {
+ gpsBtn.textContent = 'Getting GPS fix\u2026';
+ statusEl.textContent = 'Waiting for location (up to 10s)\u2026';
  const loc = await getCurrentGpsLocation();
+ statusEl.textContent = `Got ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)} \u2014 looking up address\u2026`;
  const label = await reverseGeocode(loc.lat, loc.lon);
  const location: UserLocation = { ...loc, label };
  saveLocation(location);
- onLocationSet();
+ // Show confirmation before transitioning
+ gpsBtn.textContent = '\u2705 Saved!';
+ statusEl.textContent = `Location set to: ${label}`;
+ statusEl.style.color = '#22c55e';
+ setTimeout(() => onLocationSet(), 800);
  } catch (error) {
  gpsBtn.disabled = false;
  gpsBtn.textContent = '\u{1F4CD} Use My Location';
@@ -114,7 +122,10 @@ export function showLocationGate(
  const label = labelInput.value.trim() || `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
  const location: UserLocation = { lat, lon, label, source: 'manual', setAt: Date.now() };
  saveLocation(location);
- onLocationSet();
+ saveBtn.textContent = '\u2705 Saved!';
+ statusEl.textContent = `Location set to: ${label}`;
+ statusEl.style.color = '#22c55e';
+ setTimeout(() => onLocationSet(), 800);
   });
 
   const manualRow = h('div', {
@@ -184,13 +195,15 @@ export function wireLocationBanner(container: HTMLElement, onSet: () => void): v
   if (!btn) return;
   btn.addEventListener('click', () => {
  btn.disabled = true;
- btn.textContent = 'Detecting\u2026';
+ btn.textContent = 'Getting GPS\u2026';
  void (async () => {
  try {
  const loc = await getCurrentGpsLocation();
  const label = await reverseGeocode(loc.lat, loc.lon);
  saveLocation({ ...loc, label });
- onSet();
+ btn.textContent = '\u2705 Saved!';
+ btn.style.background = '#22c55e';
+ setTimeout(() => onSet(), 800);
  } catch {
  btn.disabled = false;
  btn.textContent = 'Use GPS';

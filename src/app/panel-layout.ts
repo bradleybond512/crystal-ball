@@ -53,6 +53,54 @@ import {
   DailyWisdomPanel,
 } from '@/components';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
+import { TriageBar } from '@/components/TriageBar';
+import { JustInRail } from '@/components/JustInRail';
+import { startPanelNarrator } from '@/services/panel-narrator';
+import { TodayView } from '@/components/TodayView';
+import { WatchlistEditor } from '@/components/WatchlistEditor';
+import { CommandPalette } from '@/components/CommandPalette';
+import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
+import { startSilenceDetector } from '@/services/silence-detector';
+import { startSourceFeedback } from '@/services/source-feedback';
+import { startCorrelationFeedback } from '@/services/correlation-feedback';
+import { startInfrastructureAlertBridge } from '@/services/infrastructure-alert-bridge';
+import { startIntelChannelsBridge } from '@/services/intel-channels-bridge';
+import { startAnomalyBaselines } from '@/services/anomaly-baselines';
+import { startCompoundAlertBridge } from '@/services/compound-alert-bridge';
+import { startAlertLifecycle } from '@/services/alert-lifecycle';
+import { startSituationFeed } from '@/services/situation-feed';
+import { startForecastAccuracy } from '@/services/forecast-accuracy';
+import { startWatchlistProximity } from '@/services/watchlist-proximity';
+import { CrystalBallSays } from '@/components/CrystalBallSays';
+import { RelatedStrip } from '@/components/RelatedStrip';
+import { startAlertGeoClustering } from '@/services/alert-geo-cluster';
+import { startSeverityRecalibration } from '@/services/severity-recalibration';
+import { startAlertFatigue } from '@/services/alert-fatigue';
+import { initSnoozeLearning } from '@/services/snooze-learning';
+import { initCustomCorrelationRules } from '@/services/custom-correlation-rules';
+import { startPatternMemory } from '@/services/pattern-memory';
+import { initSourceReliability } from '@/services/source-reliability';
+import { initAlertAnnotations } from '@/services/alert-annotations';
+import { initAlertBookmarks } from '@/services/alert-bookmarks';
+import { initExportBriefing, exportBriefingToClipboard } from '@/services/export-briefing';
+import { startGeofenceAlerts } from '@/services/geofence-alerts';
+import { startProximityCascade } from '@/services/proximity-cascade';
+import { startThreatCorridor } from '@/services/threat-corridor';
+import { startPeriodicityDetector } from '@/services/periodicity-detector';
+import { startSilenceAnomaly } from '@/services/silence-anomaly';
+import { ShiftHandoffCard } from '@/components/ShiftHandoffCard';
+import { AlertReplayScrubber } from '@/components/AlertReplayScrubber';
+import { EntityHeatRail } from '@/components/EntityHeatRail';
+import { AlertTimeline } from '@/components/AlertTimeline';
+import { StatusOverlay } from '@/components/StatusOverlay';
+import { startBlackoutSignature } from '@/services/blackout-signature';
+import { DigestOverlay } from '@/components/DigestOverlay';
+import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
+import { startAlertReactions } from '@/services/alert-reactions';
+import { startSidebarHeat } from '@/services/sidebar-heat';
+import { startAlertCorrelator } from '@/services/alert-correlator';
+import { startAlertDebug } from '@/services/alert-debug';
+import { startAlertActivityLog } from '@/services/alert-activity-log';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
 import { LocalIDSPanel } from '@/components/LocalIDSPanel';
@@ -633,6 +681,116 @@ export class PanelLayoutManager implements AppModule {
 
   private createPanels(): void {
  const panelsGrid = document.getElementById('panelsGrid')!;
+
+ // Mount the triage bar above the panel grid (auto-hides when nothing is hot).
+ const triageBar = new TriageBar();
+ triageBar.mount(panelsGrid.parentElement ?? panelsGrid);
+ const justInRail = new JustInRail();
+ justInRail.mount(document.body);
+ startPanelNarrator();
+ startAlertDebug();
+ startAlertActivityLog();
+ startAlertReactions();
+ startSidebarHeat();
+ startAlertCorrelator();
+ startSituationAlertBridge();
+ startSilenceDetector();
+ startSourceFeedback();
+ startCorrelationFeedback();
+ startInfrastructureAlertBridge();
+  startIntelChannelsBridge();
+ startAnomalyBaselines();
+ startCompoundAlertBridge();
+ startAlertLifecycle();
+ startSituationFeed();
+ startForecastAccuracy();
+ startWatchlistProximity();
+ startSeverityRecalibration();
+ startAlertFatigue();
+ initSnoozeLearning();
+ initCustomCorrelationRules();
+ startPatternMemory();
+ initSourceReliability();
+ initAlertAnnotations();
+ initAlertBookmarks();
+ initExportBriefing();
+ startGeofenceAlerts();
+ startProximityCascade();
+ startThreatCorridor();
+ startPeriodicityDetector();
+ startSilenceAnomaly();
+ document.addEventListener('keydown', (e: KeyboardEvent) => {
+   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
+     e.preventDefault();
+     exportBriefingToClipboard();
+   }
+ });
+ const cbSays = new CrystalBallSays();
+ cbSays.mount(document.body);
+ const relatedStrip = new RelatedStrip();
+ relatedStrip.mount(document.body);
+ startAlertGeoClustering();
+ const entityRail = new EntityHeatRail();
+ entityRail.mount(document.body);
+ const alertTimeline = new AlertTimeline();
+ alertTimeline.mount(document.body);
+ const statusOverlay = new StatusOverlay();
+ statusOverlay.mount(document.body);
+ document.addEventListener('cb:toggle-status', () => statusOverlay.toggle());
+ const shiftCard = new ShiftHandoffCard(); shiftCard.mount(document.body);
+ const replayScrubber = new AlertReplayScrubber(); replayScrubber.mount(document.body);
+ document.addEventListener('keydown', (ev) => {
+   if (ev.metaKey && ev.shiftKey && (ev.key === 'S' || ev.key === 's')) {
+     ev.preventDefault();
+     statusOverlay.toggle();
+   }
+ });
+ startBlackoutSignature();
+ const digestOverlay = new DigestOverlay();
+ digestOverlay.mount(document.body);
+ // Proactive digest — once per 8h, after data has had a chance to load.
+ if (shouldShowDigest()) {
+ window.setTimeout(() => {
+ void generateDigest().then(text => {
+ if (!text) return;
+ markDigestShown();
+ digestOverlay.show(text);
+ });
+ }, 30_000);
+ }
+ // On-demand digest (triggered from Cmd+K "brief").
+ document.addEventListener('cb:show-digest', () => {
+   digestOverlay.show('Generating brief…');
+   void generateDigest().then(text => {
+     if (text) { markDigestShown(); digestOverlay.show(text); }
+     else digestOverlay.show('No recent activity to summarize.');
+   });
+ });
+
+ // Mount Today view + wire ⌘⇧T toggle
+ const todayView = new TodayView();
+ todayView.mount(document.body);
+ document.addEventListener('cb:toggle-today', () => todayView.toggle());
+
+ // Mount Watchlist editor + wire ⌘⇧W toggle
+ const watchlistEditor = new WatchlistEditor();
+ watchlistEditor.mount(document.body);
+ document.addEventListener('cb:toggle-watchlist', () => watchlistEditor.toggle());
+
+ // Mount Cmd+K command palette
+ const cmdk = new CommandPalette();
+ cmdk.mount(document.body);
+ document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
+
+ document.addEventListener('cb:focus-map', ((e: Event) => {
+ const d = (e as CustomEvent).detail as { lat: number; lon: number; zoom?: number };
+ this.ctx.map?.setCenter(d.lat, d.lon, d.zoom);
+ }) as EventListener);
+
+ document.addEventListener('cb:alert-pulses', ((e: Event) => {
+ const detail = (e as CustomEvent).detail as Array<{ id: string; lat: number; lon: number; severity: 'critical' | 'high' | 'medium' | 'low' | 'info' }>;
+ this.ctx.map?.setAlertPulses(detail);
+ }) as EventListener);
 
  const mapContainer = document.getElementById('mapContainer') as HTMLElement;
  this.ctx.map = new MapContainer(mapContainer, {

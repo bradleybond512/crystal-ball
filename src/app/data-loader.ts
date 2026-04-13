@@ -282,6 +282,7 @@ import { detectCompoundThreats, toHazardSignal } from '@/services/compound-threa
 import { fetchSatelliteCatalog } from '@/services/satellite-catalog';
 import { satellitePropagator } from '@/services/satellite-propagator';
 import { unifiedAlertStore } from '@/services/unified-alerts';
+import { ingestEarthquakesUnified, ingestCyberThreatsUnified } from '@/services/unified-ingestors';
 import {
   normalizeBreakingAlert,
   normalizeNWSAlert,
@@ -1261,6 +1262,7 @@ export class DataLoaderManager implements AppModule {
  ingestEarthquakesToPoL(earthquakeResult.value);
  ingestEarthquakesToTimeline(earthquakeResult.value);
  ingestEarthquakesToMatrix(earthquakeResult.value);
+ ingestEarthquakesUnified(earthquakeResult.value);
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
  dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
@@ -1796,6 +1798,7 @@ export class DataLoaderManager implements AppModule {
  ingestCyberToGraph(allThreats);
  ingestCyberToTimeline(allThreats);
  ingestCyberToMatrix(allThreats);
+ ingestCyberThreatsUnified(allThreats);
  (this.ctx.panels.cii as CIIPanel)?.refresh();
  (this.ctx.panels['cyber-threats'] as CyberThreatPanel)?.update(allThreats);
  this.ctx.statusPanel?.updateFeed('Cyber Threats', { status: 'ok', itemCount: allThreats.length });
@@ -1814,6 +1817,22 @@ export class DataLoaderManager implements AppModule {
  try {
  const alerts = await fetchLocalIDSAlerts();
  (this.ctx.panels['local-ids'] as LocalIDSPanel)?.update(alerts);
+ // Mirror high/critical IDS alerts into the unified store so triage bar,
+ // notifications, and reactions pick them up.
+ const unified = alerts
+ .filter(a => a.severity === 'high' || a.severity === 'critical')
+ .map(a => ({
+ id: `localids-${a.id}`,
+ source: 'local-ids' as const,
+ severity: a.severity,
+ title: a.signature || a.category || 'IDS alert',
+ body: `${a.source} · ${a.srcIp} → ${a.destIp} (${a.proto}) ${a.action}`,
+ timestamp: Date.parse(a.ts) || Date.now(),
+ relevanceScore: 50,
+ acknowledged: false,
+ pinned: false,
+ }));
+ if (unified.length > 0) unifiedAlertStore.ingest(unified);
  } catch {
  (this.ctx.panels['local-ids'] as LocalIDSPanel)?.update([]);
  }

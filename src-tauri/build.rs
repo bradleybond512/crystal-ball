@@ -22,5 +22,8 @@ fn main() {
  "scripts/prune-tauri-dist.mjs exited with status {status}",
  );
 
+ #[cfg(target_os = "macos")]
+ println!("cargo:rustc-link-lib=framework=CoreLocation");
+
  tauri_build::build()
 }

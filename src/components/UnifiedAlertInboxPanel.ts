@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Unified Alert Inbox Panel
  *
@@ -22,6 +23,8 @@ import {
 } from '@/services/unified-alerts';
 import { scoreAndSort } from '@/services/relevance-scoring';
 import { EvidenceDrawer } from './EvidenceDrawer';
+import { computeEntityHeat } from '@/services/entity-heat';
+import { buildStoryTimelineHtml } from '@/components/StoryTimeline';
 
 type SortMode = 'relevance' | 'severity' | 'time' | 'distance';
 type FilterShow = 'unread' | 'all';
@@ -50,6 +53,20 @@ const SOURCE_LABELS: Record<AlertSource, string> = {
   correlation: 'Signal',
   cyber: 'Cyber',
   resource: 'Resource',
+  'local-ids': 'IDS',
+  earthquake: 'Quake',
+  fire: 'Fire',
+  cyclone: 'Cyclone',
+  'power-grid': 'Grid',
+  'comms-health': 'Comms',
+  'space-weather': 'Space Wx',
+  spc: 'SPC',
+  disease: 'Disease',
+  maritime: 'Maritime',
+  'travel-advisory': 'Travel',
+  radiation: 'Radiation',
+  'air-quality': 'Air',
+  'aviation-hazard': 'Aviation',
 };
 
 export class UnifiedAlertInboxPanel extends Panel {
@@ -57,6 +74,7 @@ export class UnifiedAlertInboxPanel extends Panel {
   private filterShow: FilterShow = 'unread';
   private filterSources: Set<AlertSource> | null = null; // null = all
   private filterMinSeverity: AlertSeverity = 'info';
+  private filterEntityIds: Set<string> | null = null;
   private nearMeActive: boolean;
   private nearMeRadiusMi: number;
   private selectedIndex = -1;
@@ -96,6 +114,15 @@ export class UnifiedAlertInboxPanel extends Panel {
 
  this.updateBadge();
  this.render();
+
+ // Listen for cross-component entity filter (EntityHeatRail chip click)
+ document.addEventListener('cb:entity-filter', (e) => {
+   const det = (e as CustomEvent<{ entity: string; alertIds: string[] }>).detail;
+   if (!det) return;
+   this.filterEntityIds = new Set(det.alertIds);
+   this.filterShow = 'all';
+   this.render();
+ });
   }
 
   override destroy(): void {
@@ -135,6 +162,12 @@ export class UnifiedAlertInboxPanel extends Panel {
  const minSev = SEVERITY_ORDER[this.filterMinSeverity];
  if (minSev > 1) {
  alerts = alerts.filter(a => SEVERITY_ORDER[a.severity] >= minSev);
+ }
+
+ // Filter: entity (from EntityHeatRail chip click)
+ if (this.filterEntityIds) {
+   const ids = this.filterEntityIds;
+   alerts = alerts.filter(a => ids.has(a.id));
  }
 
  // Filter: Near Me radius
@@ -330,6 +363,45 @@ export class UnifiedAlertInboxPanel extends Panel {
 
   // ── Render ──────────────────────────────────────────────────────────────
 
+  private dedupByEntity(alerts: UnifiedAlert[]): { leader: UnifiedAlert; relatedCount: number; relatedAlerts: UnifiedAlert[] }[] {
+    const entityHeat = computeEntityHeat();
+    const entityAlertMap = new Map<string, Set<string>>();
+    for (const ent of entityHeat) {
+      entityAlertMap.set(ent.name, new Set(ent.alertIds));
+    }
+
+    const assigned = new Set<string>();
+    const groups: { leader: UnifiedAlert; relatedCount: number; relatedAlerts: UnifiedAlert[] }[] = [];
+
+    for (const a of alerts) {
+      if (assigned.has(a.id)) continue;
+      let bestEntity: string | null = null;
+      let bestCount = 0;
+      for (const [name, ids] of entityAlertMap) {
+        if (ids.has(a.id) && ids.size > bestCount) {
+          bestEntity = name;
+          bestCount = ids.size;
+        }
+      }
+      if (bestEntity && bestCount >= 3) {
+        const entityIds = entityAlertMap.get(bestEntity)!;
+        const related: UnifiedAlert[] = [];
+        for (const other of alerts) {
+          if (other.id !== a.id && entityIds.has(other.id) && !assigned.has(other.id)) {
+            assigned.add(other.id);
+            related.push(other);
+          }
+        }
+        assigned.add(a.id);
+        groups.push({ leader: a, relatedCount: related.length, relatedAlerts: related });
+      } else {
+        assigned.add(a.id);
+        groups.push({ leader: a, relatedCount: 0, relatedAlerts: [] });
+      }
+    }
+    return groups;
+  }
+
   private render(): void {
  const alerts = this.getFilteredAlerts();
  const totalCount = unifiedAlertStore.getAll().length;
@@ -342,7 +414,15 @@ export class UnifiedAlertInboxPanel extends Panel {
  }
 
  const toolbar = this.renderToolbar();
- const rows = alerts.map((a, i) => this.renderRow(a, i)).join('');
+ const deduped = this.dedupByEntity(alerts);
+ const rows = deduped.map((g, i) => {
+ const row = this.renderRow(g.leader, i, g.relatedCount);
+ if (g.relatedAlerts.length > 0) {
+ const tl = buildStoryTimelineHtml([g.leader, ...g.relatedAlerts]);
+ if (tl) return row + `<tr class="story-tl-row"><td colspan="7">${tl}</td></tr>`;
+ }
+ return row;
+ }).join('');
 
  this.setContent(`
  <div class="uai-container">
@@ -429,7 +509,7 @@ export class UnifiedAlertInboxPanel extends Panel {
  `;
   }
 
-  private renderRow(alert: UnifiedAlert, index: number): string {
+  private renderRow(alert: UnifiedAlert, index: number, relatedCount = 0): string {
  const sevPill = `<span class="ac-pill ac-pill-${alert.severity}">${SEVERITY_LABELS[alert.severity]}</span>`;
  const srcTag = `<span class="uai-src-tag uai-src-${alert.source}" data-filter-src="${alert.source}" title="Filter: ${alert.source}">${SOURCE_LABELS[alert.source] ?? alert.source}</span>`;
 
@@ -446,6 +526,10 @@ export class UnifiedAlertInboxPanel extends Panel {
  const title = safeLink
  ? `<a href="${esc(safeLink)}" target="_blank" rel="noopener noreferrer">${esc(alert.title)}</a>`
  : esc(alert.title);
+
+ const relatedBadge = relatedCount > 0
+ ? `<span class="uai-related-badge">+${relatedCount} related</span>`
+ : '';
 
  const whyBtn = alert.evidence
  ? `<button class="uai-why-btn" data-alert-id="${esc(alert.id)}" type="button">Why</button>`
@@ -467,7 +551,7 @@ export class UnifiedAlertInboxPanel extends Panel {
  <td class="ac-sev">${sevPill}</td>
  <td class="uai-src-cell">${srcTag}</td>
  <td class="uai-title-cell">
- <div class="uai-title">${title}</div>
+ <div class="uai-title">${title}${relatedBadge}</div>
  <div class="uai-body">${esc(alert.body)}${whyBtn}</div>
  </td>
  <td class="uai-score-cell">${scoreBar}</td>

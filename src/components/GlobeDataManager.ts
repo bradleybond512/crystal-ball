@@ -9,7 +9,6 @@ import {
   type Viewer,
   NearFarScalar,
   DistanceDisplayCondition,
-  PolylineDashMaterialProperty,
   ColorMaterialProperty,
   ConstantProperty,
   PropertyBag,
@@ -420,10 +419,7 @@ export class GlobeDataManager {
  polyline: {
  positions,
  width: cable.major ? 1.5 : 0.8,
- material: new PolylineDashMaterialProperty({
- color: cable.major ? C.cable : C.cable.withAlpha(0.25),
- dashLength: 12,
- }),
+ material: new ColorMaterialProperty(cable.major ? C.cableMajor : C.cable),
  clampToGround: true,
  },
  description: cable.capacityTbps
@@ -1021,13 +1017,14 @@ export class GlobeDataManager {
 
  if (f.track && f.track.length >= 2) {
  const trailPositions = f.track.map(([lon, lat]: [number, number]) =>
- Cartesian3.fromDegrees(lon, lat, altMeters),
+ Cartesian3.fromDegrees(lon, lat),
  );
  layer.source.entities.add({
  polyline: {
  positions: trailPositions,
  width: 1.5,
  material: new ColorMaterialProperty(C.flightTrail),
+ clampToGround: true,
  },
  });
  }
@@ -1377,16 +1374,12 @@ export class GlobeDataManager {
  layer.source.entities.add({
  polyline: {
  positions: [
- Cartesian3.fromDegrees(flow.originLon, flow.originLat, 50_000),
- Cartesian3.fromDegrees(
- (flow.originLon + flow.asylumLon) / 2,
- (flow.originLat + flow.asylumLat) / 2,
- 200_000,
- ),
- Cartesian3.fromDegrees(flow.asylumLon, flow.asylumLat, 50_000),
+ Cartesian3.fromDegrees(flow.originLon, flow.originLat),
+ Cartesian3.fromDegrees(flow.asylumLon, flow.asylumLat),
  ],
  width: Math.min(4, 1 + Math.log10(flow.refugees) * 0.3),
  material: new ColorMaterialProperty(C.displacementFlow),
+ clampToGround: true,
  },
  description: `${flow.originName} → ${flow.asylumName}: ${flow.refugees.toLocaleString()} refugees`,
  });

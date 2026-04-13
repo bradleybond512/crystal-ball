@@ -1,4 +1,6 @@
+/* eslint-disable sonarjs/no-nested-conditional */
 import { loadGodsVisionLayers, saveGodsVisionLayers, type GodsVisionLayers } from '@/config/gods-vision-layers';
+import { getFusedForecast } from '@/services/forecast-fusion';
 import type { FollowTarget } from '@/components/gods-vision/AutoFollowEngine';
 import type { FlyModeStatus } from '@/components/gods-vision/FlyMode/FlyModeController';
 import { FLY_SUB_MODE_NAMES } from '@/components/gods-vision/FlyMode/flyModeKeybinds';
@@ -94,6 +96,8 @@ export class GlobeHUD {
   // Cached DOM refs
   private threatEl: HTMLElement | null = null;
   private threatDetailEl: HTMLElement | null = null;
+  private fusionEl: HTMLElement | null = null;
+  private fusionTimer: number | null = null;
   private lastHotspotCount = 0;
   private lastTopAlerts: { name: string; type: string; severity: number }[] = [];
   private hotspotsEl: HTMLElement | null = null;
@@ -143,6 +147,9 @@ export class GlobeHUD {
  card.append(this.threatEl);
  this.threatDetailEl = this.el('div', 'ge-hud-threat-detail', '');
  card.append(this.threatDetailEl);
+ this.fusionEl = this.el('div', 'ge-hud-fusion', 'FUSION — / —');
+ this.fusionEl.style.cssText = 'font:600 10px/1.3 -apple-system,system-ui;letter-spacing:0.06em;color:rgba(255,200,120,0.85);margin-top:4px;';
+ card.append(this.fusionEl);
  const sparkCanvas = document.createElement('canvas');
  sparkCanvas.className = 'ge-hud-sparkline';
  sparkCanvas.width = 120;
@@ -525,6 +532,17 @@ export class GlobeHUD {
  this.updateClock();
  this.updateCameraContext();
  }, 1000);
+ this.updateFusion();
+ this.fusionTimer = window.setInterval(() => this.updateFusion(), 30_000);
+  }
+
+  private updateFusion(): void {
+ if (!this.fusionEl) return;
+ try {
+ const f = getFusedForecast();
+ const arrow = f.trend === 'up' ? '▲' : (f.trend === 'down' ? '▼' : '◆');
+ this.fusionEl.textContent = `FUSION ${f.combined} ${arrow}  ${f.topDriver}`;
+ } catch { /* noop */ }
   }
 
   // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -776,6 +794,7 @@ export class GlobeHUD {
 
   destroy(): void {
  if (this.clockId != null) clearInterval(this.clockId);
+ if (this.fusionTimer != null) clearInterval(this.fusionTimer);
  this.element.remove();
  this.onLayerToggle = null;
  this.onExit = null;

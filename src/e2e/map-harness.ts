@@ -203,6 +203,8 @@ const allLayersEnabled: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 const allLayersDisabled: MapLayers = {
@@ -273,6 +275,8 @@ const allLayersDisabled: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 const SEEDED_NEWS_LOCATIONS: {

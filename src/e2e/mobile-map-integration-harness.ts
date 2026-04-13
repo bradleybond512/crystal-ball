@@ -152,6 +152,8 @@ const layers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 await initI18n();

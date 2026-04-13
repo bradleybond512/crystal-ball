@@ -48,7 +48,9 @@ export type RuntimeSecretKey =
   | 'GEONAMES_USERNAME'
   | 'IPINFO_TOKEN'
   | 'CESIUM_ION_TOKEN'
-  | 'GOOGLE_MAPS_API_KEY';
+  | 'GOOGLE_MAPS_API_KEY'
+  | 'MAPBOX_API_KEY'
+  | 'MAPTILER_API_KEY';
 
 export type RuntimeFeatureId =
   | 'cloudApiFallbackAuth'
@@ -119,7 +121,10 @@ export type RuntimeFeatureId =
   | 'cyberReactor'
   | 'cyberReactorNotifyNative'
   | 'cyberReactorNotifyToast'
-  | 'cyberReactorNotifyMap';
+  | 'cyberReactorNotifyMap'
+  | 'navigationMapbox'
+  | 'navigationMaptiler'
+  | 'navigationRouting';
 
 export interface RuntimeFeatureDefinition {
   id: RuntimeFeatureId;
@@ -218,6 +223,9 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   cyberReactorNotifyNative: true,
   cyberReactorNotifyToast: true,
   cyberReactorNotifyMap: true,
+  navigationMapbox: true,
+  navigationMaptiler: true,
+  navigationRouting: true,
 };
 
 export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
@@ -756,6 +764,27 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  description: 'Route Cyber Reactor alerts to map pings.',
  requiredSecrets: [],
  fallback: 'Map pings disabled for Cyber Reactor alerts.',
+  },
+  {
+ id: 'navigationMapbox',
+ name: 'Mapbox Navigation',
+ description: 'Street tiles and routing via Mapbox',
+ requiredSecrets: ['MAPBOX_API_KEY'],
+ fallback: 'Falls back to MapTiler, then OpenStreetMap raster tiles',
+  },
+  {
+ id: 'navigationMaptiler',
+ name: 'MapTiler Streets',
+ description: 'Street map tiles via MapTiler',
+ requiredSecrets: ['MAPTILER_API_KEY'],
+ fallback: 'Falls back to OpenStreetMap raster tiles',
+  },
+  {
+ id: 'navigationRouting',
+ name: 'Turn-by-Turn Navigation',
+ description: 'Route calculation and turn-by-turn directions',
+ requiredSecrets: [],
+ fallback: 'Uses OSRM (free) when no premium routing keys are configured',
   },
 ];
 

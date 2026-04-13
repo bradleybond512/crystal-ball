@@ -91,6 +91,8 @@ export const DEFAULT_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 // Mobile defaults — same as desktop for happy variant
@@ -166,6 +168,8 @@ export const MOBILE_DEFAULT_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 export const VARIANT_CONFIG: VariantConfig = {

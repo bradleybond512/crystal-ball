@@ -2,42 +2,42 @@ name: Lint
 
 on:
   pull_request:
- paths:
- - '**/*.md'
- - '**/*.json'
- - '**/*.yml'
- - '**/*.yaml'
- - '**/*.sh'
- - '.husky/**'
- - 'scripts/lint-*.mjs'
- - '.markdownlint-cli2.jsonc'
- - 'package.json'
- - 'package-lock.json'
+    paths:
+      - '**/*.md'
+      - '**/*.json'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '**/*.sh'
+      - '.husky/**'
+      - 'scripts/lint-*.mjs'
+      - '.markdownlint-cli2.jsonc'
+      - 'package.json'
+      - 'package-lock.json'
 
 jobs:
   static-lint:
- if: github.event.pull_request.head.repo.full_name == github.repository
- runs-on: ubuntu-latest
- steps:
- - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
- with:
- fetch-depth: 0
- - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
- with:
- node-version: '22'
- cache: 'npm'
- - run: npm ci
- - run: npm run lint:conflicts
- - run: npm run lint:json
- - run: npm run lint:yaml
- - run: npm run lint:shell
- - name: Lint changed markdown files
- run: |
- git fetch origin "${{ github.base_ref }}" --depth=1
- git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- '*.md' > "$RUNNER_TEMP/markdown-files.list"
- if [ ! -s "$RUNNER_TEMP/markdown-files.list" ]; then
- echo "No markdown files changed"
- exit 0
- fi
- tr '\n' '\0' < "$RUNNER_TEMP/markdown-files.list" > "$RUNNER_TEMP/markdown-files.txt"
- xargs -0 npx markdownlint-cli2 < "$RUNNER_TEMP/markdown-files.txt"
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint:conflicts
+      - run: npm run lint:json
+      - run: npm run lint:yaml
+      - run: npm run lint:shell
+      - name: Lint changed markdown files
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- '*.md' > "$RUNNER_TEMP/markdown-files.list"
+          if [ ! -s "$RUNNER_TEMP/markdown-files.list" ]; then
+            echo "No markdown files changed"
+            exit 0
+          fi
+          tr '\n' '\0' < "$RUNNER_TEMP/markdown-files.list" > "$RUNNER_TEMP/markdown-files.txt"
+          xargs -0 npx markdownlint-cli2 < "$RUNNER_TEMP/markdown-files.txt"

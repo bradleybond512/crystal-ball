@@ -14,6 +14,7 @@ import {
 import {
   buildMapUrl,
   debounce,
+  rafSchedule,
   saveToStorage,
   ExportPanel,
   getCurrentTheme,
@@ -958,12 +959,12 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  });
 
- this._mapResizeMouseMove = (e: MouseEvent) => {
+ this._mapResizeMouseMove = rafSchedule((e: MouseEvent) => {
  if (!isResizing) return;
  const deltaY = e.clientY - startY;
  const newHeight = Math.max(getMinHeight(), Math.min(startHeight + deltaY, getMaxHeight()));
  mapSection.style.height = `${newHeight}px`;
- };
+ }) as (e: MouseEvent) => void;
  this._mapResizeMouseUp = endResize;
 
  document.addEventListener('mousemove', this._mapResizeMouseMove);

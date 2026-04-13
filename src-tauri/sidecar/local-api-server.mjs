@@ -7,6 +7,7 @@ import { readdir } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { brotliCompress, gzipSync } from 'node:zlib';
 import path from 'node:path';
+import os from 'node:os';
 import { pathToFileURL } from 'node:url';
 // Node 22 ships a built-in WebSocket global (WHATWG API) — no external dep needed.
 const AisWebSocket = WebSocket;
@@ -5948,6 +5949,39 @@ export async function createLocalApiServer(options = {}) {
   const server = createServer(async (req, res) => {
  const requestUrl = new URL(req.url || '/', `http://127.0.0.1:${context.port}`);
  const reqStartedAt = Date.now();
+
+ if (requestUrl.pathname === '/gps/nmea') {
+ try {
+ const { execFileSync } = await import('node:child_process');
+ const configPath = path.join(os.homedir(), '.crystalball-gps.json');
+ let port = '/dev/tty.usbserial-0001';
+
+ try {
+ const config = JSON.parse(readFileSync(configPath, 'utf8'));
+ port = config.port || port;
+ } catch {
+ // Use defaults
+ }
+
+ const line = execFileSync('head', ['-n', '5', port], {
+ encoding: 'utf8',
+ timeout: 3000,
+ }).trim();
+
+ if (!line || !line.startsWith('$')) {
+ res.writeHead(404, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+ res.end(JSON.stringify({ error: 'No GPS device detected' }));
+ return;
+ }
+
+ res.writeHead(200, { 'content-type': 'text/plain', ...makeCorsHeaders(req) });
+ res.end(line);
+ } catch (error) {
+ res.writeHead(404, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+ res.end(JSON.stringify({ error: 'GPS not available', details: error.message }));
+ }
+ return;
+ }
 
  if (!requestUrl.pathname.startsWith('/api/')) {
  res.writeHead(404, { 'content-type': 'application/json', ...makeCorsHeaders(req) });

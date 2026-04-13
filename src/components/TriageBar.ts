@@ -106,8 +106,15 @@ export class TriageBar {
     }
     const items = document.createElement('div');
     items.className = 'triage-bar-items';
-    for (const story of stories) {
-      items.append(this.makeStoryItem(story));
+    for (let i = 0; i < stories.length; i++) {
+      const item = this.makeStoryItem(stories[i]!);
+      if (i === 0) {
+        item.classList.add('hottest');
+        const sev = stories[0]!.leadAlert.severity;
+        const severityAttr = sev === 'medium' ? 'elevated' : sev;
+        item.dataset.severity = severityAttr;
+      }
+      items.append(item);
     }
     const ack = document.createElement('button');
     ack.className = 'triage-bar-ack';

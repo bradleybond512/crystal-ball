@@ -530,3 +530,13 @@
   30% { transform: translateX(6px); }
   100% { transform: translateX(0); }
 }
+
+.triage-bar-item { position: relative; transition: transform var(--duration-fast) var(--ease-default); }
+
+.triage-bar-item.hottest::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+.triage-bar-item.hottest[data-severity="critical"]::before { background: var(--severity-critical); }
+.triage-bar-item.hottest[data-severity="high"]::before { background: var(--severity-high); }
+.triage-bar-item.hottest[data-severity="elevated"]::before { background: var(--severity-elevated); }

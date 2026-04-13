@@ -519,10 +519,13 @@ function scan(): void {
   }
 }
 
+const MAX_LLM_VALIDATIONS = 5;
+
 async function validateWithLlm(alerts: UnifiedAlert[]): Promise<void> {
-  for (const a of alerts) {
-    if (!a.correlationPair) continue;
-    const prompt = `You are a situational-awareness analyst. A system clustered these alerts as causally related (${a.correlationPair[0]} -> ${a.correlationPair[1]}):\n\n${a.body}\n\nIs this a real causal correlation or coincidence? Respond with exactly one line:\nVERDICT: <REAL|WEAK|COINCIDENCE>\nREASON: <one short sentence>`;
+  const toValidate = alerts.filter(a => a.correlationPair).slice(0, MAX_LLM_VALIDATIONS);
+  for (const a of toValidate) {
+    const pair = a.correlationPair!;
+    const prompt = `You are a situational-awareness analyst. A system clustered these alerts as causally related (${pair[0]} -> ${pair[1]}):\n\n${a.body}\n\nIs this a real causal correlation or coincidence? Respond with exactly one line:\nVERDICT: <REAL|WEAK|COINCIDENCE>\nREASON: <one short sentence>`;
     try {
       const r = await runIntel(prompt, { maxTokens: 80, temperature: 0.1 });
       const m = /VERDICT:\s*(REAL|WEAK|COINCIDENCE)/i.exec(r.response);

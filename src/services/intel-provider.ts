@@ -41,23 +41,49 @@ export interface IntelResponse {
   provider: 'local' | 'claude';
 }
 
+// Circuit breaker: trips after consecutive failures, prevents sidecar flood
+const BREAKER_THRESHOLD = 3;
+const BREAKER_COOLDOWN_MS = 90_000;
+let consecutiveFailures = 0;
+let breakerOpenUntil = 0;
+
 async function callLocal(prompt: string, opts: IntelOptions): Promise<IntelResponse> {
+  if (Date.now() < breakerOpenUntil) {
+    throw new Error('local intel circuit breaker open');
+  }
+
   const url = `${getApiBaseUrl()}/api/intel-generate`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt,
-      system: opts.system,
-      maxTokens: opts.maxTokens,
-      temperature: opts.temperature,
-    }),
-    signal: opts.signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        system: opts.system,
+        maxTokens: opts.maxTokens,
+        temperature: opts.temperature,
+      }),
+      signal: opts.signal,
+    });
+  } catch (error) {
+    consecutiveFailures++;
+    if (consecutiveFailures >= BREAKER_THRESHOLD) {
+      breakerOpenUntil = Date.now() + BREAKER_COOLDOWN_MS;
+      console.warn(`[IntelProvider] Circuit breaker open after ${consecutiveFailures} failures — cooling down ${BREAKER_COOLDOWN_MS / 1000}s`); // eslint-disable-line no-console
+    }
+    throw error;
+  }
   if (!res.ok) {
+    consecutiveFailures++;
+    if (consecutiveFailures >= BREAKER_THRESHOLD) {
+      breakerOpenUntil = Date.now() + BREAKER_COOLDOWN_MS;
+      console.warn(`[IntelProvider] Circuit breaker open after ${consecutiveFailures} failures — cooling down ${BREAKER_COOLDOWN_MS / 1000}s`); // eslint-disable-line no-console
+    }
     const errText = await res.text().catch(() => '');
     throw new Error(`local intel ${res.status}: ${errText.slice(0, 200)}`);
   }
+  consecutiveFailures = 0;
   const data = await res.json() as { response: string; model: string };
   return { response: data.response, model: data.model, provider: 'local' };
 }

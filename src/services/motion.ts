@@ -25,12 +25,10 @@ export function staggerIn(
   }
 }
 
-export function crossfadeContent(panel: HTMLElement, newHTML: string): Promise<void> {
+export function crossfadeContent(panel: HTMLElement, newContent: HTMLElement | DocumentFragment): Promise<void> {
   if (prefersReducedMotion()) {
     panel.textContent = '';
-    const temp = document.createElement('div');
-    temp.insertAdjacentHTML('afterbegin', newHTML);
-    while (temp.firstChild) panel.append(temp.firstChild);
+    panel.append(newContent);
     return Promise.resolve();
   }
 
@@ -40,9 +38,7 @@ export function crossfadeContent(panel: HTMLElement, newHTML: string): Promise<v
       panel.removeEventListener('animationend', handler);
       panel.classList.remove('cb-animate-fade-out');
       panel.textContent = '';
-      const temp = document.createElement('div');
-      temp.insertAdjacentHTML('afterbegin', newHTML);
-      while (temp.firstChild) panel.append(temp.firstChild);
+      panel.append(newContent);
       panel.classList.add('cb-animate-fade-in');
       panel.addEventListener('animationend', function handler2() {
         panel.removeEventListener('animationend', handler2);

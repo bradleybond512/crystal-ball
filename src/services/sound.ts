@@ -23,9 +23,13 @@ function canPlay(): boolean {
   return true;
 }
 
+let sharedCtx: AudioContext | null = null;
+
 function getContext(): AudioContext | null {
   try {
-    return new AudioContext();
+    if (sharedCtx && sharedCtx.state !== 'closed') return sharedCtx;
+    sharedCtx = new AudioContext();
+    return sharedCtx;
   } catch {
     return null;
   }

@@ -521,8 +521,7 @@
 }
 
 @keyframes cb-alert-dismiss {
-  to { opacity: 0; transform: translateX(40px); max-height: 0;
-       padding-top: 0; padding-bottom: 0; overflow: hidden; }
+  to { opacity: 0; transform: translateX(40px); }
 }
 
 @keyframes cb-alert-snooze {

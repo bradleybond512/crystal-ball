@@ -385,6 +385,12 @@ const CONFLICT_ZONES_GEOJSON: GeoJSON.FeatureCollection = {
   })),
 };
 
+const SCATTER_TRANSITIONS = {
+  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
+  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
+  getFillColor: { duration: 300 },
+};
+
 export class DeckGLMap {
   private static readonly MAX_CLUSTER_LEAVES = 200;
 
@@ -1781,11 +1787,7 @@ export class DeckGLMap {
  radiusMaxPixels: 40,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
 
  const textLayer = new TextLayer<ServerBaseCluster>({
@@ -1843,11 +1845,7 @@ export class DeckGLMap {
  radiusMaxPixels: 10,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -1862,11 +1860,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -1899,11 +1893,7 @@ export class DeckGLMap {
  radiusMaxPixels: 10,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -1928,11 +1918,7 @@ export class DeckGLMap {
  radiusMaxPixels: 15,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -1949,11 +1935,7 @@ export class DeckGLMap {
  pickable: true,
  autoHighlight: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -1997,11 +1979,7 @@ export class DeckGLMap {
  pickable: true,
  autoHighlight: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2034,11 +2012,7 @@ export class DeckGLMap {
  pickable: true,
  autoHighlight: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2052,11 +2026,7 @@ export class DeckGLMap {
  getFillColor: [0, 0, 0, 0],
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2106,11 +2076,7 @@ export class DeckGLMap {
  radiusMaxPixels: 30,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2129,11 +2095,7 @@ export class DeckGLMap {
  radiusMaxPixels: 18,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2152,11 +2114,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2175,11 +2133,7 @@ export class DeckGLMap {
  radiusMaxPixels: 16,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2202,11 +2156,7 @@ export class DeckGLMap {
  radiusMaxPixels: 20,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2221,11 +2171,7 @@ export class DeckGLMap {
  radiusMaxPixels: 18,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2265,11 +2211,7 @@ export class DeckGLMap {
  getLineColor: [255, 255, 255, 160] as [number, number, number, number],
  lineWidthMinPixels: 1,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2293,11 +2235,7 @@ export class DeckGLMap {
  lineWidthMinPixels: 1,
  lineWidthMaxPixels: 2,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2344,11 +2282,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2369,11 +2303,7 @@ export class DeckGLMap {
  getLineColor: [255, 255, 255, 100] as [number, number, number, number],
  lineWidthMinPixels: 1,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2401,11 +2331,7 @@ export class DeckGLMap {
  getLineColor: [255, 255, 255, 150] as [number, number, number, number],
  lineWidthMinPixels: 1,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2427,11 +2353,7 @@ export class DeckGLMap {
  pickable: true,
  updateTriggers: { getFillColor: [this.adsbFlights] },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2471,11 +2393,7 @@ export class DeckGLMap {
  getLineColor: [0, 200, 255, 200] as [number, number, number, number], // Cyan outline (cable color)
  lineWidthMinPixels: 2,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2491,11 +2409,7 @@ export class DeckGLMap {
  radiusMaxPixels: 10,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2519,11 +2433,7 @@ export class DeckGLMap {
  },
  lineWidthMinPixels: 2,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2544,11 +2454,7 @@ export class DeckGLMap {
  radiusMaxPixels: 25,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2567,11 +2473,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2612,11 +2514,7 @@ export class DeckGLMap {
  radiusMaxPixels: 25,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2686,11 +2584,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2705,11 +2599,7 @@ export class DeckGLMap {
  radiusMaxPixels: 10,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2728,11 +2618,7 @@ export class DeckGLMap {
  radiusMaxPixels: 14,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2751,11 +2637,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2774,11 +2656,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2797,11 +2675,7 @@ export class DeckGLMap {
  radiusMaxPixels: 11,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2826,11 +2700,7 @@ export class DeckGLMap {
  pickable: true,
  stroked: false,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2860,11 +2730,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2880,11 +2746,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2899,11 +2761,7 @@ export class DeckGLMap {
  radiusMaxPixels: 8,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2918,11 +2776,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -2946,11 +2800,7 @@ export class DeckGLMap {
  pickable: true,
  updateTriggers: { getRadius: this.lastSCZoom, getFillColor: this.lastSCZoom },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
 
  const multiClusters = this.protestClusters.filter(c => c.count > 1);
@@ -2990,11 +2840,7 @@ export class DeckGLMap {
  pickable: false,
  updateTriggers: { radiusScale: this.pulseTime },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
  }
 
@@ -3021,11 +2867,7 @@ export class DeckGLMap {
  pickable: true,
  updateTriggers: { getRadius: this.lastSCZoom },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
 
  const multiClusters = this.techHQClusters.filter(c => c.count > 1);
@@ -3085,11 +2927,7 @@ export class DeckGLMap {
  pickable: true,
  updateTriggers: { getRadius: this.lastSCZoom },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
 
  const multiClusters = this.techEventClusters.filter(c => c.count > 1);
@@ -3132,11 +2970,7 @@ export class DeckGLMap {
  pickable: true,
  updateTriggers: { getRadius: this.lastSCZoom },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
 
  const multiClusters = this.datacenterClusters.filter(c => c.count > 1);
@@ -3191,11 +3025,7 @@ export class DeckGLMap {
  d.hasBreaking ? [255, 255, 255, 255] as [number, number, number, number] : [0, 0, 0, 0] as [number, number, number, number],
  lineWidthMinPixels: 2,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
 
  const highHotspots = this.hotspots.filter(h => h.level === 'high' || h.hasBreaking);
@@ -3222,11 +3052,7 @@ export class DeckGLMap {
  pickable: false,
  updateTriggers: { radiusScale: this.pulseTime },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
 
  // Night bloom: soft outer glow around high-severity hotspots.
@@ -3255,11 +3081,7 @@ export class DeckGLMap {
  pickable: false,
  updateTriggers: { getFillColor: this.pulseTime },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
  }
  }
@@ -3287,11 +3109,7 @@ export class DeckGLMap {
  radiusMaxPixels: 28,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -3425,11 +3243,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }),
  ];
 
@@ -3463,11 +3277,7 @@ export class DeckGLMap {
  lineWidthMinPixels: 1.5,
  updateTriggers: { pulseTime: now },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
  }
 
@@ -3508,11 +3318,7 @@ export class DeckGLMap {
  radiusMaxPixels: 10,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
 
  // Gentle pulse ring for significant events (count > 8)
@@ -3534,11 +3340,7 @@ export class DeckGLMap {
  pickable: false,
  updateTriggers: { radiusScale: this.pulseTime },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
  }
 
@@ -3560,11 +3362,7 @@ export class DeckGLMap {
  radiusMaxPixels: 10,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
 
  // Pulse for real events
@@ -3584,11 +3382,7 @@ export class DeckGLMap {
  pickable: false,
  updateTriggers: { radiusScale: this.pulseTime },
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  }));
 
  return layers;
@@ -3636,11 +3430,7 @@ export class DeckGLMap {
  lineWidthMinPixels: 1.5,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -3670,11 +3460,7 @@ export class DeckGLMap {
  lineWidthMinPixels: 1,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -4899,11 +4685,7 @@ export class DeckGLMap {
  radiusMaxPixels: 20,
  pickable: false,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -4927,11 +4709,7 @@ export class DeckGLMap {
  lineWidthMinPixels: 1,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -4963,11 +4741,7 @@ export class DeckGLMap {
  lineWidthMinPixels: 1,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -5055,11 +4829,7 @@ export class DeckGLMap {
  radiusMaxPixels: 12,
  pickable: false,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -6026,11 +5796,7 @@ export class DeckGLMap {
  radiusUnits: 'meters' as const,
  pickable: false,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
 
  // Inner core dot
@@ -6048,11 +5814,7 @@ export class DeckGLMap {
  pickable: true,
  autoHighlight: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
 
  return [outer, inner];
@@ -6150,11 +5912,7 @@ export class DeckGLMap {
  pickable: true,
  autoHighlight: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -6177,11 +5935,7 @@ export class DeckGLMap {
  pickable: true,
  autoHighlight: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -6325,11 +6079,7 @@ export class DeckGLMap {
  radiusMaxPixels: 8,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -6351,11 +6101,7 @@ export class DeckGLMap {
  radiusMinPixels: 6,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 
@@ -6403,11 +6149,7 @@ export class DeckGLMap {
  radiusMaxPixels: 6,
  pickable: true,
 
- transitions: {
-  getPosition: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getRadius: { duration: 400, easing: (t: number) => 1 - Math.pow(1 - t, 3) },
-  getFillColor: { duration: 300 },
- },
+ transitions: SCATTER_TRANSITIONS,
  });
   }
 

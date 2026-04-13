@@ -20,6 +20,8 @@ use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuIte
 use tauri::{AppHandle, Manager, RunEvent, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_biometry;
 
+mod corelocation;
+
 const DEFAULT_LOCAL_API_PORT: u16 = 46123;
 const KEYRING_SERVICE: &str = "crystal-ball";
 const LOCAL_API_LOG_FILE: &str = "local-api.log";
@@ -2133,6 +2135,7 @@ fn main() {
  .manage(LocalApiState::default())
  .manage(SecretsCache::load_from_keychain())
  .plugin(tauri_plugin_biometry::init())
+ .plugin(corelocation::init())
  .invoke_handler(tauri::generate_handler![
  list_supported_secret_keys,
  get_secret,

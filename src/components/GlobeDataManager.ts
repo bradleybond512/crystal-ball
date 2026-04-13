@@ -322,6 +322,10 @@ export class GlobeDataManager {
  this.registerLayer('lightningStrikes', () => this.loadLightningStrikes());
  this.registerLayer('redFlagWarnings', () => this.loadRedFlagWarnings());
 
+ this.registerLayer('streetTiles', () => {
+ // Managed by StreetTileManager, not data source
+ });
+
  // 3D Building tiles (managed separately — uses Cesium primitives, not data sources)
  this.buildingManager = new BuildingTileManager(this.viewer);
  void this.buildingManager.initialize();

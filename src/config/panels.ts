@@ -265,6 +265,8 @@ const FULL_MAP_LAYERS: MapLayers = {
   buildings3d: true,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 const FULL_MOBILE_MAP_LAYERS: MapLayers = {
@@ -339,6 +341,8 @@ const FULL_MOBILE_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 // ============================================
@@ -454,6 +458,8 @@ const TECH_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 const TECH_MOBILE_MAP_LAYERS: MapLayers = {
@@ -528,6 +534,8 @@ const TECH_MOBILE_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 // ============================================
@@ -639,6 +647,8 @@ const FINANCE_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
@@ -713,6 +723,8 @@ const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 // ============================================
@@ -803,6 +815,8 @@ const HAPPY_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
@@ -877,6 +891,8 @@ const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 // ============================================

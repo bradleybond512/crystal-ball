@@ -122,6 +122,8 @@ export const DEFAULT_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 // Mobile-specific defaults for geopolitical
@@ -196,6 +198,8 @@ export const MOBILE_DEFAULT_MAP_LAYERS: MapLayers = {
   buildings3d: false,
   satellites: false,
   aircraft3d: false,
+  streetTiles: false,
+  navigationRoute: false,
 };
 
 export const VARIANT_CONFIG: VariantConfig = {

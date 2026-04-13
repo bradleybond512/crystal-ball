@@ -611,6 +611,9 @@ export interface MapLayers {
   buildings3d: boolean;
   satellites: boolean;
   aircraft3d: boolean;
+  // Navigation layers
+  streetTiles: boolean;
+  navigationRoute: boolean;
 }
 
 export interface AIDataCenter {

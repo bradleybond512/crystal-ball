@@ -27,6 +27,11 @@ import { GlobeSatellites } from '@/components/gods-vision/GlobeSatellites';
 import { GlobeMiniMap } from '@/components/gods-vision/GlobeMiniMap';
 import { GlobeAudio } from '@/components/gods-vision/GlobeAudio';
 import { GlobeAlertClusters } from '@/components/gods-vision/GlobeAlertClusters';
+import { StreetTileManager } from '@/services/street-tiles';
+import { GpsTracker, type GpsPosition } from '@/services/gps-tracker';
+import { computeRoute, type RouteResult, type RouteCoord } from '@/services/routing-engine';
+import { NavigationHUD } from '@/components/NavigationHUD';
+import { NavigationPanel } from '@/components/NavigationPanel';
 
 // ── Theater camera presets (lat, lon, altitude meters, pitch degrees) ──
 const THEATERS = {
@@ -82,6 +87,13 @@ export class GodsVisionView {
   private ionToken: string | undefined;
   private cleanupHandlers: (() => void)[] = [];
   private currentMode: AppMode | null = null;
+  private streetTiles: StreetTileManager | null = null;
+  private gpsTracker: GpsTracker | null = null;
+  private navHud: NavigationHUD | null = null;
+  private navPanel: NavigationPanel | null = null;
+  private navigationActive = false;
+  private _currentRoute: RouteResult | null = null;
+  private gpsCleanup: (() => void) | null = null;
 
   constructor(ionToken?: string) {
  this.ionToken = ionToken;
@@ -92,6 +104,10 @@ export class GodsVisionView {
 
   get isActive(): boolean {
  return this.active;
+  }
+
+  get activeRoute(): RouteResult | null {
+ return this._currentRoute;
   }
 
   async enter(): Promise<void> {
@@ -234,6 +250,26 @@ export class GodsVisionView {
  this.hud.setOnScreenshot(() => { void this.takeScreenshot(); });
  this.hud.setOnArcsToggle((enabled) => this.globeArcs?.setEnabled(enabled));
  this.hud.setOnHeatmapToggle((enabled) => this.globeHeatmap?.setEnabled(enabled));
+ this.hud.setOnNavigationToggle(() => void this.toggleNavigation());
+
+ // Navigation HUD + Panel
+ this.navHud = new NavigationHUD(this.container);
+ this.navHud.mount();
+ this.cleanupHandlers.push(() => { this.navHud?.destroy(); this.navHud = null; });
+
+ this.navPanel = new NavigationPanel(this.container);
+ this.navPanel.mount();
+ this.navPanel.setOnClose(() => this.deactivateNavigation());
+ this.cleanupHandlers.push(() => { this.navPanel?.destroy(); this.navPanel = null; });
+
+ // Initialize street tiles and GPS tracker
+ if (viewer) {
+ this.streetTiles = new StreetTileManager(viewer);
+ void this.streetTiles.initialize();
+ this.cleanupHandlers.push(() => { this.streetTiles?.destroy(); this.streetTiles = null; });
+ }
+ this.gpsTracker = new GpsTracker();
+ this.cleanupHandlers.push(() => { this.gpsTracker?.destroy(); this.gpsTracker = null; });
 
  // Satellite overlay
  if (viewer) {
@@ -311,6 +347,8 @@ export class GodsVisionView {
  this.waypointTour?.stop();
  this.waypointTour = null;
 
+ this.deactivateNavigation();
+
  this.autoFollow?.destroy();
  this.autoFollow = null;
 
@@ -361,6 +399,70 @@ export class GodsVisionView {
 
   flyToReactorAlert(alertId: string): boolean {
  return this.reactorBeacons?.flyTo(alertId) ?? false;
+  }
+
+  // ── Navigation ──────────────────────────────────────
+
+  async toggleNavigation(): Promise<void> {
+ if (this.navigationActive) {
+ this.deactivateNavigation();
+ } else {
+ await this.activateNavigation();
+ }
+  }
+
+  private async activateNavigation(): Promise<void> {
+ this.navigationActive = true;
+ this.streetTiles?.setVisible(true);
+
+ if (this.gpsTracker) {
+ await this.gpsTracker.start();
+ this.gpsCleanup = this.gpsTracker.addListener((pos: GpsPosition) => {
+ this.navHud?.updateFromGps(pos);
+ this.navPanel?.updateGpsPosition(pos);
+
+ const cameraHeight = this.globe?.cesiumViewer?.camera.positionCartographic.height;
+ if (cameraHeight !== undefined && cameraHeight < 5000 && !this.navPanel?.visible) {
+   this.navPanel?.show({ lat: pos.lat, lon: pos.lon });
+ } else if (cameraHeight !== undefined && cameraHeight >= 5000 && this.navPanel?.visible) {
+   this.navPanel?.hide();
+ }
+ });
+ }
+
+ this.navHud?.show();
+  }
+
+  private deactivateNavigation(): void {
+ this.navigationActive = false;
+ this.streetTiles?.setVisible(false);
+ this.gpsCleanup?.();
+ this.gpsCleanup = null;
+ this.gpsTracker?.stop();
+ this.navHud?.hide();
+ this.navPanel?.hide();
+ this._currentRoute = null;
+  }
+
+  async navigateTo(destination: RouteCoord): Promise<void> {
+ const pos = this.gpsTracker?.lastPosition;
+ if (!pos) return;
+
+ const from: RouteCoord = { lat: pos.lat, lon: pos.lon };
+ const route = await computeRoute(from, destination);
+ if (!route) return;
+
+ this._currentRoute = route;
+ this.navHud?.update({
+ active: true,
+ currentStep: route.steps[0] ?? null,
+ nextStep: route.steps[1] ?? null,
+ distanceToTurn: route.steps[0]?.distance ?? 0,
+ totalRemaining: route.distance,
+ routingProvider: route.provider,
+ eta: new Date(Date.now() + route.duration * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+ });
+ this.navPanel?.displayRoute(route);
   }
 
   // ── Mode theming ─────────────────────────────────────
@@ -491,6 +593,12 @@ export class GodsVisionView {
  // L toggles day/night terminator
  if (ke.key === 'l' || ke.key === 'L') {
  this.hud?.toggleTerminator();
+ return;
+ }
+
+ // N toggles navigation mode
+ if (ke.key === 'n' || ke.key === 'N') {
+ void this.toggleNavigation();
  return;
  }
 

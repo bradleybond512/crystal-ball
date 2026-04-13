@@ -44,6 +44,8 @@ export const SIGNUP_URLS: Partial<Record<RuntimeSecretKey, string>> = {
   IPINFO_TOKEN: 'https://ipinfo.io/signup',
   CESIUM_ION_TOKEN: 'https://ion.cesium.com/signup/',
   GOOGLE_MAPS_API_KEY: 'https://console.cloud.google.com/apis/credentials',
+  MAPBOX_API_KEY: 'https://account.mapbox.com/auth/signup/',
+  MAPTILER_API_KEY: 'https://cloud.maptiler.com/auth/widget?next=https://cloud.maptiler.com/maps/',
 };
 
 export const PLAINTEXT_KEYS = new Set<RuntimeSecretKey>([
@@ -104,6 +106,8 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   IPINFO_TOKEN: 'IPInfo Token',
   CESIUM_ION_TOKEN: 'Cesium Ion Token',
   GOOGLE_MAPS_API_KEY: 'Google Maps API Key',
+  MAPBOX_API_KEY: 'Mapbox',
+  MAPTILER_API_KEY: 'MapTiler',
 };
 
 export interface SettingsCategory {
@@ -157,5 +161,10 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
  id: 'travel-warnings',
  label: 'Travel Warnings',
  features: ['fcdoTravelWarnings', 'dfatTravelWarnings', 'gacTravelWarnings'],
+  },
+  {
+ id: 'navigation',
+ label: 'Navigation & Routing',
+ features: ['navigationMapbox', 'navigationMaptiler', 'navigationRouting'],
   },
 ];

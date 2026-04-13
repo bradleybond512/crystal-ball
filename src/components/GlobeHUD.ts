@@ -78,6 +78,7 @@ export class GlobeHUD {
   private onAudioToggle: ((enabled: boolean) => void) | null = null;
   private onAlertClick: ((lat: number, lon: number, name: string) => void) | null = null;
   private onScreenshot: (() => void) | null = null;
+  private onNavigationToggle: (() => void) | null = null;
   private terminatorBtn: HTMLButtonElement | null = null;
   private buildingsBtn: HTMLButtonElement | null = null;
   private arcsBtn: HTMLButtonElement | null = null;
@@ -232,6 +233,12 @@ export class GlobeHUD {
  this.buildAudioButton(layerBar);
  this.buildScreenshotButton(layerBar);
  this.buildLayerButtons(layerBar);
+ const navBtn = document.createElement('button');
+ navBtn.textContent = 'NAV';
+ navBtn.title = 'Toggle Navigation (N)';
+ navBtn.style.cssText = `background: rgba(20,25,40,0.8); border: 1px solid rgba(100,140,255,0.3); color: #8ca8ff; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 11px; font-family: 'SF Mono', monospace; font-weight: 600;`;
+ navBtn.addEventListener('click', () => this.onNavigationToggle?.());
+ layerBar.appendChild(navBtn);
  bottomCenter.append(layerBar);
  this.element.append(bottomCenter);
 
@@ -776,6 +783,10 @@ export class GlobeHUD {
 
   setOnExit(cb: () => void): void {
  this.onExit = cb;
+  }
+
+  setOnNavigationToggle(fn: () => void): void {
+ this.onNavigationToggle = fn;
   }
 
   updateFlyMode(status: FlyModeStatus): void {

@@ -20,6 +20,8 @@ use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuIte
 use tauri::{AppHandle, Manager, RunEvent, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_biometry;
 
+mod corelocation;
+
 const DEFAULT_LOCAL_API_PORT: u16 = 46123;
 const KEYRING_SERVICE: &str = "crystal-ball";
 const LOCAL_API_LOG_FILE: &str = "local-api.log";
@@ -35,7 +37,7 @@ const MENU_VIEW_MODE_ID: &str = "view.mode_status";
 #[cfg(feature = "devtools")]
 const MENU_HELP_DEVTOOLS_ID: &str = "help.devtools";
 const TRUSTED_WINDOWS: [&str; 3] = ["main", "settings", "live-channels"];
-const SUPPORTED_SECRET_KEYS: [&str; 47] = [
+const SUPPORTED_SECRET_KEYS: [&str; 49] = [
  "CRYSTALBALL_API_KEY",
  "ANTHROPIC_API_KEY",
  "GROQ_API_KEY",
@@ -83,6 +85,8 @@ const SUPPORTED_SECRET_KEYS: [&str; 47] = [
  "IPINFO_TOKEN",
  "CESIUM_ION_TOKEN",
  "GOOGLE_MAPS_API_KEY",
+ "MAPBOX_API_KEY",
+ "MAPTILER_API_KEY",
 ];
 
 // Rate-limit native notifications: no more than 1 per 30 seconds across all threads.
@@ -2131,6 +2135,7 @@ fn main() {
  .manage(LocalApiState::default())
  .manage(SecretsCache::load_from_keychain())
  .plugin(tauri_plugin_biometry::init())
+ .plugin(corelocation::init())
  .invoke_handler(tauri::generate_handler![
  list_supported_secret_keys,
  get_secret,

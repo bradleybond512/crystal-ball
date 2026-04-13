@@ -46,7 +46,7 @@ import { detectPlatform, allButtons, buttonsForPlatform } from '@/components/Dow
 import type { Platform } from '@/components/DownloadBanner';
 import { invokeTauri } from '@/services/tauri-bridge';
 import { toggleGhostMode, getMode, setMode } from '@/services/mode-manager';
-import { isAppActive } from '@/services/app-activity';
+import { isAppActive, onActivityChange } from '@/services/app-activity';
 import { playUiClick } from '@/services/sound-manager';
 import { dataFreshness } from '@/services/data-freshness';
 import { mlWorker } from '@/services/ml-worker';
@@ -78,6 +78,7 @@ export class EventHandlerManager implements AppModule {
   private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private snapshotIntervalId: ReturnType<typeof setInterval> | null = null;
   private clockIntervalId: ReturnType<typeof setInterval> | null = null;
+  private _unsubActivity: (() => void) | null = null;
   private readonly IDLE_PAUSE_MS = 2 * 60 * 1000;
   private debouncedUrlSync = debounce(() => {
  const shareUrl = this.getShareUrl();
@@ -180,6 +181,8 @@ export class EventHandlerManager implements AppModule {
  document.removeEventListener('mouseup', this._mapResizeMouseUp);
  this._mapResizeMouseUp = null;
  }
+ this._unsubActivity?.();
+ this._unsubActivity = null;
  this.ctx.tvMode?.destroy();
  this.ctx.tvMode = null;
  this.ctx.unifiedSettings?.destroy();
@@ -280,6 +283,17 @@ export class EventHandlerManager implements AppModule {
  }
  };
  document.addEventListener('visibilitychange', this.boundVisibilityHandler);
+
+ this._unsubActivity = onActivityChange((active) => {
+ document.body.classList.toggle('animations-paused', !active);
+ if (!active) {
+ this.callbacks.setHiddenSince(Date.now());
+ mlWorker.unloadOptionalModels();
+ } else {
+ this.resetIdleTimer();
+ this.callbacks.flushStaleRefreshes();
+ }
+ });
 
  window.addEventListener('focal-points-ready', () => {
  (this.ctx.panels.cii as CIIPanel)?.refresh(true);

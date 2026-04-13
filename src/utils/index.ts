@@ -76,7 +76,8 @@ export function throttle<T extends (...args: unknown[]) => void>(
   };
 }
 
-export function rafSchedule<T extends (...args: unknown[]) => void>(fn: T): (...args: Parameters<T>) => void {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rafSchedule<T extends (...args: any[]) => void>(fn: T): (...args: Parameters<T>) => void {
   // Frame-synchronized scheduling for visual updates; batches repeated calls into one render frame.
   let scheduled = false;
   let lastArgs: Parameters<T> | null = null;
@@ -101,13 +102,13 @@ export function loadFromStorage<T>(key: string, defaultValue: T): T {
  if (stored) {
  const parsed = JSON.parse(stored) as T;
  // Merge with defaults for object types to handle new properties
- if (typeof defaultValue === 'object' && defaultValue !== null && !Array.isArray(defaultValue)) {
+ if (typeof defaultValue === 'object' && defaultValue != null && !Array.isArray(defaultValue)) {
  return { ...defaultValue, ...parsed };
  }
  return parsed;
  }
-  } catch (error) {
- console.warn(`Failed to load ${key} from storage:`, error);
+  } catch {
+ // storage unavailable — return default
   }
   return defaultValue;
 }
@@ -119,14 +120,11 @@ export function isStorageQuotaExceeded(): boolean {
 }
 
 export function isQuotaError(e: unknown): boolean {
-  return e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22);
+  return e instanceof DOMException && e.name === 'QuotaExceededError';
 }
 
 export function markStorageQuotaExceeded(): void {
-  if (!_storageQuotaExceeded) {
- _storageQuotaExceeded = true;
- console.warn('[Storage] Quota exceeded — disabling further writes');
-  }
+  _storageQuotaExceeded = true;
 }
 
 export function saveToStorage<T>(key: string, value: T): void {
@@ -136,13 +134,12 @@ export function saveToStorage<T>(key: string, value: T): void {
   } catch (error) {
  if (isQuotaError(error)) {
  markStorageQuotaExceeded();
- } else {
- console.warn(`Failed to save ${key} to storage:`, error);
  }
   }
 }
 
 export function generateId(): string {
+  // eslint-disable-next-line sonarjs/pseudo-random
   return `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 

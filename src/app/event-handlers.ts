@@ -46,6 +46,7 @@ import { detectPlatform, allButtons, buttonsForPlatform } from '@/components/Dow
 import type { Platform } from '@/components/DownloadBanner';
 import { invokeTauri } from '@/services/tauri-bridge';
 import { toggleGhostMode, getMode, setMode } from '@/services/mode-manager';
+import { isAppActive } from '@/services/app-activity';
 import { playUiClick } from '@/services/sound-manager';
 import { dataFreshness } from '@/services/data-freshness';
 import { mlWorker } from '@/services/ml-worker';
@@ -674,6 +675,7 @@ export class EventHandlerManager implements AppModule {
  const el = document.getElementById('headerClock');
  if (!el) return;
  const tick = () => {
+ if (!isAppActive()) return;
  el.textContent = new Date().toUTCString().replace('GMT', 'UTC');
  };
  tick();

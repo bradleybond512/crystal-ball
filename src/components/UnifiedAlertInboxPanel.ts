@@ -21,6 +21,7 @@ import {
   type AlertSeverity,
   type AlertSource,
 } from '@/services/unified-alerts';
+import { playAckSound } from '@/services/sound';
 import { scoreAndSort } from '@/services/relevance-scoring';
 import { EvidenceDrawer } from './EvidenceDrawer';
 import { computeEntityHeat } from '@/services/entity-heat';
@@ -299,6 +300,9 @@ export class UnifiedAlertInboxPanel extends Panel {
  const ackBtn = target.closest('[data-ack]') as HTMLElement | null;
  if (ackBtn) {
  e.stopPropagation();
+ const row = ackBtn.closest('tr');
+ if (row) row.classList.add('alert-row-ack');
+ playAckSound();
  unifiedAlertStore.acknowledge(ackBtn.dataset.ack!);
  return true;
  }
@@ -544,6 +548,7 @@ export class UnifiedAlertInboxPanel extends Panel {
  alert.pinned ? 'uai-pinned' : '',
  alert.acknowledged ? 'uai-acked' : '',
  index === this.selectedIndex ? 'uai-selected' : '',
+ alert.acknowledged ? '' : 'alert-row-arrive',
  ]
  .filter(Boolean)
  .join(' ');

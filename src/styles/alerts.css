@@ -506,3 +506,27 @@
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  .alert-row-ack { animation: cb-alert-ack 200ms var(--ease-default) both; }
+  .alert-row-dismiss { animation: cb-alert-dismiss 200ms var(--ease-in) both; }
+  .alert-row-snooze { animation: cb-alert-snooze 200ms var(--ease-default) both; }
+  .alert-row-arrive { animation: cb-slide-down var(--duration-moderate) var(--ease-out) both; }
+}
+
+@keyframes cb-alert-ack {
+  0% { background: transparent; }
+  30% { background: var(--severity-positive-bg); }
+  100% { background: transparent; }
+}
+
+@keyframes cb-alert-dismiss {
+  to { opacity: 0; transform: translateX(40px); max-height: 0;
+       padding-top: 0; padding-bottom: 0; overflow: hidden; }
+}
+
+@keyframes cb-alert-snooze {
+  0% { transform: translateX(0); }
+  30% { transform: translateX(6px); }
+  100% { transform: translateX(0); }
+}

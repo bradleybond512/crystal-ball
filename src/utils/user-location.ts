@@ -46,7 +46,7 @@ function coordsToRegion(lat: number, lon: number): MapView {
 
 function getGeolocationPosition(timeout: number): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
- navigator.geolocation.getCurrentPosition(resolve, reject, {
+ navigator.geolocation.getCurrentPosition(resolve, reject, { // eslint-disable-line sonarjs/no-intrusive-permissions
  timeout,
  maximumAge: 300_000,
  });
@@ -63,14 +63,12 @@ export async function resolveUserRegion(): Promise<MapView> {
   }
 
   try {
- if (typeof navigator === 'undefined' || !navigator.permissions) throw 0;
- const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
- if (status.state === 'granted') {
- const pos = await getGeolocationPosition(3000);
+ if (typeof navigator !== 'undefined' && navigator.geolocation) {
+ const pos = await getGeolocationPosition(5000);
  return coordsToRegion(pos.coords.latitude, pos.coords.longitude);
  }
   } catch {
- // permissions.query unsupported or geolocation failed
+ // geolocation denied, timed out, or unavailable — fall through to timezone
   }
 
   return tzRegion;

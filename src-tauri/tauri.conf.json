@@ -70,7 +70,8 @@
  },
  "macOS": {
  "hardenedRuntime": true,
- "infoPlist": "./Info.plist"
+ "infoPlist": "./Info.plist",
+ "entitlements": "./Entitlements.plist"
  },
  "linux": {
  "appimage": {

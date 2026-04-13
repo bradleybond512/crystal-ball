@@ -323,29 +323,14 @@ export class GodsVisionView {
  this.reactorBeacons?.destroy();
  this.reactorBeacons = null;
 
- setTimeout(() => {
  this.hud?.destroy();
  this.hud = null;
  this.dataManager?.destroy();
  this.dataManager = null;
  this.globe?.destroy();
  this.globe = null;
- }, 600);
   }
 
-  toggle(): void {
- // If a previous enter() crashed past the globe-init catch block (e.g. HUD
- // construction threw), `active` can be stuck true with no visible UI. Treat
- // active-without-globe as broken state and force a clean re-enter.
- if (this.active && !this.globe) {
- this.exit();
- }
- if (this.active) {
- this.exit();
- } else {
- void this.enter();
- }
-  }
 
   destroy(): void {
  this.exit();

@@ -494,7 +494,12 @@ export class App {
   }
 
   async toggleGodsVision(): Promise<void> {
- if (!this.godsVisionView) {
+ if (this.godsVisionView) {
+ // Full teardown — frees WebGL context, GPU textures, all timers
+ this.godsVisionView.destroy();
+ this.godsVisionView = null;
+ return;
+ }
  // Cesium reads CESIUM_BASE_URL at module init — must be set before dynamic import
  (window as unknown as Record<string, unknown>).CESIUM_BASE_URL = '/cesium';
  try {
@@ -502,13 +507,10 @@ export class App {
  const ionToken = getRuntimeConfigSnapshot().secrets.CESIUM_ION_TOKEN?.value;
  this.godsVisionView = new GodsVisionView(ionToken);
  } catch (error) {
- // Surface the real failure to desktop.log instead of letting it bubble
- // up to vite:preloadError → chunkReloadGuard → page reload → vault loop.
  console.error('[GodsVision] dynamic import failed:', error, (error as Error)?.stack);
  return;
  }
- }
- this.godsVisionView.toggle();
+ void this.godsVisionView.enter();
   }
 
   private handleDeepLinks(): void {

@@ -107,7 +107,7 @@
     "@deck.gl/geo-layers": "^9.2.11",
     "@deck.gl/layers": "^9.2.6",
     "@deck.gl/mapbox": "^9.2.6",
-    "@deck.gl/mesh-layers": "^9.2.11",
+    "@deck.gl/mesh-layers": "^9.3.0",
     "@sentry/browser": "^10.39.0",
     "@types/three": "^0.183.1",
     "@upstash/ratelimit": "^2.0.8",

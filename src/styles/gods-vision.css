@@ -783,3 +783,10 @@ body.gods-vision-lock {
 }
 .ge-minimap-canvas { display: block; }
 
+@media (prefers-reduced-motion: no-preference) {
+  .ge-entering .ge-globe-container { animation: cb-fade-in 500ms var(--ease-out) 200ms both; }
+  .ge-entering .ge-hud-element { animation: cb-slide-up var(--duration-moderate) var(--ease-out) both; }
+  .ge-exiting .ge-globe-container { animation: cb-fade-out 300ms var(--ease-in) both; }
+  .ge-exiting .ge-hud-element { animation: cb-fade-out 200ms var(--ease-in) both; }
+}
+

@@ -37,6 +37,7 @@ export class CesiumGlobe {
  initCesium(this.options.ionToken);
 
  const cesiumContainer = document.createElement('div');
+ cesiumContainer.className = 'ge-globe-container';
  cesiumContainer.style.cssText = 'width:100%;height:100%;position:absolute;inset:0;';
  this.container.append(cesiumContainer);
 

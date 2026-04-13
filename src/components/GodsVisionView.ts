@@ -324,6 +324,14 @@ export class GodsVisionView {
  }
  }, 100);
 
+ // Staggered HUD entry animation
+ const hudElements = this.container.querySelectorAll('.ge-hud-element');
+ hudElements.forEach((el, i) => {
+ (el as HTMLElement).style.animationDelay = `${700 + i * 50}ms`;
+ });
+ this.container.classList.add('ge-entering');
+ setTimeout(() => this.container.classList.remove('ge-entering'), 1200);
+
  // Mode tracking
  this.currentMode = getMode();
  this.applyModeTheme(this.currentMode);

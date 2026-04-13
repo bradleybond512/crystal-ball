@@ -4,6 +4,7 @@ import { getFusedForecast } from '@/services/forecast-fusion';
 import type { FollowTarget } from '@/components/gods-vision/AutoFollowEngine';
 import type { FlyModeStatus } from '@/components/gods-vision/FlyMode/FlyModeController';
 import { FLY_SUB_MODE_NAMES } from '@/components/gods-vision/FlyMode/flyModeKeybinds';
+import { animateNumber } from '@/services/motion';
 
 export interface HUDState {
   cameraAltitude: number;
@@ -139,6 +140,7 @@ export class GlobeHUD {
   private buildDOM(): void {
  // ── Top-left: Threat card ──
  const topLeft = this.pos('top:16px;left:16px;pointer-events:auto;');
+ topLeft.classList.add('ge-hud-element');
  const card = this.card('ge-hud-threat-card');
  this.clockEl = this.el('div', 'ge-hud-clock');
  card.append(this.clockEl);
@@ -185,6 +187,7 @@ export class GlobeHUD {
 
  // ── Top-center: Breaking news ticker ──
  const topCenter = this.pos('top:16px;left:50%;transform:translateX(-50%);pointer-events:auto;max-width:46%;');
+ topCenter.classList.add('ge-hud-element');
  const ticker = this.el('div', 'ge-hud-ticker');
  const tickerLabel = this.el('span', 'ge-hud-ticker-label', 'LIVE');
  const tickerWin = this.el('div', 'ge-hud-ticker-window');
@@ -196,6 +199,7 @@ export class GlobeHUD {
 
  // ── Top-right: Exit + theater legend ──
  const topRight = this.pos('top:16px;right:16px;pointer-events:auto;display:flex;flex-direction:column;align-items:flex-end;gap:8px;');
+ topRight.classList.add('ge-hud-element');
  const exitBtn = document.createElement('button');
  exitBtn.className = 'ge-exit-btn';
  exitBtn.id = 'geExitBtn';
@@ -221,6 +225,7 @@ export class GlobeHUD {
  const bottomCenter = this.pos(
  'bottom:16px;left:16px;right:16px;pointer-events:auto;overflow-x:auto;',
  );
+ bottomCenter.classList.add('ge-hud-element');
  const layerBar = document.createElement('div');
  layerBar.className = 'ge-layer-bar';
  layerBar.id = 'geLayerBar';
@@ -238,12 +243,13 @@ export class GlobeHUD {
  navBtn.title = 'Toggle Navigation (N)';
  navBtn.style.cssText = `background: rgba(20,25,40,0.8); border: 1px solid rgba(100,140,255,0.3); color: #8ca8ff; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 11px; font-family: 'SF Mono', monospace; font-weight: 600;`;
  navBtn.addEventListener('click', () => this.onNavigationToggle?.());
- layerBar.appendChild(navBtn);
+ layerBar.append(navBtn);
  bottomCenter.append(layerBar);
  this.element.append(bottomCenter);
 
  // ── Bottom-right: Auto-follow status ──
  const bottomRight = this.pos('bottom:80px;right:16px;pointer-events:auto;');
+ bottomRight.classList.add('ge-hud-element');
  this.autoFollowCard = this.card('ge-autofollow-card ge-hidden');
  const afHeader = this.el('div', 'ge-autofollow-header');
  const afLabel = this.el('span', 'ge-hud-micro-label', 'AUTO-FOLLOW');
@@ -556,7 +562,10 @@ export class GlobeHUD {
   updateState(state: Partial<HUDState>): void {
  if (state.activeHotspots !== undefined) {
  this.lastHotspotCount = state.activeHotspots;
- if (this.hotspotsEl) this.hotspotsEl.textContent = String(state.activeHotspots);
+ if (this.hotspotsEl) {
+ const oldCount = Number.parseInt(this.hotspotsEl.textContent || '0', 10);
+ animateNumber(this.hotspotsEl, oldCount, state.activeHotspots);
+ }
  if (this.threatEl) {
  const { label, cls } = threatFromHotspots(state.activeHotspots);
  this.threatEl.textContent = label;
@@ -586,10 +595,12 @@ export class GlobeHUD {
  this.updateThreatDetail();
  }
  if (state.conflicts !== undefined && this.conflictsEl) {
- this.conflictsEl.textContent = String(state.conflicts);
+ const oldCount = Number.parseInt(this.conflictsEl.textContent || '0', 10);
+ animateNumber(this.conflictsEl, oldCount, state.conflicts);
  }
  if (state.disasters !== undefined && this.disastersEl) {
- this.disastersEl.textContent = String(state.disasters);
+ const oldCount = Number.parseInt(this.disastersEl.textContent || '0', 10);
+ animateNumber(this.disastersEl, oldCount, state.disasters);
  }
  if (state.nearestHotspot !== undefined && this.nearestEl) {
  const n = state.nearestHotspot;

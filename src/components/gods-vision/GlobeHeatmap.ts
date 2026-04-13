@@ -2,6 +2,7 @@ import { Cartesian3, SceneTransforms, type Viewer } from 'cesium';
 import type { GlobeDataManager } from '@/components/GlobeDataManager';
 import { unifiedAlertStore } from '@/services/unified-alerts';
 import { scoreAlert } from '@/services/alert-routing';
+import { isAppActive, onActivityChange } from '@/services/app-activity';
 
 const SEV_COLORS: Record<string, [number, number, number]> = {
   critical: [239, 68, 68],
@@ -16,6 +17,7 @@ export class GlobeHeatmap {
   private rafId: number | null = null;
   private enabled = false;
   private resizeObserver: ResizeObserver | null = null;
+  private unsubActivity: (() => void) | null = null;
 
   constructor(
  private viewer: Viewer,
@@ -38,9 +40,14 @@ export class GlobeHeatmap {
  this.canvas.height = this.container.clientHeight;
  });
  this.resizeObserver.observe(this.container);
+ this.unsubActivity = onActivityChange((active) => {
+ if (active && this.enabled) this.loop();
+ });
   }
 
   destroy(): void {
+ this.unsubActivity?.();
+ this.unsubActivity = null;
  if (this.rafId != null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
  this.resizeObserver?.disconnect();
  this.resizeObserver = null;
@@ -59,7 +66,7 @@ export class GlobeHeatmap {
   }
 
   private loop(): void {
- if (!this.enabled) return;
+ if (!this.enabled || !isAppActive()) return;
  this.rafId = requestAnimationFrame(() => { this.draw(); this.loop(); });
   }
 

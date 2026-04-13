@@ -5,6 +5,7 @@ import {
 } from 'cesium';
 import * as satellite from 'satellite.js';
 import { getApiBaseUrl } from '@/services/runtime';
+import { isAppActive, onActivityChange } from '@/services/app-activity';
 
 interface TleEntry { name: string; line1: string; line2: string }
 
@@ -26,6 +27,7 @@ export class GlobeSatellites {
   private rafId: number | null = null;
   private enabled = false;
   private destroyed = false;
+  private unsubActivity: (() => void) | null = null;
 
   constructor(private viewer: Viewer) {
  this.source = new CustomDataSource('satellites');
@@ -34,9 +36,14 @@ export class GlobeSatellites {
   async mount(): Promise<void> {
  await this.viewer.dataSources.add(this.source);
  await this.fetchTles();
+ this.unsubActivity = onActivityChange((active) => {
+ if (active && this.enabled && !this.destroyed) this.propagateLoop();
+ });
   }
 
   destroy(): void {
+ this.unsubActivity?.();
+ this.unsubActivity = null;
  this.destroyed = true;
  if (this.rafId != null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
  this.viewer.dataSources.remove(this.source, true);
@@ -85,7 +92,7 @@ export class GlobeSatellites {
   }
 
   private propagateLoop(): void {
- if (!this.enabled || this.destroyed) return;
+ if (!this.enabled || this.destroyed || !isAppActive()) return;
  this.rafId = requestAnimationFrame(() => {
  if (this.destroyed) return;
  this.propagate();

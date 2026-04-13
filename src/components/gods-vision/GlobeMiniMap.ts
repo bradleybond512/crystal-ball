@@ -1,10 +1,12 @@
 import { Math as CesiumMath, type Viewer } from 'cesium';
+import { isAppActive, onActivityChange } from '@/services/app-activity';
 
 export class GlobeMiniMap {
   private canvas: HTMLCanvasElement | null = null;
   private rafId: number | null = null;
   private img: HTMLImageElement | null = null;
   private destroyed = false;
+  private unsubActivity: (() => void) | null = null;
 
   constructor(private viewer: Viewer, private container: HTMLElement) {}
 
@@ -26,9 +28,14 @@ export class GlobeMiniMap {
  img.addEventListener('load', () => { this.img = img; });
 
  this.loop();
+ this.unsubActivity = onActivityChange((active) => {
+ if (active && !this.destroyed) this.loop();
+ });
   }
 
   destroy(): void {
+ this.unsubActivity?.();
+ this.unsubActivity = null;
  this.destroyed = true;
  if (this.rafId != null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
  this.canvas?.parentElement?.remove();
@@ -36,7 +43,7 @@ export class GlobeMiniMap {
   }
 
   private loop(): void {
- if (this.destroyed) return;
+ if (this.destroyed || !isAppActive()) return;
  this.rafId = requestAnimationFrame(() => {
  if (this.destroyed) return;
  this.draw();

@@ -1,6 +1,8 @@
 // Wikipedia REST API — no key, CORS-friendly, called directly from the browser.
 // https://en.wikipedia.org/api/rest_v1/page/summary/{title}
 
+import { LruCache } from '@/utils/lru-cache';
+
 export interface WikiSummary {
   title: string;
   displayTitle: string;
@@ -9,7 +11,7 @@ export interface WikiSummary {
   pageUrl: string;
 }
 
-const cache = new Map<string, { data: WikiSummary; ts: number }>();
+const cache = new LruCache<string, { data: WikiSummary; ts: number }>(200);
 const TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 export async function fetchWikiSummary(title: string): Promise<WikiSummary | null> {
@@ -24,12 +26,16 @@ export async function fetchWikiSummary(title: string): Promise<WikiSummary | nul
  { headers: { Accept: 'application/json' } },
  );
  if (!res.ok) return null;
- const d = await res.json();
+ const d = await res.json() as Record<string, unknown> & {
+   type?: string; title?: string; displaytitle?: string; extract?: string;
+   thumbnail?: { source: string; width: number; height: number };
+   content_urls?: { desktop?: { page?: string } };
+ };
  if (d.type === 'disambiguation') return null;
  const summary: WikiSummary = {
- title: d.title ?? title,
- displayTitle: d.displaytitle ?? d.title ?? title,
- extract: d.extract ?? '',
+ title: (d.title as string | undefined) ?? title,
+ displayTitle: (d.displaytitle as string | undefined) ?? (d.title as string | undefined) ?? title,
+ extract: (d.extract as string | undefined) ?? '',
  thumbnail: d.thumbnail ? {
  source: d.thumbnail.source,
  width: d.thumbnail.width,

@@ -6,6 +6,7 @@ import {
   type SearchGdeltDocumentsResponse,
 } from '@/generated/client/crystalball/intelligence/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
+import { LruCache } from '@/utils/lru-cache';
 
 export interface GdeltArticle {
   title: string;
@@ -130,7 +131,7 @@ const gdeltBreaker = createCircuitBreaker<SearchGdeltDocumentsResponse>({ name: 
 const emptyGdeltFallback: SearchGdeltDocumentsResponse = { articles: [], query: '', error: '' };
 
 const CACHE_TTL = 5 * 60 * 1000;
-const articleCache = new Map<string, { articles: GdeltArticle[]; timestamp: number }>();
+const articleCache = new LruCache<string, { articles: GdeltArticle[]; timestamp: number }>(100);
 
 /** Map proto GdeltArticle (all required strings) to service GdeltArticle (optional fields) */
 function toGdeltArticle(a: ProtoGdeltArticle): GdeltArticle {
@@ -168,11 +169,12 @@ export async function fetchGdeltArticles(
   }, emptyGdeltFallback);
 
   if (resp.error) {
+ // eslint-disable-next-line no-console
  console.warn(`[GDELT-Intel] RPC error: ${resp.error}`);
- return cached?.articles || [];
+ return cached?.articles ?? [];
   }
 
-  const articles: GdeltArticle[] = (resp.articles || []).map(toGdeltArticle);
+  const articles: GdeltArticle[] = (resp.articles ?? []).map(a => toGdeltArticle(a));
 
   articleCache.set(cacheKey, { articles, timestamp: Date.now() });
   return articles;
@@ -213,7 +215,7 @@ export function formatArticleDate(dateStr: string): string {
  const min = dateStr.slice(11, 13);
  const sec = dateStr.slice(13, 15);
  const date = new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`);
- if (isNaN(date.getTime())) return '';
+ if (Number.isNaN(date.getTime())) return '';
 
  const now = Date.now();
  const diff = now - date.getTime();
@@ -261,11 +263,12 @@ export async function fetchPositiveGdeltArticles(
   }, emptyGdeltFallback);
 
   if (resp.error) {
+ // eslint-disable-next-line no-console
  console.warn(`[GDELT-Intel] Positive RPC error: ${resp.error}`);
- return cached?.articles || [];
+ return cached?.articles ?? [];
   }
 
-  const articles: GdeltArticle[] = (resp.articles || []).map(toGdeltArticle);
+  const articles: GdeltArticle[] = (resp.articles ?? []).map(a => toGdeltArticle(a));
   articleCache.set(cacheKey, { articles, timestamp: Date.now() });
   return articles;
 }

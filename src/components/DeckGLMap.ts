@@ -4200,71 +4200,99 @@ export class DeckGLMap {
   private createControls(): void {
  const controls = document.createElement('div');
  controls.className = 'map-controls deckgl-controls';
- controls.innerHTML = `
- <div class="zoom-controls">
- <button class="map-btn zoom-in" title="${t('components.deckgl.zoomIn')}">+</button>
- <button class="map-btn zoom-out" title="${t('components.deckgl.zoomOut')}">-</button>
- <button class="map-btn zoom-reset" title="${t('components.deckgl.resetView')}">&#8962;</button>
- </div>
- <div class="view-selector">
- <select class="view-select">
- <option value="global">${t('components.deckgl.views.global')}</option>
- <option value="america">${t('components.deckgl.views.americas')}</option>
- <option value="mena">${t('components.deckgl.views.mena')}</option>
- <option value="eu">${t('components.deckgl.views.europe')}</option>
- <option value="asia">${t('components.deckgl.views.asia')}</option>
- <option value="latam">${t('components.deckgl.views.latam')}</option>
- <option value="africa">${t('components.deckgl.views.africa')}</option>
- <option value="oceania">${t('components.deckgl.views.oceania')}</option>
- </select>
- </div>
- `;
+
+ // Zoom controls
+ const zoomControls = document.createElement('div');
+ zoomControls.className = 'zoom-controls';
+
+ const zoomIn = document.createElement('button');
+ zoomIn.className = 'map-btn zoom-in';
+ zoomIn.title = t('components.deckgl.zoomIn');
+ zoomIn.textContent = '+';
+
+ const zoomOut = document.createElement('button');
+ zoomOut.className = 'map-btn zoom-out';
+ zoomOut.title = t('components.deckgl.zoomOut');
+ zoomOut.textContent = '-';
+
+ const zoomReset = document.createElement('button');
+ zoomReset.className = 'map-btn zoom-reset';
+ zoomReset.title = t('components.deckgl.resetView');
+ zoomReset.textContent = '\u2302';
+
+ zoomControls.append(zoomIn, zoomOut, zoomReset);
+ controls.append(zoomControls);
+
+ // View preset pill group
+ const viewPresets: { value: DeckMapView; label: string }[] = [
+ { value: 'global', label: t('components.deckgl.views.global') },
+ { value: 'america', label: t('components.deckgl.views.americas') },
+ { value: 'mena', label: t('components.deckgl.views.mena') },
+ { value: 'eu', label: t('components.deckgl.views.europe') },
+ { value: 'asia', label: t('components.deckgl.views.asia') },
+ { value: 'latam', label: t('components.deckgl.views.latam') },
+ { value: 'africa', label: t('components.deckgl.views.africa') },
+ { value: 'oceania', label: t('components.deckgl.views.oceania') },
+ ];
+
+ const pillGroup = document.createElement('div');
+ pillGroup.className = 'cb-pill-group deckgl-view-pills';
+
+ for (const preset of viewPresets) {
+ const btn = document.createElement('button');
+ btn.textContent = preset.label;
+ btn.dataset.view = preset.value;
+ if (preset.value === this.state.view) btn.classList.add('active');
+ btn.addEventListener('click', () => this.setView(preset.value));
+ pillGroup.append(btn);
+ }
+
+ controls.append(pillGroup);
 
  this.container.append(controls);
 
- // Bind events - use event delegation for reliability
+ // Bind zoom events
  controls.addEventListener('click', (e) => {
  const target = e.target as HTMLElement;
  if (target.classList.contains('zoom-in')) this.zoomIn();
  else if (target.classList.contains('zoom-out')) this.zoomOut();
  else if (target.classList.contains('zoom-reset')) this.resetView();
  });
-
- const viewSelect = controls.querySelector('.view-select') as HTMLSelectElement;
- viewSelect.value = this.state.view;
- viewSelect.addEventListener('change', () => {
- this.setView(viewSelect.value as DeckMapView);
- });
   }
 
   private createTimeSlider(): void {
  const slider = document.createElement('div');
  slider.className = 'time-slider deckgl-time-slider';
- slider.innerHTML = `
- <div class="time-options">
- <button class="time-btn ${this.state.timeRange === '1h' ? 'active' : ''}" data-range="1h">1h</button>
- <button class="time-btn ${this.state.timeRange === '6h' ? 'active' : ''}" data-range="6h">6h</button>
- <button class="time-btn ${this.state.timeRange === '24h' ? 'active' : ''}" data-range="24h">24h</button>
- <button class="time-btn ${this.state.timeRange === '48h' ? 'active' : ''}" data-range="48h">48h</button>
- <button class="time-btn ${this.state.timeRange === '7d' ? 'active' : ''}" data-range="7d">7d</button>
- <button class="time-btn ${this.state.timeRange === 'all' ? 'active' : ''}" data-range="all">${t('components.deckgl.timeAll')}</button>
- </div>
- `;
 
+ const timeRanges: { value: TimeRange; label: string }[] = [
+ { value: '1h', label: '1h' },
+ { value: '6h', label: '6h' },
+ { value: '24h', label: '24h' },
+ { value: '48h', label: '48h' },
+ { value: '7d', label: '7d' },
+ { value: 'all', label: t('components.deckgl.timeAll') },
+ ];
+
+ const pillGroup = document.createElement('div');
+ pillGroup.className = 'cb-pill-group deckgl-time-pills';
+
+ for (const range of timeRanges) {
+ const btn = document.createElement('button');
+ btn.textContent = range.label;
+ btn.dataset.range = range.value;
+ if (range.value === this.state.timeRange) btn.classList.add('active');
+ btn.addEventListener('click', () => this.setTimeRange(range.value));
+ pillGroup.append(btn);
+ }
+
+ slider.append(pillGroup);
  this.container.append(slider);
-
- slider.querySelectorAll('.time-btn').forEach(btn => {
- btn.addEventListener('click', () => {
- const range = (btn as HTMLElement).dataset.range as TimeRange;
- this.setTimeRange(range);
- });
- });
   }
 
   private updateTimeSliderButtons(): void {
  const slider = this.container.querySelector('.deckgl-time-slider');
  if (!slider) return;
- slider.querySelectorAll('.time-btn').forEach((btn) => {
+ slider.querySelectorAll('button[data-range]').forEach((btn) => {
  const range = (btn as HTMLElement).dataset.range as TimeRange | undefined;
  btn.classList.toggle('active', range === this.state.timeRange);
  });
@@ -4734,15 +4762,21 @@ export class DeckGLMap {
  this.state.view = view;
 
  if (this.maplibreMap) {
+ const bearing = (Math.random() * 30) - 15;
+ const isZoomIn = preset.zoom > (this.maplibreMap.getZoom() ?? 1.5);
  this.maplibreMap.flyTo({
  center: [preset.longitude, preset.latitude],
  zoom: preset.zoom,
- duration: 1000,
+ bearing,
+ pitch: isZoomIn ? 45 : 0,
+ duration: 1500,
  });
  }
 
- const viewSelect = this.container.querySelector('.view-select') as HTMLSelectElement;
- if (viewSelect) viewSelect.value = view;
+ // Update active state on pill buttons
+ this.container.querySelectorAll('.deckgl-view-pills button').forEach((btn) => {
+ btn.classList.toggle('active', (btn as HTMLElement).dataset.view === view);
+ });
 
  this.onStateChange?.(this.state);
   }

@@ -3,14 +3,14 @@ deps:
   - buf.build/bufbuild/protovalidate
 lint:
   use:
- - STANDARD
- - COMMENTS
+    - STANDARD
+    - COMMENTS
   enum_zero_value_suffix: _UNSPECIFIED
   service_suffix: Service
   ignore:
- - sebuf
+    - sebuf
 breaking:
   use:
- - FILE
- - PACKAGE
- - WIRE_JSON
+    - FILE
+    - PACKAGE
+    - WIRE_JSON

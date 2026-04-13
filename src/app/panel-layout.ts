@@ -240,6 +240,8 @@ import { isLowPowerMode, setLowPowerMode } from '@/services/low-power';
 import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import { initModeTransitionCards } from '@/services/mode-transition-card';
 import { initPanelCorrelation } from '@/services/panel-correlation';
+import { WelcomeFlow } from '@/components/WelcomeFlow';
+import { HINTS } from '@/components/ContextualHint';
 import { getPrimarySavedPlace, getSavedPlace } from '@/services/saved-places';
 import { SavedPlaceModal } from '@/components/SavedPlaceModal';
 import type { GeoHubActivity } from '@/services/geo-activity';
@@ -1558,6 +1560,18 @@ export class PanelLayoutManager implements AppModule {
 
  // Auto-mode-activation notifications deleted in mode collapse —
  // war/disaster modes no longer exist as triggerable states.
+
+ if (WelcomeFlow.shouldShow()) {
+   const flow = new WelcomeFlow({
+     onComplete: () => {
+       const alertPanel = document.querySelector('[data-panel="unified-alert-inbox"]');
+       if (alertPanel) {
+         setTimeout(() => HINTS.alertNavigation(alertPanel as HTMLElement), 1000);
+       }
+     },
+   });
+   flow.show();
+ }
   }
 
   /**

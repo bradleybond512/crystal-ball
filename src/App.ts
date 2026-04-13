@@ -25,6 +25,7 @@ import type { MacroSignalsPanel } from '@/components/MacroSignalsPanel';
 import type { StrategicPosturePanel } from '@/components/StrategicPosturePanel';
 import type { StrategicRiskPanel } from '@/components/StrategicRiskPanel';
 import { isDesktopRuntime } from '@/services/runtime';
+import { initAppActivity } from '@/services/app-activity';
 import { BETA_MODE } from '@/config/beta';
 import { trackEvent, trackDeeplinkOpened } from '@/services/analytics';
 import { preloadCountryGeometry, getCountryNameByCode } from '@/services/country-geometry';
@@ -433,6 +434,7 @@ export class App {
  });
 
  // Phase 5: Event listeners + URL sync
+ initAppActivity();
  this.eventHandlers.init();
  // Capture ?country= BEFORE URL sync overwrites it
  const initState = parseMapUrlState(window.location.search, this.state.mapLayers);

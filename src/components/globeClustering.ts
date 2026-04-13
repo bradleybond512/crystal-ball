@@ -1,4 +1,5 @@
 import { Color, type CustomDataSource, type Entity } from 'cesium';
+import { LruCache } from '@/utils/lru-cache';
 
 export interface ClusterOptions {
   pixelRange: number;
@@ -11,7 +12,7 @@ const DEFAULTS = {
   minimumClusterSize: 3,
 };
 
-const imageCache = new Map<string, string>();
+const imageCache = new LruCache<string, string>(300);
 
 function colorHex(c: Color): string {
   const r = Math.round(c.red * 255);

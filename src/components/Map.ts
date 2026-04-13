@@ -1,7 +1,7 @@
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import { escapeHtml } from '@/utils/sanitize';
-import { getCSSColor } from '@/utils';
+import { getCSSColor, rafSchedule } from '@/utils';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 import type { Feature, Geometry } from 'geojson';
 import type { MapLayers, Hotspot, NewsItem, InternetOutage, RelatedAsset, AssetType, AisDisruptionEvent, AisDensityZone, CableAdvisory, RepairShip, SocialUnrestEvent, MilitaryFlight, MilitaryVessel, MilitaryFlightCluster, MilitaryVesselCluster, NaturalEvent, CyberThreat, CableHealthRecord } from '@/types';
@@ -700,7 +700,7 @@ export class MapComponent {
  }
  });
 
- document.addEventListener('mousemove', (e) => {
+ const onPanMouseMove = rafSchedule((e: MouseEvent) => {
  if (!isDragging) return;
 
  const dx = e.clientX - lastPos.x;
@@ -713,6 +713,7 @@ export class MapComponent {
  lastPos = { x: e.clientX, y: e.clientY };
  this.applyTransform();
  });
+ document.addEventListener('mousemove', onPanMouseMove);
 
  document.addEventListener('mouseup', () => {
  if (isDragging) {

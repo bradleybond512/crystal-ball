@@ -1,4 +1,5 @@
 import type { Viewer } from 'cesium';
+import { isAppActive, onActivityChange } from '@/services/app-activity';
 import { FreeFlyCamera } from './FreeFlyCamera';
 import { CinematicPath } from './CinematicPath';
 import { ChaseCamera } from './ChaseCamera';
@@ -32,6 +33,7 @@ export class FlyModeController {
   private rafId: number | null = null;
   private lastFrameMs = 0;
   private onStatusChange: ((status: FlyModeStatus) => void) | null = null;
+  private unsubActivity: (() => void) | null = null;
 
   constructor(
  viewer: Viewer,
@@ -120,14 +122,21 @@ export class FlyModeController {
 
   private startLoop(): void {
  const tick = () => {
- if (!this._active) return;
+ if (!this._active || !isAppActive()) return;
  this.onFrame();
  this.rafId = requestAnimationFrame(tick);
  };
+ this.unsubActivity = onActivityChange((active) => {
+ if (active && this._active) {
+ this.rafId = requestAnimationFrame(tick);
+ }
+ });
  this.rafId = requestAnimationFrame(tick);
   }
 
   private stopLoop(): void {
+ this.unsubActivity?.();
+ this.unsubActivity = null;
  if (this.rafId !== null) {
  cancelAnimationFrame(this.rafId);
  this.rafId = null;

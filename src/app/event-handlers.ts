@@ -14,6 +14,7 @@ import {
 import {
   buildMapUrl,
   debounce,
+  rafSchedule,
   saveToStorage,
   ExportPanel,
   getCurrentTheme,
@@ -45,6 +46,7 @@ import { detectPlatform, allButtons, buttonsForPlatform } from '@/components/Dow
 import type { Platform } from '@/components/DownloadBanner';
 import { invokeTauri } from '@/services/tauri-bridge';
 import { toggleGhostMode, getMode, setMode } from '@/services/mode-manager';
+import { isAppActive, onActivityChange } from '@/services/app-activity';
 import { playUiClick } from '@/services/sound-manager';
 import { dataFreshness } from '@/services/data-freshness';
 import { mlWorker } from '@/services/ml-worker';
@@ -76,6 +78,7 @@ export class EventHandlerManager implements AppModule {
   private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private snapshotIntervalId: ReturnType<typeof setInterval> | null = null;
   private clockIntervalId: ReturnType<typeof setInterval> | null = null;
+  private _unsubActivity: (() => void) | null = null;
   private readonly IDLE_PAUSE_MS = 2 * 60 * 1000;
   private debouncedUrlSync = debounce(() => {
  const shareUrl = this.getShareUrl();
@@ -178,6 +181,8 @@ export class EventHandlerManager implements AppModule {
  document.removeEventListener('mouseup', this._mapResizeMouseUp);
  this._mapResizeMouseUp = null;
  }
+ this._unsubActivity?.();
+ this._unsubActivity = null;
  this.ctx.tvMode?.destroy();
  this.ctx.tvMode = null;
  this.ctx.unifiedSettings?.destroy();
@@ -278,6 +283,17 @@ export class EventHandlerManager implements AppModule {
  }
  };
  document.addEventListener('visibilitychange', this.boundVisibilityHandler);
+
+ this._unsubActivity = onActivityChange((active) => {
+ document.body.classList.toggle('animations-paused', !active);
+ if (!active) {
+ this.callbacks.setHiddenSince(Date.now());
+ mlWorker.unloadOptionalModels();
+ } else {
+ this.resetIdleTimer();
+ this.callbacks.flushStaleRefreshes();
+ }
+ });
 
  window.addEventListener('focal-points-ready', () => {
  (this.ctx.panels.cii as CIIPanel)?.refresh(true);
@@ -673,6 +689,7 @@ export class EventHandlerManager implements AppModule {
  const el = document.getElementById('headerClock');
  if (!el) return;
  const tick = () => {
+ if (!isAppActive()) return;
  el.textContent = new Date().toUTCString().replace('GMT', 'UTC');
  };
  tick();
@@ -958,12 +975,12 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  });
 
- this._mapResizeMouseMove = (e: MouseEvent) => {
+ this._mapResizeMouseMove = rafSchedule((e: MouseEvent) => {
  if (!isResizing) return;
  const deltaY = e.clientY - startY;
  const newHeight = Math.max(getMinHeight(), Math.min(startHeight + deltaY, getMaxHeight()));
  mapSection.style.height = `${newHeight}px`;
- };
+ }) as (e: MouseEvent) => void;
  this._mapResizeMouseUp = endResize;
 
  document.addEventListener('mousemove', this._mapResizeMouseMove);

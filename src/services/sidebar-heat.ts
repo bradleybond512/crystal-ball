@@ -9,6 +9,7 @@
 
 import { unifiedAlertStore } from './unified-alerts';
 import { panelHeatMap, panelForAlert, scoreAlert } from './alert-routing';
+import { isAppActive } from '@/services/app-activity';
 
 const HEAT_BADGE_CLASS = 'mac-sidebar-heat-badge';
 
@@ -81,6 +82,6 @@ export function startSidebarHeat(): void {
   started = true;
   unifiedAlertStore.subscribe(applyHeat);
   // Periodic refresh so recency decay updates the heat even without ingest events.
-  window.setInterval(applyHeat, 30_000);
+  window.setInterval(() => { if (isAppActive()) applyHeat(); }, 30_000);
   applyHeat();
 }

@@ -5,6 +5,7 @@ import {
   type Viewer,
 } from 'cesium';
 import type { GlobeDataManager } from '@/components/GlobeDataManager';
+import { isAppActive, onActivityChange } from '@/services/app-activity';
 
 const PULSE_DURATION_MS = 3000;
 const PULSE_MAX_RADIUS_M = 80_000;
@@ -16,6 +17,7 @@ export class GlobePulse {
   private pulses: PulseEntry[] = [];
   private rafId: number | null = null;
   private destroyed = false;
+  private unsubActivity: (() => void) | null = null;
 
   constructor(private viewer: Viewer, private dataManager: GlobeDataManager) {
  this.source = new CustomDataSource('pulses');
@@ -24,15 +26,21 @@ export class GlobePulse {
   mount(): void {
  this.viewer.dataSources.add(this.source).catch(() => { /* intentional */ });
  this.tick();
+ this.unsubActivity = onActivityChange((active) => {
+ if (active && !this.destroyed) this.tick();
+ });
   }
 
   destroy(): void {
+ this.unsubActivity?.();
+ this.unsubActivity = null;
  this.destroyed = true;
  if (this.rafId != null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
  this.viewer.dataSources.remove(this.source, true);
   }
 
   private tick(): void {
+ if (!isAppActive()) return;
  this.rafId = requestAnimationFrame(() => {
  if (this.destroyed) return;
  this.refreshPulses();

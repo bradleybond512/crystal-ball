@@ -221,7 +221,7 @@ import { UnifiedAlertInboxPanel } from '@/components/UnifiedAlertInboxPanel';
 import { AlertRulesPanel } from '@/components/AlertRulesPanel';
 import { StalenessBanner } from '@/components/StalenessBanner';
 import { focusInvestmentOnMap } from '@/services/investments-focus';
-import { debounce, saveToStorage } from '@/utils';
+import { debounce, rafSchedule, saveToStorage } from '@/utils';
 import { escapeHtml } from '@/utils/sanitize';
 import {
   FEEDS,
@@ -1831,13 +1831,14 @@ export class PanelLayoutManager implements AppModule {
  dragStarted = false;
  };
 
+ const onMouseMoveRaf = rafSchedule(onMouseMove);
  el.addEventListener('mousedown', onMouseDown);
- document.addEventListener('mousemove', onMouseMove);
+ document.addEventListener('mousemove', onMouseMoveRaf);
  document.addEventListener('mouseup', onMouseUp);
 
  this.panelDragCleanupHandlers.push(() => {
  el.removeEventListener('mousedown', onMouseDown);
- document.removeEventListener('mousemove', onMouseMove);
+ document.removeEventListener('mousemove', onMouseMoveRaf);
  document.removeEventListener('mouseup', onMouseUp);
  if (rafId) {
  cancelAnimationFrame(rafId);

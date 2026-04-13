@@ -25,6 +25,7 @@ import type { MacroSignalsPanel } from '@/components/MacroSignalsPanel';
 import type { StrategicPosturePanel } from '@/components/StrategicPosturePanel';
 import type { StrategicRiskPanel } from '@/components/StrategicRiskPanel';
 import { isDesktopRuntime } from '@/services/runtime';
+import { initAppActivity } from '@/services/app-activity';
 import { BETA_MODE } from '@/config/beta';
 import { trackEvent, trackDeeplinkOpened } from '@/services/analytics';
 import { preloadCountryGeometry, getCountryNameByCode } from '@/services/country-geometry';
@@ -433,6 +434,7 @@ export class App {
  });
 
  // Phase 5: Event listeners + URL sync
+ initAppActivity();
  this.eventHandlers.init();
  // Capture ?country= BEFORE URL sync overwrites it
  const initState = parseMapUrlState(window.location.search, this.state.mapLayers);
@@ -494,7 +496,12 @@ export class App {
   }
 
   async toggleGodsVision(): Promise<void> {
- if (!this.godsVisionView) {
+ if (this.godsVisionView) {
+ // Full teardown — frees WebGL context, GPU textures, all timers
+ this.godsVisionView.destroy();
+ this.godsVisionView = null;
+ return;
+ }
  // Cesium reads CESIUM_BASE_URL at module init — must be set before dynamic import
  (window as unknown as Record<string, unknown>).CESIUM_BASE_URL = '/cesium';
  try {
@@ -502,13 +509,10 @@ export class App {
  const ionToken = getRuntimeConfigSnapshot().secrets.CESIUM_ION_TOKEN?.value;
  this.godsVisionView = new GodsVisionView(ionToken);
  } catch (error) {
- // Surface the real failure to desktop.log instead of letting it bubble
- // up to vite:preloadError → chunkReloadGuard → page reload → vault loop.
  console.error('[GodsVision] dynamic import failed:', error, (error as Error)?.stack);
  return;
  }
- }
- this.godsVisionView.toggle();
+ void this.godsVisionView.enter();
   }
 
   private handleDeepLinks(): void {

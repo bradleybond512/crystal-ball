@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isAppActive, onActivityChange } from '@/services/app-activity';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -43,6 +44,10 @@ export function shouldEnableBiometricGate3D(capability: BiometricGate3DCapabilit
   return true;
 }
 
+function handleContextLost(event: Event): void {
+  event.preventDefault();
+}
+
 function clamp01(value: number): number {
   if (value < 0) return 0;
   if (value > 1) return 1;
@@ -74,8 +79,11 @@ function buildStarfield(starCount: number): THREE.Points {
   const positions = new Float32Array(starCount * 3);
   for (let i = 0; i < starCount; i += 1) {
  const index = i * 3;
+ // eslint-disable-next-line sonarjs/pseudo-random
  positions[index] = (Math.random() - 0.5) * 7;
+ // eslint-disable-next-line sonarjs/pseudo-random
  positions[index + 1] = (Math.random() - 0.5) * 4 + 0.6;
+ // eslint-disable-next-line sonarjs/pseudo-random
  positions[index + 2] = -Math.random() * 24 - 2;
   }
 
@@ -93,7 +101,7 @@ function buildStarfield(starCount: number): THREE.Points {
   return new THREE.Points(geometry, material);
 }
 
-export async function mountBiometricGate3D(stage: HTMLElement): Promise<BiometricGate3DController> {
+export function mountBiometricGate3D(stage: HTMLElement): BiometricGate3DController {
   const host = document.createElement('div');
   host.id = 'crystalball-biometric-gate-3d';
   Object.assign(host.style, {
@@ -291,17 +299,15 @@ export async function mountBiometricGate3D(stage: HTMLElement): Promise<Biometri
   let rafId = 0;
   let destroyed = false;
   let lastFrameMs = performance.now();
+  let unsubActivity: (() => void) | null = null;
 
-  const onContextLost = (event: Event) => {
- event.preventDefault();
-  };
-  renderer.domElement.addEventListener('webglcontextlost', onContextLost, false);
+  renderer.domElement.addEventListener('webglcontextlost', handleContextLost, false);
 
   const resizeObserver = new ResizeObserver(() => resize());
   resizeObserver.observe(stage);
 
   const renderFrame = (nowMs: number) => {
- if (destroyed) return;
+ if (destroyed || !isAppActive()) return;
 
  const deltaSec = Math.min(0.05, (nowMs - lastFrameMs) / 1000);
  lastFrameMs = nowMs;
@@ -355,6 +361,12 @@ export async function mountBiometricGate3D(stage: HTMLElement): Promise<Biometri
   };
 
   rafId = window.requestAnimationFrame(renderFrame);
+  unsubActivity = onActivityChange((active) => {
+ if (active && !destroyed) {
+ lastFrameMs = performance.now();
+ rafId = window.requestAnimationFrame(renderFrame);
+ }
+  });
 
   return {
  setAuthenticating(active: boolean) {
@@ -370,10 +382,12 @@ export async function mountBiometricGate3D(stage: HTMLElement): Promise<Biometri
  destroy() {
  if (destroyed) return;
  destroyed = true;
+ unsubActivity?.();
+ unsubActivity = null;
 
  window.cancelAnimationFrame(rafId);
  resizeObserver.disconnect();
- renderer.domElement.removeEventListener('webglcontextlost', onContextLost, false);
+ renderer.domElement.removeEventListener('webglcontextlost', handleContextLost, false);
 
  disposeSceneResources(scene);
  envRenderTarget.dispose();

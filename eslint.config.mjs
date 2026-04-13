@@ -129,6 +129,7 @@ export default tseslint.config(
  'src/app/panel-layout.ts',
  'src/app/event-handlers.ts',
  'src/config/panels.ts',
+ 'src/components/Map.ts',
  'src/components/DeckGLMap.ts',
  'src-tauri/sidecar/local-api-server.mjs',
  'src/services/runtime.ts',

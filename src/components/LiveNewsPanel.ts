@@ -2,7 +2,7 @@ import { Panel } from './Panel';
 import { fetchLiveVideoInfo } from '@/services/live-news';
 import { isDesktopRuntime, getRemoteApiBaseUrl, getApiBaseUrl, getLocalApiPort } from '@/services/runtime';
 import { t } from '../services/i18n';
-import { loadFromStorage, saveToStorage } from '@/utils';
+import { loadFromStorage, rafSchedule, saveToStorage } from '@/utils';
 import { STORAGE_KEYS, SITE_VARIANT } from '@/config';
 import { getStreamQuality } from '@/services/ai-flow-settings';
 
@@ -680,7 +680,7 @@ export class LiveNewsPanel extends Panel {
  e.preventDefault();
  });
 
- document.addEventListener('mousemove', (e) => {
+ const onChannelDragMove = rafSchedule((e: MouseEvent) => {
  if (!dragging || !this.channelSwitcher) return;
  if (!dragStarted) {
  if (Math.abs(e.clientX - startX) < THRESHOLD) return;
@@ -699,6 +699,7 @@ export class LiveNewsPanel extends Panel {
  target.parentElement?.insertBefore(dragging, target);
  }
  });
+ document.addEventListener('mousemove', onChannelDragMove);
 
  document.addEventListener('mouseup', () => {
  if (!dragging) return;

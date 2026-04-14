@@ -1,3 +1,4 @@
+/* eslint-disable no-console, sonarjs/pseudo-random, @typescript-eslint/no-empty-function */
 import type { AppContext, AppModule } from '@/app/app-context';
 import { getGhostRefreshMultiplier } from '@/services/mode-manager';
 
@@ -83,7 +84,7 @@ export class RefreshScheduler implements AppModule {
  currentMultiplier = changed === false ? Math.min(currentMultiplier * 2, MAX_BACKOFF_MULTIPLIER) : 1;
  } catch (error) {
  console.error(`[App] Refresh ${name} failed:`, error);
- currentMultiplier = 1;
+ currentMultiplier = Math.min(currentMultiplier * 2, MAX_BACKOFF_MULTIPLIER);
  } finally {
  this.ctx.inFlight.delete(name);
  scheduleNext(computeDelay(intervalMs * currentMultiplier, false));
@@ -104,7 +105,7 @@ export class RefreshScheduler implements AppModule {
  const pending = this.refreshTimeoutIds.get(name);
  if (pending) clearTimeout(pending);
  const delay = stagger;
- stagger += 150;
+ stagger += 500;
  this.refreshTimeoutIds.set(name, setTimeout(() => void run(), delay));
  }
   }

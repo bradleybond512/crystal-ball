@@ -1,4 +1,5 @@
-import { animateIn, animateOut, prefersReducedMotion } from '@/services/motion';
+import { animateIn, prefersReducedMotion } from '@/services/motion';
+import { hasTauriInvokeBridge, invokeTauri } from '@/services/tauri-bridge';
 
 const ONBOARDING_KEY = 'cb:onboarding-complete';
 
@@ -91,14 +92,12 @@ export class WelcomeFlow {
   }
 
   private close(): void {
-    void animateOut(this.modal, 'scale-down').then(() => {
-      this.backdrop.classList.add('closing');
-      this.backdrop.addEventListener('animationend', () => {
-        this.backdrop.remove();
-      }, { once: true });
-      // Fallback if no animation
-      setTimeout(() => this.backdrop.remove(), 400);
-    });
+    this.modal.classList.add('closing');
+    this.backdrop.classList.add('closing');
+
+    this.backdrop.addEventListener('animationend', () => this.backdrop.remove(), { once: true });
+    // Fallback if reduced-motion or animation doesn't fire
+    setTimeout(() => this.backdrop.remove(), 500);
   }
 
   private renderDots(): void {
@@ -174,13 +173,27 @@ export class WelcomeFlow {
   }
 
   private requestLocation(btn: HTMLButtonElement): void {
+    const originalText = btn.textContent;
+    btn.textContent = 'Locating...';
+    btn.disabled = true;
+
+    if (hasTauriInvokeBridge()) {
+      void invokeTauri<[number, number]>('get_native_location')
+        .then(([lat, lon]) => {
+          this.options.onLocationSet?.(lat, lon);
+          this.advance();
+        })
+        .catch(() => {
+          btn.textContent = originalText;
+          btn.disabled = false;
+        });
+      return;
+    }
+
     if (!navigator.geolocation) {
       this.advance();
       return;
     }
-    const originalText = btn.textContent;
-    btn.textContent = 'Locating...';
-    btn.disabled = true;
     // eslint-disable-next-line sonarjs/no-intrusive-permissions
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -361,7 +374,10 @@ export class WelcomeFlow {
     this.stepEl.style.transform = 'translateX(-40px)';
     this.stepEl.style.opacity = '0';
 
-    this.stepEl.addEventListener('transitionend', () => {
+    let advanced = false;
+    const doAdvance = () => {
+      if (advanced) return;
+      advanced = true;
       this.step++;
       this.renderDots();
       this.renderStep();
@@ -370,7 +386,11 @@ export class WelcomeFlow {
         this.stepEl.style.transform = 'translateX(0)';
         this.stepEl.style.opacity = '1';
       });
-    }, { once: true });
+    };
+
+    this.stepEl.addEventListener('transitionend', doAdvance, { once: true });
+    // Fallback if transitionend doesn't fire
+    setTimeout(doAdvance, 400);
   }
 
   private complete(): void {

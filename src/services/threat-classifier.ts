@@ -1,3 +1,4 @@
+/* eslint-disable no-console, sonarjs/pseudo-random, sonarjs/cognitive-complexity, sonarjs/regex-complexity, @typescript-eslint/no-floating-promises */
 export type ThreatLevel = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 export type EventCategory =
@@ -424,6 +425,7 @@ const MIN_GAP_MS = 2000;
 const MAX_RETRIES = 2;
 const MAX_QUEUE_LENGTH = 100;
 let batchPaused = false;
+let consecutiveServerErrors = 0;
 let batchInFlight = false;
 let batchTimer: ReturnType<typeof setTimeout> | null = null;
 let lastRequestAt = 0;
@@ -461,11 +463,14 @@ function flushBatch(): void {
  title: job.title, description: '', source: '', country: '',
  });
  job.resolve(toThreat(resp));
+ consecutiveServerErrors = 0;
  } catch (error) {
  if (error instanceof ApiError && (error.statusCode === 429 || error.statusCode >= 500)) {
  batchPaused = true;
- const delay = error.statusCode === 429 ? 60_000 : 30_000;
- console.warn(`[Classify] ${error.statusCode} — pausing AI classification for ${delay / 1000}s`);
+ consecutiveServerErrors++;
+ const baseDelay = error.statusCode === 429 ? 60_000 : 30_000;
+ const delay = Math.min(baseDelay * Math.pow(2, consecutiveServerErrors - 1), 600_000);
+ console.warn(`[Classify] ${error.statusCode} — pausing AI classification for ${delay / 1000}s (attempt ${consecutiveServerErrors})`);
  const remaining = batch.slice(i + 1);
  // Failed job: increment attempts, requeue if under limit
  if ((job.attempts ?? 0) < MAX_RETRIES) {

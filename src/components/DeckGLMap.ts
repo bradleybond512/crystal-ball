@@ -324,20 +324,69 @@ let _cachedTheme: string | null = null;
 let COLORS = getOverlayColors();
 
 // SVG icons as data URLs for different marker shapes
-const MARKER_ICONS = {
-  // Square - for datacenters
-  square: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="2" y="2" width="28" height="28" rx="3" fill="white"/></svg>`),
-  // Diamond - for hotspots
-  diamond: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><polygon points="16,2 30,16 16,30 2,16" fill="white"/></svg>`),
-  // Triangle up - for military bases
-  triangleUp: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><polygon points="16,2 30,28 2,28" fill="white"/></svg>`),
-  // Hexagon - for nuclear
-  hexagon: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="white"/></svg>`),
-  // Circle - fallback
-  circle: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="white"/></svg>`),
-  // Star - for special markers
-  star: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><polygon points="16,2 20,12 30,12 22,19 25,30 16,23 7,30 10,19 2,12 12,12" fill="white"/></svg>`),
+// ── Canvas-drawn icon atlas (SVG data URIs fail in WKWebView WebGL) ──
+// All icons are drawn onto a single 32-tall sprite sheet using Canvas 2D API.
+// Each icon occupies a 32x32 cell. `mask: true` lets DeckGL tint via getColor.
+const ICON_SIZE = 32;
+
+type IconDrawFn = (ctx: CanvasRenderingContext2D) => void;
+
+const ICON_DRAW_FNS: Record<string, IconDrawFn> = {
+  triangleUp: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.lineTo(30, 28); ctx.lineTo(2, 28); ctx.closePath(); ctx.fill(); },
+  hexagon: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.lineTo(28, 9); ctx.lineTo(28, 23); ctx.lineTo(16, 30); ctx.lineTo(4, 23); ctx.lineTo(4, 9); ctx.closePath(); ctx.fill(); },
+  square: (ctx) => { ctx.beginPath(); ctx.roundRect(2, 2, 28, 28, 3); ctx.fill(); },
+  circle: (ctx) => { ctx.beginPath(); ctx.arc(16, 16, 14, 0, Math.PI * 2); ctx.fill(); },
+  diamond: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.lineTo(30, 16); ctx.lineTo(16, 30); ctx.lineTo(2, 16); ctx.closePath(); ctx.fill(); },
+  star: (ctx) => { ctx.beginPath(); const pts = [[16,2],[20,12],[30,12],[22,19],[25,30],[16,23],[7,30],[10,19],[2,12],[12,12]]; ctx.moveTo(pts[0]![0]!, pts[0]![1]!); for (let i = 1; i < pts.length; i++) { ctx.lineTo(pts[i]![0]!, pts[i]![1]!); } ctx.closePath(); ctx.fill(); },
+  airplane: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 1); ctx.lineTo(14, 10); ctx.lineTo(4, 18); ctx.lineTo(4, 20); ctx.lineTo(14, 17); ctx.lineTo(14, 25); ctx.lineTo(10, 28); ctx.lineTo(10, 30); ctx.lineTo(16, 28); ctx.lineTo(22, 30); ctx.lineTo(22, 28); ctx.lineTo(18, 25); ctx.lineTo(18, 17); ctx.lineTo(28, 20); ctx.lineTo(28, 18); ctx.lineTo(18, 10); ctx.closePath(); ctx.fill(); },
+  ship: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 3); ctx.lineTo(20, 10); ctx.lineTo(21, 24); ctx.lineTo(19, 29); ctx.lineTo(13, 29); ctx.lineTo(11, 24); ctx.lineTo(12, 10); ctx.closePath(); ctx.fill(); },
+  satellite: (ctx) => { ctx.beginPath(); ctx.roundRect(13, 8, 6, 16, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(2, 12, 10, 8, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(20, 12, 10, 8, 1); ctx.fill(); },
+  earthquake: (ctx) => { ctx.beginPath(); ctx.moveTo(4, 16); ctx.lineTo(8, 8); ctx.lineTo(12, 22); ctx.lineTo(16, 6); ctx.lineTo(20, 26); ctx.lineTo(24, 10); ctx.lineTo(28, 16); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); },
+  fire: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.bezierCurveTo(16, 2, 24, 12, 24, 20); ctx.bezierCurveTo(24, 24.4, 20.4, 28, 16, 28); ctx.bezierCurveTo(11.6, 28, 8, 24.4, 8, 20); ctx.bezierCurveTo(8, 12, 16, 2, 16, 2); ctx.fill(); },
+  lightning: (ctx) => { ctx.beginPath(); ctx.moveTo(18, 2); ctx.lineTo(10, 18); ctx.lineTo(15, 18); ctx.lineTo(14, 30); ctx.lineTo(22, 14); ctx.lineTo(17, 14); ctx.closePath(); ctx.fill(); },
+  rocket: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.bezierCurveTo(16, 2, 22, 8, 22, 18); ctx.lineTo(25, 22); ctx.lineTo(25, 25); ctx.lineTo(20, 22); ctx.lineTo(20, 26); ctx.lineTo(18, 28); ctx.lineTo(16, 26); ctx.lineTo(14, 28); ctx.lineTo(12, 26); ctx.lineTo(12, 22); ctx.lineTo(7, 25); ctx.lineTo(7, 22); ctx.lineTo(10, 18); ctx.bezierCurveTo(10, 8, 16, 2, 16, 2); ctx.fill(); ctx.beginPath(); ctx.arc(16, 15, 3, 0, Math.PI * 2); ctx.globalCompositeOperation = 'destination-out'; ctx.fill(); ctx.globalCompositeOperation = 'source-over'; },
+  anchor: (ctx) => { ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(16, 8, 3, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(16, 11); ctx.lineTo(16, 27); ctx.stroke(); ctx.beginPath(); ctx.moveTo(11, 17); ctx.lineTo(21, 17); ctx.stroke(); ctx.beginPath(); ctx.moveTo(10, 22); ctx.quadraticCurveTo(10, 29, 16, 29); ctx.stroke(); ctx.beginPath(); ctx.moveTo(22, 22); ctx.quadraticCurveTo(22, 29, 16, 29); ctx.stroke(); },
+  crosshair: (ctx) => { ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(16, 16, 8, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(16, 16, 3, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.moveTo(16, 4); ctx.lineTo(16, 8); ctx.moveTo(16, 24); ctx.lineTo(16, 28); ctx.moveTo(4, 16); ctx.lineTo(8, 16); ctx.moveTo(24, 16); ctx.lineTo(28, 16); ctx.stroke(); },
+  biohazard: (ctx) => { ctx.beginPath(); ctx.arc(16, 16, 3, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(16, 10, 8, Math.PI * 0.7, Math.PI * 1.1); ctx.stroke(); ctx.beginPath(); ctx.arc(22, 20, 8, Math.PI * 1.2, Math.PI * 1.7); ctx.stroke(); ctx.beginPath(); ctx.arc(10, 20, 8, -Math.PI * 0.2, Math.PI * 0.3); ctx.stroke(); },
+  shield: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 3); ctx.lineTo(4, 8); ctx.lineTo(4, 16); ctx.quadraticCurveTo(4, 26, 16, 30); ctx.quadraticCurveTo(28, 26, 28, 16); ctx.lineTo(28, 8); ctx.closePath(); ctx.fill(); },
+  cloud: (ctx) => { ctx.beginPath(); ctx.arc(12, 16, 6, 0, Math.PI * 2); ctx.arc(20, 15, 7, 0, Math.PI * 2); ctx.arc(8, 19, 4, 0, Math.PI * 2); ctx.arc(24, 18, 4, 0, Math.PI * 2); ctx.fill(); ctx.fillRect(6, 16, 20, 8); ctx.beginPath(); ctx.fillRect(15, 11, 2, 6); ctx.fill(); ctx.beginPath(); ctx.arc(16, 10, 1, 0, Math.PI * 2); ctx.fill(); },
+  turbine: (ctx) => { ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(16, 13); ctx.lineTo(16, 28); ctx.moveTo(12, 28); ctx.lineTo(20, 28); ctx.stroke(); ctx.beginPath(); ctx.arc(16, 10, 3, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(16, 10); ctx.lineTo(16, 2); ctx.moveTo(16, 10); ctx.lineTo(23, 16); ctx.moveTo(16, 10); ctx.lineTo(9, 16); ctx.stroke(); },
+  chart: (ctx) => { ctx.beginPath(); ctx.roundRect(5, 18, 4, 10, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(11, 12, 4, 16, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(17, 6, 4, 22, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(23, 14, 4, 14, 1); ctx.fill(); },
+  bank: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 3); ctx.lineTo(28, 10); ctx.lineTo(28, 12); ctx.lineTo(4, 12); ctx.lineTo(4, 10); ctx.closePath(); ctx.fill(); ctx.fillRect(6, 13, 3, 12); ctx.fillRect(11, 13, 3, 12); ctx.fillRect(18, 13, 3, 12); ctx.fillRect(23, 13, 3, 12); ctx.beginPath(); ctx.roundRect(4, 26, 24, 3, 1); ctx.fill(); },
 };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _iconAtlas: any = null;
+let _iconMapping: Record<string, { x: number; y: number; width: number; height: number; mask: boolean }> | null = null;
+
+// DeckGL accepts HTMLCanvasElement at runtime but types only allow string | Texture
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getIconAtlas(): any {
+  if (_iconAtlas) return _iconAtlas;
+  const names = Object.keys(ICON_DRAW_FNS);
+  const canvas = document.createElement('canvas');
+  canvas.width = names.length * ICON_SIZE;
+  canvas.height = ICON_SIZE;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = 'white';
+  ctx.strokeStyle = 'white';
+  const mapping: typeof _iconMapping = {};
+  for (const [i, name] of names.entries()) {
+    ctx.save();
+    ctx.translate(i * ICON_SIZE, 0);
+    ICON_DRAW_FNS[name!]!(ctx);
+    ctx.restore();
+    mapping[name!] = { x: i * ICON_SIZE, y: 0, width: ICON_SIZE, height: ICON_SIZE, mask: true };
+  }
+  _iconAtlas = canvas;
+  _iconMapping = mapping;
+  return canvas;
+}
+
+function getIconMapping(): Record<string, { x: number; y: number; width: number; height: number; mask: boolean }> {
+  if (!_iconMapping) getIconAtlas();
+  return _iconMapping!;
+}
 
 // Altitude-based color gradient matching Wingbits' color scheme.
 // Transitions cyan (sea level) → yellow-green → orange → red (cruise altitude).
@@ -372,70 +421,6 @@ function altitudeToColor(altFt: number): [number, number, number] {
   return [last.r, last.g, last.b]; // unreachable: exhaustive bracket search above satisfies TS
 }
 
-const BASES_ICON_MAPPING = { triangleUp: { x: 0, y: 0, width: 32, height: 32, mask: true } };
-const NUCLEAR_ICON_MAPPING = { hexagon: { x: 0, y: 0, width: 32, height: 32, mask: true } };
-const DATACENTER_ICON_MAPPING = { square: { x: 0, y: 0, width: 32, height: 32, mask: true } };
-
-// ── Realistic map icons ──
-const svgIcon = (path: string) => 'data:image/svg+xml;base64,' + btoa(
-  `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">${path}</svg>`);
-const iconMap = (name: string) => ({ [name]: { x: 0, y: 0, width: 32, height: 32, mask: true } });
-
-// Ship (top-down hull with bow)
-const SHIP_ICON = svgIcon(`<path d="M16 3 L20 10 L21 24 L19 29 L13 29 L11 24 L12 10 Z" fill="white"/>`);
-const SHIP_ICON_MAPPING = iconMap('ship');
-
-// Satellite (body + solar panels)
-const SATELLITE_ICON = svgIcon(`<rect x="13" y="8" width="6" height="16" rx="1" fill="white"/><rect x="2" y="12" width="10" height="8" rx="1" fill="white"/><rect x="20" y="12" width="10" height="8" rx="1" fill="white"/>`);
-const SATELLITE_ICON_MAPPING = iconMap('satellite');
-
-// Earthquake (seismic wave zigzag)
-const EARTHQUAKE_ICON = svgIcon(`<path d="M4 16 L8 8 L12 22 L16 6 L20 26 L24 10 L28 16" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
-const EARTHQUAKE_ICON_MAPPING = iconMap('earthquake');
-
-// Fire (flame)
-const FIRE_ICON = svgIcon(`<path d="M16 2 C16 2 24 12 24 20 C24 24.4 20.4 28 16 28 C11.6 28 8 24.4 8 20 C8 12 16 2 16 2 Z M16 24 C18.2 24 20 22.2 20 20 C20 17 16 12 16 12 C16 12 12 17 12 20 C12 22.2 13.8 24 16 24 Z" fill="white"/>`);
-const FIRE_ICON_MAPPING = iconMap('fire');
-
-// Lightning bolt
-const LIGHTNING_ICON = svgIcon(`<path d="M18 2 L10 18 L15 18 L14 30 L22 14 L17 14 Z" fill="white"/>`);
-const LIGHTNING_ICON_MAPPING = iconMap('lightning');
-
-// Rocket (spaceport)
-const ROCKET_ICON = svgIcon(`<path d="M16 2 C16 2 22 8 22 18 L25 22 L25 25 L20 22 L20 26 L18 28 L16 26 L14 28 L12 26 L12 22 L7 25 L7 22 L10 18 C10 8 16 2 16 2 Z M16 12 C17.7 12 19 13.3 19 15 C19 16.7 17.7 18 16 18 C14.3 18 13 16.7 13 15 C13 13.3 14.3 12 16 12 Z" fill="white"/>`);
-const ROCKET_ICON_MAPPING = iconMap('rocket');
-
-// Anchor (port)
-const ANCHOR_ICON = svgIcon(`<circle cx="16" cy="8" r="3" stroke="white" stroke-width="2" fill="none"/><path d="M16 11 L16 27 M10 22 C10 27 16 29 16 29 C16 29 22 27 22 22 M11 17 L21 17" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>`);
-const ANCHOR_ICON_MAPPING = iconMap('anchor');
-
-// Crosshair (airstrike)
-const CROSSHAIR_ICON = svgIcon(`<circle cx="16" cy="16" r="8" stroke="white" stroke-width="2" fill="none"/><circle cx="16" cy="16" r="3" fill="white"/><path d="M16 4 L16 8 M16 24 L16 28 M4 16 L8 16 M24 16 L28 16" stroke="white" stroke-width="2" stroke-linecap="round"/>`);
-const CROSSHAIR_ICON_MAPPING = iconMap('crosshair');
-
-// Biohazard (disease)
-const BIOHAZARD_ICON = svgIcon(`<circle cx="16" cy="16" r="3" fill="white"/><path d="M16 6 C12 6 9 9 9 13 C9 14.5 9.5 16 10.5 17" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M24.5 20 C26 17 25 13 22 10.5 C20.7 9.4 19 8.8 17.3 8.8" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M9 23 C11.5 25.5 15.5 26 18.5 24 C19.8 23.2 20.8 22 21.3 20.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>`);
-const BIOHAZARD_ICON_MAPPING = iconMap('biohazard');
-
-// Shield (cyber)
-const SHIELD_ICON = svgIcon(`<path d="M16 3 L4 8 L4 16 C4 22 9 27 16 30 C23 27 28 22 28 16 L28 8 Z" fill="white"/>`);
-const SHIELD_ICON_MAPPING = iconMap('shield');
-
-// Cloud with warning (weather)
-const CLOUD_ICON = svgIcon(`<path d="M8 22 C4 22 2 19 2 16.5 C2 14 4 12 6.5 11.5 C7 8 10 5 14 5 C17 5 19.5 7 20.5 10 C21 9.8 21.5 9.7 22 9.7 C25 9.7 27.5 12 27.5 15 C27.5 18 25 20 22 20 L22 22 Z" fill="white"/><path d="M15 14 L17 14 L16.5 19 L15.5 19 Z M16 21 L16 22" stroke="white" stroke-width="1.5" fill="white"/>`);
-const CLOUD_ICON_MAPPING = iconMap('cloud');
-
-// Solar/Wind (renewable) — wind turbine
-const TURBINE_ICON = svgIcon(`<circle cx="16" cy="10" r="3" fill="white"/><path d="M16 13 L16 28 M12 28 L20 28" stroke="white" stroke-width="2" stroke-linecap="round"/><path d="M16 10 L16 2 M16 10 L23 16 M16 10 L9 16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>`);
-const TURBINE_ICON_MAPPING = iconMap('turbine');
-
-// Chart columns (stock exchange)
-const CHART_ICON = svgIcon(`<rect x="5" y="18" width="4" height="10" rx="1" fill="white"/><rect x="11" y="12" width="4" height="16" rx="1" fill="white"/><rect x="17" y="6" width="4" height="22" rx="1" fill="white"/><rect x="23" y="14" width="4" height="14" rx="1" fill="white"/>`);
-const CHART_ICON_MAPPING = iconMap('chart');
-
-// Bank building (central bank)
-const BANK_ICON = svgIcon(`<path d="M16 3 L28 10 L28 12 L4 12 L4 10 Z" fill="white"/><rect x="6" y="13" width="3" height="12" fill="white"/><rect x="11" y="13" width="3" height="12" fill="white"/><rect x="18" y="13" width="3" height="12" fill="white"/><rect x="23" y="13" width="3" height="12" fill="white"/><rect x="4" y="26" width="24" height="3" rx="1" fill="white"/>`);
-const BANK_ICON_MAPPING = iconMap('bank');
 
 const CONFLICT_ZONES_GEOJSON: GeoJSON.FeatureCollection = {
   type: 'FeatureCollection',
@@ -1835,8 +1820,8 @@ export class DeckGLMap {
  data,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'triangleUp',
- iconAtlas: MARKER_ICONS.triangleUp,
- iconMapping: BASES_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => highlightedBases.has(d.id) ? 16 : 11,
  getColor: (d) => {
  if (highlightedBases.has(d.id)) {
@@ -1893,8 +1878,8 @@ export class DeckGLMap {
  data,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'hexagon',
- iconAtlas: MARKER_ICONS.hexagon,
- iconMapping: NUCLEAR_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => highlightedNuclear.has(d.id) ? 15 : 11,
  getColor: (d) => {
  if (highlightedNuclear.has(d.id)) {
@@ -1931,8 +1916,8 @@ export class DeckGLMap {
  data: SPACEPORTS,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'rocket',
- iconAtlas: ROCKET_ICON,
- iconMapping: ROCKET_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: 20,
  sizeMinPixels: 10,
  sizeMaxPixels: 22,
@@ -1947,8 +1932,8 @@ export class DeckGLMap {
  data: PORTS,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'anchor',
- iconAtlas: ANCHOR_ICON,
- iconMapping: ANCHOR_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: 18,
  sizeMinPixels: 8,
  sizeMaxPixels: 18,
@@ -2067,8 +2052,8 @@ export class DeckGLMap {
  data: pins,
  getPosition: d => [d.lon, d.lat],
  getIcon: () => 'biohazard',
- iconAtlas: BIOHAZARD_ICON,
- iconMapping: BIOHAZARD_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: 20,
  sizeMinPixels: 10,
  sizeMaxPixels: 22,
@@ -2100,8 +2085,8 @@ export class DeckGLMap {
  data,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'square',
- iconAtlas: MARKER_ICONS.square,
- iconMapping: DATACENTER_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => highlightedDC.has(d.id) ? 14 : 10,
  getColor: (d) => {
  if (highlightedDC.has(d.id)) {
@@ -2125,8 +2110,8 @@ export class DeckGLMap {
  data: earthquakes,
  getPosition: (d) => [d.location?.longitude ?? 0, d.location?.latitude ?? 0],
  getIcon: () => 'earthquake',
- iconAtlas: EARTHQUAKE_ICON,
- iconMapping: EARTHQUAKE_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => 12 + d.magnitude * 3,
  sizeMinPixels: 10,
  sizeMaxPixels: 36,
@@ -2163,8 +2148,8 @@ export class DeckGLMap {
  data: this.firmsFireData,
  getPosition: (d: (typeof this.firmsFireData)[0]) => [d.lon, d.lat],
  getIcon: () => 'fire',
- iconAtlas: FIRE_ICON,
- iconMapping: FIRE_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d: (typeof this.firmsFireData)[0]) => 12 + Math.min(d.frp / 10, 16),
  sizeMinPixels: 8,
  sizeMaxPixels: 24,
@@ -2202,8 +2187,8 @@ export class DeckGLMap {
  data: alertsWithCoords,
  getPosition: (d) => d.centroid as [number, number],
  getIcon: () => 'cloud',
- iconAtlas: CLOUD_ICON,
- iconMapping: CLOUD_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: 24,
  sizeMinPixels: 14,
  sizeMaxPixels: 28,
@@ -2236,8 +2221,8 @@ export class DeckGLMap {
  data: this.cyberThreats,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'shield',
- iconAtlas: SHIELD_ICON,
- iconMapping: SHIELD_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => {
  switch (d.severity) {
  case 'critical': { return 28; }
@@ -2372,23 +2357,25 @@ export class DeckGLMap {
  });
   }
 
-  private createAdsbLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createAdsbLayer(): IconLayer {
+ return new IconLayer({
  id: 'adsb-layer',
  data: this.adsbFlights,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 25_000,
- radiusMinPixels: 2,
- radiusMaxPixels: 6,
- getFillColor: (d) => {
+ getIcon: () => 'airplane',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getAngle: (d) => -(d.heading ?? 0),
+ getSize: 20,
+ sizeMinPixels: 8,
+ sizeMaxPixels: 20,
+ getColor: (d) => {
  if (d.squawk === '7700' || d.squawk === '7600' || d.squawk === '7500') return [255, 50, 50, 255];
- const alt = d.altitude ?? 0;
- if (alt < 3000) return [100, 200, 100, 180];
- if (alt < 10000) return [255, 200, 50, 180];
- return [200, 220, 255, 200];
+ const [r, g, b] = altitudeToColor(d.altitude ?? 0);
+ return [r, g, b, 200] as [number, number, number, number];
  },
  pickable: true,
- updateTriggers: { getFillColor: [this.adsbFlights] },
+ updateTriggers: { getColor: [this.adsbFlights] },
  });
   }
 
@@ -2436,8 +2423,8 @@ export class DeckGLMap {
  data: this.repairShips,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'ship',
- iconAtlas: SHIP_ICON,
- iconMapping: SHIP_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: 18,
  sizeMinPixels: 8,
  sizeMaxPixels: 18,
@@ -2452,8 +2439,8 @@ export class DeckGLMap {
  data: vessels,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'ship',
- iconAtlas: SHIP_ICON,
- iconMapping: SHIP_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getAngle: (d) => -(d.heading ?? 0),
  getSize: 18,
  sizeMinPixels: 8,
@@ -2485,19 +2472,23 @@ export class DeckGLMap {
  });
   }
 
-  private createMilitaryFlightsLayer(flights: MilitaryFlight[]): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createMilitaryFlightsLayer(flights: MilitaryFlight[]): IconLayer {
+ return new IconLayer({
  id: 'military-flights-layer',
  data: flights,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 8000,
- getFillColor: (d) => {
+ getIcon: () => 'airplane',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getAngle: (d) => -d.heading,
+ getSize: 22,
+ sizeMinPixels: 8,
+ sizeMaxPixels: 22,
+ getColor: (d) => {
  if (d.onGround) return [120, 120, 120, 160] as [number, number, number, number];
  const [r, g, b] = altitudeToColor(d.altitude);
  return [r, g, b, 220] as [number, number, number, number];
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 12,
  pickable: true,
  });
   }
@@ -2628,8 +2619,8 @@ export class DeckGLMap {
  data: STOCK_EXCHANGES,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'chart',
- iconAtlas: CHART_ICON,
- iconMapping: CHART_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => d.tier === 'mega' ? 24 : (d.tier === 'major' ? 20 : 16),
  sizeMinPixels: 10,
  sizeMaxPixels: 24,
@@ -2665,8 +2656,8 @@ export class DeckGLMap {
  data: CENTRAL_BANKS,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'bank',
- iconAtlas: BANK_ICON,
- iconMapping: BANK_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => d.type === 'supranational' ? 22 : (d.type === 'major' ? 20 : 16),
  sizeMinPixels: 8,
  sizeMaxPixels: 22,
@@ -3422,8 +3413,8 @@ export class DeckGLMap {
  data: this.renewableInstallations,
  getPosition: (d: RenewableInstallation) => [d.lon, d.lat],
  getIcon: () => 'turbine',
- iconAtlas: TURBINE_ICON,
- iconMapping: TURBINE_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: 20,
  sizeMinPixels: 10,
  sizeMaxPixels: 24,
@@ -4627,8 +4618,8 @@ export class DeckGLMap {
  data: this.airstrikesData,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'crosshair',
- iconAtlas: CROSSHAIR_ICON,
- iconMapping: CROSSHAIR_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => 14 + Math.sqrt(d.fatalities || 0) * 3,
  sizeMinPixels: 10,
  sizeMaxPixels: 30,
@@ -6002,8 +5993,8 @@ export class DeckGLMap {
  data: this.lightningStrikes,
  getPosition: (d: LightningStrike) => [d.lon, d.lat],
  getIcon: () => 'lightning',
- iconAtlas: LIGHTNING_ICON,
- iconMapping: LIGHTNING_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: 16,
  sizeMinPixels: 6,
  sizeMaxPixels: 18,
@@ -6070,8 +6061,8 @@ export class DeckGLMap {
  data,
  getPosition: (d: SatellitePosition) => [d.lon, d.lat],
  getIcon: () => 'satellite',
- iconAtlas: SATELLITE_ICON,
- iconMapping: SATELLITE_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d: SatellitePosition) => notable.has(d.noradId) ? 18 : 12,
  sizeMinPixels: 4,
  sizeMaxPixels: 18,

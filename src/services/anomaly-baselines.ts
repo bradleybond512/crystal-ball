@@ -43,6 +43,15 @@ function save(): void {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); } catch { /* noop */ }
 }
 
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+function debouncedSave(): void {
+  if (saveTimeout) return;
+  saveTimeout = setTimeout(() => {
+    save();
+    saveTimeout = null;
+  }, 2000);
+}
+
 function bump(source: AlertSource, ts: number): void {
   const bucket = hourBucket(ts);
   let ring = rings.get(source);
@@ -98,7 +107,7 @@ function observe(alerts: UnifiedAlert[]): void {
     seenIds.add(a.id);
     bump(a.source, a.timestamp);
   }
-  save();
+  debouncedSave();
 }
 
 let started = false;

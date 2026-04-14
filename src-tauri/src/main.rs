@@ -554,6 +554,12 @@ fn delete_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, 
 #[tauri::command]
 fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, PersistentCache>, key: String, value: String) -> Result<(), String> {
  require_trusted_window(webview.label())?;
+ if key.len() > 256 {
+  return Err("Cache key exceeds 256 byte limit".into());
+ }
+ if value.len() > 5 * 1024 * 1024 {
+  return Err("Cache value exceeds 5 MB limit".into());
+ }
  let parsed_value: Value = serde_json::from_str(&value)
  .map_err(|e| format!("Invalid cache payload JSON: {e}"))?;
  let _write_guard = cache.write_lock.lock().unwrap_or_else(|e| e.into_inner());
@@ -661,7 +667,8 @@ fn open_path_in_shell(path: &Path) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_url(url: String) -> Result<(), String> {
+fn open_url(webview: Webview, url: String) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  let parsed = Url::parse(&url).map_err(|_| "Invalid URL".to_string())?;
 
  // Only HTTPS is allowed. Local/internal URLs must never be opened via this command
@@ -948,7 +955,8 @@ fn copy_app_bundle_preserving_signature(source: &str, dest: &str) -> Result<(), 
 }
 
 #[tauri::command]
-async fn install_update(download_url: String) -> Result<(), String> {
+async fn install_update(webview: Webview, download_url: String) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  // Validate the URL comes from GitHub
  let parsed = reqwest::Url::parse(&download_url)
  .map_err(|e| format!("Invalid update URL: {e}"))?;

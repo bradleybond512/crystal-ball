@@ -170,6 +170,7 @@ function updateNegativeEvidence(alerts: UnifiedAlert[]): void {
     if (causesPresent.length > 0) {
       const pending = pendingCauses.get(pk) ?? [];
       for (const c of causesPresent) {
+        if (pending.length >= 1000) continue;
         if (!pending.some(t => Math.abs(t - c.timestamp) < 60_000)) {
           pending.push(c.timestamp);
         }
@@ -332,12 +333,24 @@ function ruleEnabled(r: CausalRule): boolean {
   return getPairFeedbackMult(`${r.cause}|${r.effect}`) >= 0.55;
 }
 
+const distanceCache = new Map<string, number>();
+
+function cachedDistanceKm(a: UnifiedAlert, b: UnifiedAlert): number {
+  const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+  let d = distanceCache.get(key);
+  if (d === undefined) {
+    d = computeDistanceKm(a.location!.lat, a.location!.lon, b.location!.lat, b.location!.lon);
+    distanceCache.set(key, d);
+  }
+  return d;
+}
+
 function tryRule(r: CausalRule, cause: UnifiedAlert, effect: UnifiedAlert, dt: number): boolean {
   if (dt < 0 || dt > r.maxLagMs) return false;
   if (r.guard && !r.guard(cause)) return false;
   if (!ruleEnabled(r)) return false;
   const radius = r.radiusFn ? r.radiusFn(cause) : r.radiusKm;
-  const d = computeDistanceKm(cause.location!.lat, cause.location!.lon, effect.location!.lat, effect.location!.lon);
+  const d = cachedDistanceKm(cause, effect);
   return d <= radius;
 }
 
@@ -390,6 +403,7 @@ function buildClusters(leaders: UnifiedAlert[]): { members: UnifiedAlert[]; rule
     const seed = leaders[i]!;
     if (used.has(seed.id)) continue;
     const members: UnifiedAlert[] = [seed];
+    const memberSet = new Set<string>([seed.id]);
     let seedRule: CausalRule | null = null;
     // Iterative growth: keep adding any alert that rule-matches ANY current member.
     let grew = true;
@@ -397,11 +411,12 @@ function buildClusters(leaders: UnifiedAlert[]): { members: UnifiedAlert[]; rule
       grew = false;
       for (const other of leaders) {
         if (used.has(other.id)) continue;
-        if (members.includes(other)) continue;
+        if (memberSet.has(other.id)) continue;
         for (const m of members) {
           const r = matchRule(m, other);
           if (r) {
             members.push(other);
+            memberSet.add(other.id);
             if (!seedRule) seedRule = r;
             grew = true;
             break;
@@ -418,6 +433,7 @@ function buildClusters(leaders: UnifiedAlert[]): { members: UnifiedAlert[]; rule
 }
 
 function scan(): void {
+  distanceCache.clear();
   const now = Date.now();
   const recent = unifiedAlertStore.getAll().filter(a =>
     !a.acknowledged

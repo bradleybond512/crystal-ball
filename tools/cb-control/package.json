@@ -1,0 +1,23 @@
+{
+  "name": "cb-control",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remote control for Claude Code CLI sessions. Daemon + PWA, accessed over Tailscale from iPhone.",
+  "type": "module",
+  "bin": {
+    "cb-control": "./server/index.mjs"
+  },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "dev": "node --watch server/index.mjs",
+    "install-hooks": "node scripts/install-hooks.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0"
+  }
+}

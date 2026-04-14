@@ -57,9 +57,10 @@ function handleClient(ws, sessionId) {
     if (msg.type === 'input' && typeof msg.data === 'string') {
       const s = sessions.get(sessionId);
       if (s) s.write(msg.data);
+      else ws.send(JSON.stringify({ type: 'error', error: 'session not live' }));
     } else if (msg.type === 'resize') {
       const s = sessions.get(sessionId);
-      if (s) s.resize(Number(msg.cols) || 120, Number(msg.rows) || 40);
+      if (s && typeof s.resize === 'function') s.resize(Number(msg.cols) || 120, Number(msg.rows) || 40);
     } else if (msg.type === 'ping') {
       ws.send(JSON.stringify({ type: 'pong' }));
     }

@@ -1,8 +1,8 @@
 // Minimal service worker: shell caching so the PWA launches offline.
 // No API caching — we always go to network for session state.
 
-const CACHE = 'cb-control-v1';
-const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/api.js', '/ansi.js', '/manifest.webmanifest', '/icon.svg'];
+const CACHE = 'cb-control-v2';
+const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/api.js', '/ansi.js', '/biometric.js', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

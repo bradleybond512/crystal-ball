@@ -10,7 +10,11 @@
   "scripts": {
     "start": "node server/index.mjs",
     "dev": "node --watch server/index.mjs",
-    "install-hooks": "node scripts/install-hooks.mjs"
+    "install-hooks": "node scripts/install-hooks.mjs",
+    "uninstall-hooks": "node scripts/install-hooks.mjs --uninstall",
+    "install-launchd": "node scripts/install-launchd.mjs",
+    "uninstall-launchd": "node scripts/install-launchd.mjs --uninstall",
+    "setup-https": "bash scripts/setup-tailscale-https.sh"
   },
   "engines": {
     "node": ">=20"

@@ -37,12 +37,18 @@ function currentBranch(cwd) {
   let payload = {};
   try { payload = raw ? JSON.parse(raw) : {}; } catch { /* stdin may be empty */ }
 
+  // If we're running inside tmux, capture the pane id so the daemon can
+  // relay input and mirror output. $TMUX_PANE is set by tmux for any child
+  // process of a pane. If unset, the external session is metadata-only.
+  const tmuxPane = process.env.TMUX_PANE || null;
+
   const body = {
     id: payload.session_id || payload.sessionId || process.env.CLAUDE_SESSION_ID || `cli-${process.pid}-${Date.now()}`,
     cwd: payload.cwd || process.cwd(),
     label: payload.label || `cli:${(payload.cwd || process.cwd()).split('/').pop()}`,
     branch: currentBranch(payload.cwd || process.cwd()),
     pid: process.ppid,
+    tmuxPane,
   };
 
   try {

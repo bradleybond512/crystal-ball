@@ -11,6 +11,7 @@ import { createServer } from 'node:http';
 import { config } from './config.mjs';
 import { handleRequest } from './api.mjs';
 import { attachWebSocket } from './ws.mjs';
+import { sessions } from './sessions.mjs';
 
 const server = createServer((req, res) => {
   handleRequest(req, res).catch((err) => {
@@ -23,6 +24,9 @@ const server = createServer((req, res) => {
 });
 
 attachWebSocket(server);
+
+// Re-attach to any external tmux sessions still alive from a previous run.
+try { sessions.rehydrate(); } catch (err) { console.error('[cb-control] rehydrate error:', err); }
 
 server.listen(config.port, config.host, () => {
   const origin = `http://${config.host}:${config.port}`;

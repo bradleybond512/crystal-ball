@@ -56,6 +56,15 @@ export class Api {
   killSession(id) {
     return this.#fetch('/api/sessions/' + encodeURIComponent(id), { method: 'DELETE' });
   }
+  compose(ids, data, enter = true) {
+    return this.#fetch('/api/compose', {
+      method: 'POST', body: JSON.stringify({ ids, data, enter }),
+    });
+  }
+  search(query, limit = 50) {
+    const q = encodeURIComponent(query);
+    return this.#fetch(`/api/search?q=${q}&limit=${limit}`);
+  }
 
   wsUrl(id) {
     const base = this.settings.serverUrl.replace(/^http/, 'ws').replace(/\/$/, '');

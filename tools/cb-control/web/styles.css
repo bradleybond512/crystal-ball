@@ -151,3 +151,53 @@ dialog input {
   padding: 10px; font: inherit;
 }
 dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; margin: 8px 0 0; }
+
+/* Terminal metadata strip */
+.terminal-meta {
+  padding: 6px 12px; font-size: 12px; color: var(--text-dim);
+  background: var(--bg-elev); border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+
+/* Compose */
+.compose-picker {
+  overflow-y: auto; flex: 1; min-height: 0;
+  border-bottom: 1px solid var(--border);
+}
+.compose-picker h2 { margin: 0; padding: 12px 14px 4px; font-size: 13px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.compose-list { list-style: none; margin: 0; padding: 0; }
+.compose-list li {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.compose-list .meta { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+.compose-list input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+.inline-check { display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); font-size: 13px; }
+.inline-check input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* Search */
+.search-bar {
+  display: flex; gap: 8px; padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.search-bar input {
+  flex: 1; background: var(--bg-elev); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; font: inherit;
+}
+.search-results { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.search-results li {
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.search-results li:active { background: var(--bg-elev); }
+.search-results .snippet { font-family: var(--mono); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.search-results .snippet mark { background: #3a2d07; color: var(--warn); padding: 0 2px; border-radius: 3px; }
+.search-results .row { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.search-results .row .label { font-weight: 600; }
+.search-results .row .meta { color: var(--text-dim); font-size: 11px; font-family: var(--mono); }
+
+.divider { border: 0; border-top: 1px solid var(--border); margin: 18px 0 6px; }
+.section-heading { margin: 4px 0; font-size: 14px; color: var(--text); font-weight: 600; }
+.hint { color: var(--text-dim); font-size: 13px; margin: 0; }

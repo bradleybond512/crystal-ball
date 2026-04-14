@@ -137,7 +137,7 @@ export async function handleRequest(req, res) {
       if (req.method === 'POST' && sub === '/input') {
         const body = await readBody(req);
         const session = sessions.get(id);
-        if (!session) return sendJSON(res, 409, { error: 'session not live (external or ended)' });
+        if (!session) return sendJSON(res, 409, { error: 'session not live (ended, or external without tmux bridge)' });
         const text = typeof body.data === 'string' ? body.data : '';
         const appendEnter = body.enter !== false;
         if (text) session.write(text);
@@ -172,8 +172,37 @@ export async function handleRequest(req, res) {
         cwd: body.cwd,
         branch: body.branch,
         pid: body.pid,
+        tmuxPane: body.tmuxPane || null,
       });
       return sendJSON(res, 200, { ok: true });
+    }
+
+    // Multi-session compose: relay the same payload to N sessions in parallel.
+    if (req.method === 'POST' && pathname === '/api/compose') {
+      const body = await readBody(req);
+      const ids = Array.isArray(body.ids) ? body.ids : [];
+      const text = typeof body.data === 'string' ? body.data : '';
+      const enter = body.enter !== false;
+      if (ids.length === 0) return sendJSON(res, 400, { error: 'ids required' });
+      const results = ids.map((id) => {
+        const session = sessions.get(id);
+        if (!session) return { id, ok: false, error: 'not live' };
+        try {
+          if (text) session.write(text);
+          if (enter) session.write('\r');
+          storage.appendEvent(id, 'input', { bytes: text.length, enter, compose: true });
+          return { id, ok: true };
+        } catch (err) { return { id, ok: false, error: String(err.message ?? err) }; }
+      });
+      return sendJSON(res, 200, { results });
+    }
+
+    // Full-text search across event payloads.
+    if (req.method === 'GET' && pathname === '/api/search') {
+      const q = (url.searchParams.get('q') ?? '').trim();
+      const limit = Math.min(200, Number(url.searchParams.get('limit') ?? 50));
+      if (!q) return sendJSON(res, 200, { results: [] });
+      return sendJSON(res, 200, { results: storage.search(q, limit) });
     }
 
     if (req.method === 'POST' && pathname === '/api/hooks/session-stop') {

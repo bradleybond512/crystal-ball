@@ -24,6 +24,34 @@ export interface TemporalAnomaly {
 
 const client = new InfrastructureServiceClient('', { fetch: (...args) => globalThis.fetch(...args) });
 
+// Lightweight circuit breaker — each call has different params so we can't use the caching CircuitBreaker
+let baselineFailures = 0;
+let baselineCooldownUntil = 0;
+const BASELINE_MAX_FAILURES = 2;
+const BASELINE_COOLDOWN_MS = 5 * 60 * 1000;
+
+function isBaselineAvailable(): boolean {
+  if (Date.now() < baselineCooldownUntil) return false;
+  if (baselineCooldownUntil > 0) {
+    baselineFailures = 0;
+    baselineCooldownUntil = 0;
+  }
+  return true;
+}
+
+function recordBaselineFailure(): void {
+  baselineFailures++;
+  if (baselineFailures >= BASELINE_MAX_FAILURES) {
+    baselineCooldownUntil = Date.now() + BASELINE_COOLDOWN_MS;
+    console.warn(`[TemporalBaseline] On cooldown for ${BASELINE_COOLDOWN_MS / 1000}s after ${baselineFailures} failures`);
+  }
+}
+
+function recordBaselineSuccess(): void {
+  baselineFailures = 0;
+  baselineCooldownUntil = 0;
+}
+
 const TYPE_LABELS: Record<TemporalEventType, string> = {
   military_flights: 'Military flights',
   vessels: 'Naval vessels',
@@ -61,10 +89,13 @@ function getSeverity(zScore: number): 'medium' | 'high' | 'critical' {
 export async function reportMetrics(
   updates: { type: TemporalEventType; region: string; count: number }[]
 ): Promise<void> {
+  if (!isBaselineAvailable()) return;
   try {
  await client.recordBaselineSnapshot({ updates });
+ recordBaselineSuccess();
   } catch (error) {
  console.warn('[TemporalBaseline] Update failed:', error);
+ recordBaselineFailure();
   }
 }
 
@@ -74,8 +105,10 @@ export async function checkAnomaly(
   region: string,
   count: number,
 ): Promise<TemporalAnomaly | null> {
+  if (!isBaselineAvailable()) return null;
   try {
  const data = await client.getTemporalBaseline({ type, region, count });
+ recordBaselineSuccess();
  if (!data.anomaly) return null;
 
  return {
@@ -89,6 +122,7 @@ export async function checkAnomaly(
  };
   } catch (error) {
  console.warn('[TemporalBaseline] Check failed:', error);
+ recordBaselineFailure();
  return null;
   }
 }

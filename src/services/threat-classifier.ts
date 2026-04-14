@@ -427,6 +427,7 @@ let batchPaused = false;
 let batchInFlight = false;
 let batchTimer: ReturnType<typeof setTimeout> | null = null;
 let lastRequestAt = 0;
+let consecutivePauses = 0;
 const batchQueue: BatchJob[] = [];
 
 async function waitForGap(): Promise<void> {
@@ -461,11 +462,14 @@ function flushBatch(): void {
  title: job.title, description: '', source: '', country: '',
  });
  job.resolve(toThreat(resp));
+ consecutivePauses = 0;
  } catch (error) {
  if (error instanceof ApiError && (error.statusCode === 429 || error.statusCode >= 500)) {
  batchPaused = true;
- const delay = error.statusCode === 429 ? 60_000 : 30_000;
- console.warn(`[Classify] ${error.statusCode} — pausing AI classification for ${delay / 1000}s`);
+ consecutivePauses++;
+ const baseDelay = error.statusCode === 429 ? 60_000 : 30_000;
+ const delay = Math.min(baseDelay * Math.pow(2, consecutivePauses - 1), 5 * 60 * 1000);
+ console.warn(`[Classify] ${error.statusCode} — pausing AI classification for ${Math.round(delay / 1000)}s (attempt ${consecutivePauses})`);
  const remaining = batch.slice(i + 1);
  // Failed job: increment attempts, requeue if under limit
  if ((job.attempts ?? 0) < MAX_RETRIES) {

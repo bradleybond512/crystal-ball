@@ -1385,6 +1385,7 @@ export class DataLoaderManager implements AppModule {
  this.ctx.map?.setLayerReady('weather', alerts.length > 0);
  this.ctx.statusPanel?.updateFeed('Weather', { status: 'ok', itemCount: alerts.length });
  dataFreshness.recordUpdate('weather', alerts.length);
+ void import('@/services/offline-staleness').then(({ recordSourceUpdate }) => { recordSourceUpdate('weather', Date.now()); });
  updateStormPreparednessContext({ weatherAlerts: alerts });
 
  // Wire weather into correlation matrix, anomaly detection, and convergence

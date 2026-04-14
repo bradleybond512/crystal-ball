@@ -196,6 +196,7 @@ import { SanctionsCrossRefPanel } from '@/components/SanctionsCrossRefPanel';
 import { CompoundThreatPanel } from '@/components/CompoundThreatPanel';
 import { CorrelationMatrixPanel } from '@/components/CorrelationMatrixPanel';
 import { StrikePackagesPanel } from '@/components/StrikePackagesPanel';
+import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
 import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
 import { SatelliteChangePanel } from '@/components/SatelliteChangePanel';
@@ -1234,6 +1235,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['compound-threat'] = new CompoundThreatPanel();
  this.ctx.panels['correlation-matrix'] = new CorrelationMatrixPanel();
  this.ctx.panels['strike-packages'] = new StrikePackagesPanel();
+ this.ctx.panels['api-diagnostic'] = new ApiDiagnosticPanel();
  this.ctx.panels['cascade-simulator'] = new CascadeSimulatorPanel();
  this.ctx.panels['emergency-broadcast'] = new EmergencyBroadcastPanel();
  this.ctx.panels['satellite-change'] = new SatelliteChangePanel();

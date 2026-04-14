@@ -152,6 +152,8 @@ import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { fetchNearbyInfrastructure } from '@/services/infrastructure/hifld';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { fetchAirstrikes } from '@/services/airstrikes';
+import { updateFromFlights } from '@/services/strike-packages';
+import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { fetchS2Underground } from '@/services/s2-underground';
 import { fetchThreatFoxIOCs, fetchOpenPhishFeed, fetchSpamhausDrop, fetchCisaKev, fetchOtxIOCs, fetchPhishStatsFeed } from '@/services/cyber-extra';
 import { fetchSpaceWeather, fetchDonkiEvents } from '@/services/space-weather';
@@ -1594,6 +1596,21 @@ export class DataLoaderManager implements AppModule {
  } catch (error) {
  console.error('[Intelligence] Airstrikes fetch failed:', error);
  dataFreshness.recordError('acled_airstrikes', String(error));
+ }
+ })());
+
+ // Strike package detection (piggybacks on military flights data)
+ tasks.push((async () => {
+ try {
+ const { fetchMilitaryFlights } = await import('@/services/military-flights');
+ const { flights } = await fetchMilitaryFlights();
+ const packages = updateFromFlights(flights);
+ (this.ctx.panels['strike-package'] as StrikePackagePanel)?.update(packages);
+ if (this.ctx.mapLayers.strikePackages) {
+ (this.ctx.map as any)?.setStrikePackages(packages);
+ }
+ } catch (error) {
+ console.error('[Strike Packages] Detection failed:', error);
  }
  })());
 

@@ -549,6 +549,7 @@ export interface MapLayers {
   // Data source layers
   ucdpEvents: boolean;
   airstrikes: boolean;
+  strikePackages: boolean;
   displacement: boolean;
   climate: boolean;
   // Tech variant layers

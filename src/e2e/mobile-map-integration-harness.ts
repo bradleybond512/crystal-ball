@@ -129,6 +129,7 @@ const layers = {
   tradeRoutes: false,
   iranAttacks: false,
   airstrikes: false,
+  strikePackages: false,
   s2pimu: false,
   dayNight: false,
   faaWeatherCams: false,

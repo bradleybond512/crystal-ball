@@ -223,12 +223,14 @@ export class CircuitBreaker<T> {
  // so returning stale data from a different call is wrong.
  if (this.cache !== null && this.cacheTtlMs > 0) {
  this.lastDataState = { mode: 'cached', timestamp: this.cache.timestamp, offline };
- // Fire-and-forget background refresh
+ // Fire-and-forget background refresh — skip if circuit breaker is cooling down
+ if (!this.isOnCooldown()) {
  fn().then(result => this.recordSuccess(result)).catch(error => {
  // eslint-disable-next-line no-console
  console.warn(`[${this.name}] Background refresh failed:`, error);
  this.recordFailure(String(error));
  });
+ }
  return this.cache.data as R;
  }
 

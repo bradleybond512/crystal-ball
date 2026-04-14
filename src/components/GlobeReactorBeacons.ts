@@ -113,6 +113,7 @@ export class GlobeReactorBeacons {
 
  const color = severityColor(severity);
 
+ const radiusCb = new CallbackProperty(pulseRadius, false);
  const entity = this.dataSource.entities.add({
  position: Cartesian3.fromDegrees(lon, lat),
  point: {
@@ -124,8 +125,8 @@ export class GlobeReactorBeacons {
  heightReference: HeightReference.CLAMP_TO_GROUND,
  },
  ellipse: {
- semiMinorAxis: new CallbackProperty(pulseRadius, false),
- semiMajorAxis: new CallbackProperty(pulseRadius, false),
+ semiMinorAxis: radiusCb,
+ semiMajorAxis: radiusCb,
  height: 0,
  material: new ColorMaterialProperty(color.withAlpha(0.3)),
  outline: false,

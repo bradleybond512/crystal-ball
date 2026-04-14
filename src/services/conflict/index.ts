@@ -11,6 +11,7 @@ import {
 } from '@/generated/client/crystalball/conflict/v1/service_client';
 import type { UcdpGeoEvent, UcdpEventType } from '@/types';
 import { createCircuitBreaker } from '@/utils';
+import { createConcurrencyLimiter } from '@/utils/concurrency-limiter';
 
 // ---- Client + Circuit Breakers (3 separate breakers for 3 RPCs) ----
 
@@ -272,14 +273,17 @@ export async function fetchUcdpClassifications(): Promise<Map<string, UcdpConfli
   return deriveUcdpClassifications(resp.events);
 }
 
+const hapiLimiter = createConcurrencyLimiter(3);
+
 export async function fetchHapiSummary(): Promise<Map<string, HapiConflictSummary>> {
-  const results = await Promise.allSettled(
- HAPI_COUNTRY_CODES.map(async (iso2) => {
+  const results = await hapiLimiter.mapSettled(
+ HAPI_COUNTRY_CODES,
+ async (iso2) => {
  const resp = await hapiBreaker.execute(async () => {
  return client.getHumanitarianSummary({ countryCode: iso2 });
  }, emptyHapiFallback);
  return { iso2, resp };
- }),
+ },
   );
 
   const byCode = new Map<string, HapiConflictSummary>();

@@ -1544,12 +1544,22 @@ async function handleOllamaStream(requestUrl, req, res, context) {
   }
 }
 
+// Circuit breaker for intel-generate: fast-fail when LLM is unreachable
+let intelFailures = 0;
+let intelCooldownUntil = 0;
+
 // Generic non-streaming intel generation. Accepts { prompt, system?, maxTokens?,
 // temperature? } and returns { response, model } from OLLAMA_API_URL (any
 // OpenAI-compatible local endpoint, e.g. LM Studio at http://localhost:1234).
 async function handleIntelGenerate(req, res, context) {
   const cors = getSidecarCorsOrigin(req);
   const headers = { 'content-type': 'application/json', 'access-control-allow-origin': cors, 'vary': 'Origin' };
+
+  if (Date.now() < intelCooldownUntil) {
+    res.writeHead(503, headers);
+    res.end(JSON.stringify({ error: 'LLM service unavailable — circuit breaker open' }));
+    return;
+  }
   const body = await readBody(req);
   if (!body) { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'expected JSON body' })); return; }
   let parsed;
@@ -1603,14 +1613,20 @@ async function handleIntelGenerate(req, res, context) {
         resp.on('error', reject);
       });
       r.on('error', reject);
-      r.setTimeout(60_000, () => { r.destroy(new Error('timeout')); });
+      r.setTimeout(10_000, () => { r.destroy(new Error('timeout')); });
       r.write(requestBody);
       r.end();
     });
     const response = result?.choices?.[0]?.message?.content ?? '';
+    intelFailures = 0;
     res.writeHead(200, headers);
     res.end(JSON.stringify({ response, model }));
   } catch (error) {
+    intelFailures++;
+    if (intelFailures >= 2) {
+      intelCooldownUntil = Date.now() + 120_000;
+      context.logger.warn(`[intel-generate] circuit breaker open after ${intelFailures} failures — cooling down 120s`);
+    }
     context.logger.warn('[intel-generate] error:', error.message);
     res.writeHead(502, headers);
     res.end(JSON.stringify({ error: error.message }));

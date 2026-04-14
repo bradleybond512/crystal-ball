@@ -13,6 +13,7 @@ import {
 } from '@/config';
 import { INTEL_HOTSPOTS, CONFLICT_ZONES } from '@/config/geo';
 import { tokenizeForMatch, matchKeyword } from '@/utils/keyword-match';
+import { createConcurrencyLimiter } from '@/utils/concurrency-limiter';
 import {
   fetchCategoryFeeds,
   getFeedFailures,
@@ -473,24 +474,24 @@ export class DataLoaderManager implements AppModule {
  }
  };
 
- const tasks: { name: string; task: Promise<void> }[] = [
- { name: 'news', task: runGuarded('news', () => this.loadNews()) },
+ const tasks: { name: string; task: () => Promise<void> }[] = [
+ { name: 'news', task: () => runGuarded('news', () => this.loadNews()) },
  ];
 
  // Happy variant only loads news data -- skip all geopolitical/financial/military data
  if (SITE_VARIANT !== 'happy') {
- tasks.push({ name: 'markets', task: runGuarded('markets', () => this.loadMarkets()) });
- tasks.push({ name: 'predictions', task: runGuarded('predictions', () => this.loadPredictions()) });
- tasks.push({ name: 'pizzint', task: runGuarded('pizzint', () => this.loadPizzInt()) });
- tasks.push({ name: 'fred', task: runGuarded('fred', () => this.loadFredData()) });
- tasks.push({ name: 'oil', task: runGuarded('oil', () => this.loadOilAnalytics()) });
- tasks.push({ name: 'spending', task: runGuarded('spending', () => this.loadGovernmentSpending()) });
- tasks.push({ name: 'bis', task: runGuarded('bis', () => this.loadBisData()) });
+ tasks.push({ name: 'markets', task: () => runGuarded('markets', () => this.loadMarkets()) });
+ tasks.push({ name: 'predictions', task: () => runGuarded('predictions', () => this.loadPredictions()) });
+ tasks.push({ name: 'pizzint', task: () => runGuarded('pizzint', () => this.loadPizzInt()) });
+ tasks.push({ name: 'fred', task: () => runGuarded('fred', () => this.loadFredData()) });
+ tasks.push({ name: 'oil', task: () => runGuarded('oil', () => this.loadOilAnalytics()) });
+ tasks.push({ name: 'spending', task: () => runGuarded('spending', () => this.loadGovernmentSpending()) });
+ tasks.push({ name: 'bis', task: () => runGuarded('bis', () => this.loadBisData()) });
 
  // Trade policy data (FULL and FINANCE only)
  if (SITE_VARIANT === 'full' || SITE_VARIANT === 'finance') {
- tasks.push({ name: 'tradePolicy', task: runGuarded('tradePolicy', () => this.loadTradePolicy()) });
- tasks.push({ name: 'supplyChain', task: runGuarded('supplyChain', () => this.loadSupplyChain()) });
+ tasks.push({ name: 'tradePolicy', task: () => runGuarded('tradePolicy', () => this.loadTradePolicy()) });
+ tasks.push({ name: 'supplyChain', task: () => runGuarded('supplyChain', () => this.loadSupplyChain()) });
  }
  }
 
@@ -498,26 +499,26 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'happy') {
  tasks.push({
  name: 'progress',
- task: runGuarded('progress', () => this.loadProgressData()),
+ task: () => runGuarded('progress', () => this.loadProgressData()),
  });
  tasks.push({
  name: 'species',
- task: runGuarded('species', () => this.loadSpeciesData()),
+ task: () => runGuarded('species', () => this.loadSpeciesData()),
  });
  tasks.push({
  name: 'renewable',
- task: runGuarded('renewable', () => this.loadRenewableData()),
+ task: () => runGuarded('renewable', () => this.loadRenewableData()),
  });
  tasks.push({
  name: 'happinessMap',
- task: runGuarded('happinessMap', async () => {
+ task: () => runGuarded('happinessMap', async () => {
  const data = await fetchHappinessScores();
  this.ctx.map?.setHappinessScores(data);
  }),
  });
  tasks.push({
  name: 'renewableMap',
- task: runGuarded('renewableMap', async () => {
+ task: () => runGuarded('renewableMap', async () => {
  const installations = await fetchRenewableInstallations();
  this.ctx.map?.setRenewableInstallations(installations);
  }),
@@ -527,7 +528,7 @@ export class DataLoaderManager implements AppModule {
  // Global giving activity data (all variants)
  tasks.push({
  name: 'giving',
- task: runGuarded('giving', async () => {
+ task: () => runGuarded('giving', async () => {
  const givingResult = await fetchGivingSummary();
  if (!givingResult.ok) {
  dataFreshness.recordError('giving', 'Giving data unavailable (retaining prior state)');
@@ -540,81 +541,82 @@ export class DataLoaderManager implements AppModule {
  });
 
  if (SITE_VARIANT === 'full') {
- tasks.push({ name: 'intelligence', task: runGuarded('intelligence', () => this.loadIntelligenceSignals()) });
+ tasks.push({ name: 'intelligence', task: () => runGuarded('intelligence', () => this.loadIntelligenceSignals()) });
  }
 
- if (SITE_VARIANT === 'full') tasks.push({ name: 'firms', task: runGuarded('firms', () => this.loadFirmsData()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'inpeFires', task: runGuarded('inpeFires', () => this.loadInpeFires()) });
- if (this.ctx.mapLayers.natural) tasks.push({ name: 'natural', task: runGuarded('natural', () => this.loadNatural()) });
- if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.weather) tasks.push({ name: 'weather', task: runGuarded('weather', () => this.loadWeatherAlerts()) });
- if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.ais) tasks.push({ name: 'ais', task: runGuarded('ais', () => this.loadAisSignals()) });
- if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.adsb) tasks.push({ name: 'adsb', task: runGuarded('adsb', () => this.loadAdsb()) });
- if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.cables) tasks.push({ name: 'cables', task: runGuarded('cables', () => this.loadCableActivity()) });
- if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.cables) tasks.push({ name: 'cableHealth', task: runGuarded('cableHealth', () => this.loadCableHealth()) });
- if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.flights) tasks.push({ name: 'flights', task: runGuarded('flights', () => this.loadFlightDelays()) });
- if (SITE_VARIANT !== 'happy' && CYBER_LAYER_ENABLED && this.ctx.mapLayers.cyberThreats) tasks.push({ name: 'cyberThreats', task: runGuarded('cyberThreats', () => this.loadCyberThreats()) });
- if (SITE_VARIANT !== 'happy') tasks.push({ name: 'iranAttacks', task: runGuarded('iranAttacks', () => this.loadIranEvents()) });
- if (SITE_VARIANT !== 'happy' && (this.ctx.mapLayers.techEvents || SITE_VARIANT === 'tech')) tasks.push({ name: 'techEvents', task: runGuarded('techEvents', () => this.loadTechEvents()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'spaceWeather', task: runGuarded('spaceWeather', () => this.loadSpaceWeather()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'spaceflightNews', task: runGuarded('spaceflightNews', () => this.loadSpaceflightNews()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'spaceLaunches', task: runGuarded('spaceLaunches', () => this.loadSpaceLaunches()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'diseaseOutbreaks', task: runGuarded('diseaseOutbreaks', () => this.loadDiseaseOutbreaks()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'diseaseIntel', task: runGuarded('diseaseIntel', () => this.loadDiseaseIntel()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'humanitarianCrises', task: runGuarded('humanitarianCrises', () => this.loadHumanitarianCrises()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'federalRegister', task: runGuarded('federalRegister', () => this.loadFederalRegister()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'airQuality', task: runGuarded('airQuality', () => this.loadAirQuality()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'wildfireIncidents', task: runGuarded('wildfireIncidents', () => this.loadWildfireIncidents()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'hazmatIncidents', task: runGuarded('hazmatIncidents', () => this.loadHazmatIncidents()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'oilSpills', task: runGuarded('oilSpills', () => this.loadOilSpills()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'gdacsAlerts', task: runGuarded('gdacsAlerts', () => this.loadGDACSAlerts()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoAlerts', task: runGuarded('volcanoAlerts', () => this.loadVolcanoAlerts()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'nwsAlerts', task: runGuarded('nwsAlerts', () => this.loadNWSAlerts()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'faaCameras', task: runGuarded('faaCameras', () => this.loadFAACameras()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'savedPlaceWeather', task: runGuarded('savedPlaceWeather', () => this.loadSavedPlaceWeather()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'emaForecast', task: runGuarded('emaForecast', () => this.runEMAForecast()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'globalWeather', task: runGuarded('globalWeather', () => this.loadGlobalWeather()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'openSanctions', task: runGuarded('openSanctions', () => this.loadOpenSanctions()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'edgarFilings', task: runGuarded('edgarFilings', () => this.loadEdgarFilings()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'infrastructure', task: runGuarded('infrastructure', () => this.loadInfrastructure()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'iswReports', task: runGuarded('iswReports', () => this.loadIswReports()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'natoNews', task: runGuarded('natoNews', () => this.loadNatoNews()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'dodNews', task: runGuarded('dodNews', () => this.loadDodNews()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'reliefWeb', task: runGuarded('reliefWeb', () => this.loadReliefWebCrises()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'bellingcat', task: runGuarded('bellingcat', () => this.loadBellingcat()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'travelWarnings', task: runGuarded('travelWarnings', () => this.loadTravelWarnings()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'emscSeismic', task: runGuarded('emscSeismic', () => this.loadEmscSeismic()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'acapsCrises', task: runGuarded('acapsCrises', () => this.loadAcapsCrises()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'liveUaMap', task: runGuarded('liveUaMap', () => this.loadLiveUaMap()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'debrisReentries', task: runGuarded('debrisReentries', () => this.loadDebrisReentries()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'amtrakAlerts', task: runGuarded('amtrakAlerts', () => this.loadAmtrakAlerts()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'avalancheHazard', task: runGuarded('avalancheHazard', () => this.loadAvalancheHazard()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'armsTransfers', task: runGuarded('armsTransfers', () => this.loadArmsTransfers()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'ecdcSurveillance', task: runGuarded('ecdcSurveillance', () => this.loadEcdcSurveillance()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'fdicFailures', task: runGuarded('fdicFailures', () => this.loadFdicFailures()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'habsos', task: runGuarded('habsos', () => this.loadHabsos()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'unSecurityCouncil', task: runGuarded('unSecurityCouncil', () => this.loadUnSecurityCouncil()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'wildfireSmoke', task: runGuarded('wildfireSmoke', () => this.loadWildfireSmoke()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'centralBankCalendar', task: runGuarded('centralBankCalendar', () => this.loadCentralBankCalendar()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'congressDefense', task: runGuarded('congressDefense', () => this.loadCongressDefense()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'combatantCommands', task: runGuarded('combatantCommands', () => this.loadCombatantCommands()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'foreignMilNews', task: runGuarded('foreignMilNews', () => this.loadForeignMilNews()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'spcMesoscale', task: runGuarded('spcMesoscale', () => this.loadSpcMesoscale()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'extendedForecast', task: runGuarded('extendedForecast', () => this.loadExtendedForecast()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'weatherRadar', task: runGuarded('weatherRadar', () => this.loadWeatherRadar()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'tidePredictions', task: runGuarded('tidePredictions', () => this.loadTidePredictions()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'pollenData', task: runGuarded('pollenData', () => this.loadPollenData()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'lightning', task: runGuarded('lightning', () => this.loadLightning()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'redFlagWarnings', task: runGuarded('redFlagWarnings', () => this.loadRedFlagWarnings()) });
- if (SITE_VARIANT === 'full') tasks.push({ name: 'satellites', task: runGuarded('satellites', () => this.loadSatellites()) });
- if (SITE_VARIANT !== 'happy') tasks.push({ name: 'threat-intel-hub', task: runGuarded('threat-intel-hub', () => this.loadThreatIntelHub()) });
- if (SITE_VARIANT !== 'happy') tasks.push({ name: 'geo-intel', task: runGuarded('geo-intel', () => this.loadGeoIntel()) });
- if (SITE_VARIANT !== 'happy') tasks.push({ name: 'dark-web', task: runGuarded('dark-web', () => this.loadDarkWeb()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'firms', task: () => runGuarded('firms', () => this.loadFirmsData()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'inpeFires', task: () => runGuarded('inpeFires', () => this.loadInpeFires()) });
+ if (this.ctx.mapLayers.natural) tasks.push({ name: 'natural', task: () => runGuarded('natural', () => this.loadNatural()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.weather) tasks.push({ name: 'weather', task: () => runGuarded('weather', () => this.loadWeatherAlerts()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.ais) tasks.push({ name: 'ais', task: () => runGuarded('ais', () => this.loadAisSignals()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.adsb) tasks.push({ name: 'adsb', task: () => runGuarded('adsb', () => this.loadAdsb()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.cables) tasks.push({ name: 'cables', task: () => runGuarded('cables', () => this.loadCableActivity()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.cables) tasks.push({ name: 'cableHealth', task: () => runGuarded('cableHealth', () => this.loadCableHealth()) });
+ if (SITE_VARIANT !== 'happy' && this.ctx.mapLayers.flights) tasks.push({ name: 'flights', task: () => runGuarded('flights', () => this.loadFlightDelays()) });
+ if (SITE_VARIANT !== 'happy' && CYBER_LAYER_ENABLED && this.ctx.mapLayers.cyberThreats) tasks.push({ name: 'cyberThreats', task: () => runGuarded('cyberThreats', () => this.loadCyberThreats()) });
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'iranAttacks', task: () => runGuarded('iranAttacks', () => this.loadIranEvents()) });
+ if (SITE_VARIANT !== 'happy' && (this.ctx.mapLayers.techEvents || SITE_VARIANT === 'tech')) tasks.push({ name: 'techEvents', task: () => runGuarded('techEvents', () => this.loadTechEvents()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'spaceWeather', task: () => runGuarded('spaceWeather', () => this.loadSpaceWeather()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'spaceflightNews', task: () => runGuarded('spaceflightNews', () => this.loadSpaceflightNews()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'spaceLaunches', task: () => runGuarded('spaceLaunches', () => this.loadSpaceLaunches()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'diseaseOutbreaks', task: () => runGuarded('diseaseOutbreaks', () => this.loadDiseaseOutbreaks()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'diseaseIntel', task: () => runGuarded('diseaseIntel', () => this.loadDiseaseIntel()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'humanitarianCrises', task: () => runGuarded('humanitarianCrises', () => this.loadHumanitarianCrises()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'federalRegister', task: () => runGuarded('federalRegister', () => this.loadFederalRegister()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'airQuality', task: () => runGuarded('airQuality', () => this.loadAirQuality()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'wildfireIncidents', task: () => runGuarded('wildfireIncidents', () => this.loadWildfireIncidents()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'hazmatIncidents', task: () => runGuarded('hazmatIncidents', () => this.loadHazmatIncidents()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'oilSpills', task: () => runGuarded('oilSpills', () => this.loadOilSpills()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'gdacsAlerts', task: () => runGuarded('gdacsAlerts', () => this.loadGDACSAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoAlerts', task: () => runGuarded('volcanoAlerts', () => this.loadVolcanoAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'nwsAlerts', task: () => runGuarded('nwsAlerts', () => this.loadNWSAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'faaCameras', task: () => runGuarded('faaCameras', () => this.loadFAACameras()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'savedPlaceWeather', task: () => runGuarded('savedPlaceWeather', () => this.loadSavedPlaceWeather()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'emaForecast', task: () => runGuarded('emaForecast', () => this.runEMAForecast()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'globalWeather', task: () => runGuarded('globalWeather', () => this.loadGlobalWeather()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'openSanctions', task: () => runGuarded('openSanctions', () => this.loadOpenSanctions()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'edgarFilings', task: () => runGuarded('edgarFilings', () => this.loadEdgarFilings()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'infrastructure', task: () => runGuarded('infrastructure', () => this.loadInfrastructure()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'iswReports', task: () => runGuarded('iswReports', () => this.loadIswReports()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'natoNews', task: () => runGuarded('natoNews', () => this.loadNatoNews()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'dodNews', task: () => runGuarded('dodNews', () => this.loadDodNews()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'reliefWeb', task: () => runGuarded('reliefWeb', () => this.loadReliefWebCrises()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'bellingcat', task: () => runGuarded('bellingcat', () => this.loadBellingcat()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'travelWarnings', task: () => runGuarded('travelWarnings', () => this.loadTravelWarnings()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'emscSeismic', task: () => runGuarded('emscSeismic', () => this.loadEmscSeismic()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'acapsCrises', task: () => runGuarded('acapsCrises', () => this.loadAcapsCrises()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'liveUaMap', task: () => runGuarded('liveUaMap', () => this.loadLiveUaMap()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'debrisReentries', task: () => runGuarded('debrisReentries', () => this.loadDebrisReentries()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'amtrakAlerts', task: () => runGuarded('amtrakAlerts', () => this.loadAmtrakAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'avalancheHazard', task: () => runGuarded('avalancheHazard', () => this.loadAvalancheHazard()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'armsTransfers', task: () => runGuarded('armsTransfers', () => this.loadArmsTransfers()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'ecdcSurveillance', task: () => runGuarded('ecdcSurveillance', () => this.loadEcdcSurveillance()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'fdicFailures', task: () => runGuarded('fdicFailures', () => this.loadFdicFailures()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'habsos', task: () => runGuarded('habsos', () => this.loadHabsos()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'unSecurityCouncil', task: () => runGuarded('unSecurityCouncil', () => this.loadUnSecurityCouncil()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'wildfireSmoke', task: () => runGuarded('wildfireSmoke', () => this.loadWildfireSmoke()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'centralBankCalendar', task: () => runGuarded('centralBankCalendar', () => this.loadCentralBankCalendar()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'congressDefense', task: () => runGuarded('congressDefense', () => this.loadCongressDefense()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'combatantCommands', task: () => runGuarded('combatantCommands', () => this.loadCombatantCommands()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'foreignMilNews', task: () => runGuarded('foreignMilNews', () => this.loadForeignMilNews()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'spcMesoscale', task: () => runGuarded('spcMesoscale', () => this.loadSpcMesoscale()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'extendedForecast', task: () => runGuarded('extendedForecast', () => this.loadExtendedForecast()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'weatherRadar', task: () => runGuarded('weatherRadar', () => this.loadWeatherRadar()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'tidePredictions', task: () => runGuarded('tidePredictions', () => this.loadTidePredictions()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'pollenData', task: () => runGuarded('pollenData', () => this.loadPollenData()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'lightning', task: () => runGuarded('lightning', () => this.loadLightning()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'redFlagWarnings', task: () => runGuarded('redFlagWarnings', () => this.loadRedFlagWarnings()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'satellites', task: () => runGuarded('satellites', () => this.loadSatellites()) });
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'threat-intel-hub', task: () => runGuarded('threat-intel-hub', () => this.loadThreatIntelHub()) });
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'geo-intel', task: () => runGuarded('geo-intel', () => this.loadGeoIntel()) });
+ if (SITE_VARIANT !== 'happy') tasks.push({ name: 'dark-web', task: () => runGuarded('dark-web', () => this.loadDarkWeb()) });
 
  if (SITE_VARIANT === 'tech') {
- tasks.push({ name: 'techReadiness', task: runGuarded('techReadiness', () => (this.ctx.panels['tech-readiness'] as TechReadinessPanel)?.refresh()) });
+ tasks.push({ name: 'techReadiness', task: () => runGuarded('techReadiness', () => (this.ctx.panels['tech-readiness'] as TechReadinessPanel)?.refresh()) });
  }
 
- const results = await Promise.allSettled(tasks.map(t => t.task));
+ const limiter = createConcurrencyLimiter(12);
+ const results = await limiter.mapSettled(tasks, t => t.task());
 
  results.forEach((result, idx) => {
  if (result.status === 'rejected') {

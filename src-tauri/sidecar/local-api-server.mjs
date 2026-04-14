@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import http, { createServer } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
 import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync } from 'node:fs';
@@ -11,6 +12,14 @@ import os from 'node:os';
 import { pathToFileURL } from 'node:url';
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
+function isValidToken(authHeader) {
+  const tok = process.env.LOCAL_API_TOKEN;
+  if (!tok) return false;
+  const expected = Buffer.from(`Bearer ${tok}`);
+  const actual = Buffer.from(authHeader);
+  if (expected.length !== actual.length) return false;
+  return timingSafeEqual(expected, actual);
+}
 // Node 22 ships a built-in WebSocket global (WHATWG API) — no external dep needed.
 const AisWebSocket = WebSocket;
 
@@ -1664,10 +1673,9 @@ async function dispatch(requestUrl, req, routes, context) {
   // Every endpoint below requires a valid LOCAL_API_TOKEN.  This prevents
   // other local processes, malicious browser scripts, and rogue extensions
   // from accessing the sidecar API without the per-session token.
-  const expectedToken = process.env.LOCAL_API_TOKEN;
-  if (expectedToken) {
+  {
  const authHeader = req.headers.authorization || '';
- if (authHeader !== `Bearer ${expectedToken}`) {
+ if (!isValidToken(authHeader)) {
  context.logger.warn(`[local-api] unauthorized request to ${requestUrl.pathname}`);
  return json({ error: 'Unauthorized' }, 401);
  }
@@ -5983,6 +5991,10 @@ async function dispatch(requestUrl, req, routes, context) {
 }
 
 export async function createLocalApiServer(options = {}) {
+  if (!process.env.LOCAL_API_TOKEN) {
+    console.error('[sidecar] FATAL: LOCAL_API_TOKEN not set — refusing to start');
+    process.exit(1);
+  }
   const context = resolveConfig(options);
   loadVerboseState(context.dataDir);
   const routes = await buildRouteTable(context.apiDir);
@@ -6032,10 +6044,9 @@ export async function createLocalApiServer(options = {}) {
 
  // ── /api/health — lightweight liveness probe ──────────────────────
  if (requestUrl.pathname === '/api/health') {
- const expectedToken = process.env.LOCAL_API_TOKEN;
- if (expectedToken) {
+ {
  const authHeader = req.headers['authorization'] || '';
- if (authHeader !== `Bearer ${expectedToken}`) {
+ if (!isValidToken(authHeader)) {
  res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
  res.end(JSON.stringify({ error: 'Unauthorized' }));
  return;
@@ -6058,10 +6069,9 @@ export async function createLocalApiServer(options = {}) {
 
  // ── /api/diag — full diagnostics snapshot for bug reports ─────────
  if (requestUrl.pathname === '/api/diag') {
- const expectedToken = process.env.LOCAL_API_TOKEN;
- if (expectedToken) {
+ {
  const authHeader = req.headers['authorization'] || '';
- if (authHeader !== `Bearer ${expectedToken}`) {
+ if (!isValidToken(authHeader)) {
  res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
  res.end(JSON.stringify({ error: 'Unauthorized' }));
  return;
@@ -6106,10 +6116,9 @@ export async function createLocalApiServer(options = {}) {
 
  // Ollama streaming — handled before dispatch() to bypass arrayBuffer() buffering
  if (requestUrl.pathname === '/api/ollama-stream' && req.method === 'POST') {
- const expectedToken = process.env.LOCAL_API_TOKEN;
- if (expectedToken) {
+ {
  const authHeader = req.headers['authorization'] || '';
- if (authHeader !== `Bearer ${expectedToken}`) {
+ if (!isValidToken(authHeader)) {
  context.logger.warn(`[local-api] unauthorized request to ${requestUrl.pathname}`);
  res.writeHead(401, { 'content-type': 'application/json' });
  res.end(JSON.stringify({ error: 'Unauthorized' }));
@@ -6123,10 +6132,9 @@ export async function createLocalApiServer(options = {}) {
  // Generic intel generation — proxies arbitrary prompt/system to a local
  // OpenAI-compatible endpoint (LM Studio, Ollama, etc.) at OLLAMA_API_URL.
  if (requestUrl.pathname === '/api/intel-generate' && req.method === 'POST') {
- const expectedToken = process.env.LOCAL_API_TOKEN;
- if (expectedToken) {
+ {
  const authHeader = req.headers['authorization'] || '';
- if (authHeader !== `Bearer ${expectedToken}`) {
+ if (!isValidToken(authHeader)) {
  res.writeHead(401, { 'content-type': 'application/json' });
  res.end(JSON.stringify({ error: 'Unauthorized' }));
  return;

@@ -160,13 +160,21 @@ function mergeOverlappingRegions(regionMap: Map<string, Situation[]>): Situation
   return mergedGroups;
 }
 
+function sanitizeForPrompt(text: string): string {
+  return text
+    .replace(/[\n\r]/g, ' ')
+    .replace(/`/g, "'")
+    .replace(/\b(SYSTEM|ASSISTANT|USER|HUMAN|TOOL):/gi, '$1 -')
+    .slice(0, 150);
+}
+
 /** Build the signal-by-domain summary map for a group of situations */
 function buildSignalsByDomain(group: Situation[]): Record<string, string[]> {
   const signalsByDomain: Record<string, string[]> = {};
   for (const sit of group) {
  const domainLabel = DOMAIN_LABELS[sit.domain] ?? sit.domain;
  signalsByDomain[domainLabel] ??= [];
- signalsByDomain[domainLabel].push(sit.title);
+ signalsByDomain[domainLabel].push(sanitizeForPrompt(sit.title));
   }
   return signalsByDomain;
 }

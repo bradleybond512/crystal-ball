@@ -339,6 +339,7 @@ const ICON_DRAW_FNS: Record<string, IconDrawFn> = {
   diamond: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.lineTo(30, 16); ctx.lineTo(16, 30); ctx.lineTo(2, 16); ctx.closePath(); ctx.fill(); },
   star: (ctx) => { ctx.beginPath(); const pts = [[16,2],[20,12],[30,12],[22,19],[25,30],[16,23],[7,30],[10,19],[2,12],[12,12]]; ctx.moveTo(pts[0]![0]!, pts[0]![1]!); for (let i = 1; i < pts.length; i++) { ctx.lineTo(pts[i]![0]!, pts[i]![1]!); } ctx.closePath(); ctx.fill(); },
   airplane: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 1); ctx.lineTo(14, 10); ctx.lineTo(4, 18); ctx.lineTo(4, 20); ctx.lineTo(14, 17); ctx.lineTo(14, 25); ctx.lineTo(10, 28); ctx.lineTo(10, 30); ctx.lineTo(16, 28); ctx.lineTo(22, 30); ctx.lineTo(22, 28); ctx.lineTo(18, 25); ctx.lineTo(18, 17); ctx.lineTo(28, 20); ctx.lineTo(28, 18); ctx.lineTo(18, 10); ctx.closePath(); ctx.fill(); },
+  fighter: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 1); ctx.lineTo(14, 8); ctx.lineTo(2, 16); ctx.lineTo(2, 18); ctx.lineTo(14, 15); ctx.lineTo(13, 22); ctx.lineTo(8, 26); ctx.lineTo(8, 28); ctx.lineTo(14, 25); ctx.lineTo(14, 29); ctx.lineTo(16, 31); ctx.lineTo(18, 29); ctx.lineTo(18, 25); ctx.lineTo(24, 28); ctx.lineTo(24, 26); ctx.lineTo(19, 22); ctx.lineTo(18, 15); ctx.lineTo(30, 18); ctx.lineTo(30, 16); ctx.lineTo(18, 8); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(12, 10); ctx.lineTo(10, 12); ctx.lineTo(14, 11); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(20, 10); ctx.lineTo(22, 12); ctx.lineTo(18, 11); ctx.closePath(); ctx.fill(); },
   ship: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 3); ctx.lineTo(20, 10); ctx.lineTo(21, 24); ctx.lineTo(19, 29); ctx.lineTo(13, 29); ctx.lineTo(11, 24); ctx.lineTo(12, 10); ctx.closePath(); ctx.fill(); },
   satellite: (ctx) => { ctx.beginPath(); ctx.roundRect(13, 8, 6, 16, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(2, 12, 10, 8, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(20, 12, 10, 8, 1); ctx.fill(); },
   earthquake: (ctx) => { ctx.beginPath(); ctx.moveTo(4, 16); ctx.lineTo(8, 8); ctx.lineTo(12, 22); ctx.lineTo(16, 6); ctx.lineTo(20, 26); ctx.lineTo(24, 10); ctx.lineTo(28, 16); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); },
@@ -2477,17 +2478,19 @@ export class DeckGLMap {
  id: 'military-flights-layer',
  data: flights,
  getPosition: (d) => [d.lon, d.lat],
- getIcon: () => 'airplane',
+ getIcon: () => 'fighter',
  iconAtlas: getIconAtlas(),
  iconMapping: getIconMapping(),
  getAngle: (d) => -d.heading,
- getSize: 22,
- sizeMinPixels: 8,
- sizeMaxPixels: 22,
+ getSize: 24,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 24,
  getColor: (d) => {
  if (d.onGround) return [120, 120, 120, 160] as [number, number, number, number];
- const [r, g, b] = altitudeToColor(d.altitude);
- return [r, g, b, 220] as [number, number, number, number];
+ if (d.operator === 'usaf' || d.operator === 'usn' || d.operator === 'usa' || d.operator === 'usmc') return [52, 211, 153, 240] as [number, number, number, number];
+ if (d.operatorCountry === 'Russia') return [248, 113, 113, 240] as [number, number, number, number];
+ if (d.operatorCountry === 'China') return [251, 191, 36, 240] as [number, number, number, number];
+ return [129, 140, 248, 240] as [number, number, number, number];
  },
  pickable: true,
  });

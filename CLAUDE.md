@@ -113,3 +113,24 @@ API keys entered via gear icon → API Keys tab. None embed the brand in their n
 ## Secret Scan Guardrail
 
 Mandatory repo secret scan enforcement in hooks and CI. Keep `npm run secrets:scan:staged` and `npm run secrets:scan` active and passing.
+
+## Cross-session coordination: `tools/cb-control/`
+
+A local daemon at `http://127.0.0.1:46987` registers every Claude CLI
+session on this Mac and exposes an HTTP API to list them, read their
+recent output, relay commands into them, and spawn new ones. It's how
+the user drives sessions remotely from their iPhone and how Claude
+sessions can coordinate with each other.
+
+**If the user asks you to check what another session is doing, hand off
+work to another session, or spawn parallel sessions, read
+`tools/cb-control/CLAUDE.md` — it has the full API surface, patterns,
+and safety rules.**
+
+Quick check it's running:
+```bash
+curl -fsS http://127.0.0.1:46987/health && \
+  TOKEN=$(cat ~/.config/cb-control/token) && \
+  curl -fsS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:46987/api/sessions | jq
+```
+

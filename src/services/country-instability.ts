@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, sonarjs/cognitive-complexity, sonarjs/no-nested-conditional */
 import type { SocialUnrestEvent, MilitaryFlight, MilitaryVessel, ClusteredEvent, InternetOutage, AisDisruptionEvent, CyberThreat } from '@/types';
 import type { AirportDelayAlert } from '@/services/aviation';
 import type { SecurityAdvisory } from '@/services/security-advisories';
@@ -11,6 +12,7 @@ import type { CountryDisplacement } from '@/services/displacement';
 import type { ClimateAnomaly } from '@/services/climate';
 import type { GpsJamHex } from '@/services/gps-interference';
 import { getCountryAtCoordinates, iso3ToIso2Code, nameToCountryCode, getCountryNameByCode, matchCountryNamesInText, ME_STRIKE_BOUNDS, resolveCountryFromBounds } from './country-geometry';
+import { hasElectionSoon, type Election } from '@/config/elections';
 
 export interface CountryScore {
   code: string;
@@ -21,6 +23,8 @@ export interface CountryScore {
   change24h: number;
   components: ComponentScores;
   lastUpdated: Date;
+  /** Set when a national election is within the 30-day window. Triggers 1.3x on information component. */
+  electionWindow?: Election;
 }
 
 export interface ComponentScores {
@@ -883,11 +887,14 @@ export function calculateCII(): CountryScore[] {
  const data = countryDataMap.get(code) || initCountryData();
  const baselineRisk = CURATED_COUNTRIES[code]?.baselineRisk ?? DEFAULT_BASELINE_RISK;
 
+ const election = hasElectionSoon(code, 30) ?? undefined;
+ const rawInformation = calcInformationScore(data, code);
+ const boostedInformation = election ? rawInformation * 1.3 : rawInformation;
  const components: ComponentScores = {
  unrest: Math.round(calcUnrestScore(data, code)),
  conflict: Math.round(calcConflictScore(data, code)),
  security: Math.round(calcSecurityScore(data)),
- information: Math.round(calcInformationScore(data, code)),
+ information: Math.round(Math.min(100, boostedInformation)),
  };
 
  const eventScore = components.unrest * 0.25 + components.conflict * 0.3 + components.security * 0.2 + components.information * 0.25;
@@ -924,6 +931,7 @@ export function calculateCII(): CountryScore[] {
  change24h: score - prev,
  components,
  lastUpdated: new Date(),
+ electionWindow: election,
  });
 
  previousScores.set(code, score);

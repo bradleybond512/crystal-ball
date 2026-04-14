@@ -286,6 +286,8 @@ import { analyzeWeatherImpacts, weatherToSupplyChainSignals } from '@/services/w
 import { ingestEvent as ingestCorrelationMatrix, classifyRegion, getGlobalScore as getMatrixGlobalScore } from '@/services/correlation-matrix';
 import { ingestWeatherAnomalySignals, ingestMatrixScoreSignal, anomalyEngine } from '@/services/anomaly-detection';
 import { notificationDispatcher } from '@/services/notification-dispatcher';
+import { initWebhookDispatcher } from '@/services/webhook-dispatcher';
+import { detectStrikePackages } from '@/services/strike-package';
 import { fetchSatelliteCatalog } from '@/services/satellite-catalog';
 import { satellitePropagator } from '@/services/satellite-propagator';
 import { unifiedAlertStore } from '@/services/unified-alerts';
@@ -386,6 +388,9 @@ export class DataLoaderManager implements AppModule {
  notificationDispatcher.dispatchAnomalyAlert(anomaly);
  }
  });
+
+ // Wire outbound webhook dispatcher (Slack / Discord / generic)
+ initWebhookDispatcher();
 
  // Bridge breaking-news events into the unified alert store
  document.addEventListener('wm:breaking-news', (e: Event) => {
@@ -1547,6 +1552,19 @@ export class DataLoaderManager implements AppModule {
  signalAggregator.ingestFlights(flightData.flights);
  signalAggregator.ingestVessels(vesselData.vessels);
  ingestMilFlightsToOrbat(flightData.flights);
+ // Strike package detection — classify coordinated air operations
+ const strikePackages = detectStrikePackages(flightData.flights);
+ if (strikePackages.length > 0) {
+ document.dispatchEvent(new CustomEvent('wm:strike-packages', { detail: strikePackages }));
+ for (const pkg of strikePackages) {
+ if (pkg.threatLevel === 'critical' && pkg.inSensitiveAirspace) {
+ notificationDispatcher.dispatchConvergenceAlert(
+ `${pkg.label}: ${pkg.aircraftCount} aircraft in sensitive airspace — ${pkg.description.slice(0, 120)}`,
+ pkg.threatScore, pkg.lat, pkg.lon,
+ );
+ }
+ }
+ }
  ingestMilVesselsToOrbat(vesselData.vessels);
  ingestMilVesselsToDarkVessel(vesselData.vessels);
  checkGeofenceMilitary(flightData.flights);

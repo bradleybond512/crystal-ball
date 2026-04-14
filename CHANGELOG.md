@@ -6,6 +6,21 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Strike package intelligence** (`strike-package.ts` + `StrikePackagesPanel`): Detects coordinated military aircraft formations (offensive-strike, CAP, ISR, tanker-bridge, humanitarian, training) from live flight data. Clusters within 150km, classifies by role mix, scores threat 0-100 weighted by package type, size, 11 sensitive airspace zones (Persian Gulf, Taiwan Strait, Ukraine, Korean Peninsula, etc.), coalition composition, and altitude profile. Critical packages in sensitive airspace trigger native notifications.
+- **Alerts Enhancement Roadmap shipped** (Phases 0-3):
+  - **P0.2 Relevance scoring** (`relevance-scoring.ts`): 0-100 composite score from severity × proximity × freshness × novelty × source_trust.
+  - **P1.1 Near-Me filter** (`near-me-filter.ts`): NearMeMode (off/near-me/strict), distance stamping, user-location hint fallback.
+  - **P1.2 Situation clustering** (`situation-clustering.ts`): Alert-centric lightweight Situation grouping by <100km / <6h / category overlap, with escalating/stable/de-escalating trend classification.
+  - **P1.3 Alert archive** (`alert-store.ts`): Added `archiveAlert`, `getArchivedAlerts`, `getAlertTrendStats` (with % delta vs prior window), `pruneOldAlerts`. 30-day IndexedDB retention preserved.
+  - **P2.1 Multi-location watchlist** (`multi-location-watchlist.ts`): `WatchedLocation` with `kind` (primary/secondary/travel) and `radiusKm`, CRUD, findNearestLocation, tagAlertWithNearest.
+  - **P2.2 Alert rules engine** (`alert-rules-engine.ts`): User-defined IF/THEN rules with 6 operators (equals/contains/gte/lte/in/within-km), priority-sorted evaluation, 5 preset rules (Earthquake Watcher, Storm Chaser, Conflict Monitor, Financial Alert).
+  - **P2.3 Action response cards** (`action-cards.ts`): 14 category-specific action checklists with immediate/short-term items, sourced from FEMA/NOAA/CDC/CISA public safety guidance.
+  - **P3.2 Escalation lifecycle** (`escalation-lifecycle.ts`): LifecyclePhase (emerging/active/peak/de-escalating/resolved), auto-resolve after 12h idle, severity-transition notifications, 15-minute reassessment loop.
+- **Webhook dispatcher** (`webhook-dispatcher.ts`): Outbound Slack/Discord/generic webhook delivery for critical signals. Severity filtering, 30s per-webhook rate limit, 5s timeout, subscribes to compound threats, strike packages, and critical anomalies.
+- **Election calendar** (`config/elections.ts`): 27 upcoming elections across 27 countries with helpers `getElectionsInWindow`, `hasElectionSoon`. Wired into `country-instability.ts`: 1.3x information-component multiplier within 30 days of election, with `electionWindow` annotation on CountryScore for UI badging.
+- **Stablecoin de-peg correlation signal** (`stablecoin-depeg-signal.ts`): Detects when a stablecoin deviates >0.5% from peg AND a country has CII > 70.
+- **CII choropleth layer data** (`cii-choropleth.ts`): Country-level fill/line color mapping with red-yellow-green 0-100 scale, ready for deck.gl GeoJsonLayer.
+- **Custom Tier 2 country watchlist** (`cii-custom-watchlist.ts`): User-defined additional CII monitoring targets with localStorage persistence.
 - **Weather-threat convergence detection** (`weather-threat-convergence.ts`): New service that detects when severe weather events overlap geographically with existing conflict, infrastructure, or health threats. 11 weather-threat interaction rules with risk multipliers (heat+grid, hurricane+conflict, flood+industrial, drought+food, etc.).
 - **Weather impact analysis** (`weather-impact.ts`): Scores severe weather against 30+ critical infrastructure points (military bases, maritime chokepoints, power grid hubs, population centers, agricultural regions). Generates `DisruptionSignal`-compatible outputs for the supply-chain-impact service.
 - **8 new weather cascade causal rules** in `alert-correlator.ts`: NWS→grid, NWS→comms-health, NWS→aviation-hazard, GDACS→maritime, earthquake→grid/comms-health (magnitude-scaled radius), cyclone→air-quality, disease→breaking-news.

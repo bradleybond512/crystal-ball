@@ -245,6 +245,17 @@ Data Sources (RSS, NWS, GDACS, OREF, ACLED, ...)
 | 2026-04-14 | 1 | Correlation matrix drill-down UI | Done | Cells clickable with score/trend/event-count detail view |
 | 2026-04-14 | 0 | Notification dispatcher expansion | Done | New methods for compound threats, critical anomalies, and convergence alerts; wired to native Tauri notifications |
 | 2026-04-14 | 1 | Anomaly detection stream expansion | Done | New ingest helpers for weather alert counts, regional news volume, matrix global score |
+| 2026-04-14 | 0.1 | Unified Alert Inbox panel | Done | `UnifiedAlertInboxPanel` already shipped; includes keyboard shortcuts (J/K/A/P), severity/time/distance/relevance sorts, filter bar |
+| 2026-04-14 | 0.2 | Composite relevance scoring | Done | `relevance-scoring.ts` — severity × proximity × freshness × novelty × source_trust composite (0-100) with `sortAlertsByRelevance` |
+| 2026-04-14 | 1.1 | Cross-source Near-Me proximity filter | Done | `near-me-filter.ts` — three modes (off/near-me/strict), distance stamping, primary location from watchlist with miles→km conversion |
+| 2026-04-14 | 1.2 | Alert grouping into Situations | Done | `situation-clustering.ts` — lightweight alert-centric Situation type; geo<100km + temporal<6h + category overlap; escalating/stable/de-escalating trend classification |
+| 2026-04-14 | 1.3 | Alert persistence (IndexedDB) | Done | Enhanced `alert-store.ts`: `archiveAlert`, `getArchivedAlerts` (filtered search), `getAlertTrendStats` (% delta vs prior window), `pruneOldAlerts`. Existing 30-day retention preserved |
+| 2026-04-14 | 2.1 | Multi-location watchlist | Done | `multi-location-watchlist.ts` — `WatchedLocation` with `kind` (primary/secondary/travel) and `radiusKm`, CRUD + findNearestLocation + tagAlertWithNearest |
+| 2026-04-14 | 2.2 | User-defined alert rules engine | Done | `alert-rules-engine.ts` — 6 operators, AND-joined conditions, priority-sorted evaluation, 5 preset rules, localStorage persistence |
+| 2026-04-14 | 2.3 | Actionable response cards | Done | `action-cards.ts` — 14 category-specific action checklists (earthquake, tsunami, hurricane, tornado, wildfire, flood, winter-storm, conflict, cyber, financial, disease, space weather, power grid, generic) sourced from FEMA/NOAA/CDC/CISA |
+| 2026-04-14 | 3.2 | Escalation lifecycle tracking | Done | `escalation-lifecycle.ts` — LifecyclePhase (emerging/active/peak/de-escalating/resolved), auto-resolve after 12h idle, severity-transition notifications, 15-min reassessment loop |
+| 2026-04-14 | — | Webhook dispatcher (TODO-003) | Done | `webhook-dispatcher.ts` — Slack/Discord/generic formats, severity filtering, 30s rate limit, subscribes to compound threats, strike packages, anomalies |
+| 2026-04-14 | — | Strike package intelligence (NEW) | Done | `strike-package.ts` + `StrikePackagesPanel` — military aircraft formation detection with 7 mission classifications and 11 sensitive airspace zones; critical packages in sensitive airspace trigger notifications |
 
 ---
 

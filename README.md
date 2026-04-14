@@ -42,6 +42,7 @@ Full-viewport Cesium.js 3D globe mode. Activate with `G` or the sidebar.
 | **Space & Satellites** | ISS + Starlink + weather satellite tracking, SGP4 propagation, real-time orbital positions, satellite ISR intelligence |
 | **Infrastructure** | Submarine cables, maritime vessels, flight tracking, port status, datacenter outages, internet exchange points, CCTV & webcams |
 | **Disasters** | GDACS Red/Orange events, M6.5+ earthquakes, wildfire perimeters (NASA FIRMS), cyclone paths |
+| **Cross-Domain Correlation** | 40+ directional causal rules (earthquake→tsunami, NWS→grid, cyclone→maritime, etc.), region×domain correlation matrix with drill-down UI, compound threat detection across 20+ hazard patterns, weather-threat convergence scoring, sentiment divergence signals, anomaly detection with Z-score statistical monitoring, OODA-loop situation engine |
 
 ## What Makes This Hard
 

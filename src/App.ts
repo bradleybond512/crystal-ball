@@ -614,6 +614,7 @@ export class App {
  { name: 'tropicalCyclones', fn: () => this.dataLoader.loadTropicalCyclones(), intervalMs: 30 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'savedPlaceWeather', fn: () => this.dataLoader.loadSavedPlaceWeather(), intervalMs: 30 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'foodInsecurity', fn: () => this.dataLoader.loadFoodInsecurity(), intervalMs: 4 * 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
+      { name: 'worldBankBaselines', fn: () => this.dataLoader.loadWorldBankBaselines(), intervalMs: 6 * 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'globalWeather', fn: () => this.dataLoader.loadGlobalWeather(), intervalMs: 30 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'openSanctions', fn: () => this.dataLoader.loadOpenSanctions(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'edgarFilings', fn: () => this.dataLoader.loadEdgarFilings(), intervalMs: 30 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },

@@ -36,3 +36,18 @@ describe('RIPE Atlas wiring', () => {
     assert.match(appSrc, /loadRipeAtlas/);
   });
 });
+
+describe('World Bank data-loader wiring', () => {
+  it('data-loader imports fetchWorldBankProfile', () => {
+    assert.match(dataLoaderSrc, /fetchWorldBankProfile/);
+  });
+
+  it('data-loader has loadWorldBankBaselines method', () => {
+    assert.match(dataLoaderSrc, /async loadWorldBankBaselines\(\): Promise<void>/);
+  });
+
+  it('App.ts scheduler includes worldBankBaselines', () => {
+    assert.match(appSrc, /worldBankBaselines/);
+    assert.match(appSrc, /loadWorldBankBaselines/);
+  });
+});

@@ -310,6 +310,7 @@ import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
 import { fetchAcledEvents, fetchAdsbMilitary } from '@/services/osint';
 import { fetchHibpBreaches, fetchTorMetrics } from '@/services/osint';
+import { fetchWorldBankProfile } from '@/services/world-bank';
 import type { ThreatIntelHubPanel } from '@/components/ThreatIntelHubPanel';
 import type { GeoIntelPanel } from '@/components/GeoIntelPanel';
 import type { DarkWebPanel } from '@/components/DarkWebPanel';
@@ -3553,6 +3554,15 @@ export class DataLoaderManager implements AppModule {
  } catch (error) {
  console.warn('[satellites] fetch failed', error);
  }
+  }
+
+  async loadWorldBankBaselines(): Promise<void> {
+    try {
+      const keyCodes = ['USA', 'CHN', 'RUS', 'IND', 'DEU', 'GBR', 'FRA', 'JPN', 'BRA', 'SAU', 'IRN', 'UKR', 'ISR', 'TWN', 'KOR'];
+      await Promise.allSettled(keyCodes.map(iso => fetchWorldBankProfile(iso)));
+    } catch (error) {
+      console.error('[App] World Bank baselines fetch failed:', error);
+    }
   }
 
   async loadDarkWeb(): Promise<void> {

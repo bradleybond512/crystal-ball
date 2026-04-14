@@ -216,14 +216,21 @@ Common subfolders:
 1. Build required OS + variant package(s).
 2. Move artifacts to a clean machine (or fresh VM).
 3. Install/launch:
- - macOS: mount `.dmg`, drag app to Applications, launch.
- - Windows: run `.exe` or `.msi`, launch from Start menu.
+
+   - macOS: mount `.dmg`, drag app to Applications, launch.
+   - Windows: run `.exe` or `.msi`, launch from Start menu.
+
 4. Validate startup:
- - App window opens without crash.
- - Map view renders.
- - Initial data loading path does not fatal-error.
+
+   - App window opens without crash.
+   - Map view renders.
+   - Initial data loading path does not fatal-error.
+
 5. Validate variant identity:
- - Window title and product name match expected variant.
+
+   - Window title and product name match expected variant.
+
 6. If signing was enabled:
- - Verify code-signing metadata in OS dialogs/properties.
- - Verify notarization/Gatekeeper acceptance on macOS.
+
+   - Verify code-signing metadata in OS dialogs/properties.
+   - Verify notarization/Gatekeeper acceptance on macOS.

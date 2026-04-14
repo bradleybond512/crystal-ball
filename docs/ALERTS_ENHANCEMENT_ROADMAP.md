@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD031 MD032 -->
 # Crystal Ball — Alerts Enhancement Roadmap
 
 > **Created**: 2026-03-31

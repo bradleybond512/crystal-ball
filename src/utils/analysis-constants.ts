@@ -213,6 +213,7 @@ export function findRelatedTopics(prediction: string): string[] {
 }
 
 export function generateSignalId(): string {
+  // eslint-disable-next-line sonarjs/pseudo-random -- non-cryptographic ID for deduplication
   return `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
@@ -243,7 +244,9 @@ export type SignalType =
   | 'explained_market_move'
   | 'hotspot_escalation'
   | 'sector_cascade'
-  | 'military_surge';
+  | 'military_surge'
+  | 'sentiment_divergence'
+  | 'weather_correlation';
 
 export interface SignalContext {
   whyItMatters: string;
@@ -321,6 +324,16 @@ export const SIGNAL_CONTEXT: Record<SignalType, SignalContext> = {
  whyItMatters: 'Military transport activity significantly above baseline—indicates potential deployment, humanitarian operation, or force projection.',
  actionableInsight: 'Correlate with regional news; assess nearby base activity and naval movements.',
  confidenceNote: 'Higher confidence with sustained activity over multiple hours and diverse aircraft types.',
+  },
+  sentiment_divergence: {
+ whyItMatters: 'News sentiment is diverging sharply from market or baseline trend—indicates building concern not yet priced in.',
+ actionableInsight: 'Cross-reference with market moves and watch for delayed reactions in affected sectors.',
+ confidenceNote: 'Confidence scales with sentiment intensity and cross-source consistency.',
+  },
+  weather_correlation: {
+ whyItMatters: 'Severe weather is converging with active threats (conflict, infrastructure, health) creating compound risk.',
+ actionableInsight: 'Flag impacted infrastructure and populations; prepare for cascading service disruptions.',
+ confidenceNote: 'Higher confidence with Extreme/Severe weather severity overlapping 3+ threat sources.',
   },
 };
 

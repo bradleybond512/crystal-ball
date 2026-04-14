@@ -21,6 +21,8 @@ import type { ForecastResult } from './ema-forecast';
 import { runClaudeAgent } from './claude-agent';
 import type { AgentResponse } from './claude-agent';
 import { generateSummary } from './summarization';
+import { getActiveConvergences } from './weather-threat-convergence';
+import { getHotspots as getMatrixHotspots } from './correlation-matrix';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -120,6 +122,25 @@ function buildContextSummary(ctx: BriefingContext): string {
  for (const f of highRiskForecasts.slice(0, 10)) {
  lines.push(`- ${f.region}: risk=${f.risk24h}/100, trend=${f.trending}, deviation=${f.deviation.toFixed(1)} SD`);
  }
+  }
+
+  // Weather-threat convergence zones
+  const convergences = getActiveConvergences();
+  if (convergences.length > 0) {
+    lines.push(`\n## Weather-Threat Convergence (${convergences.length})`);
+    for (const c of convergences.slice(0, 8)) {
+      const threats = c.collocatedThreats.map(t => t.source).join(', ');
+      lines.push(`- ${c.weatherAlert.event} (${c.weatherAlert.severity}) converging with [${threats}]: score ${c.convergenceScore} — ${c.description}`);
+    }
+  }
+
+  // Correlation matrix hotspots
+  const hotspots = getMatrixHotspots(60);
+  if (hotspots.length > 0) {
+    lines.push(`\n## Correlation Matrix Hotspots (${hotspots.length})`);
+    for (const h of hotspots.slice(0, 10)) {
+      lines.push(`- ${h.region} × ${h.domain}: score ${h.score}`);
+    }
   }
 
   // Timestamp

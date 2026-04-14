@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity, sonarjs/no-unused-collection, @typescript-eslint/prefer-nullish-coalescing, unicorn/prefer-set-has, unicorn/prefer-single-call */
 /**
  * Core analysis functions shared between main thread and worker.
  * All functions here are PURE (no side effects, no external state).
@@ -123,7 +124,9 @@ export type SignalType =
   | 'explained_market_move'
   | 'hotspot_escalation'
   | 'sector_cascade'
-  | 'military_surge';
+  | 'military_surge'
+  | 'sentiment_divergence'
+  | 'weather_correlation';
 
 export interface CorrelationSignalCore {
   id: string;
@@ -146,6 +149,11 @@ export interface CorrelationSignalCore {
  sourceCount?: number;
  placeIds?: string[];
  placeSummary?: string;
+ sentimentScore?: number;
+ sentimentTrend?: 'positive' | 'negative' | 'neutral';
+ weatherEvent?: string;
+ weatherSeverity?: string;
+ impactedInfrastructure?: string[];
   };
   evidence?: EvidencePack;
 }

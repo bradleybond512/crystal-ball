@@ -410,3 +410,38 @@ class AnomalyDetectionEngine {
 // ── Singleton export ──────────────────────────────────────────────────────────
 
 export const anomalyEngine = new AnomalyDetectionEngine();
+
+// ── Weather & News Anomaly Helpers ──────────────────────────────────────────
+
+/**
+ * Ingest weather alert counts as anomaly observations.
+ * Call after each weather fetch cycle with the count of active alerts.
+ */
+export function ingestWeatherAnomalySignals(
+  alertCount: number,
+  severeCount: number,
+): void {
+  anomalyEngine.ingest('weather:alert-count', alertCount);
+  if (severeCount > 0) {
+    anomalyEngine.ingest('weather:severe-count', severeCount);
+  }
+}
+
+/**
+ * Ingest news volume per region as anomaly observations.
+ * Detects sudden silence or burst in regional coverage.
+ */
+export function ingestNewsVolumeSignals(
+  regionVolumes: Map<string, number>,
+): void {
+  for (const [region, volume] of regionVolumes) {
+    anomalyEngine.ingest(`news:volume:${region}`, volume);
+  }
+}
+
+/**
+ * Ingest correlation matrix global score for trend monitoring.
+ */
+export function ingestMatrixScoreSignal(globalScore: number): void {
+  anomalyEngine.ingest('matrix:global-score', globalScore);
+}

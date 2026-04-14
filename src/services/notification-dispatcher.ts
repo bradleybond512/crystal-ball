@@ -12,6 +12,8 @@
  */
 
 import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
+import type { CompoundThreat } from './compound-threat';
+import type { Anomaly } from './anomaly-detection';
 
 /**
  * Tauri notification plugin module name. Indirected through a variable so
@@ -147,6 +149,72 @@ class NotificationDispatcher {
  } else {
  this.sendWebNotification(alert, withSound);
  }
+  }
+
+  /**
+   * Dispatch a notification for a compound threat detection.
+   * Only fires for critical/high severity compounds.
+   */
+  dispatchCompoundThreatAlert(threat: CompoundThreat): void {
+    if (threat.overallSeverity === 'medium') return;
+
+    const alert: UnifiedAlert = {
+      id: `compound-notif-${threat.id}`,
+      source: 'correlation',
+      severity: threat.overallSeverity === 'critical' ? 'critical' : 'high',
+      title: `Compound Threat: ${threat.hazardCategories.join(' + ')}`,
+      body: threat.description,
+      timestamp: threat.detectedAt.getTime(),
+      location: { lat: threat.lat, lon: threat.lon },
+      relevanceScore: threat.overallSeverity === 'critical' ? 95 : 75,
+      acknowledged: false,
+      pinned: false,
+    };
+
+    this.dispatchNotification(alert, actionForSeverity(alert.severity));
+  }
+
+  /**
+   * Dispatch a notification for a critical anomaly detection.
+   */
+  dispatchAnomalyAlert(anomaly: Anomaly): void {
+    if (anomaly.severity !== 'critical') return;
+
+    const alert: UnifiedAlert = {
+      id: `anomaly-notif-${anomaly.id}`,
+      source: 'correlation',
+      severity: 'high',
+      title: `Anomaly: ${anomaly.source}`,
+      body: anomaly.description,
+      timestamp: anomaly.timestamp,
+      relevanceScore: 70,
+      acknowledged: false,
+      pinned: false,
+    };
+
+    this.dispatchNotification(alert, 'banner');
+  }
+
+  /**
+   * Dispatch a notification for weather-threat convergence.
+   */
+  dispatchConvergenceAlert(description: string, score: number, lat: number, lon: number): void {
+    if (score < 70) return;
+
+    const alert: UnifiedAlert = {
+      id: `convergence-notif-${Date.now()}`,
+      source: 'correlation',
+      severity: score >= 85 ? 'critical' : 'high',
+      title: 'Weather-Threat Convergence',
+      body: description,
+      timestamp: Date.now(),
+      location: { lat, lon },
+      relevanceScore: score,
+      acknowledged: false,
+      pinned: false,
+    };
+
+    this.dispatchNotification(alert, actionForSeverity(alert.severity));
   }
 
   // ── Tauri native notification ──────────────────────────────────────────────

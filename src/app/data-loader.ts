@@ -281,6 +281,11 @@ import { fetchRecentSanctions } from '@/services/opensanctions';
 import { fetchRecentEdgarFilings } from '@/services/sec-edgar';
 import { showApiKeyGate } from '@/components/api-key-gate';
 import { detectCompoundThreats, toHazardSignal } from '@/services/compound-threat';
+import { detectWeatherThreatConvergence } from '@/services/weather-threat-convergence';
+import { analyzeWeatherImpacts, weatherToSupplyChainSignals } from '@/services/weather-impact';
+import { ingestEvent as ingestCorrelationMatrix, classifyRegion, getGlobalScore as getMatrixGlobalScore } from '@/services/correlation-matrix';
+import { ingestWeatherAnomalySignals, ingestMatrixScoreSignal, anomalyEngine } from '@/services/anomaly-detection';
+import { notificationDispatcher } from '@/services/notification-dispatcher';
 import { fetchSatelliteCatalog } from '@/services/satellite-catalog';
 import { satellitePropagator } from '@/services/satellite-propagator';
 import { unifiedAlertStore } from '@/services/unified-alerts';
@@ -374,6 +379,13 @@ export class DataLoaderManager implements AppModule {
 
  // Wire AAR auto-creation on mode transitions
  initModeTracking();
+
+ // Subscribe to anomaly detections → dispatch critical anomalies as notifications
+ anomalyEngine.subscribe((anomaly) => {
+ if (anomaly.severity === 'critical') {
+ notificationDispatcher.dispatchAnomalyAlert(anomaly);
+ }
+ });
 
  // Bridge breaking-news events into the unified alert store
  document.addEventListener('wm:breaking-news', (e: Event) => {
@@ -1369,6 +1381,45 @@ export class DataLoaderManager implements AppModule {
  this.ctx.statusPanel?.updateFeed('Weather', { status: 'ok', itemCount: alerts.length });
  dataFreshness.recordUpdate('weather', alerts.length);
  updateStormPreparednessContext({ weatherAlerts: alerts });
+
+ // Wire weather into correlation matrix, anomaly detection, and convergence
+ const severeCount = alerts.filter(a => a.severity === 'Extreme' || a.severity === 'Severe').length;
+ ingestWeatherAnomalySignals(alerts.length, severeCount);
+ for (const alert of alerts) {
+ if (!alert.centroid) continue;
+ const [lon, lat] = alert.centroid;
+ const region = classifyRegion(lat, lon);
+ if (!region) continue;
+ const severityMap: Record<string, 'low' | 'medium' | 'high' | 'critical'> = {
+ Extreme: 'critical', Severe: 'high', Moderate: 'medium', Minor: 'low', Unknown: 'low',
+ };
+ ingestCorrelationMatrix(lat, lon, 'weather', severityMap[alert.severity] ?? 'low');
+ }
+
+ // Weather-threat convergence detection
+ const convergences = detectWeatherThreatConvergence(alerts);
+ if (convergences.length > 0) {
+ document.dispatchEvent(new CustomEvent('wm:weather-threat-convergence', { detail: convergences }));
+ for (const c of convergences.filter(x => x.convergenceScore >= 70)) {
+ notificationDispatcher.dispatchConvergenceAlert(c.description, c.convergenceScore, c.lat, c.lon);
+ }
+ }
+
+ // Weather impact analysis
+ const impacts = analyzeWeatherImpacts(alerts);
+ if (impacts.length > 0) {
+ document.dispatchEvent(new CustomEvent('wm:weather-impacts', { detail: impacts }));
+ }
+
+ // Supply chain disruption signals from weather
+ const supplySignals = weatherToSupplyChainSignals(alerts);
+ if (supplySignals.length > 0) {
+ document.dispatchEvent(new CustomEvent('wm:weather-supply-signals', { detail: supplySignals }));
+ }
+
+ // Feed correlation matrix global score into anomaly detection for trend monitoring
+ ingestMatrixScoreSignal(getMatrixGlobalScore());
+
  void evaluateDisasterTrigger(
  this.ctx.intelligenceCache.gdacsAlerts ?? [],
  this.ctx.intelligenceCache.earthquakes ?? [],
@@ -2061,6 +2112,29 @@ export class DataLoaderManager implements AppModule {
  const threats = detectCompoundThreats(signals);
  if (threats.length > 0) {
  document.dispatchEvent(new CustomEvent('wm:compound-threats-updated', { detail: threats }));
+ for (const threat of threats) {
+ if (threat.overallSeverity !== 'medium') {
+ notificationDispatcher.dispatchCompoundThreatAlert(threat);
+ }
+ const region = classifyRegion(threat.lat, threat.lon);
+ if (region) {
+ const sevMap: Record<string, 'medium' | 'high' | 'critical'> = {
+ medium: 'medium', high: 'high', critical: 'critical',
+ };
+ const domainMap: Record<string, 'military' | 'cyber' | 'weather' | 'infrastructure' | 'financial' | 'health' | 'conflict' | 'nuclear'> = {
+ weather: 'weather', seismic: 'weather', wildfire: 'weather', flood: 'weather',
+ industrial: 'infrastructure', grid: 'infrastructure', maritime: 'infrastructure',
+ nuclear: 'nuclear', cyber: 'cyber', disease: 'health', conflict: 'conflict',
+ food: 'financial', air_quality: 'weather',
+ };
+ for (const cat of threat.hazardCategories) {
+ const domain = domainMap[cat];
+ if (domain) {
+ ingestCorrelationMatrix(threat.lat, threat.lon, domain, sevMap[threat.overallSeverity] ?? 'medium');
+ }
+ }
+ }
+ }
  }
  } catch (error) {
  console.warn('[compound-threats] evaluation failed', error);
@@ -2073,6 +2147,22 @@ export class DataLoaderManager implements AppModule {
  this.ctx.intelligenceCache.gdacsAlerts = events;
  (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update(events);
  unifiedAlertStore.ingest(events.map(normalizeGDACSEvent));
+
+ // Wire GDACS into correlation matrix
+ for (const event of events) {
+ if (!event.coordinates) continue;
+ const [lon, lat] = event.coordinates;
+ if (lat == null || lon == null) continue;
+ const region = classifyRegion(lat, lon);
+ if (!region) continue;
+ const severity: 'low' | 'medium' | 'high' | 'critical' =
+ event.alertLevel === 'Red' ? 'critical'
+ : event.alertLevel === 'Orange' ? 'high'
+ : 'medium';
+ // GDACS events map to 'weather' domain for hydrometeorological, 'infrastructure' for others
+ const domain = (event.eventType === 'TC' || event.eventType === 'FL' || event.eventType === 'DR') ? 'weather' : 'infrastructure';
+ ingestCorrelationMatrix(lat, lon, domain, severity);
+ }
  // Note: intelligenceCache.earthquakes is only populated when the natural
  // events map layer is enabled. When that layer is disabled the array will
  // be empty, so the M≥6.5 earthquake trigger path is unavailable — the

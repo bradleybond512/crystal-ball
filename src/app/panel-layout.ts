@@ -244,6 +244,7 @@ import { getPrimarySavedPlace, getSavedPlace } from '@/services/saved-places';
 import { SavedPlaceModal } from '@/components/SavedPlaceModal';
 import type { GeoHubActivity } from '@/services/geo-activity';
 import type { TechHubActivity } from '@/services/tech-activity';
+import { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
 
 export interface PanelLayoutCallbacks {
   openCountryStory: (code: string, name: string) => void;
@@ -1308,6 +1309,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['combatant-commands'] = new CombatantCommandsPanel();
  this.ctx.panels['foreign-mil-news'] = new ForeignMilNewsPanel();
  this.ctx.panels['spc-mesoscale'] = new SpcMesoscalePanel();
+ this.ctx.panels['ripe-atlas'] = new RipeAtlasPanel();
  }
 
  if (SITE_VARIANT === 'finance') {

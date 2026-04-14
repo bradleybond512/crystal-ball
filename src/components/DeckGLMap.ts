@@ -324,20 +324,70 @@ let _cachedTheme: string | null = null;
 let COLORS = getOverlayColors();
 
 // SVG icons as data URLs for different marker shapes
-const MARKER_ICONS = {
-  // Square - for datacenters
-  square: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="2" y="2" width="28" height="28" rx="3" fill="white"/></svg>`),
-  // Diamond - for hotspots
-  diamond: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><polygon points="16,2 30,16 16,30 2,16" fill="white"/></svg>`),
-  // Triangle up - for military bases
-  triangleUp: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><polygon points="16,2 30,28 2,28" fill="white"/></svg>`),
-  // Hexagon - for nuclear
-  hexagon: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><polygon points="16,2 28,9 28,23 16,30 4,23 4,9" fill="white"/></svg>`),
-  // Circle - fallback
-  circle: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="white"/></svg>`),
-  // Star - for special markers
-  star: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><polygon points="16,2 20,12 30,12 22,19 25,30 16,23 7,30 10,19 2,12 12,12" fill="white"/></svg>`),
+// ── Canvas-drawn icon atlas (SVG data URIs fail in WKWebView WebGL) ──
+// All icons are drawn onto a single 32-tall sprite sheet using Canvas 2D API.
+// Each icon occupies a 32x32 cell. `mask: true` lets DeckGL tint via getColor.
+const ICON_SIZE = 32;
+
+type IconDrawFn = (ctx: CanvasRenderingContext2D) => void;
+
+const ICON_DRAW_FNS: Record<string, IconDrawFn> = {
+  triangleUp: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.lineTo(30, 28); ctx.lineTo(2, 28); ctx.closePath(); ctx.fill(); },
+  hexagon: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.lineTo(28, 9); ctx.lineTo(28, 23); ctx.lineTo(16, 30); ctx.lineTo(4, 23); ctx.lineTo(4, 9); ctx.closePath(); ctx.fill(); },
+  square: (ctx) => { ctx.beginPath(); ctx.roundRect(2, 2, 28, 28, 3); ctx.fill(); },
+  circle: (ctx) => { ctx.beginPath(); ctx.arc(16, 16, 14, 0, Math.PI * 2); ctx.fill(); },
+  diamond: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.lineTo(30, 16); ctx.lineTo(16, 30); ctx.lineTo(2, 16); ctx.closePath(); ctx.fill(); },
+  star: (ctx) => { ctx.beginPath(); const pts = [[16,2],[20,12],[30,12],[22,19],[25,30],[16,23],[7,30],[10,19],[2,12],[12,12]]; ctx.moveTo(pts[0]![0]!, pts[0]![1]!); for (let i = 1; i < pts.length; i++) { ctx.lineTo(pts[i]![0]!, pts[i]![1]!); } ctx.closePath(); ctx.fill(); },
+  airplane: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 1); ctx.lineTo(14, 10); ctx.lineTo(4, 18); ctx.lineTo(4, 20); ctx.lineTo(14, 17); ctx.lineTo(14, 25); ctx.lineTo(10, 28); ctx.lineTo(10, 30); ctx.lineTo(16, 28); ctx.lineTo(22, 30); ctx.lineTo(22, 28); ctx.lineTo(18, 25); ctx.lineTo(18, 17); ctx.lineTo(28, 20); ctx.lineTo(28, 18); ctx.lineTo(18, 10); ctx.closePath(); ctx.fill(); },
+  fighter: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 1); ctx.lineTo(14, 8); ctx.lineTo(2, 16); ctx.lineTo(2, 18); ctx.lineTo(14, 15); ctx.lineTo(13, 22); ctx.lineTo(8, 26); ctx.lineTo(8, 28); ctx.lineTo(14, 25); ctx.lineTo(14, 29); ctx.lineTo(16, 31); ctx.lineTo(18, 29); ctx.lineTo(18, 25); ctx.lineTo(24, 28); ctx.lineTo(24, 26); ctx.lineTo(19, 22); ctx.lineTo(18, 15); ctx.lineTo(30, 18); ctx.lineTo(30, 16); ctx.lineTo(18, 8); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(12, 10); ctx.lineTo(10, 12); ctx.lineTo(14, 11); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(20, 10); ctx.lineTo(22, 12); ctx.lineTo(18, 11); ctx.closePath(); ctx.fill(); },
+  ship: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 3); ctx.lineTo(20, 10); ctx.lineTo(21, 24); ctx.lineTo(19, 29); ctx.lineTo(13, 29); ctx.lineTo(11, 24); ctx.lineTo(12, 10); ctx.closePath(); ctx.fill(); },
+  satellite: (ctx) => { ctx.beginPath(); ctx.roundRect(13, 8, 6, 16, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(2, 12, 10, 8, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(20, 12, 10, 8, 1); ctx.fill(); },
+  earthquake: (ctx) => { ctx.beginPath(); ctx.moveTo(4, 16); ctx.lineTo(8, 8); ctx.lineTo(12, 22); ctx.lineTo(16, 6); ctx.lineTo(20, 26); ctx.lineTo(24, 10); ctx.lineTo(28, 16); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); },
+  fire: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.bezierCurveTo(16, 2, 24, 12, 24, 20); ctx.bezierCurveTo(24, 24.4, 20.4, 28, 16, 28); ctx.bezierCurveTo(11.6, 28, 8, 24.4, 8, 20); ctx.bezierCurveTo(8, 12, 16, 2, 16, 2); ctx.fill(); },
+  lightning: (ctx) => { ctx.beginPath(); ctx.moveTo(18, 2); ctx.lineTo(10, 18); ctx.lineTo(15, 18); ctx.lineTo(14, 30); ctx.lineTo(22, 14); ctx.lineTo(17, 14); ctx.closePath(); ctx.fill(); },
+  rocket: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 2); ctx.bezierCurveTo(16, 2, 22, 8, 22, 18); ctx.lineTo(25, 22); ctx.lineTo(25, 25); ctx.lineTo(20, 22); ctx.lineTo(20, 26); ctx.lineTo(18, 28); ctx.lineTo(16, 26); ctx.lineTo(14, 28); ctx.lineTo(12, 26); ctx.lineTo(12, 22); ctx.lineTo(7, 25); ctx.lineTo(7, 22); ctx.lineTo(10, 18); ctx.bezierCurveTo(10, 8, 16, 2, 16, 2); ctx.fill(); ctx.beginPath(); ctx.arc(16, 15, 3, 0, Math.PI * 2); ctx.globalCompositeOperation = 'destination-out'; ctx.fill(); ctx.globalCompositeOperation = 'source-over'; },
+  anchor: (ctx) => { ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(16, 8, 3, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(16, 11); ctx.lineTo(16, 27); ctx.stroke(); ctx.beginPath(); ctx.moveTo(11, 17); ctx.lineTo(21, 17); ctx.stroke(); ctx.beginPath(); ctx.moveTo(10, 22); ctx.quadraticCurveTo(10, 29, 16, 29); ctx.stroke(); ctx.beginPath(); ctx.moveTo(22, 22); ctx.quadraticCurveTo(22, 29, 16, 29); ctx.stroke(); },
+  crosshair: (ctx) => { ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(16, 16, 8, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(16, 16, 3, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.moveTo(16, 4); ctx.lineTo(16, 8); ctx.moveTo(16, 24); ctx.lineTo(16, 28); ctx.moveTo(4, 16); ctx.lineTo(8, 16); ctx.moveTo(24, 16); ctx.lineTo(28, 16); ctx.stroke(); },
+  biohazard: (ctx) => { ctx.beginPath(); ctx.arc(16, 16, 3, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(16, 10, 8, Math.PI * 0.7, Math.PI * 1.1); ctx.stroke(); ctx.beginPath(); ctx.arc(22, 20, 8, Math.PI * 1.2, Math.PI * 1.7); ctx.stroke(); ctx.beginPath(); ctx.arc(10, 20, 8, -Math.PI * 0.2, Math.PI * 0.3); ctx.stroke(); },
+  shield: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 3); ctx.lineTo(4, 8); ctx.lineTo(4, 16); ctx.quadraticCurveTo(4, 26, 16, 30); ctx.quadraticCurveTo(28, 26, 28, 16); ctx.lineTo(28, 8); ctx.closePath(); ctx.fill(); },
+  cloud: (ctx) => { ctx.beginPath(); ctx.arc(12, 16, 6, 0, Math.PI * 2); ctx.arc(20, 15, 7, 0, Math.PI * 2); ctx.arc(8, 19, 4, 0, Math.PI * 2); ctx.arc(24, 18, 4, 0, Math.PI * 2); ctx.fill(); ctx.fillRect(6, 16, 20, 8); ctx.beginPath(); ctx.fillRect(15, 11, 2, 6); ctx.fill(); ctx.beginPath(); ctx.arc(16, 10, 1, 0, Math.PI * 2); ctx.fill(); },
+  turbine: (ctx) => { ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(16, 13); ctx.lineTo(16, 28); ctx.moveTo(12, 28); ctx.lineTo(20, 28); ctx.stroke(); ctx.beginPath(); ctx.arc(16, 10, 3, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(16, 10); ctx.lineTo(16, 2); ctx.moveTo(16, 10); ctx.lineTo(23, 16); ctx.moveTo(16, 10); ctx.lineTo(9, 16); ctx.stroke(); },
+  chart: (ctx) => { ctx.beginPath(); ctx.roundRect(5, 18, 4, 10, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(11, 12, 4, 16, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(17, 6, 4, 22, 1); ctx.fill(); ctx.beginPath(); ctx.roundRect(23, 14, 4, 14, 1); ctx.fill(); },
+  bank: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 3); ctx.lineTo(28, 10); ctx.lineTo(28, 12); ctx.lineTo(4, 12); ctx.lineTo(4, 10); ctx.closePath(); ctx.fill(); ctx.fillRect(6, 13, 3, 12); ctx.fillRect(11, 13, 3, 12); ctx.fillRect(18, 13, 3, 12); ctx.fillRect(23, 13, 3, 12); ctx.beginPath(); ctx.roundRect(4, 26, 24, 3, 1); ctx.fill(); },
 };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _iconAtlas: any = null;
+let _iconMapping: Record<string, { x: number; y: number; width: number; height: number; mask: boolean }> | null = null;
+
+// DeckGL accepts HTMLCanvasElement at runtime but types only allow string | Texture
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getIconAtlas(): any {
+  if (_iconAtlas) return _iconAtlas;
+  const names = Object.keys(ICON_DRAW_FNS);
+  const canvas = document.createElement('canvas');
+  canvas.width = names.length * ICON_SIZE;
+  canvas.height = ICON_SIZE;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = 'white';
+  ctx.strokeStyle = 'white';
+  const mapping: typeof _iconMapping = {};
+  for (const [i, name] of names.entries()) {
+    ctx.save();
+    ctx.translate(i * ICON_SIZE, 0);
+    ICON_DRAW_FNS[name!]!(ctx);
+    ctx.restore();
+    mapping[name!] = { x: i * ICON_SIZE, y: 0, width: ICON_SIZE, height: ICON_SIZE, mask: true };
+  }
+  _iconAtlas = canvas;
+  _iconMapping = mapping;
+  return canvas;
+}
+
+function getIconMapping(): Record<string, { x: number; y: number; width: number; height: number; mask: boolean }> {
+  if (!_iconMapping) getIconAtlas();
+  return _iconMapping!;
+}
 
 // Altitude-based color gradient matching Wingbits' color scheme.
 // Transitions cyan (sea level) → yellow-green → orange → red (cruise altitude).
@@ -372,9 +422,6 @@ function altitudeToColor(altFt: number): [number, number, number] {
   return [last.r, last.g, last.b]; // unreachable: exhaustive bracket search above satisfies TS
 }
 
-const BASES_ICON_MAPPING = { triangleUp: { x: 0, y: 0, width: 32, height: 32, mask: true } };
-const NUCLEAR_ICON_MAPPING = { hexagon: { x: 0, y: 0, width: 32, height: 32, mask: true } };
-const DATACENTER_ICON_MAPPING = { square: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 
 const CONFLICT_ZONES_GEOJSON: GeoJSON.FeatureCollection = {
   type: 'FeatureCollection',
@@ -1774,8 +1821,8 @@ export class DeckGLMap {
  data,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'triangleUp',
- iconAtlas: MARKER_ICONS.triangleUp,
- iconMapping: BASES_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => highlightedBases.has(d.id) ? 16 : 11,
  getColor: (d) => {
  if (highlightedBases.has(d.id)) {
@@ -1832,8 +1879,8 @@ export class DeckGLMap {
  data,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'hexagon',
- iconAtlas: MARKER_ICONS.hexagon,
- iconMapping: NUCLEAR_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => highlightedNuclear.has(d.id) ? 15 : 11,
  getColor: (d) => {
  if (highlightedNuclear.has(d.id)) {
@@ -1864,46 +1911,44 @@ export class DeckGLMap {
  });
   }
 
-  private createSpaceportsLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createSpaceportsLayer(): IconLayer {
+ return new IconLayer({
  id: 'spaceports-layer',
  data: SPACEPORTS,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 10_000,
- getFillColor: [200, 100, 255, 200] as [number, number, number, number], // Purple
- radiusMinPixels: 5,
- radiusMaxPixels: 12,
+ getIcon: () => 'rocket',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: 20,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 22,
+ getColor: [200, 100, 255, 200] as [number, number, number, number],
  pickable: true,
  });
   }
 
-  private createPortsLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createPortsLayer(): IconLayer {
+ return new IconLayer({
  id: 'ports-layer',
  data: PORTS,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 6000,
- getFillColor: (d) => {
- // Color by port type (matching old Map.ts icons)
+ getIcon: () => 'anchor',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: 18,
+ sizeMinPixels: 8,
+ sizeMaxPixels: 18,
+ getColor: (d) => {
  switch (d.type) {
- case 'naval': { return [100, 150, 255, 200] as [number, number, number, number];
- } // Blue - ⚓
- case 'oil': { return [255, 140, 0, 200] as [number, number, number, number];
- } // Orange - 🛢️
- case 'lng': { return [255, 200, 50, 200] as [number, number, number, number];
- } // Yellow - 🛢️
- case 'container': { return [0, 200, 255, 180] as [number, number, number, number];
- } // Cyan - 🏭
- case 'mixed': { return [150, 200, 150, 180] as [number, number, number, number];
- } // Green
- case 'bulk': { return [180, 150, 120, 180] as [number, number, number, number];
- } // Brown
- default: { return [0, 200, 255, 160] as [number, number, number, number];
- }
+ case 'naval': { return [100, 150, 255, 200] as [number, number, number, number]; }
+ case 'oil': { return [255, 140, 0, 200] as [number, number, number, number]; }
+ case 'lng': { return [255, 200, 50, 200] as [number, number, number, number]; }
+ case 'container': { return [0, 200, 255, 180] as [number, number, number, number]; }
+ case 'mixed': { return [150, 200, 150, 180] as [number, number, number, number]; }
+ case 'bulk': { return [180, 150, 120, 180] as [number, number, number, number]; }
+ default: { return [0, 200, 255, 160] as [number, number, number, number]; }
  }
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 10,
  pickable: true,
  });
   }
@@ -1990,7 +2035,7 @@ export class DeckGLMap {
 
   private createDiseaseIntelOutbreakPinsLayer(
  items: (EpidemicEvent | WhoDonAlert)[]
-  ): ScatterplotLayer<{ lat: number; lon: number; isAlert: boolean }> {
+  ): IconLayer<{ lat: number; lon: number; isAlert: boolean }> {
  const countries = this.diseaseIntelData?.covidCountries ?? [];
 
  const pins = items
@@ -2003,19 +2048,18 @@ export class DeckGLMap {
  })
  .filter((p): p is { lat: number; lon: number; isAlert: boolean } => p !== null);
 
- return new ScatterplotLayer({
+ return new IconLayer({
  id: 'disease-intel-outbreak-pins',
  data: pins,
  getPosition: d => [d.lon, d.lat],
- getRadius: 8,
- getFillColor: d => d.isAlert ? [255, 60, 60, 220] : [255, 160, 60, 200],
- radiusMinPixels: 6,
- radiusMaxPixels: 14,
- stroked: true,
- getLineColor: [255, 255, 255, 100],
- lineWidthMinPixels: 1,
+ getIcon: () => 'biohazard',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: 20,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 22,
+ getColor: d => d.isAlert ? [255, 60, 60, 220] : [255, 160, 60, 200],
  pickable: true,
- autoHighlight: true,
  });
   }
 
@@ -2042,8 +2086,8 @@ export class DeckGLMap {
  data,
  getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'square',
- iconAtlas: MARKER_ICONS.square,
- iconMapping: DATACENTER_ICON_MAPPING,
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
  getSize: (d) => highlightedDC.has(d.id) ? 14 : 10,
  getColor: (d) => {
  if (highlightedDC.has(d.id)) {
@@ -2061,20 +2105,23 @@ export class DeckGLMap {
  });
   }
 
-  private createEarthquakesLayer(earthquakes: Earthquake[]): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createEarthquakesLayer(earthquakes: Earthquake[]): IconLayer {
+ return new IconLayer({
  id: 'earthquakes-layer',
  data: earthquakes,
  getPosition: (d) => [d.location?.longitude ?? 0, d.location?.latitude ?? 0],
- getRadius: (d) => Math.pow(2, d.magnitude) * 1000,
- getFillColor: (d) => {
+ getIcon: () => 'earthquake',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: (d) => 12 + d.magnitude * 3,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 36,
+ getColor: (d) => {
  const mag = d.magnitude;
  if (mag >= 6) return [255, 0, 0, 200] as [number, number, number, number];
  if (mag >= 5) return [255, 100, 0, 200] as [number, number, number, number];
  return COLORS.earthquake;
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 30,
  pickable: true,
  });
   }
@@ -2096,19 +2143,22 @@ export class DeckGLMap {
  });
   }
 
-  private createFiresLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createFiresLayer(): IconLayer {
+ return new IconLayer({
  id: 'fires-layer',
  data: this.firmsFireData,
  getPosition: (d: (typeof this.firmsFireData)[0]) => [d.lon, d.lat],
- getRadius: (d: (typeof this.firmsFireData)[0]) => Math.min(d.frp * 200, 30_000) || 5000,
- getFillColor: (d: (typeof this.firmsFireData)[0]) => {
+ getIcon: () => 'fire',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: (d: (typeof this.firmsFireData)[0]) => 12 + Math.min(d.frp / 10, 16),
+ sizeMinPixels: 8,
+ sizeMaxPixels: 24,
+ getColor: (d: (typeof this.firmsFireData)[0]) => {
  if (d.brightness > 400) return [255, 30, 0, 220] as [number, number, number, number];
  if (d.brightness > 350) return [255, 140, 0, 200] as [number, number, number, number];
  return [255, 220, 50, 180] as [number, number, number, number];
  },
- radiusMinPixels: 3,
- radiusMaxPixels: 12,
  pickable: true,
  });
   }
@@ -2130,23 +2180,25 @@ export class DeckGLMap {
  });
   }
 
-  private createWeatherLayer(alerts: WeatherAlert[]): ScatterplotLayer {
- // Filter weather alerts that have centroid coordinates
+  private createWeatherLayer(alerts: WeatherAlert[]): IconLayer {
  const alertsWithCoords = alerts.filter(a => a.centroid?.length === 2);
 
- return new ScatterplotLayer({
+ return new IconLayer({
  id: 'weather-layer',
  data: alertsWithCoords,
- getPosition: (d) => d.centroid as [number, number], // centroid is [lon, lat]
- getRadius: 25_000,
- getFillColor: (d) => {
+ getPosition: (d) => d.centroid as [number, number],
+ getIcon: () => 'cloud',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: 24,
+ sizeMinPixels: 14,
+ sizeMaxPixels: 28,
+ getColor: (d) => {
  if (d.severity === 'Extreme') return [255, 0, 0, 200] as [number, number, number, number];
  if (d.severity === 'Severe') return [255, 100, 0, 180] as [number, number, number, number];
  if (d.severity === 'Moderate') return [255, 170, 0, 160] as [number, number, number, number];
  return COLORS.weather;
  },
- radiusMinPixels: 8,
- radiusMaxPixels: 20,
  pickable: true,
  });
   }
@@ -2164,41 +2216,33 @@ export class DeckGLMap {
  });
   }
 
-  private createCyberThreatsLayer(): ScatterplotLayer<CyberThreat> {
- return new ScatterplotLayer<CyberThreat>({
+  private createCyberThreatsLayer(): IconLayer<CyberThreat> {
+ return new IconLayer<CyberThreat>({
  id: 'cyber-threats-layer',
  data: this.cyberThreats,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: (d) => {
+ getIcon: () => 'shield',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: (d) => {
  switch (d.severity) {
- case 'critical': { return 22_000;
- }
- case 'high': { return 17_000;
- }
- case 'medium': { return 13_000;
- }
- default: { return 9000;
- }
+ case 'critical': { return 28; }
+ case 'high': { return 22; }
+ case 'medium': { return 18; }
+ default: { return 14; }
  }
  },
- getFillColor: (d) => {
+ sizeMinPixels: 10,
+ sizeMaxPixels: 28,
+ getColor: (d) => {
  switch (d.severity) {
- case 'critical': { return [255, 61, 0, 225] as [number, number, number, number];
- }
- case 'high': { return [255, 102, 0, 205] as [number, number, number, number];
- }
- case 'medium': { return [255, 176, 0, 185] as [number, number, number, number];
- }
- default: { return [255, 235, 59, 170] as [number, number, number, number];
- }
+ case 'critical': { return [255, 61, 0, 225] as [number, number, number, number]; }
+ case 'high': { return [255, 102, 0, 205] as [number, number, number, number]; }
+ case 'medium': { return [255, 176, 0, 185] as [number, number, number, number]; }
+ default: { return [255, 235, 59, 170] as [number, number, number, number]; }
  }
  },
- radiusMinPixels: 6,
- radiusMaxPixels: 18,
  pickable: true,
- stroked: true,
- getLineColor: [255, 255, 255, 160] as [number, number, number, number],
- lineWidthMinPixels: 1,
  });
   }
 
@@ -2314,23 +2358,25 @@ export class DeckGLMap {
  });
   }
 
-  private createAdsbLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createAdsbLayer(): IconLayer {
+ return new IconLayer({
  id: 'adsb-layer',
  data: this.adsbFlights,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 25_000,
- radiusMinPixels: 2,
- radiusMaxPixels: 6,
- getFillColor: (d) => {
+ getIcon: () => 'airplane',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getAngle: (d) => -(d.heading ?? 0),
+ getSize: 20,
+ sizeMinPixels: 8,
+ sizeMaxPixels: 20,
+ getColor: (d) => {
  if (d.squawk === '7700' || d.squawk === '7600' || d.squawk === '7500') return [255, 50, 50, 255];
- const alt = d.altitude ?? 0;
- if (alt < 3000) return [100, 200, 100, 180];
- if (alt < 10000) return [255, 200, 50, 180];
- return [200, 220, 255, 200];
+ const [r, g, b] = altitudeToColor(d.altitude ?? 0);
+ return [r, g, b, 200] as [number, number, number, number];
  },
  pickable: true,
- updateTriggers: { getFillColor: [this.adsbFlights] },
+ updateTriggers: { getColor: [this.adsbFlights] },
  });
   }
 
@@ -2372,39 +2418,39 @@ export class DeckGLMap {
  });
   }
 
-  private createRepairShipsLayer(): ScatterplotLayer {
- // Cable repair ships
- return new ScatterplotLayer({
+  private createRepairShipsLayer(): IconLayer {
+ return new IconLayer({
  id: 'repair-ships-layer',
  data: this.repairShips,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 8000,
- getFillColor: [0, 255, 200, 200] as [number, number, number, number], // Teal
- radiusMinPixels: 4,
- radiusMaxPixels: 10,
+ getIcon: () => 'ship',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: 18,
+ sizeMinPixels: 8,
+ sizeMaxPixels: 18,
+ getColor: [0, 255, 200, 200] as [number, number, number, number],
  pickable: true,
  });
   }
 
-  private createMilitaryVesselsLayer(vessels: MilitaryVessel[]): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createMilitaryVesselsLayer(vessels: MilitaryVessel[]): IconLayer {
+ return new IconLayer({
  id: 'military-vessels-layer',
  data: vessels,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 6000,
- getFillColor: (d) => {
- if (d.usniSource) return [255, 160, 60, 160] as [number, number, number, number]; // Orange, lower alpha for USNI-only
+ getIcon: () => 'ship',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getAngle: (d) => -(d.heading ?? 0),
+ getSize: 18,
+ sizeMinPixels: 8,
+ sizeMaxPixels: 18,
+ getColor: (d) => {
+ if (d.usniSource) return [255, 160, 60, 160] as [number, number, number, number];
  return COLORS.vesselMilitary;
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 10,
  pickable: true,
- stroked: true,
- getLineColor: (d) => {
- if (d.usniSource) return [255, 180, 80, 200] as [number, number, number, number]; // Orange outline
- return [0, 0, 0, 0] as [number, number, number, number]; // No outline for AIS
- },
- lineWidthMinPixels: 2,
  });
   }
 
@@ -2427,19 +2473,25 @@ export class DeckGLMap {
  });
   }
 
-  private createMilitaryFlightsLayer(flights: MilitaryFlight[]): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createMilitaryFlightsLayer(flights: MilitaryFlight[]): IconLayer {
+ return new IconLayer({
  id: 'military-flights-layer',
  data: flights,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 8000,
- getFillColor: (d) => {
+ getIcon: () => 'fighter',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getAngle: (d) => -d.heading,
+ getSize: 24,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 24,
+ getColor: (d) => {
  if (d.onGround) return [120, 120, 120, 160] as [number, number, number, number];
- const [r, g, b] = altitudeToColor(d.altitude);
- return [r, g, b, 220] as [number, number, number, number];
+ if (d.operator === 'usaf' || d.operator === 'usn' || d.operator === 'usa' || d.operator === 'usmc') return [52, 211, 153, 240] as [number, number, number, number];
+ if (d.operatorCountry === 'Russia') return [248, 113, 113, 240] as [number, number, number, number];
+ if (d.operatorCountry === 'China') return [251, 191, 36, 240] as [number, number, number, number];
+ return [129, 140, 248, 240] as [number, number, number, number];
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 12,
  pickable: true,
  });
   }
@@ -2564,19 +2616,22 @@ export class DeckGLMap {
  });
   }
 
-  private createStockExchangesLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createStockExchangesLayer(): IconLayer {
+ return new IconLayer({
  id: 'stock-exchanges-layer',
  data: STOCK_EXCHANGES,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: (d) => d.tier === 'mega' ? 18_000 : (d.tier === 'major' ? 14_000 : 11_000),
- getFillColor: (d) => {
+ getIcon: () => 'chart',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: (d) => d.tier === 'mega' ? 24 : (d.tier === 'major' ? 20 : 16),
+ sizeMinPixels: 10,
+ sizeMaxPixels: 24,
+ getColor: (d) => {
  if (d.tier === 'mega') return [255, 215, 80, 220] as [number, number, number, number];
  if (d.tier === 'major') return COLORS.stockExchange;
  return [140, 210, 255, 190] as [number, number, number, number];
  },
- radiusMinPixels: 5,
- radiusMaxPixels: 14,
  pickable: true,
  });
   }
@@ -2598,19 +2653,22 @@ export class DeckGLMap {
  });
   }
 
-  private createCentralBanksLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createCentralBanksLayer(): IconLayer {
+ return new IconLayer({
  id: 'central-banks-layer',
  data: CENTRAL_BANKS,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: (d) => d.type === 'major' ? 15_000 : (d.type === 'supranational' ? 17_000 : 12_000),
- getFillColor: (d) => {
+ getIcon: () => 'bank',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: (d) => d.type === 'supranational' ? 22 : (d.type === 'major' ? 20 : 16),
+ sizeMinPixels: 8,
+ sizeMaxPixels: 22,
+ getColor: (d) => {
  if (d.type === 'major') return COLORS.centralBank;
  if (d.type === 'supranational') return [255, 235, 140, 220] as [number, number, number, number];
  return [235, 180, 80, 185] as [number, number, number, number];
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 12,
  pickable: true,
  });
   }
@@ -3346,30 +3404,24 @@ export class DeckGLMap {
  });
   }
 
-  private createRenewableInstallationsLayer(): ScatterplotLayer {
+  private createRenewableInstallationsLayer(): IconLayer {
  const typeColors: Record<string, [number, number, number, number]> = {
  solar: [255, 200, 50, 200],
  wind: [100, 200, 255, 200],
  hydro: [0, 180, 180, 200],
  geothermal: [255, 150, 80, 200],
  };
- const typeLineColors: Record<string, [number, number, number, number]> = {
- solar: [255, 200, 50, 255],
- wind: [100, 200, 255, 255],
- hydro: [0, 180, 180, 255],
- geothermal: [255, 150, 80, 255],
- };
- return new ScatterplotLayer({
+ return new IconLayer({
  id: 'renewable-installations-layer',
  data: this.renewableInstallations,
  getPosition: (d: RenewableInstallation) => [d.lon, d.lat],
- getRadius: 30_000,
- radiusMinPixels: 5,
- radiusMaxPixels: 18,
- getFillColor: (d: RenewableInstallation) => typeColors[d.type] ?? [200, 200, 200, 200] as [number, number, number, number],
- stroked: true,
- getLineColor: (d: RenewableInstallation) => typeLineColors[d.type] ?? [200, 200, 200, 255] as [number, number, number, number],
- lineWidthMinPixels: 1,
+ getIcon: () => 'turbine',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: 20,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 24,
+ getColor: (d: RenewableInstallation) => typeColors[d.type] ?? [200, 200, 200, 200] as [number, number, number, number],
  pickable: true,
  });
   }
@@ -4563,24 +4615,24 @@ export class DeckGLMap {
  });
   }
 
-  private createAirstrikesLayer(): ScatterplotLayer<AirstrikeEvent> {
- return new ScatterplotLayer<AirstrikeEvent>({
+  private createAirstrikesLayer(): IconLayer<AirstrikeEvent> {
+ return new IconLayer<AirstrikeEvent>({
  id: 'airstrikes-layer',
  data: this.airstrikesData,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: (d) => Math.max(8000, 8000 + Math.sqrt(d.fatalities || 0) * 5000),
- getFillColor: (d) => {
+ getIcon: () => 'crosshair',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: (d) => 14 + Math.sqrt(d.fatalities || 0) * 3,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 30,
+ getColor: (d) => {
  const sub = d.subEventType.toLowerCase();
  if (sub.includes('drone') || sub.includes('loiter')) return [140, 80, 255, 210];
  if (sub.includes('missile')) return [255, 100, 20, 220];
  if (sub.includes('shell') || sub.includes('artill')) return [255, 200, 30, 200];
- return [255, 40, 40, 220]; // generic airstrike
+ return [255, 40, 40, 220];
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 24,
- stroked: true,
- getLineColor: [255, 255, 255, 80],
- lineWidthMinPixels: 1,
  pickable: true,
  });
   }
@@ -5938,20 +5990,22 @@ export class DeckGLMap {
 
   // ── Lightning Layer (DeckGL ScatterplotLayer) ────────────────────
 
-  private createLightningLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createLightningLayer(): IconLayer {
+ return new IconLayer({
  id: 'lightning-strikes',
  data: this.lightningStrikes,
  getPosition: (d: LightningStrike) => [d.lon, d.lat],
- getRadius: 8000,
- getFillColor: (d: LightningStrike) => {
+ getIcon: () => 'lightning',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: 16,
+ sizeMinPixels: 6,
+ sizeMaxPixels: 18,
+ getColor: (d: LightningStrike) => {
  const rgb = strikeColor(d.intensity);
  const a = Math.round(strikeOpacity(d.time) * 255);
  return [...rgb, a] as [number, number, number, number];
  },
- radiusUnits: 'meters' as const,
- radiusMinPixels: 2,
- radiusMaxPixels: 8,
  pickable: true,
  });
   }
@@ -5995,7 +6049,7 @@ export class DeckGLMap {
 
   // ── Satellite Layers ─────────────────────────────────────────────
 
-  private createSatelliteLayer(): ScatterplotLayer {
+  private createSatelliteLayer(): IconLayer {
  const zoom = this.maplibreMap?.getZoom() ?? 0;
  const notable = this.satelliteCatalog.length > 0
  ? new Set(filterNotable(this.satelliteCatalog).map(s => s.noradId))
@@ -6005,19 +6059,21 @@ export class DeckGLMap {
  ? this.satellitePositions.filter(s => notable.has(s.noradId))
  : this.satellitePositions;
 
- return new ScatterplotLayer({
+ return new IconLayer({
  id: 'satellite-positions',
  data,
  getPosition: (d: SatellitePosition) => [d.lon, d.lat],
- getRadius: (d: SatellitePosition) => notable.has(d.noradId) ? 20_000 : 8_000,
- getFillColor: (d: SatellitePosition) => {
+ getIcon: () => 'satellite',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: (d: SatellitePosition) => notable.has(d.noradId) ? 18 : 12,
+ sizeMinPixels: 4,
+ sizeMaxPixels: 18,
+ getColor: (d: SatellitePosition) => {
  const cat = this.satelliteCatalog.find(s => s.noradId === d.noradId);
  if (cat?.annotation) return [...cat.annotation.color, 200] as [number, number, number, number];
  return [150, 150, 150, 100];
  },
- radiusUnits: 'meters' as const,
- radiusMinPixels: 1,
- radiusMaxPixels: 6,
  pickable: true,
  });
   }

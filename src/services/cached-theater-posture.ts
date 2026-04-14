@@ -81,11 +81,14 @@ function toPostureSummary(proto: TheaterPosture): TheaterPostureSummary {
  byOperator: {},
  postureLevel,
  strikeCapable,
+ strikeGroupPresent: false,
  trend: 'stable',
  changePercent: 0,
  summary: '',
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  headline: postureLevel === 'critical'
  ? `Critical military buildup - ${meta?.name ?? proto.theater}`
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (postureLevel === 'elevated'
  ? `Elevated military activity - ${meta?.name ?? proto.theater}`
  : `Normal activity - ${meta?.name ?? proto.theater}`),
@@ -96,6 +99,7 @@ function toPostureSummary(proto: TheaterPosture): TheaterPostureSummary {
 }
 
 function toPostureData(resp: GetTheaterPostureResponse): CachedTheaterPosture {
+  // eslint-disable-next-line unicorn/no-array-callback-reference
   const postures = resp.theaters.map(toPostureSummary);
   const totalFlights = postures.reduce((sum, p) => sum + p.totalAircraft, 0);
   return {
@@ -138,6 +142,7 @@ function withCallerAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<
  },
  (error) => {
  signal.removeEventListener('abort', onAbort);
+ // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
  reject(error);
  },
  );
@@ -148,11 +153,13 @@ function loadFromStorage(): CachedTheaterPosture | null {
   try {
  const raw = localStorage.getItem(LS_KEY);
  if (!raw) return null;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
  const { data, savedAt } = JSON.parse(raw);
  if (Date.now() - savedAt > LS_MAX_AGE_MS) {
  localStorage.removeItem(LS_KEY);
  return null;
  }
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-return
  return { ...data, stale: true };
   } catch {
  return null;
@@ -198,6 +205,7 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
  return cachedPosture;
  } catch (error) {
  if (error instanceof DOMException && error.name === 'AbortError') throw error;
+ // eslint-disable-next-line no-console
  console.error('[CachedTheaterPosture] Fetch error:', error);
  return cachedPosture; // Return stale cache on error
  } finally {

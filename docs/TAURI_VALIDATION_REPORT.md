@@ -9,11 +9,16 @@ Validated desktop build readiness for the Crystal Ball Tauri app by checking fro
 Run these checks first so failures are classified quickly:
 
 1. npm registry reachability
- - `npm ping`
+
+   - `npm ping`
+
 2. crates.io sparse index reachability
- - `curl -I https://index.crates.io/`
+
+   - `curl -I https://index.crates.io/`
+
 3. proxy configuration present when required by your network
- - `env | grep -E '^(HTTP_PROXY|HTTPS_PROXY|NO_PROXY)='`
+
+   - `env | grep -E '^(HTTP_PROXY|HTTPS_PROXY|NO_PROXY)='`
 
 If any of these checks fail, treat downstream desktop build failures as environment-level until the network path is fixed.
 
@@ -36,12 +41,14 @@ If any of these checks fail, treat downstream desktop build failures as environm
 Use these labels in future reports so outcomes are actionable:
 
 1. **External environment outage**
- - Symptoms: npm/crates registry requests fail with transport/auth/network errors (403/5xx/timeout/DNS/proxy), independent of repository state.
- - Action: retry in a healthy network or fix credentials/proxy/mirror availability.
+
+   - Symptoms: npm/crates registry requests fail with transport/auth/network errors (403/5xx/timeout/DNS/proxy), independent of repository state.
+   - Action: retry in a healthy network or fix credentials/proxy/mirror availability.
 
 2. **Expected failure: offline mode not provisioned**
- - Symptoms: build is intentionally run without internet, but required offline inputs are missing (for Rust: no `vendor/` artifact, no internal mirror mapping, or offline override not enabled; for JS: no prepared package cache).
- - Action: provision offline artifacts/mirror config first, enable offline override (`config.local.toml` or CLI `--config`), then rerun.
+
+   - Symptoms: build is intentionally run without internet, but required offline inputs are missing (for Rust: no `vendor/` artifact, no internal mirror mapping, or offline override not enabled; for JS: no prepared package cache).
+   - Action: provision offline artifacts/mirror config first, enable offline override (`config.local.toml` or CLI `--config`), then rerun.
 
 ## Next action to validate desktop end-to-end
 

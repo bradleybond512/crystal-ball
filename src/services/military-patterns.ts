@@ -1,0 +1,289 @@
+import type { TheaterPostureSummary, SurgeAlert } from './military-surge';
+import type { SignalType } from '@/utils/analysis-constants';
+
+export type { TheaterPostureSummary, SurgeAlert } from './military-surge';
+export type { SignalType } from '@/utils/analysis-constants';
+
+// ── Types ──
+
+export interface ConflictPattern {
+  id: string;
+  name: string;
+  description: string;
+  signature: {
+    minAircraft: number;
+    fighterPct: [number, number];
+    tankerPct: [number, number];
+    transportPct: [number, number];
+    requireStrikeCapable: boolean;
+    requireAwacs: boolean;
+    requireMultiOperator: boolean;
+  };
+}
+
+export interface PatternMatch {
+  patternId: string;
+  patternName: string;
+  matchScore: number;
+  theaterId: string;
+  theaterName: string;
+  breakdown: Record<string, number>;
+}
+
+// ── Pattern Library ──
+
+export const CONFLICT_PATTERNS: ConflictPattern[] = [
+  {
+    id: 'desert-storm',
+    name: 'Coalition Air War',
+    description: 'Heavy multi-national force with tanker/AWACS support — mirrors Desert Storm buildup',
+    signature: {
+      minAircraft: 15,
+      fighterPct: [30, 50],
+      tankerPct: [10, 25],
+      transportPct: [15, 30],
+      requireStrikeCapable: true,
+      requireAwacs: true,
+      requireMultiOperator: true,
+    },
+  },
+  {
+    id: 'air-campaign',
+    name: 'Air Campaign',
+    description: 'Fighter-heavy posture with strike enablers — offensive air operations',
+    signature: {
+      minAircraft: 10,
+      fighterPct: [60, 100],
+      tankerPct: [5, 20],
+      transportPct: [0, 15],
+      requireStrikeCapable: true,
+      requireAwacs: true,
+      requireMultiOperator: false,
+    },
+  },
+  {
+    id: 'airlift-deployment',
+    name: 'Airlift/Deployment',
+    description: 'Transport-heavy movement — rapid force deployment or evacuation',
+    signature: {
+      minAircraft: 8,
+      fighterPct: [0, 20],
+      tankerPct: [0, 15],
+      transportPct: [50, 100],
+      requireStrikeCapable: false,
+      requireAwacs: false,
+      requireMultiOperator: false,
+    },
+  },
+  {
+    id: 'naval-strike-support',
+    name: 'Naval Strike Support',
+    description: 'Mixed fighter/tanker posture near maritime theater — carrier group air support',
+    signature: {
+      minAircraft: 6,
+      fighterPct: [30, 50],
+      tankerPct: [10, 30],
+      transportPct: [0, 20],
+      requireStrikeCapable: false,
+      requireAwacs: false,
+      requireMultiOperator: false,
+    },
+  },
+  {
+    id: 'recon-surge',
+    name: 'Reconnaissance Surge',
+    description: 'ISR-heavy posture — intelligence gathering, not strike',
+    signature: {
+      minAircraft: 4,
+      fighterPct: [0, 20],
+      tankerPct: [0, 15],
+      transportPct: [0, 20],
+      requireStrikeCapable: false,
+      requireAwacs: false,
+      requireMultiOperator: false,
+    },
+  },
+  {
+    id: 'rapid-reaction',
+    name: 'Rapid Reaction',
+    description: 'Sudden spike from near-zero baseline — emergency response or snap deployment',
+    signature: {
+      minAircraft: 5,
+      fighterPct: [0, 100],
+      tankerPct: [0, 100],
+      transportPct: [0, 100],
+      requireStrikeCapable: false,
+      requireAwacs: false,
+      requireMultiOperator: false,
+    },
+  },
+];
+
+// ── Matching Logic ──
+
+function pctScore(actual: number, range: [number, number]): number {
+  const [lo, hi] = range;
+  if (actual >= lo && actual <= hi) return 20;
+  const dist = actual < lo ? lo - actual : actual - hi;
+  return Math.max(0, Math.round(20 - dist * 0.6));
+}
+
+function scoreRequiredFlags(
+  pattern: ConflictPattern,
+  posture: TheaterPostureSummary,
+  surges: SurgeAlert[] | undefined,
+  breakdown: Record<string, number>,
+): boolean {
+  const sig = pattern.signature;
+
+  if (sig.requireStrikeCapable) {
+    breakdown.strikeCapable = posture.strikeCapable ? 10 : 0;
+  } else {
+    breakdown.strikeCapable = 10;
+  }
+  if (sig.requireAwacs) {
+    breakdown.awacs = posture.awacs > 0 ? 10 : 0;
+  } else {
+    breakdown.awacs = 10;
+  }
+
+  if (sig.requireMultiOperator && Object.keys(posture.byOperator).length < 2) return false;
+  breakdown.multiOperator = 10;
+
+  if (pattern.id === 'rapid-reaction') {
+    const theater = surges?.filter(s => s.theater.id === posture.theaterId) ?? [];
+    const maxMultiple = theater.reduce((m, s) => Math.max(m, s.surgeMultiple), 0);
+    if (maxMultiple <= 4) return false;
+    breakdown.rapidSurge = 10;
+  }
+
+  return true;
+}
+
+function scorePattern(
+  pattern: ConflictPattern,
+  posture: TheaterPostureSummary,
+  surges: SurgeAlert[] | undefined,
+): number {
+  const total = posture.totalAircraft;
+  const sig = pattern.signature;
+  const breakdown: Record<string, number> = { strikeCapable: 0, awacs: 0, multiOperator: 0 };
+
+  const fighterPct = total > 0 ? (posture.fighters / total) * 100 : 0;
+  const tankerPct = total > 0 ? (posture.tankers / total) * 100 : 0;
+  const transportPct = total > 0 ? (posture.transport / total) * 100 : 0;
+
+  breakdown.fighterPct = pctScore(fighterPct, sig.fighterPct);
+  breakdown.tankerPct = pctScore(tankerPct, sig.tankerPct);
+  breakdown.transportPct = pctScore(transportPct, sig.transportPct);
+
+  if (!scoreRequiredFlags(pattern, posture, surges, breakdown)) return -1;
+
+  if (pattern.id === 'recon-surge') {
+    const reconPct = total > 0 ? ((posture.reconnaissance + posture.awacs) / total) * 100 : 0;
+    breakdown.reconDominance = reconPct >= 50 ? 10 : Math.round(reconPct / 5);
+  }
+
+  const totalPoints = breakdown.fighterPct + breakdown.tankerPct + breakdown.transportPct
+    + (breakdown.strikeCapable ?? 0) + (breakdown.awacs ?? 0) + (breakdown.multiOperator ?? 0)
+    + (breakdown.rapidSurge ?? 0) + (breakdown.reconDominance ?? 0);
+  const maxPoints = 60 + 30
+    + (breakdown.rapidSurge === undefined ? 0 : 10)
+    + (breakdown.reconDominance === undefined ? 0 : 10);
+  return Math.round((totalPoints / maxPoints) * 100);
+}
+
+function buildBreakdown(
+  pattern: ConflictPattern,
+  posture: TheaterPostureSummary,
+  surges: SurgeAlert[] | undefined,
+): Record<string, number> {
+  const total = posture.totalAircraft;
+  const sig = pattern.signature;
+  const breakdown: Record<string, number> = {
+    strikeCapable: 0,
+    awacs: 0,
+    multiOperator: 0,
+  };
+
+  const fighterPct = total > 0 ? (posture.fighters / total) * 100 : 0;
+  const tankerPct = total > 0 ? (posture.tankers / total) * 100 : 0;
+  const transportPct = total > 0 ? (posture.transport / total) * 100 : 0;
+
+  breakdown.fighterPct = pctScore(fighterPct, sig.fighterPct);
+  breakdown.tankerPct = pctScore(tankerPct, sig.tankerPct);
+  breakdown.transportPct = pctScore(transportPct, sig.transportPct);
+  scoreRequiredFlags(pattern, posture, surges, breakdown);
+
+  if (pattern.id === 'recon-surge') {
+    const reconPct = total > 0 ? ((posture.reconnaissance + posture.awacs) / total) * 100 : 0;
+    breakdown.reconDominance = reconPct >= 50 ? 10 : Math.round(reconPct / 5);
+  }
+
+  return breakdown;
+}
+
+export function matchPatterns(
+  posture: TheaterPostureSummary,
+  surges?: SurgeAlert[],
+): PatternMatch[] {
+  const total = posture.totalAircraft;
+  const results: PatternMatch[] = [];
+
+  for (const pattern of CONFLICT_PATTERNS) {
+    if (total < pattern.signature.minAircraft) continue;
+    const matchScore = scorePattern(pattern, posture, surges);
+    if (matchScore < 60) continue;
+    results.push({
+      patternId: pattern.id,
+      patternName: pattern.name,
+      matchScore,
+      theaterId: posture.theaterId,
+      theaterName: posture.theaterName,
+      breakdown: buildBreakdown(pattern, posture, surges),
+    });
+  }
+
+  results.sort((a, b) => b.matchScore - a.matchScore);
+  return results;
+}
+
+// ── Signal Conversion ──
+
+export function patternMatchToSignal(match: PatternMatch): {
+  id: string;
+  type: SignalType;
+  source: string;
+  title: string;
+  description: string;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  confidence: number;
+  category: string;
+  timestamp: Date;
+  data: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+} {
+  const severity = match.matchScore >= 90 ? 'critical' as const : 'high' as const;
+  const pattern = CONFLICT_PATTERNS.find(p => p.id === match.patternId);
+  const description = `${match.theaterName} matches "${match.patternName}" profile at ${match.matchScore}% confidence. ${pattern?.description ?? ''}`;
+  const metadata = {
+    patternId: match.patternId,
+    matchScore: match.matchScore,
+    theaterId: match.theaterId,
+    breakdown: match.breakdown,
+  };
+
+  return {
+    id: `pattern-${match.patternId}-${match.theaterId}-${Date.now()}`,
+    type: 'military_surge' as SignalType,
+    source: 'Military Pattern Analysis',
+    title: `${match.theaterName} matches ${match.patternName} pattern (${match.matchScore}%)`,
+    description,
+    severity,
+    confidence: match.matchScore / 100,
+    category: 'military',
+    timestamp: new Date(),
+    data: metadata,
+    metadata,
+  };
+}

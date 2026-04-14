@@ -133,6 +133,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'reddit-osint': { name: 'Reddit Signals', enabled: true, priority: 2 },
   'openaq-monitor': { name: 'OpenAQ Air Quality', enabled: true, priority: 2 },
   'ripe-ncc': { name: 'RIPE NCC BGP', enabled: true, priority: 2 },
+  'ripe-atlas': { name: 'RIPE Atlas', enabled: true, priority: 2 },
   'ipinfo-lookup': { name: 'IPInfo Lookup', enabled: true, priority: 2 },
   'aerospace-reentry': { name: 'Aerospace Reentry Tracker', enabled: true, priority: 2 },
   'amtrak-alerts': { name: 'Amtrak Service Alerts', enabled: true, priority: 2 },

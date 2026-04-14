@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 import type { MilitaryFlight, MilitaryOperator } from '@/types';
 import type { SignalType } from '@/utils/analysis-constants';
 import { MILITARY_BASES_EXPANDED } from '@/config/bases-expanded';
@@ -265,6 +266,7 @@ function cleanupOldHistory(): void {
   }
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function analyzeFlightsForSurge(flights: MilitaryFlight[]): SurgeAlert[] {
   cleanupOldHistory();
 
@@ -531,7 +533,9 @@ export function foreignPresenceToSignal(alert: ForeignPresenceAlert): {
  ([op, reg]) => alert.operator === op && alert.region.id === reg
   );
 
+  // eslint-disable-next-line sonarjs/no-nested-conditional
   const severity = isCritical ? 'critical' :
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  (alert.aircraftCount >= 5 ? 'high' : 'medium');
 
   const confidence = Math.min(0.95, 0.7 + alert.aircraftCount * 0.05);
@@ -631,7 +635,9 @@ export function surgeAlertToSignal(surge: SurgeAlert): {
  .map(([type, count]) => `${count}x ${type}`)
  .join(', ');
 
+  // eslint-disable-next-line sonarjs/no-nested-conditional
   const severity = surge.surgeMultiple >= 4 ? 'critical' :
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  (surge.surgeMultiple >= 3 ? 'high' : 'medium');
 
   const confidence = Math.min(0.95, 0.6 + (surge.surgeMultiple - 2) * 0.1);
@@ -809,6 +815,7 @@ export interface TheaterPostureSummary {
   byOperator: Record<string, number>;
   postureLevel: 'normal' | 'elevated' | 'critical';
   strikeCapable: boolean;
+  strikeGroupPresent: boolean;
   trend: 'increasing' | 'stable' | 'decreasing';
   changePercent: number;
   summary: string;
@@ -819,6 +826,7 @@ export interface TheaterPostureSummary {
   bounds?: { north: number; south: number; east: number; west: number };
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPostureSummary[] {
   const summaries: TheaterPostureSummary[] = [];
 
@@ -848,9 +856,11 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  byOperator[f.operator] = (byOperator[f.operator] || 0) + 1;
  }
 
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  const postureLevel: 'normal' | 'elevated' | 'critical' =
  total >= theater.thresholds.critical
  ? 'critical'
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (total >= theater.thresholds.elevated
  ? 'elevated'
  : 'normal');
@@ -868,7 +878,9 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  const olderAvg =
  older.length > 0 ? older.reduce((a, b) => a + b.totalMilitary, 0) / older.length : total;
  const changePercent = olderAvg > 0 ? Math.round(((recentAvg - olderAvg) / olderAvg) * 100) : 0;
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  const trend: 'increasing' | 'stable' | 'decreasing' =
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  changePercent > 10 ? 'increasing' : (changePercent < -10 ? 'decreasing' : 'stable');
 
  const parts: string[] = [];
@@ -878,9 +890,11 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  if (byType.reconnaissance > 0) parts.push(`${byType.reconnaissance} recon`);
  const summary = parts.join(', ') || 'No military aircraft';
 
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  const headline =
  postureLevel === 'critical'
  ? `Critical military buildup - ${theater.name}`
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (postureLevel === 'elevated'
  ? `Elevated military activity - ${theater.name}`
  : `Normal activity - ${theater.name}`);
@@ -911,6 +925,7 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  byOperator,
  postureLevel,
  strikeCapable,
+ strikeGroupPresent: false,
  trend,
  changePercent,
  summary,
@@ -940,17 +955,23 @@ const TARGET_NATION_CODES: Record<string, string> = {
  * Uses "either triggers" logic: if aircraft OR vessels exceed thresholds, level escalates.
  * CII boost: theaters whose target nation has CII ≥ 70 get elevated, ≥ 85 get critical.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function recalcPostureWithVessels(postures: TheaterPostureSummary[]): void {
   for (const p of postures) {
  const theater = POSTURE_THEATERS.find((t) => t.id === p.theaterId);
  if (!theater) continue;
 
+ // eslint-disable-next-line sonarjs/use-type-alias
  const airLevel: 0 | 1 | 2 =
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  p.totalAircraft >= theater.thresholds.critical ? 2
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (p.totalAircraft >= theater.thresholds.elevated ? 1 : 0);
 
  const navalLevel: 0 | 1 | 2 =
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  p.totalVessels >= theater.navalThresholds.critical ? 2
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (p.totalVessels >= theater.navalThresholds.elevated ? 1 : 0);
 
  // CII boost: high instability in target nation elevates theater posture
@@ -960,12 +981,14 @@ export function recalcPostureWithVessels(postures: TheaterPostureSummary[]): voi
  if (code) {
  const cii = getCountryScore(code);
  if (cii !== null) {
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  ciiLevel = cii >= 85 ? 2 : (cii >= 70 ? 1 : 0);
  }
  }
  }
 
  const combined = Math.max(airLevel, navalLevel, ciiLevel) as 0 | 1 | 2;
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  p.postureLevel = combined === 2 ? 'critical' : (combined === 1 ? 'elevated' : 'normal');
 
  // Rebuild headline with combined context
@@ -974,9 +997,11 @@ export function recalcPostureWithVessels(postures: TheaterPostureSummary[]): voi
  if (p.totalVessels > 0) parts.push(`${p.totalVessels} vessels`);
  const assetSummary = parts.join(' + ') || 'No assets';
 
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  p.headline =
  p.postureLevel === 'critical'
  ? `Critical military buildup - ${p.theaterName} (${assetSummary})`
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (p.postureLevel === 'elevated'
  ? `Elevated military activity - ${p.theaterName} (${assetSummary})`
  : `Normal activity - ${p.theaterName}`);

@@ -376,6 +376,13 @@ const BASES_ICON_MAPPING = { triangleUp: { x: 0, y: 0, width: 32, height: 32, ma
 const NUCLEAR_ICON_MAPPING = { hexagon: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 const DATACENTER_ICON_MAPPING = { square: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 
+// Top-down airplane silhouette (pointing up / north). Rotated at render time via getAngle.
+const AIRPLANE_ICON = 'data:image/svg+xml;base64,' + btoa(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
+  `<path d="M16 1 L14 10 L4 18 L4 20 L14 17 L14 25 L10 28 L10 30 L16 28 L22 30 L22 28 L18 25 L18 17 L28 20 L28 18 L18 10 Z" fill="white"/>` +
+  `</svg>`);
+const AIRPLANE_ICON_MAPPING = { airplane: { x: 0, y: 0, width: 32, height: 32, mask: true, anchorY: 16 } };
+
 const CONFLICT_ZONES_GEOJSON: GeoJSON.FeatureCollection = {
   type: 'FeatureCollection',
   features: CONFLICT_ZONES.map(zone => ({
@@ -2335,15 +2342,19 @@ export class DeckGLMap {
  });
   }
 
-  private createAdsbLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createAdsbLayer(): IconLayer {
+ return new IconLayer({
  id: 'adsb-layer',
  data: this.adsbFlights,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 25_000,
- radiusMinPixels: 2,
- radiusMaxPixels: 6,
- getFillColor: (d) => {
+ getIcon: () => 'airplane',
+ iconAtlas: AIRPLANE_ICON,
+ iconMapping: AIRPLANE_ICON_MAPPING,
+ getAngle: (d) => -(d.heading ?? 0),
+ getSize: 20,
+ sizeMinPixels: 8,
+ sizeMaxPixels: 24,
+ getColor: (d) => {
  if (d.squawk === '7700' || d.squawk === '7600' || d.squawk === '7500') return [255, 50, 50, 255];
  const alt = d.altitude ?? 0;
  if (alt < 3000) return [100, 200, 100, 180];
@@ -2351,9 +2362,7 @@ export class DeckGLMap {
  return [200, 220, 255, 200];
  },
  pickable: true,
- updateTriggers: { getFillColor: [this.adsbFlights] },
-
- transitions: SCATTER_TRANSITIONS,
+ updateTriggers: { getColor: [this.adsbFlights], getAngle: [this.adsbFlights] },
  });
   }
 
@@ -2458,22 +2467,24 @@ export class DeckGLMap {
  });
   }
 
-  private createMilitaryFlightsLayer(flights: MilitaryFlight[]): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createMilitaryFlightsLayer(flights: MilitaryFlight[]): IconLayer {
+ return new IconLayer({
  id: 'military-flights-layer',
  data: flights,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 8000,
- getFillColor: (d) => {
+ getIcon: () => 'airplane',
+ iconAtlas: AIRPLANE_ICON,
+ iconMapping: AIRPLANE_ICON_MAPPING,
+ getAngle: (d) => -d.heading,
+ getSize: 22,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 28,
+ getColor: (d) => {
  if (d.onGround) return [120, 120, 120, 160] as [number, number, number, number];
  const [r, g, b] = altitudeToColor(d.altitude);
  return [r, g, b, 220] as [number, number, number, number];
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 12,
  pickable: true,
-
- transitions: SCATTER_TRANSITIONS,
  });
   }
 

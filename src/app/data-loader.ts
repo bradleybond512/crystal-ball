@@ -181,6 +181,8 @@ import { fetchGridStatus } from '@/services/power-grid';
 import { fetchEconomicStress } from '@/services/economic-stress';
 import { fetchWsbSentiment } from '@/services/wsb-sentiment';
 import { fetchFederalRegister } from '@/services/federal-register';
+import { fetchRipeAtlasStatus } from '@/services/ripe-atlas';
+import type { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
 import { FederalRegisterPanel } from '@/components/FederalRegisterPanel';
 import { updateRegionCount, getHighRiskRegions } from '@/services/ema-forecast';
 import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
@@ -3564,6 +3566,15 @@ export class DataLoaderManager implements AppModule {
  });
  } catch (error) {
  console.error('[DarkWeb] load error:', error);
+ }
+  }
+
+  async loadRipeAtlas(): Promise<void> {
+ try {
+ const data = await fetchRipeAtlasStatus();
+ (this.ctx.panels['ripe-atlas'] as RipeAtlasPanel | undefined)?.update(data);
+ } catch (error) {
+ console.error('[App] RIPE Atlas fetch failed:', error);
  }
   }
 }

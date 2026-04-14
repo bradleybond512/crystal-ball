@@ -1,0 +1,38 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const root = resolve(__dirname, '..');
+
+const panelsSrc = readFileSync(resolve(root, 'src/config/panels.ts'), 'utf8');
+const panelLayoutSrc = readFileSync(resolve(root, 'src/app/panel-layout.ts'), 'utf8');
+const sidecarSrc = readFileSync(resolve(root, 'src-tauri/sidecar/local-api-server.mjs'), 'utf8');
+const dataLoaderSrc = readFileSync(resolve(root, 'src/app/data-loader.ts'), 'utf8');
+const appSrc = readFileSync(resolve(root, 'src/App.ts'), 'utf8');
+
+describe('RIPE Atlas wiring', () => {
+  it('sidecar has /api/ripe-atlas route', () => {
+    assert.match(sidecarSrc, /\/api\/ripe-atlas/);
+    assert.match(sidecarSrc, /atlas\.ripe\.net/);
+  });
+
+  it('ripe-atlas panel is registered', () => {
+    assert.match(panelsSrc, /'ripe-atlas':\s*\{/);
+  });
+
+  it('RipeAtlasPanel is instantiated in panel-layout', () => {
+    assert.match(panelLayoutSrc, /new RipeAtlasPanel\(/);
+  });
+
+  it('data-loader has loadRipeAtlas method', () => {
+    assert.match(dataLoaderSrc, /async loadRipeAtlas\(\): Promise<void>/);
+  });
+
+  it('App.ts scheduler includes ripeAtlas', () => {
+    assert.match(appSrc, /ripeAtlas/);
+    assert.match(appSrc, /loadRipeAtlas/);
+  });
+});

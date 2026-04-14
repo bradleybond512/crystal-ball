@@ -102,6 +102,7 @@ export type RuntimeFeatureId =
   | 'openAqMonitor'
   | 'geoNames'
   | 'ripeNccData'
+  | 'ripeAtlasMeasurements'
   | 'ipInfoLookup'
   | 'iswSituationReports'
   | 'reliefwebCrises'
@@ -203,6 +204,7 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   openAqMonitor: true,
   geoNames: true,
   ripeNccData: true,
+  ripeAtlasMeasurements: true,
   ipInfoLookup: true,
   iswSituationReports: true,
   reliefwebCrises: true,
@@ -610,6 +612,13 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  requiredSecrets: [],
  desktopRequiredSecrets: [],
  fallback: 'RIPE NCC BGP data is disabled.',
+  },
+  {
+ id: 'ripeAtlasMeasurements',
+ name: 'RIPE Atlas Measurements',
+ description: 'Real internet connectivity measurements from global probe network',
+ requiredSecrets: [],
+ fallback: 'Internet infrastructure monitoring disabled',
   },
   {
  id: 'ipInfoLookup',

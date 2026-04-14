@@ -4021,6 +4021,28 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // -- RIPE Atlas -- real internet connectivity measurements ----------------
+  if (requestUrl.pathname === '/api/ripe-atlas') {
+    const type = requestUrl.searchParams.get('type') ?? 'status';
+    const cacheKey = `ripe-atlas-${type}`;
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      let endpoint;
+      endpoint = type === 'anchors' ? 'https://atlas.ripe.net/api/v2/anchors/?format=json&page_size=100&is_disabled=false' : 'https://atlas.ripe.net/api/v2/probes/?format=json&status=1&page_size=1&fields=id';
+      const r = await fetchWithTimeout(endpoint, { headers: { Accept: 'application/json' } }, 12000);
+      if (!r.ok) throw new Error(`RIPE Atlas ${r.status}`);
+      const data = await r.json();
+      const result = type === 'anchors'
+        ? { anchors: (data.results ?? []).map(a => ({ id: a.id, fqdn: a.fqdn, country: a.country, is_ipv4_only: a.is_ipv4_only, geometry: a.geometry })), count: data.count ?? 0 }
+        : { totalConnectedProbes: data.count ?? 0 };
+      setCached(cacheKey, result, 10 * 60 * 1000);
+      return json(result);
+    } catch (error) {
+      return json({ error: `ripe-atlas error: ${error.message ?? error}` }, 502);
+    }
+  }
+
   // ── IPInfo IP intelligence lookup ────────────────────────────────────────
   if (requestUrl.pathname === '/api/ipinfo-lookup') {
  const token = process.env.IPINFO_TOKEN ?? '';

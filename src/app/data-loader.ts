@@ -1607,7 +1607,7 @@ export class DataLoaderManager implements AppModule {
  const packages = updateFromFlights(flights);
  (this.ctx.panels['strike-package'] as StrikePackagePanel)?.update(packages);
  if (this.ctx.mapLayers.strikePackages) {
- (this.ctx.map as any)?.setStrikePackages(packages);
+ this.ctx.map?.setStrikePackages(packages);
  }
  } catch (error) {
  console.error('[Strike Packages] Detection failed:', error);

@@ -25,6 +25,7 @@ import type {
   UcdpGeoEvent,
   CyberThreat,
   CableHealthRecord,
+  StrikePackage,
 } from '@/types';
 import type { AirportDelayAlert } from '@/services/aviation';
 import type { DisplacementFlow } from '@/services/displacement';
@@ -299,6 +300,10 @@ export class MapContainer {
  } else {
  this.svgMap?.setMilitaryFlights(flights, clusters);
  }
+  }
+
+  public setStrikePackages(packages: StrikePackage[]): void {
+ this.deckGLMap?.setStrikePackages(packages);
   }
 
   public setMilitaryVessels(vessels: MilitaryVessel[], clusters: MilitaryVesselCluster[] = []): void {

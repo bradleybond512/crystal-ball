@@ -4,6 +4,20 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Weather-threat convergence detection** (`weather-threat-convergence.ts`): New service that detects when severe weather events overlap geographically with existing conflict, infrastructure, or health threats. 11 weather-threat interaction rules with risk multipliers (heat+grid, hurricane+conflict, flood+industrial, drought+food, etc.).
+- **Weather impact analysis** (`weather-impact.ts`): Scores severe weather against 30+ critical infrastructure points (military bases, maritime chokepoints, power grid hubs, population centers, agricultural regions). Generates `DisruptionSignal`-compatible outputs for the supply-chain-impact service.
+- **8 new weather cascade causal rules** in `alert-correlator.ts`: NWS→grid, NWS→comms-health, NWS→aviation-hazard, GDACS→maritime, earthquake→grid/comms-health (magnitude-scaled radius), cyclone→air-quality, disease→breaking-news.
+- **8 new compound threat patterns** in `compound-threat.ts`: weather+conflict, flood+conflict, seismic+disease, wildfire+grid, weather+food, conflict+cyber (hybrid warfare), nuclear+conflict, weather+maritime.
+- **2 new correlation signal types**: `sentiment_divergence` and `weather_correlation`, with full SignalContext entries and data fields (`sentimentScore`, `sentimentTrend`, `weatherEvent`, `weatherSeverity`, `impactedInfrastructure`).
+- **Correlation matrix ingestion wiring** in `data-loader.ts`: Weather alerts, GDACS events, and compound threats now feed the region×domain correlation matrix (previously unwired).
+- **Insights panel sections**: New "Weather-Threat Convergence" and "Matrix Hotspots" sections with scores and collocated threats. AI World Brief now receives weather context alongside military posture context.
+- **Intelligence briefing enhancements**: AI prompt now includes weather-threat convergence zones and correlation matrix hotspots.
+- **Correlation matrix drill-down UI**: Cells in `CorrelationMatrixPanel` are now clickable, revealing score, trend, event count, and last-updated details with a visual selection indicator.
+- **Notification dispatcher expansion**: New `dispatchCompoundThreatAlert`, `dispatchAnomalyAlert`, `dispatchConvergenceAlert` methods. Data-loader subscribes to the anomaly engine so critical anomalies trigger native notifications. High-severity compound threats and convergence scores ≥70 auto-notify.
+- **Anomaly detection expansion**: New helpers for ingesting weather alert counts, regional news volume, and correlation matrix global score for trend monitoring.
+
 ### Changed
 
 - Removed the Claude agent surface from desktop/web runtime configuration, UI exports, and API routes to avoid direct Anthropic API-cost exposure in default app flows.

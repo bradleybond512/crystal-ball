@@ -234,7 +234,17 @@ Data Sources (RSS, NWS, GDACS, OREF, ACLED, ...)
 | Date | Phase | Item | Status | Notes |
 |------|-------|------|--------|-------|
 | 2026-03-31 | — | Roadmap created | Done | Initial analysis of current system |
-| | | | | |
+| 2026-04-14 | 1 | Weather-threat convergence detection | Done | New service `weather-threat-convergence.ts` with 11 interaction rules and risk multipliers |
+| 2026-04-14 | 1 | Weather impact analysis on strategic infrastructure | Done | New service `weather-impact.ts` scoring 30+ critical infrastructure points; emits supply-chain disruption signals |
+| 2026-04-14 | 1 | Causal rule expansion — weather cascades | Done | +8 rules in `alert-correlator.ts` (NWS→grid/comms/aviation, GDACS→maritime, quake→infra, cyclone→AQ, disease→news) |
+| 2026-04-14 | 1 | Compound threat pattern expansion | Done | +8 patterns in `compound-threat.ts` (weather+conflict, seismic+disease, nuclear+conflict, etc.) |
+| 2026-04-14 | 1 | Correlation signal type expansion | Done | +2 signal types (`sentiment_divergence`, `weather_correlation`) with full SignalContext |
+| 2026-04-14 | 1 | Correlation matrix ingestion wiring | Done | Weather alerts, GDACS events, and compound threats now feed the region×domain matrix |
+| 2026-04-14 | 1 | Intelligence briefing weather context | Done | AI prompt includes weather-threat convergence zones and matrix hotspots |
+| 2026-04-14 | 1 | Insights panel weather + matrix sections | Done | New "Weather-Threat Convergence" and "Matrix Hotspots" rendering; World Brief receives weather context |
+| 2026-04-14 | 1 | Correlation matrix drill-down UI | Done | Cells clickable with score/trend/event-count detail view |
+| 2026-04-14 | 0 | Notification dispatcher expansion | Done | New methods for compound threats, critical anomalies, and convergence alerts; wired to native Tauri notifications |
+| 2026-04-14 | 1 | Anomaly detection stream expansion | Done | New ingest helpers for weather alert counts, regional news volume, matrix global score |
 
 ---
 

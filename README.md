@@ -1,6 +1,6 @@
 # Crystal Ball
 
-Tauri 2 + TypeScript + Rust desktop app: 168+ live data panels across 4 product variants, a Cesium.js/DeckGL 3D globe with 74 geospatial layers, SGP4 orbital propagation in a Web Worker, AI summarization with Ollama/Groq/Claude/OpenRouter fallback chain, Protobuf/Buf contract-driven API layer, OS keychain secret storage, Node.js sidecar proxy on a bearer-authenticated local port, and a PostHog-instrumented Ghost Mode with analytics suppression.
+Tauri 2 + TypeScript + Rust desktop app: 170+ live data panels across 4 product variants, a Cesium.js/DeckGL 3D globe with 74 geospatial layers, SGP4 orbital propagation in a Web Worker, AI summarization with Ollama/Groq/Claude/OpenRouter fallback chain, Protobuf/Buf contract-driven API layer, OS keychain secret storage, Node.js sidecar proxy on a bearer-authenticated local port, and a PostHog-instrumented Ghost Mode with analytics suppression.
 
 [![Version](https://img.shields.io/github/v/release/bradleybond512/crystal-ball?label=version)](https://github.com/bradleybond512/crystal-ball/releases/latest)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
@@ -84,7 +84,7 @@ CSS `-webkit-app-region: drag` is silently ignored. Window dragging requires JS 
 |--------|-------|--------|
 | Product variants | 4 | `src/config/variant.ts` |
 | Desktop build targets | 3 | `package.json` |
-| Default panel inventory | 168 full / 35 tech / 31 finance / 10 happy | `src/config/panels.ts` |
+| Default panel inventory | 170 full / 35 tech / 31 finance / 10 happy | `src/config/panels.ts` |
 | God's Eye data layers | 74 | `src/config/panels.ts` |
 | Supported secret keys | 47 | `src-tauri/src/main.rs` |
 | Locales | 19 | `src/locales/` |

@@ -376,6 +376,67 @@ const BASES_ICON_MAPPING = { triangleUp: { x: 0, y: 0, width: 32, height: 32, ma
 const NUCLEAR_ICON_MAPPING = { hexagon: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 const DATACENTER_ICON_MAPPING = { square: { x: 0, y: 0, width: 32, height: 32, mask: true } };
 
+// ── Realistic map icons ──
+const svgIcon = (path: string) => 'data:image/svg+xml;base64,' + btoa(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">${path}</svg>`);
+const iconMap = (name: string) => ({ [name]: { x: 0, y: 0, width: 32, height: 32, mask: true } });
+
+// Ship (top-down hull with bow)
+const SHIP_ICON = svgIcon(`<path d="M16 3 L20 10 L21 24 L19 29 L13 29 L11 24 L12 10 Z" fill="white"/>`);
+const SHIP_ICON_MAPPING = iconMap('ship');
+
+// Satellite (body + solar panels)
+const SATELLITE_ICON = svgIcon(`<rect x="13" y="8" width="6" height="16" rx="1" fill="white"/><rect x="2" y="12" width="10" height="8" rx="1" fill="white"/><rect x="20" y="12" width="10" height="8" rx="1" fill="white"/>`);
+const SATELLITE_ICON_MAPPING = iconMap('satellite');
+
+// Earthquake (seismic wave zigzag)
+const EARTHQUAKE_ICON = svgIcon(`<path d="M4 16 L8 8 L12 22 L16 6 L20 26 L24 10 L28 16" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+const EARTHQUAKE_ICON_MAPPING = iconMap('earthquake');
+
+// Fire (flame)
+const FIRE_ICON = svgIcon(`<path d="M16 2 C16 2 24 12 24 20 C24 24.4 20.4 28 16 28 C11.6 28 8 24.4 8 20 C8 12 16 2 16 2 Z M16 24 C18.2 24 20 22.2 20 20 C20 17 16 12 16 12 C16 12 12 17 12 20 C12 22.2 13.8 24 16 24 Z" fill="white"/>`);
+const FIRE_ICON_MAPPING = iconMap('fire');
+
+// Lightning bolt
+const LIGHTNING_ICON = svgIcon(`<path d="M18 2 L10 18 L15 18 L14 30 L22 14 L17 14 Z" fill="white"/>`);
+const LIGHTNING_ICON_MAPPING = iconMap('lightning');
+
+// Rocket (spaceport)
+const ROCKET_ICON = svgIcon(`<path d="M16 2 C16 2 22 8 22 18 L25 22 L25 25 L20 22 L20 26 L18 28 L16 26 L14 28 L12 26 L12 22 L7 25 L7 22 L10 18 C10 8 16 2 16 2 Z M16 12 C17.7 12 19 13.3 19 15 C19 16.7 17.7 18 16 18 C14.3 18 13 16.7 13 15 C13 13.3 14.3 12 16 12 Z" fill="white"/>`);
+const ROCKET_ICON_MAPPING = iconMap('rocket');
+
+// Anchor (port)
+const ANCHOR_ICON = svgIcon(`<circle cx="16" cy="8" r="3" stroke="white" stroke-width="2" fill="none"/><path d="M16 11 L16 27 M10 22 C10 27 16 29 16 29 C16 29 22 27 22 22 M11 17 L21 17" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>`);
+const ANCHOR_ICON_MAPPING = iconMap('anchor');
+
+// Crosshair (airstrike)
+const CROSSHAIR_ICON = svgIcon(`<circle cx="16" cy="16" r="8" stroke="white" stroke-width="2" fill="none"/><circle cx="16" cy="16" r="3" fill="white"/><path d="M16 4 L16 8 M16 24 L16 28 M4 16 L8 16 M24 16 L28 16" stroke="white" stroke-width="2" stroke-linecap="round"/>`);
+const CROSSHAIR_ICON_MAPPING = iconMap('crosshair');
+
+// Biohazard (disease)
+const BIOHAZARD_ICON = svgIcon(`<circle cx="16" cy="16" r="3" fill="white"/><path d="M16 6 C12 6 9 9 9 13 C9 14.5 9.5 16 10.5 17" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M24.5 20 C26 17 25 13 22 10.5 C20.7 9.4 19 8.8 17.3 8.8" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M9 23 C11.5 25.5 15.5 26 18.5 24 C19.8 23.2 20.8 22 21.3 20.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>`);
+const BIOHAZARD_ICON_MAPPING = iconMap('biohazard');
+
+// Shield (cyber)
+const SHIELD_ICON = svgIcon(`<path d="M16 3 L4 8 L4 16 C4 22 9 27 16 30 C23 27 28 22 28 16 L28 8 Z" fill="white"/>`);
+const SHIELD_ICON_MAPPING = iconMap('shield');
+
+// Cloud with warning (weather)
+const CLOUD_ICON = svgIcon(`<path d="M8 22 C4 22 2 19 2 16.5 C2 14 4 12 6.5 11.5 C7 8 10 5 14 5 C17 5 19.5 7 20.5 10 C21 9.8 21.5 9.7 22 9.7 C25 9.7 27.5 12 27.5 15 C27.5 18 25 20 22 20 L22 22 Z" fill="white"/><path d="M15 14 L17 14 L16.5 19 L15.5 19 Z M16 21 L16 22" stroke="white" stroke-width="1.5" fill="white"/>`);
+const CLOUD_ICON_MAPPING = iconMap('cloud');
+
+// Solar/Wind (renewable) — wind turbine
+const TURBINE_ICON = svgIcon(`<circle cx="16" cy="10" r="3" fill="white"/><path d="M16 13 L16 28 M12 28 L20 28" stroke="white" stroke-width="2" stroke-linecap="round"/><path d="M16 10 L16 2 M16 10 L23 16 M16 10 L9 16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>`);
+const TURBINE_ICON_MAPPING = iconMap('turbine');
+
+// Chart columns (stock exchange)
+const CHART_ICON = svgIcon(`<rect x="5" y="18" width="4" height="10" rx="1" fill="white"/><rect x="11" y="12" width="4" height="16" rx="1" fill="white"/><rect x="17" y="6" width="4" height="22" rx="1" fill="white"/><rect x="23" y="14" width="4" height="14" rx="1" fill="white"/>`);
+const CHART_ICON_MAPPING = iconMap('chart');
+
+// Bank building (central bank)
+const BANK_ICON = svgIcon(`<path d="M16 3 L28 10 L28 12 L4 12 L4 10 Z" fill="white"/><rect x="6" y="13" width="3" height="12" fill="white"/><rect x="11" y="13" width="3" height="12" fill="white"/><rect x="18" y="13" width="3" height="12" fill="white"/><rect x="23" y="13" width="3" height="12" fill="white"/><rect x="4" y="26" width="24" height="3" rx="1" fill="white"/>`);
+const BANK_ICON_MAPPING = iconMap('bank');
+
 const CONFLICT_ZONES_GEOJSON: GeoJSON.FeatureCollection = {
   type: 'FeatureCollection',
   features: CONFLICT_ZONES.map(zone => ({
@@ -1864,46 +1925,44 @@ export class DeckGLMap {
  });
   }
 
-  private createSpaceportsLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createSpaceportsLayer(): IconLayer {
+ return new IconLayer({
  id: 'spaceports-layer',
  data: SPACEPORTS,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 10_000,
- getFillColor: [200, 100, 255, 200] as [number, number, number, number], // Purple
- radiusMinPixels: 5,
- radiusMaxPixels: 12,
+ getIcon: () => 'rocket',
+ iconAtlas: ROCKET_ICON,
+ iconMapping: ROCKET_ICON_MAPPING,
+ getSize: 20,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 22,
+ getColor: [200, 100, 255, 200] as [number, number, number, number],
  pickable: true,
  });
   }
 
-  private createPortsLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createPortsLayer(): IconLayer {
+ return new IconLayer({
  id: 'ports-layer',
  data: PORTS,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 6000,
- getFillColor: (d) => {
- // Color by port type (matching old Map.ts icons)
+ getIcon: () => 'anchor',
+ iconAtlas: ANCHOR_ICON,
+ iconMapping: ANCHOR_ICON_MAPPING,
+ getSize: 18,
+ sizeMinPixels: 8,
+ sizeMaxPixels: 18,
+ getColor: (d) => {
  switch (d.type) {
- case 'naval': { return [100, 150, 255, 200] as [number, number, number, number];
- } // Blue - ⚓
- case 'oil': { return [255, 140, 0, 200] as [number, number, number, number];
- } // Orange - 🛢️
- case 'lng': { return [255, 200, 50, 200] as [number, number, number, number];
- } // Yellow - 🛢️
- case 'container': { return [0, 200, 255, 180] as [number, number, number, number];
- } // Cyan - 🏭
- case 'mixed': { return [150, 200, 150, 180] as [number, number, number, number];
- } // Green
- case 'bulk': { return [180, 150, 120, 180] as [number, number, number, number];
- } // Brown
- default: { return [0, 200, 255, 160] as [number, number, number, number];
- }
+ case 'naval': { return [100, 150, 255, 200] as [number, number, number, number]; }
+ case 'oil': { return [255, 140, 0, 200] as [number, number, number, number]; }
+ case 'lng': { return [255, 200, 50, 200] as [number, number, number, number]; }
+ case 'container': { return [0, 200, 255, 180] as [number, number, number, number]; }
+ case 'mixed': { return [150, 200, 150, 180] as [number, number, number, number]; }
+ case 'bulk': { return [180, 150, 120, 180] as [number, number, number, number]; }
+ default: { return [0, 200, 255, 160] as [number, number, number, number]; }
  }
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 10,
  pickable: true,
  });
   }
@@ -1990,7 +2049,7 @@ export class DeckGLMap {
 
   private createDiseaseIntelOutbreakPinsLayer(
  items: (EpidemicEvent | WhoDonAlert)[]
-  ): ScatterplotLayer<{ lat: number; lon: number; isAlert: boolean }> {
+  ): IconLayer<{ lat: number; lon: number; isAlert: boolean }> {
  const countries = this.diseaseIntelData?.covidCountries ?? [];
 
  const pins = items
@@ -2003,19 +2062,18 @@ export class DeckGLMap {
  })
  .filter((p): p is { lat: number; lon: number; isAlert: boolean } => p !== null);
 
- return new ScatterplotLayer({
+ return new IconLayer({
  id: 'disease-intel-outbreak-pins',
  data: pins,
  getPosition: d => [d.lon, d.lat],
- getRadius: 8,
- getFillColor: d => d.isAlert ? [255, 60, 60, 220] : [255, 160, 60, 200],
- radiusMinPixels: 6,
- radiusMaxPixels: 14,
- stroked: true,
- getLineColor: [255, 255, 255, 100],
- lineWidthMinPixels: 1,
+ getIcon: () => 'biohazard',
+ iconAtlas: BIOHAZARD_ICON,
+ iconMapping: BIOHAZARD_ICON_MAPPING,
+ getSize: 20,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 22,
+ getColor: d => d.isAlert ? [255, 60, 60, 220] : [255, 160, 60, 200],
  pickable: true,
- autoHighlight: true,
  });
   }
 
@@ -2061,20 +2119,23 @@ export class DeckGLMap {
  });
   }
 
-  private createEarthquakesLayer(earthquakes: Earthquake[]): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createEarthquakesLayer(earthquakes: Earthquake[]): IconLayer {
+ return new IconLayer({
  id: 'earthquakes-layer',
  data: earthquakes,
  getPosition: (d) => [d.location?.longitude ?? 0, d.location?.latitude ?? 0],
- getRadius: (d) => Math.pow(2, d.magnitude) * 1000,
- getFillColor: (d) => {
+ getIcon: () => 'earthquake',
+ iconAtlas: EARTHQUAKE_ICON,
+ iconMapping: EARTHQUAKE_ICON_MAPPING,
+ getSize: (d) => 12 + d.magnitude * 3,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 36,
+ getColor: (d) => {
  const mag = d.magnitude;
  if (mag >= 6) return [255, 0, 0, 200] as [number, number, number, number];
  if (mag >= 5) return [255, 100, 0, 200] as [number, number, number, number];
  return COLORS.earthquake;
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 30,
  pickable: true,
  });
   }
@@ -2096,19 +2157,22 @@ export class DeckGLMap {
  });
   }
 
-  private createFiresLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createFiresLayer(): IconLayer {
+ return new IconLayer({
  id: 'fires-layer',
  data: this.firmsFireData,
  getPosition: (d: (typeof this.firmsFireData)[0]) => [d.lon, d.lat],
- getRadius: (d: (typeof this.firmsFireData)[0]) => Math.min(d.frp * 200, 30_000) || 5000,
- getFillColor: (d: (typeof this.firmsFireData)[0]) => {
+ getIcon: () => 'fire',
+ iconAtlas: FIRE_ICON,
+ iconMapping: FIRE_ICON_MAPPING,
+ getSize: (d: (typeof this.firmsFireData)[0]) => 12 + Math.min(d.frp / 10, 16),
+ sizeMinPixels: 8,
+ sizeMaxPixels: 24,
+ getColor: (d: (typeof this.firmsFireData)[0]) => {
  if (d.brightness > 400) return [255, 30, 0, 220] as [number, number, number, number];
  if (d.brightness > 350) return [255, 140, 0, 200] as [number, number, number, number];
  return [255, 220, 50, 180] as [number, number, number, number];
  },
- radiusMinPixels: 3,
- radiusMaxPixels: 12,
  pickable: true,
  });
   }
@@ -2130,23 +2194,25 @@ export class DeckGLMap {
  });
   }
 
-  private createWeatherLayer(alerts: WeatherAlert[]): ScatterplotLayer {
- // Filter weather alerts that have centroid coordinates
+  private createWeatherLayer(alerts: WeatherAlert[]): IconLayer {
  const alertsWithCoords = alerts.filter(a => a.centroid?.length === 2);
 
- return new ScatterplotLayer({
+ return new IconLayer({
  id: 'weather-layer',
  data: alertsWithCoords,
- getPosition: (d) => d.centroid as [number, number], // centroid is [lon, lat]
- getRadius: 25_000,
- getFillColor: (d) => {
+ getPosition: (d) => d.centroid as [number, number],
+ getIcon: () => 'cloud',
+ iconAtlas: CLOUD_ICON,
+ iconMapping: CLOUD_ICON_MAPPING,
+ getSize: 24,
+ sizeMinPixels: 14,
+ sizeMaxPixels: 28,
+ getColor: (d) => {
  if (d.severity === 'Extreme') return [255, 0, 0, 200] as [number, number, number, number];
  if (d.severity === 'Severe') return [255, 100, 0, 180] as [number, number, number, number];
  if (d.severity === 'Moderate') return [255, 170, 0, 160] as [number, number, number, number];
  return COLORS.weather;
  },
- radiusMinPixels: 8,
- radiusMaxPixels: 20,
  pickable: true,
  });
   }
@@ -2164,41 +2230,33 @@ export class DeckGLMap {
  });
   }
 
-  private createCyberThreatsLayer(): ScatterplotLayer<CyberThreat> {
- return new ScatterplotLayer<CyberThreat>({
+  private createCyberThreatsLayer(): IconLayer<CyberThreat> {
+ return new IconLayer<CyberThreat>({
  id: 'cyber-threats-layer',
  data: this.cyberThreats,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: (d) => {
+ getIcon: () => 'shield',
+ iconAtlas: SHIELD_ICON,
+ iconMapping: SHIELD_ICON_MAPPING,
+ getSize: (d) => {
  switch (d.severity) {
- case 'critical': { return 22_000;
- }
- case 'high': { return 17_000;
- }
- case 'medium': { return 13_000;
- }
- default: { return 9000;
- }
+ case 'critical': { return 28; }
+ case 'high': { return 22; }
+ case 'medium': { return 18; }
+ default: { return 14; }
  }
  },
- getFillColor: (d) => {
+ sizeMinPixels: 10,
+ sizeMaxPixels: 28,
+ getColor: (d) => {
  switch (d.severity) {
- case 'critical': { return [255, 61, 0, 225] as [number, number, number, number];
- }
- case 'high': { return [255, 102, 0, 205] as [number, number, number, number];
- }
- case 'medium': { return [255, 176, 0, 185] as [number, number, number, number];
- }
- default: { return [255, 235, 59, 170] as [number, number, number, number];
- }
+ case 'critical': { return [255, 61, 0, 225] as [number, number, number, number]; }
+ case 'high': { return [255, 102, 0, 205] as [number, number, number, number]; }
+ case 'medium': { return [255, 176, 0, 185] as [number, number, number, number]; }
+ default: { return [255, 235, 59, 170] as [number, number, number, number]; }
  }
  },
- radiusMinPixels: 6,
- radiusMaxPixels: 18,
  pickable: true,
- stroked: true,
- getLineColor: [255, 255, 255, 160] as [number, number, number, number],
- lineWidthMinPixels: 1,
  });
   }
 
@@ -2372,39 +2430,39 @@ export class DeckGLMap {
  });
   }
 
-  private createRepairShipsLayer(): ScatterplotLayer {
- // Cable repair ships
- return new ScatterplotLayer({
+  private createRepairShipsLayer(): IconLayer {
+ return new IconLayer({
  id: 'repair-ships-layer',
  data: this.repairShips,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 8000,
- getFillColor: [0, 255, 200, 200] as [number, number, number, number], // Teal
- radiusMinPixels: 4,
- radiusMaxPixels: 10,
+ getIcon: () => 'ship',
+ iconAtlas: SHIP_ICON,
+ iconMapping: SHIP_ICON_MAPPING,
+ getSize: 18,
+ sizeMinPixels: 8,
+ sizeMaxPixels: 18,
+ getColor: [0, 255, 200, 200] as [number, number, number, number],
  pickable: true,
  });
   }
 
-  private createMilitaryVesselsLayer(vessels: MilitaryVessel[]): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createMilitaryVesselsLayer(vessels: MilitaryVessel[]): IconLayer {
+ return new IconLayer({
  id: 'military-vessels-layer',
  data: vessels,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: 6000,
- getFillColor: (d) => {
- if (d.usniSource) return [255, 160, 60, 160] as [number, number, number, number]; // Orange, lower alpha for USNI-only
+ getIcon: () => 'ship',
+ iconAtlas: SHIP_ICON,
+ iconMapping: SHIP_ICON_MAPPING,
+ getAngle: (d) => -(d.heading ?? 0),
+ getSize: 18,
+ sizeMinPixels: 8,
+ sizeMaxPixels: 18,
+ getColor: (d) => {
+ if (d.usniSource) return [255, 160, 60, 160] as [number, number, number, number];
  return COLORS.vesselMilitary;
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 10,
  pickable: true,
- stroked: true,
- getLineColor: (d) => {
- if (d.usniSource) return [255, 180, 80, 200] as [number, number, number, number]; // Orange outline
- return [0, 0, 0, 0] as [number, number, number, number]; // No outline for AIS
- },
- lineWidthMinPixels: 2,
  });
   }
 
@@ -2564,19 +2622,22 @@ export class DeckGLMap {
  });
   }
 
-  private createStockExchangesLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createStockExchangesLayer(): IconLayer {
+ return new IconLayer({
  id: 'stock-exchanges-layer',
  data: STOCK_EXCHANGES,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: (d) => d.tier === 'mega' ? 18_000 : (d.tier === 'major' ? 14_000 : 11_000),
- getFillColor: (d) => {
+ getIcon: () => 'chart',
+ iconAtlas: CHART_ICON,
+ iconMapping: CHART_ICON_MAPPING,
+ getSize: (d) => d.tier === 'mega' ? 24 : (d.tier === 'major' ? 20 : 16),
+ sizeMinPixels: 10,
+ sizeMaxPixels: 24,
+ getColor: (d) => {
  if (d.tier === 'mega') return [255, 215, 80, 220] as [number, number, number, number];
  if (d.tier === 'major') return COLORS.stockExchange;
  return [140, 210, 255, 190] as [number, number, number, number];
  },
- radiusMinPixels: 5,
- radiusMaxPixels: 14,
  pickable: true,
  });
   }
@@ -2598,19 +2659,22 @@ export class DeckGLMap {
  });
   }
 
-  private createCentralBanksLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createCentralBanksLayer(): IconLayer {
+ return new IconLayer({
  id: 'central-banks-layer',
  data: CENTRAL_BANKS,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: (d) => d.type === 'major' ? 15_000 : (d.type === 'supranational' ? 17_000 : 12_000),
- getFillColor: (d) => {
+ getIcon: () => 'bank',
+ iconAtlas: BANK_ICON,
+ iconMapping: BANK_ICON_MAPPING,
+ getSize: (d) => d.type === 'supranational' ? 22 : (d.type === 'major' ? 20 : 16),
+ sizeMinPixels: 8,
+ sizeMaxPixels: 22,
+ getColor: (d) => {
  if (d.type === 'major') return COLORS.centralBank;
  if (d.type === 'supranational') return [255, 235, 140, 220] as [number, number, number, number];
  return [235, 180, 80, 185] as [number, number, number, number];
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 12,
  pickable: true,
  });
   }
@@ -3346,30 +3410,24 @@ export class DeckGLMap {
  });
   }
 
-  private createRenewableInstallationsLayer(): ScatterplotLayer {
+  private createRenewableInstallationsLayer(): IconLayer {
  const typeColors: Record<string, [number, number, number, number]> = {
  solar: [255, 200, 50, 200],
  wind: [100, 200, 255, 200],
  hydro: [0, 180, 180, 200],
  geothermal: [255, 150, 80, 200],
  };
- const typeLineColors: Record<string, [number, number, number, number]> = {
- solar: [255, 200, 50, 255],
- wind: [100, 200, 255, 255],
- hydro: [0, 180, 180, 255],
- geothermal: [255, 150, 80, 255],
- };
- return new ScatterplotLayer({
+ return new IconLayer({
  id: 'renewable-installations-layer',
  data: this.renewableInstallations,
  getPosition: (d: RenewableInstallation) => [d.lon, d.lat],
- getRadius: 30_000,
- radiusMinPixels: 5,
- radiusMaxPixels: 18,
- getFillColor: (d: RenewableInstallation) => typeColors[d.type] ?? [200, 200, 200, 200] as [number, number, number, number],
- stroked: true,
- getLineColor: (d: RenewableInstallation) => typeLineColors[d.type] ?? [200, 200, 200, 255] as [number, number, number, number],
- lineWidthMinPixels: 1,
+ getIcon: () => 'turbine',
+ iconAtlas: TURBINE_ICON,
+ iconMapping: TURBINE_ICON_MAPPING,
+ getSize: 20,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 24,
+ getColor: (d: RenewableInstallation) => typeColors[d.type] ?? [200, 200, 200, 200] as [number, number, number, number],
  pickable: true,
  });
   }
@@ -4563,24 +4621,24 @@ export class DeckGLMap {
  });
   }
 
-  private createAirstrikesLayer(): ScatterplotLayer<AirstrikeEvent> {
- return new ScatterplotLayer<AirstrikeEvent>({
+  private createAirstrikesLayer(): IconLayer<AirstrikeEvent> {
+ return new IconLayer<AirstrikeEvent>({
  id: 'airstrikes-layer',
  data: this.airstrikesData,
  getPosition: (d) => [d.lon, d.lat],
- getRadius: (d) => Math.max(8000, 8000 + Math.sqrt(d.fatalities || 0) * 5000),
- getFillColor: (d) => {
+ getIcon: () => 'crosshair',
+ iconAtlas: CROSSHAIR_ICON,
+ iconMapping: CROSSHAIR_ICON_MAPPING,
+ getSize: (d) => 14 + Math.sqrt(d.fatalities || 0) * 3,
+ sizeMinPixels: 10,
+ sizeMaxPixels: 30,
+ getColor: (d) => {
  const sub = d.subEventType.toLowerCase();
  if (sub.includes('drone') || sub.includes('loiter')) return [140, 80, 255, 210];
  if (sub.includes('missile')) return [255, 100, 20, 220];
  if (sub.includes('shell') || sub.includes('artill')) return [255, 200, 30, 200];
- return [255, 40, 40, 220]; // generic airstrike
+ return [255, 40, 40, 220];
  },
- radiusMinPixels: 4,
- radiusMaxPixels: 24,
- stroked: true,
- getLineColor: [255, 255, 255, 80],
- lineWidthMinPixels: 1,
  pickable: true,
  });
   }
@@ -5938,20 +5996,22 @@ export class DeckGLMap {
 
   // ── Lightning Layer (DeckGL ScatterplotLayer) ────────────────────
 
-  private createLightningLayer(): ScatterplotLayer {
- return new ScatterplotLayer({
+  private createLightningLayer(): IconLayer {
+ return new IconLayer({
  id: 'lightning-strikes',
  data: this.lightningStrikes,
  getPosition: (d: LightningStrike) => [d.lon, d.lat],
- getRadius: 8000,
- getFillColor: (d: LightningStrike) => {
+ getIcon: () => 'lightning',
+ iconAtlas: LIGHTNING_ICON,
+ iconMapping: LIGHTNING_ICON_MAPPING,
+ getSize: 16,
+ sizeMinPixels: 6,
+ sizeMaxPixels: 18,
+ getColor: (d: LightningStrike) => {
  const rgb = strikeColor(d.intensity);
  const a = Math.round(strikeOpacity(d.time) * 255);
  return [...rgb, a] as [number, number, number, number];
  },
- radiusUnits: 'meters' as const,
- radiusMinPixels: 2,
- radiusMaxPixels: 8,
  pickable: true,
  });
   }
@@ -5995,7 +6055,7 @@ export class DeckGLMap {
 
   // ── Satellite Layers ─────────────────────────────────────────────
 
-  private createSatelliteLayer(): ScatterplotLayer {
+  private createSatelliteLayer(): IconLayer {
  const zoom = this.maplibreMap?.getZoom() ?? 0;
  const notable = this.satelliteCatalog.length > 0
  ? new Set(filterNotable(this.satelliteCatalog).map(s => s.noradId))
@@ -6005,19 +6065,21 @@ export class DeckGLMap {
  ? this.satellitePositions.filter(s => notable.has(s.noradId))
  : this.satellitePositions;
 
- return new ScatterplotLayer({
+ return new IconLayer({
  id: 'satellite-positions',
  data,
  getPosition: (d: SatellitePosition) => [d.lon, d.lat],
- getRadius: (d: SatellitePosition) => notable.has(d.noradId) ? 20_000 : 8_000,
- getFillColor: (d: SatellitePosition) => {
+ getIcon: () => 'satellite',
+ iconAtlas: SATELLITE_ICON,
+ iconMapping: SATELLITE_ICON_MAPPING,
+ getSize: (d: SatellitePosition) => notable.has(d.noradId) ? 18 : 12,
+ sizeMinPixels: 4,
+ sizeMaxPixels: 18,
+ getColor: (d: SatellitePosition) => {
  const cat = this.satelliteCatalog.find(s => s.noradId === d.noradId);
  if (cat?.annotation) return [...cat.annotation.color, 200] as [number, number, number, number];
  return [150, 150, 150, 100];
  },
- radiusUnits: 'meters' as const,
- radiusMinPixels: 1,
- radiusMaxPixels: 6,
  pickable: true,
  });
   }

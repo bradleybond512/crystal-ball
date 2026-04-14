@@ -51,6 +51,8 @@ function entryToEnriched(e: MilitaryBaseEntry): MilitaryBaseEnriched {
 
 let lastResult: CachedResult | null = null;
 let pendingFetch: Promise<CachedResult | null> | null = null;
+let basesFailures = 0;
+let basesCooldownUntil = 0;
 
 
 
@@ -67,6 +69,10 @@ export async function fetchMilitaryBases(
  return lastResult;
   }
 
+  // Circuit breaker: skip RPC while cooling down, return stale data
+  if (Date.now() < basesCooldownUntil) return lastResult;
+  if (basesCooldownUntil > 0) { basesFailures = 0; basesCooldownUntil = 0; }
+
   if (pendingFetch) return pendingFetch;
 
   pendingFetch = (async () => {
@@ -79,6 +85,8 @@ export async function fetchMilitaryBases(
  country: filters?.country || '',
  });
 
+ basesFailures = 0;
+ basesCooldownUntil = 0;
  const bases = resp.bases.map(entryToEnriched);
  const result: CachedResult = {
  bases,
@@ -90,7 +98,13 @@ export async function fetchMilitaryBases(
  lastResult = result;
  return result;
  } catch (error) {
+ basesFailures++;
+ if (basesFailures >= 2) {
+ basesCooldownUntil = Date.now() + 5 * 60 * 1000;
+ console.warn(`[bases-svc] On cooldown for 300s after ${basesFailures} failures`);
+ } else {
  console.error('[bases-svc] error', error);
+ }
  return lastResult;
  } finally {
  pendingFetch = null;

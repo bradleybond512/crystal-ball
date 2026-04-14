@@ -938,6 +938,65 @@ export interface MilitaryActivitySummary {
   lastUpdate: Date;
 }
 
+// ---- Strike Packages ----
+
+export type StrikePackageDomain = 'naval' | 'air';
+
+export type StrikePackageStatus =
+  | 'active'
+  | 'forming'
+  | 'deploying'
+  | 'transit'
+  | 'in_port'
+  | 'unknown';
+
+export interface PackageUnit {
+  type: string;
+  count: number;
+  role: string;
+}
+
+export interface PredictedDestination {
+  name: string;
+  lat: number;
+  lon: number;
+  probability: number;
+  reasoning: string;
+}
+
+export interface ConfidenceCone {
+  bearingMin: number;
+  bearingMax: number;
+  rangeKm: number;
+}
+
+export interface RoutePrediction {
+  extrapolatedPath: [number, number][];
+  destinations: PredictedDestination[];
+  confidenceCone?: ConfidenceCone;
+  method: 'extrapolation' | 'pattern' | 'ai' | 'combined';
+  updatedAt: Date;
+}
+
+export interface StrikePackage {
+  id: string;
+  domain: StrikePackageDomain;
+  name: string;
+  status: StrikePackageStatus;
+  importance: number;
+  lat: number;
+  lon: number;
+  heading: number;
+  speed: number;
+  composition: PackageUnit[];
+  prediction: RoutePrediction;
+  aiAssessment?: string;
+  aiEscalation?: 'normal' | 'elevated' | 'high';
+  detectedAt: Date;
+  lastUpdated: Date;
+  trail: [number, number][];
+}
+
 // PizzINT - Pentagon Pizza Index Types
 export type PizzIntDefconLevel = 1 | 2 | 3 | 4 | 5;
 export type PizzIntDataFreshness = 'fresh' | 'stale';

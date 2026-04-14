@@ -563,6 +563,7 @@ export class DeckGLMap {
   private rafUpdateLayers: () => void;
   private rafUpdateLayersPending = false;
   private moveTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private _themeChangedHandler: ((e: Event) => void) | null = null;
   private mapEventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
 
   constructor(container: HTMLElement, initialState: DeckMapState) {
@@ -589,7 +590,7 @@ export class DeckGLMap {
  this.setupDOM();
  this.popup = new MapPopup(container);
 
- window.addEventListener('theme-changed', (e: Event) => {
+ this._themeChangedHandler = (e: Event) => {
  const theme = (e as CustomEvent).detail?.theme as 'dark' | 'light';
  if (theme) {
  // Only auto-switch basemap if not using a custom (satellite/terrain) style
@@ -598,7 +599,8 @@ export class DeckGLMap {
  }
  this.render(); // Rebuilds Deck.GL layers with new theme-aware colors
  }
- });
+ };
+ window.addEventListener('theme-changed', this._themeChangedHandler);
 
  this.initMapLibre();
 
@@ -5636,6 +5638,11 @@ export class DeckGLMap {
  this.stopCablePulse();
  this.stopDayNightTimer();
  this.stopTheaterPolygons();
+
+ if (this._themeChangedHandler) {
+ window.removeEventListener('theme-changed', this._themeChangedHandler);
+ this._themeChangedHandler = null;
+ }
 
  // Remove all MapLibre event listeners to prevent leaks
  for (const { event, handler } of this.mapEventHandlers) {

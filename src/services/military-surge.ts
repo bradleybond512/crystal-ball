@@ -1013,3 +1013,125 @@ export function getCriticalPostures(flights: MilitaryFlight[]): TheaterPostureSu
  (p) => p.postureLevel === 'critical' || (p.postureLevel === 'elevated' && p.strikeCapable)
   );
 }
+// ── Multi-Theater Coordination ──
+
+export interface MultiTheaterAlert {
+  id: string;
+  theaters: {
+    theaterId: string;
+    theaterName: string;
+    surgeType: 'airlift' | 'fighter' | 'reconnaissance';
+    surgeMultiple: number;
+    aircraftCount: number;
+  }[];
+  coordinationScore: number;
+  description: string;
+  severity: 'critical';
+  timestamp: Date;
+}
+
+const COORDINATION_WINDOW_MS = 4 * 60 * 60 * 1000;
+const seenMultiTheaterAlerts = new Set<string>();
+
+const NAMED_COMBOS: Record<string, string> = {
+  'iran-theater+taiwan-theater': 'Dual-front posturing: Iran + Taiwan',
+  'baltic-theater+blacksea-theater': 'European theater-wide mobilization',
+  'iran-theater+east-med-theater+yemen-redsea-theater': 'Middle East theater-wide surge',
+  'iran-theater+east-med-theater': 'Eastern Mediterranean / Iran corridor surge',
+  'baltic-theater+korea-theater': 'NATO / Pacific dual alert',
+};
+
+export function detectMultiTheaterCoordination(surges: SurgeAlert[]): MultiTheaterAlert[] {
+  if (surges.length < 2) return [];
+
+  const byTheater = new Map<string, SurgeAlert>();
+  for (const s of surges) {
+    const existing = byTheater.get(s.theater.id);
+    if (!existing || s.surgeMultiple > existing.surgeMultiple) {
+      byTheater.set(s.theater.id, s);
+    }
+  }
+
+  if (byTheater.size < 2) return [];
+
+  const sorted = [...byTheater.values()].sort(
+    (a, b) => a.firstDetected.getTime() - b.firstDetected.getTime(),
+  );
+  const earliest = sorted[0]!.firstDetected.getTime();
+  const latest = sorted[sorted.length - 1]!.firstDetected.getTime();
+  if (latest - earliest > COORDINATION_WINDOW_MS) return [];
+
+  // eslint-disable-next-line sonarjs/no-alphabetical-sort
+  const theaterIds = [...byTheater.keys()].sort();
+  const dedupeKey = theaterIds.join('+');
+  if (seenMultiTheaterAlerts.has(dedupeKey)) return [];
+  seenMultiTheaterAlerts.add(dedupeKey);
+  setTimeout(() => seenMultiTheaterAlerts.delete(dedupeKey), COORDINATION_WINDOW_MS);
+
+  let score = 50;
+  score += Math.min(20, (theaterIds.length - 2) * 10);
+  if (latest - earliest < 60 * 60 * 1000) score += 10;
+  const operators = new Set(surges.map(s => {
+    const types = [...s.aircraftTypes.keys()];
+    return types.join(',');
+  }));
+  if (operators.size >= 3) score += 10;
+  score = Math.min(100, score);
+
+  const description = NAMED_COMBOS[dedupeKey]
+    ?? `Multi-theater coordination: ${sorted.map(s => s.theater.name).join(', ')}`;
+
+  const theaters = sorted.map(s => ({
+    theaterId: s.theater.id,
+    theaterName: s.theater.name,
+    surgeType: s.type,
+    surgeMultiple: s.surgeMultiple,
+    aircraftCount: s.currentCount,
+  }));
+
+  return [{
+    id: `multi-theater-${dedupeKey}-${Date.now()}`,
+    theaters,
+    coordinationScore: score,
+    description,
+    severity: 'critical' as const,
+    timestamp: new Date(),
+  }];
+}
+
+export function multiTheaterToSignal(alert: MultiTheaterAlert): {
+  id: string;
+  type: SignalType;
+  source: string;
+  title: string;
+  description: string;
+  severity: 'critical';
+  confidence: number;
+  category: string;
+  timestamp: Date;
+  data: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+} {
+  const theaterDetails = alert.theaters
+    .map(t => `${t.theaterName}: ${t.aircraftCount} aircraft (${t.surgeType}, ${t.surgeMultiple.toFixed(1)}x baseline)`)
+    .join('; ');
+
+  const metadata = {
+    theaters: alert.theaters,
+    coordinationScore: alert.coordinationScore,
+  };
+
+  return {
+    id: alert.id,
+    type: 'military_surge' as SignalType,
+    source: 'Military Flight Tracking',
+    title: alert.description,
+    description: `Simultaneous military surges across ${alert.theaters.length} theaters. ${theaterDetails}`,
+    severity: 'critical',
+    confidence: alert.coordinationScore / 100,
+    category: 'military',
+    timestamp: alert.timestamp,
+    data: metadata,
+    metadata,
+  };
+}

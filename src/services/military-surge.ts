@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 import type { MilitaryFlight, MilitaryOperator } from '@/types';
 import type { SignalType } from '@/utils/analysis-constants';
 import { MILITARY_BASES_EXPANDED } from '@/config/bases-expanded';
@@ -265,6 +266,7 @@ function cleanupOldHistory(): void {
   }
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function analyzeFlightsForSurge(flights: MilitaryFlight[]): SurgeAlert[] {
   cleanupOldHistory();
 
@@ -531,7 +533,9 @@ export function foreignPresenceToSignal(alert: ForeignPresenceAlert): {
  ([op, reg]) => alert.operator === op && alert.region.id === reg
   );
 
+  // eslint-disable-next-line sonarjs/no-nested-conditional
   const severity = isCritical ? 'critical' :
+  // eslint-disable-next-line sonarjs/no-nested-conditional
  (alert.aircraftCount >= 5 ? 'high' : 'medium');
 
   const confidence = Math.min(0.95, 0.7 + alert.aircraftCount * 0.05);
@@ -631,7 +635,9 @@ export function surgeAlertToSignal(surge: SurgeAlert): {
  .map(([type, count]) => `${count}x ${type}`)
  .join(', ');
 
+  // eslint-disable-next-line sonarjs/no-nested-conditional
   const severity = surge.surgeMultiple >= 4 ? 'critical' :
+  // eslint-disable-next-line sonarjs/no-nested-conditional
  (surge.surgeMultiple >= 3 ? 'high' : 'medium');
 
   const confidence = Math.min(0.95, 0.6 + (surge.surgeMultiple - 2) * 0.1);
@@ -819,6 +825,7 @@ export interface TheaterPostureSummary {
   bounds?: { north: number; south: number; east: number; west: number };
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPostureSummary[] {
   const summaries: TheaterPostureSummary[] = [];
 
@@ -848,9 +855,11 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  byOperator[f.operator] = (byOperator[f.operator] || 0) + 1;
  }
 
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  const postureLevel: 'normal' | 'elevated' | 'critical' =
  total >= theater.thresholds.critical
  ? 'critical'
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (total >= theater.thresholds.elevated
  ? 'elevated'
  : 'normal');
@@ -868,7 +877,9 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  const olderAvg =
  older.length > 0 ? older.reduce((a, b) => a + b.totalMilitary, 0) / older.length : total;
  const changePercent = olderAvg > 0 ? Math.round(((recentAvg - olderAvg) / olderAvg) * 100) : 0;
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  const trend: 'increasing' | 'stable' | 'decreasing' =
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  changePercent > 10 ? 'increasing' : (changePercent < -10 ? 'decreasing' : 'stable');
 
  const parts: string[] = [];
@@ -878,9 +889,11 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  if (byType.reconnaissance > 0) parts.push(`${byType.reconnaissance} recon`);
  const summary = parts.join(', ') || 'No military aircraft';
 
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  const headline =
  postureLevel === 'critical'
  ? `Critical military buildup - ${theater.name}`
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (postureLevel === 'elevated'
  ? `Elevated military activity - ${theater.name}`
  : `Normal activity - ${theater.name}`);
@@ -940,17 +953,21 @@ const TARGET_NATION_CODES: Record<string, string> = {
  * Uses "either triggers" logic: if aircraft OR vessels exceed thresholds, level escalates.
  * CII boost: theaters whose target nation has CII ≥ 70 get elevated, ≥ 85 get critical.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function recalcPostureWithVessels(postures: TheaterPostureSummary[]): void {
   for (const p of postures) {
  const theater = POSTURE_THEATERS.find((t) => t.id === p.theaterId);
  if (!theater) continue;
 
+ // eslint-disable-next-line sonarjs/use-type-alias
  const airLevel: 0 | 1 | 2 =
  p.totalAircraft >= theater.thresholds.critical ? 2
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (p.totalAircraft >= theater.thresholds.elevated ? 1 : 0);
 
  const navalLevel: 0 | 1 | 2 =
  p.totalVessels >= theater.navalThresholds.critical ? 2
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (p.totalVessels >= theater.navalThresholds.elevated ? 1 : 0);
 
  // CII boost: high instability in target nation elevates theater posture
@@ -960,12 +977,14 @@ export function recalcPostureWithVessels(postures: TheaterPostureSummary[]): voi
  if (code) {
  const cii = getCountryScore(code);
  if (cii !== null) {
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  ciiLevel = cii >= 85 ? 2 : (cii >= 70 ? 1 : 0);
  }
  }
  }
 
  const combined = Math.max(airLevel, navalLevel, ciiLevel) as 0 | 1 | 2;
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  p.postureLevel = combined === 2 ? 'critical' : (combined === 1 ? 'elevated' : 'normal');
 
  // Rebuild headline with combined context
@@ -974,9 +993,11 @@ export function recalcPostureWithVessels(postures: TheaterPostureSummary[]): voi
  if (p.totalVessels > 0) parts.push(`${p.totalVessels} vessels`);
  const assetSummary = parts.join(' + ') || 'No assets';
 
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  p.headline =
  p.postureLevel === 'critical'
  ? `Critical military buildup - ${p.theaterName} (${assetSummary})`
+ // eslint-disable-next-line sonarjs/no-nested-conditional
  : (p.postureLevel === 'elevated'
  ? `Elevated military activity - ${p.theaterName} (${assetSummary})`
  : `Normal activity - ${p.theaterName}`);
@@ -987,4 +1008,127 @@ export function getCriticalPostures(flights: MilitaryFlight[]): TheaterPostureSu
   return getTheaterPostureSummaries(flights).filter(
  (p) => p.postureLevel === 'critical' || (p.postureLevel === 'elevated' && p.strikeCapable)
   );
+}
+
+// ── Multi-Theater Coordination ──
+
+export interface MultiTheaterAlert {
+  id: string;
+  theaters: {
+    theaterId: string;
+    theaterName: string;
+    surgeType: 'airlift' | 'fighter' | 'reconnaissance';
+    surgeMultiple: number;
+    aircraftCount: number;
+  }[];
+  coordinationScore: number;
+  description: string;
+  severity: 'critical';
+  timestamp: Date;
+}
+
+const COORDINATION_WINDOW_MS = 4 * 60 * 60 * 1000;
+const seenMultiTheaterAlerts = new Set<string>();
+
+const NAMED_COMBOS: Record<string, string> = {
+  'iran-theater+taiwan-theater': 'Dual-front posturing: Iran + Taiwan',
+  'baltic-theater+blacksea-theater': 'European theater-wide mobilization',
+  'iran-theater+east-med-theater+yemen-redsea-theater': 'Middle East theater-wide surge',
+  'iran-theater+east-med-theater': 'Eastern Mediterranean / Iran corridor surge',
+  'baltic-theater+korea-theater': 'NATO / Pacific dual alert',
+};
+
+export function detectMultiTheaterCoordination(surges: SurgeAlert[]): MultiTheaterAlert[] {
+  if (surges.length < 2) return [];
+
+  const byTheater = new Map<string, SurgeAlert>();
+  for (const s of surges) {
+    const existing = byTheater.get(s.theater.id);
+    if (!existing || s.surgeMultiple > existing.surgeMultiple) {
+      byTheater.set(s.theater.id, s);
+    }
+  }
+
+  if (byTheater.size < 2) return [];
+
+  const sorted = [...byTheater.values()].sort(
+    (a, b) => a.firstDetected.getTime() - b.firstDetected.getTime(),
+  );
+  const earliest = sorted[0]!.firstDetected.getTime();
+  const latest = sorted[sorted.length - 1]!.firstDetected.getTime();
+  if (latest - earliest > COORDINATION_WINDOW_MS) return [];
+
+  // eslint-disable-next-line sonarjs/no-alphabetical-sort
+  const theaterIds = [...byTheater.keys()].sort();
+  const dedupeKey = theaterIds.join('+');
+  if (seenMultiTheaterAlerts.has(dedupeKey)) return [];
+  seenMultiTheaterAlerts.add(dedupeKey);
+  setTimeout(() => seenMultiTheaterAlerts.delete(dedupeKey), COORDINATION_WINDOW_MS);
+
+  let score = 50;
+  score += Math.min(20, (theaterIds.length - 2) * 10);
+  if (latest - earliest < 60 * 60 * 1000) score += 10;
+  const operators = new Set(surges.map(s => {
+    const types = [...s.aircraftTypes.keys()];
+    return types.join(',');
+  }));
+  if (operators.size >= 3) score += 10;
+  score = Math.min(100, score);
+
+  const description = NAMED_COMBOS[dedupeKey]
+    ?? `Multi-theater coordination: ${sorted.map(s => s.theater.name).join(', ')}`;
+
+  const theaters = sorted.map(s => ({
+    theaterId: s.theater.id,
+    theaterName: s.theater.name,
+    surgeType: s.type,
+    surgeMultiple: s.surgeMultiple,
+    aircraftCount: s.currentCount,
+  }));
+
+  return [{
+    id: `multi-theater-${dedupeKey}-${Date.now()}`,
+    theaters,
+    coordinationScore: score,
+    description,
+    severity: 'critical' as const,
+    timestamp: new Date(),
+  }];
+}
+
+export function multiTheaterToSignal(alert: MultiTheaterAlert): {
+  id: string;
+  type: SignalType;
+  source: string;
+  title: string;
+  description: string;
+  severity: 'critical';
+  confidence: number;
+  category: string;
+  timestamp: Date;
+  data: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+} {
+  const theaterDetails = alert.theaters
+    .map(t => `${t.theaterName}: ${t.aircraftCount} aircraft (${t.surgeType}, ${t.surgeMultiple.toFixed(1)}x baseline)`)
+    .join('; ');
+
+  const metadata = {
+    theaters: alert.theaters,
+    coordinationScore: alert.coordinationScore,
+  };
+
+  return {
+    id: alert.id,
+    type: 'military_surge' as SignalType,
+    source: 'Military Flight Tracking',
+    title: alert.description,
+    description: `Simultaneous military surges across ${alert.theaters.length} theaters. ${theaterDetails}`,
+    severity: 'critical',
+    confidence: alert.coordinationScore / 100,
+    category: 'military',
+    timestamp: alert.timestamp,
+    data: metadata,
+    metadata,
+  };
 }

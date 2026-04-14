@@ -9,6 +9,8 @@ import { brotliCompress, gzipSync } from 'node:zlib';
 import path from 'node:path';
 import os from 'node:os';
 import { pathToFileURL } from 'node:url';
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 // Node 22 ships a built-in WebSocket global (WHATWG API) — no external dep needed.
 const AisWebSocket = WebSocket;
 
@@ -70,12 +72,8 @@ function wmRecordHostCall(host, ok, status, errorMsg) {
   let entry = wmHostStats.get(host);
   if (!entry) {
  if (wmHostStats.size >= WM_HOST_STATS_CAP) {
- let oldestKey = null;
- let oldestTs = Infinity;
- for (const [k, v] of wmHostStats) {
- const ts = Math.max(v.lastOkAt, v.lastFailAt);
- if (ts < oldestTs) { oldestTs = ts; oldestKey = k; }
- }
+ // Maps iterate in insertion order — first key is oldest
+ const oldestKey = wmHostStats.keys().next().value;
  if (oldestKey) wmHostStats.delete(oldestKey);
  }
  entry = { ok: 0, fail: 0, lastStatus: 0, lastOkAt: 0, lastFailAt: 0, lastError: '' };
@@ -108,6 +106,27 @@ function wmMissingKeys() {
 }
 
 const brotliCompressAsync = promisify(brotliCompress);
+
+// ── Response cache for expensive/slow endpoints ─────────────────────────
+const _responseCache = new Map(); // key → { data, expiresAt }
+function cachedFetch(key, ttlMs, fetcher) {
+  const cached = _responseCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) return Promise.resolve(cached.data);
+  return fetcher().then(data => {
+    _responseCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+    // Evict stale entries periodically
+    if (_responseCache.size > 200) {
+      const now = Date.now();
+      for (const [k, v] of _responseCache) {
+        if (now >= v.expiresAt) _responseCache.delete(k);
+      }
+    }
+    return data;
+  });
+}
+
+// Pre-compiled regex patterns (avoid re-creation in hot paths)
+const RE_HTML_TAGS = /<[^>]+>/g;
 
 // ── AIS Stream Manager ────────────────────────────────────────────────────
 // Connects directly to aisstream.io using AISSTREAM_API_KEY (set via settings).
@@ -310,7 +329,7 @@ globalThis.fetch = async function ipv4Fetch(input, init) {
  Object.assign(headers, h);
   }
   return new Promise((resolve, reject) => {
- const req = mod.request({ hostname: url.hostname, port: url.port || (url.protocol === 'https:' ? 443 : 80), path: url.pathname + url.search, method, headers, family: 4 }, (res) => {
+ const req = mod.request({ hostname: url.hostname, port: url.port || (url.protocol === 'https:' ? 443 : 80), path: url.pathname + url.search, method, headers, family: 4, agent: mod === https ? httpsAgent : httpAgent }, (res) => {
  const chunks = [];
  res.on('data', (c) => chunks.push(c));
  res.on('end', () => {
@@ -4064,7 +4083,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const link = block.match(/<link>(.*?)<\/link>/)?.[1]?.trim() ?? null;
  const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1]?.trim() ?? null;
  const rawDesc = parseRssField(block, 'description');
- const description = rawDesc ? rawDesc.replace(/<[^>]+>/g, '').trim().slice(0, 500) : null;
+ const description = rawDesc ? rawDesc.replace(RE_HTML_TAGS, '').trim().slice(0, 500) : null;
  const category = parseRssField(block, 'category');
  if (title) items.push({ title, link, pubDate, description, category });
  }
@@ -4110,7 +4129,7 @@ async function dispatch(requestUrl, req, routes, context) {
  url: f.url ?? null,
  format: f.format?.[0]?.name ?? null,
  themes: (f.theme ?? []).map(t => t.name),
- summary: f['body-html'] ? f['body-html'].replace(/<[^>]+>/g, '').trim().slice(0, 600) : null,
+ summary: f['body-html'] ? f['body-html'].replace(RE_HTML_TAGS, '').trim().slice(0, 600) : null,
  };
  });
  setCached('reliefweb-crises', reports, 2 * 60 * 60 * 1000);
@@ -4144,7 +4163,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const link = block.match(/<link>(.*?)<\/link>/)?.[1]?.trim() ?? null;
  const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1]?.trim() ?? null;
  const rawDesc = parseBcField(block, 'description');
- const description = rawDesc ? rawDesc.replace(/<[^>]+>/g, '').trim().slice(0, 500) : null;
+ const description = rawDesc ? rawDesc.replace(RE_HTML_TAGS, '').trim().slice(0, 500) : null;
  const creator = parseBcField(block, 'dc:creator');
  if (title) items.push({ title, link, pubDate, description, creator });
  }
@@ -4221,7 +4240,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const date = block.match(datePattern)?.[1]?.trim() ?? null;
  const linkHref = block.match(/href="([^"]+)"/)?.[1]?.trim() ?? block.match(/<link>(.*?)<\/link>/)?.[1]?.trim() ?? null;
  const sumRaw = block.match(/<summary[^>]*>([\s\S]*?)<\/summary>/) ?? block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) ?? block.match(/<description>([\s\S]*?)<\/description>/);
- const summary = sumRaw?.[1]?.replace(/<[^>]+>/g, '').trim().slice(0, 400) ?? null;
+ const summary = sumRaw?.[1]?.replace(RE_HTML_TAGS, '').trim().slice(0, 400) ?? null;
  const country = title.replace(/\s*[-:]\s*travel (advice|advisory|warning).*$/i, '').trim();
  if (country) results.push({ country, date, link: linkHref, summary, source, title });
  }
@@ -4338,7 +4357,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const link = block.match(/<link>(.*?)<\/link>/)?.[1]?.trim() ?? null;
  const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1]?.trim() ?? null;
  const descRaw = block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) ?? block.match(/<description>([\s\S]*?)<\/description>/);
- const description = descRaw?.[1]?.replace(/<[^>]+>/g, '').trim().slice(0, 400) ?? null;
+ const description = descRaw?.[1]?.replace(RE_HTML_TAGS, '').trim().slice(0, 400) ?? null;
  if (title) items.push({ title, link, pubDate, description, source: 'US DoD' });
  }
  setCached('dod-news', items, 30 * 60 * 1000);
@@ -4364,7 +4383,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const link = block.match(/<link>(.*?)<\/link>/)?.[1]?.trim() ?? null;
  const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1]?.trim() ?? null;
  const descRaw = block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) ?? block.match(/<description>([\s\S]*?)<\/description>/);
- const description = descRaw?.[1]?.replace(/<[^>]+>/g, '').trim().slice(0, 400) ?? null;
+ const description = descRaw?.[1]?.replace(RE_HTML_TAGS, '').trim().slice(0, 400) ?? null;
  if (title) items.push({ title, link, pubDate, description, source: 'NATO' });
  }
  setCached('nato-news', items, 30 * 60 * 1000);
@@ -4422,7 +4441,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const link = block.match(/<link>(.*?)<\/link>/)?.[1]?.trim() ?? null;
  const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1]?.trim() ?? null;
  const descRaw = block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) ?? block.match(/<description>([\s\S]*?)<\/description>/);
- const description = descRaw?.[1]?.replace(/<[^>]+>/g, '').trim().slice(0, 400) ?? null;
+ const description = descRaw?.[1]?.replace(RE_HTML_TAGS, '').trim().slice(0, 400) ?? null;
  const lat = parseFloat(block.match(/<geo:lat>(.*?)<\/geo:lat>/)?.[1] ?? 'NaN');
  const lon = parseFloat(block.match(/<geo:long>(.*?)<\/geo:long>/)?.[1] ?? 'NaN');
  if (title) items.push({ title, link, pubDate, description, lat: isNaN(lat) ? null : lat, lon: isNaN(lon) ? null : lon, source: 'LiveUAMap' });

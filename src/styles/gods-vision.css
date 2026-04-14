@@ -783,3 +783,12 @@ body.gods-vision-lock {
 }
 .ge-minimap-canvas { display: block; }
 
+@media (prefers-reduced-motion: reduce) {
+  .ge-stat-value.pulsing,
+  .ge-alert-dot,
+  .ge-hud-stat-value.pulsing,
+  .ge-threat-pulse {
+    animation: none !important;
+  }
+}
+

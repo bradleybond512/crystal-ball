@@ -1541,16 +1541,16 @@ export class MapComponent {
 
  // Earthquakes (magnitude-based sizing) - part of NATURAL layer
  if (this.state.layers.natural) {
- console.log('[Map] Rendering earthquakes. Total:', this.earthquakes.length, 'Layer enabled:', this.state.layers.natural);
+ if (import.meta.env.DEV) console.log('[Map] Rendering earthquakes. Total:', this.earthquakes.length, 'Layer enabled:', this.state.layers.natural); // eslint-disable-line no-console
  const filteredQuakes = this.state.timeRange === 'all'
  ? this.earthquakes
  : this.earthquakes.filter((eq) => eq.occurredAt >= Date.now() - this.getTimeRangeMs());
- console.log('[Map] After time filter:', filteredQuakes.length, 'earthquakes. TimeRange:', this.state.timeRange);
+ if (import.meta.env.DEV) console.log('[Map] After time filter:', filteredQuakes.length, 'earthquakes. TimeRange:', this.state.timeRange); // eslint-disable-line no-console
  let rendered = 0;
  filteredQuakes.forEach((eq) => {
  const pos = projection([eq.location?.longitude ?? 0, eq.location?.latitude ?? 0]);
  if (!pos) {
- console.log('[Map] Earthquake position null for:', eq.place, eq.location?.longitude, eq.location?.latitude);
+ if (import.meta.env.DEV) console.log('[Map] Earthquake position null for:', eq.place, eq.location?.longitude, eq.location?.latitude); // eslint-disable-line no-console
  return;
  }
  rendered++;
@@ -1582,7 +1582,7 @@ export class MapComponent {
 
  this.overlays.append(div);
  });
- console.log('[Map] Actually rendered', rendered, 'earthquake markers');
+ if (import.meta.env.DEV) console.log('[Map] Actually rendered', rendered, 'earthquake markers'); // eslint-disable-line no-console
  }
 
  // Economic Centers (always HTML - emoji icons for type distinction)
@@ -3026,7 +3026,7 @@ export class MapComponent {
   ]);
 
   public toggleLayer(layer: keyof MapLayers, source: 'user' | 'programmatic' = 'user'): void {
- console.log(`[Map.toggleLayer] ${layer}: ${this.state.layers[layer]} -> ${!this.state.layers[layer]}`);
+ if (import.meta.env.DEV) console.log(`[Map.toggleLayer] ${layer}: ${this.state.layers[layer]} -> ${!this.state.layers[layer]}`); // eslint-disable-line no-console
  this.state.layers[layer] = !this.state.layers[layer];
  if (this.state.layers[layer]) {
  const thresholds = MapComponent.LAYER_ZOOM_THRESHOLDS[layer];
@@ -3514,12 +3514,12 @@ export class MapComponent {
   }
 
   public setCenter(lat: number, lon: number): void {
- console.log('[Map] setCenter called:', { lat, lon });
+ if (import.meta.env.DEV) console.log('[Map] setCenter called:', { lat, lon }); // eslint-disable-line no-console
  const width = this.container.clientWidth;
  const height = this.container.clientHeight;
  const projection = this.getProjection(width, height);
  const pos = projection([lon, lat]);
- console.log('[Map] projected pos:', pos, 'container:', { width, height }, 'zoom:', this.state.zoom);
+ if (import.meta.env.DEV) console.log('[Map] projected pos:', pos, 'container:', { width, height }, 'zoom:', this.state.zoom); // eslint-disable-line no-console
  if (!pos) return;
  // Pan formula: after applyTransform() computes tx = centerOffset + pan*zoom,
  // and transform is translate(tx,ty) scale(zoom), to center on pos:
@@ -3544,11 +3544,11 @@ export class MapComponent {
   }
 
   public setEarthquakes(earthquakes: Earthquake[]): void {
- console.log('[Map] setEarthquakes called with', earthquakes.length, 'earthquakes');
+ if (import.meta.env.DEV) console.log('[Map] setEarthquakes called with', earthquakes.length, 'earthquakes'); // eslint-disable-line no-console
  if (earthquakes.length > 0 || this.earthquakes.length === 0) {
  this.earthquakes = earthquakes;
  } else {
- console.log('[Map] Keeping existing', this.earthquakes.length, 'earthquakes (new data was empty)');
+ if (import.meta.env.DEV) console.log('[Map] Keeping existing', this.earthquakes.length, 'earthquakes (new data was empty)'); // eslint-disable-line no-console
  }
  this.render();
   }

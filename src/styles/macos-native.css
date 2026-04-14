@@ -1463,3 +1463,15 @@ body.is-desktop-macos #unifiedSettingsMount {
   from { transform: translateX(0); }
   to { transform: translateX(-100%); }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .wm-disaster-indicator,
+  .wm-war-indicator,
+  .wm-war-topline-glow,
+  .wm-finance-topline-glow,
+  .wm-disaster-topline-glow,
+  .panel-heartbeat-dot,
+  .ge-mode-ticker-track {
+    animation: none !important;
+  }
+}

@@ -117,13 +117,14 @@ export class CIIPanel extends Panel {
  btn.addEventListener('click', (e) => {
  e.stopPropagation();
  const el = e.currentTarget as HTMLElement;
- const code = el.dataset.code || '';
- const name = el.dataset.name || '';
+ const code = el.dataset.code ?? '';
+ const name = el.dataset.name ?? '';
  if (code && name) this.onShareStory!(code, name);
  });
  });
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   public async refresh(forceLocal = false): Promise<void> {
  if (!this.focalPointsReady && !forceLocal) {
  return;
@@ -131,7 +132,7 @@ export class CIIPanel extends Panel {
 
  if (forceLocal) {
  this.focalPointsReady = true;
- console.log('[CIIPanel] Focal points ready, calculating scores...');
+ if (import.meta.env.DEV) console.log('[CIIPanel] Focal points ready, calculating scores...'); // eslint-disable-line no-console
  }
 
  this.showLoading();
@@ -140,7 +141,7 @@ export class CIIPanel extends Panel {
  const localScores = calculateCII();
  const localWithData = localScores.filter(s => s.score > 0).length;
  this.scores = localScores;
- console.log(`[CIIPanel] Calculated ${localWithData} countries with focal point intelligence`);
+ if (import.meta.env.DEV) console.log(`[CIIPanel] Calculated ${localWithData} countries with focal point intelligence`); // eslint-disable-line no-console
 
  const withData = this.scores.filter(s => s.score > 0);
  const watchedCountries = withData.filter((country) => this.watchedCodes.has(country.code)).slice(0, 4);
@@ -173,6 +174,7 @@ export class CIIPanel extends Panel {
  replaceChildren(this.content, listEl);
  this.bindShareButtons();
  } catch (error) {
+ // eslint-disable-next-line no-console
  console.error('[CIIPanel] Refresh error:', error);
  this.showError(t('common.failedCII'));
  }

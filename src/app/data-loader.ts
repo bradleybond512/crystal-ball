@@ -670,9 +670,9 @@ export class DataLoaderManager implements AppModule {
  break;
  }
  case 'techEvents': {
- console.log('[loadDataForLayer] Loading techEvents...');
+ if (import.meta.env.DEV) console.log('[loadDataForLayer] Loading techEvents...'); // eslint-disable-line no-console
  await this.loadTechEvents();
- console.log('[loadDataForLayer] techEvents loaded');
+ if (import.meta.env.DEV) console.log('[loadDataForLayer] techEvents loaded'); // eslint-disable-line no-console
  break;
  }
  case 'positiveEvents': {
@@ -1308,9 +1308,9 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadTechEvents(): Promise<void> {
- console.log('[loadTechEvents] Called. SITE_VARIANT:', SITE_VARIANT, 'techEvents layer:', this.ctx.mapLayers.techEvents);
+ if (import.meta.env.DEV) console.log('[loadTechEvents] Called. SITE_VARIANT:', SITE_VARIANT, 'techEvents layer:', this.ctx.mapLayers.techEvents); // eslint-disable-line no-console
  if (SITE_VARIANT !== 'tech' && !this.ctx.mapLayers.techEvents) {
- console.log('[loadTechEvents] Skipping - not tech variant and layer disabled');
+ if (import.meta.env.DEV) console.log('[loadTechEvents] Skipping - not tech variant and layer disabled'); // eslint-disable-line no-console
  return;
  }
 
@@ -1729,7 +1729,7 @@ export class DataLoaderManager implements AppModule {
  this.ctx.intelligenceCache.earthquakes ?? [],
  (this.ctx.intelligenceCache.outages ?? []).map(o => ({ score: o.severity === 'total' ? 10 : o.severity === 'major' ? 7 : 3 })),
  );
- console.log('[Intelligence] All signals loaded for CII calculation');
+ if (import.meta.env.DEV) console.log('[Intelligence] All signals loaded for CII calculation'); // eslint-disable-line no-console
   }
 
   async loadOutages(): Promise<void> {
@@ -2302,7 +2302,7 @@ export class DataLoaderManager implements AppModule {
  try {
  const { disruptions, density } = await fetchAisSignals();
  const aisStatus = getAisStatus();
- console.log('[Ships] Events:', { disruptions: disruptions.length, density: density.length, vessels: aisStatus.vessels });
+ if (import.meta.env.DEV) console.log('[Ships] Events:', { disruptions: disruptions.length, density: density.length, vessels: aisStatus.vessels }); // eslint-disable-line no-console
  this.ctx.map?.setAisData(disruptions, density);
  signalAggregator.ingestAisDisruptions(disruptions);
  ingestAisDisruptionsForCII(disruptions);

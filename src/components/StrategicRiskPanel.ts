@@ -42,6 +42,7 @@ export class StrategicRiskPanel extends Panel {
  trackActivity: true,
  infoTooltip: t('components.strategicRisk.infoTooltip'),
  });
+ // eslint-disable-next-line @typescript-eslint/no-floating-promises, sonarjs/no-async-constructor
  this.init();
   }
 
@@ -54,26 +55,32 @@ export class StrategicRiskPanel extends Panel {
  // Debounce refresh to batch multiple rapid updates
  if (refreshTimeout) clearTimeout(refreshTimeout);
  refreshTimeout = setTimeout(() => {
- this.refresh();
+ void this.refresh();
  }, 500);
  });
 
  // Listen for breaking news events (dispatched on document)
  this.boundOnBreaking = (e: Event) => {
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
  const detail = (e as CustomEvent).detail;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
  if (!detail?.id) return;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
  const level = detail.threatLevel;
  if (level !== 'critical' && level !== 'high') return;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
  this.breakingAlerts.set(detail.id, {
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
  threatLevel: level,
  timestamp: Date.now(),
  });
- this.refresh();
+ void this.refresh();
  };
  document.addEventListener('wm:breaking-news', this.boundOnBreaking);
 
  await this.refresh();
  } catch (error) {
+ // eslint-disable-next-line no-console
  console.error('[StrategicRiskPanel] Init error:', error);
  this.showError(t('common.failedRiskOverview'));
  }
@@ -81,6 +88,7 @@ export class StrategicRiskPanel extends Panel {
 
   private lastRiskFingerprint = '';
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity
   public async refresh(): Promise<boolean> {
  this.freshnessSummary = dataFreshness.getSummary();
  this.convergenceAlerts = detectConvergence();
@@ -131,9 +139,9 @@ export class StrategicRiskPanel extends Panel {
  this.usedCachedScores = false;
  if (inLearning) {
  const cached = await fetchCachedRiskScores(this.signal);
- if (cached && cached.strategicRisk) {
+ if (cached?.strategicRisk) {
  this.usedCachedScores = true;
- console.log('[StrategicRiskPanel] Using cached scores from backend');
+ if (import.meta.env.DEV) console.log('[StrategicRiskPanel] Using cached scores from backend'); // eslint-disable-line no-console
  }
  }
 
@@ -147,7 +155,7 @@ export class StrategicRiskPanel extends Panel {
 
  this.render();
 
- const alertIds = this.alerts.map(a => a.id).sort().join(',');
+ const alertIds = this.alerts.map(a => a.id).sort((a, b) => a.localeCompare(b)).join(',');
  const fp = `${this.overview?.compositeScore}|${this.overview?.trend}|${alertIds}`;
  const changed = fp !== this.lastRiskFingerprint;
  this.lastRiskFingerprint = fp;
@@ -190,6 +198,11 @@ export class StrategicRiskPanel extends Panel {
  }
   }
 
+  private getTrendLabel(trend: string): string {
+ if (trend === 'escalating') return t('components.strategicRisk.trends.escalating');
+ if (trend === 'de-escalating') return t('components.strategicRisk.trends.deEscalating');
+ return t('components.strategicRisk.trends.stable');
+  }
 
   private getPriorityColor(priority: AlertPriority): string {
  switch (priority) {
@@ -319,7 +332,7 @@ export class StrategicRiskPanel extends Panel {
  <div class="risk-trend-container">
  <span class="risk-trend-label">${t('components.strategicRisk.trend')}</span>
  <div class="risk-trend" style="color: ${this.getTrendColor(this.overview.trend)}">
- ${this.getTrendEmoji(this.overview.trend)} ${this.overview.trend === 'escalating' ? t('components.strategicRisk.trends.escalating') : (this.overview.trend === 'de-escalating' ? t('components.strategicRisk.trends.deEscalating') : t('components.strategicRisk.trends.stable'))}
+ ${this.getTrendEmoji(this.overview.trend)} ${this.getTrendLabel(this.overview.trend)}
  </div>
  </div>
  </div>
@@ -475,9 +488,8 @@ export class StrategicRiskPanel extends Panel {
 
  // Render full data view — partial data is handled gracefully by CII baselines
  // Only show insufficient state if zero sources after 60s (true failure)
- let html: string;
  const uptime = performance.now();
- html = this.freshnessSummary.overallStatus === 'insufficient' && uptime > 60_000 ? this.renderInsufficientData() : this.renderFullData();
+ const html = this.freshnessSummary.overallStatus === 'insufficient' && uptime > 60_000 ? this.renderInsufficientData() : this.renderFullData();
 
  this.content.innerHTML = html;
  this.attachEventListeners();
@@ -487,7 +499,7 @@ export class StrategicRiskPanel extends Panel {
  // Refresh button
  const refreshBtn = this.content.querySelector('.risk-refresh-btn');
  if (refreshBtn) {
- refreshBtn.addEventListener('click', () => this.refresh());
+ refreshBtn.addEventListener('click', () => void this.refresh());
  }
 
  // Enable source buttons
@@ -518,9 +530,9 @@ export class StrategicRiskPanel extends Panel {
  const clickableRisks = this.content.querySelectorAll('.risk-item-clickable');
  clickableRisks.forEach(item => {
  item.addEventListener('click', () => {
- const lat = Number.parseFloat((item as HTMLElement).dataset.lat || '0');
- const lon = Number.parseFloat((item as HTMLElement).dataset.lon || '0');
- if (this.onLocationClick && !isNaN(lat) && !isNaN(lon)) {
+ const lat = Number.parseFloat((item as HTMLElement).dataset.lat ?? '0');
+ const lon = Number.parseFloat((item as HTMLElement).dataset.lon ?? '0');
+ if (this.onLocationClick && !Number.isNaN(lat) && !Number.isNaN(lon)) {
  this.onLocationClick(lat, lon);
  }
  });
@@ -530,9 +542,9 @@ export class StrategicRiskPanel extends Panel {
  const clickableAlerts = this.content.querySelectorAll('.risk-alert-clickable');
  clickableAlerts.forEach(alert => {
  alert.addEventListener('click', () => {
- const lat = Number.parseFloat((alert as HTMLElement).dataset.lat || '0');
- const lon = Number.parseFloat((alert as HTMLElement).dataset.lon || '0');
- if (this.onLocationClick && !isNaN(lat) && !isNaN(lon)) {
+ const lat = Number.parseFloat((alert as HTMLElement).dataset.lat ?? '0');
+ const lon = Number.parseFloat((alert as HTMLElement).dataset.lon ?? '0');
+ if (this.onLocationClick && !Number.isNaN(lat) && !Number.isNaN(lon)) {
  this.onLocationClick(lat, lon);
  }
  });

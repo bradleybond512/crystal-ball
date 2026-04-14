@@ -73,6 +73,9 @@ export class EventHandlerManager implements AppModule {
   private boundVisibilityHandler: (() => void) | null = null;
   private boundDesktopExternalLinkHandler: ((e: MouseEvent) => void) | null = null;
   private boundIdleResetHandler: (() => void) | null = null;
+  private boundKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private boundModeChangedHandler: (() => void) | null = null;
+  private boundFocusSituationHandler: ((e: Event) => void) | null = null;
   private _mapResizeMouseMove: ((e: MouseEvent) => void) | null = null;
   private _mapResizeMouseUp: (() => void) | null = null;
   private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -183,6 +186,18 @@ export class EventHandlerManager implements AppModule {
  }
  this._unsubActivity?.();
  this._unsubActivity = null;
+ if (this.boundKeydownHandler) {
+ document.removeEventListener('keydown', this.boundKeydownHandler);
+ this.boundKeydownHandler = null;
+ }
+ if (this.boundModeChangedHandler) {
+ document.removeEventListener('wm:mode-changed', this.boundModeChangedHandler);
+ this.boundModeChangedHandler = null;
+ }
+ if (this.boundFocusSituationHandler) {
+ document.removeEventListener('wm:focus-situation', this.boundFocusSituationHandler);
+ this.boundFocusSituationHandler = null;
+ }
  this.ctx.tvMode?.destroy();
  this.ctx.tvMode = null;
  this.ctx.unifiedSettings?.destroy();
@@ -330,7 +345,7 @@ export class EventHandlerManager implements AppModule {
  document.addEventListener('click', this.boundDesktopExternalLinkHandler, true);
 
  // Cmd+S — copy shareable URL to clipboard (macOS desktop share shortcut)
- document.addEventListener('keydown', async (e: KeyboardEvent) => {
+ this.boundKeydownHandler = async (e: KeyboardEvent) => {
  if (e.metaKey && e.key === 's' && !e.shiftKey && !e.altKey) {
  const active = document.activeElement;
  if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return;
@@ -401,7 +416,8 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  setMode(getMode() === 'ghost' ? null : 'ghost');
  }
- });
+ };
+ document.addEventListener('keydown', this.boundKeydownHandler);
 
  // Wire sidebar collapse button + floating expand tab
  this._initSidebarCollapse();
@@ -449,15 +465,17 @@ export class EventHandlerManager implements AppModule {
  setMode(getMode() === 'ghost' ? null : 'ghost');
  setTimeout(updateModeBtn, 50);
  });
- document.addEventListener('wm:mode-changed', updateModeBtn);
+ this.boundModeChangedHandler = updateModeBtn;
+ document.addEventListener('wm:mode-changed', this.boundModeChangedHandler);
 
  // Situation Awareness — map focus binding
- document.addEventListener('wm:focus-situation', ((e: CustomEvent<{ situationId: string; center: { lat: number; lon: number }; signals: unknown[] }>) => {
+ this.boundFocusSituationHandler = ((e: CustomEvent<{ situationId: string; center: { lat: number; lon: number }; signals: unknown[] }>) => {
  const { center } = e.detail;
  if (this.ctx.map && (center.lat !== 0 || center.lon !== 0)) {
  this.ctx.map.setCenter(center.lat, center.lon, 6);
  }
- }) as EventListener);
+ }) as EventListener;
+ document.addEventListener('wm:focus-situation', this.boundFocusSituationHandler);
   }
 
   private showShareToast(message: string): void {
@@ -512,7 +530,7 @@ export class EventHandlerManager implements AppModule {
  if (!document.hidden) {
  this.ctx.isIdle = true;
  document.body.classList.add('animations-paused');
- console.log('[App] User idle - pausing animations to save resources');
+ if (import.meta.env.DEV) console.log('[App] User idle - pausing animations to save resources'); // eslint-disable-line no-console
  }
  }, this.IDLE_PAUSE_MS);
   }
@@ -861,7 +879,7 @@ export class EventHandlerManager implements AppModule {
 
   setupMapLayerHandlers(): void {
  this.ctx.map?.setOnLayerChange((layer, enabled, source) => {
- console.log(`[App.onLayerChange] ${layer}: ${enabled} (${source})`);
+ if (import.meta.env.DEV) console.log(`[App.onLayerChange] ${layer}: ${enabled} (${source})`); // eslint-disable-line no-console
  trackMapLayerToggle(layer, enabled, source);
  this.ctx.mapLayers[layer] = enabled;
  saveToStorage(STORAGE_KEYS.mapLayers, this.ctx.mapLayers);

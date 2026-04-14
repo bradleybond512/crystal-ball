@@ -31,10 +31,12 @@ export class StrategicPosturePanel extends Panel {
  void this.fetchAndRender();
  // Re-augment with vessels after stream has had time to populate
  // AIS data accumulates gradually - check at 30s, 60s, 90s, 120s
- this.vesselTimeouts.push(setTimeout(() => this.reaugmentVessels(), 30 * 1000));
- this.vesselTimeouts.push(setTimeout(() => this.reaugmentVessels(), 60 * 1000));
- this.vesselTimeouts.push(setTimeout(() => this.reaugmentVessels(), 90 * 1000));
- this.vesselTimeouts.push(setTimeout(() => this.reaugmentVessels(), 120 * 1000));
+ this.vesselTimeouts.push(
+ setTimeout(() => this.reaugmentVessels(), 30 * 1000),
+ setTimeout(() => this.reaugmentVessels(), 60 * 1000),
+ setTimeout(() => this.reaugmentVessels(), 90 * 1000),
+ setTimeout(() => this.reaugmentVessels(), 120 * 1000),
+ );
   }
 
   private isPanelVisible(): boolean {
@@ -43,7 +45,7 @@ export class StrategicPosturePanel extends Panel {
 
   private async reaugmentVessels(): Promise<void> {
  if (!this.isPanelVisible() || this.postures.length === 0) return;
- console.log('[StrategicPosturePanel] Re-augmenting with vessels...');
+ if (import.meta.env.DEV) console.log('[StrategicPosturePanel] Re-augmenting with vessels...'); // eslint-disable-line no-console
  await this.augmentWithVessels();
  this.render();
   }
@@ -134,7 +136,7 @@ export class StrategicPosturePanel extends Panel {
  byOperator: { ...p.byOperator },
  }));
  this.lastTimestamp = data.timestamp;
- this.isStale = data.stale || false;
+ this.isStale = data.stale ?? false;
 
  // Try to augment with vessel data (client-side)
  this.showLoadingStage('vessels');
@@ -152,6 +154,7 @@ export class StrategicPosturePanel extends Panel {
  }
  } catch (error) {
  if (this.isAbortError(error)) return;
+ // eslint-disable-next-line no-console
  console.error('[StrategicPosturePanel] Fetch error:', error);
  this.showFetchError();
  }
@@ -160,7 +163,7 @@ export class StrategicPosturePanel extends Panel {
   private async augmentWithVessels(): Promise<void> {
  try {
  const { vessels } = await fetchMilitaryVessels();
- console.log(`[StrategicPosturePanel] Got ${vessels.length} total military vessels`);
+ if (import.meta.env.DEV) console.log(`[StrategicPosturePanel] Got ${vessels.length} total military vessels`); // eslint-disable-line no-console
  if (vessels.length === 0) {
  // AIS stream hasn't accumulated data yet — restore from cache
  this.restoreVesselCounts();
@@ -192,14 +195,12 @@ export class StrategicPosturePanel extends Panel {
  ).length;
  posture.totalVessels = theaterVessels.length;
 
- if (theaterVessels.length > 0) {
- console.log(`[StrategicPosturePanel] ${posture.shortName}: ${theaterVessels.length} vessels`, theaterVessels.map(v => v.vesselType));
- }
+ if (theaterVessels.length > 0 && import.meta.env.DEV) console.log(`[StrategicPosturePanel] ${posture.shortName}: ${theaterVessels.length} vessels`, theaterVessels.map(v => v.vesselType)); // eslint-disable-line no-console
 
  // Add vessel operators to byOperator
  for (const v of theaterVessels) {
  const op = v.operator || 'unknown';
- posture.byOperator[op] = (posture.byOperator[op] || 0) + 1;
+ posture.byOperator[op] = (posture.byOperator[op] ?? 0) + 1;
  }
  }
 
@@ -208,8 +209,9 @@ export class StrategicPosturePanel extends Panel {
 
  // Recalculate posture levels now that vessels are included
  recalcPostureWithVessels(this.postures);
- console.log('[StrategicPosturePanel] Augmented with', vessels.length, 'vessels, posture levels recalculated');
+ if (import.meta.env.DEV) console.log('[StrategicPosturePanel] Augmented with', vessels.length, 'vessels, posture levels recalculated'); // eslint-disable-line no-console
  } catch (error) {
+ // eslint-disable-next-line no-console
  console.warn('[StrategicPosturePanel] Failed to fetch vessels:', error);
  // Restore cached vessel counts if live fetch failed
  this.restoreVesselCounts();
@@ -241,22 +243,31 @@ export class StrategicPosturePanel extends Panel {
  try {
  const raw = localStorage.getItem('wm:vesselPosture');
  if (!raw) return;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
  const { counts, ts } = JSON.parse(raw);
  // Only use cache if < 30 minutes old
  if (Date.now() - ts > 30 * 60 * 1000) return;
  for (const p of this.postures) {
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
  const cached = counts[p.theaterId];
  if (cached) {
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
  p.destroyers = cached.destroyers;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
  p.frigates = cached.frigates;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
  p.carriers = cached.carriers;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
  p.submarines = cached.submarines;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
  p.patrol = cached.patrol;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
  p.auxiliaryVessels = cached.auxiliaryVessels;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
  p.totalVessels = cached.totalVessels;
  }
  }
- console.log('[StrategicPosturePanel] Restored cached vessel counts');
+ if (import.meta.env.DEV) console.log('[StrategicPosturePanel] Restored cached vessel counts'); // eslint-disable-line no-console
  } catch { /* parse error */ }
   }
 
@@ -271,8 +282,8 @@ export class StrategicPosturePanel extends Panel {
  byOperator: { ...p.byOperator },
  }));
  this.lastTimestamp = data.timestamp;
- this.isStale = data.stale || false;
- this.augmentWithVessels().then(() => {
+ this.isStale = data.stale ?? false;
+ void this.augmentWithVessels().then(() => {
  this.updateBadges();
  this.render();
  });
@@ -337,7 +348,7 @@ export class StrategicPosturePanel extends Panel {
  </div>
  </div>
  `);
- this.content.querySelector('.posture-retry-btn')?.addEventListener('click', () => this.refresh());
+ this.content.querySelector('.posture-retry-btn')?.addEventListener('click', () => { void this.refresh(); });
   }
 
   private showFetchError(): void {
@@ -357,7 +368,7 @@ export class StrategicPosturePanel extends Panel {
  </div>
  </div>
  `);
- this.content.querySelector('.posture-retry-btn')?.addEventListener('click', () => this.refresh());
+ this.content.querySelector('.posture-retry-btn')?.addEventListener('click', () => { void this.refresh(); });
   }
 
   private getPostureBadge(level: string): string {
@@ -394,6 +405,7 @@ export class StrategicPosturePanel extends Panel {
  return translated === key ? p.theaterName : translated;
   }
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity
   private renderTheater(p: TheaterPostureSummary): string {
  const isExpanded = p.postureLevel !== 'normal';
  const displayName = this.theaterDisplayName(p);
@@ -496,15 +508,15 @@ export class StrategicPosturePanel extends Panel {
 
   private attachEventListeners(): void {
  this.content.querySelector('.posture-refresh-btn')?.addEventListener('click', () => {
- this.refresh();
+ void this.refresh();
  });
 
  const theaters = this.content.querySelectorAll('.posture-theater');
  theaters.forEach((el) => {
  el.addEventListener('click', () => {
- const lat = Number.parseFloat((el as HTMLElement).dataset.lat || '0');
- const lon = Number.parseFloat((el as HTMLElement).dataset.lon || '0');
- console.log('[StrategicPosturePanel] Theater clicked:', {
+ const lat = Number.parseFloat((el as HTMLElement).dataset.lat ?? '0');
+ const lon = Number.parseFloat((el as HTMLElement).dataset.lon ?? '0');
+ if (import.meta.env.DEV) console.log('[StrategicPosturePanel] Theater clicked:', { // eslint-disable-line no-console
  lat,
  lon,
  dataLat: (el as HTMLElement).dataset.lat,
@@ -512,10 +524,11 @@ export class StrategicPosturePanel extends Panel {
  element: (el as HTMLElement).textContent?.slice(0, 30),
  hasHandler: !!this.onLocationClick,
  });
- if (this.onLocationClick && !isNaN(lat) && !isNaN(lon)) {
- console.log('[StrategicPosturePanel] Calling onLocationClick with:', lat, lon);
+ if (this.onLocationClick && !Number.isNaN(lat) && !Number.isNaN(lon)) {
+ if (import.meta.env.DEV) console.log('[StrategicPosturePanel] Calling onLocationClick with:', lat, lon); // eslint-disable-line no-console
  this.onLocationClick(lat, lon);
  } else {
+ // eslint-disable-next-line no-console
  console.warn('[StrategicPosturePanel] No handler or invalid coords!', {
  hasHandler: !!this.onLocationClick,
  lat,
@@ -527,10 +540,9 @@ export class StrategicPosturePanel extends Panel {
   }
 
   public setLocationClickHandler(handler: (lat: number, lon: number) => void): void {
- console.log('[StrategicPosturePanel] setLocationClickHandler called, handler:', typeof handler);
+ if (import.meta.env.DEV) console.log('[StrategicPosturePanel] setLocationClickHandler called, handler:', typeof handler); // eslint-disable-line no-console
  this.onLocationClick = handler;
- // Verify it's stored
- console.log('[StrategicPosturePanel] Handler stored, onLocationClick now:', typeof this.onLocationClick);
+ if (import.meta.env.DEV) console.log('[StrategicPosturePanel] Handler stored, onLocationClick now:', typeof this.onLocationClick); // eslint-disable-line no-console
   }
 
   public getPostures(): TheaterPostureSummary[] {

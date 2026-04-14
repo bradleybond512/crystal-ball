@@ -514,7 +514,9 @@ export class DeckGLMap {
   private debouncedRebuildLayers: () => void;
   private debouncedFetchBases: () => void;
   private rafUpdateLayers: () => void;
+  private rafUpdateLayersPending = false;
   private moveTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private mapEventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
 
   constructor(container: HTMLElement, initialState: DeckMapState) {
  this.container = container;
@@ -527,10 +529,15 @@ export class DeckGLMap {
  try { this.deckOverlay?.setProps({ layers: this.buildLayers() }); } catch { /* map mid-teardown */ }
  }, 150);
  this.debouncedFetchBases = debounce(() => this.fetchServerBases(), 300);
- this.rafUpdateLayers = rafSchedule(() => {
+ const rafFn = rafSchedule(() => {
+ this.rafUpdateLayersPending = false;
  if (this.renderPaused || this.webglLost || !this.maplibreMap) return;
  try { this.deckOverlay?.setProps({ layers: this.buildLayers() }); } catch { /* map mid-teardown */ }
  });
+ this.rafUpdateLayers = () => {
+ this.rafUpdateLayersPending = true;
+ rafFn();
+ };
 
  this.setupDOM();
  this.popup = new MapPopup(container);
@@ -690,14 +697,14 @@ export class DeckGLMap {
 
  this.maplibreMap.addControl(this.deckOverlay as unknown as maplibregl.IControl);
 
- this.maplibreMap.on('movestart', () => {
+ // Store map event handlers for cleanup in destroy()
+ const onMoveStart = () => {
  if (this.moveTimeoutId) {
  clearTimeout(this.moveTimeoutId);
  this.moveTimeoutId = null;
  }
- });
-
- this.maplibreMap.on('moveend', () => {
+ };
+ const onMoveEnd = () => {
  this.lastSCZoom = -1;
  this.rafUpdateLayers();
  this.debouncedFetchBases();
@@ -705,25 +712,15 @@ export class DeckGLMap {
  this.onStateChange?.(this.state);
  const c = this.maplibreMap?.getCenter();
  if (c) setCurrentCenter(c.lat, c.lng);
- });
-
- this.maplibreMap.on('move', () => {
+ };
+ const onMoveOrZoom = () => {
  if (this.moveTimeoutId) clearTimeout(this.moveTimeoutId);
  this.moveTimeoutId = setTimeout(() => {
  this.lastSCZoom = -1;
  this.rafUpdateLayers();
  }, 100);
- });
-
- this.maplibreMap.on('zoom', () => {
- if (this.moveTimeoutId) clearTimeout(this.moveTimeoutId);
- this.moveTimeoutId = setTimeout(() => {
- this.lastSCZoom = -1;
- this.rafUpdateLayers();
- }, 100);
- });
-
- this.maplibreMap.on('zoomend', () => {
+ };
+ const onZoomEnd = () => {
  const currentZoom = Math.floor(this.maplibreMap?.getZoom() || 2);
  const thresholdCrossed = Math.abs(currentZoom - this.lastZoomThreshold) >= 1;
  if (thresholdCrossed) {
@@ -732,7 +729,20 @@ export class DeckGLMap {
  }
  this.state.zoom = this.maplibreMap?.getZoom() ?? this.state.zoom;
  this.onStateChange?.(this.state);
- });
+ };
+
+ this.maplibreMap.on('movestart', onMoveStart);
+ this.maplibreMap.on('moveend', onMoveEnd);
+ this.maplibreMap.on('move', onMoveOrZoom);
+ this.maplibreMap.on('zoom', onMoveOrZoom);
+ this.maplibreMap.on('zoomend', onZoomEnd);
+ this.mapEventHandlers = [
+ { event: 'movestart', handler: onMoveStart as (...args: unknown[]) => void },
+ { event: 'moveend', handler: onMoveEnd as (...args: unknown[]) => void },
+ { event: 'move', handler: onMoveOrZoom as (...args: unknown[]) => void },
+ { event: 'zoom', handler: onMoveOrZoom as (...args: unknown[]) => void },
+ { event: 'zoomend', handler: onZoomEnd as (...args: unknown[]) => void },
+ ];
   }
 
   private setupResizeObserver(): void {
@@ -782,16 +792,28 @@ export class DeckGLMap {
  return Number.isFinite(ts) ? ts : null;
   }
 
+  // filterByTime memoization — cache keyed by (arrayRef, timeRange, minuteBucket)
+  // so the same filter isn't re-run 11+ times per buildLayers() call.
+  private filterByTimeCache = new WeakMap<readonly unknown[] | unknown[], { range: string; bucket: number; result: unknown[] }>();
+
   private filterByTime<T>(
  items: T[],
  getTime: (item: T) => Date | string | number | undefined | null
   ): T[] {
  if (this.state.timeRange === 'all') return items;
+ // Bucket by minute so cache invalidates roughly every 60s, not every frame
+ const bucket = Math.floor(Date.now() / 60_000);
+ const cached = this.filterByTimeCache.get(items);
+ if (cached && cached.range === this.state.timeRange && cached.bucket === bucket) {
+ return cached.result as T[];
+ }
  const cutoff = Date.now() - this.getTimeRangeMs();
- return items.filter((item) => {
+ const result = items.filter((item) => {
  const ts = this.parseTime(getTime(item));
  return ts == undefined ? true : ts >= cutoff;
  });
+ this.filterByTimeCache.set(items, { range: this.state.timeRange, bucket, result });
+ return result;
   }
 
   private getFilteredProtests(): SocialUnrestEvent[] {
@@ -1326,6 +1348,8 @@ export class DeckGLMap {
  s === 'critical' ? [255, 59, 48, 255]
  : s === 'high' ? [255, 149, 0, 255]
  : [255, 204, 0, 255];
+ const radius = 8 + t * 28;
+ const fadeAlpha = Math.round(255 * (1 - t));
  layers.push(new ScatterplotLayer({
  id: 'alert-pulses',
  data: this.alertPulses,
@@ -1335,16 +1359,16 @@ export class DeckGLMap {
  lineWidthMinPixels: 2,
  radiusUnits: 'pixels',
  getPosition: (d: { lat: number; lon: number }) => [d.lon, d.lat],
- getRadius: () => 8 + t * 28,
+ getRadius: radius,
  getLineColor: (d: { severity: string }) => {
  const c = sevColor(d.severity);
- return [c[0], c[1], c[2], Math.round(255 * (1 - t))];
+ return [c[0], c[1], c[2], fadeAlpha];
  },
  updateTriggers: { getRadius: t, getLineColor: t },
  }));
- // Schedule a repaint for the next animation frame so the pulse animates.
- if (typeof requestAnimationFrame === 'function') {
- requestAnimationFrame(() => this.render());
+ // Throttled repaint — drives alert pulse at ~4fps instead of unbounded RAF loop
+ if (!this.rafUpdateLayersPending) {
+ setTimeout(() => this.rafUpdateLayers(), 250);
  }
  }
 
@@ -1695,16 +1719,17 @@ export class DeckGLMap {
 
   private createConflictZonesLayer(): GeoJsonLayer {
  const cacheKey = 'conflict-zones-layer';
+ const lineColor = getCurrentTheme() === 'light'
+ ? [255, 0, 0, 120] as [number, number, number, number]
+ : [255, 0, 0, 180] as [number, number, number, number];
 
  const layer = new GeoJsonLayer({
  id: cacheKey,
  data: CONFLICT_ZONES_GEOJSON,
  filled: true,
  stroked: true,
- getFillColor: () => COLORS.conflict,
- getLineColor: () => getCurrentTheme() === 'light'
- ? [255, 0, 0, 120] as [number, number, number, number]
- : [255, 0, 0, 180] as [number, number, number, number],
+ getFillColor: COLORS.conflict,
+ getLineColor: lineColor,
  getLineWidth: 2,
  lineWidthMinPixels: 1,
  pickable: true,
@@ -3056,7 +3081,8 @@ export class DeckGLMap {
 
   private startPulseAnimation(): void {
  if (this.newsPulseIntervalId !== null) return;
- const PULSE_UPDATE_INTERVAL_MS = 500;
+ // 1s is sufficient — pulse is a smooth sine wave, 500ms was imperceptibly faster
+ const PULSE_UPDATE_INTERVAL_MS = 1000;
 
  this.newsPulseIntervalId = setInterval(() => {
  const now = Date.now();
@@ -3084,19 +3110,19 @@ export class DeckGLMap {
   // ──────────────────────────────────────────────────────────────────────────
 
   private static readonly CABLE_PULSE_PERIOD_MS = 10_000;
-  private static readonly CABLE_PULSE_INTERVAL_MS = 120;
 
   private startCablePulse(): void {
  if (this.cablePulseIntervalId !== null) return;
- const TWO_PI = 2 * Math.PI;
- const period = DeckGLMap.CABLE_PULSE_PERIOD_MS;
-
+ // Use a slower interval (1s) — the pulse is a gentle 10s sine wave,
+ // so 120ms updates were ~80x faster than perceptually needed.
  this.cablePulseIntervalId = setInterval(() => {
  if (this.renderPaused || this.webglLost) return;
+ const TWO_PI = 2 * Math.PI;
+ const period = DeckGLMap.CABLE_PULSE_PERIOD_MS;
  this.cablePulsePhase = ((Date.now() % period) / period) * TWO_PI;
  this.layerCache.delete('cables-layer');
  this.rafUpdateLayers();
- }, DeckGLMap.CABLE_PULSE_INTERVAL_MS);
+ }, 1000);
   }
 
   private stopCablePulse(): void {
@@ -5559,12 +5585,19 @@ export class DeckGLMap {
  this.stopDayNightTimer();
  this.stopTheaterPolygons();
 
+ // Remove all MapLibre event listeners to prevent leaks
+ for (const { event, handler } of this.mapEventHandlers) {
+ this.maplibreMap?.off(event, handler);
+ }
+ this.mapEventHandlers = [];
+
  if (this.resizeObserver) {
  this.resizeObserver.disconnect();
  this.resizeObserver = null;
  }
 
  this.layerCache.clear();
+ this.filterByTimeCache = new WeakMap();
 
  this.deckOverlay?.finalize();
  this.deckOverlay = null;
@@ -5576,7 +5609,7 @@ export class DeckGLMap {
 
   // ── Worldview-style layer creators ────────────────────────────────────────
 
-  private createTheaterPolygonsLayers(): (PolygonLayer | TextLayer<TheaterPolygon>)[] {
+  private createTheaterPolygonsLayers(): Layer[] {
  const isLight = getCurrentTheme() === 'light';
  const fill = new PolygonLayer<TheaterPolygon>({
  id: 'theater-polygons-fill',
@@ -5591,17 +5624,25 @@ export class DeckGLMap {
  pickable: true,
  });
 
- const labels = new TextLayer<TheaterPolygon>({
+ // Precompute centroids once per data change instead of per frame
+ const labelData = this.theaterPolygons
+ .filter(t => t.score >= 40)
+ .map(t => {
+ const lons = t.polygon.map(p => p[0]);
+ const lats = t.polygon.map(p => p[1]);
+ return {
+ ...t,
+ _centroid: [
+ (Math.min(...lons) + Math.max(...lons)) / 2,
+ (Math.min(...lats) + Math.max(...lats)) / 2,
+ ] as [number, number],
+ };
+ });
+
+ const labels = new TextLayer<(typeof labelData)[number]>({
  id: 'theater-polygons-labels',
- data: this.theaterPolygons.filter(t => t.score >= 40),
- getPosition: (d) => {
- // Centroid of polygon bounding box
- const lons = d.polygon.map(p => p[0]);
- const lats = d.polygon.map(p => p[1]);
- const cLon = (Math.min(...lons) + Math.max(...lons)) / 2;
- const cLat = (Math.min(...lats) + Math.max(...lats)) / 2;
- return [cLon, cLat];
- },
+ data: labelData,
+ getPosition: (d) => d._centroid,
  getText: (d) => `${d.name}\n${d.score}`,
  getSize: 11,
  getColor: isLight ? [30, 30, 30, 200] : [240, 240, 240, 200],

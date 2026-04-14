@@ -172,6 +172,7 @@ export class Panel {
   private lastTickAt = 0;
   private static instances = new Set<Panel>();
   private static tickerStarted = false;
+  private static heartbeatTickerId: ReturnType<typeof setInterval> | null = null;
   public getPanelId(): string { return this.panelId; }
 
   /** Returns the panel's content element for external mounting (e.g. embedding in settings modal). */
@@ -182,6 +183,10 @@ export class Panel {
   protected panelId: string;
   private abortController: AbortController = new AbortController();
   private tooltipCloseHandler: (() => void) | null = null;
+  private infoBtnHandler: ((e: Event) => void) | null = null;
+  private aiBtnHandler: ((e: Event) => void) | null = null;
+  private infoBtnEl: HTMLElement | null = null;
+  private aiBtnEl: HTMLElement | null = null;
   private resizeHandle: HTMLElement | null = null;
   private isResizing = false;
   private startY = 0;
@@ -237,10 +242,12 @@ export class Panel {
  const tooltip = h('div', { className: 'panel-info-tooltip' });
  tooltip.append(safeHtml(options.infoTooltip));
 
- infoBtn.addEventListener('click', (e) => {
+ this.infoBtnHandler = (e: Event) => {
  e.stopPropagation();
  tooltip.classList.toggle('visible');
- });
+ };
+ this.infoBtnEl = infoBtn;
+ infoBtn.addEventListener('click', this.infoBtnHandler);
 
  this.tooltipCloseHandler = () => tooltip.classList.remove('visible');
  document.addEventListener('click', this.tooltipCloseHandler);
@@ -281,10 +288,12 @@ export class Panel {
  title: 'AI Summary',
  'aria-label': 'Generate AI summary of this panel',
  }, '✦');
- aiBtn.addEventListener('click', (e) => {
+ this.aiBtnHandler = (e: Event) => {
  e.stopPropagation();
  void this._runAiSummary(aiBtn);
- });
+ };
+ this.aiBtnEl = aiBtn;
+ aiBtn.addEventListener('click', this.aiBtnHandler);
  this.header.append(aiBtn);
  }
 
@@ -798,7 +807,7 @@ export class Panel {
   private static startHeartbeatTicker(): void {
  if (Panel.tickerStarted) return;
  Panel.tickerStarted = true;
- window.setInterval(() => {
+ Panel.heartbeatTickerId = window.setInterval(() => {
  for (const p of Panel.instances) p.updateHeartbeat();
  }, 5000);
  document.addEventListener('cb:panel-narrative', (ev: Event) => {
@@ -808,6 +817,14 @@ export class Panel {
  if (p.panelId === detail.panelId) p.setNarrative(detail.text);
  }
  });
+  }
+
+  public static stopHeartbeatTicker(): void {
+ if (Panel.heartbeatTickerId !== null) {
+ clearInterval(Panel.heartbeatTickerId);
+ Panel.heartbeatTickerId = null;
+ Panel.tickerStarted = false;
+ }
   }
 
   public show(): void {
@@ -1101,6 +1118,16 @@ export class Panel {
  }
  this.pendingContentHtml = null;
 
+ if (this.infoBtnHandler && this.infoBtnEl) {
+ this.infoBtnEl.removeEventListener('click', this.infoBtnHandler);
+ this.infoBtnHandler = null;
+ this.infoBtnEl = null;
+ }
+ if (this.aiBtnHandler && this.aiBtnEl) {
+ this.aiBtnEl.removeEventListener('click', this.aiBtnHandler);
+ this.aiBtnHandler = null;
+ this.aiBtnEl = null;
+ }
  if (this.tooltipCloseHandler) {
  document.removeEventListener('click', this.tooltipCloseHandler);
  this.tooltipCloseHandler = null;

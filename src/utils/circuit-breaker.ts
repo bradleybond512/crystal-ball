@@ -75,6 +75,7 @@ export class CircuitBreaker<T> {
  try {
  const { getPersistentCache } = await import('../services/persistent-cache');
  const entry = await getPersistentCache<T>(this.persistKey);
+ // eslint-disable-next-line sonarjs/different-types-comparison
  if (entry?.data === undefined || entry.data === null) return;
 
  const age = Date.now() - entry.updatedAt;
@@ -91,6 +92,7 @@ export class CircuitBreaker<T> {
  };
  }
  } catch (error) {
+ // eslint-disable-next-line no-console
  console.warn(`[${this.name}] Persistent cache hydration failed:`, error);
  } finally {
  this.persistentLoaded = true;
@@ -104,15 +106,15 @@ export class CircuitBreaker<T> {
   /** Fire-and-forget write to persistent storage. */
   private writePersistentCache(data: T): void {
  import('../services/persistent-cache').then(({ setPersistentCache }) => {
- setPersistentCache(this.persistKey, data).catch(() => {});
- }).catch(() => {});
+ setPersistentCache(this.persistKey, data).catch(() => { /* no-op */ });
+ }).catch(() => { /* no-op */ });
   }
 
   /** Fire-and-forget delete from persistent storage. */
   private deletePersistentCache(): void {
  import('../services/persistent-cache').then(({ deletePersistentCache }) => {
- deletePersistentCache(this.persistKey).catch(() => {});
- }).catch(() => {});
+ deletePersistentCache(this.persistKey).catch(() => { /* no-op */ });
+ }).catch(() => { /* no-op */ });
   }
 
   isOnCooldown(): boolean {
@@ -179,6 +181,7 @@ export class CircuitBreaker<T> {
  this.state.lastError = error;
  if (this.state.failures >= this.maxFailures) {
  this.state.cooldownUntil = Date.now() + this.cooldownMs;
+ // eslint-disable-next-line no-console
  console.warn(`[${this.name}] On cooldown for ${this.cooldownMs / 1000}s after ${this.state.failures} failures`);
  }
   }
@@ -195,7 +198,7 @@ export class CircuitBreaker<T> {
  }
 
  if (this.isOnCooldown()) {
- console.log(`[${this.name}] Currently unavailable, ${this.getCooldownRemaining()}s remaining`);
+ if (import.meta.env.DEV) console.log(`[${this.name}] Currently unavailable, ${this.getCooldownRemaining()}s remaining`); // eslint-disable-line no-console
  const cachedFallback = this.getCached();
  if (cachedFallback !== null) {
  this.lastDataState = { mode: 'cached', timestamp: this.cache?.timestamp ?? null, offline };
@@ -222,6 +225,7 @@ export class CircuitBreaker<T> {
  this.lastDataState = { mode: 'cached', timestamp: this.cache.timestamp, offline };
  // Fire-and-forget background refresh
  fn().then(result => this.recordSuccess(result)).catch(error => {
+ // eslint-disable-next-line no-console
  console.warn(`[${this.name}] Background refresh failed:`, error);
  this.recordFailure(String(error));
  });
@@ -234,6 +238,7 @@ export class CircuitBreaker<T> {
  return result;
  } catch (error) {
  const msg = String(error);
+ // eslint-disable-next-line no-console
  console.error(`[${this.name}] Failed:`, msg);
  this.recordFailure(msg);
  this.lastDataState = { mode: 'unavailable', timestamp: null, offline };

@@ -51,13 +51,12 @@ export class SearchManager implements AppModule {
   }
 
   private setupSearchModal(): void {
- const searchOptions = SITE_VARIANT === 'tech'
- ? { placeholder: t('modals.search.placeholderTech') }
- : SITE_VARIANT === 'happy'
- ? { placeholder: 'Search or type a command...' }
- : SITE_VARIANT === 'finance'
- ? { placeholder: t('modals.search.placeholderFinance') }
- : { placeholder: t('modals.search.placeholder') };
+ let placeholder: string;
+ if (SITE_VARIANT === 'tech') placeholder = t('modals.search.placeholderTech');
+ else if (SITE_VARIANT === 'happy') placeholder = 'Search or type a command...';
+ else if (SITE_VARIANT === 'finance') placeholder = t('modals.search.placeholderFinance');
+ else placeholder = t('modals.search.placeholder');
+ const searchOptions = { placeholder };
  this.ctx.searchModal = new SearchModal(this.ctx.container, searchOptions);
 
  if (SITE_VARIANT === 'happy') {
@@ -66,28 +65,28 @@ export class SearchManager implements AppModule {
  this.ctx.searchModal.registerSource('techcompany', TECH_COMPANIES.map(c => ({
  id: c.id,
  title: c.name,
- subtitle: `${c.sector} ${c.city} ${c.keyProducts?.join(' ') || ''}`.trim(),
+ subtitle: `${c.sector} ${c.city} ${c.keyProducts?.join(' ') ?? ''}`.trim(),
  data: c,
  })));
 
  this.ctx.searchModal.registerSource('ailab', AI_RESEARCH_LABS.map(l => ({
  id: l.id,
  title: l.name,
- subtitle: `${l.type} ${l.city} ${l.focusAreas?.join(' ') || ''}`.trim(),
+ subtitle: `${l.type} ${l.city} ${l.focusAreas?.join(' ') ?? ''}`.trim(),
  data: l,
  })));
 
  this.ctx.searchModal.registerSource('startup', STARTUP_ECOSYSTEMS.map(s => ({
  id: s.id,
  title: s.name,
- subtitle: `${s.ecosystemTier} ${s.topSectors?.join(' ') || ''} ${s.notableStartups?.join(' ') || ''}`.trim(),
+ subtitle: `${s.ecosystemTier} ${s.topSectors?.join(' ') ?? ''} ${s.notableStartups?.join(' ') ?? ''}`.trim(),
  data: s,
  })));
 
  this.ctx.searchModal.registerSource('datacenter', AI_DATA_CENTERS.map(d => ({
  id: d.id,
  title: d.name,
- subtitle: `${d.owner} ${d.chipType || ''}`.trim(),
+ subtitle: `${d.owner} ${d.chipType ?? ''}`.trim(),
  data: d,
  })));
 
@@ -98,45 +97,53 @@ export class SearchManager implements AppModule {
  data: c,
  })));
 
- this.ctx.searchModal.registerSource('techhq', TECH_HQS.map(h => ({
+ this.ctx.searchModal.registerSource('techhq', TECH_HQS.map(h => {
+ let typeLabel = 'Public';
+ if (h.type === 'faang') typeLabel = 'Big Tech';
+ else if (h.type === 'unicorn') typeLabel = 'Unicorn';
+ return {
  id: h.id,
  title: h.company,
- subtitle: `${h.type === 'faang' ? 'Big Tech' : (h.type === 'unicorn' ? 'Unicorn' : 'Public')} • ${h.city}, ${h.country}`,
+ subtitle: `${typeLabel} • ${h.city}, ${h.country}`,
  data: h,
- })));
+ };
+ }));
 
- this.ctx.searchModal.registerSource('accelerator', ACCELERATORS.map(a => ({
+ this.ctx.searchModal.registerSource('accelerator', ACCELERATORS.map(a => {
+ const notableSuffix = a.notable ? ' • ' + a.notable.slice(0, 2).join(', ') : '';
+ return {
  id: a.id,
  title: a.name,
- subtitle: `${a.type} • ${a.city}, ${a.country}${a.notable ? ` • ${a.notable.slice(0, 2).join(', ')}` : ''}`,
+ subtitle: `${a.type} • ${a.city}, ${a.country}${notableSuffix}`,
  data: a,
- })));
+ };
+ }));
  } else {
  this.ctx.searchModal.registerSource('hotspot', INTEL_HOTSPOTS.map(h => ({
  id: h.id,
  title: h.name,
- subtitle: `${h.subtext || ''} ${h.keywords?.join(' ') || ''} ${h.description || ''}`.trim(),
+ subtitle: `${h.subtext ?? ''} ${h.keywords?.join(' ') ?? ''} ${h.description ?? ''}`.trim(),
  data: h,
  })));
 
  this.ctx.searchModal.registerSource('conflict', CONFLICT_ZONES.map(c => ({
  id: c.id,
  title: c.name,
- subtitle: `${c.parties?.join(' ') || ''} ${c.keywords?.join(' ') || ''} ${c.description || ''}`.trim(),
+ subtitle: `${c.parties?.join(' ') ?? ''} ${c.keywords?.join(' ') ?? ''} ${c.description ?? ''}`.trim(),
  data: c,
  })));
 
  this.ctx.searchModal.registerSource('base', MILITARY_BASES.map(b => ({
  id: b.id,
  title: b.name,
- subtitle: `${b.type} ${b.description || ''}`.trim(),
+ subtitle: `${b.type} ${b.description ?? ''}`.trim(),
  data: b,
  })));
 
  this.ctx.searchModal.registerSource('pipeline', PIPELINES.map(p => ({
  id: p.id,
  title: p.name,
- subtitle: `${p.type} ${p.operator || ''} ${p.countries?.join(' ') || ''}`.trim(),
+ subtitle: `${p.type} ${p.operator ?? ''} ${p.countries?.join(' ') ?? ''}`.trim(),
  data: p,
  })));
 
@@ -150,53 +157,66 @@ export class SearchManager implements AppModule {
  this.ctx.searchModal.registerSource('datacenter', AI_DATA_CENTERS.map(d => ({
  id: d.id,
  title: d.name,
- subtitle: `${d.owner} ${d.chipType || ''}`.trim(),
+ subtitle: `${d.owner} ${d.chipType ?? ''}`.trim(),
  data: d,
  })));
 
  this.ctx.searchModal.registerSource('nuclear', NUCLEAR_FACILITIES.map(n => ({
  id: n.id,
  title: n.name,
- subtitle: `${n.type} ${n.operator || ''}`.trim(),
+ subtitle: `${n.type} ${n.operator ?? ''}`.trim(),
  data: n,
  })));
 
  this.ctx.searchModal.registerSource('irradiator', GAMMA_IRRADIATORS.map(g => ({
  id: g.id,
  title: `${g.city}, ${g.country}`,
- subtitle: g.organization || '',
+ subtitle: g.organization ?? '',
  data: g,
  })));
  }
 
  if (SITE_VARIANT === 'finance') {
- this.ctx.searchModal.registerSource('exchange', STOCK_EXCHANGES.map(e => ({
+ this.ctx.searchModal.registerSource('exchange', STOCK_EXCHANGES.map(e => {
+ const mcSuffix = e.marketCap ? ' • $' + e.marketCap + 'T' : '';
+ return {
  id: e.id,
  title: `${e.shortName} - ${e.name}`,
- subtitle: `${e.tier} • ${e.city}, ${e.country}${e.marketCap ? ` • $${e.marketCap}T` : ''}`,
+ subtitle: `${e.tier} • ${e.city}, ${e.country}${mcSuffix}`,
  data: e,
- })));
+ };
+ }));
 
- this.ctx.searchModal.registerSource('financialcenter', FINANCIAL_CENTERS.map(f => ({
+ this.ctx.searchModal.registerSource('financialcenter', FINANCIAL_CENTERS.map(f => {
+ const rankPart = f.gfciRank ? ' • GFCI #' + f.gfciRank : '';
+ const specPart = f.specialties ? ' • ' + f.specialties.slice(0, 3).join(', ') : '';
+ return {
  id: f.id,
  title: f.name,
- subtitle: `${f.type} financial center${f.gfciRank ? ` • GFCI #${f.gfciRank}` : ''}${f.specialties ? ` • ${f.specialties.slice(0, 3).join(', ')}` : ''}`,
+ subtitle: `${f.type} financial center${rankPart}${specPart}`,
  data: f,
- })));
+ };
+ }));
 
- this.ctx.searchModal.registerSource('centralbank', CENTRAL_BANKS.map(b => ({
+ this.ctx.searchModal.registerSource('centralbank', CENTRAL_BANKS.map(b => {
+ const currPart = b.currency ? ' • ' + b.currency : '';
+ return {
  id: b.id,
  title: `${b.shortName} - ${b.name}`,
- subtitle: `${b.type}${b.currency ? ` • ${b.currency}` : ''} • ${b.city}, ${b.country}`,
+ subtitle: `${b.type}${currPart} • ${b.city}, ${b.country}`,
  data: b,
- })));
+ };
+ }));
 
- this.ctx.searchModal.registerSource('commodityhub', COMMODITY_HUBS.map(h => ({
+ this.ctx.searchModal.registerSource('commodityhub', COMMODITY_HUBS.map(h => {
+ const commPart = h.commodities ? ' • ' + h.commodities.slice(0, 3).join(', ') : '';
+ return {
  id: h.id,
  title: h.name,
- subtitle: `${h.type} • ${h.city}, ${h.country}${h.commodities ? ` • ${h.commodities.slice(0, 3).join(', ')}` : ''}`,
+ subtitle: `${h.type} • ${h.city}, ${h.country}${commPart}`,
  data: h,
- })));
+ };
+ }));
  }
 
  this.ctx.searchModal.registerSource('country', this.buildCountrySearchItems());
@@ -393,6 +413,7 @@ export class SearchManager implements AppModule {
  }
   }
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity
   private handleCommand(cmd: Command): void {
  const colonIdx = cmd.id.indexOf(':');
  if (colonIdx === -1) return;
@@ -431,7 +452,7 @@ export class SearchManager implements AppModule {
  }
 
  case 'layer': {
- const layerKey = (LAYER_KEY_MAP[action] || action) as keyof MapLayers;
+ const layerKey = (LAYER_KEY_MAP[action] ?? action) as keyof MapLayers;
  if (!(layerKey in this.ctx.mapLayers)) return;
  this.ctx.mapLayers[layerKey] = !this.ctx.mapLayers[layerKey];
  saveToStorage(STORAGE_KEYS.mapLayers, this.ctx.mapLayers);
@@ -453,11 +474,13 @@ export class SearchManager implements AppModule {
  setTheme(action);
  } else if (action === 'fullscreen') {
  if (document.fullscreenElement) {
- try { void document.exitFullscreen()?.catch(() => {}); } catch {}
+ // eslint-disable-next-line sonarjs/no-try-promise
+ try { void document.exitFullscreen()?.catch(() => { /* ignore */ }); } catch { /* ignore */ }
  } else {
  const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
  if (el.requestFullscreen) {
- try { void el.requestFullscreen()?.catch(() => {}); } catch {}
+ // eslint-disable-next-line sonarjs/no-try-promise
+ try { void el.requestFullscreen()?.catch(() => { /* ignore */ }); } catch { /* ignore */ }
  } else if (el.webkitRequestFullscreen) {
  try { el.webkitRequestFullscreen(); } catch {}
  }
@@ -477,9 +500,9 @@ export class SearchManager implements AppModule {
 
  case 'country': {
  const name = TIER1_COUNTRIES[action]
- || CURATED_COUNTRIES[action]?.name
- || new Intl.DisplayNames(['en'], { type: 'region' }).of(action)
- || action;
+ ?? CURATED_COUNTRIES[action]?.name
+ ?? new Intl.DisplayNames(['en'], { type: 'region' }).of(action)
+ ?? action;
  trackCountrySelected(action, name, 'command');
  this.callbacks.openCountryBriefByCode(action, name);
  break;
@@ -492,7 +515,10 @@ export class SearchManager implements AppModule {
  const lat = (minLat + maxLat) / 2;
  const lon = (minLon + maxLon) / 2;
  const span = Math.max(maxLat - minLat, maxLon - minLon);
- const zoom = span > 40 ? 3 : span > 15 ? 4 : span > 5 ? 5 : 6;
+ let zoom = 6;
+ if (span > 40) zoom = 3;
+ else if (span > 15) zoom = 4;
+ else if (span > 5) zoom = 5;
  this.ctx.map?.setView('global');
  setTimeout(() => { this.ctx.map?.setCenter(lat, lon, zoom); }, 300);
  }
@@ -533,7 +559,7 @@ export class SearchManager implements AppModule {
  subtitle: n.source,
  data: n,
  }));
- console.log(`[Search] Indexing ${newsItems.length} news items (allNews total: ${this.ctx.allNews.length})`);
+ if (import.meta.env.DEV) console.log(`[Search] Indexing ${newsItems.length} news items (allNews total: ${this.ctx.allNews.length})`); // eslint-disable-line no-console
  this.ctx.searchModal.registerSource('news', newsItems);
 
  if (this.ctx.latestPredictions.length > 0) {
@@ -549,7 +575,7 @@ export class SearchManager implements AppModule {
  this.ctx.searchModal.registerSource('market', this.ctx.latestMarkets.map(m => ({
  id: m.symbol,
  title: `${m.symbol} - ${m.name}`,
- subtitle: `$${m.price?.toFixed(2) || 'N/A'}`,
+ subtitle: `$${m.price?.toFixed(2) ?? 'N/A'}`,
  data: m,
  })));
  }

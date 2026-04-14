@@ -18,7 +18,9 @@ export class RefreshScheduler implements AppModule {
  this.ctx = ctx;
   }
 
-  init(): void {}
+  init(): void {
+    // No initialization needed — scheduling happens via registerAll()
+  }
 
   destroy(): void {
  for (const timeoutId of this.refreshTimeoutIds.values()) {
@@ -26,6 +28,8 @@ export class RefreshScheduler implements AppModule {
  }
  this.refreshTimeoutIds.clear();
  this.refreshRunners.clear();
+ this.flushQueue = [];
+ this.flushInFlight = 0;
   }
 
   setHiddenSince(ts: number): void {
@@ -54,6 +58,7 @@ export class RefreshScheduler implements AppModule {
  const ghostMultiplier = getGhostRefreshMultiplier();
  const adjusted = baseMs * ghostMultiplier * (isHidden ? HIDDEN_REFRESH_MULTIPLIER : 1);
  const jitterRange = adjusted * JITTER_FRACTION;
+ // eslint-disable-next-line sonarjs/pseudo-random
  const jittered = adjusted + (Math.random() * 2 - 1) * jitterRange;
  return Math.max(MIN_REFRESH_MS, Math.round(jittered));
  };
@@ -82,6 +87,7 @@ export class RefreshScheduler implements AppModule {
  const changed = await fn();
  currentMultiplier = changed === false ? Math.min(currentMultiplier * 2, MAX_BACKOFF_MULTIPLIER) : 1;
  } catch (error) {
+ // eslint-disable-next-line no-console
  console.error(`[App] Refresh ${name} failed:`, error);
  currentMultiplier = 1;
  } finally {
@@ -93,19 +99,44 @@ export class RefreshScheduler implements AppModule {
  scheduleNext(computeDelay(intervalMs, document.visibilityState === 'hidden'));
   }
 
+  private static readonly MAX_CONCURRENT_FLUSHES = 6;
+  private flushQueue: { name: string; run: () => Promise<void> }[] = [];
+  private flushInFlight = 0;
+
   flushStaleRefreshes(): void {
  if (!this.hiddenSince) return;
  const hiddenMs = Date.now() - this.hiddenSince;
  this.hiddenSince = 0;
 
- let stagger = 0;
+ // Collect stale refreshes
+ const stale: { name: string; run: () => Promise<void>; intervalMs: number }[] = [];
  for (const [name, { run, intervalMs }] of this.refreshRunners) {
  if (hiddenMs < intervalMs) continue;
  const pending = this.refreshTimeoutIds.get(name);
  if (pending) clearTimeout(pending);
- const delay = stagger;
- stagger += 150;
- this.refreshTimeoutIds.set(name, setTimeout(() => void run(), delay));
+ stale.push({ name, run, intervalMs });
+ }
+
+ // Sort by interval (shortest first = most time-sensitive)
+ stale.sort((a, b) => a.intervalMs - b.intervalMs);
+
+ this.flushQueue = stale;
+ this.flushInFlight = 0;
+ this.drainFlushQueue();
+  }
+
+  private drainFlushQueue(): void {
+ while (this.flushInFlight < RefreshScheduler.MAX_CONCURRENT_FLUSHES && this.flushQueue.length > 0) {
+ const item = this.flushQueue.shift()!;
+ this.flushInFlight++;
+ // Stagger each launch by 200ms * position to avoid burst
+ const delay = this.flushInFlight * 200;
+ this.refreshTimeoutIds.set(item.name, setTimeout(() => {
+ void item.run().finally(() => {
+  this.flushInFlight--;
+  this.drainFlushQueue();
+ });
+ }, delay));
  }
   }
 

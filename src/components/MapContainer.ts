@@ -113,7 +113,7 @@ export class MapContainer {
   }
 
   private initSvgMap(logMessage: string): void {
- console.log(logMessage); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log(logMessage); // eslint-disable-line no-console
  this.useDeckGL = false;
  this.deckGLMap = null;
  this.container.classList.remove('deckgl-mode');
@@ -126,7 +126,7 @@ export class MapContainer {
 
   private init(): void {
  if (this.useDeckGL) {
- console.log('[MapContainer] Initializing deck.gl map (desktop mode)'); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[MapContainer] Initializing deck.gl map (desktop mode)'); // eslint-disable-line no-console
  try {
  this.container.classList.add('deckgl-mode');
  this.deckGLMap = new DeckGLMap(this.container, {
@@ -377,7 +377,7 @@ export class MapContainer {
  }
   }
 
-  public setAlertPulses(pulses: Array<{ id: string; lat: number; lon: number; severity: 'critical' | 'high' | 'medium' | 'low' | 'info' }>): void {
+  public setAlertPulses(pulses: { id: string; lat: number; lon: number; severity: 'critical' | 'high' | 'medium' | 'low' | 'info' }[]): void {
  if (this.useDeckGL) {
  this.deckGLMap?.setAlertPulses(pulses);
  }

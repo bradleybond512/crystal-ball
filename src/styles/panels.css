@@ -536,3 +536,10 @@
 .gdelt-badge--tense { background: color-mix(in srgb, #f97316 15%, transparent); color: #fb923c; }
 .gdelt-badge--neutral  { background: color-mix(in srgb, #6b7280 15%, transparent); color: #9ca3af; }
 
+@media (prefers-reduced-motion: reduce) {
+  .oref-pulse,
+  .agent-progress {
+    animation: none !important;
+  }
+}
+

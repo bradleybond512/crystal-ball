@@ -8,6 +8,12 @@ import { fileURLToPath } from 'node:url';
 import { config } from './config.mjs';
 import { sessions } from './sessions.mjs';
 import { storage } from './storage.mjs';
+import { createAlertProducer } from './alerts.mjs';
+
+const alertProducer = createAlertProducer((sessionId, message) => {
+  const session = sessions.get(sessionId);
+  if (session) session.write(message + '\r');
+});
 
 const WEB_ROOT = resolve(fileURLToPath(new URL('../web', import.meta.url)));
 
@@ -217,6 +223,22 @@ export async function handleRequest(req, res) {
       if (!body.id || !body.kind) return sendJSON(res, 400, { error: 'id and kind required' });
       storage.appendEvent(body.id, body.kind, body.payload ?? null);
       return sendJSON(res, 200, { ok: true });
+    }
+
+    // Alert subscription routes
+    if (req.method === 'POST' && pathname === '/api/alerts/subscribe') {
+      const body = await readBody(req);
+      if (!body.sessionId) return sendJSON(res, 400, { error: 'sessionId required' });
+      return sendJSON(res, 200, alertProducer.subscribe(body.sessionId, body.filter));
+    }
+
+    if (req.method === 'DELETE' && pathname.startsWith('/api/alerts/subscribe/')) {
+      const sid = pathname.split('/').pop();
+      return sendJSON(res, 200, alertProducer.unsubscribe(sid));
+    }
+
+    if (req.method === 'GET' && pathname === '/api/alerts/subscriptions') {
+      return sendJSON(res, 200, { subscriptions: alertProducer.getSubscriptions() });
     }
 
     return sendJSON(res, 404, { error: 'not found' });

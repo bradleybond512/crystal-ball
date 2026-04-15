@@ -1,6 +1,6 @@
 # Crystal Ball
 
-Tauri 2 + TypeScript + Rust desktop app: 168+ live data panels across 4 product variants, a Cesium.js/DeckGL 3D globe with 74 geospatial layers, SGP4 orbital propagation in a Web Worker, AI summarization with Ollama/Groq/Claude/OpenRouter fallback chain, Protobuf/Buf contract-driven API layer, OS keychain secret storage, Node.js sidecar proxy on a bearer-authenticated local port, and a PostHog-instrumented Ghost Mode with analytics suppression.
+Tauri 2 + TypeScript + Rust desktop app: 180+ live data panels across 4 product variants, a Cesium.js/DeckGL 3D globe with 99 geospatial layers, SGP4 orbital propagation in a Web Worker, AI summarization with Ollama/Groq/Claude/OpenRouter fallback chain, an MCP server exposing 19+ tools for Claude Code integration, Protobuf/Buf contract-driven API layer, OS keychain secret storage, Node.js sidecar proxy on a bearer-authenticated local port, and a PostHog-instrumented Ghost Mode with analytics suppression.
 
 [![Version](https://img.shields.io/github/v/release/bradleybond512/crystal-ball?label=version)](https://github.com/bradleybond512/crystal-ball/releases/latest)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
@@ -15,9 +15,9 @@ Tauri 2 + TypeScript + Rust desktop app: 168+ live data panels across 4 product 
 
 Full-viewport Cesium.js 3D globe mode. Activate with `G` or the sidebar.
 
-**74 live data layers:** military bases, nuclear facilities, earthquakes, active conflicts, airstrikes, cyclones, fires, vessels, flights, cyber threats, submarines, cables, ports, satellites, ISS, and more.
+**99 live data layers:** military bases, nuclear facilities, earthquakes, active conflicts, airstrikes, cyclones, fires, vessels, flights, cyber threats, submarines, cables, ports, satellites, ISS, strike packages, navigation routes, RIPE Atlas probes, displacement flows, and more.
 
-**HUD overlay:** threat assessment card, mode badge, HOTSPOTS/ALT/CONFLICT/DISASTER stat pills, nearest hotspot (haversine), sun-phase badge (DAY/GOLDEN/CIVIL/NAUTICAL/ASTRO/NIGHT), local clock at camera longitude, scrolling LIVE alert ticker, top-5 alert list, layer-toggle bar.
+**HUD overlay:** threat assessment card, mode badge, HOTSPOTS/ALT/CONFLICT/DISASTER stat pills, nearest hotspot (haversine), sun-phase badge (DAY/GOLDEN/CIVIL/NAUTICAL/ASTRO/NIGHT), local clock at camera longitude, scrolling LIVE alert ticker, top-5 alert list, layer-toggle bar, navigation HUD with turn-by-turn routing.
 
 **Fly Mode:** game-style WASD/mouse first-person flight over the globe. Right-click drag for look, scroll for speed.
 
@@ -29,19 +29,27 @@ Full-viewport Cesium.js 3D globe mode. Activate with `G` or the sidebar.
 
 **Imagery:** Bing satellite (Cesium Ion token) > ArcGIS World Imagery fallback.
 
+**Navigation system:** 2D MapLibre panel + 3D God's Vision integration. 4-tier routing engine (OSRM > GraphHopper > Valhalla > straight-line), 3-tier GPS (CoreLocation > browser > manual), street-level tile fallback chain (Mapbox > Stadia > OSM).
+
 <!-- screenshot: God's Eye 3D globe with HUD overlay and active layers -->
+
+## MCP Server
+
+Crystal Ball ships an MCP (Model Context Protocol) server that exposes its intelligence feeds to Claude Code and other MCP-compatible AI agents. 19+ tools across aggregate situational awareness (sitrep, threats, markets, cyber, weather, infrastructure, military posture) and granular lookups (conflicts, news, IP, CVE, vessel, flight, sanctions, FRED economic data, SEC filings, earthquakes, disease outbreaks, region briefs). Registered automatically in Claude Code via `settings.json`.
 
 ## Intelligence Coverage
 
 | Domain | What's included |
 |--------|----------------|
-| **Conflict & Geopolitics** | Live conflict zones, airstrike tracking, ACLED events, military bases, nuclear facilities, theater polygons, kill chain, ORBAT, STIX/TAXII feeds |
+| **Conflict & Geopolitics** | Live conflict zones, airstrike tracking, ACLED events, military bases, nuclear facilities, theater polygons, kill chain, ORBAT, STIX/TAXII feeds, strike package detection with route prediction, multi-theater coordination detection, historical conflict pattern matching |
 | **Weather** | 7-day forecasts, RainViewer global radar, Blitzortung lightning, NOAA GOES/Himawari satellite imagery, tide predictions, pollen tracking, NWS severe alerts, SPC convective outlooks, tropical cyclone tracking, red flag fire warnings |
-| **Cyber & Threats** | ThreatFox IOCs, OpenPhish feeds, Spamhaus blocklists, CISA KEV, ICS/OT threats, network topology, 24-session EMA threat forecast, Palantir/Dragos-inspired intel panels |
-| **Markets & Finance** | S&P 500, BTC, oil, gold, commodities, macro signals, central bank feeds, sector heatmap (requires Finnhub key) |
+| **Cyber & Threats** | ThreatFox IOCs, OpenPhish feeds, Spamhaus blocklists, CISA KEV, ICS/OT threats, network topology, 24-session EMA threat forecast, Palantir/Dragos-inspired intel panels, local IDS integration (Suricata/Zeek) |
+| **Markets & Finance** | S&P 500, BTC, oil, gold, commodities, macro signals, central bank feeds, sector heatmap, World Bank development indicators, stablecoin depeg detection, elections tracking |
 | **Space & Satellites** | ISS + Starlink + weather satellite tracking, SGP4 propagation, real-time orbital positions, satellite ISR intelligence |
-| **Infrastructure** | Submarine cables, maritime vessels, flight tracking, port status, datacenter outages, internet exchange points, CCTV & webcams |
-| **Disasters** | GDACS Red/Orange events, M6.5+ earthquakes, wildfire perimeters (NASA FIRMS), cyclone paths |
+| **Infrastructure** | Submarine cables, maritime vessels, flight tracking, port status, datacenter outages, internet exchange points, CCTV & webcams, RIPE Atlas internet connectivity, power grid/comms health monitoring |
+| **Disasters** | GDACS Red/Orange events, M6.5+ earthquakes, wildfire perimeters (NASA FIRMS), cyclone paths, UNHCR displacement data |
+| **Alerts & Correlation** | Unified alert inbox with composite relevance scoring, 18-wave alert intelligence system, situation clustering, shift handoff, story timelines, entity co-occurrence graphs, geofence alerts, silence anomaly detection, escalation prediction |
+| **Navigation** | Turn-by-turn routing (OSRM/GraphHopper/Valhalla), native CoreLocation GPS, street-level tiles, 2D + 3D globe integration |
 
 ## What Makes This Hard
 
@@ -72,8 +80,10 @@ CSS `-webkit-app-region: drag` is silently ignored. Window dragging requires JS 
 |-------|-------|
 | Frontend | TypeScript, Vite, MapLibre GL, deck.gl, Cesium.js, D3, i18next |
 | Contracts | Buf, Protobuf, generated TypeScript clients + OpenAPI output |
-| Desktop shell | Tauri v2, Rust, OS keychain, Node.js sidecar (port 46123) |
-| AI layer | Ollama > Groq > Claude > OpenRouter > browser inference |
+| Desktop shell | Tauri v2, Rust, OS keychain, Node.js sidecar (port 46123), CoreLocation IPC |
+| AI layer | Ollama > Groq > Claude > OpenRouter > LM Studio > browser inference |
+| MCP server | @modelcontextprotocol/sdk, 19+ tools, sidecar port/token discovery |
+| Correlation | Unified event schema, controlled taxonomy, directional rules, causal chains |
 | Verification | TypeScript strict, Playwright e2e + visual, sidecar unit tests |
 | CI/CD | Tag-driven desktop publish, release manifest verification, CodeQL |
 
@@ -83,10 +93,11 @@ CSS `-webkit-app-region: drag` is silently ignored. Window dragging requires JS 
 |--------|-------|--------|
 | Product variants | 4 | `src/config/variant.ts` |
 | Desktop build targets | 3 | `package.json` |
-| Default panel inventory | 168 full / 35 tech / 31 finance / 10 happy | `src/config/panels.ts` |
-| God's Eye data layers | 74 | `src/config/panels.ts` |
-| Supported secret keys | 47 | `src-tauri/src/main.rs` |
-| Locales | 19 | `src/locales/` |
+| Default panel inventory | 180 full / 35 tech / 31 finance / 10 happy | `src/config/panels.ts` |
+| God's Eye data layers | 99 | `src/types/index.ts` MapLayers |
+| MCP tools | 19+ | `mcp-server/` |
+| Supported secret keys | 49 | `src-tauri/src/main.rs` |
+| Locales | 31 | `src/locales/` |
 | Generated OpenAPI specs | 21 | `docs/api/` |
 
 ## Variants
@@ -115,9 +126,10 @@ The `happy` variant shares the default dev server (`npm run dev`). See [docs/API
 
 | Guide | Purpose |
 |-------|---------|
-| [docs/API_KEYS.md](docs/API_KEYS.md) | All 47 API keys -- categories, signup URLs, free/paid |
+| [docs/API_KEYS.md](docs/API_KEYS.md) | All 49 API keys -- categories, signup URLs, free/paid |
 | [docs/DESKTOP_CONFIGURATION.md](docs/DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, fallback |
 | [docs/RELEASE_PACKAGING.md](docs/RELEASE_PACKAGING.md) | Desktop packaging and signing workflow |
+| [docs/ALERTS_ENHANCEMENT_ROADMAP.md](docs/ALERTS_ENHANCEMENT_ROADMAP.md) | Alert system architecture and enhancement roadmap |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor workflow, checks, PR expectations |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and scope |
 

@@ -2,9 +2,9 @@
 # Crystal Ball — Alerts Enhancement Roadmap
 
 > **Created**: 2026-03-31
-> **Last updated**: 2026-03-31
-> **Branch**: `claude/enhance-alerts-sorting-rYp3l`
-> **Status**: Active
+> **Last updated**: 2026-04-14
+> **Branch**: multiple (see progress log)
+> **Status**: Active — Phase 0 and Phase 1 largely complete
 
 ---
 
@@ -42,12 +42,12 @@ Transform Crystal Ball's fragmented alert panels into a unified, intelligent ale
 
 ## Roadmap
 
-### Phase 0 — Foundation (P0) `[IN PROGRESS]`
+### Phase 0 — Foundation (P0) `[COMPLETE]`
 
 #### 0.1 Unified Alert Inbox
 
-- [ ] Create `UnifiedAlertInboxPanel` that ingests from all alert sources
-- [ ] Normalize all alert types into a common `UnifiedAlert` interface:
+- [x] Create `UnifiedAlertInboxPanel` that ingests from all alert sources
+- [x] Normalize all alert types into a common `UnifiedAlert` interface:
 
   ```typescript
   interface UnifiedAlert {
@@ -67,40 +67,40 @@ Transform Crystal Ball's fragmented alert panels into a unified, intelligent ale
   }
   ```
 
-- [ ] Sort controls: severity | time | distance | relevance score
-- [ ] Filter bar: by source type, severity level, acknowledged/unread
-- [ ] Acknowledge (dismiss) and pin (star) individual alerts
-- [ ] Badge count for unread alerts in sidebar
-- [ ] Keyboard shortcuts: `J/K` navigate, `A` acknowledge, `P` pin, `1-5` filter severity
+- [x] Sort controls: severity | time | distance | relevance score
+- [x] Filter bar: by source type, severity level, acknowledged/unread
+- [x] Acknowledge (dismiss) and pin (star) individual alerts
+- [x] Badge count for unread alerts in sidebar
+- [x] Keyboard shortcuts: `J/K` navigate, `A` acknowledge, `P` pin, `1-5` filter severity
 
 #### 0.2 Composite Relevance Scoring
 
-- [ ] Create `src/services/relevance-scoring.ts`
-- [ ] Score formula: `severity_weight * proximity_weight * freshness_weight * novelty_weight * source_trust_weight`
+- [x] Create `src/services/relevance-scoring.ts`
+- [x] Score formula: `severity_weight * proximity_weight * freshness_weight * novelty_weight * source_trust_weight`
   - **Severity**: critical=1.0, high=0.8, medium=0.5, low=0.25, info=0.1
   - **Proximity**: 1.0 at 0km, decays to 0.3 at radius limit, 0.2 for no-location alerts
   - **Freshness**: 1.0 at 0min, 0.7 at 1hr, 0.4 at 6hr, 0.2 at 24hr (exponential decay)
   - **Novelty**: 1.0 for first report, 0.5 for 2nd-3rd, 0.3 for 4th+
   - **Source trust**: tier1=1.0, tier2=0.8, tier3=0.6, tier4=0.4
-- [ ] Expose `computeRelevanceScore(alert: UnifiedAlert, userLocation?: UserLocation): number`
-- [ ] Default sort in unified inbox = relevance score descending
-- [ ] Visual indicator: relevance bar or heat dot next to each alert
+- [x] Expose `computeRelevanceScore(alert: UnifiedAlert, userLocation?: UserLocation): number`
+- [x] Default sort in unified inbox = relevance score descending
+- [x] Visual indicator: relevance bar or heat dot next to each alert
 
 ---
 
-### Phase 1 — Intelligence (P1) `[PLANNED]`
+### Phase 1 — Intelligence (P1) `[LARGELY COMPLETE]`
 
 #### 1.1 Cross-Source Proximity Filtering
 
-- [ ] Extend proximity scoring to GDACS earthquakes, NWS weather alerts, OREF sirens, ACLED conflict events, breaking news with coordinates
-- [ ] "Near Me" toggle in unified inbox — filters to alerts within user's chosen radius
-- [ ] Distance badge on every alert that has coordinates
-- [ ] Sort-by-distance option
+- [x] Extend proximity scoring to GDACS earthquakes, NWS weather alerts, OREF sirens, ACLED conflict events, breaking news with coordinates
+- [x] "Near Me" toggle in unified inbox — filters to alerts within user's chosen radius
+- [x] Distance badge on every alert that has coordinates
+- [x] Sort-by-distance option
 
 #### 1.2 Alert Grouping (Situations)
 
-- [ ] Create `src/services/situation-clustering.ts`
-- [ ] Group alerts by: geographic proximity (< 100km) + temporal proximity (< 6hr) + category overlap
+- [x] Create `src/services/situation-clustering.ts`
+- [x] Group alerts by: geographic proximity (< 100km) + temporal proximity (< 6hr) + category overlap
 - [ ] `Situation` interface:
 
   ```typescript
@@ -115,18 +115,18 @@ Transform Crystal Ball's fragmented alert panels into a unified, intelligent ale
   }
   ```
 
-- [ ] Collapsible situation cards in unified inbox
-- [ ] Situation summary: "3 NWS warnings + 1 GDACS red + 2 news articles"
-- [ ] Mini-timeline showing escalation/de-escalation within a situation
+- [x] Collapsible situation cards in unified inbox
+- [x] Situation summary: "3 NWS warnings + 1 GDACS red + 2 news articles"
+- [x] Mini-timeline showing escalation/de-escalation within a situation
 
 #### 1.3 Alert Persistence (IndexedDB)
 
-- [ ] Create `src/services/alert-store.ts` using existing `crystalball_db`
-- [ ] Object store: `unified_alerts` with indexes on `timestamp`, `severity`, `source`, `situationId`
-- [ ] Retain alerts for 30 days (configurable)
-- [ ] Migrate in-memory buffers (AlertCenterPanel's 100-item array, correlation signal history) to IndexedDB-backed
-- [ ] Alert history view: searchable, filterable archive panel
-- [ ] Basic trend stats: "12 critical alerts this week (up from 4 last week)"
+- [x] Create `src/services/alert-store.ts` using existing `crystalball_db`
+- [x] Object store: `unified_alerts` with indexes on `timestamp`, `severity`, `source`, `situationId`
+- [x] Retain alerts for 30 days (configurable)
+- [x] Migrate in-memory buffers (AlertCenterPanel's 100-item array, correlation signal history) to IndexedDB-backed
+- [x] Alert history view: searchable, filterable archive panel
+- [x] Basic trend stats: "12 critical alerts this week (up from 4 last week)"
 
 ---
 
@@ -234,7 +234,17 @@ Data Sources (RSS, NWS, GDACS, OREF, ACLED, ...)
 | Date | Phase | Item | Status | Notes |
 |------|-------|------|--------|-------|
 | 2026-03-31 | — | Roadmap created | Done | Initial analysis of current system |
-| | | | | |
+| 2026-04-07 | 0.1 | Unified alert inbox | Done | Triage bar, multi-pronged reactions, source grouping |
+| 2026-04-07 | 0.2 | Composite relevance scoring | Done | Severity × proximity × freshness × novelty × source trust |
+| 2026-04-07 | 0.1 | Watchlist editor + alerting presets | Done | Quick-add, per-source multipliers |
+| 2026-04-07 | — | Local IDS integration | Done | Suricata + Zeek log ingest with noise filtering |
+| 2026-04-08 | 1.2 | Situation clustering | Done | Directional correlation rules, haversine, causal chains |
+| 2026-04-08 | 1.1 | Cross-source proximity | Done | ~20 intel services bridged into unified alert store |
+| 2026-04-08 | — | LLM-validated correlations | Done | LM Studio provider, negative evidence guards |
+| 2026-04-09 | 1.2 | Story timelines + entity graph | Done | Waves 7-14: temporal chains, story grouping, lifecycle tracking |
+| 2026-04-09 | 1.3 | Alert persistence (IndexedDB) | Done | Alert replay, shift handoff, custom correlation rules |
+| 2026-04-10 | — | Waves 15-18 | Done | Pattern memory, escalation predictor, geofence alerts, threat corridors |
+| 2026-04-13 | — | Alert action animations + sound | Done | Web Audio API sound service, design system migration |
 
 ---
 

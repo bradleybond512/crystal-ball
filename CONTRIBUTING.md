@@ -74,12 +74,14 @@ For release bundles and signing, use [docs/RELEASE_PACKAGING.md](docs/RELEASE_PA
 | `src/components/` | Dashboard panels, settings UI, maps, and modal flows |
 | `src/services/` | Data-fetching, summarization, runtime, analysis, and alert logic |
 | `src/config/` | Variant settings, feeds, map data, static datasets, and commands |
-| `src/locales/` | 18 language bundles and locale metadata |
+| `src/locales/` | 31 language bundles and locale metadata |
 | `src/generated/` | Generated Sebuf clients and server bindings. Do not hand-edit |
 | `proto/` | Protobuf service and message definitions |
 | `server/` | Sebuf handler implementations |
 | `api/` | Vercel routes, gateway entrypoints, and legacy non-RPC endpoints |
-| `src-tauri/` | Tauri desktop app, Rust shell, and local sidecar integration |
+| `src-tauri/` | Tauri desktop app, Rust shell, CoreLocation IPC, and local sidecar integration |
+| `mcp-server/` | MCP server — 19+ tools exposing intelligence feeds to Claude Code |
+| `tools/cb-control/` | Cross-session coordination daemon and iPhone PWA |
 | `docs/` | Public docs plus generated OpenAPI artifacts |
 | `research/` | Repeatable evaluation tracks and results history |
 | `tests/` and `e2e/` | Data tests, runtime tests, and Playwright coverage |

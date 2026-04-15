@@ -2,20 +2,77 @@
 
 All notable changes to Crystal Ball are documented here.
 
-## [Unreleased]
+## [2.10.5] - 2026-04-13
 
-### Changed
+### Added
 
-- Removed the Claude agent surface from desktop/web runtime configuration, UI exports, and API routes to avoid direct Anthropic API-cost exposure in default app flows.
-- Summarization provider chain now uses `Ollama -> Groq -> OpenRouter -> browser` without Anthropic dependencies in runtime settings or sidecar secret validation.
+- **MCP server** — 19+ tools exposing Crystal Ball intelligence feeds to Claude Code and MCP-compatible agents. Aggregate tools (sitrep, threats, markets, cyber, weather, infrastructure, military posture) and granular lookups (conflicts, news, IP, CVE, vessel, flight, sanctions, FRED, SEC, earthquakes, disease, region briefs). Auto-registered in Claude Code via `settings.json`. Feed health monitoring tool.
+- **Strike Package panel** — air formation clustering with importance scoring, route prediction engine (extrapolation + pattern matching), DeckGL map layers with predicted route paths, Cesium globe integration with icons and route polylines.
+- **Military intelligence enhancements** — multi-theater coordination detection, historical conflict pattern matching, strike group presence detection, conflict pattern type library.
+- **Correlation Engine v3 Phase 1** — unified event schema with controlled taxonomy, source-to-taxonomy mapper, UnifiedAlert-to-NormalizedEvent bridge.
+- **Navigation system** — 2D MapLibre navigation panel, 3D God's Vision integration, 4-tier routing engine (OSRM > GraphHopper > Valhalla > straight-line), 3-tier GPS (CoreLocation > browser > manual), street-level tile fallback chain, Navigation HUD overlay, GPS NMEA endpoint in sidecar.
+- **CoreLocation IPC** — native macOS GPS via ObjC FFI from Rust, bypassing WKWebView geolocation restrictions.
+- **cb-control daemon** — cross-session coordination for parallel Claude Code sessions. iPhone PWA for remote control, tmux bridge, FTS5 search, biometric auth, launchd integration.
+- **Apple design system** — design tokens (`design-system.css`), motion utilities, Toast notifications, EmptyState component, ContextualHint tooltips, Apple Maps-style glass card popups, segmented controls for map presets.
+- **WelcomeFlow** — 3-step onboarding modal with contextual hints wired into app init.
+- **Alert system overhaul** (18 waves) — unified alert inbox, composite relevance scoring, situation clustering, shift handoff, alert replay, story timelines, entity co-occurrence graphs, geofence alerts, silence anomaly detection, escalation predictor, pattern memory, source reliability tracking, annotations, bookmarks, briefing export, threat corridor detection, periodicity detector.
+- **Local IDS integration** — Suricata eve.json + fast.log, Zeek log paths, noise filtering for stream events and dev/CDN hits.
+- **God's Vision improvements** — cinematic entry/exit transitions, alert clustering on globe, SIGINT legend chip, map icon overhaul (15 dot layers replaced with realistic icons, Canvas 2D sprite sheet), fighter jet icons with operator colors.
+- **RIPE Atlas** internet connectivity measurements panel and map layer.
+- **World Bank** development indicators wired into periodic data-loader.
+- **LM Studio** as additional intel provider with LLM-validated correlations.
+- **Cmd+K command palette**, StatusOverlay (Cmd+Shift+S), Today view (Cmd+Shift+T).
+
+### Fixed
+
+- Performance death spiral — concurrency limits, circuit breaker fixes, retry cooldowns, exponential backoff with temporal-baseline circuit breaker.
+- God's Vision CPU/GPU burn when inactive — viewer now destroyed on exit, RAF loops paused.
+- Floating polylines — geodesic densification, correct EllipsoidTerrainProvider, proper ColorMaterialProperty wrapping.
+- Storage quota recovery and panic safety.
+- YouTube error 150 embed fallback chain, webcam autoplay, embed-restricted live channels.
+- Rust zombie-process leak in sidecar management.
+- 588/588 tests passing after comprehensive regression fix passes.
 
 ### Security
 
-- Tightened API key policy for trusted browser origins: keyless access now applies to read-only requests only; non-read requests require `X-CrystalBall-Key`.
-- Hardened RSS proxy ingress with explicit origin rejection, method allowlisting (`GET/OPTIONS`), and per-IP Upstash rate limiting.
-- Release workflow now hard-fails publish builds on macOS when Apple signing secrets are missing.
+- postMessage origin hardening, noopener enforcement, CSP-safe image error handling.
+- Vercel analytics guard, Iran events client fix, CSP tightening.
+- YouTube embed postMessage hardening.
+
+### Performance
+
+- LruCache utility for all bounded caches, mousemove throttling with rafSchedule.
+- Clock + sidebar-heat ticks skip when app is inactive.
+- Comprehensive bundle cleanup, regex caching, resource leak fixes.
 
 ---
+
+## [2.8.0] - 2026-04-07
+
+### Added
+
+- **Unified alert system foundation** — triage bar, multi-pronged reactions, IDS ingest, snooze with re-escalation, ghost-aware reactions, source grouping, watchlist editor, alerting presets, correlation synthesis.
+- **Alert intelligence layers** — sidebar heat auto-promote, Today view, activity log, map pulse beacons for hot alerts, debug ring buffer, quiet hours, watchlist quick-add, feed earthquakes and cyber into store.
+- **Correlation engine overhaul** — directional rules, haversine distance, causal chains, confidence scoring, UI feedback, source trust, entity dedup, causal-gated correlator, situation bridge, negative evidence guards, magnitude-aware radius, per-rule auto-disable.
+- **Forecast fusion** with silence detection and HUD display.
+- **Source feedback learning**, chat memory + activity tracking, proactive digest.
+- **Power-grid + comms-health** alert sources and blackout-signature detector.
+- **LM Studio intel provider** with LLM-validated correlations.
+- **Liveness indicators** — per-panel heartbeat, fresh-flash, just-in rail, LLM narratives, severity-tier sidebar.
+
+### Changed
+
+- Removed the Claude agent surface from desktop/web runtime configuration to avoid direct Anthropic API-cost exposure.
+- Default radar spatial ping set to OFF.
+
+### Security
+
+- Tightened API key policy: keyless access now read-only; non-read requests require `X-CrystalBall-Key`.
+- Hardened RSS proxy ingress with origin rejection, method allowlisting, per-IP rate limiting.
+
+---
+
+## [2.7.4] - 2026-03-25
 
 ## [2.7.2] - 2026-03-24
 
@@ -52,57 +109,6 @@ All notable changes to Crystal Ball are documented here.
 ### Changed
 
 - Version metadata was advanced to `2.7.3` across Node and Tauri release files to publish the repaired desktop release pipeline.
-
----
-
-## [2.7.2] - 2026-03-24
-
-### Fixed
-
-- CI typecheck compatibility for XML parser callbacks in aviation and arXiv ingestion paths, preventing release pipeline failures against stricter callback signatures.
-- Release docs no longer pin stale download/version strings in README and docs badges.
-
-### Changed
-
-- Added release-doc sync regression coverage so docs and changelog stay aligned with `package.json` version updates.
-
----
-
-## [2.7.4] - 2026-03-25
-
-### Fixed
-
-- Restored TypeScript QA gate compatibility by aligning `tsconfig.json` `ignoreDeprecations` with the shipped TypeScript compiler.
-- Repaired release push guard compatibility so `scripts/release-doctor.mjs` accepts and honors remote selection from guarded pre-push flows.
-
-### Changed
-
-- Advanced desktop release metadata to `2.7.4` across Node and Tauri versioned files for a clean tagged release after post-`2.7.3` hardening fixes.
-
----
-
-## [2.7.3] - 2026-03-25
-
-### Fixed
-
-- Release automation now triggers required pull request checks for the release branch before merge.
-
-### Changed
-
-- Version metadata was advanced to `2.7.3` across Node and Tauri release files to publish the repaired desktop release pipeline.
-
----
-
-## [2.7.2] - 2026-03-24
-
-### Fixed
-
-- CI typecheck compatibility for XML parser callbacks in aviation and arXiv ingestion paths, preventing release pipeline failures against stricter callback signatures.
-- Release docs no longer pin stale download/version strings in README and docs badges.
-
-### Changed
-
-- Added release-doc sync regression coverage so docs and changelog stay aligned with `package.json` version updates.
 
 ---
 

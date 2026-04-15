@@ -4,7 +4,7 @@
 
 - **App name**: Crystal Ball
 - **Bundle ID**: `com.bradleybond.crystalball`
-- **Stack**: Tauri 2 + TypeScript + Vite + DeckGL + Node.js sidecar (port 46123)
+- **Stack**: Tauri 2 + TypeScript + Vite + DeckGL + Cesium.js + Node.js sidecar (port 46123) + MCP server
 
 ## Commands
 
@@ -68,6 +68,9 @@ src/                        # TypeScript frontend (Vite)
     panels.ts               # FULL_PANELS, PANEL_CATEGORY_MAP, FULL_MAP_LAYERS
   services/
     mode-manager.ts         # AppMode: peace/finance/war/disaster/ghost
+    alert-store.ts          # unified alert inbox, IndexedDB persistence
+    correlation-engine.ts   # directional rules, causal chains, situation clustering
+    navigation.ts           # GPS tracker, routing engine, tile provider
     runtime-config.ts       # API key definitions, feature toggles
     settings-constants.ts   # HUMAN_LABELS, SIGNUP_URLS, SETTINGS_CATEGORIES
     analytics.ts            # PostHog (suppressed in Ghost Mode)
@@ -75,6 +78,11 @@ src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123
   capabilities/default.json     # Tauri capability allowlist
   src/main.rs                   # SUPPORTED_SECRET_KEYS, keychain service "crystal-ball"
+mcp-server/                     # MCP server — 19+ tools for Claude Code integration
+  src/index.ts                  # server entry point, tool registration
+  src/tools/                    # aggregate + granular tool implementations
+  src/sidecar-client.ts         # port/token discovery, HTTP helpers
+tools/cb-control/               # cross-session coordination daemon (port 46987)
 ```
 
 ## App Modes (`src/services/mode-manager.ts`)
@@ -108,7 +116,7 @@ Ghost Mode: polling ×5, analytics suppressed, notifications suppressed, dark cr
 
 ## Settings / API Keys
 
-API keys entered via gear icon → API Keys tab. None embed the brand in their names; all 47 supported keys are generic API names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc).
+API keys entered via gear icon → API Keys tab. None embed the brand in their names; all 49 supported keys are generic API names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc).
 
 ## Secret Scan Guardrail
 

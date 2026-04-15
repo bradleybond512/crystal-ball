@@ -21,9 +21,12 @@ Crystal Ball currently ships:
 
 - `4` web variants
 - `3` desktop build targets
+- `180` panels (full variant)
+- `99` God's Eye map layers
+- `19+` MCP tools for Claude Code integration
 - `21` generated OpenAPI specs
-- `19` locale bundles
-- `46` desktop secret slots backed by the OS keychain
+- `31` locale bundles
+- `49` desktop secret slots backed by the OS keychain
 
 Those numbers come from the current codebase, not aspirational copy.
 
@@ -40,11 +43,17 @@ Those numbers come from the current codebase, not aspirational copy.
 
 | Guide | Focus |
 | --- | --- |
-| [API_KEYS.md](API_KEYS.md) | All 46 API keys — categories, signup URLs, free/paid status |
+| [API_KEYS.md](API_KEYS.md) | All 49 API keys — categories, signup URLs, free/paid status |
 | [DESKTOP_CONFIGURATION.md](DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, and degraded behavior |
 | [API_KEY_DEPLOYMENT.md](API_KEY_DEPLOYMENT.md) | Vercel API access rules, trusted origins, and key requirements |
 | [RELAY_PARAMETERS.md](RELAY_PARAMETERS.md) | Relay environment variables for AIS and OpenSky paths |
 | [RELEASE_PACKAGING.md](RELEASE_PACKAGING.md) | Tauri packaging, signing, and clean-machine validation |
+
+## Intelligence and Integration Docs
+
+| Guide | Focus |
+| --- | --- |
+| [ALERTS_ENHANCEMENT_ROADMAP.md](ALERTS_ENHANCEMENT_ROADMAP.md) | Alert system architecture, unified inbox, correlation, and enhancement roadmap |
 
 ## API and Extension Docs
 

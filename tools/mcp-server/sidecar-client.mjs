@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 const DEFAULT_DATA_DIR = join(
   homedir(),
   'Library',
-  'Application Support',
+  'Logs',
   'com.bradleybond.crystalball',
 );
 

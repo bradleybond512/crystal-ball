@@ -6,6 +6,7 @@ import { makeAggregateTools } from './tools/aggregate.mjs';
 import { makeGranularTools } from './tools/granular.mjs';
 import { makeFoundationTools, schemas as foundationSchemas } from './tools/foundation.mjs';
 import { makeIntelligenceTools, schemas as intelligenceSchemas } from './tools/intelligence.mjs';
+import { makeStatefulTools, schemas as statefulSchemas } from './tools/stateful.mjs';
 import { createStorage } from './storage.mjs';
 
 const client = createSidecarClient();
@@ -14,6 +15,7 @@ const aggregate = makeAggregateTools(client);
 const granular = makeGranularTools(client);
 const foundation = makeFoundationTools(client);
 const intelligence = makeIntelligenceTools(client, storage);
+const stateful = makeStatefulTools(client, storage);
 
 const server = new McpServer(
   { name: 'crystalball', version: '0.1.0' },
@@ -175,6 +177,16 @@ server.registerTool('correlate', intelligenceSchemas.correlate, async (args) => 
 server.registerTool('trend', intelligenceSchemas.trend, async (args) => textResult(await intelligence.trend(args)));
 
 server.registerTool('anomaly_scan', intelligenceSchemas.anomaly_scan, async (args) => textResult(await intelligence.anomaly_scan(args)));
+
+// ---- Stateful Tools (Phase 3) ----
+
+server.registerTool('watchlist_manage', statefulSchemas.watchlist_manage, async (args) => textResult(await stateful.watchlist_manage(args)));
+
+server.registerTool('watchlist_check', statefulSchemas.watchlist_check, async (args) => textResult(await stateful.watchlist_check(args)));
+
+server.registerTool('alert_rules_manage', statefulSchemas.alert_rules_manage, async (args) => textResult(await stateful.alert_rules_manage(args)));
+
+server.registerTool('alert_check', statefulSchemas.alert_check, async (args) => textResult(await stateful.alert_check(args)));
 
 // ---- Start ----
 

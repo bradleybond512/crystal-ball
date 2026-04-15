@@ -135,6 +135,47 @@ const COMPOUND_RISK_PATTERNS: {
  description: 'Hybrid threat pattern: elevated cyber activity coinciding with infrastructure stress',
  severityBoost: true,
   },
+  // ── Weather cascade compound patterns ──────────────────────────────────
+  {
+ categories: ['weather', 'conflict'],
+ description: 'Severe weather in active conflict zone — humanitarian crisis acceleration, evacuation complications',
+ severityBoost: true,
+  },
+  {
+ categories: ['weather', 'maritime'],
+ description: 'Severe weather disrupting maritime operations — shipping delays and safety risk',
+ severityBoost: false,
+  },
+  {
+ categories: ['flood', 'conflict'],
+ description: 'Flooding in conflict zone — displacement compounding, aid delivery blocked',
+ severityBoost: true,
+  },
+  {
+ categories: ['seismic', 'disease'],
+ description: 'Earthquake during disease outbreak — collapsed healthcare, contaminated water',
+ severityBoost: true,
+  },
+  {
+ categories: ['wildfire', 'grid'],
+ description: 'Wildfire threatening power infrastructure — PSPS and cascading grid failure risk',
+ severityBoost: true,
+  },
+  {
+ categories: ['weather', 'food'],
+ description: 'Severe weather in food-insecure region — harvest destruction, supply chain break',
+ severityBoost: false,
+  },
+  {
+ categories: ['conflict', 'cyber'],
+ description: 'Active conflict with concurrent cyber operations — hybrid warfare pattern',
+ severityBoost: true,
+  },
+  {
+ categories: ['nuclear', 'conflict'],
+ description: 'Nuclear facility near active conflict — catastrophic contamination risk',
+ severityBoost: true,
+  },
 ];
 
 function findMatchingPattern(categories: HazardCategory[]): string {

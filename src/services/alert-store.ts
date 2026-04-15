@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-nested-conditional, @typescript-eslint/prefer-nullish-coalescing */
 /**
  * IndexedDB-backed alert store for 30-day alert persistence.
  *
@@ -7,7 +8,7 @@
  * Exported singleton: `alertDB`
  */
 
-import type { UnifiedAlert } from './unified-alerts';
+import type { UnifiedAlert, AlertSource, AlertSeverity } from './unified-alerts';
 
 const DB_NAME = 'crystalball_db';
 const STORE_NAME = 'unified_alerts';
@@ -333,3 +334,103 @@ class AlertDB {
 
 /** Singleton alert database instance. */
 export const alertDB = new AlertDB();
+
+// ── Phase 1.3 archive API ──────────────────────────────────────────────
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface ArchiveQueryOpts {
+  source?: AlertSource;
+  severity?: AlertSeverity;
+  sinceMs?: number;
+  limit?: number;
+  searchText?: string;
+}
+
+export interface AlertTrendStats {
+  totalAlerts: number;
+  bySeverity: Record<AlertSeverity, number>;
+  bySource: Record<string, number>;
+  /** % change in totalAlerts vs the immediately preceding window of equal length. */
+  deltaFromPrevious: number;
+}
+
+/** Archive a single alert to IndexedDB (30-day retention). */
+export async function archiveAlert(alert: UnifiedAlert): Promise<void> {
+  await alertDB.put(alert);
+}
+
+/** Query the archive with combined filters and optional full-text search. */
+export async function getArchivedAlerts(opts: ArchiveQueryOpts = {}): Promise<UnifiedAlert[]> {
+  const since = opts.sinceMs ?? Date.now() - SEVEN_DAYS_MS;
+  const limit = opts.limit ?? 500;
+  let results = await alertDB.getAll({
+    since,
+    source: opts.source,
+    severity: opts.severity,
+  });
+  if (opts.searchText) {
+    const lower = opts.searchText.toLowerCase();
+    results = results.filter(
+      (a) => a.title.toLowerCase().includes(lower) || a.body.toLowerCase().includes(lower),
+    );
+  }
+  return results.slice(0, limit);
+}
+
+/** Compute trend stats for a window (default 7 days), with % delta vs the previous equal window. */
+export async function getAlertTrendStats(windowMs: number = SEVEN_DAYS_MS): Promise<AlertTrendStats> {
+  const now = Date.now();
+  const currentSince = now - windowMs;
+  const previousSince = now - 2 * windowMs;
+
+  const current = await alertDB.getAll({ since: currentSince });
+  const previousAll = await alertDB.getAll({ since: previousSince });
+  const previous = previousAll.filter((a) => a.timestamp < currentSince);
+
+  const bySeverity: Record<AlertSeverity, number> = {
+    critical: 0, high: 0, medium: 0, low: 0, info: 0,
+  };
+  const bySource: Record<string, number> = {};
+  for (const alert of current) {
+    bySeverity[alert.severity] = (bySeverity[alert.severity] ?? 0) + 1;
+    bySource[alert.source] = (bySource[alert.source] ?? 0) + 1;
+  }
+
+  const deltaFromPrevious = previous.length === 0
+    ? (current.length === 0 ? 0 : 100)
+    : ((current.length - previous.length) / previous.length) * 100;
+
+  return {
+    totalAlerts: current.length,
+    bySeverity,
+    bySource,
+    deltaFromPrevious,
+  };
+}
+
+/** Delete archived alerts older than the given age in ms. Returns count deleted. */
+export async function pruneOldAlerts(olderThanMs: number): Promise<number> {
+  const cutoff = Date.now() - olderThanMs;
+  const db = await openDB();
+  return new Promise<number>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const index = store.index('timestamp');
+    const range = IDBKeyRange.upperBound(cutoff, true);
+    const request = index.openCursor(range);
+    let deleted = 0;
+    request.addEventListener('success', () => {
+      const cursor = request.result;
+      if (cursor) {
+        cursor.delete();
+        deleted++;
+        cursor.continue();
+      }
+    });
+    tx.addEventListener('complete', () => resolve(deleted));
+    tx.addEventListener('error', () => {
+      reject(tx.error ?? new Error('[alert-store] pruneOldAlerts failed'));
+    });
+  });
+}

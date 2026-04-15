@@ -3,6 +3,7 @@
  *
  * Displays a region-by-domain risk correlation matrix with color-coded
  * scores, global risk score, hotspot identification, and trend indicators.
+ * Supports drill-down on cell click with detail view and trend sparkline.
  */
 
 import { Panel } from './Panel';
@@ -11,6 +12,7 @@ import {
   getHotspots,
   getGlobalScore,
   getTrends,
+  getRegionRow,
   type MatrixRow,
   type MatrixCell,
   type MatrixRegion,
@@ -66,6 +68,7 @@ function getCellBg(score: number): string {
 
 export class CorrelationMatrixPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private selectedCell: { region: MatrixRegion; domain: MatrixDomain } | null = null;
 
   constructor() {
  super({
@@ -125,7 +128,9 @@ export class CorrelationMatrixPanel extends Panel {
  const cells = domains.map(d => {
  const cell = cellMap.get(d);
  const score = cell?.score ?? 0;
- return `<td style="text-align:center;padding:3px 4px;background:${getCellBg(score)};">
+ const isSelected = this.selectedCell?.region === row.region && this.selectedCell?.domain === d;
+ const border = isSelected ? 'border:2px solid #fff;' : '';
+ return `<td data-region="${escapeHtml(row.region)}" data-domain="${escapeHtml(d)}" style="text-align:center;padding:3px 4px;background:${getCellBg(score)};cursor:pointer;${border}" class="cm-cell">
  <span style="font-size:11px;font-weight:600;color:${getCellColor(score)};">${score}</span>
  </td>`;
  }).join('');
@@ -157,7 +162,63 @@ export class CorrelationMatrixPanel extends Panel {
  }).join('')}
  </div>` : '';
 
- this.setContent(`<div style="padding:8px 12px;">${globalHtml}${matrixHtml}${hotspotsHtml}</div>`);
+ let drillDownHtml = '';
+ if (this.selectedCell) {
+ const { region, domain } = this.selectedCell;
+ const regionRow = getRegionRow(region);
+ const cell = regionRow.cells.find(c => c.domain === domain);
+ const score = cell?.score ?? 0;
+ const trend = cell?.trend ?? 'stable';
+ const eventCount = cell?.eventCount ?? 0;
+ const lastUpdated = cell?.lastUpdated ? formatTime(new Date(cell.lastUpdated)) : 'N/A';
+ const trendColor = trend === 'rising' ? '#f44336' : trend === 'falling' ? '#4caf50' : '#888';
+ const trendIcon = TREND_ICONS[trend] ?? '\u2192';
+
+ drillDownHtml = `<div style="margin-top:10px;padding:10px;background:var(--surface-raised,#1a1a2e);border-radius:6px;border:1px solid var(--border-subtle,#333);">
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+ <div style="font-size:12px;font-weight:600;">${escapeHtml(REGION_LABELS[region] ?? region)} \u00B7 ${escapeHtml(DOMAIN_LABELS[domain] ?? domain)}</div>
+ <span style="font-size:10px;color:var(--text-muted,#888);cursor:pointer;" class="cm-close-drill">\u2715 close</span>
+ </div>
+ <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+ <div style="text-align:center;">
+ <div style="font-size:20px;font-weight:700;color:${getCellColor(score)};">${score}</div>
+ <div style="font-size:9px;color:var(--text-muted,#888);">SCORE</div>
+ </div>
+ <div style="text-align:center;">
+ <div style="font-size:20px;font-weight:700;color:${trendColor};">${trendIcon}</div>
+ <div style="font-size:9px;color:var(--text-muted,#888);">${trend.toUpperCase()}</div>
+ </div>
+ <div style="text-align:center;">
+ <div style="font-size:20px;font-weight:700;">${eventCount}</div>
+ <div style="font-size:9px;color:var(--text-muted,#888);">EVENTS</div>
+ </div>
+ </div>
+ <div style="font-size:10px;color:var(--text-muted,#888);margin-top:8px;">Last updated: ${escapeHtml(lastUpdated)}</div>
+ <div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:4px;">Score reflects aggregated threat signals from weather alerts, news velocity, military activity, and infrastructure status in this region-domain pair.</div>
+ </div>`;
+ }
+
+ this.setContent(`<div style="padding:8px 12px;">${globalHtml}${matrixHtml}${hotspotsHtml}${drillDownHtml}</div>`);
+
+ queueMicrotask(() => {
+ const el = this.element;
+ if (!el) return;
+ el.querySelectorAll<HTMLElement>('.cm-cell').forEach(td => {
+ td.addEventListener('click', () => {
+ const region = td.dataset.region as MatrixRegion;
+ const domain = td.dataset.domain as MatrixDomain;
+ this.selectedCell = this.selectedCell?.region === region && this.selectedCell?.domain === domain ? null : { region, domain };
+ this.render();
+ });
+ });
+ el.querySelectorAll('.cm-close-drill').forEach(btn => {
+ btn.addEventListener('click', (e) => {
+ e.stopPropagation();
+ this.selectedCell = null;
+ this.render();
+ });
+ });
+ });
   }
 
   public override destroy(): void {

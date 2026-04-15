@@ -113,6 +113,22 @@ const CAUSAL_RULES: readonly CausalRule[] = [
   { cause: 'radiation',  effect: 'travel-advisory', maxLagMs: 48 * 60 * 60_000, radiusKm: 500 },
   // Fire → air quality downwind
   { cause: 'fire',       effect: 'air-quality',     maxLagMs: 24 * 60 * 60_000, radiusKm: 800 },
+  // ── Weather cascade rules ──────────────────────────────────────────────
+  // NWS severe weather → grid stress
+  { cause: 'nws',        effect: 'power-grid',      maxLagMs: 12 * 60 * 60_000, radiusKm: 600 },
+  // NWS severe weather → communications disruption
+  { cause: 'nws',        effect: 'comms-health',    maxLagMs: 12 * 60 * 60_000, radiusKm: 500 },
+  // GDACS disaster → supply chain / maritime disruption
+  { cause: 'gdacs',      effect: 'maritime',         maxLagMs: 48 * 60 * 60_000, radiusKm: 1500 },
+  // Earthquake → infrastructure cascade
+  { cause: 'earthquake', effect: 'power-grid',      maxLagMs: 6 * 60 * 60_000, radiusKm: 300, radiusFn: quakeRadius(300) },
+  { cause: 'earthquake', effect: 'comms-health',    maxLagMs: 6 * 60 * 60_000, radiusKm: 300, radiusFn: quakeRadius(300) },
+  // Cyclone → air quality (wind-driven debris, industrial damage)
+  { cause: 'cyclone',    effect: 'air-quality',     maxLagMs: 48 * 60 * 60_000, radiusKm: 500 },
+  // Disease → breaking news (major outbreak always becomes news)
+  { cause: 'disease',    effect: 'breaking-news',   maxLagMs: 48 * 60 * 60_000, radiusKm: 5000 },
+  // NWS severe weather → aviation hazards
+  { cause: 'nws',        effect: 'aviation-hazard', maxLagMs: 6 * 60 * 60_000, radiusKm: 500 },
 ];
 
 // ── Negative evidence decay ──────────────────────────────────────────────

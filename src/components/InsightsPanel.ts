@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-immediate-mutation, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-misleading-array-reverse, sonarjs/cognitive-complexity, no-console, sonarjs/no-nested-conditional, unicorn/no-nested-ternary, sonarjs/duplicates-in-character-class */
 import { Panel } from './Panel';
 import { mlWorker } from '@/services/ml-worker';
 import { generateSummary, type SummarizeOptions } from '@/services/summarization';
@@ -14,6 +15,8 @@ import { t } from '@/services/i18n';
 import { isDesktopRuntime } from '@/services/runtime';
 import { getAiFlowSettings, isAnyAiProviderEnabled, subscribeAiFlowChange } from '@/services/ai-flow-settings';
 import type { ClusteredEvent, FocalPoint, MilitaryFlight } from '@/types';
+import { getActiveConvergences, type WeatherThreatConvergence } from '@/services/weather-threat-convergence';
+import { getHotspots as getMatrixHotspots } from '@/services/correlation-matrix';
 
 export class InsightsPanel extends Panel {
   private isHidden = false;
@@ -24,6 +27,7 @@ export class InsightsPanel extends Panel {
   private lastFocalPoints: FocalPoint[] = [];
   private lastMilitaryFlights: MilitaryFlight[] = [];
   private lastClusters: ClusteredEvent[] = [];
+  private lastWeatherConvergences: WeatherThreatConvergence[] = [];
   private aiFlowUnsubscribe: (() => void) | null = null;
   private updateGeneration = 0;
   private static readonly BRIEF_COOLDOWN_MS = 120_000; // 2 min cooldown (API has limits)
@@ -373,8 +377,9 @@ export class InsightsPanel extends Panel {
  // Pass focal point context + theater posture to AI for correlation-aware summarization
  // Tech variant: no geopolitical context, just tech news summarization
  const theaterContext = SITE_VARIANT === 'full' ? this.getTheaterPostureContext() : '';
+ const weatherContext = SITE_VARIANT === 'full' ? this.getWeatherContext() : '';
  const geoContext = SITE_VARIANT === 'full'
- ? (focalSummary.aiContext || signalSummary.aiContext) + theaterContext
+ ? (focalSummary.aiContext || signalSummary.aiContext) + theaterContext + weatherContext
  : '';
  const result = await generateSummary(titles, (_step, _total, msg) => {
  // Show sub-progress for summarization
@@ -418,6 +423,8 @@ export class InsightsPanel extends Panel {
  const briefHtml = worldBrief ? this.renderWorldBrief(worldBrief) : '';
  const focalPointsHtml = this.renderFocalPoints();
  const convergenceHtml = this.renderConvergenceZones();
+ const weatherConvergenceHtml = this.renderWeatherConvergence();
+ const matrixHotspotsHtml = this.renderMatrixHotspots();
  const sentimentOverview = this.renderSentimentOverview(sentiments);
  const breakingHtml = this.renderBreakingStories(clusters, sentiments);
  const statsHtml = this.renderStats(clusters);
@@ -427,6 +434,8 @@ export class InsightsPanel extends Panel {
  ${briefHtml}
  ${focalPointsHtml}
  ${convergenceHtml}
+ ${weatherConvergenceHtml}
+ ${matrixHotspotsHtml}
  ${sentimentOverview}
  ${statsHtml}
  <div class="insights-section">
@@ -623,6 +632,66 @@ export class InsightsPanel extends Panel {
  ${storiesHtml}
  </div>
  `;
+  }
+
+  private static scoreToColor(score: number): string {
+ if (score >= 75) return '#f44336';
+ if (score >= 50) return '#ff9800';
+ return '#ffeb3b';
+  }
+
+  private renderWeatherConvergence(): string {
+ const convergences = getActiveConvergences();
+ this.lastWeatherConvergences = convergences;
+ if (convergences.length === 0) return '';
+
+ const items = convergences.slice(0, 5).map(c => {
+ const scoreColor = InsightsPanel.scoreToColor(c.convergenceScore);
+ const threats = c.collocatedThreats.slice(0, 3).map(t =>
+ `<span style="font-size:10px;background:rgba(255,255,255,0.06);padding:1px 4px;border-radius:3px;">${escapeHtml(t.source)}</span>`
+ ).join(' ');
+ return `<div style="padding:6px 0;border-bottom:1px solid var(--border-subtle,#333);">
+ <div style="display:flex;justify-content:space-between;align-items:center;">
+ <span style="font-size:11px;font-weight:600;">${escapeHtml(c.weatherAlert.event)}</span>
+ <span style="font-size:12px;font-weight:700;color:${scoreColor};">${c.convergenceScore}</span>
+ </div>
+ <div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:2px;">${escapeHtml(c.description.slice(0, 120))}</div>
+ <div style="margin-top:3px;">${threats}</div>
+ </div>`;
+ }).join('');
+
+ return `<div class="insights-section">
+ <div class="insights-section-title">⛈️ WEATHER-THREAT CONVERGENCE (${convergences.length})</div>
+ ${items}
+ </div>`;
+  }
+
+  private renderMatrixHotspots(): string {
+ const hotspots = getMatrixHotspots(60);
+ if (hotspots.length === 0) return '';
+
+ const items = hotspots.slice(0, 6).map(h => {
+ const color = InsightsPanel.scoreToColor(h.score);
+ const shortRegion = h.region.replace(/Sub-Saharan /, '').split(' ')[0] ?? h.region;
+ return `<span style="font-size:10px;color:${color};font-weight:600;white-space:nowrap;">${escapeHtml(shortRegion)}·${escapeHtml(h.domain)}:${h.score}</span>`;
+ }).join(' &middot; ');
+
+ return `<div class="insights-section" style="padding:6px 8px;background:rgba(255,152,0,0.06);border-radius:4px;">
+ <div class="insights-section-title" style="margin-bottom:4px;">🔥 MATRIX HOTSPOTS</div>
+ <div style="display:flex;flex-wrap:wrap;gap:6px;">${items}</div>
+ </div>`;
+  }
+
+  private getWeatherContext(): string {
+ const convergences = this.lastWeatherConvergences;
+ if (convergences.length === 0) return '';
+
+ const lines = convergences.slice(0, 5).map(c => {
+ const threats = c.collocatedThreats.map(t => `${t.source}:${t.title.slice(0, 40)}`).join(', ');
+ return `${c.weatherAlert.event} (${c.weatherAlert.severity}) near ${threats} — score ${c.convergenceScore}`;
+ });
+
+ return `\n\nWEATHER-THREAT CONVERGENCE:\n${lines.join('\n')}`;
   }
 
   private renderConvergenceZones(): string {

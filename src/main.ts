@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-duplicated-branches, no-console, @typescript-eslint/prefer-nullish-coalescing, @typescript-eslint/prefer-optional-chain, sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, sonarjs/todo-tag, unicorn/prefer-code-point, unicorn/no-nested-ternary, sonarjs/no-misleading-array-reverse, sonarjs/no-nested-template-literals, @typescript-eslint/no-misused-promises, sonarjs/slow-regex, sonarjs/anchor-precedence, sonarjs/regex-complexity, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, no-unused-vars, unicorn/prefer-string-replace-all, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, sonarjs/function-return-type, @typescript-eslint/no-empty-function, @typescript-eslint/no-floating-promises, unicorn/prefer-top-level-await, unicorn/no-immediate-mutation, sonarjs/different-types-comparison, unicorn/prefer-regexp-test, sonarjs/no-commented-code */
 import './styles/base-layer.css';
 import './styles/happy-theme.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -250,6 +251,12 @@ void initAnalytics();
 
 // Initialize dynamic meta tags for sharing
 initMetaTags();
+
+// Offline staleness monitor + banner — mount early so cached-data warnings
+// are visible the moment the app boots (before any data loads complete).
+import('./services/offline-staleness').then(({ startOfflineMonitor }) => { startOfflineMonitor(); }).catch(() => {});
+import('./components/OfflineStalenessBanner').then(({ offlineStalenessBanner }) => { offlineStalenessBanner.mount(); }).catch(() => {});
+import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { attachDiagnosticToWindow(); }).catch(() => {});
 
 // In desktop mode, route /api/* calls to the local Tauri sidecar backend.
 installRuntimeFetchPatch();

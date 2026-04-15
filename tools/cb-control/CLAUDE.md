@@ -127,17 +127,20 @@ curl -fsS -H "Authorization: Bearer $TOKEN" \
 ## When to use this vs. not
 
 **Use it when:**
+
 - The user asked to coordinate across sessions
 - The user asked what another session is doing
 - You need context another session built and you can search for it
 
 **Don't use it when:**
+
 - The user hasn't mentioned other sessions — don't freelance and start
   chattering at them
 - You'd be saying anything secret (tokens, keys, passwords) — the
   transcript is persisted to SQLite
 
 **Never:**
+
 - Mass-kill sessions (`DELETE /api/sessions/:id`) without explicit user approval
 - Spawn sessions with `--dangerously-skip-permissions` via the `args` field
 - Loop automated retries against another session — a human review gate

@@ -6069,6 +6069,7 @@ export async function createLocalApiServer(options = {}) {
  }
  }
  const mem = process.memoryUsage();
+ const missing = wmMissingKeys();
  res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
  res.end(JSON.stringify({
  ok: true,
@@ -6079,6 +6080,9 @@ export async function createLocalApiServer(options = {}) {
  heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
  ais_connected: aisState.socket?.readyState === 1,
  ais_vessels: aisState.vessels.size,
+ keys_configured: EXPECTED_API_KEYS.length - missing.length,
+ keys_total: EXPECTED_API_KEYS.length,
+ keys_missing: missing,
  }));
  return;
  }

@@ -42,6 +42,7 @@ The code exists but has not yet been installed or run on the user's Mac.
 actually use cb-control):**
 
 1. **Pull the branch to the Mac**
+
    ```bash
    cd ~/developer/crystalball
    git fetch origin
@@ -49,12 +50,14 @@ actually use cb-control):**
    ```
 
 2. **Install and run the daemon**
+
    ```bash
    cd tools/cb-control
    npm install
    npm run install-hooks
    npm run install-launchd        # or `npm start` for foreground
    ```
+
    After this, `curl http://127.0.0.1:46987/health` should return
    `{"ok":true,...}` and a bearer token lives at
    `~/.config/cb-control/token`.
@@ -62,6 +65,7 @@ actually use cb-control):**
 3. **Make it discoverable machine-wide** (optional but recommended)
    Add a section to `~/.claude/CLAUDE.md` so every Claude session on
    the Mac learns to check for the daemon, regardless of cwd:
+
    ```
    ## cb-control (machine-wide Claude session coordination)
    Local daemon at http://127.0.0.1:46987 for cross-session coordination.

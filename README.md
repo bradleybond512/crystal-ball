@@ -74,12 +74,13 @@ A single inbox that ingests from every alert source -- NWS, GDACS, OREF (Israel 
 
 ## MCP Server -- Claude Code Integration
 
-Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds. 19 tools registered automatically when you open a session in this repo.
+Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds. 20 tools registered automatically when you open a session in this repo.
 
 **Aggregate tools** (broad awareness):
 
 | Command | What you get |
 |---------|-------------|
+| `check_feed_health` | Pre-flight diagnostic: sidecar status, feed health, API key inventory |
 | `get_sitrep` | Top conflicts, market moves, weather alerts, service health |
 | `get_threat_landscape` | ACLED conflicts, ThreatFox IOCs, CISA KEVs, crisis alerts |
 | `get_market_overview` | Indices, crypto, ETF flows, Fear & Greed, FRED macro signals |
@@ -92,12 +93,12 @@ Crystal Ball ships an MCP server that gives Claude Code direct access to all int
 
 **Slash commands** built on top of MCP tools:
 
-- `/sitrep` -- daily intelligence brief across all domains
+- `/sitrep` -- full-spectrum presidential-style daily intelligence brief. 3-phase intelligence cycle: parallel collection across all 20 tools, triage & enrichment on elevated signals, analyst-voice synthesis. Personalized to your home location, platforms, and watchlist tickers. Sections: Source Status, Local Conditions, BLUF, Conflicts, Military Posture, Threat Landscape, Cyber, Markets & Economy, Sanctions, Weather & Space Weather, Seismic, Infrastructure, Health, News Wire, and a cross-domain Nexus analysis.
 - `/watch Strait of Hormuz` -- regional brief for any location
 - `/threat-brief` -- top 5 threats with trajectory and recommended watches
 - `/market-pulse` -- markets snapshot with yield curve and Fed balance sheet
 
-The MCP server talks to the Crystal Ball sidecar over a bearer-authenticated localhost port. Crystal Ball must be running. See [docs/MCP_PIPELINE.md](docs/MCP_PIPELINE.md) for the full pipeline architecture.
+The MCP server talks to the Crystal Ball sidecar over a bearer-authenticated localhost port. Crystal Ball must be running.
 
 ---
 
@@ -206,7 +207,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | God's Vision map layers | 70 (26 on by default) | `src/types/index.ts` MapLayers |
 | Panel categories | 19 | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
-| MCP tools | 19 | `tools/mcp-server/index.mjs` |
+| MCP tools | 20 | `tools/mcp-server/index.mjs` |
 | Supported secret keys | 49 | `src-tauri/src/main.rs` |
 | Locales | 19 | `src/locales/` |
 | Generated OpenAPI specs | 21 | `docs/api/` |
@@ -236,7 +237,7 @@ API keys are optional -- most panels degrade gracefully without them. Configure 
 
 | Guide | Purpose |
 |-------|---------|
-| [docs/MCP_PIPELINE.md](docs/MCP_PIPELINE.md) | How Claude Code gathers intelligence via MCP -- pipeline, auth, tools |
+| [docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md](docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md) | Enhanced `/sitrep` design -- 3-phase intelligence cycle, personalization, all 20 MCP tools |
 | [docs/API_KEYS.md](docs/API_KEYS.md) | All 49 API keys -- categories, signup URLs, free/paid |
 | [docs/DESKTOP_CONFIGURATION.md](docs/DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, fallback behavior |
 | [docs/RELEASE_PACKAGING.md](docs/RELEASE_PACKAGING.md) | Desktop packaging and signing workflow |

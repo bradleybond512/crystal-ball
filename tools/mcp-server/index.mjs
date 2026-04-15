@@ -7,6 +7,7 @@ import { makeGranularTools } from './tools/granular.mjs';
 import { makeFoundationTools, schemas as foundationSchemas } from './tools/foundation.mjs';
 import { makeIntelligenceTools, schemas as intelligenceSchemas } from './tools/intelligence.mjs';
 import { makeStatefulTools, schemas as statefulSchemas } from './tools/stateful.mjs';
+import { makeHelpTools, schemas as helpSchemas } from './tools/help.mjs';
 import { createStorage } from './storage.mjs';
 
 const client = createSidecarClient();
@@ -16,6 +17,7 @@ const granular = makeGranularTools(client);
 const foundation = makeFoundationTools(client);
 const intelligence = makeIntelligenceTools(client, storage);
 const stateful = makeStatefulTools(client, storage);
+const helpTools = makeHelpTools();
 
 const server = new McpServer(
   { name: 'crystalball', version: '0.1.0' },
@@ -187,6 +189,10 @@ server.registerTool('watchlist_check', statefulSchemas.watchlist_check, async (a
 server.registerTool('alert_rules_manage', statefulSchemas.alert_rules_manage, async (args) => textResult(await stateful.alert_rules_manage(args)));
 
 server.registerTool('alert_check', statefulSchemas.alert_check, async (args) => textResult(await stateful.alert_check(args)));
+
+// ---- Help ----
+
+server.registerTool('help', helpSchemas.help, async (args) => textResult(await helpTools.help(args)));
 
 // ---- Start ----
 

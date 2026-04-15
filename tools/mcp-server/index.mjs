@@ -4,10 +4,12 @@ import { z } from 'zod';
 import { createSidecarClient } from './sidecar-client.mjs';
 import { makeAggregateTools } from './tools/aggregate.mjs';
 import { makeGranularTools } from './tools/granular.mjs';
+import { makeFoundationTools, schemas as foundationSchemas } from './tools/foundation.mjs';
 
 const client = createSidecarClient();
 const aggregate = makeAggregateTools(client);
 const granular = makeGranularTools(client);
+const foundation = makeFoundationTools(client);
 
 const server = new McpServer(
   { name: 'crystalball', version: '0.1.0' },
@@ -153,6 +155,14 @@ server.registerTool('get_region_brief', {
     lon: z.number().optional().describe('Longitude'),
   }),
 }, async (args) => textResult(await granular.get_region_brief(args)));
+
+// ---- Foundation Tools (Phase 1) ----
+
+server.registerTool('query_raw', foundationSchemas.query_raw, async (args) => textResult(await foundation.query_raw(args)));
+
+server.registerTool('chain_query', foundationSchemas.chain_query, async (args) => textResult(await foundation.chain_query(args)));
+
+server.registerTool('compare_snapshots', foundationSchemas.compare_snapshots, async (args) => textResult(await foundation.compare_snapshots(args)));
 
 // ---- Start ----
 

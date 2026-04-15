@@ -1,3 +1,10 @@
+function toArray(...candidates) {
+  for (const c of candidates) {
+    if (Array.isArray(c)) return c;
+  }
+  return [];
+}
+
 function makeResponse(summary, data, sources, warnings = []) {
   return {
     summary,
@@ -17,8 +24,25 @@ function extractWarnings(results) {
   return warnings;
 }
 
+function parseOpts(opts = {}) {
+  const summaryOnly = opts.summary_only === true;
+  const limit = typeof opts.limit === 'number' && opts.limit > 0 ? opts.limit : Infinity;
+  const cap = (arr) => (limit === Infinity ? arr : arr.slice(0, limit));
+  return { summaryOnly, cap };
+}
+
+function summarizeData(data, summaryOnly) {
+  if (!summaryOnly) return data;
+  const out = {};
+  for (const [key, value] of Object.entries(data)) {
+    out[key] = Array.isArray(value) ? { count: value.length } : value;
+  }
+  return out;
+}
+
 export function makeAggregateTools(client) {
-  async function get_sitrep() {
+  async function get_sitrep(opts) {
+    const { summaryOnly, cap } = parseOpts(opts);
     const routes = ['/api/market-quotes', '/api/acled-events', '/api/nws-alerts', '/api/service-status'];
     const results = await client.getAll(routes);
     const warnings = extractWarnings(results);
@@ -34,15 +58,18 @@ export function makeAggregateTools(client) {
 
     const summary = `Situational report: ${conflictCount} conflict events, ${alertCount} weather alerts. Markets: ${quoteSummary}.${warnings.length ? ` (${warnings.length} source(s) unavailable)` : ''}`;
 
-    return makeResponse(summary, {
-      conflicts: conflicts?.events || [],
-      markets: markets?.quotes || [],
-      alerts: Array.isArray(alerts) ? alerts : [],
+    const data = {
+      conflicts: cap(conflicts?.events || []),
+      markets: cap(markets?.quotes || []),
+      alerts: cap(Array.isArray(alerts) ? alerts : []),
       serviceHealth: status || {},
-    }, routes.filter(r => !results.get(r)?.error), warnings);
+    };
+
+    return makeResponse(summary, summarizeData(data, summaryOnly), routes.filter(r => !results.get(r)?.error), warnings);
   }
 
-  async function get_threat_landscape() {
+  async function get_threat_landscape(opts) {
+    const { summaryOnly, cap } = parseOpts(opts);
     const routes = ['/api/acled-events', '/api/threatfox-iocs', '/api/cisa-kev', '/api/oref-alerts', '/api/liveuamap'];
     const results = await client.getAll(routes);
     const warnings = extractWarnings(results);
@@ -59,18 +86,21 @@ export function makeAggregateTools(client) {
 
     const summary = `Threat landscape: ${conflictCount} conflict events, ${iocCount} IOCs, ${kevCount} KEVs.${warnings.length ? ` (${warnings.length} source(s) unavailable)` : ''}`;
 
-    return makeResponse(summary, {
-      conflicts: conflicts?.events || [],
-      cyberThreats: iocs?.data || iocs || [],
-      kevs: kevs?.vulnerabilities || kevs || [],
-      crisisAlerts: [
-        ...(oref?.alerts || oref || []),
-        ...(uamap?.events || uamap || []),
-      ],
-    }, routes.filter(r => !results.get(r)?.error), warnings);
+    const data = {
+      conflicts: cap(conflicts?.events || []),
+      cyberThreats: cap(toArray(iocs?.data, iocs)),
+      kevs: cap(toArray(kevs?.vulnerabilities, kevs)),
+      crisisAlerts: cap([
+        ...toArray(oref?.alerts, oref),
+        ...toArray(uamap?.events, uamap),
+      ]),
+    };
+
+    return makeResponse(summary, summarizeData(data, summaryOnly), routes.filter(r => !results.get(r)?.error), warnings);
   }
 
-  async function get_market_overview() {
+  async function get_market_overview(opts) {
+    const { summaryOnly, cap } = parseOpts(opts);
     const routes = ['/api/market-quotes', '/api/crypto-quotes', '/api/btc-etf-flows', '/api/macro-signals', '/api/fear-greed', '/api/wsb-sentiment'];
     const results = await client.getAll(routes);
     const warnings = extractWarnings(results);
@@ -87,16 +117,19 @@ export function makeAggregateTools(client) {
 
     const summary = `Markets overview: Fear & Greed at ${fgValue} (${fgLabel}).${warnings.length ? ` (${warnings.length} source(s) unavailable)` : ''}`;
 
-    return makeResponse(summary, {
-      indices: quotes?.quotes || [],
-      crypto: crypto?.prices || crypto || [],
+    const data = {
+      indices: cap(quotes?.quotes || []),
+      crypto: cap(toArray(crypto?.prices, crypto)),
       etfFlows: etf?.flows || etf || {},
       sentiment: { fearGreed: fg, wsb: wsb },
       macroRegime: macro?.signals || macro || {},
-    }, routes.filter(r => !results.get(r)?.error), warnings);
+    };
+
+    return makeResponse(summary, summarizeData(data, summaryOnly), routes.filter(r => !results.get(r)?.error), warnings);
   }
 
-  async function get_cyber_intel() {
+  async function get_cyber_intel(opts) {
+    const { summaryOnly, cap } = parseOpts(opts);
     const routes = ['/api/threatfox-iocs', '/api/cisa-kev', '/api/openphish-feed', '/api/urlhaus', '/api/otx-pulses'];
     const results = await client.getAll(routes);
     const warnings = extractWarnings(results);
@@ -112,16 +145,19 @@ export function makeAggregateTools(client) {
 
     const summary = `Cyber intel: ${iocCount} IOCs, ${kevCount} KEVs.${warnings.length ? ` (${warnings.length} source(s) unavailable)` : ''}`;
 
-    return makeResponse(summary, {
-      iocs: iocs?.data || [],
-      kevs: kevs?.vulnerabilities || kevs || [],
-      phishing: phishing || [],
-      malwareUrls: malware || [],
-      threatPulses: pulses?.results || pulses || [],
-    }, routes.filter(r => !results.get(r)?.error), warnings);
+    const data = {
+      iocs: cap(iocs?.data || []),
+      kevs: cap(toArray(kevs?.vulnerabilities, kevs)),
+      phishing: cap(toArray(phishing)),
+      malwareUrls: cap(toArray(malware)),
+      threatPulses: cap(toArray(pulses?.results, pulses)),
+    };
+
+    return makeResponse(summary, summarizeData(data, summaryOnly), routes.filter(r => !results.get(r)?.error), warnings);
   }
 
-  async function get_weather_environment() {
+  async function get_weather_environment(opts) {
+    const { summaryOnly, cap } = parseOpts(opts);
     const routes = ['/api/owm-current', '/api/nws-alerts', '/api/donki-events', '/api/space-weather-feeds'];
     const results = await client.getAll(routes);
     const warnings = extractWarnings(results);
@@ -135,14 +171,17 @@ export function makeAggregateTools(client) {
 
     const summary = `Environment: ${alertCount} weather alerts active.${warnings.length ? ` (${warnings.length} source(s) unavailable)` : ''}`;
 
-    return makeResponse(summary, {
-      weather: weather?.cities || weather || [],
-      alerts: Array.isArray(alerts) ? alerts : [],
+    const data = {
+      weather: cap(toArray(weather?.cities, weather)),
+      alerts: cap(Array.isArray(alerts) ? alerts : []),
       spaceWeather: { donki: donki || [], feeds: space || {} },
-    }, routes.filter(r => !results.get(r)?.error), warnings);
+    };
+
+    return makeResponse(summary, summarizeData(data, summaryOnly), routes.filter(r => !results.get(r)?.error), warnings);
   }
 
-  async function get_infrastructure_status() {
+  async function get_infrastructure_status(opts) {
+    const { summaryOnly, cap } = parseOpts(opts);
     const routes = ['/api/power-grid', '/api/grid-alerts', '/api/epa-sdwis-proxy', '/api/epa-radnet-proxy', '/api/usgs-water-proxy'];
     const results = await client.getAll(routes);
     const warnings = extractWarnings(results);
@@ -157,16 +196,19 @@ export function makeAggregateTools(client) {
 
     const summary = `Infrastructure: ${alertCount} grid alerts.${warnings.length ? ` (${warnings.length} source(s) unavailable)` : ''}`;
 
-    return makeResponse(summary, {
+    const data = {
       powerGrid: grid || {},
-      gridAlerts: gridAlerts?.alerts || gridAlerts || [],
+      gridAlerts: cap(toArray(gridAlerts?.alerts, gridAlerts)),
       waterQuality: water || {},
       radiation: radiation || {},
       waterResources: usgs || {},
-    }, routes.filter(r => !results.get(r)?.error), warnings);
+    };
+
+    return makeResponse(summary, summarizeData(data, summaryOnly), routes.filter(r => !results.get(r)?.error), warnings);
   }
 
-  async function get_military_posture() {
+  async function get_military_posture(opts) {
+    const { summaryOnly, cap } = parseOpts(opts);
     const routes = ['/api/adsb-military', '/api/ais-snapshot', '/api/military/v1/get-theater-posture', '/api/isw-reports'];
     const results = await client.getAll(routes);
     const warnings = extractWarnings(results);
@@ -181,12 +223,14 @@ export function makeAggregateTools(client) {
 
     const summary = `Military posture: ${flightCount} tracked aircraft, ${vesselCount} tracked vessels.${warnings.length ? ` (${warnings.length} source(s) unavailable)` : ''}`;
 
-    return makeResponse(summary, {
-      militaryFlights: flights?.aircraft || flights || [],
-      navalVessels: vessels?.vessels || vessels || [],
+    const data = {
+      militaryFlights: cap(toArray(flights?.aircraft, flights)),
+      navalVessels: cap(toArray(vessels?.vessels, vessels)),
       theaterPosture: posture || {},
-      iswAnalysis: isw?.reports || isw || [],
-    }, routes.filter(r => !results.get(r)?.error), warnings);
+      iswAnalysis: cap(toArray(isw?.reports, isw)),
+    };
+
+    return makeResponse(summary, summarizeData(data, summaryOnly), routes.filter(r => !results.get(r)?.error), warnings);
   }
 
   return {

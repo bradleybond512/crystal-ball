@@ -211,6 +211,56 @@ export function makeGranularTools(client) {
     );
   }
 
+  async function check_feed_health() {
+    const health = await client.get('/api/health');
+    const status = await client.get('/api/service-status');
+
+    const probeRoutes = [
+      '/api/acled-events',
+      '/api/market-quotes',
+      '/api/nws-alerts',
+      '/api/threatfox-iocs',
+      '/api/cisa-kev',
+      '/api/adsb-military',
+      '/api/ais-snapshot',
+      '/api/isw-reports',
+      '/api/owm-current',
+      '/api/fear-greed',
+    ];
+    const results = await client.getAll(probeRoutes);
+
+    const feeds = [];
+    let healthy = 0;
+    let degraded = 0;
+    for (const route of probeRoutes) {
+      const data = results.get(route);
+      const ok = data && !data.error;
+      feeds.push({ route, status: ok ? 'ok' : 'error', error: data?.error || null });
+      if (ok) healthy++; else degraded++;
+    }
+
+    const sidecarOk = health && !health.error;
+    const keyInfo = sidecarOk ? `${health.keys_configured}/${health.keys_total} API keys configured` : 'unknown';
+    const missingKeys = sidecarOk && health.keys_missing?.length ? health.keys_missing : [];
+
+    const summary = `Sidecar ${sidecarOk ? 'up' : 'DOWN'}. Feeds: ${healthy} healthy, ${degraded} degraded out of ${probeRoutes.length}. Keys: ${keyInfo}.${missingKeys.length ? ` Missing: ${missingKeys.join(', ')}.` : ''}`;
+
+    return makeResponse(summary, {
+      sidecar: sidecarOk ? {
+        pid: health.pid,
+        uptime_ms: health.uptime_ms,
+        rss_mb: health.rss_mb,
+        ais_connected: health.ais_connected,
+        ais_vessels: health.ais_vessels,
+        keys_configured: health.keys_configured,
+        keys_total: health.keys_total,
+        keys_missing: missingKeys,
+      } : { error: health?.error || 'unreachable' },
+      serviceStatus: status || {},
+      feeds,
+    }, ['/api/health', '/api/service-status', ...probeRoutes]);
+  }
+
   return {
     search_conflicts,
     search_news,
@@ -224,5 +274,6 @@ export function makeGranularTools(client) {
     get_earthquakes,
     get_disease_outbreaks,
     get_region_brief,
+    check_feed_health,
   };
 }

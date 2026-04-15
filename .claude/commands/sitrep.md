@@ -117,7 +117,8 @@ BOTTOM LINE UP FRONT
    seasonal outlook.]
 
   SEISMIC
-  [Significant earthquakes (M5+), tsunami alerts, volcanic activity.]
+  [Significant earthquakes — M5.5+ noted, M6.5+ highlighted.
+   Tsunami alerts, volcanic activity. Proximity to home location noted.]
 
   INFRASTRUCTURE
   [Power grid, internet, transport disruptions, NOTAM clusters.]
@@ -148,10 +149,17 @@ Follow these rules strictly when writing the brief:
 2. **Signal-proportional density.** Quiet sections compress to one line (e.g., "Sanctions: no new designations or enforcement actions."). Never omit a section.
 3. **Inline cross-references.** Use `↳ Note:` or `— see SECTION` when domains connect (e.g., a cyber campaign targeting energy infrastructure cross-references both CYBER and INFRASTRUCTURE).
 4. **Degraded feeds.** Mark affected sections with `⚠ DATA DEGRADED — [feed name]` inline. Do not silently omit data.
-5. **Personal relevance.** Prefix items matching the user profile with `★ PERSONAL:` — Apple CVEs, watchlist ticker filings, Midwest severe weather, home-area items. Elevate these even in otherwise quiet sections.
+5. **Personal relevance.** Prefix items matching the user profile with `★ PERSONAL:`. Elevate these even in otherwise quiet sections. Per-section personalization:
+   - **LOCAL CONDITIONS**: Home location weather, grid (MISO), nearby seismic/conflicts
+   - **CYBER**: Flag CVEs/KEVs/IOCs targeting Apple, macOS, iOS, WebKit
+   - **MARKETS & ECONOMY**: Surface AAPL 8-Ks, Apple supply chain disruptions (TSMC, Foxconn, rare earths)
+   - **INFRASTRUCTURE**: Note Apple service outages if detected, Midwest grid and water status
+   - **WEATHER**: Great Lakes / Midwest severe weather highlighted
+   - **NEXUS**: Correlations involving Apple ecosystem or La Porte area get priority
 6. **SOURCE STATUS.** Count operational vs degraded feeds from `check_feed_health`. List any missing API keys.
 7. **LOCAL CONDITIONS.** Filter weather, grid (use MISO for La Porte, IN), seismic (within ~500km), NWS alerts, local cyber/health relevance for the home location. Compress to "All local indicators nominal." on quiet days.
 8. **BLUF.** Exactly 2-3 sentences: the single most important development, the overnight shift direction, and one forward watch item.
-9. **NEXUS.** Only surface genuine cross-domain correlations. Do not force connections. State "No significant cross-domain convergence detected." when nothing links.
-10. **No emojis.** Only `⚠` for warnings and `★` for personal flags.
-11. **Timestamps.** Use the user's local timezone throughout.
+9. **Honest uncertainty.** If data is degraded or a correlation is speculative, say so. Never invent connections.
+10. **NEXUS.** Only surface genuine cross-domain correlations. Do not force connections. State "No significant cross-domain convergence detected." when nothing links.
+11. **No emojis.** Only `⚠` for warnings and `★` for personal flags.
+12. **Timestamps.** Use the user's local timezone throughout.

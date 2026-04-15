@@ -74,13 +74,12 @@ A single inbox that ingests from every alert source -- NWS, GDACS, OREF (Israel 
 
 ## MCP Server -- Claude Code Integration
 
-Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds. 20 tools registered automatically when you open a session in this repo.
+Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds. 30 tools across 6 categories registered automatically when you open a session in this repo. Call `help()` for full documentation.
 
 **Aggregate tools** (broad awareness):
 
 | Command | What you get |
 |---------|-------------|
-| `check_feed_health` | Pre-flight diagnostic: sidecar status, feed health, API key inventory |
 | `get_sitrep` | Top conflicts, market moves, weather alerts, service health |
 | `get_threat_landscape` | ACLED conflicts, ThreatFox IOCs, CISA KEVs, crisis alerts |
 | `get_market_overview` | Indices, crypto, ETF flows, Fear & Greed, FRED macro signals |
@@ -91,14 +90,26 @@ Crystal Ball ships an MCP server that gives Claude Code direct access to all int
 
 **Granular tools** (targeted lookups): `search_conflicts`, `search_news`, `lookup_ip`, `lookup_cve`, `lookup_vessel`, `lookup_flight`, `get_sanctions`, `get_economic_data`, `get_sec_filings`, `get_earthquakes`, `get_disease_outbreaks`, `get_region_brief`.
 
+**Foundation tools** (query primitives): `query_raw` (direct sidecar endpoint access), `chain_query` (multi-step queries with `$prev[N]` references), `compare_snapshots` (structured diffs).
+
+**Intelligence tools** (analysis): `correlate` (cross-domain entity matching), `trend` (time-series from sentinel history), `anomaly_scan` (deviation detection vs baselines).
+
+**Stateful tools** (persistent tracking): `watchlist_manage` / `watchlist_check` (track IPs, tickers, regions, CVEs, vessels, callsigns), `alert_rules_manage` / `alert_check` (threshold-based alerts).
+
+**Help**: `help()` returns full tool index; `help({ tool: "correlate" })` returns man page; `help({ topic: "getting-started" })` for guides; `help({ examples: "cross-domain" })` for cookbooks.
+
 **Slash commands** built on top of MCP tools:
 
-- `/sitrep` -- full-spectrum presidential-style daily intelligence brief. 3-phase intelligence cycle: parallel collection across all 20 tools, triage & enrichment on elevated signals, analyst-voice synthesis. Personalized to your home location, platforms, and watchlist tickers. Sections: Source Status, Local Conditions, BLUF, Conflicts, Military Posture, Threat Landscape, Cyber, Markets & Economy, Sanctions, Weather & Space Weather, Seismic, Infrastructure, Health, News Wire, and a cross-domain Nexus analysis.
+- `/sitrep` -- full-spectrum presidential-style daily intelligence brief. 3-phase intelligence cycle: parallel collection across all 30 tools, triage & enrichment on elevated signals, analyst-voice synthesis. Personalized to your home location, platforms, and watchlist tickers.
+- `/sentinel` -- autonomous intelligence sweep: gathers sitrep, diffs against previous snapshot, checks watchlists and alert rules, writes alerts. Designed for scheduled runs every 30 minutes.
+- `/correlate` -- interactive cross-domain correlation analysis with trend context and follow-up suggestions
+- `/watchlist` -- manage watchlists and alert rules from the CLI
+- `/alerts` -- check current alerts, clear history, filter by severity
 - `/watch Strait of Hormuz` -- regional brief for any location
 - `/threat-brief` -- top 5 threats with trajectory and recommended watches
 - `/market-pulse` -- markets snapshot with yield curve and Fed balance sheet
 
-The MCP server talks to the Crystal Ball sidecar over a bearer-authenticated localhost port. Crystal Ball must be running.
+The MCP server talks to the Crystal Ball sidecar over a bearer-authenticated localhost port. Crystal Ball must be running. Sentinel history and watchlists are stored in `~/.crystal-ball/`.
 
 ---
 

@@ -20,8 +20,8 @@ const stateful = makeStatefulTools(client, storage);
 const helpTools = makeHelpTools();
 
 const server = new McpServer(
-  { name: 'crystalball', version: '0.1.0' },
-  { instructions: 'Crystal Ball provides real-time global intelligence: conflicts, markets, cyber threats, weather, military posture, infrastructure status, and more. Use aggregate tools for broad situational awareness, granular tools for specific lookups.' },
+  { name: 'crystalball', version: '0.2.0' },
+  { instructions: 'Crystal Ball provides real-time global intelligence: conflicts, markets, cyber threats, weather, military posture, infrastructure status, and more. Use aggregate tools for broad situational awareness, granular tools for specific lookups. Foundation tools (query_raw, chain_query, compare_snapshots) give direct sidecar access and query chaining. Intelligence tools (correlate, trend, anomaly_scan) enable cross-domain correlation and time-series analysis from sentinel history. Stateful tools (watchlist_manage, watchlist_check, alert_rules_manage, alert_check) provide persistent tracking and threshold alerts. Call help() for full documentation.' },
 );
 
 function textResult(data) {

@@ -17,11 +17,10 @@ If the file does not exist, skip personalization and run as a generic global bri
 
 ## Phase 1 — Collection
 
-Call all 16 aggregate MCP tools **in parallel**, using `summary_only: true` where supported:
+Call all aggregate + key granular MCP tools **in parallel**, using `summary_only: true` where supported:
 
 | Tool | Parameters |
 |------|------------|
-| `check_feed_health` | _(none)_ |
 | `get_sitrep` | `summary_only: true` |
 | `get_threat_landscape` | `summary_only: true` |
 | `get_military_posture` | `summary_only: true` |
@@ -61,6 +60,18 @@ When Phase 1 or Layer 1 names specific entities, enrich with granular lookup too
 | Market-moving company | `get_sec_filings` | filtered search |
 
 Only enrich entities that are actually named in the data. Do not fabricate lookups.
+
+### Layer 3 — Cross-Domain Analysis
+
+After enrichment, run these intelligence tools to surface hidden connections:
+
+| Tool | Purpose |
+|------|---------|
+| `correlate` | Find shared entities across any elevated domains (e.g., `["conflicts", "cyber"]`) |
+| `anomaly_scan` | Detect metrics deviating from historical baselines |
+| `trend` | For any anomalies or elevated domains, check directional trends |
+
+If watchlists exist (`watchlist_check`), include watchlist hits in the brief. If alert rules are configured (`alert_check`), report any triggered rules.
 
 ---
 

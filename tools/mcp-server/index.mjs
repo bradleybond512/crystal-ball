@@ -4,14 +4,24 @@ import { z } from 'zod';
 import { createSidecarClient } from './sidecar-client.mjs';
 import { makeAggregateTools } from './tools/aggregate.mjs';
 import { makeGranularTools } from './tools/granular.mjs';
+import { makeFoundationTools, schemas as foundationSchemas } from './tools/foundation.mjs';
+import { makeIntelligenceTools, schemas as intelligenceSchemas } from './tools/intelligence.mjs';
+import { makeStatefulTools, schemas as statefulSchemas } from './tools/stateful.mjs';
+import { makeHelpTools, schemas as helpSchemas } from './tools/help.mjs';
+import { createStorage } from './storage.mjs';
 
 const client = createSidecarClient();
+const storage = createStorage();
 const aggregate = makeAggregateTools(client);
 const granular = makeGranularTools(client);
+const foundation = makeFoundationTools(client);
+const intelligence = makeIntelligenceTools(client, storage);
+const stateful = makeStatefulTools(client, storage);
+const helpTools = makeHelpTools();
 
 const server = new McpServer(
-  { name: 'crystalball', version: '0.1.0' },
-  { instructions: 'Crystal Ball provides real-time global intelligence: conflicts, markets, cyber threats, weather, military posture, infrastructure status, and more. Use aggregate tools for broad situational awareness, granular tools for specific lookups.' },
+  { name: 'crystalball', version: '0.2.0' },
+  { instructions: 'Crystal Ball provides real-time global intelligence: conflicts, markets, cyber threats, weather, military posture, infrastructure status, and more. Use aggregate tools for broad situational awareness, granular tools for specific lookups. Foundation tools (query_raw, chain_query, compare_snapshots) give direct sidecar access and query chaining. Intelligence tools (correlate, trend, anomaly_scan) enable cross-domain correlation and time-series analysis from sentinel history. Stateful tools (watchlist_manage, watchlist_check, alert_rules_manage, alert_check) provide persistent tracking and threshold alerts. Call help() for full documentation.' },
 );
 
 function textResult(data) {
@@ -153,6 +163,36 @@ server.registerTool('get_region_brief', {
     lon: z.number().optional().describe('Longitude'),
   }),
 }, async (args) => textResult(await granular.get_region_brief(args)));
+
+// ---- Foundation Tools (Phase 1) ----
+
+server.registerTool('query_raw', foundationSchemas.query_raw, async (args) => textResult(await foundation.query_raw(args)));
+
+server.registerTool('chain_query', foundationSchemas.chain_query, async (args) => textResult(await foundation.chain_query(args)));
+
+server.registerTool('compare_snapshots', foundationSchemas.compare_snapshots, async (args) => textResult(await foundation.compare_snapshots(args)));
+
+// ---- Intelligence Tools (Phase 2) ----
+
+server.registerTool('correlate', intelligenceSchemas.correlate, async (args) => textResult(await intelligence.correlate(args)));
+
+server.registerTool('trend', intelligenceSchemas.trend, async (args) => textResult(await intelligence.trend(args)));
+
+server.registerTool('anomaly_scan', intelligenceSchemas.anomaly_scan, async (args) => textResult(await intelligence.anomaly_scan(args)));
+
+// ---- Stateful Tools (Phase 3) ----
+
+server.registerTool('watchlist_manage', statefulSchemas.watchlist_manage, async (args) => textResult(await stateful.watchlist_manage(args)));
+
+server.registerTool('watchlist_check', statefulSchemas.watchlist_check, async (args) => textResult(await stateful.watchlist_check(args)));
+
+server.registerTool('alert_rules_manage', statefulSchemas.alert_rules_manage, async (args) => textResult(await stateful.alert_rules_manage(args)));
+
+server.registerTool('alert_check', statefulSchemas.alert_check, async (args) => textResult(await stateful.alert_check(args)));
+
+// ---- Help ----
+
+server.registerTool('help', helpSchemas.help, async (args) => textResult(await helpTools.help(args)));
 
 // ---- Start ----
 

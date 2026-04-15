@@ -1,0 +1,19 @@
+{
+  "name": "alert_check",
+  "synopsis": "alert_check({ rule_id? })",
+  "description": "Evaluate alert rules against current live data. Fetches the latest values for each rule's domain and metric, applies the comparison operator against the threshold, and returns which rules are currently triggered. Can check a single rule by ID or evaluate all active rules at once.",
+  "parameters": {
+    "rule_id": "string (optional) — Check a specific rule by ID. Omit to evaluate all active rules."
+  },
+  "examples": [
+    {
+      "description": "Check all alert rules against current data",
+      "call": "alert_check({})"
+    },
+    {
+      "description": "Check a specific rule",
+      "call": "alert_check({ rule_id: \"spy-crash\" })"
+    }
+  ],
+  "see_also": ["alert_rules_manage", "anomaly_scan", "watchlist_check"]
+}

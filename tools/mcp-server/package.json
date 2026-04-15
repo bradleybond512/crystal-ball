@@ -1,8 +1,8 @@
 {
   "name": "crystalball-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "MCP server giving Claude CLI full access to Crystal Ball live data",
+  "description": "MCP server giving Claude CLI full access to Crystal Ball live data — 30 tools across 6 categories: aggregate, granular, foundation, intelligence, stateful, and help",
   "type": "module",
   "bin": {
     "crystalball-mcp": "./index.mjs"

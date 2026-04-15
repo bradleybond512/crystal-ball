@@ -1,0 +1,24 @@
+{
+  "name": "anomaly_scan",
+  "synopsis": "anomaly_scan({ sensitivity?, domains? })",
+  "description": "Broad anomaly detection across all intelligence domains. Compares current live values to historical baselines computed from sentinel snapshots, and flags any metric that deviates beyond the specified standard deviation threshold. Requires at least 3 historical snapshots for reliable baselines. Results are sorted by deviation magnitude.",
+  "parameters": {
+    "sensitivity": "number (optional) — Standard deviations threshold for flagging anomalies (default: 2.0). Lower values catch more anomalies.",
+    "domains": "array of strings (optional) — Limit scan to specific domains. Default: all domains (conflicts, markets, cyber, weather, military, health)"
+  },
+  "examples": [
+    {
+      "description": "Scan all domains with default sensitivity",
+      "call": "anomaly_scan({})"
+    },
+    {
+      "description": "High-sensitivity scan of markets and cyber only",
+      "call": "anomaly_scan({ sensitivity: 1.5, domains: [\"markets\", \"cyber\"] })"
+    },
+    {
+      "description": "Conservative scan (only extreme outliers)",
+      "call": "anomaly_scan({ sensitivity: 3.0 })"
+    }
+  ],
+  "see_also": ["trend", "correlate", "alert_check"]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "help",
+  "synopsis": "help({ tool?, topic?, examples? })",
+  "description": "Built-in documentation system for Crystal Ball MCP tools. Call with no arguments to see the full tool index organized by category. Pass a tool name for its man page, a topic name for a conceptual guide, or an examples category for a cookbook of worked examples.",
+  "parameters": {
+    "tool": "string (optional) — Tool name to get its man page, e.g. \"correlate\", \"query_raw\"",
+    "topic": "string (optional) — Conceptual topic: getting-started, watchlists, alerts, correlation, sentinel",
+    "examples": "string (optional) — Example cookbook: cross-domain, time-series, watchlists, alert-rules"
+  },
+  "examples": [
+    {
+      "description": "Show the full tool index",
+      "call": "help({})"
+    },
+    {
+      "description": "Get the man page for the correlate tool",
+      "call": "help({ tool: \"correlate\" })"
+    },
+    {
+      "description": "Read the getting started guide",
+      "call": "help({ topic: \"getting-started\" })"
+    },
+    {
+      "description": "Browse cross-domain correlation examples",
+      "call": "help({ examples: \"cross-domain\" })"
+    }
+  ],
+  "see_also": []
+}

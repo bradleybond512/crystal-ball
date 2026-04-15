@@ -1,0 +1,40 @@
+{
+  "title": "Watchlist Usage Examples",
+  "examples": [
+    {
+      "description": "Track suspicious IP addresses from a cyber investigation",
+      "steps": [
+        "watchlist_manage({ action: \"create\", name: \"investigation-ips\", type: \"ip\", items: [\"185.220.101.1\", \"45.155.205.233\", \"91.219.236.174\"] })",
+        "// Later, check for new threat intel on these IPs:",
+        "watchlist_check({ name: \"investigation-ips\" })"
+      ]
+    },
+    {
+      "description": "Monitor energy sector tickers during a crisis",
+      "steps": [
+        "watchlist_manage({ action: \"create\", name: \"energy-watch\", type: \"ticker\", items: [\"XLE\", \"USO\", \"XOP\", \"CVX\", \"XOM\"] })",
+        "watchlist_check({ name: \"energy-watch\" })",
+        "// Add more tickers as the situation develops:",
+        "watchlist_manage({ action: \"add_items\", name: \"energy-watch\", items: [\"HAL\", \"SLB\"] })"
+      ]
+    },
+    {
+      "description": "Track vessels in a sensitive maritime region",
+      "steps": [
+        "watchlist_manage({ action: \"create\", name: \"hormuz-vessels\", type: \"vessel\", items: [\"636092783\", \"538006735\"] })",
+        "watchlist_check({ name: \"hormuz-vessels\" })",
+        "// Cross-reference with military activity:",
+        "get_military_posture()"
+      ]
+    },
+    {
+      "description": "Manage watchlist lifecycle",
+      "steps": [
+        "watchlist_manage({ action: \"list\" })",
+        "watchlist_manage({ action: \"get\", name: \"investigation-ips\" })",
+        "watchlist_manage({ action: \"remove_items\", name: \"investigation-ips\", items: [\"91.219.236.174\"] })",
+        "watchlist_manage({ action: \"delete\", name: \"old-watchlist\" })"
+      ]
+    }
+  ]
+}

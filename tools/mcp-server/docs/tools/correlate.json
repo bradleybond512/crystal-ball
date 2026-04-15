@@ -1,0 +1,25 @@
+{
+  "name": "correlate",
+  "synopsis": "correlate({ domains, region?, timeframe? })",
+  "description": "Cross-domain correlation engine that finds shared entities (countries, IPs, actors, tickers) across two or more intelligence domains. Pulls live data from all specified domains and runs entity extraction to identify overlaps. Use this to discover connections between seemingly unrelated events across conflict, market, cyber, weather, military, and health domains.",
+  "parameters": {
+    "domains": "array of strings (required, minimum 2) — Domains to correlate. Valid values: conflicts, markets, cyber, weather, military, health",
+    "region": "string (optional) — Geographic filter to narrow results (country or region name)",
+    "timeframe": "string (optional) — Time range, e.g. \"7d\", \"30d\", \"2026-04-01/2026-04-14\""
+  },
+  "examples": [
+    {
+      "description": "Find connections between conflict zones and cyber threats",
+      "call": "correlate({ domains: [\"conflicts\", \"cyber\"] })"
+    },
+    {
+      "description": "Correlate military and market activity in the Middle East",
+      "call": "correlate({ domains: [\"military\", \"markets\"], region: \"Middle East\" })"
+    },
+    {
+      "description": "Three-way correlation across conflicts, weather, and health",
+      "call": "correlate({ domains: [\"conflicts\", \"weather\", \"health\"], timeframe: \"30d\" })"
+    }
+  ],
+  "see_also": ["trend", "anomaly_scan", "chain_query"]
+}

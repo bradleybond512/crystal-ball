@@ -1,8 +1,11 @@
 import { isDesktopRuntime, getApiBaseUrl } from '@/services/runtime';
 import { proxyUrl } from '@/utils';
+import { createConcurrencyLimiter } from '@/utils/concurrency-limiter';
 import { getPersistentCache, setPersistentCache } from './persistent-cache';
 import { dataFreshness } from './data-freshness';
 import { nameToCountryCode, matchCountryNamesInText } from './country-geometry';
+
+const advisoryLimiter = createConcurrencyLimiter(4);
 
 function advisoryFeedUrl(feedUrl: string): string {
   if (isDesktopRuntime()) return proxyUrl(feedUrl);
@@ -210,12 +213,12 @@ export async function fetchSecurityAdvisories(
   }
 
   const allAdvisories: SecurityAdvisory[] = [];
-  const feedResults = await Promise.allSettled(
- ADVISORY_FEEDS.map(async (feed) => {
- try {
+  const feedResults = await advisoryLimiter.mapSettled(
+ ADVISORY_FEEDS,
+ async (feed) => {
  const response = await fetch(advisoryFeedUrl(feed.url), {
  headers: { Accept: 'application/rss+xml, application/xml, text/xml, */*' },
- ...(signal ? { signal } : {}),
+ signal: signal ?? AbortSignal.timeout(12_000),
  });
  if (!response.ok) {
  console.warn(`[SecurityAdvisories] ${feed.name} HTTP ${response.status}`);
@@ -223,12 +226,7 @@ export async function fetchSecurityAdvisories(
  }
  const text = await response.text();
  return parseFeedXml(text, feed);
- } catch (error) {
- if (error instanceof DOMException && error.name === 'AbortError') throw error;
- console.warn(`[SecurityAdvisories] ${feed.name} failed:`, error);
- return [];
- }
- }),
+ },
   );
 
   for (const result of feedResults) {

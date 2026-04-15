@@ -60,20 +60,18 @@ export class GlobePulse {
  if (alert.lat === undefined || alert.lon === undefined) continue;
  const pos = Cartesian3.fromDegrees(alert.lon, alert.lat, 0);
  const startMs = Date.now();
+ const radiusCb = new CallbackProperty(() => {
+ const t = (Date.now() - startMs) % PULSE_DURATION_MS;
+ return (t / PULSE_DURATION_MS) * PULSE_MAX_RADIUS_M;
+ }, false);
  const pulse: PulseEntry = {
  entityId: id,
  startMs,
  cesiumEntity: this.source.entities.add(new Entity({
  position: new ConstantPositionProperty(pos),
  ellipse: new EllipseGraphics({
- semiMajorAxis: new CallbackProperty(() => {
- const t = (Date.now() - startMs) % PULSE_DURATION_MS;
- return (t / PULSE_DURATION_MS) * PULSE_MAX_RADIUS_M;
- }, false),
- semiMinorAxis: new CallbackProperty(() => {
- const t = (Date.now() - startMs) % PULSE_DURATION_MS;
- return (t / PULSE_DURATION_MS) * PULSE_MAX_RADIUS_M;
- }, false),
+ semiMajorAxis: radiusCb,
+ semiMinorAxis: radiusCb,
  material: new ColorMaterialProperty(new CallbackProperty(() => {
  const t = (Date.now() - startMs) % PULSE_DURATION_MS;
  const alpha = 0.5 * (1 - t / PULSE_DURATION_MS);

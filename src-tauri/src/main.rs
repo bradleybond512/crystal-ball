@@ -1638,6 +1638,8 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
 
  let port_file = logs_dir_path(app)?.join("sidecar.port");
  let _ = fs::remove_file(&port_file);
+ let token_file_cleanup = logs_dir_path(app)?.join("sidecar.token");
+ let _ = fs::remove_file(&token_file_cleanup);
 
  let log_path = sidecar_log_path(app)?;
  rotate_log_if_needed(&log_path);
@@ -1684,6 +1686,17 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  *token_slot = Some(generate_local_token());
  }
  let local_api_token = token_slot.clone().unwrap();
+ // Write token to file so MCP server and other local tools can authenticate
+ let token_file = logs_dir_path(app)?.join("sidecar.token");
+ if let Err(e) = fs::write(&token_file, &local_api_token) {
+ append_desktop_log(app, "WARN", &format!("failed to write token file: {e}"));
+ } else {
+ #[cfg(unix)]
+ {
+ use std::os::unix::fs::PermissionsExt;
+ let _ = fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600));
+ }
+ }
  drop(token_slot);
 
  let mut cmd = Command::new(&node_binary);
@@ -1934,6 +1947,7 @@ fn stop_local_api(app: &AppHandle) {
  }
  if let Ok(log_dir) = logs_dir_path(app) {
  let _ = fs::remove_file(log_dir.join("sidecar.port"));
+ let _ = fs::remove_file(log_dir.join("sidecar.token"));
  }
  }
 }

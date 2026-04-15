@@ -65,6 +65,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'ucdp-events': { name: 'UCDP Conflict Events', enabled: true, priority: 2 },
   'nuclear-risk': { name: 'Nuclear Risk Tracker', enabled: true, priority: 2 },
   'airstrikes': { name: 'Air Strikes & Drones', enabled: true, priority: 2 },
+  'strike-package': { name: 'Strike Packages', enabled: true, priority: 2 },
   giving: { name: 'Global Giving', enabled: true, priority: 2 },
   'stoic-reflections': { name: 'Stoic Reflections', enabled: true, priority: 3 },
   'biblical-encouragement': { name: 'Biblical Encouragement', enabled: true, priority: 3 },
@@ -221,6 +222,7 @@ const FULL_MAP_LAYERS: MapLayers = {
   // Data source layers
   ucdpEvents: true,
   airstrikes: true,
+  strikePackages: true,
   displacement: true,
   climate: false,
   // Tech layers (disabled in full variant)
@@ -298,6 +300,7 @@ const FULL_MOBILE_MAP_LAYERS: MapLayers = {
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
+  strikePackages: false,
   displacement: false,
   climate: false,
   // Tech layers (disabled in full variant)
@@ -414,6 +417,7 @@ const TECH_MAP_LAYERS: MapLayers = {
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
+  strikePackages: false,
   displacement: false,
   climate: false,
   // Tech layers (enabled in tech variant)
@@ -490,6 +494,7 @@ const TECH_MOBILE_MAP_LAYERS: MapLayers = {
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
+  strikePackages: false,
   displacement: false,
   climate: false,
   // Tech layers (limited on mobile)
@@ -603,6 +608,7 @@ const FINANCE_MAP_LAYERS: MapLayers = {
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
+  strikePackages: false,
   displacement: false,
   climate: false,
   // Tech layers (disabled in finance variant)
@@ -679,6 +685,7 @@ const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
+  strikePackages: false,
   displacement: false,
   climate: false,
   // Tech layers (disabled)
@@ -771,6 +778,7 @@ const HAPPY_MAP_LAYERS: MapLayers = {
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
+  strikePackages: false,
   displacement: false,
   climate: false,
   // Tech layers (disabled)
@@ -847,6 +855,7 @@ const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
+  strikePackages: false,
   displacement: false,
   climate: false,
   // Tech layers (disabled)

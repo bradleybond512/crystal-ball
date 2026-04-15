@@ -125,6 +125,7 @@ import { OilSpillPanel } from '@/components/OilSpillPanel';
 import { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
+import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
 import { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
 import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
@@ -1157,6 +1158,12 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.map?.setCenter(lat, lon, 6);
  });
  this.ctx.panels.airstrikes = airstrikesPanel;
+
+ const strikePackagePanel = new StrikePackagePanel();
+ strikePackagePanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 6);
+ });
+ this.ctx.panels['strike-package'] = strikePackagePanel;
 
  const gdacsAlertsPanel = new GDACSAlertsPanel();
  gdacsAlertsPanel.setEventClickHandler((lat, lon) => {

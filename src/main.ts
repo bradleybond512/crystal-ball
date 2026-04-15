@@ -242,8 +242,8 @@ function showDesktopRuntimeDebugNotice(snapshot: DesktopRuntimeSnapshot): void {
   document.body.append(banner);
 }
 
-// Initialize Vercel Analytics
-inject();
+// Initialize Vercel Analytics (skip in Tauri — script can't load from tauri:// protocol)
+if (!isDesktopRuntime()) inject();
 
 // Initialize PostHog product analytics
 void initAnalytics();

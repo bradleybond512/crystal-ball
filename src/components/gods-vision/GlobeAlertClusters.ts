@@ -56,17 +56,15 @@ export class GlobeAlertClusters {
       const radiusM = Math.max(50_000, c.radius * 1000);
       const startMs = Date.now();
 
+      const radiusCb = new CallbackProperty(() => {
+        const t = (Date.now() - startMs) % 4000;
+        return radiusM * (0.6 + 0.4 * (t / 4000));
+      }, false);
       this.source.entities.add(new Entity({
         position: new ConstantPositionProperty(Cartesian3.fromDegrees(c.lon, c.lat, 0)),
         ellipse: new EllipseGraphics({
-          semiMajorAxis: new CallbackProperty(() => {
-            const t = (Date.now() - startMs) % 4000;
-            return radiusM * (0.6 + 0.4 * (t / 4000));
-          }, false),
-          semiMinorAxis: new CallbackProperty(() => {
-            const t = (Date.now() - startMs) % 4000;
-            return radiusM * (0.6 + 0.4 * (t / 4000));
-          }, false),
+          semiMajorAxis: radiusCb,
+          semiMinorAxis: radiusCb,
           material: new ColorMaterialProperty(new CallbackProperty(() => {
             const t = (Date.now() - startMs) % 4000;
             const alpha = 0.35 * (1 - t / 4000);

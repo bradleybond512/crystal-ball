@@ -34,6 +34,7 @@ import type {
   CyberThreat,
   CableHealthRecord,
   MilitaryBaseEnriched,
+  StrikePackage,
 } from '@/types';
 import { fetchMilitaryBases, type MilitaryBaseCluster as ServerBaseCluster } from '@/services/military-bases';
 import { forecastOverlay, riskToColor, formatRegionLabel, type ForecastRegion } from '@/services/forecast-overlay';
@@ -47,6 +48,7 @@ import type { Earthquake } from '@/services/earthquakes';
 import type { ClimateAnomaly } from '@/services/climate';
 import { ArcLayer } from '@deck.gl/layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
+import { PathStyleExtension } from '@deck.gl/extensions';
 import { SimpleMeshLayer } from '@deck.gl/mesh-layers';
 import { modelLoader } from '@/services/model-loader';
 import type { WeatherAlert } from '@/services/weather';
@@ -462,6 +464,8 @@ export class DeckGLMap {
   private protests: SocialUnrestEvent[] = [];
   private militaryFlights: MilitaryFlight[] = [];
   private militaryFlightClusters: MilitaryFlightCluster[] = [];
+  private strikePackages: StrikePackage[] = [];
+  private expandedStrikePackageId: string | null = null;
   private militaryVessels: MilitaryVessel[] = [];
   private militaryVesselClusters: MilitaryVesselCluster[] = [];
   private serverBases: MilitaryBaseEnriched[] = [];
@@ -1566,6 +1570,12 @@ export class DeckGLMap {
  // Air strikes & drone events layer
  if (mapLayers.airstrikes && this.airstrikesData.length > 0) {
  layers.push(this.createAirstrikesLayer());
+ }
+
+ // Strike package icons + predicted route paths
+ if (mapLayers.strikePackages && this.strikePackages.length > 0) {
+ layers.push(this.createStrikePackageIconLayer());
+ layers.push(...this.createStrikePackageRouteLayers());
  }
 
  // S2 Underground intelligence layer — only at zoom ≥5 to avoid global dot clutter
@@ -4639,6 +4649,47 @@ export class DeckGLMap {
  });
   }
 
+  private createStrikePackageIconLayer(): IconLayer<StrikePackage> {
+ return new IconLayer<StrikePackage>({
+ id: 'strike-package-icons',
+ data: this.strikePackages,
+ getPosition: (d) => [d.lon, d.lat],
+ getIcon: (d) => d.domain === 'naval' ? 'warship' : 'fighter',
+ iconAtlas: getIconAtlas(),
+ iconMapping: getIconMapping(),
+ getSize: 28,
+ sizeMinPixels: 14,
+ sizeMaxPixels: 32,
+ getAngle: (d) => d.domain === 'air' ? -d.heading : 0,
+ getColor: (d) => d.domain === 'naval'
+ ? [245, 158, 11, 240] as [number, number, number, number]
+ : [59, 130, 246, 240] as [number, number, number, number],
+ pickable: true,
+ });
+  }
+
+  private createStrikePackageRouteLayers(): PathLayer<StrikePackage>[] {
+ return this.strikePackages
+ .filter(p => p.prediction.extrapolatedPath.length > 0)
+ .map(p => {
+ const isExpanded = p.id === this.expandedStrikePackageId;
+ const path: [number, number][] = [[p.lon, p.lat], ...p.prediction.extrapolatedPath.map(([lat, lon]): [number, number] => [lon, lat])];
+ return new PathLayer<StrikePackage>({
+ id: `strike-route-${p.id}`,
+ data: [p],
+ getPath: () => path,
+ getColor: p.domain === 'naval'
+ ? [245, 158, 11, isExpanded ? 160 : 80]
+ : [59, 130, 246, isExpanded ? 160 : 80],
+ getWidth: isExpanded ? 3 : 1.5,
+ widthMinPixels: 1,
+ // getDashArray / dashJustified are injected by PathStyleExtension at runtime
+ ...({ getDashArray: [6, 4], dashJustified: true } as Record<string, unknown>),
+ extensions: [new PathStyleExtension({ dash: true })],
+ });
+ });
+  }
+
   private createS2UndergroundLayer(): ScatterplotLayer<S2UndergroundEvent> {
  // Filter to high-signal events only — skip generic/routine entries that flood the map
  const HIGH_SIGNAL_TERMS = ['kinetic', 'attack', 'strike', 'military', 'base', 'installation',
@@ -4926,6 +4977,16 @@ export class DeckGLMap {
   public setMilitaryFlights(flights: MilitaryFlight[], clusters: MilitaryFlightCluster[] = []): void {
  this.militaryFlights = flights;
  this.militaryFlightClusters = clusters;
+ this.render();
+  }
+
+  public setStrikePackages(packages: StrikePackage[]): void {
+ this.strikePackages = packages;
+ this.render();
+  }
+
+  public expandStrikePackage(id: string | null): void {
+ this.expandedStrikePackageId = id;
  this.render();
   }
 

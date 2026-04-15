@@ -305,6 +305,7 @@ export class GlobeDataManager {
  this.registerLayer('fires', () => this.loadFires());
  this.registerLayer('conflicts', () => this.loadConflicts());
  this.registerLayer('airstrikes', () => this.loadAirstrikes());
+ this.registerLayer('strike-packages', () => this.loadStrikePackages());
  this.registerLayer('cyber', () => this.loadCyberThreats());
  this.registerLayer('flights', () => this.loadMilitaryFlights());
  this.registerLayer('vessels', () => this.loadMilitaryVessels());
@@ -943,6 +944,66 @@ export class GlobeDataManager {
  }
  }
   }
+
+  private async loadStrikePackages(): Promise<void> {
+ const layer = this.layers.get('strike-packages');
+ if (!layer) return;
+
+ const { getStrikePackages } = await import('@/services/strike-packages');
+ const packages = getStrikePackages();
+
+ for (const pkg of packages) {
+   const isNaval = pkg.domain === 'naval';
+   const color = isNaval
+     ? Color.fromCssColorString('#f59e0b')
+     : Color.fromCssColorString('#3b82f6');
+
+   layer.source.entities.add({
+     position: Cartesian3.fromDegrees(pkg.lon, pkg.lat),
+     billboard: {
+       image: isNaval ? ICON_WARSHIP : ICON_BASE_AIR,
+       color,
+       scale: 0.5,
+       heightReference: HeightReference.CLAMP_TO_GROUND,
+       scaleByDistance: new NearFarScalar(1e4, 1.4, 1e7, 0.3),
+       verticalOrigin: VerticalOrigin.CENTER,
+       horizontalOrigin: HorizontalOrigin.CENTER,
+     },
+     label: {
+       text: pkg.name,
+       font: '11px monospace',
+       fillColor: color,
+       outlineColor: Color.BLACK,
+       outlineWidth: 2,
+       style: 2,
+       pixelOffset: LABEL_OFFSET_SM,
+       horizontalOrigin: HorizontalOrigin.CENTER,
+       verticalOrigin: VerticalOrigin.BOTTOM,
+       scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+       distanceDisplayCondition: new DistanceDisplayCondition(0, 1e7),
+     },
+     description: `${pkg.name} (${pkg.domain})
+Status: ${pkg.status}
+${pkg.composition.map(u => `${u.type} x${u.count}`).join(', ')}`,
+   });
+
+   if (pkg.prediction.extrapolatedPath.length >= 2) {
+     const positions = [
+       Cartesian3.fromDegrees(pkg.lon, pkg.lat),
+       ...pkg.prediction.extrapolatedPath.map(([lat, lon]) =>
+         Cartesian3.fromDegrees(lon, lat)),
+     ];
+     layer.source.entities.add({
+       polyline: {
+         positions,
+         width: 1.5,
+         material: new ColorMaterialProperty(color.withAlpha(0.4)),
+         clampToGround: true,
+       },
+     });
+   }
+ }
+ }
 
   private async loadCyberThreats(): Promise<void> {
  const layer = this.layers.get('cyber');

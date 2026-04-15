@@ -1,0 +1,26 @@
+{
+  "name": "query_raw",
+  "synopsis": "query_raw({ endpoint, params?, offset?, limit? })",
+  "description": "Direct access to any sidecar API endpoint with full parameter passthrough and pagination. Use this when no higher-level tool covers your needs, or when you need precise control over query parameters. The endpoint is a path on the local sidecar server (e.g., /api/acled-events). Results are returned as-is from the sidecar.",
+  "parameters": {
+    "endpoint": "string (required) — Sidecar API path, e.g. \"/api/acled-events\", \"/api/fred\"",
+    "params": "object (optional) — Key-value query parameters to pass through to the endpoint",
+    "offset": "number (optional) — Pagination offset for large result sets",
+    "limit": "number (optional) — Maximum number of results to return"
+  },
+  "examples": [
+    {
+      "description": "Fetch recent ACLED conflict events in Ukraine",
+      "call": "query_raw({ endpoint: \"/api/acled-events\", params: { country: \"Ukraine\" }, limit: 10 })"
+    },
+    {
+      "description": "Get FRED economic data for the federal funds rate",
+      "call": "query_raw({ endpoint: \"/api/fred\", params: { series_ids: \"FEDFUNDS\" } })"
+    },
+    {
+      "description": "Paginate through results",
+      "call": "query_raw({ endpoint: \"/api/acled-events\", offset: 50, limit: 25 })"
+    }
+  ],
+  "see_also": ["chain_query", "compare_snapshots"]
+}

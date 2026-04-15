@@ -67,7 +67,7 @@ src/                        # TypeScript frontend (Vite)
   config/
     panels.ts               # FULL_PANELS, PANEL_CATEGORY_MAP, FULL_MAP_LAYERS
   services/
-    mode-manager.ts         # AppMode: peace/finance/war/disaster/ghost
+    mode-manager.ts         # AppMode: ghost | gods-vision | null (default)
     alert-store.ts          # unified alert inbox, IndexedDB persistence
     correlation-engine.ts   # directional rules, causal chains, situation clustering
     navigation.ts           # GPS tracker, routing engine, tile provider
@@ -89,13 +89,11 @@ tools/cb-control/               # cross-session coordination daemon (port 46987)
 
 | Mode | Trigger |
 |------|---------|
-| Peace | default |
-| Finance | S&P500 ≥2.5% OR BTC ≥5% OR Oil ≥4% OR Gold ≥2% |
-| War | ≥2 war signals > confidence 0.6 (normalized by conflict baselines) |
-| Disaster | GDACS Red OR 3+ Orange OR M≥6.5 quake |
+| Default (`null`) | Normal state — no special mode active |
 | Ghost | Manual only — ⌘⇧G / sidebar / File menu |
+| God's Vision | `G` key or sidebar — full-viewport Cesium 3D globe |
 
-Ghost Mode: polling ×5, analytics suppressed, notifications suppressed, dark crimson sidebar.
+Ghost Mode: polling ×5, analytics suppressed, notifications suppressed, dark crimson sidebar. The old Peace/Finance/War/Disaster modes have been removed — their behaviors are inlined into the default state.
 
 ## CSP Posture
 

@@ -65,8 +65,8 @@ Four product variants (Full, Tech, Finance, Happy) share one application shell. 
 **AI fallback chain**
 Summarization resolves at runtime: Ollama (local) > Groq > Claude > OpenRouter > browser inference. Each hop is an explicit boundary, not a catch-all try/catch. Works in air-gapped and privacy-sensitive environments.
 
-**App mode state machine**
-Five modes (Peace/Finance/War/Disaster/Ghost) trigger on live signal thresholds -- S&P >=2.5%, >=2 war signals above confidence 0.6 normalized by conflict baselines, GDACS Red events. Ghost Mode suppresses analytics, multiplies poll intervals x5, and changes UI chrome. Mode transitions are deterministic and testable.
+**Ghost Mode**
+Manual toggle (Cmd+Shift+G / sidebar / File menu) that suppresses analytics, multiplies poll intervals x5, suppresses notifications, and switches to dark crimson UI chrome. God's Vision is the other modal state -- a full-viewport Cesium 3D globe activated with `G`.
 
 **Native location via CoreLocation IPC**
 WKWebView blocks `navigator.geolocation` entirely. Crystal Ball bypasses this with native CLLocationManager via ObjC FFI from Rust, exposed as a Tauri IPC command. Requires hardened runtime entitlements for location access.

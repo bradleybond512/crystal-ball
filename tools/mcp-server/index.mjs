@@ -5,11 +5,15 @@ import { createSidecarClient } from './sidecar-client.mjs';
 import { makeAggregateTools } from './tools/aggregate.mjs';
 import { makeGranularTools } from './tools/granular.mjs';
 import { makeFoundationTools, schemas as foundationSchemas } from './tools/foundation.mjs';
+import { makeIntelligenceTools, schemas as intelligenceSchemas } from './tools/intelligence.mjs';
+import { createStorage } from './storage.mjs';
 
 const client = createSidecarClient();
+const storage = createStorage();
 const aggregate = makeAggregateTools(client);
 const granular = makeGranularTools(client);
 const foundation = makeFoundationTools(client);
+const intelligence = makeIntelligenceTools(client, storage);
 
 const server = new McpServer(
   { name: 'crystalball', version: '0.1.0' },
@@ -163,6 +167,14 @@ server.registerTool('query_raw', foundationSchemas.query_raw, async (args) => te
 server.registerTool('chain_query', foundationSchemas.chain_query, async (args) => textResult(await foundation.chain_query(args)));
 
 server.registerTool('compare_snapshots', foundationSchemas.compare_snapshots, async (args) => textResult(await foundation.compare_snapshots(args)));
+
+// ---- Intelligence Tools (Phase 2) ----
+
+server.registerTool('correlate', intelligenceSchemas.correlate, async (args) => textResult(await intelligence.correlate(args)));
+
+server.registerTool('trend', intelligenceSchemas.trend, async (args) => textResult(await intelligence.trend(args)));
+
+server.registerTool('anomaly_scan', intelligenceSchemas.anomaly_scan, async (args) => textResult(await intelligence.anomaly_scan(args)));
 
 // ---- Start ----
 

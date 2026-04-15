@@ -53,6 +53,7 @@ Those numbers come from the current codebase, not aspirational copy.
 
 | Guide | Focus |
 | --- | --- |
+| [MCP_PIPELINE.md](MCP_PIPELINE.md) | How Claude Code gathers intelligence from Crystal Ball via MCP -- full pipeline, auth, tools, slash commands |
 | [ALERTS_ENHANCEMENT_ROADMAP.md](ALERTS_ENHANCEMENT_ROADMAP.md) | Alert system architecture, unified inbox, correlation, and enhancement roadmap |
 
 ## API and Extension Docs

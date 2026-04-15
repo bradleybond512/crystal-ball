@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0
 
       - name: Close stale open PRs (no activity in 30 days)
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -59,7 +59,7 @@ jobs:
             console.log(`Closed ${closed} stale PRs.`);
 
       - name: Delete merged remote branches
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -109,7 +109,7 @@ jobs:
             console.log(`Deleted ${deleted} merged branches.`);
 
       - name: Report summary
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

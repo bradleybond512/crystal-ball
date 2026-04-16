@@ -1,176 +1,95 @@
-Generate a full-spectrum presidential-style daily intelligence brief using all Crystal Ball MCP tools, personalized to the user's profile.
+Dispatch a subagent (model: sonnet) to generate the daily intelligence brief. The subagent absorbs all MCP tool data in its isolated context; only the finished brief (~2k tokens) returns to main context.
+
+Read `~/.claude/projects/-Users-bradleybond-Developer-crystalball/memory/user_sitrep_profile.md` for home_location, platforms, watchlist_tickers, and interests. If it doesn't exist, use defaults: La Porte IN, Apple platforms, AAPL, Midwest weather.
+
+Dispatch the subagent with the profile data embedded in the prompt (don't make it read the file). Use the instructions below as the subagent prompt.
 
 ---
 
-## Phase 0 — User Profile
+## Subagent Prompt
 
-Read `~/.claude/projects/-Users-bradleybond-Developer-crystalball/memory/user_sitrep_profile.md` to load:
+You are generating a Crystal Ball daily intelligence brief.
 
-- **home_location** (e.g., "La Porte, Indiana")
-- **platforms** (e.g., Apple macOS/iOS/iPadOS/watchOS, WebKit/Safari)
-- **watchlist_tickers** (e.g., AAPL)
-- **interests** (e.g., Apple supply chain, Great Lakes weather, Midwest severe weather)
+### User Profile
 
-If the file does not exist, skip personalization and run as a generic global brief.
+- Home: {home_location}
+- Platforms: {platforms}
+- Tickers: {watchlist_tickers}
+- Interests: {interests}
 
----
+### Step 1: Collect Data (2 parallel calls)
 
-## Phase 1 — Collection
+Call these MCP tools in parallel:
+1. `query_raw` with endpoint `/api/sitrep-bundle`
+2. `get_region_brief` with place_name "{home_location}"
 
-Call all aggregate + key granular MCP tools **in parallel**, using `summary_only: true` where supported:
+### Step 2: Targeted Enrichment (conditional)
 
-| Tool | Parameters |
-|------|------------|
-| `get_sitrep` | `summary_only: true` |
-| `get_threat_landscape` | `summary_only: true` |
-| `get_military_posture` | `summary_only: true` |
-| `get_cyber_intel` | `summary_only: true` |
-| `get_market_overview` | `summary_only: true` |
-| `get_economic_data` | `series: fed_funds, yield_curve, unemployment` |
-| `get_weather_environment` | `summary_only: true` |
-| `get_earthquakes` | `summary_only: true` |
-| `get_infrastructure_status` | `summary_only: true` |
-| `get_disease_outbreaks` | `summary_only: true` |
-| `get_sanctions` | `summary_only: true` |
-| `search_conflicts` | `summary_only: true` |
-| `get_region_brief` | `place_name:` _(from user profile home_location)_ |
-| `search_news` | `limit: 10` |
-| `get_sec_filings` | `limit: 5` |
+Parse the bundle's `severity` scores. Only if needed:
+- If any domain severity >= 3 AND bundle names specific CVE IDs: call `lookup_cve` for up to 2 CVEs
+- If any domain severity >= 3 AND bundle names specific IPs: call `lookup_ip` for up to 2 IPs
+- If 2+ domains have severity >= 3: call `correlate` with those domain names
+- Max 3 enrichment calls total. Skip entirely if all domains <= 2.
 
----
+### Step 3: Write the Brief
 
-## Phase 2 — Triage & Enrichment
-
-### Layer 1 — Escalation Drill-Down
-
-For any aggregate tool that returned **elevated or critical** indicators in Phase 1, re-call that tool with `limit: 20` and **without** `summary_only` to get full detail. Quiet domains skip this layer entirely.
-
-### Layer 2 — Entity Enrichment
-
-When Phase 1 or Layer 1 names specific entities, enrich with granular lookup tools:
-
-| Signal | Tool | Key Parameter |
-|--------|------|---------------|
-| Military aircraft | `lookup_flight` | callsign or hex |
-| Naval vessels | `lookup_vessel` | MMSI or name |
-| CVEs | `lookup_cve` | CVE ID |
-| Suspicious IPs | `lookup_ip` | IP address |
-| Sanctions entities | `get_sanctions` | entity search |
-| Regional conflict escalation | `search_conflicts` | country/date filter |
-| Market-moving company | `get_sec_filings` | filtered search |
-
-Only enrich entities that are actually named in the data. Do not fabricate lookups.
-
-### Layer 3 — Cross-Domain Analysis
-
-After enrichment, run these intelligence tools to surface hidden connections:
-
-| Tool | Purpose |
-|------|---------|
-| `correlate` | Find shared entities across any elevated domains (e.g., `["conflicts", "cyber"]`) |
-| `anomaly_scan` | Detect metrics deviating from historical baselines |
-| `trend` | For any anomalies or elevated domains, check directional trends |
-
-If watchlists exist (`watchlist_check`), include watchlist hits in the brief. If alert rules are configured (`alert_check`), report any triggered rules.
-
----
-
-## Phase 3 — Synthesis
-
-Write the brief using this exact fixed structure. Never omit a section — compress quiet sections to one line instead.
+Use this exact format. Use severity scores from the bundle to control density:
+- Severity 1-2 AND not in user interests: compress to one line
+- Severity 3+: full detail
+- User interest domains: full treatment regardless of severity
+- Military posture: always at least a short paragraph
 
 ```
 ╔══════════════════════════════════════════════════════╗
 ║  CRYSTAL BALL — DAILY SITUATIONAL REPORT             ║
-║  [date] [time] [timezone]                            ║
+║  [date] [time] CDT                                   ║
+╠──────────────────────────────────────────────────────╣
+║  SEC n │ CYB n │ MKT n │ MIL n │ WX n │ INF n       ║
+║  SEI n │ HTH n │ ECO n                               ║
 ╚══════════════════════════════════════════════════════╝
 
 SOURCE STATUS
-  [count] feeds operational, [count] degraded, [count] missing API keys
-  Degraded: [list if any]
+  [operational/degraded/missing from feed_health]
+  Mode: DELTA (sentinel Xmin ago) | FULL SCAN
 
-LOCAL CONDITIONS — [home city from profile]
-  [Weather, grid status (MISO for La Porte IN), seismic within ~500km,
-   NWS alerts, local cyber/health relevance. Compress to
-   "All local indicators nominal." on quiet days.]
+LOCAL CONDITIONS — [home city]
+  [From region brief. "All local indicators nominal." if quiet.]
 
 BOTTOM LINE UP FRONT
-  [2-3 sentences: most important development, overnight shift direction,
-   forward watch item.]
+  [2-3 sentences: top development, shift direction, forward watch.]
 
-── SECURITY ───────────────────────────────────────────
+── SECURITY ───────────────────────────────
   CONFLICTS & SECURITY
-  [Active conflicts, escalation/de-escalation, casualty events,
-   peace talks, territorial changes.]
-
   MILITARY POSTURE
-  [Force movements, exercises, deployments, strategic signaling.
-   Include lookup_flight / lookup_vessel results if enriched.]
-
-  THREAT LANDSCAPE
-  [Terrorism, WMD, hybrid warfare, state-sponsored activity.]
-
   CYBER
-  [Active campaigns, CVEs, IOCs, ransomware, APT activity.
-   Include lookup_cve / lookup_ip results if enriched.]
 
-── ECONOMY ────────────────────────────────────────────
+── ECONOMY ────────────────────────────────
   MARKETS & ECONOMY
-  [Indices, commodities, crypto, FX, yield curve, fed funds,
-   unemployment, SEC filings. Watchlist tickers called out.]
-
   SANCTIONS
-  [New designations, enforcement actions, evasion patterns.]
 
-── ENVIRONMENT ────────────────────────────────────────
+── ENVIRONMENT ────────────────────────────
   WEATHER & SPACE WEATHER
-  [Severe weather, tropical systems, space weather (Kp, solar flares),
-   seasonal outlook.]
-
   SEISMIC
-  [Significant earthquakes — M5.5+ noted, M6.5+ highlighted.
-   Tsunami alerts, volcanic activity. Proximity to home location noted.]
-
   INFRASTRUCTURE
-  [Power grid, internet, transport disruptions, NOTAM clusters.]
-
   HEALTH
-  [Disease outbreaks, WHO alerts, pandemic indicators.]
 
-── SIGNALS ────────────────────────────────────────────
+── SIGNALS ────────────────────────────────
   NEWS WIRE
-  [Top stories from search_news not covered above.
-   Brief bullets, source attributed.]
 
-── SYNTHESIS ──────────────────────────────────────────
+── SYNTHESIS ──────────────────────────────
   NEXUS
-  [Explicit cross-domain correlations where genuine connections exist.
-   Examples: oil spike + Gulf military movement = supply chain risk;
-   cyber IOCs targeting energy + grid alerts = infrastructure convergence.
-   "No significant cross-domain convergence detected." when quiet.]
+  FORWARD WATCH (24-48hr)
 ```
 
----
+### Rules
 
-## Narrative Rules
-
-Follow these rules strictly when writing the brief:
-
-1. **Analyst voice.** Declarative sentences. Connect dots. No hedging, no filler, no "it remains to be seen."
-2. **Signal-proportional density.** Quiet sections compress to one line (e.g., "Sanctions: no new designations or enforcement actions."). Never omit a section.
-3. **Inline cross-references.** Use `↳ Note:` or `— see SECTION` when domains connect (e.g., a cyber campaign targeting energy infrastructure cross-references both CYBER and INFRASTRUCTURE).
-4. **Degraded feeds.** Mark affected sections with `⚠ DATA DEGRADED — [feed name]` inline. Do not silently omit data.
-5. **Personal relevance.** Prefix items matching the user profile with `★ PERSONAL:`. Elevate these even in otherwise quiet sections. Per-section personalization:
-   - **LOCAL CONDITIONS**: Home location weather, grid (MISO), nearby seismic/conflicts
-   - **CYBER**: Flag CVEs/KEVs/IOCs targeting Apple, macOS, iOS, WebKit
-   - **MARKETS & ECONOMY**: Surface AAPL 8-Ks, Apple supply chain disruptions (TSMC, Foxconn, rare earths)
-   - **INFRASTRUCTURE**: Note Apple service outages if detected, Midwest grid and water status
-   - **WEATHER**: Great Lakes / Midwest severe weather highlighted
-   - **NEXUS**: Correlations involving Apple ecosystem or La Porte area get priority
-6. **SOURCE STATUS.** Count operational vs degraded feeds from `check_feed_health`. List any missing API keys.
-7. **LOCAL CONDITIONS.** Filter weather, grid (use MISO for La Porte, IN), seismic (within ~500km), NWS alerts, local cyber/health relevance for the home location. Compress to "All local indicators nominal." on quiet days.
-8. **BLUF.** Exactly 2-3 sentences: the single most important development, the overnight shift direction, and one forward watch item.
-9. **Honest uncertainty.** If data is degraded or a correlation is speculative, say so. Never invent connections.
-10. **NEXUS.** Only surface genuine cross-domain correlations. Do not force connections. State "No significant cross-domain convergence detected." when nothing links.
-11. **No emojis.** Only `⚠` for warnings and `★` for personal flags.
-12. **Timestamps.** Use the user's local timezone throughout.
+- Analyst voice. Declarative. No hedging.
+- Severity 1-2 non-interest domains = one line max.
+- Severity 3+ = full detail with entity names and numbers.
+- Military posture: always at least a short paragraph.
+- User interest items get full treatment regardless of severity. Prefix with ★ PERSONAL:
+- ⚠ DATA DEGRADED for any feed listed in the bundle warnings.
+- Cross-reference linked domains with — see SECTION.
+- No emojis except ⚠ and ★.
+- NEXUS: only genuine cross-domain correlations. "No significant cross-domain convergence." when quiet.
+- FORWARD WATCH: 2-3 items with 24-48hr lookahead. Skip section if nothing warrants it.

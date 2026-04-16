@@ -1722,7 +1722,7 @@ async function dispatch(requestUrl, req, routes, context) {
       radiation:    '/api/epa-radnet-proxy',
       seismic:      '/api/usgs-earthquakes',
       health:       '/api/disease-outbreaks',
-      economic:     '/api/fred-series?series_ids=FEDFUNDS,T10Y2Y,UNRATE',
+      economic:     process.env.FRED_API_KEY ? '/api/fred-series?series_ids=FEDFUNDS,T10Y2Y,UNRATE' : '/api/fred-fallback',
       sanctions:    '/api/opensanctions',
       news:         '/api/newsapi-headlines',
       serviceStatus: '/api/service-status',

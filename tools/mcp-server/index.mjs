@@ -77,6 +77,11 @@ server.registerTool('check_feed_health', {
   inputSchema: z.object({}),
 }, async () => textResult(await granular.check_feed_health()));
 
+server.registerTool('sitrep_bundle', {
+  description: 'Pre-filtered intelligence bundle with per-domain severity scores (1-5). Returns all domains in one call, pre-filtered by severity (quiet domains compressed). Use this instead of calling multiple aggregate tools.',
+  inputSchema: z.object({}),
+}, async () => textResult(await client.get('/api/sitrep-bundle')));
+
 // ---- Granular Tools ----
 
 server.registerTool('search_conflicts', {

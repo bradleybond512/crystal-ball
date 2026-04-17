@@ -8,7 +8,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 
 const panelSrc = readFileSync(resolve(root, 'src/components/Panel.ts'), 'utf8');
-const panelLayoutSrc = readFileSync(resolve(root, 'src/app/panel-layout.ts'), 'utf8');
+// panel-layout.ts delegates HTML builders to layout/html.ts — scan both so the
+// grid/map layout contract assertions still match after the decomposition.
+const panelLayoutSrc = [
+  readFileSync(resolve(root, 'src/app/panel-layout.ts'), 'utf8'),
+  readFileSync(resolve(root, 'src/app/layout/html.ts'), 'utf8'),
+].join('\n');
 const mainCssSrc = readFileSync(resolve(root, 'src/styles/main.css'), 'utf8');
 
 test('info panels default to two rows while the separate map section stays outside the grid', () => {

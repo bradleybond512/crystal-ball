@@ -6,7 +6,7 @@ import dns from 'node:dns/promises';
 import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { brotliCompress, gzipSync } from 'node:zlib';
+import { brotliCompress, gzip } from 'node:zlib';
 import path from 'node:path';
 import os from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -117,15 +117,18 @@ function wmMissingKeys() {
 }
 
 const brotliCompressAsync = promisify(brotliCompress);
+const gzipAsync = promisify(gzip);
 
 // ── Response cache for expensive/slow endpoints ─────────────────────────
 const _responseCache = new Map(); // key → { data, expiresAt }
+const _inflight = new Map(); // key → Promise — deduplicates concurrent identical fetches
 function cachedFetch(key, ttlMs, fetcher) {
   const cached = _responseCache.get(key);
   if (cached && Date.now() < cached.expiresAt) return Promise.resolve(cached.data);
-  return fetcher().then(data => {
+  const pending = _inflight.get(key);
+  if (pending) return pending;
+  const promise = fetcher().then(data => {
     _responseCache.set(key, { data, expiresAt: Date.now() + ttlMs });
-    // Evict stale entries periodically
     if (_responseCache.size > 200) {
       const now = Date.now();
       for (const [k, v] of _responseCache) {
@@ -133,7 +136,9 @@ function cachedFetch(key, ttlMs, fetcher) {
       }
     }
     return data;
-  });
+  }).finally(() => _inflight.delete(key));
+  _inflight.set(key, promise);
+  return promise;
 }
 
 // Pre-compiled regex patterns (avoid re-creation in hot paths)
@@ -170,8 +175,18 @@ function aisBuildSnapshot() {
  if (v.timestamp < cutoff) aisState.vessels.delete(mmsi);
   }
   if (aisState.vessels.size > AIS_MAX_VESSELS) {
- const sorted = [...aisState.vessels.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
- for (const [mmsi] of sorted.slice(0, aisState.vessels.size - AIS_MAX_VESSELS)) aisState.vessels.delete(mmsi);
+ // Linear scan: find the Nth-oldest timestamp, then evict everything older.
+ const excess = aisState.vessels.size - AIS_MAX_VESSELS;
+ const timestamps = new Float64Array(aisState.vessels.size);
+ let i = 0;
+ for (const v of aisState.vessels.values()) timestamps[i++] = v.timestamp;
+ timestamps.sort();
+ const cutoffTs = timestamps[excess];
+ let removed = 0;
+ for (const [mmsi, v] of aisState.vessels) {
+   if (removed >= excess) break;
+   if (v.timestamp <= cutoffTs) { aisState.vessels.delete(mmsi); removed++; }
+ }
   }
   const snapshot = {
  sequence: ++aisState.sequence,
@@ -482,6 +497,11 @@ function isPrivateIP(ip) {
   return false;
 }
 
+// DNS resolution cache — avoids repeated lookups on the same hostname (5 min TTL).
+const _dnsCache = new Map(); // hostname → addresses[]
+const _DNS_CACHE_TTL = 5 * 60_000;
+setInterval(() => _dnsCache.clear(), _DNS_CACHE_TTL).unref();
+
 async function isSafeUrl(urlString) {
   let parsed;
   try {
@@ -517,8 +537,10 @@ async function isSafeUrl(urlString) {
   // DNS resolution check — resolve the hostname and verify all resolved IPs
   // are public. This prevents DNS rebinding attacks where a public domain
   // resolves to a private IP.
-  let addresses = [];
-  try {
+  let addresses = _dnsCache.get(hostname);
+  if (!addresses) {
+    addresses = [];
+    try {
  try {
  const v4 = await dns.resolve4(hostname);
  addresses = addresses.concat(v4);
@@ -527,18 +549,20 @@ async function isSafeUrl(urlString) {
  const v6 = await dns.resolve6(hostname);
  addresses = addresses.concat(v6);
  } catch { /* no AAAA records */ }
+    } catch {
+ return { safe: false, reason: 'DNS resolution failed' };
+    }
+    if (addresses.length > 0) _dnsCache.set(hostname, addresses);
+  }
 
- if (addresses.length === 0) {
+  if (addresses.length === 0) {
  return { safe: false, reason: 'Could not resolve hostname' };
- }
+  }
 
- for (const addr of addresses) {
+  for (const addr of addresses) {
  if (isPrivateIP(addr)) {
  return { safe: false, reason: 'Hostname resolves to a private/reserved IP address' };
  }
- }
-  } catch {
- return { safe: false, reason: 'DNS resolution failed' };
   }
 
   return { safe: true, resolvedAddresses: addresses };
@@ -575,7 +599,7 @@ async function maybeCompressResponseBody(body, headers, acceptEncoding = '') {
 
   if (acceptEncoding.includes('gzip')) {
  headers['content-encoding'] = 'gzip';
- return gzipSync(body);
+ return gzipAsync(body);
   }
 
   return body;
@@ -743,7 +767,9 @@ const fallbackCounts = new Map();
 const cloudPreferred = new Set();
 
 const TRAFFIC_LOG_MAX = 200;
-const trafficLog = [];
+const trafficLog = Array.from({length: TRAFFIC_LOG_MAX});
+let _trafficHead = 0;
+let _trafficSize = 0;
 let verboseMode = false;
 let _verboseStatePath = null;
 
@@ -760,9 +786,19 @@ function saveVerboseState() {
   try { writeFileSync(_verboseStatePath, JSON.stringify({ verboseMode })); } catch { /* ignore */ }
 }
 
+function _getTrafficEntries() {
+  const result = [];
+  for (let i = 0; i < _trafficSize; i++) {
+    result.push(trafficLog[(_trafficHead + i) % TRAFFIC_LOG_MAX]);
+  }
+  return result;
+}
+
 function recordTraffic(entry) {
-  trafficLog.push(entry);
-  if (trafficLog.length > TRAFFIC_LOG_MAX) trafficLog.shift();
+  const idx = (_trafficHead + _trafficSize) % TRAFFIC_LOG_MAX;
+  trafficLog[idx] = entry;
+  if (_trafficSize < TRAFFIC_LOG_MAX) _trafficSize++;
+  else _trafficHead = (_trafficHead + 1) % TRAFFIC_LOG_MAX;
   if (verboseMode) {
  const ts = entry.timestamp.split('T')[1].replace('Z', '');
  console.log(`[traffic] ${ts} ${entry.method} ${entry.path} → ${entry.status} ${entry.durationMs}ms`);
@@ -908,6 +944,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
  method: options.method || 'GET',
  headers: options.headers || {},
  family: 4,
+ agent: httpsAgent,
  };
  // Pin to a pre-resolved IP to prevent TOCTOU DNS rebinding.
  // The hostname is kept for SNI / TLS certificate validation.
@@ -959,6 +996,28 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
 
 // CACHE PATTERN: copy this for future cached routes
 const _sidecarCache = new Map(); // key -> { data, ts }
+const SIDECAR_CACHE_MAX = 500;
+let _sidecarCacheSweepTimer = null;
+
+function _sweepSidecarCache() {
+  const now = Date.now();
+  for (const [k, v] of _sidecarCache) {
+    if (v.ttlMs != null && now - v.ts >= v.ttlMs) _sidecarCache.delete(k);
+  }
+  // Hard cap: if still over limit, drop oldest entries
+  if (_sidecarCache.size > SIDECAR_CACHE_MAX) {
+    const entries = [..._sidecarCache.entries()].sort((a, b) => a[1].ts - b[1].ts);
+    for (const [k] of entries.slice(0, _sidecarCache.size - SIDECAR_CACHE_MAX)) _sidecarCache.delete(k);
+  }
+}
+
+function _ensureSidecarCacheSweep() {
+  if (!_sidecarCacheSweepTimer) {
+    _sidecarCacheSweepTimer = setInterval(_sweepSidecarCache, 5 * 60_000);
+    if (_sidecarCacheSweepTimer.unref) _sidecarCacheSweepTimer.unref();
+  }
+}
+
 function getCached(key, ttlMs) {
   const entry = _sidecarCache.get(key);
   const effective = ttlMs ?? entry?.ttlMs;
@@ -971,6 +1030,7 @@ function getCachedStale(key) {
 }
 function setCached(key, data, ttlMs) {
   _sidecarCache.set(key, { data, ts: Date.now(), ...(ttlMs != null && { ttlMs }) });
+  _ensureSidecarCacheSweep();
 }
 
 // ── Local IDS log helpers ─────────────────────────────────────────────────
@@ -1920,12 +1980,12 @@ async function dispatch(requestUrl, req, routes, context) {
   }
   if (requestUrl.pathname === '/api/local-traffic-log') {
  if (req.method === 'DELETE') {
- trafficLog.length = 0;
+ _trafficHead = 0; _trafficSize = 0;
  return json({ cleared: true });
  }
  // Strip query strings from logged paths to avoid leaking feed URLs and
  // user research patterns to anyone who can read the traffic log.
- const sanitized = trafficLog.map(entry => ({
+ const sanitized = _getTrafficEntries().map(entry => ({
  ...entry,
  path: entry.path?.split('?')[0] ?? entry.path,
  }));

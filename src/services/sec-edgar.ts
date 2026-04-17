@@ -14,14 +14,14 @@ export interface EdgarFiling {
 export interface EdgarSearchResult {
   query: string;
   total: number;
-  results: Array<{
+  results: {
  id: string;
  company: string;
  cik: string | null;
  formType: string;
  filedAt: string | null;
  accessionNo: string | null;
-  }>;
+  }[];
 }
 
 export async function fetchRecentEdgarFilings(): Promise<EdgarFiling[]> {

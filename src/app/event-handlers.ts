@@ -530,7 +530,7 @@ export class EventHandlerManager implements AppModule {
  if (!document.hidden) {
  this.ctx.isIdle = true;
  document.body.classList.add('animations-paused');
- if (import.meta.env.DEV) console.log('[App] User idle - pausing animations to save resources'); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[App] User idle - pausing animations to save resources');  
  }
  }, this.IDLE_PAUSE_MS);
   }
@@ -879,7 +879,7 @@ export class EventHandlerManager implements AppModule {
 
   setupMapLayerHandlers(): void {
  this.ctx.map?.setOnLayerChange((layer, enabled, source) => {
- if (import.meta.env.DEV) console.log(`[App.onLayerChange] ${layer}: ${enabled} (${source})`); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log(`[App.onLayerChange] ${layer}: ${enabled} (${source})`);  
  trackMapLayerToggle(layer, enabled, source);
  this.ctx.mapLayers[layer] = enabled;
  saveToStorage(STORAGE_KEYS.mapLayers, this.ctx.mapLayers);

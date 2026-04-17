@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Entity canonicalization — collapses different feeds reporting the same
  * real-world event into a single key. Two alerts with the same canonical key

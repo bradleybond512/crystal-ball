@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * EntityHeatRail — shows the top-entities mentioned across all feeds in the
  * last 6h as compact chips. Clicking a chip filters to alerts mentioning

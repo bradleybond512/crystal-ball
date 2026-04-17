@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity */
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Alert lifecycle tracker — tracks each alert's trajectory over time
  * (rising → peaked → cooling → resolved) by sampling the alert store

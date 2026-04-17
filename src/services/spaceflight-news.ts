@@ -33,7 +33,7 @@ let _cache: { articles: SpaceflightArticle[]; ts: number } | null = null;
 export async function fetchSpaceflightNews(): Promise<SpaceflightArticle[]> {
   if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS) return _cache.articles;
   try {
- const res = await fetch(API_URL, { signal: AbortSignal.timeout(10000) });
+ const res = await fetch(API_URL, { signal: AbortSignal.timeout(10_000) });
  if (!res.ok) {
  _cache = { articles: [], ts: Date.now() };
  return [];

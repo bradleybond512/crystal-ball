@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * AlertReplayScrubber — time-machine slider that lets users scrub
  * backward through the last 24h of alert history using lifecycle

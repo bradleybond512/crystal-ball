@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/no-nested-conditional, @typescript-eslint/prefer-nullish-coalescing, unicorn/no-array-callback-reference, sonarjs/no-misleading-array-reverse */
+/* eslint-disable unicorn/no-array-callback-reference, sonarjs/no-misleading-array-reverse */
 /**
  * Situation Clustering — Alerts Enhancement Roadmap Phase 1.2
  *

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, sonarjs/cognitive-complexity, sonarjs/no-nested-conditional */
+ 
 /**
  * Situation Escalation Lifecycle
  *

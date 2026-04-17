@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/pseudo-random, sonarjs/void-use, sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, @typescript-eslint/no-unused-expressions, @typescript-eslint/prefer-nullish-coalescing, unicorn/consistent-function-scoping, @typescript-eslint/no-empty-function */
+/* eslint-disable sonarjs/pseudo-random, @typescript-eslint/no-unused-expressions, @typescript-eslint/prefer-nullish-coalescing, unicorn/consistent-function-scoping, @typescript-eslint/no-empty-function */
 /**
  * Sound Manager — Mode Transition & Spatial Alert Audio
  *

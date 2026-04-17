@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, sonarjs/pseudo-random, unicorn/no-array-callback-reference */
+/* eslint-disable sonarjs/pseudo-random, unicorn/no-array-callback-reference */
 /**
  * Multi-Location Watchlist — Phase 2.1 roadmap spec.
  *

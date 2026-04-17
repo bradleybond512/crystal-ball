@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Forecast fusion — single number that fuses signals from the three
  * independent forecasters (EMA region risk, escalation theaters, situation

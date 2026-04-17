@@ -358,12 +358,12 @@ const ICON_DRAW_FNS: Record<string, IconDrawFn> = {
   bank: (ctx) => { ctx.beginPath(); ctx.moveTo(16, 3); ctx.lineTo(28, 10); ctx.lineTo(28, 12); ctx.lineTo(4, 12); ctx.lineTo(4, 10); ctx.closePath(); ctx.fill(); ctx.fillRect(6, 13, 3, 12); ctx.fillRect(11, 13, 3, 12); ctx.fillRect(18, 13, 3, 12); ctx.fillRect(23, 13, 3, 12); ctx.beginPath(); ctx.roundRect(4, 26, 24, 3, 1); ctx.fill(); },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 let _iconAtlas: any = null;
 let _iconMapping: Record<string, { x: number; y: number; width: number; height: number; mask: boolean }> | null = null;
 
 // DeckGL accepts HTMLCanvasElement at runtime but types only allow string | Texture
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function getIconAtlas(): any {
   if (_iconAtlas) return _iconAtlas;
   const names = Object.keys(ICON_DRAW_FNS);
@@ -3443,7 +3443,7 @@ export class DeckGLMap {
 
  const rawLayerId = info.layer?.id || '';
  const layerId = rawLayerId.endsWith('-ghost') ? rawLayerId.slice(0, -6) : rawLayerId;
- // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
  const obj = info.object as any;
  const text = (value: unknown): string => escapeHtml(String(value ?? ''));
 

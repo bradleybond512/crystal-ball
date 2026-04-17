@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Entity heat — extracts country / major actor names from alert titles and
  * bodies, then ranks them by recency-weighted mention count. Powers the

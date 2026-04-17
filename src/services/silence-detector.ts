@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Silence detector — flags feeds that have gone unusually quiet.
  *

@@ -6,7 +6,7 @@
  * Auto-hides when there's nothing hot.
  */
 
-/* eslint-disable sonarjs/void-use, sonarjs/no-nested-conditional, sonarjs/no-nested-template-literals, sonarjs/regex-complexity */
+/* eslint-disable sonarjs/no-nested-conditional, sonarjs/no-nested-template-literals */
 import { unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
 import { rankAlerts, panelForAlert, scoreBreakdown } from '@/services/alert-routing';
 import { flashPanel, jumpToPanel, pulseAlertOnMap } from '@/services/alert-reactions';

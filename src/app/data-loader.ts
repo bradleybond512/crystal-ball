@@ -694,9 +694,9 @@ export class DataLoaderManager implements AppModule {
  break;
  }
  case 'techEvents': {
- if (import.meta.env.DEV) console.log('[loadDataForLayer] Loading techEvents...'); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[loadDataForLayer] Loading techEvents...');  
  await this.loadTechEvents();
- if (import.meta.env.DEV) console.log('[loadDataForLayer] techEvents loaded'); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[loadDataForLayer] techEvents loaded');  
  break;
  }
  case 'positiveEvents': {
@@ -1332,9 +1332,9 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadTechEvents(): Promise<void> {
- if (import.meta.env.DEV) console.log('[loadTechEvents] Called. SITE_VARIANT:', SITE_VARIANT, 'techEvents layer:', this.ctx.mapLayers.techEvents); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[loadTechEvents] Called. SITE_VARIANT:', SITE_VARIANT, 'techEvents layer:', this.ctx.mapLayers.techEvents);  
  if (SITE_VARIANT !== 'tech' && !this.ctx.mapLayers.techEvents) {
- if (import.meta.env.DEV) console.log('[loadTechEvents] Skipping - not tech variant and layer disabled'); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[loadTechEvents] Skipping - not tech variant and layer disabled');  
  return;
  }
 
@@ -1821,7 +1821,7 @@ export class DataLoaderManager implements AppModule {
  this.ctx.intelligenceCache.earthquakes ?? [],
  (this.ctx.intelligenceCache.outages ?? []).map(o => ({ score: o.severity === 'total' ? 10 : o.severity === 'major' ? 7 : 3 })),
  );
- if (import.meta.env.DEV) console.log('[Intelligence] All signals loaded for CII calculation'); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[Intelligence] All signals loaded for CII calculation');  
   }
 
   async loadOutages(): Promise<void> {
@@ -1998,7 +1998,7 @@ export class DataLoaderManager implements AppModule {
  this.ctx.map?.setDiseaseIntel(data);
  }
  } catch (error) {
- // eslint-disable-next-line no-console
+  
  console.warn('[disease-intel] fetch failed', error);
  (this.ctx.panels['disease-intel'] as DiseaseIntelPanel)?.update(null);
  }
@@ -2433,7 +2433,7 @@ export class DataLoaderManager implements AppModule {
  try {
  const { disruptions, density } = await fetchAisSignals();
  const aisStatus = getAisStatus();
- if (import.meta.env.DEV) console.log('[Ships] Events:', { disruptions: disruptions.length, density: density.length, vessels: aisStatus.vessels }); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[Ships] Events:', { disruptions: disruptions.length, density: density.length, vessels: aisStatus.vessels });  
  this.ctx.map?.setAisData(disruptions, density);
  signalAggregator.ingestAisDisruptions(disruptions);
  ingestAisDisruptionsForCII(disruptions);

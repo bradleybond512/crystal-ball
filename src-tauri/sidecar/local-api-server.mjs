@@ -501,7 +501,7 @@ async function isSafeUrl(urlString) {
   const hostname = parsed.hostname;
 
   // Quick-reject obvious private hostnames before DNS resolution
-  // eslint-disable-next-line no-restricted-syntax -- intentional: SSRF guard checking request hostname, not constructing a URL
+   
   if (hostname === 'localhost' || hostname === '[::1]') {
  return { safe: false, reason: 'Requests to localhost are not allowed' };
   }
@@ -879,7 +879,7 @@ const SIDECAR_ALLOWED_ORIGINS = [
 function getSidecarCorsOrigin(req) {
   const origin = req.headers?.origin || req.headers?.get?.('origin') || '';
   if (origin && SIDECAR_ALLOWED_ORIGINS.some(p => p.test(origin))) return origin;
-  // eslint-disable-next-line no-restricted-syntax -- intentional: Tauri IPC origin; must not change to 127.0.0.1
+   
   return 'tauri://localhost';
 }
 

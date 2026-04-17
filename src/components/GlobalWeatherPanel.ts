@@ -29,7 +29,7 @@ export class GlobalWeatherPanel extends Panel {
  }
 
  const rows = this.readings.slice(0, 15).map(r => {
- const wind = r.windMps != null ? `${r.windMps.toFixed(1)} m/s` : '—';
+ const wind = r.windMps == null ? '—' : `${r.windMps.toFixed(1)} m/s`;
  const temp = `${r.tempC.toFixed(1)}°C`;
  return `<tr>
  <td>${escapeHtml(r.city)}</td>

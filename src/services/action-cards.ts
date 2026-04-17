@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/no-nested-conditional */
+ 
 /**
  * Actionable Response Cards
  *

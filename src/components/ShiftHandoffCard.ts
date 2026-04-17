@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * ShiftHandoffCard — one-click "Last 8 hours" summary card.
  * Overlay that shows top stories, active situations, forecast accuracy,

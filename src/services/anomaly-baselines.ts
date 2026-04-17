@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Anomaly baselines — per-source 7-day rolling rate (alerts per hour).
  * Flags when a source is 3σ above its own baseline ("burst"), or silent

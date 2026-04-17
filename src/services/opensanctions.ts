@@ -16,7 +16,7 @@ export interface SanctionedEntity {
 export interface OpenSanctionsSearchResult {
   query: string;
   total: number;
-  results: Array<{
+  results: {
  id: string;
  name: string;
  schema: string;
@@ -24,7 +24,7 @@ export interface OpenSanctionsSearchResult {
  datasets: string[];
  topics: string[];
  score: number | null;
-  }>;
+  }[];
 }
 
 export async function fetchRecentSanctions(): Promise<SanctionedEntity[]> {

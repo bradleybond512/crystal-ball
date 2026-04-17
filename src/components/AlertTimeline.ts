@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * AlertTimeline — 6h bar-chart strip showing unified alert arrival density.
  * Each bar is a 5min bucket; height = count, color tinted by max severity

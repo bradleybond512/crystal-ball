@@ -256,7 +256,7 @@ export class CesiumGlobe {
  setTimeout(() => this.auditEntityHeights(), 10_000);
   }
 
-  /* eslint-disable sonarjs/cognitive-complexity -- audit needs nested iteration */
+   
   private auditEntityHeights(): void {
  const viewer = this.viewer;
  if (!viewer) return;
@@ -282,7 +282,7 @@ export class CesiumGlobe {
  `[globe-audit] terrainProvider=${viewer.terrainProvider?.constructor?.name ?? 'none'}`,
  );
   }
-  /* eslint-enable sonarjs/cognitive-complexity */
+   
 
   private auditPoint(
  entity: import('cesium').Entity, sourceName: string,

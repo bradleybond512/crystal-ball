@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity */
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Correlation feedback — tracks user reactions to synthesized correlation
  * alerts, keyed by causal pair. A pair that's repeatedly dismissed fast

@@ -7,7 +7,7 @@
  */
 import type { AppMode } from '@/services/mode-manager';
 
-type ModeChangedDetail = { mode: AppMode | null; prev: AppMode | null; auto: boolean };
+interface ModeChangedDetail { mode: AppMode | null; prev: AppMode | null; auto: boolean }
 
 const CARD_DURATION_MS = 14_000;
 
@@ -91,7 +91,7 @@ function showCard(mode: AppMode, prev: AppMode | null): void {
  </div>
   `;
 
-  document.body.appendChild(card);
+  document.body.append(card);
   _currentCard = card;
 
   requestAnimationFrame(() => requestAnimationFrame(() => {

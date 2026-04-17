@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity */
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Pair discovery — logs observed (sourceA, sourceB) co-occurrences within
  * a loose spatiotemporal window. Does NOT act on them; surfaces top

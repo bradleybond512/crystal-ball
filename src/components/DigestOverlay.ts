@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * DigestOverlay — full-bleed welcome card showing the AI-generated
  * "since you last looked" digest. Replaces stuffing the digest into the

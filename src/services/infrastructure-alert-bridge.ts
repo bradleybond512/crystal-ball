@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/no-nested-conditional, unicorn/no-array-callback-reference */
+/* eslint-disable sonarjs/no-nested-conditional, unicorn/no-array-callback-reference */
 /**
  * Infrastructure alert bridge — promotes power-grid + comms-health signals
  * into the unified alert store so the correlation engine and triage bar can

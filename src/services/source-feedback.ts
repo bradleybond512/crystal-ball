@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity */
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Source feedback learning — observes user ack/snooze behavior per source
  * and produces a feedback multiplier (0.5–1.0) used to dampen score on

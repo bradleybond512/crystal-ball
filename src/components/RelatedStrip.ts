@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * RelatedStrip — when clicking an alert or entity anywhere, this thin
  * horizontal strip appears showing related signals from other panels.

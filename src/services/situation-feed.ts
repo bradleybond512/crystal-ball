@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Situation feed — wires the SituationEngine to the unified alert store
  * so it produces live OODA-loop output. Feeds high-severity alerts into

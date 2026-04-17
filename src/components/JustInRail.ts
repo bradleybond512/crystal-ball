@@ -6,7 +6,7 @@
  * animation, auto-fade after 30s. Builds the "live drumbeat" feel.
  */
 
-/* eslint-disable sonarjs/void-use */
+ 
 import { unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
 import { panelForAlert } from '@/services/alert-routing';
 import { jumpToPanel, flashPanel, pulseAlertOnMap } from '@/services/alert-reactions';

@@ -9,9 +9,9 @@
  * when a threshold is breached (e.g. M6.5+ quake, GDACS Red, cyber attack spike).
  */
 
-const WINDOW_MS = 5 * 60 * 1_000; // 5-minute correlation window
+const WINDOW_MS = 5 * 60 * 1000; // 5-minute correlation window
 const THRESHOLD = 3; // distinct panels required
-const ALERT_COOLDOWN = 10 * 60 * 1_000; // min gap between compound alerts
+const ALERT_COOLDOWN = 10 * 60 * 1000; // min gap between compound alerts
 
 interface ElevatedSignal {
   panelId: string;
@@ -40,10 +40,10 @@ function activePanelIds(): string[] {
 export function reportElevatedPanel(panelId: string, label: string): void {
   pruneOld();
   const idx = _signals.findIndex(s => s.panelId === panelId);
-  if (idx >= 0) {
- _signals[idx]!.timestamp = Date.now();
-  } else {
+  if (idx === -1) {
  _signals.push({ panelId, label, timestamp: Date.now() });
+  } else {
+ _signals[idx]!.timestamp = Date.now();
   }
 
   const panels = activePanelIds();
@@ -107,7 +107,7 @@ function _showBanner(count: number, labels: string[]): void {
  <button id="wm-ca-dismiss" style="margin-left:8px;background:none;border:none;color:#fca5a5;cursor:pointer;font-size:18px;padding:0;line-height:1">&times;</button>
   `;
 
-  document.body.appendChild(banner);
+  document.body.append(banner);
 
   requestAnimationFrame(() => requestAnimationFrame(() => {
  banner.style.opacity = '1';

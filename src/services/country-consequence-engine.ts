@@ -190,6 +190,6 @@ export function buildCountryConsequences(input: CountryConsequenceInput): Countr
  });
   }
 
-  // eslint-disable-next-line unicorn/no-array-sort
+   
   return [...consequences].sort((a, b) => SEVERITY_SCORE[b.severity] - SEVERITY_SCORE[a.severity]);
 }

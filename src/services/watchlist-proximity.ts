@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity */
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Watchlist proximity alerting — fires synthetic convergence alerts when
  * two watchlist entities co-occur in alerts within the same geo-convergence

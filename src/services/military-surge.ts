@@ -533,7 +533,7 @@ export function foreignPresenceToSignal(alert: ForeignPresenceAlert): {
  ([op, reg]) => alert.operator === op && alert.region.id === reg
   );
 
-  // eslint-disable-next-line sonarjs/no-nested-conditional
+   
   const severity = isCritical ? 'critical' :
  // eslint-disable-next-line sonarjs/no-nested-conditional
  (alert.aircraftCount >= 5 ? 'high' : 'medium');
@@ -635,7 +635,7 @@ export function surgeAlertToSignal(surge: SurgeAlert): {
  .map(([type, count]) => `${count}x ${type}`)
  .join(', ');
 
-  // eslint-disable-next-line sonarjs/no-nested-conditional
+   
   const severity = surge.surgeMultiple >= 4 ? 'critical' :
  // eslint-disable-next-line sonarjs/no-nested-conditional
  (surge.surgeMultiple >= 3 ? 'high' : 'medium');
@@ -856,7 +856,7 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  byOperator[f.operator] = (byOperator[f.operator] || 0) + 1;
  }
 
- // eslint-disable-next-line sonarjs/no-nested-conditional
+  
  const postureLevel: 'normal' | 'elevated' | 'critical' =
  total >= theater.thresholds.critical
  ? 'critical'
@@ -878,7 +878,7 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  const olderAvg =
  older.length > 0 ? older.reduce((a, b) => a + b.totalMilitary, 0) / older.length : total;
  const changePercent = olderAvg > 0 ? Math.round(((recentAvg - olderAvg) / olderAvg) * 100) : 0;
- // eslint-disable-next-line sonarjs/no-nested-conditional
+  
  const trend: 'increasing' | 'stable' | 'decreasing' =
  // eslint-disable-next-line sonarjs/no-nested-conditional
  changePercent > 10 ? 'increasing' : (changePercent < -10 ? 'decreasing' : 'stable');
@@ -890,7 +890,7 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  if (byType.reconnaissance > 0) parts.push(`${byType.reconnaissance} recon`);
  const summary = parts.join(', ') || 'No military aircraft';
 
- // eslint-disable-next-line sonarjs/no-nested-conditional
+  
  const headline =
  postureLevel === 'critical'
  ? `Critical military buildup - ${theater.name}`
@@ -963,13 +963,13 @@ export function recalcPostureWithVessels(postures: TheaterPostureSummary[]): voi
 
  // eslint-disable-next-line sonarjs/use-type-alias
  const airLevel: 0 | 1 | 2 =
- // eslint-disable-next-line sonarjs/no-nested-conditional
+  
  p.totalAircraft >= theater.thresholds.critical ? 2
  // eslint-disable-next-line sonarjs/no-nested-conditional
  : (p.totalAircraft >= theater.thresholds.elevated ? 1 : 0);
 
  const navalLevel: 0 | 1 | 2 =
- // eslint-disable-next-line sonarjs/no-nested-conditional
+  
  p.totalVessels >= theater.navalThresholds.critical ? 2
  // eslint-disable-next-line sonarjs/no-nested-conditional
  : (p.totalVessels >= theater.navalThresholds.elevated ? 1 : 0);
@@ -997,7 +997,7 @@ export function recalcPostureWithVessels(postures: TheaterPostureSummary[]): voi
  if (p.totalVessels > 0) parts.push(`${p.totalVessels} vessels`);
  const assetSummary = parts.join(' + ') || 'No assets';
 
- // eslint-disable-next-line sonarjs/no-nested-conditional
+  
  p.headline =
  p.postureLevel === 'critical'
  ? `Critical military buildup - ${p.theaterName} (${assetSummary})`

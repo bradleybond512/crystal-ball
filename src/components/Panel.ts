@@ -212,6 +212,7 @@ export class Panel {
   private readonly contentDebounceMs = 150;
   private pendingContentHtml: string | null = null;
   private contentDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private _lastCommittedHtml: string | null = null;
   private aiSummaryOverlay: HTMLElement | null = null;
 
   /** Panel IDs that should not offer AI Summary (video streams or already-AI panels). */
@@ -741,7 +742,7 @@ export class Panel {
   }
 
   public setContent(html: string): void {
- if (this.pendingContentHtml === html || this.content.innerHTML === html) {
+ if (this.pendingContentHtml === html || this._lastCommittedHtml === html) {
  return;
  }
 
@@ -764,8 +765,11 @@ export class Panel {
  }
 
  this.pendingContentHtml = null;
- if (this.content.innerHTML !== html) {
+ if (this._lastCommittedHtml !== html) {
+ // innerHTML is the existing pattern for panel content rendering;
+ // all input is pre-sanitised by safeHtml() before reaching here.
  this.content.innerHTML = html;
+ this._lastCommittedHtml = html;
  this.markFresh();
  }
   }
@@ -808,7 +812,11 @@ export class Panel {
  if (Panel.tickerStarted) return;
  Panel.tickerStarted = true;
  Panel.heartbeatTickerId = window.setInterval(() => {
- for (const p of Panel.instances) p.updateHeartbeat();
+ for (const p of Panel.instances) {
+   if (p.lastTickAt === 0) continue;
+   if (!p.element.offsetParent) continue; // skip hidden/off-screen panels
+   p.updateHeartbeat();
+ }
  }, 5000);
  document.addEventListener('cb:panel-narrative', (ev: Event) => {
  const detail = (ev as CustomEvent<{ panelId: string; text: string }>).detail;

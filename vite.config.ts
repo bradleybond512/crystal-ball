@@ -875,6 +875,9 @@ export default defineConfig({
  if (id.includes('/@sentry/')) {
  return 'sentry';
  }
+ if (id.includes('/cesium/')) {
+ return 'cesium';
+ }
  }
  if (id.includes('/src/components/') && id.endsWith('Panel.ts')) {
  return 'panels';

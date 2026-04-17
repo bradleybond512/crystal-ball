@@ -70,16 +70,12 @@ export class RefreshScheduler implements AppModule {
  const run = async () => {
  if (this.ctx.isDestroyed) return;
  const isHidden = document.visibilityState === 'hidden';
- if (isHidden) {
- scheduleNext(computeDelay(intervalMs * currentMultiplier, true));
- return;
- }
  if (condition && !condition()) {
- scheduleNext(computeDelay(intervalMs * currentMultiplier, false));
+ scheduleNext(computeDelay(intervalMs * currentMultiplier, isHidden));
  return;
  }
  if (this.ctx.inFlight.has(name)) {
- scheduleNext(computeDelay(intervalMs * currentMultiplier, false));
+ scheduleNext(computeDelay(intervalMs * currentMultiplier, isHidden));
  return;
  }
  this.ctx.inFlight.add(name);
@@ -92,7 +88,7 @@ export class RefreshScheduler implements AppModule {
  currentMultiplier = 1;
  } finally {
  this.ctx.inFlight.delete(name);
- scheduleNext(computeDelay(intervalMs * currentMultiplier, false));
+ scheduleNext(computeDelay(intervalMs * currentMultiplier, isHidden));
  }
  };
  this.refreshRunners.set(name, { run, intervalMs });

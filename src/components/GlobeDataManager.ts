@@ -272,6 +272,22 @@ const CLUSTER_LAYERS: Record<string, Color> = {
   lightningStrikes: Color.fromCssColorString('#ffff00'),
 };
 
+// Layers that should only load when the camera is below a certain altitude (meters).
+// Static reference layers load eagerly; dynamic data layers are deferred until zoom.
+const DEFERRED_LAYER_ALTITUDE: Record<string, number> = {
+  fires: 8_000_000,
+  protests: 6_000_000,
+  lightningStrikes: 5_000_000,
+  disease: 10_000_000,
+  displacement: 10_000_000,
+  gpsJamming: 8_000_000,
+  satChange: 15_000_000,
+  darkVessels: 6_000_000,
+  redFlagWarnings: 5_000_000,
+  weatherRadar: 5_000_000,
+  weatherSatellite: 15_000_000,
+};
+
 export class GlobeDataManager {
   private viewer: Viewer;
   private layers = new Map<string, GlobeLayer>();
@@ -282,6 +298,7 @@ export class GlobeDataManager {
   private orbitLines: InstanceType<typeof PolylineCollection> | null = null;
   private satelliteCatalog: SatelliteTLE[] = [];
   private unsubPositions: (() => void) | null = null;
+  private cameraMoveSub: (() => void) | null = null;
 
   constructor(viewer: Viewer) {
  this.viewer = viewer;
@@ -334,9 +351,23 @@ export class GlobeDataManager {
  // Satellites (managed via PointPrimitiveCollection for performance, not data sources)
  void this.initSatellites();
 
+ // Eagerly load layers without altitude gates; deferred layers load on camera move.
  for (const name of this.layers.keys()) {
- void this.loadLayer(name);
+ if (!DEFERRED_LAYER_ALTITUDE[name]) void this.loadLayer(name);
  }
+ this.setupDeferredLayerLoading();
+  }
+
+  private checkDeferredLayers = (): void => {
+ const altitude = Ellipsoid.WGS84.cartesianToCartographic(this.viewer.camera.positionWC)?.height ?? Infinity;
+ for (const [name, maxAlt] of Object.entries(DEFERRED_LAYER_ALTITUDE)) {
+   if (altitude <= maxAlt) void this.loadLayer(name);
+ }
+  };
+
+  private setupDeferredLayerLoading(): void {
+ this.cameraMoveSub = this.viewer.camera.changed.addEventListener(this.checkDeferredLayers);
+ this.checkDeferredLayers();
   }
 
   private registerLayer(name: string, load: () => void | Promise<void>): void {
@@ -984,7 +1015,7 @@ export class GlobeDataManager {
      },
      description: `${pkg.name} (${pkg.domain})
 Status: ${pkg.status}
-${pkg.composition.map(u => `${u.type} x${u.count}`).join(', ')}`,
+${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
    });
 
    if (pkg.prediction.extrapolatedPath.length >= 2) {
@@ -1764,6 +1795,8 @@ ${pkg.composition.map(u => `${u.type} x${u.count}`).join(', ')}`,
   }
 
   destroy(): void {
+ this.cameraMoveSub?.();
+ this.cameraMoveSub = null;
  for (const [, layer] of this.layers) {
  this.viewer.dataSources.remove(layer.source, true);
  }

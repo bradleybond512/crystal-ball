@@ -364,6 +364,7 @@ export class DataLoaderManager implements AppModule {
 
   private mapFlashCache = new Map<string, number>();
   private readonly MAP_FLASH_COOLDOWN_MS = 10 * 60 * 1000;
+  private _lastFlashCleanup = 0;
   private readonly applyTimeRangeFilterToNewsPanelsDebounced = debounce(() => {
  this.applyTimeRangeFilterToNewsPanels();
   }, 120);
@@ -634,12 +635,25 @@ export class DataLoaderManager implements AppModule {
  tasks.push({ name: 'techReadiness', task: () => runGuarded('techReadiness', () => (this.ctx.panels['tech-readiness'] as TechReadinessPanel)?.refresh()) });
  }
 
- const limiter = createConcurrencyLimiter(12);
- const results = await limiter.mapSettled(tasks, t => t.task());
+ // Two-wave loading: critical panels first, then deferred.
+ const CRITICAL = new Set([
+ 'news', 'markets', 'weather', 'nwsAlerts', 'gdacsAlerts', 'intelligence',
+ 'natural', 'cyberThreats', 'predictions', 'spaceWeather', 'firms',
+ ]);
+ const critical = tasks.filter(t => CRITICAL.has(t.name));
+ const deferred = tasks.filter(t => !CRITICAL.has(t.name));
 
- results.forEach((result, idx) => {
+ const limiter = createConcurrencyLimiter(12);
+ const wave1 = await limiter.mapSettled(critical, t => t.task());
+ wave1.forEach((result, idx) => {
  if (result.status === 'rejected') {
- console.error(`[App] ${tasks[idx]?.name} load failed:`, result.reason);
+ console.error(`[App] ${critical[idx]?.name} load failed:`, result.reason);
+ }
+ });
+ const wave2 = await limiter.mapSettled(deferred, t => t.task());
+ wave2.forEach((result, idx) => {
+ if (result.status === 'rejected') {
+ console.error(`[App] ${deferred[idx]?.name} load failed:`, result.reason);
  }
  });
 
@@ -772,9 +786,12 @@ export class DataLoaderManager implements AppModule {
  if (!getAiFlowSettings().mapNewsFlash) return;
  const now = Date.now();
 
+ if (now - this._lastFlashCleanup > 60_000) {
+ this._lastFlashCleanup = now;
  for (const [key, timestamp] of this.mapFlashCache.entries()) {
- if (now - timestamp > this.MAP_FLASH_COOLDOWN_MS) {
- this.mapFlashCache.delete(key);
+   if (now - timestamp > this.MAP_FLASH_COOLDOWN_MS) {
+   this.mapFlashCache.delete(key);
+   }
  }
  }
 

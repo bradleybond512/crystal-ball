@@ -8,7 +8,7 @@ export default async function handler(req) {
 
   const apiKey = process.env.NEWSAPI_KEY;
   if (!apiKey) {
- return new Response(JSON.stringify({ error: 'NEWSAPI_KEY not configured' }), {
+ return Response.json({ error: 'NEWSAPI_KEY not configured' }, {
  status: 503,
  headers: { 'Content-Type': 'application/json', ...corsHeaders },
  });
@@ -16,16 +16,19 @@ export default async function handler(req) {
 
   const reqUrl = new URL(req.url);
   const q = reqUrl.searchParams.get('q') ?? 'geopolitics world news';
-  const rawPageSize = parseInt(reqUrl.searchParams.get('pageSize') ?? '10', 10);
-  const pageSize = Math.min(20, isNaN(rawPageSize) ? 10 : rawPageSize);
+  const rawPageSize = Number.parseInt(reqUrl.searchParams.get('pageSize') ?? '10', 10);
+  const pageSize = Math.min(20, Number.isNaN(rawPageSize) ? 10 : rawPageSize);
 
   try {
  const params = new URLSearchParams({ q, pageSize: String(pageSize), language: 'en', sortBy: 'publishedAt', apiKey });
+ // AbortSignal.timeout caps upstream hang — a slow newsapi.org should not
+ // wedge our edge function for the full 30 s Vercel runtime limit.
  const resp = await fetch(`https://newsapi.org/v2/everything?${params}`, {
  headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/1.0' },
+ signal: AbortSignal.timeout(10_000),
  });
  if (!resp.ok) {
- return new Response(JSON.stringify([]), {
+ return Response.json([], {
  status: 200,
  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=120', ...corsHeaders },
  });
@@ -41,12 +44,12 @@ export default async function handler(req) {
  description: a.description ?? '',
  imageUrl: a.urlToImage ?? undefined,
  }));
- return new Response(JSON.stringify(items), {
+ return Response.json(items, {
  status: 200,
  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=120, s-maxage=300', ...corsHeaders },
  });
-  } catch (error) {
- return new Response(JSON.stringify([]), {
+  } catch {
+ return Response.json([], {
  status: 200,
  headers: { 'Content-Type': 'application/json', ...corsHeaders },
  });

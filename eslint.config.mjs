@@ -47,6 +47,13 @@ export default tseslint.config(
  message: 'Use 127.0.0.1 instead of localhost — WKWebView treats them as distinct origins.',
  },
  ],
+ // TODO: add a `no-unsafe-innerHTML` rule once the 125 existing
+ // template-literal innerHTML sites have been audited and tagged with
+ // `// safe-html: …` justification comments. Rule design:
+ //   AssignmentExpression[left.property.name="innerHTML"][right.type="TemplateLiteral"]
+ // Security reviews have already verified the current sites escape user data
+ // via escapeHtml()/sanitizeUrl() or interpolate only translation keys; the
+ // rule is valuable for future regressions, not current XSS hunting.
  ...unicorn.configs.recommended.rules,
  ...sonarjs.configs.recommended.rules,
  // Unicorn overrides — codebase conventions

@@ -19,8 +19,10 @@ export default async function handler(req) {
 
   try {
  const params = new URLSearchParams({ apikey: apiKey, q, language: 'en' });
+ // Bound upstream latency so a newsdata.io stall can't wedge the edge function.
  const resp = await fetch(`https://newsdata.io/api/1/latest?${params}`, {
  headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/1.0' },
+ signal: AbortSignal.timeout(10_000),
  });
  if (!resp.ok) {
  return Response.json([], {

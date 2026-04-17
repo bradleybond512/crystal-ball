@@ -771,9 +771,33 @@ export class Panel {
 
  this.pendingContentHtml = null;
  if (this.lastAppliedContentHtml !== html) {
+ // Crash-isolate the DOM write so a malformed string from one panel subclass
+ // (bad escaping, oversized attribute, CSP blocker) can't abort the debounce
+ // timer. On failure we swap in a minimal error card and mark the cache so
+ // subsequent identical writes are skipped.
+ try {
  this.content.innerHTML = html;
  this.lastAppliedContentHtml = html;
  this.markFresh();
+ } catch (error) {
+ // eslint-disable-next-line no-console
+ console.warn(`[Panel ${this.panelId}] setContent failed:`, error);
+ this.renderErrorFallback(error instanceof Error ? error.message : String(error));
+ }
+ }
+  }
+
+  private renderErrorFallback(message: string): void {
+ const safe = message.replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c] ?? c));
+ const fallback = `<div class="panel-error-fallback" role="alert">
+ <div class="panel-error-fallback-icon">⚠</div>
+ <div class="panel-error-fallback-text">This panel failed to render.<br><small>${safe}</small></div>
+ </div>`;
+ try {
+ this.content.innerHTML = fallback;
+ this.lastAppliedContentHtml = fallback;
+ } catch {
+ // DOM truly hostile — give up silently rather than cascade the crash.
  }
   }
 

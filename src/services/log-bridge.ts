@@ -181,6 +181,98 @@ function installVisibilityBreadcrumbs(): void {
   window.addEventListener('offline', () => recordBreadcrumb('WARN', 'network', 'offline'));
 }
 
+// ─── Interaction latency (INP-style) ────────────────────────────────────────
+// Use PerformanceObserver 'event' entries to catch interactions that take >200
+// ms to next-paint — the standard INP "needs improvement" threshold. Feature-
+// checked; WebKit doesn't yet support 'event' entryType so we no-op.
+const INP_REPORT_THRESHOLD_MS = 200;
+let inpObserver: PerformanceObserver | null = null;
+
+function installInteractionLatencyObserver(): void {
+  if (typeof PerformanceObserver === 'undefined') return;
+  const supported = PerformanceObserver.supportedEntryTypes;
+  if (!supported?.includes('event')) return;
+  try {
+ inpObserver = new PerformanceObserver((list) => {
+ for (const entry of list.getEntries()) {
+ const duration = (entry as PerformanceEntry & { duration: number }).duration;
+ if (duration < INP_REPORT_THRESHOLD_MS) continue;
+ recordBreadcrumb('PERF', 'slow-interaction', `${entry.name} took ${Math.round(duration)}ms to next paint`, {
+ startTime: Math.round(entry.startTime),
+ });
+ }
+ });
+ inpObserver.observe({ type: 'event', buffered: true, durationThreshold: INP_REPORT_THRESHOLD_MS } as PerformanceObserverInit);
+  } catch {
+ inpObserver = null;
+  }
+}
+
+// ─── Fetch failure rate tracker ─────────────────────────────────────────────
+// Wraps window.fetch so we can count recent failures per host (rolling
+// 5-minute window). Useful for distinguishing "everything is down" from
+// "one upstream is flaky". Results surface through `getFetchFailureSummary()`
+// which the diagnostics bundle can include.
+interface FetchStat { ok: number; fail: number; lastErrorAt: number }
+const FETCH_WINDOW_MS = 5 * 60 * 1000;
+const fetchStats = new Map<string, FetchStat>();
+const fetchFailureTimes = new Map<string, number[]>();
+
+function bumpFetchStat(host: string, ok: boolean): void {
+  const stat = fetchStats.get(host) ?? { ok: 0, fail: 0, lastErrorAt: 0 };
+  if (ok) stat.ok += 1;
+  else { stat.fail += 1; stat.lastErrorAt = Date.now(); }
+  fetchStats.set(host, stat);
+
+  if (!ok) {
+ const arr = fetchFailureTimes.get(host) ?? [];
+ arr.push(Date.now());
+ // Trim to window
+ const cutoff = Date.now() - FETCH_WINDOW_MS;
+ while (arr.length > 0 && arr[0]! < cutoff) arr.shift();
+ fetchFailureTimes.set(host, arr);
+ // Log an alarm if 5+ failures for the same host in the window.
+ if (arr.length === 5) {
+ recordBreadcrumb('WARN', 'fetch-burst', `${host}: ${arr.length} failures in <5m`);
+ logToDesktop('WARN', `fetch failure burst: ${host} (${arr.length} in <5m)`);
+ }
+  }
+}
+
+function installFetchInstrumentation(): void {
+  // Idempotent — installLogBridge is idempotent so this is fine.
+  const origFetch = window.fetch.bind(window);
+  window.fetch = async function instrumentedFetch(input, init) {
+ let host = 'unknown';
+ try {
+ let url: string;
+ if (typeof input === 'string') url = input;
+ else if (input instanceof Request) url = input.url;
+ else url = String(input);
+ host = new URL(url, location.href).host;
+ } catch { /* unparseable; keep 'unknown' */ }
+ try {
+ const resp = await origFetch(input, init);
+ bumpFetchStat(host, resp.ok);
+ return resp;
+ } catch (error) {
+ bumpFetchStat(host, false);
+ throw error;
+ }
+  };
+}
+
+export function getFetchFailureSummary(): { host: string; ok: number; fail: number; failureRate: number }[] {
+  const out: { host: string; ok: number; fail: number; failureRate: number }[] = [];
+  for (const [host, stat] of fetchStats) {
+ const total = stat.ok + stat.fail;
+ if (total === 0) continue;
+ out.push({ host, ok: stat.ok, fail: stat.fail, failureRate: stat.fail / total });
+  }
+  out.sort((a, b) => b.fail - a.fail);
+  return out;
+}
+
 export function installLogBridge(): void {
   if (installed) return;
   installed = true;
@@ -226,8 +318,10 @@ export function installLogBridge(): void {
   };
 
   installLongTaskObserver();
+  installInteractionLatencyObserver();
   installMemoryWatchdog();
   installVisibilityBreadcrumbs();
+  installFetchInstrumentation();
 
   // Cmd+Shift+D — copy diagnostics bundle to clipboard
   document.addEventListener('keydown', (e) => {

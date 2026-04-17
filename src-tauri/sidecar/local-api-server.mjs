@@ -1613,7 +1613,7 @@ async function handleIntelGenerate(req, res, context) {
         resp.on('error', reject);
       });
       r.on('error', reject);
-      r.setTimeout(10_000, () => { r.destroy(new Error('timeout')); });
+      r.setTimeout(60_000, () => { r.destroy(new Error('timeout')); });
       r.write(requestBody);
       r.end();
     });

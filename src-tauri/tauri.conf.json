@@ -56,6 +56,8 @@
     "resources": [
       "../api",
       "sidecar/local-api-server.mjs",
+      "sidecar/sitrep-severity.mjs",
+      "sidecar/sitrep-filter.mjs",
       "sidecar/package.json",
       "sidecar/node",
       "../data",

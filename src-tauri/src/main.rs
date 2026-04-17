@@ -1871,11 +1871,15 @@ fn log_frontend(app: AppHandle, level: String, message: String, context: Option<
  _ => "INFO".to_string(),
  };
  let ctx = context.unwrap_or_default();
- let truncated_msg = if message.len() > 1000 { &message[..1000] } else { &message };
+ // Use byte-safe truncation — slicing &message[..1000] panics when the cut
+ // bisects a multi-byte UTF-8 codepoint (emoji, non-Latin scripts), which the
+ // frontend can easily trigger via breadcrumbs/log output.
+ let truncated_msg = truncate_to_bytes(&message, 1000);
+ let truncated_ctx = truncate_to_bytes(&ctx, 2000);
  append_desktop_log(
  &app,
  &lvl,
- &format!("[FRONTEND] {truncated_msg}{}", if ctx.is_empty() { String::new() } else { format!(" | {ctx}") }),
+ &format!("[FRONTEND] {truncated_msg}{}", if truncated_ctx.is_empty() { String::new() } else { format!(" | {truncated_ctx}") }),
  );
 }
 

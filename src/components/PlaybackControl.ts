@@ -1,6 +1,7 @@
 import { getSnapshots, type DashboardSnapshot } from '@/services/storage';
 import { buildReplayNarrative } from '@/services/replay-narrative';
 import { t } from '@/services/i18n';
+import { escapeHtml } from '@/utils/sanitize';
 
 export class PlaybackControl {
   private element: HTMLElement;
@@ -53,12 +54,12 @@ export class PlaybackControl {
  const closeBtn = this.element.querySelector('.playback-close')!;
  const slider = this.element.querySelector('.playback-slider') as HTMLInputElement;
 
- toggle.addEventListener('click', async () => {
+ toggle.addEventListener('click', () => {
  panel.classList.toggle('hidden');
- if (!panel.classList.contains('hidden')) {
- await this.loadSnapshots();
- } else {
+ if (panel.classList.contains('hidden')) {
  this.stopPlayback();
+ } else {
+ void this.loadSnapshots();
  }
  });
 
@@ -83,7 +84,7 @@ export class PlaybackControl {
  this.element.querySelector('.playback-dots')?.addEventListener('click', (event) => {
  const dot = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-index]');
  if (!dot) return;
- const index = Number.parseInt(dot.dataset.index || '', 10);
+ const index = Number.parseInt(dot.dataset.index ?? '', 10);
  if (!Number.isFinite(index)) return;
  this.stopPlayback();
  this.currentIndex = index;
@@ -264,7 +265,7 @@ export class PlaybackControl {
 
  titleEl.textContent = narrative.headline;
  summaryEl.textContent = narrative.summary;
- bulletsEl.innerHTML = narrative.bullets.map((bullet) => `<div class="playback-bullet">${bullet}</div>`).join('');
+ bulletsEl.innerHTML = narrative.bullets.map((bullet) => `<div class="playback-bullet">${escapeHtml(bullet)}</div>`).join('');
  (this.element.querySelector('.playback-narrative') as HTMLElement | null)?.setAttribute('data-severity', narrative.severity);
   }
 

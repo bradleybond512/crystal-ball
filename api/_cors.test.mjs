@@ -73,6 +73,9 @@ test('rejects non-enumerated crystalball.app subdomains', () => {
 test('allows Vercel preview deploy origins', () => {
   const origins = [
  'https://crystalball-abc123-elie-xyz.vercel.app',
+ 'https://crystalball-main-bradleybond512.vercel.app',
+ 'https://crystal-ball-feature-abc-bradleybond512.vercel.app',
+ 'https://crystal-ball-preview-elie-xyz.vercel.app',
  'http://localhost:5173',
  'http://localhost',
  'https://localhost:3000',
@@ -80,6 +83,23 @@ test('allows Vercel preview deploy origins', () => {
   for (const origin of origins) {
  const req = makeRequest(origin);
  assert.equal(isDisallowedOrigin(req), false, `preview origin should be allowed: ${origin}`);
+  }
+});
+
+test('rejects unrelated third-party Vercel projects that share the crystal-ball prefix', () => {
+  // Historical bug: a pattern like /^https:\/\/crystal-ball[a-z0-9-]*\.vercel\.app$/
+  // would let any Vercel project starting with "crystal-ball" bypass CORS.
+  // Every trusted pattern must terminate on a known username segment.
+  const bad = [
+ 'https://crystal-ball.vercel.app',
+ 'https://crystal-ball-attacker.vercel.app',
+ 'https://crystal-ball-foo-bar-baz.vercel.app',
+ 'https://crystalball-foo.vercel.app',
+ 'https://crystal-ball-main-otheruser.vercel.app',
+  ];
+  for (const origin of bad) {
+ const req = makeRequest(origin);
+ assert.equal(isDisallowedOrigin(req), true, `third-party Vercel origin should be rejected: ${origin}`);
   }
 });
 

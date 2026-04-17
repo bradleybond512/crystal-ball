@@ -622,13 +622,25 @@ fn append_desktop_log(app: &AppHandle, level: &str, message: &str) {
  return;
  };
 
+ // Replace embedded CR/LF so frontend-supplied content can't inject forged
+ // log entries into subsequent lines. Each `append_desktop_log` call MUST
+ // produce exactly one line.
+ let sanitized: String = message
+ .chars()
+ .map(|c| match c {
+ '\n' => ' ',
+ '\r' => ' ',
+ _ => c,
+ })
+ .collect();
+
  let timestamp = SystemTime::now()
  .duration_since(UNIX_EPOCH)
  .map(|d| d.as_secs())
  .unwrap_or(0);
  let _ = writeln!(
  file,
- "[{timestamp}][v{}+{}][{level}] {message}",
+ "[{timestamp}][v{}+{}][{level}] {sanitized}",
  env!("CARGO_PKG_VERSION"),
  BUILD_SHA
  );
@@ -704,8 +716,12 @@ fn open_system_prefs_location() -> Result<(), String> {
 }
 
 /// Get device location via native CoreLocation (bypasses WKWebView geolocation block).
+/// Gated by `require_trusted_window` so an external-origin window (e.g. the
+/// YouTube login WebView) cannot exfiltrate GPS coordinates even if its
+/// capability config is ever broadened.
 #[tauri::command]
-fn get_native_location() -> Result<(f64, f64), String> {
+fn get_native_location(webview: Webview) -> Result<(f64, f64), String> {
+ require_trusted_window(webview.label())?;
  get_native_location_impl()
 }
 

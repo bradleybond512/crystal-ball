@@ -212,6 +212,11 @@ export class Panel {
   private readonly contentDebounceMs = 150;
   private pendingContentHtml: string | null = null;
   private contentDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  // Cache the last HTML string we actually wrote to the DOM. Reading
+  // `element.innerHTML` forces the browser to serialize the subtree, which is
+  // expensive on panels with large or animated content. Keeping a cached copy
+  // lets setContent() detect no-op updates without touching the DOM.
+  private lastAppliedContentHtml = '';
   private aiSummaryOverlay: HTMLElement | null = null;
 
   /** Panel IDs that should not offer AI Summary (video streams or already-AI panels). */
@@ -741,9 +746,10 @@ export class Panel {
   }
 
   public setContent(html: string): void {
- if (this.pendingContentHtml === html || this.content.innerHTML === html) {
- return;
- }
+ // No-op detection uses only cached strings — avoid reading innerHTML, which
+ // forces a full subtree serialization every call.
+ if (this.pendingContentHtml === html) return;
+ if (this.pendingContentHtml === null && this.lastAppliedContentHtml === html) return;
 
  this.pendingContentHtml = html;
  if (this.contentDebounceTimer) {
@@ -764,10 +770,21 @@ export class Panel {
  }
 
  this.pendingContentHtml = null;
- if (this.content.innerHTML !== html) {
+ if (this.lastAppliedContentHtml !== html) {
  this.content.innerHTML = html;
+ this.lastAppliedContentHtml = html;
  this.markFresh();
  }
+  }
+
+  /**
+   * Clear the cached last-applied-HTML so the next setContent() call is forced
+   * to write to the DOM even if it would otherwise be a no-op. Subclasses that
+   * mutate this.content directly (innerHTML, replaceChildren, append) should
+   * call this afterwards so the cache does not mask a real update.
+   */
+  protected invalidateContentCache(): void {
+ this.lastAppliedContentHtml = '';
   }
 
   /** Mark the panel as freshly updated — flashes the content and resets the heartbeat. */
@@ -1117,6 +1134,7 @@ export class Panel {
  this.contentDebounceTimer = null;
  }
  this.pendingContentHtml = null;
+ this.lastAppliedContentHtml = '';
 
  if (this.infoBtnHandler && this.infoBtnEl) {
  this.infoBtnEl.removeEventListener('click', this.infoBtnHandler);

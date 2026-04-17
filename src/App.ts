@@ -344,10 +344,12 @@ export class App {
 
   public async init(): Promise<void> {
  const initStart = performance.now();
- if (isDesktopRuntime()) {
+ // Log-bridge records breadcrumbs, long-task perf events, and memory snapshots
+ // in every runtime. In desktop builds it also forwards to ~/Library/Logs via
+ // Tauri; in web builds the invokeTauri calls no-op but the client-side
+ // breadcrumb buffer remains available for diagnostics copy-outs.
  const { installLogBridge } = await import('@/services/log-bridge');
  installLogBridge();
- }
  await initDB();
  await initI18n();
  cyberReactorUnsubscribe = startNotificationRouter();

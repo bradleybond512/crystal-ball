@@ -8,6 +8,10 @@ export interface RefreshRegistration {
   condition?: () => boolean;
 }
 
+// Anything slower than this gets a console.warn that log-bridge captures as a
+// perf breadcrumb. Chosen to trip on clear regressions, not noisy batch work.
+const SLOW_REFRESH_THRESHOLD_MS = 2500;
+
 export class RefreshScheduler implements AppModule {
   private ctx: AppContext;
   private refreshTimeoutIds = new Map<string, ReturnType<typeof setTimeout>>();
@@ -83,12 +87,21 @@ export class RefreshScheduler implements AppModule {
  return;
  }
  this.ctx.inFlight.add(name);
+ const refreshStart = performance.now();
  try {
  const changed = await fn();
+ const elapsed = performance.now() - refreshStart;
+ if (elapsed >= SLOW_REFRESH_THRESHOLD_MS) {
+ // console.warn is intercepted by log-bridge so this reaches ~/Library/Logs
+ // automatically in desktop builds and stays as a breadcrumb in web builds.
+ // eslint-disable-next-line no-console
+ console.warn(`[App] Slow refresh: ${name} took ${Math.round(elapsed)}ms`);
+ }
  currentMultiplier = changed === false ? Math.min(currentMultiplier * 2, MAX_BACKOFF_MULTIPLIER) : 1;
  } catch (error) {
+ const elapsed = performance.now() - refreshStart;
  // eslint-disable-next-line no-console
- console.error(`[App] Refresh ${name} failed:`, error);
+ console.error(`[App] Refresh ${name} failed after ${Math.round(elapsed)}ms:`, error);
  currentMultiplier = 1;
  } finally {
  this.ctx.inFlight.delete(name);
@@ -99,7 +112,8 @@ export class RefreshScheduler implements AppModule {
  scheduleNext(computeDelay(intervalMs, document.visibilityState === 'hidden'));
   }
 
-  private static readonly MAX_CONCURRENT_FLUSHES = 6;
+  static readonly MAX_CONCURRENT_FLUSHES = 6;
+  static readonly FLUSH_STAGGER_MS = 150;
   private flushQueue: { name: string; run: () => Promise<void> }[] = [];
   private flushInFlight = 0;
 
@@ -129,13 +143,14 @@ export class RefreshScheduler implements AppModule {
  while (this.flushInFlight < RefreshScheduler.MAX_CONCURRENT_FLUSHES && this.flushQueue.length > 0) {
  const item = this.flushQueue.shift()!;
  this.flushInFlight++;
- // Stagger each launch by 200ms * position to avoid burst
- const delay = this.flushInFlight * 200;
+ // First flushed item fires immediately; subsequent items stagger to avoid burst.
+ const delay = (this.flushInFlight - 1) * RefreshScheduler.FLUSH_STAGGER_MS;
  this.refreshTimeoutIds.set(item.name, setTimeout(() => {
- void item.run().finally(() => {
+ // Wrap in Promise.resolve so runners that forget to return a Promise don't crash the chain.
+ Promise.resolve(item.run()).finally(() => {
   this.flushInFlight--;
   this.drainFlushQueue();
- });
+ }).catch(() => { /* errors are already logged by the caller */ });
  }, delay));
  }
   }

@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mockReq, mockRes, mockFetch } from './_test-utils.mjs';
+import { invokeHandler, mockFetch } from './_test-utils.mjs';
 
 let handler;
 try {
@@ -21,20 +21,16 @@ try {
 
 test('fwdstart.js: rejects unsupported methods', async () => {
   if (!handler) return;
-  const req = mockReq({ method: 'DELETE' });
-  const res = mockRes();
-  await handler(req, res);
-  assert.ok(res.statusCode === 405 || res.statusCode === 400 || res.statusCode === 200,
-    'should handle or reject unsupported methods');
+  const { res } = await invokeHandler(handler, { method: 'DELETE' });
+  assert.ok(res.ended, 'should respond to unsupported methods without throwing');
 });
 
 test('fwdstart.js: handles missing query params gracefully', async () => {
   if (!handler) return;
-  const req = mockReq({ query: {} });
-  const res = mockRes();
   const restoreFetch = mockFetch(new Map([
     ['http', { status: 200, json: {} }],
   ]));
-  try { await handler(req, res); } catch {} finally { restoreFetch(); }
+  let res;
+  try { ({ res } = await invokeHandler(handler, { query: {} })); } finally { restoreFetch(); }
   assert.ok(res.ended || res.body !== null, 'should respond');
 });

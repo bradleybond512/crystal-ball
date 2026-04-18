@@ -117,7 +117,7 @@ Ghost Mode: polling ×5, analytics suppressed, notifications suppressed, dark cr
 
 ## Settings / API Keys
 
-API keys entered via gear icon → API Keys tab. None embed the brand in their names; all 47 supported keys are generic API names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc).
+API keys entered via gear icon → API Keys tab. None embed the brand in their names; all 49 supported keys are generic API names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc).
 
 ## Secret Scan Guardrail
 

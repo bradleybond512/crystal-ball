@@ -20,10 +20,12 @@ If you have ten minutes, read these in order:
 Crystal Ball currently ships:
 
 - `4` web variants
-- `3` desktop build targets
+- `3` desktop build targets (`full`, `tech`, `finance`)
+- `185` panels in the full variant (see [src/config/panels.ts](../src/config/panels.ts))
+- `70` map layers on the 3D globe (see [src/types/index.ts](../src/types/index.ts) `MapLayers`)
 - `21` generated OpenAPI specs
 - `19` locale bundles
-- `46` desktop secret slots backed by the OS keychain
+- `49` desktop secret slots backed by the OS keychain
 
 Those numbers come from the current codebase, not aspirational copy.
 

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { buildReleaseTag, assertSupportedReleaseVariant } from './release-metadata.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
@@ -17,6 +18,7 @@ function parseArgs(argv) {
   const options = {
  allowExistingTargetRelease: false,
  remote: '',
+ variant: 'full',
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -34,9 +36,19 @@ function parseArgs(argv) {
  options.remote = arg.slice('--remote='.length);
  continue;
  }
+ if (arg === '--variant') {
+ options.variant = argv[i + 1] ?? '';
+ i += 1;
+ continue;
+ }
+ if (arg.startsWith('--variant=')) {
+ options.variant = arg.slice('--variant='.length);
+ continue;
+ }
  throw new Error(`Unknown argument: ${arg}`);
   }
 
+  assertSupportedReleaseVariant(options.variant);
   return options;
 }
 
@@ -73,8 +85,8 @@ export function parseCargoLockVersion(cargoLock, packageName) {
   return versionMatch[1];
 }
 
-function buildTargetTag(version) {
-  return `v${version}`;
+function buildTargetTag(version, variant = 'full') {
+  return buildReleaseTag(version, variant);
 }
 
 export function findVersionMismatches(versionsByFile) {
@@ -220,7 +232,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const versionsByFile = await readVersionFiles();
   const targetVersion = versionsByFile['package.json'];
-  const targetTag = buildTargetTag(targetVersion);
+  const targetTag = buildTargetTag(targetVersion, options.variant);
 
   const issues = [
  ...findVersionMismatches(versionsByFile),
@@ -250,6 +262,7 @@ async function main() {
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isCli) {
+  // eslint-disable-next-line unicorn/prefer-top-level-await -- wrapped in isCli guard so top-level await would run during imports
   main().catch((error) => {
  console.error(`[release:doctor] Failed: ${error instanceof Error ? error.message : String(error)}`);
  process.exit(1);

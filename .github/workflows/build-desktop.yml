@@ -2,6 +2,18 @@ name: Build Desktop App
 
 on:
   workflow_dispatch:
+    # Build-only variant dispatcher — picks a variant and runs the build
+    # without publishing a release. Tag pushes are the release publisher.
+    inputs:
+      variant:
+        description: 'Variant to build (no release publish)'
+        required: true
+        default: full
+        type: choice
+        options:
+          - full
+          - tech
+          - finance
   push:
     tags:
       - 'v*'

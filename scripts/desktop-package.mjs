@@ -15,22 +15,29 @@ const getArg = (name) => {
 const hasFlag = (name) => args.includes(`--${name}`);
 
 const targetOs = getArg('os');
-const variant = 'full';
+const variant = getArg('variant') || 'full';
 const sign = hasFlag('sign');
 const appOnly = hasFlag('app-only');
 const skipNodeRuntime = hasFlag('skip-node-runtime');
 const showHelp = hasFlag('help') || hasFlag('h');
-const variantProductName = 'Crystal Ball';
+// Product banner per variant. Must match packaging targets emitted by the
+// Tauri build so the expected app bundle name resolves cleanly.
+const variantProductName = {
+  full: 'Crystal Ball',
+  tech: 'Tech Monitor',
+  finance: 'Finance Monitor',
+}[variant];
 
 const validOs = new Set(['macos', 'windows', 'linux']);
+const validVariant = /^(full|tech|finance)$/.test(variant);
 
 if (showHelp) {
-  console.log('Usage: npm run desktop:package -- --os <macos|windows|linux> [--sign] [--app-only] [--skip-node-runtime]');
+  console.log('Usage: npm run desktop:package -- --os <macos|windows|linux> --variant <full|tech|finance> [--sign] [--app-only] [--skip-node-runtime]');
   process.exit(0);
 }
 
-if (!validOs.has(targetOs)) {
-  console.error('Usage: npm run desktop:package -- --os <macos|windows|linux> [--sign] [--app-only] [--skip-node-runtime]');
+if (!validOs.has(targetOs) || !validVariant) {
+  console.error('Usage: npm run desktop:package -- --os <macos|windows|linux> --variant <full|tech|finance> [--sign] [--app-only] [--skip-node-runtime]');
   process.exit(1);
 }
 
@@ -214,10 +221,19 @@ if (targetOs === 'macos') {
 
  console.log('[desktop-package] Re-signing macOS app bundle with ad-hoc signature for local packaging');
  const entitlementsPath = path.join('src-tauri', 'Entitlements.plist');
- const signArgs = ['--force', '--deep', '--sign', '-'];
- if (existsSync(entitlementsPath)) signArgs.push('--entitlements', entitlementsPath);
- signArgs.push(appPath);
- run('codesign', signArgs);
+ const hasEntitlements = existsSync(entitlementsPath);
+ // Keep the codesign flags as an inline array literal — the
+ // desktop-package-signing.test.mjs regression test grep-matches on the
+ // literal flag sequence so any dynamic `signArgs.push()` style hides the
+ // intent from the contract check.
+ run('codesign', [
+ '--force',
+ '--deep',
+ '--sign',
+ '-',
+ ...(hasEntitlements ? ['--entitlements', entitlementsPath] : []),
+ appPath,
+ ]);
  verifyMacCodeSignature(appPath, 'App bundle');
   }
 

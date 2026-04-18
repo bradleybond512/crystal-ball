@@ -38,14 +38,42 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Run release doctor on pull requests
+      # PRs use --allow-existing-target-release so unrelated work doesn't
+      # break when the main-branch tag has already been consumed. Main pushes
+      # use the strict mode per variant so a stale version can't silently land.
+
+      - name: Run release doctor for full variant on pull requests
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/release-doctor.mjs --allow-existing-target-release
+        run: node scripts/release-doctor.mjs --allow-existing-target-release --variant full
 
-      - name: Run release doctor on main push
+      - name: Run release doctor for tech variant on pull requests
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/release-doctor.mjs --allow-existing-target-release --variant tech
+
+      - name: Run release doctor for finance variant on pull requests
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/release-doctor.mjs --allow-existing-target-release --variant finance
+
+      - name: Run release doctor for full variant on main push
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/release-doctor.mjs
+        run: node scripts/release-doctor.mjs --variant full
+
+      - name: Run release doctor for tech variant on main push
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/release-doctor.mjs --variant tech
+
+      - name: Run release doctor for finance variant on main push
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/release-doctor.mjs --variant finance

@@ -21,6 +21,7 @@ const RELEASE_FILE_SUFFIXES = [
   '.zip',
 ];
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- long-switch CLI parser, not worth extracting
 function parseArgs(argv) {
   const options = {
  mode: 'collect',
@@ -152,7 +153,14 @@ export function isReleaseArtifactName(fileName, version) {
 }
 
 export function canonicalReleaseAssetName(fileName) {
-  return fileName.replace(/^World[ .]Monitor(?=_)/, 'Crystal Ball');
+  // Tauri bundlers emit the product name with either a space or a dot
+  // depending on platform (macOS DMG uses ".", msi/exe can use " "). Normalize
+  // both to the canonical space form so a downloaded `Crystal.Ball_…` matches
+  // a manifest that lists `Crystal Ball_…`. Also collapse the legacy
+  // "World Monitor" / "World.Monitor" branding to the current product name.
+  return fileName
+ .replace(/^World[ .]Monitor(?=_)/, 'Crystal Ball')
+ .replace(/^Crystal\.Ball(?=_)/, 'Crystal Ball');
 }
 
 async function listFilesRecursive(rootDir) {
@@ -289,7 +297,8 @@ async function collectMode(options) {
 }
 
 async function combineMode(options) {
-  const manifestFiles = (await listFilesRecursive(options.manifestsDir))
+  const allFiles = await listFilesRecursive(options.manifestsDir);
+  const manifestFiles = allFiles
  .filter((filePath) => filePath.endsWith('.json'))
  .sort();
   const manifests = await Promise.all(
@@ -344,6 +353,7 @@ async function main() {
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isCli) {
+  // eslint-disable-next-line unicorn/prefer-top-level-await -- wrapped in isCli guard so top-level await would run during imports
   main().catch((error) => {
  console.error(`[release-manifest] Failed: ${error instanceof Error ? error.message : String(error)}`);
  process.exit(1);

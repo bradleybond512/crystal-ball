@@ -214,7 +214,8 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Panels (full variant) | 183 | `src/config/panels.ts` |
+| Panels (full variant) | 185 | `src/config/panels.ts` |
+| Default panel inventory | `185 full / 35 tech / 31 finance / 10 happy` | `src/config/panels.ts` |
 | God's Vision map layers | 70 (26 on by default) | `src/types/index.ts` MapLayers |
 | Panel categories | 19 | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |

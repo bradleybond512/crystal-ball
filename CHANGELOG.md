@@ -4,6 +4,8 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.10.5] - 2026-04-18
+
 ### Added
 
 - **CLI Intelligence Toolkit** (`tools/mcp-server/`): 11 new MCP tools (30 total) across 4 phases:

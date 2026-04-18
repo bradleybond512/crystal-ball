@@ -6,25 +6,44 @@ import path from 'node:path';
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const src = readFileSync(path.join(repoRoot, 'src', 'app', 'vault-intro.ts'), 'utf8');
 
-// See vault-intro-open-sequence.test.mjs header: this test describes the
-// previous scanner overlay built on top of a video scene. The current vault
-// intro uses the Tauri biometry plugin directly — no scanBtn. Skipping
-// until the characterization suite is rewritten for the new lifecycle.
-test.skip('vault intro scanner wiring is single-registration and retry-safe', () => {
-  const clickListenerMatches = src.match(/scanBtn\.addEventListener\('click'/g) ?? [];
+// Scanner wiring characterization for the current vault intro. See
+// vault-intro-open-sequence.test.mjs for the full architecture note.
+// Contract enforced by these assertions:
+//   - Exactly ONE click listener on the scanner button (retry must reuse the
+//     same handler, not re-register).
+//   - Retry path is guarded by an `inFlight` flag so double-taps can't race.
+//   - Authentication goes through a single `invokeTauri('plugin:biometry|…')`
+//     call, not a home-grown fingerprint overlay.
+
+test('vault intro scanner wiring is single-registration and retry-safe', () => {
+  const clickListenerMatches = src.match(/refs\.scannerBtn\.addEventListener\('click'/g) ?? [];
   assert.equal(
  clickListenerMatches.length,
  1,
- 'scanner should register one click listener when the flow starts',
+ 'scanner button should register exactly one click listener across the flow',
   );
+
   assert.match(
  src,
- /scene\.scanBtn\.addEventListener\('click', async \(\) => \{[\s\S]*if \(st\.phase !== 'idle'\) return;/m,
- 'scanner handler should remain single-registered and guard against re-entry during active scans',
+ /let inFlight = false;[\s\S]*if \(settled \|\| inFlight\) return;[\s\S]*inFlight = true;/m,
+ 'tryAuth should gate on an inFlight flag so rapid retries cannot race',
   );
+
   assert.match(
  src,
- /if \(granted\) \{[\s\S]*await playOpenSequence\(scene, st, appReady\);[\s\S]*\} else \{[\s\S]*await sleep\(1800\);[\s\S]*st\.phase\s*=\s*'idle';/m,
- 'retry path should reset scanner state back to idle after a failed authentication attempt',
+ /const CMD = 'plugin:biometry\|authenticate';[\s\S]*await invokeTauri<void>\(CMD,/m,
+ 'authentication should route through the Tauri biometry plugin, not a custom scanner',
+  );
+
+  assert.match(
+ src,
+ /setScannerError\(refs, text\);[\s\S]*setTimeout\(\(\) => \{ if \(!settled\) setScannerIdle\(refs\); \}, \d+\);/m,
+ 'on error the scanner should flip to an error state and auto-reset to idle so retry works',
+  );
+
+  assert.match(
+ src,
+ /export async function runVaultIntro\(appReady\?: Promise<void>\): Promise<boolean>/m,
+ 'runVaultIntro should expose an appReady hook so the shell can gate on bootstrap completion',
   );
 });

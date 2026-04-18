@@ -83,7 +83,6 @@ import { analyzeFlightsForSurge, surgeAlertToSignal, detectForeignMilitaryPresen
 import { fetchCachedTheaterPosture, ingestLocalPostures } from '@/services/cached-theater-posture';
 import { ingestProtestsForCII, ingestMilitaryForCII, ingestNewsForCII, ingestOutagesForCII, ingestConflictsForCII, ingestUcdpForCII, ingestHapiForCII, ingestDisplacementForCII, ingestClimateForCII, ingestStrikesForCII, ingestOrefForCII, ingestAviationForCII, ingestAdvisoriesForCII, ingestGpsJammingForCII, ingestAisDisruptionsForCII, ingestSatelliteFiresForCII, ingestCyberThreatsForCII, ingestTemporalAnomaliesForCII, isInLearningMode } from '@/services/country-instability';
 import { fetchGpsInterference } from '@/services/gps-interference';
-import { fetchLocalIDSAlerts } from '@/services/local-ids';
 import { situationEngine } from '@/services/situation-engine';
 import { dataFreshness, type DataSourceId } from '@/services/data-freshness';
 import { fetchConflictEvents, fetchUcdpClassifications, fetchHapiSummary, fetchUcdpEvents, deduplicateAgainstAcled, fetchIranEvents } from '@/services/conflict';
@@ -137,7 +136,6 @@ import {
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
-import { LocalIDSPanel } from '@/components/LocalIDSPanel';
 import { AlertCenterPanel } from '@/components/AlertCenterPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { fetchNearbyInfrastructure } from '@/services/infrastructure/hifld';
@@ -153,7 +151,6 @@ import { fetchInciwebIncidents } from '@/services/inciweb';
 import { fetchHazmatIncidents } from '@/services/hazmat-incidents';
 import { classifyNewsItem } from '@/services/positive-classifier';
 import { fetchGivingSummary } from '@/services/giving';
-import { fetchVolcanoAlerts } from '@/services/volcano-alerts';
 import { fetchNWSAlerts } from '@/services/nws-alerts';
 import { fetchFAACameras, scoreCamerasAgainstAlerts, getDisasterProximateCameras } from '@/services/faa-cameras';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
@@ -163,7 +160,6 @@ import { fetchRipeAtlasStatus } from '@/services/ripe-atlas';
 import type { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
 import { updateRegionCount, getHighRiskRegions } from '@/services/ema-forecast';
 import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
-import { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
 import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
 import { GivingPanel } from '@/components';
 import { GeoHubsPanel } from '@/components/GeoHubsPanel';
@@ -298,6 +294,7 @@ import * as spaceLoaders from '@/app/loaders/space';
 import * as utilityLoaders from '@/app/loaders/utility';
 import * as hazardLoaders from '@/app/loaders/hazards';
 import * as diseaseLoaders from '@/app/loaders/disease';
+import * as cyberLoaders from '@/app/loaders/cyber';
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_UNSPECIFIED: 'info',
@@ -1879,30 +1876,7 @@ export class DataLoaderManager implements AppModule {
  }
   }
 
-  async loadLocalIDS(): Promise<void> {
- try {
- const alerts = await fetchLocalIDSAlerts();
- (this.ctx.panels['local-ids'] as LocalIDSPanel)?.update(alerts);
- // Mirror high/critical IDS alerts into the unified store so triage bar,
- // notifications, and reactions pick them up.
- const unified = alerts
- .filter(a => a.severity === 'high' || a.severity === 'critical')
- .map(a => ({
- id: `localids-${a.id}`,
- source: 'local-ids' as const,
- severity: a.severity,
- title: a.signature || a.category || 'IDS alert',
- body: `${a.source} · ${a.srcIp} → ${a.destIp} (${a.proto}) ${a.action}`,
- timestamp: Date.parse(a.ts) || Date.now(),
- relevanceScore: 50,
- acknowledged: false,
- pinned: false,
- }));
- if (unified.length > 0) unifiedAlertStore.ingest(unified);
- } catch {
- (this.ctx.panels['local-ids'] as LocalIDSPanel)?.update([]);
- }
-  }
+  async loadLocalIDS(): Promise<void> { return cyberLoaders.loadLocalIDS(this.ctx); }
 
   // Space domain → src/app/loaders/space.ts
   async loadSpaceWeather(): Promise<void> { return spaceLoaders.loadSpaceWeather(this.ctx); }
@@ -2075,15 +2049,7 @@ export class DataLoaderManager implements AppModule {
  }
   }
 
-  async loadVolcanoAlerts(): Promise<void> {
- try {
- const alerts = await fetchVolcanoAlerts();
- (this.ctx.panels['volcano-alerts'] as VolcanoAlertsPanel)?.update(alerts);
- } catch (error) {
- console.warn('[volcano-alerts] fetch failed', error);
- (this.ctx.panels['volcano-alerts'] as VolcanoAlertsPanel)?.update([]);
- }
-  }
+  async loadVolcanoAlerts(): Promise<void> { return cyberLoaders.loadVolcanoAlerts(this.ctx); }
 
   async loadNWSAlerts(): Promise<void> {
  try {

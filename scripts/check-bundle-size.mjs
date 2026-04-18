@@ -8,12 +8,15 @@
  *
  * Thresholds (gzipped):
  *   - Main entry (index-*.js, main-*.js): 350 KB
- *   - Any single non-entry chunk: 800 KB
+ *   - Any single non-entry chunk: 1.2 MB
  *   - Total JS (all chunks): 6 MB
  *
- * Cesium adds ~2.4 MB on its own (documented in the PWA workbox config); a
- * future accidental import of the full deck.gl or xenova/transformers bundle
- * would blow past this and the PR would fail before merging.
+ * The per-chunk cap is generous because Cesium (GodsVisionView chunk) is
+ * around 1.06 MB gzipped on its own and is an intentional large-chunk split
+ * — one atomic globe bundle that's lazy-loaded when users open God's Vision.
+ * The total-JS cap is what guards against stealth bloat; chunk-level growth
+ * beyond ~1.2 MB usually means a new big dep was static-imported into an
+ * existing chunk, which deserves a review.
  */
 import { readdir, stat, readFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
@@ -25,7 +28,7 @@ const distJsDir = path.resolve(root, 'dist', 'assets');
 
 const LIMITS = {
   mainEntryGzipBytes: 350 * 1024,
-  singleChunkGzipBytes: 800 * 1024,
+  singleChunkGzipBytes: 1200 * 1024,
   totalJsGzipBytes: 6 * 1024 * 1024,
 };
 

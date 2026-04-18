@@ -29,7 +29,8 @@ The supported release path is **tag-driven**. Desktop publishing runs from the `
 ## CANONICAL REPO — SINGLE SOURCE OF TRUTH (MANDATE)
 
 There is exactly ONE place to develop this app:
-```
+
+```text
 ~/developer/crystalball
 ```
 

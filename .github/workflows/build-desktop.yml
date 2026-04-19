@@ -2,11 +2,16 @@ name: Build Desktop App
 
 on:
   workflow_dispatch:
-    # Build-only variant dispatcher — picks a variant and runs the build
-    # without publishing a release. Tag pushes are the release publisher.
+    # Two modes:
+    #   build   — pick a variant, build artifacts, do NOT publish.
+    #   publish — recovery path for tags whose push didn't fire this workflow
+    #             (GitHub anti-loop: tags pushed by GITHUB_TOKEN inside
+    #             auto-tag.yml don't trigger downstream workflows). Dispatch
+    #             with ref=<tag> and publish_mode=publish; release-context
+    #             treats it exactly like a tag push.
     inputs:
       variant:
-        description: 'Variant to build (no release publish)'
+        description: 'Variant to build (build mode only; publish mode derives variant from the tag)'
         required: true
         default: full
         type: choice
@@ -14,6 +19,14 @@ on:
           - full
           - tech
           - finance
+      publish_mode:
+        description: 'build = artifacts only, publish = cut a GitHub release from the dispatched ref'
+        required: true
+        default: build
+        type: choice
+        options:
+          - build
+          - publish
   push:
     tags:
       - 'v*'
@@ -54,6 +67,8 @@ jobs:
           node scripts/release-context.mjs \
             --event "${{ github.event_name }}" \
             --ref "${{ github.ref_name }}" \
+            --variant "${{ inputs.variant || 'full' }}" \
+            --publish-mode "${{ inputs.publish_mode || 'build' }}" \
             --sha "${{ github.sha }}" \
             --github-output "$GITHUB_OUTPUT"
 

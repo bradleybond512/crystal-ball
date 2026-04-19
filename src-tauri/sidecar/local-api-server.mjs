@@ -10,6 +10,8 @@ import { brotliCompress, gzipSync } from 'node:zlib';
 import path from 'node:path';
 import os from 'node:os';
 import { pathToFileURL } from 'node:url';
+import { scoreAllDomains } from './sitrep-severity.mjs';
+import { filterAllDomains } from './sitrep-filter.mjs';
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 function isValidToken(authHeader) {
@@ -1695,6 +1697,127 @@ async function dispatch(requestUrl, req, routes, context) {
  context.logger.warn(`[local-api] unauthorized request to ${requestUrl.pathname}`);
  return json({ error: 'Unauthorized' }, 401);
  }
+  }
+
+  if (requestUrl.pathname === '/api/sitrep-bundle') {
+    const cacheKey = 'sitrep-bundle';
+    const cached = getCached(cacheKey, 5 * 60 * 1000);
+    if (cached) return json(cached);
+
+    const endpoints = {
+      conflicts:    '/api/acled-events',
+      markets:      '/api/market-quotes',
+      cyberKev:     '/api/cisa-kev',
+      cyberIoc:     '/api/threatfox-iocs',
+      cyberPhish:   '/api/openphish-feed',
+      milAdsb:      '/api/adsb-military',
+      milAis:       '/api/ais-snapshot',
+      milPosture:   '/api/military/v1/get-theater-posture',
+      milIsw:       '/api/isw-reports',
+      weather:      '/api/nws-alerts',
+      spaceWx:      '/api/space-weather-feeds',
+      gridStatus:   '/api/power-grid',
+      gridAlerts:   '/api/grid-alerts',
+      water:        '/api/epa-sdwis-proxy',
+      radiation:    '/api/epa-radnet-proxy',
+      seismic:      '/api/usgs-earthquakes',
+      health:       '/api/disease-outbreaks',
+      economic:     process.env.FRED_API_KEY ? '/api/fred-series?series_ids=FEDFUNDS,T10Y2Y,UNRATE' : '/api/fred-fallback',
+      sanctions:    '/api/opensanctions',
+      news:         '/api/newsapi-headlines',
+      serviceStatus: '/api/service-status',
+    };
+
+    const entries = Object.entries(endpoints);
+    const results = {};
+    const warnings = [];
+    const sources = [];
+
+    await Promise.allSettled(entries.map(async ([key, route]) => {
+      try {
+        const url = new URL(`http://127.0.0.1:${context.port}${route}`);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(url.toString(), {
+          headers: { Authorization: req.headers.authorization || '' },
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          results[key] = { error: `${res.status}: ${text}` };
+          warnings.push(`${route}: HTTP ${res.status}`);
+        } else {
+          results[key] = await res.json();
+          sources.push(route);
+        }
+      } catch (error) {
+        results[key] = { error: error.message };
+        warnings.push(`${route}: ${error.message}`);
+      }
+    }));
+
+    const raw = {
+      conflicts: results.conflicts?.events ?? [],
+      markets: results.markets?.quotes ?? [],
+      cyber: {
+        iocs: results.cyberIoc?.data ?? [],
+        kevs: results.cyberKev?.vulnerabilities ?? results.cyberKev ?? [],
+      },
+      military: {
+        aircraft: results.milAdsb?.aircraft ?? (Array.isArray(results.milAdsb) ? results.milAdsb : []),
+        vessels: results.milAis?.vessels ?? (Array.isArray(results.milAis) ? results.milAis : []),
+        posture: results.milPosture ?? {},
+      },
+      weather: Array.isArray(results.weather) ? results.weather : [],
+      infrastructure: { gridAlerts: results.gridAlerts?.alerts ?? [] },
+      seismic: results.seismic?.features ?? [],
+      health: results.health?.outbreaks ?? results.health ?? [],
+      economic: results.economic ?? {},
+      sanctions: results.sanctions?.results ?? [],
+      news: results.news,
+    };
+
+    const severity = scoreAllDomains(raw);
+    const domains = filterAllDomains(severity, raw);
+
+    const newsArticles = raw.news?.articles ?? (Array.isArray(raw.news) ? raw.news : []);
+    domains.news = { summary: `${newsArticles.length} articles`, items: newsArticles.slice(0, 5) };
+
+    let deltaMode = false;
+    let sentinelAgeMin = null;
+    try {
+      const snapshotPath = path.join(os.homedir(), '.crystal-ball', 'sentinel', 'latest-snapshot.json');
+      const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
+      if (snapshot?.timestamp) {
+        const ageMs = Date.now() - new Date(snapshot.timestamp).getTime();
+        sentinelAgeMin = Math.round(ageMs / 60000);
+        deltaMode = sentinelAgeMin < 60;
+      }
+    } catch { /* no sentinel data */ }
+
+    const missingKeys = wmMissingKeys();
+    const feedHealth = {
+      operational: sources.length,
+      degraded: warnings.length,
+      missing_keys: missingKeys.length,
+      degraded_list: warnings.map(w => w.split(':')[0]),
+      missing_key_names: missingKeys,
+    };
+
+    const bundle = {
+      timestamp: new Date().toISOString(),
+      delta_mode: deltaMode,
+      sentinel_age_min: sentinelAgeMin,
+      feed_health: feedHealth,
+      severity,
+      domains,
+      sources,
+      warnings,
+    };
+
+    setCached(cacheKey, bundle, 5 * 60 * 1000);
+    return json(bundle);
   }
 
   if (requestUrl.pathname === '/api/tle') {

@@ -1,8 +1,15 @@
 name: Auto-tag on version bump
 
 # Watches for version changes in tauri.conf.json on main.
-# When the version changes, creates a vX.Y.Z tag which triggers build-desktop.yml.
-# This means: bump version + commit + push = release builds start automatically.
+# When the version changes, creates a vX.Y.Z tag AND dispatches build-desktop.yml
+# in publish mode. We cannot rely on the tag-push trigger alone because
+# GITHUB_TOKEN tag pushes do not fire downstream workflows (GitHub's anti-loop
+# protection). Explicit workflow_dispatch via the same token IS allowed, so we
+# use it as the always-on release driver.
+#
+# Recovery: if the tag already exists but no GitHub release has been published
+# yet, the dispatch still fires. That lets us unstick releases that were
+# created before this workflow gained the dispatch step.
 
 on:
   push:
@@ -11,9 +18,11 @@ on:
     paths:
       - 'src-tauri/tauri.conf.json'
       - 'package.json'
+      - '.github/workflows/auto-tag.yml'
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   auto-tag:
@@ -40,7 +49,7 @@ jobs:
           TAG="v${{ steps.version.outputs.version }}"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag $TAG already exists — skipping"
+            echo "Tag $TAG already exists"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "Tag $TAG does not exist — will create"
@@ -57,4 +66,30 @@ jobs:
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
           echo "Created and pushed tag: $TAG"
-          echo "Build workflow will now start automatically."
+
+      - name: Check if release already published
+        id: release_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "Release for $TAG already exists — no dispatch needed"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "No release for $TAG yet — will dispatch build"
+          fi
+
+      - name: Dispatch build-desktop.yml in publish mode
+        if: steps.release_check.outputs.released == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          gh workflow run build-desktop.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$TAG" \
+            -f variant=full \
+            -f publish_mode=publish
+          echo "Dispatched build-desktop.yml on tag $TAG in publish mode"

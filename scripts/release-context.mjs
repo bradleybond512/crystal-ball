@@ -14,6 +14,32 @@ import {
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 
+const VALUE_FLAGS = new Map([
+  ['--event', 'event'],
+  ['--ref', 'ref'],
+  ['--variant', 'variant'],
+  ['--sha', 'sha'],
+  ['--github-output', 'githubOutput'],
+  ['--publish-mode', 'publishMode'],
+]);
+
+const BOOLEAN_FLAGS = new Map([
+  ['--no-enforce-main', { key: 'enforceMain', value: false }],
+]);
+
+function readValueFlag(arg, nextArg) {
+  if (VALUE_FLAGS.has(arg)) {
+ return { key: VALUE_FLAGS.get(arg), value: nextArg ?? '', consumedNext: true };
+  }
+  for (const [flag, key] of VALUE_FLAGS) {
+ const prefix = `${flag}=`;
+ if (arg.startsWith(prefix)) {
+ return { key, value: arg.slice(prefix.length), consumedNext: false };
+ }
+  }
+  return null;
+}
+
 function parseArgs(argv) {
   const options = {
  event: '',
@@ -22,77 +48,44 @@ function parseArgs(argv) {
  sha: '',
  githubOutput: '',
  enforceMain: true,
+ publishMode: 'build',
   };
 
   for (let i = 0; i < argv.length; i += 1) {
  const arg = argv[i];
- if (arg === '--event') {
- options.event = argv[i + 1] ?? '';
- i += 1;
+ const valueFlag = readValueFlag(arg, argv[i + 1]);
+ if (valueFlag) {
+ options[valueFlag.key] = valueFlag.value;
+ if (valueFlag.consumedNext) i += 1;
  continue;
  }
- if (arg.startsWith('--event=')) {
- options.event = arg.slice('--event='.length);
- continue;
- }
- if (arg === '--ref') {
- options.ref = argv[i + 1] ?? '';
- i += 1;
- continue;
- }
- if (arg.startsWith('--ref=')) {
- options.ref = arg.slice('--ref='.length);
- continue;
- }
- if (arg === '--variant') {
- options.variant = argv[i + 1] ?? '';
- i += 1;
- continue;
- }
- if (arg.startsWith('--variant=')) {
- options.variant = arg.slice('--variant='.length);
- continue;
- }
- if (arg === '--sha') {
- options.sha = argv[i + 1] ?? '';
- i += 1;
- continue;
- }
- if (arg.startsWith('--sha=')) {
- options.sha = arg.slice('--sha='.length);
- continue;
- }
- if (arg === '--github-output') {
- options.githubOutput = argv[i + 1] ?? '';
- i += 1;
- continue;
- }
- if (arg.startsWith('--github-output=')) {
- options.githubOutput = arg.slice('--github-output='.length);
- continue;
- }
- if (arg === '--no-enforce-main') {
- options.enforceMain = false;
+ const boolFlag = BOOLEAN_FLAGS.get(arg);
+ if (boolFlag) {
+ options[boolFlag.key] = boolFlag.value;
  continue;
  }
  throw new Error(`Unknown argument: ${arg}`);
   }
 
+  validateParsedOptions(options);
+  return options;
+}
+
+function validateParsedOptions(options) {
   if (!['push', 'workflow_dispatch'].includes(options.event)) {
  throw new Error(`Unsupported release event: ${options.event}`);
   }
-
   if (!options.sha) {
  throw new Error('Missing --sha');
   }
-
-  if (options.event === 'workflow_dispatch') {
- options.variant = 'full';
-  } else if (!options.ref) {
- throw new Error('Missing --ref for tag-driven release context');
+  if (options.event === 'workflow_dispatch' && options.publishMode !== 'publish') {
+ options.variant = options.variant || 'full';
+ return;
   }
-
-  return options;
+  if (!options.ref) {
+ const context = options.event === 'push' ? 'tag-driven release context' : 'publish-mode workflow_dispatch';
+ throw new Error(`Missing --ref for ${context}`);
+  }
 }
 
 function runCommand(command, args) {
@@ -132,8 +125,31 @@ export async function readSynchronizedVersions() {
   };
 }
 
-export function resolveReleaseContext({ event, refName, inputVariant, packageVersion, sha }) {
+export function resolveReleaseContext({ event, refName, inputVariant, packageVersion, sha, publishMode = 'build' }) {
   const shortSha = sha.slice(0, 12);
+
+  // Workflow dispatch with publish_mode=publish is the recovery path when the
+  // tag-push trigger was suppressed (e.g. tag pushed by GITHUB_TOKEN from
+  // auto-tag.yml, which per GitHub anti-loop rules does not fire downstream
+  // workflows). The workflow gets dispatched with --ref <tag> and
+  // -f publish_mode=publish; from here it's indistinguishable from a real
+  // tag push.
+  if (event === 'workflow_dispatch' && publishMode === 'publish') {
+ const parsed = parseReleaseRef(refName);
+ if (parsed.version !== packageVersion) {
+ throw new Error(`Tag ${parsed.tag} does not match package version ${packageVersion}`);
+ }
+ return {
+ publish: true,
+ variant: parsed.variant,
+ version: parsed.version,
+ tag: parsed.tag,
+ releaseName: buildReleaseName(parsed.version, parsed.variant),
+ productName: getReleaseProductName(parsed.variant),
+ commitSha: sha,
+ shortSha,
+ };
+  }
 
   if (event === 'workflow_dispatch') {
  const variant = inputVariant;
@@ -209,6 +225,7 @@ async function main() {
  inputVariant: options.variant,
  packageVersion: versions.packageVersion,
  sha: options.sha,
+ publishMode: options.publishMode,
   });
 
   if (options.enforceMain && context.publish) {
@@ -229,8 +246,10 @@ async function main() {
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isCli) {
-  main().catch((error) => {
+  try {
+ await main();
+  } catch (error) {
  console.error(`[release-context] Failed: ${error instanceof Error ? error.message : String(error)}`);
  process.exit(1);
-  });
+  }
 }

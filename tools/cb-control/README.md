@@ -6,6 +6,7 @@ features from your phone, with full command relay into any running CLI
 session.
 
 **What it does:**
+
 - **Spawn Claude sessions from your phone** — they run on your Mac with your
   real env, keys, and tools.
 - **Attach to existing CLI sessions** you started in a terminal. As long as
@@ -16,6 +17,7 @@ session.
 - **Biometric gate** (Face ID / Touch ID) before any write from the phone.
 
 **Architecture:**
+
 - Node 20 daemon: HTTP + WebSocket + PTY + SQLite (~1000 LOC)
 - Vanilla-ESM PWA: no build step
 - Tailscale: secure transport, no public internet exposure
@@ -65,14 +67,17 @@ Copy the token into the PWA once and forget it.
 ## Using it
 
 ### Spawn from the phone
+
 **+ New session** → cwd + optional label + extra args. A managed `claude`
 process starts in a PTY; the terminal view opens.
 
 ### Attach to a terminal session (tmux)
+
 ```bash
 # in tmux
 claude
 ```
+
 The `SessionStart` hook registers it and captures `$TMUX_PANE`. Open the
 PWA — the session appears with a `live · tmux` badge and full I/O works.
 
@@ -80,6 +85,7 @@ Without tmux, the session still appears in the list but is **read-only**
 (metadata only; the daemon can't inject into a bare terminal's stdin).
 
 ### Compose (multi-session relay)
+
 Tap the pencil icon. Check the sessions to target, type a command, **Relay
 to N**. Each selected session receives the same input in parallel. Useful
 for: "rebase all feature branches onto main", "run the test suite
@@ -87,10 +93,12 @@ everywhere", "paste the same question into three branches to compare
 answers".
 
 ### Search
+
 Tap the magnifying-glass icon. Queries FTS5-indexed events across every
 session. Tap a hit to jump into that session's terminal view.
 
 ### Biometric unlock (optional but recommended)
+
 Settings → **Enable Face ID / Touch ID**. Once enabled, every write
 (spawn, input, compose) requires a platform-authenticator assertion. The
 unlock is cached for 60s to avoid re-prompting on every keystroke.
@@ -100,6 +108,7 @@ second wall that protects against scenarios where someone has physical
 access to your unlocked phone.
 
 ### Terminal keyboard
+
 - `Send` — relay the textarea + Enter
 - `^C` — SIGINT / Ctrl-C
 - `Esc` — Escape key (e.g. cancel a Claude thought)
@@ -165,6 +174,7 @@ npm run uninstall-launchd         # reverse
 ```
 
 The installed agent:
+
 - Runs at login and respawns on crash
 - Binds to `0.0.0.0:46987` (override with `CB_CONTROL_HOST` / `CB_CONTROL_PORT`)
 - Logs to `~/Library/Logs/cb-control.log` and `cb-control.err.log`

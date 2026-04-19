@@ -30,40 +30,52 @@ function textResult(data) {
 
 // ---- Aggregate Tools ----
 
+const aggregateOpts = {
+  summary_only: z.boolean().optional().describe('Return only the summary and counts, omit raw data arrays. Dramatically reduces output size.'),
+  limit: z.number().optional().describe('Max items to return per data source (default: unlimited). Use 10-20 for a concise overview.'),
+};
+
 server.registerTool('get_sitrep', {
-  description: 'Full situational report: top conflicts, market moves, weather alerts, service health. Start here for broad awareness.',
-  inputSchema: z.object({}),
-}, async () => textResult(await aggregate.get_sitrep()));
+  description: 'Full situational report: top conflicts, market moves, weather alerts, service health. Start here for broad awareness. Use summary_only=true for a compact brief.',
+  inputSchema: z.object({ ...aggregateOpts }),
+}, async (args) => textResult(await aggregate.get_sitrep(args)));
 
 server.registerTool('get_threat_landscape', {
-  description: 'Active threats across conflict, cyber, and crisis domains. Includes ACLED conflicts, ThreatFox IOCs, CISA KEVs, and crisis alerts.',
-  inputSchema: z.object({}),
-}, async () => textResult(await aggregate.get_threat_landscape()));
+  description: 'Active threats across conflict, cyber, and crisis domains. Includes ACLED conflicts, ThreatFox IOCs, CISA KEVs, and crisis alerts. Use summary_only=true for a compact brief.',
+  inputSchema: z.object({ ...aggregateOpts }),
+}, async (args) => textResult(await aggregate.get_threat_landscape(args)));
 
 server.registerTool('get_market_overview', {
-  description: 'Financial markets snapshot: indices, crypto, BTC ETF flows, Fear & Greed, WSB sentiment, FRED macro signals.',
-  inputSchema: z.object({}),
-}, async () => textResult(await aggregate.get_market_overview()));
+  description: 'Financial markets snapshot: indices, crypto, BTC ETF flows, Fear & Greed, WSB sentiment, FRED macro signals. Use summary_only=true for a compact brief.',
+  inputSchema: z.object({ ...aggregateOpts }),
+}, async (args) => textResult(await aggregate.get_market_overview(args)));
 
 server.registerTool('get_cyber_intel', {
-  description: 'Cyber threat intelligence: ThreatFox IOCs, CISA KEVs, OpenPhish, URLhaus malware URLs, OTX threat pulses.',
-  inputSchema: z.object({}),
-}, async () => textResult(await aggregate.get_cyber_intel()));
+  description: 'Cyber threat intelligence: ThreatFox IOCs, CISA KEVs, OpenPhish, URLhaus malware URLs, OTX threat pulses. Use summary_only=true for a compact brief.',
+  inputSchema: z.object({ ...aggregateOpts }),
+}, async (args) => textResult(await aggregate.get_cyber_intel(args)));
 
 server.registerTool('get_weather_environment', {
-  description: 'Weather and environment: conditions for 28 global cities, NWS alerts, NASA DONKI space weather, NOAA SWPC.',
-  inputSchema: z.object({}),
-}, async () => textResult(await aggregate.get_weather_environment()));
+  description: 'Weather and environment: conditions for 28 global cities, NWS alerts, NASA DONKI space weather, NOAA SWPC. Use summary_only=true for a compact brief.',
+  inputSchema: z.object({ ...aggregateOpts }),
+}, async (args) => textResult(await aggregate.get_weather_environment(args)));
 
 server.registerTool('get_infrastructure_status', {
-  description: 'Critical infrastructure: power grid status, grid outage alerts, EPA water quality, RadNet radiation, USGS water.',
-  inputSchema: z.object({}),
-}, async () => textResult(await aggregate.get_infrastructure_status()));
+  description: 'Critical infrastructure: power grid status, grid outage alerts, EPA water quality, RadNet radiation, USGS water. Use summary_only=true for a compact brief.',
+  inputSchema: z.object({ ...aggregateOpts }),
+}, async (args) => textResult(await aggregate.get_infrastructure_status(args)));
 
 server.registerTool('get_military_posture', {
-  description: 'Military activity: tracked aircraft (ADS-B), naval vessels (AIS), theater posture, ISW analysis reports.',
+  description: 'Military activity: tracked aircraft (ADS-B), naval vessels (AIS), theater posture, ISW analysis reports. Use summary_only=true for a compact brief.',
+  inputSchema: z.object({ ...aggregateOpts }),
+}, async (args) => textResult(await aggregate.get_military_posture(args)));
+
+// ---- Diagnostic Tools ----
+
+server.registerTool('check_feed_health', {
+  description: 'Pre-flight check: probes the sidecar and key data feeds. Returns which feeds are healthy vs erroring, sidecar memory/uptime, and AIS connection status. Run this before aggregate tools to know what data is available.',
   inputSchema: z.object({}),
-}, async () => textResult(await aggregate.get_military_posture()));
+}, async () => textResult(await granular.check_feed_health()));
 
 // ---- Granular Tools ----
 

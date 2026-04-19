@@ -87,9 +87,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.version.outputs.tag }}"
+          # Dispatch at main (the default ref) so the workflow always uses the
+          # latest automation code. Pass the tag via release_tag input; the
+          # workflow checks it out for the actual app build.
           gh workflow run build-desktop.yml \
             --repo "$GITHUB_REPOSITORY" \
-            --ref "$TAG" \
+            --ref main \
             -f variant=full \
-            -f publish_mode=publish
-          echo "Dispatched build-desktop.yml on tag $TAG in publish mode"
+            -f publish_mode=publish \
+            -f release_tag="$TAG"
+          echo "Dispatched build-desktop.yml at main with release_tag=$TAG"

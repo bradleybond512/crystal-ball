@@ -7,11 +7,13 @@ on:
     #   publish — recovery path for tags whose push didn't fire this workflow
     #             (GitHub anti-loop: tags pushed by GITHUB_TOKEN inside
     #             auto-tag.yml don't trigger downstream workflows). Dispatch
-    #             with ref=<tag> and publish_mode=publish; release-context
-    #             treats it exactly like a tag push.
+    #             with publish_mode=publish and release_tag=<tag>. The workflow
+    #             runs at main (so it always uses the latest automation code),
+    #             then checks out release_tag for the actual build, and
+    #             release-context treats it exactly like a tag push.
     inputs:
       variant:
-        description: 'Variant to build (build mode only; publish mode derives variant from the tag)'
+        description: 'Variant to build (build mode only; publish mode derives variant from release_tag)'
         required: true
         default: full
         type: choice
@@ -20,13 +22,18 @@ on:
           - tech
           - finance
       publish_mode:
-        description: 'build = artifacts only, publish = cut a GitHub release from the dispatched ref'
+        description: 'build = artifacts only, publish = cut a GitHub release from release_tag'
         required: true
         default: build
         type: choice
         options:
           - build
           - publish
+      release_tag:
+        description: 'Tag to publish (only used when publish_mode=publish; e.g. v2.10.6)'
+        required: false
+        default: ''
+        type: string
   push:
     tags:
       - 'v*'
@@ -64,9 +71,14 @@ jobs:
         id: context
         shell: bash
         run: |
+          # For publish-mode workflow_dispatch, the tag comes from the
+          # release_tag input (because the workflow runs at main, not at the
+          # tag — see trigger comment). For everything else, github.ref_name
+          # is either the pushed tag or the dispatched branch.
+          REF_NAME="${{ inputs.release_tag || github.ref_name }}"
           node scripts/release-context.mjs \
             --event "${{ github.event_name }}" \
-            --ref "${{ github.ref_name }}" \
+            --ref "$REF_NAME" \
             --variant "${{ inputs.variant || 'full' }}" \
             --publish-mode "${{ inputs.publish_mode || 'build' }}" \
             --sha "${{ github.sha }}" \
@@ -112,6 +124,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          # In publish-mode workflow_dispatch the workflow runs at main so we
+          # always use the latest automation code — but the build must reflect
+          # the tagged release. The release-context job resolves the tag, so
+          # we reuse its output here.
+          ref: ${{ needs.release-context.outputs.tag || github.ref }}
 
       - name: Start job timer
         shell: bash
@@ -376,6 +394,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
+          ref: ${{ needs.release-context.outputs.tag || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f

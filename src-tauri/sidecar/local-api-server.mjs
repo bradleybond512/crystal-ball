@@ -1553,6 +1553,35 @@ let intelCooldownUntil = 0;
 // Generic non-streaming intel generation. Accepts { prompt, system?, maxTokens?,
 // temperature? } and returns { response, model } from OLLAMA_API_URL (any
 // OpenAI-compatible local endpoint, e.g. LM Studio at http://localhost:1234).
+async function callChatCompletion(apiUrl, model, messages, maxTokens, temperature, authHeader, timeoutMs) {
+  const u = new URL(apiUrl);
+  const mod = u.protocol === 'https:' ? https : http;
+  const requestBody = JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, stream: false });
+  const reqHeaders = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(requestBody) };
+  if (authHeader) reqHeaders['Authorization'] = authHeader;
+  const reqOptions = {
+    hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80),
+    path: u.pathname + u.search, method: 'POST', headers: reqHeaders, family: 4,
+  };
+  const result = await new Promise((resolve, reject) => {
+    const r = mod.request(reqOptions, (resp) => {
+      const chunks = [];
+      resp.on('data', c => chunks.push(c));
+      resp.on('end', () => {
+        const text = Buffer.concat(chunks).toString();
+        if (resp.statusCode !== 200) return reject(new Error(`upstream ${resp.statusCode}: ${text.slice(0, 200)}`));
+        try { resolve(JSON.parse(text)); } catch (error) { reject(error); }
+      });
+      resp.on('error', reject);
+    });
+    r.on('error', reject);
+    r.setTimeout(timeoutMs, () => { r.destroy(new Error('timeout')); });
+    r.write(requestBody);
+    r.end();
+  });
+  return result?.choices?.[0]?.message?.content ?? '';
+}
+
 async function handleIntelGenerate(req, res, context) {
   const cors = getSidecarCorsOrigin(req);
   const headers = { 'content-type': 'application/json', 'access-control-allow-origin': cors, 'vary': 'Origin' };
@@ -1568,70 +1597,58 @@ async function handleIntelGenerate(req, res, context) {
   try { parsed = JSON.parse(body.toString()); }
   catch { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'invalid JSON' })); return; }
 
-  const baseUrl = process.env.OLLAMA_API_URL || 'http://localhost:1234';
-  const rawModel = process.env.OLLAMA_MODEL || 'local-model';
-  const model = /^[a-zA-Z0-9._:/-]{1,80}$/.test(rawModel) ? rawModel : 'local-model';
   const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.slice(0, 8000) : '';
   const system = typeof parsed.system === 'string' ? parsed.system.slice(0, 2000) : 'You are a concise intelligence analyst. Be factual, direct, no preamble.';
   const maxTokens = Math.min(2048, Math.max(16, Number(parsed.maxTokens) || 400));
   const temperature = Math.min(1, Math.max(0, Number(parsed.temperature) || 0.3));
   if (!prompt) { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'prompt required' })); return; }
 
-  let apiUrl;
-  try { apiUrl = new URL('/v1/chat/completions', baseUrl).toString(); }
-  catch { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'invalid OLLAMA_API_URL' })); return; }
+  const messages = [{ role: 'system', content: system }, { role: 'user', content: prompt }];
 
-  const requestBody = JSON.stringify({
-    model,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: prompt },
-    ],
-    temperature,
-    max_tokens: maxTokens,
-    stream: false,
-  });
+  // Try local Ollama first, fall back to Groq
+  const baseUrl = process.env.OLLAMA_API_URL || 'http://localhost:1234';
+  const rawModel = process.env.OLLAMA_MODEL || 'local-model';
+  const localModel = /^[a-zA-Z0-9._:/-]{1,80}$/.test(rawModel) ? rawModel : 'local-model';
+  let localUrl;
+  try { localUrl = new URL('/v1/chat/completions', baseUrl).toString(); } catch { /* invalid URL */ }
 
-  try {
-    const u = new URL(apiUrl);
-    const mod = u.protocol === 'https:' ? https : http;
-    const reqOptions = {
-      hostname: u.hostname,
-      port: u.port || (u.protocol === 'https:' ? 443 : 80),
-      path: u.pathname + u.search,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(requestBody) },
-      family: 4,
-    };
-    const result = await new Promise((resolve, reject) => {
-      const r = mod.request(reqOptions, (resp) => {
-        const chunks = [];
-        resp.on('data', c => chunks.push(c));
-        resp.on('end', () => {
-          const text = Buffer.concat(chunks).toString();
-          if (resp.statusCode !== 200) return reject(new Error(`upstream ${resp.statusCode}: ${text.slice(0, 200)}`));
-          try { resolve(JSON.parse(text)); } catch (error) { reject(error); }
-        });
-        resp.on('error', reject);
-      });
-      r.on('error', reject);
-      r.setTimeout(10_000, () => { r.destroy(new Error('timeout')); });
-      r.write(requestBody);
-      r.end();
-    });
-    const response = result?.choices?.[0]?.message?.content ?? '';
+  let response, model;
+  if (localUrl) {
+    try {
+      response = await callChatCompletion(localUrl, localModel, messages, maxTokens, temperature, null, 60_000);
+      model = localModel;
+    } catch (localError) {
+      context.logger.warn('[intel-generate] local failed:', localError.message);
+    }
+  }
+
+  // Groq fallback
+  if (response == null && process.env.GROQ_API_KEY) {
+    try {
+      response = await callChatCompletion(
+        'https://api.groq.com/openai/v1/chat/completions',
+        'llama-3.1-8b-instant', messages, maxTokens, temperature,
+        `Bearer ${process.env.GROQ_API_KEY}`, 30_000,
+      );
+      model = 'groq:llama-3.1-8b-instant';
+      context.logger.warn('[intel-generate] used Groq fallback');
+    } catch (groqError) {
+      context.logger.warn('[intel-generate] Groq fallback failed:', groqError.message);
+    }
+  }
+
+  if (response != null) {
     intelFailures = 0;
     res.writeHead(200, headers);
     res.end(JSON.stringify({ response, model }));
-  } catch (error) {
+  } else {
     intelFailures++;
     if (intelFailures >= 2) {
       intelCooldownUntil = Date.now() + 120_000;
       context.logger.warn(`[intel-generate] circuit breaker open after ${intelFailures} failures — cooling down 120s`);
     }
-    context.logger.warn('[intel-generate] error:', error.message);
     res.writeHead(502, headers);
-    res.end(JSON.stringify({ error: error.message }));
+    res.end(JSON.stringify({ error: 'all LLM providers failed' }));
   }
 }
 

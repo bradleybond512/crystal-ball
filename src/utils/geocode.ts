@@ -36,13 +36,13 @@ export async function forwardGeocode(query: string): Promise<GeocodeResult[]> {
   try {
  const res = await throttledFetch(url);
  if (!res.ok) return [];
- const data = (await res.json()) as Array<{ display_name: string; lat: string; lon: string }>;
+ const data = (await res.json()) as { display_name: string; lat: string; lon: string }[];
  return data
  .filter((item) => item.display_name && item.lat && item.lon)
  .map((item) => ({
  displayName: item.display_name,
- lat: parseFloat(item.lat),
- lon: parseFloat(item.lon),
+ lat: Number.parseFloat(item.lat),
+ lon: Number.parseFloat(item.lon),
  }))
  .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lon));
   } catch {

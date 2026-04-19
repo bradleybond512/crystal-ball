@@ -238,7 +238,7 @@ export class GlobeHUD {
  navBtn.title = 'Toggle Navigation (N)';
  navBtn.style.cssText = `background: rgba(20,25,40,0.8); border: 1px solid rgba(100,140,255,0.3); color: #8ca8ff; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 11px; font-family: 'SF Mono', monospace; font-weight: 600;`;
  navBtn.addEventListener('click', () => this.onNavigationToggle?.());
- layerBar.appendChild(navBtn);
+ layerBar.append(navBtn);
  bottomCenter.append(layerBar);
  this.element.append(bottomCenter);
 
@@ -594,7 +594,7 @@ export class GlobeHUD {
  if (state.nearestHotspot !== undefined && this.nearestEl) {
  const n = state.nearestHotspot;
  this.nearestEl.textContent = n
- // eslint-disable-next-line sonarjs/no-nested-conditional
+  
  ? `Nearest: ${n.name.length > 28 ? n.name.slice(0, 25) + '…' : n.name} · ${Math.round(n.distanceKm)} km`
  : 'Nearest: —';
  }

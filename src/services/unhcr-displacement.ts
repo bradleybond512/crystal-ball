@@ -1,4 +1,4 @@
-/* eslint-disable no-console, @typescript-eslint/prefer-optional-chain, sonarjs/different-types-comparison, unicorn/no-array-callback-reference, @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable sonarjs/different-types-comparison, unicorn/no-array-callback-reference */
 /* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 /**
  * UNHCR Refugee Population & Displacement Data

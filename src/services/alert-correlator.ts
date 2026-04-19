@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity, sonarjs/no-alphabetical-sort, sonarjs/reduce-initial-value, unicorn/prefer-math-trunc, unicorn/prefer-code-point, sonarjs/no-nested-conditional, @typescript-eslint/prefer-for-of, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-template-literals */
+/* eslint-disable sonarjs/cognitive-complexity, sonarjs/no-alphabetical-sort, sonarjs/reduce-initial-value, unicorn/prefer-math-trunc, unicorn/prefer-code-point, sonarjs/no-nested-conditional, @typescript-eslint/prefer-for-of, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-template-literals */
 /**
  * Alert correlator — synthesize `correlation` alerts when ≥2 alerts from
  * causally-compatible sources cluster in space and time.

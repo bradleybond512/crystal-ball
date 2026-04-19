@@ -61,8 +61,8 @@ export class SpaceflightNewsPanel extends Panel {
 
   private relativeTime(date: Date): string {
  const diffMs = Date.now() - date.getTime();
- const diffH = Math.floor(diffMs / 3600000);
- if (diffH < 1) return `${Math.floor(diffMs / 60000)}m ago`;
+ const diffH = Math.floor(diffMs / 3_600_000);
+ if (diffH < 1) return `${Math.floor(diffMs / 60_000)}m ago`;
  if (diffH < 24) return `${diffH}h ago`;
  return `${Math.floor(diffH / 24)}d ago`;
   }

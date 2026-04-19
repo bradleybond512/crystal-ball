@@ -13,26 +13,26 @@ export interface NmeaPosition {
 function parseLatLon(raw: string, dir: string): number {
   const dotIdx = raw.indexOf('.');
   const degLen = dotIdx - 2;
-  const degrees = parseFloat(raw.slice(0, degLen));
-  const minutes = parseFloat(raw.slice(degLen));
+  const degrees = Number.parseFloat(raw.slice(0, degLen));
+  const minutes = Number.parseFloat(raw.slice(degLen));
   let decimal = degrees + minutes / 60;
   if (dir === 'S' || dir === 'W') decimal = -decimal;
   return decimal;
 }
 
 function knotsToMs(knots: string): number {
-  return parseFloat(knots) * 0.514444;
+  return Number.parseFloat(knots) * 0.514_444;
 }
 
 export function parseGGA(fields: string[]): NmeaPosition | null {
   if (fields.length < 15) return null;
-  const fixQuality = parseInt(fields[6] ?? '0', 10) as 0 | 1 | 2;
+  const fixQuality = Number.parseInt(fields[6] ?? '0', 10) as 0 | 1 | 2;
   if (fixQuality === 0) return null;
 
   const latitude = parseLatLon(fields[2] ?? '', fields[3] ?? '');
   const longitude = parseLatLon(fields[4] ?? '', fields[5] ?? '');
-  const satellites = parseInt(fields[7] ?? '0', 10) || 0;
-  const altitude = fields[9] ? parseFloat(fields[9]) : null;
+  const satellites = Number.parseInt(fields[7] ?? '0', 10) || 0;
+  const altitude = fields[9] ? Number.parseFloat(fields[9]) : null;
 
   return {
     latitude,
@@ -54,7 +54,7 @@ export function parseRMC(fields: string[]): NmeaPosition | null {
   const latitude = parseLatLon(fields[3] ?? '', fields[4] ?? '');
   const longitude = parseLatLon(fields[5] ?? '', fields[6] ?? '');
   const speed = fields[7] ? knotsToMs(fields[7]) : null;
-  const heading = fields[8] ? parseFloat(fields[8]) : null;
+  const heading = fields[8] ? Number.parseFloat(fields[8]) : null;
 
   return {
     latitude,
@@ -78,8 +78,11 @@ export function parseNmea(sentence: string): NmeaPosition | null {
   const type = (fields[0] ?? '').slice(3);
 
   switch (type) {
-    case 'GGA': return parseGGA(fields);
-    case 'RMC': return parseRMC(fields);
-    default: return null;
+    case 'GGA': { return parseGGA(fields);
+    }
+    case 'RMC': { return parseRMC(fields);
+    }
+    default: { return null;
+    }
   }
 }

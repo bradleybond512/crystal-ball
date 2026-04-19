@@ -9,7 +9,12 @@ const root = resolve(__dirname, '..');
 
 const panelsSrc = readFileSync(resolve(root, 'src/config/panels.ts'), 'utf8');
 const panelLayoutSrc = readFileSync(resolve(root, 'src/app/panel-layout.ts'), 'utf8');
-const dataLoaderSrc = readFileSync(resolve(root, 'src/app/data-loader.ts'), 'utf8');
+// data-loader.ts delegates domain loaders to split modules — read both here so
+// wiring assertions stay valid after the decomposition.
+const dataLoaderSrc = [
+  readFileSync(resolve(root, 'src/app/data-loader.ts'), 'utf8'),
+  readFileSync(resolve(root, 'src/app/loaders/space.ts'), 'utf8'),
+].join('\n');
 const appSrc = readFileSync(resolve(root, 'src/App.ts'), 'utf8');
 const sidecarSrc = readFileSync(resolve(root, 'src-tauri/sidecar/local-api-server.mjs'), 'utf8');
 const spaceWeatherSrc = readFileSync(resolve(root, 'src/services/space-weather.ts'), 'utf8');

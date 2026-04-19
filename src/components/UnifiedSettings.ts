@@ -263,7 +263,7 @@ export class UnifiedSettings {
  setPrimarySavedPlace(placeId);
  return;
  }
- // eslint-disable-next-line sonarjs/no-redundant-jump
+  
  return;
  }
 
@@ -982,7 +982,7 @@ export class UnifiedSettings {
  }
  }
  if (sources.length > 0) {
- // eslint-disable-next-line sonarjs/no-misleading-array-reverse
+  
  map.set(regionKey, [...sources].sort((a, b) => a.localeCompare(b)));
  }
  }

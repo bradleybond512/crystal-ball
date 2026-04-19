@@ -14,11 +14,11 @@ export interface NuclearRiskData {
  description: string;
   };
   riskLevel: 'low' | 'elevated' | 'high' | 'critical';
-  treatyStatus: Array<{
+  treatyStatus: {
  name: string;
  status: 'active' | 'suspended' | 'withdrawn';
  notes: string;
-  }>;
+  }[];
   alertIndicators: string[];
 }
 

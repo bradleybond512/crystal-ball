@@ -205,7 +205,7 @@ function parseSeverity(text: string): ThreatSeverity | undefined {
 function parseBriefingItems(content: string): BriefingItem[] {
   const items: BriefingItem[] = [];
   // Match markdown list items with optional bold severity tags
-  // eslint-disable-next-line sonarjs/slow-regex -- bounded input from AI response, not user-controlled
+   
   const itemPattern = /^[-*]\s+(?:\*\*\[(\w+)\]\s*(.*?)\*\*:?\s*)?(.*)$/gm;
   let match: RegExpExecArray | null;
   while ((match = itemPattern.exec(content)) !== null) {

@@ -102,7 +102,7 @@ export class NavigationHUD {
 
     // Clear previous content
     while (this.root.firstChild) {
-      this.root.removeChild(this.root.firstChild);
+      this.root.firstChild.remove();
     }
 
     const step = this.state.currentStep;

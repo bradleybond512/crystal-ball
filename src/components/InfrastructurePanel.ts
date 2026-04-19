@@ -45,7 +45,7 @@ export class InfrastructurePanel extends Panel {
 
  const rows = this._assets.map(a => {
  const typeLabel = a.type === 'hospital' ? 'Hospital' : escapeHtml(a.type);
- const beds = a.beds != null ? String(a.beds) : '—';
+ const beds = a.beds == null ? '—' : String(a.beds);
  const phone = a.phone ? escapeHtml(a.phone) : '—';
  return `
  <tr class="eq-row">

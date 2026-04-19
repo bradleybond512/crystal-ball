@@ -99,10 +99,23 @@ describe('full variant panel visibility regressions', () => {
   });
 
   it('keeps the README inventory count aligned with the live full-variant config', () => {
+ // Derive live counts from src/config/panels.ts rather than hard-coding them
+ // so the test doesn't flap every time a panel is added. README just has to
+ // reference current numbers somewhere.
+ const countVariant = (name) => {
+ const m = panelsSrc.match(new RegExp(`const ${name}:[\\s\\S]*?= \\{([\\s\\S]*?)\\n\\};`));
+ if (!m) return 0;
+ return [...m[1].matchAll(/^\s*'?[a-zA-Z0-9-]+'?:\s*\{/gm)].length;
+ };
+ const full = countVariant('FULL_PANELS');
+ const tech = countVariant('TECH_PANELS');
+ const finance = countVariant('FINANCE_PANELS');
+ const happy = countVariant('HAPPY_PANELS');
+ const expected = new RegExp(`Default panel inventory\\s*\\|\\s*\`${full} full / ${tech} tech / ${finance} finance / ${happy} happy\``);
  assert.match(
  readmeSrc,
- /Default panel inventory \| `70 full \/ 35 tech \/ 31 finance \/ 10 happy`/,
- 'README inventory counts should match src/config/panels.ts',
+ expected,
+ `README should include "Default panel inventory | \`${full} full / ${tech} tech / ${finance} finance / ${happy} happy\`" row`,
  );
   });
 });

@@ -455,7 +455,7 @@ export class LiveNewsPanel extends Panel {
  if (protocol === 'http:' || protocol === 'https:') {
  // Desktop webviews commonly run from tauri.localhost which can trigger
  // YouTube embed restrictions. Use canonical public origin instead.
- // eslint-disable-next-line no-restricted-syntax -- intentional: Tauri IPC origin check, not URL construction
+  
  if (host === 'tauri.localhost' || host.endsWith('.tauri.localhost')) {
  return fallbackOrigin;
  }

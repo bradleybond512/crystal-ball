@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Forecast accuracy tracker — logs predictions from the EMA forecast and
  * situation forecaster, then checks 24h later whether they materialized.

@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Per-source trust score (0–1). Multiplied into alert hotness so noisy/low-
  * confidence feeds don't get the same panic budget as authoritative ones.

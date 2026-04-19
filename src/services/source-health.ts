@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Source health tracker — records per-source last-success and error rates
  * so the health dashboard can show "which feeds are dead" at a glance.

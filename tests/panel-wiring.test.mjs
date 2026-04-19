@@ -12,7 +12,8 @@ function readRepoFile(relativePath) {
 test('full-variant awareness panels are registered, instantiated, and refreshed', () => {
   const panelsConfig = readRepoFile('src/config/panels.ts');
   const panelLayout = readRepoFile('src/app/panel-layout.ts');
-  const dataLoader = readRepoFile('src/app/data-loader.ts');
+  // data-loader.ts delegates the utility loaders to loaders/utility.ts.
+  const dataLoader = readRepoFile('src/app/data-loader.ts') + '\n' + readRepoFile('src/app/loaders/utility.ts');
   const appSource = readRepoFile('src/App.ts');
 
   for (const panelId of ['comms-health', 'economic-stress']) {
@@ -31,8 +32,8 @@ test('full-variant awareness panels are registered, instantiated, and refreshed'
   assert.match(dataLoader, /fetchEconomicStress/);
   assert.match(dataLoader, /loadCommsHealth\(\)/);
   assert.match(dataLoader, /loadEconomicStress\(\)/);
-  assert.match(dataLoader, /this\.ctx\.panels\[['"]comms-health['"]\]/);
-  assert.match(dataLoader, /this\.ctx\.panels\[['"]economic-stress['"]\]/);
+  assert.match(dataLoader, /ctx\.panels\[['"]comms-health['"]\]/);
+  assert.match(dataLoader, /ctx\.panels\[['"]economic-stress['"]\]/);
 
   assert.match(appSource, /this\.dataLoader\.loadCommsHealth\(\)/);
   assert.match(appSource, /this\.dataLoader\.loadEconomicStress\(\)/);

@@ -18,7 +18,7 @@ export interface CbMeeting {
 
 // 2026 official meeting calendars
 // Sources: Fed (federalreserve.gov), ECB, BoJ, BoE, BoC published schedules
-const MEETINGS_2026: Array<{ bank: string; shortName: string; currency: string; iso: string; multi: boolean }> = [
+const MEETINGS_2026: { bank: string; shortName: string; currency: string; iso: string; multi: boolean }[] = [
   // Federal Reserve FOMC — decision day (Wed of 2-day meeting)
   { bank: 'Federal Reserve', shortName: 'Fed', currency: 'USD', iso: '2026-01-28', multi: true },
   { bank: 'Federal Reserve', shortName: 'Fed', currency: 'USD', iso: '2026-03-18', multi: true },

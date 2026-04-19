@@ -17,10 +17,20 @@ npm run release:prepare -- --bump patch --push   # only supported release path
 
 Install built app: copy `src-tauri/target/release/bundle/macos/Crystal Ball.app` to `~/Applications/Crystal Ball.app` (use `node scripts/install-built-app.mjs --relaunch`).
 
+## Release Management
+
+The supported release path is **tag-driven**. Desktop publishing runs from the `build-desktop.yml` workflow when a `vX.Y.Z` (or `vX.Y.Z-<variant>`) tag is pushed to `origin`. `workflow_dispatch` builds artifacts without publishing.
+
+- Supported variants: `full`, `tech`, `finance` (see `scripts/release-metadata.mjs`).
+- Only supported release command: `npm run release:prepare -- --bump patch --push`. It bumps `package.json`, writes the CHANGELOG entry, tags, and pushes — the tag push is what triggers the publisher.
+- The release-integrity workflow runs `release-doctor.mjs` per-variant on `main` pushes (strict) and on PRs (with `--allow-existing-target-release` so unrelated PRs don't break).
+- Never publish manually with `gh release create` or by hand-editing tags; the workflow collects a manifest, verifies the downloaded payload, and only then promotes to public release.
+
 ## CANONICAL REPO — SINGLE SOURCE OF TRUTH (MANDATE)
 
 There is exactly ONE place to develop this app:
-```
+
+```text
 ~/developer/crystalball
 ```
 
@@ -108,8 +118,8 @@ Ghost Mode: polling ×5, analytics suppressed, notifications suppressed, dark cr
 
 ## Settings / API Keys
 
-API keys entered via gear icon → API Keys tab. None embed the brand in their names; all 47 supported keys are generic API names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc).
+API keys entered via gear icon → API Keys tab. None embed the brand in their names; all 49 supported keys are generic API names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc).
 
 ## Secret Scan Guardrail
 
-Mandatory repo secret scan enforcement in hooks and CI. Keep `npm run secrets:scan:staged` and `npm run secrets:scan` active and passing.
+Mandatory repo secret scan enforcement in hooks and CI. This is a user-owned repo on GitHub — provider-native secret validity checks and non-provider patterns don't cover everything on their own, so the compensating control is mandatory repo-level scanning. Keep `npm run secrets:scan:staged` and `npm run secrets:scan` active and passing.

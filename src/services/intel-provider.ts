@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Intel provider — abstraction over local LLM (LM Studio / Ollama via the
  * sidecar) with optional fallback to the cloud Claude agent.

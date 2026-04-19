@@ -212,6 +212,11 @@ export class Panel {
   private readonly contentDebounceMs = 150;
   private pendingContentHtml: string | null = null;
   private contentDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  // Cache the last HTML string we actually wrote to the DOM. Reading
+  // `element.innerHTML` forces the browser to serialize the subtree, which is
+  // expensive on panels with large or animated content. Keeping a cached copy
+  // lets setContent() detect no-op updates without touching the DOM.
+  private lastAppliedContentHtml = '';
   private aiSummaryOverlay: HTMLElement | null = null;
 
   /** Panel IDs that should not offer AI Summary (video streams or already-AI panels). */
@@ -741,9 +746,10 @@ export class Panel {
   }
 
   public setContent(html: string): void {
- if (this.pendingContentHtml === html || this.content.innerHTML === html) {
- return;
- }
+ // No-op detection uses only cached strings — avoid reading innerHTML, which
+ // forces a full subtree serialization every call.
+ if (this.pendingContentHtml === html) return;
+ if (this.pendingContentHtml === null && this.lastAppliedContentHtml === html) return;
 
  this.pendingContentHtml = html;
  if (this.contentDebounceTimer) {
@@ -764,10 +770,45 @@ export class Panel {
  }
 
  this.pendingContentHtml = null;
- if (this.content.innerHTML !== html) {
+ if (this.lastAppliedContentHtml !== html) {
+ // Crash-isolate the DOM write so a malformed string from one panel subclass
+ // (bad escaping, oversized attribute, CSP blocker) can't abort the debounce
+ // timer. On failure we swap in a minimal error card and mark the cache so
+ // subsequent identical writes are skipped.
+ try {
  this.content.innerHTML = html;
+ this.lastAppliedContentHtml = html;
  this.markFresh();
+ } catch (error) {
+ // eslint-disable-next-line no-console
+ console.warn(`[Panel ${this.panelId}] setContent failed:`, error);
+ this.renderErrorFallback(error instanceof Error ? error.message : String(error));
  }
+ }
+  }
+
+  private renderErrorFallback(message: string): void {
+ const safe = message.replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c] ?? c));
+ const fallback = `<div class="panel-error-fallback" role="alert">
+ <div class="panel-error-fallback-icon">⚠</div>
+ <div class="panel-error-fallback-text">This panel failed to render.<br><small>${safe}</small></div>
+ </div>`;
+ try {
+ this.content.innerHTML = fallback;
+ this.lastAppliedContentHtml = fallback;
+ } catch {
+ // DOM truly hostile — give up silently rather than cascade the crash.
+ }
+  }
+
+  /**
+   * Clear the cached last-applied-HTML so the next setContent() call is forced
+   * to write to the DOM even if it would otherwise be a no-op. Subclasses that
+   * mutate this.content directly (innerHTML, replaceChildren, append) should
+   * call this afterwards so the cache does not mask a real update.
+   */
+  protected invalidateContentCache(): void {
+ this.lastAppliedContentHtml = '';
   }
 
   /** Mark the panel as freshly updated — flashes the content and resets the heartbeat. */
@@ -1117,6 +1158,7 @@ export class Panel {
  this.contentDebounceTimer = null;
  }
  this.pendingContentHtml = null;
+ this.lastAppliedContentHtml = '';
 
  if (this.infoBtnHandler && this.infoBtnEl) {
  this.infoBtnEl.removeEventListener('click', this.infoBtnHandler);

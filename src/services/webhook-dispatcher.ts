@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, no-console, sonarjs/no-nested-template-literals, sonarjs/cognitive-complexity */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, no-console, sonarjs/no-nested-template-literals */
 /**
  * Webhook Dispatcher — outbound notifications to Slack / Discord / generic endpoints
  *

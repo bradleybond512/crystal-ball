@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/no-nested-conditional, @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable sonarjs/no-nested-conditional */
 /**
  * IndexedDB-backed alert store for 30-day alert persistence.
  *

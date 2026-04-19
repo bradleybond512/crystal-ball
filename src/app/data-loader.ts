@@ -64,8 +64,6 @@ import {
   fetchWinterWeatherOutlooks,
   fetchBuoyAlerts,
   fetchHurricaneRecon,
-  fetchSavedPlaceWeather,
-  getSavedPlaces,
   getStormPreparednessContext,
   getStormPreparednessSummary,
   updateStormPreparednessContext,
@@ -85,7 +83,6 @@ import { analyzeFlightsForSurge, surgeAlertToSignal, detectForeignMilitaryPresen
 import { fetchCachedTheaterPosture, ingestLocalPostures } from '@/services/cached-theater-posture';
 import { ingestProtestsForCII, ingestMilitaryForCII, ingestNewsForCII, ingestOutagesForCII, ingestConflictsForCII, ingestUcdpForCII, ingestHapiForCII, ingestDisplacementForCII, ingestClimateForCII, ingestStrikesForCII, ingestOrefForCII, ingestAviationForCII, ingestAdvisoriesForCII, ingestGpsJammingForCII, ingestAisDisruptionsForCII, ingestSatelliteFiresForCII, ingestCyberThreatsForCII, ingestTemporalAnomaliesForCII, isInLearningMode } from '@/services/country-instability';
 import { fetchGpsInterference } from '@/services/gps-interference';
-import { fetchLocalIDSAlerts } from '@/services/local-ids';
 import { situationEngine } from '@/services/situation-engine';
 import { dataFreshness, type DataSourceId } from '@/services/data-freshness';
 import { fetchConflictEvents, fetchUcdpClassifications, fetchHapiSummary, fetchUcdpEvents, deduplicateAgainstAcled, fetchIranEvents } from '@/services/conflict';
@@ -139,15 +136,7 @@ import {
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
-import { LocalIDSPanel } from '@/components/LocalIDSPanel';
 import { AlertCenterPanel } from '@/components/AlertCenterPanel';
-import { SpaceWeatherPanel } from '@/components/SpaceWeatherPanel';
-import { DiseaseOutbreakPanel } from '@/components/DiseaseOutbreakPanel';
-import { AirQualityPanel } from '@/components/AirQualityPanel';
-import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
-import { HazmatIncidentsPanel } from '@/components/HazmatIncidentsPanel';
-import { OilSpillPanel } from '@/components/OilSpillPanel';
-import { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { fetchNearbyInfrastructure } from '@/services/infrastructure/hifld';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
@@ -156,44 +145,22 @@ import { updateFromFlights } from '@/services/strike-packages';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { fetchS2Underground } from '@/services/s2-underground';
 import { fetchThreatFoxIOCs, fetchOpenPhishFeed, fetchSpamhausDrop, fetchCisaKev, fetchOtxIOCs, fetchPhishStatsFeed } from '@/services/cyber-extra';
-import { fetchSpaceWeather, fetchDonkiEvents } from '@/services/space-weather';
-import { fetchSpaceflightNews } from '@/services/spaceflight-news';
-import { SpaceflightNewsPanel } from '@/components/SpaceflightNewsPanel';
-import { fetchSpaceLaunches } from '@/services/space-launches';
-import { SpaceLaunchesPanel } from '@/components/SpaceLaunchesPanel';
-import { fetchDiseaseOutbreaks, fetchGlobalDiseaseSnapshots, fetchCdcSurveillance } from '@/services/disease-outbreak';
-import { fetchDiseaseIntel } from '@/services/disease-intel';
-import { DiseaseIntelPanel } from '@/components/DiseaseIntelPanel';
-import { fetchHdxCrises } from '@/services/hdx-crisis';
-import { HumanitarianCrisisPanel } from '@/components/HumanitarianCrisisPanel';
+// Space, disease, and humanitarian loaders live in ./loaders/ — no direct imports here.
 import { fetchGlobalAirQuality } from '@/services/air-quality';
 import { fetchInciwebIncidents } from '@/services/inciweb';
 import { fetchHazmatIncidents } from '@/services/hazmat-incidents';
-import { fetchOilSpills } from '@/services/oil-spill-tracker';
-import { proximityAlertService } from '@/services/proximity-alerts';
 import { classifyNewsItem } from '@/services/positive-classifier';
 import { fetchGivingSummary } from '@/services/giving';
-import { fetchVolcanoAlerts } from '@/services/volcano-alerts';
 import { fetchNWSAlerts } from '@/services/nws-alerts';
 import { fetchFAACameras, scoreCamerasAgainstAlerts, getDisasterProximateCameras } from '@/services/faa-cameras';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
 import { fetchAdsbSnapshot } from '@/services/adsb';
 import type { AirTrafficPanel } from '@/components/AirTrafficPanel';
-import { fetchCommsHealth } from '@/services/comms-health';
-import { fetchGridStatus } from '@/services/power-grid';
-import { fetchEconomicStress } from '@/services/economic-stress';
-import { fetchWsbSentiment } from '@/services/wsb-sentiment';
-import { fetchFederalRegister } from '@/services/federal-register';
 import { fetchRipeAtlasStatus } from '@/services/ripe-atlas';
 import type { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
-import { FederalRegisterPanel } from '@/components/FederalRegisterPanel';
 import { updateRegionCount, getHighRiskRegions } from '@/services/ema-forecast';
 import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
-import { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
 import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
-import { CommsHealthPanel } from '@/components/CommsHealthPanel';
-import { PowerGridPanel } from '@/components/PowerGridPanel';
-import { EconomicStressPanel } from '@/components/EconomicStressPanel';
 import { GivingPanel } from '@/components';
 import { GeoHubsPanel } from '@/components/GeoHubsPanel';
 import { TechHubsPanel } from '@/components/TechHubsPanel';
@@ -276,12 +243,6 @@ import { fetchCongressDefense } from '@/services/congress-defense';
 import { fetchCombatantCommands } from '@/services/combatant-commands';
 import { fetchForeignMilNews } from '@/services/foreign-mil-news';
 import { fetchMesoscaleDiscussions } from '@/services/spc-mesoscale';
-import { GlobalWeatherPanel } from '@/components/GlobalWeatherPanel';
-import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
-import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
-import { fetchGlobalWeather } from '@/services/global-weather';
-import { fetchRecentSanctions } from '@/services/opensanctions';
-import { fetchRecentEdgarFilings } from '@/services/sec-edgar';
 import { showApiKeyGate } from '@/components/api-key-gate';
 import { detectCompoundThreats, toHazardSignal } from '@/services/compound-threat';
 import { detectWeatherThreatConvergence } from '@/services/weather-threat-convergence';
@@ -324,6 +285,16 @@ import { fetchWorldBankProfile } from '@/services/world-bank';
 import type { ThreatIntelHubPanel } from '@/components/ThreatIntelHubPanel';
 import type { GeoIntelPanel } from '@/components/GeoIntelPanel';
 import type { DarkWebPanel } from '@/components/DarkWebPanel';
+// ── Extracted loader modules ──
+// Single-source fetch → panel-update flows live in domain files under
+// ./loaders/. DataLoader keeps thin wrappers that bind `this.ctx` + the
+// compound-threat callback so the App.ts refresh scheduler registrations
+// don't have to change.
+import * as spaceLoaders from '@/app/loaders/space';
+import * as utilityLoaders from '@/app/loaders/utility';
+import * as hazardLoaders from '@/app/loaders/hazards';
+import * as diseaseLoaders from '@/app/loaders/disease';
+import * as cyberLoaders from '@/app/loaders/cyber';
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_UNSPECIFIED: 'info',
@@ -694,9 +665,9 @@ export class DataLoaderManager implements AppModule {
  break;
  }
  case 'techEvents': {
- if (import.meta.env.DEV) console.log('[loadDataForLayer] Loading techEvents...'); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[loadDataForLayer] Loading techEvents...');  
  await this.loadTechEvents();
- if (import.meta.env.DEV) console.log('[loadDataForLayer] techEvents loaded'); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[loadDataForLayer] techEvents loaded');  
  break;
  }
  case 'positiveEvents': {
@@ -1332,9 +1303,9 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadTechEvents(): Promise<void> {
- if (import.meta.env.DEV) console.log('[loadTechEvents] Called. SITE_VARIANT:', SITE_VARIANT, 'techEvents layer:', this.ctx.mapLayers.techEvents); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[loadTechEvents] Called. SITE_VARIANT:', SITE_VARIANT, 'techEvents layer:', this.ctx.mapLayers.techEvents);  
  if (SITE_VARIANT !== 'tech' && !this.ctx.mapLayers.techEvents) {
- if (import.meta.env.DEV) console.log('[loadTechEvents] Skipping - not tech variant and layer disabled'); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[loadTechEvents] Skipping - not tech variant and layer disabled');  
  return;
  }
 
@@ -1821,7 +1792,7 @@ export class DataLoaderManager implements AppModule {
  this.ctx.intelligenceCache.earthquakes ?? [],
  (this.ctx.intelligenceCache.outages ?? []).map(o => ({ score: o.severity === 'total' ? 10 : o.severity === 'major' ? 7 : 3 })),
  );
- if (import.meta.env.DEV) console.log('[Intelligence] All signals loaded for CII calculation'); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[Intelligence] All signals loaded for CII calculation');  
   }
 
   async loadOutages(): Promise<void> {
@@ -1905,165 +1876,25 @@ export class DataLoaderManager implements AppModule {
  }
   }
 
-  async loadLocalIDS(): Promise<void> {
- try {
- const alerts = await fetchLocalIDSAlerts();
- (this.ctx.panels['local-ids'] as LocalIDSPanel)?.update(alerts);
- // Mirror high/critical IDS alerts into the unified store so triage bar,
- // notifications, and reactions pick them up.
- const unified = alerts
- .filter(a => a.severity === 'high' || a.severity === 'critical')
- .map(a => ({
- id: `localids-${a.id}`,
- source: 'local-ids' as const,
- severity: a.severity,
- title: a.signature || a.category || 'IDS alert',
- body: `${a.source} · ${a.srcIp} → ${a.destIp} (${a.proto}) ${a.action}`,
- timestamp: Date.parse(a.ts) || Date.now(),
- relevanceScore: 50,
- acknowledged: false,
- pinned: false,
- }));
- if (unified.length > 0) unifiedAlertStore.ingest(unified);
- } catch {
- (this.ctx.panels['local-ids'] as LocalIDSPanel)?.update([]);
- }
-  }
+  async loadLocalIDS(): Promise<void> { return cyberLoaders.loadLocalIDS(this.ctx); }
 
-  async loadSpaceWeather(): Promise<void> {
- try {
- const [data, donkiEvents] = await Promise.all([fetchSpaceWeather(), fetchDonkiEvents()]);
- (this.ctx.panels['space-weather'] as SpaceWeatherPanel)?.update({ ...data, donkiEvents });
- } catch (error) {
- console.warn('[space-weather] fetch failed', error);
- (this.ctx.panels['space-weather'] as SpaceWeatherPanel)?.update({
- kpIndex: null, kpClass: 'quiet', solarWindSpeed: null, solarWindDensity: null,
- bz: null, xrayClass: null, alertMessages: [], fetchedAt: new Date(), donkiEvents: [],
- });
- }
-  }
+  // Space domain → src/app/loaders/space.ts
+  async loadSpaceWeather(): Promise<void> { return spaceLoaders.loadSpaceWeather(this.ctx); }
+  async loadSpaceflightNews(): Promise<void> { return spaceLoaders.loadSpaceflightNews(this.ctx); }
+  async loadSpaceLaunches(): Promise<void> { return spaceLoaders.loadSpaceLaunches(this.ctx); }
 
-  async loadSpaceflightNews(): Promise<void> {
- try {
- const articles = await fetchSpaceflightNews();
- (this.ctx.panels['spaceflight-news'] as SpaceflightNewsPanel)?.update(articles);
- } catch (error) {
- console.warn('[spaceflight-news] fetch failed', error);
- (this.ctx.panels['spaceflight-news'] as SpaceflightNewsPanel)?.update([]);
- }
-  }
+  // Disease + humanitarian → src/app/loaders/disease.ts
+  async loadDiseaseOutbreaks(): Promise<void> { return diseaseLoaders.loadDiseaseOutbreaks(this.ctx); }
+  async loadDiseaseIntel(): Promise<void> { return diseaseLoaders.loadDiseaseIntel(this.ctx); }
+  async loadHumanitarianCrises(): Promise<void> { return diseaseLoaders.loadHumanitarianCrises(this.ctx); }
 
-  async loadSpaceLaunches(): Promise<void> {
- try {
- const launches = await fetchSpaceLaunches();
- (this.ctx.panels['space-launches'] as SpaceLaunchesPanel)?.update(launches);
- } catch (error) {
- console.warn('[space-launches] fetch failed', error);
- (this.ctx.panels['space-launches'] as SpaceLaunchesPanel)?.update([]);
- }
-  }
-
-  async loadDiseaseOutbreaks(): Promise<void> {
- try {
- const [outbreaks, snapshots, cdcSignals] = await Promise.all([
- fetchDiseaseOutbreaks(),
- fetchGlobalDiseaseSnapshots(),
- fetchCdcSurveillance(),
- ]);
- const cdcOutbreaks = cdcSignals.map((s, i) => ({
- id: `cdc-${i}-${s.date}`,
- title: `${s.disease}: ${s.metric}${s.value !== null ? ` (${s.value})` : ''}`,
- country: s.region,
- disease: s.disease,
- date: new Date(s.date),
- url: s.url,
- source: (s.source === 'WHO' ? 'WHO' : 'ReliefWeb') as 'WHO' | 'ReliefWeb' | 'ProMED',
- severity: (s.severity === 'alert' ? 'high' : 'medium') as 'critical' | 'high' | 'medium' | 'low',
- }));
- (this.ctx.panels['disease-outbreaks'] as DiseaseOutbreakPanel)?.update(
- [...outbreaks, ...cdcOutbreaks],
- snapshots,
- );
- } catch (error) {
- console.warn('[disease-outbreaks] fetch failed', error);
- (this.ctx.panels['disease-outbreaks'] as DiseaseOutbreakPanel)?.update([]);
- }
-  }
-
-  async loadDiseaseIntel(): Promise<void> {
- try {
- const data = await fetchDiseaseIntel();
- (this.ctx.panels['disease-intel'] as DiseaseIntelPanel)?.update(data);
- if (this.ctx.mapLayers.diseaseIntel) {
- this.ctx.map?.setDiseaseIntel(data);
- }
- } catch (error) {
- // eslint-disable-next-line no-console
- console.warn('[disease-intel] fetch failed', error);
- (this.ctx.panels['disease-intel'] as DiseaseIntelPanel)?.update(null);
- }
-  }
-
-  async loadHumanitarianCrises(): Promise<void> {
- try {
- const crises = await fetchHdxCrises();
- (this.ctx.panels['humanitarian-crisis'] as HumanitarianCrisisPanel)?.update(crises);
- } catch (error) {
- console.warn('[humanitarian-crisis] fetch failed', error);
- (this.ctx.panels['humanitarian-crisis'] as HumanitarianCrisisPanel)?.update([]);
- }
-  }
-
-  async loadAirQuality(): Promise<void> {
- try {
- const readings = await fetchGlobalAirQuality();
- (this.ctx.panels['air-quality'] as AirQualityPanel)?.update(readings);
- void proximityAlertService.checkAirQuality(readings);
- (this.ctx.panels['hazard-alerts'] as HazardAlertsPanel)?.refresh();
- void this.evaluateCompoundThreats();
- } catch (error) {
- console.warn('[air-quality] fetch failed', error);
- (this.ctx.panels['air-quality'] as AirQualityPanel)?.update([]);
- }
-  }
-
-  async loadWildfireIncidents(): Promise<void> {
- try {
- const incidents = await fetchInciwebIncidents();
- (this.ctx.panels['wildfire-incidents'] as WildfireIncidentsPanel)?.update(incidents);
- void proximityAlertService.checkWildfires(incidents);
- (this.ctx.panels['hazard-alerts'] as HazardAlertsPanel)?.refresh();
- void this.evaluateCompoundThreats();
- } catch (error) {
- console.warn('[wildfire-incidents] fetch failed', error);
- (this.ctx.panels['wildfire-incidents'] as WildfireIncidentsPanel)?.update([]);
- }
-  }
-
-  async loadHazmatIncidents(): Promise<void> {
- try {
- const incidents = await fetchHazmatIncidents();
- (this.ctx.panels['hazmat-incidents'] as HazmatIncidentsPanel)?.update(incidents);
- void proximityAlertService.checkHazmat(incidents);
- (this.ctx.panels['hazard-alerts'] as HazardAlertsPanel)?.refresh();
- void this.evaluateCompoundThreats();
- } catch (error) {
- console.warn('[hazmat-incidents] fetch failed', error);
- (this.ctx.panels['hazmat-incidents'] as HazmatIncidentsPanel)?.update([]);
- }
-  }
-
-  async loadOilSpills(): Promise<void> {
- try {
- const incidents = await fetchOilSpills();
- (this.ctx.panels['oil-spill'] as OilSpillPanel)?.update(incidents);
- void proximityAlertService.checkOilSpills(incidents);
- (this.ctx.panels['hazard-alerts'] as HazardAlertsPanel)?.refresh();
- } catch (error) {
- console.warn('[oil-spills] fetch failed', error);
- (this.ctx.panels['oil-spill'] as OilSpillPanel)?.update([]);
- }
-  }
+  // Hazard pipeline → src/app/loaders/hazards.ts
+  // The compound-threat evaluator still owns cross-domain data, so we pass it
+  // in as a callback rather than importing it from the loader module.
+  async loadAirQuality(): Promise<void> { return hazardLoaders.loadAirQuality(this.ctx, () => void this.evaluateCompoundThreats()); }
+  async loadWildfireIncidents(): Promise<void> { return hazardLoaders.loadWildfireIncidents(this.ctx, () => void this.evaluateCompoundThreats()); }
+  async loadHazmatIncidents(): Promise<void> { return hazardLoaders.loadHazmatIncidents(this.ctx, () => void this.evaluateCompoundThreats()); }
+  async loadOilSpills(): Promise<void> { return hazardLoaders.loadOilSpills(this.ctx); }
 
   async evaluateCompoundThreats(): Promise<void> {
  try {
@@ -2218,15 +2049,7 @@ export class DataLoaderManager implements AppModule {
  }
   }
 
-  async loadVolcanoAlerts(): Promise<void> {
- try {
- const alerts = await fetchVolcanoAlerts();
- (this.ctx.panels['volcano-alerts'] as VolcanoAlertsPanel)?.update(alerts);
- } catch (error) {
- console.warn('[volcano-alerts] fetch failed', error);
- (this.ctx.panels['volcano-alerts'] as VolcanoAlertsPanel)?.update([]);
- }
-  }
+  async loadVolcanoAlerts(): Promise<void> { return cyberLoaders.loadVolcanoAlerts(this.ctx); }
 
   async loadNWSAlerts(): Promise<void> {
  try {
@@ -2267,56 +2090,12 @@ export class DataLoaderManager implements AppModule {
  }
   }
 
-  async loadSavedPlaceWeather(): Promise<void> {
- const places = getSavedPlaces().slice(0, 6);
- if (places.length === 0) return;
-
- const results = await Promise.allSettled(
- places.map((place) => fetchSavedPlaceWeather(place)),
- );
-
- const failures = results.filter((result) => result.status === 'rejected');
- if (failures.length === results.length) {
- throw new Error('saved-place weather refresh failed');
- }
-  }
-
-  async loadCommsHealth(): Promise<void> {
- try {
- const data = await fetchCommsHealth();
- (this.ctx.panels['comms-health'] as CommsHealthPanel)?.update(data);
- } catch (error) {
- console.warn('[comms-health] fetch failed', error);
- (this.ctx.panels['comms-health'] as CommsHealthPanel)?.update(null);
- }
-  }
-
-  async loadPowerGrid(): Promise<void> {
- try {
- const data = await fetchGridStatus();
- (this.ctx.panels['power-grid'] as PowerGridPanel)?.update(data);
- } catch (error) {
- console.warn('[power-grid] fetch failed', error);
- (this.ctx.panels['power-grid'] as PowerGridPanel)?.update(null);
- }
-  }
-
-  async loadEconomicStress(): Promise<void> {
- try {
- const [data, snapshots] = await Promise.all([fetchEconomicStress(), fetchWsbSentiment()]);
- (this.ctx.panels['economic-stress'] as EconomicStressPanel)?.update(data, snapshots);
- } catch (error) {
- console.warn('[economic-stress] fetch failed', error);
- (this.ctx.panels['economic-stress'] as EconomicStressPanel)?.update(null);
- }
-  }
-
-  async loadFederalRegister(): Promise<void> {
- const panel = this.ctx.panels['federal-register'] as FederalRegisterPanel | undefined;
- if (!panel) return;
- const docs = await fetchFederalRegister();
- panel.update(docs);
-  }
+  // Utility / infrastructure → src/app/loaders/utility.ts
+  async loadSavedPlaceWeather(): Promise<void> { return utilityLoaders.loadSavedPlaceWeather(); }
+  async loadCommsHealth(): Promise<void> { return utilityLoaders.loadCommsHealth(this.ctx); }
+  async loadPowerGrid(): Promise<void> { return utilityLoaders.loadPowerGrid(this.ctx); }
+  async loadEconomicStress(): Promise<void> { return utilityLoaders.loadEconomicStress(this.ctx); }
+  async loadFederalRegister(): Promise<void> { return utilityLoaders.loadFederalRegister(this.ctx); }
 
   async runEMAForecast(): Promise<void> {
  // Accumulate event counts per country from cached intelligence data
@@ -2385,35 +2164,9 @@ export class DataLoaderManager implements AppModule {
  }
   }
 
-  async loadGlobalWeather(): Promise<void> {
- try {
- const readings = await fetchGlobalWeather();
- (this.ctx.panels['global-weather'] as GlobalWeatherPanel)?.update(readings);
- } catch (error) {
- console.warn('[global-weather] fetch failed', error);
- (this.ctx.panels['global-weather'] as GlobalWeatherPanel)?.update([]);
- }
-  }
-
-  async loadOpenSanctions(): Promise<void> {
- try {
- const entities = await fetchRecentSanctions();
- (this.ctx.panels['opensanctions'] as OpenSanctionsPanel)?.update(entities);
- } catch (error) {
- console.warn('[opensanctions] fetch failed', error);
- (this.ctx.panels['opensanctions'] as OpenSanctionsPanel)?.update([]);
- }
-  }
-
-  async loadEdgarFilings(): Promise<void> {
- try {
- const filings = await fetchRecentEdgarFilings();
- (this.ctx.panels['edgar-filings'] as EdgarFilingsPanel)?.update(filings);
- } catch (error) {
- console.warn('[edgar-filings] fetch failed', error);
- (this.ctx.panels['edgar-filings'] as EdgarFilingsPanel)?.update([]);
- }
-  }
+  async loadGlobalWeather(): Promise<void> { return utilityLoaders.loadGlobalWeather(this.ctx); }
+  async loadOpenSanctions(): Promise<void> { return utilityLoaders.loadOpenSanctions(this.ctx); }
+  async loadEdgarFilings(): Promise<void> { return utilityLoaders.loadEdgarFilings(this.ctx); }
 
   async loadIranEvents(): Promise<void> {
  try {
@@ -2433,7 +2186,7 @@ export class DataLoaderManager implements AppModule {
  try {
  const { disruptions, density } = await fetchAisSignals();
  const aisStatus = getAisStatus();
- if (import.meta.env.DEV) console.log('[Ships] Events:', { disruptions: disruptions.length, density: density.length, vessels: aisStatus.vessels }); // eslint-disable-line no-console
+ if (import.meta.env.DEV) console.log('[Ships] Events:', { disruptions: disruptions.length, density: density.length, vessels: aisStatus.vessels });  
  this.ctx.map?.setAisData(disruptions, density);
  signalAggregator.ingestAisDisruptions(disruptions);
  ingestAisDisruptionsForCII(disruptions);

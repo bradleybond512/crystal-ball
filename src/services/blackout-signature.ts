@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity */
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Blackout signature detector — synthesizes a high-severity correlation
  * alert when ≥2 infrastructure-degradation signals coincide:

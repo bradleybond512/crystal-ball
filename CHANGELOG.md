@@ -6,6 +6,40 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Performance and crash diagnostics** (`src/services/log-bridge.ts`): 100-entry breadcrumb ring buffer (log + longtask + slow-refresh + memory + visibility + network + INP + fetch-burst categories). `PerformanceObserver` for long tasks >100 ms and INP `event` entries >200 ms. Memory watchdog samples `performance.memory` every ~60 s and warns above 70% heap usage. Visibility / online / offline breadcrumbs. `window.onerror` and `unhandledrejection` now attach the last 10 breadcrumbs to crash reports. `Cmd+Shift+D` diagnostics copy includes the last 30 client-side breadcrumbs alongside the Tauri bundle.
+- **Fetch failure tracker**: per-host ok/fail counters with 5-minute rolling window; warn breadcrumb on 5+ failures-in-5min for any host. `getFetchFailureSummary()` exported for diagnostic bundles.
+- **Panel crash isolation** (`src/components/Panel.ts`): `setContent` now wraps `innerHTML =` in try/catch and renders an error-fallback card on failure so one bad panel can't cascade. Added cached `lastAppliedContentHtml` so the DOM read for no-op detection is skipped across ~226 panels. Added `invalidateContentCache()` escape hatch for subclasses that mutate `this.content` directly.
+- **Rate limiting for `api/claude-agent.js`**: Upstash sliding window, 10 req/min/IP. Fails open on Upstash outage so Redis blips don't wedge the endpoint.
+- **Bundle-size CI guard**: `scripts/check-bundle-size.mjs` + `npm run bundle:check` + `.github/workflows/bundle-size.yml`. Limits: 350 KB main entry / 800 KB per chunk / 6 MB total gzipped.
+- **Engines + Node pin**: `.nvmrc` + `"engines": { "node": ">=22.0.0 <23.0.0" }` so dev/CI/sidecar all match.
+- **Loader module split**: `src/app/loaders/{space,disease,hazards,utility,cyber}.ts` extracted from `src/app/data-loader.ts`. `src/app/layout/html.ts` extracted from `src/app/panel-layout.ts`. Together these shrink the monoliths by ~500 lines.
+
+### Changed
+
+- **CORS allowlist tightened**: `api/_cors.js` and `server/cors.ts` — dropped the over-permissive `^https://crystal-ball[a-z0-9-]*\.vercel\.app$` pattern that matched any third-party Vercel project. Patterns now require a trusted username suffix.
+- **Edge-function timeouts**: `api/newsapi-headlines.js` and `api/newsdata-feed.js` now use `AbortSignal.timeout(10_000)` so slow upstreams can't wedge the full Vercel 30 s limit.
+- **Release tooling multi-variant restored**: `scripts/release-metadata.mjs`, `release-prepare.mjs`, `release-manifest.mjs`, `desktop-package.mjs` now support all three variants (full/tech/finance), matching the build pipeline. `canonicalReleaseAssetName` normalizes the macOS `Crystal.Ball_…` dot form to the canonical space form.
+- **Release-integrity workflow**: per-variant `release-doctor` steps; PRs soft (`--allow-existing-target-release`), main pushes strict.
+- **build-desktop workflow**: `workflow_dispatch` inputs now expose a variant choice (full/tech/finance) labeled "Build-only variant"; publishing stays tag-driven.
+
+### Fixed
+
+- **XSS in `PlaybackControl.ts:267`**: replay-narrative bullets were interpolated into `innerHTML` without escaping. Now passes through `escapeHtml()`.
+- **Tauri `log_frontend` UTF-8 panic**: byte-slicing at 1,000 bytes could panic mid-codepoint on emoji/non-ASCII messages. Switched to the existing `truncate_to_bytes` helper.
+- **Log injection in `append_desktop_log`**: CR/LF characters in frontend-supplied messages could forge additional log entries. Now stripped before `writeln!`.
+- **GPS IPC missing trusted-window gate**: `get_native_location` (CoreLocation) did not call `require_trusted_window` unlike every other sensitive Tauri command. Added the gate.
+- **URL parameter smuggling in `api/story.js`**: social-crawler meta response interpolated query params without URL-encoding. Now uses `URLSearchParams`.
+- **Test harness for Edge-runtime API handlers**: `mockReq` now returns a real `Request` and `invokeHandler` mirrors the returned `Response` into a Node-style `res` so characterization tests assert against real Edge semantics. 33/36 → 36/36 API tests passing.
+- **Flush-stale-refreshes unit test**: previously eval'd TS method body as plain JS and choked on type annotations. Rewritten to import the real `RefreshScheduler` class via tsx. 7 subtests recovered.
+
+### Security
+
+- **Dependency overrides** (`package.json`): forced `protobufjs ^7.5.5` and `dompurify ^3.4.0` via overrides to close the transitive CVEs from `@xenova/transformers → onnxruntime-web → onnx-proto → protobufjs` and `cesium / posthog-js → dompurify`. `npm audit: 0 vulnerabilities`.
+
+## [2.10.5] - 2026-04-18
+
+### Added
+
 - **CLI Intelligence Toolkit** (`tools/mcp-server/`): 11 new MCP tools (30 total) across 4 phases:
   - **Foundation tools**: `query_raw` (direct sidecar endpoint access with pagination), `chain_query` (multi-step queries with `$prev[N].field.path` cross-references), `compare_snapshots` (structured diffs showing appeared/disappeared items).
   - **Intelligence tools**: `correlate` (cross-domain entity matching across conflicts/markets/cyber/weather/military/health), `trend` (time-series analysis from sentinel history snapshots), `anomaly_scan` (deviation detection vs historical baselines).

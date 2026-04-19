@@ -4,7 +4,7 @@
  * hammer the model. Dispatches `cb:panel-narrative` for Panel.ts to render.
  */
 
-/* eslint-disable sonarjs/void-use */
+ 
 import { runIntel } from './intel-provider';
 
 const CYCLE_MS = 60_000;       // tick every minute

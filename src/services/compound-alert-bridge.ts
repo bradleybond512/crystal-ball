@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use */
+ 
 /**
  * Compound alert bridge — wires the compound-threat-detector into the
  * unified alert store so multi-domain escalations surface as synthetic

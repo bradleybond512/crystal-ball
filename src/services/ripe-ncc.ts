@@ -1,9 +1,7 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import { isFeatureAvailable } from '@/services/runtime-config';
 
-export interface RipeNccData {
-  [key: string]: unknown;
-}
+export type RipeNccData = Record<string, unknown>;
 
 export async function fetchRipeNccAsn(asn: string): Promise<RipeNccData | null> {
   if (!isFeatureAvailable('ripeNccData')) return null;

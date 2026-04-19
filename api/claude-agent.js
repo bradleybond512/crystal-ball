@@ -14,6 +14,8 @@
 
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
 import { validateApiKey } from './_api-key.js';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 
 export const config = { runtime: 'edge' };
 
@@ -28,6 +30,62 @@ const MAX_TURNS = 5;
 const UPSTREAM_TIMEOUT_MS = 25_000;
 const GDELT_API = 'https://api.gdeltproject.org/api/v2/doc/doc';
 const MAX_QUERY_LEN = 500;
+
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// Every successful request burns Anthropic tokens server-side. Limit is
+// deliberately tight — legitimate usage is a handful of queries per session,
+// so 10/min/IP leaves plenty of headroom while capping the damage from an
+// abusive client. Upstash credentials are set in Vercel; fail-open if the
+// limiter can't reach Upstash so a Redis outage doesn't wedge the endpoint.
+let claudeAgentRatelimit = null;
+
+function getClaudeAgentRatelimit() {
+  if (claudeAgentRatelimit) return claudeAgentRatelimit;
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+
+  claudeAgentRatelimit = new Ratelimit({
+ redis: new Redis({ url, token }),
+ limiter: Ratelimit.slidingWindow(10, '60 s'),
+ prefix: 'rl:claude-agent',
+ analytics: false,
+  });
+  return claudeAgentRatelimit;
+}
+
+function getClientIp(request) {
+  return (
+ request.headers.get('x-real-ip')
+ || request.headers.get('cf-connecting-ip')
+ || '0.0.0.0'
+  );
+}
+
+async function checkRateLimit(request, corsHeaders) {
+  const rl = getClaudeAgentRatelimit();
+  if (!rl) return null;
+
+  try {
+ const { success, limit, reset } = await rl.limit(getClientIp(request));
+ if (success) return null;
+ return Response.json({ error: 'Too many requests' }, {
+ status: 429,
+ headers: {
+ 'Content-Type': 'application/json',
+ 'X-RateLimit-Limit': String(limit),
+ 'X-RateLimit-Remaining': '0',
+ 'X-RateLimit-Reset': String(reset),
+ 'Retry-After': String(Math.ceil((reset - Date.now()) / 1000)),
+ ...corsHeaders,
+ },
+ });
+  } catch {
+ // Upstash unavailable — fail open. Better to serve the request than to
+ // black-hole the endpoint if Redis has a blip.
+ return null;
+  }
+}
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 // ── Tool definitions exposed to Claude ───────────────────────────────────────
@@ -219,6 +277,7 @@ async function toolGetCyberThreats(baseUrl) {
 
 // ── Agentic loop ─────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- multi-turn tool-use state machine
 async function runAgentLoop(apiKey, userQuery, baseUrl) {
   const dateStr = new Date().toISOString().split('T')[0];
   const systemPrompt =
@@ -259,7 +318,6 @@ async function runAgentLoop(apiKey, userQuery, baseUrl) {
  });
 
  if (!res.ok) {
- const errText = await res.text().catch(() => '');
  const isRateLimit = res.status === 429;
  throw new Error(isRateLimit ? 'Claude API rate limited' : 'Claude API error');
  }
@@ -350,6 +408,10 @@ export default async function handler(req) {
  headers: { 'Content-Type': 'application/json', ...corsHeaders },
  });
   }
+
+  // Rate limit — every accepted request burns Anthropic tokens downstream.
+  const rateLimitResponse = await checkRateLimit(req, corsHeaders);
+  if (rateLimitResponse) return rateLimitResponse;
 
   // Require Anthropic key
   const apiKey = process.env.ANTHROPIC_API_KEY;

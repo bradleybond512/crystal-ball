@@ -28,7 +28,7 @@ export async function fetchFAACameras(): Promise<FAACamera[]> {
   if (cache && Date.now() - cache.ts < CACHE_TTL_MS) return cache.data;
   try {
  const res = await fetch(`${getApiBaseUrl()}/api/faa-cameras`, {
- signal: AbortSignal.timeout(15000),
+ signal: AbortSignal.timeout(15_000),
  });
  if (!res.ok) return cache?.data ?? [];
  const data = (await res.json()) as FAACamera[];

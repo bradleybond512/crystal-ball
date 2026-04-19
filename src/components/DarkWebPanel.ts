@@ -56,7 +56,7 @@ export class DarkWebPanel extends Panel {
  const items = top.map(b => {
  const name = b.name ?? b.title ?? '—';
  const date = b.breachDate ?? '—';
- const count = b.pwnCount != null ? b.pwnCount.toLocaleString() : '—';
+ const count = b.pwnCount == null ? '—' : b.pwnCount.toLocaleString();
  return `<div style="padding:3px 0;border-bottom:1px solid var(--border-subtle);font-size:11px;display:flex;gap:6px;align-items:baseline;">
  <span style="color:var(--text-primary);flex:1;">${escapeHtml(name)}</span>
  <span style="color:var(--text-muted);">${escapeHtml(date)}</span>

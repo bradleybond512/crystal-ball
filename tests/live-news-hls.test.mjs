@@ -79,12 +79,21 @@ describe('DIRECT_HLS_MAP integrity', () => {
 // ── 2. Channel data integrity ──
 
 describe('channel data integrity', () => {
-  it('all FULL_LIVE_CHANNELS have fallbackVideoId', () => {
+  it('every FULL channel has either a fallbackVideoId or autoPlaylist', () => {
+ // Channels pick one of two resolution strategies:
+ //  - `fallbackVideoId: '...'`  → static last-known-good video ID
+ //  - `autoPlaylist: true`      → dynamic resolver from the channel feed
+ // Either is sufficient; requiring both is a spec drift from the original
+ // test when autoPlaylist support was added.
  for (const id of fullIds) {
  const match = liveNewsSrc.match(new RegExp(`id:\\s*'${id}'[^}]*}`, 's'));
  assert.ok(match, `Channel '${id}' not found`);
- assert.match(match[0], /fallbackVideoId:\s*'[^']+'/,
- `FULL channel '${id}' missing fallbackVideoId`);
+ const hasFallback = /fallbackVideoId:\s*'[^']+'/.test(match[0]);
+ const hasAutoPlaylist = /autoPlaylist:\s*true/.test(match[0]);
+ assert.ok(
+ hasFallback || hasAutoPlaylist,
+ `FULL channel '${id}' needs either fallbackVideoId or autoPlaylist: true`,
+ );
  }
   });
 

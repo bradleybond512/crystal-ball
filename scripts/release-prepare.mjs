@@ -9,6 +9,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 const packageJsonPath = path.join(repoRoot, 'package.json');
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- long-switch CLI parser, not worth extracting
 function parseArgs(argv) {
   const options = {
  version: '',
@@ -90,8 +91,11 @@ export function bumpVersion(currentVersion, bump) {
   throw new Error(`Unsupported bump type: ${bump}`);
 }
 
-export function buildTagPlan(version) {
-  return [buildReleaseTag(version, 'full')];
+export function buildTagPlan(version, variants = ['full']) {
+  // Default is a full-only plan (canonical release). Callers that want a
+  // multi-variant release pass an explicit variants array; each gets its own
+  // tag (full stays untagged as `vX.Y.Z`, others use `vX.Y.Z-<variant>`).
+  return variants.map((variant) => buildReleaseTag(version, variant));
 }
 
 async function updatePackageVersion(version) {
@@ -150,6 +154,7 @@ async function main() {
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isCli) {
+  // eslint-disable-next-line unicorn/prefer-top-level-await -- wrapped in isCli guard so top-level await would run during imports
   main().catch((error) => {
  console.error(`[release-prepare] Failed: ${error instanceof Error ? error.message : String(error)}`);
  process.exit(1);

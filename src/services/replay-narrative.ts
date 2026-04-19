@@ -87,7 +87,7 @@ export function buildReplayNarrative(
   bullets.push(...scenarioChanges);
 
   const topCountries = [...current.watchedCountries]
- // eslint-disable-next-line unicorn/no-array-sort
+  
  .sort((a, b) => SEVERITY_SCORE[b.severity] - SEVERITY_SCORE[a.severity] || b.score - a.score)
  .slice(0, 3);
 

@@ -8,7 +8,7 @@ export default async function handler(req) {
 
   const apiKey = process.env.NEWSDATA_API_KEY;
   if (!apiKey) {
- return new Response(JSON.stringify({ error: 'NEWSDATA_API_KEY not configured' }), {
+ return Response.json({ error: 'NEWSDATA_API_KEY not configured' }, {
  status: 503,
  headers: { 'Content-Type': 'application/json', ...corsHeaders },
  });
@@ -19,11 +19,13 @@ export default async function handler(req) {
 
   try {
  const params = new URLSearchParams({ apikey: apiKey, q, language: 'en' });
+ // Bound upstream latency so a newsdata.io stall can't wedge the edge function.
  const resp = await fetch(`https://newsdata.io/api/1/latest?${params}`, {
  headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/1.0' },
+ signal: AbortSignal.timeout(10_000),
  });
  if (!resp.ok) {
- return new Response(JSON.stringify([]), {
+ return Response.json([], {
  status: 200,
  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=120', ...corsHeaders },
  });
@@ -39,12 +41,12 @@ export default async function handler(req) {
  description: a.description ?? '',
  imageUrl: a.image_url ?? undefined,
  }));
- return new Response(JSON.stringify(items), {
+ return Response.json(items, {
  status: 200,
  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=120, s-maxage=300', ...corsHeaders },
  });
-  } catch (error) {
- return new Response(JSON.stringify([]), {
+  } catch {
+ return Response.json([], {
  status: 200,
  headers: { 'Content-Type': 'application/json', ...corsHeaders },
  });

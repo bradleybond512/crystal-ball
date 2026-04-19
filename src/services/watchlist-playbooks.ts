@@ -121,7 +121,7 @@ function safeParseCountries(raw: string | null): WatchlistCountry[] {
 }
 
 function sortCountries(countries: WatchlistCountry[]): WatchlistCountry[] {
-  // eslint-disable-next-line unicorn/no-array-sort
+   
   return [...countries].sort((a, b) => b.addedAt - a.addedAt || a.code.localeCompare(b.code));
 }
 
@@ -339,7 +339,7 @@ export function evaluateWatchlistPlaybook(input: WatchlistPlaybookInput): Watchl
  },
   ];
 
-  // eslint-disable-next-line unicorn/no-array-sort
+   
   const rankedOptions = [...options].sort((a, b) => b.signalScore - a.signalScore);
   const selected = rankedOptions[0] ?? {
  scenario: 'steady-watch' as const,
@@ -372,7 +372,7 @@ export function evaluateWatchlistPlaybook(input: WatchlistPlaybookInput): Watchl
 }
 
 export function rankWatchedCountries<T extends RankedWatchCountry>(entries: T[]): T[] {
-  // eslint-disable-next-line unicorn/no-array-sort
+   
   return [...entries].sort((a, b) => {
  const severityDelta = SEVERITY_RANK[b.playbook.severity] - SEVERITY_RANK[a.playbook.severity];
  if (severityDelta !== 0) return severityDelta;

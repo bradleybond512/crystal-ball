@@ -1,0 +1,49 @@
+name: Bundle Size
+
+# Guard against accidental bundle bloat. Runs the full-variant Vite build on
+# every PR and fails if any JS chunk exceeds the policy limits defined in
+# scripts/check-bundle-size.mjs. Cesium already accounts for ~2.4 MB of the
+# 6 MB gzipped budget, so a future `import` of the full deck.gl or transformers
+# bundle would fail this job before merge.
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'scripts/check-bundle-size.mjs'
+      - '.github/workflows/bundle-size.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  bundle-size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+          cache: npm
+
+      # vite-plugin-pwa@1.2.0 peer caps at vite ^7; we use vite@^8.
+          # --legacy-peer-deps lets install proceed. Tracked for a proper
+          # resolution in a follow-up PR.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build full-variant PWA
+        run: npm run build:full
+        env:
+          # Disable texture-download postinstall step in CI where it would hit
+          # network + flake. The bundle-size check doesn't need them.
+          CRYSTALBALL_SKIP_VAULT_TEXTURES: '1'
+
+      - name: Check bundle-size policy
+        run: npm run bundle:check

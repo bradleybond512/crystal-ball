@@ -22,12 +22,12 @@ const CACHE_TTL_MS = 60 * 60 * 1000;
 export async function fetchHdxCrises(): Promise<HumanitarianCrisis[]> {
   if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS) return _cache.crises;
   try {
- const res = await fetch(`${getApiBaseUrl()}/api/hdx-crises`, { signal: AbortSignal.timeout(15000) });
+ const res = await fetch(`${getApiBaseUrl()}/api/hdx-crises`, { signal: AbortSignal.timeout(15_000) });
  if (!res.ok) {
  _cache = { crises: [], ts: Date.now() };
  return [];
  }
- const raw = await res.json() as Array<HumanitarianCrisis & { updatedAt: string }>;
+ const raw = await res.json() as (HumanitarianCrisis & { updatedAt: string })[];
  const crises = raw.map(r => ({ ...r, updatedAt: new Date(r.updatedAt) }));
  _cache = { crises, ts: Date.now() };
  return crises;

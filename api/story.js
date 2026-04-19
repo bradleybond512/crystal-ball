@@ -27,7 +27,11 @@ export default function handler(req, res) {
   const isBot = BOT_UA.test(ua);
 
   const baseUrl = 'https://crystalball.app';
-  const spaUrl = `${baseUrl}/?c=${countryCode}&t=${type}${ts ? `&ts=${ts}` : ''}`;
+  // URL-encode every interpolated value so a crafted query param (e.g. `c=foo&admin=1`)
+  // cannot smuggle additional query params into the downstream URL structure.
+  const spaParams = new URLSearchParams({ c: countryCode, t: type });
+  if (ts) spaParams.set('ts', ts);
+  const spaUrl = `${baseUrl}/?${spaParams.toString()}`;
 
   // Real users → redirect to SPA
   if (!isBot) {
@@ -40,9 +44,13 @@ export default function handler(req, res) {
   const countryName = COUNTRY_NAMES[countryCode] || countryCode || 'Global';
   const title = `${countryName} Intelligence Brief | Crystal Ball`;
   const description = `Real-time instability analysis for ${countryName}. Country Instability Index, military posture, threat classification, and prediction markets. Free, open-source geopolitical intelligence.`;
-  const imageParams = `c=${countryCode}&t=${type}${score ? `&s=${score}` : ''}${level ? `&l=${level}` : ''}`;
-  const imageUrl = `${baseUrl}/api/og-story?${imageParams}`;
-  const storyUrl = `${baseUrl}/api/story?c=${countryCode}&t=${type}${ts ? `&ts=${ts}` : ''}`;
+  const imageParams = new URLSearchParams({ c: countryCode, t: type });
+  if (score) imageParams.set('s', score);
+  if (level) imageParams.set('l', level);
+  const imageUrl = `${baseUrl}/api/og-story?${imageParams.toString()}`;
+  const storyParams = new URLSearchParams({ c: countryCode, t: type });
+  if (ts) storyParams.set('ts', ts);
+  const storyUrl = `${baseUrl}/api/story?${storyParams.toString()}`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">

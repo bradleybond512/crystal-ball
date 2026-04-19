@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/no-nested-template-literals */
+ 
 /**
  * StatusOverlay — single card with three sections:
  *   1. Source Health (from source-health tracker)

@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/cognitive-complexity, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/no-nested-template-literals */
+/* eslint-disable sonarjs/cognitive-complexity, sonarjs/no-nested-conditional, sonarjs/no-nested-template-literals */
 /**
  * Intel channels bridge — promotes weather/health/infra/space/maritime/
  * aviation/travel/radiation/air-quality signals into the unified alert store

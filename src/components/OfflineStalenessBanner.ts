@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/no-nested-conditional */
+ 
 /**
  * Offline Staleness Banner — mounts a fixed-position banner at the top of
  * the viewport that is IMPOSSIBLE to dismiss while data is stale. Uses

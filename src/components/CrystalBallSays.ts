@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/void-use, sonarjs/no-nested-template-literals, sonarjs/cognitive-complexity */
+/* eslint-disable sonarjs/cognitive-complexity */
 /**
  * Crystal Ball Says — lightweight strip below the Triage bar showing
  * the top actionable Situation from the OODA-loop Situation Engine.

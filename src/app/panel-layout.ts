@@ -97,6 +97,9 @@ import { startBlackoutSignature } from '@/services/blackout-signature';
 import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
 import { startAlertReactions } from '@/services/alert-reactions';
+import { startAnalystLoop } from '@/services/analyst-loop';
+import { startModeForecast } from '@/services/mode-forecast';
+import { startRelevanceLearner } from '@/services/relevance-learner';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
 import { startAlertDebug } from '@/services/alert-debug';
@@ -506,6 +509,9 @@ export class PanelLayoutManager implements AppModule {
  startThreatCorridor();
  startPeriodicityDetector();
  startSilenceAnomaly();
+ startRelevanceLearner();
+ startModeForecast();
+ startAnalystLoop();
  document.addEventListener('keydown', (e: KeyboardEvent) => {
    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
      e.preventDefault();

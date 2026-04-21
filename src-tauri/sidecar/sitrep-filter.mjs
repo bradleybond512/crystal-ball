@@ -102,3 +102,109 @@ export function filterAllDomains(severity, raw) {
   }
   return result;
 }
+
+// ── Citations ─────────────────────────────────────────────────────────────────
+// Stable short keys the subagent can reference inline, e.g. [wx-1].
+// Each citation maps to a panel so the client can deep-link back.
+
+const DOMAIN_PANEL = {
+  conflicts: 'conflicts',
+  markets: 'markets',
+  weather: 'weather-alerts',
+  seismic: 'earthquakes',
+  health: 'disease-outbreaks',
+  sanctions: 'opensanctions',
+  news: 'breaking-news',
+  cyber: 'cyber-threats',
+  military: 'military-tracker',
+  infrastructure: 'grid-alerts',
+};
+
+const DOMAIN_PREFIX = {
+  conflicts: 'con',
+  markets: 'mkt',
+  weather: 'wx',
+  seismic: 'sei',
+  health: 'hlt',
+  sanctions: 'san',
+  news: 'nws',
+  cyber: 'cyb',
+  military: 'mil',
+  infrastructure: 'inf',
+};
+
+function itemIdentity(item, fallback) {
+  if (!item || typeof item !== 'object') return String(fallback);
+  return (
+    item.id ?? item.alertId ?? item.eventId ?? item.cve_id ?? item.cveID ??
+    item.symbol ?? item.callsign ?? item.mmsi ?? item.url ?? String(fallback)
+  );
+}
+
+function itemLabel(domain, item) {
+  if (!item || typeof item !== 'object') return '';
+  if (domain === 'markets') {
+    const sym = item.symbol ?? '?';
+    const pct = typeof item.changePercent === 'number' ? ` ${item.changePercent.toFixed(2)}%` : '';
+    return `${sym}${pct}`;
+  }
+  if (domain === 'seismic') {
+    const mag = item.properties?.mag ?? item.mag ?? '?';
+    const place = item.properties?.place ?? item.place ?? '';
+    return `M${mag} ${place}`;
+  }
+  if (domain === 'weather') {
+    return item.event ?? item.headline ?? item.title ?? 'alert';
+  }
+  if (domain === 'cyber') {
+    return item.cve_id ?? item.cveID ?? item.ioc ?? item.value ?? 'ioc';
+  }
+  if (domain === 'military') {
+    return item.callsign ?? item.name ?? item.mmsi ?? 'unit';
+  }
+  return item.title ?? item.name ?? item.headline ?? item.event ?? '';
+}
+
+function collectDomainItems(data) {
+  const arrays = [];
+  if (Array.isArray(data.items)) arrays.push(data.items);
+  if (Array.isArray(data.iocs)) arrays.push(data.iocs);
+  if (Array.isArray(data.kevs)) arrays.push(data.kevs);
+  if (Array.isArray(data.vessels)) arrays.push(data.vessels);
+  return arrays.flat().slice(0, 10);
+}
+
+function citationsForDomain(domain, data) {
+  if (!data || typeof data !== 'object') return [];
+  const prefix = DOMAIN_PREFIX[domain] ?? domain.slice(0, 3);
+  const panel = DOMAIN_PANEL[domain] ?? domain;
+  return collectDomainItems(data).map((item, i) => {
+    const idx = i + 1;
+    return {
+      key: `${prefix}-${idx}`,
+      domain,
+      panel,
+      id: String(itemIdentity(item, idx)),
+      label: String(itemLabel(domain, item) ?? '').slice(0, 120),
+    };
+  });
+}
+
+/**
+ * Build a compact list of citation keys across the filtered bundle so the
+ * subagent can reference items inline (e.g. "magnitude 6.1 quake [sei-2]")
+ * and the main-context client can deep-link each citation to its panel.
+ *
+ * Returns { citations: [{ key, domain, panel, id, label }], byKey: {...} }.
+ */
+export function buildCitations(domains) {
+  const citations = [];
+  const byKey = {};
+  for (const [domain, data] of Object.entries(domains)) {
+    for (const c of citationsForDomain(domain, data)) {
+      citations.push(c);
+      byKey[c.key] = c;
+    }
+  }
+  return { citations, byKey };
+}

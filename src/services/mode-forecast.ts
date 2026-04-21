@@ -1,0 +1,272 @@
+/**
+ * Mode Forecast — Posture Advisory
+ *
+ * Modes are now manual (see mode-manager.ts), but users still benefit from an
+ * advisory that says "signals are shifting toward domain X — consider
+ * focusing there." This service watches rolling signal pressure across
+ * domains and emits advisories when a domain crosses a rising threshold.
+ *
+ * Advisories are suggestions, not triggers. They never call setMode(). They
+ * surface through a `cb:mode-advisory` event and a small persisted snapshot,
+ * so a HUD or sidebar affordance can render them.
+ *
+ * Domains tracked:
+ *   - finance   (market volatility, economic anomalies)
+ *   - security  (military situations, war signals)
+ *   - disaster  (natural-hazard situations, seismic anomalies)
+ *   - cyber     (cyber situations, cyber anomalies)
+ *
+ * Each domain has a rolling EWMA of "pressure" (derived from situations +
+ * anomalies). When the slope is positive and the level exceeds a threshold,
+ * an advisory is emitted. When pressure recedes, the advisory is cleared.
+ */
+
+import { situationEngine } from './situation-engine';
+import { anomalyEngine } from './anomaly-detection';
+import type { Situation, SituationDomain } from './situation-types';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type ForecastDomain = 'finance' | 'security' | 'disaster' | 'cyber';
+
+export interface ModeAdvisory {
+  domain: ForecastDomain;
+  /** 0–1 current pressure level. */
+  pressure: number;
+  /** Pressure delta over the last window (positive = rising). */
+  slope: number;
+  /** Projected time until threshold crossover, or null if already above. */
+  etaMin: number | null;
+  /** Short analyst-voice statement. */
+  statement: string;
+  timestamp: number;
+}
+
+export interface ForecastSnapshot {
+  timestamp: number;
+  advisories: ModeAdvisory[];
+  /** Per-domain pressure telemetry for debug UIs. */
+  pressure: Record<ForecastDomain, number>;
+}
+
+// ── Tuning ────────────────────────────────────────────────────────────────────
+
+const BASE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+const EWMA_ALPHA = 0.3;                  // responsiveness; higher = snappier
+const ADVISORY_THRESHOLD = 0.5;          // emit once pressure exceeds this
+const CLEAR_THRESHOLD = 0.35;            // hysteresis — don't flap at boundary
+const STORAGE_KEY = 'crystalball-mode-forecast-v1';
+const EVENT_NAME = 'cb:mode-advisory';
+
+const DOMAIN_LABELS: Record<ForecastDomain, string> = {
+  finance: 'Finance',
+  security: 'Security',
+  disaster: 'Disaster',
+  cyber: 'Cyber',
+};
+
+// ── Pressure computation ─────────────────────────────────────────────────────
+
+const PHASE_WEIGHT: Record<Situation['phase'], number> = {
+  resolved: 0,
+  active: 1,
+  developing: 0.7,
+  emerging: 0.4,
+  'de-escalating': 0.2,
+};
+
+function situationWeight(s: Situation): number {
+  return s.confidence * PHASE_WEIGHT[s.phase];
+}
+
+function domainPressureFromSituations(
+  situations: Situation[],
+  domains: SituationDomain[],
+): number {
+  let sum = 0;
+  for (const s of situations) {
+    if (!domains.includes(s.domain)) continue;
+    sum += situationWeight(s);
+  }
+  // Normalize: 3 fully active situations with confidence 1.0 → pressure 1.0.
+  return Math.min(1, sum / 3);
+}
+
+const ANOMALY_SEV_WEIGHT = { critical: 1, warning: 0.6, info: 0.25 } as const;
+
+function domainPressureFromAnomalies(prefix: string): number {
+  const anomalies = anomalyEngine.getActiveAnomalies();
+  let sum = 0;
+  for (const a of anomalies) {
+    if (!a.source.startsWith(prefix)) continue;
+    const sevWeight = ANOMALY_SEV_WEIGHT[a.severity] ?? 0.25;
+    sum += Math.min(1, Math.abs(a.zScore) / 6) * sevWeight;
+  }
+  return Math.min(1, sum);
+}
+
+function computeRawPressure(domain: ForecastDomain, situations: Situation[]): number {
+  switch (domain) {
+    case 'finance': {
+      const sit = domainPressureFromSituations(situations, ['economic']);
+      const anom =
+        domainPressureFromAnomalies('market:') * 0.6 +
+        domainPressureFromAnomalies('matrix:') * 0.2;
+      return Math.min(1, sit * 0.6 + anom * 0.6);
+    }
+    case 'security': {
+      const sit = domainPressureFromSituations(situations, ['military', 'civil_unrest']);
+      const anom = domainPressureFromAnomalies('military:');
+      return Math.min(1, sit * 0.7 + anom * 0.5);
+    }
+    case 'disaster': {
+      const sit = domainPressureFromSituations(situations, ['natural_hazard', 'infrastructure']);
+      const anom =
+        domainPressureFromAnomalies('weather:') * 0.6 +
+        domainPressureFromAnomalies('seismic:') * 0.6;
+      return Math.min(1, sit * 0.7 + anom * 0.5);
+    }
+    case 'cyber': {
+      const sit = domainPressureFromSituations(situations, ['cyber']);
+      const anom = domainPressureFromAnomalies('cyber:');
+      return Math.min(1, sit * 0.7 + anom * 0.6);
+    }
+  }
+}
+
+// ── EWMA state ────────────────────────────────────────────────────────────────
+
+const pressure: Record<ForecastDomain, number> = {
+  finance: 0, security: 0, disaster: 0, cyber: 0,
+};
+const previousPressure: Record<ForecastDomain, number> = {
+  finance: 0, security: 0, disaster: 0, cyber: 0,
+};
+const advised = new Set<ForecastDomain>();
+
+function updateEwma(domain: ForecastDomain, raw: number): number {
+  previousPressure[domain] = pressure[domain];
+  const next = EWMA_ALPHA * raw + (1 - EWMA_ALPHA) * pressure[domain];
+  pressure[domain] = next;
+  return next;
+}
+
+function etaToThreshold(current: number, slope: number, threshold: number): number | null {
+  if (current >= threshold) return null;
+  if (slope <= 0) return null;
+  // Each cycle is BASE_INTERVAL_MS; extrapolate linearly.
+  const cyclesNeeded = (threshold - current) / slope;
+  if (!Number.isFinite(cyclesNeeded) || cyclesNeeded < 0) return null;
+  const minutes = (cyclesNeeded * BASE_INTERVAL_MS) / 60_000;
+  if (minutes > 120) return null; // don't project absurdly far out
+  return Math.round(minutes);
+}
+
+function trendLabel(slope: number): string {
+  if (slope > 0.02) return 'still climbing';
+  if (slope < -0.02) return 'receding';
+  return 'plateaued';
+}
+
+function buildStatement(
+  domain: ForecastDomain,
+  level: number,
+  slope: number,
+  etaMin: number | null,
+): string {
+  const name = DOMAIN_LABELS[domain];
+  const pct = (level * 100).toFixed(0);
+  if (etaMin !== null) {
+    return `${name} pressure rising (${pct}%, +${(slope * 100).toFixed(0)} pts/cycle) — threshold in ~${etaMin}m.`;
+  }
+  return `${name} pressure elevated at ${pct}% — ${trendLabel(slope)}.`;
+}
+
+// ── Cycle ─────────────────────────────────────────────────────────────────────
+
+function persist(snapshot: ForecastSnapshot): void {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch { /* quota */ }
+}
+
+export function getForecastSnapshot(): ForecastSnapshot | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) as ForecastSnapshot : null;
+  } catch { return null; }
+}
+
+export function runForecastCycle(): ForecastSnapshot {
+  const situations = situationEngine.getSituations();
+  const domains: ForecastDomain[] = ['finance', 'security', 'disaster', 'cyber'];
+  const advisories: ModeAdvisory[] = [];
+
+  for (const d of domains) {
+    const raw = computeRawPressure(d, situations);
+    const level = updateEwma(d, raw);
+    const slope = level - previousPressure[d];
+
+    const wasAdvised = advised.has(d);
+    const nowAdvised = wasAdvised ? level >= CLEAR_THRESHOLD : level >= ADVISORY_THRESHOLD;
+
+    if (nowAdvised) {
+      advised.add(d);
+      advisories.push({
+        domain: d,
+        pressure: level,
+        slope,
+        etaMin: etaToThreshold(level, slope, ADVISORY_THRESHOLD),
+        statement: buildStatement(d, level, slope, etaToThreshold(level, slope, ADVISORY_THRESHOLD)),
+        timestamp: Date.now(),
+      });
+    } else if (wasAdvised) {
+      advised.delete(d);
+    }
+  }
+
+  advisories.sort((a, b) => b.pressure - a.pressure);
+
+  const snapshot: ForecastSnapshot = {
+    timestamp: Date.now(),
+    advisories,
+    pressure: { ...pressure },
+  };
+  persist(snapshot);
+  document.dispatchEvent(new CustomEvent<ForecastSnapshot>(EVENT_NAME, { detail: snapshot }));
+  return snapshot;
+}
+
+// ── Background loop ──────────────────────────────────────────────────────────
+
+let started = false;
+let timerId: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleNext(): void {
+  timerId = setTimeout(() => {
+    try { runForecastCycle(); } catch { /* keep looping */ }
+    scheduleNext();
+  }, BASE_INTERVAL_MS);
+}
+
+export function startModeForecast(): void {
+  if (started) return;
+  started = true;
+  try { runForecastCycle(); } catch { /* ignore */ }
+  scheduleNext();
+}
+
+export function stopModeForecast(): void {
+  started = false;
+  if (timerId !== null) {
+    clearTimeout(timerId);
+    timerId = null;
+  }
+}
+
+export function subscribeModeAdvisory(cb: (snapshot: ForecastSnapshot) => void): () => void {
+  const handler = (e: Event): void => {
+    const ce = e as CustomEvent<ForecastSnapshot>;
+    cb(ce.detail);
+  };
+  document.addEventListener(EVENT_NAME, handler);
+  return () => { document.removeEventListener(EVENT_NAME, handler); };
+}

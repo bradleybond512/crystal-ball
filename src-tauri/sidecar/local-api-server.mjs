@@ -11,7 +11,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { scoreAllDomains } from './sitrep-severity.mjs';
-import { filterAllDomains } from './sitrep-filter.mjs';
+import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 function isValidToken(authHeader) {
@@ -1882,6 +1882,8 @@ async function dispatch(requestUrl, req, routes, context) {
       missing_key_names: missingKeys,
     };
 
+    const { citations } = buildCitations(domains);
+
     const bundle = {
       timestamp: new Date().toISOString(),
       delta_mode: deltaMode,
@@ -1889,6 +1891,7 @@ async function dispatch(requestUrl, req, routes, context) {
       feed_health: feedHealth,
       severity,
       domains,
+      citations,
       sources,
       warnings,
     };

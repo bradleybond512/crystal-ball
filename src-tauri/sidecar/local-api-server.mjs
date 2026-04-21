@@ -1776,6 +1776,49 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Analyst state (renderer → sidecar mirror, exposed via MCP) ──
+  if (requestUrl.pathname === '/api/analyst-state') {
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json();
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!context._analystState) context._analystState = {};
+        // Cap payload size defensively (drop unknown deeply-nested fields).
+        const safe = {
+          timestamp: typeof body.timestamp === 'number' ? body.timestamp : Date.now(),
+          analyst: body.analyst ?? null,
+          forecast: body.forecast ?? null,
+          accuracy: Array.isArray(body.accuracy) ? body.accuracy.slice(0, 20) : [],
+          threads: Array.isArray(body.threads) ? body.threads.slice(0, 30) : [],
+          hotEntities: Array.isArray(body.hotEntities) ? body.hotEntities.slice(0, 20) : [],
+          entityCount: typeof body.entityCount === 'number' ? body.entityCount : 0,
+          ghostMode: !!body.ghostMode,
+        };
+        context._analystState = safe;
+        return json({ ok: true });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const state = context._analystState || null;
+      if (!state) {
+        return json({
+          available: false,
+          message: 'Analyst state not yet pushed by renderer. Open the Crystal Ball app to populate.',
+        });
+      }
+      const ageMs = Date.now() - (state.timestamp || 0);
+      return json({
+        available: true,
+        ageMs,
+        stale: ageMs > 10 * 60 * 1000,
+        ...state,
+      });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
   if (requestUrl.pathname === '/api/sitrep-bundle') {
     const cacheKey = 'sitrep-bundle';
     const cached = getCached(cacheKey, 5 * 60 * 1000);

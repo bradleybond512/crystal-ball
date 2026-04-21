@@ -19433,3 +19433,78 @@ body.gods-vision-lock .replay-scrubber { display: none; }
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+.analyst-hud-advisory-meter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.analyst-hud-advisory-meter-row .analyst-hud-meter { flex: 1; }
+.analyst-hud-sparkline {
+  color: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
+}
+.analyst-hud-thread {
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.analyst-hud-thread-strengthening {
+  background: rgba(220, 90, 80, 0.22);
+  color: #ffb6ad;
+}
+.analyst-hud-thread-weakening {
+  background: rgba(80, 200, 130, 0.22);
+  color: #b6f0c8;
+}
+.analyst-hud-thread-stable {
+  background: rgba(100, 160, 220, 0.18);
+  color: #b9d4ff;
+}
+.analyst-hud-thread-new {
+  background: rgba(180, 140, 220, 0.22);
+  color: #d8c4f0;
+}
+.analyst-hud-hot-entities,
+.analyst-hud-hyp-entities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.analyst-hud-entity-chip {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-variant-numeric: tabular-nums;
+}
+.analyst-hud-entity-country { background: rgba(220, 130, 80, 0.18); color: #ffc89e; }
+.analyst-hud-entity-ticker { background: rgba(80, 200, 130, 0.18); color: #b6f0c8; }
+.analyst-hud-entity-cve { background: rgba(220, 80, 80, 0.18); color: #ffb6ad; }
+.analyst-hud-entity-region { background: rgba(120, 150, 220, 0.18); color: #c4d4ff; }
+.analyst-hud-entity-callsign { background: rgba(180, 140, 220, 0.18); color: #d8c4f0; }
+.analyst-hud-hyp-skeptic { margin-bottom: 6px; }
+.analyst-hud-skeptic-toggle {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.analyst-hud-skeptic-toggle:hover { background: rgba(255, 255, 255, 0.08); }
+.analyst-hud-skeptic-full {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.78);
+  padding-left: 8px;
+  border-left: 2px solid rgba(255, 255, 255, 0.15);
+}

@@ -17,6 +17,12 @@ import { subscribeModeAdvisory, getForecastSnapshot, type ForecastSnapshot, type
 import { subscribeAutoBrief, getLatestBriefs, isAutoBriefEnabled, setAutoBriefEnabled, type AutoBrief } from '@/services/auto-brief';
 import { thumbsUp, thumbsDown } from '@/services/hypothesis-feedback';
 import { getKindAccuracy } from '@/services/hypothesis-accuracy';
+import { getThreadFor } from '@/services/hypothesis-threads';
+import { entitiesForHypothesis, getHotEntities, type EntityMention } from '@/services/hypothesis-entities';
+import { getSkepticNote, isSkepticEnabled, setSkepticEnabled, subscribeSkeptic } from '@/services/hypothesis-skeptic';
+import { getPressureHistory, buildSparklinePath, subscribePressureHistory } from '@/services/pressure-history';
+import type { ForecastDomain } from '@/services/mode-forecast';
+import type { PressureSample } from '@/services/pressure-history';
 
 const MAX_VISIBLE = 5;
 
@@ -36,7 +42,9 @@ export class AnalystHUD {
   private snapshot: AnalystSnapshot | null = null;
   private forecast: ForecastSnapshot | null = null;
   private briefs: Record<string, AutoBrief | undefined> = {};
+  private pressure: Record<ForecastDomain, PressureSample[]>;
   private visible = false;
+  private expandedSkeptic = new Set<string>();
 
   constructor() {
     this.root = document.createElement('div');
@@ -48,6 +56,7 @@ export class AnalystHUD {
     this.snapshot = getAnalystSnapshot();
     this.forecast = getForecastSnapshot();
     this.briefs = getLatestBriefs();
+    this.pressure = getPressureHistory();
   }
 
   mount(parent: HTMLElement): void {
@@ -62,6 +71,13 @@ export class AnalystHUD {
     });
     subscribeAutoBrief((brief) => {
       this.briefs[brief.domain] = brief;
+      if (this.visible) this.render();
+    });
+    subscribePressureHistory((h) => {
+      this.pressure = h;
+      if (this.visible) this.render();
+    });
+    subscribeSkeptic(() => {
       if (this.visible) this.render();
     });
     document.addEventListener('cb:toggle-analyst-hud', () => this.toggle());
@@ -91,6 +107,7 @@ export class AnalystHUD {
     card.append(
       this.buildHeader(),
       this.buildAdvisorySection(),
+      this.buildHotEntitiesSection(),
       this.buildHypothesesSection(),
       this.buildBriefsSection(),
       this.buildFooter(),
@@ -149,14 +166,66 @@ export class AnalystHUD {
     const body = document.createElement('div');
     body.className = 'analyst-hud-advisory-body';
     body.textContent = `[${glyph}] ${advisory.statement}`;
+
+    const meterRow = document.createElement('div');
+    meterRow.className = 'analyst-hud-advisory-meter-row';
     const bar = document.createElement('div');
     bar.className = 'analyst-hud-meter';
     const fill = document.createElement('div');
     fill.className = 'analyst-hud-meter-fill';
     fill.style.width = `${pct}%`;
     bar.append(fill);
-    row.append(body, bar);
+    const spark = this.buildSparkline(advisory.domain);
+    meterRow.append(bar, spark);
+
+    row.append(body, meterRow);
     return row;
+  }
+
+  private buildSparkline(domain: ForecastDomain): SVGSVGElement {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'analyst-hud-sparkline');
+    svg.setAttribute('width', '80');
+    svg.setAttribute('height', '18');
+    svg.setAttribute('viewBox', '0 0 80 18');
+    const series = this.pressure[domain] ?? [];
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', buildSparklinePath(series, 80, 18));
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'currentColor');
+    path.setAttribute('stroke-width', '1.2');
+    svg.append(path);
+    return svg;
+  }
+
+  private buildHotEntitiesSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'analyst-hud-section';
+    const h = document.createElement('h3');
+    h.textContent = 'Hot Entities';
+    sec.append(h);
+
+    const hot = getHotEntities().slice(0, 12);
+    if (hot.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'analyst-hud-empty';
+      empty.textContent = 'No entities span multiple hypotheses.';
+      sec.append(empty);
+      return sec;
+    }
+    const row = document.createElement('div');
+    row.className = 'analyst-hud-hot-entities';
+    for (const m of hot) row.append(this.buildEntityChip(m, true));
+    sec.append(row);
+    return sec;
+  }
+
+  private buildEntityChip(m: EntityMention, includeCount: boolean): HTMLElement {
+    const chip = document.createElement('span');
+    chip.className = `analyst-hud-entity-chip analyst-hud-entity-${m.kind}`;
+    chip.textContent = includeCount ? `${m.entity} ×${m.hypothesisIds.length}` : m.entity;
+    chip.title = `${m.kind} — appears in ${m.hypothesisIds.length} hypotheses`;
+    return chip;
   }
 
   private buildHypothesesSection(): HTMLElement {
@@ -185,6 +254,18 @@ export class AnalystHUD {
     row.className = 'analyst-hud-hyp';
     row.style.borderLeftColor = RISK_COLORS[h.risk];
 
+    row.append(
+      this.buildHypHead(h),
+      this.buildHypStatement(h),
+      this.buildHypEntities(h),
+      this.buildHypEvidence(h),
+      this.buildHypSkeptic(h),
+      this.buildHypActions(h),
+    );
+    return row;
+  }
+
+  private buildHypHead(h: Hypothesis): HTMLElement {
     const head = document.createElement('div');
     head.className = 'analyst-hud-hyp-head';
     const kind = document.createElement('span');
@@ -197,16 +278,70 @@ export class AnalystHUD {
     const conf = document.createElement('span');
     conf.className = 'analyst-hud-hyp-conf';
     conf.textContent = `${(h.confidence * 100).toFixed(0)}%`;
+
+    const thread = getThreadFor(h);
     head.append(kind, risk, conf);
+    if (thread && thread.cycleCount > 1) {
+      const badge = document.createElement('span');
+      badge.className = `analyst-hud-thread analyst-hud-thread-${thread.trajectory}`;
+      const TRAJECTORY_ARROW = { strengthening: 'up', weakening: 'down', stable: 'flat', new: 'new' } as const;
+      const arrow = TRAJECTORY_ARROW[thread.trajectory];
+      badge.textContent = `${thread.cycleCount}c ${arrow}`;
+      badge.title = `Thread: ${thread.cycleCount} cycles, ${thread.trajectory}, peak=${thread.peakRisk}`;
+      head.append(badge);
+    }
+    return head;
+  }
 
-    const statement = document.createElement('p');
-    statement.className = 'analyst-hud-hyp-statement';
-    statement.textContent = h.statement;
+  private buildHypStatement(h: Hypothesis): HTMLElement {
+    const p = document.createElement('p');
+    p.className = 'analyst-hud-hyp-statement';
+    p.textContent = h.statement;
+    return p;
+  }
 
+  private buildHypEntities(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-entities';
+    for (const m of entitiesForHypothesis(h.id).slice(0, 6)) {
+      wrap.append(this.buildEntityChip(m, false));
+    }
+    return wrap;
+  }
+
+  private buildHypEvidence(h: Hypothesis): HTMLElement {
     const ev = document.createElement('div');
     ev.className = 'analyst-hud-hyp-evidence';
     for (const e of h.evidence.slice(0, 6)) ev.append(this.buildEvidenceChip(e));
+    return ev;
+  }
 
+  private buildHypSkeptic(h: Hypothesis): HTMLElement {
+    const note = getSkepticNote(h);
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-skeptic';
+    if (!note) return wrap;
+    const expanded = this.expandedSkeptic.has(note.signature);
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-skeptic-toggle';
+    btn.textContent = expanded ? `[skeptic ▼] ${note.summary}` : `[skeptic ▶] ${note.summary.slice(0, 80)}…`;
+    btn.title = 'Click to expand the skeptic\'s full critique';
+    btn.addEventListener('click', () => {
+      if (expanded) this.expandedSkeptic.delete(note.signature);
+      else this.expandedSkeptic.add(note.signature);
+      this.render();
+    });
+    wrap.append(btn);
+    if (expanded && note.text) {
+      const full = document.createElement('p');
+      full.className = 'analyst-hud-skeptic-full';
+      full.textContent = note.text;
+      wrap.append(full);
+    }
+    return wrap;
+  }
+
+  private buildHypActions(h: Hypothesis): HTMLElement {
     const actions = document.createElement('div');
     actions.className = 'analyst-hud-hyp-actions';
     const up = document.createElement('button');
@@ -226,9 +361,7 @@ export class AnalystHUD {
       down.classList.add('analyst-hud-thumb-done');
     });
     actions.append(up, down);
-
-    row.append(head, statement, ev, actions);
-    return row;
+    return actions;
   }
 
   private buildEvidenceChip(e: HypothesisEvidence): HTMLElement {
@@ -269,6 +402,19 @@ export class AnalystHUD {
     label.textContent = 'Auto-generate brief on critical crossover';
     toggle.append(cb, label);
     sec.append(toggle);
+
+    const skepticToggle = document.createElement('label');
+    skepticToggle.className = 'analyst-hud-toggle';
+    const sk = document.createElement('input');
+    sk.type = 'checkbox';
+    sk.checked = isSkepticEnabled();
+    sk.addEventListener('change', () => {
+      setSkepticEnabled(sk.checked);
+    });
+    const skLabel = document.createElement('span');
+    skLabel.textContent = 'Run skeptic pass on high/critical hypotheses';
+    skepticToggle.append(sk, skLabel);
+    sec.append(skepticToggle);
 
     const briefs = (['finance', 'security', 'disaster', 'cyber'] as const)
       .map(d => this.briefs[d])

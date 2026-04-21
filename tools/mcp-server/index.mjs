@@ -7,6 +7,7 @@ import { makeGranularTools } from './tools/granular.mjs';
 import { makeFoundationTools, schemas as foundationSchemas } from './tools/foundation.mjs';
 import { makeIntelligenceTools, schemas as intelligenceSchemas } from './tools/intelligence.mjs';
 import { makeStatefulTools, schemas as statefulSchemas } from './tools/stateful.mjs';
+import { makeAnalystTools, schemas as analystSchemas } from './tools/analyst.mjs';
 import { makeHelpTools, schemas as helpSchemas } from './tools/help.mjs';
 import { createStorage } from './storage.mjs';
 
@@ -17,6 +18,7 @@ const granular = makeGranularTools(client);
 const foundation = makeFoundationTools(client);
 const intelligence = makeIntelligenceTools(client, storage);
 const stateful = makeStatefulTools(client, storage);
+const analyst = makeAnalystTools(client);
 const helpTools = makeHelpTools();
 
 const server = new McpServer(
@@ -206,6 +208,16 @@ server.registerTool('watchlist_check', statefulSchemas.watchlist_check, async (a
 server.registerTool('alert_rules_manage', statefulSchemas.alert_rules_manage, async (args) => textResult(await stateful.alert_rules_manage(args)));
 
 server.registerTool('alert_check', statefulSchemas.alert_check, async (args) => textResult(await stateful.alert_check(args)));
+
+// ---- Analyst Tools (renderer-side reasoning layer) ----
+
+server.registerTool('get_analyst_hypotheses', analystSchemas.get_analyst_hypotheses, async (args) => textResult(await analyst.get_analyst_hypotheses(args)));
+
+server.registerTool('get_mode_forecast', analystSchemas.get_mode_forecast, async (args) => textResult(await analyst.get_mode_forecast(args)));
+
+server.registerTool('get_analyst_accuracy', analystSchemas.get_analyst_accuracy, async (args) => textResult(await analyst.get_analyst_accuracy(args)));
+
+server.registerTool('get_hot_entities', analystSchemas.get_hot_entities, async (args) => textResult(await analyst.get_hot_entities(args)));
 
 // ---- Help ----
 

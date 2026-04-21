@@ -102,6 +102,11 @@ import { startModeForecast } from '@/services/mode-forecast';
 import { startRelevanceLearner } from '@/services/relevance-learner';
 import { startHypothesisAccuracy } from '@/services/hypothesis-accuracy';
 import { startAutoBrief } from '@/services/auto-brief';
+import { startHypothesisThreads } from '@/services/hypothesis-threads';
+import { startHypothesisEntities } from '@/services/hypothesis-entities';
+import { startHypothesisSkeptic } from '@/services/hypothesis-skeptic';
+import { startPressureHistory } from '@/services/pressure-history';
+import { startSidecarPusher } from '@/services/sidecar-pusher';
 import { AnalystHUD } from '@/components/AnalystHUD';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
@@ -514,9 +519,14 @@ export class PanelLayoutManager implements AppModule {
  startSilenceAnomaly();
  startRelevanceLearner();
  startModeForecast();
+ startPressureHistory();
  startAnalystLoop();
+ startHypothesisThreads();
+ startHypothesisEntities();
  startHypothesisAccuracy();
  startAutoBrief();
+ startHypothesisSkeptic();
+ startSidecarPusher();
  const analystHud = new AnalystHUD();
  analystHud.mount(document.body);
  document.addEventListener('keydown', (e: KeyboardEvent) => {

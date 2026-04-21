@@ -23,6 +23,8 @@ import { unifiedAlertStore, type UnifiedAlert } from './unified-alerts';
 import { scoreAlert, panelForAlert } from './alert-routing';
 import { getCachedSynthesis, type CrossDomainCluster, type EscalationRisk } from './threat-synthesis';
 import { isGhostMode, getGhostRefreshMultiplier } from './mode-manager';
+import { getHypothesisFeedbackMult } from './hypothesis-feedback';
+import { getHypothesisAccuracyMult } from './hypothesis-accuracy';
 import type { Situation } from './situation-types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -98,6 +100,13 @@ function confidenceToRisk(c: number): EscalationRisk {
 const RISK_RANK: Record<EscalationRisk, number> = {
   critical: 3, high: 2, moderate: 1, low: 0,
 };
+
+/**
+ * Ranking weight = raw confidence × learned user preference × outcome accuracy.
+ */
+function rankingWeight(h: Hypothesis): number {
+  return h.confidence * getHypothesisFeedbackMult(h) * getHypothesisAccuracyMult(h);
+}
 
 // ── Per-source hypothesis builders ───────────────────────────────────────────
 
@@ -233,7 +242,7 @@ function rank(hypotheses: Hypothesis[]): Hypothesis[] {
   return [...hypotheses].sort((a, b) => {
     const riskDelta = RISK_RANK[b.risk] - RISK_RANK[a.risk];
     if (riskDelta !== 0) return riskDelta;
-    return b.confidence - a.confidence;
+    return rankingWeight(b) - rankingWeight(a);
   }).slice(0, MAX_HYPOTHESES);
 }
 

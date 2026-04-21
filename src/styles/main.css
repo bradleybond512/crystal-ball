@@ -19251,3 +19251,185 @@ body.gods-vision-lock .replay-scrubber { display: none; }
     animation: none !important;
   }
 }
+
+/* ─── Analyst HUD (Cmd+Shift+A) ─── */
+.analyst-hud {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  z-index: 520;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.analyst-hud[hidden] { display: none; }
+.analyst-hud-card {
+  background: rgba(14, 18, 26, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  width: min(640px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 18px 22px;
+  color: #e6e6e6;
+  font-size: 12px;
+}
+.analyst-hud-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+.analyst-hud-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+}
+.analyst-hud-ai-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(100, 160, 255, 0.18);
+  color: #9ec5ff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.analyst-hud-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.analyst-hud-close:hover { color: #fff; }
+.analyst-hud-section { margin-bottom: 16px; }
+.analyst-hud-section h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.analyst-hud-empty {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+}
+.analyst-hud-advisory {
+  margin-bottom: 8px;
+}
+.analyst-hud-advisory-body { margin-bottom: 4px; }
+.analyst-hud-meter {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.analyst-hud-meter-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #27ae60 0%, #f39c12 50%, #c0392b 100%);
+}
+.analyst-hud-hyp {
+  border-left: 3px solid;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0 6px 6px 0;
+}
+.analyst-hud-hyp-head {
+  display: flex;
+  gap: 10px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.analyst-hud-hyp-kind { flex: 1; }
+.analyst-hud-hyp-risk { font-weight: 600; }
+.analyst-hud-hyp-conf { font-variant-numeric: tabular-nums; }
+.analyst-hud-hyp-statement {
+  margin: 6px 0;
+  line-height: 1.45;
+}
+.analyst-hud-hyp-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.analyst-hud-evidence-chip {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(100, 160, 255, 0.12);
+  border: 1px solid rgba(100, 160, 255, 0.25);
+  color: #b9d4ff;
+  cursor: pointer;
+}
+.analyst-hud-evidence-chip:hover:not(:disabled) {
+  background: rgba(100, 160, 255, 0.25);
+}
+.analyst-hud-evidence-chip:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.analyst-hud-hyp-actions {
+  display: flex;
+  gap: 6px;
+}
+.analyst-hud-thumb {
+  font-size: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+.analyst-hud-thumb:hover { background: rgba(255, 255, 255, 0.12); }
+.analyst-hud-thumb-done {
+  background: rgba(100, 200, 120, 0.22);
+  border-color: rgba(100, 200, 120, 0.4);
+}
+.analyst-hud-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.analyst-hud-brief {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 8px;
+}
+.analyst-hud-brief-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 4px;
+}
+.analyst-hud-brief-summary {
+  margin: 0;
+  line-height: 1.4;
+}
+.analyst-hud-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

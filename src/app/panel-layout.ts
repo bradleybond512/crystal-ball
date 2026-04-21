@@ -100,6 +100,9 @@ import { startAlertReactions } from '@/services/alert-reactions';
 import { startAnalystLoop } from '@/services/analyst-loop';
 import { startModeForecast } from '@/services/mode-forecast';
 import { startRelevanceLearner } from '@/services/relevance-learner';
+import { startHypothesisAccuracy } from '@/services/hypothesis-accuracy';
+import { startAutoBrief } from '@/services/auto-brief';
+import { AnalystHUD } from '@/components/AnalystHUD';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
 import { startAlertDebug } from '@/services/alert-debug';
@@ -512,6 +515,16 @@ export class PanelLayoutManager implements AppModule {
  startRelevanceLearner();
  startModeForecast();
  startAnalystLoop();
+ startHypothesisAccuracy();
+ startAutoBrief();
+ const analystHud = new AnalystHUD();
+ analystHud.mount(document.body);
+ document.addEventListener('keydown', (e: KeyboardEvent) => {
+   if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+     e.preventDefault();
+     analystHud.toggle();
+   }
+ });
  document.addEventListener('keydown', (e: KeyboardEvent) => {
    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
      e.preventDefault();

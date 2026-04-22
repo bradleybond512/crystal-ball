@@ -16,6 +16,9 @@
  * is unavailable (private browsing, quota, etc).
  */
 
+import { logDebug } from './reasoning-debug';
+import { recordLatency, incrementCounter } from './reasoning-metrics';
+
 const DB_NAME = 'crystalball_db';
 const STORE_NAME = 'reasoning_memory';
 
@@ -70,9 +73,10 @@ function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
       reject(upgrade.error ?? new Error('[reasoning-memory] upgrade failed'));
     });
     upgrade.addEventListener('blocked', () => {
-      // Another tab/connection is holding the old version open. Rather
-      // than hang forever, reject so the caller can fall back to the LS
-      // mirror and try again later.
+      logDebug({ level: 'error', category: 'idb', source: 'reasoning-memory',
+        message: 'upgrade blocked by another connection',
+        data: { currentVersion } });
+      incrementCounter('idb.upgrade.blocked');
       reject(new Error('[reasoning-memory] upgrade blocked by another connection'));
     });
     upgrade.addEventListener('upgradeneeded', (event) => {
@@ -100,6 +104,9 @@ function openDB(): Promise<IDBDatabase> {
       reject(probe.error ?? new Error('[reasoning-memory] probe failed'));
     });
     probe.addEventListener('blocked', () => {
+      logDebug({ level: 'error', category: 'idb', source: 'reasoning-memory',
+        message: 'probe blocked' });
+      incrementCounter('idb.probe.blocked');
       reject(new Error('[reasoning-memory] probe blocked'));
     });
     probe.addEventListener('success', () => {
@@ -131,6 +138,7 @@ function openDB(): Promise<IDBDatabase> {
 
 /** Write a value under `key`. Errors are logged and swallowed. */
 export async function putMemory<T>(key: string, value: T): Promise<void> {
+  const t0 = performance.now();
   try {
     const db = await openDB();
     await new Promise<void>((resolve, reject) => {
@@ -141,16 +149,23 @@ export async function putMemory<T>(key: string, value: T): Promise<void> {
       tx.addEventListener('complete', () => resolve());
       tx.addEventListener('error', () => reject(tx.error ?? new Error('put failed')));
     });
-  } catch {
-    // Silent — callers keep a localStorage mirror for durability.
+    recordLatency('idb.put', performance.now() - t0);
+    incrementCounter('idb.put.success');
+  } catch (error) {
+    recordLatency('idb.put', performance.now() - t0);
+    incrementCounter('idb.put.error');
+    logDebug({ level: 'error', category: 'idb', source: 'reasoning-memory',
+      message: `put ${key} failed`, latencyMs: performance.now() - t0,
+      data: { error: error instanceof Error ? error.message : String(error), key } });
   }
 }
 
 /** Read a value by key. Returns null if missing or on error. */
 export async function getMemory<T>(key: string): Promise<T | null> {
+  const t0 = performance.now();
   try {
     const db = await openDB();
-    return await new Promise<T | null>((resolve) => {
+    const value = await new Promise<T | null>((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const req = tx.objectStore(STORE_NAME).get(key);
       req.addEventListener('success', () => {
@@ -159,7 +174,15 @@ export async function getMemory<T>(key: string): Promise<T | null> {
       });
       req.addEventListener('error', () => resolve(null));
     });
-  } catch {
+    recordLatency('idb.get', performance.now() - t0);
+    incrementCounter(value === null ? 'idb.get.miss' : 'idb.get.hit');
+    return value;
+  } catch (error) {
+    recordLatency('idb.get', performance.now() - t0);
+    incrementCounter('idb.get.error');
+    logDebug({ level: 'error', category: 'idb', source: 'reasoning-memory',
+      message: `get ${key} failed`, latencyMs: performance.now() - t0,
+      data: { error: error instanceof Error ? error.message : String(error), key } });
     return null;
   }
 }

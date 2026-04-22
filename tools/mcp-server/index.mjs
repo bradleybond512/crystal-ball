@@ -225,6 +225,10 @@ server.registerTool('dismiss_hypothesis', analystSchemas.dismiss_hypothesis, asy
 
 server.registerTool('run_skeptic_now', analystSchemas.run_skeptic_now, async (args) => textResult(await analyst.run_skeptic_now(args)));
 
+server.registerTool('get_reasoning_debug_log', analystSchemas.get_reasoning_debug_log, async (args) => textResult(await analyst.get_reasoning_debug_log(args)));
+
+server.registerTool('get_reasoning_metrics', analystSchemas.get_reasoning_metrics, async (args) => textResult(await analyst.get_reasoning_metrics(args)));
+
 // ---- Help ----
 
 server.registerTool('help', helpSchemas.help, async (args) => textResult(await helpTools.help(args)));

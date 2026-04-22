@@ -27,6 +27,7 @@ import { getArchive, subscribeBriefingArchive } from '@/services/briefing-archiv
 import { projectHypothesis, getCachedProjection, subscribeProjection } from '@/services/hypothesis-projection';
 import { exportHypothesisToClipboard } from '@/services/hypothesis-export';
 import { getBudgetStatus, subscribeBudget, setCloudCap, resetBudget } from '@/services/llm-budget';
+import { getTotalErrorCount, subscribeDebug } from '@/services/reasoning-debug';
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
 import type { ForecastDomain } from '@/services/mode-forecast';
@@ -144,6 +145,11 @@ export class AnalystHUD {
       this.scheduleRender();
     });
     subscribeBudget(() => { this.scheduleRender(); });
+    subscribeDebug((entry) => {
+      // Only re-render on errors (to refresh the footer counter) — info
+      // and warn entries are too chatty.
+      if (entry.level === 'error') this.scheduleRender();
+    });
     subscribeSnapshotArchive(() => {
       // Only scroll the view on new archived snapshots when we're live.
       // When replayed, the user's anchor timestamp resolves to the same
@@ -1060,7 +1066,15 @@ export class AnalystHUD {
       `LLM — ${budget.cloud}/${budget.cap} cloud · ${budget.local} local today` +
       (budget.exhausted ? ' (cloud cap reached)' : '');
     budgetLine.title = 'Daily cloud-LLM cap. Local calls are uncounted. Change via the settings overlay.';
-    f.append(accuracyLine, budgetLine);
+    const debugLine = document.createElement('div');
+    const errors = getTotalErrorCount();
+    debugLine.className = errors > 0 ? 'analyst-hud-debug-errors' : 'analyst-hud-debug-ok';
+    const plural = errors === 1 ? '' : 's';
+    debugLine.textContent = errors > 0
+      ? `Debug — ${errors} error${plural} logged (⌘⇧D for diagnostics)`
+      : 'Debug — no errors (⌘⇧D for diagnostics)';
+    debugLine.title = 'Press Cmd+Shift+D for the reasoning diagnostics overlay.';
+    f.append(accuracyLine, budgetLine, debugLine);
     return f;
   }
 }

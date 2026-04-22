@@ -75,6 +75,26 @@ export const schemas = {
       signature: z.string().optional(),
     }),
   },
+  get_reasoning_debug_log: {
+    description:
+      'Ring-buffer log of the last ~50 reasoning-layer events (bootstrap, ' +
+      'IDB ops, LLM calls, commands, errors). Use this for post-mortem ' +
+      'debugging or to watch a feature in real time. Supports filtering ' +
+      'by level (info / warn / error) and category.',
+    inputSchema: z.object({
+      level: z.enum(['info', 'warn', 'error']).optional().describe('Minimum level to include'),
+      category: z.enum(['bootstrap', 'idb', 'llm', 'events', 'commands', 'hud', 'hypothesis', 'forecast', 'budget', 'sidecar', 'other']).optional().describe('Filter to one category'),
+      limit: z.number().optional().describe('Max entries (default 20, max 100)'),
+    }),
+  },
+  get_reasoning_metrics: {
+    description:
+      'Latency histograms (p50/p95/p99) and counters for every named ' +
+      'reasoning operation (analyst-cycle, forecast-cycle, idb.get, ' +
+      'idb.put, llm.local, llm.cloud-agent, cmd-poll). Read this to ' +
+      'understand throughput, error rates, and where time is being spent.',
+    inputSchema: z.object({}),
+  },
 };
 
 const RISK_RANK = { low: 0, moderate: 1, high: 2, critical: 3 };
@@ -257,6 +277,63 @@ export function makeAnalystTools(client) {
         summary:
           'Skeptic pass queued. The renderer will run a review on the next poll ' +
           '(~10s). Fetch the note via get_analyst_hypotheses afterwards.',
+      };
+    },
+
+    async get_reasoning_debug_log(args = {}) {
+      const state = await loadState();
+      if (!state?.available) return unavailable(state, 'Reasoning debug log');
+      const log = Array.isArray(state.debugLog) ? state.debugLog : [];
+      const levelRank = { info: 0, warn: 1, error: 2 };
+      const minRank = args.level ? (levelRank[args.level] ?? 0) : 0;
+      const filtered = log
+        .filter(e => (levelRank[e.level] ?? 0) >= minRank)
+        .filter(e => !args.category || e.category === args.category);
+      const limit = Math.min(100, Math.max(1, typeof args.limit === 'number' ? args.limit : 20));
+      const tail = filtered.slice(-limit).reverse(); // newest first
+      const errorCounts = state.debugErrorCounts || {};
+      const totalErrors = Object.values(errorCounts).reduce((a, b) => a + b, 0);
+      return {
+        available: true,
+        summary:
+          `${tail.length} entries (of ${log.length} total in ring buffer). ` +
+          `${totalErrors} errors logged since last clear.`,
+        errorCounts,
+        stale: state.stale === true,
+        entries: tail,
+        timestamp: new Date().toISOString(),
+      };
+    },
+
+    async get_reasoning_metrics() {
+      const state = await loadState();
+      if (!state?.available) return unavailable(state, 'Reasoning metrics');
+      const metrics = state.metrics;
+      if (!metrics) {
+        return {
+          available: true,
+          summary: 'No metrics snapshot yet — the renderer pushes one per analyst cycle.',
+          latencies: {},
+          counters: {},
+          timestamp: new Date().toISOString(),
+        };
+      }
+      const latencyKeys = Object.keys(metrics.latencies ?? {}).sort();
+      const summary = latencyKeys.length === 0
+        ? 'No latency samples yet.'
+        : `${latencyKeys.length} ops tracked. ` +
+          latencyKeys.slice(0, 3).map(k => {
+            const s = metrics.latencies[k];
+            return `${k}: p50=${s.p50.toFixed(0)}ms p95=${s.p95.toFixed(0)}ms`;
+          }).join(' · ');
+      return {
+        available: true,
+        summary,
+        stale: state.stale === true,
+        latencies: metrics.latencies ?? {},
+        counters: metrics.counters ?? {},
+        snapshotTimestamp: new Date(metrics.timestamp).toISOString(),
+        timestamp: new Date().toISOString(),
       };
     },
   };

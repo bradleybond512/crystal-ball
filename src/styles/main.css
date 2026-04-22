@@ -19438,6 +19438,8 @@ body.gods-vision-lock .replay-scrubber { display: none; }
 }
 .analyst-hud-budget { color: rgba(180, 220, 180, 0.7); }
 .analyst-hud-budget-exhausted { color: rgba(240, 140, 120, 0.9); }
+.analyst-hud-debug-ok { color: rgba(150, 150, 150, 0.6); }
+.analyst-hud-debug-errors { color: rgba(230, 120, 120, 0.95); font-weight: 600; }
 .analyst-hud-advisory-meter-row {
   display: flex;
   align-items: center;

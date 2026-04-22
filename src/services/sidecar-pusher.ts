@@ -22,6 +22,8 @@ import type { ForecastSnapshot } from './mode-forecast';
 import { getKindAccuracy } from './hypothesis-accuracy';
 import { getAllThreads } from './hypothesis-threads';
 import { getHotEntities, getEntityMentions } from './hypothesis-entities';
+import { dumpDebug, getErrorCounts, type DebugEntry } from './reasoning-debug';
+import { getMetricsSnapshot, type MetricsSnapshot } from './reasoning-metrics';
 
 const ENDPOINT = '/api/analyst-state';
 
@@ -48,6 +50,12 @@ interface PushPayload {
   hotEntities?: EntityRow[];
   entityCount?: number;
   ghostMode?: boolean;
+  /** Last N debug entries, tail of the ring buffer. */
+  debugLog?: DebugEntry[];
+  /** Error counters per category. */
+  debugErrorCounts?: Record<string, number>;
+  /** Metrics snapshot (latencies + counters). */
+  metrics?: MetricsSnapshot;
 }
 
 let lastPushAt = 0;
@@ -152,12 +160,28 @@ export function startSidecarPusher(): void {
     const ent = summarizeEntities();
     pendingPayload.hotEntities = ent.hot;
     pendingPayload.entityCount = ent.total;
+    pendingPayload.debugLog = dumpDebug().slice(-50);
+    pendingPayload.debugErrorCounts = { ...getErrorCounts() };
+    pendingPayload.metrics = getMetricsSnapshot();
     schedule();
   });
 
   document.addEventListener('cb:mode-advisory', (e: Event) => {
     const ce = e as CustomEvent<ForecastSnapshot>;
     pendingPayload.forecast = ce.detail;
+    // Keep metrics fresh on every cycle — useful for watching forecast op
+    // latencies from MCP without waiting for the next analyst cycle.
+    pendingPayload.metrics = getMetricsSnapshot();
+    schedule();
+  });
+
+  // Push on any reasoning-debug error so the sidecar (and MCP readers)
+  // see failures within the 2s debounce window.
+  document.addEventListener('cb:reasoning-debug-event', (e: Event) => {
+    const ce = e as CustomEvent<DebugEntry>;
+    if (ce.detail?.level !== 'error') return;
+    pendingPayload.debugLog = dumpDebug().slice(-50);
+    pendingPayload.debugErrorCounts = { ...getErrorCounts() };
     schedule();
   });
 }

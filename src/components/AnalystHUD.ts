@@ -26,7 +26,7 @@ import { suggestQuestions, getCachedAnswer, askQuestion, subscribeQuestionAnswer
 import { getArchive, subscribeBriefingArchive } from '@/services/briefing-archive';
 import { projectHypothesis, getCachedProjection, subscribeProjection } from '@/services/hypothesis-projection';
 import { exportHypothesisToClipboard } from '@/services/hypothesis-export';
-import { getBudgetStatus, subscribeBudget } from '@/services/llm-budget';
+import { getBudgetStatus, subscribeBudget, setCloudCap, resetBudget } from '@/services/llm-budget';
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
 import type { ForecastDomain } from '@/services/mode-forecast';
@@ -64,6 +64,12 @@ function ensembleButtonLabel(loading: boolean, cached: boolean, expanded: boolea
   return expanded ? 'hide ▾' : 'perspectives ▾';
 }
 
+function shouldIgnoreKey(e: KeyboardEvent): boolean {
+  const target = e.target as HTMLElement | null;
+  if (!target) return false;
+  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+}
+
 export class AnalystHUD {
   private readonly root: HTMLElement;
   private snapshot: AnalystSnapshot | null = null;
@@ -81,6 +87,8 @@ export class AnalystHUD {
   private expandedEnsemble = new Set<string>();
   private exportedFlash: { id: string; at: number } | null = null;
   private replayIndex: number | null = null; // null = live; else index into snapshot archive
+  private selectedHypothesisIndex = 0;
+  private settingsOpen = false;
 
   constructor() {
     this.root = document.createElement('div');
@@ -146,6 +154,57 @@ export class AnalystHUD {
     document.addEventListener('cb:hypothesis-feedback', () => {
       if (this.visible) this.render();
     });
+    document.addEventListener('keydown', (e: KeyboardEvent) => this.handleKeydown(e));
+  }
+
+  private handleKeydown(e: KeyboardEvent): void {
+    if (!this.visible) return;
+    if (shouldIgnoreKey(e)) return;
+    if (this.handleGlobalKey(e)) return;
+    this.handleNavigationKey(e);
+  }
+
+  private handleGlobalKey(e: KeyboardEvent): boolean {
+    if (e.key === 'Escape') {
+      if (this.settingsOpen) { this.settingsOpen = false; this.render(); }
+      else this.hide();
+      e.preventDefault();
+      return true;
+    }
+    if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
+      this.settingsOpen = !this.settingsOpen;
+      this.render();
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
+  private handleNavigationKey(e: KeyboardEvent): void {
+    const snap = this.effectiveSnapshot();
+    const count = Math.min(MAX_VISIBLE, snap?.hypotheses.length ?? 0);
+    if (count === 0) return;
+    if (e.key === 'ArrowDown') {
+      this.selectedHypothesisIndex = Math.min(count - 1, this.selectedHypothesisIndex + 1);
+      this.render();
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      this.selectedHypothesisIndex = Math.max(0, this.selectedHypothesisIndex - 1);
+      this.render();
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      const h = snap?.hypotheses[this.selectedHypothesisIndex];
+      if (!h) return;
+      const set = e.shiftKey ? this.expandedEnsemble : this.expandedProjection;
+      this.toggleExpandedSet(set, h.id);
+      this.render();
+      e.preventDefault();
+    }
+  }
+
+  private toggleExpandedSet(set: Set<string>, id: string): void {
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
   }
 
   toggle(): void { if (this.visible) this.hide(); else this.show(); }
@@ -177,6 +236,7 @@ export class AnalystHUD {
       this.buildTimelineSection(),
       this.buildFooter(),
     );
+    if (this.settingsOpen) card.append(this.buildSettingsOverlay());
     replaceChildren(this.root, card);
   }
 
@@ -194,12 +254,22 @@ export class AnalystHUD {
       ? 'Clusters enriched by Claude agent'
       : 'Template-based reasoning (no AI)';
 
+    const settings = document.createElement('button');
+    settings.className = 'analyst-hud-settings-btn-inline';
+    settings.textContent = '⚙';
+    settings.title = 'Settings (⌘,)';
+    settings.addEventListener('click', () => {
+      this.settingsOpen = !this.settingsOpen;
+      this.render();
+    });
+
     const close = document.createElement('button');
     close.className = 'analyst-hud-close';
     close.textContent = 'x';
+    close.title = 'Close (Esc)';
     close.addEventListener('click', () => this.hide());
 
-    header.append(title, aiBadge, close);
+    header.append(title, aiBadge, settings, close);
     return header;
   }
 
@@ -324,8 +394,106 @@ export class AnalystHUD {
       sec.append(empty);
       return sec;
     }
-    for (const h of visible) sec.append(this.buildHypothesisRow(h));
+    // Clamp the selection if the list shrank.
+    if (this.selectedHypothesisIndex >= visible.length) {
+      this.selectedHypothesisIndex = visible.length - 1;
+    }
+    visible.forEach((h, i) => {
+      const row = this.buildHypothesisRow(h);
+      if (i === this.selectedHypothesisIndex) {
+        row.classList.add('analyst-hud-hyp-selected');
+      }
+      sec.append(row);
+    });
     return sec;
+  }
+
+  private buildSettingsOverlay(): HTMLElement {
+    const overlay = document.createElement('div');
+    overlay.className = 'analyst-hud-settings';
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        this.settingsOpen = false;
+        this.render();
+      }
+    });
+
+    const card = document.createElement('div');
+    card.className = 'analyst-hud-settings-card';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Analyst HUD settings';
+    card.append(title);
+
+    card.append(
+      this.buildSettingToggle('Auto-generate brief on critical crossover',
+        isAutoBriefEnabled(), setAutoBriefEnabled),
+      this.buildSettingToggle('Run skeptic pass on high/critical hypotheses',
+        isSkepticEnabled(), setSkepticEnabled),
+      this.buildCloudCapSlider(),
+    );
+
+    const resetRow = document.createElement('div');
+    resetRow.className = 'analyst-hud-settings-row';
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'analyst-hud-settings-btn';
+    resetBtn.textContent = 'Reset LLM budget';
+    resetBtn.title = 'Zero today\'s cloud+local counters.';
+    resetBtn.addEventListener('click', () => { resetBudget(); });
+    resetRow.append(resetBtn);
+    card.append(resetRow);
+
+    const close = document.createElement('button');
+    close.className = 'analyst-hud-settings-close';
+    close.textContent = 'Close (Esc)';
+    close.addEventListener('click', () => {
+      this.settingsOpen = false;
+      this.render();
+    });
+    card.append(close);
+
+    overlay.append(card);
+    return overlay;
+  }
+
+  private buildSettingToggle(label: string, checked: boolean, set: (v: boolean) => void): HTMLElement {
+    const row = document.createElement('label');
+    row.className = 'analyst-hud-settings-row';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = checked;
+    cb.addEventListener('change', () => {
+      set(cb.checked);
+      this.render();
+    });
+    const span = document.createElement('span');
+    span.textContent = label;
+    row.append(cb, span);
+    return row;
+  }
+
+  private buildCloudCapSlider(): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'analyst-hud-settings-row';
+    const label = document.createElement('label');
+    label.textContent = 'Daily cloud-LLM cap: ';
+    const budget = getBudgetStatus();
+    const value = document.createElement('span');
+    value.className = 'analyst-hud-settings-value';
+    value.textContent = String(budget.cap);
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = '500';
+    slider.step = '5';
+    slider.value = String(budget.cap);
+    slider.addEventListener('input', () => {
+      value.textContent = slider.value;
+    });
+    slider.addEventListener('change', () => { setCloudCap(Number(slider.value)); });
+    label.append(value);
+    row.append(label, slider);
+    return row;
   }
 
   private buildReplayScrubber(): HTMLElement {

@@ -19673,3 +19673,71 @@ body.gods-vision-lock .replay-scrubber { display: none; }
   color: rgba(255, 200, 160, 0.8);
   font-style: italic;
 }
+.analyst-hud-hyp-selected {
+  outline: 1px solid rgba(185, 212, 255, 0.55);
+  box-shadow: 0 0 0 2px rgba(185, 212, 255, 0.08) inset;
+}
+.analyst-hud-settings-btn-inline {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.analyst-hud-settings-btn-inline:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.analyst-hud-settings {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  border-radius: 12px;
+}
+.analyst-hud-settings-card {
+  background: rgba(18, 22, 32, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  width: min(420px, 90%);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.analyst-hud-settings-card h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.analyst-hud-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+}
+.analyst-hud-settings-row input[type="range"] { flex: 1; accent-color: #b9d4ff; }
+.analyst-hud-settings-value { font-variant-numeric: tabular-nums; color: #b9d4ff; }
+.analyst-hud-settings-btn,
+.analyst-hud-settings-close {
+  align-self: flex-end;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+}
+.analyst-hud-settings-btn:hover,
+.analyst-hud-settings-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}

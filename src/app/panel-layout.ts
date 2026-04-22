@@ -97,6 +97,23 @@ import { startBlackoutSignature } from '@/services/blackout-signature';
 import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
 import { startAlertReactions } from '@/services/alert-reactions';
+import { startAnalystLoop } from '@/services/analyst-loop';
+import { startModeForecast } from '@/services/mode-forecast';
+import { startRelevanceLearner } from '@/services/relevance-learner';
+import { startHypothesisAccuracy } from '@/services/hypothesis-accuracy';
+import { startAutoBrief } from '@/services/auto-brief';
+import { startHypothesisThreads } from '@/services/hypothesis-threads';
+import { startHypothesisEntities } from '@/services/hypothesis-entities';
+import { startHypothesisSkeptic } from '@/services/hypothesis-skeptic';
+import { startPressureHistory } from '@/services/pressure-history';
+import { startSidecarPusher } from '@/services/sidecar-pusher';
+import { startAnalystCommandListener } from '@/services/analyst-command-listener';
+import { startActionMemory } from '@/services/action-memory';
+import { startPressureBaselines } from '@/services/pressure-baselines';
+import { startBriefingArchive } from '@/services/briefing-archive';
+import { startHypothesisNotifier } from '@/services/hypothesis-notifier';
+import { startSnapshotArchive } from '@/services/snapshot-archive';
+import { AnalystHUD } from '@/components/AnalystHUD';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
 import { startAlertDebug } from '@/services/alert-debug';
@@ -506,6 +523,35 @@ export class PanelLayoutManager implements AppModule {
  startThreatCorridor();
  startPeriodicityDetector();
  startSilenceAnomaly();
+ // Subscribers FIRST — they all listen for cb:analyst-hypotheses or
+ // cb:mode-advisory and would miss the first event if started after the
+ // emitters. The emitters (mode-forecast, analyst-loop) also defer their
+ // initial cycle to setTimeout(0), so this is belt-and-suspenders.
+ startRelevanceLearner();
+ startActionMemory();
+ startBriefingArchive();
+ startPressureHistory();
+ startPressureBaselines();
+ startHypothesisThreads();
+ startHypothesisEntities();
+ startHypothesisAccuracy();
+ startHypothesisSkeptic();
+ startAutoBrief();
+ startSnapshotArchive();
+ startHypothesisNotifier();
+ startSidecarPusher();
+ startAnalystCommandListener();
+ // Emitters last.
+ startModeForecast();
+ startAnalystLoop();
+ const analystHud = new AnalystHUD();
+ analystHud.mount(document.body);
+ document.addEventListener('keydown', (e: KeyboardEvent) => {
+   if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+     e.preventDefault();
+     analystHud.toggle();
+   }
+ });
  document.addEventListener('keydown', (e: KeyboardEvent) => {
    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
      e.preventDefault();

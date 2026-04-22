@@ -46,6 +46,13 @@ function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
  upgrade.addEventListener('success', () => {
  dbInstance = upgrade.result;
  upgrade.result.addEventListener('close', () => { dbInstance = null; });
+ // Allow another module (reasoning-memory bumping to a higher version)
+ // to upgrade the shared `crystalball_db` without being blocked by this
+ // open connection.
+ upgrade.result.addEventListener('versionchange', () => {
+ upgrade.result.close();
+ dbInstance = null;
+ });
  resolve(upgrade.result);
  });
   });
@@ -74,6 +81,12 @@ function openDB(): Promise<IDBDatabase> {
  // Store already exists — reuse this connection.
  dbInstance = currentDB;
  currentDB.addEventListener('close', () => { dbInstance = null; });
+ // Let reasoning-memory (or any future module) upgrade the shared
+ // crystalball_db without this connection blocking them.
+ currentDB.addEventListener('versionchange', () => {
+ currentDB.close();
+ dbInstance = null;
+ });
  resolve(currentDB);
  return;
  }

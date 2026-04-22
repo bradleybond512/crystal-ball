@@ -39,6 +39,10 @@ Use this exact format. Use severity scores from the bundle to control density:
 - User interest domains: full treatment regardless of severity
 - Military posture: always at least a short paragraph
 
+**Citations.** The bundle includes a `citations` array — each entry has `key` (e.g. `wx-1`, `sei-2`), `domain`, `panel`, `id`, and `label`. When you reference a specific item by name or number in the brief, suffix it with its citation key in square brackets, e.g. `magnitude 6.1 near Oaxaca [sei-2]`. Only cite items that are actually in the bundle's citations list — never invent keys. Keys may be reused if the item is referenced multiple times.
+
+At the end of the brief, append a compact CITATIONS section listing every key you referenced, one per line, in the form `[key] panel:<panel> — <label>`. The main-context client parses this footer to build deep-links back to the panels.
+
 ```
 ╔══════════════════════════════════════════════════════╗
 ║  CRYSTAL BALL — DAILY SITUATIONAL REPORT             ║
@@ -79,6 +83,9 @@ BOTTOM LINE UP FRONT
 ── SYNTHESIS ──────────────────────────────
   NEXUS
   FORWARD WATCH (24-48hr)
+
+── CITATIONS ──────────────────────────────
+  [key] panel:<panel> — <label>
 ```
 
 ### Rules

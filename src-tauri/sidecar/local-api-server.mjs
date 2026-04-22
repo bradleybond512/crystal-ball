@@ -11,7 +11,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { scoreAllDomains } from './sitrep-severity.mjs';
-import { filterAllDomains } from './sitrep-filter.mjs';
+import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 function isValidToken(authHeader) {
@@ -1776,6 +1776,93 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Analyst commands (MCP → sidecar → renderer queue) ──
+  // Write-back path for external agents (MCP tools) to submit feedback,
+  // dismiss hypotheses, or trigger a skeptic pass. Sidecar holds an in-
+  // memory queue that the renderer drains every few seconds.
+  if (requestUrl.pathname === '/api/analyst-commands') {
+    if (!context._analystCommands) context._analystCommands = [];
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json();
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        const kind = typeof body.kind === 'string' ? body.kind : '';
+        const allowed = new Set(['thumbs_up', 'thumbs_down', 'dismiss', 'run_skeptic']);
+        if (!allowed.has(kind)) return json({ error: 'unknown kind', allowed: [...allowed] }, 400);
+        const command = {
+          id: `cmd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          issuedAt: Date.now(),
+          kind,
+          hypothesisId: typeof body.hypothesisId === 'string' ? body.hypothesisId : null,
+          signature: typeof body.signature === 'string' ? body.signature : null,
+          note: typeof body.note === 'string' ? body.note.slice(0, 400) : null,
+        };
+        // Cap queue to 64 so a runaway agent can't balloon memory.
+        if (context._analystCommands.length >= 64) {
+          context._analystCommands.splice(0, context._analystCommands.length - 63);
+        }
+        context._analystCommands.push(command);
+        return json({ ok: true, id: command.id });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      // Renderer drains the queue; we return + clear in one shot. Optionally
+      // filter by `since` to support idempotent retries.
+      const since = Number(requestUrl.searchParams.get('since') || 0);
+      const commands = context._analystCommands
+        .filter(c => c.issuedAt > since);
+      const drain = requestUrl.searchParams.get('drain') !== '0';
+      if (drain) context._analystCommands = [];
+      return json({ commands, drained: drain });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Analyst state (renderer → sidecar mirror, exposed via MCP) ──
+  if (requestUrl.pathname === '/api/analyst-state') {
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json();
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!context._analystState) context._analystState = {};
+        // Cap payload size defensively (drop unknown deeply-nested fields).
+        const safe = {
+          timestamp: typeof body.timestamp === 'number' ? body.timestamp : Date.now(),
+          analyst: body.analyst ?? null,
+          forecast: body.forecast ?? null,
+          accuracy: Array.isArray(body.accuracy) ? body.accuracy.slice(0, 20) : [],
+          threads: Array.isArray(body.threads) ? body.threads.slice(0, 30) : [],
+          hotEntities: Array.isArray(body.hotEntities) ? body.hotEntities.slice(0, 20) : [],
+          entityCount: typeof body.entityCount === 'number' ? body.entityCount : 0,
+          ghostMode: !!body.ghostMode,
+        };
+        context._analystState = safe;
+        return json({ ok: true });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const state = context._analystState || null;
+      if (!state) {
+        return json({
+          available: false,
+          message: 'Analyst state not yet pushed by renderer. Open the Crystal Ball app to populate.',
+        });
+      }
+      const ageMs = Date.now() - (state.timestamp || 0);
+      return json({
+        available: true,
+        ageMs,
+        stale: ageMs > 10 * 60 * 1000,
+        ...state,
+      });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
   if (requestUrl.pathname === '/api/sitrep-bundle') {
     const cacheKey = 'sitrep-bundle';
     const cached = getCached(cacheKey, 5 * 60 * 1000);
@@ -1882,6 +1969,8 @@ async function dispatch(requestUrl, req, routes, context) {
       missing_key_names: missingKeys,
     };
 
+    const { citations } = buildCitations(domains);
+
     const bundle = {
       timestamp: new Date().toISOString(),
       delta_mode: deltaMode,
@@ -1889,6 +1978,7 @@ async function dispatch(requestUrl, req, routes, context) {
       feed_health: feedHealth,
       severity,
       domains,
+      citations,
       sources,
       warnings,
     };

@@ -1,0 +1,342 @@
+/**
+ * Analyst Loop — Cross-Domain Reasoning Orchestrator
+ *
+ * Persistent background loop that fuses outputs from the existing reasoning
+ * services (situation-engine, anomaly-detection, unified-alert hot list,
+ * compound-threat via threat-synthesis) into a single ranked list of
+ * hypotheses with evidence links.
+ *
+ * Unlike threat-synthesis (which is an on-demand AI call), this service:
+ *   - runs on a slow cadence in the background
+ *   - merges multiple reasoning surfaces instead of one
+ *   - always produces hypotheses even when AI is unavailable
+ *   - emits a `cb:analyst-hypotheses` event + persists to localStorage so
+ *     panels and the HUD can subscribe without duplicating the fusion logic
+ *
+ * This is intentionally a thin fusion layer over existing services — it does
+ * not reimplement clustering, it reads what each service already produced.
+ */
+
+import { situationEngine } from './situation-engine';
+import { anomalyEngine, type Anomaly } from './anomaly-detection';
+import { unifiedAlertStore, type UnifiedAlert } from './unified-alerts';
+import { scoreAlert, panelForAlert } from './alert-routing';
+import { getCachedSynthesis, type CrossDomainCluster, type EscalationRisk } from './threat-synthesis';
+import { isGhostMode, getGhostRefreshMultiplier } from './mode-manager';
+import { getHypothesisFeedbackMult } from './hypothesis-feedback';
+import { getHypothesisAccuracyMult } from './hypothesis-accuracy';
+import { isDismissed } from './analyst-command-listener';
+import { dedupeHypotheses } from './hypothesis-dedupe';
+import { getWatchlistHypotheses } from './watchlist-hypothesis-bridge';
+import type { Situation } from './situation-types';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type HypothesisKind =
+  | 'cross-domain-cluster'
+  | 'anomaly-convergence'
+  | 'alert-burst'
+  | 'situation-escalation'
+  | 'watchlist-convergence';
+
+export interface HypothesisEvidence {
+  /** Where the evidence came from (service name). */
+  source: 'situation-engine' | 'anomaly-detection' | 'unified-alerts' | 'threat-synthesis';
+  /** Stable ID we can deep-link back to. */
+  id: string;
+  /** Short label to render in UI. */
+  label: string;
+  /** Panel ID the evidence lives in, for jumpToPanel(). */
+  panelId?: string;
+}
+
+export interface Hypothesis {
+  id: string;
+  kind: HypothesisKind;
+  /** One-sentence hypothesis in analyst voice. */
+  statement: string;
+  /** 0–1 confidence; priority-ranked descending. */
+  confidence: number;
+  /** Computed escalation risk on the shared scale. */
+  risk: EscalationRisk;
+  /** Evidence pointers — clickable links in the HUD/panel. */
+  evidence: HypothesisEvidence[];
+  /** Unix-ms timestamp of generation. */
+  timestamp: number;
+  /** Region label if one clearly dominates. */
+  region?: string;
+}
+
+export interface AnalystSnapshot {
+  timestamp: number;
+  hypotheses: Hypothesis[];
+  /** Whether this cycle used AI-synthesized clusters. */
+  aiEnriched: boolean;
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const BASE_INTERVAL_MS = 5 * 60 * 1000;   // 5 minutes
+const HOT_ALERT_SCORE = 50;
+const BURST_WINDOW_MS = 15 * 60 * 1000;    // 15 minutes
+const BURST_THRESHOLD = 6;                 // alerts in window to count as a burst
+const STORAGE_KEY = 'crystalball-analyst-snapshot-v1';
+const EVENT_NAME = 'cb:analyst-hypotheses';
+const MAX_HYPOTHESES = 12;
+
+// ── ID generation ─────────────────────────────────────────────────────────────
+
+let _idCounter = 0;
+function genId(): string {
+  _idCounter += 1;
+  return `hyp-${Date.now().toString(36)}-${_idCounter.toString(36)}`;
+}
+
+// ── Risk helpers ──────────────────────────────────────────────────────────────
+
+function confidenceToRisk(c: number): EscalationRisk {
+  if (c >= 0.8) return 'critical';
+  if (c >= 0.6) return 'high';
+  if (c >= 0.35) return 'moderate';
+  return 'low';
+}
+
+const RISK_RANK: Record<EscalationRisk, number> = {
+  critical: 3, high: 2, moderate: 1, low: 0,
+};
+
+/**
+ * Ranking weight = raw confidence × learned user preference × outcome accuracy.
+ */
+function rankingWeight(h: Hypothesis): number {
+  return h.confidence * getHypothesisFeedbackMult(h) * getHypothesisAccuracyMult(h);
+}
+
+// ── Per-source hypothesis builders ───────────────────────────────────────────
+
+function fromClusters(clusters: CrossDomainCluster[]): Hypothesis[] {
+  return clusters.map((c): Hypothesis => ({
+    id: genId(),
+    kind: 'cross-domain-cluster',
+    statement: c.causalHypothesis && c.causalHypothesis.length > 10
+      ? c.causalHypothesis.slice(0, 280)
+      : `Concurrent ${c.domains.join('+')} signals converging on ${c.region}.`,
+    confidence: c.confidence,
+    risk: c.escalationRisk,
+    region: c.region,
+    timestamp: Date.now(),
+    evidence: [
+      ...c.situationIds.map((id): HypothesisEvidence => ({
+        source: 'situation-engine',
+        id,
+        label: `Situation ${id}`,
+        panelId: 'situation-awareness',
+      })),
+      ...c.compoundThreatIds.map((id): HypothesisEvidence => ({
+        source: 'threat-synthesis',
+        id,
+        label: `Compound ${id}`,
+        panelId: 'compound-threat',
+      })),
+    ],
+  }));
+}
+
+/** Group active anomalies whose sources share a prefix (e.g. "weather:*"). */
+function fromAnomalies(anomalies: Anomaly[]): Hypothesis[] {
+  if (anomalies.length < 2) return [];
+  const byPrefix = new Map<string, Anomaly[]>();
+  for (const a of anomalies) {
+    const prefix = a.source.split(':')[0] ?? a.source;
+    const bucket = byPrefix.get(prefix);
+    if (bucket) bucket.push(a);
+    else byPrefix.set(prefix, [a]);
+  }
+  const out: Hypothesis[] = [];
+  for (const [prefix, group] of byPrefix) {
+    if (group.length < 2) continue;
+    const worstZ = Math.max(...group.map(a => Math.abs(a.zScore)));
+    const confidence = Math.min(0.95, 0.4 + Math.min(0.5, worstZ / 10));
+    const descriptions = group.slice(0, 3).map(a => a.description).join('; ');
+    out.push({
+      id: genId(),
+      kind: 'anomaly-convergence',
+      statement:
+        `${group.length} concurrent anomalies in ${prefix} domain (max z=${worstZ.toFixed(1)}): ${descriptions}`,
+      confidence,
+      risk: confidenceToRisk(confidence),
+      timestamp: Date.now(),
+      evidence: group.map((a): HypothesisEvidence => ({
+        source: 'anomaly-detection',
+        id: a.id,
+        label: `${a.type} ${a.source}`,
+      })),
+    });
+  }
+  return out;
+}
+
+/** Detect geographic bursts: many hot alerts in a short window sharing a panel. */
+function fromAlertBurst(alerts: UnifiedAlert[]): Hypothesis[] {
+  const now = Date.now();
+  const hot = alerts.filter(a =>
+    !a.acknowledged &&
+    now - a.timestamp <= BURST_WINDOW_MS &&
+    scoreAlert(a, now) >= HOT_ALERT_SCORE);
+
+  if (hot.length < BURST_THRESHOLD) return [];
+
+  const byPanel = new Map<string, UnifiedAlert[]>();
+  for (const a of hot) {
+    const pid = panelForAlert(a);
+    const bucket = byPanel.get(pid);
+    if (bucket) bucket.push(a);
+    else byPanel.set(pid, [a]);
+  }
+
+  const out: Hypothesis[] = [];
+  for (const [panelId, group] of byPanel) {
+    if (group.length < BURST_THRESHOLD) continue;
+    const confidence = Math.min(0.9, 0.5 + group.length * 0.04);
+    const title = group[0]?.title ?? 'alerts';
+    out.push({
+      id: genId(),
+      kind: 'alert-burst',
+      statement:
+        `Alert burst in ${panelId}: ${group.length} hot alerts within ${Math.round(BURST_WINDOW_MS / 60_000)}m, led by "${title.slice(0, 80)}".`,
+      confidence,
+      risk: confidenceToRisk(confidence),
+      timestamp: now,
+      evidence: group.slice(0, 8).map((a): HypothesisEvidence => ({
+        source: 'unified-alerts',
+        id: a.id,
+        label: a.title.slice(0, 80),
+        panelId,
+      })),
+    });
+  }
+  return out;
+}
+
+/** Situations that just entered a more severe phase. */
+function fromSituations(situations: Situation[]): Hypothesis[] {
+  const escalating = situations.filter(s =>
+    s.phase !== 'resolved' && s.confidence >= 0.6 && s.domainDiversity >= 2);
+  return escalating.slice(0, 4).map((s): Hypothesis => ({
+    id: genId(),
+    kind: 'situation-escalation',
+    statement:
+      `${s.title}: ${s.summary.slice(0, 200)} (confidence ${(s.confidence * 100).toFixed(0)}%, ${s.domainDiversity} domains).`,
+    confidence: s.confidence,
+    risk: confidenceToRisk(s.confidence),
+    region: s.geo.label,
+    timestamp: Date.now(),
+    evidence: [{
+      source: 'situation-engine',
+      id: s.id,
+      label: s.title,
+      panelId: 'situation-awareness',
+    }],
+  }));
+}
+
+// ── Ranking + persistence ────────────────────────────────────────────────────
+
+function rank(hypotheses: Hypothesis[]): Hypothesis[] {
+  const deduped = dedupeHypotheses(hypotheses);
+  return deduped
+    .filter(h => !isDismissed(h))
+    .sort((a, b) => {
+      const riskDelta = RISK_RANK[b.risk] - RISK_RANK[a.risk];
+      if (riskDelta !== 0) return riskDelta;
+      return rankingWeight(b) - rankingWeight(a);
+    })
+    .slice(0, MAX_HYPOTHESES);
+}
+
+function persist(snapshot: AnalystSnapshot): void {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch { /* quota */ }
+}
+
+/** Retrieve the last persisted snapshot, if any. */
+export function getAnalystSnapshot(): AnalystSnapshot | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) as AnalystSnapshot : null;
+  } catch { return null; }
+}
+
+// ── Main cycle ────────────────────────────────────────────────────────────────
+
+export function runAnalystCycle(): AnalystSnapshot {
+  const cached = getCachedSynthesis();
+  const clusters = cached?.clusters ?? [];
+  const situations = situationEngine.getSituations();
+  const anomalies = anomalyEngine.getActiveAnomalies();
+  const alerts = unifiedAlertStore.getAll();
+
+  const hypotheses = rank([
+    ...fromClusters(clusters),
+    ...fromAnomalies(anomalies),
+    ...fromAlertBurst(alerts),
+    ...fromSituations(situations),
+    ...getWatchlistHypotheses(),
+  ]);
+
+  const snapshot: AnalystSnapshot = {
+    timestamp: Date.now(),
+    hypotheses,
+    aiEnriched: cached?.aiPowered ?? false,
+  };
+
+  persist(snapshot);
+  document.dispatchEvent(new CustomEvent<AnalystSnapshot>(EVENT_NAME, { detail: snapshot }));
+  return snapshot;
+}
+
+// ── Background loop ──────────────────────────────────────────────────────────
+
+let started = false;
+let timerId: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleNext(): void {
+  if (!started) return;
+  // Ghost mode slows the cadence by the same multiplier the scheduler uses.
+  const interval = BASE_INTERVAL_MS * (isGhostMode() ? getGhostRefreshMultiplier() : 1);
+  timerId = setTimeout(() => {
+    if (!started) return;
+    try { runAnalystCycle(); } catch { /* swallow — loop keeps going */ }
+    scheduleNext();
+  }, interval);
+}
+
+export function startAnalystLoop(): void {
+  if (started) return;
+  started = true;
+  // Defer the initial cycle to the next task so subscribers registered
+  // later in the bootstrap sequence (hypothesis-threads, entities,
+  // accuracy, skeptic, notifier, snapshot-archive, sidecar-pusher,
+  // command-listener) are all listening before we dispatch.
+  setTimeout(() => {
+    try { runAnalystCycle(); } catch { /* ignore */ }
+  }, 0);
+  scheduleNext();
+}
+
+export function stopAnalystLoop(): void {
+  started = false;
+  if (timerId !== null) {
+    clearTimeout(timerId);
+    timerId = null;
+  }
+}
+
+/** Subscribe to analyst snapshots. Returns an unsubscribe function. */
+export function subscribeAnalyst(cb: (snapshot: AnalystSnapshot) => void): () => void {
+  const handler = (e: Event): void => {
+    const ce = e as CustomEvent<AnalystSnapshot>;
+    cb(ce.detail);
+  };
+  document.addEventListener(EVENT_NAME, handler);
+  return () => { document.removeEventListener(EVENT_NAME, handler); };
+}

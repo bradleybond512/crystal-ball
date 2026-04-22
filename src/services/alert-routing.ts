@@ -10,6 +10,7 @@ import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
 import { getSourceTrust } from './source-trust';
 import { getSourceFeedbackMult } from './source-feedback';
 import { getRecalMult } from './severity-recalibration';
+import { getRelevanceBoost } from './relevance-learner';
 
 // ─── Tunable weights (start values; we'll iterate) ────────────────────────
 const SEVERITY_WEIGHT: Record<AlertSeverity, number> = {
@@ -103,12 +104,13 @@ export interface ScoreBreakdown {
   proximityMult: number;
   watchlistMult: number;
   pinMult: number;
+  relevanceMult: number;
   total: number;
 }
 
 export function scoreBreakdown(a: UnifiedAlert, nowMs: number = Date.now()): ScoreBreakdown {
   if (a.acknowledged || (typeof a.snoozedUntil === 'number' && a.snoozedUntil > nowMs)) {
-    return { base: 0, decay: 0, sourceMult: 0, trustMult: 1, proximityMult: 1, watchlistMult: 1, pinMult: 1, total: 0 };
+    return { base: 0, decay: 0, sourceMult: 0, trustMult: 1, proximityMult: 1, watchlistMult: 1, pinMult: 1, relevanceMult: 1, total: 0 };
   }
   const base = SEVERITY_WEIGHT[a.severity] ?? 0;
   const ageMin = Math.max(0, (nowMs - a.timestamp) / 60_000);
@@ -118,8 +120,9 @@ export function scoreBreakdown(a: UnifiedAlert, nowMs: number = Date.now()): Sco
   const proximityMult = (typeof a.distanceKm === 'number' && a.distanceKm <= PROXIMITY_KM) ? PROXIMITY_MULT : 1;
   const watchlistMult = a.relevanceScore >= 100 ? WATCHLIST_MULT : 1;
   const pinMult = a.pinned ? 1.25 : 1;
-  const total = base * decay * sourceMult * trustMult * proximityMult * watchlistMult * pinMult;
-  return { base, decay, sourceMult, trustMult, proximityMult, watchlistMult, pinMult, total };
+  const relevanceMult = getRelevanceBoost(a);
+  const total = base * decay * sourceMult * trustMult * proximityMult * watchlistMult * pinMult * relevanceMult;
+  return { base, decay, sourceMult, trustMult, proximityMult, watchlistMult, pinMult, relevanceMult, total };
 }
 
 /** Compute current hotness score for a single alert. */

@@ -50,11 +50,30 @@ function createOtherStoresIfMissing(db: IDBDatabase): void {
   }
 }
 
+function attachCloseHandlers(db: IDBDatabase): void {
+  db.addEventListener('close', () => { dbInstance = null; });
+  // When another module (alert-store, storage.ts, or a future tab) tries
+  // to open at a higher version, a `versionchange` event fires on this
+  // open connection. If we don't close, the upgrade request is `blocked`
+  // forever. Closing here lets the upgrade proceed; the next getMemory/
+  // putMemory call will reopen at the new version.
+  db.addEventListener('versionchange', () => {
+    db.close();
+    dbInstance = null;
+  });
+}
+
 function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
   return new Promise<IDBDatabase>((resolve, reject) => {
     const upgrade = indexedDB.open(DB_NAME, currentVersion + 1);
     upgrade.addEventListener('error', () => {
       reject(upgrade.error ?? new Error('[reasoning-memory] upgrade failed'));
+    });
+    upgrade.addEventListener('blocked', () => {
+      // Another tab/connection is holding the old version open. Rather
+      // than hang forever, reject so the caller can fall back to the LS
+      // mirror and try again later.
+      reject(new Error('[reasoning-memory] upgrade blocked by another connection'));
     });
     upgrade.addEventListener('upgradeneeded', (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
@@ -65,7 +84,7 @@ function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
     });
     upgrade.addEventListener('success', () => {
       dbInstance = upgrade.result;
-      upgrade.result.addEventListener('close', () => { dbInstance = null; });
+      attachCloseHandlers(upgrade.result);
       resolve(upgrade.result);
     });
   });
@@ -80,11 +99,14 @@ function openDB(): Promise<IDBDatabase> {
     probe.addEventListener('error', () => {
       reject(probe.error ?? new Error('[reasoning-memory] probe failed'));
     });
+    probe.addEventListener('blocked', () => {
+      reject(new Error('[reasoning-memory] probe blocked'));
+    });
     probe.addEventListener('success', () => {
       const currentDB = probe.result;
       if (currentDB.objectStoreNames.contains(STORE_NAME)) {
         dbInstance = currentDB;
-        currentDB.addEventListener('close', () => { dbInstance = null; });
+        attachCloseHandlers(currentDB);
         resolve(currentDB);
         return;
       }

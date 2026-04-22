@@ -161,9 +161,29 @@ export function getHotEntities(): EntityMention[] {
   return lastMentions.filter(m => m.hypothesisIds.length >= 2);
 }
 
-/** Entities associated with a specific hypothesis. */
+/**
+ * Entities associated with a specific hypothesis, looked up from the
+ * most-recently-built cache. Returns empty for past-snapshot hypotheses
+ * whose IDs are no longer in the cache — use `entitiesFromHypothesis`
+ * for anything that might be a replayed or out-of-band hypothesis.
+ */
 export function entitiesForHypothesis(hypothesisId: string): EntityMention[] {
   return lastMentions.filter(m => m.hypothesisIds.includes(hypothesisId));
+}
+
+/**
+ * Extract entities from a hypothesis directly, without consulting the
+ * lastMentions cache. Use this for code paths that might see past-
+ * snapshot hypotheses (HUD replay scrubber, hypothesis-export bundle)
+ * where the per-snapshot cache won't have the IDs anymore.
+ */
+export function entitiesFromHypothesis(h: Hypothesis): EntityMention[] {
+  return extractFromHypothesis(h).map(({ kind, entity }) => ({
+    entity,
+    kind,
+    hypothesisIds: [h.id],
+    sources: [h.region ?? h.kind],
+  }));
 }
 
 /** Exposed for tests / debugging. */

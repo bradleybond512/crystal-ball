@@ -108,14 +108,27 @@ function rankScore(h: Hypothesis): number {
   return RISK_RANK[h.risk] * 10 + h.confidence;
 }
 
-function pickWinner(group: Hypothesis[]): FusedHypothesis {
-  const sorted = [...group].sort((a, b) => rankScore(b) - rankScore(a));
-  const winner = sorted[0];
+/**
+ * Pick the winner + report its position within `group` so the caller can
+ * preserve the top-ranked member's position in the overall list. We can't
+ * use indexOf after spreading `{...winner, fusedFrom}` because the spread
+ * creates a new object that isn't === any member.
+ */
+function pickWinner(group: Hypothesis[]): { h: FusedHypothesis; idxInGroup: number } {
+  let winner = group[0];
+  let winnerIdx = 0;
+  for (let i = 1; i < group.length; i++) {
+    const candidate = group[i];
+    if (winner && candidate && rankScore(candidate) > rankScore(winner)) {
+      winner = candidate;
+      winnerIdx = i;
+    }
+  }
   if (!winner) throw new Error('empty group');
-  if (group.length === 1) return winner;
+  if (group.length === 1) return { h: winner, idxInGroup: 0 };
   const fusedFrom = [...new Set(group.map(h => h.kind))].filter(k => k !== winner.kind);
-  if (fusedFrom.length === 0) return winner;
-  return { ...winner, fusedFrom };
+  const result: FusedHypothesis = fusedFrom.length === 0 ? winner : { ...winner, fusedFrom };
+  return { h: result, idxInGroup: winnerIdx };
 }
 
 // ── Public ───────────────────────────────────────────────────────────────────
@@ -145,8 +158,8 @@ export function dedupeHypotheses(hypotheses: Hypothesis[]): FusedHypothesis[] {
       .map(i => hypotheses[i])
       .filter((h): h is Hypothesis => h !== undefined);
     if (members.length === 0) continue;
-    const winner = pickWinner(members);
-    const winnerIndex = group[members.indexOf(winner as Hypothesis)] ?? group[0] ?? 0;
+    const { h: winner, idxInGroup } = pickWinner(members);
+    const winnerIndex = group[idxInGroup] ?? group[0] ?? 0;
     winners.push({ idx: winnerIndex, h: winner });
   }
   winners.sort((a, b) => a.idx - b.idx);

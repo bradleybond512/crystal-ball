@@ -8,7 +8,7 @@
 
 import type { Hypothesis } from './analyst-loop';
 import { getThreadFor } from './hypothesis-threads';
-import { entitiesForHypothesis } from './hypothesis-entities';
+import { entitiesForHypothesis, entitiesFromHypothesis } from './hypothesis-entities';
 import { getSkepticNote } from './hypothesis-skeptic';
 import { getCachedAnswer, suggestQuestions } from './question-suggester';
 import { getPlaybookFor, summarizePlaybook } from './action-memory';
@@ -49,7 +49,10 @@ function buildHeader(h: Hypothesis): string {
 }
 
 function buildEntities(h: Hypothesis): string {
-  const mentions = entitiesForHypothesis(h.id);
+  // Fall back to a cache-free extraction so replayed / past-snapshot
+  // hypotheses still get entity sections in their exported markdown.
+  let mentions = entitiesForHypothesis(h.id);
+  if (mentions.length === 0) mentions = entitiesFromHypothesis(h);
   if (mentions.length === 0) return '';
   const lines = mentions.map(m => `- ${m.kind}: \`${m.entity}\``);
   return `## Entities\n\n${lines.join('\n')}\n\n`;

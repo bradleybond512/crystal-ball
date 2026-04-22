@@ -18,7 +18,7 @@ import { subscribeAutoBrief, getLatestBriefs, isAutoBriefEnabled, setAutoBriefEn
 import { thumbsUp, thumbsDown } from '@/services/hypothesis-feedback';
 import { getKindAccuracy } from '@/services/hypothesis-accuracy';
 import { getThreadFor } from '@/services/hypothesis-threads';
-import { entitiesForHypothesis, getHotEntities, type EntityMention } from '@/services/hypothesis-entities';
+import { entitiesForHypothesis, entitiesFromHypothesis, getHotEntities, type EntityMention } from '@/services/hypothesis-entities';
 import { getSkepticNote, isSkepticEnabled, setSkepticEnabled, subscribeSkeptic } from '@/services/hypothesis-skeptic';
 import { getPressureHistory, buildSparklinePath, subscribePressureHistory } from '@/services/pressure-history';
 import { getPlaybookFor, summarizePlaybook, recordAction, noteRecurrence } from '@/services/action-memory';
@@ -85,7 +85,13 @@ export class AnalystHUD {
   private loadingEnsemble = new Set<string>();
   private expandedEnsemble = new Set<string>();
   private exportedFlash: { id: string; at: number } | null = null;
-  private replayIndex: number | null = null; // null = live; else index into snapshot archive
+  // Anchor the replay position to a SNAPSHOT TIMESTAMP, not an index.
+  // Index-based replay drifts silently when the archive evicts the oldest
+  // snapshots (120-slot ring buffer): what the user had as index 5 before
+  // eviction becomes a different snapshot after eviction. Timestamps stay
+  // stable across evictions; we resolve them to an index at render time
+  // via findNearestSnapshot. `null` = live.
+  private replayAtTimestamp: number | null = null;
   private selectedHypothesisIndex = 0;
   private settingsOpen = false;
   private renderScheduled = false;
@@ -139,7 +145,10 @@ export class AnalystHUD {
     });
     subscribeBudget(() => { this.scheduleRender(); });
     subscribeSnapshotArchive(() => {
-      if (this.replayIndex === null) this.scheduleRender();
+      // Only scroll the view on new archived snapshots when we're live.
+      // When replayed, the user's anchor timestamp resolves to the same
+      // snapshot regardless, so no re-render is needed.
+      if (this.replayAtTimestamp === null) this.scheduleRender();
     });
     subscribeEnsemble(() => { this.scheduleRender(); });
     document.addEventListener('cb:toggle-analyst-hud', () => this.toggle());
@@ -263,8 +272,10 @@ export class AnalystHUD {
 
     const aiBadge = document.createElement('span');
     aiBadge.className = 'analyst-hud-ai-badge';
-    aiBadge.textContent = this.snapshot?.aiEnriched ? 'AI' : 'templates';
-    aiBadge.title = this.snapshot?.aiEnriched
+    // Reflect the snapshot actually being displayed (live or replayed).
+    const effective = this.effectiveSnapshot();
+    aiBadge.textContent = effective?.aiEnriched ? 'AI' : 'templates';
+    aiBadge.title = effective?.aiEnriched
       ? 'Clusters enriched by Claude agent'
       : 'Template-based reasoning (no AI)';
 
@@ -378,11 +389,19 @@ export class AnalystHUD {
   }
 
   private effectiveSnapshot(): AnalystSnapshot | null {
-    if (this.replayIndex === null) return this.snapshot;
+    if (this.replayAtTimestamp === null) return this.snapshot;
     const history = getAllSnapshots();
     if (history.length === 0) return this.snapshot;
-    const idx = Math.max(0, Math.min(history.length - 1, this.replayIndex));
-    return history[idx] ?? this.snapshot;
+    // Find the nearest snapshot to the anchored timestamp. Stable across
+    // archive evictions.
+    let best = history[0];
+    if (!best) return this.snapshot;
+    let bestDelta = Math.abs(best.timestamp - this.replayAtTimestamp);
+    for (const snap of history) {
+      const delta = Math.abs(snap.timestamp - this.replayAtTimestamp);
+      if (delta < bestDelta) { best = snap; bestDelta = delta; }
+    }
+    return best;
   }
 
   private buildHypothesesSection(): HTMLElement {
@@ -391,7 +410,7 @@ export class AnalystHUD {
 
     const h = document.createElement('h3');
     const snap = this.effectiveSnapshot();
-    const isReplay = this.replayIndex !== null;
+    const isReplay = this.replayAtTimestamp !== null;
     h.textContent = isReplay && snap
       ? `Hypotheses — replay ${ageLabel(Date.now() - snap.timestamp)} ago`
       : 'Hypotheses';
@@ -520,34 +539,45 @@ export class AnalystHUD {
       return wrap;
     }
     const max = history.length - 1;
-    const value = this.replayIndex ?? max;
+    // Resolve the anchored timestamp to a stable index in the current
+    // archive for slider position. Live view pins at max.
+    let currentIdx = max;
+    if (this.replayAtTimestamp !== null) {
+      let bestDelta = Infinity;
+      history.forEach((snap, i) => {
+        const delta = Math.abs(snap.timestamp - this.replayAtTimestamp!);
+        if (delta < bestDelta) { bestDelta = delta; currentIdx = i; }
+      });
+    }
 
     const slider = document.createElement('input');
     slider.type = 'range';
     slider.min = '0';
     slider.max = String(max);
-    slider.value = String(value);
+    slider.value = String(currentIdx);
     slider.className = 'analyst-hud-scrubber-slider';
     slider.addEventListener('input', () => {
       const idx = Number.parseInt(slider.value, 10);
-      this.replayIndex = idx === max ? null : idx;
+      // Anchor to the selected snapshot's timestamp (null = live). Stays
+      // stable as the archive evicts older snapshots.
+      this.replayAtTimestamp = idx === max ? null : (history[idx]?.timestamp ?? null);
       this.render();
     });
 
     const live = document.createElement('button');
     live.className = 'analyst-hud-scrubber-live';
-    live.textContent = this.replayIndex === null ? 'live' : 'go live';
-    live.disabled = this.replayIndex === null;
+    live.textContent = this.replayAtTimestamp === null ? 'live' : 'go live';
+    live.disabled = this.replayAtTimestamp === null;
     live.addEventListener('click', () => {
-      this.replayIndex = null;
+      this.replayAtTimestamp = null;
       this.render();
     });
 
     const label = document.createElement('span');
     label.className = 'analyst-hud-scrubber-label';
-    const snap = history[value];
+    const snap = history[currentIdx];
     const ago = snap ? ageLabel(Date.now() - snap.timestamp) : 'now';
-    label.textContent = `${ago} ago · ${value + 1}/${max + 1}`;
+    label.textContent = `${ago} ago · ${currentIdx + 1}/${max + 1}`;
 
     wrap.append(slider, label, live);
     return wrap;
@@ -760,7 +790,13 @@ export class AnalystHUD {
   private buildHypEntities(h: Hypothesis): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'analyst-hud-hyp-entities';
-    for (const m of entitiesForHypothesis(h.id).slice(0, 6)) {
+    // Prefer the live cross-hypothesis cache so cross-cutting entities
+    // match what the "Hot Entities" section shows. Fall back to a
+    // per-hypothesis extraction for replayed past snapshots whose IDs
+    // aren't in the cache anymore.
+    let mentions = entitiesForHypothesis(h.id);
+    if (mentions.length === 0) mentions = entitiesFromHypothesis(h);
+    for (const m of mentions.slice(0, 6)) {
       wrap.append(this.buildEntityChip(m, false));
     }
     return wrap;
@@ -911,7 +947,10 @@ export class AnalystHUD {
         if (e.panelId) {
           jumpToPanel(e.panelId);
           flashPanel(e.panelId);
-          if (h) recordAction(h, 'panel-jump', e.panelId);
+          // Only record playbook actions on live-view clicks. In replay
+          // mode the user is reviewing past state, not acting on it, and
+          // mutating the playbook would pollute future recurrence hints.
+          if (h && this.replayAtTimestamp === null) recordAction(h, 'panel-jump', e.panelId);
         }
         this.hide();
       });
@@ -922,8 +961,11 @@ export class AnalystHUD {
   }
 
   private findHypothesisForEvidence(e: HypothesisEvidence): Hypothesis | null {
-    if (!this.snapshot) return null;
-    return this.snapshot.hypotheses.find(h => h.evidence.some(ev => ev.id === e.id && ev.source === e.source)) ?? null;
+    // Use the effective snapshot (live OR replayed) so the found
+    // hypothesis matches the row the user actually clicked from.
+    const snap = this.effectiveSnapshot();
+    if (!snap) return null;
+    return snap.hypotheses.find(h => h.evidence.some(ev => ev.id === e.id && ev.source === e.source)) ?? null;
   }
 
   private buildBriefsSection(): HTMLElement {

@@ -92,7 +92,22 @@ function saveDismissed(): void {
 
 export function isDismissed(h: Pick<Hypothesis, 'kind' | 'evidence' | 'region'>): boolean {
   loadDismissed();
-  return dismissed.has(signatureFor(h));
+  const sig = signatureFor(h);
+  const at = dismissed.get(sig);
+  if (at === undefined) return false;
+  // Lazy TTL enforcement — `prune()` only runs at load, so long-running
+  // sessions would otherwise hold dismissed entries past their 24h
+  // window. Check + delete on read.
+  if (Date.now() - at > DISMISSED_TTL_MS) {
+    // Prune the expired entry in-memory. Skip the save here — rank()
+    // calls isDismissed many times per cycle and batching saves would
+    // require API changes; expired entries get re-persisted on the
+    // next markDismissed/clearDismissed write, and on reload the lazy
+    // check prunes them again (self-healing).
+    dismissed.delete(sig);
+    return false;
+  }
+  return true;
 }
 
 export function markDismissed(h: Pick<Hypothesis, 'kind' | 'evidence' | 'region'>): void {

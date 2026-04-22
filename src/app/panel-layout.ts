@@ -523,22 +523,27 @@ export class PanelLayoutManager implements AppModule {
  startThreatCorridor();
  startPeriodicityDetector();
  startSilenceAnomaly();
+ // Subscribers FIRST — they all listen for cb:analyst-hypotheses or
+ // cb:mode-advisory and would miss the first event if started after the
+ // emitters. The emitters (mode-forecast, analyst-loop) also defer their
+ // initial cycle to setTimeout(0), so this is belt-and-suspenders.
  startRelevanceLearner();
- startModeForecast();
+ startActionMemory();
+ startBriefingArchive();
  startPressureHistory();
- startAnalystLoop();
+ startPressureBaselines();
  startHypothesisThreads();
  startHypothesisEntities();
  startHypothesisAccuracy();
- startAutoBrief();
  startHypothesisSkeptic();
- startActionMemory();
- startPressureBaselines();
- startBriefingArchive();
+ startAutoBrief();
  startSnapshotArchive();
  startHypothesisNotifier();
  startSidecarPusher();
  startAnalystCommandListener();
+ // Emitters last.
+ startModeForecast();
+ startAnalystLoop();
  const analystHud = new AnalystHUD();
  analystHud.mount(document.body);
  document.addEventListener('keydown', (e: KeyboardEvent) => {

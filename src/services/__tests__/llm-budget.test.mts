@@ -22,7 +22,7 @@ class StubCE<T = unknown> {
 };
 
 import {
-  canSpend, recordCall, getBudgetStatus, setCloudCap, getCloudCap, resetBudget,
+  canSpend, recordCall, reserveCloudCall, getBudgetStatus, setCloudCap, getCloudCap, resetBudget,
 } from '../llm-budget.ts';
 
 test('local calls are always allowed', () => {
@@ -41,6 +41,27 @@ test('cloud calls respect the cap', () => {
   assert.equal(canSpend('cloud-agent'), false);
   assert.equal(getBudgetStatus().exhausted, true);
   assert.equal(getBudgetStatus().remaining, 0);
+});
+
+test('reserveCloudCall is atomic (race-safe vs canSpend)', () => {
+  resetBudget();
+  setCloudCap(2);
+  // Three "parallel" reservations: only the first two should succeed, even
+  // though canSpend() would have returned true for all three before any
+  // recordCall ran.
+  assert.equal(reserveCloudCall('cloud-agent'), true);
+  assert.equal(reserveCloudCall('cloud-agent'), true);
+  assert.equal(reserveCloudCall('cloud-agent'), false);
+  assert.equal(getBudgetStatus().cloud, 2);
+  assert.equal(getBudgetStatus().exhausted, true);
+});
+
+test('reserveCloudCall passes through local + none without counting', () => {
+  resetBudget();
+  setCloudCap(1);
+  assert.equal(reserveCloudCall('local'), true);
+  assert.equal(reserveCloudCall('none'), true);
+  assert.equal(getBudgetStatus().cloud, 0);
 });
 
 test('recordCall buckets local vs cloud correctly', () => {

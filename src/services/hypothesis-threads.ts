@@ -167,6 +167,7 @@ export function getAllThreads(): HypothesisThread[] {
 export function resetThreads(): void {
   threads.clear();
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  document.dispatchEvent(new CustomEvent<HypothesisThread[]>(EVENT_NAME, { detail: [] }));
 }
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ import { entitiesForHypothesis, getHotEntities, type EntityMention } from '@/ser
 import { getSkepticNote, isSkepticEnabled, setSkepticEnabled, subscribeSkeptic } from '@/services/hypothesis-skeptic';
 import { getPressureHistory, buildSparklinePath, subscribePressureHistory } from '@/services/pressure-history';
 import { getPlaybookFor, summarizePlaybook, recordAction, noteRecurrence } from '@/services/action-memory';
-import { suggestQuestions, getCachedAnswer, askQuestion, subscribeQuestionAnswered, type QuestionAnswer } from '@/services/question-suggester';
+import { suggestQuestions, getCachedAnswer, askQuestion, subscribeQuestionAnswered } from '@/services/question-suggester';
 import { getArchive, subscribeBriefingArchive } from '@/services/briefing-archive';
 import { projectHypothesis, getCachedProjection, subscribeProjection } from '@/services/hypothesis-projection';
 import { exportHypothesisToClipboard } from '@/services/hypothesis-export';
@@ -80,7 +80,6 @@ export class AnalystHUD {
   private expandedSkeptic = new Set<string>();
   private expandedQuestion = new Set<string>();
   private loadingQuestion = new Set<string>();
-  private answers = new Map<string, QuestionAnswer>();
   private loadingProjection = new Set<string>();
   private expandedProjection = new Set<string>();
   private loadingEnsemble = new Set<string>();
@@ -89,6 +88,7 @@ export class AnalystHUD {
   private replayIndex: number | null = null; // null = live; else index into snapshot archive
   private selectedHypothesisIndex = 0;
   private settingsOpen = false;
+  private renderScheduled = false;
 
   constructor() {
     this.root = document.createElement('div');
@@ -105,51 +105,39 @@ export class AnalystHUD {
 
   mount(parent: HTMLElement): void {
     parent.append(this.root);
+    // All event-driven re-renders go through scheduleRender() to coalesce
+    // bursts (e.g. analyst-hypotheses + auto-brief + question-answered all
+    // arriving in the same tick) into a single rAF-aligned render.
     subscribeAnalyst((snap) => {
       this.snapshot = snap;
-      if (this.visible) this.render();
+      this.scheduleRender();
     });
     subscribeModeAdvisory((f) => {
       this.forecast = f;
-      if (this.visible) this.render();
+      this.scheduleRender();
     });
     subscribeAutoBrief((brief) => {
       this.briefs[brief.domain] = brief;
-      if (this.visible) this.render();
+      this.scheduleRender();
     });
     subscribePressureHistory((h) => {
       this.pressure = h;
-      if (this.visible) this.render();
+      this.scheduleRender();
     });
-    subscribeSkeptic(() => {
-      if (this.visible) this.render();
-    });
-    subscribeQuestionAnswered((answer) => {
-      // Cache on HUD state; re-render if visible so the answer expands.
-      for (const [key] of this.answers) if (key.endsWith(`||${answer.question}`)) this.answers.delete(key);
-      this.answers.set(`__last||${answer.question}`, answer);
-      if (this.visible) this.render();
-    });
-    subscribeBriefingArchive(() => {
-      if (this.visible) this.render();
-    });
-    subscribeProjection(() => {
-      if (this.visible) this.render();
-    });
+    subscribeSkeptic(() => { this.scheduleRender(); });
+    subscribeQuestionAnswered(() => { this.scheduleRender(); });
+    subscribeBriefingArchive(() => { this.scheduleRender(); });
+    subscribeProjection(() => { this.scheduleRender(); });
     document.addEventListener('cb:hypothesis-export-copied', (e: Event) => {
       const ce = e as CustomEvent<{ hypothesisId: string }>;
       this.exportedFlash = { id: ce.detail.hypothesisId, at: Date.now() };
-      if (this.visible) this.render();
+      this.scheduleRender();
     });
-    subscribeBudget(() => {
-      if (this.visible) this.render();
-    });
+    subscribeBudget(() => { this.scheduleRender(); });
     subscribeSnapshotArchive(() => {
-      if (this.visible && this.replayIndex === null) this.render();
+      if (this.replayIndex === null) this.scheduleRender();
     });
-    subscribeEnsemble(() => {
-      if (this.visible) this.render();
-    });
+    subscribeEnsemble(() => { this.scheduleRender(); });
     document.addEventListener('cb:toggle-analyst-hud', () => this.toggle());
     document.addEventListener('cb:hypothesis-feedback', () => {
       if (this.visible) this.render();
@@ -208,6 +196,28 @@ export class AnalystHUD {
   }
 
   toggle(): void { if (this.visible) this.hide(); else this.show(); }
+
+  /**
+   * Coalesce repeat render() calls within the same frame. Multiple events
+   * (e.g. analyst-hypotheses + auto-brief + question-answered) commonly
+   * fire in the same tick; without this, each one would rebuild the entire
+   * card.
+   */
+  private scheduleRender(): void {
+    if (!this.visible) return;
+    if (this.renderScheduled) return;
+    this.renderScheduled = true;
+    const raf = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : (cb: FrameRequestCallback): number => {
+          setTimeout(() => cb(Date.now()), 16);
+          return 0;
+        };
+    raf(() => {
+      this.renderScheduled = false;
+      if (this.visible) this.render();
+    });
+  }
 
   show(): void {
     this.visible = true;

@@ -24,7 +24,7 @@
 
 import type { Hypothesis } from './analyst-loop';
 import type { EscalationRisk } from './threat-synthesis';
-import { entitiesForHypothesis } from './hypothesis-entities';
+import { extractEntitiesFromText } from './hypothesis-entities';
 
 const RISK_RANK: Record<EscalationRisk, number> = {
   critical: 3, high: 2, moderate: 1, low: 0,
@@ -45,7 +45,12 @@ function evidenceIds(h: Hypothesis): Set<string> {
 }
 
 function entityKeys(h: Hypothesis): Set<string> {
-  return new Set(entitiesForHypothesis(h.id).map(m => `${m.kind}:${m.entity}`));
+  // Extract directly from the hypothesis text — we can't use the
+  // hypothesis-entities cache here because dedupe runs INSIDE
+  // analyst-loop.rank() before the snapshot is dispatched, so the
+  // cache still holds last-snapshot IDs that don't match this snapshot.
+  const text = [h.statement, h.region ?? '', ...h.evidence.map(e => e.label)].join(' | ');
+  return new Set(extractEntitiesFromText(text).map(m => `${m.kind}:${m.entity}`));
 }
 
 function overlaps<T>(a: Set<T>, b: Set<T>): boolean {

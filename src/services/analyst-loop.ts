@@ -311,8 +311,13 @@ function scheduleNext(): void {
 export function startAnalystLoop(): void {
   if (started) return;
   started = true;
-  // Kick off an immediate cycle so panels have data on boot; errors are non-fatal.
-  try { runAnalystCycle(); } catch { /* ignore */ }
+  // Defer the initial cycle to the next task so subscribers registered
+  // later in the bootstrap sequence (hypothesis-threads, entities,
+  // accuracy, skeptic, notifier, snapshot-archive, sidecar-pusher,
+  // command-listener) are all listening before we dispatch.
+  setTimeout(() => {
+    try { runAnalystCycle(); } catch { /* ignore */ }
+  }, 0);
   scheduleNext();
 }
 

@@ -260,7 +260,12 @@ function scheduleNext(): void {
 export function startModeForecast(): void {
   if (started) return;
   started = true;
-  try { runForecastCycle(); } catch { /* ignore */ }
+  // Defer the initial cycle so pressure-history, pressure-baselines,
+  // auto-brief, sidecar-pusher, and the HUD subscribe before the first
+  // cb:mode-advisory dispatches.
+  setTimeout(() => {
+    try { runForecastCycle(); } catch { /* ignore */ }
+  }, 0);
   scheduleNext();
 }
 

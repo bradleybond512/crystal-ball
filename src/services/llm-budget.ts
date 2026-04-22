@@ -144,8 +144,32 @@ export function canSpend(provider: LlmProvider): boolean {
 }
 
 /**
+ * Atomically check + reserve a cloud-call slot. Returns true iff the
+ * counter was incremented. Use this from llm-adapter before issuing a
+ * cloud request so that N parallel callers (e.g. the multi-persona
+ * ensemble) cannot all race past canSpend() and overshoot the cap.
+ *
+ * If the call later fails, the slot is NOT refunded — the call was
+ * still attempted, and conservative accounting is the safer default.
+ */
+export function reserveCloudCall(provider: LlmProvider): boolean {
+  if (provider === 'local' || provider === 'none') return true;
+  load();
+  rolloverIfNeeded();
+  const cap = getCloudCap();
+  const cloud = state.cloudAgent + state.cloudChat;
+  if (cloud >= cap) return false;
+  if (provider === 'cloud-agent') state.cloudAgent += 1;
+  else if (provider === 'cloud-chat') state.cloudChat += 1;
+  save();
+  document.dispatchEvent(new CustomEvent<BudgetStatus>(EVENT_NAME, { detail: getBudgetStatus() }));
+  return true;
+}
+
+/**
  * Record that a call of the given provider was made. Writes the counter
- * and dispatches cb:llm-budget so the HUD refreshes.
+ * and dispatches cb:llm-budget so the HUD refreshes. Cloud calls should
+ * use reserveCloudCall() instead, which is race-safe.
  */
 export function recordCall(provider: LlmProvider): void {
   if (provider === 'none') return;

@@ -17,7 +17,7 @@
 
 import { runClaudeAgent } from './claude-agent';
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
-import { canSpend, recordCall } from './llm-budget';
+import { recordCall, reserveCloudCall } from './llm-budget';
 
 export type LlmProvider = 'local' | 'cloud-agent' | 'cloud-chat' | 'none';
 
@@ -101,6 +101,10 @@ async function tryCloudAgent(prompt: string, options: LlmOptions): Promise<LlmRe
  * Generate text. Tries the local path first unless preferCloud is set.
  * Returns { provider: 'none' } if everything failed or the daily cloud
  * budget is exhausted, so callers can react.
+ *
+ * Cloud calls go through reserveCloudCall() so that N parallel callers
+ * (e.g. the multi-persona ensemble fan-out) cannot all race past the
+ * cap and overshoot.
  */
 export async function generateText(prompt: string, options: LlmOptions = {}): Promise<LlmResult> {
   if (!options.preferCloud) {
@@ -110,13 +114,11 @@ export async function generateText(prompt: string, options: LlmOptions = {}): Pr
       return local;
     }
   }
-  // Gate cloud call on budget; if exhausted, fail soft rather than charging.
-  if (!canSpend('cloud-agent')) return { text: '', provider: 'none' };
+  // Atomically reserve a cloud-call slot before issuing the request.
+  // If reserveCloudCall returns false, the cap is already hit; fail soft.
+  if (!reserveCloudCall('cloud-agent')) return { text: '', provider: 'none' };
   const cloud = await tryCloudAgent(prompt, options);
-  if (cloud) {
-    recordCall(cloud.provider);
-    return cloud;
-  }
+  if (cloud) return cloud; // already counted by reserveCloudCall
   return { text: '', provider: 'none' };
 }
 

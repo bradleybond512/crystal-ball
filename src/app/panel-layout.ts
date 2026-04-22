@@ -112,6 +112,7 @@ import { startActionMemory } from '@/services/action-memory';
 import { startPressureBaselines } from '@/services/pressure-baselines';
 import { startBriefingArchive } from '@/services/briefing-archive';
 import { startHypothesisNotifier } from '@/services/hypothesis-notifier';
+import { startSnapshotArchive } from '@/services/snapshot-archive';
 import { AnalystHUD } from '@/components/AnalystHUD';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
@@ -534,6 +535,7 @@ export class PanelLayoutManager implements AppModule {
  startActionMemory();
  startPressureBaselines();
  startBriefingArchive();
+ startSnapshotArchive();
  startHypothesisNotifier();
  startSidecarPusher();
  startAnalystCommandListener();

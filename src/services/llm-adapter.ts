@@ -17,6 +17,7 @@
 
 import { runClaudeAgent } from './claude-agent';
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
+import { canSpend, recordCall } from './llm-budget';
 
 export type LlmProvider = 'local' | 'cloud-agent' | 'cloud-chat' | 'none';
 
@@ -98,15 +99,24 @@ async function tryCloudAgent(prompt: string, options: LlmOptions): Promise<LlmRe
 
 /**
  * Generate text. Tries the local path first unless preferCloud is set.
- * Returns { provider: 'none' } if everything failed so callers can react.
+ * Returns { provider: 'none' } if everything failed or the daily cloud
+ * budget is exhausted, so callers can react.
  */
 export async function generateText(prompt: string, options: LlmOptions = {}): Promise<LlmResult> {
   if (!options.preferCloud) {
     const local = await tryLocal(prompt, options);
-    if (local) return local;
+    if (local) {
+      recordCall(local.provider);
+      return local;
+    }
   }
+  // Gate cloud call on budget; if exhausted, fail soft rather than charging.
+  if (!canSpend('cloud-agent')) return { text: '', provider: 'none' };
   const cloud = await tryCloudAgent(prompt, options);
-  if (cloud) return cloud;
+  if (cloud) {
+    recordCall(cloud.provider);
+    return cloud;
+  }
   return { text: '', provider: 'none' };
 }
 

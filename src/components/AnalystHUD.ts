@@ -26,6 +26,9 @@ import { suggestQuestions, getCachedAnswer, askQuestion, subscribeQuestionAnswer
 import { getArchive, subscribeBriefingArchive } from '@/services/briefing-archive';
 import { projectHypothesis, getCachedProjection, subscribeProjection } from '@/services/hypothesis-projection';
 import { exportHypothesisToClipboard } from '@/services/hypothesis-export';
+import { getBudgetStatus, subscribeBudget } from '@/services/llm-budget';
+import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
+import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
 
@@ -55,6 +58,12 @@ function simButtonLabel(loading: boolean, cached: boolean, expanded: boolean): s
   return expanded ? 'hide ▾' : 'show ▸';
 }
 
+function ensembleButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {
+  if (loading) return 'perspectives…';
+  if (!cached) return 'perspectives ▸';
+  return expanded ? 'hide ▾' : 'perspectives ▾';
+}
+
 export class AnalystHUD {
   private readonly root: HTMLElement;
   private snapshot: AnalystSnapshot | null = null;
@@ -68,7 +77,10 @@ export class AnalystHUD {
   private answers = new Map<string, QuestionAnswer>();
   private loadingProjection = new Set<string>();
   private expandedProjection = new Set<string>();
+  private loadingEnsemble = new Set<string>();
+  private expandedEnsemble = new Set<string>();
   private exportedFlash: { id: string; at: number } | null = null;
+  private replayIndex: number | null = null; // null = live; else index into snapshot archive
 
   constructor() {
     this.root = document.createElement('div');
@@ -119,6 +131,15 @@ export class AnalystHUD {
     document.addEventListener('cb:hypothesis-export-copied', (e: Event) => {
       const ce = e as CustomEvent<{ hypothesisId: string }>;
       this.exportedFlash = { id: ce.detail.hypothesisId, at: Date.now() };
+      if (this.visible) this.render();
+    });
+    subscribeBudget(() => {
+      if (this.visible) this.render();
+    });
+    subscribeSnapshotArchive(() => {
+      if (this.visible && this.replayIndex === null) this.render();
+    });
+    subscribeEnsemble(() => {
       if (this.visible) this.render();
     });
     document.addEventListener('cb:toggle-analyst-hud', () => this.toggle());
@@ -272,15 +293,29 @@ export class AnalystHUD {
     return chip;
   }
 
+  private effectiveSnapshot(): AnalystSnapshot | null {
+    if (this.replayIndex === null) return this.snapshot;
+    const history = getAllSnapshots();
+    if (history.length === 0) return this.snapshot;
+    const idx = Math.max(0, Math.min(history.length - 1, this.replayIndex));
+    return history[idx] ?? this.snapshot;
+  }
+
   private buildHypothesesSection(): HTMLElement {
     const sec = document.createElement('section');
     sec.className = 'analyst-hud-section';
 
     const h = document.createElement('h3');
-    h.textContent = 'Hypotheses';
+    const snap = this.effectiveSnapshot();
+    const isReplay = this.replayIndex !== null;
+    h.textContent = isReplay && snap
+      ? `Hypotheses — replay ${ageLabel(Date.now() - snap.timestamp)} ago`
+      : 'Hypotheses';
     sec.append(h);
 
-    const hypotheses = this.snapshot?.hypotheses ?? [];
+    sec.append(this.buildReplayScrubber());
+
+    const hypotheses = snap?.hypotheses ?? [];
     const visible = hypotheses.slice(0, MAX_VISIBLE);
     if (visible.length === 0) {
       const empty = document.createElement('p');
@@ -291,6 +326,48 @@ export class AnalystHUD {
     }
     for (const h of visible) sec.append(this.buildHypothesisRow(h));
     return sec;
+  }
+
+  private buildReplayScrubber(): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-scrubber';
+    const history = getAllSnapshots();
+    if (history.length < 2) {
+      // Nothing meaningful to replay.
+      return wrap;
+    }
+    const max = history.length - 1;
+    const value = this.replayIndex ?? max;
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = String(max);
+    slider.value = String(value);
+    slider.className = 'analyst-hud-scrubber-slider';
+    slider.addEventListener('input', () => {
+      const idx = Number.parseInt(slider.value, 10);
+      this.replayIndex = idx === max ? null : idx;
+      this.render();
+    });
+
+    const live = document.createElement('button');
+    live.className = 'analyst-hud-scrubber-live';
+    live.textContent = this.replayIndex === null ? 'live' : 'go live';
+    live.disabled = this.replayIndex === null;
+    live.addEventListener('click', () => {
+      this.replayIndex = null;
+      this.render();
+    });
+
+    const label = document.createElement('span');
+    label.className = 'analyst-hud-scrubber-label';
+    const snap = history[value];
+    const ago = snap ? ageLabel(Date.now() - snap.timestamp) : 'now';
+    label.textContent = `${ago} ago · ${value + 1}/${max + 1}`;
+
+    wrap.append(slider, label, live);
+    return wrap;
   }
 
   private buildHypothesisRow(h: Hypothesis): HTMLElement {
@@ -309,9 +386,35 @@ export class AnalystHUD {
       this.buildHypQuestions(h),
       this.buildHypSkeptic(h),
       this.buildHypProjection(h),
+      this.buildHypEnsemble(h),
       this.buildHypActions(h),
     );
     return row;
+  }
+
+  private buildHypEnsemble(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-ensemble';
+    const cached = getCachedEnsemble(h);
+    if (!cached || !this.expandedEnsemble.has(h.id)) return wrap;
+    if (cached.takes.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'analyst-hud-ensemble-empty';
+      empty.textContent = cached.partial
+        ? 'Ensemble partial — cloud budget exhausted or all personas failed.'
+        : 'No takes returned.';
+      wrap.append(empty);
+      return wrap;
+    }
+    for (const take of cached.takes) {
+      const line = document.createElement('p');
+      line.className = `analyst-hud-ensemble-take analyst-hud-ensemble-${take.persona}`;
+      const label = document.createElement('strong');
+      label.textContent = `${take.persona}: `;
+      line.append(label, document.createTextNode(take.text));
+      wrap.append(line);
+    }
+    return wrap;
   }
 
   private buildHypProjection(h: Hypothesis): HTMLElement {
@@ -535,10 +638,40 @@ export class AnalystHUD {
     });
 
     const simulate = this.buildSimulateButton(h);
+    const perspectives = this.buildEnsembleButton(h);
     const copy = this.buildCopyButton(h);
 
-    actions.append(up, down, simulate, copy);
+    actions.append(up, down, simulate, perspectives, copy);
     return actions;
+  }
+
+  private buildEnsembleButton(h: Hypothesis): HTMLElement {
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-ensemble-btn';
+    const cached = getCachedEnsemble(h);
+    const loading = this.loadingEnsemble.has(h.id);
+    const expanded = this.expandedEnsemble.has(h.id);
+    btn.textContent = ensembleButtonLabel(loading, Boolean(cached), expanded);
+    btn.title = cached
+      ? 'Toggle the stored ensemble perspectives'
+      : '3 personas (analyst / skeptic / pragmatist) take on this hypothesis';
+    btn.disabled = loading;
+    btn.addEventListener('click', () => {
+      if (cached) {
+        if (expanded) this.expandedEnsemble.delete(h.id);
+        else this.expandedEnsemble.add(h.id);
+        this.render();
+        return;
+      }
+      this.loadingEnsemble.add(h.id);
+      this.render();
+      void runEnsemble(h).finally(() => {
+        this.loadingEnsemble.delete(h.id);
+        this.expandedEnsemble.add(h.id);
+        this.render();
+      });
+    });
+    return btn;
   }
 
   private buildSimulateButton(h: Hypothesis): HTMLElement {
@@ -691,9 +824,18 @@ export class AnalystHUD {
       const pct = Math.round((stats.hits / total) * 100);
       parts.push(`${kind}: ${pct}% (${total})`);
     }
-    f.textContent = parts.length > 0
+    const accuracyLine = document.createElement('div');
+    accuracyLine.textContent = parts.length > 0
       ? `Accuracy — ${parts.join(' · ')}`
       : 'Accuracy — insufficient data.';
+    const budget = getBudgetStatus();
+    const budgetLine = document.createElement('div');
+    budgetLine.className = budget.exhausted ? 'analyst-hud-budget-exhausted' : 'analyst-hud-budget';
+    budgetLine.textContent =
+      `LLM — ${budget.cloud}/${budget.cap} cloud · ${budget.local} local today` +
+      (budget.exhausted ? ' (cloud cap reached)' : '');
+    budgetLine.title = 'Daily cloud-LLM cap. Local calls are uncounted. Change via the settings overlay.';
+    f.append(accuracyLine, budgetLine);
     return f;
   }
 }

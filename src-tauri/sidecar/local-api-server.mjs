@@ -1837,6 +1837,9 @@ async function dispatch(requestUrl, req, routes, context) {
           hotEntities: Array.isArray(body.hotEntities) ? body.hotEntities.slice(0, 20) : [],
           entityCount: typeof body.entityCount === 'number' ? body.entityCount : 0,
           ghostMode: !!body.ghostMode,
+          debugLog: Array.isArray(body.debugLog) ? body.debugLog.slice(-100) : [],
+          debugErrorCounts: body.debugErrorCounts && typeof body.debugErrorCounts === 'object' ? body.debugErrorCounts : {},
+          metrics: body.metrics && typeof body.metrics === 'object' ? body.metrics : null,
         };
         context._analystState = safe;
         return json({ ok: true });

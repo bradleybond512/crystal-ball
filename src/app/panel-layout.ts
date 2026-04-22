@@ -113,7 +113,10 @@ import { startPressureBaselines } from '@/services/pressure-baselines';
 import { startBriefingArchive } from '@/services/briefing-archive';
 import { startHypothesisNotifier } from '@/services/hypothesis-notifier';
 import { startSnapshotArchive } from '@/services/snapshot-archive';
+import { startReasoningDebug } from '@/services/reasoning-debug';
+import { startReasoningMetrics } from '@/services/reasoning-metrics';
 import { AnalystHUD } from '@/components/AnalystHUD';
+import { ReasoningDebugOverlay, ensureReasoningDebugCss } from '@/components/ReasoningDebugOverlay';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
 import { startAlertDebug } from '@/services/alert-debug';
@@ -523,6 +526,9 @@ export class PanelLayoutManager implements AppModule {
  startThreatCorridor();
  startPeriodicityDetector();
  startSilenceAnomaly();
+ // Debug + metrics first so every subsequent start() call can log.
+ startReasoningDebug();
+ startReasoningMetrics();
  // Subscribers FIRST — they all listen for cb:analyst-hypotheses or
  // cb:mode-advisory and would miss the first event if started after the
  // emitters. The emitters (mode-forecast, analyst-loop) also defer their
@@ -546,6 +552,9 @@ export class PanelLayoutManager implements AppModule {
  startAnalystLoop();
  const analystHud = new AnalystHUD();
  analystHud.mount(document.body);
+ ensureReasoningDebugCss();
+ const debugOverlay = new ReasoningDebugOverlay();
+ debugOverlay.mount(document.body);
  document.addEventListener('keydown', (e: KeyboardEvent) => {
    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
      e.preventDefault();

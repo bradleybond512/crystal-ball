@@ -18,6 +18,8 @@
 import { runClaudeAgent } from './claude-agent';
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
 import { recordCall, reserveCloudCall } from './llm-budget';
+import { logDebug } from './reasoning-debug';
+import { recordLatency, incrementCounter } from './reasoning-metrics';
 
 export type LlmProvider = 'local' | 'cloud-agent' | 'cloud-chat' | 'none';
 
@@ -58,6 +60,7 @@ async function tryLocal(prompt: string, options: LlmOptions): Promise<LlmResult 
     ? combineSignals(controller.signal, options.signal)
     : controller.signal;
 
+  const t0 = performance.now();
   try {
     const res = await fetch(`${base}${LOCAL_ENDPOINT}`, {
       method: 'POST',
@@ -69,18 +72,43 @@ async function tryLocal(prompt: string, options: LlmOptions): Promise<LlmResult 
       }),
       signal,
     });
-    if (!res.ok) return null;
+    const latencyMs = performance.now() - t0;
+    recordLatency('llm.local', latencyMs);
+    if (!res.ok) {
+      logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
+        message: `local ${res.status}`, latencyMs, data: { status: res.status, promptChars: prompt.length } });
+      incrementCounter('llm.local.non-ok');
+      return null;
+    }
     const parsed = await res.json() as LocalResponseShape;
     let text = '';
     if (typeof parsed.response === 'string') text = parsed.response;
     else if (typeof parsed.text === 'string') text = parsed.text;
-    if (!text || parsed.error) return null;
+    if (!text || parsed.error) {
+      logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
+        message: 'local returned empty/error', latencyMs,
+        data: { promptChars: prompt.length, hasError: !!parsed.error } });
+      incrementCounter('llm.local.empty');
+      return null;
+    }
+    logDebug({ level: 'info', category: 'llm', source: 'llm-adapter',
+      message: 'local ok', latencyMs,
+      data: { promptChars: prompt.length, responseChars: text.length,
+              model: typeof parsed.model === 'string' ? parsed.model : undefined } });
+    incrementCounter('llm.local.success');
     return {
       text,
       provider: 'local',
       model: typeof parsed.model === 'string' ? parsed.model : undefined,
     };
-  } catch {
+  } catch (error) {
+    const latencyMs = performance.now() - t0;
+    recordLatency('llm.local', latencyMs);
+    logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
+      message: 'local threw', latencyMs,
+      data: { error: error instanceof Error ? error.message : String(error),
+              promptChars: prompt.length } });
+    incrementCounter('llm.local.error');
     return null;
   } finally {
     clearTimeout(timer);
@@ -88,11 +116,31 @@ async function tryLocal(prompt: string, options: LlmOptions): Promise<LlmResult 
 }
 
 async function tryCloudAgent(prompt: string, options: LlmOptions): Promise<LlmResult | null> {
+  const t0 = performance.now();
   try {
     const res = await runClaudeAgent(prompt, options.signal);
-    if (!res.response) return null;
+    const latencyMs = performance.now() - t0;
+    recordLatency('llm.cloud-agent', latencyMs);
+    if (!res.response) {
+      logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
+        message: 'cloud-agent empty', latencyMs,
+        data: { promptChars: prompt.length } });
+      incrementCounter('llm.cloud-agent.empty');
+      return null;
+    }
+    logDebug({ level: 'info', category: 'llm', source: 'llm-adapter',
+      message: 'cloud-agent ok', latencyMs,
+      data: { promptChars: prompt.length, responseChars: res.response.length, model: res.model } });
+    incrementCounter('llm.cloud-agent.success');
     return { text: res.response, provider: 'cloud-agent', model: res.model };
-  } catch {
+  } catch (error) {
+    const latencyMs = performance.now() - t0;
+    recordLatency('llm.cloud-agent', latencyMs);
+    logDebug({ level: 'error', category: 'llm', source: 'llm-adapter',
+      message: 'cloud-agent threw', latencyMs,
+      data: { error: error instanceof Error ? error.message : String(error),
+              promptChars: prompt.length } });
+    incrementCounter('llm.cloud-agent.error');
     return null;
   }
 }

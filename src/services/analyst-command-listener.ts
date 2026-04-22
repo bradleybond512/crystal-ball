@@ -28,6 +28,8 @@ import { isGhostMode } from './mode-manager';
 import type { Hypothesis, AnalystSnapshot } from './analyst-loop';
 import { thumbsUp, thumbsDown, signatureFor } from './hypothesis-feedback';
 import { putMemory, getMemory } from './reasoning-memory';
+import { logDebug } from './reasoning-debug';
+import { recordLatency, incrementCounter } from './reasoning-metrics';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -141,9 +143,10 @@ function findHypothesis(cmd: AnalystCommand): Hypothesis | null {
   return null;
 }
 
-function applyCommand(cmd: AnalystCommand): void {
+/** Returns true iff a matching hypothesis was found and the command applied. */
+function applyCommand(cmd: AnalystCommand): boolean {
   const h = findHypothesis(cmd);
-  if (!h) return; // stale or unknown — drop silently
+  if (!h) return false; // stale or unknown — drop silently
   switch (cmd.kind) {
     case 'thumbs_up': { thumbsUp(h); break; }
     case 'thumbs_down': { thumbsDown(h); break; }
@@ -153,6 +156,7 @@ function applyCommand(cmd: AnalystCommand): void {
       break;
     }
   }
+  return true;
 }
 
 // ── Polling loop ─────────────────────────────────────────────────────────────
@@ -163,16 +167,42 @@ let lastSeenAt = 0;
 
 async function poll(): Promise<void> {
   if (!isDesktopRuntime()) return;
+  const t0 = performance.now();
   try {
     const res = await fetch(`${ENDPOINT}?since=${lastSeenAt}`);
-    if (!res.ok) return;
-    const parsed = await res.json() as CommandResponse;
-    if (!parsed || !Array.isArray(parsed.commands)) return;
-    for (const cmd of parsed.commands) {
-      lastSeenAt = Math.max(lastSeenAt, cmd.issuedAt);
-      applyCommand(cmd);
+    if (!res.ok) {
+      recordLatency('cmd-poll', performance.now() - t0);
+      incrementCounter('cmd-poll.non-ok');
+      return;
     }
-  } catch { /* silent */ }
+    const parsed = await res.json() as CommandResponse;
+    if (!parsed || !Array.isArray(parsed.commands)) {
+      recordLatency('cmd-poll', performance.now() - t0);
+      return;
+    }
+    const commands = parsed.commands;
+    let matched = 0;
+    let dropped = 0;
+    for (const cmd of commands) {
+      lastSeenAt = Math.max(lastSeenAt, cmd.issuedAt);
+      const applied = applyCommand(cmd);
+      if (applied) matched += 1; else dropped += 1;
+    }
+    recordLatency('cmd-poll', performance.now() - t0);
+    if (commands.length > 0) {
+      logDebug({ level: 'info', category: 'commands', source: 'analyst-command-listener',
+        message: `drained ${commands.length}`,
+        data: { total: commands.length, matched, dropped } });
+      incrementCounter('cmd-poll.drained', commands.length);
+      incrementCounter('cmd-poll.dropped', dropped);
+    }
+  } catch (error) {
+    recordLatency('cmd-poll', performance.now() - t0);
+    incrementCounter('cmd-poll.error');
+    logDebug({ level: 'warn', category: 'commands', source: 'analyst-command-listener',
+      message: 'poll threw',
+      data: { error: error instanceof Error ? error.message : String(error) } });
+  }
 }
 
 function scheduleNext(): void {

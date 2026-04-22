@@ -25,6 +25,8 @@ import { situationEngine } from './situation-engine';
 import { anomalyEngine } from './anomaly-detection';
 import type { Situation, SituationDomain } from './situation-types';
 import { isAboveNormal, deviationSigma, getBaseline } from './pressure-baselines';
+import { logDebug } from './reasoning-debug';
+import { recordLatency, incrementCounter } from './reasoning-metrics';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -197,6 +199,7 @@ export function getForecastSnapshot(): ForecastSnapshot | null {
 }
 
 export function runForecastCycle(): ForecastSnapshot {
+  const t0 = performance.now();
   const situations = situationEngine.getSituations();
   const domains: ForecastDomain[] = ['finance', 'security', 'disaster', 'cyber'];
   const advisories: ModeAdvisory[] = [];
@@ -246,6 +249,12 @@ export function runForecastCycle(): ForecastSnapshot {
   };
   persist(snapshot);
   document.dispatchEvent(new CustomEvent<ForecastSnapshot>(EVENT_NAME, { detail: snapshot }));
+  const latencyMs = performance.now() - t0;
+  recordLatency('forecast-cycle', latencyMs);
+  incrementCounter('forecast-cycle.runs');
+  logDebug({ level: 'info', category: 'forecast', source: 'mode-forecast',
+    message: 'cycle complete', latencyMs,
+    data: { advisories: advisories.length, pressure: { ...pressure } } });
   return snapshot;
 }
 

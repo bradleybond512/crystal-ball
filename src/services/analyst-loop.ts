@@ -28,6 +28,8 @@ import { getHypothesisAccuracyMult } from './hypothesis-accuracy';
 import { isDismissed } from './analyst-command-listener';
 import { dedupeHypotheses } from './hypothesis-dedupe';
 import { getWatchlistHypotheses } from './watchlist-hypothesis-bridge';
+import { logDebug } from './reasoning-debug';
+import { recordLatency, incrementCounter } from './reasoning-metrics';
 import type { Situation } from './situation-types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -269,19 +271,21 @@ export function getAnalystSnapshot(): AnalystSnapshot | null {
 // ── Main cycle ────────────────────────────────────────────────────────────────
 
 export function runAnalystCycle(): AnalystSnapshot {
+  const t0 = performance.now();
   const cached = getCachedSynthesis();
   const clusters = cached?.clusters ?? [];
   const situations = situationEngine.getSituations();
   const anomalies = anomalyEngine.getActiveAnomalies();
   const alerts = unifiedAlertStore.getAll();
 
-  const hypotheses = rank([
+  const raw = [
     ...fromClusters(clusters),
     ...fromAnomalies(anomalies),
     ...fromAlertBurst(alerts),
     ...fromSituations(situations),
     ...getWatchlistHypotheses(),
-  ]);
+  ];
+  const hypotheses = rank(raw);
 
   const snapshot: AnalystSnapshot = {
     timestamp: Date.now(),
@@ -291,6 +295,21 @@ export function runAnalystCycle(): AnalystSnapshot {
 
   persist(snapshot);
   document.dispatchEvent(new CustomEvent<AnalystSnapshot>(EVENT_NAME, { detail: snapshot }));
+
+  const latencyMs = performance.now() - t0;
+  recordLatency('analyst-cycle', latencyMs);
+  incrementCounter('analyst-cycle.runs');
+  logDebug({ level: 'info', category: 'hypothesis', source: 'analyst-loop',
+    message: 'cycle complete', latencyMs,
+    data: {
+      rawHypotheses: raw.length,
+      rankedHypotheses: hypotheses.length,
+      clusters: clusters.length,
+      anomalies: anomalies.length,
+      alerts: alerts.length,
+      situations: situations.length,
+      aiEnriched: snapshot.aiEnriched,
+    } });
   return snapshot;
 }
 
@@ -313,12 +332,18 @@ function scheduleNext(): void {
 export function startAnalystLoop(): void {
   if (started) return;
   started = true;
+  logDebug({ level: 'info', category: 'bootstrap', source: 'analyst-loop', message: 'start' });
   // Defer the initial cycle to the next task so subscribers registered
   // later in the bootstrap sequence (hypothesis-threads, entities,
   // accuracy, skeptic, notifier, snapshot-archive, sidecar-pusher,
   // command-listener) are all listening before we dispatch.
   setTimeout(() => {
-    try { runAnalystCycle(); } catch { /* ignore */ }
+    try { runAnalystCycle(); } catch (error) {
+      incrementCounter('analyst-cycle.errors');
+      logDebug({ level: 'error', category: 'hypothesis', source: 'analyst-loop',
+        message: 'initial cycle threw',
+        data: { error: error instanceof Error ? error.message : String(error) } });
+    }
   }, 0);
   scheduleNext();
 }

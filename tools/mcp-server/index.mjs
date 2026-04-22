@@ -219,6 +219,12 @@ server.registerTool('get_analyst_accuracy', analystSchemas.get_analyst_accuracy,
 
 server.registerTool('get_hot_entities', analystSchemas.get_hot_entities, async (args) => textResult(await analyst.get_hot_entities(args)));
 
+server.registerTool('submit_hypothesis_feedback', analystSchemas.submit_hypothesis_feedback, async (args) => textResult(await analyst.submit_hypothesis_feedback(args)));
+
+server.registerTool('dismiss_hypothesis', analystSchemas.dismiss_hypothesis, async (args) => textResult(await analyst.dismiss_hypothesis(args)));
+
+server.registerTool('run_skeptic_now', analystSchemas.run_skeptic_now, async (args) => textResult(await analyst.run_skeptic_now(args)));
+
 // ---- Help ----
 
 server.registerTool('help', helpSchemas.help, async (args) => textResult(await helpTools.help(args)));

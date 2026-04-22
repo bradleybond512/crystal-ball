@@ -19,6 +19,7 @@
 
 import { unifiedAlertStore, type UnifiedAlert } from './unified-alerts';
 import { isGhostMode } from './mode-manager';
+import { getMemory, putMemory } from './reasoning-memory';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -55,21 +56,26 @@ interface LearnerState {
 
 let state: LearnerState = { weights: {}, writeCount: 0 };
 
+function applyState(parsed: Partial<LearnerState> | null): void {
+  if (!parsed) return;
+  if (parsed.weights && typeof parsed.weights === 'object') {
+    state.weights = parsed.weights;
+  }
+  if (typeof parsed.writeCount === 'number') {
+    state.writeCount = parsed.writeCount;
+  }
+}
+
 function load(): void {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as Partial<LearnerState>;
-    if (parsed.weights && typeof parsed.weights === 'object') {
-      state.weights = parsed.weights;
-    }
-    if (typeof parsed.writeCount === 'number') {
-      state.writeCount = parsed.writeCount;
-    }
+    if (raw) applyState(JSON.parse(raw) as Partial<LearnerState>);
   } catch { /* ignore */ }
+  void getMemory<LearnerState>(STORAGE_KEY).then(applyState);
 }
 function save(): void {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* quota */ }
+  void putMemory(STORAGE_KEY, state);
 }
 
 // ── Tokenization ──────────────────────────────────────────────────────────────

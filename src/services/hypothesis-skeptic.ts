@@ -15,7 +15,7 @@
  *   - requires `aiClaude` runtime feature
  */
 
-import { runClaudeAgent } from './claude-agent';
+import { generateText } from './llm-adapter';
 import { isGhostMode } from './mode-manager';
 import { isFeatureAvailable } from './runtime-config';
 import { signatureFor } from './hypothesis-feedback';
@@ -124,13 +124,14 @@ async function reviewOne(h: Hypothesis): Promise<void> {
   if (inFlight.has(sig)) return;
   inFlight.add(sig);
   try {
-    const res = await runClaudeAgent(buildSkepticPrompt(h));
+    const res = await generateText(buildSkepticPrompt(h), { maxTokens: 300 });
+    if (!res.text) throw new Error('empty response');
     const note: SkepticNote = {
       signature: sig,
       hypothesisId: h.id,
       generatedAt: Date.now(),
-      summary: summarize(res.response),
-      text: res.response,
+      summary: summarize(res.text),
+      text: res.text,
     };
     notes.set(sig, note);
     save();
@@ -178,6 +179,14 @@ export function startHypothesisSkeptic(): void {
   document.addEventListener('cb:analyst-hypotheses', (e: Event) => {
     const ce = e as CustomEvent<AnalystSnapshot>;
     handleSnapshot(ce.detail);
+  });
+  // On-demand skeptic review requested by an external agent via MCP.
+  // Bypasses the enabled/ghost/feature guards below-loop since the user
+  // explicitly asked for it via the analyst-command queue.
+  document.addEventListener('cb:hypothesis-skeptic-requested', (e: Event) => {
+    if (!isFeatureAvailable('aiClaude')) return;
+    const ce = e as CustomEvent<Hypothesis>;
+    void reviewOne(ce.detail);
   });
 }
 

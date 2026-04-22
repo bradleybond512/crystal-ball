@@ -12,6 +12,7 @@
 import type { Hypothesis, AnalystSnapshot } from './analyst-loop';
 import type { EscalationRisk } from './threat-synthesis';
 import { signatureFor } from './hypothesis-feedback';
+import { getMemory, putMemory } from './reasoning-memory';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,17 +60,26 @@ let loaded = false;
 function load(): void {
   if (loaded) return;
   loaded = true;
+  // Synchronous localStorage bootstrap so first-cycle reads aren't empty.
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const arr = JSON.parse(raw) as HypothesisThread[];
-    for (const t of arr) threads.set(t.signature, t);
+    if (raw) {
+      const arr = JSON.parse(raw) as HypothesisThread[];
+      for (const t of arr) threads.set(t.signature, t);
+    }
   } catch { /* ignore */ }
+  // Async IDB hydrate replaces the bootstrap data with the richer store.
+  void getMemory<HypothesisThread[]>(STORAGE_KEY).then(arr => {
+    if (!arr || arr.length === 0) return;
+    threads.clear();
+    for (const t of arr) threads.set(t.signature, t);
+  });
 }
 
 function save(): void {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...threads.values()])); }
-  catch { /* quota */ }
+  const arr = [...threads.values()];
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); } catch { /* quota */ }
+  void putMemory(STORAGE_KEY, arr);
 }
 
 // ── Thread update ────────────────────────────────────────────────────────────

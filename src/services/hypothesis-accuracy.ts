@@ -16,6 +16,7 @@ import { situationEngine } from './situation-engine';
 import { unifiedAlertStore } from './unified-alerts';
 import { scoreAlert } from './alert-routing';
 import { signatureFor } from './hypothesis-feedback';
+import { getMemory, putMemory } from './reasoning-memory';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -58,23 +59,35 @@ interface Persisted {
   byKind: Record<string, AccuracyStats>;
 }
 
+function hydrate(parsed: Partial<Persisted>): void {
+  if (Array.isArray(parsed.pending)) {
+    pending.length = 0;
+    pending.push(...parsed.pending);
+  }
+  if (parsed.bySignature) {
+    bySignature.clear();
+    for (const [k, v] of Object.entries(parsed.bySignature)) bySignature.set(k, v);
+  }
+  if (parsed.byKind) {
+    byKind.clear();
+    for (const [k, v] of Object.entries(parsed.byKind)) {
+      byKind.set(k as Hypothesis['kind'], v);
+    }
+  }
+}
+
 function load(): void {
   if (loaded) return;
   loaded = true;
+  // Synchronous localStorage bootstrap.
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as Partial<Persisted>;
-    if (Array.isArray(parsed.pending)) pending.push(...parsed.pending);
-    if (parsed.bySignature) {
-      for (const [k, v] of Object.entries(parsed.bySignature)) bySignature.set(k, v);
-    }
-    if (parsed.byKind) {
-      for (const [k, v] of Object.entries(parsed.byKind)) {
-        byKind.set(k as Hypothesis['kind'], v);
-      }
-    }
+    if (raw) hydrate(JSON.parse(raw) as Partial<Persisted>);
   } catch { /* ignore */ }
+  // Async IDB hydrate, replacing bootstrap with canonical store.
+  void getMemory<Persisted>(STORAGE_KEY).then(value => {
+    if (value) hydrate(value);
+  });
 }
 
 function save(): void {
@@ -84,6 +97,7 @@ function save(): void {
     byKind: Object.fromEntries(byKind),
   };
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(out)); } catch { /* quota */ }
+  void putMemory(STORAGE_KEY, out);
 }
 
 // ── Stamping ─────────────────────────────────────────────────────────────────

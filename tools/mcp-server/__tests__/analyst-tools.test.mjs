@@ -2,11 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeAnalystTools, schemas } from '../tools/analyst.mjs';
 
-function fakeClient(state) {
+function fakeClient(state, posts = []) {
   return {
     async get(route) {
       assert.equal(route, '/api/analyst-state');
       return state;
+    },
+    async post(route, body) {
+      posts.push({ route, body });
+      return { ok: true, id: `cmd-${posts.length}` };
     },
   };
 }
@@ -83,6 +87,40 @@ test('analyst tools', async (t) => {
     const res = await tools.get_analyst_accuracy({});
     assert.equal(res.available, true);
     assert.match(res.summary, /alert-burst: 80%/);
+  });
+
+  await t.test('submit_hypothesis_feedback POSTs to command queue', async () => {
+    const posts = [];
+    const tools = makeAnalystTools(fakeClient({ available: true }, posts));
+    const res = await tools.submit_hypothesis_feedback({ vote: 'down', hypothesis_id: 'h1' });
+    assert.equal(res.submitted, true);
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].route, '/api/analyst-commands');
+    assert.equal(posts[0].body.kind, 'thumbs_down');
+    assert.equal(posts[0].body.hypothesisId, 'h1');
+  });
+
+  await t.test('submit_hypothesis_feedback requires id or signature', async () => {
+    const tools = makeAnalystTools(fakeClient({ available: true }));
+    const res = await tools.submit_hypothesis_feedback({ vote: 'up' });
+    assert.match(res.error, /Provide either/);
+  });
+
+  await t.test('dismiss_hypothesis POSTs a dismiss command', async () => {
+    const posts = [];
+    const tools = makeAnalystTools(fakeClient({ available: true }, posts));
+    const res = await tools.dismiss_hypothesis({ signature: 'sig-1' });
+    assert.equal(res.submitted, true);
+    assert.equal(posts[0].body.kind, 'dismiss');
+    assert.equal(posts[0].body.signature, 'sig-1');
+  });
+
+  await t.test('run_skeptic_now POSTs a run_skeptic command', async () => {
+    const posts = [];
+    const tools = makeAnalystTools(fakeClient({ available: true }, posts));
+    const res = await tools.run_skeptic_now({ hypothesis_id: 'h2' });
+    assert.equal(res.submitted, true);
+    assert.equal(posts[0].body.kind, 'run_skeptic');
   });
 
   await t.test('hot entities tool', async () => {

@@ -12,7 +12,7 @@
  *   - requires `aiClaude` runtime feature
  */
 
-import { runClaudeAgent } from './claude-agent';
+import { generateText } from './llm-adapter';
 import { isGhostMode } from './mode-manager';
 import { isFeatureAvailable } from './runtime-config';
 import type { ForecastSnapshot, ForecastDomain, ModeAdvisory } from './mode-forecast';
@@ -27,6 +27,8 @@ export interface AutoBrief {
   text: string;
   /** Abbreviated summary suitable for HUD. */
   summary: string;
+  /** Which provider generated this brief. */
+  provider?: 'local' | 'cloud-agent' | 'cloud-chat' | 'none';
 }
 
 // ── Tuning ────────────────────────────────────────────────────────────────────
@@ -116,13 +118,15 @@ async function runBrief(domain: ForecastDomain, pressure: number): Promise<void>
   if (inFlight.has(domain)) return;
   inFlight.add(domain);
   try {
-    const res = await runClaudeAgent(DOMAIN_PROMPT[domain]);
+    const res = await generateText(DOMAIN_PROMPT[domain], { maxTokens: 500 });
+    if (!res.text) return;
     const brief: AutoBrief = {
       domain,
       pressure,
       generatedAt: Date.now(),
-      text: res.response,
-      summary: summarize(res.response),
+      text: res.text,
+      summary: summarize(res.text),
+      provider: res.provider,
     };
     persistBrief(brief);
     document.dispatchEvent(new CustomEvent<AutoBrief>(EVENT_NAME, { detail: brief }));

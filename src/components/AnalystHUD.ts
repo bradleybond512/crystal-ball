@@ -281,6 +281,14 @@ export class AnalystHUD {
 
     const thread = getThreadFor(h);
     head.append(kind, risk, conf);
+    const fused = (h as Hypothesis & { fusedFrom?: string[] }).fusedFrom;
+    if (fused && fused.length > 0) {
+      const fuseBadge = document.createElement('span');
+      fuseBadge.className = 'analyst-hud-fused';
+      fuseBadge.textContent = `+${fused.length}`;
+      fuseBadge.title = `Fused from: ${fused.join(', ')}`;
+      head.append(fuseBadge);
+    }
     if (thread && thread.cycleCount > 1) {
       const badge = document.createElement('span');
       badge.className = `analyst-hud-thread analyst-hud-thread-${thread.trajectory}`;

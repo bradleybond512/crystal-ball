@@ -107,6 +107,7 @@ import { startHypothesisEntities } from '@/services/hypothesis-entities';
 import { startHypothesisSkeptic } from '@/services/hypothesis-skeptic';
 import { startPressureHistory } from '@/services/pressure-history';
 import { startSidecarPusher } from '@/services/sidecar-pusher';
+import { startAnalystCommandListener } from '@/services/analyst-command-listener';
 import { AnalystHUD } from '@/components/AnalystHUD';
 import { startSidebarHeat } from '@/services/sidebar-heat';
 import { startAlertCorrelator } from '@/services/alert-correlator';
@@ -527,6 +528,7 @@ export class PanelLayoutManager implements AppModule {
  startAutoBrief();
  startHypothesisSkeptic();
  startSidecarPusher();
+ startAnalystCommandListener();
  const analystHud = new AnalystHUD();
  analystHud.mount(document.body);
  document.addEventListener('keydown', (e: KeyboardEvent) => {

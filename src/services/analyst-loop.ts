@@ -25,6 +25,8 @@ import { getCachedSynthesis, type CrossDomainCluster, type EscalationRisk } from
 import { isGhostMode, getGhostRefreshMultiplier } from './mode-manager';
 import { getHypothesisFeedbackMult } from './hypothesis-feedback';
 import { getHypothesisAccuracyMult } from './hypothesis-accuracy';
+import { isDismissed } from './analyst-command-listener';
+import { dedupeHypotheses } from './hypothesis-dedupe';
 import type { Situation } from './situation-types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -239,11 +241,15 @@ function fromSituations(situations: Situation[]): Hypothesis[] {
 // ── Ranking + persistence ────────────────────────────────────────────────────
 
 function rank(hypotheses: Hypothesis[]): Hypothesis[] {
-  return [...hypotheses].sort((a, b) => {
-    const riskDelta = RISK_RANK[b.risk] - RISK_RANK[a.risk];
-    if (riskDelta !== 0) return riskDelta;
-    return rankingWeight(b) - rankingWeight(a);
-  }).slice(0, MAX_HYPOTHESES);
+  const deduped = dedupeHypotheses(hypotheses);
+  return deduped
+    .filter(h => !isDismissed(h))
+    .sort((a, b) => {
+      const riskDelta = RISK_RANK[b.risk] - RISK_RANK[a.risk];
+      if (riskDelta !== 0) return riskDelta;
+      return rankingWeight(b) - rankingWeight(a);
+    })
+    .slice(0, MAX_HYPOTHESES);
 }
 
 function persist(snapshot: AnalystSnapshot): void {

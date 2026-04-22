@@ -55,6 +55,7 @@ interface LearnerState {
 }
 
 let state: LearnerState = { weights: {}, writeCount: 0 };
+let writtenSinceLoad = false;
 
 function applyState(parsed: Partial<LearnerState> | null): void {
   if (!parsed) return;
@@ -71,9 +72,13 @@ function load(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) applyState(JSON.parse(raw) as Partial<LearnerState>);
   } catch { /* ignore */ }
-  void getMemory<LearnerState>(STORAGE_KEY).then(applyState);
+  void getMemory<LearnerState>(STORAGE_KEY).then(parsed => {
+    if (writtenSinceLoad) return;
+    applyState(parsed);
+  });
 }
 function save(): void {
+  writtenSinceLoad = true;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* quota */ }
   void putMemory(STORAGE_KEY, state);
 }

@@ -300,9 +300,11 @@ let started = false;
 let timerId: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleNext(): void {
+  if (!started) return;
   // Ghost mode slows the cadence by the same multiplier the scheduler uses.
   const interval = BASE_INTERVAL_MS * (isGhostMode() ? getGhostRefreshMultiplier() : 1);
   timerId = setTimeout(() => {
+    if (!started) return;
     try { runAnalystCycle(); } catch { /* swallow — loop keeps going */ }
     scheduleNext();
   }, interval);

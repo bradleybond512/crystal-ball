@@ -64,6 +64,7 @@ const PERSONA_SYSTEMS: Record<PersonaKind, string> = {
 
 const cache = new Map<string, EnsembleResult>();
 let loaded = false;
+let writtenSinceLoad = false;
 
 function applyLoaded(arr: [string, EnsembleResult][] | null): void {
   if (!arr) return;
@@ -77,10 +78,14 @@ function load(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) applyLoaded(JSON.parse(raw) as [string, EnsembleResult][]);
   } catch { /* ignore */ }
-  void getMemory<[string, EnsembleResult][]>(STORAGE_KEY).then(applyLoaded);
+  void getMemory<[string, EnsembleResult][]>(STORAGE_KEY).then(arr => {
+    if (writtenSinceLoad) return;
+    applyLoaded(arr);
+  });
 }
 
 function save(): void {
+  writtenSinceLoad = true;
   const entries = [...cache.entries()];
   if (entries.length > MAX_CACHE) {
     entries.sort((a, b) => a[1].generatedAt - b[1].generatedAt);

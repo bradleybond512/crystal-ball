@@ -52,6 +52,7 @@ const pending: PendingHypothesis[] = [];
 const bySignature = new Map<string, AccuracyStats>();
 const byKind = new Map<Hypothesis['kind'], AccuracyStats>();
 let loaded = false;
+let writtenSinceLoad = false;
 
 interface Persisted {
   pending: PendingHypothesis[];
@@ -79,18 +80,18 @@ function hydrate(parsed: Partial<Persisted>): void {
 function load(): void {
   if (loaded) return;
   loaded = true;
-  // Synchronous localStorage bootstrap.
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) hydrate(JSON.parse(raw) as Partial<Persisted>);
   } catch { /* ignore */ }
-  // Async IDB hydrate, replacing bootstrap with canonical store.
   void getMemory<Persisted>(STORAGE_KEY).then(value => {
+    if (writtenSinceLoad) return;
     if (value) hydrate(value);
   });
 }
 
 function save(): void {
+  writtenSinceLoad = true;
   const out: Persisted = {
     pending,
     bySignature: Object.fromEntries(bySignature),

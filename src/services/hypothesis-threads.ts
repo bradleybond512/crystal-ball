@@ -56,6 +56,7 @@ const RISK_RANK: Record<EscalationRisk, number> = {
 
 const threads = new Map<string, HypothesisThread>();
 let loaded = false;
+let writtenSinceLoad = false;
 
 function load(): void {
   if (loaded) return;
@@ -68,8 +69,11 @@ function load(): void {
       for (const t of arr) threads.set(t.signature, t);
     }
   } catch { /* ignore */ }
-  // Async IDB hydrate replaces the bootstrap data with the richer store.
+  // Async IDB hydrate replaces bootstrap data with the richer store —
+  // but only if nothing has been written since load() started, otherwise
+  // a fresh write from a first-cycle event would be clobbered.
   void getMemory<HypothesisThread[]>(STORAGE_KEY).then(arr => {
+    if (writtenSinceLoad) return;
     if (!arr || arr.length === 0) return;
     threads.clear();
     for (const t of arr) threads.set(t.signature, t);
@@ -77,6 +81,7 @@ function load(): void {
 }
 
 function save(): void {
+  writtenSinceLoad = true;
   const arr = [...threads.values()];
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); } catch { /* quota */ }
   void putMemory(STORAGE_KEY, arr);

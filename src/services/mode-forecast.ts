@@ -251,7 +251,9 @@ let started = false;
 let timerId: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleNext(): void {
+  if (!started) return;
   timerId = setTimeout(() => {
+    if (!started) return;
     try { runForecastCycle(); } catch { /* keep looping */ }
     scheduleNext();
   }, BASE_INTERVAL_MS);

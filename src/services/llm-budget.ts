@@ -41,6 +41,7 @@ interface DailyCounts {
 
 let state: DailyCounts = initialState();
 let loaded = false;
+let writtenSinceLoad = false;
 
 function utcDateStr(now: Date = new Date()): string {
   const y = now.getUTCFullYear();
@@ -72,10 +73,14 @@ function load(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) applyLoaded(JSON.parse(raw) as DailyCounts);
   } catch { /* ignore */ }
-  void getMemory<DailyCounts>(STORAGE_KEY).then(applyLoaded);
+  void getMemory<DailyCounts>(STORAGE_KEY).then(value => {
+    if (writtenSinceLoad) return;
+    applyLoaded(value);
+  });
 }
 
 function save(): void {
+  writtenSinceLoad = true;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* quota */ }
   void putMemory(STORAGE_KEY, state);
 }

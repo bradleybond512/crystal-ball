@@ -50,6 +50,7 @@ const EVENT_NAME = 'cb:action-recorded';
 
 const playbooks = new Map<string, Playbook>();
 let loaded = false;
+let writtenSinceLoad = false;
 
 function applyLoaded(arr: Playbook[] | null): void {
   if (!arr) return;
@@ -63,10 +64,14 @@ function load(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) applyLoaded(JSON.parse(raw) as Playbook[]);
   } catch { /* ignore */ }
-  void getMemory<Playbook[]>(STORAGE_KEY).then(applyLoaded);
+  void getMemory<Playbook[]>(STORAGE_KEY).then(arr => {
+    if (writtenSinceLoad) return;
+    applyLoaded(arr);
+  });
 }
 
 function save(): void {
+  writtenSinceLoad = true;
   const arr = [...playbooks.values()];
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); } catch { /* quota */ }
   void putMemory(STORAGE_KEY, arr);

@@ -23,6 +23,7 @@ const EVENT_NAME = 'cb:snapshot-archived';
 
 const archive: AnalystSnapshot[] = [];
 let loaded = false;
+let writtenSinceLoad = false;
 
 function applyLoaded(arr: AnalystSnapshot[] | null): void {
   if (!Array.isArray(arr)) return;
@@ -37,10 +38,17 @@ function load(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) applyLoaded(JSON.parse(raw) as AnalystSnapshot[]);
   } catch { /* ignore */ }
-  void getMemory<AnalystSnapshot[]>(STORAGE_KEY).then(applyLoaded);
+  // Async IDB hydrate must not clobber writes that landed while it was
+  // in flight (the analyst-loop's first cycle can fire within a tick
+  // of load() being called).
+  void getMemory<AnalystSnapshot[]>(STORAGE_KEY).then(arr => {
+    if (writtenSinceLoad) return;
+    applyLoaded(arr);
+  });
 }
 
 function save(): void {
+  writtenSinceLoad = true;
   const tail = archive.slice(-MAX_SNAPSHOTS);
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tail)); } catch { /* quota */ }
   void putMemory(STORAGE_KEY, tail);

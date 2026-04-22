@@ -39,6 +39,7 @@ const EVENT_NAME = 'cb:question-answered';
 
 const cache = new Map<string, QuestionAnswer>();
 let loaded = false;
+let writtenSinceLoad = false;
 
 function cacheKey(signature: string, question: string): string {
   return `${signature}||${question.slice(0, 120)}`;
@@ -56,10 +57,14 @@ function load(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) applyLoaded(JSON.parse(raw) as [string, QuestionAnswer][]);
   } catch { /* ignore */ }
-  void getMemory<[string, QuestionAnswer][]>(STORAGE_KEY).then(applyLoaded);
+  void getMemory<[string, QuestionAnswer][]>(STORAGE_KEY).then(arr => {
+    if (writtenSinceLoad) return;
+    applyLoaded(arr);
+  });
 }
 
 function save(): void {
+  writtenSinceLoad = true;
   const entries = [...cache.entries()];
   if (entries.length > MAX_CACHE_SIZE) {
     entries.sort((a, b) => a[1].generatedAt - b[1].generatedAt);

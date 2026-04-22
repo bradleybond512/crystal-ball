@@ -24,6 +24,7 @@ const EVENT_NAME = 'cb:briefing-archived';
 
 const archive: AutoBrief[] = [];
 let loaded = false;
+let writtenSinceLoad = false;
 
 function applyLoaded(arr: AutoBrief[] | null): void {
   if (!Array.isArray(arr)) return;
@@ -38,10 +39,14 @@ function load(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) applyLoaded(JSON.parse(raw) as AutoBrief[]);
   } catch { /* ignore */ }
-  void getMemory<AutoBrief[]>(STORAGE_KEY).then(applyLoaded);
+  void getMemory<AutoBrief[]>(STORAGE_KEY).then(arr => {
+    if (writtenSinceLoad) return;
+    applyLoaded(arr);
+  });
 }
 
 function save(): void {
+  writtenSinceLoad = true;
   // Only keep the last MAX_BRIEFS in localStorage to stay under quota;
   // full archive also lives in IDB which has more headroom.
   const tail = archive.slice(-MAX_BRIEFS);

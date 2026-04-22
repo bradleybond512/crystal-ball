@@ -58,6 +58,7 @@ interface DismissRecord { signature: string; at: number }
 
 const dismissed = new Map<string, number>();
 let dismissLoaded = false;
+let dismissWrittenSinceLoad = false;
 
 function loadDismissed(): void {
   if (dismissLoaded) return;
@@ -70,6 +71,7 @@ function loadDismissed(): void {
     }
   } catch { /* ignore */ }
   void getMemory<DismissRecord[]>(DISMISSED_STORAGE_KEY).then(arr => {
+    if (dismissWrittenSinceLoad) return;
     if (!arr) return;
     for (const r of arr) dismissed.set(r.signature, r.at);
   });
@@ -82,6 +84,7 @@ function prune(): void {
 }
 
 function saveDismissed(): void {
+  dismissWrittenSinceLoad = true;
   const arr: DismissRecord[] = [...dismissed].map(([signature, at]) => ({ signature, at }));
   try { localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(arr)); } catch { /* quota */ }
   void putMemory(DISMISSED_STORAGE_KEY, arr);
@@ -158,8 +161,10 @@ async function poll(): Promise<void> {
 }
 
 function scheduleNext(): void {
+  if (!started) return;
   const interval = isGhostMode() ? GHOST_POLL_INTERVAL_MS : POLL_INTERVAL_MS;
   timer = setTimeout(() => {
+    if (!started) return;
     void poll().finally(scheduleNext);
   }, interval);
 }

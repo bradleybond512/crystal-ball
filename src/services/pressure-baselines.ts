@@ -66,6 +66,7 @@ const buckets: DomainBuckets = {
 };
 
 let loaded = false;
+let writtenSinceLoad = false;
 
 function applyLoaded(stored: Partial<DomainBuckets> | null): void {
   if (!stored) return;
@@ -84,10 +85,14 @@ function load(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) applyLoaded(JSON.parse(raw) as Partial<DomainBuckets>);
   } catch { /* ignore */ }
-  void getMemory<Partial<DomainBuckets>>(STORAGE_KEY).then(applyLoaded);
+  void getMemory<Partial<DomainBuckets>>(STORAGE_KEY).then(stored => {
+    if (writtenSinceLoad) return;
+    applyLoaded(stored);
+  });
 }
 
 function save(): void {
+  writtenSinceLoad = true;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(buckets)); } catch { /* quota */ }
   void putMemory(STORAGE_KEY, buckets);
 }

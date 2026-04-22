@@ -54,10 +54,18 @@ let lastPushAt = 0;
 const MIN_PUSH_INTERVAL_MS = 2000; // debounce to coalesce burst events
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingPayload: PushPayload = { timestamp: 0 };
+let flushInFlight = false;
 
 async function flush(): Promise<void> {
   pendingTimer = null;
   if (!isDesktopRuntime()) return;
+  // Only one in-flight POST at a time. A second flush() call during an
+  // existing fetch could otherwise deliver stale state out of order
+  // (the earlier flush snapshotted pendingPayload before the second's
+  // buildup). Re-schedule instead, so the next flush picks up the full
+  // accumulated payload.
+  if (flushInFlight) { schedule(); return; }
+  flushInFlight = true;
   const payload: PushPayload = { ...pendingPayload, timestamp: Date.now(), ghostMode: isGhostMode() };
   pendingPayload = { timestamp: 0 };
   lastPushAt = Date.now();
@@ -68,10 +76,26 @@ async function flush(): Promise<void> {
       body: JSON.stringify(payload),
     });
   } catch { /* silent — best effort */ }
+  finally {
+    flushInFlight = false;
+    // If events accumulated during the in-flight POST, push again soon.
+    if (hasPendingPayload()) schedule();
+  }
+}
+
+function hasPendingPayload(): boolean {
+  return pendingPayload.analyst !== undefined
+    || pendingPayload.forecast !== undefined
+    || (pendingPayload.accuracy?.length ?? 0) > 0
+    || (pendingPayload.threads?.length ?? 0) > 0
+    || (pendingPayload.hotEntities?.length ?? 0) > 0;
 }
 
 function schedule(): void {
   if (pendingTimer !== null) return;
+  // If a flush is in flight, skip scheduling — its finally will call
+  // schedule() again after completion (single-pending-timer invariant).
+  if (flushInFlight) return;
   const since = Date.now() - lastPushAt;
   const wait = since >= MIN_PUSH_INTERVAL_MS ? 0 : (MIN_PUSH_INTERVAL_MS - since);
   pendingTimer = setTimeout(() => { void flush(); }, wait);

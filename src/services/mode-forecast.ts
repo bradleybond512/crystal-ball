@@ -24,6 +24,7 @@
 import { situationEngine } from './situation-engine';
 import { anomalyEngine } from './anomaly-detection';
 import type { Situation, SituationDomain } from './situation-types';
+import { isAboveNormal, deviationSigma } from './pressure-baselines';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -206,16 +207,25 @@ export function runForecastCycle(): ForecastSnapshot {
     const slope = level - previousPressure[d];
 
     const wasAdvised = advised.has(d);
-    const nowAdvised = wasAdvised ? level >= CLEAR_THRESHOLD : level >= ADVISORY_THRESHOLD;
+    // Fixed-threshold check (existing behavior).
+    const passesFixedThreshold = wasAdvised ? level >= CLEAR_THRESHOLD : level >= ADVISORY_THRESHOLD;
+    // Temporal-baseline check: once the baseline has enough samples, require
+    // the reading to also be anomalous for its hour-of-week. Until then,
+    // fall back to the fixed threshold alone so boot-time isn't silent.
+    const passesTemporal = isAboveNormal(d, level);
+    const sigma = deviationSigma(d, level);
+    const nowAdvised = passesFixedThreshold && (sigma === 0 || passesTemporal);
 
     if (nowAdvised) {
       advised.add(d);
+      const eta = etaToThreshold(level, slope, ADVISORY_THRESHOLD);
       advisories.push({
         domain: d,
         pressure: level,
         slope,
-        etaMin: etaToThreshold(level, slope, ADVISORY_THRESHOLD),
-        statement: buildStatement(d, level, slope, etaToThreshold(level, slope, ADVISORY_THRESHOLD)),
+        etaMin: eta,
+        statement: buildStatement(d, level, slope, eta) +
+          (sigma >= 2 ? ` (${sigma.toFixed(1)}σ above hour-of-week baseline)` : ''),
         timestamp: Date.now(),
       });
     } else if (wasAdvised) {

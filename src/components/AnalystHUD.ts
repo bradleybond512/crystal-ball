@@ -21,6 +21,9 @@ import { getThreadFor } from '@/services/hypothesis-threads';
 import { entitiesForHypothesis, getHotEntities, type EntityMention } from '@/services/hypothesis-entities';
 import { getSkepticNote, isSkepticEnabled, setSkepticEnabled, subscribeSkeptic } from '@/services/hypothesis-skeptic';
 import { getPressureHistory, buildSparklinePath, subscribePressureHistory } from '@/services/pressure-history';
+import { getPlaybookFor, summarizePlaybook, recordAction, noteRecurrence } from '@/services/action-memory';
+import { suggestQuestions, getCachedAnswer, askQuestion, subscribeQuestionAnswered, type QuestionAnswer } from '@/services/question-suggester';
+import { getArchive, subscribeBriefingArchive } from '@/services/briefing-archive';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
 
@@ -37,6 +40,13 @@ const DOMAIN_GLYPH = {
   finance: '$', security: '*', disaster: '!', cyber: '#',
 } as const;
 
+function ageLabel(ms: number): string {
+  const mins = Math.max(0, Math.round(ms / 60_000));
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h`;
+}
+
 export class AnalystHUD {
   private readonly root: HTMLElement;
   private snapshot: AnalystSnapshot | null = null;
@@ -45,6 +55,9 @@ export class AnalystHUD {
   private pressure: Record<ForecastDomain, PressureSample[]>;
   private visible = false;
   private expandedSkeptic = new Set<string>();
+  private expandedQuestion = new Set<string>();
+  private loadingQuestion = new Set<string>();
+  private answers = new Map<string, QuestionAnswer>();
 
   constructor() {
     this.root = document.createElement('div');
@@ -80,6 +93,15 @@ export class AnalystHUD {
     subscribeSkeptic(() => {
       if (this.visible) this.render();
     });
+    subscribeQuestionAnswered((answer) => {
+      // Cache on HUD state; re-render if visible so the answer expands.
+      for (const [key] of this.answers) if (key.endsWith(`||${answer.question}`)) this.answers.delete(key);
+      this.answers.set(`__last||${answer.question}`, answer);
+      if (this.visible) this.render();
+    });
+    subscribeBriefingArchive(() => {
+      if (this.visible) this.render();
+    });
     document.addEventListener('cb:toggle-analyst-hud', () => this.toggle());
     document.addEventListener('cb:hypothesis-feedback', () => {
       if (this.visible) this.render();
@@ -110,6 +132,7 @@ export class AnalystHUD {
       this.buildHotEntitiesSection(),
       this.buildHypothesesSection(),
       this.buildBriefsSection(),
+      this.buildTimelineSection(),
       this.buildFooter(),
     );
     replaceChildren(this.root, card);
@@ -253,16 +276,114 @@ export class AnalystHUD {
     const row = document.createElement('div');
     row.className = 'analyst-hud-hyp';
     row.style.borderLeftColor = RISK_COLORS[h.risk];
+    // Note recurrence (playbook bookkeeping) exactly once per render pass.
+    noteRecurrence(h);
 
     row.append(
       this.buildHypHead(h),
       this.buildHypStatement(h),
+      this.buildHypPlaybook(h),
       this.buildHypEntities(h),
       this.buildHypEvidence(h),
+      this.buildHypQuestions(h),
       this.buildHypSkeptic(h),
       this.buildHypActions(h),
     );
     return row;
+  }
+
+  private buildHypPlaybook(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-playbook';
+    const book = getPlaybookFor(h);
+    if (!book || book.actions.length === 0) return wrap;
+    const line = document.createElement('span');
+    line.className = 'analyst-hud-playbook-line';
+    line.textContent = summarizePlaybook(book);
+    wrap.append(line);
+    return wrap;
+  }
+
+  private buildHypQuestions(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-questions';
+    const questions = suggestQuestions(h);
+    for (const q of questions) wrap.append(this.buildQuestionChip(h, q));
+    return wrap;
+  }
+
+  private buildQuestionChip(h: Hypothesis, question: string): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-question';
+    const key = `${h.id}||${question}`;
+    const cached = getCachedAnswer(h, question);
+    const loading = this.loadingQuestion.has(key);
+    const expanded = this.expandedQuestion.has(key);
+
+    const chip = document.createElement('button');
+    chip.className = 'analyst-hud-question-chip';
+    chip.textContent = loading ? `? ${question} …` : `? ${question}`;
+    chip.disabled = loading;
+    chip.title = cached
+      ? 'Cached answer — click to toggle'
+      : 'Ask Claude (local if configured) and cache the answer';
+    chip.addEventListener('click', () => {
+      if (cached) {
+        if (expanded) this.expandedQuestion.delete(key);
+        else this.expandedQuestion.add(key);
+        this.render();
+        return;
+      }
+      this.loadingQuestion.add(key);
+      this.render();
+      void askQuestion(h, question).finally(() => {
+        this.loadingQuestion.delete(key);
+        this.expandedQuestion.add(key);
+        this.render();
+      });
+    });
+    wrap.append(chip);
+    if (cached && expanded) {
+      const body = document.createElement('p');
+      body.className = 'analyst-hud-question-answer';
+      body.textContent = `[${cached.provider}] ${cached.text}`;
+      wrap.append(body);
+    }
+    return wrap;
+  }
+
+  private buildTimelineSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'analyst-hud-section';
+    const h = document.createElement('h3');
+    h.textContent = 'Briefing Timeline';
+    sec.append(h);
+    const items = getArchive().slice(0, 8);
+    if (items.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'analyst-hud-empty';
+      empty.textContent = 'No briefings archived yet.';
+      sec.append(empty);
+      return sec;
+    }
+    const list = document.createElement('div');
+    list.className = 'analyst-hud-timeline';
+    for (const brief of items) {
+      const row = document.createElement('div');
+      row.className = 'analyst-hud-timeline-row';
+      const agoLabel = ageLabel(Date.now() - brief.generatedAt);
+      const head = document.createElement('span');
+      head.className = 'analyst-hud-timeline-head';
+      const providerSuffix = brief.provider ? ` (${brief.provider})` : '';
+      head.textContent = `${agoLabel} · ${brief.domain}${providerSuffix}`;
+      const body = document.createElement('span');
+      body.className = 'analyst-hud-timeline-body';
+      body.textContent = brief.summary || brief.text.slice(0, 160);
+      row.append(head, body);
+      list.append(row);
+    }
+    sec.append(list);
+    return sec;
   }
 
   private buildHypHead(h: Hypothesis): HTMLElement {
@@ -358,6 +479,7 @@ export class AnalystHUD {
     up.title = 'Useful';
     up.addEventListener('click', () => {
       thumbsUp(h);
+      recordAction(h, 'thumbs-up');
       up.classList.add('analyst-hud-thumb-done');
     });
     const down = document.createElement('button');
@@ -366,6 +488,7 @@ export class AnalystHUD {
     down.title = 'Noise';
     down.addEventListener('click', () => {
       thumbsDown(h);
+      recordAction(h, 'thumbs-down');
       down.classList.add('analyst-hud-thumb-done');
     });
     actions.append(up, down);
@@ -379,9 +502,11 @@ export class AnalystHUD {
     chip.title = `${e.source} — ${e.id}`;
     if (e.panelId) {
       chip.addEventListener('click', () => {
+        const h = this.findHypothesisForEvidence(e);
         if (e.panelId) {
           jumpToPanel(e.panelId);
           flashPanel(e.panelId);
+          if (h) recordAction(h, 'panel-jump', e.panelId);
         }
         this.hide();
       });
@@ -389,6 +514,11 @@ export class AnalystHUD {
       chip.disabled = true;
     }
     return chip;
+  }
+
+  private findHypothesisForEvidence(e: HypothesisEvidence): Hypothesis | null {
+    if (!this.snapshot) return null;
+    return this.snapshot.hypotheses.find(h => h.evidence.some(ev => ev.id === e.id && ev.source === e.source)) ?? null;
   }
 
   private buildBriefsSection(): HTMLElement {

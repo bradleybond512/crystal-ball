@@ -60,6 +60,28 @@ const lastBriefAt: Partial<Record<ForecastDomain, number>> = {};
 const lastPressure: Partial<Record<ForecastDomain, number>> = {};
 const inFlight = new Set<ForecastDomain>();
 
+// Persist lastBriefAt so a reload inside the 60-min cooldown doesn't
+// re-fire the same crossover brief.
+const COOLDOWN_STORAGE_KEY = 'crystalball-auto-brief-cooldowns-v1';
+let cooldownLoaded = false;
+function loadCooldowns(): void {
+  if (cooldownLoaded) return;
+  cooldownLoaded = true;
+  try {
+    const raw = localStorage.getItem(COOLDOWN_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Partial<Record<ForecastDomain, number>>;
+    for (const d of ['finance', 'security', 'disaster', 'cyber'] as const) {
+      const v = parsed[d];
+      if (typeof v === 'number') lastBriefAt[d] = v;
+    }
+  } catch { /* ignore */ }
+}
+function saveCooldowns(): void {
+  try { localStorage.setItem(COOLDOWN_STORAGE_KEY, JSON.stringify(lastBriefAt)); }
+  catch { /* quota */ }
+}
+
 // ── Enabled toggle ────────────────────────────────────────────────────────────
 
 export function isAutoBriefEnabled(): boolean {
@@ -119,7 +141,7 @@ async function runBrief(domain: ForecastDomain, pressure: number): Promise<void>
   inFlight.add(domain);
   try {
     const res = await generateText(DOMAIN_PROMPT[domain], { maxTokens: 500 });
-    if (!res.text) return;
+    if (!res.text) return; // failed — cooldown not burned, next crossing retries
     const brief: AutoBrief = {
       domain,
       pressure,
@@ -129,9 +151,12 @@ async function runBrief(domain: ForecastDomain, pressure: number): Promise<void>
       provider: res.provider,
     };
     persistBrief(brief);
+    // Lock in cooldown only on success.
+    lastBriefAt[domain] = Date.now();
+    saveCooldowns();
     document.dispatchEvent(new CustomEvent<AutoBrief>(EVENT_NAME, { detail: brief }));
   } catch {
-    // Swallow; will retry next time cooldown expires.
+    // Swallow; next crossing retries since cooldown wasn't set.
   } finally {
     inFlight.delete(domain);
   }
@@ -145,6 +170,7 @@ function crossedCritical(domain: ForecastDomain, advisory: ModeAdvisory): boolea
 }
 
 function cooldownOk(domain: ForecastDomain): boolean {
+  loadCooldowns();
   const last = lastBriefAt[domain] ?? 0;
   return Date.now() - last >= COOLDOWN_MS;
 }
@@ -153,13 +179,16 @@ function handleForecast(snapshot: ForecastSnapshot): void {
   if (!isAutoBriefEnabled()) return;
   if (isGhostMode()) return;
   if (!isFeatureAvailable('aiClaude')) return;
+  loadCooldowns();
 
   for (const advisory of snapshot.advisories) {
     // Keep lastPressure in sync even when not triggering a run.
     const crossed = crossedCritical(advisory.domain, advisory);
     if (!crossed) continue;
     if (!cooldownOk(advisory.domain)) continue;
-    lastBriefAt[advisory.domain] = Date.now();
+    // Cooldown is locked in by runBrief ONLY on successful generation, so a
+    // failed LLM call doesn't burn the 60-min window. inFlight dedupes
+    // concurrent calls.
     void runBrief(advisory.domain, advisory.pressure);
   }
 }

@@ -174,8 +174,13 @@ export async function askQuestion(h: Hypothesis, question: string): Promise<Ques
     provider: res.provider,
     generatedAt: Date.now(),
   };
-  cache.set(key, answer);
-  save();
+  // Don't cache failed calls (budget exhausted, network down, etc.) —
+  // caching '(no response)' for 200 entries would prevent retry even
+  // after the cloud is back up. Only a successful generation is cached.
+  if (res.provider !== 'none' && res.text) {
+    cache.set(key, answer);
+    save();
+  }
   document.dispatchEvent(new CustomEvent<QuestionAnswer>(EVENT_NAME, { detail: answer }));
   return answer;
 }

@@ -33,7 +33,10 @@ export interface EntityMention {
 // ISO3 country codes actually used by situations in this codebase are
 // uppercase 3-letter codes. We match standalone uppercase 3-letter tokens.
 const COUNTRY_CODE = /\b([A-Z]{3})\b/g;
-const TICKER = /\b([A-Z]{1,5}(?:-[A-Z]{1,3})?)\b/g;
+// Tickers can include futures-style suffixes (e.g. CL=F, GC=F) and
+// hyphenated pair notation (e.g. BTC-USD, XAU-USD). Restricted further by
+// the KNOWN_TICKERS allowlist so spurious uppercase runs don't match.
+const TICKER = /\b([A-Z]{1,5}(?:[-=][A-Z0-9]{1,3})?)\b/g;
 const CVE = /\b(CVE-\d{4}-\d{4,7})\b/gi;
 const CALLSIGN = /\b([A-Z]{2,6}\d{0,4})\b/g;
 

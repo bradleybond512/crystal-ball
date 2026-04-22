@@ -157,8 +157,13 @@ export async function runEnsemble(h: Hypothesis): Promise<EnsembleResult> {
       takes,
       partial: takes.length < personas.length,
     };
-    cache.set(sig, result);
-    save();
+    // Don't cache total failures — we'd pin "(no takes)" for 60min and
+    // prevent the user from retrying even after the cloud is back up.
+    // Partial results (1-2 personas) are worth keeping.
+    if (takes.length > 0) {
+      cache.set(sig, result);
+      save();
+    }
     document.dispatchEvent(new CustomEvent<EnsembleResult>(EVENT_NAME, { detail: result }));
     return result;
   } finally {

@@ -143,7 +143,17 @@ function pruneStale(now: number): void {
 function handleSnapshot(snapshot: AnalystSnapshot): void {
   load();
   const now = Date.now();
-  for (const h of snapshot.hypotheses) upsertThread(h, now);
+  // Dedupe within a snapshot by signature. Dedupe+signature semantics can
+  // diverge in edge cases (e.g. same kind+sources+region but different
+  // evidence IDs and entities), so defensively ensure we don't double-
+  // increment cycleCount for a thread in a single cycle.
+  const seenSigs = new Set<string>();
+  for (const h of snapshot.hypotheses) {
+    const sig = signatureFor(h);
+    if (seenSigs.has(sig)) continue;
+    seenSigs.add(sig);
+    upsertThread(h, now);
+  }
   pruneStale(now);
   save();
   document.dispatchEvent(new CustomEvent<HypothesisThread[]>(EVENT_NAME, {
@@ -171,7 +181,11 @@ export function getAllThreads(): HypothesisThread[] {
 
 export function resetThreads(): void {
   threads.clear();
+  // Mark as a write so the pending IDB hydrate (if any) doesn't resurrect
+  // the old data before the empty-array write lands.
+  writtenSinceLoad = true;
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  void putMemory(STORAGE_KEY, []);
   document.dispatchEvent(new CustomEvent<HypothesisThread[]>(EVENT_NAME, { detail: [] }));
 }
 

@@ -176,7 +176,9 @@ export function getRelevanceWeights(): Readonly<Record<string, number>> {
 /** User-facing reset for the learned profile. */
 export function resetRelevanceWeights(): void {
   state = { weights: {}, writeCount: 0 };
+  writtenSinceLoad = true;
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  void putMemory(STORAGE_KEY, state);
 }
 
 // ── Engagement observer ──────────────────────────────────────────────────────

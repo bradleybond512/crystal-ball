@@ -154,8 +154,12 @@ export async function projectHypothesis(h: Hypothesis): Promise<HypothesisProjec
     generatedAt: Date.now(),
   };
 
-  cache.set(sig, projection);
-  save();
+  // Don't cache failures (provider='none' / empty text) — that would pin
+  // the "(projection failed)" placeholder for 15 minutes and block retry.
+  if (res.provider !== 'none' && res.text) {
+    cache.set(sig, projection);
+    save();
+  }
   document.dispatchEvent(new CustomEvent<HypothesisProjection>(EVENT_NAME, { detail: projection }));
   return projection;
 }

@@ -107,6 +107,10 @@ export function hourOfWeek(date: Date = new Date()): number {
 // ── Welford update ───────────────────────────────────────────────────────────
 
 function updateBucket(bucket: BucketStats, value: number): void {
+  // Guard against NaN / non-finite inputs — one rogue sample would
+  // propagate NaN into mean and variance forever, silently corrupting
+  // the bucket. isAboveNormal would then return false against anything.
+  if (!Number.isFinite(value)) return;
   bucket.samples += 1;
   const delta = value - bucket.mean;
   bucket.mean += delta / bucket.samples;

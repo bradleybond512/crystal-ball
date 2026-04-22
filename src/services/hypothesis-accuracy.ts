@@ -122,7 +122,15 @@ function stamp(snapshot: AnalystSnapshot): void {
 
 // ── Grading ──────────────────────────────────────────────────────────────────
 
-function didEvidenceEscalate(p: PendingHypothesis): boolean {
+/**
+ * Grade a pending hypothesis. Returns true if evidence escalated,
+ * false if it fizzled, and null when there's no evidence left to
+ * check (e.g. the situation naturally resolved and the alert was
+ * purged). Null means "skip — don't update stats either way", which
+ * avoids a false-negative bias against hypotheses whose evidence
+ * disappeared before we got to grade them.
+ */
+function didEvidenceEscalate(p: PendingHypothesis): boolean | null {
   // Situation evidence: escalation = still present AND phase is active/developing.
   const situations = situationEngine.getSituations();
   const sitMap = new Map(situations.map(s => [s.id, s]));
@@ -150,7 +158,7 @@ function didEvidenceEscalate(p: PendingHypothesis): boolean {
   }
 
   const totalChecked = sitChecked + alertChecked;
-  if (totalChecked === 0) return false;
+  if (totalChecked === 0) return null; // evidence gone — skip grading
   const hitRatio = (sitHit + alertHit) / totalChecked;
   return hitRatio >= 0.5;
 }
@@ -163,6 +171,7 @@ function bumpStats(stats: AccuracyStats, hit: boolean): void {
 
 function gradeOne(p: PendingHypothesis): void {
   const hit = didEvidenceEscalate(p);
+  if (hit === null) return; // no evidence left to judge — skip, don't record a miss
 
   const sigStats = bySignature.get(p.signature) ?? { hits: 0, misses: 0, lastGraded: 0 };
   bumpStats(sigStats, hit);

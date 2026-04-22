@@ -110,6 +110,10 @@ export class AnalystHUD {
     // arriving in the same tick) into a single rAF-aligned render.
     subscribeAnalyst((snap) => {
       this.snapshot = snap;
+      // Record recurrence ONCE per snapshot (not once per render) —
+      // otherwise event bursts cause recurrenceCount to balloon by 10-30×
+      // per actual cycle, polluting playbooks + hammering IDB writes.
+      for (const h of snap.hypotheses.slice(0, MAX_VISIBLE)) noteRecurrence(h);
       this.scheduleRender();
     });
     subscribeModeAdvisory((f) => {
@@ -404,9 +408,10 @@ export class AnalystHUD {
       sec.append(empty);
       return sec;
     }
-    // Clamp the selection if the list shrank.
+    // Clamp the selection if the list shrank. Use Math.max(0, …) so we
+    // don't end up at -1 when the list is empty.
     if (this.selectedHypothesisIndex >= visible.length) {
-      this.selectedHypothesisIndex = visible.length - 1;
+      this.selectedHypothesisIndex = Math.max(0, visible.length - 1);
     }
     visible.forEach((h, i) => {
       const row = this.buildHypothesisRow(h);
@@ -552,8 +557,8 @@ export class AnalystHUD {
     const row = document.createElement('div');
     row.className = 'analyst-hud-hyp';
     row.style.borderLeftColor = RISK_COLORS[h.risk];
-    // Note recurrence (playbook bookkeeping) exactly once per render pass.
-    noteRecurrence(h);
+    // Note: recurrence is recorded once per snapshot in the subscribeAnalyst
+    // handler, NOT here — render can fire many times per snapshot.
 
     row.append(
       this.buildHypHead(h),

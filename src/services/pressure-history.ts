@@ -148,7 +148,11 @@ export function getPressureHistory(): Record<ForecastDomain, PressureSample[]> {
 export function buildSparklinePath(series: PressureSample[], width: number, height: number): string {
   if (series.length === 0) return '';
   if (series.length === 1) {
-    const y = height * (1 - (series[0]?.value ?? 0));
+    // Clamp to [0,1] for consistency with the multi-element branch — protects
+    // against out-of-range values corrupting the SVG viewport.
+    const raw = series[0]?.value ?? 0;
+    const v = Math.max(0, Math.min(1, Number.isFinite(raw) ? raw : 0));
+    const y = height * (1 - v);
     return `M 0 ${y.toFixed(1)} L ${width} ${y.toFixed(1)}`;
   }
   const step = width / (series.length - 1);

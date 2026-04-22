@@ -137,16 +137,10 @@ async function reviewOne(h: Hypothesis): Promise<void> {
     save();
     document.dispatchEvent(new CustomEvent<SkepticNote>(EVENT_NAME, { detail: note }));
   } catch {
-    // swallow; cooldown below still applies so we don't hammer on repeated failures
-    const placeholder: SkepticNote = {
-      signature: sig,
-      hypothesisId: h.id,
-      generatedAt: Date.now(),
-      summary: '(skeptic pass failed)',
-      text: '',
-    };
-    notes.set(sig, placeholder);
-    save();
+    // Don't persist a "failure" placeholder — shouldReview() would then
+    // treat it as a recent note and enforce the 30-min cooldown, blocking
+    // retry even after the cloud is back up. The inFlight guard above
+    // already prevents hammering within the same render pass.
   } finally {
     inFlight.delete(sig);
   }

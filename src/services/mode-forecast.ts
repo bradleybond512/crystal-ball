@@ -24,7 +24,7 @@
 import { situationEngine } from './situation-engine';
 import { anomalyEngine } from './anomaly-detection';
 import type { Situation, SituationDomain } from './situation-types';
-import { isAboveNormal, deviationSigma } from './pressure-baselines';
+import { isAboveNormal, deviationSigma, getBaseline } from './pressure-baselines';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -212,9 +212,13 @@ export function runForecastCycle(): ForecastSnapshot {
     // Temporal-baseline check: once the baseline has enough samples, require
     // the reading to also be anomalous for its hour-of-week. Until then,
     // fall back to the fixed threshold alone so boot-time isn't silent.
+    // Use explicit .sufficient rather than a `sigma === 0` proxy — sigma
+    // can also be 0 for sufficient-but-flat baselines, which would cause
+    // the temporal check to be bypassed when it shouldn't be.
+    const baselineReady = getBaseline(d).sufficient;
     const passesTemporal = isAboveNormal(d, level);
     const sigma = deviationSigma(d, level);
-    const nowAdvised = passesFixedThreshold && (sigma === 0 || passesTemporal);
+    const nowAdvised = passesFixedThreshold && (!baselineReady || passesTemporal);
 
     if (nowAdvised) {
       advised.add(d);

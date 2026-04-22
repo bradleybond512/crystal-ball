@@ -19574,3 +19574,36 @@ body.gods-vision-lock .replay-scrubber { display: none; }
   font-variant-numeric: tabular-nums;
 }
 .analyst-hud-timeline-body { color: rgba(255, 255, 255, 0.8); }
+.analyst-hud-sim-btn,
+.analyst-hud-copy-btn {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.analyst-hud-sim-btn:hover:not(:disabled),
+.analyst-hud-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.analyst-hud-sim-btn:disabled { opacity: 0.6; cursor: wait; }
+.analyst-hud-hyp-projection { margin: 4px 0 6px; }
+.analyst-hud-projection-body {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.82);
+  padding-left: 8px;
+  border-left: 2px solid rgba(180, 140, 220, 0.35);
+  white-space: pre-wrap;
+}
+.analyst-hud-projection-cascade {
+  margin: 4px 0 0;
+  font-size: 10px;
+  color: rgba(180, 140, 220, 0.9);
+  padding-left: 8px;
+}

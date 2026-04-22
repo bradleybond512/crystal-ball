@@ -24,6 +24,8 @@ import { getPressureHistory, buildSparklinePath, subscribePressureHistory } from
 import { getPlaybookFor, summarizePlaybook, recordAction, noteRecurrence } from '@/services/action-memory';
 import { suggestQuestions, getCachedAnswer, askQuestion, subscribeQuestionAnswered, type QuestionAnswer } from '@/services/question-suggester';
 import { getArchive, subscribeBriefingArchive } from '@/services/briefing-archive';
+import { projectHypothesis, getCachedProjection, subscribeProjection } from '@/services/hypothesis-projection';
+import { exportHypothesisToClipboard } from '@/services/hypothesis-export';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
 
@@ -47,6 +49,12 @@ function ageLabel(ms: number): string {
   return `${Math.floor(mins / 60)}h`;
 }
 
+function simButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {
+  if (loading) return 'simulating…';
+  if (!cached) return 'simulate ▸';
+  return expanded ? 'hide ▾' : 'show ▸';
+}
+
 export class AnalystHUD {
   private readonly root: HTMLElement;
   private snapshot: AnalystSnapshot | null = null;
@@ -58,6 +66,9 @@ export class AnalystHUD {
   private expandedQuestion = new Set<string>();
   private loadingQuestion = new Set<string>();
   private answers = new Map<string, QuestionAnswer>();
+  private loadingProjection = new Set<string>();
+  private expandedProjection = new Set<string>();
+  private exportedFlash: { id: string; at: number } | null = null;
 
   constructor() {
     this.root = document.createElement('div');
@@ -102,6 +113,14 @@ export class AnalystHUD {
     subscribeBriefingArchive(() => {
       if (this.visible) this.render();
     });
+    subscribeProjection(() => {
+      if (this.visible) this.render();
+    });
+    document.addEventListener('cb:hypothesis-export-copied', (e: Event) => {
+      const ce = e as CustomEvent<{ hypothesisId: string }>;
+      this.exportedFlash = { id: ce.detail.hypothesisId, at: Date.now() };
+      if (this.visible) this.render();
+    });
     document.addEventListener('cb:toggle-analyst-hud', () => this.toggle());
     document.addEventListener('cb:hypothesis-feedback', () => {
       if (this.visible) this.render();
@@ -114,11 +133,13 @@ export class AnalystHUD {
     this.visible = true;
     this.root.hidden = false;
     this.render();
+    document.dispatchEvent(new CustomEvent<{ visible: boolean }>('cb:analyst-hud-visibility', { detail: { visible: true } }));
   }
 
   hide(): void {
     this.visible = false;
     this.root.hidden = true;
+    document.dispatchEvent(new CustomEvent<{ visible: boolean }>('cb:analyst-hud-visibility', { detail: { visible: false } }));
   }
 
   // ── Rendering ─────────────────────────────────────────────────────────────
@@ -287,9 +308,30 @@ export class AnalystHUD {
       this.buildHypEvidence(h),
       this.buildHypQuestions(h),
       this.buildHypSkeptic(h),
+      this.buildHypProjection(h),
       this.buildHypActions(h),
     );
     return row;
+  }
+
+  private buildHypProjection(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-projection';
+    const projection = getCachedProjection(h);
+    if (!projection || !this.expandedProjection.has(h.id)) return wrap;
+    const body = document.createElement('p');
+    body.className = 'analyst-hud-projection-body';
+    body.textContent = `[${projection.provider}] ${projection.narrative}`;
+    wrap.append(body);
+    if (projection.cascade) {
+      const cas = document.createElement('p');
+      cas.className = 'analyst-hud-projection-cascade';
+      cas.textContent =
+        `Cascade sim: ${projection.cascade.triggerName} — ${projection.cascade.effects.length} effects, ` +
+        `~${projection.cascade.estimatedRecoveryHours}h recovery, risk ${projection.cascade.riskScore}/100.`;
+      wrap.append(cas);
+    }
+    return wrap;
   }
 
   private buildHypPlaybook(h: Hypothesis): HTMLElement {
@@ -491,8 +533,55 @@ export class AnalystHUD {
       recordAction(h, 'thumbs-down');
       down.classList.add('analyst-hud-thumb-done');
     });
-    actions.append(up, down);
+
+    const simulate = this.buildSimulateButton(h);
+    const copy = this.buildCopyButton(h);
+
+    actions.append(up, down, simulate, copy);
     return actions;
+  }
+
+  private buildSimulateButton(h: Hypothesis): HTMLElement {
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-sim-btn';
+    const loading = this.loadingProjection.has(h.id);
+    const cached = getCachedProjection(h);
+    const expanded = this.expandedProjection.has(h.id);
+    btn.textContent = simButtonLabel(loading, Boolean(cached), expanded);
+    btn.title = cached
+      ? 'Toggle the stored projection'
+      : 'Project 24/48h rollout via local LLM (cloud fallback)';
+    btn.disabled = loading;
+    btn.addEventListener('click', () => {
+      if (cached) {
+        if (expanded) this.expandedProjection.delete(h.id);
+        else this.expandedProjection.add(h.id);
+        this.render();
+        return;
+      }
+      this.loadingProjection.add(h.id);
+      this.render();
+      void projectHypothesis(h).finally(() => {
+        this.loadingProjection.delete(h.id);
+        this.expandedProjection.add(h.id);
+        this.render();
+      });
+    });
+    return btn;
+  }
+
+  private buildCopyButton(h: Hypothesis): HTMLElement {
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-copy-btn';
+    const flashed = this.exportedFlash?.id === h.id
+      && Date.now() - this.exportedFlash.at < 3000;
+    btn.textContent = flashed ? 'copied ✓' : 'copy ⎘';
+    btn.title = 'Copy this hypothesis thread as markdown to the clipboard';
+    btn.addEventListener('click', () => {
+      void exportHypothesisToClipboard(h);
+      recordAction(h, 'export');
+    });
+    return btn;
   }
 
   private buildEvidenceChip(e: HypothesisEvidence): HTMLElement {

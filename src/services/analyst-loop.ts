@@ -27,6 +27,7 @@ import { getHypothesisFeedbackMult } from './hypothesis-feedback';
 import { getHypothesisAccuracyMult } from './hypothesis-accuracy';
 import { isDismissed } from './analyst-command-listener';
 import { dedupeHypotheses } from './hypothesis-dedupe';
+import { getWatchlistHypotheses } from './watchlist-hypothesis-bridge';
 import type { Situation } from './situation-types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -35,7 +36,8 @@ export type HypothesisKind =
   | 'cross-domain-cluster'
   | 'anomaly-convergence'
   | 'alert-burst'
-  | 'situation-escalation';
+  | 'situation-escalation'
+  | 'watchlist-convergence';
 
 export interface HypothesisEvidence {
   /** Where the evidence came from (service name). */
@@ -278,6 +280,7 @@ export function runAnalystCycle(): AnalystSnapshot {
     ...fromAnomalies(anomalies),
     ...fromAlertBurst(alerts),
     ...fromSituations(situations),
+    ...getWatchlistHypotheses(),
   ]);
 
   const snapshot: AnalystSnapshot = {

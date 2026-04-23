@@ -1041,11 +1041,12 @@ export async function setSecretValue(key: RuntimeSecretKey, value: string): Prom
 
   // Push to sidecar so handlers pick it up immediately.
   // This is best-effort: keyring persistence is the source of truth.
-  try {
- await pushSecretToSidecar(key, sanitized || '');
-  } catch (error) {
- // eslint-disable-next-line no-console
- console.warn(`[runtime-config] Failed to sync ${key} to sidecar`, error);
+  if (sanitized) {
+ try {
+ await pushSecretToSidecar(key, sanitized);
+ } catch {
+ // Sidecar may not be ready yet — keychain is the source of truth.
+ }
   }
 
   // Signal other windows (main ↔ settings) to reload secrets from keychain.
@@ -1232,9 +1233,9 @@ export async function loadDesktopSecrets(): Promise<void> {
  runtimeConfig.secrets[key as RuntimeSecretKey] = { value, source: 'vault' };
  try {
  await pushSecretToSidecar(key as RuntimeSecretKey, value);
- } catch (error) {
- // eslint-disable-next-line no-console
- console.warn(`[runtime-config] Failed to sync ${key} to sidecar`, error);
+ } catch {
+ // Sidecar may not be ready during early bootstrap — secrets are
+ // already injected into the sidecar env at launch via keychain.
  }
  })
  );

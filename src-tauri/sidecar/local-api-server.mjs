@@ -5024,13 +5024,14 @@ async function dispatch(requestUrl, req, routes, context) {
  }, parsed.hostname.includes('news.google.com') ? 20_000 : 12_000);
  const contentType = response.headers?.get?.('content-type') || 'application/xml';
  const rssBody = await response.text();
+ const corsOrigin = getSidecarCorsOrigin(req);
  return new Response(rssBody || '', {
  status: response.status,
- headers: { 'content-type': contentType },
+ headers: { 'content-type': contentType, 'access-control-allow-origin': corsOrigin, 'vary': 'Origin' },
  });
  } catch (error) {
  const isTimeout = error.name === 'AbortError' || error.message?.includes('timeout');
- return json({ error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed' }, isTimeout ? 504 : 502);
+ return json({ error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed' }, isTimeout ? 504 : 502, makeCorsHeaders(req));
  }
   }
 

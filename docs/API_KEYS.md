@@ -2,6 +2,8 @@
 
 Crystal Ball integrates with 40+ external data sources. Most features work out of the box with free public APIs, but some layers require API keys for full functionality. Keys are entered via **Settings (gear icon) > API Keys** and stored securely in your macOS keychain.
 
+> **Each field in the in-app Settings overlay also shows a one-line description of what the key does, free vs paid, and a "Get key" link** — added in the v2.11 release as part of the documentation refresh.
+
 ## Quick Start — Essential Free Keys
 
 These keys unlock the most impactful features and are free with simple registration:

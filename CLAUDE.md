@@ -65,7 +65,7 @@ git push origin claude/your-feature-name
 ```
 src/                        # TypeScript frontend (Vite)
   app/
-    panel-layout.ts         # panel instantiation + sidebar layout
+    panel-layout.ts         # panel instantiation + sidebar layout + bootstrap
     data-loader.ts          # data fetching, task scheduling
     refresh-scheduler.ts    # scheduleRefresh() — ghost multiplier + hidden×10 + jitter
     event-handlers.ts       # UI events, keyboard shortcuts
@@ -73,19 +73,65 @@ src/                        # TypeScript frontend (Vite)
     Panel.ts                # base Panel class
     GlobeHUD.ts             # God's Eye HUD overlay
     GlobeDataManager.ts     # God's Eye Cesium layer manager
-    GodsVisionView.ts          # God's Eye 3D globe view
+    GodsVisionView.ts       # God's Eye 3D globe view
+    AnalystHUD.ts           # ⌘⇧A analyst reasoning HUD
+    ReasoningDebugOverlay.ts # ⌘⇧D diagnostics overlay
   config/
     panels.ts               # FULL_PANELS, PANEL_CATEGORY_MAP, FULL_MAP_LAYERS
   services/
     mode-manager.ts         # AppMode: peace/finance/war/disaster/ghost
     runtime-config.ts       # API key definitions, feature toggles
-    settings-constants.ts   # HUMAN_LABELS, SIGNUP_URLS, SETTINGS_CATEGORIES
+    settings-constants.ts   # HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS, SETTINGS_CATEGORIES
     analytics.ts            # PostHog (suppressed in Ghost Mode)
+    # ── Analyst reasoning layer (see docs/reasoning-layer.md) ──
+    analyst-loop.ts             # cross-domain hypothesis fusion + ranking
+    mode-forecast.ts            # per-domain pressure EWMA + advisories
+    pressure-baselines.ts       # 168 hour-of-week baselines per domain
+    pressure-history.ts         # rolling sparkline samples + critical notif
+    hypothesis-threads.ts       # signature-keyed continuity tracker
+    hypothesis-entities.ts      # country/ticker/CVE/callsign extraction
+    hypothesis-feedback.ts      # signature-keyed thumbs up/down
+    hypothesis-accuracy.ts      # outcome-graded hit/miss per kind
+    hypothesis-dedupe.ts        # union-find merge across reasoning surfaces
+    hypothesis-skeptic.ts       # opt-in second-pass contrarian LLM
+    hypothesis-projection.ts    # 24/48h projection + cascade-sim addendum
+    hypothesis-ensemble.ts      # analyst/skeptic/pragmatist personas
+    hypothesis-notifier.ts      # native notification on critical-first
+    hypothesis-export.ts        # markdown bundle for clipboard
+    auto-brief.ts               # critical-crossover Claude brief
+    briefing-archive.ts         # 200-entry brief ring
+    snapshot-archive.ts         # 120-entry analyst-snapshot ring
+    action-memory.ts            # playbook recorder ("last time you did X")
+    relevance-learner.ts        # per-term boost from user engagement
+    watchlist-hypothesis-bridge.ts  # watchlist matches → hypotheses
+    question-suggester.ts       # 3 investigative chips per hypothesis
+    analyst-command-listener.ts # MCP write-back queue poller
+    sidecar-pusher.ts           # mirror analyst state → /api/analyst-state
+    llm-adapter.ts              # local-first generateText() (Ollama → cloud)
+    llm-budget.ts               # daily cloud-call cap + race-safe reserve
+    reasoning-memory.ts         # IDB KV store on shared crystalball_db
+    reasoning-debug.ts          # 200-entry ring buffer log
+    reasoning-metrics.ts        # latency histograms + counters
 src-tauri/
-  sidecar/local-api-server.mjs  # Node.js API proxy, port 46123
+  sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes
+                                # /api/analyst-state + /api/analyst-commands
+                                # for MCP read+write to renderer state
   capabilities/default.json     # Tauri capability allowlist
   src/main.rs                   # SUPPORTED_SECRET_KEYS, keychain service "crystal-ball"
+tools/mcp-server/
+  index.mjs                # MCP server registering 30+ tools
+  tools/analyst.mjs        # 9 analyst tools (4 read + 3 write + 2 diagnostic)
 ```
+
+## Analyst Reasoning Layer
+
+A persistent, renderer-side reasoning stack that fuses `situation-engine`, `anomaly-detection`, `unified-alerts`, `threat-synthesis`, and the `watchlist` into ranked cross-domain hypotheses. The full architecture (event bus, IDB schema, MCP surface, invariants, bootstrap order) lives in [`docs/reasoning-layer.md`](docs/reasoning-layer.md). Highlights:
+
+- **HUD**: ⌘⇧A. Sections: posture advisories (with sparklines), hot entities, ranked hypotheses with thread badges + entity chips + clickable evidence, auto-briefs, briefing timeline, replay scrubber.
+- **Diagnostics**: ⌘⇧D. Four tabs (Events / Metrics / State / Boot). HUD footer shows live error counter.
+- **LLM**: `llm-adapter.generateText()` is the single entry point; prefers Ollama / LM Studio via `/api/intel-generate` before falling back to `runClaudeAgent`. Daily cloud-call cap enforced by `llm-budget.reserveCloudCall()` (race-safe for parallel personas).
+- **MCP**: 4 read + 3 write + 2 diagnostic tools — see `tools/mcp-server/tools/analyst.mjs`.
+- **Memory**: IDB `reasoning_memory` store on the shared `crystalball_db` (versionchange handlers in alert-store and reasoning-memory let upgrades happen without blocking each other). LS bootstrap + writtenSinceLoad guard against IDB hydrate races.
 
 ## App Modes (`src/services/mode-manager.ts`)
 

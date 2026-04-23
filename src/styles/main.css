@@ -16414,6 +16414,77 @@ body.has-breaking-alert .panels-grid {
   background: var(--darken-medium);
 }
 
+.web-vault-banner {
+  border: 1px solid var(--overlay-medium);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 0 0 12px;
+  background: var(--darken-medium);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.web-vault-banner-ok { border-color: rgba(80, 180, 120, 0.45); }
+.web-vault-banner-locked { border-color: rgba(220, 180, 80, 0.5); }
+.web-vault-banner-create { border-color: rgba(100, 160, 220, 0.45); }
+.web-vault-banner-error { border-color: rgba(220, 90, 90, 0.55); }
+.web-vault-banner-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.web-vault-banner-title {
+  font-size: 12px;
+  font-weight: 600;
+  flex: 1 1 auto;
+}
+.web-vault-banner-hint {
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.web-vault-form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.web-vault-input {
+  flex: 1 1 160px;
+  min-width: 140px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--overlay-medium);
+  background: var(--darken-strong);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.web-vault-btn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--overlay-medium);
+  background: var(--darken-strong);
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.web-vault-btn:hover { background: var(--darken-medium); }
+.web-vault-btn-primary {
+  border-color: rgba(100, 160, 220, 0.55);
+  color: rgba(130, 190, 240, 1);
+}
+.web-vault-btn-danger {
+  border-color: rgba(220, 90, 90, 0.45);
+  color: rgba(230, 130, 130, 1);
+}
+.web-vault-message {
+  margin: 0;
+  font-size: 11px;
+}
+.web-vault-message-error { color: rgba(230, 130, 130, 1); }
+.web-vault-message-info { color: var(--text-muted); }
+
 .runtime-alert h3 {
   margin: 0 0 6px;
   font-size: 11px;

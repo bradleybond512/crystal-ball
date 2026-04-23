@@ -1,5 +1,12 @@
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
 import { invokeTauri } from './tauri-bridge';
+import {
+  isVaultUnlocked as isWebVaultUnlocked,
+  listSecrets as listWebVaultSecrets,
+  setSecret as setWebVaultSecret,
+  onVaultChange as onWebVaultChange,
+  isSupported as isWebVaultSupported,
+} from './web-secret-store';
 
 export type RuntimeSecretKey =
   | 'CRYSTALBALL_API_KEY'
@@ -888,6 +895,36 @@ function seedSecretsFromEnvironment(): void {
 
 seedSecretsFromEnvironment();
 
+/**
+ * Reconcile the in-memory config with the web vault's current state.
+ * Called after unlock/lock/set/destroy so consumers see the latest.
+ * Desktop mode is a no-op here — it uses loadDesktopSecrets instead.
+ */
+export function syncWebVaultIntoConfig(): void {
+  if (isDesktopRuntime()) return;
+
+  // Clear any previously hydrated vault entries so locking actually hides them.
+  for (const key of Object.keys(runtimeConfig.secrets) as RuntimeSecretKey[]) {
+ if (runtimeConfig.secrets[key]?.source === 'vault') delete runtimeConfig.secrets[key];
+  }
+
+  if (isWebVaultUnlocked()) {
+ const entries = listWebVaultSecrets();
+ for (const [key, value] of entries) {
+ if (value) runtimeConfig.secrets[key as RuntimeSecretKey] = { value, source: 'vault' };
+ }
+  } else {
+ // Re-seed env fallbacks for any slot the vault used to cover.
+ seedSecretsFromEnvironment();
+  }
+
+  notifyConfigChanged();
+}
+
+if (!isDesktopRuntime()) {
+  onWebVaultChange(() => { syncWebVaultIntoConfig(); });
+}
+
 // Listen for cross-window state updates (settings ↔ main).
 // When one window saves secrets or toggles features, the `storage` event fires in other same-origin windows.
 if (typeof window !== 'undefined') {
@@ -953,8 +990,25 @@ export function setFeatureToggle(featureId: RuntimeFeatureId, enabled: boolean):
 
 export async function setSecretValue(key: RuntimeSecretKey, value: string): Promise<void> {
   if (!isDesktopRuntime()) {
+ if (!isWebVaultSupported()) {
  // eslint-disable-next-line no-console
- console.warn('[runtime-config] Ignoring secret write outside desktop runtime');
+ console.warn('[runtime-config] Web vault unsupported (no SubtleCrypto/IDB); ignoring secret write');
+ return;
+ }
+ if (!isWebVaultUnlocked()) {
+ throw new Error('Vault is locked. Unlock the key vault before saving secrets.');
+ }
+ const sanitized = value.trim();
+ await setWebVaultSecret(key, sanitized);
+ if (sanitized) {
+ runtimeConfig.secrets[key] = { value: sanitized, source: 'vault' };
+ } else {
+ delete runtimeConfig.secrets[key];
+ // Fall back to env seeding if a VITE_* value exists for this key.
+ const envFallback = readEnvSecret(key);
+ if (envFallback) runtimeConfig.secrets[key] = { value: envFallback, source: 'env' };
+ }
+ notifyConfigChanged();
  return;
   }
 

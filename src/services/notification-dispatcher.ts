@@ -15,12 +15,6 @@ import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
 import type { CompoundThreat } from './compound-threat';
 import type { Anomaly } from './anomaly-detection';
 
-/**
- * Tauri notification plugin module name. Indirected through a variable so
- * TypeScript does not attempt static module resolution (the package may not
- * be installed — the dynamic import handles absence at runtime via .catch()).
- */
-const TAURI_NOTIFICATION_MODULE = '@tauri-apps/plugin-notification';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Types
@@ -220,21 +214,8 @@ class NotificationDispatcher {
   // ── Tauri native notification ──────────────────────────────────────────────
 
   private sendTauriNotification(alert: UnifiedAlert, withSound: boolean): void {
- (import(/* @vite-ignore */ TAURI_NOTIFICATION_MODULE) as Promise<Record<string, unknown>>)
- .then(mod => {
- const send = mod.sendNotification ?? mod.notify;
- if (typeof send === 'function') {
- (send as (opts: Record<string, unknown>) => void)({
- title: alert.title,
- body: alert.body,
- sound: withSound ? 'default' : undefined,
- });
- }
- })
- .catch(() => {
- // Plugin not available — fall back to web
+ // Plugin not installed — skip dynamic import entirely to avoid Vite preload errors
  this.sendWebNotification(alert, withSound);
- });
   }
 
   // ── Web Notifications API fallback ─────────────────────────────────────────

@@ -108,6 +108,8 @@ const REGION_COORDS: Record<string, { lat: number; lon: number }> = {
   'Diego Garcia': { lat: -7.32, lon: 72.42 },
   Djibouti: { lat: 11.55, lon: 43.15 },
   Singapore: { lat: 1.35, lon: 103.82 },
+  Houston: { lat: 29.76, lon: -95.37 },
+  'Houston, Texas': { lat: 29.76, lon: -95.37 },
   'Souda Bay': { lat: 35.49, lon: 24.08 },
   Naples: { lat: 40.84, lon: 14.25 },
 };

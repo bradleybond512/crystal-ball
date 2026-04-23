@@ -473,6 +473,7 @@ if (import.meta.env.DEV) {
  const covered = MILITARY_QUERY_REGIONS.some(r =>
  r.lamin <= hbox.lamin && r.lamax >= hbox.lamax && r.lomin <= hbox.lomin && r.lomax >= hbox.lomax
  );
+ // eslint-disable-next-line no-console
  if (!covered) console.error(`[Military] HOTSPOT ${h.name} bbox not covered by any QUERY_REGION`);
   }
 }
@@ -525,6 +526,8 @@ export const USNI_REGION_COORDINATES: Record<string, { lat: number; lon: number 
   'Bremerton': { lat: 47.57, lon: -122.63 },
   'Everett': { lat: 47.97, lon: -122.22 },
   'Kings Bay': { lat: 30.8, lon: -81.56 },
+  'Houston': { lat: 29.76, lon: -95.37 },
+  'Houston, Texas': { lat: 29.76, lon: -95.37 },
   'Bangor': { lat: 47.73, lon: -122.71 },
   'Djibouti': { lat: 11.55, lon: 43.15 },
   'Singapore': { lat: 1.35, lon: 103.82 },
@@ -566,7 +569,7 @@ export function getUSNIRegionApproxCoords(regionText: string): { lat: number; lo
   // Deterministic fallback so previously unseen regions are still rendered.
   let hash = 0;
   for (let i = 0; i < normalized.length; i++) {
- hash = ((hash << 5) - hash) + normalized.charCodeAt(i);
+ hash = ((hash << 5) - hash) + normalized.codePointAt(i)!;
  hash = Math.trunc(hash);
   }
   const lat = ((Math.abs(hash) % 120) - 60);

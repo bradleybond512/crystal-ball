@@ -470,6 +470,7 @@ export async function getContagionModel(): Promise<ContagionModel> {
   let ecoData: EconomicStressData;
   try {
  ecoData = await fetchEconomicStress();
+ if (!ecoData.indicators) throw new Error('indicators missing');
   } catch {
  if (_lastModel) return _lastModel;
  throw new Error('Economic stress data unavailable');

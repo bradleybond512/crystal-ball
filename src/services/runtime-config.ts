@@ -966,14 +966,19 @@ export function getSecretState(key: RuntimeSecretKey): { present: boolean; valid
 export function isFeatureAvailable(featureId: RuntimeFeatureId): boolean {
   if (!isFeatureEnabled(featureId)) return false;
 
-  // Cloud/web deployments validate credentials server-side.
-  // Desktop runtime validates local secrets client-side for capability gating.
-  if (!isDesktopRuntime()) {
- return true;
-  }
-
   const feature = RUNTIME_FEATURES.find(item => item.id === featureId);
   if (!feature) return false;
+
+  if (!isDesktopRuntime()) {
+ // Once the user has unlocked their browser vault we know whether each
+ // required key is actually present locally, so gate on that. Before
+ // unlock we optimistically trust server-managed credentials (the cloud
+ // deployment may have keys set at the edge) rather than greying out
+ // every feature the user hasn't configured yet.
+ if (!isWebVaultUnlocked()) return true;
+ return feature.requiredSecrets.every(secretKey => getSecretState(secretKey).valid);
+  }
+
   const secrets = feature.desktopRequiredSecrets ?? feature.requiredSecrets;
   return secrets.every(secretKey => getSecretState(secretKey).valid);
 }

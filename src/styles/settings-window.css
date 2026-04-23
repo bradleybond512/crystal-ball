@@ -488,6 +488,15 @@
   color: var(--settings-text-secondary);
 }
 
+.settings-secret-desc {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--settings-text-tertiary, rgba(255, 255, 255, 0.55));
+  margin: 2px 0 6px;
+  font-style: italic;
+}
+
 .settings-secret-status {
   grid-area: status;
   font-size: 11px;

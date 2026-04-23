@@ -72,9 +72,49 @@ A single inbox that ingests from every alert source -- NWS, GDACS, OREF (Israel 
 
 ---
 
+## Analyst HUD -- Cross-Domain Reasoning Layer
+
+Press `Cmd+Shift+A` to open the Analyst HUD. A persistent reasoning loop fuses outputs from `situation-engine`, `anomaly-detection`, `unified-alerts`, `threat-synthesis`, and your `watchlist` into one ranked list of cross-domain hypotheses. Each hypothesis has clickable evidence chips, a thread badge (`4c up` = 4 cycles, strengthening), color-coded entity chips (countries, tickers, CVEs, callsigns), and learns from your `+`/`-` votes over time.
+
+**What it gives you:**
+
+- **Hypotheses** -- top N ranked by `risk × confidence × feedback × outcome-accuracy`
+- **Posture advisories** -- per-domain pressure (finance / security / disaster / cyber) with rolling sparklines and ETA-to-threshold projections
+- **Hot entities** -- entities appearing in 2+ concurrent hypotheses, surfaced for cross-cutting awareness
+- **Auto-briefs** (opt-in) -- on critical-pressure crossover, generates a focused 24h brief via the local-first LLM adapter
+- **Skeptic + ensemble** -- per-hypothesis "perspectives ▾" runs analyst / skeptic / pragmatist personas in parallel
+- **Projections** -- "simulate ▸" runs a 24/48h forward-look + cascade-simulator addendum if a matching infra node is found
+- **Question chips** -- 3 investigative prompts per hypothesis; click to ask Claude (local first), answer caches inline
+- **Replay scrubber** -- slide back through 120 archived snapshots, anchored by timestamp so eviction doesn't drift the position
+- **Playbooks** -- learns what you do after each hypothesis (panel jumps, votes, exports) and surfaces "Last time: opened situation-awareness, voted useful (3×)" on recurrence
+- **Markdown export** -- copy a full hypothesis thread (statement + evidence + skeptic + questions + answers + playbook + projection) to clipboard for shift handoff
+
+**Local-first LLM with daily budget**: all generation routes through `/api/intel-generate` (Ollama / LM Studio → Groq) before falling back to the cloud Claude agent. The HUD footer shows your daily cloud-call cap; the Settings overlay (gear icon in HUD header, or `Cmd+,`) lets you raise/lower the cap or toggle auto-brief / skeptic.
+
+**Keyboard:** `Esc` close · `↑/↓` select hypothesis · `Enter` expand projection · `Shift+Enter` expand ensemble · `Cmd+,` settings.
+
+See [`docs/reasoning-layer.md`](docs/reasoning-layer.md) for the full service graph, event bus, storage layout, and invariants.
+
+---
+
+## Diagnostics Overlay (`Cmd+Shift+D`)
+
+Press `Cmd+Shift+D` for the reasoning diagnostics overlay. Four tabs:
+
+- **Events** -- 200-entry ring buffer log filterable by level (info / warn / error) and category (bootstrap / idb / llm / events / commands / hypothesis / forecast / budget / sidecar). Copy-as-JSON or clear from the toolbar.
+- **Metrics** -- per-op latency table (count / p50 / p95 / p99 / mean / last) + named counters (e.g. `llm.local.success`, `idb.put.error`, `analyst-cycle.runs`).
+- **State** -- live shape of every reasoning store: hypothesis count, snapshot archive size, brief archive size, thread count, entity mentions, accuracy samples, relevance weights, LLM budget. Plus a localStorage-footprint table.
+- **Boot** -- bootstrap trace with per-service start latency.
+
+The HUD footer (`Cmd+Shift+A`) shows a live error counter (turns red when > 0). All errors are also pushed to the sidecar within 2s, readable from Claude Code via the `get_reasoning_debug_log` and `get_reasoning_metrics` MCP tools.
+
+`window.cbReasoningDebug.dump()` and `window.cbReasoningMetrics.snapshot()` work from the DevTools console too.
+
+---
+
 ## MCP Server -- Claude Code Integration
 
-Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds. 30 tools across 6 categories registered automatically when you open a session in this repo. Call `help()` for full documentation.
+Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds and the in-app reasoning state. 30+ tools across 7 categories registered automatically when you open a session in this repo. Call `help()` for full documentation.
 
 **Aggregate tools** (broad awareness):
 
@@ -95,6 +135,10 @@ Crystal Ball ships an MCP server that gives Claude Code direct access to all int
 **Intelligence tools** (analysis): `correlate` (cross-domain entity matching), `trend` (time-series from sentinel history), `anomaly_scan` (deviation detection vs baselines).
 
 **Stateful tools** (persistent tracking): `watchlist_manage` / `watchlist_check` (track IPs, tickers, regions, CVEs, vessels, callsigns), `alert_rules_manage` / `alert_check` (threshold-based alerts).
+
+**Analyst tools** (reasoning-layer read + write): `get_analyst_hypotheses` (top ranked hypotheses with thread enrichment), `get_mode_forecast` (per-domain pressure + advisories), `get_analyst_accuracy` (hit/miss ratio per kind), `get_hot_entities` (cross-cutting entities). Write-back via `submit_hypothesis_feedback`, `dismiss_hypothesis`, `run_skeptic_now` — these post to a sidecar queue the renderer drains every ~10s.
+
+**Diagnostic tools**: `get_reasoning_debug_log` (filterable ring buffer), `get_reasoning_metrics` (latency histograms + counters).
 
 **Help**: `help()` returns full tool index; `help({ tool: "correlate" })` returns man page; `help({ topic: "getting-started" })` for guides; `help({ examples: "cross-domain" })` for cookbooks.
 
@@ -152,11 +196,15 @@ Works in air-gapped environments with just Ollama. Each hop is an explicit bound
 |----------|--------|
 | `G` | Toggle God's Vision 3D globe |
 | `Cmd+K` | Command palette |
+| `Cmd+Shift+A` | Toggle Analyst HUD |
+| `Cmd+Shift+D` | Toggle Reasoning Diagnostics overlay |
 | `Cmd+Shift+G` | Toggle Ghost Mode |
+| `Cmd+Shift+H` | Export current briefing to clipboard |
+| `Cmd+Shift+S` | Toggle Status overlay |
 | `Cmd+Shift+T` | Toggle Today view |
 | `Cmd+Shift+W` | Toggle Watchlist editor |
 | `Cmd+S` | Copy shareable URL to clipboard |
-| `Cmd+,` | Open Settings |
+| `Cmd+,` | Open Settings (or Analyst HUD settings if HUD is open) |
 | `Cmd+\` | Toggle sidebar |
 | `F` | Enter Fly Mode (in God's Vision) |
 | `N` | Toggle Navigation (in God's Vision) |
@@ -164,7 +212,9 @@ Works in air-gapped environments with just Ollama. Each hop is an explicit bound
 | `L` | Toggle day/night terminator |
 | `1`-`6` | Fly to theater presets |
 | `Cmd+1`-`5` | Save/recall camera bookmarks |
-| `ESC` | Exit God's Vision or Fly Mode |
+| `ESC` | Exit any open overlay or Fly Mode |
+
+**Inside the Analyst HUD**: `↑`/`↓` move the selection ring through hypotheses, `Enter` expands the projection, `Shift+Enter` expands the ensemble (perspectives) block.
 
 ---
 
@@ -201,7 +251,8 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | Contracts | Buf, Protobuf, generated TypeScript clients + OpenAPI output |
 | Desktop shell | Tauri v2, Rust, macOS keychain, CoreLocation IPC, Node.js sidecar (port 46123) |
 | AI layer | Ollama > Groq > Claude > OpenRouter |
-| MCP server | @modelcontextprotocol/sdk, 19 tools, sidecar port/token discovery |
+| Reasoning  | Analyst HUD, hypothesis-threads / accuracy / dedupe / entities / skeptic / projection / ensemble, IDB reasoning_memory, local-first LLM adapter with daily budget |
+| MCP server | @modelcontextprotocol/sdk, 30+ tools (aggregate / granular / foundation / intelligence / stateful / analyst / diagnostic), sidecar port/token discovery |
 | Correlation | Unified event schema, directional rules, temporal chains, situation clustering |
 | Alerts | Unified inbox, composite relevance scoring, IndexedDB persistence, custom rules |
 | Audio | Procedural Web Audio synthesis, per-layer spatial mixing |
@@ -219,7 +270,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | God's Vision map layers | 70 (26 on by default) | `src/types/index.ts` MapLayers |
 | Panel categories | 19 | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
-| MCP tools | 20 | `tools/mcp-server/index.mjs` |
+| MCP tools | 30 | `tools/mcp-server/index.mjs` |
 | Supported secret keys | 49 | `src-tauri/src/main.rs` |
 | Locales | 19 | `src/locales/` |
 | Generated OpenAPI specs | 21 | `docs/api/` |
@@ -249,8 +300,9 @@ API keys are optional -- most panels degrade gracefully without them. Configure 
 
 | Guide | Purpose |
 |-------|---------|
-| [docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md](docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md) | Enhanced `/sitrep` design -- 3-phase intelligence cycle, personalization, all 20 MCP tools |
-| [docs/API_KEYS.md](docs/API_KEYS.md) | All 49 API keys -- categories, signup URLs, free/paid |
+| [docs/reasoning-layer.md](docs/reasoning-layer.md) | Analyst HUD service graph, event bus, IDB schema, MCP surface, invariants, keyboard shortcuts |
+| [docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md](docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md) | Enhanced `/sitrep` design -- 3-phase intelligence cycle, personalization, all 30 MCP tools |
+| [docs/API_KEYS.md](docs/API_KEYS.md) | All 49 API keys -- categories, signup URLs, free/paid, plain-language descriptions |
 | [docs/DESKTOP_CONFIGURATION.md](docs/DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, fallback behavior |
 | [docs/RELEASE_PACKAGING.md](docs/RELEASE_PACKAGING.md) | Desktop packaging and signing workflow |
 | [docs/ALERTS_ENHANCEMENT_ROADMAP.md](docs/ALERTS_ENHANCEMENT_ROADMAP.md) | Alert system architecture and enhancement roadmap |

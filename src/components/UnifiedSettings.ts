@@ -268,6 +268,16 @@ export class UnifiedSettings {
  }
 
  // Debug tab buttons
+ if (target.id === 'us-open-reasoning-overlay') {
+ document.dispatchEvent(new KeyboardEvent('keydown', {
+ key: 'D', code: 'KeyD', shiftKey: true, metaKey: true, bubbles: true,
+ }));
+ return;
+ }
+ if (target.id === 'us-reload-app') {
+ window.location.reload();
+ return;
+ }
  if (target.id === 'us-open-logs') {
  void tryInvokeTauri<string>('open_logs_folder');
  return;
@@ -415,7 +425,7 @@ export class UnifiedSettings {
  <button class="${this.tabClass('places')}" data-tab="places">Places</button>
  <button class="${this.tabClass('status')}" data-tab="status">${t('panels.status')}</button>
  <button class="${this.tabClass('help')}" data-tab="help">Help</button>
- ${this.config.isDesktopApp ? `<button class="${this.tabClass('debug')}" data-tab="debug">Debug</button>` : ''}
+ <button class="${this.tabClass('debug')}" data-tab="debug">Debug</button>
  </div>
  <div class="unified-settings-tab-panel${this.activeTab === 'general' ? ' active' : ''}" data-panel-id="general">
  ${this.renderGeneralContent()}
@@ -458,7 +468,7 @@ export class UnifiedSettings {
  <div class="unified-settings-tab-panel${this.activeTab === 'help' ? ' active' : ''}" data-panel-id="help">
  ${this.renderHelpContent()}
  </div>
- ${this.config.isDesktopApp ? `<div class="${debugPanelClass}" data-panel-id="debug">${this.renderDebugContent()}</div>` : ''}
+ <div class="${debugPanelClass}" data-panel-id="debug">${this.config.isDesktopApp ? this.renderDebugContent() : this.renderDebugContentWeb()}</div>
  </div>
  `;
 
@@ -502,9 +512,13 @@ export class UnifiedSettings {
  });
 
  if (tab === 'debug') {
+ if (this.config.isDesktopApp) {
  void this._refreshTrafficLog();
  void this._syncVerboseState();
  this._startDebugAutoRefresh();
+ } else {
+ void this._populateWebDebugStats();
+ }
  }
  if (tab === 'places') {
  this.placesDeleteConfirm = null;
@@ -1063,6 +1077,71 @@ export class UnifiedSettings {
   }
 
   // ── Debug tab ──────────────────────────────────────────────────────────────
+
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- linear storage + SW probe, reads cleaner inline
+  private async _populateWebDebugStats(): Promise<void> {
+ const storageEl = this.overlay.querySelector<HTMLElement>('[data-web-debug="storage"]');
+ const swEl = this.overlay.querySelector<HTMLElement>('[data-web-debug="sw"]');
+ if (storageEl) {
+ try {
+ const nav = typeof navigator === 'undefined' ? undefined : navigator as Navigator & { storage?: { estimate?: () => Promise<{ usage?: number; quota?: number }> } };
+ const est = await nav?.storage?.estimate?.();
+ if (est?.usage === undefined || est?.quota === undefined) {
+ storageEl.textContent = 'unavailable';
+ } else {
+ const used = (est.usage / 1024 / 1024).toFixed(1);
+ const quota = (est.quota / 1024 / 1024).toFixed(0);
+ storageEl.textContent = `${used} MiB / ${quota} MiB`;
+ }
+ } catch {
+ storageEl.textContent = 'unavailable';
+ }
+ }
+ if (swEl) {
+ try {
+ const reg = await navigator.serviceWorker?.getRegistration();
+ if (!reg) {
+ swEl.textContent = 'not registered';
+ } else if (reg.waiting) {
+ swEl.textContent = 'update waiting (reload to activate)';
+ } else if (reg.installing) {
+ swEl.textContent = 'installing';
+ } else {
+ swEl.textContent = 'active';
+ }
+ } catch {
+ swEl.textContent = 'unavailable';
+ }
+ }
+  }
+
+  private renderDebugContentWeb(): string {
+ const fetchDebug = localStorage.getItem('wm-debug-log') === '1';
+ const ua = typeof navigator === 'undefined' ? 'n/a' : navigator.userAgent;
+ const variant = SITE_VARIANT || 'full';
+ const version = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
+ return `
+ <div class="us-debug-content">
+ <div class="us-debug-section-label">Runtime</div>
+ <dl class="us-debug-kv">
+ <dt>Version</dt><dd>${escapeHtml(version)}</dd>
+ <dt>Variant</dt><dd>${escapeHtml(variant)}</dd>
+ <dt>User agent</dt><dd>${escapeHtml(ua)}</dd>
+ <dt>Storage</dt><dd><span data-web-debug="storage">computing…</span></dd>
+ <dt>Service worker</dt><dd><span data-web-debug="sw">checking…</span></dd>
+ </dl>
+ <div class="us-debug-section-label">Diagnostics</div>
+ <div class="us-debug-toggles">
+ <label class="us-debug-toggle-row"><input type="checkbox" id="us-fetch-debug" ${fetchDebug ? 'checked' : ''}> Frontend Fetch Debug</label>
+ </div>
+ <div class="us-debug-actions">
+ <button id="us-open-reasoning-overlay" class="us-debug-btn">Open Reasoning Overlay (⌘⇧D)</button>
+ <button id="us-reload-app" class="us-debug-btn">Reload app</button>
+ </div>
+ <p class="us-debug-empty" style="margin-top:12px;">Sidecar traffic logs and keychain tools are desktop-only. For browser-side issues, use DevTools + the Reasoning Overlay.</p>
+ </div>
+ `;
+  }
 
   private renderDebugContent(): string {
  const fetchDebug = localStorage.getItem('wm-debug-log') === '1';

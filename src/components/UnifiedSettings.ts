@@ -24,6 +24,7 @@ import {
   setLocationFromGps,
   setLocationManual,
 } from '@/services/proximity-filter';
+import { geocodeCityStateCountry } from '@/services/geonames';
 
 const GEAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
 
@@ -213,6 +214,34 @@ export class UnifiedSettings {
  setLocationManual(lat, lon, label);
  this.refreshGeneralTab();
  }
+ return;
+ }
+ if (target.id === 'us-lookup-location') {
+ const statusEl = this.overlay.querySelector<HTMLElement>('#us-lookup-status');
+ const city = this.overlay.querySelector<HTMLInputElement>('#us-home-city')?.value ?? '';
+ const state = this.overlay.querySelector<HTMLInputElement>('#us-home-state')?.value ?? '';
+ const country = this.overlay.querySelector<HTMLInputElement>('#us-home-country')?.value ?? '';
+ if (!city.trim() && !state.trim() && !country.trim()) {
+ if (statusEl) statusEl.textContent = 'Enter a city, state, or country.';
+ return;
+ }
+ if (statusEl) statusEl.textContent = 'Looking up…';
+ const btn = target as HTMLButtonElement;
+ btn.disabled = true;
+ void (async () => {
+ try {
+ const result = await geocodeCityStateCountry(city, state, country);
+ if (!result) {
+ if (statusEl) statusEl.textContent = 'No match found. Try a different spelling or use coordinates.';
+ return;
+ }
+ setLocationManual(result.lat, result.lon, result.label);
+ if (statusEl) statusEl.textContent = `Set to ${result.label}`;
+ this.refreshGeneralTab();
+ } finally {
+ btn.disabled = false;
+ }
+ })();
  return;
  }
  if (target.id === 'us-clear-location') {
@@ -603,9 +632,17 @@ export class UnifiedSettings {
  <div class="ai-flow-toggle-row" style="flex-direction:column;align-items:flex-start;gap:6px">
  <div class="ai-flow-toggle-label">Set manually</div>
  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+ <input id="us-home-city" type="text" placeholder="City" style="width:140px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <input id="us-home-state" type="text" placeholder="State / region" style="width:140px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <input id="us-home-country" type="text" placeholder="Country" style="width:140px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <button id="us-lookup-location" class="yt-account-btn connect" style="min-width:70px">Look up</button>
+ <span id="us-lookup-status" style="font-size:11px;color:var(--text-muted);min-height:14px;"></span>
+ </div>
+ <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+ <span style="font-size:11px;color:var(--text-muted);">or coordinates:</span>
  <input id="us-home-lat" type="number" step="any" placeholder="Latitude" value="${latVal}" style="width:100px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
  <input id="us-home-lon" type="number" step="any" placeholder="Longitude" value="${lonVal}" style="width:110px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
- <input id="us-home-label" type="text" placeholder="Label (e.g. Home)" value="${labelVal}" style="width:130px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <input id="us-home-label" type="text" placeholder="Label (optional)" value="${labelVal}" style="width:130px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
  <button id="us-manual-location" class="yt-account-btn connect" style="min-width:50px">Set</button>
  ${loc ? `<button id="us-clear-location" class="yt-account-btn disconnect" style="min-width:55px">Clear</button>` : ''}
  </div>

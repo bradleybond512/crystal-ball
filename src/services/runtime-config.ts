@@ -1087,6 +1087,72 @@ async function callSidecarWithAuth(url: string, init: RequestInit): Promise<Resp
   return fetch(url, { ...init, headers });
 }
 
+interface WebProbeSpec {
+  url: (value: string) => string;
+  headers?: (value: string) => Record<string, string>;
+}
+
+/**
+ * Browser-direct probes for providers that accept CORS preflight from
+ * a web origin. A 200/2xx means the key is valid; 401/403 means bad key;
+ * anything else (CORS block, network error, 5xx) falls back to a
+ * non-committal "Saved" rather than marking the key invalid.
+ */
+const WEB_PROBES: Partial<Record<RuntimeSecretKey, WebProbeSpec>> = {
+  ANTHROPIC_API_KEY: {
+ url: () => 'https://api.anthropic.com/v1/models',
+ headers: (v) => ({ 'x-api-key': v, 'anthropic-version': '2023-06-01' }),
+  },
+  GROQ_API_KEY: {
+ url: () => 'https://api.groq.com/openai/v1/models',
+ headers: (v) => ({ Authorization: `Bearer ${v}` }),
+  },
+  OPENROUTER_API_KEY: {
+ url: () => 'https://openrouter.ai/api/v1/models',
+ headers: (v) => ({ Authorization: `Bearer ${v}` }),
+  },
+  CESIUM_ION_TOKEN: {
+ url: () => 'https://api.cesium.com/v1/assets?limit=1',
+ headers: (v) => ({ Authorization: `Bearer ${v}` }),
+  },
+  MAPBOX_API_KEY: {
+ url: (v) => `https://api.mapbox.com/tokens/v2?access_token=${encodeURIComponent(v)}`,
+  },
+  MAPTILER_API_KEY: {
+ url: (v) => `https://api.maptiler.com/maps/basic-v2/style.json?key=${encodeURIComponent(v)}`,
+  },
+};
+
+async function verifyWebSecret(
+  key: RuntimeSecretKey,
+  value: string,
+): Promise<SecretVerificationResult> {
+  const spec = WEB_PROBES[key];
+  if (!spec) return { valid: true, message: 'Saved' };
+
+  const trimmed = value.trim();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+ const res = await fetch(spec.url(trimmed), {
+ method: 'GET',
+ headers: spec.headers ? spec.headers(trimmed) : undefined,
+ signal: controller.signal,
+ });
+ if (res.ok) return { valid: true, message: 'Verified' };
+ if (res.status === 401 || res.status === 403) {
+ return { valid: false, message: `Rejected by provider (${res.status})` };
+ }
+ // Rate limits, 5xx, etc. — don't lie about validity.
+ return { valid: true, message: `Saved (provider returned ${res.status})` };
+  } catch {
+ // CORS block or network failure — can't tell, so don't block the save.
+ return { valid: true, message: 'Saved (could not verify from browser)' };
+  } finally {
+ clearTimeout(timer);
+  }
+}
+
 export async function verifySecretWithApi(
   key: RuntimeSecretKey,
   value: string,
@@ -1098,7 +1164,7 @@ export async function verifySecretWithApi(
   }
 
   if (!isDesktopRuntime()) {
- return { valid: true, message: 'Saved' };
+ return verifyWebSecret(key, value);
   }
 
   try {

@@ -349,8 +349,13 @@ export class EventHandlerManager implements AppModule {
  } catch { /* malformed URL -- let browser handle */ }
  };
  document.addEventListener('click', this.boundDesktopExternalLinkHandler, true);
+ }
 
- // Cmd+S — copy shareable URL to clipboard (macOS desktop share shortcut)
+ // Keyboard shortcuts — these route to pure renderer-side actions
+ // (CustomEvent dispatch, CSS toggles, clipboard writes) so they work in
+ // the web build too. Cmd is e.metaKey on mac browsers and the
+ // Windows/Super key elsewhere; preventDefault suppresses the browser
+ // default for the rare overlaps (Cmd+S, Cmd+K).
  this.boundKeydownHandler = async (e: KeyboardEvent) => {
  if (e.metaKey && e.key === 's' && !e.shiftKey && !e.altKey) {
  const active = document.activeElement;
@@ -386,8 +391,10 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  document.dispatchEvent(new CustomEvent('cb:toggle-cmdk'));
  }
- // Cmd+Shift+W — toggle Watchlist editor
- if (e.metaKey && e.shiftKey && e.key === 'W' && !e.altKey) {
+ // Cmd+Shift+W — toggle Watchlist editor. Browsers reserve this for
+ // "close all tabs" and will not let preventDefault override it, so
+ // desktop-only on purpose.
+ if (this.ctx.isDesktopApp && e.metaKey && e.shiftKey && e.key === 'W' && !e.altKey) {
  const active = document.activeElement;
  if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return;
  e.preventDefault();
@@ -415,8 +422,10 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  (document.querySelector('#unifiedSettingsMount .mac-sidebar-footer-btn') as HTMLElement)?.click();
  }
- // Cmd+M — toggle Ghost Mode (only non-default mode left besides God's Vision)
- if (e.metaKey && e.key === 'm' && !e.shiftKey && !e.altKey) {
+ // Cmd+M — toggle Ghost Mode (only non-default mode left besides God's Vision).
+ // The OS intercepts Cmd+M in Mac browsers for "minimize window" so web gets
+ // Cmd+Shift+G as its only way in.
+ if (this.ctx.isDesktopApp && e.metaKey && e.key === 'm' && !e.shiftKey && !e.altKey) {
  const active = document.activeElement;
  if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return;
  e.preventDefault();
@@ -427,7 +436,6 @@ export class EventHandlerManager implements AppModule {
 
  // Wire sidebar collapse button + floating expand tab
  this._initSidebarCollapse();
- }
   }
 
   private _toggleSidebar(): void {

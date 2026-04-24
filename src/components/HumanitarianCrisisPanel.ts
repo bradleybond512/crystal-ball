@@ -1,7 +1,7 @@
 import { Panel } from './Panel';
 import type { HumanitarianCrisis } from '@/services/hdx-crisis';
 import { crisisTypeLabel, crisisSeverityClass } from '@/services/hdx-crisis';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 
 export class HumanitarianCrisisPanel extends Panel {
   private crises: HumanitarianCrisis[] = [];
@@ -36,7 +36,7 @@ export class HumanitarianCrisisPanel extends Panel {
  return `<tr class="${rowClass}">
  <td><span class="sev-badge">${escapeHtml(crisisTypeLabel(c.crisisType))}</span></td>
  <td>${escapeHtml(country)}</td>
- <td><a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer"
+ <td><a href="${sanitizeUrl(c.url)}" target="_blank" rel="noopener noreferrer"
  style="color:inherit;text-decoration:none">${escapeHtml(c.title.slice(0, 55))}${c.title.length > 55 ? '…' : ''}</a></td>
  <td style="opacity:0.6;white-space:nowrap">${updated}</td>
  </tr>`;

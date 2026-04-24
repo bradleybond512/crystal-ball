@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 import type { BreakingAlert } from '@/services/breaking-news-alerts';
 import { getAlertSettings } from '@/services/breaking-news-alerts';
 import { t } from '@/services/i18n';
@@ -27,6 +28,7 @@ export class BreakingNewsBanner {
   private boundOnVisibility: () => void;
   private boundOnResize: () => void;
   private dismissed = new Map<string, number>();
+  private resizeRaf: number | null = null;
 
   constructor() {
  this.container = document.createElement('div');
@@ -38,7 +40,15 @@ export class BreakingNewsBanner {
 
  this.boundOnAlert = (e: Event) => this.handleAlert((e as CustomEvent<BreakingAlert>).detail);
  this.boundOnVisibility = () => this.handleVisibility();
- this.boundOnResize = () => this.updatePosition();
+ // Coalesce bursts of resize events (window drag fires 100s/sec) into one
+ // layout pass per animation frame.
+ this.boundOnResize = () => {
+ if (this.resizeRaf !== null) return;
+ this.resizeRaf = requestAnimationFrame(() => {
+ this.resizeRaf = null;
+ this.updatePosition();
+ });
+ };
 
  document.addEventListener('wm:breaking-news', this.boundOnAlert);
  document.addEventListener('visibilitychange', this.boundOnVisibility);
@@ -255,6 +265,7 @@ export class BreakingNewsBanner {
  document.removeEventListener('wm:breaking-news', this.boundOnAlert);
  document.removeEventListener('visibilitychange', this.boundOnVisibility);
  window.removeEventListener('resize', this.boundOnResize);
+ if (this.resizeRaf !== null) cancelAnimationFrame(this.resizeRaf);
  this.mutationObserver?.disconnect();
  this.resizeObserver?.disconnect();
 

@@ -1,6 +1,7 @@
+/* eslint-disable sonarjs/no-nested-conditional, unicorn/no-nested-ternary, unicorn/no-negated-condition */
 import { Panel } from './Panel';
 import type { DiseaseOutbreak, GlobalDiseaseSnapshot } from '@/services/disease-outbreak';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { t } from '@/services/i18n';
 
 export class DiseaseOutbreakPanel extends Panel {
@@ -46,10 +47,10 @@ export class DiseaseOutbreakPanel extends Panel {
 
  const rows = this.outbreaks.slice(0, 50).map(o => {
  const sevClass = sevRowClass(o.severity);
- // Validate scheme before using URL in href — prevents javascript:/data: injection
- const safeUrl = o.url?.startsWith('https://') ? o.url : null;
+ // sanitizeUrl rejects non-http(s) schemes and private/loopback hosts.
+ const safeUrl = o.url ? sanitizeUrl(o.url) : '';
  const link = safeUrl
- ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener" class="do-link">${escapeHtml(o.disease)}</a>`
+ ? `<a href="${safeUrl}" target="_blank" rel="noopener" class="do-link">${escapeHtml(o.disease)}</a>`
  : escapeHtml(o.disease);
  return `<tr class="${sevClass}">
  <td class="do-sev">${sevBadge(o.severity)}</td>

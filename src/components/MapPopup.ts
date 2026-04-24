@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, sonarjs/max-switch-cases, sonarjs/no-identical-functions, sonarjs/no-nested-template-literals, sonarjs/slow-regex, unicorn/no-nested-ternary, unicorn/consistent-function-scoping */
 import type { ConflictZone, Hotspot, NewsItem, MilitaryBase, StrategicWaterway, APTGroup, NuclearFacility, EconomicCenter, GammaIrradiator, Pipeline, UnderseaCable, CableAdvisory, RepairShip, InternetOutage, AIDataCenter, AisDisruptionEvent, SocialUnrestEvent, MilitaryFlight, MilitaryVessel, MilitaryFlightCluster, MilitaryVesselCluster, NaturalEvent, Port, Spaceport, CriticalMineralProject, CyberThreat } from '@/types';
 import type { AirportDelayAlert } from '@/services/aviation';
 import type { ScoredFAACamera } from '@/services/faa-cameras';
@@ -1166,7 +1167,7 @@ export class MapPopup {
  ? `<div class="popup-subtitle" style="margin-top:6px">Targets: ${escapeHtml(apt.targetSectors.join(', '))}</div>`
  : '';
  const mitreHtml = apt.mitreId && apt.mitreUrl
- ? `<div class="popup-stat"><span class="stat-label">MITRE</span><span class="stat-value"><a class="popup-link" href="${escapeHtml(apt.mitreUrl)}" target="_blank" rel="noopener">${escapeHtml(apt.mitreId)} ↗</a></span></div>`
+ ? `<div class="popup-stat"><span class="stat-label">MITRE</span><span class="stat-value"><a class="popup-link" href="${sanitizeUrl(apt.mitreUrl)}" target="_blank" rel="noopener">${escapeHtml(apt.mitreId)} ↗</a></span></div>`
  : '';
  const activeBadge = apt.active === false
  ? `<span class="popup-badge low">Inactive</span>`

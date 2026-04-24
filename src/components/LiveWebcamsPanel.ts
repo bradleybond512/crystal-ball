@@ -125,15 +125,17 @@ export class LiveWebcamsPanel extends Panel {
  const gridBtn = document.createElement('button');
  gridBtn.className = `webcam-view-btn${this.viewMode === 'grid' ? ' active' : ''}`;
  gridBtn.dataset.mode = 'grid';
- gridBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>';
+ gridBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>';
  gridBtn.title = 'Grid view';
+ gridBtn.setAttribute('aria-label', 'Grid view');
  gridBtn.addEventListener('click', () => this.setViewMode('grid'));
 
  const singleBtn = document.createElement('button');
  singleBtn.className = `webcam-view-btn${this.viewMode === 'single' ? ' active' : ''}`;
  singleBtn.dataset.mode = 'single';
- singleBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="18" height="14" rx="2"/><rect x="3" y="19" width="18" height="2" rx="1"/></svg>';
+ singleBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="3" y="3" width="18" height="14" rx="2"/><rect x="3" y="19" width="18" height="2" rx="1"/></svg>';
  singleBtn.title = 'Single view';
+ singleBtn.setAttribute('aria-label', 'Single view');
  singleBtn.addEventListener('click', () => this.setViewMode('single'));
 
  viewGroup.append(gridBtn);
@@ -235,7 +237,8 @@ export class LiveWebcamsPanel extends Panel {
  const expandBtn = document.createElement('button');
  expandBtn.className = 'webcam-expand-btn';
  expandBtn.title = t('webcams.expand') || 'Expand';
- expandBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+ expandBtn.setAttribute('aria-label', t('webcams.expand') || 'Expand webcam');
+ expandBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
  expandBtn.addEventListener('click', (e) => {
  e.stopPropagation();
  trackWebcamSelected(feed.id, feed.city, 'grid');

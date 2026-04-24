@@ -270,10 +270,19 @@ loadDesktopSecrets().then(async () => {
 // Apply stored theme preference before app initialization (safety net for inline script)
 applyStoredTheme();
 
-// Mark body with macOS-native class so CSS design system activates on desktop
-if (isDesktopRuntime()) {
-  document.body.classList.add('is-desktop-macos');
-} else if (FORCE_DESKTOP_GATE) {
+// Activate the desktop design system (sidebar chrome, wide layout, hover
+// affordances) whenever the client is a fine-pointer desktop-sized viewport,
+// not only in the Tauri build. The class name is historical — "macos" means
+// "the macOS-inspired chrome we use on any desktop browser". Mobile and
+// narrow-tablet browsers keep the default mobile layout.
+function shouldUseDesktopChrome(): boolean {
+  if (isDesktopRuntime() || FORCE_DESKTOP_GATE) return true;
+  if (typeof window === 'undefined') return false;
+  const finePointer = window.matchMedia?.('(pointer: fine)').matches ?? false;
+  const wideEnough = window.innerWidth >= 768;
+  return finePointer && wideEnough;
+}
+if (shouldUseDesktopChrome()) {
   document.body.classList.add('is-desktop-macos');
 }
 

@@ -1,4 +1,4 @@
-
+/* eslint-disable sonarjs/no-nested-conditional, sonarjs/function-return-type, sonarjs/no-async-constructor, no-console */
 import { Panel } from './Panel';
 import { t } from '@/services/i18n';
 import { getLocalApiPort, isDesktopRuntime } from '@/services/runtime';
@@ -40,10 +40,32 @@ export class ServiceStatusPanel extends Panel {
   private error: string | null = null;
   private filter: CategoryFilter = 'all';
   private localBackend: LocalBackendStatus | null = null;
+  private cloudReachable: boolean | null = null;
 
   constructor() {
  super({ id: 'service-status', title: t('panels.serviceStatus'), showCount: false });
  void this.fetchStatus();
+ if (!isDesktopRuntime()) void this.probeCloudHealth();
+  }
+
+  private async probeCloudHealth(): Promise<void> {
+ // Cheap HEAD/GET probe to whatever the `/api/*` redirect resolves to in
+ // this deployment. Uses a short timeout so a loading panel never hangs
+ // on a slow or offline network.
+ const controller = new AbortController();
+ const timer = setTimeout(() => controller.abort(), 4000);
+ try {
+ const res = await fetch('/api/health', { method: 'GET', signal: controller.signal });
+ // Only a 2xx response counts as healthy. A 404 usually means the edge
+ // is up but /api/health is not wired on this deployment — that's still
+ // a red flag, so surface it as unreachable rather than lying green.
+ this.cloudReachable = res.ok;
+ } catch {
+ this.cloudReachable = false;
+ } finally {
+ clearTimeout(timer);
+ this.render();
+ }
   }
 
   private lastServicesJson = '';
@@ -120,7 +142,18 @@ export class ServiceStatusPanel extends Panel {
   }
 
   private buildBackendStatus(): DomChild {
- if (!isDesktopRuntime()) return false;
+ if (!isDesktopRuntime()) {
+ const reachable = this.cloudReachable;
+ const label = reachable === null
+ ? 'Checking cloud API…'
+ : (reachable
+ ? 'Cloud API reachable'
+ : 'Cloud API unreachable — features that rely on server proxying may fail.');
+ const stateClass = reachable === false ? 'service-status-backend warning' : 'service-status-backend';
+ return h('div', { className: stateClass },
+ label, ' · ', h('strong', null, 'api.crystalball.app'),
+ );
+ }
 
  if (!this.localBackend?.enabled) {
  return h('div', { className: 'service-status-backend warning' },

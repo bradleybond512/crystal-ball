@@ -411,7 +411,7 @@ export class UnifiedSettings {
  <button class="${this.tabClass('general')}" data-tab="general">${t('header.tabGeneral')}</button>
  <button class="${this.tabClass('panels')}" data-tab="panels">${t('header.tabPanels')}</button>
  <button class="${this.tabClass('sources')}" data-tab="sources">${t('header.tabSources')}</button>
- ${this.config.isDesktopApp ? `<button class="${this.tabClass('api-keys')}" data-tab="api-keys">${t('header.tabApiKeys')}</button>` : ''}
+ <button class="${this.tabClass('api-keys')}" data-tab="api-keys">${t('header.tabApiKeys')}</button>
  <button class="${this.tabClass('places')}" data-tab="places">Places</button>
  <button class="${this.tabClass('status')}" data-tab="status">${t('panels.status')}</button>
  <button class="${this.tabClass('help')}" data-tab="help">Help</button>
@@ -448,7 +448,7 @@ export class UnifiedSettings {
  <button class="sources-select-none">${t('common.selectNone')}</button>
  </div>
  </div>
- ${this.config.isDesktopApp ? `<div class="${apiKeyPanelClass}" data-panel-id="api-keys"></div>` : ''}
+ <div class="${apiKeyPanelClass}" data-panel-id="api-keys"></div>
  <div class="unified-settings-tab-panel${this.activeTab === 'places' ? ' active' : ''}" data-panel-id="places">
  <div class="us-places-content" id="usPlacesContent"></div>
  </div>
@@ -462,8 +462,11 @@ export class UnifiedSettings {
  </div>
  `;
 
- // Mount RuntimeConfigPanel content into API Keys tab (desktop only)
- if (this.config.isDesktopApp) {
+ // Mount RuntimeConfigPanel content into API Keys tab. On web the panel
+ // surfaces the passphrase-encrypted vault (create / unlock / lock /
+ // destroy banner + per-provider inputs); on desktop it goes through the
+ // Tauri keychain.
+ {
  const apiContainer = this.overlay.querySelector<HTMLElement>('[data-panel-id="api-keys"]');
  if (apiContainer) {
  this.apiConfigPanel ??= new RuntimeConfigPanel({ mode: 'full', buffered: false });

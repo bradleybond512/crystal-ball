@@ -90,8 +90,18 @@ function markSignalSeen(key: string): void {
 }
 
 // Worker message handler
-self.onmessage = (event: MessageEvent<WorkerMessage>) => {
+const VALID_MESSAGE_TYPES = new Set(['cluster', 'correlation', 'reset']);
+
+// eslint-disable-next-line sonarjs/post-message -- dedicated worker: only the spawning document can post
+self.addEventListener('message', (event: MessageEvent<WorkerMessage>) => {
   const message = event.data;
+  // Worker is spawned same-origin, but postMessage accepts arbitrary
+  // structured-cloned input. Reject anything outside the known contract
+  // rather than relying on the TypeScript cast to protect us at runtime.
+  if (!message || typeof message !== 'object' || typeof (message as { type?: unknown }).type !== 'string'
+ || !VALID_MESSAGE_TYPES.has((message as { type: string }).type)) {
+ return;
+  }
 
   switch (message.type) {
  case 'cluster': {
@@ -154,7 +164,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
  break;
  }
   }
-};
+});
 
 // Signal that worker is ready
 self.postMessage({ type: 'ready' });

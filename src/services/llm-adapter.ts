@@ -17,6 +17,7 @@
 
 import { runClaudeAgent } from './claude-agent';
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
+import { getRuntimeConfigSnapshot } from './runtime-config';
 import { recordCall, reserveCloudCall } from './llm-budget';
 import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
@@ -50,7 +51,11 @@ interface LocalResponseShape {
 }
 
 async function tryLocal(prompt: string, options: LlmOptions): Promise<LlmResult | null> {
-  if (!isDesktopRuntime()) return null;
+  if (isDesktopRuntime()) return tryLocalViaSidecar(prompt, options);
+  return tryLocalDirect(prompt, options);
+}
+
+async function tryLocalViaSidecar(prompt: string, options: LlmOptions): Promise<LlmResult | null> {
   const base = getApiBaseUrl();
   if (!base) return null;
 
@@ -168,6 +173,72 @@ export async function generateText(prompt: string, options: LlmOptions = {}): Pr
   const cloud = await tryCloudAgent(prompt, options);
   if (cloud) return cloud; // already counted by reserveCloudCall
   return { text: '', provider: 'none' };
+}
+
+/**
+ * Web build has no sidecar, so call the user-configured Ollama endpoint
+ * directly. OLLAMA_API_URL / OLLAMA_MODEL are set via the web secret vault.
+ * Requires the user to start Ollama with `OLLAMA_ORIGINS=*` (or the app's
+ * origin) so the browser's fetch is CORS-permitted.
+ */
+async function tryLocalDirect(prompt: string, options: LlmOptions): Promise<LlmResult | null> {
+  const secrets = getRuntimeConfigSnapshot().secrets;
+  const baseUrl = secrets.OLLAMA_API_URL?.value?.replace(/\/$/, '') ?? '';
+  const model = secrets.OLLAMA_MODEL?.value ?? '';
+  if (!baseUrl || !model) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOCAL_TIMEOUT_MS);
+  const signal = options.signal
+    ? combineSignals(controller.signal, options.signal)
+    : controller.signal;
+
+  const t0 = performance.now();
+  try {
+    const res = await fetch(`${baseUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt: options.system ? `${options.system}\n\n${prompt}` : prompt,
+        stream: false,
+        options: { num_predict: options.maxTokens ?? 400 },
+      }),
+      signal,
+    });
+    const latencyMs = performance.now() - t0;
+    recordLatency('llm.local', latencyMs);
+    if (!res.ok) {
+      logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
+        message: `local-direct ${res.status}`, latencyMs,
+        data: { status: res.status, promptChars: prompt.length } });
+      incrementCounter('llm.local.non-ok');
+      return null;
+    }
+    const parsed = await res.json() as { response?: unknown; model?: unknown };
+    const text = typeof parsed.response === 'string' ? parsed.response : '';
+    if (!text) {
+      incrementCounter('llm.local.empty');
+      return null;
+    }
+    incrementCounter('llm.local.success');
+    return {
+      text,
+      provider: 'local',
+      model: typeof parsed.model === 'string' ? parsed.model : model,
+    };
+  } catch (error) {
+    const latencyMs = performance.now() - t0;
+    recordLatency('llm.local', latencyMs);
+    logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
+      message: 'local-direct threw', latencyMs,
+      data: { error: error instanceof Error ? error.message : String(error),
+              promptChars: prompt.length } });
+    incrementCounter('llm.local.error');
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

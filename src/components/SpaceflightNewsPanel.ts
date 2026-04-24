@@ -1,6 +1,6 @@
 import { Panel } from './Panel';
 import type { SpaceflightArticle } from '@/services/spaceflight-news';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 
 export class SpaceflightNewsPanel extends Panel {
   private articles: SpaceflightArticle[] = [];
@@ -40,7 +40,7 @@ export class SpaceflightNewsPanel extends Panel {
  <span class="sev-badge" style="white-space:nowrap">${escapeHtml(a.newsSite)}</span>
  <span style="opacity:0.5;font-size:11px;white-space:nowrap">${ago}</span>
  </div>
- <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer"
+ <a href="${sanitizeUrl(a.url)}" target="_blank" rel="noopener noreferrer"
  style="display:block;margin:4px 0 2px;font-weight:600;text-decoration:none;color:inherit">
  ${escapeHtml(a.title)}
  </a>

@@ -23,6 +23,22 @@ import { trackFeatureToggle } from '@/services/analytics';
 import { SIGNUP_URLS, PLAINTEXT_KEYS, MASKED_SENTINEL, SETTINGS_CATEGORIES } from '@/services/settings-constants';
 import { getRegistrationProfile, saveRegistrationProfile, clearRegistrationProfile } from '@/services/registration-profile';
 import type { RegistrationProfile } from '@/services/registration-profile';
+import {
+  createVault as createWebVault,
+  destroyVault as destroyWebVault,
+  getVaultState as getWebVaultState,
+  isSupported as isWebVaultSupported,
+  isVaultUnlocked as isWebVaultUnlocked,
+  lockVault as lockWebVault,
+  onVaultChange as onWebVaultChange,
+  unlockVault as unlockWebVault,
+  validatePassphrase as validateWebPassphrase,
+  type LockState as WebVaultLockState,
+} from '@/services/web-secret-store';
+
+function canEditWebSecrets(): boolean {
+  return isDesktopRuntime() || isWebVaultUnlocked();
+}
 
 interface RuntimeConfigPanelOptions {
   mode?: 'full' | 'alert';
@@ -32,12 +48,15 @@ interface RuntimeConfigPanelOptions {
 
 export class RuntimeConfigPanel extends Panel {
   private unsubscribe: (() => void) | null = null;
+  private unsubscribeVault: (() => void) | null = null;
   private readonly mode: 'full' | 'alert';
   private readonly buffered: boolean;
   private readonly featureFilter?: RuntimeFeatureId[];
   private pendingSecrets = new Map<RuntimeSecretKey, string>();
   private validatedKeys = new Map<RuntimeSecretKey, boolean>();
   private validationMessages = new Map<RuntimeSecretKey, string>();
+  private webVaultState: WebVaultLockState = isWebVaultUnlocked() ? 'unlocked' : 'missing';
+  private webVaultMessage: { kind: 'info' | 'error'; text: string } | null = null;
 
   constructor(options: RuntimeConfigPanelOptions = {}) {
  super({ id: 'runtime-config', title: t('modals.runtimeConfig.title'), showCount: false });
@@ -45,6 +64,30 @@ export class RuntimeConfigPanel extends Panel {
  this.buffered = options.buffered ?? false;
  this.featureFilter = options.featureFilter;
  this.unsubscribe = subscribeRuntimeConfig(() => this.render());
+ if (!isDesktopRuntime()) {
+ this.unsubscribeVault = onWebVaultChange(() => {
+ if (isWebVaultUnlocked()) {
+ this.webVaultState = 'unlocked';
+ } else if (this.webVaultState === 'unlocked') {
+ this.webVaultState = 'locked';
+ }
+ this.render();
+ });
+ // Fire-and-forget initial probe so a newly-mounted panel reflects the
+ // persisted vault state (locked vs missing) once IDB responds.
+ // eslint-disable-next-line sonarjs/no-async-constructor
+ void this.refreshWebVaultState();
+ }
+ this.render();
+  }
+
+  private async refreshWebVaultState(): Promise<void> {
+ if (isDesktopRuntime()) return;
+ try {
+ this.webVaultState = await getWebVaultState();
+ } catch {
+ this.webVaultState = 'missing';
+ }
  this.render();
   }
 
@@ -99,7 +142,7 @@ export class RuntimeConfigPanel extends Panel {
  const errors: string[] = [];
  for (const [key, value] of this.pendingSecrets) {
  const result = validateSecret(key, value);
- if (!result.valid) errors.push(`${key}: ${result.hint || 'Invalid format'}`);
+ if (!result.valid) errors.push(`${key}: ${result.hint ?? 'Invalid format'}`);
  }
  return errors;
   }
@@ -117,8 +160,8 @@ export class RuntimeConfigPanel extends Panel {
  toVerifyRemotely.push([key, value]);
  } else {
  this.validatedKeys.set(key, false);
- this.validationMessages.set(key, localResult.hint || 'Invalid format');
- errors.push(`${key}: ${localResult.hint || 'Invalid format'}`);
+ this.validationMessages.set(key, localResult.hint ?? 'Invalid format');
+ errors.push(`${key}: ${localResult.hint ?? 'Invalid format'}`);
  }
  }
 
@@ -140,8 +183,8 @@ export class RuntimeConfigPanel extends Panel {
  if (verifyResult.valid) {
  this.validationMessages.delete(key);
  } else {
- this.validationMessages.set(key, verifyResult.message || 'Verification failed');
- errors.push(`${key}: ${verifyResult.message || 'Verification failed'}`);
+ this.validationMessages.set(key, verifyResult.message ?? 'Verification failed');
+ errors.push(`${key}: ${verifyResult.message ?? 'Verification failed'}`);
  }
  }
  }
@@ -156,6 +199,8 @@ export class RuntimeConfigPanel extends Panel {
   public destroy(): void {
  this.unsubscribe?.();
  this.unsubscribe = null;
+ this.unsubscribeVault?.();
+ this.unsubscribeVault = null;
  this.pendingSecrets.clear();
   }
 
@@ -168,26 +213,27 @@ export class RuntimeConfigPanel extends Panel {
  if (!raw || raw === MASKED_SENTINEL) return;
  // Skip plaintext keys whose value hasn't changed from stored value
  if (PLAINTEXT_KEYS.has(key) && !this.pendingSecrets.has(key)) {
- const stored = getRuntimeConfigSnapshot().secrets[key]?.value || '';
+ const stored = getRuntimeConfigSnapshot().secrets[key]?.value ?? '';
  if (raw === stored) return;
  }
  this.pendingSecrets.set(key, raw);
  const result = validateSecret(key, raw);
  if (!result.valid) {
  this.validatedKeys.set(key, false);
- this.validationMessages.set(key, result.hint || 'Invalid format');
+ this.validationMessages.set(key, result.hint ?? 'Invalid format');
  }
  });
  // Capture model from select or manual input
  const modelSelect = this.content.querySelector<HTMLSelectElement>('select[data-model-select]');
  const modelManual = this.content.querySelector<HTMLInputElement>('input[data-model-manual]');
- const modelValue = (modelManual && !modelManual.classList.contains('hidden-input') ? modelManual.value.trim() : modelSelect?.value) || '';
+ const modelValue = (modelManual && !modelManual.classList.contains('hidden-input') ? modelManual.value.trim() : modelSelect?.value) ?? '';
  if (modelValue && !this.pendingSecrets.has('OLLAMA_MODEL')) {
  this.pendingSecrets.set('OLLAMA_MODEL', modelValue);
  this.validatedKeys.set('OLLAMA_MODEL', true);
  }
   }
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- dispatches alert/full modes with many small branches; splitting would obscure the flow
   protected render(): void {
  this.captureUnsavedInputs();
  const snapshot = getRuntimeConfigSnapshot();
@@ -206,9 +252,14 @@ export class RuntimeConfigPanel extends Panel {
  return;
  }
 
- const alertTitle = configuredCount > 0
- ? (missingFeatures > 0 ? t('modals.runtimeConfig.alertTitle.some') : t('modals.runtimeConfig.alertTitle.configured'))
- : t('modals.runtimeConfig.alertTitle.needsKeys');
+ let alertTitle: string;
+ if (configuredCount === 0) {
+ alertTitle = t('modals.runtimeConfig.alertTitle.needsKeys');
+ } else if (missingFeatures > 0) {
+ alertTitle = t('modals.runtimeConfig.alertTitle.some');
+ } else {
+ alertTitle = t('modals.runtimeConfig.alertTitle.configured');
+ }
  const alertClass = missingFeatures > 0 ? 'warn' : 'ok';
 
  this.show();
@@ -243,6 +294,7 @@ export class RuntimeConfigPanel extends Panel {
 
  this.content.innerHTML = `
  ${this.renderProfileSection()}
+ ${desktop ? '' : this.renderWebVaultBanner()}
  <div class="runtime-config-summary">
  ${desktop ? t('modals.runtimeConfig.summary.desktop') : t('modals.runtimeConfig.summary.web')} · ${features.filter(f => isFeatureAvailable(f.id)).length}/${features.length} ${t('modals.runtimeConfig.summary.available')}
  </div>
@@ -254,6 +306,131 @@ export class RuntimeConfigPanel extends Panel {
 
  this.attachListeners();
  this.attachProfileListeners();
+ if (!desktop) this.attachWebVaultListeners();
+  }
+
+  private renderWebVaultBanner(): string {
+ if (!isWebVaultSupported()) {
+ return `
+ <div class="web-vault-banner web-vault-banner-error">
+ <strong>Key vault unavailable</strong>
+ <p>This browser does not support Web Crypto or IndexedDB, so API keys cannot be persisted locally.</p>
+ </div>
+ `;
+ }
+
+ const state = this.webVaultState;
+ const msg = this.webVaultMessage
+ ? `<p class="web-vault-message web-vault-message-${this.webVaultMessage.kind}">${escapeHtml(this.webVaultMessage.text)}</p>`
+ : '';
+
+ if (state === 'unlocked') {
+ return `
+ <div class="web-vault-banner web-vault-banner-ok">
+ <div class="web-vault-banner-row">
+ <span class="web-vault-banner-title">Key vault unlocked for this session</span>
+ <button type="button" data-vault-lock class="web-vault-btn">Lock vault</button>
+ <button type="button" data-vault-destroy class="web-vault-btn web-vault-btn-danger">Destroy vault</button>
+ </div>
+ <p class="web-vault-banner-hint">Keys are encrypted with your passphrase (AES-GCM-256 / PBKDF2-SHA-256, 600k iters) and stored only in this browser. They never leave your device.</p>
+ ${msg}
+ </div>
+ `;
+ }
+
+ if (state === 'locked') {
+ return `
+ <div class="web-vault-banner web-vault-banner-locked">
+ <div class="web-vault-banner-row">
+ <span class="web-vault-banner-title">Key vault is locked</span>
+ </div>
+ <form data-vault-unlock-form class="web-vault-form">
+ <input type="password" data-vault-passphrase placeholder="Vault passphrase" autocomplete="current-password" class="web-vault-input">
+ <button type="submit" class="web-vault-btn web-vault-btn-primary">Unlock</button>
+ <button type="button" data-vault-destroy class="web-vault-btn web-vault-btn-danger">Forget vault</button>
+ </form>
+ <p class="web-vault-banner-hint">Enter the passphrase you set when creating the vault. There is no recovery — lost passphrases require destroying the vault and re-entering keys.</p>
+ ${msg}
+ </div>
+ `;
+ }
+
+ // missing
+ return `
+ <div class="web-vault-banner web-vault-banner-create">
+ <div class="web-vault-banner-row">
+ <span class="web-vault-banner-title">Create a key vault to keep your API keys between sessions</span>
+ </div>
+ <form data-vault-create-form class="web-vault-form">
+ <input type="password" data-vault-passphrase placeholder="Choose a passphrase (12+ characters)" autocomplete="new-password" class="web-vault-input">
+ <input type="password" data-vault-passphrase-confirm placeholder="Confirm passphrase" autocomplete="new-password" class="web-vault-input">
+ <button type="submit" class="web-vault-btn web-vault-btn-primary">Create vault</button>
+ </form>
+ <p class="web-vault-banner-hint">The passphrase never leaves this browser. Keys are encrypted locally with AES-GCM-256 derived from your passphrase via PBKDF2-SHA-256 (600,000 iterations). If you forget the passphrase the keys cannot be recovered.</p>
+ ${msg}
+ </div>
+ `;
+  }
+
+  private setWebVaultMessage(kind: 'info' | 'error', text: string): void {
+ this.webVaultMessage = { kind, text };
+ this.render();
+  }
+
+  private attachWebVaultListeners(): void {
+ const unlockForm = this.content.querySelector<HTMLFormElement>('[data-vault-unlock-form]');
+ unlockForm?.addEventListener('submit', (event) => {
+ event.preventDefault();
+ const input = unlockForm.querySelector<HTMLInputElement>('[data-vault-passphrase]');
+ const passphrase = input?.value ?? '';
+ if (!passphrase) return;
+ void (async () => {
+ const ok = await unlockWebVault(passphrase);
+ if (ok) {
+ this.webVaultMessage = null;
+ await this.refreshWebVaultState();
+ } else {
+ this.setWebVaultMessage('error', 'Incorrect passphrase. Try again.');
+ }
+ })();
+ });
+
+ const createForm = this.content.querySelector<HTMLFormElement>('[data-vault-create-form]');
+ createForm?.addEventListener('submit', (event) => {
+ event.preventDefault();
+ const pass = createForm.querySelector<HTMLInputElement>('[data-vault-passphrase]')?.value ?? '';
+ const confirm = createForm.querySelector<HTMLInputElement>('[data-vault-passphrase-confirm]')?.value ?? '';
+ if (pass !== confirm) { this.setWebVaultMessage('error', 'Passphrases do not match.'); return; }
+ const check = validateWebPassphrase(pass);
+ if (!check.valid) { this.setWebVaultMessage('error', check.hint ?? 'Passphrase too weak'); return; }
+ void (async () => {
+ try {
+ await createWebVault(pass);
+ this.webVaultMessage = null;
+ await this.refreshWebVaultState();
+ } catch (error) {
+ this.setWebVaultMessage('error', error instanceof Error ? error.message : 'Could not create vault');
+ }
+ })();
+ });
+
+ this.content.querySelector<HTMLButtonElement>('[data-vault-lock]')?.addEventListener('click', () => {
+ lockWebVault();
+ this.webVaultMessage = { kind: 'info', text: 'Vault locked. Enter your passphrase to unlock it.' };
+ void this.refreshWebVaultState();
+ });
+
+ this.content.querySelector<HTMLButtonElement>('[data-vault-destroy]')?.addEventListener('click', () => {
+ const confirmed = typeof window === 'undefined'
+ ? false
+ : window.confirm('Destroy the key vault? All stored API keys will be permanently deleted.');
+ if (!confirmed) return;
+ void (async () => {
+ await destroyWebVault();
+ this.webVaultMessage = { kind: 'info', text: 'Vault destroyed. Create a new one to save keys again.' };
+ await this.refreshWebVaultState();
+ })();
+ });
   }
 
   private renderProfileSection(): string {
@@ -299,19 +476,21 @@ export class RuntimeConfigPanel extends Panel {
  `;
   }
 
+  private readRegField(field: string): string {
+ return this.content.querySelector<HTMLInputElement>(`[data-reg-field="${field}"]`)?.value.trim() ?? '';
+  }
+
   private attachProfileListeners(): void {
  const saveBtn = this.content.querySelector<HTMLButtonElement>('[data-reg-save]');
  const clearBtn = this.content.querySelector<HTMLButtonElement>('[data-reg-clear]');
  const statusEl = this.content.querySelector<HTMLSpanElement>('.reg-profile-status');
 
  saveBtn?.addEventListener('click', () => {
- const get = (field: string) =>
- (this.content.querySelector<HTMLInputElement>(`[data-reg-field="${field}"]`)?.value.trim()) ?? '';
  const profile: RegistrationProfile = {
- firstName: get('firstName'),
- lastName: get('lastName'),
- email: get('email'),
- organization: get('organization'),
+ firstName: this.readRegField('firstName'),
+ lastName: this.readRegField('lastName'),
+ email: this.readRegField('email'),
+ organization: this.readRegField('organization'),
  };
  if (!profile.email) {
  if (statusEl) statusEl.textContent = 'Email required';
@@ -335,14 +514,28 @@ export class RuntimeConfigPanel extends Panel {
  const allStaged = !available && effectiveSecrets.every(
  (k) => getSecretState(k).valid || (this.pendingSecrets.has(k) && this.validatedKeys.get(k) !== false)
  );
- const pillClass = available ? 'ok' : (allStaged ? 'staged' : 'warn');
- const pillLabel = available ? t('modals.runtimeConfig.status.ready') : (allStaged ? t('modals.runtimeConfig.status.staged') : t('modals.runtimeConfig.status.needsKeys'));
+ let pillClass: string;
+ let pillLabel: string;
+ let sectionClass: string;
+ if (available) {
+ pillClass = 'ok';
+ pillLabel = t('modals.runtimeConfig.status.ready');
+ sectionClass = 'available';
+ } else if (allStaged) {
+ pillClass = 'staged';
+ pillLabel = t('modals.runtimeConfig.status.staged');
+ sectionClass = 'staged';
+ } else {
+ pillClass = 'warn';
+ pillLabel = t('modals.runtimeConfig.status.needsKeys');
+ sectionClass = 'degraded';
+ }
  const secrets = effectiveSecrets.map((key) => this.renderSecretRow(key)).join('');
  const desktop = isDesktopRuntime();
  const fallbackHtml = available || allStaged ? '' : `<p class="runtime-feature-fallback fallback">${escapeHtml(feature.fallback)}</p>`;
 
  return `
- <section class="runtime-feature ${available ? 'available' : (allStaged ? 'staged' : 'degraded')}">
+ <section class="runtime-feature ${sectionClass}">
  <header class="runtime-feature-header">
  <label>
  <input type="checkbox" data-toggle="${feature.id}" ${enabled ? 'checked' : ''} ${desktop ? '' : 'disabled'}>
@@ -356,42 +549,58 @@ export class RuntimeConfigPanel extends Panel {
  `;
   }
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- HTML template composition with many presentational branches; kept as a single method for readability
   private renderSecretRow(key: RuntimeSecretKey): string {
  const state = getSecretState(key);
  const pending = this.pendingSecrets.has(key);
  const pendingValid = pending ? this.validatedKeys.get(key) : undefined;
- const status = pending
- ? (pendingValid === false ? t('modals.runtimeConfig.status.invalid') : t('modals.runtimeConfig.status.staged'))
- : state.present ? state.valid ? t('modals.runtimeConfig.status.valid') : t('modals.runtimeConfig.status.looksInvalid') : t('modals.runtimeConfig.status.missing');
- const statusClass = pending
- ? (pendingValid === false ? 'warn' : 'staged')
- : (state.valid ? 'ok' : 'warn');
+ let status: string;
+ let statusClass: string;
+ if (pending) {
+ if (pendingValid === false) {
+ status = t('modals.runtimeConfig.status.invalid');
+ statusClass = 'warn';
+ } else {
+ status = t('modals.runtimeConfig.status.staged');
+ statusClass = 'staged';
+ }
+ } else if (!state.present) {
+ status = t('modals.runtimeConfig.status.missing');
+ statusClass = 'warn';
+ } else if (state.valid) {
+ status = t('modals.runtimeConfig.status.valid');
+ statusClass = 'ok';
+ } else {
+ status = t('modals.runtimeConfig.status.looksInvalid');
+ statusClass = 'warn';
+ }
  const signupUrl = SIGNUP_URLS[key];
  const helpKey = `modals.runtimeConfig.help.${key}`;
  const helpRaw = t(helpKey);
  const helpText = helpRaw === helpKey ? '' : helpRaw;
  const showGetKey = signupUrl && !state.present && !pending;
  const validated = this.validatedKeys.get(key);
- const inputClass = pending ? (validated === false ? 'invalid' : 'valid-staged') : '';
+ let inputClass = '';
+ if (pending) inputClass = validated === false ? 'invalid' : 'valid-staged';
  const checkClass = validated === true ? 'visible' : '';
  const hintText = pending && validated === false
- ? (this.validationMessages.get(key) || validateSecret(key, this.pendingSecrets.get(key) || '').hint || 'Invalid value')
+ ? (this.validationMessages.get(key) ?? validateSecret(key, this.pendingSecrets.get(key) ?? '').hint ?? 'Invalid value')
  : null;
 
  if (key === 'OLLAMA_MODEL') {
  const storedModel = pending
- ? this.pendingSecrets.get(key) || ''
- : getRuntimeConfigSnapshot().secrets[key]?.value || '';
+ ? this.pendingSecrets.get(key) ?? ''
+ : getRuntimeConfigSnapshot().secrets[key]?.value ?? '';
  return `
  <div class="runtime-secret-row">
  <div class="runtime-secret-key"><code>${escapeHtml(key)}</code></div>
  <span class="runtime-secret-status ${statusClass}">${escapeHtml(status)}</span>
  <span class="runtime-secret-check ${checkClass}">&#x2713;</span>
  ${helpText ? `<div class="runtime-secret-meta">${escapeHtml(helpText)}</div>` : ''}
- <select data-model-select class="${inputClass}" ${isDesktopRuntime() ? '' : 'disabled'}>
+ <select data-model-select class="${inputClass}" ${canEditWebSecrets() ? '' : 'disabled'}>
  ${storedModel ? `<option value="${escapeHtml(storedModel)}" selected>${escapeHtml(storedModel)}</option>` : '<option value="" selected disabled>Loading models...</option>'}
  </select>
- <input type="text" data-model-manual class="${inputClass} hidden-input" placeholder="Or type model name" autocomplete="off" ${isDesktopRuntime() ? '' : 'disabled'} ${storedModel ? `value="${escapeHtml(storedModel)}"` : ''}>
+ <input type="text" data-model-manual class="${inputClass} hidden-input" placeholder="Or type model name" autocomplete="off" ${canEditWebSecrets() ? '' : 'disabled'} ${storedModel ? `value="${escapeHtml(storedModel)}"` : ''}>
  ${hintText ? `<span class="runtime-secret-hint">${escapeHtml(hintText)}</span>` : ''}
  </div>
  `;
@@ -411,8 +620,8 @@ export class RuntimeConfigPanel extends Panel {
  <a href="#" data-signup-url="${escapeHtml(signupUrl)}" class="runtime-signup-btn">Open signup page</a>
  </div>
  <div class="runtime-signup-card-input-row">
- <input type="${PLAINTEXT_KEYS.has(key) ? 'text' : 'password'}" data-secret="${key}" placeholder="Paste your API key here" autocomplete="off" ${isDesktopRuntime() ? '' : 'disabled'} class="runtime-signup-input ${inputClass}">
- <button type="button" class="runtime-signup-save-btn" data-save-secret="${key}" ${isDesktopRuntime() ? '' : 'disabled'}>Save</button>
+ <input type="${PLAINTEXT_KEYS.has(key) ? 'text' : 'password'}" data-secret="${key}" placeholder="Paste your API key here" autocomplete="off" ${canEditWebSecrets() ? '' : 'disabled'} class="runtime-signup-input ${inputClass}">
+ <button type="button" class="runtime-signup-save-btn" data-save-secret="${key}" ${canEditWebSecrets() ? '' : 'disabled'}>Save</button>
  </div>
  ${hintText ? `<span class="runtime-secret-hint">${escapeHtml(hintText)}</span>` : ''}
  </div>
@@ -420,11 +629,7 @@ export class RuntimeConfigPanel extends Panel {
  `;
  }
 
- const inputVal = pending
- ? (PLAINTEXT_KEYS.has(key) ? escapeHtml(this.pendingSecrets.get(key) || '') : MASKED_SENTINEL)
- : (PLAINTEXT_KEYS.has(key) && state.present
- ? escapeHtml(getRuntimeConfigSnapshot().secrets[key]?.value || '')
- : (state.present ? MASKED_SENTINEL : ''));
+ const inputVal = this.computeInputValue(key, pending, state.present);
  return `
  <div class="runtime-secret-row">
  <div class="runtime-secret-key"><code>${escapeHtml(key)}</code></div>
@@ -432,12 +637,22 @@ export class RuntimeConfigPanel extends Panel {
  <span class="runtime-secret-check ${checkClass}">&#x2713;</span>
  ${helpText ? `<div class="runtime-secret-meta">${escapeHtml(helpText)}</div>` : ''}
  <div class="runtime-input-wrapper runtime-input-with-save">
- <input type="${PLAINTEXT_KEYS.has(key) ? 'text' : 'password'}" data-secret="${key}" placeholder="${pending ? t('modals.runtimeConfig.placeholder.staged') : t('modals.runtimeConfig.placeholder.setSecret')}" autocomplete="off" ${isDesktopRuntime() ? '' : 'disabled'} class="${inputClass}" ${inputVal ? `value="${inputVal}"` : ''}>
- ${isDesktopRuntime() ? `<button type="button" class="runtime-secret-save-btn" data-save-secret="${key}">Save</button>` : ''}
+ <input type="${PLAINTEXT_KEYS.has(key) ? 'text' : 'password'}" data-secret="${key}" placeholder="${pending ? t('modals.runtimeConfig.placeholder.staged') : t('modals.runtimeConfig.placeholder.setSecret')}" autocomplete="off" ${canEditWebSecrets() ? '' : 'disabled'} class="${inputClass}" ${inputVal ? `value="${inputVal}"` : ''}>
+ ${canEditWebSecrets() ? `<button type="button" class="runtime-secret-save-btn" data-save-secret="${key}">Save</button>` : ''}
  </div>
  ${hintText ? `<span class="runtime-secret-hint">${escapeHtml(hintText)}</span>` : ''}
  </div>
  `;
+  }
+
+  private computeInputValue(key: RuntimeSecretKey, pending: boolean, present: boolean): string {
+ const plaintext = PLAINTEXT_KEYS.has(key);
+ if (pending) {
+ if (plaintext) return escapeHtml(this.pendingSecrets.get(key) ?? '');
+ return MASKED_SENTINEL;
+ }
+ if (plaintext && present) return escapeHtml(getRuntimeConfigSnapshot().secrets[key]?.value ?? '');
+ return present ? MASKED_SENTINEL : '';
   }
 
   private attachListeners(): void {
@@ -448,6 +663,7 @@ export class RuntimeConfigPanel extends Panel {
  if (!url) return;
  if (isDesktopRuntime()) {
  void invokeTauri<void>('open_url', { url }).catch((error: unknown) => {
+ // eslint-disable-next-line no-console -- user action failure diagnostics
  console.warn('[runtime-config] Failed to open signup URL', {
  url,
  error: error instanceof Error ? error.message : String(error),
@@ -459,7 +675,7 @@ export class RuntimeConfigPanel extends Panel {
  });
  });
 
- if (!isDesktopRuntime()) return;
+ if (!canEditWebSecrets()) return;
 
  // Save buttons (signup card + regular row)
  this.content.querySelectorAll<HTMLButtonElement>('button[data-save-secret]').forEach((btn) => {
@@ -479,6 +695,7 @@ export class RuntimeConfigPanel extends Panel {
  if (this.mode === 'alert') {
  this.content.querySelector<HTMLButtonElement>('[data-open-settings]')?.addEventListener('click', () => {
  void invokeTauri<void>('open_settings_window_command').catch((error) => {
+ // eslint-disable-next-line no-console -- user action failure diagnostics
  console.warn('[runtime-config] Failed to open settings window', error);
  });
  });
@@ -526,6 +743,7 @@ export class RuntimeConfigPanel extends Panel {
  if (hint) hint.remove();
  });
 
+ // eslint-disable-next-line sonarjs/cognitive-complexity -- blur handler coordinates staging, validation, masking, and feature-card updates
  input.addEventListener('blur', () => {
  const key = input.dataset.secret as RuntimeSecretKey | undefined;
  if (!key) return;
@@ -548,7 +766,7 @@ export class RuntimeConfigPanel extends Panel {
  this.validationMessages.delete(key);
  } else {
  this.validatedKeys.set(key, false);
- this.validationMessages.set(key, result.hint || 'Invalid format');
+ this.validationMessages.set(key, result.hint ?? 'Invalid format');
  }
  if (PLAINTEXT_KEYS.has(key)) {
  input.value = raw;
@@ -610,11 +828,27 @@ export class RuntimeConfigPanel extends Panel {
  const allStaged = !available && effectiveSecrets.every(
  (k) => getSecretState(k).valid || (this.pendingSecrets.has(k) && this.validatedKeys.get(k) !== false)
  );
- section.className = `runtime-feature ${available ? 'available' : (allStaged ? 'staged' : 'degraded')}`;
+ let sectionVariant: string;
+ let pillVariant: string;
+ let pillText: string;
+ if (available) {
+ sectionVariant = 'available';
+ pillVariant = 'ok';
+ pillText = t('modals.runtimeConfig.status.ready');
+ } else if (allStaged) {
+ sectionVariant = 'staged';
+ pillVariant = 'staged';
+ pillText = t('modals.runtimeConfig.status.staged');
+ } else {
+ sectionVariant = 'degraded';
+ pillVariant = 'warn';
+ pillText = t('modals.runtimeConfig.status.needsKeys');
+ }
+ section.className = `runtime-feature ${sectionVariant}`;
  const pill = section.querySelector('.runtime-pill');
  if (pill) {
- pill.className = `runtime-pill ${available ? 'ok' : (allStaged ? 'staged' : 'warn')}`;
- pill.textContent = available ? t('modals.runtimeConfig.status.ready') : (allStaged ? t('modals.runtimeConfig.status.staged') : t('modals.runtimeConfig.status.needsKeys'));
+ pill.className = `runtime-pill ${pillVariant}`;
+ pill.textContent = pillText;
  }
  const fallback = section.querySelector('.runtime-feature-fallback');
  if (available || allStaged) {
@@ -649,16 +883,16 @@ export class RuntimeConfigPanel extends Panel {
   private async fetchOllamaModels(select: HTMLSelectElement): Promise<void> {
  const snapshot = getRuntimeConfigSnapshot();
  const ollamaUrl = this.pendingSecrets.get('OLLAMA_API_URL')
- || snapshot.secrets.OLLAMA_API_URL?.value
- || '';
+ ?? snapshot.secrets.OLLAMA_API_URL?.value
+ ?? '';
  if (!ollamaUrl) {
  select.innerHTML = '<option value="" disabled selected>Set Ollama URL first</option>';
  return;
  }
 
  const currentModel = this.pendingSecrets.get('OLLAMA_MODEL')
- || snapshot.secrets.OLLAMA_MODEL?.value
- || '';
+ ?? snapshot.secrets.OLLAMA_MODEL?.value
+ ?? '';
 
  try {
  // Try Ollama-native /api/tags first, fall back to OpenAI-compatible /v1/models
@@ -669,7 +903,7 @@ export class RuntimeConfigPanel extends Panel {
  });
  if (res.ok) {
  const data = await res.json() as { models?: { name: string }[] };
- models = (data.models?.map(m => m.name) || []).filter(n => !n.includes('embed'));
+ models = (data.models?.map(m => m.name) ?? []).filter(n => !n.includes('embed'));
  }
  } catch { /* Ollama endpoint not available, try OpenAI format */ }
 
@@ -680,7 +914,7 @@ export class RuntimeConfigPanel extends Panel {
  });
  if (res.ok) {
  const data = await res.json() as { data?: { id: string }[] };
- models = (data.data?.map(m => m.id) || []).filter(n => !n.includes('embed'));
+ models = (data.data?.map(m => m.id) ?? []).filter(n => !n.includes('embed'));
  }
  } catch { /* OpenAI endpoint also unavailable */ }
  }

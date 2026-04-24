@@ -1,5 +1,12 @@
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
 import { invokeTauri } from './tauri-bridge';
+import {
+  isVaultUnlocked as isWebVaultUnlocked,
+  listSecrets as listWebVaultSecrets,
+  setSecret as setWebVaultSecret,
+  onVaultChange as onWebVaultChange,
+  isSupported as isWebVaultSupported,
+} from './web-secret-store';
 
 export type RuntimeSecretKey =
   | 'CRYSTALBALL_API_KEY'
@@ -824,6 +831,16 @@ export interface SecretVerificationResult {
   message: string;
 }
 
+// IPv4 ranges that are almost always mistakes when supplied as OLLAMA_API_URL:
+// - 169.254.0.0/16 is the cloud-metadata service link-local range (AWS, GCP,
+//   Azure, Alibaba). A value that points here is likely a copy-paste accident
+//   and never a legitimate Ollama host.
+// - 0.0.0.0/8 is "this network" — also not a real endpoint a user should use.
+// We deliberately allow 127.0.0.1 and RFC 1918 private ranges because Ollama
+// typically runs on the user's own machine or LAN.
+const OLLAMA_BLOCKED_HOSTS = /^(169\.254\.|0\.)/;
+
+// eslint-disable-next-line sonarjs/cognitive-complexity -- per-key switch that's easier to read as one function
 export function validateSecret(key: RuntimeSecretKey, value: string): { valid: boolean; hint?: string } {
   const trimmed = value.trim();
   if (!trimmed) return { valid: false, hint: 'Value is required' };
@@ -841,6 +858,9 @@ export function validateSecret(key: RuntimeSecretKey, value: string): { valid: b
  if (key === 'OLLAMA_API_URL') {
  if (!['http:', 'https:'].includes(parsed.protocol)) {
  return { valid: false, hint: 'Must be an http(s) URL' };
+ }
+ if (OLLAMA_BLOCKED_HOSTS.test(parsed.hostname)) {
+ return { valid: false, hint: 'Cloud-metadata and 0.0.0.0 addresses are not valid Ollama hosts' };
  }
  return { valid: true };
  }
@@ -888,6 +908,36 @@ function seedSecretsFromEnvironment(): void {
 
 seedSecretsFromEnvironment();
 
+/**
+ * Reconcile the in-memory config with the web vault's current state.
+ * Called after unlock/lock/set/destroy so consumers see the latest.
+ * Desktop mode is a no-op here — it uses loadDesktopSecrets instead.
+ */
+export function syncWebVaultIntoConfig(): void {
+  if (isDesktopRuntime()) return;
+
+  // Clear any previously hydrated vault entries so locking actually hides them.
+  for (const key of Object.keys(runtimeConfig.secrets) as RuntimeSecretKey[]) {
+ if (runtimeConfig.secrets[key]?.source === 'vault') delete runtimeConfig.secrets[key];
+  }
+
+  if (isWebVaultUnlocked()) {
+ const entries = listWebVaultSecrets();
+ for (const [key, value] of entries) {
+ if (value) runtimeConfig.secrets[key as RuntimeSecretKey] = { value, source: 'vault' };
+ }
+  } else {
+ // Re-seed env fallbacks for any slot the vault used to cover.
+ seedSecretsFromEnvironment();
+  }
+
+  notifyConfigChanged();
+}
+
+if (!isDesktopRuntime()) {
+  onWebVaultChange(() => { syncWebVaultIntoConfig(); });
+}
+
 // Listen for cross-window state updates (settings ↔ main).
 // When one window saves secrets or toggles features, the `storage` event fires in other same-origin windows.
 if (typeof window !== 'undefined') {
@@ -929,14 +979,19 @@ export function getSecretState(key: RuntimeSecretKey): { present: boolean; valid
 export function isFeatureAvailable(featureId: RuntimeFeatureId): boolean {
   if (!isFeatureEnabled(featureId)) return false;
 
-  // Cloud/web deployments validate credentials server-side.
-  // Desktop runtime validates local secrets client-side for capability gating.
-  if (!isDesktopRuntime()) {
- return true;
-  }
-
   const feature = RUNTIME_FEATURES.find(item => item.id === featureId);
   if (!feature) return false;
+
+  if (!isDesktopRuntime()) {
+ // Once the user has unlocked their browser vault we know whether each
+ // required key is actually present locally, so gate on that. Before
+ // unlock we optimistically trust server-managed credentials (the cloud
+ // deployment may have keys set at the edge) rather than greying out
+ // every feature the user hasn't configured yet.
+ if (!isWebVaultUnlocked()) return true;
+ return feature.requiredSecrets.every(secretKey => getSecretState(secretKey).valid);
+  }
+
   const secrets = feature.desktopRequiredSecrets ?? feature.requiredSecrets;
   return secrets.every(secretKey => getSecretState(secretKey).valid);
 }
@@ -953,8 +1008,25 @@ export function setFeatureToggle(featureId: RuntimeFeatureId, enabled: boolean):
 
 export async function setSecretValue(key: RuntimeSecretKey, value: string): Promise<void> {
   if (!isDesktopRuntime()) {
+ if (!isWebVaultSupported()) {
  // eslint-disable-next-line no-console
- console.warn('[runtime-config] Ignoring secret write outside desktop runtime');
+ console.warn('[runtime-config] Web vault unsupported (no SubtleCrypto/IDB); ignoring secret write');
+ return;
+ }
+ if (!isWebVaultUnlocked()) {
+ throw new Error('Vault is locked. Unlock the key vault before saving secrets.');
+ }
+ const sanitized = value.trim();
+ await setWebVaultSecret(key, sanitized);
+ if (sanitized) {
+ runtimeConfig.secrets[key] = { value: sanitized, source: 'vault' };
+ } else {
+ delete runtimeConfig.secrets[key];
+ // Fall back to env seeding if a VITE_* value exists for this key.
+ const envFallback = readEnvSecret(key);
+ if (envFallback) runtimeConfig.secrets[key] = { value: envFallback, source: 'env' };
+ }
+ notifyConfigChanged();
  return;
   }
 
@@ -1028,6 +1100,75 @@ async function callSidecarWithAuth(url: string, init: RequestInit): Promise<Resp
   return fetch(url, { ...init, headers });
 }
 
+interface WebProbeSpec {
+  url: (value: string) => string;
+  headers?: (value: string) => Record<string, string>;
+}
+
+/**
+ * Browser-direct probes for providers that accept CORS preflight from
+ * a web origin. A 200/2xx means the key is valid; 401/403 means bad key;
+ * anything else (CORS block, network error, 5xx) falls back to a
+ * non-committal "Saved" rather than marking the key invalid.
+ */
+const WEB_PROBES: Partial<Record<RuntimeSecretKey, WebProbeSpec>> = {
+  ANTHROPIC_API_KEY: {
+ url: () => 'https://api.anthropic.com/v1/models',
+ headers: (v) => ({ 'x-api-key': v, 'anthropic-version': '2023-06-01' }),
+  },
+  GROQ_API_KEY: {
+ url: () => 'https://api.groq.com/openai/v1/models',
+ headers: (v) => ({ Authorization: `Bearer ${v}` }),
+  },
+  OPENROUTER_API_KEY: {
+ url: () => 'https://openrouter.ai/api/v1/models',
+ headers: (v) => ({ Authorization: `Bearer ${v}` }),
+  },
+  CESIUM_ION_TOKEN: {
+ url: () => 'https://api.cesium.com/v1/assets?limit=1',
+ headers: (v) => ({ Authorization: `Bearer ${v}` }),
+  },
+  MAPBOX_API_KEY: {
+ url: (v) => `https://api.mapbox.com/tokens/v2?access_token=${encodeURIComponent(v)}`,
+  },
+  MAPTILER_API_KEY: {
+ url: (v) => `https://api.maptiler.com/maps/basic-v2/style.json?key=${encodeURIComponent(v)}`,
+  },
+};
+
+async function verifyWebSecret(
+  key: RuntimeSecretKey,
+  value: string,
+): Promise<SecretVerificationResult> {
+  const spec = WEB_PROBES[key];
+  if (!spec) return { valid: true, message: 'Saved' };
+
+  const trimmed = value.trim();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+ const res = await fetch(spec.url(trimmed), {
+ method: 'GET',
+ headers: spec.headers ? spec.headers(trimmed) : undefined,
+ signal: controller.signal,
+ // Suppress Referer so the Authorization bearer doesn't leak to a
+ // redirect target if the provider 301/302s to a CDN.
+ referrerPolicy: 'no-referrer',
+ });
+ if (res.ok) return { valid: true, message: 'Verified' };
+ if (res.status === 401 || res.status === 403) {
+ return { valid: false, message: `Rejected by provider (${res.status})` };
+ }
+ // Rate limits, 5xx, etc. — don't lie about validity.
+ return { valid: true, message: `Saved (provider returned ${res.status})` };
+  } catch {
+ // CORS block or network failure — can't tell, so don't block the save.
+ return { valid: true, message: 'Saved (could not verify from browser)' };
+  } finally {
+ clearTimeout(timer);
+  }
+}
+
 export async function verifySecretWithApi(
   key: RuntimeSecretKey,
   value: string,
@@ -1039,7 +1180,7 @@ export async function verifySecretWithApi(
   }
 
   if (!isDesktopRuntime()) {
- return { valid: true, message: 'Saved' };
+ return verifyWebSecret(key, value);
   }
 
   try {

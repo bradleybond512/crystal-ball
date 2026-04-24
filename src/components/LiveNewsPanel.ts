@@ -516,7 +516,12 @@ export class LiveNewsPanel extends Panel {
 
   private startMuteSyncPolling(): void {
  this.stopMuteSyncPolling();
- this.muteSyncInterval = setInterval(() => this.syncMuteStateFromPlayer(), LiveNewsPanel.MUTE_SYNC_POLL_MS);
+ // Skip polling when the tab is hidden so we don't burn battery on a
+ // 500 ms timer that nobody can see.
+ this.muteSyncInterval = setInterval(() => {
+ if (document.visibilityState === 'hidden') return;
+ this.syncMuteStateFromPlayer();
+ }, LiveNewsPanel.MUTE_SYNC_POLL_MS);
   }
 
   private syncMuteStateFromPlayer(): void {
@@ -910,9 +915,12 @@ export class LiveNewsPanel extends Panel {
  <div class="live-offline">
  <div class="offline-icon">📺</div>
  <div class="offline-text">${t('components.liveNews.notLive', { name: channel.name })}</div>
- <button class="offline-retry" onclick="this.closest('.panel').querySelector('.live-channel-btn.active')?.click()">${t('common.retry')}</button>
+ <button class="offline-retry" type="button">${t('common.retry')}</button>
  </div>
  `;
+ this.content.querySelector<HTMLButtonElement>('.offline-retry')?.addEventListener('click', () => {
+ this.content.closest('.panel')?.querySelector<HTMLButtonElement>('.live-channel-btn.active')?.click();
+ });
   }
 
   private showEmbedError(channel: LiveChannel, errorCode: number): void {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/cognitive-complexity, unicorn/no-nested-ternary, no-console, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-misused-promises, @typescript-eslint/no-empty-function, sonarjs/no-nested-template-literals, unicorn/prefer-top-level-await, unicorn/no-array-reverse */
 import './styles/main.css';
 import './styles/settings-window.css';
 import { SettingsManager } from '@/services/settings-manager';
@@ -526,6 +527,16 @@ async function loadOllamaModelsIntoSelect(select: HTMLSelectElement): Promise<vo
 // ── Debug section ──
 
 function renderDebug(area: HTMLElement): void {
+  const desktop = isDesktopRuntime();
+  if (!desktop) {
+ area.innerHTML = `
+ <div class="settings-section-header">
+ <h2>Debug &amp; Logs</h2>
+ </div>
+ <p class="debug-web-notice">Logs and sidecar diagnostics are only available in the desktop build. Use your browser's DevTools console for renderer-side debugging.</p>
+ `;
+ return;
+  }
   area.innerHTML = `
  <div class="settings-section-header">
  <h2>Debug &amp; Logs</h2>

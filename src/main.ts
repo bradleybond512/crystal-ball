@@ -254,9 +254,9 @@ initMetaTags();
 
 // Offline staleness monitor + banner — mount early so cached-data warnings
 // are visible the moment the app boots (before any data loads complete).
-import('./services/offline-staleness').then(({ startOfflineMonitor }) => { startOfflineMonitor(); }).catch(() => {});
-import('./components/OfflineStalenessBanner').then(({ offlineStalenessBanner }) => { offlineStalenessBanner.mount(); }).catch(() => {});
-import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { attachDiagnosticToWindow(); }).catch(() => {});
+import('./services/offline-staleness').then(({ startOfflineMonitor }) => { startOfflineMonitor(); }).catch((error: unknown) => console.warn('[boot] offline-staleness failed to mount', error));
+import('./components/OfflineStalenessBanner').then(({ offlineStalenessBanner }) => { offlineStalenessBanner.mount(); }).catch((error: unknown) => console.warn('[boot] OfflineStalenessBanner failed to mount', error));
+import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { attachDiagnosticToWindow(); }).catch((error: unknown) => console.warn('[boot] api-diagnostic failed to mount', error));
 
 // In desktop mode, route /api/* calls to the local Tauri sidecar backend.
 installRuntimeFetchPatch();
@@ -373,16 +373,24 @@ if (!('__TAURI_INTERNALS__' in window) && !('__TAURI__' in window)) {
   import('virtual:pwa-register').then(({ registerSW }) => {
  registerSW({
  onRegisteredSW(_swUrl, registration) {
- if (registration) {
+ if (!registration) return;
  setInterval(async () => {
+ // Skip the hourly update when the tab is offline or backgrounded
+ // so we don't wake the network on mobile devices for no reason.
  if (!navigator.onLine) return;
- try { await registration.update(); } catch {}
- }, 60 * 60 * 1000);
+ if (document.visibilityState === 'hidden') return;
+ try {
+ await registration.update();
+ } catch (error) {
+ console.warn('[PWA] Service worker update check failed', error);
  }
+ }, 60 * 60 * 1000);
  },
  onOfflineReady() {
  console.log('[PWA] App ready for offline use');
  },
  });
+  }).catch((error: unknown) => {
+ console.warn('[PWA] Service worker registration failed', error);
   });
 }

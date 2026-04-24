@@ -212,7 +212,9 @@ body {
   overflow: hidden;
   height: 100%;
   width: 100%;
-  min-height: 100vh;
+  /* 100dvh tracks the dynamic viewport so iOS Safari's collapsing URL bar
+     doesn't force the body past the actual visible area. */
+  min-height: 100dvh;
   min-width: 100vw;
 }
 
@@ -749,7 +751,7 @@ canvas,
   position: absolute;
   top: 100%;
   right: 0;
-  width: 280px;
+  width: min(280px, 90vw);
   background: var(--border-subtle);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -962,7 +964,9 @@ canvas,
 
 .panels-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* Below 320px viewports auto-fill can't satisfy the 280px minmax without
+     horizontal overflow, so drop to a single-column layout instead. */
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   grid-auto-flow: row dense;
   grid-auto-rows: minmax(200px, 380px);
   gap: 4px;
@@ -3710,7 +3714,7 @@ body.panel-resize-active iframe {
   background: linear-gradient(180deg, rgba(20, 20, 20, 0.98) 0%, rgba(10, 10, 10, 0.98) 100%);
   border: 1px solid var(--border-strong);
   border-radius: 14px;
-  width: 360px;
+  width: min(360px, 90vw);
   z-index: 100;
   box-shadow: 0 22px 44px rgba(0, 0, 0, 0.35);
   overflow: hidden;
@@ -12469,7 +12473,7 @@ a.prediction-link:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 10000;  /* findings modal — bottom of the modal stack */
   backdrop-filter: blur(4px);
 }
 
@@ -15534,7 +15538,7 @@ body.has-breaking-alert .panels-grid {
 .country-intel-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 10001;  /* stacks above findings modal */
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -16414,6 +16418,85 @@ body.has-breaking-alert .panels-grid {
   background: var(--darken-medium);
 }
 
+.web-vault-banner {
+  border: 1px solid var(--overlay-medium);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 0 0 12px;
+  background: var(--darken-medium);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.web-vault-banner-ok { border-color: rgba(80, 180, 120, 0.45); }
+.web-vault-banner-locked { border-color: rgba(220, 180, 80, 0.5); }
+.web-vault-banner-create { border-color: rgba(100, 160, 220, 0.45); }
+.web-vault-banner-error { border-color: rgba(220, 90, 90, 0.55); }
+.web-vault-banner-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.web-vault-banner-title {
+  font-size: 12px;
+  font-weight: 600;
+  flex: 1 1 auto;
+}
+.web-vault-banner-hint {
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.web-vault-form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.web-vault-input {
+  flex: 1 1 160px;
+  min-width: 140px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--overlay-medium);
+  background: var(--darken-strong);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.web-vault-btn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--overlay-medium);
+  background: var(--darken-strong);
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.web-vault-btn:hover { background: var(--darken-medium); }
+.web-vault-btn-primary {
+  border-color: rgba(100, 160, 220, 0.55);
+  color: rgba(130, 190, 240, 1);
+}
+.web-vault-btn-danger {
+  border-color: rgba(220, 90, 90, 0.45);
+  color: rgba(230, 130, 130, 1);
+}
+.web-vault-message {
+  margin: 0;
+  font-size: 11px;
+}
+.web-vault-message-error { color: rgba(230, 130, 130, 1); }
+
+/* Stack the vault form vertically on the narrowest phones so the
+   passphrase field and the Lock/Destroy buttons never wrap into an
+   unreadable jumble. */
+@media (max-width: 360px) {
+  .web-vault-input { flex: 1 1 100%; min-width: 0; }
+  .web-vault-btn { flex: 1 1 100%; }
+}
+.web-vault-message-info { color: var(--text-muted); }
+
 .runtime-alert h3 {
   margin: 0 0 6px;
   font-size: 11px;
@@ -16626,7 +16709,7 @@ body.has-breaking-alert .panels-grid {
 .country-brief-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 10002;  /* stacks above country intel modal */
   background: var(--bg);
   backdrop-filter: blur(6px);
   opacity: 0;
@@ -18328,7 +18411,7 @@ body.has-breaking-alert .panels-grid {
   font-size: 13px;
   color: var(--text);
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  z-index: 10000;
+  z-index: 10003;  /* top of modal stack — floats above all overlays */
   white-space: nowrap;
 }
 

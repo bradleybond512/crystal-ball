@@ -279,8 +279,14 @@ export class EventHandlerManager implements AppModule {
  trackMapViewChange(regionSelect.value);
  });
 
+ // Coalesce rapid resize bursts into one map render per animation frame.
+ let resizeRaf: number | null = null;
  this.boundResizeHandler = () => {
+ if (resizeRaf !== null) return;
+ resizeRaf = requestAnimationFrame(() => {
+ resizeRaf = null;
  this.ctx.map?.render();
+ });
  };
  window.addEventListener('resize', this.boundResizeHandler);
 

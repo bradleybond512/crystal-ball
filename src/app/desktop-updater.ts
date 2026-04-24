@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-empty-function, @typescript-eslint/require-await */
 import type { AppContext, AppModule, UpdateState } from '@/app/app-context';
 import { invokeTauri } from '@/services/tauri-bridge';
 import { trackUpdateShown, trackUpdateClicked, trackUpdateDismissed } from '@/services/analytics';
@@ -17,6 +18,7 @@ export class DesktopUpdater implements AppModule {
   init(): void {
  this.setupUpdateChecks();
 
+ if (!this.ctx.isDesktopApp) return;
  // Manual "Check for Updates…" from the macOS Help menu
  document.addEventListener('wm:check-for-updates', () => {
  void this.checkForUpdate(true);

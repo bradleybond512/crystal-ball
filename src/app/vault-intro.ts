@@ -37,8 +37,8 @@ async function waitForBridge(): Promise<boolean> {
 
 // Seeded LCG — deterministic grain every render
 function lcg(seed: number): () => number {
-  let s = (seed | 0) >>> 0;
-  return () => { s = (Math.imul(1664525, s) + 1013904223) >>> 0; return s / 4294967296; };
+  let s = Math.trunc(seed) >>> 0;
+  return () => { s = (Math.imul(1_664_525, s) + 1_013_904_223) >>> 0; return s / 4_294_967_296; };
 }
 
 // ── Audio ──────────────────────────────────────────────────────────────────────
@@ -99,6 +99,7 @@ function playBoltRetracts(ctx: AudioContext): void {
 
  const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.04), ctx.sampleRate);
  const d = buf.getChannelData(0);
+ // eslint-disable-next-line sonarjs/pseudo-random -- audio noise buffer, not security-sensitive
  for (let j = 0; j < d.length; j++) d[j] = Math.random() * 2 - 1;
  const src = ctx.createBufferSource();
  src.buffer = buf;
@@ -118,6 +119,7 @@ function playDoorOpen(ctx: AudioContext): void {
 
   const hBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
   const hd = hBuf.getChannelData(0);
+  // eslint-disable-next-line sonarjs/pseudo-random -- audio noise buffer, not security-sensitive
   for (let i = 0; i < hd.length; i++) hd[i] = Math.random() * 2 - 1;
   const hSrc = ctx.createBufferSource();
   hSrc.buffer = hBuf;
@@ -125,7 +127,7 @@ function playDoorOpen(ctx: AudioContext): void {
   hF.type = 'bandpass';
   hF.frequency.setValueAtTime(1600, t0);
   hF.frequency.exponentialRampToValueAtTime(280, t0 + dur * 0.7);
-  hF.Q.value = 1.0;
+  hF.Q.value = 1;
   const hG = ctx.createGain();
   hG.gain.setValueAtTime(0, t0);
   hG.gain.linearRampToValueAtTime(0.42, t0 + 0.1);
@@ -150,6 +152,7 @@ function playDoorOpen(ctx: AudioContext): void {
 
   const wBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 1.6), ctx.sampleRate);
   const wd = wBuf.getChannelData(0);
+  // eslint-disable-next-line sonarjs/pseudo-random -- audio noise buffer, not security-sensitive
   for (let i = 0; i < wd.length; i++) wd[i] = Math.random() * 2 - 1;
   const wSrc = ctx.createBufferSource();
   wSrc.buffer = wBuf;
@@ -197,7 +200,7 @@ function injectStyles(): void {
  }
  @keyframes vi-ledblink { 0%,100%{opacity:1} 50%{opacity:.2} }
   `;
-  document.head.appendChild(s);
+  document.head.append(s);
 }
 
 // ── Vault room environment ─────────────────────────────────────────────────────
@@ -225,7 +228,7 @@ function drawVaultRoom(canvas: HTMLCanvasElement): void {
  const y  = rW() * VH;
  const bv = 0.35 + rW() * 1.3;
  const a  = 0.004 + rW() * 0.016;
- c.strokeStyle = `rgba(${50 * bv | 0},${54 * bv | 0},${60 * bv | 0},${a})`;
+ c.strokeStyle = `rgba(${Math.trunc(50 * bv)},${Math.trunc(54 * bv)},${Math.trunc(60 * bv)},${a})`;
  c.lineWidth = 0.12 + rW() * 0.7;
  c.beginPath(); c.moveTo(0, y); c.lineTo(VW, y); c.stroke();
   }
@@ -236,7 +239,7 @@ function drawVaultRoom(canvas: HTMLCanvasElement): void {
  const y  = rA() * VH;
  const r  = 1.5 + rA() * 5;
  const a  = 0.008 + rA() * 0.018;
- c.fillStyle = `rgba(${40 + (rA() * 25) | 0},${43 + (rA() * 25) | 0},${50 + (rA() * 25) | 0},${a})`;
+ c.fillStyle = `rgba(${Math.trunc(40 + (rA() * 25))},${Math.trunc(43 + (rA() * 25))},${Math.trunc(50 + (rA() * 25))},${a})`;
  c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
   }
 
@@ -249,7 +252,7 @@ function drawVaultRoom(canvas: HTMLCanvasElement): void {
  c.fillStyle = g; c.fillRect(0, 0, VW, VH);
   }
   // Fluorescent tube fixture at ceiling
-  const tubeW = VW * 0.10;
+  const tubeW = VW * 0.1;
   const tx = cx - tubeW / 2;
   {
  const g = c.createLinearGradient(0, 0, 0, 32);
@@ -320,7 +323,7 @@ function drawVaultRoom(canvas: HTMLCanvasElement): void {
   for (let pass = 0; pass < 6; pass++) {
  c.save();
  c.filter = `blur(${48 + pass * 36}px)`;
- c.strokeStyle = `rgba(0,0,0,${0.26 + pass * 0.10})`;
+ c.strokeStyle = `rgba(0,0,0,${0.26 + pass * 0.1})`;
  c.lineWidth = doorSize * (0.085 + pass * 0.014);
  c.beginPath(); c.arc(cx, cy + VH * 0.007, frameROut + pass * 3, 0, Math.PI * 2); c.stroke();
  c.restore();
@@ -347,7 +350,7 @@ function drawVaultRoom(canvas: HTMLCanvasElement): void {
 
   {
  const g = c.createRadialGradient(
- cx - frameROut * 0.30, cy - frameROut * 0.24, 0,
+ cx - frameROut * 0.3, cy - frameROut * 0.24, 0,
  cx + 6, cy + 8, frameROut * 1.06,
  );
  g.addColorStop(0, '#1d2028');
@@ -363,7 +366,7 @@ function drawVaultRoom(canvas: HTMLCanvasElement): void {
  const y = cy - frameROut - 4 + rFr() * (frameROut + 4) * 2;
  const bv  = 0.45 + rFr() * 0.9;
  const a = 0.004 + rFr() * 0.016;
- c.strokeStyle = `rgba(${30 * bv | 0},${32 * bv | 0},${38 * bv | 0},${a})`;
+ c.strokeStyle = `rgba(${Math.trunc(30 * bv)},${Math.trunc(32 * bv)},${Math.trunc(38 * bv)},${a})`;
  c.lineWidth = 0.15 + rFr() * 0.5;
  c.beginPath(); c.moveTo(cx - frameROut - 5, y); c.lineTo(cx + frameROut + 5, y); c.stroke();
   }
@@ -425,7 +428,7 @@ function drawDoorCanvas(canvas: HTMLCanvasElement): void {
  const y = y0 + rng() * (y1 - y0);
  const bv = 0.48 + rng() * 0.96;
  const alpha = 0.004 + rng() * 0.024;
- ctx.strokeStyle = `rgba(${Math.min(255,base[0]*bv|0)},${Math.min(255,base[1]*bv|0)},${Math.min(255,base[2]*bv|0)},${alpha})`;
+ ctx.strokeStyle = `rgba(${Math.min(255,Math.trunc(base[0]*bv))},${Math.min(255,Math.trunc(base[1]*bv))},${Math.min(255,Math.trunc(base[2]*bv))},${alpha})`;
  ctx.lineWidth = 0.18 + rng() * 0.58;
  ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
  }
@@ -479,8 +482,8 @@ function drawDoorCanvas(canvas: HTMLCanvasElement): void {
  const g = ctx.createRadialGradient(C - 72, C - 60, 0, C + 22, C + 28, 232);
  g.addColorStop(0, '#575f6c');
  g.addColorStop(0.14, '#404852');
- g.addColorStop(0.40, '#2a2d34');
- g.addColorStop(0.70, '#1e2026');
+ g.addColorStop(0.4, '#2a2d34');
+ g.addColorStop(0.7, '#1e2026');
  g.addColorStop(1, '#121418');
  ctx.fillStyle = g; ctx.fillRect(0, 0, L, L);
   }
@@ -630,13 +633,13 @@ function drawDoorCanvas(canvas: HTMLCanvasElement): void {
   ctx.font = '700 9.5px "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(135,145,160,0.18)';
-  ctx.fillText('WORLD  MONITOR', C, C - 128);
+  ctx.fillText('CRYSTAL  BALL', C, C - 128);
   ctx.restore();
 }
 
 // ── SVG door ───────────────────────────────────────────────────────────────────
 
-type DoorParts = {
+interface DoorParts {
   root: HTMLDivElement;
   svg: SVGSVGElement;
   scannerRing: SVGCircleElement;
@@ -647,7 +650,7 @@ type DoorParts = {
   boltPins: SVGGElement[];
   lockedLed: SVGCircleElement;
   scannerBtn: SVGCircleElement;
-};
+}
 
 function buildDoor(): DoorParts {
   const V = 500;
@@ -658,7 +661,7 @@ function buildDoor(): DoorParts {
 
   const canvas = document.createElement('canvas');
   drawDoorCanvas(canvas);
-  root.appendChild(canvas);
+  root.append(canvas);
 
   const svg = svgEl<SVGSVGElement>('svg');
   attr(svg, { viewBox: `0 0 ${V} ${V}` });
@@ -671,7 +674,7 @@ function buildDoor(): DoorParts {
   for (const [off, col] of [
  ['0%','#636970'],['20%','#4c5258'],['55%','#2e3138'],['100%','#1a1b20'],
   ] as const) {
- const s = svgEl<SVGStopElement>('stop'); attr(s, { offset: off, 'stop-color': col }); bg.appendChild(s);
+ const s = svgEl<SVGStopElement>('stop'); attr(s, { offset: off, 'stop-color': col }); bg.append(s);
   }
 
   // Tighter, more realistic glow — not a neon ring
@@ -679,8 +682,8 @@ function buildDoor(): DoorParts {
   attr(gf, { id: 'vi-glow', x: '-50%', y: '-50%', width: '200%', height: '200%' });
   const gb = svgEl('feGaussianBlur'); attr(gb, { stdDeviation: '5', result: 'blur' });
   const gm = svgEl('feMerge');
-  [{ in: 'blur' }, { in: 'SourceGraphic' }].forEach(a => { const n = svgEl('feMergeNode'); attr(n, a); gm.appendChild(n); });
-  gf.appendChild(gb); gf.appendChild(gm);
+  [{ in: 'blur' }, { in: 'SourceGraphic' }].forEach(a => { const n = svgEl('feMergeNode'); attr(n, a); gm.append(n); });
+  gf.append(gb); gf.append(gm);
 
   const grainF = svgEl<SVGFilterElement>('filter');
   attr(grainF, { id: 'vi-grain', 'color-interpolation-filters': 'sRGB' });
@@ -692,10 +695,10 @@ function buildDoor(): DoorParts {
   attr(grainBlend, { in: 'SourceGraphic', in2: 'gray', mode: 'overlay', result: 'blended' });
   const grainComp = svgEl('feComposite');
   attr(grainComp, { in: 'blended', in2: 'SourceGraphic', operator: 'in' });
-  grainF.appendChild(turb); grainF.appendChild(desat); grainF.appendChild(grainBlend); grainF.appendChild(grainComp);
+  grainF.append(turb); grainF.append(desat); grainF.append(grainBlend); grainF.append(grainComp);
 
-  defs.appendChild(bg); defs.appendChild(gf); defs.appendChild(grainF);
-  svg.appendChild(defs);
+  defs.append(bg); defs.append(gf); defs.append(grainF);
+  svg.append(defs);
 
   // Bolt pins
   const boltPins: SVGGElement[] = [];
@@ -712,9 +715,9 @@ function buildDoor(): DoorParts {
  const pinGrain = svgEl<SVGRectElement>('rect');
  attr(pinGrain, { x: C - 8, y: 8, width: 16, height: 34, rx: 4,
  fill: 'rgba(200,205,215,0.07)', filter: 'url(#vi-grain)' });
- pinG.appendChild(pin); pinG.appendChild(pinTopHL);
- pinG.appendChild(pinLeftHL); pinG.appendChild(pinGrain);
- g.appendChild(pinG); svg.appendChild(g);
+ pinG.append(pin); pinG.append(pinTopHL);
+ pinG.append(pinLeftHL); pinG.append(pinGrain);
+ g.append(pinG); svg.append(g);
  boltPins.push(pinG);
   }
 
@@ -723,16 +726,16 @@ function buildDoor(): DoorParts {
   const scannerGlow = svgEl<SVGCircleElement>('circle');
   attr(scannerGlow, { cx: C, cy: C, r: 85, fill: 'none', stroke: '#6b0e0e', 'stroke-width': 7 });
   scannerGlow.style.cssText = 'filter:url(#vi-glow);animation:vi-glow 2.8s ease-in-out infinite;';
-  svg.appendChild(scannerGlow);
+  svg.append(scannerGlow);
 
   const scannerRing = svgEl<SVGCircleElement>('circle');
   attr(scannerRing, { cx: C, cy: C, r: 84, fill: 'none', stroke: '#9b1c1c', 'stroke-width': 1.2 });
   scannerRing.style.animation = 'vi-scan 2.8s ease-in-out infinite';
-  svg.appendChild(scannerRing);
+  svg.append(scannerRing);
 
   const padFill = svgEl<SVGCircleElement>('circle');
   attr(padFill, { cx: C, cy: C, r: 83, fill: 'transparent' });
-  svg.appendChild(padFill);
+  svg.append(padFill);
 
   // Fingerprint ridges — dark crimson, locked
   const fpG = svgEl<SVGGElement>('g');
@@ -754,9 +757,9 @@ function buildDoor(): DoorParts {
   for (const d of fpDefs) {
  const p = svgEl<SVGPathElement>('path');
  attr(p, { d, stroke: '#8b2222', 'stroke-width': '1.2', fill: 'none', 'stroke-linecap': 'round' });
- fpG.appendChild(p); fpPaths.push(p);
+ fpG.append(p); fpPaths.push(p);
   }
-  svg.appendChild(fpG);
+  svg.append(fpG);
 
   const statusText = svgEl<SVGTextElement>('text');
   attr(statusText, {
@@ -767,23 +770,23 @@ function buildDoor(): DoorParts {
  fill: 'rgba(180,80,80,0.6)',
   });
   statusText.textContent = 'BIOMETRIC SCAN READY';
-  svg.appendChild(statusText);
+  svg.append(statusText);
 
   // Status LED — red blinking (locked)
   const ledGlow = svgEl<SVGCircleElement>('circle');
   attr(ledGlow, { cx: C, cy: C + 160, r: 9, fill: 'rgba(200,28,28,0.16)' });
-  svg.appendChild(ledGlow);
+  svg.append(ledGlow);
   const lockedLed = svgEl<SVGCircleElement>('circle');
   attr(lockedLed, { cx: C, cy: C + 160, r: 3.5, fill: '#cc2020', stroke: '#6a0e0e', 'stroke-width': 1 });
   lockedLed.style.animation = 'vi-ledblink 2.2s ease-in-out infinite';
-  svg.appendChild(lockedLed);
+  svg.append(lockedLed);
 
   const scannerBtn = svgEl<SVGCircleElement>('circle');
   attr(scannerBtn, { cx: C, cy: C, r: 93, fill: 'transparent' });
   scannerBtn.style.cssText = 'cursor:pointer;pointer-events:all;';
-  svg.appendChild(scannerBtn);
+  svg.append(scannerBtn);
 
-  root.appendChild(svg);
+  root.append(svg);
   return { root, svg, scannerRing, scannerGlow, padFill, fpPaths, statusText, boltPins, lockedLed, scannerBtn };
 }
 
@@ -812,7 +815,7 @@ function buildOverlay(): OverlayRefs {
   // Vault room environment canvas — concrete walls, overhead light, static frame
   const roomCanvas = document.createElement('canvas');
   drawVaultRoom(roomCanvas);
-  overlay.appendChild(roomCanvas);
+  overlay.append(roomCanvas);
 
   // Scene container — 3D perspective parent for the rotating door
   const scene = document.createElement('div');
@@ -850,8 +853,8 @@ function buildOverlay(): OverlayRefs {
  z-index:1;
   `;
 
-  scene.appendChild(interior);
-  scene.appendChild(parts.root);
+  scene.append(interior);
+  scene.append(parts.root);
 
   const quit = document.createElement('button');
   quit.textContent = 'Quit';
@@ -865,8 +868,8 @@ function buildOverlay(): OverlayRefs {
   quit.addEventListener('mouseenter', () => { quit.style.color = 'rgba(180,200,220,0.65)'; });
   quit.addEventListener('mouseleave', () => { quit.style.color = 'rgba(120,140,160,0.35)'; });
 
-  overlay.appendChild(scene);
-  overlay.appendChild(quit);
+  overlay.append(scene);
+  overlay.append(quit);
 
   return { ...parts, overlay, scene, interior };
 }
@@ -887,8 +890,6 @@ function setScannerIdle(p: DoorParts): void {
   p.statusText.setAttribute('fill', 'rgba(170,70,70,0.7)');
   p.statusText.textContent = 'TAP TO RETRY';
   p.scannerBtn.style.cursor = 'pointer';
-  p.scannerBtn.onmouseenter = null;
-  p.scannerBtn.onmouseleave = null;
 }
 
 function setScannerWarmup(p: DoorParts): void {
@@ -1056,10 +1057,10 @@ async function runBiometricFlow(
  settled = true;
  await playOpenSequence(refs, appReady);
  resolveFlow(true);
- } catch (err) {
+ } catch (error) {
  if (settled) return;
  inFlight = false;
- const msg = err instanceof Error ? err.message : '';
+ const msg = error instanceof Error ? error.message : '';
  const text = msg.toLowerCase().includes('cancel') ? 'CANCELLED — TAP TO RETRY' : 'TAP TO RETRY';
  setScannerError(refs, text);
  setTimeout(() => { if (!settled) setScannerIdle(refs); }, 1400);
@@ -1076,7 +1077,7 @@ async function runBiometricFlow(
 
 export async function runVaultIntro(appReady?: Promise<void>): Promise<boolean> {
   const refs = buildOverlay();
-  document.body.appendChild(refs.overlay);
+  document.body.append(refs.overlay);
 
   let quitCalled = false;
   const unlocked = await runBiometricFlow(refs, () => { quitCalled = true; }, appReady);

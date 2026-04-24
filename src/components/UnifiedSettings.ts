@@ -613,21 +613,19 @@ export class UnifiedSettings {
  `;
  }
 
- // YouTube Account section (desktop only)
- if (this.config.isDesktopApp) {
+ // YouTube Account section — shown in both builds, with different copy
+ // for web (browser cookie jar handles auth) vs desktop (in-app webview).
+ {
  const connected = isYouTubeConnected();
+ const desktopCopy = 'Use your subscription to avoid ads in live streams. Optional — cookies are shared with embedded players.';
+ const webCopy = 'Embedded players use your browser\'s YouTube session. Open YouTube in a new tab to switch accounts or sign in.';
  html += `<div class="ai-flow-section-label">YouTube Account</div>`;
  html += `<div class="ai-flow-toggle-row yt-account-row">
  <div class="ai-flow-toggle-label-wrap">
- <div class="ai-flow-toggle-label">Sign in to YouTube</div>
- <div class="ai-flow-toggle-desc">Use your subscription to avoid ads in live streams. Optional — cookies are shared with embedded players.</div>
+ <div class="ai-flow-toggle-label">${this.config.isDesktopApp ? 'Sign in to YouTube' : 'YouTube session'}</div>
+ <div class="ai-flow-toggle-desc">${this.config.isDesktopApp ? desktopCopy : webCopy}</div>
  </div>
- <div class="yt-account-status">
- ${connected
- ? `<span class="yt-status-dot connected"></span><span class="yt-status-text">Connected</span><button id="us-yt-disconnect" class="yt-account-btn disconnect">Disconnect</button>`
- : `<button id="us-yt-connect" class="yt-account-btn connect">Connect</button>`
- }
- </div>
+ <div class="yt-account-status">${this._renderYtStatus(connected)}</div>
  </div>`;
  }
 
@@ -1113,6 +1111,18 @@ export class UnifiedSettings {
  swEl.textContent = 'unavailable';
  }
  }
+  }
+
+  private _renderYtStatus(connected: boolean): string {
+ if (!this.config.isDesktopApp) {
+ // Web is always "connected" via the browser cookie jar; the button
+ // routes to youtube.com for account switching / fresh sign-in.
+ return `<span class="yt-status-dot connected"></span><span class="yt-status-text">Via browser</span><button id="us-yt-connect" class="yt-account-btn connect">Open YouTube</button>`;
+ }
+ if (connected) {
+ return `<span class="yt-status-dot connected"></span><span class="yt-status-text">Connected</span><button id="us-yt-disconnect" class="yt-account-btn disconnect">Disconnect</button>`;
+ }
+ return `<button id="us-yt-connect" class="yt-account-btn connect">Connect</button>`;
   }
 
   private renderDebugContentWeb(): string {

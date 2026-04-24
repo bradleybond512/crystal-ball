@@ -176,14 +176,16 @@ const VIEW_PRESETS: Record<DeckMapView, { longitude: number; latitude: number; z
 const MAP_INTERACTION_MODE: MapInteractionMode =
   import.meta.env.VITE_MAP_INTERACTION_MODE === 'flat' ? 'flat' : '3d';
 
-// Theme-aware basemap vector style URLs (English labels, no local scripts)
-// Happy variant uses self-hosted warm styles; default uses CARTO CDN
+// Theme-aware basemap style URLs. Self-hosted JSON references CARTO raster
+// tiles — more reliable in web builds than fetching the CARTO vector gl style
+// cross-origin (which occasionally misbehaves under strict CSP / CORS, and
+// doesn't get picked up by the service worker's carto-tiles runtime cache).
 const DARK_STYLE = SITE_VARIANT === 'happy'
   ? '/map-styles/happy-dark.json'
-  : 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+  : '/map-styles/dark.json';
 const LIGHT_STYLE = SITE_VARIANT === 'happy'
   ? '/map-styles/happy-light.json'
-  : 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
+  : '/map-styles/light.json';
 
 // Raster basemap styles — Esri services, free to use, no API key required
 const SATELLITE_STYLE = '/map-styles/satellite.json';
@@ -701,7 +703,13 @@ export class DeckGLMap {
   private initMapLibre(): void {
  const preset = VIEW_PRESETS[this.state.view];
  const initialTheme = getCurrentTheme();
- const savedBasemap = localStorage.getItem(BASEMAP_STORAGE_KEY) as BaseMapStyle | null;
+ // Validate the persisted value — an older build or a hand-edited localStorage
+ // could leave a bogus string here, in which case getStyleUrl() silently falls
+ // to DARK while the button UI shows nothing as active, and the user reports
+ // "the basemap switcher doesn't work".
+ const rawSaved = localStorage.getItem(BASEMAP_STORAGE_KEY);
+ const validBasemaps: readonly BaseMapStyle[] = ['dark', 'light', 'satellite', 'terrain'];
+ const savedBasemap = validBasemaps.includes(rawSaved as BaseMapStyle) ? rawSaved as BaseMapStyle : null;
  this.activeBaseMap = savedBasemap ?? (initialTheme === 'light' ? 'light' : 'dark');
 
  this.maplibreMap = new maplibregl.Map({
@@ -783,6 +791,16 @@ export class DeckGLMap {
  this.state.zoom = this.maplibreMap?.getZoom() ?? this.state.zoom;
  this.onStateChange?.(this.state);
  };
+
+ // MapLibre 'error' events fire when a style JSON or tile fails to load
+ // (CORS block, 404, network). Without a listener these are silently
+ // swallowed and the user sees a blank or stuck map with no clue why.
+ this.maplibreMap.on('error', (e: unknown) => {
+ const err = (e as { error?: unknown }).error;
+ const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
+ const sourceId = (e as { sourceId?: string }).sourceId;
+ console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId });
+ });
 
  this.maplibreMap.on('movestart', onMoveStart);
  this.maplibreMap.on('moveend', onMoveEnd);

@@ -1,0 +1,31 @@
+{
+  "version": 8,
+  "name": "Dark",
+  "sources": {
+    "carto-dark": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png"
+      ],
+      "tileSize": 256,
+      "maxzoom": 19,
+      "attribution": "&copy; <a href=\"https://carto.com/attributions\" target=\"_blank\" rel=\"noopener\">CARTO</a> &copy; <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">OpenStreetMap</a>"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#0b0e12" }
+    },
+    {
+      "id": "carto-dark-tiles",
+      "type": "raster",
+      "source": "carto-dark",
+      "minzoom": 0,
+      "maxzoom": 22
+    }
+  ]
+}

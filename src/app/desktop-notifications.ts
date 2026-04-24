@@ -59,6 +59,12 @@ export class DesktopNotifications implements AppModule {
 
   private async showWebNotification(body: string): Promise<void> {
  if (this.webPermission === 'unsupported' || typeof Notification === 'undefined') return;
+ // Re-sync with the browser each time so a user who flipped the site
+ // lock-icon setting from denied → allowed without us seeing a
+ // requestPermission round-trip is picked up automatically.
+ if (this.webPermission !== Notification.permission) {
+ this.webPermission = Notification.permission;
+ }
  if (this.webPermission === 'default') {
  try {
  this.webPermission = await Notification.requestPermission();

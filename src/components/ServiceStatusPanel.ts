@@ -56,7 +56,10 @@ export class ServiceStatusPanel extends Panel {
  const timer = setTimeout(() => controller.abort(), 4000);
  try {
  const res = await fetch('/api/health', { method: 'GET', signal: controller.signal });
- this.cloudReachable = res.ok || res.status === 404; // 404 still means the edge answered
+ // Only a 2xx response counts as healthy. A 404 usually means the edge
+ // is up but /api/health is not wired on this deployment — that's still
+ // a red flag, so surface it as unreachable rather than lying green.
+ this.cloudReachable = res.ok;
  } catch {
  this.cloudReachable = false;
  } finally {

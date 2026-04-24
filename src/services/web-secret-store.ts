@@ -223,7 +223,18 @@ async function persistCurrent(): Promise<void> {
   const blob = cachedBlob;
   if (!blob) throw new Error('Vault blob missing');
   const salt = base64ToBytes(blob.salt);
-  const next = await encryptMap(derivedKey, salt, plaintext);
+  // Snapshot the live state BEFORE we await. A concurrent visibility-change
+  // auto-lock between the encrypt and the putMemory call would otherwise
+  // leave us persisting with a key that no longer matches the in-memory
+  // vault. After the await we re-verify that nothing was wiped underneath us.
+  const keySnapshot = derivedKey;
+  const mapSnapshot = new Map(plaintext);
+  const next = await encryptMap(keySnapshot, salt, mapSnapshot);
+  // lockVault() clears derivedKey and plaintext together, so checking the key
+  // reference alone is sufficient to detect a concurrent auto-lock.
+  if (derivedKey !== keySnapshot) {
+    throw new Error('Vault was locked during save; change not persisted');
+  }
   await putMemory(VAULT_KEY, next);
   cachedBlob = next;
 }
@@ -243,6 +254,7 @@ export async function deleteSecret(key: string): Promise<void> {
   if (!plaintext) throw new Error('Vault is locked');
   plaintext.delete(key);
   await persistCurrent();
+  if (!plaintext) return;
   notify();
 }
 

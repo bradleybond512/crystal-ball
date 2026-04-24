@@ -831,6 +831,16 @@ export interface SecretVerificationResult {
   message: string;
 }
 
+// IPv4 ranges that are almost always mistakes when supplied as OLLAMA_API_URL:
+// - 169.254.0.0/16 is the cloud-metadata service link-local range (AWS, GCP,
+//   Azure, Alibaba). A value that points here is likely a copy-paste accident
+//   and never a legitimate Ollama host.
+// - 0.0.0.0/8 is "this network" — also not a real endpoint a user should use.
+// We deliberately allow 127.0.0.1 and RFC 1918 private ranges because Ollama
+// typically runs on the user's own machine or LAN.
+const OLLAMA_BLOCKED_HOSTS = /^(169\.254\.|0\.)/;
+
+// eslint-disable-next-line sonarjs/cognitive-complexity -- per-key switch that's easier to read as one function
 export function validateSecret(key: RuntimeSecretKey, value: string): { valid: boolean; hint?: string } {
   const trimmed = value.trim();
   if (!trimmed) return { valid: false, hint: 'Value is required' };
@@ -848,6 +858,9 @@ export function validateSecret(key: RuntimeSecretKey, value: string): { valid: b
  if (key === 'OLLAMA_API_URL') {
  if (!['http:', 'https:'].includes(parsed.protocol)) {
  return { valid: false, hint: 'Must be an http(s) URL' };
+ }
+ if (OLLAMA_BLOCKED_HOSTS.test(parsed.hostname)) {
+ return { valid: false, hint: 'Cloud-metadata and 0.0.0.0 addresses are not valid Ollama hosts' };
  }
  return { valid: true };
  }
@@ -1138,6 +1151,9 @@ async function verifyWebSecret(
  method: 'GET',
  headers: spec.headers ? spec.headers(trimmed) : undefined,
  signal: controller.signal,
+ // Suppress Referer so the Authorization bearer doesn't leak to a
+ // redirect target if the provider 301/302s to a CDN.
+ referrerPolicy: 'no-referrer',
  });
  if (res.ok) return { valid: true, message: 'Verified' };
  if (res.status === 401 || res.status === 403) {

@@ -212,7 +212,9 @@ body {
   overflow: hidden;
   height: 100%;
   width: 100%;
-  min-height: 100vh;
+  /* 100dvh tracks the dynamic viewport so iOS Safari's collapsing URL bar
+     doesn't force the body past the actual visible area. */
+  min-height: 100dvh;
   min-width: 100vw;
 }
 
@@ -749,7 +751,7 @@ canvas,
   position: absolute;
   top: 100%;
   right: 0;
-  width: 280px;
+  width: min(280px, 90vw);
   background: var(--border-subtle);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -962,7 +964,9 @@ canvas,
 
 .panels-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* Below 320px viewports auto-fill can't satisfy the 280px minmax without
+     horizontal overflow, so drop to a single-column layout instead. */
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   grid-auto-flow: row dense;
   grid-auto-rows: minmax(200px, 380px);
   gap: 4px;
@@ -3710,7 +3714,7 @@ body.panel-resize-active iframe {
   background: linear-gradient(180deg, rgba(20, 20, 20, 0.98) 0%, rgba(10, 10, 10, 0.98) 100%);
   border: 1px solid var(--border-strong);
   border-radius: 14px;
-  width: 360px;
+  width: min(360px, 90vw);
   z-index: 100;
   box-shadow: 0 22px 44px rgba(0, 0, 0, 0.35);
   overflow: hidden;
@@ -12469,7 +12473,7 @@ a.prediction-link:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 10000;  /* findings modal — bottom of the modal stack */
   backdrop-filter: blur(4px);
 }
 
@@ -15534,7 +15538,7 @@ body.has-breaking-alert .panels-grid {
 .country-intel-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 10001;  /* stacks above findings modal */
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -16483,6 +16487,14 @@ body.has-breaking-alert .panels-grid {
   font-size: 11px;
 }
 .web-vault-message-error { color: rgba(230, 130, 130, 1); }
+
+/* Stack the vault form vertically on the narrowest phones so the
+   passphrase field and the Lock/Destroy buttons never wrap into an
+   unreadable jumble. */
+@media (max-width: 360px) {
+  .web-vault-input { flex: 1 1 100%; min-width: 0; }
+  .web-vault-btn { flex: 1 1 100%; }
+}
 .web-vault-message-info { color: var(--text-muted); }
 
 .runtime-alert h3 {
@@ -16697,7 +16709,7 @@ body.has-breaking-alert .panels-grid {
 .country-brief-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 10002;  /* stacks above country intel modal */
   background: var(--bg);
   backdrop-filter: blur(6px);
   opacity: 0;
@@ -18399,7 +18411,7 @@ body.has-breaking-alert .panels-grid {
   font-size: 13px;
   color: var(--text);
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  z-index: 10000;
+  z-index: 10003;  /* top of modal stack — floats above all overlays */
   white-space: nowrap;
 }
 

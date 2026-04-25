@@ -793,13 +793,22 @@ export class DeckGLMap {
  };
 
  // MapLibre 'error' events fire when a style JSON or tile fails to load
- // (CORS block, 404, network). Without a listener these are silently
- // swallowed and the user sees a blank or stuck map with no clue why.
+ // (CORS block, 404, network). Log them; if we get many in a short
+ // window, surface a visible overlay so a black map produces actionable
+ // info instead of a silent failure.
+ let mapErrorCount = 0;
+ const mapErrorWindowMs = 5000;
+ const mapErrorThreshold = 3;
+ setTimeout(() => { mapErrorCount = 0; }, mapErrorWindowMs);
  this.maplibreMap.on('error', (e: unknown) => {
  const err = (e as { error?: unknown }).error;
  const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
  const sourceId = (e as { sourceId?: string }).sourceId;
  console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId });
+ mapErrorCount += 1;
+ if (mapErrorCount === mapErrorThreshold) {
+ this.showMapErrorOverlay(msg, sourceId);
+ }
  });
 
  this.maplibreMap.on('movestart', onMoveStart);
@@ -5671,6 +5680,40 @@ export class DeckGLMap {
  } catch (error) {
  console.warn('[DeckGLMap] Dark map enhancements skipped:', error);
  }
+  }
+
+  private showMapErrorOverlay(message: string, sourceId?: string): void {
+ const wrapper = this.container.querySelector<HTMLElement>('#deckglMapWrapper');
+ if (!wrapper || wrapper.querySelector('.map-error-overlay')) return;
+ const overlay = document.createElement('div');
+ overlay.className = 'map-error-overlay';
+ overlay.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(11,14,18,0.92);color:#e5e9f0;font-size:13px;text-align:center;padding:24px;z-index:5;';
+ const safeMsg = message.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
+ const safeSource = sourceId ? sourceId.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c] ?? c)) : '';
+ overlay.innerHTML = `
+ <div style="font-weight:600;font-size:14px;">Map tiles failed to load</div>
+ <div style="opacity:0.75;max-width:420px;">${safeMsg}${safeSource ? ` (source: ${safeSource})` : ''}</div>
+ <div style="display:flex;gap:8px;margin-top:6px;">
+ <button class="map-error-retry" style="padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.06);color:#e5e9f0;cursor:pointer;font-size:12px;">Retry</button>
+ <button class="map-error-clear-cache" style="padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.25);background:transparent;color:#e5e9f0;cursor:pointer;font-size:12px;">Clear cache &amp; reload</button>
+ </div>
+ `;
+ wrapper.append(overlay);
+ overlay.querySelector('.map-error-retry')?.addEventListener('click', () => {
+ overlay.remove();
+ if (this.maplibreMap) this.maplibreMap.setStyle(getStyleUrl(this.activeBaseMap));
+ });
+ overlay.querySelector('.map-error-clear-cache')?.addEventListener('click', () => {
+ void (async () => {
+ try {
+ const regs = await navigator.serviceWorker?.getRegistrations();
+ await Promise.all((regs ?? []).map((r) => r.unregister()));
+ const keys = await caches.keys();
+ await Promise.all(keys.map((k) => caches.delete(k)));
+ } catch { /* ignore */ }
+ location.reload();
+ })();
+ });
   }
 
   private switchBasemap(basemap: BaseMapStyle): void {

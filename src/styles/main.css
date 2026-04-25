@@ -16488,6 +16488,20 @@ body.has-breaking-alert .panels-grid {
 }
 .web-vault-message-error { color: rgba(230, 130, 130, 1); }
 
+.web-vault-match-hint {
+  margin: 0 0 6px;
+  font-size: 11px;
+  min-height: 14px;
+  color: var(--text-muted);
+}
+.web-vault-match-hint--warn { color: rgba(230, 180, 100, 1); }
+.web-vault-match-hint--ok { color: rgba(120, 220, 140, 1); }
+.web-vault-match-hint--info { color: var(--text-muted); }
+.web-vault-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Stack the vault form vertically on the narrowest phones so the
    passphrase field and the Lock/Destroy buttons never wrap into an
    unreadable jumble. */

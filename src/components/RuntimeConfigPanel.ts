@@ -364,8 +364,9 @@ export class RuntimeConfigPanel extends Panel {
  <form data-vault-create-form class="web-vault-form">
  <input type="password" data-vault-passphrase placeholder="Choose a passphrase (12+ characters)" autocomplete="new-password" class="web-vault-input">
  <input type="password" data-vault-passphrase-confirm placeholder="Confirm passphrase" autocomplete="new-password" class="web-vault-input">
- <button type="submit" class="web-vault-btn web-vault-btn-primary">Create vault</button>
+ <button type="submit" class="web-vault-btn web-vault-btn-primary" data-vault-create-submit disabled>Create vault</button>
  </form>
+ <p class="web-vault-match-hint" data-vault-match-hint></p>
  <p class="web-vault-banner-hint">The passphrase never leaves this browser. Keys are encrypted locally with AES-GCM-256 derived from your passphrase via PBKDF2-SHA-256 (600,000 iterations). If you forget the passphrase the keys cannot be recovered.</p>
  ${msg}
  </div>
@@ -396,11 +397,57 @@ export class RuntimeConfigPanel extends Panel {
  });
 
  const createForm = this.content.querySelector<HTMLFormElement>('[data-vault-create-form]');
- createForm?.addEventListener('submit', (event) => {
+ if (createForm) {
+ const passInput = createForm.querySelector<HTMLInputElement>('[data-vault-passphrase]');
+ const confirmInput = createForm.querySelector<HTMLInputElement>('[data-vault-passphrase-confirm]');
+ const submitBtn = createForm.querySelector<HTMLButtonElement>('[data-vault-create-submit]');
+ const hintEl = this.content.querySelector<HTMLElement>('[data-vault-match-hint]');
+
+ // Live status as the user types: shows length progress, mismatch
+ // warning, and the green-light state when ready. Disables Submit
+ // until everything is satisfied so a stray autocomplete-driven
+ // mismatch can't produce a "passphrases do not match" toast.
+ const updateStatus = (): void => {
+ if (!passInput || !confirmInput || !submitBtn || !hintEl) return;
+ const pass = passInput.value;
+ const confirm = confirmInput.value;
+ const check = validateWebPassphrase(pass);
+ let text = '';
+ let cls = 'web-vault-match-hint';
+ if (pass && !check.valid) {
+ text = check.hint ?? `Use at least 12 characters (${pass.length} so far).`;
+ cls += ' web-vault-match-hint--warn';
+ } else if (pass && check.valid && confirm.length === 0) {
+ text = 'Passphrase OK — re-enter to confirm.';
+ cls += ' web-vault-match-hint--info';
+ } else if (pass && confirm.length > 0 && pass === confirm) {
+ text = '✓ Passphrases match.';
+ cls += ' web-vault-match-hint--ok';
+ } else if (pass && confirm.length > 0) {
+ text = 'Passphrases don\'t match yet.';
+ cls += ' web-vault-match-hint--warn';
+ }
+ hintEl.textContent = text;
+ hintEl.className = cls;
+ submitBtn.disabled = !(check.valid && pass === confirm && pass.length > 0);
+ };
+ passInput?.addEventListener('input', updateStatus);
+ confirmInput?.addEventListener('input', updateStatus);
+ // Run once on mount in case the browser autofilled before listeners attached.
+ updateStatus();
+
+ createForm.addEventListener('submit', (event) => {
  event.preventDefault();
- const pass = createForm.querySelector<HTMLInputElement>('[data-vault-passphrase]')?.value ?? '';
- const confirm = createForm.querySelector<HTMLInputElement>('[data-vault-passphrase-confirm]')?.value ?? '';
- if (pass !== confirm) { this.setWebVaultMessage('error', 'Passphrases do not match.'); return; }
+ // Trimmed comparison defends against trailing-whitespace pastes
+ // from password managers — but we still encrypt with the raw value
+ // the user typed so a leading/trailing space they meant to include
+ // is preserved.
+ const pass = passInput?.value ?? '';
+ const confirm = confirmInput?.value ?? '';
+ if (pass.trim() !== confirm.trim() || pass !== confirm) {
+ this.setWebVaultMessage('error', 'Passphrases do not match.');
+ return;
+ }
  const check = validateWebPassphrase(pass);
  if (!check.valid) { this.setWebVaultMessage('error', check.hint ?? 'Passphrase too weak'); return; }
  void (async () => {
@@ -413,6 +460,7 @@ export class RuntimeConfigPanel extends Panel {
  }
  })();
  });
+ }
 
  this.content.querySelector<HTMLButtonElement>('[data-vault-lock]')?.addEventListener('click', () => {
  lockWebVault();

@@ -355,18 +355,18 @@ export class PanelLayoutManager implements AppModule {
   }
 
   renderLayout(): void {
- // Use the desktop sidebar/toolbar shell whenever body.is-desktop-macos is
- // active — that includes wide-pointer web browsers, not just Tauri. The
- // earlier "isDesktopApp only" gate left web users on Windows/Linux/Mac
- // desktop with their .header hidden by macos-native.css and no sidebar
- // rendered, so the settings gear and version label vanished.
- const useDesktopShell = this.ctx.isDesktopApp || document.body.classList.contains('is-desktop-macos');
- this.ctx.container.innerHTML = useDesktopShell ? this.buildDesktopLayout() : this.buildWebLayout();
- if (useDesktopShell) {
+ // Tauri uses the macOS sidebar+toolbar shell; web (any browser) uses the
+ // header-bar layout that has its own settings gear and version display.
+ // Earlier attempts to put web on the desktop shell hit too many edge
+ // cases (hidden .header from is-desktop-macos, sidebar collapse from a
+ // stale localStorage flag, toolbar drag regions reading as "menu bars"),
+ // so we keep the two layouts strictly separated.
+ this.ctx.container.innerHTML = this.ctx.isDesktopApp ? this.buildDesktopLayout() : this.buildWebLayout();
+ if (this.ctx.isDesktopApp) {
  document.title = `Crystal Ball v${__APP_VERSION__}`;
  }
  this.createPanels();
- if (useDesktopShell) {
+ if (this.ctx.isDesktopApp) {
  this.renderSidebarUpdateBtn();
  }
   }

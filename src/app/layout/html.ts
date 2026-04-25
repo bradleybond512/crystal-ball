@@ -246,6 +246,9 @@ export function buildWebLayout(ctx: AppContext): string {
  </div>`}
  <button class="search-btn" id="searchBtn"><kbd>⌘K</kbd> ${t('header.search')}</button>
  ${ctx.isDesktopApp ? '' : `<button class="copy-link-btn" id="copyLinkBtn">${t('header.copyLink')}</button>`}
+ <button class="copy-link-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)" style="display:inline-flex;align-items:center;gap:6px;">
+ 🌍 <span style="font-size:11px;">God's Vision</span>
+ </button>
  <button class="theme-toggle-btn" id="headerThemeToggle" title="${t('header.toggleTheme')}">
  ${buildThemeIcon()}
  </button>

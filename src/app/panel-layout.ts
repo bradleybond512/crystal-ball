@@ -372,6 +372,16 @@ export class PanelLayoutManager implements AppModule {
  // Only other content is hardcoded markup (class names, "Installing…", "✓", button structure).
  container.innerHTML = this.buildSidebarUpdateBtnHtml(); // safe-html: escapeHtml applied to all dynamic strings
 
+ // Re-check button: rendered when state is null (initial / after fetch
+ // failure) or 'up-to-date'. Dispatches the same event the macOS Help
+ // menu uses so the desktop-updater module owns the actual fetch.
+ const recheckBtn = container.querySelector<HTMLButtonElement>('#sidebarUpdateRecheck');
+ if (recheckBtn) {
+ recheckBtn.addEventListener('click', () => {
+ document.dispatchEvent(new CustomEvent('wm:check-for-updates'));
+ });
+ }
+
  const installBtn = container.querySelector<HTMLButtonElement>('#sidebarUpdateInstall');
  if (!installBtn) return;
 

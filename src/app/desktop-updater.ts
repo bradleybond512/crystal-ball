@@ -79,7 +79,10 @@ export class DesktopUpdater implements AppModule {
  );
  if (!res.ok) {
  this.logUpdaterOutcome('fetch_failed', { status: res.status });
- this.setUpdateState({ phase: 'up-to-date' });
+ // Don't claim up-to-date on a server error — that hides real
+ // failures behind a false green check. Reset to null so the sidebar
+ // falls back to just the version label and the user can retry.
+ this.setUpdateState(null);
  if (manual) this.showInfoToast('Could not reach update server. Check your connection.');
  return;
  }
@@ -117,8 +120,11 @@ export class DesktopUpdater implements AppModule {
  this.logUpdaterOutcome('fetch_failed', {
  error: error instanceof Error ? error.message : String(error),
  });
- this.setUpdateState({ phase: 'up-to-date' });
- }
+ // Network or parsing failure — same as the !res.ok branch, don't pretend
+ // the user is current.
+ this.setUpdateState(null);
+ if (manual) this.showInfoToast('Could not reach update server. Check your connection.');
+  }
   }
 
   private isNewerVersion(remote: string, current: string): boolean {

@@ -653,6 +653,20 @@ body.is-desktop-macos[data-app-mode="ghost"] .mac-mode-section {
   background: rgba(245, 158, 11, 0.2);
 }
 
+/* When .mac-sidebar-version is rendered as a <button> (the re-check
+   variant), strip the default browser chrome so it matches the inert
+   <span> case. The .mac-sidebar-update-recheck class signals it's
+   interactive — give it a faint hover affordance. */
+button.mac-sidebar-version {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.mac-sidebar-update-recheck:hover {
+  color: var(--mac-label);
+}
 .mac-sidebar-version {
   margin-left: auto;
   font-size: 11px;

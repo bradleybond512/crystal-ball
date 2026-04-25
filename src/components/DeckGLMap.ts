@@ -5628,6 +5628,15 @@ export class DeckGLMap {
 
   private applyDarkMapEnhancements(): void {
  if (!this.maplibreMap || this.activeBaseMap !== 'dark') return;
+ // The hillshade DEM expects a vector style with symbol layers underneath
+ // for the hillshade to overlay through. Our self-hosted dark.json is a
+ // raster-only style (single CARTO tile layer), so adding a hillshade on
+ // top occludes the basemap and produces a black map. Bail when there's
+ // no vector source to enhance.
+ const styleSpec = this.maplibreMap.getStyle();
+ const hasVectorSource = Object.values(styleSpec?.sources ?? {})
+ .some((src) => (src as { type?: string }).type === 'vector');
+ if (!hasVectorSource) return;
  try {
  // Add terrain DEM source for hillshade (Mapzen terrarium — free, no API key)
  if (!this.maplibreMap.getSource('wm-terrain-dem')) {

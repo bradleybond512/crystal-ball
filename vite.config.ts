@@ -695,7 +695,7 @@ export default defineConfig({
  },
 
  workbox: {
- globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
+ globPatterns: ['**/*.{js,css,ico,png,svg,woff2,json}'],
  globIgnores: ['**/ml*.js', '**/onnx*.wasm', '**/locale-*.js'],
  maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // 6 MiB — CesiumJS adds ~2.4 MiB to panels bundle
  navigateFallback: null,
@@ -762,6 +762,24 @@ export default defineConfig({
  handler: 'CacheFirst',
  options: {
  cacheName: 'carto-tiles',
+ expiration: { maxEntries: 500, maxAgeSeconds: 30 * 24 * 60 * 60 },
+ cacheableResponse: { statuses: [0, 200] },
+ },
+ },
+ {
+ urlPattern: /^https:\/\/[abc]\.tile\.opentopomap\.org\//,
+ handler: 'CacheFirst',
+ options: {
+ cacheName: 'opentopomap-tiles',
+ expiration: { maxEntries: 500, maxAgeSeconds: 30 * 24 * 60 * 60 },
+ cacheableResponse: { statuses: [0, 200] },
+ },
+ },
+ {
+ urlPattern: /^https:\/\/gibs\.earthdata\.nasa\.gov\//,
+ handler: 'CacheFirst',
+ options: {
+ cacheName: 'gibs-tiles',
  expiration: { maxEntries: 500, maxAgeSeconds: 30 * 24 * 60 * 60 },
  cacheableResponse: { statuses: [0, 200] },
  },

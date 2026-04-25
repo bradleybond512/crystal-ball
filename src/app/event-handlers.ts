@@ -384,8 +384,8 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  document.dispatchEvent(new CustomEvent('cb:toggle-today'));
  }
- // Cmd+K — toggle command palette
- if (e.metaKey && e.key === 'k' && !e.shiftKey && !e.altKey) {
+ // Cmd+K (mac) / Ctrl+K (windows / linux) — toggle command palette
+ if ((e.metaKey || e.ctrlKey) && e.key === 'k' && !e.shiftKey && !e.altKey) {
  const active = document.activeElement;
  if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return;
  e.preventDefault();

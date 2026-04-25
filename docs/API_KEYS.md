@@ -1,8 +1,17 @@
 # Crystal Ball — API Keys & Data Sources
 
-Crystal Ball integrates with 40+ external data sources. Most features work out of the box with free public APIs, but some layers require API keys for full functionality. Keys are entered via **Settings (gear icon) > API Keys** and stored securely in your macOS keychain.
+Crystal Ball integrates with 40+ external data sources. Most features work out of the box with free public APIs, but some layers require API keys for full functionality. Keys are entered via **Settings (gear icon) → API Keys** in both the desktop and web builds.
 
 > **Each field in the in-app Settings overlay also shows a one-line description of what the key does, free vs paid, and a "Get key" link** — added in the v2.11 release as part of the documentation refresh.
+
+## Where keys are stored
+
+- **Desktop (Tauri)** — keys live in the macOS Keychain under service name `crystal-ball`. The renderer never sees them; they're injected into the Node.js sidecar at startup and proxied through a bearer-authenticated localhost port.
+- **Web (browser)** — keys live in a passphrase-encrypted vault in IndexedDB. AES-GCM-256 over PBKDF2-SHA-256 (600,000 iterations); ciphertext only, derived key + plaintext map held in module closure for the duration of the session. Auto-locks after 15 min of the tab being hidden. To set up:
+  1. Open Settings → API Keys.
+  2. Pick a passphrase you can remember (≥12 chars). There is no recovery — lost passphrase means destroying the vault and re-entering keys.
+  3. Once unlocked, the per-provider inputs accept and persist your keys across reloads.
+  4. **Save validation** — Anthropic, Groq, OpenRouter, Cesium Ion, Mapbox, and MapTiler keys are probed directly from the browser on save (no Referer leak via `referrerPolicy: 'no-referrer'`); a 401/403 surfaces immediately. Other providers don't accept browser CORS, so they fall through to a non-committal "Saved".
 
 ## Quick Start — Essential Free Keys
 

@@ -80,8 +80,9 @@ src/                        # TypeScript frontend (Vite)
     panels.ts               # FULL_PANELS, PANEL_CATEGORY_MAP, FULL_MAP_LAYERS
   services/
     mode-manager.ts         # AppMode: peace/finance/war/disaster/ghost
-    runtime-config.ts       # API key definitions, feature toggles
+    runtime-config.ts       # API key definitions, feature toggles, web verifySecret probes
     settings-constants.ts   # HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS, SETTINGS_CATEGORIES
+    web-secret-store.ts     # browser-only passphrase-encrypted vault (see "Web key vault" below)
     analytics.ts            # PostHog (suppressed in Ghost Mode)
     # ── Analyst reasoning layer (see docs/reasoning-layer.md) ──
     analyst-loop.ts             # cross-domain hypothesis fusion + ranking
@@ -132,6 +133,37 @@ A persistent, renderer-side reasoning stack that fuses `situation-engine`, `anom
 - **LLM**: `llm-adapter.generateText()` is the single entry point; prefers Ollama / LM Studio via `/api/intel-generate` before falling back to `runClaudeAgent`. Daily cloud-call cap enforced by `llm-budget.reserveCloudCall()` (race-safe for parallel personas).
 - **MCP**: 4 read + 3 write + 2 diagnostic tools — see `tools/mcp-server/tools/analyst.mjs`.
 - **Memory**: IDB `reasoning_memory` store on the shared `crystalball_db` (versionchange handlers in alert-store and reasoning-memory let upgrades happen without blocking each other). LS bootstrap + writtenSinceLoad guard against IDB hydrate races.
+
+## Web Key Vault (`src/services/web-secret-store.ts`)
+
+The browser build can't reach the macOS keychain, so user-entered keys are persisted in a passphrase-encrypted IndexedDB vault. Architecture:
+
+- AES-GCM-256 over PBKDF2-SHA-256, **600,000 iterations** (OWASP 2023). Per-save random 12-byte IV, AAD pinned to `"crystalball-web-vault-v1"` so a future v2 needs an explicit migration.
+- Ciphertext stored in shared `crystalball_db` IDB at key `web-secret-vault/v1`. Derived key + plaintext `Map<string,string>` live only in module closure — **never** localStorage / sessionStorage / globalThis.
+- Auto-lock after 15 min of `document.visibilityState === 'hidden'`. Manual Lock and Destroy in the API Keys tab banner.
+- `setSecret` / `persistCurrent` snapshot the derived key before the async encrypt and re-verify after the await; concurrent auto-lock during a save throws cleanly instead of silently persisting with a wiped key.
+- `runtime-config.setSecretValue` routes to the vault when `!isDesktopRuntime() && isWebVaultUnlocked()`, otherwise routes to the desktop keychain via `invokeTauri('set_secret')`.
+- `runtime-config.isFeatureAvailable` gates on the vault's `requiredSecrets` once unlocked. Before unlock, web optimistically trusts server-managed credentials so users without a vault don't see a wall of red.
+- `runtime-config.verifyWebSecret` does direct CORS-friendly probes for Anthropic / Groq / OpenRouter / Cesium Ion / Mapbox / MapTiler with `referrerPolicy: 'no-referrer'` so bearer tokens don't leak via redirect Referer. Other providers fall through to a non-committal "Saved".
+- The API Keys tab in `UnifiedSettings` mounts the same `RuntimeConfigPanel` as desktop; the panel's `renderWebVaultBanner()` swaps the inputs for create/unlock/lock/destroy state when `!isDesktopRuntime()`.
+
+## Desktop Chrome Activation (`src/main.ts`)
+
+`body.is-desktop-macos` drives the entire sidebar + toolbar design system. Applied when:
+- `isDesktopRuntime()` is true (Tauri build), **OR**
+- `FORCE_DESKTOP_GATE` env override is on, **OR**
+- the browser has `(pointer: fine)` AND `window.innerWidth >= 768` (Windows / Linux / Mac web on a real monitor).
+
+Touch phones and narrow tablets get the mobile layout. The class name is historical; "macos" now means "the macOS-inspired chrome we use on any desktop browser."
+
+## Basemap Switcher (`src/components/DeckGLMap.ts`)
+
+Four basemaps (`dark | light | satellite | terrain`) selected by the `wm-basemap` localStorage key. Style URLs:
+- Dark/Light → self-hosted `/map-styles/{dark,light}.json` referencing CARTO raster tiles. The vector gl-style URL (`basemaps.cartocdn.com/gl/...`) is **not** used because it's cross-origin and not covered by the existing workbox `[abc].basemaps.cartocdn.com` cache rule.
+- Satellite → self-hosted `/map-styles/satellite.json` (NASA GIBS Blue Marble).
+- Terrain → self-hosted `/map-styles/terrain.json` (OpenTopoMap).
+
+`initMapLibre()` validates the persisted value against `validBasemaps` to prevent stale localStorage from leaving the UI in a stuck state. A MapLibre `'error'` listener logs failed style/tile fetches with `sourceId` so the next user report comes with diagnostics.
 
 ## App Modes (`src/services/mode-manager.ts`)
 

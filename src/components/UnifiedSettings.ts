@@ -1167,11 +1167,18 @@ export class UnifiedSettings {
  const ua = typeof navigator === 'undefined' ? 'n/a' : navigator.userAgent;
  const variant = SITE_VARIANT || 'full';
  const version = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
+ // These build macros are stamped at vite build time so they identify
+ // exactly which Vercel deployment / commit the user is running.
+ const commitSha = typeof __BUILD_COMMIT_SHA__ === 'string' ? __BUILD_COMMIT_SHA__.slice(0, 12) : 'dev';
+ const buildTag = typeof __BUILD_TAG__ === 'string' ? __BUILD_TAG__ : '';
+ const buildTime = typeof __BUILD_TIMESTAMP__ === 'string' ? __BUILD_TIMESTAMP__ : '';
  return `
  <div class="us-debug-content">
  <div class="us-debug-section-label">Runtime</div>
  <dl class="us-debug-kv">
- <dt>Version</dt><dd>${escapeHtml(version)}</dd>
+ <dt>Version</dt><dd>${escapeHtml(version)}${buildTag && buildTag !== `v${version}` ? ` (${escapeHtml(buildTag)})` : ''}</dd>
+ <dt>Build commit</dt><dd><code>${escapeHtml(commitSha)}</code></dd>
+ <dt>Built at</dt><dd>${escapeHtml(buildTime)}</dd>
  <dt>Variant</dt><dd>${escapeHtml(variant)}</dd>
  <dt>User agent</dt><dd>${escapeHtml(ua)}</dd>
  <dt>Storage</dt><dd><span data-web-debug="storage">computing…</span></dd>

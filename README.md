@@ -231,7 +231,9 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 
 ## What Makes This Hard
 
-**Local-first security boundary** -- the renderer never sees API keys. Keys live in the macOS keychain, get injected into a Node.js sidecar at startup, and are proxied through a bearer-authenticated localhost port. The MCP server discovers the port and token from disk files with `0o600` permissions.
+**Local-first security boundary** -- the renderer never sees API keys on desktop. Keys live in the macOS keychain, get injected into a Node.js sidecar at startup, and are proxied through a bearer-authenticated localhost port. The MCP server discovers the port and token from disk files with `0o600` permissions.
+
+**Web key vault** -- the browser build has no keychain access, so user-entered keys are persisted in a passphrase-encrypted IndexedDB vault. AES-GCM-256 over PBKDF2-SHA-256 (600,000 iterations, OWASP 2023), per-save random 12-byte IV, AAD-bound ciphertext. The derived key and plaintext map live only in module closure -- never written to localStorage, sessionStorage, or globalThis -- and the vault auto-locks after 15 minutes of the tab being hidden. Lost passphrase = destroy and re-enter; there is no recovery.
 
 **CSP under real constraints** -- `script-src` requires `'unsafe-eval'` because Cesium compiles GLSL shaders dynamically. Removing it silently breaks God's Vision. Compensating controls: trusted-window IPC gating, sidecar bearer auth, no `'unsafe-inline'` on script-src, devtools disabled in production.
 

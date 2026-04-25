@@ -52,20 +52,28 @@ export function buildThemeIcon(): string {
 export function buildSidebarUpdateBtnHtml(ctx: AppContext): string {
   const versionLabel = escapeHtml(`v${__APP_VERSION__}${BETA_MODE ? ' β' : ''}`);
   const state = ctx.updateState;
-  if (!state || state.phase === 'checking') {
+  // While a check is in flight, render an inert label.
+  if (state?.phase === 'checking') {
  return `<span class="mac-sidebar-version">${versionLabel}</span>`;
   }
-  if (state.phase === 'up-to-date') {
- return `<span class="mac-sidebar-version mac-sidebar-version--ok">${versionLabel} ✓</span>`;
-  }
-  if (state.phase === 'available' && state.version) {
+  // A new release is out — primary action: install.
+  if (state?.phase === 'available' && state.version) {
  const remoteLabel = escapeHtml(`v${state.version}`);
- return `<button class="mac-sidebar-update-btn" id="sidebarUpdateInstall">${versionLabel} → ${remoteLabel}</button>`;
+ return `<button class="mac-sidebar-update-btn" id="sidebarUpdateInstall" title="Install ${remoteLabel}">${versionLabel} → ${remoteLabel}</button>`;
   }
-  if (state.phase === 'installing') {
+  // Auto-installer is downloading + replacing the .app bundle.
+  if (state?.phase === 'installing') {
  return `<span class="mac-sidebar-version mac-sidebar-version--installing">Installing…</span>`;
   }
-  return `<span class="mac-sidebar-version">${versionLabel}</span>`;
+  // Up-to-date OR initial pre-check OR a previous fetch failed (state === null).
+  // All three render the same clickable widget so the user can always trigger
+  // a manual re-check; the ✓ only renders when we know the result is fresh.
+  const okMark = state?.phase === 'up-to-date' ? ' ✓' : '';
+  const okClass = state?.phase === 'up-to-date' ? ' mac-sidebar-version--ok' : '';
+  const titleAttr = state?.phase === 'up-to-date'
+ ? 'Click to check for updates'
+ : 'Check for updates';
+  return `<button class="mac-sidebar-version mac-sidebar-update-recheck${okClass}" id="sidebarUpdateRecheck" title="${titleAttr}">${versionLabel}${okMark}</button>`;
 }
 
 export function buildSidebarNav(ctx: AppContext): string {

@@ -1,6 +1,6 @@
 /* eslint-disable no-console, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-empty-function, @typescript-eslint/require-await */
 import type { AppContext, AppModule, UpdateState } from '@/app/app-context';
-import { invokeTauri } from '@/services/tauri-bridge';
+import { invokeTauri, tryInvokeTauri } from '@/services/tauri-bridge';
 import { trackUpdateShown, trackUpdateClicked, trackUpdateDismissed } from '@/services/analytics';
 import { escapeHtml } from '@/utils/sanitize';
 
@@ -9,7 +9,22 @@ type UpdaterOutcome = 'no_update' | 'update_available' | 'open_failed' | 'fetch_
 export class DesktopUpdater implements AppModule {
   private ctx: AppContext;
   private updateCheckIntervalId: ReturnType<typeof setInterval> | null = null;
-  private readonly UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+  // Hourly background check is the right cadence for a long-running desktop
+  // app: short enough that a user who keeps Crystal Ball open in the
+  // background notices a new release the same day, long enough that we
+  // don't grind through GitHub's 60/hr unauthenticated API limit.
+  private readonly UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+  // Cooldown between focus-triggered re-checks so re-focusing the window
+  // every 30 seconds doesn't rate-limit us out.
+  private readonly FOCUS_RECHECK_COOLDOWN_MS = 5 * 60 * 1000;
+  private lastFocusCheckAt = 0;
+  private readonly boundFocusHandler = (): void => {
+ if (!this.ctx.isDesktopApp || this.ctx.isDestroyed) return;
+ const now = Date.now();
+ if (now - this.lastFocusCheckAt < this.FOCUS_RECHECK_COOLDOWN_MS) return;
+ this.lastFocusCheckAt = now;
+ void this.checkForUpdate();
+  };
 
   constructor(ctx: AppContext) {
  this.ctx = ctx;
@@ -23,6 +38,13 @@ export class DesktopUpdater implements AppModule {
  document.addEventListener('wm:check-for-updates', () => {
  void this.checkForUpdate(true);
  });
+ // Re-check whenever the user brings the window back to focus — covers
+ // the common case of leaving the app open in the background for a few
+ // hours and returning to it after a release went out.
+ window.addEventListener('focus', this.boundFocusHandler);
+ document.addEventListener('visibilitychange', () => {
+ if (document.visibilityState === 'visible') this.boundFocusHandler();
+ });
   }
 
   destroy(): void {
@@ -30,6 +52,7 @@ export class DesktopUpdater implements AppModule {
  clearInterval(this.updateCheckIntervalId);
  this.updateCheckIntervalId = null;
  }
+ window.removeEventListener('focus', this.boundFocusHandler);
   }
 
   private setupUpdateChecks(): void {
@@ -70,6 +93,7 @@ export class DesktopUpdater implements AppModule {
  return dmg?.browser_download_url ?? 'https://github.com/bradleybond512/crystal-ball/releases/latest';
   }
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- linear fetch + parse + state branches; splitting hides the flow
   private async checkForUpdate(manual = false): Promise<void> {
  this.setUpdateState({ phase: 'checking' });
  try {
@@ -106,6 +130,7 @@ export class DesktopUpdater implements AppModule {
 
  const downloadUrl = this.resolveDownloadUrl(data);
  const dismissKey = `wm-update-dismissed-${remote}`;
+ const notifiedKey = `wm-update-notified-${remote}`;
  if (localStorage.getItem(dismissKey) && !manual) {
  this.logUpdaterOutcome('update_available', { current, remote, dismissed: true });
  this.setUpdateState({ phase: 'available', version: remote, downloadUrl });
@@ -116,6 +141,17 @@ export class DesktopUpdater implements AppModule {
  this.setUpdateState({ phase: 'available', version: remote, downloadUrl });
  trackUpdateShown(current, remote);
  await this.showUpdateToast(remote, downloadUrl);
+ // Fire a native macOS notification once per remote version so a
+ // background-running app surfaces the update without the user needing
+ // to look at the Crystal Ball window.
+ if (!localStorage.getItem(notifiedKey)) {
+ localStorage.setItem(notifiedKey, '1');
+ await tryInvokeTauri<void>('send_notification', {
+ title: 'Crystal Ball update available',
+ body: `v${current} → v${remote}. Click the version chip in the sidebar to install.`,
+ sound: 'Glass',
+ });
+ }
  } catch (error) {
  this.logUpdaterOutcome('fetch_failed', {
  error: error instanceof Error ? error.message : String(error),

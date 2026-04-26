@@ -88,12 +88,34 @@ function alertsMatch(a: UnifiedAlert, b: UnifiedAlert): boolean {
   return km < PROXIMITY_KM;
 }
 
-function belongsToGroup(alert: UnifiedAlert, group: UnifiedAlert[]): boolean {
-  // Alert joins group if it matches ANY existing member.
-  for (const member of group) {
-    if (alertsMatch(alert, member)) return true;
+// ── Union-Find for deterministic clustering ──────────────────────────────
+class UnionFind {
+  private parent: number[];
+  private rank: number[];
+  constructor(n: number) {
+    this.parent = Array.from({ length: n }, (_, i) => i);
+    this.rank = Array.from<number>({ length: n }).fill(0);
   }
-  return false;
+  find(x: number): number {
+    let root = x;
+    while (this.parent[root] !== root) root = this.parent[root]!;
+    // Path compression
+    let current = x;
+    while (current !== root) {
+      const next = this.parent[current]!;
+      this.parent[current] = root;
+      current = next;
+    }
+    return root;
+  }
+  union(a: number, b: number): void {
+    const ra = this.find(a);
+    const rb = this.find(b);
+    if (ra === rb) return;
+    if (this.rank[ra]! < this.rank[rb]!) { this.parent[ra] = rb; }
+    else if (this.rank[ra]! > this.rank[rb]!) { this.parent[rb] = ra; }
+    else { this.parent[rb] = ra; this.rank[ra]!++; }
+  }
 }
 
 export function classifyTrend(situation: Situation): 'escalating' | 'stable' | 'de-escalating' {
@@ -131,19 +153,39 @@ function buildSituation(alerts: UnifiedAlert[]): Situation {
   return draft;
 }
 
-/** Cluster a flat list of alerts into at most 50 Situations. */
+/**
+ * Cluster a flat list of alerts into at most 50 Situations.
+ * Uses union-find for deterministic, order-independent clustering:
+ * all matching alert pairs are connected, producing stable groups
+ * regardless of input order.
+ */
 export function clusterAlertsToSituations(alerts: UnifiedAlert[]): Situation[] {
   if (alerts.length === 0) return [];
-  const sorted = [...alerts].sort((a, b) => a.timestamp - b.timestamp);
-  const groups: UnifiedAlert[][] = [];
-  for (const alert of sorted) {
-    let placed = false;
-    for (const g of groups) {
-      if (belongsToGroup(alert, g)) { g.push(alert); placed = true; break; }
+  // Sort deterministically by (timestamp, id) for reproducible output
+  const sorted = [...alerts].sort((a, b) => a.timestamp - b.timestamp || a.id.localeCompare(b.id));
+  const n = sorted.length;
+
+  // Build union-find: connect all matching pairs
+  const uf = new UnionFind(n);
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      // Early exit: if temporal gap exceeds window, skip ahead
+      // (alerts are sorted by timestamp, so remaining j's are even later)
+      if (sorted[j]!.timestamp - sorted[i]!.timestamp > TEMPORAL_WINDOW_MS) break;
+      if (alertsMatch(sorted[i]!, sorted[j]!)) uf.union(i, j);
     }
-    if (!placed) groups.push([alert]);
   }
-  const situations = groups.map(buildSituation);
+
+  // Extract connected components
+  const componentMap = new Map<number, UnifiedAlert[]>();
+  for (let i = 0; i < n; i++) {
+    const root = uf.find(i);
+    let group = componentMap.get(root);
+    if (!group) { group = []; componentMap.set(root, group); }
+    group.push(sorted[i]!);
+  }
+
+  const situations = [...componentMap.values()].map((g) => buildSituation(g));
   // Sort by severity desc, then most recent lastUpdate desc.
   situations.sort((a, b) => {
     const s = SEV_RANK[b.severity] - SEV_RANK[a.severity];

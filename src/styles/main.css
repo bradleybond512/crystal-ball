@@ -19285,6 +19285,11 @@ body.gods-vision-lock .replay-scrubber { display: none; }
   display: block; margin: 8px auto; background: rgba(0,0,0,0.2); border-radius: 8px;
 }
 
+/* ── Alert Inbox row interactivity ─────────────────────────────── */
+tr[data-alert-index] { cursor: pointer; }
+tr[data-alert-index]:hover { background: rgba(255,255,255,0.04); }
+tr.uai-expanded .uai-body { max-height: none; white-space: normal; overflow: visible; }
+
 /* ── Related badge in Inbox ─────────────────────────────────────── */
 .uai-related-badge {
   display: inline-block;

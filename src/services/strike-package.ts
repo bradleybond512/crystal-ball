@@ -28,6 +28,7 @@
 import type { MilitaryFlight, MilitaryAircraftType, MilitaryOperator } from '@/types';
 import { haversineKm } from './proximity-filter';
 import { classifyRegion, type MatrixRegion } from './correlation-matrix';
+import { MILITARY_BASES_EXPANDED } from '@/config/bases-expanded';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,8 @@ export interface FormationCoherence {
   convergenceLon?: number;
   /** Distance from convergence point to nearest sensitive zone (km), if converging */
   convergenceToSensitiveKm?: number;
+  /** Nearest military base or sensitive zone to convergence point */
+  nearestTarget?: { name: string; distanceKm: number; type: 'military_base' | 'sensitive_zone' };
 }
 
 export interface StrikePackage {
@@ -130,6 +133,31 @@ const SENSITIVE_AIRSPACE: { lat: number; lon: number; radiusKm: number; label: s
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function findNearestTarget(lat: number, lon: number): FormationCoherence['nearestTarget'] | undefined {
+  let best: FormationCoherence['nearestTarget'] | undefined;
+  let bestDist = Infinity;
+
+  for (const base of MILITARY_BASES_EXPANDED) {
+    const d = haversineKm(lat, lon, base.lat, base.lon);
+    if (d <= 200 && d < bestDist) {
+      bestDist = d;
+      best = { name: base.name, distanceKm: Math.round(d), type: 'military_base' };
+    }
+  }
+
+  if (!best) {
+    for (const zone of SENSITIVE_AIRSPACE) {
+      const d = haversineKm(lat, lon, zone.lat, zone.lon);
+      if (d <= zone.radiusKm && d < bestDist) {
+        bestDist = d;
+        best = { name: zone.label, distanceKm: Math.round(d), type: 'sensitive_zone' };
+      }
+    }
+  }
+
+  return best;
+}
 
 function isInSensitiveAirspace(lat: number, lon: number): { inZone: boolean; zoneLabel?: string } {
   for (const zone of SENSITIVE_AIRSPACE) {
@@ -297,6 +325,7 @@ function analyzeFormation(cluster: MilitaryFlight[]): FormationCoherence {
         break;
       }
     }
+    result.nearestTarget = findNearestTarget(projLat, projLon);
   }
 
   return result;
@@ -417,6 +446,8 @@ function computeThreatScore(
   if (coherence.isConverging) score += 10;
   // Converging directly toward sensitive airspace = major threat signal
   if (coherence.isConverging && coherence.convergenceToSensitiveKm !== undefined) score += 10;
+  // Converging toward identified target within 100km
+  if (coherence.nearestTarget && coherence.nearestTarget.distanceKm <= 100) score += 15;
 
   return Math.min(100, Math.max(0, Math.round(score)));
 }

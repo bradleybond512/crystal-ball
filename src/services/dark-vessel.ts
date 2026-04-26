@@ -35,6 +35,14 @@ export interface TrackedVessel {
   headingTowardRiskZone: boolean;
 }
 
+export interface PredictedRoute {
+  predictedLat: number;
+  predictedLon: number;
+  predictedRiskZone: string | null;
+  hoursToZone: number | null;
+  confidenceNote: string;
+}
+
 export interface DarkVesselAlert {
   id: string;
   mmsi: string;
@@ -59,6 +67,7 @@ export interface DarkVesselAlert {
   wasDecelerating: boolean;
   /** Was heading toward a risk zone before going dark */
   wasHeadingTowardRiskZone: boolean;
+  predictedRoute?: PredictedRoute;
 }
 
 // ── High-Risk Zones ──────────────────────────────────────────────────────────
@@ -134,6 +143,46 @@ function isDecelerating(speedHistory: number[]): boolean {
   }
   // Require meaningful deceleration (at least 20% drop from first to last)
   return speedHistory[speedHistory.length - 1]! < speedHistory[0]! * 0.8;
+}
+
+// ── Route Prediction ────────────────────────────────────────────────────────
+
+function projectPosition(
+  lat: number, lon: number, headingDeg: number, speedKnots: number, hoursAhead: number,
+): { lat: number; lon: number } {
+  const headingRad = headingDeg * DEG2RAD;
+  const distKm = speedKnots * hoursAhead * 1.852;
+  const newLat = lat + (distKm / 111.32) * Math.cos(headingRad);
+  const newLon = lon + (distKm / (111.32 * Math.cos(lat * DEG2RAD))) * Math.sin(headingRad);
+  return { lat: newLat, lon: newLon };
+}
+
+export function predictDarkVesselRoute(vessel: TrackedVessel): PredictedRoute | undefined {
+  if (!vessel.speed || vessel.speed <= 0 || vessel.heading === undefined) return undefined;
+
+  const projectionHours = [6, 12, 24];
+  for (const h of projectionHours) {
+    const pos = projectPosition(vessel.lat, vessel.lon, vessel.heading, vessel.speed, h);
+    const zone = findRiskZone(pos.lat, pos.lon);
+    if (zone) {
+      return {
+        predictedLat: pos.lat,
+        predictedLon: pos.lon,
+        predictedRiskZone: zone,
+        hoursToZone: h,
+        confidenceNote: `Equirectangular projection at ${vessel.speed}kn, heading ${vessel.heading}°, ${h}h ahead`,
+      };
+    }
+  }
+
+  const fallback = projectPosition(vessel.lat, vessel.lon, vessel.heading, vessel.speed, 12);
+  return {
+    predictedLat: fallback.lat,
+    predictedLon: fallback.lon,
+    predictedRiskZone: null,
+    hoursToZone: null,
+    confidenceNote: `No risk zone intercept within 24h at ${vessel.speed}kn, heading ${vessel.heading}°`,
+  };
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -228,6 +277,7 @@ export function detectDarkVessels(): DarkVesselAlert[] {
  lastHeading: v.heading,
  wasDecelerating: v.decelerating,
  wasHeadingTowardRiskZone: v.headingTowardRiskZone,
+ predictedRoute: predictDarkVesselRoute(v),
  });
   }
 

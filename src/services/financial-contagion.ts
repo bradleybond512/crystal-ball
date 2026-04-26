@@ -253,6 +253,9 @@ const SYNTHETIC_STRESS: Record<string, (channels: Map<string, number>) => number
   },
 };
 
+/** Dampening factor for feedback loops (return edges get 0.5x weight). */
+const FEEDBACK_DAMPENING = 0.5;
+
 function buildCascadePaths(stressMap: Map<string, number>): CascadePath[] {
   const paths: CascadePath[] = [];
   const HIGH_THRESHOLD = 60;
@@ -261,8 +264,11 @@ function buildCascadePaths(stressMap: Map<string, number>): CascadePath[] {
   for (const [channelId, stress] of stressMap) {
  if (stress < HIGH_THRESHOLD) continue;
 
- // BFS from this trigger along cascade edges
- const visited = new Set<string>([channelId]);
+ // BFS from this trigger along cascade edges.
+ // Track visit count: allow revisiting a node exactly once (feedback loop)
+ // but with dampened weight.
+ const visitCount = new Map<string, number>();
+ visitCount.set(channelId, 1);
  const steps: CascadeStep[] = [];
  let frontier = [channelId];
  let cumulativeProb = 1.0;
@@ -270,17 +276,23 @@ function buildCascadePaths(stressMap: Map<string, number>): CascadePath[] {
  while (frontier.length > 0) {
  const nextFrontier: string[] = [];
  for (const node of frontier) {
- const outEdges = CASCADE_EDGES.filter(e => e.from === node && !visited.has(e.to));
+ const outEdges = CASCADE_EDGES.filter(e => e.from === node);
  for (const edge of outEdges) {
- visited.add(edge.to);
+ const visits = visitCount.get(edge.to) ?? 0;
+ if (visits >= 2) continue; // Max 2 visits (initial + 1 feedback)
+
+ const isFeedback = visits === 1;
+ visitCount.set(edge.to, visits + 1);
+
  const nodeStress = stressMap.get(edge.to) ?? 0;
- // Probability is a function of source stress and edge weight
  const sourceStress = stressMap.get(node) ?? 0;
- const prob = Math.min(0.99, (sourceStress / 100) * edge.weight);
+ const baseWeight = edge.weight;
+ const effectiveWeight = isFeedback ? baseWeight * FEEDBACK_DAMPENING : baseWeight;
+ const prob = Math.min(0.99, (sourceStress / 100) * effectiveWeight);
  cumulativeProb *= prob;
 
  steps.push({
- label: edge.label,
+ label: isFeedback ? `${edge.label} (feedback)` : edge.label,
  probability: Math.round(prob * 100),
  stressLevel: Math.round(nodeStress),
  });
@@ -291,7 +303,6 @@ function buildCascadePaths(stressMap: Map<string, number>): CascadePath[] {
  }
 
  if (steps.length > 0) {
- // Find the channel label for the trigger
  const def = CHANNEL_DEFS.find(d => d.id === channelId);
  paths.push({
  trigger: `${def?.label ?? channelId} (${Math.round(stress)})`,

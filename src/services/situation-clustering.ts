@@ -98,12 +98,58 @@ function generateLabel(alerts: UnifiedAlert[]): string {
 }
 
 // ── Clustering primitives ────────────────────────────────────────────────
+// ── Clustering Quality Signal ────────────────────────────────────────────
+
+interface ClusterFeedback { category: string; expanded: number; collapsed: number }
+const FEEDBACK_KEY = 'crystalball-cluster-feedback-v1';
+const MIN_FEEDBACK_SAMPLES = 8;
+
+function loadClusterFeedback(): Record<string, ClusterFeedback> {
+  try {
+    const raw = localStorage.getItem(FEEDBACK_KEY);
+    return raw ? JSON.parse(raw) as Record<string, ClusterFeedback> : {};
+  } catch { return {}; }
+}
+
+function saveClusterFeedback(fb: Record<string, ClusterFeedback>): void {
+  try { localStorage.setItem(FEEDBACK_KEY, JSON.stringify(fb)); } catch { /* quota */ }
+}
+
+export function recordClusterInteraction(_situationId: string, alerts: UnifiedAlert[], action: 'expanded' | 'collapsed'): void {
+  if (alerts.length === 0) return;
+  const cat = categoryOf(alerts[0]!.source);
+  const fb = loadClusterFeedback();
+  fb[cat] ??= { category: cat, expanded: 0, collapsed: 0 };
+  fb[cat][action]++;
+  saveClusterFeedback(fb);
+}
+
+export function getAdjustedTemporalWindow(category: string): number {
+  const base = CATEGORY_TEMPORAL_WINDOW_MS[category] ?? DEFAULT_TEMPORAL_WINDOW_MS;
+  const fb = loadClusterFeedback();
+  const entry = fb[category];
+  if (!entry) return base;
+  const total = entry.expanded + entry.collapsed;
+  if (total < MIN_FEEDBACK_SAMPLES) return base;
+  const collapseRate = entry.collapsed / total;
+  if (collapseRate > 0.6) return Math.round(base * 0.8);
+  if (collapseRate < 0.3) return Math.round(base * 1.2);
+  return base;
+}
+
+export function getClusterFeedbackStats(): Record<string, ClusterFeedback> {
+  return loadClusterFeedback();
+}
+
+export function resetClusterFeedback(): void {
+  localStorage.removeItem(FEEDBACK_KEY);
+}
+
 function alertsMatch(a: UnifiedAlert, b: UnifiedAlert): boolean {
   const catA = categoryOf(a.source);
   const catB = categoryOf(b.source);
   if (catA !== catB) return false;
-  // Use the category-specific temporal window
-  const temporalWindow = CATEGORY_TEMPORAL_WINDOW_MS[catA] ?? DEFAULT_TEMPORAL_WINDOW_MS;
+  const temporalWindow = getAdjustedTemporalWindow(catA);
   if (Math.abs(a.timestamp - b.timestamp) > temporalWindow) return false;
   if (!a.location || !b.location) return true; // no geo = match on category+time
   const km = computeDistanceKm(a.location.lat, a.location.lon, b.location.lat, b.location.lon);

@@ -46,9 +46,18 @@ export interface CascadePath {
   overallProbability: number;
 }
 
+export interface CascadeVelocity {
+  edgeId: string;
+  fromChannel: string;
+  toChannel: string;
+  velocityPerHour: number;
+  trend: 'accelerating' | 'stable' | 'decelerating';
+}
+
 export interface ContagionModel {
   channels: ChannelStress[];
   cascadePaths: CascadePath[];
+  velocities: CascadeVelocity[];
   systemicRiskScore: number;
   aiNarrative: string | null;
   updatedAt: string;
@@ -317,6 +326,90 @@ function buildCascadePaths(stressMap: Map<string, number>): CascadePath[] {
   return paths.slice(0, 5);
 }
 
+// ── Cascade velocity tracking ───────────────────────────────────────────────
+
+const EDGE_VELOCITY_KEY = 'crystalball-contagion-edge-velocity-v1';
+const MAX_EDGE_SNAPSHOTS = 20;
+
+interface EdgeStressSnapshot {
+  ts: number;
+  fromStress: number;
+  toStress: number;
+}
+
+type EdgeStressHistory = Record<string, EdgeStressSnapshot[]>;
+
+function loadEdgeHistory(): EdgeStressHistory {
+  try {
+	const raw = localStorage.getItem(EDGE_VELOCITY_KEY);
+	return raw ? (JSON.parse(raw) as EdgeStressHistory) : {};
+  } catch {
+	return {};
+  }
+}
+
+function saveEdgeHistory(hist: EdgeStressHistory): void {
+  localStorage.setItem(EDGE_VELOCITY_KEY, JSON.stringify(hist));
+}
+
+function computeVelocities(stressMap: Map<string, number>, edges: CascadeEdge[]): CascadeVelocity[] {
+  const hist = loadEdgeHistory();
+  const now = Date.now();
+  const velocities: CascadeVelocity[] = [];
+
+  for (const edge of edges) {
+	const edgeKey = `${edge.from}->${edge.to}`;
+	const fromStress = stressMap.get(edge.from) ?? 0;
+	const toStress = stressMap.get(edge.to) ?? 0;
+
+	if (!hist[edgeKey]) hist[edgeKey] = [];
+	const snapshots = hist[edgeKey];
+
+	let velocityPerHour = 0;
+	let trend: CascadeVelocity['trend'] = 'stable';
+
+	const prev = snapshots.length > 0 ? snapshots[snapshots.length - 1] : undefined;
+	if (prev) {
+	const timeDeltaHours = (now - prev.ts) / (1000 * 60 * 60);
+	const deltaFrom = Math.abs(fromStress - prev.fromStress);
+	const deltaTo = toStress - prev.toStress;
+
+	if (timeDeltaHours > 0 && deltaFrom > 5) {
+	velocityPerHour = deltaTo / timeDeltaHours;
+	}
+
+	const prevPrev = snapshots.length >= 2 ? snapshots[snapshots.length - 2] : undefined;
+	if (prevPrev) {
+	const prevTimeDelta = (prev.ts - prevPrev.ts) / (1000 * 60 * 60);
+	const prevDeltaFrom = Math.abs(prev.fromStress - prevPrev.fromStress);
+	const prevDeltaTo = prev.toStress - prevPrev.toStress;
+
+	if (prevTimeDelta > 0 && prevDeltaFrom > 5) {
+	const prevVelocity = prevDeltaTo / prevTimeDelta;
+	if (velocityPerHour > prevVelocity + 1) trend = 'accelerating';
+	else if (velocityPerHour < prevVelocity - 1) trend = 'decelerating';
+	}
+	}
+	}
+
+	snapshots.push({ ts: now, fromStress, toStress });
+	if (snapshots.length > MAX_EDGE_SNAPSHOTS) {
+	hist[edgeKey] = snapshots.slice(-MAX_EDGE_SNAPSHOTS);
+	}
+
+	velocities.push({
+	edgeId: edgeKey,
+	fromChannel: edge.from,
+	toChannel: edge.to,
+	velocityPerHour: Math.round(velocityPerHour * 100) / 100,
+	trend,
+	});
+  }
+
+  saveEdgeHistory(hist);
+  return velocities;
+}
+
 // ── AI narrative ─────────────────────────────────────────────────────────────
 
 const AI_CACHE_KEY = 'crystalball-contagion-ai-narrative';
@@ -415,6 +508,9 @@ export async function getContagionModel(): Promise<ContagionModel> {
   // Cascade paths
   const cascadePaths = buildCascadePaths(stressMap);
 
+  // Cascade velocity
+  const velocities = computeVelocities(stressMap, CASCADE_EDGES);
+
   // Systemic risk score: weighted average of all channel stresses
   const allStresses = [...stressMap.values()];
   const systemicRiskScore = Math.round(allStresses.reduce((a, b) => a + b, 0) / allStresses.length);
@@ -425,6 +521,7 @@ export async function getContagionModel(): Promise<ContagionModel> {
   const model: ContagionModel = {
  channels,
  cascadePaths,
+ velocities,
  systemicRiskScore,
  aiNarrative,
  updatedAt: new Date().toISOString(),
@@ -439,4 +536,8 @@ export function getChannelStress(): ChannelStress[] {
 
 export function getCascadePaths(): CascadePath[] {
   return _lastModel?.cascadePaths ?? [];
+}
+
+export function getCascadeVelocities(): CascadeVelocity[] {
+  return _lastModel?.velocities ?? [];
 }

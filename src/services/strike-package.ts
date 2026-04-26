@@ -48,6 +48,20 @@ export interface StrikePackageRole {
   examples: string[]; // up to 3 callsigns
 }
 
+export interface FormationCoherence {
+  /** Heading convergence: 0 = scattered, 1 = all pointed same direction */
+  headingConvergence: number;
+  /** Speed coherence: 0 = wildly different speeds, 1 = all matching */
+  speedCoherence: number;
+  /** Are aircraft converging on a single point? */
+  isConverging: boolean;
+  /** If converging, estimated convergence point */
+  convergenceLat?: number;
+  convergenceLon?: number;
+  /** Distance from convergence point to nearest sensitive zone (km), if converging */
+  convergenceToSensitiveKm?: number;
+}
+
 export interface StrikePackage {
   id: string;
   /** Classification of the formation */
@@ -79,6 +93,8 @@ export interface StrikePackage {
   threatLevel: PackageThreatLevel;
   /** Is formation in a sensitive airspace near a hotspot? */
   inSensitiveAirspace: boolean;
+  /** Formation heading/velocity analysis */
+  coherence: FormationCoherence;
   /** Flight IDs in this package */
   flightIds: string[];
   /** Timestamp of detection */
@@ -185,6 +201,105 @@ function countByCategory(roles: StrikePackageRole[]): { strike: number; tanker: 
   }
   const support = tanker + awacs + recon;
   return { strike, tanker, awacs, recon, transport, support, fighter, bomber };
+}
+
+/** Heading convergence: 1 = all same direction, 0 = scattered. Uses circular variance. */
+function headingConvergence(headings: number[]): number {
+  if (headings.length < 2) return 1;
+  let sinSum = 0;
+  let cosSum = 0;
+  for (const h of headings) {
+    const rad = (h * Math.PI) / 180;
+    sinSum += Math.sin(rad);
+    cosSum += Math.cos(rad);
+  }
+  // R̄ = resultant length / n — 1 when perfectly aligned, 0 when uniform spread
+  return Math.hypot(sinSum, cosSum) / headings.length;
+}
+
+/** Speed coherence: 1 = all same speed, 0 = wildly different. Uses coefficient of variation. */
+function speedCoherence(speeds: number[]): number {
+  if (speeds.length < 2) return 1;
+  const m = speeds.reduce((s, v) => s + v, 0) / speeds.length;
+  if (m <= 0) return 1;
+  const variance = speeds.reduce((s, v) => s + (v - m) ** 2, 0) / speeds.length;
+  const cv = Math.sqrt(variance) / m;
+  // CV of 0 = perfect coherence, CV of 1+ = no coherence
+  return Math.max(0, 1 - cv);
+}
+
+/** Degrees to radians */
+const DEG2RAD = Math.PI / 180;
+
+/**
+ * Project a point along a heading by a distance (km).
+ * Simple equirectangular approximation — sufficient for 200-500km distances.
+ */
+function projectPoint(lat: number, lon: number, headingDeg: number, distKm: number): { lat: number; lon: number } {
+  const R = 6371;
+  const d = distKm / R; // angular distance
+  const h = headingDeg * DEG2RAD;
+  const latRad = lat * DEG2RAD;
+  const newLat = lat + (d * Math.cos(h) * 180) / Math.PI;
+  const newLon = lon + ((d * Math.sin(h)) / Math.cos(latRad)) * (180 / Math.PI);
+  return { lat: newLat, lon: newLon };
+}
+
+/**
+ * Analyze formation coherence: heading convergence, speed matching,
+ * and whether the formation is converging on a point near sensitive airspace.
+ */
+function analyzeFormation(cluster: MilitaryFlight[]): FormationCoherence {
+  const airborne = cluster.filter(f => !f.onGround && f.speed > 50);
+  if (airborne.length < 2) {
+    return { headingConvergence: 0, speedCoherence: 0, isConverging: false };
+  }
+
+  const headings = airborne.map(f => f.heading);
+  const speeds = airborne.map(f => f.speed);
+  const hConv = headingConvergence(headings);
+  const sCoherence = speedCoherence(speeds);
+
+  // Check convergence: project each aircraft along its heading by 200km,
+  // see if projected points cluster tightly (within 100km of each other).
+  const projections = airborne.map(f => projectPoint(f.lat, f.lon, f.heading, 200));
+  const projLat = projections.reduce((s, p) => s + p.lat, 0) / projections.length;
+  const projLon = projections.reduce((s, p) => s + p.lon, 0) / projections.length;
+
+  let maxProjSpread = 0;
+  for (const p of projections) {
+    const d = haversineKm(projLat, projLon, p.lat, p.lon);
+    if (d > maxProjSpread) maxProjSpread = d;
+  }
+
+  // Converging if projected points are within 100km of their centroid
+  // AND tighter than their current spread
+  const currentLat = airborne.reduce((s, f) => s + f.lat, 0) / airborne.length;
+  const currentLon = airborne.reduce((s, f) => s + f.lon, 0) / airborne.length;
+  let currentSpread = 0;
+  for (const f of airborne) {
+    const d = haversineKm(currentLat, currentLon, f.lat, f.lon);
+    if (d > currentSpread) currentSpread = d;
+  }
+
+  const isConverging = maxProjSpread < 100 && maxProjSpread < currentSpread * 0.7;
+
+  const result: FormationCoherence = { headingConvergence: hConv, speedCoherence: sCoherence, isConverging };
+
+  if (isConverging) {
+    result.convergenceLat = projLat;
+    result.convergenceLon = projLon;
+    // Check distance from convergence point to nearest sensitive zone
+    for (const zone of SENSITIVE_AIRSPACE) {
+      const d = haversineKm(projLat, projLon, zone.lat, zone.lon);
+      if (d <= zone.radiusKm) {
+        result.convergenceToSensitiveKm = Math.round(d);
+        break;
+      }
+    }
+  }
+
+  return result;
 }
 
 function classifyPackage(
@@ -294,6 +409,15 @@ function computeThreatScore(
   // Strike altitude check (30-45k ft is strike/transit altitude band)
   if (pkg.meanAltitudeFt >= 25_000 && pkg.meanAltitudeFt <= 45_000 && pkg.packageType === 'offensive-strike') score += 5;
 
+  // Formation coherence boosts
+  const { coherence } = pkg;
+  // Tight formation (high heading convergence + speed matching) = coordinated
+  if (coherence.headingConvergence >= 0.8 && coherence.speedCoherence >= 0.7) score += 10;
+  // Converging on a single point is more threatening than scattered
+  if (coherence.isConverging) score += 10;
+  // Converging directly toward sensitive airspace = major threat signal
+  if (coherence.isConverging && coherence.convergenceToSensitiveKm !== undefined) score += 10;
+
   return Math.min(100, Math.max(0, Math.round(score)));
 }
 
@@ -338,6 +462,7 @@ export function detectStrikePackages(flights: MilitaryFlight[]): StrikePackage[]
     const meanSpeedKts = cluster.reduce((s, f) => s + (f.speed || 0), 0) / cluster.length;
     const operators = [...new Set(cluster.map(f => f.operator))];
     const { inZone } = isInSensitiveAirspace(lat, lon);
+    const coherence = analyzeFormation(cluster);
 
     const pkgBase: Omit<StrikePackage, 'threatScore' | 'threatLevel'> = {
       id: `sp-${now}-${Math.round(lat * 10)}-${Math.round(lon * 10)}`,
@@ -354,6 +479,7 @@ export function detectStrikePackages(flights: MilitaryFlight[]): StrikePackage[]
       meanSpeedKts: Math.round(meanSpeedKts),
       region: classifyRegion(lat, lon),
       inSensitiveAirspace: inZone,
+      coherence,
       flightIds: cluster.map(f => f.id),
       detectedAt: now,
     };

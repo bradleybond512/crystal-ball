@@ -85,7 +85,9 @@ function toPostureSummary(proto: TheaterPosture): TheaterPostureSummary {
  trend: 'stable',
  changePercent: 0,
  summary: '',
-  
+ weekOverWeekTrend: 'stable',
+ daysAtElevated: 0,
+
  headline: postureLevel === 'critical'
  ? `Critical military buildup - ${meta?.name ?? proto.theater}`
  // eslint-disable-next-line sonarjs/no-nested-conditional

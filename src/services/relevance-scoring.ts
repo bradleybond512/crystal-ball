@@ -1,4 +1,4 @@
- 
+
 /**
  * Composite Alert Relevance Scoring (Phase 0.2)
  *
@@ -111,6 +111,92 @@ export function resetLearnedTrust(): void {
   try { localStorage.removeItem(TRUST_STORAGE_KEY); } catch { /* ignore */ }
 }
 
+// ── Source Reliability Tracking ─────────────────────────────────────────────
+//
+// Tracks per-source API health: last successful fetch, consecutive failures,
+// and average latency. Stale or failing sources get a multiplier < 1 so their
+// alerts rank lower until the source recovers.
+
+const RELIABILITY_STORAGE_KEY = 'crystalball-source-reliability-v1';
+
+export interface SourceReliability {
+  source: string;
+  lastSuccessfulFetch: number;
+  consecutiveFailures: number;
+  avgLatencyMs: number;
+  sampleCount: number;
+}
+
+let reliabilityMap: Record<string, SourceReliability> = {};
+let reliabilityLoaded = false;
+
+function loadReliability(): void {
+  if (reliabilityLoaded) return;
+  reliabilityLoaded = true;
+  try {
+    const raw = localStorage.getItem(RELIABILITY_STORAGE_KEY);
+    if (raw) reliabilityMap = JSON.parse(raw) as Record<string, SourceReliability>;
+  } catch { /* ignore corrupt data */ }
+}
+
+function saveReliability(): void {
+  try {
+    localStorage.setItem(RELIABILITY_STORAGE_KEY, JSON.stringify(reliabilityMap));
+  } catch { /* quota */ }
+}
+
+function ensureReliability(source: string): SourceReliability {
+  reliabilityMap[source] ??= {
+    source,
+    lastSuccessfulFetch: 0,
+    consecutiveFailures: 0,
+    avgLatencyMs: 0,
+    sampleCount: 0,
+  };
+  return reliabilityMap[source];
+}
+
+export function recordSourceSuccess(source: string, latencyMs: number): void {
+  loadReliability();
+  const r = ensureReliability(source);
+  r.lastSuccessfulFetch = Date.now();
+  r.consecutiveFailures = 0;
+  r.sampleCount += 1;
+  r.avgLatencyMs = r.avgLatencyMs + (latencyMs - r.avgLatencyMs) / r.sampleCount;
+  saveReliability();
+}
+
+export function recordSourceFailure(source: string): void {
+  loadReliability();
+  const r = ensureReliability(source);
+  r.consecutiveFailures += 1;
+  saveReliability();
+}
+
+export function getSourceReliabilityMultiplier(source: string): number {
+  loadReliability();
+  const r = reliabilityMap[source];
+  if (!r || r.lastSuccessfulFetch === 0) return 1;
+
+  let mult = 1;
+
+  const ageMinutes = (Date.now() - r.lastSuccessfulFetch) / 60_000;
+  if (ageMinutes > 30) {
+    mult *= Math.max(0.3, 1 - (ageMinutes - 30) / 120);
+  }
+
+  if (r.consecutiveFailures > 2) {
+    mult *= Math.max(0.3, 1 - (r.consecutiveFailures - 2) * 0.15);
+  }
+
+  return mult;
+}
+
+export function getSourceReliabilityStats(): Readonly<Record<string, SourceReliability>> {
+  loadReliability();
+  return { ...reliabilityMap };
+}
+
 function proximityScore(alert: UnifiedAlert, userLocation?: UserLocation): number {
   if (!alert.location || !userLocation) return NO_LOCATION_PROXIMITY;
   const radius = userLocation.radiusKm ?? DEFAULT_RADIUS_KM;
@@ -142,7 +228,8 @@ function trustScore(alert: UnifiedAlert): number {
   } catch { /* fall through */ }
   const feedbackMult = getSourceFeedbackMult(alert.source);
   const learnedMult = getLearnedTrustMultiplier(alert.source);
-  return Math.max(0.1, base * feedbackMult * learnedMult);
+  const reliabilityMult = getSourceReliabilityMultiplier(alert.source);
+  return Math.max(0.1, base * feedbackMult * learnedMult * reliabilityMult);
 }
 
 /** Compute the composite relevance breakdown for a single alert. */

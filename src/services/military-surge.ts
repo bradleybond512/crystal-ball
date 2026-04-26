@@ -778,6 +778,104 @@ export function surgeAlertToSignal(surge: SurgeAlert): {
   };
 }
 
+// ============ 7-DAY POSTURE TIME-SERIES ============
+
+type PostureLevel = 'normal' | 'elevated' | 'critical';
+
+export interface PostureSnapshot {
+  timestamp: number;
+  postureLevel: PostureLevel;
+  totalAircraft: number;
+  totalVessels: number;
+}
+
+const POSTURE_TS_KEY = 'crystalball-theater-posture-7d-v1';
+const POSTURE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const POSTURE_MAX_PER_THEATER = 336;
+
+function loadPostureStore(): Record<string, PostureSnapshot[]> {
+  try {
+    const raw = localStorage.getItem(POSTURE_TS_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, PostureSnapshot[]>;
+  } catch {
+    return {};
+  }
+}
+
+function savePostureStore(store: Record<string, PostureSnapshot[]>): void {
+  try {
+    localStorage.setItem(POSTURE_TS_KEY, JSON.stringify(store));
+  } catch { /* quota exceeded */ }
+}
+
+function recordPostureSnapshot(summary: TheaterPostureSummary): void {
+  const store = loadPostureStore();
+  const snaps = store[summary.theaterId] ?? [];
+  const now = Date.now();
+
+  snaps.push({
+    timestamp: now,
+    postureLevel: summary.postureLevel,
+    totalAircraft: summary.totalAircraft,
+    totalVessels: summary.totalVessels,
+  });
+
+  const cutoff = now - POSTURE_MAX_AGE_MS;
+  const pruned = snaps.filter(s => s.timestamp >= cutoff);
+  store[summary.theaterId] = pruned.length > POSTURE_MAX_PER_THEATER
+    ? pruned.slice(pruned.length - POSTURE_MAX_PER_THEATER)
+    : pruned;
+
+  savePostureStore(store);
+}
+
+export function getPostureTimeSeries(theaterId: string): PostureSnapshot[] {
+  const store = loadPostureStore();
+  return store[theaterId] ?? [];
+}
+
+const POSTURE_LEVEL_NUM: Record<string, number> = { normal: 0, elevated: 1, critical: 2 };
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function computeWeekOverWeekTrend(theaterId: string): 'escalating' | 'stable' | 'de-escalating' {
+  const snaps = getPostureTimeSeries(theaterId);
+  if (snaps.length < 2) return 'stable';
+
+  const now = Date.now();
+  const last24h = snaps.filter(s => now - s.timestamp < MS_PER_DAY);
+  const prev6d = snaps.filter(s => now - s.timestamp >= MS_PER_DAY && now - s.timestamp < POSTURE_MAX_AGE_MS);
+
+  if (last24h.length === 0 || prev6d.length === 0) return 'stable';
+
+  const recentAvg = last24h.reduce((sum, s) => sum + POSTURE_LEVEL_NUM[s.postureLevel]!, 0) / last24h.length;
+  const olderAvg = prev6d.reduce((sum, s) => sum + POSTURE_LEVEL_NUM[s.postureLevel]!, 0) / prev6d.length;
+  const diff = recentAvg - olderAvg;
+
+  if (diff > 0.25) return 'escalating';
+  if (diff < -0.25) return 'de-escalating';
+  return 'stable';
+}
+
+function computeDaysAtElevated(theaterId: string): number {
+  const snaps = getPostureTimeSeries(theaterId);
+  if (snaps.length === 0) return 0;
+
+  const now = Date.now();
+  let count = 0;
+
+  for (let d = 0; d < 7; d++) {
+    const dayStart = now - (d + 1) * MS_PER_DAY;
+    const dayEnd = now - d * MS_PER_DAY;
+    const daySnaps = snaps.filter(s => s.timestamp >= dayStart && s.timestamp < dayEnd);
+    if (daySnaps.length === 0) continue;
+    const elevatedCount = daySnaps.filter(s => s.postureLevel === 'elevated' || s.postureLevel === 'critical').length;
+    if (elevatedCount / daySnaps.length > 0.5) count++;
+  }
+
+  return count;
+}
+
 // ============ THEATER POSTURE AGGREGATION ============
 
 interface PostureTheater {
@@ -923,6 +1021,8 @@ export interface TheaterPostureSummary {
   strikeGroupPresent: boolean;
   trend: 'increasing' | 'stable' | 'decreasing';
   changePercent: number;
+  weekOverWeekTrend: 'escalating' | 'stable' | 'de-escalating';
+  daysAtElevated: number;
   summary: string;
   headline: string;
   centerLat: number;
@@ -1033,12 +1133,18 @@ export function getTheaterPostureSummaries(flights: MilitaryFlight[]): TheaterPo
  strikeGroupPresent: false,
  trend,
  changePercent,
+ weekOverWeekTrend: computeWeekOverWeekTrend(theater.id),
+ daysAtElevated: computeDaysAtElevated(theater.id),
  summary,
  headline,
  centerLat: (theater.bounds.north + theater.bounds.south) / 2,
  centerLon: (theater.bounds.east + theater.bounds.west) / 2,
  bounds: theater.bounds,
  });
+  }
+
+  for (const s of summaries) {
+    recordPostureSnapshot(s);
   }
 
   return summaries;

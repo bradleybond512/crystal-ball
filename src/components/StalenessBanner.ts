@@ -180,8 +180,26 @@ export class StalenessBanner {
  // safe-html: timeText comes from date formatting, message is built from constants
  this.el.innerHTML = `
  <div class="staleness-message">${message}</div>
+ <button class="staleness-reset" aria-label="Reset cache and reload" title="Clear local cache + service worker, then reload">Reset cache</button>
  <button class="staleness-dismiss" aria-label="Dismiss staleness banner">\u00D7</button>
  `;
+ // Recovery button: stuck-banner reports usually trace back to a stale
+ // service-worker bundle from before a deploy that fixed the underlying
+ // fetch failures. Unregister every SW + purge every cache + reload.
+ const resetBtn = this.el.querySelector<HTMLButtonElement>('.staleness-reset');
+ resetBtn?.addEventListener('click', () => {
+ void (async () => {
+ resetBtn.disabled = true;
+ resetBtn.textContent = 'Clearing\u2026';
+ try {
+ const regs = await navigator.serviceWorker?.getRegistrations();
+ await Promise.all((regs ?? []).map((r) => r.unregister()));
+ const keys = await caches.keys();
+ await Promise.all(keys.map((k) => caches.delete(k)));
+ } catch { /* best-effort */ }
+ location.reload();
+ })();
+ });
 
  // Update details if expanded
  if (this.expanded) {

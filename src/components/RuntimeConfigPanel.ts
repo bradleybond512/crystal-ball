@@ -487,7 +487,7 @@ export class RuntimeConfigPanel extends Panel {
  return `
  <details class="reg-profile-section">
  <summary class="reg-profile-summary">
- Registered as: ${escapeHtml(profile.firstName)} ${escapeHtml(profile.lastName)} (${escapeHtml(profile.email)})
+ Saved as: ${escapeHtml(profile.firstName)} ${escapeHtml(profile.lastName)} (${escapeHtml(profile.email)})
  <span class="reg-profile-edit-hint">— click to edit</span>
  </summary>
  <div class="reg-profile-form">
@@ -497,9 +497,11 @@ export class RuntimeConfigPanel extends Panel {
  <input type="text" class="reg-profile-input" data-reg-field="organization" placeholder="Organization (optional)" value="${escapeHtml(profile.organization)}">
  <div class="reg-profile-actions">
  <button type="button" class="reg-profile-save-btn" data-reg-save>Save Profile</button>
+ <button type="button" class="reg-profile-save-btn" data-reg-copy>Copy Email</button>
  <button type="button" class="reg-profile-clear-btn" data-reg-clear>Clear</button>
  </div>
  <span class="reg-profile-status"></span>
+ <p class="reg-profile-explainer">Cross-origin browsers block auto-fill into provider signup pages. We open the provider's tab and copy your email to your clipboard so you can paste it in seconds.</p>
  </div>
  </details>
  `;
@@ -507,7 +509,7 @@ export class RuntimeConfigPanel extends Panel {
  return `
  <details class="reg-profile-section">
  <summary class="reg-profile-summary">
- Save your info once to auto-register for API keys
+ Save your info once for faster API key signups
  <span class="reg-profile-edit-hint">— click to set up</span>
  </summary>
  <div class="reg-profile-form">
@@ -531,6 +533,7 @@ export class RuntimeConfigPanel extends Panel {
   private attachProfileListeners(): void {
  const saveBtn = this.content.querySelector<HTMLButtonElement>('[data-reg-save]');
  const clearBtn = this.content.querySelector<HTMLButtonElement>('[data-reg-clear]');
+ const copyBtn = this.content.querySelector<HTMLButtonElement>('[data-reg-copy]');
  const statusEl = this.content.querySelector<HTMLSpanElement>('.reg-profile-status');
 
  saveBtn?.addEventListener('click', () => {
@@ -547,6 +550,19 @@ export class RuntimeConfigPanel extends Panel {
  saveRegistrationProfile(profile);
  if (statusEl) statusEl.textContent = 'Profile saved';
  this.render();
+ });
+
+ copyBtn?.addEventListener('click', () => {
+ const profile = getRegistrationProfile();
+ if (!profile?.email) {
+ if (statusEl) statusEl.textContent = 'No email to copy';
+ return;
+ }
+ void navigator.clipboard?.writeText(profile.email).then(() => {
+ if (statusEl) statusEl.textContent = `Copied ${profile.email} to clipboard`;
+ }).catch(() => {
+ if (statusEl) statusEl.textContent = 'Clipboard write failed';
+ });
  });
 
  clearBtn?.addEventListener('click', () => {
@@ -709,6 +725,14 @@ export class RuntimeConfigPanel extends Panel {
  e.preventDefault();
  const url = link.dataset.signupUrl;
  if (!url) return;
+ // Best-effort: copy the saved registration email to the clipboard
+ // before opening the provider tab. Cross-origin browsers won't let
+ // us autofill the form, but a one-keystroke paste is the closest
+ // thing to "auto-register" we can deliver in a web build.
+ const profile = getRegistrationProfile();
+ if (profile?.email) {
+ void navigator.clipboard?.writeText(profile.email).catch(() => { /* no clipboard; ignore */ });
+ }
  if (isDesktopRuntime()) {
  void invokeTauri<void>('open_url', { url }).catch((error: unknown) => {
  // eslint-disable-next-line no-console -- user action failure diagnostics

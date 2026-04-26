@@ -25,6 +25,10 @@ export interface CountryScore {
   lastUpdated: Date;
   /** Set when a national election is within the 30-day window. Triggers 1.3x on information component. */
   electionWindow?: Election;
+  /** Sources that haven't reported data in >6h for this country */
+  staleSources: string[];
+  /** True when 2+ sources are stale — assessment may be incomplete */
+  incompleteAssessment: boolean;
 }
 
 export interface ComponentScores {
@@ -144,6 +148,38 @@ function ensureISO2(code: string): string | null {
 const countryDataMap = new Map<string, CountryData>();
 const previousScores = new Map<string, number>();
 
+/** Per-country, per-source last-update timestamp for freshness tracking */
+const sourceFreshnessMap = new Map<string, Map<string, number>>();
+const SOURCE_STALE_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+const CII_SOURCE_NAMES = [
+  'protests', 'conflicts', 'military', 'news', 'outages',
+  'strikes', 'aviation', 'advisories', 'fires', 'cyber',
+] as const;
+
+function recordSourceFreshness(countryCode: string, source: string): void {
+  let countryMap = sourceFreshnessMap.get(countryCode);
+  if (!countryMap) {
+    countryMap = new Map();
+    sourceFreshnessMap.set(countryCode, countryMap);
+  }
+  countryMap.set(source, Date.now());
+}
+
+function getStaleSources(countryCode: string): string[] {
+  const countryMap = sourceFreshnessMap.get(countryCode);
+  if (!countryMap) return [...CII_SOURCE_NAMES]; // never reported = all stale
+  const now = Date.now();
+  const stale: string[] = [];
+  for (const source of CII_SOURCE_NAMES) {
+    const lastUpdate = countryMap.get(source);
+    if (!lastUpdate || now - lastUpdate > SOURCE_STALE_MS) {
+      stale.push(source);
+    }
+  }
+  return stale;
+}
+
 function initCountryData(): CountryData {
   return {
  protests: [],
@@ -184,6 +220,7 @@ export function clearCountryData(): void {
   countryDataMap.clear();
   hotspotActivityMap.clear();
   newsEventIndexMap.clear();
+  sourceFreshnessMap.clear();
 }
 
 export function getCountryData(code: string): CountryData | undefined {
@@ -211,6 +248,7 @@ export function ingestProtestsForCII(events: SocialUnrestEvent[]): void {
  if (!code) { unmappedCount++; continue; }
  if (!countryDataMap.has(code)) countryDataMap.set(code, initCountryData());
  countryDataMap.get(code)!.protests.push(e);
+ recordSourceFreshness(code, 'protests');
  trackHotspotActivity(e.lat, e.lon, e.severity === 'high' ? 2 : 1);
   }
 }
@@ -222,6 +260,7 @@ export function ingestConflictsForCII(events: ConflictEvent[]): void {
  if (!code) { unmappedCount++; continue; }
  if (!countryDataMap.has(code)) countryDataMap.set(code, initCountryData());
  countryDataMap.get(code)!.conflicts.push(e);
+ recordSourceFreshness(code, 'conflicts');
  trackHotspotActivity(e.lat, e.lon, e.fatalities > 0 ? 3 : 2);
   }
 }
@@ -360,6 +399,7 @@ export function ingestMilitaryForCII(flights: MilitaryFlight[], vessels: Militar
  if (operatorCode) {
  if (!countryDataMap.has(operatorCode)) countryDataMap.set(operatorCode, initCountryData());
  countryDataMap.get(operatorCode)!.militaryFlights.push(f);
+ recordSourceFreshness(operatorCode, 'military');
  } else {
  unmappedCount++;
  }
@@ -380,6 +420,7 @@ export function ingestMilitaryForCII(flights: MilitaryFlight[], vessels: Militar
  if (operatorCode) {
  if (!countryDataMap.has(operatorCode)) countryDataMap.set(operatorCode, initCountryData());
  countryDataMap.get(operatorCode)!.militaryVessels.push(v);
+ recordSourceFreshness(operatorCode, 'military');
  } else {
  unmappedCount++;
  }
@@ -433,6 +474,7 @@ export function ingestNewsForCII(events: ClusteredEvent[]): void {
  } else {
  cd.newsEvents[existingIdx] = e;
  }
+ recordSourceFreshness(code, 'news');
  }
   }
 }
@@ -462,6 +504,7 @@ export function ingestStrikesForCII(events: {
  lat: e.latitude, lon: e.longitude,
  title: e.title || e.locationName, id: e.id,
  });
+ recordSourceFreshness(code, 'strikes');
   }
 }
 
@@ -472,6 +515,7 @@ export function ingestOutagesForCII(outages: InternetOutage[]): void {
  if (!code) { unmappedCount++; continue; }
  if (!countryDataMap.has(code)) countryDataMap.set(code, initCountryData());
  countryDataMap.get(code)!.outages.push(o);
+ recordSourceFreshness(code, 'outages');
   }
 }
 
@@ -494,6 +538,7 @@ export function ingestAviationForCII(alerts: AirportDelayAlert[]): void {
  if (!code) { unmappedCount++; continue; }
  if (!countryDataMap.has(code)) countryDataMap.set(code, initCountryData());
  countryDataMap.get(code)!.aviationDisruptions.push(a);
+ recordSourceFreshness(code, 'aviation');
   }
 }
 
@@ -520,6 +565,7 @@ export function ingestAdvisoriesForCII(advisories: SecurityAdvisory[]): void {
  const currentRank = ADVISORY_LEVEL_RANK[data.advisoryMaxLevel || ''] || 0;
  const newRank = ADVISORY_LEVEL_RANK[a.level!] || 0;
  if (newRank > currentRank) data.advisoryMaxLevel = a.level!;
+ recordSourceFreshness(code, 'advisories');
   }
 }
 
@@ -646,6 +692,7 @@ export function ingestSatelliteFiresForCII(fires: {
  if (fire.brightness >= 360 || fire.frp >= 50) {
  data.satelliteFireHighCount++;
  }
+ recordSourceFreshness(code, 'fires');
   }
 }
 
@@ -665,6 +712,7 @@ export function ingestCyberThreatsForCII(threats: CyberThreat[]): void {
  if (threat.severity === 'critical') data.cyberThreatCriticalCount++;
  else if (threat.severity === 'high') data.cyberThreatHighCount++;
  else if (threat.severity === 'medium') data.cyberThreatMediumCount++;
+ recordSourceFreshness(code, 'cyber');
   }
 }
 
@@ -922,6 +970,9 @@ export function calculateCII(): CountryScore[] {
 
  const prev = previousScores.get(code) ?? score;
 
+ const staleSources = getStaleSources(code);
+ const incompleteAssessment = staleSources.length >= 2;
+
  scores.push({
  code,
  name,
@@ -932,6 +983,8 @@ export function calculateCII(): CountryScore[] {
  components,
  lastUpdated: new Date(),
  electionWindow: election,
+ staleSources,
+ incompleteAssessment,
  });
 
  previousScores.set(code, score);

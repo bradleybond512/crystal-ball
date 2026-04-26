@@ -84,10 +84,10 @@ function getScoreLevel(score: number): 'low' | 'normal' | 'elevated' | 'high' | 
 function toCachedCII(proto: CiiScore): CachedCIIScore {
   return {
  code: proto.region,
- name: TIER1_NAMES[proto.region] || proto.region,
+ name: TIER1_NAMES[proto.region] ?? proto.region,
  score: proto.combinedScore,
  level: getScoreLevel(proto.combinedScore),
- trend: TREND_REVERSE[proto.trend] || 'stable',
+ trend: TREND_REVERSE[proto.trend] ?? 'stable',
  change24h: proto.dynamicScore,
  components: {
  unrest: proto.components?.ciiContribution ?? 0,
@@ -104,13 +104,13 @@ function toCachedStrategicRisk(risks: StrategicRisk[], ciiScores: CiiScore[]): C
   const ciiMap = new Map(ciiScores.map((s) => [s.region, s]));
   return {
  score: global?.score ?? 0,
- level: SEVERITY_REVERSE[global?.level ?? ''] || 'low',
- trend: TREND_REVERSE[global?.trend ?? ''] || 'stable',
+ level: SEVERITY_REVERSE[global?.level ?? ''] ?? 'low',
+ trend: TREND_REVERSE[global?.trend ?? ''] ?? 'stable',
  lastUpdated: new Date().toISOString(),
  contributors: (global?.factors ?? []).map((code) => {
  const cii = ciiMap.get(code);
  return {
- country: TIER1_NAMES[code] || code,
+ country: TIER1_NAMES[code] ?? code,
  code,
  score: cii?.combinedScore ?? 0,
  level: cii ? getScoreLevel(cii.combinedScore) : 'low',
@@ -121,7 +121,7 @@ function toCachedStrategicRisk(risks: StrategicRisk[], ciiScores: CiiScore[]): C
 
 function toRiskScores(resp: GetRiskScoresResponse): CachedRiskScores {
   return {
- cii: resp.ciiScores.map(toCachedCII),
+ cii: resp.ciiScores.map((s) => toCachedCII(s)),
  strategicRisk: toCachedStrategicRisk(resp.strategicRisks, resp.ciiScores),
  protestCount: 0,
  computedAt: new Date().toISOString(),
@@ -143,7 +143,7 @@ function createAbortError(): DOMException {
 
 function withCallerAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(createAbortError());
+  if (signal.aborted) return Promise.reject(createAbortError()) as Promise<T>;
 
   return new Promise<T>((resolve, reject) => {
  const onAbort = () => {
@@ -157,8 +157,9 @@ function withCallerAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<
  signal.removeEventListener('abort', onAbort);
  resolve(value);
  },
- (error) => {
+ (error: unknown) => {
  signal.removeEventListener('abort', onAbort);
+ // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- re-rejecting the original error
  reject(error);
  },
  );
@@ -193,6 +194,7 @@ export async function fetchCachedRiskScores(signal?: AbortSignal): Promise<Cache
  return cachedScores;
  } catch (error) {
  if (error instanceof DOMException && error.name === 'AbortError') throw error;
+ // eslint-disable-next-line no-console -- intentional: debug logging for cached risk score fetch failures
  console.error('[CachedRiskScores] Fetch error:', error);
  lastFetchTime = now; // prevent unlimited retries on sustained failure
  return cachedScores ?? await loadPersistentRiskScores();
@@ -222,5 +224,7 @@ export function toCountryScore(cached: CachedCIIScore): CountryScore {
  change24h: cached.change24h,
  components: cached.components,
  lastUpdated: new Date(cached.lastUpdated),
+ staleSources: [],
+ incompleteAssessment: false,
   };
 }

@@ -30,7 +30,22 @@ export interface Situation {
 
 // ── Tunables ──────────────────────────────────────────────────────────────
 const PROXIMITY_KM = 100;
-const TEMPORAL_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 hours
+const DEFAULT_TEMPORAL_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/** Per-category time windows: protests unfold over days, earthquakes over hours. */
+const CATEGORY_TEMPORAL_WINDOW_MS: Record<string, number> = {
+  geophysical: 4 * 60 * 60 * 1000,  // 4h — aftershocks cluster tightly
+  weather: 12 * 60 * 60 * 1000,     // 12h — weather systems evolve slowly
+  hazard: 8 * 60 * 60 * 1000,       // 8h — wildfires, hazmat
+  infrastructure: 6 * 60 * 60 * 1000, // 6h
+  security: 2 * 60 * 60 * 1000,     // 2h — missile alerts cluster tightly
+  health: 48 * 60 * 60 * 1000,      // 48h — outbreaks develop over days
+  transit: 12 * 60 * 60 * 1000,     // 12h
+  news: 24 * 60 * 60 * 1000,        // 24h — protests/unrest unfold over days
+  other: 6 * 60 * 60 * 1000,        // 6h default
+};
+
+const MAX_TEMPORAL_WINDOW_MS = Math.max(...Object.values(CATEGORY_TEMPORAL_WINDOW_MS));
 const MAX_SITUATIONS = 50;
 const TREND_RECENT_MS = 60 * 60 * 1000;        // last 1h
 const TREND_PRIOR_MS = 3 * 60 * 60 * 1000;     // previous 3h
@@ -81,8 +96,12 @@ function generateLabel(alerts: UnifiedAlert[]): string {
 
 // ── Clustering primitives ────────────────────────────────────────────────
 function alertsMatch(a: UnifiedAlert, b: UnifiedAlert): boolean {
-  if (Math.abs(a.timestamp - b.timestamp) > TEMPORAL_WINDOW_MS) return false;
-  if (categoryOf(a.source) !== categoryOf(b.source)) return false;
+  const catA = categoryOf(a.source);
+  const catB = categoryOf(b.source);
+  if (catA !== catB) return false;
+  // Use the category-specific temporal window
+  const temporalWindow = CATEGORY_TEMPORAL_WINDOW_MS[catA] ?? DEFAULT_TEMPORAL_WINDOW_MS;
+  if (Math.abs(a.timestamp - b.timestamp) > temporalWindow) return false;
   if (!a.location || !b.location) return true; // no geo = match on category+time
   const km = computeDistanceKm(a.location.lat, a.location.lon, b.location.lat, b.location.lon);
   return km < PROXIMITY_KM;
@@ -171,7 +190,8 @@ export function clusterAlertsToSituations(alerts: UnifiedAlert[]): Situation[] {
     for (let j = i + 1; j < n; j++) {
       // Early exit: if temporal gap exceeds window, skip ahead
       // (alerts are sorted by timestamp, so remaining j's are even later)
-      if (sorted[j]!.timestamp - sorted[i]!.timestamp > TEMPORAL_WINDOW_MS) break;
+      // Use the largest temporal window for early exit (categories checked inside alertsMatch)
+      if (sorted[j]!.timestamp - sorted[i]!.timestamp > MAX_TEMPORAL_WINDOW_MS) break;
       if (alertsMatch(sorted[i]!, sorted[j]!)) uf.union(i, j);
     }
   }

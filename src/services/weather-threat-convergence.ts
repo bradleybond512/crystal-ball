@@ -118,7 +118,23 @@ const SEVERITY_BASE_SCORE: Record<string, number> = {
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_RESULTS = 20;
-const COLLOCATION_RADIUS_KM = 500;
+
+/**
+ * Dynamic collocation radius by weather category.
+ * Different event types have vastly different effective areas —
+ * a hurricane affects a 1000 km swath while a tornado is ~50 km.
+ */
+const COLLOCATION_RADIUS_KM: Record<WeatherCategory, number> = {
+  hurricane:     1000,
+  drought:        800,
+  extreme_heat:   600,
+  winter_storm:   500,
+  flood:          300,
+  wildfire:       200,
+  thunderstorm:   150,
+  tornado:         50,
+  general:        500,
+};
 
 let cachedConvergences: WeatherThreatConvergence[] = [];
 let cacheTimestamp = 0;
@@ -158,13 +174,15 @@ function findMatchingRule(
 function findNearbyThreats(
   wxLat: number,
   wxLon: number,
+  category: WeatherCategory,
   allThreats: UnifiedAlert[],
 ): UnifiedAlert[] {
+  const radius = COLLOCATION_RADIUS_KM[category];
   const nearby: UnifiedAlert[] = [];
   for (const threat of allThreats) {
     if (!threat.location) continue;
     const dist = haversineKm(wxLat, wxLon, threat.location.lat, threat.location.lon);
-    if (dist <= COLLOCATION_RADIUS_KM) nearby.push(threat);
+    if (dist <= radius) nearby.push(threat);
   }
   return nearby;
 }
@@ -222,7 +240,7 @@ export function detectWeatherThreatConvergence(
     const category = categorizeWeatherEvent(wx.event);
     if (category === 'general') continue;
 
-    const nearby = findNearbyThreats(wxLat, wxLon, allThreats);
+    const nearby = findNearbyThreats(wxLat, wxLon, category, allThreats);
     if (nearby.length === 0) continue;
 
     const match = selectBestMatch(category, nearby);

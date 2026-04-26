@@ -10,9 +10,11 @@
  * in a later phase.
  */
 
-import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
+import { unifiedAlertStore, type UnifiedAlert, type AlertSeverity, type AlertSource } from './unified-alerts';
 import { haversineKm } from './proximity-filter';
 import { getSourceTrust } from './source-trust';
+import { getSourceFeedbackMult } from './source-feedback';
+import { isGhostMode } from './mode-manager';
 
 export interface UserLocation {
   lat: number;
@@ -41,6 +43,74 @@ const DEFAULT_RADIUS_KM = 1000;
 const NO_LOCATION_PROXIMITY = 0.2;
 const DEFAULT_TRUST = 0.7;
 
+// ── Learned Trust Weights ────────────────────────────────────────────────────
+//
+// Per-source dismiss tracking. Each acknowledge is an "interaction"; if it
+// happens within FAST_DISMISS_MS of the alert first appearing in a scoring
+// pass, it counts as a dismiss. The dismiss rate dampens the static trust
+// score so consistently-dismissed sources float lower over time.
+//
+// Floor of 0.4 ensures no source is fully silenced by behavior alone.
+
+const TRUST_STORAGE_KEY = 'crystalball-learned-trust-v1';
+const FAST_DISMISS_MS = 15_000;
+const MIN_INTERACTIONS = 3;
+const TRUST_FLOOR = 0.4;
+
+interface SourceInteractions {
+  total: number;
+  dismissed: number;
+}
+
+let learnedTrust: Record<string, SourceInteractions> = {};
+let trustLoaded = false;
+
+function loadLearnedTrust(): void {
+  if (trustLoaded) return;
+  trustLoaded = true;
+  try {
+    const raw = localStorage.getItem(TRUST_STORAGE_KEY);
+    if (raw) learnedTrust = JSON.parse(raw) as Record<string, SourceInteractions>;
+  } catch { /* ignore corrupt data */ }
+}
+
+function saveLearnedTrust(): void {
+  try { localStorage.setItem(TRUST_STORAGE_KEY, JSON.stringify(learnedTrust)); } catch { /* quota */ }
+}
+
+function ensureSource(source: string): SourceInteractions {
+  learnedTrust[source] ??= { total: 0, dismissed: 0 };
+  return learnedTrust[source];
+}
+
+export function recordInteraction(source: AlertSource, wasDismissed: boolean): void {
+  if (isGhostMode()) return;
+  loadLearnedTrust();
+  const s = ensureSource(source);
+  s.total += 1;
+  if (wasDismissed) s.dismissed += 1;
+  saveLearnedTrust();
+}
+
+export function getLearnedTrustMultiplier(source: AlertSource): number {
+  loadLearnedTrust();
+  const s = learnedTrust[source as string];
+  if (!s || s.total < MIN_INTERACTIONS) return 1;
+  const dismissRate = s.dismissed / s.total;
+  return Math.max(TRUST_FLOOR, 1 - dismissRate * 0.6);
+}
+
+export function getLearnedTrustStats(): Readonly<Record<string, SourceInteractions>> {
+  loadLearnedTrust();
+  return { ...learnedTrust };
+}
+
+export function resetLearnedTrust(): void {
+  learnedTrust = {};
+  trustLoaded = true;
+  try { localStorage.removeItem(TRUST_STORAGE_KEY); } catch { /* ignore */ }
+}
+
 function proximityScore(alert: UnifiedAlert, userLocation?: UserLocation): number {
   if (!alert.location || !userLocation) return NO_LOCATION_PROXIMITY;
   const radius = userLocation.radiusKm ?? DEFAULT_RADIUS_KM;
@@ -65,11 +135,14 @@ function noveltyScore(recentAlertsSameSource?: number): number {
 }
 
 function trustScore(alert: UnifiedAlert): number {
+  let base = DEFAULT_TRUST;
   try {
     const t = getSourceTrust(alert.source);
-    if (typeof t === 'number' && Number.isFinite(t)) return t;
+    if (typeof t === 'number' && Number.isFinite(t)) base = t;
   } catch { /* fall through */ }
-  return DEFAULT_TRUST;
+  const feedbackMult = getSourceFeedbackMult(alert.source);
+  const learnedMult = getLearnedTrustMultiplier(alert.source);
+  return Math.max(0.1, base * feedbackMult * learnedMult);
 }
 
 /** Compute the composite relevance breakdown for a single alert. */
@@ -107,3 +180,39 @@ export function sortAlertsByRelevance(
 
 /** Legacy alias retained for existing panel consumers (pre-Phase 0.2 API). */
 export const scoreAndSort = sortAlertsByRelevance;
+
+// ── Trust learner observer ───────────────────────────────────────────────────
+//
+// Watches acknowledge transitions on unifiedAlertStore and calls
+// recordInteraction(source, wasDismissed). A dismiss is an ack that happens
+// within FAST_DISMISS_MS of the alert first being scored; otherwise it's a
+// normal interaction (not a dismiss).
+
+let trustLearnerStarted = false;
+
+export function startTrustLearner(): void {
+  if (trustLearnerStarted) return;
+  trustLearnerStarted = true;
+  loadLearnedTrust();
+
+  const firstSeen = new Map<string, number>();
+  const prevAcked = new Set<string>();
+
+  for (const a of unifiedAlertStore.getAll()) {
+    firstSeen.set(a.id, Date.now());
+    if (a.acknowledged) prevAcked.add(a.id);
+  }
+
+  unifiedAlertStore.subscribe(() => {
+    const now = Date.now();
+    for (const a of unifiedAlertStore.getAll()) {
+      if (!firstSeen.has(a.id)) firstSeen.set(a.id, now);
+      if (a.acknowledged && !prevAcked.has(a.id)) {
+        const seen = firstSeen.get(a.id) ?? now;
+        const wasDismissed = now - seen < FAST_DISMISS_MS;
+        recordInteraction(a.source, wasDismissed);
+        prevAcked.add(a.id);
+      }
+    }
+  });
+}

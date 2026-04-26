@@ -86,6 +86,15 @@ export interface MilitaryTheater {
   centerLon: number;
 }
 
+export interface HeadingCoherence {
+  /** 0–1: 1 = all aircraft flying same heading, 0 = random */
+  coherence: number;
+  /** Mean heading in degrees (circular mean) */
+  meanHeading: number;
+  /** Number of aircraft included in calculation */
+  sampleSize: number;
+}
+
 export interface SurgeAlert {
   id: string;
   theater: MilitaryTheater;
@@ -97,6 +106,22 @@ export interface SurgeAlert {
   nearbyBases: string[];
   firstDetected: Date;
   lastUpdated: Date;
+  /** Heading coherence of aircraft in this surge (if enough samples) */
+  headingCoherence?: HeadingCoherence;
+}
+
+export interface TheaterTransit {
+  flightId: string;
+  callsign: string;
+  operator: MilitaryOperator;
+  fromTheater: string;
+  toTheater: string;
+  /** When the flight was last seen in the origin theater */
+  departedAt: number;
+  /** When the flight was first seen in the destination theater */
+  arrivedAt: number;
+  /** Transit time in minutes */
+  transitMinutes: number;
 }
 
 export interface TheaterActivity {
@@ -164,6 +189,33 @@ const activeSurges = new Map<string, SurgeAlert>();
 let lastCleanup = Date.now();
 const CLEANUP_INTERVAL = 60 * 60 * 1000;
 const MAX_HISTORY_HOURS = 72;
+
+// ── Heading coherence (circular variance) ───────────────────────────────────
+const DEG2RAD = Math.PI / 180;
+const MIN_COHERENCE_SAMPLE = 3;
+
+function computeHeadingCoherence(flights: MilitaryFlight[]): HeadingCoherence | undefined {
+  const airborne = flights.filter(f => !f.onGround && f.speed > 50);
+  if (airborne.length < MIN_COHERENCE_SAMPLE) return undefined;
+  let sinSum = 0;
+  let cosSum = 0;
+  for (const f of airborne) {
+    sinSum += Math.sin(f.heading * DEG2RAD);
+    cosSum += Math.cos(f.heading * DEG2RAD);
+  }
+  const n = airborne.length;
+  const rBar = Math.hypot(sinSum, cosSum) / n; // 0 = uniform, 1 = identical
+  const meanRad = Math.atan2(sinSum / n, cosSum / n);
+  const meanHeading = ((meanRad / DEG2RAD) + 360) % 360;
+  return { coherence: rBar, meanHeading: Math.round(meanHeading), sampleSize: n };
+}
+
+// ── Inter-theater transit tracking ──────────────────────────────────────────
+/** Last known theater per flight ID */
+const flightTheaterHistory = new Map<string, { theaterId: string; timestamp: number }>();
+const recentTransits: TheaterTransit[] = [];
+const TRANSIT_MAX_AGE_MS = 6 * 60 * 60 * 1000; // keep transits for 6h
+const TRANSIT_MAX_GAP_MS = 4 * 60 * 60 * 1000;  // max time between theaters to count as transit
 
 function getTheaterForBase(baseId: string): MilitaryTheater | null {
   for (const theater of THEATERS) {
@@ -282,6 +334,35 @@ export function analyzeFlightsForSurge(flights: MilitaryFlight[]): SurgeAlert[] 
   const now = Date.now();
   const newAlerts: SurgeAlert[] = [];
 
+  // ── Inter-theater transit detection ──
+  for (const [theaterId, theaterFlightList] of theaterFlights) {
+    for (const flight of theaterFlightList) {
+      const prev = flightTheaterHistory.get(flight.id);
+      if (prev && prev.theaterId !== theaterId && now - prev.timestamp < TRANSIT_MAX_GAP_MS) {
+        const transitMinutes = Math.round((now - prev.timestamp) / 60_000);
+        recentTransits.push({
+          flightId: flight.id,
+          callsign: flight.callsign,
+          operator: flight.operator,
+          fromTheater: prev.theaterId,
+          toTheater: theaterId,
+          departedAt: prev.timestamp,
+          arrivedAt: now,
+          transitMinutes,
+        });
+      }
+      flightTheaterHistory.set(flight.id, { theaterId, timestamp: now });
+    }
+  }
+  // Prune old transits and stale theater history
+  const transitCutoff = now - TRANSIT_MAX_AGE_MS;
+  while (recentTransits.length > 0 && recentTransits[0]!.arrivedAt < transitCutoff) {
+    recentTransits.shift();
+  }
+  for (const [fid, entry] of flightTheaterHistory) {
+    if (now - entry.timestamp > TRANSIT_MAX_AGE_MS) flightTheaterHistory.delete(fid);
+  }
+
   for (const [theaterId, theaterFlightList] of theaterFlights) {
  const theater = THEATERS.find(t => t.id === theaterId);
  if (!theater) continue;
@@ -291,11 +372,13 @@ export function analyzeFlightsForSurge(flights: MilitaryFlight[]): SurgeAlert[] 
  let reconCount = 0;
  const aircraftTypes = new Map<string, number>();
  const nearbyBasesSet = new Set<string>();
+ const transportFlights: MilitaryFlight[] = [];
+ const fighterFlights: MilitaryFlight[] = [];
 
  for (const flight of theaterFlightList) {
  const classification = classifyFlight(flight);
- if (classification === 'transport') transportCount++;
- else if (classification === 'fighter') fighterCount++;
+ if (classification === 'transport') { transportCount++; transportFlights.push(flight); }
+ else if (classification === 'fighter') { fighterCount++; fighterFlights.push(flight); }
  else if (classification === 'recon') reconCount++;
 
  const typeKey = flight.aircraftModel || flight.aircraftType || 'unknown';
@@ -335,6 +418,7 @@ export function analyzeFlightsForSurge(flights: MilitaryFlight[]): SurgeAlert[] 
  existing.aircraftTypes = aircraftTypes;
  existing.nearbyBases = [...nearbyBasesSet];
  existing.lastUpdated = new Date();
+ existing.headingCoherence = computeHeadingCoherence(transportFlights);
  } else {
  const alert: SurgeAlert = {
  id: surgeId,
@@ -347,6 +431,7 @@ export function analyzeFlightsForSurge(flights: MilitaryFlight[]): SurgeAlert[] 
  nearbyBases: [...nearbyBasesSet],
  firstDetected: new Date(),
  lastUpdated: new Date(),
+ headingCoherence: computeHeadingCoherence(transportFlights),
  };
  activeSurges.set(surgeId, alert);
  newAlerts.push(alert);
@@ -369,6 +454,7 @@ export function analyzeFlightsForSurge(flights: MilitaryFlight[]): SurgeAlert[] 
  nearbyBases: [...nearbyBasesSet],
  firstDetected: new Date(),
  lastUpdated: new Date(),
+ headingCoherence: computeHeadingCoherence(fighterFlights),
  };
  activeSurges.set(surgeId, alert);
  newAlerts.push(alert);
@@ -385,6 +471,16 @@ export function getActiveSurges(): SurgeAlert[] {
 
 export function getTheaterActivity(theaterId: string): TheaterActivity[] {
   return activityHistory.get(theaterId) || [];
+}
+
+/** Get recent inter-theater transits (aircraft that moved between theaters). */
+export function getRecentTransits(): TheaterTransit[] {
+  return [...recentTransits];
+}
+
+/** Get transits into a specific theater (force redeployment indicator). */
+export function getTransitsToTheater(theaterId: string): TheaterTransit[] {
+  return recentTransits.filter(t => t.toTheater === theaterId);
 }
 
 // ============ FOREIGN MILITARY CONCENTRATION DETECTION ============
@@ -642,6 +738,7 @@ export function surgeAlertToSignal(surge: SurgeAlert): {
 
   const confidence = Math.min(0.95, 0.6 + (surge.surgeMultiple - 2) * 0.1);
 
+  const transitsIn = getTransitsToTheater(surge.theater.id);
   const metadata = {
  theaterId: surge.theater.id,
  surgeType: surge.type,
@@ -650,6 +747,11 @@ export function surgeAlertToSignal(surge: SurgeAlert): {
  surgeMultiple: surge.surgeMultiple,
  aircraftTypes: Object.fromEntries(surge.aircraftTypes),
  nearbyBases: surge.nearbyBases,
+ headingCoherence: surge.headingCoherence ?? null,
+ transitsIntoTheater: transitsIn.length > 0 ? transitsIn.map(t => ({
+   callsign: t.callsign, operator: t.operator,
+   from: t.fromTheater, transitMinutes: t.transitMinutes,
+ })) : null,
   };
 
   return {
@@ -658,7 +760,10 @@ export function surgeAlertToSignal(surge: SurgeAlert): {
  source: 'Military Flight Tracking',
  title: `${typeLabels[surge.type]} - ${surge.theater.name}`,
  description: `${surge.currentCount} ${surge.type} aircraft detected (${surge.surgeMultiple.toFixed(1)}x baseline). ` +
- `${aircraftList}. Near: ${surge.nearbyBases.slice(0, 3).join(', ')}`,
+ `${aircraftList}. Near: ${surge.nearbyBases.slice(0, 3).join(', ')}` +
+ (surge.headingCoherence && surge.headingCoherence.coherence > 0.7
+   ? `. Coordinated heading: ${surge.headingCoherence.meanHeading}° (${(surge.headingCoherence.coherence * 100).toFixed(0)}% coherence)`
+   : ''),
  severity,
  confidence,
  category: 'military',

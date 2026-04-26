@@ -30,6 +30,14 @@ const MAX_WINDOW = 24;
 /** EMA alpha — higher = more weight to recent data */
 const DEFAULT_ALPHA = 0.3;
 
+/** Adaptive alpha range: volatile regions get higher alpha, stable regions lower */
+const ALPHA_MIN = 0.15;
+const ALPHA_MAX = 0.5;
+
+/** Coefficient of variation thresholds for alpha mapping */
+const CV_LOW = 0.2; // below this → ALPHA_MIN (stable)
+const CV_HIGH = 1; // above this → ALPHA_MAX (volatile)
+
 /** Risk threshold above which a region is flagged as high-risk */
 const HIGH_RISK_THRESHOLD = 75;
 
@@ -54,6 +62,47 @@ function stdDev(arr: number[]): number {
   const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
   const variance = arr.reduce((s, v) => s + (v - mean) ** 2, 0) / (arr.length - 1);
   return Math.sqrt(variance);
+}
+
+/**
+ * Compute adaptive alpha based on coefficient of variation.
+ * High volatility → higher alpha (more responsive to recent data).
+ */
+function adaptiveAlpha(series: number[]): number {
+  if (series.length < 3) return DEFAULT_ALPHA;
+  const m = series.reduce((s, v) => s + v, 0) / series.length;
+  if (m <= 0) return DEFAULT_ALPHA;
+  const sd = stdDev(series);
+  const cv = sd / m; // coefficient of variation
+  // Linear interpolation between ALPHA_MIN and ALPHA_MAX
+  const t = Math.min(1, Math.max(0, (cv - CV_LOW) / (CV_HIGH - CV_LOW)));
+  return ALPHA_MIN + t * (ALPHA_MAX - ALPHA_MIN);
+}
+
+/**
+ * Detect trend via linear regression slope over the last N EMA values.
+ * Returns 'up' if slope is positive and meaningful, 'down' if negative, else 'stable'.
+ */
+function slopeTrend(emaValues: number[], sd: number): ForecastResult['trending'] {
+  const n = Math.min(emaValues.length, 5);
+  if (n < 3) return 'stable';
+  const tail = emaValues.slice(-n);
+  // Simple linear regression: slope = Σ((i - i̅)(y - ȳ)) / Σ((i - i̅)²)
+  const iMean = (n - 1) / 2;
+  const yMean = tail.reduce((s, v) => s + v, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (i - iMean) * (tail[i]! - yMean);
+    den += (i - iMean) ** 2;
+  }
+  if (den === 0) return 'stable';
+  const slope = num / den;
+  // Normalize slope by sd to determine significance
+  const threshold = sd > 0 ? sd * 0.1 : 0.5;
+  if (slope > threshold) return 'up';
+  if (slope < -threshold) return 'down';
+  return 'stable';
 }
 
 // ── Region time-series management ──────────────────────────────────────────
@@ -89,7 +138,8 @@ export function forecastRegions(): ForecastResult[] {
   for (const [region, series] of regionSeries.entries()) {
  if (series.length < 3) continue; // need at least 3 points for meaningful EMA
 
- const emaValues = computeEMA(series);
+ const alpha = adaptiveAlpha(series);
+ const emaValues = computeEMA(series, alpha);
  const currentEMA = emaValues[emaValues.length - 1]!;
  const currentCount = series[series.length - 1]!;
  const sd = stdDev(series);
@@ -101,14 +151,8 @@ export function forecastRegions(): ForecastResult[] {
  // 0 SD = 50% risk base, +2 SD = ~90%, +3 SD = ~97%
  const risk24h = Math.min(100, Math.max(0, Math.round(50 + deviation * 20)));
 
- // Trend: compare last 3 EMA values
- let trending: ForecastResult['trending'] = 'stable';
- if (emaValues.length >= 3) {
- const prev2 = emaValues[emaValues.length - 3]!;
- const prev1 = emaValues[emaValues.length - 2]!;
- if (currentEMA > prev1 && prev1 > prev2) trending = 'up';
- else if (currentEMA < prev1 && prev1 < prev2) trending = 'down';
- }
+ // Trend: slope-based regression over last 5 EMA values
+ const trending = slopeTrend(emaValues, sd);
 
  results.push({ region, currentCount, ema: currentEMA, deviation, risk24h, trending });
   }

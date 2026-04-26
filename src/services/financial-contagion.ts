@@ -377,10 +377,15 @@ export async function getContagionModel(): Promise<ContagionModel> {
 
   // Compute measured channels
   for (const def of CHANNEL_DEFS) {
+ try {
  const { stress, dataPoints } = def.compute(ecoData);
  const trend = computeTrend(def.id, stress, history);
  channels.push({ channel: def.label, stressLevel: Math.round(stress), trend, dataPoints });
  stressMap.set(def.id, stress);
+ } catch {
+ channels.push({ channel: def.label, stressLevel: 0, trend: 'stable' as const, dataPoints: [] });
+ stressMap.set(def.id, 0);
+ }
   }
 
   // Compute synthetic channels

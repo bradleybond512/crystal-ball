@@ -30,10 +30,10 @@ function toDisruptionEvent(proto: ProtoDisruption): AisDisruptionEvent {
   return {
  id: proto.id,
  name: proto.name,
- type: DISRUPTION_TYPE_REVERSE[proto.type] || 'gap_spike',
+ type: DISRUPTION_TYPE_REVERSE[proto.type] ?? 'gap_spike',
  lat: proto.location?.latitude ?? 0,
  lon: proto.location?.longitude ?? 0,
- severity: SEVERITY_REVERSE[proto.severity] || 'low',
+ severity: SEVERITY_REVERSE[proto.severity] ?? 'low',
  changePct: proto.changePct,
  windowHours: proto.windowHours,
  darkShips: proto.darkShips,
@@ -135,13 +135,13 @@ const MAX_CALLBACK_TRACKED_VESSELS = 20_000;
 // ---- Raw Relay URL (for candidate reports path) ----
 
 const SNAPSHOT_PROXY_URL = '/api/ais-snapshot';
-const wsRelayUrl = import.meta.env.VITE_WS_RELAY_URL || '';
+const wsRelayUrl = (import.meta.env.VITE_WS_RELAY_URL as string | undefined) ?? '';
 const DIRECT_RAILWAY_SNAPSHOT_URL = wsRelayUrl
   ? wsRelayUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace(/\/$/, '') + '/ais/snapshot'
   : '';
 const LOCAL_SNAPSHOT_FALLBACK = 'http://127.0.0.1:3004/ais/snapshot';
-// eslint-disable-next-line no-restricted-syntax -- intentional: runtime detection, localhost never reached in WKWebView
-const isLocalhost = isClientRuntime && window.location.hostname === 'localhost';
+// eslint-disable-next-line no-restricted-syntax -- intentional: runtime detection for dev fallback
+const isLocalhost = isClientRuntime && ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
 // ---- Internal Helpers ----
 
@@ -161,7 +161,7 @@ function parseSnapshot(data: unknown): {
 
   if (!Array.isArray(raw.disruptions) || !Array.isArray(raw.density)) return null;
 
-  const status = raw.status || {};
+  const status = raw.status ?? {};
   return {
  sequence: Number.isFinite(raw.sequence as number) ? Number(raw.sequence) : 0,
  status: {
@@ -220,8 +220,8 @@ async function fetchSnapshotPayload(includeCandidates: boolean): Promise<unknown
  return {
  sequence: 0, // Proto payload does not include relay sequence.
  status: { connected: true, vessels: 0, messages: 0 },
- disruptions: response.snapshot.disruptions.map(toDisruptionEvent),
- density: response.snapshot.densityZones.map(toDensityZone),
+ disruptions: response.snapshot.disruptions.map((d) => toDisruptionEvent(d)),
+ density: response.snapshot.densityZones.map((z) => toDensityZone(z)),
  candidateReports: [],
  };
  }
@@ -266,7 +266,7 @@ function emitCandidateReports(reports: SnapshotCandidateReport[]): void {
  if (!report?.mmsi || !Number.isFinite(report.lat) || !Number.isFinite(report.lon)) continue;
 
  const reportTs = Number.isFinite(report.timestamp) ? Number(report.timestamp) : now;
- const lastTs = lastCallbackTimestampByMmsi.get(report.mmsi) || 0;
+ const lastTs = lastCallbackTimestampByMmsi.get(report.mmsi) ?? 0;
  if (reportTs <= lastTs) continue;
 
  lastCallbackTimestampByMmsi.set(report.mmsi, reportTs);
@@ -315,10 +315,7 @@ async function pollSnapshot(force = false): Promise<void> {
  lastPollAt = Date.now();
 
  if (includeCandidates) {
- if (snapshot.sequence > lastSequence) {
- emitCandidateReports(snapshot.candidateReports);
- lastSequence = snapshot.sequence;
- } else if (lastSequence === 0) {
+ if (snapshot.sequence > lastSequence || lastSequence === 0) {
  emitCandidateReports(snapshot.candidateReports);
  lastSequence = snapshot.sequence;
  }

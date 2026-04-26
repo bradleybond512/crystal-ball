@@ -30,19 +30,21 @@ export function installChunkReloadGuard(
   const reload = options.reload ?? (() => window.location.reload());
 
   eventTarget.addEventListener(eventName, (event: Event) => {
- // Log the underlying failure so we can see what chunk/URL failed to preload.
- // Without this, we only see the symptom (a reload) and never the cause.
  const detail = (event as Event & { payload?: { message?: string } }).payload;
  const message = detail?.message ?? (event as unknown as { message?: string }).message ?? 'unknown';
- console.error(`[chunk-reload] vite:preloadError: ${message}`, event);
 
- // In Tauri, all chunks are bundled into the binary at build time. A reload
- // cannot fix a missing/broken chunk — it just re-runs vault intro and
- // leaves the user staring at a dead app. Skip the reload entirely.
+ // In Tauri, all chunks are bundled into the binary — a reload can't fix
+ // a missing chunk. Optional dynamic imports (e.g. @tauri-apps/plugin-notification)
+ // trigger this harmlessly; demote to warn so it doesn't flood error logs.
  const isTauri =
  typeof window !== 'undefined' &&
  ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
- if (isTauri) return;
+ if (isTauri) {
+ console.warn(`[chunk-reload] preload skipped (Tauri): ${message}`);
+ return;
+ }
+
+ console.error(`[chunk-reload] vite:preloadError: ${message}`, event);
 
  if (storage.getItem(storageKey)) return;
  storage.setItem(storageKey, '1');

@@ -1,6 +1,11 @@
 import { proxyUrl } from '@/utils';
 import { isDesktopRuntime } from '@/services/runtime';
 
+const DISABLED_RESPONSE: TelegramFeedResponse = {
+  source: 'telegram', earlySignal: false, enabled: false,
+  count: 0, updatedAt: null, items: [],
+};
+
 export interface TelegramItem {
   id: string;
   source: 'telegram';
@@ -43,12 +48,15 @@ function telegramFeedUrl(limit: number): string {
 }
 
 export async function fetchTelegramFeed(limit = 50): Promise<TelegramFeedResponse> {
+  // No sidecar route for telegram-feed on desktop — skip to avoid 60s error spam
+  if (isDesktopRuntime()) return DISABLED_RESPONSE;
+
   if (cachedResponse && Date.now() - cachedAt < CACHE_TTL) return cachedResponse;
 
   const res = await fetch(telegramFeedUrl(limit));
   if (!res.ok) throw new Error(`Telegram feed ${res.status}`);
 
-  const json: TelegramFeedResponse = await res.json();
+  const json = (await res.json()) as TelegramFeedResponse;
   cachedResponse = json;
   cachedAt = Date.now();
   return json;

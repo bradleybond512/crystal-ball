@@ -3708,6 +3708,65 @@ export class DeckGLMap {
  const callsign = obj.callsign || obj.icao24;
  return { html: `<div class="deckgl-tooltip"><strong>&#9992; ${escapeHtml(callsign)}</strong><br/>${escapeHtml(obj.originCountry)}<br/>${altFt} · ${spdKt}</div>` };
  }
+ case 'adsb-flights-3d': {
+ const alt3d = obj.altitude != null ? `${Math.round(obj.altitude).toLocaleString()} ft` : '—';
+ const spd3d = obj.velocity != null ? `${Math.round(obj.velocity * 1.944)} kt` : '—';
+ const cs3d = obj.callsign || obj.icao24;
+ return { html: `<div class="deckgl-tooltip"><strong>&#9992; ${escapeHtml(cs3d)}</strong><br/>${escapeHtml(obj.originCountry)}<br/>${alt3d} · ${spd3d}</div>` };
+ }
+ case 'military-flights-3d': {
+ const milAlt = `${Math.round(obj.altitude).toLocaleString()} ft`;
+ const milSpd = `${Math.round(obj.speed)} kt`;
+ const milCs = obj.callsign || obj.registration || 'Military Aircraft';
+ return { html: `<div class="deckgl-tooltip"><strong>&#9992; ${escapeHtml(milCs)}</strong><br/>${text(obj.operatorCountry)}${obj.aircraftModel ? ` · ${text(obj.aircraftModel)}` : ''}<br/>${milAlt} · ${milSpd}</div>` };
+ }
+ case 'fires-layer': {
+ const frpStr = obj.frp > 0 ? `FRP: ${Math.round(obj.frp)} MW` : '';
+ const confStr = obj.confidence > 0 ? `${obj.confidence}% confidence` : '';
+ const details = [frpStr, confStr].filter(Boolean).join(' · ');
+ const dayNight = obj.daynight === 'D' ? 'Day' : obj.daynight === 'N' ? 'Night' : '';
+ return { html: `<div class="deckgl-tooltip"><strong>\uD83D\uDD25 Active Fire</strong><br/>${text(obj.region || 'Unknown region')}${obj.acq_date ? `<br/>${text(obj.acq_date)}` : ''}${dayNight ? ` · ${dayNight}` : ''}${details ? `<br/>${details}` : ''}</div>` };
+ }
+ case 'disease-intel-variant-dots': {
+ return { html: `<div class="deckgl-tooltip"><strong>${text(obj.country)}</strong><br/>Active: ${(obj.active ?? 0).toLocaleString()}<br/>Today: +${(obj.todayCases ?? 0).toLocaleString()}</div>` };
+ }
+ case 'disease-intel-outbreak-pins': {
+ return { html: `<div class="deckgl-tooltip"><strong>\u2623 Disease Outbreak</strong><br/>${obj.isAlert ? 'Alert' : 'Monitoring'}</div>` };
+ }
+ case 'strike-package-icons': {
+ return { html: `<div class="deckgl-tooltip"><strong>${text(obj.label || 'Strike Package')}</strong><br/>${obj.aircraftCount} aircraft · ${text(obj.packageType || '')}<br/>${text(obj.description || '')}</div>` };
+ }
+ case 'theater-polygons-fill': {
+ const trendIcon = obj.trend === 'escalating' ? '\u2191' : obj.trend === 'de-escalating' ? '\u2193' : '\u2192';
+ return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>Risk: ${obj.score}/100 ${trendIcon}<br/>${text(obj.region)}</div>` };
+ }
+ case 'convergence-rings-inner': {
+ const evTypes = (obj.types || []).join(', ');
+ return { html: `<div class="deckgl-tooltip"><strong>\u26A0 Geo-Convergence</strong><br/>Score: ${obj.score}/100 · ${obj.totalEvents} events<br/>${text(evTypes)}</div>` };
+ }
+ case 'sigint-points-layer': {
+ const sigType = String(obj.type || '').replace(/_/g, ' ');
+ return { html: `<div class="deckgl-tooltip"><strong>SIGINT: ${text(sigType)}</strong><br/>${text(obj.severity)} severity<br/>${text(obj.description || '')}</div>` };
+ }
+ case 'sigint-cluster-layer': {
+ return { html: `<div class="deckgl-tooltip"><strong>SIGINT Convergence</strong><br/>Score: ${obj.score}/100 · ${obj.events?.length ?? 0} events<br/>${text(obj.maxSeverity)} severity · ${obj.typeCount} types</div>` };
+ }
+ case 'lightning-strikes': {
+ const kA = obj.intensity != null ? `${Math.round(obj.intensity)} kA` : '';
+ const ago = obj.time ? `${Math.round((Date.now() - obj.time) / 60_000)}m ago` : '';
+ return { html: `<div class="deckgl-tooltip"><strong>\u26A1 Lightning Strike</strong>${kA ? `<br/>${kA}` : ''}${ago ? `<br/>${ago}` : ''}</div>` };
+ }
+ case 'red-flag-warnings': {
+ return { html: `<div class="deckgl-tooltip"><strong>\uD83D\uDEA9 ${text(obj.event || 'Red Flag Warning')}</strong><br/>${text(obj.areaDesc || '')}<br/>${text(obj.severity || '')}</div>` };
+ }
+ case 'satellite-positions': {
+ const satCat = this.satelliteCatalog.find(s => s.noradId === obj.noradId);
+ const satName = satCat?.name || `NORAD ${obj.noradId}`;
+ const altStr = obj.altKm != null ? `${Math.round(obj.altKm).toLocaleString()} km` : '';
+ const velStr = obj.velocityKmS != null ? `${obj.velocityKmS.toFixed(1)} km/s` : '';
+ const classStr = satCat?.classification ? `<br/><span style="opacity:.7">${text(satCat.classification)}</span>` : '';
+ return { html: `<div class="deckgl-tooltip"><strong>\uD83D\uDEF0 ${escapeHtml(satName)}</strong>${altStr || velStr ? `<br/>${[altStr, velStr].filter(Boolean).join(' · ')}` : ''}${classStr}</div>` };
+ }
  default: {
  return null;
  }

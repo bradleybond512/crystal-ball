@@ -26,6 +26,8 @@ export interface Situation {
   trend: 'escalating' | 'stable' | 'de-escalating';
   firstSeen: number;
   lastUpdate: number;
+  scope?: 'local' | 'regional' | 'nationwide';
+  rollupCount?: number;
 }
 
 // ── Tunables ──────────────────────────────────────────────────────────────
@@ -49,6 +51,7 @@ const MAX_TEMPORAL_WINDOW_MS = Math.max(...Object.values(CATEGORY_TEMPORAL_WINDO
 const MAX_SITUATIONS = 50;
 const TREND_RECENT_MS = 60 * 60 * 1000;        // last 1h
 const TREND_PRIOR_MS = 3 * 60 * 60 * 1000;     // previous 3h
+const SCOPE_CLUSTER_DISTANCE_KM = 200;
 
 const SEV_RANK: Record<AlertSeverity, number> = {
   critical: 4, high: 3, medium: 2, low: 1, info: 0,
@@ -172,6 +175,45 @@ function buildSituation(alerts: UnifiedAlert[]): Situation {
   return draft;
 }
 
+// ── Spatial hierarchy for protest/news situations ────────────────────────
+
+function countGeoClusters(alerts: UnifiedAlert[]): number {
+  const geoAlerts = alerts.filter(a => a.location);
+  if (geoAlerts.length === 0) return 1;
+  const centroids: { lat: number; lon: number }[] = [];
+  for (const a of geoAlerts) {
+    const loc = a.location!;
+    let merged = false;
+    for (const c of centroids) {
+      if (computeDistanceKm(loc.lat, loc.lon, c.lat, c.lon) <= SCOPE_CLUSTER_DISTANCE_KM) {
+        merged = true;
+        break;
+      }
+    }
+    if (!merged) centroids.push({ lat: loc.lat, lon: loc.lon });
+  }
+  return centroids.length;
+}
+
+export function classifySituationScope(situations: Situation[]): void {
+  for (const sit of situations) {
+    const cat = categoryOf(sit.alerts[0]!.source);
+    if (cat !== 'news') continue;
+    const clusters = countGeoClusters(sit.alerts);
+    sit.rollupCount = clusters;
+    if (clusters >= 4) {
+      sit.scope = 'nationwide';
+      if (!sit.label.startsWith('Nationwide: ')) {
+        sit.label = `Nationwide: ${sit.label}`;
+      }
+    } else if (clusters >= 2) {
+      sit.scope = 'regional';
+    } else {
+      sit.scope = 'local';
+    }
+  }
+}
+
 /**
  * Cluster a flat list of alerts into at most 50 Situations.
  * Uses union-find for deterministic, order-independent clustering:
@@ -211,6 +253,7 @@ export function clusterAlertsToSituations(alerts: UnifiedAlert[]): Situation[] {
     const s = SEV_RANK[b.severity] - SEV_RANK[a.severity];
     return s === 0 ? b.lastUpdate - a.lastUpdate : s;
   });
+  classifySituationScope(situations);
   return situations.slice(0, MAX_SITUATIONS);
 }
 

@@ -57,6 +57,9 @@ const MIN_OBSERVATIONS = 5; // need at least this many for meaningful stats
 const REVERSAL_Z_THRESHOLD = 1.5; // Lower threshold for reversals — inherently notable
 const COMPOUND_WINDOW_MS = 30 * 60 * 1000; // 30 minutes — temporal convergence window
 const MIN_COMPOUND_DOMAINS = 2; // need anomalies from at least 2 different domains
+const DISMISSAL_STORAGE_KEY = 'crystalball-compound-dismissals-v1';
+const DISMISSAL_SUPPRESS_RATE = 0.7; // 70% dismiss rate triggers suppression
+const DISMISSAL_MIN_SAMPLES = 5; // need at least 5 outcomes before suppressing
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 
@@ -111,6 +114,79 @@ function computeDirection(current: number, previous: number): 'up' | 'down' | 'f
   if (current > previous) return 'up';
   if (current < previous) return 'down';
   return 'flat';
+}
+
+// ── Compound dismissal tracking ──────────────────────────────────────────────
+
+interface DismissalRecord {
+  total: number;
+  dismissed: number;
+}
+
+const compoundDismissals = new Map<string, DismissalRecord>();
+const compoundIdToDomainKey = new Map<string, string>();
+
+function loadDismissals(): void {
+  try {
+    const stored = localStorage.getItem(DISMISSAL_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Record<string, DismissalRecord>;
+      compoundDismissals.clear();
+      for (const [key, rec] of Object.entries(parsed)) {
+        compoundDismissals.set(key, rec);
+      }
+    }
+  } catch {
+    // corrupt or unavailable
+  }
+}
+
+function saveDismissals(): void {
+  try {
+    const obj: Record<string, DismissalRecord> = {};
+    for (const [key, rec] of compoundDismissals) {
+      obj[key] = rec;
+    }
+    localStorage.setItem(DISMISSAL_STORAGE_KEY, JSON.stringify(obj));
+  } catch {
+    // localStorage full or unavailable
+  }
+}
+
+function domainComboKey(domains: string[]): string {
+  return [...domains].sort().join(',');
+}
+
+function isDismissSuppressed(domainKey: string): boolean {
+  const rec = compoundDismissals.get(domainKey);
+  if (!rec || rec.total < DISMISSAL_MIN_SAMPLES) return false;
+  return rec.dismissed / rec.total >= DISMISSAL_SUPPRESS_RATE;
+}
+
+loadDismissals();
+
+export function recordCompoundOutcome(anomalyId: string, dismissed: boolean): void {
+  const domainKey = compoundIdToDomainKey.get(anomalyId);
+  if (!domainKey) return;
+
+  let rec = compoundDismissals.get(domainKey);
+  if (!rec) {
+    rec = { total: 0, dismissed: 0 };
+    compoundDismissals.set(domainKey, rec);
+  }
+  rec.total++;
+  if (dismissed) rec.dismissed++;
+  saveDismissals();
+}
+
+export function getCompoundDismissalStats(): Map<string, DismissalRecord> {
+  return new Map(compoundDismissals);
+}
+
+export function resetCompoundDismissals(): void {
+  compoundDismissals.clear();
+  compoundIdToDomainKey.clear();
+  saveDismissals();
 }
 
 // ── Anomaly Detection Engine ──────────────────────────────────────────────────
@@ -395,7 +471,14 @@ class AnomalyDetectionEngine {
  list.push(a);
  }
 
- if (byDomain.size < MIN_COMPOUND_DOMAINS) return;
+ // Check if this domain combo is suppressed due to frequent dismissals
+ const domains = [...byDomain.keys()];
+ const dKey = domainComboKey(domains);
+ const requiredDomains = isDismissSuppressed(dKey)
+   ? MIN_COMPOUND_DOMAINS + 1
+   : MIN_COMPOUND_DOMAINS;
+
+ if (byDomain.size < requiredDomains) return;
 
  // Pick the highest-severity anomaly from each domain as the representative
  const constituents: Anomaly[] = [];
@@ -422,10 +505,12 @@ class AnomalyDetectionEngine {
  'info',
  );
  const avgZ = constituents.reduce((s, a) => s + Math.abs(a.zScore), 0) / constituents.length;
- const domains = [...byDomain.keys()];
+
+ const compoundId = generateId();
+ compoundIdToDomainKey.set(compoundId, dKey);
 
  this.emitAnomaly({
- id: generateId(),
+ id: compoundId,
  source: compoundSource,
  type: 'compound',
  severity: boostSeverity(maxSeverity),

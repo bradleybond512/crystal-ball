@@ -23,6 +23,16 @@ export interface TrackedVessel {
   /** True if this vessel appears on sanctions lists */
   sanctioned: boolean;
   sanctionSource?: string;
+  /** Speed in knots at last known position */
+  speed?: number;
+  /** Heading in degrees at last known position */
+  heading?: number;
+  /** Speed history (last 3 reports) for deceleration detection */
+  speedHistory: number[];
+  /** Was vessel decelerating before going dark? */
+  decelerating: boolean;
+  /** Was vessel heading toward a risk zone before going dark? */
+  headingTowardRiskZone: boolean;
 }
 
 export interface DarkVesselAlert {
@@ -41,6 +51,14 @@ export interface DarkVesselAlert {
   sanctioned: boolean;
   severity: 'low' | 'medium' | 'high' | 'critical';
   detectedAt: number;
+  /** Last known speed (knots) */
+  lastSpeed?: number;
+  /** Last known heading (degrees) */
+  lastHeading?: number;
+  /** Was decelerating before going dark */
+  wasDecelerating: boolean;
+  /** Was heading toward a risk zone before going dark */
+  wasHeadingTowardRiskZone: boolean;
 }
 
 // ── High-Risk Zones ──────────────────────────────────────────────────────────
@@ -87,6 +105,37 @@ function findRiskZone(lat: number, lon: number): string | null {
   return null;
 }
 
+// ── Behavior Analysis ────────────────────────────────────────────────────────
+
+const DEG2RAD = Math.PI / 180;
+const MAX_SPEED_HISTORY = 3;
+
+/** Check if vessel is heading toward any risk zone (within 30deg of bearing to zone). */
+function isHeadingTowardRiskZone(lat: number, lon: number, heading: number): boolean {
+  for (const zone of RISK_ZONES) {
+    const dLon = (zone.lon - lon) * DEG2RAD;
+    const lat1 = lat * DEG2RAD;
+    const lat2 = zone.lat * DEG2RAD;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    const bearing = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+    const diff = Math.abs(heading - bearing);
+    const angularDiff = diff > 180 ? 360 - diff : diff;
+    if (angularDiff <= 30) return true;
+  }
+  return false;
+}
+
+/** Check if speed history shows deceleration (each report slower than previous). */
+function isDecelerating(speedHistory: number[]): boolean {
+  if (speedHistory.length < 2) return false;
+  for (let i = 1; i < speedHistory.length; i++) {
+    if (speedHistory[i]! >= speedHistory[i - 1]!) return false;
+  }
+  // Require meaningful deceleration (at least 20% drop from first to last)
+  return speedHistory[speedHistory.length - 1]! < speedHistory[0]! * 0.8;
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 
 const vessels = new Map<string, TrackedVessel>();
@@ -104,8 +153,26 @@ export function updateVesselPosition(
   timestamp = Date.now(),
   sanctioned = false,
   sanctionSource?: string,
+  speed?: number,
+  heading?: number,
 ): void {
-  vessels.set(mmsi, { mmsi, name, flag, lat, lon, lastSeen: timestamp, sanctioned, sanctionSource });
+  const existing = vessels.get(mmsi);
+  const speedHistory = existing?.speedHistory ?? [];
+  if (speed !== undefined) {
+    speedHistory.push(speed);
+    if (speedHistory.length > MAX_SPEED_HISTORY) speedHistory.shift();
+  }
+
+  const headingToward = heading !== undefined ? isHeadingTowardRiskZone(lat, lon, heading) : false;
+
+  vessels.set(mmsi, {
+    mmsi, name, flag, lat, lon, lastSeen: timestamp,
+    sanctioned, sanctionSource,
+    speed, heading,
+    speedHistory,
+    decelerating: isDecelerating(speedHistory),
+    headingTowardRiskZone: headingToward,
+  });
 }
 
 export function markVesselSanctioned(mmsi: string, source: string): void {
@@ -137,6 +204,13 @@ export function detectDarkVessels(): DarkVesselAlert[] {
  else if (v.sanctioned || darkHours >= 48) severity = 'high';
  else if (darkHours >= 12) severity = 'medium';
 
+ // Behavior boost: deceleration or heading toward risk zone before going dark
+ if (severity !== 'critical' && (v.decelerating || v.headingTowardRiskZone)) {
+ const sevOrder: DarkVesselAlert['severity'][] = ['low', 'medium', 'high', 'critical'];
+ const idx = sevOrder.indexOf(severity);
+ severity = sevOrder[Math.min(idx + 1, sevOrder.length - 1)]!;
+ }
+
  alerts.push({
  id: `dark-${++idCounter}`,
  mmsi: v.mmsi,
@@ -150,6 +224,10 @@ export function detectDarkVessels(): DarkVesselAlert[] {
  sanctioned: v.sanctioned,
  severity,
  detectedAt: now,
+ lastSpeed: v.speed,
+ lastHeading: v.heading,
+ wasDecelerating: v.decelerating,
+ wasHeadingTowardRiskZone: v.headingTowardRiskZone,
  });
   }
 

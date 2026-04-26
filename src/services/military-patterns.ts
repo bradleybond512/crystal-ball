@@ -119,6 +119,56 @@ export const CONFLICT_PATTERNS: ConflictPattern[] = [
   },
 ];
 
+// ── Per-Theater Calibration ──
+// Theaters with naturally high military traffic need raised thresholds so
+// routine activity doesn't trigger the same alerts as a low-baseline theater.
+
+interface TheaterCalibration {
+  minAircraftMultiplier: number;
+  /** Score penalty applied after pattern scoring (0 = no penalty, 15 = needs 15% higher raw score) */
+  scorePenalty: number;
+  /** Shift percentage ranges outward — widens "normal" band so routine traffic scores lower */
+  pctRangeShift: number;
+}
+
+const DEFAULT_CALIBRATION: TheaterCalibration = {
+  minAircraftMultiplier: 1,
+  scorePenalty: 0,
+  pctRangeShift: 0,
+};
+
+const THEATER_CALIBRATIONS: Record<string, TheaterCalibration> = {
+  // Middle East theaters — high baseline traffic from persistent US CENTCOM presence
+  'iran-theater':        { minAircraftMultiplier: 1.8, scorePenalty: 12, pctRangeShift: 8 },
+  'middle-east':         { minAircraftMultiplier: 1.8, scorePenalty: 12, pctRangeShift: 8 },
+  'yemen-redsea-theater': { minAircraftMultiplier: 1.5, scorePenalty: 10, pctRangeShift: 6 },
+  'israel-gaza-theater': { minAircraftMultiplier: 1.5, scorePenalty: 10, pctRangeShift: 6 },
+  'east-med-theater':    { minAircraftMultiplier: 1.3, scorePenalty: 8, pctRangeShift: 4 },
+
+  // Pacific theaters — moderate baseline from forward-deployed forces
+  'pacific-west':        { minAircraftMultiplier: 1.4, scorePenalty: 8, pctRangeShift: 5 },
+  'taiwan-theater':      { minAircraftMultiplier: 1.3, scorePenalty: 6, pctRangeShift: 4 },
+  'korea-theater':       { minAircraftMultiplier: 1.4, scorePenalty: 8, pctRangeShift: 5 },
+  'south-china-sea':     { minAircraftMultiplier: 1.3, scorePenalty: 6, pctRangeShift: 4 },
+
+  // European theaters — lower baseline, more sensitive to changes
+  'europe-west':         { minAircraftMultiplier: 1.2, scorePenalty: 4, pctRangeShift: 2 },
+  'europe-east':         { minAircraftMultiplier: 1.1, scorePenalty: 2, pctRangeShift: 1 },
+  'baltic-theater':      { minAircraftMultiplier: 1.1, scorePenalty: 2, pctRangeShift: 1 },
+  'blacksea-theater':    { minAircraftMultiplier: 1.1, scorePenalty: 2, pctRangeShift: 1 },
+
+  // Horn of Africa — moderate persistent presence
+  'africa-horn':         { minAircraftMultiplier: 1.3, scorePenalty: 6, pctRangeShift: 3 },
+};
+
+function getCalibration(theaterId: string): TheaterCalibration {
+  return THEATER_CALIBRATIONS[theaterId] ?? DEFAULT_CALIBRATION;
+}
+
+function calibratedRange(range: [number, number], shift: number): [number, number] {
+  return [Math.max(0, range[0] - shift), Math.min(100, range[1] + shift)];
+}
+
 // ── Matching Logic ──
 
 function pctScore(actual: number, range: [number, number]): number {
@@ -167,15 +217,16 @@ function scorePattern(
 ): number {
   const total = posture.totalAircraft;
   const sig = pattern.signature;
+  const cal = getCalibration(posture.theaterId);
   const breakdown: Record<string, number> = { strikeCapable: 0, awacs: 0, multiOperator: 0 };
 
   const fighterPct = total > 0 ? (posture.fighters / total) * 100 : 0;
   const tankerPct = total > 0 ? (posture.tankers / total) * 100 : 0;
   const transportPct = total > 0 ? (posture.transport / total) * 100 : 0;
 
-  breakdown.fighterPct = pctScore(fighterPct, sig.fighterPct);
-  breakdown.tankerPct = pctScore(tankerPct, sig.tankerPct);
-  breakdown.transportPct = pctScore(transportPct, sig.transportPct);
+  breakdown.fighterPct = pctScore(fighterPct, calibratedRange(sig.fighterPct, cal.pctRangeShift));
+  breakdown.tankerPct = pctScore(tankerPct, calibratedRange(sig.tankerPct, cal.pctRangeShift));
+  breakdown.transportPct = pctScore(transportPct, calibratedRange(sig.transportPct, cal.pctRangeShift));
 
   if (!scoreRequiredFlags(pattern, posture, surges, breakdown)) return -1;
 
@@ -190,7 +241,8 @@ function scorePattern(
   const maxPoints = 60 + 30
     + (breakdown.rapidSurge === undefined ? 0 : 10)
     + (breakdown.reconDominance === undefined ? 0 : 10);
-  return Math.round((totalPoints / maxPoints) * 100);
+  const rawScore = Math.round((totalPoints / maxPoints) * 100);
+  return Math.max(0, rawScore - cal.scorePenalty);
 }
 
 function buildBreakdown(
@@ -200,6 +252,7 @@ function buildBreakdown(
 ): Record<string, number> {
   const total = posture.totalAircraft;
   const sig = pattern.signature;
+  const cal = getCalibration(posture.theaterId);
   const breakdown: Record<string, number> = {
     strikeCapable: 0,
     awacs: 0,
@@ -210,9 +263,9 @@ function buildBreakdown(
   const tankerPct = total > 0 ? (posture.tankers / total) * 100 : 0;
   const transportPct = total > 0 ? (posture.transport / total) * 100 : 0;
 
-  breakdown.fighterPct = pctScore(fighterPct, sig.fighterPct);
-  breakdown.tankerPct = pctScore(tankerPct, sig.tankerPct);
-  breakdown.transportPct = pctScore(transportPct, sig.transportPct);
+  breakdown.fighterPct = pctScore(fighterPct, calibratedRange(sig.fighterPct, cal.pctRangeShift));
+  breakdown.tankerPct = pctScore(tankerPct, calibratedRange(sig.tankerPct, cal.pctRangeShift));
+  breakdown.transportPct = pctScore(transportPct, calibratedRange(sig.transportPct, cal.pctRangeShift));
   scoreRequiredFlags(pattern, posture, surges, breakdown);
 
   if (pattern.id === 'recon-surge') {
@@ -230,8 +283,10 @@ export function matchPatterns(
   const total = posture.totalAircraft;
   const results: PatternMatch[] = [];
 
+  const cal = getCalibration(posture.theaterId);
+
   for (const pattern of CONFLICT_PATTERNS) {
-    if (total < pattern.signature.minAircraft) continue;
+    if (total < Math.ceil(pattern.signature.minAircraft * cal.minAircraftMultiplier)) continue;
     const matchScore = scorePattern(pattern, posture, surges);
     if (matchScore < 60) continue;
     results.push({

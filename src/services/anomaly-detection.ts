@@ -14,7 +14,7 @@
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type AnomalyType = 'spike' | 'silence' | 'reversal' | 'deviation';
+export type AnomalyType = 'spike' | 'silence' | 'reversal' | 'deviation' | 'compound';
 export type AnomalySeverity = 'info' | 'warning' | 'critical';
 
 export interface Anomaly {
@@ -28,6 +28,8 @@ export interface Anomaly {
   zScore: number;
   timestamp: number;
   description: string;
+  /** Constituent anomalies when type === 'compound' */
+  constituents?: Anomaly[];
 }
 
 interface Observation {
@@ -53,6 +55,8 @@ const BURST_MULTIPLIER = 10;
 const SILENCE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours without update = silence
 const MIN_OBSERVATIONS = 5; // need at least this many for meaningful stats
 const REVERSAL_Z_THRESHOLD = 1.5; // Lower threshold for reversals — inherently notable
+const COMPOUND_WINDOW_MS = 30 * 60 * 1000; // 30 minutes — temporal convergence window
+const MIN_COMPOUND_DOMAINS = 2; // need anomalies from at least 2 different domains
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 
@@ -89,6 +93,19 @@ function classifySeverity(zScore: number, type: AnomalyType): AnomalySeverity {
   return 'info';
 }
 
+/** Extract the domain prefix from a source string (e.g., 'weather' from 'weather:alert-count'). */
+function extractDomain(source: string): string {
+  const colonIdx = source.indexOf(':');
+  return colonIdx > 0 ? source.slice(0, colonIdx) : source;
+}
+
+/** Boost severity one level: info → warning, warning → critical, critical stays critical. */
+function boostSeverity(severity: AnomalySeverity): AnomalySeverity {
+  if (severity === 'info') return 'warning';
+  if (severity === 'warning') return 'critical';
+  return 'critical';
+}
+
 /** Determine trend direction from value comparison. */
 function computeDirection(current: number, previous: number): 'up' | 'down' | 'flat' {
   if (current > previous) return 'up';
@@ -104,6 +121,8 @@ class AnomalyDetectionEngine {
   private history: Anomaly[] = [];
   private subscribers = new Set<(anomaly: Anomaly) => void>();
   private windowMs: number;
+  /** Recent anomalies per domain for cross-signal convergence detection. */
+  private compoundBuffer: Anomaly[] = [];
 
   constructor(windowMs = DEFAULT_WINDOW_MS) {
  this.windowMs = windowMs;
@@ -194,6 +213,7 @@ class AnomalyDetectionEngine {
  this.sources.clear();
  this.activeAnomalies = [];
  this.history = [];
+ this.compoundBuffer = [];
  this.saveHistory();
   }
 
@@ -349,6 +369,76 @@ class AnomalyDetectionEngine {
  });
   }
 
+  /**
+   * Cross-signal convergence: after each anomaly, check if 2+ different
+   * domains have fired anomalies within the COMPOUND_WINDOW_MS window.
+   * If so, emit a compound anomaly with boosted severity.
+   */
+  private checkCrossSignalConvergence(trigger: Anomaly): void {
+ const cutoff = trigger.timestamp - COMPOUND_WINDOW_MS;
+
+ // Prune stale entries from the buffer
+ this.compoundBuffer = this.compoundBuffer.filter(a => a.timestamp >= cutoff);
+
+ // Add the triggering anomaly
+ this.compoundBuffer.push(trigger);
+
+ // Group buffered anomalies by domain
+ const byDomain = new Map<string, Anomaly[]>();
+ for (const a of this.compoundBuffer) {
+ const domain = extractDomain(a.source);
+ let list = byDomain.get(domain);
+ if (!list) {
+ list = [];
+ byDomain.set(domain, list);
+ }
+ list.push(a);
+ }
+
+ if (byDomain.size < MIN_COMPOUND_DOMAINS) return;
+
+ // Pick the highest-severity anomaly from each domain as the representative
+ const constituents: Anomaly[] = [];
+ const severityRank: Record<AnomalySeverity, number> = { critical: 2, warning: 1, info: 0 };
+ for (const domainAnomalies of byDomain.values()) {
+ const best = domainAnomalies.reduce((a, b) =>
+ severityRank[b.severity] > severityRank[a.severity] ? b : a,
+ domainAnomalies[0]!,
+ );
+ constituents.push(best);
+ }
+
+ // Deduplicate: don't emit compound for the same domain set within 30 minutes
+ const domainKey = [...byDomain.keys()].sort().join('+');
+ const compoundSource = `compound:${domainKey}`;
+ const recentCompound = this.activeAnomalies.find(
+ a => a.type === 'compound' && a.source === compoundSource && a.timestamp >= cutoff,
+ );
+ if (recentCompound) return;
+
+ // Boost the highest constituent severity
+ const maxSeverity = constituents.reduce<AnomalySeverity>(
+ (best, a) => (severityRank[a.severity] > severityRank[best] ? a.severity : best),
+ 'info',
+ );
+ const avgZ = constituents.reduce((s, a) => s + Math.abs(a.zScore), 0) / constituents.length;
+ const domains = [...byDomain.keys()];
+
+ this.emitAnomaly({
+ id: generateId(),
+ source: compoundSource,
+ type: 'compound',
+ severity: boostSeverity(maxSeverity),
+ value: constituents.length,
+ expectedMin: 0,
+ expectedMax: 1,
+ zScore: avgZ,
+ timestamp: trigger.timestamp,
+ description: `Cross-signal convergence: ${domains.join(', ')} domains fired anomalies within ${COMPOUND_WINDOW_MS / 60_000}min (${constituents.length} signals)`,
+ constituents,
+ });
+  }
+
   private emitAnomaly(anomaly: Anomaly): void {
  // Deduplicate: don't emit same source+type within 5 minutes
  const recentCutoff = anomaly.timestamp - 5 * 60 * 1000;
@@ -381,6 +471,11 @@ class AnomalyDetectionEngine {
  document.dispatchEvent(new CustomEvent('wm:anomaly-detected', { detail: anomaly }));
  } catch {
  // SSR or test environment — no document
+ }
+
+ // Check cross-signal convergence (skip for compound to avoid recursion)
+ if (anomaly.type !== 'compound') {
+ this.checkCrossSignalConvergence(anomaly);
  }
   }
 

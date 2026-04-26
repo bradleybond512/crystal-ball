@@ -17,6 +17,7 @@ const TYPE_ICONS: Record<AnomalyType, string> = {
   silence: '\uD83D\uDD07',  // 🔇
   reversal: '\uD83D\uDD04', // 🔄
   deviation: '\uD83D\uDCC9', // 📉
+  compound: '\u26A0\uFE0F', // ⚠️
 };
 
 const SEVERITY_CLASSES: Record<AnomalySeverity, string> = {

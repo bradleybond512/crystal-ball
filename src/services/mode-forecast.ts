@@ -145,6 +145,10 @@ const pressure: Record<ForecastDomain, number> = {
 const previousPressure: Record<ForecastDomain, number> = {
   finance: 0, security: 0, disaster: 0, cyber: 0,
 };
+/** Previous slope per domain — for computing acceleration (second derivative). */
+const previousSlope: Record<ForecastDomain, number> = {
+  finance: 0, security: 0, disaster: 0, cyber: 0,
+};
 const advised = new Set<ForecastDomain>();
 
 function updateEwma(domain: ForecastDomain, raw: number): number {
@@ -154,15 +158,41 @@ function updateEwma(domain: ForecastDomain, raw: number): number {
   return next;
 }
 
-function etaToThreshold(current: number, slope: number, threshold: number): number | null {
+/** Solve quadratic for smallest positive root. Returns cycles or null. */
+function quadraticEtaCycles(slope: number, acceleration: number, gap: number): number | null {
+  const a = 0.5 * acceleration;
+  const discriminant = slope * slope + 4 * a * gap;
+  if (discriminant < 0) return slope > 0 ? gap / slope : null;
+  const sqrtD = Math.sqrt(discriminant);
+  const t1 = (-slope + sqrtD) / (2 * a);
+  const t2 = (-slope - sqrtD) / (2 * a);
+  const posRoots = [t1, t2].filter(t => t > 0 && Number.isFinite(t));
+  return posRoots.length > 0 ? Math.min(...posRoots) : null;
+}
+
+function cyclesToMinutes(cycles: number): number | null {
+  const minutes = (cycles * BASE_INTERVAL_MS) / 60_000;
+  return minutes <= 120 ? Math.round(minutes) : null;
+}
+
+/**
+ * Non-linear ETA: accounts for pressure acceleration (second derivative).
+ * If accelerating, shorten ETA; if decelerating, extend it.
+ * Uses quadratic extrapolation: p(t) = current + slope*t + 0.5*accel*t²
+ */
+function etaToThreshold(current: number, slope: number, acceleration: number, threshold: number): number | null {
   if (current >= threshold) return null;
+  if (slope <= 0 && acceleration <= 0) return null;
+
+  const gap = threshold - current;
+
+  if (Math.abs(acceleration) > 0.001) {
+    const cycles = quadraticEtaCycles(slope, acceleration, gap);
+    return cycles === null ? null : cyclesToMinutes(cycles);
+  }
+
   if (slope <= 0) return null;
-  // Each cycle is BASE_INTERVAL_MS; extrapolate linearly.
-  const cyclesNeeded = (threshold - current) / slope;
-  if (!Number.isFinite(cyclesNeeded) || cyclesNeeded < 0) return null;
-  const minutes = (cyclesNeeded * BASE_INTERVAL_MS) / 60_000;
-  if (minutes > 120) return null; // don't project absurdly far out
-  return Math.round(minutes);
+  return cyclesToMinutes(gap / slope);
 }
 
 function trendLabel(slope: number): string {
@@ -208,6 +238,8 @@ export function runForecastCycle(): ForecastSnapshot {
     const raw = computeRawPressure(d, situations);
     const level = updateEwma(d, raw);
     const slope = level - previousPressure[d];
+    const acceleration = slope - previousSlope[d];
+    previousSlope[d] = slope;
 
     const wasAdvised = advised.has(d);
     // Fixed-threshold check (existing behavior).
@@ -225,7 +257,7 @@ export function runForecastCycle(): ForecastSnapshot {
 
     if (nowAdvised) {
       advised.add(d);
-      const eta = etaToThreshold(level, slope, ADVISORY_THRESHOLD);
+      const eta = etaToThreshold(level, slope, acceleration, ADVISORY_THRESHOLD);
       advisories.push({
         domain: d,
         pressure: level,

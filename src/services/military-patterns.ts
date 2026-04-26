@@ -169,6 +169,77 @@ function calibratedRange(range: [number, number], shift: number): [number, numbe
   return [Math.max(0, range[0] - shift), Math.min(100, range[1] + shift)];
 }
 
+// ── Cry-Wolf Score Decay ──
+// When a pattern fires repeatedly in the same theater without escalation,
+// decay its score to reduce alert fatigue.
+
+interface PatternFireEntry {
+  fireCount: number;
+  lastFired: number;
+  escalated: boolean;
+}
+
+const FIRE_HISTORY_KEY = 'crystalball-pattern-fire-history-v1';
+const FIRE_HISTORY_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+const patternFireHistory = new Map<string, PatternFireEntry>();
+
+function loadFireHistory(): void {
+  try {
+    const raw = localStorage.getItem(FIRE_HISTORY_KEY);
+    if (!raw) return;
+    const entries = JSON.parse(raw) as [string, PatternFireEntry][];
+    const now = Date.now();
+    patternFireHistory.clear();
+    for (const [key, entry] of entries) {
+      if (now - entry.lastFired < FIRE_HISTORY_TTL) {
+        patternFireHistory.set(key, entry);
+      }
+    }
+  } catch { /* corrupt data — start fresh */ }
+}
+
+function saveFireHistory(): void {
+  const now = Date.now();
+  const entries: [string, PatternFireEntry][] = [];
+  for (const [key, entry] of patternFireHistory) {
+    if (now - entry.lastFired < FIRE_HISTORY_TTL) {
+      entries.push([key, entry]);
+    }
+  }
+  localStorage.setItem(FIRE_HISTORY_KEY, JSON.stringify(entries));
+}
+
+loadFireHistory();
+
+export function recordPatternFire(patternId: string, theaterId: string): void {
+  const key = `${patternId}-${theaterId}`;
+  const existing = patternFireHistory.get(key);
+  if (existing) {
+    existing.fireCount++;
+    existing.lastFired = Date.now();
+  } else {
+    patternFireHistory.set(key, { fireCount: 1, lastFired: Date.now(), escalated: false });
+  }
+  saveFireHistory();
+}
+
+export function recordEscalation(theaterId: string): void {
+  for (const [key, entry] of patternFireHistory) {
+    if (key.endsWith(`-${theaterId}`)) {
+      entry.escalated = true;
+      entry.fireCount = 1;
+    }
+  }
+  saveFireHistory();
+}
+
+function getCryWolfDecay(patternId: string, theaterId: string): number {
+  const entry = patternFireHistory.get(`${patternId}-${theaterId}`);
+  if (!entry || entry.escalated || entry.fireCount <= 1) return 1;
+  return Math.max(0.3, 1 - (entry.fireCount - 1) * 0.15);
+}
+
 // ── Matching Logic ──
 
 function pctScore(actual: number, range: [number, number]): number {
@@ -287,7 +358,10 @@ export function matchPatterns(
 
   for (const pattern of CONFLICT_PATTERNS) {
     if (total < Math.ceil(pattern.signature.minAircraft * cal.minAircraftMultiplier)) continue;
-    const matchScore = scorePattern(pattern, posture, surges);
+    const rawScore = scorePattern(pattern, posture, surges);
+    if (rawScore < 0) continue;
+    const decay = getCryWolfDecay(pattern.id, posture.theaterId);
+    const matchScore = Math.round(rawScore * decay);
     if (matchScore < 60) continue;
     results.push({
       patternId: pattern.id,

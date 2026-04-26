@@ -10,6 +10,7 @@ import type { PanelConfig } from '@/types';
 import { RuntimeConfigPanel } from './RuntimeConfigPanel';
 import type { StatusPanel } from './StatusPanel';
 import { isYouTubeConnected, signInToYouTube, signOutOfYouTube, initYouTubeAccountListeners } from '@/services/youtube-account';
+import { getImessageSettings, saveImessageSettings, sendImessage, type ImessageThreshold } from '@/services/imessage-bridge';
 import { getApiBaseUrl } from '@/services/runtime';
 import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import {
@@ -261,6 +262,23 @@ export class UnifiedSettings {
  return;
  }
 
+ // iMessage relay test send + threshold change handled elsewhere.
+ if (target.id === 'us-imessage-test') {
+ const recipient = (this.overlay.querySelector<HTMLInputElement>('#us-imessage-recipient')?.value ?? '').trim();
+ const statusEl = this.overlay.querySelector<HTMLElement>('#us-imessage-status');
+ if (!recipient) {
+ if (statusEl) statusEl.textContent = 'Enter a recipient first.';
+ return;
+ }
+ if (statusEl) statusEl.textContent = 'Sending…';
+ const btn = target as HTMLButtonElement;
+ btn.disabled = true;
+ void sendImessage(recipient, 'Crystal Ball test message — alert routing is wired up.').then((result) => {
+ if (statusEl) statusEl.textContent = result.ok ? 'Sent.' : `Failed: ${result.reason ?? 'unknown error'}`;
+ }).finally(() => { btn.disabled = false; });
+ return;
+ }
+
  // Places tab actions
  const placesAction = target.closest<HTMLElement>('[data-places-action]')?.dataset.placesAction;
  if (placesAction) {
@@ -373,6 +391,16 @@ export class UnifiedSettings {
  localStorage.setItem('wm-debug-log', target.checked ? '1' : '0');
  } else if (target.id === 'us-auto-refresh') {
  if (target.checked) this._startDebugAutoRefresh(); else this._stopDebugAutoRefresh();
+ } else if (target.id === 'us-imessage-enabled') {
+ const cur = getImessageSettings();
+ saveImessageSettings({ ...cur, enabled: target.checked });
+ } else if (target.id === 'us-imessage-recipient') {
+ const cur = getImessageSettings();
+ saveImessageSettings({ ...cur, recipient: target.value });
+ } else if (target.id === 'us-imessage-threshold') {
+ const cur = getImessageSettings();
+ const next = target.value === 'high+critical' ? 'high+critical' : 'critical';
+ saveImessageSettings({ ...cur, threshold: next as ImessageThreshold });
  }
  });
 
@@ -663,6 +691,34 @@ export class UnifiedSettings {
  <div class="ai-flow-toggle-desc">${this.config.isDesktopApp ? desktopCopy : webCopy}</div>
  </div>
  <div class="yt-account-status">${this._renderYtStatus(connected)}</div>
+ </div>`;
+ }
+
+ // iMessage relay (macOS desktop only — Apple has no API for the web)
+ if (this.config.isDesktopApp) {
+ const im = getImessageSettings();
+ const recipientVal = escapeHtml(im.recipient);
+ const checkedAttr = im.enabled ? 'checked' : '';
+ const critSel = im.threshold === 'critical' ? ' selected' : '';
+ const highSel = im.threshold === 'high+critical' ? ' selected' : '';
+ html += `<div class="ai-flow-section-label">iMessage alerts</div>`;
+ html += `<div class="ai-flow-toggle-row imessage-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+ <div class="ai-flow-toggle-label-wrap" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+ <div>
+ <div class="ai-flow-toggle-label">Route critical alerts to iMessage</div>
+ <div class="ai-flow-toggle-desc">Sends through your signed-in macOS Messages app. Rate-limited to 1 per 30s. Requires the Messages app to be open and signed in.</div>
+ </div>
+ <label class="ai-flow-switch"><input type="checkbox" id="us-imessage-enabled" ${checkedAttr}><span></span></label>
+ </div>
+ <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%;">
+ <input id="us-imessage-recipient" type="text" placeholder="Phone, email, or contact name" value="${recipientVal}" style="flex:1 1 220px;min-width:160px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <select id="us-imessage-threshold" style="padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <option value="critical"${critSel}>Critical only</option>
+ <option value="high+critical"${highSel}>High + Critical</option>
+ </select>
+ <button type="button" id="us-imessage-test" class="yt-account-btn connect" style="min-width:60px">Test</button>
+ <span id="us-imessage-status" style="font-size:11px;color:var(--text-muted);min-height:14px;"></span>
+ </div>
  </div>`;
  }
 

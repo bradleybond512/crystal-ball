@@ -3,6 +3,7 @@ import type { BreakingAlert } from '@/services/breaking-news-alerts';
 import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { getAlertSettings } from '@/services/breaking-news-alerts';
 import { isGhostMode } from '@/services/mode-manager';
+import { getImessageSettings, sendImessage } from '@/services/imessage-bridge';
 
 /**
  * Routes breaking alerts to native macOS notifications on desktop (osascript
@@ -37,6 +38,7 @@ export class DesktopNotifications implements AppModule {
  document.removeEventListener('wm:breaking-news', this.boundHandler);
   }
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- threshold gating + native + web + iMessage paths inline
   private async onBreakingNews(alert: BreakingAlert): Promise<void> {
  if (isGhostMode()) return;  // Ghost Mode: notifications suppressed
  const settings = getAlertSettings();
@@ -51,6 +53,22 @@ export class DesktopNotifications implements AppModule {
  body,
  sound,
  });
+ // Best-effort iMessage routing if the user has it configured. Threshold
+ // gating happens here so we never wake the user's phone for a 'high' if
+ // they only opted into 'critical'.
+ const imSettings = getImessageSettings();
+ if (imSettings.enabled && imSettings.recipient) {
+ const meetsThreshold = imSettings.threshold === 'critical'
+ ? alert.threatLevel === 'critical'
+ : alert.threatLevel === 'critical' || alert.threatLevel === 'high';
+ if (meetsThreshold) {
+ const result = await sendImessage(imSettings.recipient, `Crystal Ball: ${body}`);
+ if (!result.ok) {
+ // eslint-disable-next-line no-console -- best-effort relay; user-actionable failure
+ console.warn('[imessage] alert relay failed', result.reason);
+ }
+ }
+ }
  return;
  }
 

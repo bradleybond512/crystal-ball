@@ -918,6 +918,75 @@ fn send_notification(webview: Webview, title: String, body: String, sound: Optio
  }
 }
 
+/// Send an iMessage / SMS to a contact via the user's signed-in macOS Messages
+/// app. No-op on non-macOS. Reuses the same sanitization, length-cap, and
+/// trusted-window pattern as send_notification — recipient and body are
+/// stripped of AppleScript-meaningful characters before interpolation, so a
+/// hostile body string can't escape the quoted literal and run extra
+/// statements.
+///
+/// Rate-limited to 1 message per 30 seconds (shared with the notification
+/// limiter) so a runaway alert source can't burn through the user's Messages.
+#[tauri::command]
+fn send_imessage(webview: Webview, recipient: String, body: String) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
+ #[cfg(not(target_os = "macos"))]
+ {
+ let _ = (recipient, body);
+ return Err("iMessage is only available on macOS".to_string());
+ }
+ #[cfg(target_os = "macos")]
+ {
+ {
+ let mut last = NOTIFICATION_LAST_SENT.lock().unwrap_or_else(|p| p.into_inner());
+ if let Some(t) = *last {
+ if t.elapsed() < NOTIFICATION_RATE_LIMIT {
+ return Err("Rate limit: too soon since the last alert".to_string());
+ }
+ }
+ *last = Some(Instant::now());
+ }
+
+ let recipient = truncate_to_bytes(&recipient, 64);
+ let body = truncate_to_bytes(&body, 512);
+ if recipient.trim().is_empty() {
+ return Err("Recipient is required".to_string());
+ }
+ if body.trim().is_empty() {
+ return Err("Message body is required".to_string());
+ }
+
+ let sanitize = |s: &str| -> String {
+ s.chars()
+ .filter(|c| !matches!(c, '"' | '\\' | '\n' | '\r' | '\x00'..='\x1f'))
+ .collect()
+ };
+ let safe_recipient = sanitize(&recipient);
+ let safe_body = sanitize(&body);
+
+ // Use the iMessage service explicitly — falls back gracefully if the
+ // recipient is only reachable via SMS by erroring inside Messages.
+ let script = format!(
+ r#"tell application "Messages"
+  set targetService to 1st service whose service type = iMessage
+  set targetBuddy to buddy "{safe_recipient}" of targetService
+  send "{safe_body}" to targetBuddy
+end tell"#
+ );
+
+ let status = Command::new("osascript")
+ .args(["-e", &script])
+ .stdout(Stdio::null())
+ .stderr(Stdio::null())
+ .status()
+ .map_err(|e| format!("osascript spawn failed: {e}"))?;
+ if !status.success() {
+ return Err("Messages app rejected the send (recipient unreachable, not signed in, or blocked)".to_string());
+ }
+ Ok(())
+ }
+}
+
 /// Download a macOS DMG release, mount it, copy the app bundle to /Applications, and relaunch.
 /// On non-macOS platforms returns an error immediately (no-op — only called on macOS).
 #[cfg(target_os = "macos")]
@@ -2205,6 +2274,7 @@ fn main() {
  open_youtube_logout,
  fetch_polymarket,
  send_notification,
+ send_imessage,
  install_update,
  update_mode_label
  ])

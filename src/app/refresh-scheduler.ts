@@ -98,7 +98,7 @@ export class RefreshScheduler implements AppModule {
  const elapsed = performance.now() - refreshStart;
  // eslint-disable-next-line no-console
  console.error(`[App] Refresh ${name} failed after ${Math.round(elapsed)}ms:`, error);
- currentMultiplier = 1;
+ currentMultiplier = Math.min(currentMultiplier * 2, MAX_BACKOFF_MULTIPLIER);
  } finally {
  this.ctx.inFlight.delete(name);
  scheduleNext(computeDelay(intervalMs * currentMultiplier, isHidden));

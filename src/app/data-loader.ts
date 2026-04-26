@@ -2803,7 +2803,6 @@ export class DataLoaderManager implements AppModule {
  ]);
 
  if (status.locationsMonitored === 0) {
- this.ctx.pizzintIndicator?.hide();
  this.ctx.statusPanel?.updateApi('PizzINT', { status: 'error' });
  dataFreshness.recordError('pizzint', 'No monitored locations returned');
  return;
@@ -2816,7 +2815,6 @@ export class DataLoaderManager implements AppModule {
  dataFreshness.recordUpdate('pizzint', Math.max(status.locationsMonitored, tensions.length));
  } catch (error) {
  console.error('[App] PizzINT load failed:', error);
- this.ctx.pizzintIndicator?.hide();
  this.ctx.statusPanel?.updateApi('PizzINT', { status: 'error' });
  dataFreshness.recordError('pizzint', String(error));
  }

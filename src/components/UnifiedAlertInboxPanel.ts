@@ -73,7 +73,7 @@ export class UnifiedAlertInboxPanel extends Panel {
   private sortMode: SortMode = 'relevance';
   private filterShow: FilterShow = 'unread';
   private filterSources: Set<AlertSource> | null = null; // null = all
-  private filterMinSeverity: AlertSeverity = 'info';
+  private filterMinSeverity: AlertSeverity = 'low';
   private filterEntityIds: Set<string> | null = null;
   private nearMeActive: boolean;
   private nearMeRadiusMi: number;
@@ -294,7 +294,7 @@ export class UnifiedAlertInboxPanel extends Panel {
  return false;
   }
 
-  /** Handle per-alert actions: ack, pin, evidence drawer. */
+  /** Handle per-alert actions: ack, pin, evidence drawer, row click. */
   private handleAlertActionClick(e: Event, target: HTMLElement): boolean {
  const ackBtn = target.closest('[data-ack]') as HTMLElement | null;
  if (ackBtn) {
@@ -323,6 +323,38 @@ export class UnifiedAlertInboxPanel extends Panel {
  subtitle: alert.body,
  evidence: alert.evidence,
  });
+ return true;
+ }
+
+ // Row click: open link or show evidence drawer
+ const row = target.closest('tr[data-alert-index]') as HTMLElement | null;
+ if (row) {
+ const idx = Number.parseInt(row.dataset.alertIndex!, 10);
+ const alerts = this.getFilteredAlerts();
+ const deduped = this.dedupByEntity(alerts);
+ const group = deduped[idx];
+ if (!group) return false;
+ const alert = group.leader;
+
+ // If alert has a link, open it
+ const safeLink = alert.link?.startsWith('https://') ? alert.link : null;
+ if (safeLink) {
+ window.open(safeLink, '_blank', 'noopener,noreferrer');
+ return true;
+ }
+
+ // Otherwise show evidence drawer if available
+ if (alert.evidence) {
+ this.evidenceDrawer.show({
+   title: alert.title,
+   subtitle: alert.body,
+   evidence: alert.evidence,
+ });
+ return true;
+ }
+
+ // Toggle expanded body for alerts with no link or evidence
+ row.classList.toggle('uai-expanded');
  return true;
  }
 

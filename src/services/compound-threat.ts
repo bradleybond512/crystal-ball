@@ -44,7 +44,15 @@ export interface HazardSignal {
   lon: number;
   label: string;
   sourceService: string;
+  magnitude?: number;
 }
+
+const SEVERITY_WEIGHT: Record<HazardSignal['severity'], number> = {
+  critical: 1,
+  high: 0.7,
+  medium: 0.4,
+  low: 0.15,
+};
 
 export interface CompoundThreat {
   id: string;
@@ -178,23 +186,44 @@ const COMPOUND_RISK_PATTERNS: {
   },
 ];
 
-function findMatchingPattern(categories: HazardCategory[]): string {
+function findMatchingPattern(categories: HazardCategory[]): { description: string; severityBoost: boolean } {
   const catSet = new Set(categories);
   for (const pattern of COMPOUND_RISK_PATTERNS) {
- if (pattern.categories.every(c => catSet.has(c))) return pattern.description;
+ if (pattern.categories.every(c => catSet.has(c))) {
+   return { description: pattern.description, severityBoost: pattern.severityBoost };
+ }
   }
-  return `${categories.length} simultaneous hazard types in this area`;
+  return { description: `${categories.length} simultaneous hazard types in this area`, severityBoost: false };
 }
 
 function computeCompoundSeverity(
   signals: HazardSignal[],
-  hazardCount: number
+  categories: HazardCategory[],
+  severityBoost: boolean
 ): CompoundThreat['overallSeverity'] {
-  const hasCritical = signals.some(s => s.severity === 'critical');
-  const hasHigh = signals.some(s => s.severity === 'high');
-  if (hasCritical && hazardCount >= 2) return 'critical';
-  if (hasCritical || (hasHigh && hazardCount >= 3)) return 'critical';
-  if (hasHigh || hazardCount >= 4) return 'high';
+  // Aggregate weighted severity per category, using the max-severity signal
+  // in each category rather than binary presence.
+  const categoryMaxWeight = new Map<HazardCategory, number>();
+  for (const s of signals) {
+ const w = SEVERITY_WEIGHT[s.severity] * (s.magnitude ?? 1);
+ const cur = categoryMaxWeight.get(s.category) ?? 0;
+ if (w > cur) categoryMaxWeight.set(s.category, w);
+  }
+
+  // Sum of per-category max weights — a compound threat with two critical
+  // categories scores ~2.0, while two medium categories scores ~0.8.
+  let score = 0;
+  for (const w of categoryMaxWeight.values()) score += w;
+
+  // Category diversity multiplier: each additional category beyond the
+  // first amplifies the compound danger (3 categories → ×1.3, 4 → ×1.6).
+  score *= 1 + (categories.length - 1) * 0.15;
+
+  // Known-dangerous compound pairing boost
+  if (severityBoost) score *= 1.25;
+
+  if (score >= 2) return 'critical';
+  if (score >= 1.2) return 'high';
   return 'medium';
 }
 
@@ -240,7 +269,8 @@ export function detectCompoundThreats(signals: HazardSignal[]): CompoundThreat[]
  const lat = cluster.reduce((sum, s) => sum + s.lat, 0) / cluster.length;
  const lon = cluster.reduce((sum, s) => sum + s.lon, 0) / cluster.length;
 
- const severity = computeCompoundSeverity(cluster, categories.length);
+ const pattern = findMatchingPattern(categories);
+ const severity = computeCompoundSeverity(cluster, categories, pattern.severityBoost);
 
  threats.push({
  id: `compound-${centerId}-${Date.now()}`,
@@ -251,7 +281,7 @@ export function detectCompoundThreats(signals: HazardSignal[]): CompoundThreat[]
  hazardCount: categories.length,
  hazardCategories: categories,
  overallSeverity: severity,
- description: findMatchingPattern(categories),
+ description: pattern.description,
  detectedAt: new Date(),
  });
   }
@@ -277,7 +307,10 @@ export function toHazardSignal(
   lat: number,
   lon: number,
   label: string,
-  sourceService: string
+  sourceService: string,
+  magnitude?: number
 ): HazardSignal {
-  return { id, category, severity, lat, lon, label, sourceService };
+  const signal: HazardSignal = { id, category, severity, lat, lon, label, sourceService };
+  if (magnitude !== undefined) signal.magnitude = magnitude;
+  return signal;
 }

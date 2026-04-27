@@ -143,6 +143,8 @@ import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { fetchAirstrikes } from '@/services/airstrikes';
 import { updateFromFlights } from '@/services/strike-packages';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
+import { DodContractsPanel } from '@/components/DodContractsPanel';
+import { fetchDodContracts } from '@/services/dod-contracts';
 import { fetchS2Underground } from '@/services/s2-underground';
 import { fetchThreatFoxIOCs, fetchOpenPhishFeed, fetchSpamhausDrop, fetchCisaKev, fetchOtxIOCs, fetchPhishStatsFeed } from '@/services/cyber-extra';
 // Space, disease, and humanitarian loaders live in ./loaders/ — no direct imports here.
@@ -477,6 +479,7 @@ export class DataLoaderManager implements AppModule {
  tasks.push({ name: 'fred', task: () => runGuarded('fred', () => this.loadFredData()) });
  tasks.push({ name: 'oil', task: () => runGuarded('oil', () => this.loadOilAnalytics()) });
  tasks.push({ name: 'spending', task: () => runGuarded('spending', () => this.loadGovernmentSpending()) });
+ tasks.push({ name: 'dod-contracts', task: () => runGuarded('dod-contracts', () => this.loadDodContracts()) });
  tasks.push({ name: 'bis', task: () => runGuarded('bis', () => this.loadBisData()) });
 
  // Trade policy data (FULL and FINANCE only)
@@ -2593,6 +2596,21 @@ export class DataLoaderManager implements AppModule {
  console.error('[App] Government spending failed:', error);
  this.ctx.statusPanel?.updateApi('USASpending', { status: 'error' });
  dataFreshness.recordError('spending', String(error));
+ }
+  }
+
+  async loadDodContracts(): Promise<void> {
+ const panel = this.ctx.panels['dod-contracts'] as DodContractsPanel | undefined;
+ try {
+ const snap = await fetchDodContracts({ days: 7, limit: 20 });
+ panel?.update(snap);
+ if (snap.awards.length > 0) {
+ dataFreshness.recordUpdate('dod-contracts', snap.awards.length);
+ } else {
+ dataFreshness.recordError('dod-contracts', 'no awards in window');
+ }
+ } catch (error) {
+ dataFreshness.recordError('dod-contracts', error instanceof Error ? error.message : 'fetch failed');
  }
   }
 

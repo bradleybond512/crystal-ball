@@ -35,7 +35,6 @@ export const SIGNUP_URLS: Partial<Record<RuntimeSecretKey, string>> = {
   NEWSAPI_KEY: 'https://newsapi.org/register',
   NEWSDATA_API_KEY: 'https://newsdata.io/register',
   VIRUSTOTAL_API_KEY: 'https://www.virustotal.com/gui/join-us',
-  BGPVIEW_API_KEY: 'https://bgpview.io/',
   FMP_API_KEY: 'https://financialmodelingprep.com/developer/docs',
   SHODAN_API_KEY: 'https://account.shodan.io/',
   OWM_API_KEY: 'https://openweathermap.org/api',
@@ -97,7 +96,6 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   NEWSAPI_KEY: 'NewsAPI Key',
   NEWSDATA_API_KEY: 'NewsData API Key',
   VIRUSTOTAL_API_KEY: 'VirusTotal API Key',
-  BGPVIEW_API_KEY: 'BGPView API Key',
   FMP_API_KEY: 'Financial Modeling Prep API Key',
   SHODAN_API_KEY: 'Shodan API Key',
   OWM_API_KEY: 'OpenWeatherMap API Key',
@@ -171,7 +169,6 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   // ── Geo + Infrastructure ───────────────────────────────────────────────
   GEONAMES_USERNAME: 'GeoNames place name lookups. Free with registration.',
   IPINFO_TOKEN: 'IPInfo IP geolocation. Free tier (50k req/month).',
-  BGPVIEW_API_KEY: 'BGPView ASN + routing data. Free.',
   CLOUDFLARE_API_TOKEN: 'Cloudflare Radar — internet outage detection. Paid.',
   NASA_API_KEY: 'NASA developer key — boosts DONKI space-weather rate limits. Free, optional.',
   // ── Mapping ────────────────────────────────────────────────────────────
@@ -192,7 +189,7 @@ export interface KeyCategory {
 export const KEY_CATEGORIES: readonly KeyCategory[] = [
   { id: 'llm',      label: 'Core LLMs',              tier: 1, keys: ['ANTHROPIC_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'OLLAMA_API_URL'] },
   { id: 'markets',  label: 'Markets & Macro',        tier: 2, keys: ['FRED_API_KEY', 'EIA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY'] },
-  { id: 'cyber',    label: 'Cyber Threat Intel',     tier: 3, keys: ['OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'URLHAUS_AUTH_KEY', 'THREATFOX_API_KEY', 'VIRUSTOTAL_API_KEY', 'GREYNOISE_API_KEY', 'URLSCAN_API_KEY', 'VULNERS_API_KEY', 'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'BGPVIEW_API_KEY', 'BITCOINABUSE_API_KEY'] },
+  { id: 'cyber',    label: 'Cyber Threat Intel',     tier: 3, keys: ['OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'URLHAUS_AUTH_KEY', 'THREATFOX_API_KEY', 'VIRUSTOTAL_API_KEY', 'GREYNOISE_API_KEY', 'URLSCAN_API_KEY', 'VULNERS_API_KEY', 'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'BITCOINABUSE_API_KEY'] },
   { id: 'conflict', label: 'Conflict & Geopolitics', tier: 4, keys: ['ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'ACLED_REFRESH_TOKEN', 'UC_DP_KEY', 'WTO_API_KEY', 'CLOUDFLARE_API_TOKEN'] },
   { id: 'news',     label: 'News',                   tier: 5, keys: ['NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'MEDIASTACK_API_KEY'] },
   { id: 'aviation', label: 'Aviation & Maritime',    tier: 6, keys: ['WINGBITS_API_KEY', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY', 'AVIATIONSTACK_API', 'ICAO_API_KEY'] },

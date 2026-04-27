@@ -40,7 +40,6 @@ export type RuntimeSecretKey =
   | 'NEWSAPI_KEY'
   | 'NEWSDATA_API_KEY'
   | 'VIRUSTOTAL_API_KEY'
-  | 'BGPVIEW_API_KEY'
   | 'SHODAN_API_KEY'
   | 'FMP_API_KEY'
   | 'OWM_API_KEY'
@@ -462,11 +461,11 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
   },
   {
  id: 'bgpViewEnrichment',
- name: 'BGPView ASN enrichment',
- description: 'ASN metadata, prefixes, and peer data from BGPView for infrastructure context.',
- requiredSecrets: ['BGPVIEW_API_KEY'],
+ name: 'ASN enrichment',
+ description: 'ASN metadata, prefix counts, and country from PeeringDB (primary) with RIPE stat fallback. No key needed.',
+ requiredSecrets: [],
  desktopRequiredSecrets: [],
- fallback: 'BGPView ASN enrichment is disabled.',
+ fallback: 'ASN enrichment is disabled.',
   },
   {
  id: 'shodanIcsExposure',
@@ -1006,27 +1005,31 @@ export function setFeatureToggle(featureId: RuntimeFeatureId, enabled: boolean):
   notifyConfigChanged();
 }
 
-export async function setSecretValue(key: RuntimeSecretKey, value: string): Promise<void> {
-  if (!isDesktopRuntime()) {
- if (!isWebVaultSupported()) {
+async function writeWebSecret(key: RuntimeSecretKey, value: string): Promise<void> {
+  if (!isWebVaultSupported()) {
  // eslint-disable-next-line no-console
  console.warn('[runtime-config] Web vault unsupported (no SubtleCrypto/IDB); ignoring secret write');
  return;
- }
- if (!isWebVaultUnlocked()) {
+  }
+  if (!isWebVaultUnlocked()) {
  throw new Error('Vault is locked. Unlock the key vault before saving secrets.');
- }
- const sanitized = value.trim();
- await setWebVaultSecret(key, sanitized);
- if (sanitized) {
+  }
+  const sanitized = value.trim();
+  await setWebVaultSecret(key, sanitized);
+  if (sanitized) {
  runtimeConfig.secrets[key] = { value: sanitized, source: 'vault' };
- } else {
+  } else {
  delete runtimeConfig.secrets[key];
  // Fall back to env seeding if a VITE_* value exists for this key.
  const envFallback = readEnvSecret(key);
  if (envFallback) runtimeConfig.secrets[key] = { value: envFallback, source: 'env' };
- }
- notifyConfigChanged();
+  }
+  notifyConfigChanged();
+}
+
+export async function setSecretValue(key: RuntimeSecretKey, value: string): Promise<void> {
+  if (!isDesktopRuntime()) {
+ await writeWebSecret(key, value);
  return;
   }
 

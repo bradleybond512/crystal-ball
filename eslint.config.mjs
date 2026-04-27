@@ -21,6 +21,7 @@ export default tseslint.config(
   // Block 2: TypeScript source — full type-checked rules
   {
  files: ['src/**/*.ts'],
+ ignores: ['src/**/__tests__/**'],
  extends: [
  ...tseslint.configs.recommendedTypeChecked,
  ...tseslint.configs.stylisticTypeChecked,
@@ -125,6 +126,17 @@ export default tseslint.config(
  'no-console': 'off',
  'sonarjs/cognitive-complexity': 'off',
  'unicorn/no-process-exit': 'off',
+ },
+  },
+
+  // Block 4b: TypeScript test files (.test.ts / .test.mts) — use the
+  // TypeScript parser but skip the typed-checked rules that require
+  // tsconfig.json membership (test files are excluded from tsconfig).
+  {
+ files: ['src/**/__tests__/**/*.ts', 'src/**/__tests__/**/*.mts', 'src/**/*.test.ts', 'src/**/*.test.mts'],
+ languageOptions: {
+ parser: tseslint.parser,
+ parserOptions: { sourceType: 'module' },
  },
   },
 

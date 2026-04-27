@@ -5774,6 +5774,128 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── DOD contracts — recent USAspending awards filtered to Department of Defense ─
+  // Free, no-key federal data. 1h cache because USAspending POSTs are slow (~1-2s).
+  if (requestUrl.pathname === '/api/dod-contracts') {
+ const CACHE_TTL = 60 * 60 * 1000;
+ const limit = Math.min(50, Math.max(1, Number(requestUrl.searchParams.get('limit') ?? '20')));
+ const daysBack = Math.min(90, Math.max(1, Number(requestUrl.searchParams.get('days') ?? '7')));
+ const cacheKey = `dod-contracts:${limit}:${daysBack}`;
+ const cached = getCached(cacheKey, CACHE_TTL);
+ if (cached) return json(cached);
+
+ const today = new Date();
+ const start = new Date(today.getTime() - daysBack * 24 * 60 * 60 * 1000);
+ const fmtDate = (d) => d.toISOString().slice(0, 10);
+
+ try {
+ const r = await fetchWithTimeout(
+ 'https://api.usaspending.gov/api/v2/search/spending_by_award/',
+ {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': CHROME_UA },
+ body: JSON.stringify({
+ filters: {
+ time_period: [{ start_date: fmtDate(start), end_date: fmtDate(today) }],
+ award_type_codes: ['A', 'B', 'C', 'D'],
+ agencies: [{ type: 'awarding', tier: 'toptier', name: 'Department of Defense' }],
+ },
+ fields: [
+ 'Award ID', 'Recipient Name', 'Award Amount', 'Awarding Agency',
+ 'Awarding Sub Agency', 'Description', 'Start Date', 'Award Type',
+ 'recipient_id', 'Place of Performance State Code',
+ ],
+ limit, order: 'desc', sort: 'Award Amount',
+ }),
+ },
+ 12000,
+ );
+ if (!r.ok) return json({ error: `USAspending HTTP ${r.status}`, awards: [] }, 502);
+ const data = await r.json();
+ const awards = (data?.results ?? []).map((a) => ({
+ id: String(a['Award ID'] ?? ''),
+ recipient: String(a['Recipient Name'] ?? 'Unknown'),
+ amount: Number(a['Award Amount'] ?? 0),
+ subAgency: String(a['Awarding Sub Agency'] ?? ''),
+ description: String(a.Description ?? '').slice(0, 280),
+ startDate: a['Start Date'] ?? null,
+ state: a['Place of Performance State Code'] ?? null,
+ }));
+ const response = {
+ awards,
+ totalAmount: awards.reduce((s, a) => s + a.amount, 0),
+ periodStart: fmtDate(start),
+ periodEnd: fmtDate(today),
+ fetchedAt: Date.now(),
+ };
+ setCached(cacheKey, response);
+ return json(response);
+ } catch (error) {
+ return json({ error: String(error?.message ?? error), awards: [] }, 502);
+ }
+  }
+
+  // ── WikiData military bases — global SPARQL query ─────────────────────────
+  // Free, no-key, structured data. WikiData has ~10k military installations
+  // with coordinates. 12h cache (data is essentially static).
+  if (requestUrl.pathname === '/api/wikidata-military-bases') {
+ const CACHE_TTL = 12 * 60 * 60 * 1000;
+ const limit = Math.min(5000, Math.max(50, Number(requestUrl.searchParams.get('limit') ?? '2000')));
+ const cacheKey = `wd-mil-bases:${limit}`;
+ const cached = getCached(cacheKey, CACHE_TTL);
+ if (cached) return json(cached);
+
+ // P31 (instance of) → P279* (subclass-of, transitive) → Q245016 (military base).
+ // P625 = coordinates, P17 = country. OPTIONAL country in case the base lacks one.
+ const sparql = `SELECT ?base ?baseLabel ?coords ?countryLabel WHERE {
+   ?base wdt:P31/wdt:P279* wd:Q245016 .
+   ?base wdt:P625 ?coords .
+   OPTIONAL { ?base wdt:P17 ?country . }
+   SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
+ }
+ LIMIT ${limit}`;
+
+ try {
+ const r = await fetchWithTimeout(
+ 'https://query.wikidata.org/sparql',
+ {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/x-www-form-urlencoded',
+ Accept: 'application/sparql-results+json',
+ 'User-Agent': 'CrystalBall/2.10.20 (https://crystalball.app)',
+ },
+ body: 'query=' + encodeURIComponent(sparql),
+ },
+ 30000,  // SPARQL queries can be slow
+ );
+ if (!r.ok) return json({ error: `WikiData HTTP ${r.status}`, bases: [] }, 502);
+ const data = await r.json();
+ const bases = [];
+ for (const row of data?.results?.bindings ?? []) {
+ const wkt = row.coords?.value;  // 'Point(lon lat)'
+ if (!wkt || !wkt.startsWith('Point(')) continue;
+ const m = wkt.match(/^Point\(([-\d.]+)\s+([-\d.]+)\)$/);
+ if (!m) continue;
+ const lon = Number(m[1]);
+ const lat = Number(m[2]);
+ if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+ const wdId = String(row.base?.value ?? '').replace(/^.*\/(Q\d+)$/, '$1');
+ bases.push({
+ id: wdId,
+ name: String(row.baseLabel?.value ?? wdId),
+ country: row.countryLabel?.value ?? null,
+ lat, lon,
+ });
+ }
+ const response = { bases, count: bases.length, fetchedAt: Date.now() };
+ setCached(cacheKey, response);
+ return json(response);
+ } catch (error) {
+ return json({ error: String(error?.message ?? error), bases: [] }, 502);
+ }
+  }
+
   // ── ADS-B Aggregate (multi-source resilience: OpenSky + community feeds) ─
   // Fans out in parallel to OpenSky, Airplanes.live, ADSB.fi, ADSB.lol with
   // per-source 3s timeout. Dedupes by ICAO hex, prefers freshest position,

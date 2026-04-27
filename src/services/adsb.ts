@@ -28,16 +28,49 @@ export interface AdsbStats {
   notableFlights: AdsbFlight[];
 }
 
-const IDX = {
-  ICAO24: 0, CALLSIGN: 1, ORIGIN_COUNTRY: 2, TIME_POS: 3, LAST_CONTACT: 4,
-  LON: 5, LAT: 6, BARO_ALT: 7, ON_GROUND: 8, VELOCITY: 9,
-  TRUE_TRACK: 10, VERT_RATE: 11, SENSORS: 12, GEO_ALT: 13,
-  SQUAWK: 14, SPI: 15, POS_SOURCE: 16,
-} as const;
-
 const EMERGENCY_SQUAWKS = new Set(['7500', '7600', '7700']);
 const NOTABLE_CALLSIGN_PREFIXES = ['AF1', 'SAM', 'EXEC', 'VIP', 'RCH', 'REACH'];
 const NOTABLE_ALT_METERS = 12_192;
+
+/** Aircraft entry as returned by /api/adsb-aggregate. */
+interface AggregateAircraft {
+  icao: string;
+  callsign: string | null;
+  originCountry?: string | null;
+  lat: number;
+  lon: number;
+  alt: number | null;
+  speed: number | null;
+  track: number | null;
+  vsi: number | null;
+  squawk: string | null;
+  type?: string | null;
+  military?: boolean | null;
+  ts: number;
+  sources: string[];
+}
+
+interface AggregateResponse {
+  aircraft: AggregateAircraft[];
+  sources: Record<string, { ok: boolean; count: number; ms: number; error?: string }>;
+  fetchedAt: number;
+}
+
+/** Convert aggregator-format aircraft (ft/kt) to AdsbFlight (m/s/m). */
+function unifiedToFlight(a: AggregateAircraft): AdsbFlight {
+  return {
+ icao24: a.icao,
+ callsign: a.callsign,
+ originCountry: a.originCountry ?? 'Unknown',
+ lat: a.lat, lon: a.lon,
+ altitude: a.alt == null ? null : Math.round(a.alt * 0.3048),
+ onGround: false,
+ velocity: a.speed == null ? null : Math.round(a.speed * 0.514_444),
+ heading: a.track,
+ verticalRate: a.vsi == null ? null : Math.round(a.vsi * 0.005_08 * 100) / 100,
+ squawk: a.squawk,
+  };
+}
 
 const breaker = createCircuitBreaker<AdsbSnapshot>({
   name: 'ADS-B',
@@ -48,46 +81,43 @@ const breaker = createCircuitBreaker<AdsbSnapshot>({
 let _cache: { snapshot: AdsbSnapshot; ts: number } | null = null;
 const CLIENT_CACHE_TTL = 60 * 1000;
 
-function parseStates(states: unknown[][]): AdsbFlight[] {
-  const flights: AdsbFlight[] = [];
-  for (const s of states) {
- const lon = s[IDX.LON] as number | null;
- const lat = s[IDX.LAT] as number | null;
- if (lon == null || lat == null) continue;
- if (s[IDX.ON_GROUND] === true) continue;
- flights.push({
- icao24: String(s[IDX.ICAO24] ?? ''),
- callsign: s[IDX.CALLSIGN] ? String(s[IDX.CALLSIGN]).trim() || null : null,
- originCountry: String(s[IDX.ORIGIN_COUNTRY] ?? 'Unknown'),
- lon, lat,
- altitude: (s[IDX.BARO_ALT] as number | null) ?? null,
- onGround: false,
- velocity: (s[IDX.VELOCITY] as number | null) ?? null,
- heading: (s[IDX.TRUE_TRACK] as number | null) ?? null,
- verticalRate: (s[IDX.VERT_RATE] as number | null) ?? null,
- squawk: s[IDX.SQUAWK] ? String(s[IDX.SQUAWK]) : null,
- });
-  }
-  return flights;
+export interface AdsbViewport {
+  lat: number;
+  lon: number;
+  zoom: number;
 }
 
-export async function fetchAdsbSnapshot(): Promise<AdsbSnapshot> {
+/** Conservative viewport→radius ladder so community feeds aren't slammed
+ *  with 5000-NM-radius queries at mid-zoom. Below zoom 4, returns null
+ *  (use OpenSky-only global mode). */
+function radiusForZoom(zoom: number): number | null {
+  if (zoom < 4) return null;
+  if (zoom < 6) return 1000;
+  if (zoom < 8) return 500;
+  if (zoom < 10) return 200;
+  return 100;
+}
+
+export async function fetchAdsbSnapshot(viewport?: AdsbViewport): Promise<AdsbSnapshot> {
   const now = Date.now();
   if (_cache && now - _cache.ts < CLIENT_CACHE_TTL) return _cache.snapshot;
 
   return breaker.execute(async () => {
- const res = await fetch(`${getApiBaseUrl()}/api/adsb`);
+ const radius = viewport ? radiusForZoom(viewport.zoom) : null;
+ const url = (viewport && radius != null)
+ ? `${getApiBaseUrl()}/api/adsb-aggregate?lat=${viewport.lat.toFixed(4)}&lon=${viewport.lon.toFixed(4)}&dist=${radius}`
+ : `${getApiBaseUrl()}/api/adsb-aggregate`;
+ const res = await fetch(url);
  if (res.status === 429) {
  return { flights: [], fetchedAt: Date.now(), totalCount: 0, rateLimited: true };
  }
  if (!res.ok) throw new Error(`HTTP ${res.status}`);
- const data = await res.json() as { states: unknown[][] | null; time: number; rateLimited?: boolean };
- const states = data.states ?? [];
- const flights = parseStates(states);
+ const data = await res.json() as AggregateResponse;
+ const flights = (data.aircraft ?? []).map((a) => unifiedToFlight(a));
  const snapshot: AdsbSnapshot = {
  flights, fetchedAt: now,
- totalCount: states.length,
- rateLimited: data.rateLimited ?? false,
+ totalCount: flights.length,
+ rateLimited: false,
  };
  _cache = { snapshot, ts: now };
  dataFreshness.recordUpdate('adsb', snapshot.flights.length);
@@ -108,7 +138,7 @@ export function getAdsbStats(snapshot: AdsbSnapshot): AdsbStats {
  notableFlights.push(f);
  }
   }
-  const topCountries = Array.from(countryCounts.entries())
+  const topCountries = [...countryCounts.entries()]
  .sort((a, b) => b[1] - a[1]).slice(0, 5)
  .map(([country, count]) => ({ country, count }));
   return { topCountries, notableFlights };

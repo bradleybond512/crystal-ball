@@ -3053,7 +3053,16 @@ export class DataLoaderManager implements AppModule {
 
   async loadAdsb(): Promise<void> {
  try {
- const snapshot = await fetchAdsbSnapshot();
+ // Pass current map viewport so the aggregator fans out to community
+ // feeds (Airplanes.live, ADSB.fi, ADSB.lol) for the user's actual area.
+ // Falls back to OpenSky-only global mode if zoom is too wide or the map
+ // isn't ready yet.
+ const center = this.ctx.map?.getCenter();
+ const zoom = this.ctx.map?.getState()?.zoom;
+ const viewport = (center && typeof zoom === 'number')
+ ? { lat: center.lat, lon: center.lon, zoom }
+ : undefined;
+ const snapshot = await fetchAdsbSnapshot(viewport);
  this.ctx.map?.setAdsbFlights(snapshot.flights);
  this.ctx.map?.setLayerReady?.('adsb', snapshot.flights.length > 0);
  (this.ctx.panels['air-traffic'] as AirTrafficPanel | undefined)?.update(snapshot);

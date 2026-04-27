@@ -5,7 +5,7 @@
  "esri-satellite": {
  "type": "raster",
  "tiles": [
- "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/500m/{z}/{y}/{x}.jpeg"
+ "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg"
  ],
  "tileSize": 256,
  "maxzoom": 8,

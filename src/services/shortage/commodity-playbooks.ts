@@ -155,9 +155,77 @@ export const GASOLINE_PLAYBOOK: CommodityPlaybook = {
   forecastHorizonDays: 30,
 };
 
+export const RICE_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'rice',
+  domain: 'food',
+  leadingIndicators: [
+    'monsoon_rainfall_pct_of_normal',
+    'paddy_water_availability_index',
+    'fertilizer_price_yoy',
+    'export_corridor_status',
+    'planting_progress_pct',
+  ],
+  confirmingIndicators: [
+    'thai_rice_export_price_mom',
+    'india_export_ban_active',
+    'fews_net_stage',
+    'futures_curve_tightness',
+  ],
+  invalidatingIndicators: [
+    'monsoon_rainfall_recovery',
+    'export_ban_lifted',
+    'inventory_release_announced',
+  ],
+  // Asian monsoon planting Jun-Sep; harvest Oct-Dec. Late or weak
+  // monsoon = the headline risk window.
+  seasonalRiskMonths: [5, 6, 7, 8, 9, 10],
+  chokepoints: ['Bay of Bengal exports', 'Mekong River corridor', 'Strait of Malacca'],
+  affectedCountries: ['IN', 'TH', 'VN', 'PH', 'BD', 'ID', 'MY', 'SG', 'CN', 'NG', 'EG'],
+  affectedSectors: ['food retail', 'humanitarian aid', 'street-food economies'],
+  forecastHorizonDays: 90,
+};
+
+export const SOYBEANS_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'soybeans',
+  domain: 'food',
+  leadingIndicators: [
+    'rainfall_pct_of_normal',
+    'soil_moisture_percentile',
+    'ndvi_anomaly',
+    'planting_progress_pct',
+    'south_america_la_nina_signal',
+    'china_crush_demand_index',
+  ],
+  confirmingIndicators: [
+    'usda_crop_condition_g_e_pct',
+    'cbot_soy_price_mom',
+    'soy_meal_basis_widening',
+    'futures_curve_tightness',
+  ],
+  invalidatingIndicators: [
+    'late_season_rainfall_recovery',
+    'usda_yield_upgrade',
+    'china_demand_softening',
+  ],
+  // US plant May-Jun, pod-fill Jul-Aug, harvest Sep-Oct.
+  // Brazil/Argentina plant Oct-Dec, harvest Mar-May.
+  seasonalRiskMonths: [5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3],
+  chokepoints: [
+    'Mississippi River barge corridor',
+    'Brazilian Cerrado export ports',
+    'Panama Canal',
+    'Argentine Paraná River',
+  ],
+  affectedCountries: ['US', 'BR', 'AR', 'CN', 'EU', 'MX', 'JP'],
+  affectedSectors: ['livestock feed', 'cooking oil', 'biofuel', 'tofu / food'],
+  forecastHorizonDays: 90,
+};
+
 export const ALL_PLAYBOOKS: readonly CommodityPlaybook[] = [
   WHEAT_PLAYBOOK,
   CORN_PLAYBOOK,
+  RICE_PLAYBOOK,
+  SOYBEANS_PLAYBOOK,
   DIESEL_PLAYBOOK,
   GASOLINE_PLAYBOOK,
 ];

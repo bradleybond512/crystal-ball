@@ -1146,6 +1146,16 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  return ok('Groq key verified');
  }
 
+ case 'ANTHROPIC_API_KEY': {
+ const response = await fetchWithTimeout('https://api.anthropic.com/v1/models', {
+ headers: { 'x-api-key': value, 'anthropic-version': '2023-06-01', Accept: 'application/json' },
+ });
+ const text = await response.text();
+ if (isAuthFailure(response.status, text)) return fail('Anthropic rejected this key');
+ if (!response.ok && response.status !== 429) return fail(`Anthropic probe failed (${response.status})`);
+ return ok('Anthropic key verified');
+ }
+
  case 'OPENROUTER_API_KEY': {
  const response = await fetchWithTimeout('https://openrouter.ai/api/v1/models', {
  headers: { Authorization: `Bearer ${value}`, 'User-Agent': CHROME_UA },
@@ -1310,6 +1320,17 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  }
  if (typeof payload?.c !== 'number') return fail('Unexpected Finnhub response');
  return ok('Finnhub key verified');
+ }
+
+ case 'FMP_API_KEY': {
+ const response = await fetchWithTimeout(`https://financialmodelingprep.com/api/v3/profile/AAPL?apikey=${encodeURIComponent(value)}`, {
+ headers: { Accept: 'application/json' },
+ });
+ const text = await response.text();
+ if (isAuthFailure(response.status, text)) return fail('FMP rejected this key');
+ if (!response.ok) return fail(`FMP probe failed (${response.status})`);
+ if (/error|invalid api key|limit reached/i.test(text)) return fail('FMP rejected this key');
+ return ok('FMP key verified');
  }
 
  case 'NASA_FIRMS_API_KEY': {

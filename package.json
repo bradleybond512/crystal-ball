@@ -54,6 +54,7 @@
     "test:weather": "tsx --test src/services/weather/__tests__/nws-polygon-match.test.mts src/services/weather/__tests__/personal-storm-mode.test.mts src/services/weather/__tests__/weather-warning-diagnostics.test.mts",
     "test:insights6": "tsx --test src/services/insights/__tests__/presentation-export.test.mts",
     "test:intelligence": "tsx --test src/services/intelligence/__tests__/truth-score.test.mts src/services/intelligence/__tests__/evidence-graph.test.mts src/services/intelligence/__tests__/situation-clustering.test.mts src/services/intelligence/__tests__/baseline-deviation.test.mts src/services/intelligence/__tests__/forecast-calibration.test.mts",
+    "test:insights": "tsx --test src/services/insights/__tests__/big-event-detector.test.mts src/services/insights/__tests__/confidence-urgency-matrix.test.mts",
     "test:feeds": "node scripts/validate-rss-feeds.mjs",
     "test:sidecar": "node --test src-tauri/sidecar/local-api-server.test.mjs api/_cors.test.mjs api/_api-key.test.mjs api/youtube/embed.test.mjs api/cyber-threats.test.mjs api/usni-fleet.test.mjs scripts/ais-relay-rss.test.cjs api/loaders-xml-wms-regression.test.mjs",
     "test:api": "node --test api/__tests__/*.test.mjs",

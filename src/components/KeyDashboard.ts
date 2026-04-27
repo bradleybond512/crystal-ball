@@ -226,7 +226,22 @@ export class KeyDashboard {
       setKeyStatus(key, { state: 'invalid', lastChecked: Date.now(), lastError: result.message });
       this.setFeedback(key, '✗ ' + result.message, 'err');
     }
-    this.render();
+    // Update only the affected card's status glyph + dataset in place. Calling
+    // the full this.render() rebuilds every <details class="key-tier"> element;
+    // tiers where every key is set lose their `open` attribute (because the
+    // render code only sets det.open=true when !allSet) and visibly collapse,
+    // making the user think the panel is closing on Test.
+    this.updateCardStatus(key);
+  }
+
+  private updateCardStatus(key: RuntimeSecretKey): void {
+    const card = this.root.querySelector<HTMLElement>(`.key-card[data-key="${key}"]`);
+    if (!card) return;
+    const stored = this.opts.getValue(key);
+    const status = getKeyStatus(key)?.state ?? (stored ? 'unvalidated' : 'unset');
+    card.dataset.status = status;
+    const glyph = card.querySelector('.key-card-glyph');
+    if (glyph) glyph.textContent = STATUS_GLYPH[status];
   }
 
   private async handleClear(key: RuntimeSecretKey): Promise<void> {

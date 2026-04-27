@@ -1,6 +1,12 @@
-import { KEY_CATEGORIES, HUMAN_LABELS } from '../services/settings-constants';
-import { getKeyStatus, type KeyStatusState } from '../services/wizard-state';
-import type { RuntimeSecretKey } from '../services/runtime-config';
+import {
+  KEY_CATEGORIES, HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS, PLAINTEXT_KEYS,
+} from '../services/settings-constants';
+import { getKeyStatus, setKeyStatus, type KeyStatusState } from '../services/wizard-state';
+import {
+  setSecretValue, verifySecretWithApi, type RuntimeSecretKey,
+} from '../services/runtime-config';
+import { featuresFor } from '../services/key-feature-index';
+import { invokeTauri } from '../services/tauri-bridge';
 
 const ESSENTIAL_TIERS = new Set([1, 2, 3, 4]);
 const STATUS_GLYPH: Record<KeyStatusState, string> = {
@@ -83,26 +89,137 @@ export class KeyDashboard {
     det.append(sum);
     const body = document.createElement('div');
     body.className = 'key-tier-cards';
-    for (const k of cat.keys) body.append(this.renderCardPlaceholder(k));
+    for (const k of cat.keys) body.append(this.renderCard(k));
     det.append(body);
     return det;
   }
 
-  // Real card built in Task 6.
-  private renderCardPlaceholder(key: RuntimeSecretKey): HTMLElement {
+  private renderCard(key: RuntimeSecretKey): HTMLElement {
     const stored = this.opts.getValue(key);
     const status = getKeyStatus(key)?.state ?? (stored ? 'unvalidated' : 'unset');
+    const isPlaintext = PLAINTEXT_KEYS.has(key);
     const card = document.createElement('div');
     card.className = 'key-card';
     card.dataset.key = key;
     card.dataset.status = status;
+
+    const row = document.createElement('div');
+    row.className = 'key-card-row';
     const glyph = document.createElement('span');
     glyph.className = 'key-card-glyph';
     glyph.textContent = STATUS_GLYPH[status];
     const label = document.createElement('span');
     label.className = 'key-card-label';
     label.textContent = HUMAN_LABELS[key] ?? key;
-    card.append(glyph, label);
+    row.append(glyph, label);
+
+    const desc = document.createElement('div');
+    desc.className = 'key-card-desc';
+    desc.textContent = KEY_DESCRIPTIONS[key] ?? '';
+
+    const inputRow = document.createElement('div');
+    inputRow.className = 'key-card-input-row';
+    const input = document.createElement('input');
+    input.type = isPlaintext ? 'text' : 'password';
+    input.className = 'key-card-input';
+    let placeholder = 'Paste key here';
+    if (stored) {
+      placeholder = isPlaintext ? stored : '••••••' + stored.slice(-3);
+    }
+    input.placeholder = placeholder;
+    input.dataset.inputFor = key;
+
+    const testBtn = document.createElement('button');
+    testBtn.type = 'button';
+    testBtn.className = 'key-card-btn key-card-test';
+    testBtn.textContent = 'Test';
+    testBtn.addEventListener('click', () => { void this.handleTest(key); });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'key-card-btn key-card-save';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', () => { void this.handleSave(key); });
+
+    inputRow.append(input, testBtn, saveBtn);
+    if (stored) {
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'key-card-btn key-card-clear';
+      clearBtn.textContent = 'Clear';
+      clearBtn.addEventListener('click', () => { void this.handleClear(key); });
+      inputRow.append(clearBtn);
+    }
+
+    card.append(row, desc, inputRow);
+
+    const signupUrl = SIGNUP_URLS[key];
+    if (signupUrl && /^https?:\/\//.test(signupUrl)) {
+      const a = document.createElement('a');
+      a.className = 'key-card-signup';
+      a.href = signupUrl;
+      a.textContent = 'Open Signup ↗';
+      a.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        void (async () => {
+          try { await invokeTauri('plugin:shell|open', { path: signupUrl }); }
+          catch { window.open(signupUrl, '_blank', 'noopener,noreferrer'); }
+        })();
+      });
+      card.append(a);
+    }
+
+    const feedback = document.createElement('div');
+    feedback.className = 'key-card-feedback';
+    feedback.dataset.feedbackFor = key;
+    card.append(feedback);
+
     return card;
+  }
+
+  private setFeedback(key: RuntimeSecretKey, message: string, kind: 'ok' | 'err' | 'info'): void {
+    const el = this.root.querySelector<HTMLElement>('[data-feedback-for="' + key + '"]');
+    if (!el) return;
+    el.textContent = message;
+    el.dataset.kind = kind;
+  }
+
+  private getInput(key: RuntimeSecretKey): HTMLInputElement | null {
+    return this.root.querySelector<HTMLInputElement>('input[data-input-for="' + key + '"]');
+  }
+
+  private async handleSave(key: RuntimeSecretKey): Promise<void> {
+    const value = this.getInput(key)?.value.trim();
+    if (!value) { this.setFeedback(key, 'Empty value — nothing saved', 'err'); return; }
+    await setSecretValue(key, value);
+    setKeyStatus(key, { state: 'unvalidated', lastChecked: Date.now() });
+    this.setFeedback(key, 'Saved (untested) — click Test to verify', 'info');
+    this.render();
+  }
+
+  private async handleTest(key: RuntimeSecretKey): Promise<void> {
+    const typedRaw = this.getInput(key)?.value.trim();
+    const value = (typedRaw && typedRaw.length > 0) ? typedRaw : this.opts.getValue(key);
+    if (!value) { this.setFeedback(key, 'No value to test', 'err'); return; }
+    this.setFeedback(key, 'Testing…', 'info');
+    const result = await verifySecretWithApi(key, value);
+    if (result.valid) {
+      setKeyStatus(key, { state: 'valid', lastChecked: Date.now() });
+      const feats = featuresFor(key);
+      const unlock = feats.length ? ' — Unlocks: ' + feats.join(', ') : '';
+      this.setFeedback(key, '✓ ' + result.message + unlock, 'ok');
+    } else {
+      setKeyStatus(key, { state: 'invalid', lastChecked: Date.now(), lastError: result.message });
+      this.setFeedback(key, '✗ ' + result.message, 'err');
+    }
+    this.render();
+  }
+
+  private async handleClear(key: RuntimeSecretKey): Promise<void> {
+    const label = HUMAN_LABELS[key] ?? key;
+    if (!confirm('Clear ' + label + '? This cannot be undone.')) return;
+    await setSecretValue(key, '');
+    setKeyStatus(key, { state: 'unset' });
+    this.render();
   }
 }

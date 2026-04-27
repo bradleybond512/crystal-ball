@@ -12,7 +12,7 @@ import {
 } from '../services/wizard-state';
 import { featuresFor } from '../services/key-feature-index';
 import { invokeTauri } from '../services/tauri-bridge';
-import { startWatching, stopWatching } from '../services/clipboard-watcher';
+import { startWatching, stopWatching, markConsumed } from '../services/clipboard-watcher';
 
 type StepView =
   | { kind: 'step'; tier: number; stepIndex: number; key: RuntimeSecretKey }
@@ -205,6 +205,9 @@ export class SetupWizard {
   ): Promise<void> {
     const value = input.value.trim();
     if (!value) { this.setFeedback(feedback, 'Enter a value or click Skip', 'err'); return; }
+    // Mark this clipboard value as consumed so the watcher doesn't auto-fill
+    // the same string into subsequent steps whose key shapes happen to match.
+    markConsumed(value);
     this.setFeedback(feedback, 'Saving and validating…', 'info');
     await setSecretValue(step.key, value);
     const result = await verifySecretWithApi(step.key, value);

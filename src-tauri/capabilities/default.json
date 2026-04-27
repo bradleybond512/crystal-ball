@@ -6,6 +6,7 @@
   "permissions": [
  "core:default",
  "core:window:allow-start-dragging",
- "biometry:default"
+ "biometry:default",
+ "clipboard-manager:allow-read-text"
   ]
 }

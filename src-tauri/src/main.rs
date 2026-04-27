@@ -2246,6 +2246,7 @@ fn main() {
  .manage(LocalApiState::default())
  .manage(SecretsCache::load_from_keychain())
  .plugin(tauri_plugin_biometry::init())
+ .plugin(tauri_plugin_clipboard_manager::init())
  .plugin(corelocation::init())
  .invoke_handler(tauri::generate_handler![
  list_supported_secret_keys,

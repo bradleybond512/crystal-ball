@@ -1027,7 +1027,7 @@ export class PanelLayoutManager implements AppModule {
  });
  this.ctx.panels['gdacs-alerts'] = gdacsAlertsPanel;
 
- this.ctx.panels['unified-inbox'] = new UnifiedAlertInboxPanel();
+ this.ctx.panels['unified-alert-inbox'] = new UnifiedAlertInboxPanel();
  this.ctx.panels['alert-rules'] = new AlertRulesPanel();
 
  const volcanoAlertsPanel = new VolcanoAlertsPanel();

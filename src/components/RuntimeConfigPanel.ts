@@ -1,5 +1,6 @@
 import { Panel } from './Panel';
 import { KeyDashboard } from './KeyDashboard';
+import { SetupWizard } from './SetupWizard';
 import {
   RUNTIME_FEATURES,
   getEffectiveSecrets,
@@ -306,9 +307,11 @@ export class RuntimeConfigPanel extends Panel {
   }
 
   private openWizard(): void {
- // Wired in Task 9. Until then, the button no-ops with a console warn.
- // eslint-disable-next-line no-console -- placeholder until wizard launcher lands
- console.warn('Setup wizard not yet wired');
+ const wizard = new SetupWizard(document.body, {
+ getValue: (key) => this.pendingSecrets.get(key) ?? getRuntimeConfigSnapshot().secrets[key]?.value,
+ onClose: () => this.render(),
+ });
+ wizard.open();
   }
 
   private renderWebVaultBanner(): string {

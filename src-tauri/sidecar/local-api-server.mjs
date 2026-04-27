@@ -5895,7 +5895,8 @@ async function dispatch(requestUrl, req, routes, context) {
  );
  if (!r.ok) throw new Error(`HTTP ${r.status}`);
  const data = await r.json();
- return (data?.ac ?? []).map(normalizeReadsb).filter(Boolean);
+ // ADSB.fi uses `aircraft` key (full readsb output), other readsb feeds use `ac`.
+ return (data?.aircraft ?? data?.ac ?? []).map(normalizeReadsb).filter(Boolean);
  }),
  runSource('adsbLol', async () => {
  const r = await fetchWithTimeout(

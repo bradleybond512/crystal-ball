@@ -57,9 +57,10 @@ export class SetupWizard {
 
   private resolveStep(startTier: number, startIndex: number): StepView {
     const dontAsk = new Set(getDontAsk());
+    const skipped = new Set(getSkipped());
     for (const cat of KEY_CATEGORIES) {
       if (cat.tier < startTier) continue;
-      const wizardKeys = cat.keys.filter((k) => !dontAsk.has(k) && !this.opts.getValue(k));
+      const wizardKeys = cat.keys.filter((k) => !dontAsk.has(k) && !skipped.has(k) && !this.opts.getValue(k));
       if (wizardKeys.length === 0) {
         if (cat.tier === startTier) return { kind: 'checkpoint', tier: cat.tier };
         continue;
@@ -76,9 +77,10 @@ export class SetupWizard {
 
   private wizardKeysForTier(tier: number): RuntimeSecretKey[] {
     const dontAsk = new Set(getDontAsk());
+    const skipped = new Set(getSkipped());
     const cat = KEY_CATEGORIES.find((c) => c.tier === tier);
     if (!cat) return [];
-    return cat.keys.filter((k) => !dontAsk.has(k) && !this.opts.getValue(k));
+    return cat.keys.filter((k) => !dontAsk.has(k) && !skipped.has(k) && !this.opts.getValue(k));
   }
 
   private render(): void {

@@ -708,7 +708,7 @@ export class UnifiedSettings {
  <div class="ai-flow-toggle-label">Route critical alerts to iMessage</div>
  <div class="ai-flow-toggle-desc">Sends through your signed-in macOS Messages app. Rate-limited to 1 per 30s. Requires the Messages app to be open and signed in.</div>
  </div>
- <label class="ai-flow-switch"><input type="checkbox" id="us-imessage-enabled" ${checkedAttr}><span></span></label>
+ <label class="ai-flow-switch"><input type="checkbox" id="us-imessage-enabled" ${checkedAttr}><span class="ai-flow-slider"></span></label>
  </div>
  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%;">
  <input id="us-imessage-recipient" type="text" placeholder="Phone, email, or contact name" value="${recipientVal}" style="flex:1 1 220px;min-width:160px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">

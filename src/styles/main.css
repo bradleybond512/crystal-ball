@@ -19286,8 +19286,8 @@ body.gods-vision-lock .replay-scrubber { display: none; }
 }
 
 /* ── Alert Inbox row interactivity ─────────────────────────────── */
-tr[data-alert-index] { cursor: pointer; }
-tr[data-alert-index]:hover { background: rgba(255,255,255,0.04); }
+tr[data-alert-id] { cursor: pointer; }
+tr[data-alert-id]:hover { background: rgba(255,255,255,0.04); }
 tr.uai-expanded .uai-body { max-height: none; white-space: normal; overflow: visible; }
 
 /* ── Related badge in Inbox ─────────────────────────────────────── */

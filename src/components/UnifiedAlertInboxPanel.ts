@@ -327,14 +327,11 @@ export class UnifiedAlertInboxPanel extends Panel {
  }
 
  // Row click: open link or show evidence drawer
- const row = target.closest('tr[data-alert-index]') as HTMLElement | null;
+ const row = target.closest('tr[data-alert-id]') as HTMLElement | null;
  if (row) {
- const idx = Number.parseInt(row.dataset.alertIndex!, 10);
- const alerts = this.getFilteredAlerts();
- const deduped = this.dedupByEntity(alerts);
- const group = deduped[idx];
- if (!group) return false;
- const alert = group.leader;
+ const alertId = row.dataset.alertId!;
+ const alert = unifiedAlertStore.getAll().find(a => a.id === alertId);
+ if (!alert) return false;
 
  // If alert has a link, open it
  const safeLink = alert.link?.startsWith('https://') ? alert.link : null;
@@ -579,7 +576,7 @@ export class UnifiedAlertInboxPanel extends Panel {
  .filter(Boolean)
  .join(' ');
 
- return `<tr class="${rowClasses}" data-alert-index="${index}">
+ return `<tr class="${rowClasses}" data-alert-index="${index}" data-alert-id="${esc(alert.id)}">
  <td class="ac-sev">${sevPill}</td>
  <td class="uai-src-cell">${srcTag}</td>
  <td class="uai-title-cell">

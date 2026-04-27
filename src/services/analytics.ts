@@ -91,7 +91,6 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   NEWSAPI_KEY: 'newsapi',
   NEWSDATA_API_KEY: 'newsdata',
   VIRUSTOTAL_API_KEY: 'virustotal',
-  BGPVIEW_API_KEY: 'bgpview',
   SHODAN_API_KEY: 'shodan',
   FMP_API_KEY: 'fmp',
   OWM_API_KEY: 'owm',

@@ -412,7 +412,7 @@ const ALLOWED_ENV_KEYS = new Set([
   'UC_DP_KEY',
   'OLLAMA_API_URL', 'OLLAMA_MODEL', 'WTO_API_KEY', 'AVIATIONSTACK_API',
   'ICAO_API_KEY', 'THREATFOX_API_KEY',
-  'NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'VIRUSTOTAL_API_KEY', 'BGPVIEW_API_KEY',
+  'NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'VIRUSTOTAL_API_KEY',
   'SHODAN_API_KEY', 'FMP_API_KEY',
   'OWM_API_KEY', 'GREYNOISE_API_KEY',
   'NASA_API_KEY',
@@ -1351,14 +1351,6 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  if (response.status === 401) return fail('HIBP rejected this key');
  if (!response.ok && response.status !== 429) return fail(`HIBP probe failed (${response.status})`);
  return ok('HIBP key verified');
- }
-
- case 'BGPVIEW_API_KEY': {
- const response = await fetchWithTimeout('https://api.bgpview.io/asn/15169', {
- headers: { Authorization: `Bearer ${value}`, Accept: 'application/json' },
- });
- if (!response.ok) return fail(`BGPView probe failed (${response.status})`);
- return ok('BGPView key stored (no auth check available)');
  }
 
  case 'BITCOINABUSE_API_KEY': {
@@ -2971,30 +2963,69 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
-  // ── BGPView ASN info ──────────────────────────────────────────────────────
-  if (requestUrl.pathname === '/api/bgpview-asn') {
- const apiKey = process.env.BGPVIEW_API_KEY;
+  // ── ASN info: PeeringDB primary, RIPE stat fallback ──────────────────────
+  // (Endpoint name kept for backward compat; BGPView the upstream is dead.)
+  if (requestUrl.pathname === '/api/asn-info' || requestUrl.pathname === '/api/bgpview-asn') {
  const asn = requestUrl.searchParams.get('asn');
  if (!asn || !/^\d+$/.test(asn)) return json({ error: 'Invalid ASN' }, 400);
- try {
  const headers = { Accept: 'application/json', 'User-Agent': CHROME_UA };
- if (apiKey) headers['X-Api-Key'] = apiKey;
- const [asnResp, prefixResp] = await Promise.all([
- fetchWithTimeout(`https://api.bgpview.io/asn/${asn}`, { headers }, 10000),
- fetchWithTimeout(`https://api.bgpview.io/asn/${asn}/prefixes`, { headers }, 10000),
- ]);
- const asnData = asnResp.ok ? await asnResp.json() : {};
- const prefixData = prefixResp.ok ? await prefixResp.json() : {};
- const info = asnData?.data ?? {};
+
+ // Primary: PeeringDB — single call returns name, country, prefix counts.
+ try {
+ const resp = await fetchWithTimeout(
+ `https://www.peeringdb.com/api/net?asn=${asn}`,
+ { headers },
+ 8000,
+ );
+ if (resp.ok) {
+ const payload = await resp.json();
+ const net = Array.isArray(payload?.data) ? payload.data[0] : null;
+ if (net) {
  return json({
- asn: info.asn ?? Number(asn),
- name: info.name ?? '',
- description: info.description_short ?? info.description_full ?? '',
- countryCode: info.country_code ?? '',
- website: info.website ?? '',
- rir: info.rir_allocation?.rir_name ?? '',
- ipv4Prefixes: Array.isArray(prefixData?.data?.ipv4_prefixes) ? prefixData.data.ipv4_prefixes.length : 0,
- ipv6Prefixes: Array.isArray(prefixData?.data?.ipv6_prefixes) ? prefixData.data.ipv6_prefixes.length : 0,
+ asn: Number(asn),
+ name: net.name ?? '',
+ description: net.aka || net.name || '',
+ countryCode: net.country ?? '',
+ website: net.website ?? '',
+ rir: '',
+ ipv4Prefixes: Number(net.info_prefixes4 ?? 0),
+ ipv6Prefixes: Number(net.info_prefixes6 ?? 0),
+ source: 'peeringdb',
+ });
+ }
+ }
+ } catch { /* fall through to RIPE */ }
+
+ // Fallback: RIPE stat — two calls (overview + announced prefixes).
+ try {
+ const [overviewResp, prefixResp] = await Promise.all([
+ fetchWithTimeout(`https://stat.ripe.net/data/as-overview/data.json?resource=AS${asn}`, { headers }, 8000),
+ fetchWithTimeout(`https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS${asn}`, { headers }, 8000),
+ ]);
+ const overview = overviewResp.ok ? await overviewResp.json() : {};
+ const prefixes = prefixResp.ok ? await prefixResp.json() : {};
+ const o = overview?.data ?? {};
+ // RIPE holder format is typically "NAME - Description, COUNTRY" — split.
+ const holder = typeof o.holder === 'string' ? o.holder : '';
+ const dashIdx = holder.indexOf(' - ');
+ const name = dashIdx > 0 ? holder.slice(0, dashIdx) : holder;
+ const rest = dashIdx > 0 ? holder.slice(dashIdx + 3) : '';
+ const ccMatch = rest.match(/,\s*([A-Z]{2})\s*$/);
+ const countryCode = ccMatch ? ccMatch[1] : '';
+ const description = ccMatch ? rest.slice(0, rest.length - ccMatch[0].length).trim() : rest;
+ const allPrefixes = Array.isArray(prefixes?.data?.prefixes) ? prefixes.data.prefixes : [];
+ const ipv4 = allPrefixes.filter((p) => typeof p?.prefix === 'string' && !p.prefix.includes(':')).length;
+ const ipv6 = allPrefixes.length - ipv4;
+ return json({
+ asn: Number(asn),
+ name,
+ description,
+ countryCode,
+ website: '',
+ rir: '',
+ ipv4Prefixes: ipv4,
+ ipv6Prefixes: ipv6,
+ source: 'ripe',
  });
  } catch (error) {
  return json({ error: String(error.message ?? error) }, 502);

@@ -1422,6 +1422,56 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  return ok('NASA FIRMS key verified');
  }
 
+ case 'NEWSAPI_KEY': {
+ const response = await fetchWithTimeout('https://newsapi.org/v2/top-headlines?country=us&pageSize=1', {
+ headers: { 'X-Api-Key': value, Accept: 'application/json' },
+ });
+ const text = await response.text();
+ if (response.status === 401) return fail('NewsAPI rejected this key');
+ if (!response.ok) return fail(`NewsAPI probe failed (${response.status})`);
+ if (/apiKeyInvalid|apiKeyMissing/i.test(text)) return fail('NewsAPI rejected this key');
+ return ok('NewsAPI key verified');
+ }
+
+ case 'NEWSDATA_API_KEY': {
+ const response = await fetchWithTimeout(`https://newsdata.io/api/1/news?apikey=${encodeURIComponent(value)}&size=1`, {
+ headers: { Accept: 'application/json' },
+ });
+ const text = await response.text();
+ if (response.status === 401 || /unauthorized|api key/i.test(text)) return fail('NewsData rejected this key');
+ if (!response.ok) return fail(`NewsData probe failed (${response.status})`);
+ return ok('NewsData key verified');
+ }
+
+ case 'MEDIASTACK_API_KEY': {
+ const response = await fetchWithTimeout(`http://api.mediastack.com/v1/news?access_key=${encodeURIComponent(value)}&limit=1`, {
+ headers: { Accept: 'application/json' },
+ });
+ const text = await response.text();
+ if (/usage_limit_reached/i.test(text)) return ok('MediaStack key verified (usage limit reached)');
+ if (/invalid_access_key/i.test(text)) return fail('MediaStack rejected this key');
+ if (!response.ok) return fail(`MediaStack probe failed (${response.status})`);
+ return ok('MediaStack key verified');
+ }
+
+ case 'OWM_API_KEY': {
+ const response = await fetchWithTimeout(`https://api.openweathermap.org/data/2.5/weather?q=London&appid=${encodeURIComponent(value)}`, {
+ headers: { Accept: 'application/json' },
+ });
+ if (response.status === 401) return fail('OpenWeatherMap rejected this key');
+ if (!response.ok) return fail(`OpenWeatherMap probe failed (${response.status})`);
+ return ok('OpenWeatherMap key verified');
+ }
+
+ case 'NASA_API_KEY': {
+ const response = await fetchWithTimeout(`https://api.nasa.gov/planetary/apod?api_key=${encodeURIComponent(value)}`, {
+ headers: { Accept: 'application/json' },
+ });
+ if (response.status === 403) return fail('NASA rejected this key');
+ if (!response.ok && response.status !== 429) return fail(`NASA probe failed (${response.status})`);
+ return ok('NASA key verified');
+ }
+
  case 'OLLAMA_API_URL': {
  let probeUrl;
  try {

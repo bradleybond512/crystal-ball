@@ -1574,6 +1574,58 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  return ok('CrystalBall API key stored');
  }
 
+ case 'AVIATIONSTACK_API': {
+ const response = await fetchWithTimeout(`http://api.aviationstack.com/v1/flights?access_key=${encodeURIComponent(value)}&limit=1`, {
+ headers: { Accept: 'application/json' },
+ });
+ const text = await response.text();
+ if (/invalid_access_key/i.test(text)) return fail('AviationStack rejected this key');
+ if (/usage_limit_reached/i.test(text)) return ok('AviationStack key verified (usage limit reached)');
+ if (!response.ok) return fail(`AviationStack probe failed (${response.status})`);
+ return ok('AviationStack key verified');
+ }
+
+ case 'ICAO_API_KEY': {
+ const response = await fetchWithTimeout(`https://applications.icao.int/dataservices/api/notams-realtime-list?api_key=${encodeURIComponent(value)}&format=json&criticality=4&locations=KJFK`, {
+ headers: { Accept: 'application/json' },
+ });
+ if (response.status === 401 || response.status === 403) return fail('ICAO rejected this key');
+ // ICAO redirects to dataservices.icao.int and returns 404/422 for unknown keys without
+ // distinguishing them from endpoint quirks. Accept anything that isn't an explicit auth reject.
+ return ok('ICAO key stored');
+ }
+
+ case 'GOOGLE_MAPS_API_KEY': {
+ const response = await fetchWithTimeout(`https://maps.googleapis.com/maps/api/geocode/json?address=Mountain+View&key=${encodeURIComponent(value)}`, {
+ headers: { Accept: 'application/json' },
+ });
+ const text = await response.text();
+ let payload = null; try { payload = JSON.parse(text); } catch { /* ignore */ }
+ if (payload?.status === 'REQUEST_DENIED') return fail(`Google Maps rejected this key (${payload?.error_message ?? 'denied'})`);
+ if (!response.ok) return fail(`Google Maps probe failed (${response.status})`);
+ return ok('Google Maps key verified');
+ }
+
+ case 'GEONAMES_USERNAME': {
+ const response = await fetchWithTimeout(`http://api.geonames.org/searchJSON?q=london&maxRows=1&username=${encodeURIComponent(value)}`, {
+ headers: { Accept: 'application/json' },
+ });
+ const text = await response.text();
+ if (/hourly limit/i.test(text)) return ok('GeoNames username verified (hourly limit reached)');
+ if (/user does not exist|not enabled/i.test(text)) return fail('GeoNames username rejected');
+ if (!response.ok) return fail(`GeoNames probe failed (${response.status})`);
+ return ok('GeoNames username verified');
+ }
+
+ case 'IPINFO_TOKEN': {
+ const response = await fetchWithTimeout(`https://ipinfo.io/8.8.8.8/json?token=${encodeURIComponent(value)}`, {
+ headers: { Accept: 'application/json' },
+ });
+ if (response.status === 401 || response.status === 403) return fail('IPInfo rejected this token');
+ if (!response.ok) return fail(`IPInfo probe failed (${response.status})`);
+ return ok('IPInfo token verified');
+ }
+
  default: {
  return ok('Key stored');
  }

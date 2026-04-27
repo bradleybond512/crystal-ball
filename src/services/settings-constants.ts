@@ -62,6 +62,21 @@ export const PLAINTEXT_KEYS = new Set<RuntimeSecretKey>([
   'ACLED_EMAIL',
 ]);
 
+/**
+ * Keys that have NO standalone-paste flow on the upstream provider.
+ * The provider only issues credentials via an interactive OAuth/account-connect
+ * exchange (e.g. ACLED — registration gives you a myACLED login, then the
+ * sidecar exchanges email+password for a short-lived bearer token via
+ * /api/acled/connect). Pasting a single string into the SetupWizard does
+ * nothing useful for these keys, so the wizard skips them — users complete
+ * setup via the dedicated panel gate (api-key-gate) instead.
+ */
+export const OAUTH_CONNECT_KEYS = new Set<RuntimeSecretKey>([
+  'ACLED_ACCESS_TOKEN',
+  'ACLED_REFRESH_TOKEN',
+  'ACLED_EMAIL',
+]);
+
 export const MASKED_SENTINEL = '__WM_MASKED__';
 
 export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
@@ -129,9 +144,9 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   OLLAMA_API_URL: 'Local LLM endpoint (Ollama or LM Studio). Used first by the Analyst HUD adapter — keeps everything on-device. Free.',
   OLLAMA_MODEL: 'Model name for OLLAMA_API_URL (e.g. llama3, qwen2.5). Required when OLLAMA_API_URL is set.',
   // ── Conflict + Geopolitics ─────────────────────────────────────────────
-  ACLED_ACCESS_TOKEN: 'ACLED conflict events worldwide — battles, explosions, riots, protests. Free with registration.',
-  ACLED_EMAIL: 'Email registered with ACLED — paired with ACLED_ACCESS_TOKEN for airstrike data.',
-  ACLED_REFRESH_TOKEN: 'Optional refresh token for ACLED auth (advanced setup).',
+  ACLED_ACCESS_TOKEN: 'ACLED conflict events worldwide. ACLED no longer issues static API keys — the GeoIntel panel will prompt you to connect your myACLED account (email + password) the first time it loads.',
+  ACLED_EMAIL: 'Email registered with ACLED. Saved automatically when you connect your myACLED account from the GeoIntel panel.',
+  ACLED_REFRESH_TOKEN: 'Refresh token for ACLED OAuth. Saved automatically when you connect your myACLED account.',
   UC_DP_KEY: 'Uppsala Conflict Data Program — historical conflict baselines. Free.',
   // ── Tracking sensors ───────────────────────────────────────────────────
   OPENSKY_CLIENT_ID: 'OpenSky military aircraft tracking (OAuth client ID). Free with registration.',

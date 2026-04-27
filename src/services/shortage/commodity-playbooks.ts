@@ -85,9 +85,81 @@ export const DIESEL_PLAYBOOK: CommodityPlaybook = {
   forecastHorizonDays: 30,
 };
 
+export const CORN_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'corn',
+  domain: 'food',
+  leadingIndicators: [
+    'rainfall_pct_of_normal',
+    'soil_moisture_percentile',
+    'ndvi_anomaly',
+    'gdd_accumulation_pct',
+    'pollination_window_temp_anomaly_c',
+    'fertilizer_price_yoy',
+    'ethanol_demand_index',
+  ],
+  confirmingIndicators: [
+    'usda_crop_condition_g_e_pct',
+    'local_corn_price_mom',
+    'futures_curve_tightness',
+    'feedlot_demand_index',
+  ],
+  invalidatingIndicators: [
+    'late_season_rainfall_recovery',
+    'usda_yield_upgrade',
+    'pollination_temps_normalize',
+  ],
+  // Corn Belt plant Apr-May, pollinate Jul, harvest Sep-Oct. Pollination
+  // heat stress is the highest-risk window.
+  seasonalRiskMonths: [5, 6, 7, 8, 9, 10],
+  chokepoints: ['Mississippi River barge corridor', 'Gulf of Mexico export ports', 'Panama Canal'],
+  // Top US producing states + major importers.
+  affectedCountries: ['US', 'CN', 'BR', 'AR', 'MX', 'JP', 'KR', 'EG'],
+  affectedSectors: ['livestock feed', 'ethanol', 'food processing', 'sweeteners'],
+  forecastHorizonDays: 90,
+};
+
+export const GASOLINE_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'gasoline',
+  domain: 'energy',
+  leadingIndicators: [
+    'gasoline_inventory_vs_5yr',
+    'refinery_utilization_pct',
+    'crude_imports_wow',
+    'crack_spread_gasoline',
+    'refinery_outage_capacity_pct',
+    'driving_season_demand_proxy',
+    'rbob_futures_backwardation',
+  ],
+  confirmingIndicators: [
+    'retail_gasoline_price_wow',
+    'futures_curve_gasoline',
+    'pipeline_disruption_active',
+    'ethanol_blend_disruption',
+  ],
+  invalidatingIndicators: [
+    'refinery_back_online',
+    'inventory_build_consecutive',
+    'crack_spread_gasoline_normalizing',
+  ],
+  // US summer driving season is the headline demand window. Hurricane
+  // season Jun-Nov + winter blend transitions Mar-May add stress points.
+  seasonalRiskMonths: [3, 4, 5, 6, 7, 8, 9],
+  chokepoints: [
+    'US Gulf Coast refineries',
+    'Colonial Pipeline',
+    'PADD 5 (West Coast) isolation',
+    'NW Europe ARA hub',
+  ],
+  affectedCountries: ['US', 'CA', 'MX', 'NL', 'DE', 'GB', 'JP'],
+  affectedSectors: ['retail fuel', 'automotive', 'aviation feedstock', 'logistics'],
+  forecastHorizonDays: 30,
+};
+
 export const ALL_PLAYBOOKS: readonly CommodityPlaybook[] = [
   WHEAT_PLAYBOOK,
+  CORN_PLAYBOOK,
   DIESEL_PLAYBOOK,
+  GASOLINE_PLAYBOOK,
 ];
 
 /** Lookup helper — preferred over reaching into ALL_PLAYBOOKS directly. */

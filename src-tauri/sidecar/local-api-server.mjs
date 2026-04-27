@@ -1601,14 +1601,57 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  }
 
  case 'GOOGLE_MAPS_API_KEY': {
- const response = await fetchWithTimeout(`https://maps.googleapis.com/maps/api/geocode/json?address=Mountain+View&key=${encodeURIComponent(value)}`, {
- headers: { Accept: 'application/json' },
- });
+ // Probe the Directions API specifically — that's one of the two APIs the
+ // setup steps tell users to enable. Previously this probe hit Geocoding,
+ // which most users haven't enabled, so REQUEST_DENIED returned for keys
+ // that worked fine for Map Tiles + Directions.
+ const url = `https://maps.googleapis.com/maps/api/directions/json?origin=NY&destination=LA&key=${encodeURIComponent(value)}`;
+ const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
  const text = await response.text();
  let payload = null; try { payload = JSON.parse(text); } catch { /* ignore */ }
- if (payload?.status === 'REQUEST_DENIED') return fail(`Google Maps rejected this key (${payload?.error_message ?? 'denied'})`);
+ if (payload?.status === 'REQUEST_DENIED') {
+ const msg = String(payload?.error_message ?? 'denied');
+ // If the key works but Directions isn't enabled, surface that hint.
+ if (/not authorized|API not activated|API has not been used/i.test(msg)) {
+ return fail(`Google Maps key valid but Directions API isn't enabled — see APIs & Services → Library`);
+ }
+ return fail(`Google Maps rejected this key (${msg})`);
+ }
  if (!response.ok) return fail(`Google Maps probe failed (${response.status})`);
- return ok('Google Maps key verified');
+ return ok('Google Maps key verified (Directions API)');
+ }
+
+ case 'MAPBOX_API_KEY': {
+ // Mapbox Geocoding endpoint — 200 = ok, 401 = bad token, 429 = rate limit (still valid).
+ const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/SanFrancisco.json?access_token=${encodeURIComponent(value)}&limit=1`;
+ const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
+ if (response.status === 401 || response.status === 403) return fail('Mapbox rejected this token');
+ if (response.status === 429) return ok('Mapbox token accepted (rate limited)');
+ if (!response.ok) return fail(`Mapbox probe failed (${response.status})`);
+ return ok('Mapbox token verified');
+ }
+
+ case 'MAPTILER_API_KEY': {
+ // MapTiler returns the streets-v2 style JSON when the key is valid, 403 otherwise.
+ const url = `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(value)}`;
+ const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
+ if (response.status === 401 || response.status === 403) return fail('MapTiler rejected this key');
+ if (!response.ok) return fail(`MapTiler probe failed (${response.status})`);
+ return ok('MapTiler key verified');
+ }
+
+ case 'CESIUM_ION_TOKEN': {
+ // Cesium ion exposes /v1/me which returns the authenticated user's profile.
+ const response = await fetchWithTimeout('https://api.cesium.com/v1/me', {
+ method: 'GET',
+ headers: {
+ Authorization: `Bearer ${value}`,
+ Accept: 'application/json',
+ },
+ });
+ if (response.status === 401 || response.status === 403) return fail('Cesium ion rejected this token');
+ if (!response.ok) return fail(`Cesium ion probe failed (${response.status})`);
+ return ok('Cesium ion token verified');
  }
 
  case 'GEONAMES_USERNAME': {

@@ -79,6 +79,42 @@ export const OAUTH_CONNECT_KEYS = new Set<RuntimeSecretKey>([
 
 export const MASKED_SENTINEL = '__WM_MASKED__';
 
+/**
+ * Multi-step setup instructions for keys whose providers require more than
+ * "register → copy key → paste". Rendered as an ordered list in the
+ * SetupWizard step and the API Keys dashboard cards. Keep each item short
+ * (one sentence) and ordered by what the user does in time. Omit entries
+ * for keys whose KEY_DESCRIPTIONS already conveys the full flow.
+ */
+export const KEY_SETUP_STEPS: Partial<Record<RuntimeSecretKey, string[]>> = {
+  GOOGLE_MAPS_API_KEY: [
+ 'Go to console.cloud.google.com and create or select a project.',
+ 'Enable billing on the project (required even for free use; Google grants $200/mo Maps credit).',
+ 'APIs & Services → Library: enable "Map Tiles API" (3D buildings) AND "Directions API" (routing).',
+ 'APIs & Services → Credentials → Create Credentials → API Key.',
+ 'Click Restrict Key → API restrictions → select only Map Tiles API and Directions API. Paste the key below.',
+  ],
+  CESIUM_ION_TOKEN: [
+ 'Sign up at ion.cesium.com (free tier covers normal use).',
+ 'Open your Access Tokens page and copy the default token, or create a new one.',
+ 'Paste the token below — Crystal Ball uses it for Bing satellite imagery and OSM Buildings on the God\'s Vision globe.',
+  ],
+  ANTHROPIC_API_KEY: [
+ 'Sign up at console.anthropic.com and add a payment method (pay-as-you-go).',
+ 'Settings → API Keys → Create Key.',
+ 'Copy the sk-ant-… string below. Crystal Ball uses Claude for the agentic briefing and threat synthesis.',
+  ],
+  FRED_API_KEY: [
+ 'Create a free account at fredaccount.stlouisfed.org.',
+ 'Sign in → My Account → API Keys → Request API Key.',
+ 'Copy the 32-character hex key below.',
+  ],
+  EIA_API_KEY: [
+ 'Register at eia.gov/opendata/register.php (email confirmation required).',
+ 'EIA emails the API key to your registered address — paste it below.',
+  ],
+};
+
 export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   CRYSTALBALL_API_KEY: 'Crystal Ball Cloud API Key',
   ANTHROPIC_API_KEY: 'Anthropic API Key',

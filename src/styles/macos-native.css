@@ -1508,6 +1508,22 @@ body.is-desktop-macos #unifiedSettingsMount {
 .key-card[data-status="skipped"] .key-card-glyph { color: var(--mac-text-tertiary, #c7c7cc); }
 .key-card-row { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .key-card-desc { font-size: 12px; color: var(--mac-text-secondary, #8e8e93); margin: 4px 0 8px 24px; }
+.key-card-steps {
+  margin: 0 0 10px 40px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--mac-text-secondary, #8e8e93);
+  line-height: 1.5;
+}
+.key-card-steps li { margin-bottom: 3px; }
+.setup-wizard-steps {
+  margin: 0 0 14px 18px;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--mac-text-secondary, rgba(235, 235, 245, 0.7));
+  line-height: 1.5;
+}
+.setup-wizard-steps li { margin-bottom: 4px; }
 .key-card-input-row { display: flex; gap: 6px; align-items: center; margin-left: 24px; }
 .key-card-input { flex: 1; padding: 4px 8px; }
 .key-card-btn { padding: 3px 10px; font-size: 12px; }

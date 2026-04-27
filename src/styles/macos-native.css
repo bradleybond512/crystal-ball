@@ -1516,3 +1516,23 @@ body.is-desktop-macos #unifiedSettingsMount {
 .key-card-feedback[data-kind="ok"]   { color: #34c759; }
 .key-card-feedback[data-kind="err"]  { color: #ff3b30; }
 .key-card-feedback[data-kind="info"] { color: var(--mac-text-secondary, #8e8e93); }
+
+.setup-wizard-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  display: flex; align-items: center; justify-content: center; z-index: 9999;
+}
+.setup-wizard-modal {
+  width: 720px; max-width: 90vw; background: var(--mac-bg, #fff);
+  border-radius: 12px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.setup-wizard-tier { font-size: 12px; color: var(--mac-text-secondary); text-transform: uppercase; letter-spacing: .05em; }
+.setup-wizard-step { font-size: 18px; font-weight: 600; margin: 6px 0 12px; }
+.setup-wizard-desc { color: var(--mac-text-secondary); margin: 0 0 12px; }
+.setup-wizard-signup { display: inline-block; margin-bottom: 12px; }
+.setup-wizard-input { width: 100%; padding: 8px 12px; font-family: monospace; }
+.setup-wizard-feedback { margin: 10px 0; min-height: 1.2em; font-size: 13px; }
+.setup-wizard-feedback[data-kind="ok"]   { color: #34c759; }
+.setup-wizard-feedback[data-kind="err"]  { color: #ff3b30; }
+.setup-wizard-feedback[data-kind="info"] { color: var(--mac-text-secondary); }
+.setup-wizard-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.setup-wizard-footer button.primary { background: var(--mac-accent, #007aff); color: white; }

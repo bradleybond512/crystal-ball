@@ -51,6 +51,7 @@
     "test:settings": "tsx --test src/services/__tests__/key-categories.test.mts src/services/__tests__/key-feature-index.test.mts src/services/__tests__/key-shape-registry.test.mts src/services/__tests__/wizard-state.test.mts",
     "test:providers": "tsx --test src/services/providers/__tests__/registry.test.mts src/services/providers/__tests__/health.test.mts src/services/providers/__tests__/fusion.test.mts",
     "test:shortage": "tsx --test src/services/shortage/__tests__/shortage-score.test.mts src/services/shortage/__tests__/commodity-playbooks.test.mts",
+    "test:weather": "tsx --test src/services/weather/__tests__/nws-polygon-match.test.mts",
     "test:feeds": "node scripts/validate-rss-feeds.mjs",
     "test:sidecar": "node --test src-tauri/sidecar/local-api-server.test.mjs api/_cors.test.mjs api/_api-key.test.mjs api/youtube/embed.test.mjs api/cyber-threats.test.mjs api/usni-fleet.test.mjs scripts/ais-relay-rss.test.cjs api/loaders-xml-wms-regression.test.mjs",
     "test:api": "node --test api/__tests__/*.test.mjs",

@@ -2,16 +2,35 @@
   "version": 8,
   "name": "Dark",
   "sources": {
-    "carto-dark": {
+    "carto-dark-base": {
       "type": "raster",
       "tiles": [
-        "https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png"
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png"
       ],
       "tileSize": 256,
       "maxzoom": 19,
       "attribution": "&copy; <a href=\"https://carto.com/attributions\" target=\"_blank\" rel=\"noopener\">CARTO</a> &copy; <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">OpenStreetMap</a>"
+    },
+    "esri-hillshade-dark": {
+      "type": "raster",
+      "tiles": [
+        "https://services.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade_Dark/MapServer/tile/{z}/{y}/{x}"
+      ],
+      "tileSize": 256,
+      "maxzoom": 13,
+      "attribution": "Hillshade &copy; Esri, USGS, NOAA"
+    },
+    "carto-dark-labels": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "maxzoom": 19
     }
   },
   "layers": [
@@ -21,11 +40,37 @@
       "paint": { "background-color": "#0b0e12" }
     },
     {
-      "id": "carto-dark-tiles",
+      "id": "carto-dark-base-tiles",
       "type": "raster",
-      "source": "carto-dark",
+      "source": "carto-dark-base",
       "minzoom": 0,
-      "maxzoom": 22
+      "maxzoom": 22,
+      "paint": {
+        "raster-saturation": 0.2,
+        "raster-contrast": 0.08
+      }
+    },
+    {
+      "id": "esri-hillshade-tiles",
+      "type": "raster",
+      "source": "esri-hillshade-dark",
+      "minzoom": 0,
+      "maxzoom": 13,
+      "paint": {
+        "raster-opacity": 0.55,
+        "raster-saturation": -0.5,
+        "raster-contrast": 0.1
+      }
+    },
+    {
+      "id": "carto-dark-label-tiles",
+      "type": "raster",
+      "source": "carto-dark-labels",
+      "minzoom": 2,
+      "maxzoom": 22,
+      "paint": {
+        "raster-opacity": 0.95
+      }
     }
   ]
 }

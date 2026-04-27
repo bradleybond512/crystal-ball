@@ -1,5 +1,5 @@
 import {
-  KEY_CATEGORIES, HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS, OAUTH_CONNECT_KEYS,
+  KEY_CATEGORIES, HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS, OAUTH_CONNECT_KEYS, KEY_SETUP_STEPS,
 } from '../services/settings-constants';
 import {
   setSecretValue, verifySecretWithApi, type RuntimeSecretKey,
@@ -113,6 +113,18 @@ export class SetupWizard {
     desc.className = 'setup-wizard-desc';
     desc.textContent = KEY_DESCRIPTIONS[step.key] ?? '';
     modal.append(tierLabel, stepLabel, desc);
+
+    const setupSteps = KEY_SETUP_STEPS[step.key];
+    if (setupSteps && setupSteps.length > 0) {
+      const list = document.createElement('ol');
+      list.className = 'setup-wizard-steps';
+      for (const stepText of setupSteps) {
+        const li = document.createElement('li');
+        li.textContent = stepText;
+        list.append(li);
+      }
+      modal.append(list);
+    }
 
     const signup = SIGNUP_URLS[step.key];
     if (signup && /^https?:\/\//.test(signup)) {

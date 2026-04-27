@@ -1,5 +1,5 @@
 import {
-  KEY_CATEGORIES, HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS, PLAINTEXT_KEYS,
+  KEY_CATEGORIES, HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS, PLAINTEXT_KEYS, KEY_SETUP_STEPS,
 } from '../services/settings-constants';
 import { getKeyStatus, setKeyStatus, type KeyStatusState } from '../services/wizard-state';
 import {
@@ -117,6 +117,18 @@ export class KeyDashboard {
     desc.className = 'key-card-desc';
     desc.textContent = KEY_DESCRIPTIONS[key] ?? '';
 
+    const setupSteps = KEY_SETUP_STEPS[key];
+    let stepsList: HTMLOListElement | null = null;
+    if (setupSteps && setupSteps.length > 0) {
+      stepsList = document.createElement('ol');
+      stepsList.className = 'key-card-steps';
+      for (const stepText of setupSteps) {
+        const li = document.createElement('li');
+        li.textContent = stepText;
+        stepsList.append(li);
+      }
+    }
+
     const inputRow = document.createElement('div');
     inputRow.className = 'key-card-input-row';
     const input = document.createElement('input');
@@ -151,7 +163,9 @@ export class KeyDashboard {
       inputRow.append(clearBtn);
     }
 
-    card.append(row, desc, inputRow);
+    card.append(row, desc);
+    if (stepsList) card.append(stepsList);
+    card.append(inputRow);
 
     const signupUrl = SIGNUP_URLS[key];
     if (signupUrl && /^https?:\/\//.test(signupUrl)) {

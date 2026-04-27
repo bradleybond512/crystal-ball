@@ -1,5 +1,5 @@
 import {
-  KEY_CATEGORIES, HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS,
+  KEY_CATEGORIES, HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS, OAUTH_CONNECT_KEYS,
 } from '../services/settings-constants';
 import {
   setSecretValue, verifySecretWithApi, type RuntimeSecretKey,
@@ -55,12 +55,19 @@ export class SetupWizard {
     if (ev.key === 'Escape' && confirm('Close the setup wizard? Your progress is saved.')) this.close();
   };
 
+  // Keys excluded from this wizard session: explicitly skipped, marked
+  // don't-ask, already saved, or providers that require an interactive
+  // OAuth/account-connect flow (no standalone paste possible).
+  private isExcludedKey(key: RuntimeSecretKey, dontAsk: Set<RuntimeSecretKey>, skipped: Set<RuntimeSecretKey>): boolean {
+    return dontAsk.has(key) || skipped.has(key) || OAUTH_CONNECT_KEYS.has(key) || !!this.opts.getValue(key);
+  }
+
   private resolveStep(startTier: number, startIndex: number): StepView {
     const dontAsk = new Set(getDontAsk());
     const skipped = new Set(getSkipped());
     for (const cat of KEY_CATEGORIES) {
       if (cat.tier < startTier) continue;
-      const wizardKeys = cat.keys.filter((k) => !dontAsk.has(k) && !skipped.has(k) && !this.opts.getValue(k));
+      const wizardKeys = cat.keys.filter((k) => !this.isExcludedKey(k, dontAsk, skipped));
       if (wizardKeys.length === 0) {
         if (cat.tier === startTier) return { kind: 'checkpoint', tier: cat.tier };
         continue;
@@ -80,7 +87,7 @@ export class SetupWizard {
     const skipped = new Set(getSkipped());
     const cat = KEY_CATEGORIES.find((c) => c.tier === tier);
     if (!cat) return [];
-    return cat.keys.filter((k) => !dontAsk.has(k) && !skipped.has(k) && !this.opts.getValue(k));
+    return cat.keys.filter((k) => !this.isExcludedKey(k, dontAsk, skipped));
   }
 
   private render(): void {

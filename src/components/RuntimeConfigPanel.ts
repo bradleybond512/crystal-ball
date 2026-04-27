@@ -1,4 +1,5 @@
 import { Panel } from './Panel';
+import { KeyDashboard } from './KeyDashboard';
 import {
   RUNTIME_FEATURES,
   getEffectiveSecrets,
@@ -20,7 +21,7 @@ import { escapeHtml } from '@/utils/sanitize';
 import { isDesktopRuntime } from '@/services/runtime';
 import { t } from '@/services/i18n';
 import { trackFeatureToggle } from '@/services/analytics';
-import { SIGNUP_URLS, PLAINTEXT_KEYS, MASKED_SENTINEL, SETTINGS_CATEGORIES } from '@/services/settings-constants';
+import { PLAINTEXT_KEYS, MASKED_SENTINEL } from '@/services/settings-constants';
 import { getRegistrationProfile, saveRegistrationProfile, clearRegistrationProfile } from '@/services/registration-profile';
 import type { RegistrationProfile } from '@/services/registration-profile';
 import {
@@ -279,34 +280,35 @@ export class RuntimeConfigPanel extends Panel {
  return;
  }
 
- const featureById = new Map(features.map(f => [f.id, f]));
- const categorized = new Set<RuntimeFeatureId>();
- const categorySections = SETTINGS_CATEGORIES.map(cat => {
- const catFeatures = cat.features.map(id => featureById.get(id)).filter(Boolean) as RuntimeFeatureDefinition[];
- catFeatures.forEach(f => categorized.add(f.id));
- if (catFeatures.length === 0) return '';
- return `
- <div class="runtime-category-header">${escapeHtml(cat.label)}</div>
- ${catFeatures.map(f => this.renderFeature(f)).join('')}
- `;
- }).join('');
- const uncategorized = features.filter(f => !categorized.has(f.id));
-
  this.content.innerHTML = `
  ${this.renderProfileSection()}
  ${desktop ? '' : this.renderWebVaultBanner()}
  <div class="runtime-config-summary">
  ${desktop ? t('modals.runtimeConfig.summary.desktop') : t('modals.runtimeConfig.summary.web')} · ${features.filter(f => isFeatureAvailable(f.id)).length}/${features.length} ${t('modals.runtimeConfig.summary.available')}
  </div>
- <div class="runtime-config-list">
- ${categorySections}
- ${uncategorized.length > 0 ? `<div class="runtime-category-header">Other</div>${uncategorized.map(f => this.renderFeature(f)).join('')}` : ''}
- </div>
+ <div class="runtime-config-list" data-key-dashboard-mount></div>
  `;
+
+ const dashboardMount = this.content.querySelector<HTMLElement>('[data-key-dashboard-mount]');
+ if (dashboardMount) this.mountDashboard(dashboardMount);
 
  this.attachListeners();
  this.attachProfileListeners();
  if (!desktop) this.attachWebVaultListeners();
+  }
+
+  private mountDashboard(container: HTMLElement): void {
+ const dashboard = new KeyDashboard(container, {
+ getValue: (key) => this.pendingSecrets.get(key) ?? getRuntimeConfigSnapshot().secrets[key]?.value,
+ onRunWizard: () => this.openWizard(),
+ });
+ dashboard.render();
+  }
+
+  private openWizard(): void {
+ // Wired in Task 9. Until then, the button no-ops with a console warn.
+ // eslint-disable-next-line no-console -- placeholder until wizard launcher lands
+ console.warn('Setup wizard not yet wired');
   }
 
   private renderWebVaultBanner(): string {
@@ -569,154 +571,6 @@ export class RuntimeConfigPanel extends Panel {
  clearRegistrationProfile();
  this.render();
  });
-  }
-
-  private renderFeature(feature: RuntimeFeatureDefinition): string {
- const enabled = isFeatureEnabled(feature.id);
- const available = isFeatureAvailable(feature.id);
- const effectiveSecrets = getEffectiveSecrets(feature);
- const allStaged = !available && effectiveSecrets.every(
- (k) => getSecretState(k).valid || (this.pendingSecrets.has(k) && this.validatedKeys.get(k) !== false)
- );
- let pillClass: string;
- let pillLabel: string;
- let sectionClass: string;
- if (available) {
- pillClass = 'ok';
- pillLabel = t('modals.runtimeConfig.status.ready');
- sectionClass = 'available';
- } else if (allStaged) {
- pillClass = 'staged';
- pillLabel = t('modals.runtimeConfig.status.staged');
- sectionClass = 'staged';
- } else {
- pillClass = 'warn';
- pillLabel = t('modals.runtimeConfig.status.needsKeys');
- sectionClass = 'degraded';
- }
- const secrets = effectiveSecrets.map((key) => this.renderSecretRow(key)).join('');
- const desktop = isDesktopRuntime();
- const fallbackHtml = available || allStaged ? '' : `<p class="runtime-feature-fallback fallback">${escapeHtml(feature.fallback)}</p>`;
-
- return `
- <section class="runtime-feature ${sectionClass}">
- <header class="runtime-feature-header">
- <label>
- <input type="checkbox" data-toggle="${feature.id}" ${enabled ? 'checked' : ''} ${desktop ? '' : 'disabled'}>
- <span>${escapeHtml(feature.name)}</span>
- </label>
- <span class="runtime-pill ${pillClass}">${pillLabel}</span>
- </header>
- <div class="runtime-secrets">${secrets}</div>
- ${fallbackHtml}
- </section>
- `;
-  }
-
-  // eslint-disable-next-line sonarjs/cognitive-complexity -- HTML template composition with many presentational branches; kept as a single method for readability
-  private renderSecretRow(key: RuntimeSecretKey): string {
- const state = getSecretState(key);
- const pending = this.pendingSecrets.has(key);
- const pendingValid = pending ? this.validatedKeys.get(key) : undefined;
- let status: string;
- let statusClass: string;
- if (pending) {
- if (pendingValid === false) {
- status = t('modals.runtimeConfig.status.invalid');
- statusClass = 'warn';
- } else {
- status = t('modals.runtimeConfig.status.staged');
- statusClass = 'staged';
- }
- } else if (!state.present) {
- status = t('modals.runtimeConfig.status.missing');
- statusClass = 'warn';
- } else if (state.valid) {
- status = t('modals.runtimeConfig.status.valid');
- statusClass = 'ok';
- } else {
- status = t('modals.runtimeConfig.status.looksInvalid');
- statusClass = 'warn';
- }
- const signupUrl = SIGNUP_URLS[key];
- const helpKey = `modals.runtimeConfig.help.${key}`;
- const helpRaw = t(helpKey);
- const helpText = helpRaw === helpKey ? '' : helpRaw;
- const showGetKey = signupUrl && !state.present && !pending;
- const validated = this.validatedKeys.get(key);
- let inputClass = '';
- if (pending) inputClass = validated === false ? 'invalid' : 'valid-staged';
- const checkClass = validated === true ? 'visible' : '';
- const hintText = pending && validated === false
- ? (this.validationMessages.get(key) ?? validateSecret(key, this.pendingSecrets.get(key) ?? '').hint ?? 'Invalid value')
- : null;
-
- if (key === 'OLLAMA_MODEL') {
- const storedModel = pending
- ? this.pendingSecrets.get(key) ?? ''
- : getRuntimeConfigSnapshot().secrets[key]?.value ?? '';
- return `
- <div class="runtime-secret-row">
- <div class="runtime-secret-key"><code>${escapeHtml(key)}</code></div>
- <span class="runtime-secret-status ${statusClass}">${escapeHtml(status)}</span>
- <span class="runtime-secret-check ${checkClass}">&#x2713;</span>
- ${helpText ? `<div class="runtime-secret-meta">${escapeHtml(helpText)}</div>` : ''}
- <select data-model-select class="${inputClass}" ${canEditWebSecrets() ? '' : 'disabled'}>
- ${storedModel ? `<option value="${escapeHtml(storedModel)}" selected>${escapeHtml(storedModel)}</option>` : '<option value="" selected disabled>Loading models...</option>'}
- </select>
- <input type="text" data-model-manual class="${inputClass} hidden-input" placeholder="Or type model name" autocomplete="off" ${canEditWebSecrets() ? '' : 'disabled'} ${storedModel ? `value="${escapeHtml(storedModel)}"` : ''}>
- ${hintText ? `<span class="runtime-secret-hint">${escapeHtml(hintText)}</span>` : ''}
- </div>
- `;
- }
-
- // When no key is stored and a signup URL exists, render a prominent signup card
- if (showGetKey) {
- return `
- <div class="runtime-secret-row">
- <div class="runtime-secret-key"><code>${escapeHtml(key)}</code></div>
- <span class="runtime-secret-status ${statusClass}">${escapeHtml(status)}</span>
- <span class="runtime-secret-check ${checkClass}">&#x2713;</span>
- ${helpText ? `<div class="runtime-secret-meta">${escapeHtml(helpText)}</div>` : ''}
- <div class="runtime-signup-card">
- <div class="runtime-signup-card-top">
- <span class="runtime-signup-card-label">Get a free API key →</span>
- <a href="#" data-signup-url="${escapeHtml(signupUrl)}" class="runtime-signup-btn">Open signup page</a>
- </div>
- <div class="runtime-signup-card-input-row">
- <input type="${PLAINTEXT_KEYS.has(key) ? 'text' : 'password'}" data-secret="${key}" placeholder="Paste your API key here" autocomplete="off" ${canEditWebSecrets() ? '' : 'disabled'} class="runtime-signup-input ${inputClass}">
- <button type="button" class="runtime-signup-save-btn" data-save-secret="${key}" ${canEditWebSecrets() ? '' : 'disabled'}>Save</button>
- </div>
- ${hintText ? `<span class="runtime-secret-hint">${escapeHtml(hintText)}</span>` : ''}
- </div>
- </div>
- `;
- }
-
- const inputVal = this.computeInputValue(key, pending, state.present);
- return `
- <div class="runtime-secret-row">
- <div class="runtime-secret-key"><code>${escapeHtml(key)}</code></div>
- <span class="runtime-secret-status ${statusClass}">${escapeHtml(status)}</span>
- <span class="runtime-secret-check ${checkClass}">&#x2713;</span>
- ${helpText ? `<div class="runtime-secret-meta">${escapeHtml(helpText)}</div>` : ''}
- <div class="runtime-input-wrapper runtime-input-with-save">
- <input type="${PLAINTEXT_KEYS.has(key) ? 'text' : 'password'}" data-secret="${key}" placeholder="${pending ? t('modals.runtimeConfig.placeholder.staged') : t('modals.runtimeConfig.placeholder.setSecret')}" autocomplete="off" ${canEditWebSecrets() ? '' : 'disabled'} class="${inputClass}" ${inputVal ? `value="${inputVal}"` : ''}>
- ${canEditWebSecrets() ? `<button type="button" class="runtime-secret-save-btn" data-save-secret="${key}">Save</button>` : ''}
- </div>
- ${hintText ? `<span class="runtime-secret-hint">${escapeHtml(hintText)}</span>` : ''}
- </div>
- `;
-  }
-
-  private computeInputValue(key: RuntimeSecretKey, pending: boolean, present: boolean): string {
- const plaintext = PLAINTEXT_KEYS.has(key);
- if (pending) {
- if (plaintext) return escapeHtml(this.pendingSecrets.get(key) ?? '');
- return MASKED_SENTINEL;
- }
- if (plaintext && present) return escapeHtml(getRuntimeConfigSnapshot().secrets[key]?.value ?? '');
- return present ? MASKED_SENTINEL : '';
   }
 
   private attachListeners(): void {

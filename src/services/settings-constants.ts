@@ -182,6 +182,33 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   MAPTILER_API_KEY: 'MapTiler vector + raster tiles (alternative to MapLibre default).',
 };
 
+export interface KeyCategory {
+  id: 'llm' | 'markets' | 'cyber' | 'conflict' | 'news' | 'aviation' | 'geo' | 'weather';
+  label: string;
+  tier: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  keys: RuntimeSecretKey[];
+}
+
+export const KEY_CATEGORIES: readonly KeyCategory[] = [
+  { id: 'llm',      label: 'Core LLMs',              tier: 1, keys: ['ANTHROPIC_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'OLLAMA_API_URL'] },
+  { id: 'markets',  label: 'Markets & Macro',        tier: 2, keys: ['FRED_API_KEY', 'EIA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY'] },
+  { id: 'cyber',    label: 'Cyber Threat Intel',     tier: 3, keys: ['OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'URLHAUS_AUTH_KEY', 'THREATFOX_API_KEY', 'VIRUSTOTAL_API_KEY', 'GREYNOISE_API_KEY', 'URLSCAN_API_KEY', 'VULNERS_API_KEY', 'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'BGPVIEW_API_KEY', 'BITCOINABUSE_API_KEY'] },
+  { id: 'conflict', label: 'Conflict & Geopolitics', tier: 4, keys: ['ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'ACLED_REFRESH_TOKEN', 'UC_DP_KEY', 'WTO_API_KEY', 'CLOUDFLARE_API_TOKEN'] },
+  { id: 'news',     label: 'News',                   tier: 5, keys: ['NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'MEDIASTACK_API_KEY'] },
+  { id: 'aviation', label: 'Aviation & Maritime',    tier: 6, keys: ['WINGBITS_API_KEY', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY', 'AVIATIONSTACK_API', 'ICAO_API_KEY'] },
+  { id: 'geo',      label: 'Geo & Maps',             tier: 7, keys: ['GOOGLE_MAPS_API_KEY', 'MAPBOX_API_KEY', 'MAPTILER_API_KEY', 'GEONAMES_USERNAME', 'IPINFO_TOKEN', 'CESIUM_ION_TOKEN'] },
+  { id: 'weather',  label: 'Weather & NASA',         tier: 8, keys: ['OWM_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY'] },
+];
+
+const KEY_TO_CATEGORY = new Map<RuntimeSecretKey, KeyCategory>();
+for (const cat of KEY_CATEGORIES) {
+  for (const key of cat.keys) KEY_TO_CATEGORY.set(key, cat);
+}
+
+export function categoryFor(key: RuntimeSecretKey): KeyCategory | undefined {
+  return KEY_TO_CATEGORY.get(key);
+}
+
 export interface SettingsCategory {
   id: string;
   label: string;

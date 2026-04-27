@@ -147,6 +147,7 @@ import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
+import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
 import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
 import { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
 import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
@@ -1166,6 +1167,11 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['avalanche-hazard'] = new AvalancheHazardPanel();
  this.ctx.panels['dsca-arms-transfers'] = new DscaArmsPanel();
  this.ctx.panels['dod-contracts'] = new DodContractsPanel();
+ const wikidataBasesPanel = new WikidataBasesPanel();
+ wikidataBasesPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 9);
+ });
+ this.ctx.panels['wikidata-bases'] = wikidataBasesPanel;
  this.ctx.panels['ecdc-surveillance'] = new EcdcSurveillancePanel();
  this.ctx.panels['fdic-failures'] = new FdicFailuresPanel();
  this.ctx.panels['habsos'] = new HabsosPanel();

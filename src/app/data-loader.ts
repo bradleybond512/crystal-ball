@@ -145,6 +145,8 @@ import { updateFromFlights } from '@/services/strike-packages';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { fetchDodContracts } from '@/services/dod-contracts';
+import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
+import { fetchWikidataBases } from '@/services/wikidata-bases';
 import { fetchS2Underground } from '@/services/s2-underground';
 import { fetchThreatFoxIOCs, fetchOpenPhishFeed, fetchSpamhausDrop, fetchCisaKev, fetchOtxIOCs, fetchPhishStatsFeed } from '@/services/cyber-extra';
 // Space, disease, and humanitarian loaders live in ./loaders/ — no direct imports here.
@@ -480,6 +482,7 @@ export class DataLoaderManager implements AppModule {
  tasks.push({ name: 'oil', task: () => runGuarded('oil', () => this.loadOilAnalytics()) });
  tasks.push({ name: 'spending', task: () => runGuarded('spending', () => this.loadGovernmentSpending()) });
  tasks.push({ name: 'dod-contracts', task: () => runGuarded('dod-contracts', () => this.loadDodContracts()) });
+ tasks.push({ name: 'wikidata-bases', task: () => runGuarded('wikidata-bases', () => this.loadWikidataBases()) });
  tasks.push({ name: 'bis', task: () => runGuarded('bis', () => this.loadBisData()) });
 
  // Trade policy data (FULL and FINANCE only)
@@ -2611,6 +2614,21 @@ export class DataLoaderManager implements AppModule {
  }
  } catch (error) {
  dataFreshness.recordError('dod-contracts', error instanceof Error ? error.message : 'fetch failed');
+ }
+  }
+
+  async loadWikidataBases(): Promise<void> {
+ const panel = this.ctx.panels['wikidata-bases'] as WikidataBasesPanel | undefined;
+ try {
+ const snap = await fetchWikidataBases(2000);
+ panel?.update(snap);
+ if (snap.bases.length > 0) {
+ dataFreshness.recordUpdate('wikidata-bases', snap.bases.length);
+ } else {
+ dataFreshness.recordError('wikidata-bases', 'empty result');
+ }
+ } catch (error) {
+ dataFreshness.recordError('wikidata-bases', error instanceof Error ? error.message : 'fetch failed');
  }
   }
 

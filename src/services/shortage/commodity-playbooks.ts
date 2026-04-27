@@ -155,11 +155,85 @@ export const GASOLINE_PLAYBOOK: CommodityPlaybook = {
   forecastHorizonDays: 30,
 };
 
+export const NATURAL_GAS_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'natural_gas',
+  domain: 'energy',
+  leadingIndicators: [
+    'natgas_storage_vs_5yr',
+    'heating_degree_days_vs_normal',
+    'cooling_degree_days_vs_normal',
+    'lng_export_capacity_pct',
+    'production_pipeline_outage_pct',
+    'henry_hub_basis_widening',
+  ],
+  confirmingIndicators: [
+    'retail_natgas_price_mom',
+    'futures_curve_natgas',
+    'utility_curtailment_active',
+    'cold_snap_arrival_imminent',
+  ],
+  invalidatingIndicators: [
+    'mild_winter_forecast',
+    'storage_build_consecutive',
+    'lng_export_throttle',
+  ],
+  // Northern Hemisphere winter Dec-Feb is heating-demand peak;
+  // summer Jun-Aug is power-burn cooling demand. Storage typically
+  // builds Apr-Oct.
+  seasonalRiskMonths: [11, 12, 1, 2, 3, 6, 7, 8],
+  chokepoints: [
+    'US Northeast pipelines (Marcellus delivery)',
+    'European LNG import terminals',
+    'Russian gas transit corridors',
+    'Permian gas takeaway capacity',
+  ],
+  affectedCountries: ['US', 'CA', 'MX', 'DE', 'NL', 'GB', 'IT', 'ES', 'FR', 'JP', 'KR', 'CN'],
+  affectedSectors: ['heating', 'power generation', 'industrial feedstock', 'fertilizer (ammonia)'],
+  forecastHorizonDays: 60,
+};
+
+export const JET_FUEL_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'jet_fuel',
+  domain: 'energy',
+  leadingIndicators: [
+    'jet_fuel_inventory_vs_5yr',
+    'refinery_utilization_pct',
+    'crack_spread_jet',
+    'air_traffic_demand_proxy',
+    'sustainable_aviation_fuel_constraint',
+    'pipeline_jet_disruption_active',
+  ],
+  confirmingIndicators: [
+    'airline_fuel_surcharge_active',
+    'futures_curve_jet',
+    'airport_fuel_shortage_alert',
+    'cargo_capacity_diversion',
+  ],
+  invalidatingIndicators: [
+    'inventory_build_consecutive',
+    'crack_spread_jet_normalizing',
+    'air_traffic_demand_softening',
+  ],
+  // Holiday peak Nov-Jan; summer peak Jun-Aug.
+  seasonalRiskMonths: [6, 7, 8, 11, 12, 1],
+  chokepoints: [
+    'US East Coast (Buckeye / Colonial)',
+    'European hub airports',
+    'Singapore jet hub',
+    'Middle East refinery output',
+  ],
+  affectedCountries: ['US', 'GB', 'NL', 'AE', 'SG', 'JP', 'DE', 'IN', 'CN'],
+  affectedSectors: ['airlines', 'cargo aviation', 'military aviation', 'business aviation'],
+  forecastHorizonDays: 30,
+};
+
 export const ALL_PLAYBOOKS: readonly CommodityPlaybook[] = [
   WHEAT_PLAYBOOK,
   CORN_PLAYBOOK,
   DIESEL_PLAYBOOK,
   GASOLINE_PLAYBOOK,
+  NATURAL_GAS_PLAYBOOK,
+  JET_FUEL_PLAYBOOK,
 ];
 
 /** Lookup helper — preferred over reaching into ALL_PLAYBOOKS directly. */

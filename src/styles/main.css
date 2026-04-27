@@ -19340,6 +19340,9 @@ tr.uai-expanded .uai-body { max-height: none; white-space: normal; overflow: vis
   display: flex; align-items: center; gap: 8px; padding: 8px 16px;
   background: rgba(26,26,46,0.95); border-top: 1px solid rgba(255,255,255,0.1);
 }
+/* On desktop chrome the scrubber must not cover the sidebar footer (theme,
+   low-power, settings gear, update). Start it where the sidebar ends. */
+body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
 .replay-title { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
 .replay-slider { flex: 1; height: 4px; accent-color: #60a5fa; }
 .replay-label { font-size: 12px; font-weight: 600; color: #60a5fa; min-width: 60px; text-align: center; }

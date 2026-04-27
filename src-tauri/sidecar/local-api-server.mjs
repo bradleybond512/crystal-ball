@@ -5774,6 +5774,184 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── ADS-B Aggregate (multi-source resilience: OpenSky + community feeds) ─
+  // Fans out in parallel to OpenSky, Airplanes.live, ADSB.fi, ADSB.lol with
+  // per-source 3s timeout. Dedupes by ICAO hex, prefers freshest position,
+  // folds in metadata across sources. If any source fails, others still
+  // contribute. Per-source diagnostics in response.
+  //
+  // Query params:
+  //   lat, lon, dist (NM)  — area query, fans out to all 4 sources
+  //   (omit all three)     — global query, OpenSky only (only it supports this)
+  if (requestUrl.pathname === '/api/adsb-aggregate') {
+ const CACHE_TTL = 30 * 1000;
+ const cacheKey = `adsb-agg:${requestUrl.search}`;
+ const cached = getCached(cacheKey, CACHE_TTL);
+ if (cached) return json(cached);
+
+ const lat = Number(requestUrl.searchParams.get('lat'));
+ const lon = Number(requestUrl.searchParams.get('lon'));
+ const dist = Number(requestUrl.searchParams.get('dist') ?? '250');
+ const hasArea = Number.isFinite(lat) && Number.isFinite(lon) && Number.isFinite(dist);
+
+ const SOURCE_TIMEOUT = 3000;
+
+ // OpenSky returns a state-array per aircraft (positional fields). Convert to unified.
+ const normalizeOpenSky = (s) => {
+ if (!Array.isArray(s) || s.length < 17) return null;
+ const lonV = s[5], latV = s[6];
+ if (lonV == null || latV == null) return null;
+ const icao = String(s[0] ?? '').toLowerCase().trim();
+ if (!icao) return null;
+ const altMeters = s[7] ?? s[13];
+ const velMs = s[9];
+ return {
+ icao,
+ callsign: s[1] ? String(s[1]).trim() || null : null,
+ lat: latV, lon: lonV,
+ alt: altMeters != null ? Math.round(Number(altMeters) * 3.28084) : null,  // m → ft
+ speed: velMs != null ? Math.round(Number(velMs) * 1.94384) : null,        // m/s → kt
+ track: s[10] ?? null,
+ vsi: s[11] != null ? Math.round(Number(s[11]) * 196.85) : null,           // m/s → ft/min
+ squawk: s[14] ? String(s[14]) : null,
+ type: null,
+ military: null,
+ ts: (s[3] ?? s[4] ?? Math.floor(Date.now() / 1000)) * 1000,
+ };
+ };
+
+ // Airplanes.live / ADSB.fi / ADSB.lol all use the readsb `ac` shape.
+ const normalizeReadsb = (a) => {
+ if (!a || a.lat == null || a.lon == null) return null;
+ const icao = String(a.hex ?? '').toLowerCase().trim();
+ if (!icao) return null;
+ return {
+ icao,
+ callsign: a.flight ? String(a.flight).trim() || null : null,
+ lat: a.lat, lon: a.lon,
+ alt: typeof a.alt_baro === 'number' ? a.alt_baro : (typeof a.alt_geom === 'number' ? a.alt_geom : null),
+ speed: typeof a.gs === 'number' ? Math.round(a.gs) : null,
+ track: a.track ?? null,
+ vsi: typeof a.baro_rate === 'number' ? a.baro_rate : null,
+ squawk: a.squawk ? String(a.squawk) : null,
+ type: a.t ? String(a.t) : null,
+ military: a.mil === true,
+ ts: a.seen != null ? Date.now() - Math.round(Number(a.seen) * 1000) : Date.now(),
+ };
+ };
+
+ const runSource = async (name, fn) => {
+ const start = Date.now();
+ try {
+ const aircraft = await fn();
+ return { name, ok: true, count: aircraft.length, ms: Date.now() - start, aircraft };
+ } catch (error) {
+ return { name, ok: false, count: 0, ms: Date.now() - start, error: error?.message ?? 'failed', aircraft: [] };
+ }
+ };
+
+ const tasks = [
+ runSource('opensky', async () => {
+ const headers = { 'User-Agent': CHROME_UA };
+ const clientId = process.env.OPENSKY_CLIENT_ID?.trim();
+ const clientSecret = process.env.OPENSKY_CLIENT_SECRET?.trim();
+ if (clientId && clientSecret) {
+ headers['Authorization'] = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+ }
+ let url = 'https://opensky-network.org/api/states/all';
+ if (hasArea) {
+ const dLat = dist / 60;
+ const dLon = dist / (60 * Math.max(0.01, Math.cos(lat * Math.PI / 180)));
+ const params = new URLSearchParams({
+ lamin: String(lat - dLat), lamax: String(lat + dLat),
+ lomin: String(lon - dLon), lomax: String(lon + dLon),
+ });
+ url += `?${params}`;
+ }
+ const r = await fetchWithTimeout(url, { headers }, SOURCE_TIMEOUT);
+ if (!r.ok) throw new Error(`HTTP ${r.status}`);
+ const data = await r.json();
+ return (data?.states ?? []).map(normalizeOpenSky).filter(Boolean);
+ }),
+ ];
+
+ if (hasArea) {
+ tasks.push(
+ runSource('airplanesLive', async () => {
+ const r = await fetchWithTimeout(
+ `https://api.airplanes.live/v2/point/${lat}/${lon}/${dist}`,
+ { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+ SOURCE_TIMEOUT,
+ );
+ if (!r.ok) throw new Error(`HTTP ${r.status}`);
+ const data = await r.json();
+ return (data?.ac ?? []).map(normalizeReadsb).filter(Boolean);
+ }),
+ runSource('adsbFi', async () => {
+ const r = await fetchWithTimeout(
+ `https://opendata.adsb.fi/api/v2/lat/${lat}/lon/${lon}/dist/${dist}`,
+ { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+ SOURCE_TIMEOUT,
+ );
+ if (!r.ok) throw new Error(`HTTP ${r.status}`);
+ const data = await r.json();
+ return (data?.ac ?? []).map(normalizeReadsb).filter(Boolean);
+ }),
+ runSource('adsbLol', async () => {
+ const r = await fetchWithTimeout(
+ `https://api.adsb.lol/v2/lat/${lat}/lon/${lon}/dist/${dist}`,
+ { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+ SOURCE_TIMEOUT,
+ );
+ if (!r.ok) throw new Error(`HTTP ${r.status}`);
+ const data = await r.json();
+ return (data?.ac ?? []).map(normalizeReadsb).filter(Boolean);
+ }),
+ );
+ }
+
+ const results = await Promise.all(tasks);
+
+ // Merge by ICAO. Prefer freshest position; fold in metadata.
+ const merged = new Map();
+ for (const result of results) {
+ if (!result.ok) continue;
+ for (const ac of result.aircraft) {
+ const existing = merged.get(ac.icao);
+ if (!existing) {
+ merged.set(ac.icao, { ...ac, sources: [result.name] });
+ } else {
+ if (ac.ts > existing.ts) {
+ existing.lat = ac.lat; existing.lon = ac.lon;
+ if (ac.alt != null) existing.alt = ac.alt;
+ if (ac.speed != null) existing.speed = ac.speed;
+ if (ac.track != null) existing.track = ac.track;
+ if (ac.vsi != null) existing.vsi = ac.vsi;
+ existing.ts = ac.ts;
+ }
+ existing.callsign ??= ac.callsign;
+ existing.squawk ??= ac.squawk;
+ existing.type ??= ac.type;
+ if (existing.military !== true && ac.military === true) existing.military = true;
+ if (!existing.sources.includes(result.name)) existing.sources.push(result.name);
+ }
+ }
+ }
+
+ const sources = {};
+ for (const r of results) {
+ sources[r.name] = { ok: r.ok, count: r.count, ms: r.ms, ...(r.error && { error: r.error }) };
+ }
+
+ const response = {
+ aircraft: Array.from(merged.values()),
+ sources,
+ fetchedAt: Date.now(),
+ };
+ setCached(cacheKey, response);
+ return json(response);
+  }
+
   // ── GDELT Intelligence (no key required, public API) ──────────────────────
   if (requestUrl.pathname === '/api/gdelt-intel') {
  const cached = getCached('gdelt-intel', 30 * 60 * 1000); // 30 minutes — GDELT rate-limits aggressively

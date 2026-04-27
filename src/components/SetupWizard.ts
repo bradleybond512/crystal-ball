@@ -12,6 +12,7 @@ import {
 } from '../services/wizard-state';
 import { featuresFor } from '../services/key-feature-index';
 import { invokeTauri } from '../services/tauri-bridge';
+import { startWatching, stopWatching } from '../services/clipboard-watcher';
 
 type StepView =
   | { kind: 'step'; tier: number; stepIndex: number; key: RuntimeSecretKey }
@@ -43,6 +44,7 @@ export class SetupWizard {
   }
 
   close(): void {
+    stopWatching();
     clearSkipped();
     document.removeEventListener('keydown', this.onKey);
     this.overlay.remove();
@@ -130,6 +132,12 @@ export class SetupWizard {
     feedback.className = 'setup-wizard-feedback';
     modal.append(feedback);
 
+    startWatching(step.key, (value) => {
+      input.value = value;
+      feedback.textContent = 'Detected from clipboard — click Save & Next to use';
+      feedback.dataset.kind = 'info';
+    });
+
     const footer = document.createElement('div');
     footer.className = 'setup-wizard-footer';
     footer.append(
@@ -142,6 +150,7 @@ export class SetupWizard {
   }
 
   private renderCheckpoint(modal: HTMLElement, tier: number): void {
+    stopWatching();
     const cat = KEY_CATEGORIES.find((c) => c.tier === tier)!;
     const total = cat.keys.length;
     const setCount = cat.keys.filter((k) => this.opts.getValue(k)).length;
@@ -168,6 +177,7 @@ export class SetupWizard {
   }
 
   private renderDone(modal: HTMLElement): void {
+    stopWatching();
     const h = document.createElement('h2');
     h.textContent = 'All set';
     const p = document.createElement('p');

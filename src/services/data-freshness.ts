@@ -25,6 +25,7 @@ export type DataSourceId =
   | 'oil' // EIA oil analytics
   | 'spending' // USASpending.gov
   | 'dod-contracts' // USASpending DOD-filtered contract awards
+  | 'wikidata-bases' // WikiData SPARQL military bases
   | 'firms' // NASA FIRMS satellite fires
   | 'acled_conflict' // ACLED battles/explosions/violence
   | 'ucdp' // UCDP conflict classification
@@ -98,6 +99,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   oil: { name: 'Oil Analytics (EIA)', requiredForRisk: false, panelId: 'economic' },
   spending: { name: 'Gov Spending', requiredForRisk: false, panelId: 'economic' },
   'dod-contracts': { name: 'DOD Contracts', requiredForRisk: false, panelId: 'dod-contracts' },
+  'wikidata-bases': { name: 'WikiData Bases', requiredForRisk: false, panelId: 'wikidata-bases' },
   firms: { name: 'FIRMS Satellite Fires', requiredForRisk: false, panelId: 'map' },
   acled_conflict: { name: 'Armed Conflicts (ACLED)', requiredForRisk: false, panelId: 'protests' },
   ucdp: { name: 'Conflict Classification (UCDP)', requiredForRisk: false, panelId: 'protests' },
@@ -376,6 +378,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   oil: 'Oil market analytics unavailable—EIA data not updating',
   spending: 'Government spending data unavailable',
   'dod-contracts': 'DOD contract awards unavailable',
+  'wikidata-bases': 'WikiData military bases unavailable',
   firms: 'Satellite fire detection unavailable—NASA FIRMS data not updating',
   acled_conflict: 'Armed conflict events may be missed—ACLED conflict data unavailable',
   ucdp: 'Conflict classification unavailable—UCDP data not loading',

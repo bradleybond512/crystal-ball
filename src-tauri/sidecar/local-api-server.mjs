@@ -1289,6 +1289,82 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  return ok('AbuseIPDB key verified');
  }
 
+ case 'VIRUSTOTAL_API_KEY': {
+ const response = await fetchWithTimeout('https://www.virustotal.com/api/v3/files/d41d8cd98f00b204e9800998ecf8427e', {
+ headers: { 'x-apikey': value, Accept: 'application/json' },
+ });
+ if (response.status === 401) return fail('VirusTotal rejected this key');
+ if (response.status === 404) return ok('VirusTotal key verified');
+ if (!response.ok) return fail(`VirusTotal probe failed (${response.status})`);
+ return ok('VirusTotal key verified');
+ }
+
+ case 'GREYNOISE_API_KEY': {
+ const response = await fetchWithTimeout('https://api.greynoise.io/v3/community/8.8.8.8', {
+ headers: { key: value, Accept: 'application/json' },
+ });
+ const text = await response.text();
+ if (isAuthFailure(response.status, text)) return fail('GreyNoise rejected this key');
+ if (!response.ok && response.status !== 429) return fail(`GreyNoise probe failed (${response.status})`);
+ return ok('GreyNoise key verified');
+ }
+
+ case 'URLSCAN_API_KEY': {
+ const response = await fetchWithTimeout('https://urlscan.io/user/quotas/', {
+ headers: { 'API-Key': value, Accept: 'application/json' },
+ });
+ const text = await response.text();
+ if (isAuthFailure(response.status, text)) return fail('URLScan rejected this key');
+ if (!response.ok) return fail(`URLScan probe failed (${response.status})`);
+ return ok('URLScan key verified');
+ }
+
+ case 'VULNERS_API_KEY': {
+ const response = await fetchWithTimeout(`https://vulners.com/api/v3/apiKey/valid/?keyID=${encodeURIComponent(value)}`, {
+ headers: { Accept: 'application/json' },
+ });
+ const text = await response.text();
+ let payload = null; try { payload = JSON.parse(text); } catch { /* ignore */ }
+ if (payload?.result === 'OK' && payload?.data?.valid === true) return ok('Vulners key verified');
+ return fail('Vulners rejected this key');
+ }
+
+ case 'PULSEDIVE_API_KEY': {
+ const response = await fetchWithTimeout(`https://pulsedive.com/api/info.php?indicator=8.8.8.8&key=${encodeURIComponent(value)}`, {
+ headers: { Accept: 'application/json' },
+ });
+ const text = await response.text();
+ if (isAuthFailure(response.status, text)) return fail('Pulsedive rejected this key');
+ if (/invalid api key/i.test(text)) return fail('Pulsedive rejected this key');
+ return ok('Pulsedive key verified');
+ }
+
+ case 'HIBP_API_KEY': {
+ const response = await fetchWithTimeout('https://haveibeenpwned.com/api/v3/breaches?domain=adobe.com', {
+ headers: { 'hibp-api-key': value, 'User-Agent': 'CrystalBall', Accept: 'application/json' },
+ });
+ if (response.status === 401) return fail('HIBP rejected this key');
+ if (!response.ok && response.status !== 429) return fail(`HIBP probe failed (${response.status})`);
+ return ok('HIBP key verified');
+ }
+
+ case 'BGPVIEW_API_KEY': {
+ const response = await fetchWithTimeout('https://api.bgpview.io/asn/15169', {
+ headers: { Authorization: `Bearer ${value}`, Accept: 'application/json' },
+ });
+ if (!response.ok) return fail(`BGPView probe failed (${response.status})`);
+ return ok('BGPView key stored (no auth check available)');
+ }
+
+ case 'BITCOINABUSE_API_KEY': {
+ const response = await fetchWithTimeout(`https://www.bitcoinabuse.com/api/reports/check?address=1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa&api_token=${encodeURIComponent(value)}`, {
+ headers: { Accept: 'application/json' },
+ });
+ if (response.status === 401 || response.status === 403) return fail('BitcoinAbuse rejected this key');
+ if (!response.ok) return fail(`BitcoinAbuse probe failed (${response.status})`);
+ return ok('BitcoinAbuse key verified');
+ }
+
  case 'WINGBITS_API_KEY': {
  const response = await fetchWithTimeout('https://customer-api.wingbits.com/v1/flights/details/3c6444', {
  headers: {

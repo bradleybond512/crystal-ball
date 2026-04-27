@@ -1226,6 +1226,11 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  return ok('ACLED token verified');
  }
 
+ case 'ACLED_EMAIL':
+ case 'ACLED_REFRESH_TOKEN':
+ case 'UC_DP_KEY':
+ return ok('Stored');
+
  case 'URLHAUS_AUTH_KEY': {
  const response = await fetchWithTimeout('https://urlhaus-api.abuse.ch/v1/urls/recent/limit/1/', {
  headers: {

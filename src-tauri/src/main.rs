@@ -92,6 +92,10 @@ const SUPPORTED_SECRET_KEYS: [&str; 49] = [
 // Rate-limit native notifications: no more than 1 per 30 seconds across all threads.
 static NOTIFICATION_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
 const NOTIFICATION_RATE_LIMIT: Duration = Duration::from_secs(30);
+
+// iMessage has its own rate-limit state so user-initiated Test sends aren't
+// blocked by background native notifications. Same 30s window between iMessages.
+static IMESSAGE_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
 const MIN_CACHE_FLUSH_INTERVAL: Duration = Duration::from_secs(2);
 
 struct LocalApiState {
@@ -938,10 +942,10 @@ fn send_imessage(webview: Webview, recipient: String, body: String) -> Result<()
  #[cfg(target_os = "macos")]
  {
  {
- let mut last = NOTIFICATION_LAST_SENT.lock().unwrap_or_else(|p| p.into_inner());
+ let mut last = IMESSAGE_LAST_SENT.lock().unwrap_or_else(|p| p.into_inner());
  if let Some(t) = *last {
  if t.elapsed() < NOTIFICATION_RATE_LIMIT {
- return Err("Rate limit: too soon since the last alert".to_string());
+ return Err("Rate limit: too soon since the last iMessage".to_string());
  }
  }
  *last = Some(Instant::now());

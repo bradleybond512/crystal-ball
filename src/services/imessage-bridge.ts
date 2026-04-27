@@ -7,7 +7,7 @@
  * so the toggle survives reloads.
  */
 
-import { tryInvokeTauri } from './tauri-bridge';
+import { invokeTauri, hasTauriInvokeBridge } from './tauri-bridge';
 import { isDesktopRuntime } from './runtime';
 
 const SETTINGS_KEY = 'crystalball-imessage-settings';
@@ -54,12 +54,10 @@ export async function sendImessage(recipient: string, body: string): Promise<{ o
   if (!isDesktopRuntime()) return { ok: false, reason: 'iMessage routing requires the macOS desktop build' };
   if (!recipient.trim()) return { ok: false, reason: 'Recipient is required' };
   if (!body.trim()) return { ok: false, reason: 'Body is required' };
+  if (!hasTauriInvokeBridge()) return { ok: false, reason: 'Tauri bridge unavailable' };
   try {
- const result = await tryInvokeTauri<void>('send_imessage', { recipient: recipient.trim(), body });
- // tryInvokeTauri returns null on bridge unavailable. The native command
- // returns Ok(()) on success or Err string on send failure (which becomes
- // a thrown Error caught inside tryInvokeTauri).
- return result === null ? { ok: false, reason: 'Tauri bridge unavailable' } : { ok: true };
+ await invokeTauri<void>('send_imessage', { recipient: recipient.trim(), body });
+ return { ok: true };
   } catch (error) {
  return { ok: false, reason: error instanceof Error ? error.message : String(error) };
   }

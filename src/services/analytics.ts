@@ -81,7 +81,6 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   AISSTREAM_API_KEY: 'aisstream',
   FINNHUB_API_KEY: 'finnhub',
   NASA_FIRMS_API_KEY: 'nasa_firms',
-  UC_DP_KEY: 'uc_dp',
   OLLAMA_API_URL: 'ollama_url',
   OLLAMA_MODEL: 'ollama_model',
   WTO_API_KEY: 'wto',

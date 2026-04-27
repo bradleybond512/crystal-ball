@@ -753,33 +753,6 @@ test('accepts ANTHROPIC_API_KEY via /api/local-env-update (in allowlist)', async
   }
 });
 
-test('accepts UC_DP_KEY via /api/local-env-update', async () => {
-  const localApi = await setupApiDir({});
-
-  const app = await createLocalApiServer({
- port: 0,
- apiDir: localApi.apiDir,
- logger: { log() {}, warn() {}, error() {} },
-  });
-  const { port } = await app.start();
-
-  try {
- const response = await authFetch(`http://127.0.0.1:${port}/api/local-env-update`, {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ key: 'UC_DP_KEY', value: 'ucdp-test-key' }),
- });
- assert.equal(response.status, 200);
- const body = await response.json();
- assert.equal(body.ok, true);
- assert.equal(body.key, 'UC_DP_KEY');
- assert.equal(process.env.UC_DP_KEY, 'ucdp-test-key');
-  } finally {
- delete process.env.UC_DP_KEY;
- await app.close();
- await localApi.cleanup();
-  }
-});
 
 test('accepts CRYSTALBALL_API_KEY via /api/local-env-update', async () => {
   const localApi = await setupApiDir({});

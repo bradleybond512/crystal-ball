@@ -409,7 +409,6 @@ const ALLOWED_ENV_KEYS = new Set([
   'OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'WINGBITS_API_KEY', 'WS_RELAY_URL',
   'VITE_OPENSKY_RELAY_URL', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET',
   'AISSTREAM_API_KEY', 'VITE_WS_RELAY_URL', 'FINNHUB_API_KEY', 'NASA_FIRMS_API_KEY',
-  'UC_DP_KEY',
   'OLLAMA_API_URL', 'OLLAMA_MODEL', 'WTO_API_KEY', 'AVIATIONSTACK_API',
   'ICAO_API_KEY', 'THREATFOX_API_KEY',
   'NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'VIRUSTOTAL_API_KEY',
@@ -1228,7 +1227,6 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
 
  case 'ACLED_EMAIL':
  case 'ACLED_REFRESH_TOKEN':
- case 'UC_DP_KEY':
  return ok('Stored');
 
  case 'URLHAUS_AUTH_KEY': {
@@ -1363,16 +1361,26 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  }
 
  case 'WINGBITS_API_KEY': {
- const response = await fetchWithTimeout('https://customer-api.wingbits.com/v1/flights/details/3c6444', {
+ // Hit the flights endpoint without a specific aircraft hex so we get a
+ // deterministic 200 (auth ok, list returned) or 401/403 (auth bad).
+ // The previous probe used /flights/details/3c6444 which 404s for unknown
+ // hexes regardless of auth and tripped isAuthFailure's body-text regex
+ // when valid responses contained words like "forbidden" inside metadata.
+ const response = await fetchWithTimeout('https://customer-api.wingbits.com/v1/flights', {
  headers: {
  Accept: 'application/json',
  'x-api-key': value,
  'User-Agent': CHROME_UA,
  },
  });
+ // Status-only check: don't scan body text (auth keywords inside legitimate
+ // flight payloads — e.g. flight notes mentioning 'forbidden airspace' —
+ // were previously misclassified as credential failures).
+ if (response.status === 401 || response.status === 403) {
  const text = await response.text();
  if (isCloudflareChallenge403(response, text)) return ok('Wingbits key stored (Cloudflare blocked verification)');
- if (isAuthFailure(response.status, text)) return fail('Wingbits rejected this key');
+ return fail('Wingbits rejected this key');
+ }
  if (response.status >= 500) return fail(`Wingbits probe failed (${response.status})`);
  return ok('Wingbits key accepted');
  }

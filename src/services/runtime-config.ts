@@ -30,7 +30,6 @@ export type RuntimeSecretKey =
   | 'AISSTREAM_API_KEY'
   | 'FINNHUB_API_KEY'
   | 'NASA_FIRMS_API_KEY'
-  | 'UC_DP_KEY'
   | 'OLLAMA_API_URL'
   | 'OLLAMA_MODEL'
   | 'WTO_API_KEY'

@@ -18406,9 +18406,14 @@ body.has-breaking-alert .panels-grid {
 .spm-btn--sm { padding: 4px 10px; font-size: 11px; }
 
 .spm-btn--primary {
-  background: var(--accent);
+  background: var(--mac-accent, #0a84ff);
   color: #fff;
-  border-color: var(--accent);
+  border-color: var(--mac-accent, #0a84ff);
+}
+.spm-btn--primary:hover {
+  background: var(--mac-accent-hover, #409cff);
+  border-color: var(--mac-accent-hover, #409cff);
+  opacity: 1;
 }
 
 .spm-btn--ghost {

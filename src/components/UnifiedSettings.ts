@@ -640,7 +640,7 @@ export class UnifiedSettings {
  let deniedHtml = '';
  if (this._gpsPermissionDenied) {
  const openBtn = this.config.isDesktopApp
- ? '<button id="us-open-location-settings" class="yt-account-btn connect" style="font-size:10px;padding:2px 8px;min-width:0;margin-left:4px;">Open Location Settings</button>'
+ ? '<button id="us-open-location-settings" class="spm-btn spm-btn--ghost spm-btn--sm" style="margin-left:4px;">Open Location Settings</button>'
  : '';
  deniedHtml = `<div style="font-size:11px;color:#ef4444;margin-top:4px;">Location permission denied.${openBtn}</div>`;
  }
@@ -652,7 +652,7 @@ export class UnifiedSettings {
  <div class="ai-flow-toggle-label">Current location</div>
  <div class="ai-flow-toggle-desc">${locLabel}${locSource}</div>
  </div>
- <button id="us-gps-location" class="yt-account-btn connect" style="min-width:100px">Use GPS</button>
+ <button id="us-gps-location" class="spm-btn spm-btn--primary spm-btn--sm" style="min-width:100px">Use GPS</button>
  <span id="us-gps-status" style="font-size:11px;display:block;margin-top:4px;min-height:16px;"></span>
  </div>
  ${deniedHtml}
@@ -663,7 +663,7 @@ export class UnifiedSettings {
  <input id="us-home-city" type="text" placeholder="City" style="width:140px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
  <input id="us-home-state" type="text" placeholder="State / region" style="width:140px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
  <input id="us-home-country" type="text" placeholder="Country" style="width:140px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
- <button id="us-lookup-location" class="yt-account-btn connect" style="min-width:70px">Look up</button>
+ <button id="us-lookup-location" class="spm-btn spm-btn--primary spm-btn--sm" style="min-width:70px">Look up</button>
  <span id="us-lookup-status" style="font-size:11px;color:var(--text-muted);min-height:14px;"></span>
  </div>
  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
@@ -671,8 +671,8 @@ export class UnifiedSettings {
  <input id="us-home-lat" type="number" step="any" placeholder="Latitude" value="${latVal}" style="width:100px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
  <input id="us-home-lon" type="number" step="any" placeholder="Longitude" value="${lonVal}" style="width:110px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
  <input id="us-home-label" type="text" placeholder="Label (optional)" value="${labelVal}" style="width:130px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
- <button id="us-manual-location" class="yt-account-btn connect" style="min-width:50px">Set</button>
- ${loc ? `<button id="us-clear-location" class="yt-account-btn disconnect" style="min-width:55px">Clear</button>` : ''}
+ <button id="us-manual-location" class="spm-btn spm-btn--primary spm-btn--sm" style="min-width:50px">Set</button>
+ ${loc ? `<button id="us-clear-location" class="spm-btn spm-btn--ghost spm-btn--sm" style="min-width:55px">Clear</button>` : ''}
  </div>
  </div>
  `;
@@ -716,7 +716,7 @@ export class UnifiedSettings {
  <option value="critical"${critSel}>Critical only</option>
  <option value="high+critical"${highSel}>High + Critical</option>
  </select>
- <button type="button" id="us-imessage-test" class="yt-account-btn connect" style="min-width:60px">Test</button>
+ <button type="button" id="us-imessage-test" class="spm-btn spm-btn--primary spm-btn--sm" style="min-width:60px">Test</button>
  <span id="us-imessage-status" style="font-size:11px;color:var(--text-muted);min-height:14px;"></span>
  </div>
  </div>`;
@@ -1210,12 +1210,12 @@ export class UnifiedSettings {
  if (!this.config.isDesktopApp) {
  // Web is always "connected" via the browser cookie jar; the button
  // routes to youtube.com for account switching / fresh sign-in.
- return `<span class="yt-status-dot connected"></span><span class="yt-status-text">Via browser</span><button id="us-yt-connect" class="yt-account-btn connect">Open YouTube</button>`;
+ return `<span class="yt-status-dot connected"></span><span class="yt-status-text">Via browser</span><button id="us-yt-connect" class="spm-btn spm-btn--primary spm-btn--sm">Open YouTube</button>`;
  }
  if (connected) {
- return `<span class="yt-status-dot connected"></span><span class="yt-status-text">Connected</span><button id="us-yt-disconnect" class="yt-account-btn disconnect">Disconnect</button>`;
+ return `<span class="yt-status-dot connected"></span><span class="yt-status-text">Connected</span><button id="us-yt-disconnect" class="spm-btn spm-btn--ghost spm-btn--sm">Disconnect</button>`;
  }
- return `<button id="us-yt-connect" class="yt-account-btn connect">Connect</button>`;
+ return `<button id="us-yt-connect" class="spm-btn spm-btn--primary spm-btn--sm">Connect</button>`;
   }
 
   private renderDebugContentWeb(): string {

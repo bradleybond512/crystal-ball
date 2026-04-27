@@ -16,6 +16,7 @@
     "secrets:scan": "node scripts/secret-scan.mjs",
     "secrets:scan:staged": "node scripts/secret-scan.mjs --staged",
     "lint": "eslint .",
+    "lint:ci": "node scripts/lint-changed.mjs",
     "lint:fix": "eslint . --fix",
     "lockfile:check": "node scripts/check-package-lock.mjs",
     "bundle:check": "node scripts/check-bundle-size.mjs",

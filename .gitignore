@@ -51,3 +51,4 @@ scripts/data/gpsjam-latest.json
 .superpowers/
 research/runs/
 .worktrees/
+sidecar.health.json

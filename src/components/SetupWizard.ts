@@ -211,7 +211,19 @@ export class SetupWizard {
     // the same string into subsequent steps whose key shapes happen to match.
     markConsumed(value);
     this.setFeedback(feedback, 'Saving and validating…', 'info');
-    await setSecretValue(step.key, value);
+
+    // Persist first. If the keychain/vault write fails, surface the error and
+    // stay on this step so the user can retry — silently advancing here is
+    // how a 'saved' key vanishes after restart.
+    try {
+      await setSecretValue(step.key, value);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setKeyStatus(step.key, { state: 'unset', lastChecked: Date.now(), lastError: message });
+      this.setFeedback(feedback, '✗ Save failed: ' + message + ' — try again', 'err');
+      return;
+    }
+
     const result = await verifySecretWithApi(step.key, value);
     if (result.valid) {
       setKeyStatus(step.key, { state: 'valid', lastChecked: Date.now() });

@@ -297,7 +297,7 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  name: 'ACLED conflicts & protests',
  description: 'Conflict and protest event feeds from ACLED.',
  requiredSecrets: ['ACLED_ACCESS_TOKEN'],
- desktopRequiredSecrets: [],
+ desktopRequiredSecrets: ['ACLED_ACCESS_TOKEN'],
  fallback: 'Conflict/protest overlays are hidden.',
   },
   {
@@ -305,7 +305,7 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  name: 'ACLED air strikes & drone events',
  description: 'Air/drone strikes and missile attacks from ACLED (last 30 days, global).',
  requiredSecrets: ['ACLED_ACCESS_TOKEN', 'ACLED_EMAIL'],
- desktopRequiredSecrets: [],
+ desktopRequiredSecrets: ['ACLED_ACCESS_TOKEN', 'ACLED_EMAIL'],
  fallback: 'Air strikes & drone layer is hidden.',
   },
   {

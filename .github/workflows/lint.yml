@@ -33,8 +33,7 @@ jobs:
       - run: npm run lint:shell
       - name: Lint changed markdown files
         run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- '*.md' > "$RUNNER_TEMP/markdown-files.list"
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD -- '*.md' > "$RUNNER_TEMP/markdown-files.list"
           if [ ! -s "$RUNNER_TEMP/markdown-files.list" ]; then
             echo "No markdown files changed"
             exit 0

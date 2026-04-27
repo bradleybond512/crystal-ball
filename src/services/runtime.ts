@@ -1,4 +1,7 @@
-const WS_API_URL = import.meta.env.VITE_WS_API_URL || '';
+// `import.meta.env` is undefined in bare Node (tsx tests); Vite always provides it.
+const VITE_ENV: Record<string, string | undefined> = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
+
+const WS_API_URL = VITE_ENV.VITE_WS_API_URL || '';
 
 const DEFAULT_REMOTE_HOSTS: Record<string, string> = {
   tech: WS_API_URL,
@@ -8,7 +11,7 @@ const DEFAULT_REMOTE_HOSTS: Record<string, string> = {
 };
 
 const DEFAULT_LOCAL_API_PORT = 46_123;
-const FORCE_DESKTOP_RUNTIME = import.meta.env.VITE_DESKTOP_RUNTIME === '1';
+const FORCE_DESKTOP_RUNTIME = VITE_ENV.VITE_DESKTOP_RUNTIME === '1';
 
 let _resolvedPort: number | null = null;
 let _portPromise: Promise<number> | null = null;
@@ -98,7 +101,7 @@ export function getApiBaseUrl(): string {
  return '';
   }
 
-  const configuredBaseUrl = import.meta.env.VITE_TAURI_API_BASE_URL;
+  const configuredBaseUrl = VITE_ENV.VITE_TAURI_API_BASE_URL;
   if (configuredBaseUrl) {
  return normalizeBaseUrl(configuredBaseUrl);
   }
@@ -107,12 +110,12 @@ export function getApiBaseUrl(): string {
 }
 
 export function getRemoteApiBaseUrl(): string {
-  const configuredRemoteBase = import.meta.env.VITE_TAURI_REMOTE_API_BASE_URL;
+  const configuredRemoteBase = VITE_ENV.VITE_TAURI_REMOTE_API_BASE_URL;
   if (configuredRemoteBase) {
  return normalizeBaseUrl(configuredRemoteBase);
   }
 
-  const variant = import.meta.env.VITE_VARIANT || 'full';
+  const variant = VITE_ENV.VITE_VARIANT || 'full';
   return DEFAULT_REMOTE_HOSTS[variant] ?? DEFAULT_REMOTE_HOSTS.full ?? '';
 }
 
@@ -146,7 +149,7 @@ const APP_HOSTS = new Set([
 
   'localhost',
   '127.0.0.1',
-  ...extractHostnames(WS_API_URL, import.meta.env.VITE_WS_RELAY_URL),
+  ...extractHostnames(WS_API_URL, VITE_ENV.VITE_WS_RELAY_URL),
 ]);
 
 function isAppOriginUrl(urlStr: string): boolean {

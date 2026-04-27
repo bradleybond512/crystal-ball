@@ -52,17 +52,24 @@ Replace the existing API Keys tab with a hybrid surface that supports both quick
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Reuses existing infrastructure
+
+Three pieces from the spec's first draft turned out to already exist in the codebase and are reused as-is:
+
+- **Validation routing** — `verifySecretWithApi()` at `src/services/runtime-config.ts` already dispatches to `verifyWebSecret` (browser, direct CORS probe for ~6 providers) or to the sidecar (desktop). Returns `{ valid, message }`. The dashboard and wizard call this directly.
+- **Sidecar validation route** — `POST /api/local-validate-secret` at `src-tauri/sidecar/local-api-server.mjs:5066` already exists with per-provider `case` probes for Groq, OpenRouter, FRED, EIA, Cloudflare, ACLED, URLhaus, ThreatFox, OTX, AbuseIPDB, Wingbits, Finnhub, NASA FIRMS, Ollama, and the relay URLs. New probe `case` blocks added inline as needed; no new route required.
+- **Feature-unlock map** — `RUNTIME_FEATURES` at `src/services/runtime-config.ts:240` already has each feature's `requiredSecrets`. The dashboard inverts this index to compute "Unlocks: <features>" per key. No hand-curated `key-feature-map.ts` needed.
+
 ### Files added
 
 | File | Purpose |
 |---|---|
 | `src/components/KeyDashboard.ts` | Replaces `RuntimeConfigPanel` body. Renders categorized cards with status. |
 | `src/components/SetupWizard.ts` | Modal wizard with tier checkpoints and per-step UX. |
-| `src/services/key-validator.ts` | Per-provider validation registry. Three flavors: direct CORS-friendly probe, sidecar-proxied probe, plaintext-noop. |
-| `src/services/key-feature-map.ts` | Maps each key → user-facing list of features it unlocks. |
-| `src/services/key-shape-registry.ts` | Regex per key for clipboard watcher. ~30 entries; keys without a stable shape are omitted. |
+| `src/services/key-shape-registry.ts` | Regex per key for clipboard watcher. ~25 entries; keys without a stable shape are omitted. |
 | `src/services/wizard-state.ts` | Persists wizard position, "don't ask again" set, skipped-this-session set, per-key status in localStorage. |
 | `src/services/clipboard-watcher.ts` | 500ms-poll Tauri clipboard during active wizard step. Desktop only. |
+| `src/services/key-feature-index.ts` | Pure function: inverts `RUNTIME_FEATURES.requiredSecrets` to `Map<RuntimeSecretKey, string[]>` of feature labels. |
 
 ### Files modified
 
@@ -70,7 +77,7 @@ Replace the existing API Keys tab with a hybrid surface that supports both quick
 |---|---|
 | `src/components/RuntimeConfigPanel.ts` | Becomes a thin wrapper that mounts `KeyDashboard`. Existing web-vault banner logic preserved as-is. |
 | `src/services/settings-constants.ts` | Add `KEY_CATEGORIES` constant + `categoryFor(key)` helper. |
-| `src-tauri/sidecar/local-api-server.mjs` | Add `POST /api/validate-secret` route — body `{ key, value }`, sidecar makes the test call server-side, returns `{ ok, reason? }`. Bearer-auth gated. |
+| `src-tauri/sidecar/local-api-server.mjs` | Extend the existing `switch (key)` block at line 1137 with new `case` blocks for any tier-1–8 keys not yet covered (NewsAPI, NewsData, MediaStack, VirusTotal, GreyNoise, etc.). Reuses `fetchWithTimeout`, `isAuthFailure`, `isCloudflareChallenge403`, `ok()`, `fail()` helpers already in the file. |
 
 ### Tier and category mapping
 
@@ -157,57 +164,25 @@ Wizard opens at the lowest tier with any key matching `unset && !dontAsk`. End-o
 
 Keys without a stable shape (e.g., `GEONAMES_USERNAME`, `OLLAMA_MODEL`) are omitted — clipboard watcher just won't fire for those steps.
 
-## Validation layer
+## Validation layer (uses existing infrastructure)
 
-`key-validator.ts` exports:
+The dashboard and wizard call the existing `verifySecretWithApi(key, value)` from `src/services/runtime-config.ts`. That function already:
 
-```ts
-export type ValidationResult = { ok: true } | { ok: false, reason: string };
+- Validates locally first (`validateSecret`) and returns immediately on bad shape.
+- Routes to `verifyWebSecret` (browser) which performs direct CORS-friendly probes for ~6 providers using `referrerPolicy: 'no-referrer'` and an 8s `AbortController` timeout. Returns `{ valid, message }`.
+- Routes to the sidecar `/api/local-validate-secret` (desktop) via `callSidecarWithAuth` (bearer-auth handled by the helper). The sidecar runs the per-provider probe in its `switch (key)` block at line 1137. Probes already exist for Groq, OpenRouter, FRED, EIA, Cloudflare, ACLED, URLhaus, ThreatFox, OTX, AbuseIPDB, Wingbits, Finnhub, NASA FIRMS, Ollama, and the relay URLs.
 
-export async function validate(key: RuntimeSecretKey, value: string): Promise<ValidationResult>;
-```
+The implementation work for validation is therefore limited to **adding new sidecar `case` blocks** for the tier-1–8 keys that don't yet have probes (NewsAPI, NewsData, MediaStack, VirusTotal, GreyNoise, URLScan, Vulners, Pulsedive, HIBP, BGPView, BitcoinAbuse, UCDP, WTO, AviationStack, ICAO, AISStream, OpenSky pair, OpenWeatherMap, NASA, IPInfo, GeoNames, Google Maps). Each new `case` follows the existing pattern: hit a free-tier endpoint, distinguish 401/403 from 5xx and Cloudflare challenges, return `ok()` or `fail()` with a one-line message.
 
-Internal map: `Record<RuntimeSecretKey, (v: string) => Promise<ValidationResult>>`. Examples of how each key gets wired:
+Probes hit free-tier or zero-cost endpoints when possible (e.g., NewsAPI's `GET /top-headlines?country=us&pageSize=1`, OpenWeatherMap's `GET /data/2.5/weather?q=London`, etc.).
 
-| Key name (description) | Validator factory |
-|------------------------|-------------------|
-| Anthropic              | `corsProbe('https://api.anthropic.com/v1/models', { headers: ... })` |
-| Groq                   | `corsProbe('https://api.groq.com/openai/v1/models', ...)` |
-| Finnhub                | `sidecarProbe('FINNHUB_API_KEY')` |
-| Ollama URL             | `plaintextNoop` |
-| ACLED email            | `plaintextNoop` |
+## Feature index (derived from RUNTIME_FEATURES)
 
-Each validator has a 5-second timeout. On timeout: `{ ok: false, reason: 'Validation timed out' }`.
+`key-feature-index.ts` exports a single pure function `featuresFor(key: RuntimeSecretKey): string[]` that inverts the existing `RUNTIME_FEATURES` array (each entry has `name`, `requiredSecrets`). Built on import as a `Map<RuntimeSecretKey, string[]>` and looked up O(1).
 
-Sidecar `POST /api/validate-secret`:
+The unlock line renders as: "✓ Valid — Unlocks: Markets, Earnings, Threat Synthesis". If `featuresFor(key)` returns an empty array, the unlock line is omitted silently.
 
-```js
-// local-api-server.mjs
-app.post('/api/validate-secret', requireBearer, async (req, res) => {
-  const { key, value } = req.body;
-  const probe = SIDECAR_PROBES[key];
-  if (!probe) return res.status(400).json({ ok: false, reason: 'No validator' });
-  try {
-    const result = await probe(value);  // makes test call server-side
-    res.json(result);
-  } catch (err) {
-    res.json({ ok: false, reason: err.message });
-  }
-});
-```
-
-Probes hit free-tier or zero-cost endpoints when possible (e.g., Finnhub's `GET /quote?symbol=AAPL` consumes a request but returns immediately; NewsAPI's `GET /top-headlines?country=us&pageSize=1`).
-
-## Feature map
-
-`key-feature-map.ts` exports `KEY_FEATURES` as `Partial<Record<RuntimeSecretKey, KeyFeatures>>`, where `KeyFeatures` is `{ features: string[]; panels?: string[] }`. Example entries:
-
-| Key name (description) | Features | Panels |
-|------------------------|----------|--------|
-| Anthropic              | `/sitrep`, Threat Synthesis, Skeptic persona, Auto-brief | — |
-| Finnhub                | Real-time stock quotes, Earnings calendar | Markets |
-
-Rendered as: "✓ Valid — Unlocks: Real-time stock quotes, Earnings calendar". If no entry, the unlock line is omitted silently.
+This means the unlock notes stay automatically in sync with `RUNTIME_FEATURES` — no risk of the two drifting apart over time.
 
 ## Empty / first-run state
 
@@ -225,12 +200,12 @@ Validation failures are logged via the existing `reasoning-debug` ring buffer so
 
 ## Testing plan
 
-**Unit (Vitest):**
+**Unit (`tsx --test`, the project's test runner — see `npm run test:reasoning` for examples):**
 
-- `key-validator.test.ts` — mocked `fetch` for direct probes; mocked sidecar response for proxied; timeout behavior; non-200 handling.
-- `key-shape-registry.test.ts` — positive (real-shape keys match) + negative (random strings, near-miss prefixes don't match) cases for every registered regex.
-- `wizard-state.test.ts` — persistence round-trips, dontAsk add/remove, position resume, skipped-set clears on close.
-- `key-feature-map.test.ts` — every key in `KEY_FEATURES` exists in `RuntimeSecretKey` union.
+- `src/services/__tests__/key-shape-registry.test.mts` — positive (real-shape keys match) + negative (random strings, near-miss prefixes don't match) cases for every registered regex.
+- `src/services/__tests__/wizard-state.test.mts` — persistence round-trips, dontAsk add/remove, position resume, skipped-set clears on close. Uses an in-memory `localStorage` shim like the existing `llm-budget.test.mts`.
+- `src/services/__tests__/key-feature-index.test.mts` — sanity-check that every key referenced in `RUNTIME_FEATURES.requiredSecrets` exists in the `RuntimeSecretKey` union, and that `featuresFor()` returns expected feature labels for a sample of keys.
+- `src/services/__tests__/categories.test.mts` — every key in `KEY_CATEGORIES` exists in `SUPPORTED_SECRET_KEYS`; no key appears in two categories.
 
 **Integration (smoke):**
 

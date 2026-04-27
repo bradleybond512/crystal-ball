@@ -18,5 +18,9 @@
   <!-- Required for macOS Core Location permission prompt -->
   <key>NSLocationWhenInUseUsageDescription</key>
   <string>Crystal Ball uses your location to center panels and weather data on your home.</string>
+
+  <!-- Modern macOS LaunchServices should treat Crystal Ball as a Cocoa app. -->
+  <key>LSRequiresCarbon</key>
+  <false/>
 </dict>
 </plist>

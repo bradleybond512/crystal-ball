@@ -193,6 +193,24 @@ const verifyMacCodeSignature = (artifactPath, label, args = ['--verify', '--deep
   }
 };
 
+const ensureModernMacLaunchServicesPlist = (appPath, allowMutation) => {
+  if (process.platform !== 'darwin') return;
+  const plistPath = path.join(appPath, 'Contents', 'Info.plist');
+  const printResult = runCapture('/usr/libexec/PlistBuddy', ['-c', 'Print :LSRequiresCarbon', plistPath]);
+  const currentValue = (printResult.stdout || '').trim();
+  if (currentValue === 'false' || currentValue === '') return;
+  if (!allowMutation) {
+    throw new Error('App bundle Info.plist still has LSRequiresCarbon=true; fix src-tauri/Info.plist before signing.');
+  }
+  let result = runCapture('/usr/libexec/PlistBuddy', ['-c', 'Set :LSRequiresCarbon false', plistPath]);
+  if ((result.status ?? 1) !== 0) {
+    result = runCapture('/usr/libexec/PlistBuddy', ['-c', 'Add :LSRequiresCarbon bool false', plistPath]);
+  }
+  if ((result.status ?? 1) !== 0) {
+    throw new Error((result.stderr || result.stdout || '').trim() || 'Failed to clear LSRequiresCarbon in app bundle');
+  }
+};
+
 if (targetOs === 'macos') {
   const bundleRoot = path.join('src-tauri', 'target', 'release', 'bundle');
   const appDir = path.join(bundleRoot, 'macos');
@@ -210,6 +228,7 @@ if (targetOs === 'macos') {
   const bundleVersion = env.npm_package_version;
   const archSuffix = process.arch === 'arm64' ? 'aarch64' : process.arch;
   const dmgPath = path.join(dmgDir, `${variantProductName}_${bundleVersion}_${archSuffix}.dmg`);
+  ensureModernMacLaunchServicesPlist(appPath, !sign);
 
   try {
  verifyMacCodeSignature(appPath, 'App bundle');

@@ -40,6 +40,11 @@ test('macOS desktop packaging signs and verifies the app bundle before creating 
   );
   assert.match(
  desktopPackageScript,
+ /Set :LSRequiresCarbon false/,
+ 'local macOS packaging should clear the obsolete Carbon launch flag before ad-hoc signing',
+  );
+  assert.match(
+ desktopPackageScript,
  /hdiutil["']?,?\s*\[[^\]]*create/s,
  'macOS packaging should create the dmg after the app bundle has been signed and verified',
   );

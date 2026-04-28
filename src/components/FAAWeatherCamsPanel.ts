@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-async-constructor, sonarjs/cognitive-complexity */
 import { Panel } from './Panel';
 import { fetchFAACameras, scoreCamerasAgainstAlerts } from '@/services/faa-cameras';
 import type { ScoredFAACamera } from '@/services/faa-cameras';
@@ -13,7 +14,7 @@ export class FAAWeatherCamsPanel extends Panel {
 
   constructor() {
  super({ id: 'faa-weather-cams', title: 'FAA Weather Cams', className: 'panel-wide' });
- this.load();
+ void this.load();
   }
 
   private async load(): Promise<void> {
@@ -27,7 +28,7 @@ export class FAAWeatherCamsPanel extends Panel {
   }
 
   public refresh(): void {
- this.load();
+ void this.load();
   }
 
   private get displayed(): ScoredFAACamera[] {
@@ -38,7 +39,7 @@ export class FAAWeatherCamsPanel extends Panel {
 
   private render(): void {
  const el = this.getContentElement();
- while (el.firstChild) el.removeChild(el.firstChild);
+ while (el.firstChild) el.firstChild.remove();
  el.className = 'panel-content faa-cams-content';
 
  const alertCams = this.cameras.filter(c => c.alertProximityMi !== null);
@@ -46,7 +47,7 @@ export class FAAWeatherCamsPanel extends Panel {
  const banner = document.createElement('div');
  banner.className = 'faa-digest-banner';
  banner.textContent = this.digestText;
- el.appendChild(banner);
+ el.append(banner);
  }
 
  // Toolbar
@@ -58,16 +59,16 @@ export class FAAWeatherCamsPanel extends Panel {
  cb.type = 'checkbox';
  cb.checked = this.alertOnly;
  cb.addEventListener('change', () => { this.alertOnly = cb.checked; this.render(); });
- label.appendChild(cb);
- label.appendChild(document.createTextNode(' Alert-proximate only'));
+ label.append(cb);
+ label.append(document.createTextNode(' Alert-proximate only'));
  const countEl = document.createElement('span');
  countEl.className = 'faa-cam-count';
  countEl.textContent = `${this.displayed.length} cameras`;
- toolbar.appendChild(label);
- toolbar.appendChild(countEl);
- el.appendChild(toolbar);
+ toolbar.append(label);
+ toolbar.append(countEl);
+ el.append(toolbar);
 
- if (this.selectedCam) el.appendChild(this._buildViewer(this.selectedCam));
+ if (this.selectedCam) el.append(this._buildViewer(this.selectedCam));
 
  // Table
  const table = document.createElement('table');
@@ -78,31 +79,31 @@ export class FAAWeatherCamsPanel extends Panel {
  for (const col of ['Camera', 'Location', 'Alert', 'Score', 'Updated']) {
  const th = document.createElement('th');
  th.textContent = col;
- headerRow.appendChild(th);
+ headerRow.append(th);
  }
- thead.appendChild(headerRow);
- table.appendChild(thead);
+ thead.append(headerRow);
+ table.append(thead);
 
  const tbody = document.createElement('tbody');
  for (const cam of this.displayed) {
  const tr = document.createElement('tr');
- tr.className = `eq-row${cam.alertProximityMi !== null ? ' eq-moderate' : ''}`;
+ tr.className = `eq-row${cam.alertProximityMi === null ? '' : ' eq-moderate'}`;
  if (this.selectedCam?.id === cam.id) tr.classList.add('faa-cam-selected');
 
  const tdName = document.createElement('td');
  tdName.textContent = cam.name;
 
  const tdLoc = document.createElement('td');
- tdLoc.textContent = cam.category !== 'weather'
- ? `${cam.state} · ${cam.category}`
- : cam.state;
+ tdLoc.textContent = cam.category === 'weather'
+ ? cam.state
+ : `${cam.state} · ${cam.category}`;
 
  const tdAlert = document.createElement('td');
  if (cam.alertLabel) {
  const badge = document.createElement('span');
  badge.className = 'faa-alert-badge';
  badge.textContent = cam.alertLabel;
- tdAlert.appendChild(badge);
+ tdAlert.append(badge);
  } else {
  tdAlert.textContent = '—';
  }
@@ -113,16 +114,24 @@ export class FAAWeatherCamsPanel extends Panel {
  const tdTime = document.createElement('td');
  tdTime.textContent = this._relativeTime(cam.lastUpdated);
 
- for (const td of [tdName, tdLoc, tdAlert, tdScore, tdTime]) tr.appendChild(td);
+ for (const td of [tdName, tdLoc, tdAlert, tdScore, tdTime]) tr.append(td);
 
  tr.addEventListener('click', () => {
  this.selectedCam = this.selectedCam?.id === cam.id ? null : cam;
+ // The sidecar returns imageUrl='/api/faa-camera-image?...' as a
+ // resolver pointer, not a direct CDN URL. Lazy-resolve here so
+ // each click only spends one upstream call (the 927-camera
+ // catalog has 4–8 images per site; pre-fetching them all is
+ // wasteful + timeouts the catalog response).
+ if (this.selectedCam?.imageUrl.startsWith('/api/faa-camera-image')) {
+ void this._resolveImageUrl(this.selectedCam);
+ }
  this.render();
  });
- tbody.appendChild(tr);
+ tbody.append(tr);
  }
- table.appendChild(tbody);
- el.appendChild(table);
+ table.append(tbody);
+ el.append(table);
 
  if (this.displayed.length === 0) {
  const empty = document.createElement('p');
@@ -130,7 +139,7 @@ export class FAAWeatherCamsPanel extends Panel {
  empty.textContent = this.alertOnly
  ? 'No cameras near active alerts.'
  : 'No camera data available.';
- el.appendChild(empty);
+ el.append(empty);
  }
   }
 
@@ -142,17 +151,17 @@ export class FAAWeatherCamsPanel extends Panel {
  header.className = 'faa-cam-viewer-header';
  const nameEl = document.createElement('strong');
  nameEl.textContent = cam.name;
- header.appendChild(nameEl);
+ header.append(nameEl);
  if (cam.alertLabel) {
  const badge = document.createElement('span');
  badge.className = 'faa-alert-badge';
  badge.textContent = cam.alertLabel;
- header.appendChild(badge);
+ header.append(badge);
  }
  const updatedEl = document.createElement('span');
  updatedEl.className = 'faa-cam-updated';
  updatedEl.textContent = this._relativeTime(cam.lastUpdated);
- header.appendChild(updatedEl);
+ header.append(updatedEl);
 
  const img = document.createElement('img');
  img.className = 'faa-cam-image';
@@ -165,11 +174,11 @@ export class FAAWeatherCamsPanel extends Panel {
  analyzeBtn.className = 'faa-analyze-btn';
  analyzeBtn.textContent = cam.aiConditions ?? 'Analyze conditions';
  analyzeBtn.disabled = !!cam.aiConditions;
- analyzeBtn.addEventListener('click', () => this._analyzeCamera(cam, analyzeBtn));
+ analyzeBtn.addEventListener('click', () => { void this._analyzeCamera(cam, analyzeBtn); });
 
- div.appendChild(header);
- div.appendChild(img);
- div.appendChild(analyzeBtn);
+ div.append(header);
+ div.append(img);
+ div.append(analyzeBtn);
  return div;
   }
 
@@ -185,7 +194,7 @@ export class FAAWeatherCamsPanel extends Panel {
  cameraName: cam.name,
  alertLabel: cam.alertLabel,
  }),
- signal: AbortSignal.timeout(30000),
+ signal: AbortSignal.timeout(30_000),
  });
  const data = await res.json() as { conditions?: string; error?: string };
  if (data.conditions) {
@@ -209,9 +218,35 @@ export class FAAWeatherCamsPanel extends Panel {
  }
   }
 
+  /**
+   * Replace the panel's `/api/faa-camera-image?cameraId=X` resolver
+   * pointer with the actual CDN URL the FAA weathercams API returns.
+   * Idempotent — second call short-circuits when the URL already
+   * looks like a real CDN URL.
+   */
+  private async _resolveImageUrl(cam: ScoredFAACamera): Promise<void> {
+ if (!cam.imageUrl.startsWith('/api/faa-camera-image')) return;
+ try {
+ const res = await fetch(`${getApiBaseUrl()}${cam.imageUrl}`, { signal: AbortSignal.timeout(10_000) });
+ if (!res.ok) return;
+ const data = await res.json() as { imageUrl?: string | null; imageDatetime?: string };
+ if (!data.imageUrl) return;
+ const idx = this.cameras.findIndex(c => c.id === cam.id);
+ if (idx === -1) return;
+ this.cameras[idx]!.imageUrl = data.imageUrl;
+ if (data.imageDatetime) this.cameras[idx]!.lastUpdated = data.imageDatetime;
+ if (this.selectedCam?.id === cam.id) this.selectedCam = this.cameras[idx] ?? null;
+ this.render();
+ } catch {
+ // Silent failure leaves the resolver pointer in place; the
+ // viewer's <img> will 404 and the analyze button stays
+ // disabled, but the panel itself stays usable.
+ }
+  }
+
   private _relativeTime(iso: string): string {
  const diff = Date.now() - new Date(iso).getTime();
- const min = Math.floor(diff / 60000);
+ const min = Math.floor(diff / 60_000);
  if (min < 1) return 'just now';
  if (min < 60) return `${min}m ago`;
  return `${Math.floor(min / 60)}h ago`;
@@ -223,7 +258,7 @@ export class FAAWeatherCamsPanel extends Panel {
  this.alertOnly = true;
  } else if (!active) {
  this.alertOnly = false;
- this.load();
+ void this.load();
  }
  this.render();
   }

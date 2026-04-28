@@ -64,6 +64,17 @@ export interface FeatureHealth {
   /** Free-text reason for the current status. Always set so the UI
    *  can render "why is this degraded?" without joining tables. */
   reason: string;
+  /** Plain-English description of how this affects the user. Required
+   *  when status !== 'healthy' (the registry enforces this). For
+   *  healthy features it can be the empty string. Plan invariant from
+   *  the elite gameplan: "every degraded feature must include user
+   *  impact and recommended next action". */
+  userImpact: string;
+  /** Concrete next action the user (or operator) can take to remediate.
+   *  Required when status !== 'healthy'. Examples: "Add a saved place
+   *  so weather warnings can match", "Re-authenticate the NWS provider",
+   *  "Wait for the next scheduled refresh". */
+  recommendedAction: string;
   /** Confidence multiplier (0..1) that downstream scorers should
    *  apply when this feature contributes to a higher-level claim.
    *  1.0 = no penalty; 0.0 = ignore the feature entirely. */

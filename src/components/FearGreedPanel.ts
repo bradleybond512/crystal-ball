@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-async-constructor, unicorn/no-array-reverse */
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -19,8 +20,8 @@ function scoreColor(score: number): string {
   return '#4caf50';
 }
 
-function buildSparkline(history: FearGreedResponse['history']): string {
-  if (history.length < 2) return '';
+function buildSparkline(history: FearGreedResponse['history'] | undefined): string {
+  if (!Array.isArray(history) || history.length < 2) return '';
 
   const points = [...history].reverse();
   const values = points.map(p => p.value);
@@ -98,15 +99,23 @@ export class FearGreedPanel extends Panel {
  return;
  }
 
- if (this.data.error && this.data.history.length === 0) {
+ // Defensive shape check — degraded sidecar payloads can omit
+ // `history` or even `score`/`classification`. Smoke harness
+ // identified this as a crash site (history.length on undefined).
+ const history = Array.isArray(this.data.history) ? this.data.history : [];
+ if (this.data.error && history.length === 0) {
+ this.showError(FearGreedPanel.UNAVAILABLE_MESSAGE);
+ return;
+ }
+ if (typeof this.data.score !== 'number' || typeof this.data.classification !== 'string') {
  this.showError(FearGreedPanel.UNAVAILABLE_MESSAGE);
  return;
  }
 
- const { score, classification, history, updatedAt } = this.data;
+ const { score, classification, updatedAt } = this.data;
  const color = scoreColor(score);
  const sparkline = buildSparkline(history);
- const updated = formatUpdated(updatedAt);
+ const updated = formatUpdated(updatedAt ?? Math.floor(Date.now() / 1000));
 
  const html = `
  <div style="text-align:center;padding:12px 8px 8px;">

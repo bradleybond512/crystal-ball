@@ -24,6 +24,23 @@ export interface ScoredFAACamera extends FAACamera {
 const CACHE_TTL_MS = 15 * 60 * 1000;
 let cache: { data: FAACamera[]; ts: number } | null = null;
 
+/** Defensive parse — accepts a raw FAACamera[] or any of the
+ *  documented envelope shapes ({cameras|items|data: [...]}). Falls
+ *  back to [] for unknown / degraded payloads. The smoke harness's
+ *  default mock returns `{ ok: true, items: [], data: [] }` which
+ *  used to cast straight to FAACamera[] and crash downstream. */
+export function parseFAACamerasResponse(payload: unknown): FAACamera[] {
+  if (Array.isArray(payload)) return payload as FAACamera[];
+  if (payload && typeof payload === 'object') {
+    const obj = payload as Record<string, unknown>;
+    for (const key of ['cameras', 'items', 'data']) {
+      const v = obj[key];
+      if (Array.isArray(v)) return v as FAACamera[];
+    }
+  }
+  return [];
+}
+
 export async function fetchFAACameras(): Promise<FAACamera[]> {
   if (cache && Date.now() - cache.ts < CACHE_TTL_MS) return cache.data;
   try {
@@ -31,7 +48,7 @@ export async function fetchFAACameras(): Promise<FAACamera[]> {
  signal: AbortSignal.timeout(15_000),
  });
  if (!res.ok) return cache?.data ?? [];
- const data = (await res.json()) as FAACamera[];
+ const data = parseFAACamerasResponse(await res.json());
  cache = { data, ts: Date.now() };
  return data;
   } catch {
@@ -71,11 +88,16 @@ export function scoreCamerasAgainstAlerts(
   gdacsEvents: GDACSEvent[],
   radiusMi = 150,
 ): ScoredFAACamera[] {
-  return cameras.map(cam => {
+  // Defensive — callers can deserialize an arbitrary JSON shape into
+  // these slots. Coerce to [] rather than crashing on .map / for-of.
+  const camArr: FAACamera[] = Array.isArray(cameras) ? cameras : [];
+  const alertArr: NWSAlert[] = Array.isArray(nwsAlerts) ? nwsAlerts : [];
+  const gdacsArr: GDACSEvent[] = Array.isArray(gdacsEvents) ? gdacsEvents : [];
+  return camArr.map(cam => {
  let closestMi: number | null = null;
  let alertLabel: string | null = null;
 
- for (const alert of nwsAlerts) {
+ for (const alert of alertArr) {
  if (!alert.centroid) continue;
  const mi = haversineMi(cam.lat, cam.lon, alert.centroid[1], alert.centroid[0]);
  if (mi < radiusMi && (closestMi === null || mi < closestMi)) {
@@ -84,7 +106,7 @@ export function scoreCamerasAgainstAlerts(
  }
  }
 
- for (const event of gdacsEvents) {
+ for (const event of gdacsArr) {
  if (event.alertLevel === 'Green') continue;
  const mi = haversineMi(cam.lat, cam.lon, event.coordinates[1], event.coordinates[0]);
  if (mi < radiusMi && (closestMi === null || mi < closestMi)) {

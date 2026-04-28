@@ -52,3 +52,9 @@ scripts/data/gpsjam-latest.json
 research/runs/
 .worktrees/
 sidecar.health.json
+
+# Panel smoke harness reports (regenerated each run)
+tests/panels/.last-report.json
+tests/panels/.last-report.md
+tests/panels/.last-routes-audit.json
+tests/panels/.last-routes-audit.md

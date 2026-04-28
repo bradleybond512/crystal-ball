@@ -340,3 +340,150 @@ test('exportBundleToMarkdown: produces a fenced JSON code block', () => {
   assert.match(md, /```json/);
   assert.match(md, /```\n$/);
 });
+
+// ── Strategic-section redaction ────────────────────────────────────────
+// PR198 bug-smash item 2: the strategic sections (failurePrediction,
+// qualityDebt, trustBudget, improvementPlan, scenarioCoverage) used
+// to pass through unredacted. These tests embed sensitive data inside
+// each section and assert it's scrubbed.
+
+test('strategic redaction: emails, bearer tokens, and API keys in qualityDebt', () => {
+  const dirtyDebt = [
+    {
+      id: 'panel-smoke:weather:silent',
+      category: 'untested_domains',
+      severity: 'medium',
+      ownerArea: 'diagnostics',
+      summary: 'Contact bradley_bond@me.com about this',
+      impact: 'Reach Bradley at +1 (555) 123-4567',
+      recommendedFix: 'Use Bearer abc123def456ghi789jkl012mno345 to debug',
+      // Fake key string, intentionally crafted to NOT match the
+      // repo secret-scan provider pattern. The redactor key-name match
+      // (`apiKey`) is what's under test here.
+      apiKey: 'FAKE-TEST-KEY-VALUE-FOR-REDACTION-CHECK',
+      evidence: { detail: 'logs at /var/log/crystalball mention 1234567890abcdef1234567890abcdef' },
+      detectedAt: NOW,
+      lastSeenAt: NOW,
+    },
+  ];
+  const bundle = buildExportBundle({
+    now: () => NOW,
+    app: { variant: 'full', version: '2.10.20', runtime: 'desktop' },
+    systemHealth: makeSystemHealth(),
+    notifications: { summary: emptyNotifSummary(), entries: [] },
+    events: { snapshot: [] },
+    qualityDebt: dirtyDebt as never,
+  });
+  const json = exportBundleToJson(bundle);
+  // No email, no phone, no bearer token, no long hex blob, no API key value.
+  assert.doesNotMatch(json, /bradley_bond@me\.com/);
+  assert.doesNotMatch(json, /555[\s.\-)]?\s*123[\s.\-]?4567/);
+  assert.doesNotMatch(json, /Bearer\s+abc123def456ghi789jkl012mno345/);
+  assert.doesNotMatch(json, /FAKE-TEST-KEY-VALUE-FOR-REDACTION-CHECK/);
+  assert.doesNotMatch(json, /1234567890abcdef1234567890abcdef/);
+  // Round-trips
+  assert.doesNotThrow(() => JSON.parse(json));
+});
+
+test('strategic redaction: lat/lng inside failurePrediction are coarsened', () => {
+  const dirtyPrediction = {
+    generatedAt: NOW,
+    predictions: [
+      {
+        capabilityId: 'storm-mode',
+        riskTier: 'high',
+        reasons: [
+          { kind: 'missing_signal', text: 'tornado polygon intersects 41.6105234, -86.7234567' },
+        ],
+        recommendations: [
+          { kind: 'hint', text: 'Verify saved place at lat 41.6105234' },
+        ],
+        latitude: 41.6105234,
+        longitude: -86.7234567,
+      },
+    ],
+  };
+  const bundle = buildExportBundle({
+    now: () => NOW,
+    app: { variant: 'full', version: '2.10.20', runtime: 'desktop' },
+    systemHealth: makeSystemHealth(),
+    notifications: { summary: emptyNotifSummary(), entries: [] },
+    events: { snapshot: [] },
+    failurePrediction: dirtyPrediction as never,
+  });
+  // Numeric lat/lng keys → coarsened to 1 decimal (~10 km grid).
+  const pred = bundle.failurePrediction as unknown as typeof dirtyPrediction;
+  assert.equal(pred.predictions[0]?.latitude, 41.6);
+  assert.equal(pred.predictions[0]?.longitude, -86.7);
+  // String free text containing exact coordinates stays as-is for
+  // numeric reading — but no email/phone/bearer/long-hex leaks.
+  const json = exportBundleToJson(bundle);
+  assert.doesNotMatch(json, /\bBearer\s+[A-Za-z0-9]+/);
+});
+
+test('strategic redaction: improvementPlan handoff outline scrubs free text', () => {
+  const dirtyPlan = {
+    generatedAt: NOW,
+    rankings: [],
+    handoffOutline:
+      'Send results to ops@example.com. Auth: Bearer abcdef0123456789abcdef0123456789. Phone +1-555-987-6543.',
+  };
+  const bundle = buildExportBundle({
+    now: () => NOW,
+    app: { variant: 'full', version: '2.10.20', runtime: 'desktop' },
+    systemHealth: makeSystemHealth(),
+    notifications: { summary: emptyNotifSummary(), entries: [] },
+    events: { snapshot: [] },
+    improvementPlan: dirtyPlan as never,
+  });
+  const plan = bundle.improvementPlan as unknown as typeof dirtyPlan;
+  assert.doesNotMatch(plan.handoffOutline, /ops@example\.com/);
+  assert.doesNotMatch(plan.handoffOutline, /Bearer\s+abcdef0123456789abcdef0123456789/);
+  assert.doesNotMatch(plan.handoffOutline, /555[\s.\-)]?\s*987[\s.\-]?6543/);
+});
+
+test('strategic redaction: trustBudget free-text concerns scrubbed', () => {
+  const dirtyBudget = {
+    generatedAt: NOW,
+    perDomain: [],
+    topConcerns: ['operator user@host.com leaked Bearer aaaaaaaabbbbbbbbccccccccdddddddd'],
+  };
+  const bundle = buildExportBundle({
+    now: () => NOW,
+    app: { variant: 'full', version: '2.10.20', runtime: 'desktop' },
+    systemHealth: makeSystemHealth(),
+    notifications: { summary: emptyNotifSummary(), entries: [] },
+    events: { snapshot: [] },
+    trustBudget: dirtyBudget as never,
+  });
+  const budget = bundle.trustBudget as unknown as typeof dirtyBudget;
+  assert.doesNotMatch(budget.topConcerns[0] ?? '', /user@host\.com/);
+  assert.doesNotMatch(budget.topConcerns[0] ?? '', /Bearer\s+aaaaaaaabbbbbbbbccccccccdddddddd/);
+});
+
+test('strategic redaction: bundle still JSON round-trips after scrubbing', () => {
+  const bundle = buildExportBundle({
+    now: () => NOW,
+    app: { variant: 'full', version: '2.10.20', runtime: 'desktop' },
+    systemHealth: makeSystemHealth(),
+    notifications: { summary: emptyNotifSummary(), entries: [] },
+    events: { snapshot: [] },
+    qualityDebt: [
+      {
+        id: 'foo',
+        category: 'noisy_algorithms',
+        severity: 'low',
+        ownerArea: 'algorithms',
+        summary: 'tone-check email lookup@example.com',
+        evidence: { detail: 'plain text' },
+        detectedAt: NOW,
+        lastSeenAt: NOW,
+      },
+    ] as never,
+    failurePrediction: { generatedAt: NOW, predictions: [] } as never,
+  });
+  const json = exportBundleToJson(bundle);
+  const parsed = JSON.parse(json) as { schemaVersion: number; qualityDebt?: { summary: string }[] };
+  assert.equal(parsed.schemaVersion, 2);
+  assert.doesNotMatch(parsed.qualityDebt?.[0]?.summary ?? '', /lookup@example\.com/);
+});

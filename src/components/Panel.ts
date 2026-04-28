@@ -1226,4 +1226,54 @@ export class Panel {
  delete this.element.dataset.resizing;
  document.body.classList.remove('panel-resize-active');
   }
+
+  /** Reusable standard panel header (rescued from PR #64).
+   *  Returns a DOM node panels can attach to their content area when
+   *  they want a consistent title + subtitle + freshness dot layout.
+   *  Title falls back to the `.panel-title` text already rendered by
+   *  the Panel constructor. */
+  protected buildStandardHeader(opts: {
+ title?: string;
+ subtitle?: string;
+ freshness?: { dotColor?: string; label?: string };
+ rightSlot?: HTMLElement;
+  }): HTMLElement {
+ const header = document.createElement('div');
+ header.className = 'cb-panel-header';
+ header.style.cssText = `
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: var(--space-3) var(--space-4);
+    `;
+ const left = document.createElement('div');
+ const title = document.createElement('div');
+ title.style.cssText = `
+      font-size: var(--text-base); font-weight: var(--fw-semibold);
+      color: #e5e5e5; letter-spacing: -0.01em;
+    `;
+ const renderedTitle = this.element.querySelector('.panel-title')?.textContent ?? '';
+ title.textContent = opts.title ?? renderedTitle;
+ left.append(title);
+ if (opts.subtitle) {
+ const sub = document.createElement('div');
+ sub.style.cssText = 'font-size: var(--text-xs); color: #666; margin-top: 2px;';
+ sub.textContent = opts.subtitle;
+ left.append(sub);
+ }
+ header.append(left);
+ if (opts.freshness) {
+ const right = document.createElement('div');
+ right.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+ const dot = document.createElement('div');
+ dot.style.cssText = `width: 6px; height: 6px; border-radius: 50%; background: ${opts.freshness.dotColor ?? '#22c55e'};`;
+ right.append(dot);
+ const label = document.createElement('span');
+ label.style.cssText = 'font-size: var(--text-2xs); color: #666;';
+ label.textContent = opts.freshness.label ?? '';
+ right.append(label);
+ header.append(right);
+ } else if (opts.rightSlot) {
+ header.append(opts.rightSlot);
+ }
+ return header;
+  }
 }

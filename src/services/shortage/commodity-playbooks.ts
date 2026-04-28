@@ -249,6 +249,266 @@ export const COCOA_PLAYBOOK: CommodityPlaybook = {
   forecastHorizonDays: 120,
 };
 
+// ── Inputs / energy (batch 6) ──────────────────────────────────────────
+
+export const FERTILIZER_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'fertilizer',
+  domain: 'food',
+  leadingIndicators: [
+    'natural_gas_price_yoy',
+    'urea_price_mom',
+    'phosphate_dap_price_mom',
+    'potash_price_mom',
+    'china_export_quota_pct',
+    'russia_belarus_sanctions_pressure',
+    'shipping_rates_panamax',
+  ],
+  confirmingIndicators: [
+    'farmer_application_intent_yoy',
+    'corn_soybean_price_yoy',
+  ],
+  invalidatingIndicators: [
+    'natural_gas_price_falling',
+    'china_export_quota_raised',
+  ],
+  // Fertilizer demand peaks at planting — Apr-May NH, Sep-Oct SH.
+  seasonalRiskMonths: [3, 4, 5, 9, 10],
+  chokepoints: ['Russian/Belarusian sanctions corridor', 'China export quotas', 'Suez Canal', 'Tampa phosphate hub'],
+  affectedCountries: ['RU', 'BY', 'CN', 'US', 'BR', 'IN', 'CA', 'MA'],
+  affectedSectors: ['row crops', 'specialty agriculture', 'biofuels feedstock'],
+  forecastHorizonDays: 60,
+};
+
+export const CRUDE_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'crude',
+  domain: 'energy',
+  leadingIndicators: [
+    'opec_compliance_pct',
+    'us_strategic_petroleum_reserve_level',
+    'global_floating_storage',
+    'rig_count_yoy',
+    'middle_east_tension_index',
+    'russia_seaborne_export_volume',
+  ],
+  confirmingIndicators: [
+    'brent_wti_spread',
+    'crude_futures_curve',
+    'tanker_freight_rates',
+  ],
+  invalidatingIndicators: [
+    'spr_release_announced',
+    'opec_quota_raised',
+    'rig_count_recovery',
+  ],
+  // Northern hemisphere driving + heating demand layers + hurricane season.
+  seasonalRiskMonths: [6, 7, 8, 9, 10, 11, 12, 1],
+  chokepoints: ['Strait of Hormuz', 'Bab el-Mandeb', 'Suez Canal', 'Russian Black Sea ports'],
+  affectedCountries: ['SA', 'RU', 'US', 'IR', 'IQ', 'AE', 'CN', 'IN', 'EU'],
+  affectedSectors: ['refining', 'petrochemicals', 'transport', 'aviation'],
+  forecastHorizonDays: 30,
+};
+
+export const PROPANE_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'propane',
+  domain: 'energy',
+  leadingIndicators: [
+    'propane_inventory_vs_5yr',
+    'heating_degree_days_anomaly',
+    'us_export_pace_lpg',
+    'crude_to_propane_spread',
+    'crop_drying_demand_index',
+  ],
+  confirmingIndicators: [
+    'mont_belvieu_propane_price_wow',
+    'pipeline_disruption_active',
+  ],
+  invalidatingIndicators: [
+    'inventory_build_consecutive',
+    'export_pace_slowing',
+    'mild_winter_forecast',
+  ],
+  // Heating + crop drying both peak Sep-Mar in the US.
+  seasonalRiskMonths: [9, 10, 11, 12, 1, 2, 3],
+  chokepoints: ['Mont Belvieu hub', 'US Gulf Coast export terminals', 'Conway hub'],
+  affectedCountries: ['US', 'CA', 'MX', 'JP', 'KR', 'CN', 'EU'],
+  affectedSectors: ['rural heating', 'agriculture', 'petrochemicals', 'autogas'],
+  forecastHorizonDays: 30,
+};
+
+export const ELECTRICITY_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'electricity',
+  domain: 'energy',
+  leadingIndicators: [
+    'natural_gas_price_yoy',
+    'reservoir_levels_pct',
+    'wind_solar_capacity_factor',
+    'transmission_outage_capacity_mw',
+    'extreme_temperature_index',
+    'spr_to_grid_battery_state_of_charge',
+  ],
+  confirmingIndicators: [
+    'wholesale_power_price_mom',
+    'reserve_margin_pct',
+    'grid_alert_active',
+  ],
+  invalidatingIndicators: [
+    'reserve_margin_recovery',
+    'temperature_normalizing',
+    'transmission_back_online',
+  ],
+  // Summer cooling + winter heating — bi-modal, with shoulder months
+  // typically clean.
+  seasonalRiskMonths: [6, 7, 8, 12, 1, 2],
+  chokepoints: ['ERCOT', 'CAISO summer peak', 'PJM winter peak', 'European interconnects'],
+  affectedCountries: ['US', 'CA', 'MX', 'GB', 'DE', 'FR', 'JP', 'AU'],
+  affectedSectors: ['data centers', 'industrial', 'residential', 'EV charging'],
+  forecastHorizonDays: 7,
+};
+
+
+
+export const RICE_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'rice',
+  domain: 'food',
+  leadingIndicators: [
+    'monsoon_rainfall_pct_of_normal',
+    'paddy_water_availability_index',
+    'fertilizer_price_yoy',
+    'export_corridor_status',
+    'planting_progress_pct',
+  ],
+  confirmingIndicators: [
+    'thai_rice_export_price_mom',
+    'india_export_ban_active',
+    'fews_net_stage',
+    'futures_curve_tightness',
+  ],
+  invalidatingIndicators: [
+    'monsoon_rainfall_recovery',
+    'export_ban_lifted',
+    'inventory_release_announced',
+  ],
+  // Asian monsoon planting Jun-Sep; harvest Oct-Dec. Late or weak
+  // monsoon = the headline risk window.
+  seasonalRiskMonths: [5, 6, 7, 8, 9, 10],
+  chokepoints: ['Bay of Bengal exports', 'Mekong River corridor', 'Strait of Malacca'],
+  affectedCountries: ['IN', 'TH', 'VN', 'PH', 'BD', 'ID', 'MY', 'SG', 'CN', 'NG', 'EG'],
+  affectedSectors: ['food retail', 'humanitarian aid', 'street-food economies'],
+  forecastHorizonDays: 90,
+};
+
+
+export const SOYBEANS_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'soybeans',
+  domain: 'food',
+  leadingIndicators: [
+    'rainfall_pct_of_normal',
+    'soil_moisture_percentile',
+    'ndvi_anomaly',
+    'planting_progress_pct',
+    'south_america_la_nina_signal',
+    'china_crush_demand_index',
+  ],
+  confirmingIndicators: [
+    'usda_crop_condition_g_e_pct',
+    'cbot_soy_price_mom',
+    'soy_meal_basis_widening',
+    'futures_curve_tightness',
+  ],
+  invalidatingIndicators: [
+    'late_season_rainfall_recovery',
+    'usda_yield_upgrade',
+    'china_demand_softening',
+  ],
+  // US plant May-Jun, pod-fill Jul-Aug, harvest Sep-Oct.
+  // Brazil/Argentina plant Oct-Dec, harvest Mar-May.
+  seasonalRiskMonths: [5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3],
+  chokepoints: [
+    'Mississippi River barge corridor',
+    'Brazilian Cerrado export ports',
+    'Panama Canal',
+    'Argentine Paraná River',
+  ],
+  affectedCountries: ['US', 'BR', 'AR', 'CN', 'EU', 'MX', 'JP'],
+  affectedSectors: ['livestock feed', 'cooking oil', 'biofuel', 'tofu / food'],
+  forecastHorizonDays: 90,
+};
+
+
+export const NATURAL_GAS_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'natural_gas',
+  domain: 'energy',
+  leadingIndicators: [
+    'natgas_storage_vs_5yr',
+    'heating_degree_days_vs_normal',
+    'cooling_degree_days_vs_normal',
+    'lng_export_capacity_pct',
+    'production_pipeline_outage_pct',
+    'henry_hub_basis_widening',
+  ],
+  confirmingIndicators: [
+    'retail_natgas_price_mom',
+    'futures_curve_natgas',
+    'utility_curtailment_active',
+    'cold_snap_arrival_imminent',
+  ],
+  invalidatingIndicators: [
+    'mild_winter_forecast',
+    'storage_build_consecutive',
+    'lng_export_throttle',
+  ],
+  // Northern Hemisphere winter Dec-Feb is heating-demand peak;
+  // summer Jun-Aug is power-burn cooling demand. Storage typically
+  // builds Apr-Oct.
+  seasonalRiskMonths: [11, 12, 1, 2, 3, 6, 7, 8],
+  chokepoints: [
+    'US Northeast pipelines (Marcellus delivery)',
+    'European LNG import terminals',
+    'Russian gas transit corridors',
+    'Permian gas takeaway capacity',
+  ],
+  affectedCountries: ['US', 'CA', 'MX', 'DE', 'NL', 'GB', 'IT', 'ES', 'FR', 'JP', 'KR', 'CN'],
+  affectedSectors: ['heating', 'power generation', 'industrial feedstock', 'fertilizer (ammonia)'],
+  forecastHorizonDays: 60,
+};
+
+
+export const JET_FUEL_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'jet_fuel',
+  domain: 'energy',
+  leadingIndicators: [
+    'jet_fuel_inventory_vs_5yr',
+    'refinery_utilization_pct',
+    'crack_spread_jet',
+    'air_traffic_demand_proxy',
+    'sustainable_aviation_fuel_constraint',
+    'pipeline_jet_disruption_active',
+  ],
+  confirmingIndicators: [
+    'airline_fuel_surcharge_active',
+    'futures_curve_jet',
+    'airport_fuel_shortage_alert',
+    'cargo_capacity_diversion',
+  ],
+  invalidatingIndicators: [
+    'inventory_build_consecutive',
+    'crack_spread_jet_normalizing',
+    'air_traffic_demand_softening',
+  ],
+  // Holiday peak Nov-Jan; summer peak Jun-Aug.
+  seasonalRiskMonths: [6, 7, 8, 11, 12, 1],
+  chokepoints: [
+    'US East Coast (Buckeye / Colonial)',
+    'European hub airports',
+    'Singapore jet hub',
+    'Middle East refinery output',
+  ],
+  affectedCountries: ['US', 'GB', 'NL', 'AE', 'SG', 'JP', 'DE', 'IN', 'CN'],
+  affectedSectors: ['airlines', 'cargo aviation', 'military aviation', 'business aviation'],
+  forecastHorizonDays: 30,
+};
+
+
 export const ALL_PLAYBOOKS: readonly CommodityPlaybook[] = [
   WHEAT_PLAYBOOK,
   CORN_PLAYBOOK,
@@ -257,6 +517,14 @@ export const ALL_PLAYBOOKS: readonly CommodityPlaybook[] = [
   SUGAR_PLAYBOOK,
   COFFEE_PLAYBOOK,
   COCOA_PLAYBOOK,
+  FERTILIZER_PLAYBOOK,
+  CRUDE_PLAYBOOK,
+  PROPANE_PLAYBOOK,
+  ELECTRICITY_PLAYBOOK,
+  RICE_PLAYBOOK,
+  SOYBEANS_PLAYBOOK,
+  NATURAL_GAS_PLAYBOOK,
+  JET_FUEL_PLAYBOOK,
 ];
 
 /** Lookup helper — preferred over reaching into ALL_PLAYBOOKS directly. */

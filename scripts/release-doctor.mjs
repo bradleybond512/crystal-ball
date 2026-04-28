@@ -122,13 +122,23 @@ export function findReleaseStateIssues({
   remoteTags,
   releases,
   allowExistingTargetRelease = false,
+  // When the strict-mode caller can prove the existing tag points at the
+  // current HEAD AND a non-draft release exists for it, that's the
+  // healthy "we just shipped this version" state, not a stale-tag
+  // failure. The flag stays opt-in so older callers don't change shape.
+  tagPointsAtHead = false,
 }) {
   const issues = [];
   const hasRemoteTargetTag = remoteTags.has(targetTag);
   const releasesForTarget = releases.filter((release) => release?.tagName === targetTag);
+  const hasPublishedReleaseForTarget = releasesForTarget.some((release) => release && release.isDraft !== true);
   const duplicateDraftTags = findDuplicateDraftReleaseTags(releases);
 
-  if (hasRemoteTargetTag && !allowExistingTargetRelease) {
+  // The just-shipped state: tag exists AND points at HEAD AND a published
+  // (non-draft) GitHub release for that tag exists. Treat as healthy.
+  const justShipped = hasRemoteTargetTag && tagPointsAtHead && hasPublishedReleaseForTarget;
+
+  if (hasRemoteTargetTag && !allowExistingTargetRelease && !justShipped) {
  issues.push(`Remote tag already exists for target release: ${targetTag}`);
   }
 
@@ -215,8 +225,33 @@ async function fetchRemoteReleaseState(targetTag, remoteName = 'origin') {
   const repoSlug = process.env.GITHUB_REPOSITORY
  || normalizeRepoSlug(runCommand('git', ['remote', 'get-url', resolvedRemote]));
 
-  const remoteTagOutput = runCommand('git', ['ls-remote', '--tags', resolvedRemote, `refs/tags/${targetTag}`]);
+  // ls-remote also dereferences annotated tags via `--tags --refs`. The
+  // first column is the SHA; the second is the ref. For an annotated
+  // tag we ask for `refs/tags/<tag>^{}` (the dereferenced commit), which
+  // tells us the commit the tag actually labels.
+  const remoteTagOutput = runCommand('git', ['ls-remote', '--tags', resolvedRemote, `refs/tags/${targetTag}`, `refs/tags/${targetTag}^{}`]);
   const remoteTags = new Set(remoteTagOutput ? [targetTag] : []);
+
+  // Pick the dereferenced (peeled) SHA when present; otherwise the
+  // lightweight-tag SHA (which already points at the commit).
+  let tagCommitSha = '';
+  for (const line of remoteTagOutput.split('\n')) {
+ const trimmed = line.trim();
+ if (!trimmed) continue;
+ const [sha, ref] = trimmed.split(/\s+/, 2);
+ if (ref === `refs/tags/${targetTag}^{}`) {
+ tagCommitSha = sha;
+ break;
+ }
+ if (ref === `refs/tags/${targetTag}` && !tagCommitSha) {
+ tagCommitSha = sha;
+ }
+  }
+
+  // Resolve the SHA we're auditing against. CI sets GITHUB_SHA on push
+  // events; locally we fall back to HEAD.
+  const headSha = (process.env.GITHUB_SHA?.trim() || runCommand('git', ['rev-parse', 'HEAD'])).trim();
+  const tagPointsAtHead = Boolean(tagCommitSha) && tagCommitSha === headSha;
 
   const releases = JSON.parse(
  runCommand('gh', ['api', `repos/${repoSlug}/releases?per_page=100`])
@@ -225,7 +260,7 @@ async function fetchRemoteReleaseState(targetTag, remoteName = 'origin') {
  isDraft: release.draft === true,
   }));
 
-  return { remoteTags, releases };
+  return { remoteTags, releases, tagPointsAtHead };
 }
 
 async function main() {
@@ -238,13 +273,14 @@ async function main() {
  ...findVersionMismatches(versionsByFile),
   ];
 
-  const { remoteTags, releases } = await fetchRemoteReleaseState(targetTag, options.remote || 'origin');
+  const { remoteTags, releases, tagPointsAtHead } = await fetchRemoteReleaseState(targetTag, options.remote || 'origin');
   issues.push(
  ...findReleaseStateIssues({
  targetTag,
  remoteTags,
  releases,
  allowExistingTargetRelease: options.allowExistingTargetRelease,
+ tagPointsAtHead,
  }),
   );
 

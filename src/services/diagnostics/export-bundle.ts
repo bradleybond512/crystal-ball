@@ -36,6 +36,11 @@ import type {
   NotificationTraceSummary,
   SystemHealthReport,
 } from './system-health-types';
+import type { PredictedRiskReport } from './failure-prediction';
+import type { DebtItem } from '@/services/quality/quality-debt';
+import type { ImprovementReport } from '@/services/quality/self-improvement-scheduler';
+import type { TrustBudgetReport } from '@/services/ops/trust-budget';
+import type { ScenarioCoverage } from '@/services/scenarios/scenario-library';
 
 // Imported from PR 7 self-test runner. Kept as a structural type so
 // this module doesn't hard-depend on self-test.ts when self-test
@@ -83,7 +88,7 @@ export interface ExportBundleEnvHints {
 
 export interface DiagnosticsExportBundle {
   /** Schema version for the bundle itself. Bumped on shape changes. */
-  schemaVersion: 1;
+  schemaVersion: 2;
   generatedAt: number;
   app: ExportBundleAppMeta;
   env: ExportBundleEnvHints;
@@ -95,6 +100,17 @@ export interface DiagnosticsExportBundle {
   recentEvents: readonly DiagnosticEvent[];
   /** Optional self-test report from PR 7. */
   selfTest?: SelfTestReportShape;
+  // ── Strategic self-improvement layer (post-PR197 integration pass) ──
+  /** Per-capability failure-risk predictions. */
+  failurePrediction?: PredictedRiskReport;
+  /** Active intelligence-quality debt items (non-resolved), capped. */
+  qualityDebt?: readonly DebtItem[];
+  /** Trust budget per mission domain. */
+  trustBudget?: TrustBudgetReport;
+  /** Top improvement candidates this week + handoff outline. */
+  improvementPlan?: ImprovementReport;
+  /** Scenario library coverage by domain + category. */
+  scenarioCoverage?: ScenarioCoverage;
   /** Anything truncated for size, recorded so the consumer knows what
    *  was dropped. */
   truncations: ExportTruncationNote[];
@@ -124,17 +140,26 @@ export interface BuildExportBundleInput {
     | { summary: NotificationTraceSummary; entries: readonly NotificationTraceEntry[] };
   events: DiagnosticEventBus | { snapshot: readonly DiagnosticEvent[] };
   selfTest?: SelfTestReportShape;
+  // ── Strategic self-improvement layer (post-PR197 integration) ──
+  failurePrediction?: PredictedRiskReport;
+  /** Caller passes the live registry's `active()` snapshot. */
+  qualityDebt?: readonly DebtItem[];
+  trustBudget?: TrustBudgetReport;
+  improvementPlan?: ImprovementReport;
+  scenarioCoverage?: ScenarioCoverage;
   /** Caps; see DEFAULTS below. */
   caps?: Partial<{
     maxNotificationTraces: number;
     maxRecentEvents: number;
     maxBundleBytes: number;
+    maxQualityDebt: number;
   }>;
 }
 
 const DEFAULT_MAX_NOTIFICATION_TRACES = 50;
 const DEFAULT_MAX_RECENT_EVENTS = 200;
 const DEFAULT_MAX_BUNDLE_BYTES = 256 * 1024; // 256 KB
+const DEFAULT_MAX_QUALITY_DEBT = 25;
 
 export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExportBundle {
   const now = input.now ?? (() => Date.now());
@@ -143,6 +168,7 @@ export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExp
     maxNotificationTraces: input.caps?.maxNotificationTraces ?? DEFAULT_MAX_NOTIFICATION_TRACES,
     maxRecentEvents: input.caps?.maxRecentEvents ?? DEFAULT_MAX_RECENT_EVENTS,
     maxBundleBytes: input.caps?.maxBundleBytes ?? DEFAULT_MAX_BUNDLE_BYTES,
+    maxQualityDebt: input.caps?.maxQualityDebt ?? DEFAULT_MAX_QUALITY_DEBT,
   };
 
   const { summary: notificationSummary, entries: notificationTracesRaw, totalCount } =
@@ -181,8 +207,24 @@ export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExp
     isMacOs: input.env?.isMacOs,
   };
 
+  // Cap the active quality debt list so the bundle stays paste-friendly.
+  let qualityDebt: readonly DebtItem[] | undefined;
+  if (input.qualityDebt) {
+    if (input.qualityDebt.length > caps.maxQualityDebt) {
+      qualityDebt = input.qualityDebt.slice(0, caps.maxQualityDebt);
+      truncations.push({
+        field: 'qualityDebt',
+        originalCount: input.qualityDebt.length,
+        keptCount: qualityDebt.length,
+        reason: 'paste-friendly cap',
+      });
+    } else {
+      qualityDebt = input.qualityDebt;
+    }
+  }
+
   const bundle: DiagnosticsExportBundle = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: now(),
     app: { ...input.app },
     env,
@@ -191,6 +233,11 @@ export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExp
     notificationTraces,
     recentEvents,
     selfTest: input.selfTest ? cloneSelfTest(input.selfTest) : undefined,
+    failurePrediction: input.failurePrediction,
+    qualityDebt,
+    trustBudget: input.trustBudget,
+    improvementPlan: input.improvementPlan,
+    scenarioCoverage: input.scenarioCoverage,
     truncations,
   };
 

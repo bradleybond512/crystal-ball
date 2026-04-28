@@ -116,7 +116,7 @@ test('buildExportBundle: assembles all sections', () => {
     events,
   });
 
-  assert.equal(bundle.schemaVersion, 1);
+  assert.equal(bundle.schemaVersion, 2);
   assert.equal(bundle.generatedAt, NOW);
   assert.equal(bundle.app.variant, 'full');
   assert.equal(bundle.env.locale, 'en-US');
@@ -324,7 +324,7 @@ test('exportBundleToJson: round-trips identity', () => {
   });
   const json = exportBundleToJson(bundle);
   const parsed = JSON.parse(json) as { schemaVersion: number };
-  assert.equal(parsed.schemaVersion, 1);
+  assert.equal(parsed.schemaVersion, 2);
 });
 
 test('exportBundleToMarkdown: produces a fenced JSON code block', () => {

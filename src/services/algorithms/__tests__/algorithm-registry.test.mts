@@ -22,15 +22,16 @@ test.beforeEach(() => resetAlgorithmRegistry());
 
 // ── Initial registry coverage ──────────────────────────────────────────
 
-test('initial: registers all 18 plan-listed algorithms', () => {
+test('initial: registers all 20 plan-listed algorithms', () => {
   const ids = listAlgorithms().map((a) => a.id).sort();
   const expected = [
-    'big-event-detector', 'compound-risk', 'confidence-urgency-matrix',
-    'correlation-feedback', 'forecast-calibration', 'hypothesis-accuracy',
-    'negative-evidence', 'nws-polygon-match', 'personal-storm-mode',
-    'relevance-learner', 'shortage-diesel', 'shortage-wheat',
-    'situation-clustering', 'source-feedback', 'truth-score',
-    'watchlist-relevance', 'weather-urgency', 'what-changed-digest',
+    'baseline-deviation', 'big-event-detector', 'compound-risk',
+    'confidence-urgency-matrix', 'correlation-feedback', 'evidence-graph',
+    'forecast-calibration', 'hypothesis-accuracy', 'negative-evidence',
+    'nws-polygon-match', 'personal-storm-mode', 'relevance-learner',
+    'shortage-diesel', 'shortage-wheat', 'situation-clustering',
+    'source-feedback', 'truth-score', 'watchlist-relevance',
+    'weather-urgency', 'what-changed-digest',
   ];
   assert.deepEqual(ids, expected);
 });

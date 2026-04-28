@@ -1535,9 +1535,35 @@ test('service-status reports bound fallback port after EADDRINUSE recovery', asy
 });
 
 test('/api/faa-cameras — returns cached response on second call', async () => {
-  const mockCameras = [
- { id: '1', name: 'Anchorage Cam', lat: 61.2, lon: -149.9, state: 'AK', category: 'weather', imageUrl: 'https://example.com/cam1.jpg', isOnline: true, lastUpdated: '2024-01-01T00:00:00Z' },
-  ];
+  // The handler upstream is now weathercams.faa.gov/api/sites which
+  // returns {success, count, payload: [{siteId, ..., cameras: [...]}]}.
+  // Each site contributes one row per camera; we use a single
+  // single-camera site here to keep the assertion simple.
+  const mockSites = {
+ success: true,
+ count: 1,
+ payload: [{
+ siteId: 477,
+ siteName: 'Anchorage',
+ siteIdentifier: 'PANC',
+ latitude: 61.2,
+ longitude: -149.9,
+ state: 'AK',
+ country: 'US',
+ siteActive: true,
+ thirdParty: false,
+ cameras: [{
+ cameraId: 11_483,
+ cameraName: 'Camera 1',
+ cameraDirection: 'North',
+ latitude: 61.2,
+ longitude: -149.9,
+ cameraInMaintenance: false,
+ cameraOutOfOrder: false,
+ cameraLastSuccess: '2024-01-01T00:00:00Z',
+ }],
+ }],
+  };
 
   let httpsCallCount = 0;
   const originalHttpsRequest = https.request;
@@ -1554,7 +1580,7 @@ test('/api/faa-cameras — returns cached response on second call', async () => 
  res.statusMessage = '';
  res.headers = { 'content-type': 'application/json' };
  onResponse(res);
- res.emit('data', Buffer.from(JSON.stringify(mockCameras)));
+ res.emit('data', Buffer.from(JSON.stringify(mockSites)));
  res.emit('end');
  });
  };
@@ -1574,13 +1600,15 @@ test('/api/faa-cameras — returns cached response on second call', async () => 
  assert.equal(res1.status, 200);
  const body1 = await res1.json();
  assert.equal(body1.length, 1);
- assert.equal(body1[0].name, 'Anchorage Cam');
+ assert.match(body1[0].name, /Anchorage/);
+ assert.equal(body1[0].id, '11483');
+ assert.match(body1[0].imageUrl, /\/api\/faa-camera-image\?cameraId=11483/);
 
  const res2 = await authFetch(`http://127.0.0.1:${port}/api/faa-cameras`);
  assert.equal(res2.status, 200);
  const body2 = await res2.json();
  assert.equal(body2.length, 1);
- assert.equal(body2[0].name, 'Anchorage Cam');
+ assert.equal(body2[0].id, '11483');
 
  assert.equal(httpsCallCount, 1, 'FAA endpoint should only be hit once; second call should use cache');
   } finally {

@@ -3297,33 +3297,97 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── FAA Aviation Weather Cameras (public, no auth) ───────────────────────────
   if (requestUrl.pathname === '/api/faa-cameras') {
+ // Old `avcams.faa.gov` host has been decommissioned (DNS no longer
+ // resolves). The active service is `weathercams.faa.gov` whose
+ // `/api/sites` endpoint requires Origin + Referer headers but no
+ // auth key. Each site groups multiple cameras; we surface one row
+ // per camera so the panel's selection table can drill into the
+ // specific viewpoint.
  const CACHE_KEY = 'faa-cameras';
  const CACHE_TTL = 15 * 60 * 1000;
  const cached = getCached(CACHE_KEY, CACHE_TTL);
  if (cached) return json(cached);
  try {
  const resp = await fetchWithTimeout(
- 'https://avcams.faa.gov/api/cameras',
- { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/1.0' } },
+ 'https://weathercams.faa.gov/api/sites',
+ {
+ headers: {
+ Accept: 'application/json',
+ Origin: 'https://weathercams.faa.gov',
+ Referer: 'https://weathercams.faa.gov/',
+ 'User-Agent': 'CrystalBall/1.0',
+ },
+ },
  15000,
  );
  if (!resp.ok) return json(getCachedStale(CACHE_KEY) ?? [], 200);
  const raw = await resp.json();
- const cameras = (Array.isArray(raw) ? raw : raw?.cameras ?? []).map(c => ({
- id: String(c.id ?? c.cameraId ?? ''),
- name: String(c.name ?? c.cameraName ?? ''),
- lat: Number(c.lat ?? c.latitude ?? 0),
- lon: Number(c.lon ?? c.longitude ?? 0),
- state: String(c.state ?? ''),
- category: String(c.category ?? 'weather').toLowerCase(),
- imageUrl: String(c.imageUrl ?? c.image_url ?? ''),
- isOnline: Boolean(c.isOnline ?? c.active ?? true),
- lastUpdated: String(c.lastUpdated ?? c.last_updated ?? new Date().toISOString()),
- })).filter(c => c.id && c.lat !== 0 && c.lon !== 0);
+ const sites = Array.isArray(raw?.payload) ? raw.payload : [];
+ const cameras = [];
+ for (const site of sites) {
+ if (!site?.siteActive) continue;
+ const cams = Array.isArray(site.cameras) ? site.cameras : [];
+ for (const cam of cams) {
+ if (cam?.cameraInMaintenance || cam?.cameraOutOfOrder) continue;
+ const id = String(cam.cameraId ?? '');
+ if (!id) continue;
+ const lat = Number(cam.latitude ?? site.latitude ?? 0);
+ const lon = Number(cam.longitude ?? site.longitude ?? 0);
+ if (lat === 0 || lon === 0) continue;
+ cameras.push({
+ id,
+ name: `${site.siteName ?? site.siteIdentifier ?? 'Site'} — ${cam.cameraName ?? cam.cameraDirection ?? 'Camera'}`,
+ lat,
+ lon,
+ state: String(site.state ?? site.country ?? ''),
+ category: site.thirdParty ? 'remote' : 'weather',
+ // Per-image URL is resolved lazily by /api/faa-camera-image
+ // — pre-fetching 1000+ jpg metadata calls would melt the
+ // 15s timeout. The panel calls the resolver on click.
+ imageUrl: `/api/faa-camera-image?cameraId=${id}`,
+ isOnline: !cam.cameraInMaintenance && !cam.cameraOutOfOrder,
+ lastUpdated: String(cam.cameraLastSuccess ?? new Date().toISOString()),
+ });
+ }
+ }
  setCached(CACHE_KEY, cameras);
  return json(cameras);
  } catch {
  return json(getCachedStale(CACHE_KEY) ?? [], 200);
+ }
+  }
+
+  // Resolve the latest image URL for a single FAA weathercam. The
+  // weathercams.faa.gov `/api/cameras/{id}/images/last/N` endpoint
+  // returns metadata + an `imageUri` pointing at the
+  // images.wcams-static.faa.gov CDN.
+  if (requestUrl.pathname === '/api/faa-camera-image') {
+ const cameraId = (requestUrl.searchParams.get('cameraId') ?? '').replace(/\D/g, '');
+ if (!cameraId) return json({ error: 'cameraId required' }, 400);
+ try {
+ const resp = await fetchWithTimeout(
+ `https://weathercams.faa.gov/api/cameras/${cameraId}/images/last/1`,
+ {
+ headers: {
+ Accept: 'application/json',
+ Origin: 'https://weathercams.faa.gov',
+ Referer: 'https://weathercams.faa.gov/',
+ 'User-Agent': 'CrystalBall/1.0',
+ },
+ },
+ 10000,
+ );
+ if (!resp.ok) return json({ imageUrl: null, degraded: true, reason: `weathercams returned ${resp.status}` });
+ const raw = await resp.json();
+ const item = Array.isArray(raw?.payload) ? raw.payload[0] : null;
+ if (!item?.imageUri) return json({ imageUrl: null, degraded: true, reason: 'No recent image for this camera' });
+ return json({
+ imageUrl: item.imageUri,
+ imageDatetime: item.imageDatetime,
+ cameraId,
+ });
+ } catch (error) {
+ return json({ imageUrl: null, degraded: true, reason: `image lookup failed: ${error?.message ?? error}` });
  }
   }
 

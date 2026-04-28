@@ -155,11 +155,15 @@ jobs:
             });
             if (prs.length > 0) {
               const prNodeId = prs[0].node_id;
+              // The repo currently disallows squash merges
+              // (allow_squash_merge=false / allow_rebase_merge=true).
+              // Use REBASE so auto-merge actually engages instead of
+              // bouncing with "squash merging is not allowed."
               const mutation = `
                 mutation EnablePullRequestAutoMerge($pullRequestId: ID!) {
                   enablePullRequestAutoMerge(input: {
                     pullRequestId: $pullRequestId
-                    mergeMethod: SQUASH
+                    mergeMethod: REBASE
                   }) {
                     pullRequest {
                       number

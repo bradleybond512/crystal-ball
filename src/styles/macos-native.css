@@ -1766,3 +1766,393 @@ body.is-desktop-macos .panel[data-panel-id="shortage-radar"] .panel-header {
     transition: none !important;
   }
 }
+
+/* =============================================================
+ * Apple Intelligence Desk — design tokens + reusable components
+ * Per docs/MACOS_NATIVE_DESIGN_REFRESH_PLAN.md PR 1.
+ *
+ * The existing macOS tokens above stay in place; this block adds
+ * a near-black graphite palette and reusable component classes
+ * (status pill, metric row, event card, alert strip, inspector
+ * drawer) for new surfaces. Components opt in via class names —
+ * existing panels are unaffected until they migrate.
+ * =============================================================
+ */
+
+body.is-desktop-macos,
+:root {
+  /* Near-black window/surface palette — plan section 'Modern Black Palette' */
+  --aid-window: #0b0c0f;
+  --aid-sidebar: rgba(24, 24, 27, 0.72);
+  --aid-surface: #14161a;
+  --aid-elevated: #1c1f26;
+  --aid-border: rgba(255, 255, 255, 0.08);
+  --aid-border-strong: rgba(255, 255, 255, 0.14);
+  --aid-text: rgba(255, 255, 255, 0.92);
+  --aid-text-secondary: rgba(255, 255, 255, 0.58);
+  --aid-text-tertiary: rgba(255, 255, 255, 0.36);
+
+  /* Status accents — restrained vs the existing pinks/teals. */
+  --aid-blue: #0a84ff;
+  --aid-green: #32d74b;
+  --aid-amber: #ff9f0a;
+  --aid-red: #ff453a;
+
+  /* Typography */
+  --aid-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+  --aid-font-mono: "SF Mono", ui-monospace, "Cascadia Code", monospace;
+  --aid-text-size-xs: 11px;
+  --aid-text-size-sm: 12px;
+  --aid-text-size-md: 13px;
+  --aid-text-size-lg: 15px;
+  --aid-text-size-xl: 17px;
+
+  /* Spacing scale (4-step). Plan: native macOS density. */
+  --aid-space-1: 4px;
+  --aid-space-2: 8px;
+  --aid-space-3: 12px;
+  --aid-space-4: 16px;
+  --aid-space-5: 24px;
+
+  /* Card geometry — plan: 8px radius, thin border. */
+  --aid-radius-sm: 4px;
+  --aid-radius-md: 6px;
+  --aid-radius-lg: 8px;
+  --aid-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --aid-shadow-elevated: 0 6px 24px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+
+  /* Motion — plan: under 200ms. */
+  --aid-motion-fast: 100ms;
+  --aid-motion-base: 140ms;
+  --aid-motion-slow: 180ms;
+}
+
+/* Light-mode parity. */
+body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
+:root:where([data-theme="light"]) {
+  --aid-window: #f5f5f7;
+  --aid-sidebar: rgba(242, 242, 247, 0.72);
+  --aid-surface: #ffffff;
+  --aid-elevated: #fafafa;
+  --aid-border: rgba(0, 0, 0, 0.08);
+  --aid-border-strong: rgba(0, 0, 0, 0.14);
+  --aid-text: rgba(0, 0, 0, 0.88);
+  --aid-text-secondary: rgba(0, 0, 0, 0.55);
+  --aid-text-tertiary: rgba(0, 0, 0, 0.32);
+  --aid-shadow-card: 0 2px 6px rgba(0, 0, 0, 0.06), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  --aid-shadow-elevated: 0 6px 18px rgba(0, 0, 0, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+}
+
+/* ── MacStatusPill — small categorical badges ───────────────────────── */
+
+.mac-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--aid-font);
+  font-size: var(--aid-text-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--aid-text-secondary);
+  border: 1px solid var(--aid-border);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.mac-status-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+.mac-status-pill--info     { color: var(--aid-blue);  background: rgba(10, 132, 255, 0.12); border-color: rgba(10, 132, 255, 0.28); }
+.mac-status-pill--ok,
+.mac-status-pill--success  { color: var(--aid-green); background: rgba(50, 215, 75, 0.12); border-color: rgba(50, 215, 75, 0.28); }
+.mac-status-pill--watch,
+.mac-status-pill--warning  { color: var(--aid-amber); background: rgba(255, 159, 10, 0.14); border-color: rgba(255, 159, 10, 0.30); }
+.mac-status-pill--critical,
+.mac-status-pill--error,
+.mac-status-pill--emergency { color: var(--aid-red); background: rgba(255, 69, 58, 0.14); border-color: rgba(255, 69, 58, 0.32); }
+.mac-status-pill--neutral  { color: var(--aid-text-secondary); }
+
+/* ── MacMetricRow — Apple-style label/value rows for inspector ──────── */
+
+.mac-metric-row {
+  display: grid;
+  grid-template-columns: minmax(110px, max-content) 1fr;
+  gap: var(--aid-space-3);
+  padding: var(--aid-space-2) 0;
+  border-bottom: 1px solid var(--aid-border);
+  font-family: var(--aid-font);
+  font-size: var(--aid-text-size-sm);
+  color: var(--aid-text);
+}
+.mac-metric-row:last-child { border-bottom: 0; }
+.mac-metric-row__label {
+  color: var(--aid-text-secondary);
+  font-weight: 500;
+  align-self: center;
+}
+.mac-metric-row__value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  word-break: break-word;
+}
+.mac-metric-row__value--numeric { font-family: var(--aid-font-mono); }
+
+/* ── MacEventCard — situation card pattern ──────────────────────────── */
+
+.mac-event-card {
+  font-family: var(--aid-font);
+  background: var(--aid-surface);
+  color: var(--aid-text);
+  border: 1px solid var(--aid-border);
+  border-radius: var(--aid-radius-lg);
+  padding: var(--aid-space-3) var(--aid-space-4);
+  display: grid;
+  gap: var(--aid-space-2);
+  position: relative;
+  box-shadow: var(--aid-shadow-card);
+  transition: transform var(--aid-motion-fast) ease,
+              box-shadow var(--aid-motion-base) ease;
+}
+.mac-event-card:hover {
+  transform: translateY(-1px); /* plan: hover lift 1px */
+  box-shadow: var(--aid-shadow-elevated);
+}
+.mac-event-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  border-radius: var(--aid-radius-lg) 0 0 var(--aid-radius-lg);
+  background: var(--aid-border-strong);
+}
+.mac-event-card--info::before     { background: var(--aid-blue); }
+.mac-event-card--watch::before    { background: var(--aid-amber); }
+.mac-event-card--warning::before  { background: var(--aid-amber); }
+.mac-event-card--critical::before { background: var(--aid-red); }
+.mac-event-card--emergency::before { background: var(--aid-red); box-shadow: 0 0 12px rgba(255, 69, 58, 0.4); }
+
+.mac-event-card__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--aid-space-2);
+  flex-wrap: wrap;
+}
+.mac-event-card__title {
+  margin: 0;
+  font-size: var(--aid-text-size-md);
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+.mac-event-card__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--aid-space-2);
+  font-size: var(--aid-text-size-sm);
+  color: var(--aid-text-secondary);
+}
+.mac-event-card__meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mac-event-card__meta-label {
+  font-size: var(--aid-text-size-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--aid-text-tertiary);
+}
+.mac-event-card__meta-value {
+  color: var(--aid-text);
+  font-variant-numeric: tabular-nums;
+}
+.mac-event-card__why {
+  font-size: var(--aid-text-size-sm);
+  color: var(--aid-text-secondary);
+  margin: 0;
+}
+.mac-event-card__actions {
+  display: flex;
+  gap: var(--aid-space-2);
+  flex-wrap: wrap;
+}
+
+/* ── MacAlertStrip — sticky critical strip (used by Storm Mode etc.) ── */
+
+.mac-alert-strip {
+  font-family: var(--aid-font);
+  display: flex;
+  align-items: center;
+  gap: var(--aid-space-3);
+  padding: var(--aid-space-2) var(--aid-space-4);
+  background: var(--aid-elevated);
+  border-bottom: 1px solid var(--aid-border-strong);
+  font-size: var(--aid-text-size-md);
+  color: var(--aid-text);
+  transition: background var(--aid-motion-slow) ease,
+              border-color var(--aid-motion-slow) ease;
+}
+.mac-alert-strip--info     { border-bottom-color: var(--aid-blue);  background: rgba(10, 132, 255, 0.06); }
+.mac-alert-strip--watch    { border-bottom-color: var(--aid-amber); background: rgba(255, 159, 10, 0.06); }
+.mac-alert-strip--warning  { border-bottom-color: var(--aid-amber); background: rgba(255, 159, 10, 0.10); }
+.mac-alert-strip--critical { border-bottom-color: var(--aid-red);   background: rgba(255, 69, 58, 0.10); }
+.mac-alert-strip--emergency {
+  border-bottom-color: var(--aid-red);
+  background: rgba(255, 69, 58, 0.14);
+  animation: mac-alert-strip-pulse 2s ease-in-out infinite;
+}
+@keyframes mac-alert-strip-pulse {
+  0%, 100% { box-shadow: inset 0 -1px 0 0 rgba(255, 69, 58, 0.4); }
+  50%      { box-shadow: inset 0 -1px 0 0 rgba(255, 69, 58, 0.85); }
+}
+.mac-alert-strip__pill { flex-shrink: 0; }
+.mac-alert-strip__title {
+  flex: 1;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mac-alert-strip__actions {
+  display: flex;
+  gap: var(--aid-space-2);
+  flex-shrink: 0;
+}
+
+/* ── MacInspectorDrawer — right-side detail panel scaffolding ───────── */
+
+.mac-inspector-drawer {
+  font-family: var(--aid-font);
+  background: var(--aid-surface);
+  color: var(--aid-text);
+  border-left: 1px solid var(--aid-border);
+  width: 360px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transform: translateX(100%);
+  transition: transform var(--aid-motion-slow) ease; /* plan: 160ms */
+  box-shadow: var(--aid-shadow-elevated);
+}
+.mac-inspector-drawer--open { transform: translateX(0); }
+
+.mac-inspector-drawer__header {
+  display: flex;
+  align-items: center;
+  gap: var(--aid-space-2);
+  padding: var(--aid-space-3) var(--aid-space-4);
+  border-bottom: 1px solid var(--aid-border);
+  font-size: var(--aid-text-size-md);
+  font-weight: 600;
+}
+.mac-inspector-drawer__close {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--aid-text-secondary);
+  font: inherit;
+  cursor: pointer;
+  padding: var(--aid-space-1) var(--aid-space-2);
+  border-radius: var(--aid-radius-sm);
+  transition: background var(--aid-motion-fast) ease;
+}
+.mac-inspector-drawer__close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--aid-text);
+}
+
+.mac-inspector-drawer__tabs {
+  display: flex;
+  gap: var(--aid-space-1);
+  padding: 0 var(--aid-space-3);
+  border-bottom: 1px solid var(--aid-border);
+  background: var(--aid-window);
+}
+.mac-inspector-drawer__tab {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--aid-text-secondary);
+  font: inherit;
+  font-size: var(--aid-text-size-sm);
+  padding: var(--aid-space-2) var(--aid-space-3);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--aid-motion-fast) ease,
+              border-color var(--aid-motion-fast) ease;
+}
+.mac-inspector-drawer__tab[aria-selected="true"] {
+  color: var(--aid-text);
+  border-bottom-color: var(--aid-blue);
+}
+.mac-inspector-drawer__tab:hover {
+  color: var(--aid-text);
+}
+
+.mac-inspector-drawer__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--aid-space-3) var(--aid-space-4);
+  display: grid;
+  gap: var(--aid-space-3);
+}
+
+/* ── MacSegmentedControl — Apple-style segmented switch ─────────────── */
+
+.mac-segmented-control {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--aid-border);
+  border-radius: var(--aid-radius-md);
+  padding: 2px;
+  gap: 1px;
+}
+.mac-segmented-control__option {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--aid-text-secondary);
+  font: inherit;
+  font-size: var(--aid-text-size-sm);
+  font-weight: 500;
+  padding: 4px var(--aid-space-3);
+  border-radius: var(--aid-radius-sm);
+  cursor: pointer;
+  transition: background var(--aid-motion-fast) ease,
+              color var(--aid-motion-fast) ease;
+}
+.mac-segmented-control__option:hover { color: var(--aid-text); }
+.mac-segmented-control__option[aria-selected="true"] {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--aid-text);
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .mac-event-card,
+  .mac-event-card:hover,
+  .mac-alert-strip,
+  .mac-inspector-drawer,
+  .mac-status-pill,
+  .mac-segmented-control,
+  .mac-segmented-control__option {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

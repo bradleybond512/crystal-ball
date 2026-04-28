@@ -58,13 +58,33 @@ export interface GatedProposal {
  * `allow_auto` for noops since there's nothing to apply, and
  * `require_user_approval` for the rest because the host has to decide
  * what to do with the manual-review hint.
+ *
+ * Fail-closed when registry metadata is missing: an algorithm not in
+ * the registry has unknown criticality + domain, so we cannot make
+ * a safe auto-apply decision. We short-circuit to require_user_approval
+ * with an explicit "register the algorithm" hint rather than letting
+ * the engine evaluate against a default-medium criticality.
  */
 export function gateAdjustmentProposal(input: GateInput): GatedProposal {
+  if (!input.algorithm) {
+    return {
+      proposal: input.proposal,
+      verdict: {
+        decision: 'require_user_approval',
+        reason: 'Algorithm registry metadata is missing — cannot determine criticality or domain. Failing closed.',
+        requiredEvidence: [
+          `register algorithm "${input.proposal.algorithmId}" in algorithm-registry`,
+          'user click-to-confirm',
+        ],
+        ruleId: 'policy_gate_unknown_algorithm',
+      },
+    };
+  }
   const ctx: PolicyContext = {
     actionKind: 'algorithm_tuning',
     targetId: input.proposal.algorithmId,
-    domain: input.algorithm?.domain ?? 'unknown',
-    criticality: input.algorithm?.criticality ?? 'medium',
+    domain: input.algorithm.domain,
+    criticality: input.algorithm.criticality,
     evidenceCount: input.evidenceCount,
     replayPassed: input.replayPassed,
     backtestPassed: input.backtestPassed,

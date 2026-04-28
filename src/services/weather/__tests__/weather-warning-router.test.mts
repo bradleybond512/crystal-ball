@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { routeWeatherAlert } from '../weather-warning-router.ts';
 import type { AlertPolygon, NwsAlertMinimal, SavedPlace } from '../weather-threat-types.ts';
+import { getAlgorithmEvaluationLedger, resetAlgorithmsState } from '@/services/algorithms/algorithms-state';
 
 const NOW = 1_745_000_000_000;
 
@@ -299,4 +300,28 @@ test('integration: tornado warning inside polygon during quiet hours bypasses + 
   assert.ok(decision.dispatchActions.includes('imessage'));
   assert.ok(decision.dispatchActions.includes('request_acknowledgment'));
   assert.equal(decision.diagnostic.verdict, 'delivered');
+});
+
+// ── Ledger wiring (closed-loop algorithm plan PR 2) ─────────────────────
+
+test('ledger wiring: routing a matched alert records one weather-urgency evaluation', () => {
+  resetAlgorithmsState();
+  const ledger = getAlgorithmEvaluationLedger();
+  routeWeatherAlert(alert(), [HOME], { now: NOW });
+  const records = ledger.byAlgorithm('weather-urgency');
+  assert.equal(records.length, 1);
+  const r = records[0]!;
+  assert.equal(r.label, 'persistent_critical', 'records the urgency priority as the label');
+  assert.equal(r.detail?.matchKind, 'inside_polygon');
+  assert.equal(typeof r.detail?.threatLevel, 'string');
+  assert.equal(typeof r.detail?.persistentInApp, 'boolean');
+});
+
+test('ledger wiring: no_match alerts do NOT emit a weather-urgency record', () => {
+  resetAlgorithmsState();
+  const ledger = getAlgorithmEvaluationLedger();
+  routeWeatherAlert(alert({ polygon: FAR }), [HOME], { now: NOW });
+  // Skipping urgency for no_match keeps the ledger noise-free; the
+  // diagnostic trace already explains why nothing fired.
+  assert.equal(ledger.byAlgorithm('weather-urgency').length, 0);
 });

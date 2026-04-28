@@ -53,6 +53,7 @@
     "test:shortage": "tsx --test src/services/shortage/__tests__/shortage-score.test.mts src/services/shortage/__tests__/commodity-playbooks.test.mts src/services/shortage/__tests__/corn-gasoline-models.test.mts",
     "test:weather": "tsx --test src/services/weather/__tests__/nws-polygon-match.test.mts src/services/weather/__tests__/personal-storm-mode.test.mts src/services/weather/__tests__/weather-warning-diagnostics.test.mts",
     "test:diagnostics": "tsx --test src/services/diagnostics/__tests__/diagnostic-events.test.mts",
+    "test:ops": "tsx --test src/services/ops/__tests__/mission-ledger.test.mts",
     "test:insights6": "tsx --test src/services/insights/__tests__/presentation-export.test.mts",
     "test:intelligence": "tsx --test src/services/intelligence/__tests__/truth-score.test.mts src/services/intelligence/__tests__/evidence-graph.test.mts src/services/intelligence/__tests__/situation-clustering.test.mts src/services/intelligence/__tests__/baseline-deviation.test.mts src/services/intelligence/__tests__/forecast-calibration.test.mts src/services/intelligence/__tests__/negative-evidence.test.mts",
     "test:insights": "tsx --test src/services/insights/__tests__/big-event-detector.test.mts src/services/insights/__tests__/confidence-urgency-matrix.test.mts",

@@ -61,6 +61,57 @@ test('findReleaseStateIssues rejects a target tag that already exists remotely w
   ]);
 });
 
+test('findReleaseStateIssues accepts a just-shipped tag that points at HEAD with a published release', () => {
+  // The tag-driven release flow leaves the most recent release tag
+  // pointing at the same commit as `main`. Strict mode used to flag
+  // this as "tag already exists," which broke release-integrity on
+  // every successful release until the next bump shipped.
+  const issues = findReleaseStateIssues({
+ targetTag: 'v2.6.1',
+ remoteTags: new Set(['v2.6.1']),
+ releases: [
+ { tagName: 'v2.6.1', isDraft: false },
+ ],
+ tagPointsAtHead: true,
+  });
+
+  assert.deepEqual(issues, []);
+});
+
+test('findReleaseStateIssues still rejects a just-shipped tag when the release is only a draft', () => {
+  const issues = findReleaseStateIssues({
+ targetTag: 'v2.6.1',
+ remoteTags: new Set(['v2.6.1']),
+ releases: [
+ { tagName: 'v2.6.1', isDraft: true },
+ ],
+ tagPointsAtHead: true,
+  });
+
+  assert.deepEqual(issues, [
+ 'Remote tag already exists for target release: v2.6.1',
+  ]);
+});
+
+test('findReleaseStateIssues still rejects a stale tag that points at a different commit even with a release', () => {
+  // Tag exists, release exists, but the tag does NOT point at HEAD —
+  // this means main has commits past the release that haven't been
+  // tagged. Strict mode should keep flagging this as "you forgot to
+  // bump."
+  const issues = findReleaseStateIssues({
+ targetTag: 'v2.6.1',
+ remoteTags: new Set(['v2.6.1']),
+ releases: [
+ { tagName: 'v2.6.1', isDraft: false },
+ ],
+ tagPointsAtHead: false,
+  });
+
+  assert.deepEqual(issues, [
+ 'Remote tag already exists for target release: v2.6.1',
+  ]);
+});
+
 test('findReleaseStateIssues rejects duplicate drafts for the target tag', () => {
   const issues = findReleaseStateIssues({
  targetTag: 'v2.6.1',

@@ -155,11 +155,108 @@ export const GASOLINE_PLAYBOOK: CommodityPlaybook = {
   forecastHorizonDays: 30,
 };
 
+// ── Soft commodities (batch 5) ─────────────────────────────────────────
+
+export const SUGAR_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'sugar',
+  domain: 'food',
+  leadingIndicators: [
+    'rainfall_pct_of_normal',
+    'soil_moisture_percentile',
+    'fertilizer_price_yoy',
+    'cane_yield_anomaly',
+    'ethanol_diversion_pct',
+    'india_export_quota_pct',
+    'oil_price_brent',
+  ],
+  confirmingIndicators: [
+    'raw_sugar_futures_mom',
+    'shipping_rates_brazil_panamax',
+    'export_corridor_status',
+  ],
+  invalidatingIndicators: [
+    'india_export_quota_raised',
+    'cane_yield_recovery',
+    'ethanol_diversion_falling',
+  ],
+  // Brazilian centre-south crush Apr–Nov; Indian harvest Oct–Apr. The
+  // hand-off windows are when ethanol diversion + monsoon misses bite hardest.
+  seasonalRiskMonths: [4, 5, 9, 10, 11],
+  chokepoints: ['Port of Santos', 'Port of Paranaguá', 'Suez Canal', 'Indian export quotas'],
+  affectedCountries: ['BR', 'IN', 'TH', 'AU', 'PK', 'ID', 'CN', 'EU', 'US'],
+  affectedSectors: ['food retail', 'beverages', 'confectionery', 'ethanol'],
+  forecastHorizonDays: 60,
+};
+
+export const COFFEE_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'coffee',
+  domain: 'food',
+  leadingIndicators: [
+    'rainfall_pct_of_normal',
+    'frost_risk_index_brazil',
+    'soil_moisture_percentile',
+    'fertilizer_price_yoy',
+    'arabica_robusta_spread_mom',
+    'colombia_export_volume_yoy',
+    'vietnam_export_volume_yoy',
+  ],
+  confirmingIndicators: [
+    'arabica_futures_mom',
+    'shipping_rates_brazil_panamax',
+    'roaster_inventory_weeks',
+  ],
+  invalidatingIndicators: [
+    'frost_risk_passed',
+    'rainfall_recovery_brazil',
+    'roaster_inventory_rebuilds',
+  ],
+  // Brazil flowering Sep-Nov, frost risk Jun-Aug. Vietnam Robusta harvest
+  // Oct-Jan. Frost season is the highest-impact window.
+  seasonalRiskMonths: [6, 7, 8, 9, 10, 11],
+  chokepoints: ['Port of Santos', 'Vietnamese export terminals', 'Suez Canal'],
+  affectedCountries: ['BR', 'VN', 'CO', 'ID', 'ET', 'HN', 'IN', 'US', 'EU'],
+  affectedSectors: ['retail coffee', 'roasters', 'cafés', 'instant coffee'],
+  forecastHorizonDays: 90,
+};
+
+export const COCOA_PLAYBOOK: CommodityPlaybook = {
+  commodity: 'cocoa',
+  domain: 'food',
+  leadingIndicators: [
+    'rainfall_pct_of_normal',
+    'harmattan_dust_index',
+    'black_pod_disease_index',
+    'fertilizer_price_yoy',
+    'ghana_cote_divoire_export_pace',
+    'midcrop_pollination_window_temp',
+  ],
+  confirmingIndicators: [
+    'cocoa_futures_mom',
+    'grindings_yoy',
+    'shipping_rates_west_africa',
+  ],
+  invalidatingIndicators: [
+    'rainfall_recovery_west_africa',
+    'disease_index_falling',
+    'export_pace_recovery',
+  ],
+  // West-Africa main crop Oct-Mar, midcrop Apr-Sep. Harmattan dust risk
+  // peaks Dec-Feb; black-pod disease worst Jul-Sep.
+  seasonalRiskMonths: [7, 8, 9, 12, 1, 2],
+  chokepoints: ['Port of Abidjan', 'Port of Tema', 'Suez Canal'],
+  affectedCountries: ['CI', 'GH', 'ID', 'NG', 'CM', 'EC', 'BR', 'US', 'EU', 'CH'],
+  affectedSectors: ['confectionery', 'chocolate processing', 'specialty food retail'],
+  forecastHorizonDays: 120,
+};
+
 export const ALL_PLAYBOOKS: readonly CommodityPlaybook[] = [
   WHEAT_PLAYBOOK,
   CORN_PLAYBOOK,
   DIESEL_PLAYBOOK,
   GASOLINE_PLAYBOOK,
+  SUGAR_PLAYBOOK,
+  COFFEE_PLAYBOOK,
+  COCOA_PLAYBOOK,
 ];
 
 /** Lookup helper — preferred over reaching into ALL_PLAYBOOKS directly. */

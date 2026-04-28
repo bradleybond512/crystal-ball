@@ -1,27 +1,33 @@
 /**
  * Algorithms state singleton wiring.
  *
- * Holds the Evaluation Ledger and a default algorithm catalog so the
- * Algorithm Diagnostic Panel can read live state without each panel
- * rebuilding the registries.
+ * Single source of truth: the catalog of algorithms is derived directly
+ * from `algorithm-registry.ts` so health diagnostics, the evaluation
+ * ledger, and the safe-adjustment proposal engine all see identical
+ * ids, versions, criticalities, and domains. Previously this module
+ * shadowed the registry with its own copy and used `-v1`-suffixed ids
+ * that didn't join cleanly to evaluation records — that drift is now
+ * removed.
  */
 
 import {
   createAlgorithmEvaluationLedger,
   type AlgorithmEvaluationLedger,
+  type AlgorithmDomain,
 } from './algorithm-evaluation-ledger';
-import type { AlgorithmDefinition } from './algorithm-health';
+import type { AlgorithmDefinition as HealthDefinition } from './algorithm-health';
+import { listAlgorithms, type AlgorithmDefinition as RegistryDefinition } from './algorithm-registry';
 
 let ledger: AlgorithmEvaluationLedger | undefined;
-let definitions: AlgorithmDefinition[] | undefined;
+let definitions: HealthDefinition[] | undefined;
 
 export function getAlgorithmEvaluationLedger(): AlgorithmEvaluationLedger {
   ledger ??= createAlgorithmEvaluationLedger();
   return ledger;
 }
 
-export function getAlgorithmDefinitions(): readonly AlgorithmDefinition[] {
-  definitions ??= defaultAlgorithmCatalog();
+export function getAlgorithmDefinitions(): readonly HealthDefinition[] {
+  definitions ??= deriveDefinitionsFromRegistry();
   return definitions;
 }
 
@@ -30,79 +36,19 @@ export function resetAlgorithmsState(): void {
   definitions = undefined;
 }
 
-function defaultAlgorithmCatalog(): AlgorithmDefinition[] {
-  return [
-    {
-      algorithmId: 'truth-score-v1',
-      label: 'Truth scorer',
-      domain: 'truth_score',
-      criticality: 'high',
-    },
-    {
-      algorithmId: 'evidence-graph-v1',
-      label: 'Evidence graph',
-      domain: 'evidence_graph',
-      criticality: 'high',
-    },
-    {
-      algorithmId: 'situation-clustering-v1',
-      label: 'Situation clustering',
-      domain: 'situation_clustering',
-      criticality: 'medium',
-    },
-    {
-      algorithmId: 'baseline-deviation-v1',
-      label: 'Baseline deviation',
-      domain: 'baseline_deviation',
-      criticality: 'medium',
-    },
-    {
-      algorithmId: 'compound-risk-v1',
-      label: 'Compound risk',
-      domain: 'compound_risk',
-      criticality: 'high',
-    },
-    {
-      algorithmId: 'forecast-calibration-v1',
-      label: 'Forecast calibration',
-      domain: 'forecast_calibration',
-      criticality: 'medium',
-    },
-    {
-      algorithmId: 'watchlist-relevance-v1',
-      label: 'Watchlist relevance',
-      domain: 'watchlist_relevance',
-      criticality: 'medium',
-    },
-    {
-      algorithmId: 'negative-evidence-v1',
-      label: 'Negative evidence',
-      domain: 'negative_evidence',
-      criticality: 'medium',
-    },
-    {
-      algorithmId: 'shortage-score-v1',
-      label: 'Shortage scorer',
-      domain: 'shortage_score',
-      criticality: 'medium',
-    },
-    {
-      algorithmId: 'weather-polygon-v1',
-      label: 'Weather polygon match',
-      domain: 'weather_polygon',
-      criticality: 'safety',
-    },
-    {
-      algorithmId: 'weather-urgency-v1',
-      label: 'Weather urgency ladder',
-      domain: 'weather_urgency',
-      criticality: 'safety',
-    },
-    {
-      algorithmId: 'reasoning-hypothesis-v1',
-      label: 'Reasoning hypothesis fuser',
-      domain: 'reasoning_hypothesis',
-      criticality: 'medium',
-    },
-  ];
+/** Project a registry entry onto the health-aggregator's
+ *  AlgorithmDefinition shape. The registry's `healthDomain` field is
+ *  authoritative; entries without one fall through to the catch-all
+ *  `'other'` domain so the health surface still tracks them. */
+export function toHealthDefinition(reg: RegistryDefinition): HealthDefinition {
+  return {
+    algorithmId: reg.id,
+    label: reg.label,
+    domain: (reg.healthDomain ?? 'other') as AlgorithmDomain,
+    criticality: reg.criticality,
+  };
+}
+
+function deriveDefinitionsFromRegistry(): HealthDefinition[] {
+  return listAlgorithms().map((entry) => toHealthDefinition(entry));
 }

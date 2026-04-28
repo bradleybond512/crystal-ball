@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-async-constructor */
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -67,7 +68,12 @@ export class FuelPricesPanel extends Panel {
  return;
  }
 
- if (this.data.error && this.data.regions.length === 0 && !this.data.keyMissing) {
+ // Defensive shape check — degraded sidecar payloads can omit
+ // `regions`. Smoke harness identified this as a crash site
+ // (regions[0] on undefined).
+ const regions: FuelRegion[] = Array.isArray(this.data.regions) ? this.data.regions : [];
+
+ if (this.data.error && regions.length === 0 && !this.data.keyMissing) {
  this.showError(FuelPricesPanel.UNAVAILABLE_MESSAGE);
  return;
  }
@@ -84,11 +90,14 @@ export class FuelPricesPanel extends Panel {
  return;
  }
 
- const { regions } = this.data;
+ if (regions.length === 0) {
+ this.showError(FuelPricesPanel.UNAVAILABLE_MESSAGE);
+ return;
+ }
 
  const period = regions[0]?.period ?? '';
 
- const rows = regions.map(r => {
+ const rows = regions.map((r: FuelRegion) => {
  const isAvg = r.name === 'U.S. Average';
  const weight = isAvg ? 'font-weight:600;' : '';
  return `

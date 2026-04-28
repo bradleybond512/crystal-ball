@@ -29,6 +29,23 @@ Notification wiring (`src/services/insights/notification-ladder.ts`) bridges Big
 
 Replay fixtures (`src/services/ops/replay-fixtures-catalog.ts`) ship five missed-event cases (late severe wind, silent tornado polygon, fuel-stress late, quiet-hours suppression, ADS-B outage) with stable timestamps so the harness can prove regressions.
 
+### Personal + provider + share + ask layer (gaps #5, #11–14)
+
+Five additional pure-deterministic services close the gameplan's product-experience gaps:
+
+- **`src/services/personal/personal-impact.ts`** — Personal Impact Engine. Maps incoming events to the user's saved-places, watchlist, portfolio, travel routes, and utility dependencies. Produces `PersonalImpact` rows across five categories (`immediate_risk` / `financial` / `travel` / `utility` / `family_place`) plus a `dormant` bucket for sub-floor signals.
+- **`src/services/diagnostics/provider-redundancy.ts`** — Provider Redundancy Health. Per-domain verdict (`redundant_agreement` / `redundant_disagreement` / `single_source` / `primary_down_with_backup` / `all_down`) with a `confidenceMultiplier` downstream scoring should apply.
+- **`src/services/insights/share-packet.ts`** — Shareable Intelligence Packets. Wraps the existing presentation-export helpers (markdown / clipboard / share-sheet / Claude debug) into one `buildSharePacket()` call that bundles provenance + diagnostics appendices.
+- **`src/services/insights/ask-the-data.ts`** — Ask-The-Data structured query. Six recognized intents (why_high_risk / what_changed / who_disagrees / what_raises_confidence / what_to_watch / late_warning) each return a deterministic answer + structured evidence rows + follow-up questions.
+- **`src/services/insights/insights-state.ts`** — singleton wiring for the active situation, personal profile, recent events, and provider snapshots so Command Center reads them through one entry point.
+
+Action Briefs (`reaction-playbooks.ts` + `action-briefs.ts`) are now rendered inside the Command Center when an active situation is set via `setActiveSituation()`.
+
+### Diagnostic scripts
+
+- `npm run docs:check` runs `scripts/check-docs-freshness.mjs` to flag README/docs that are out of step with the source (panel counts, secret-key counts, etc.).
+- `npm run cross-check` (alias `cross-agent:check`) runs `scripts/cross-agent-check.mjs` to identify the required cross-agent reviewer for the current branch (Claude → Codex, Codex → Claude). The `.github/workflows/cross-agent-review.yml` workflow blocks merge of `claude/*` / `codex/*` / `copilot/*` branches without a recorded cross-agent review.
+
 ## Foundation Intelligence Layers
 
 Four pure-deterministic, fixture-tested service layers. **No DOM, no fetch, no globals — input-output pure. 600+ unit tests.**

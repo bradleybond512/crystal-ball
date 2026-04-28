@@ -19,6 +19,13 @@ import {
   contextFromSnapshots,
 } from '@/services/diagnostics/system-health';
 import { auditFeeds } from '@/services/diagnostics/sentinel-feed-audit';
+import {
+  getActiveActionBrief,
+  getPersonalImpactReport,
+  getProviderRedundancyReport,
+} from '@/services/insights/insights-state';
+import type { ActionBrief } from '@/services/insights/action-briefs';
+import type { PersonalImpact } from '@/services/personal/personal-impact';
 import type { FeatureHealth, HealthStatus } from '@/services/diagnostics/system-health-types';
 import { escapeHtml } from '@/utils/sanitize';
 
@@ -32,6 +39,21 @@ const STATUS_COLOR: Record<HealthStatus, string> = {
   unsafe: '#d50000',
   blind: '#607d8b',
   unknown: '#9e9e9e',
+};
+
+const ACTION_TIER_COLOR: Record<'monitor' | 'prepare' | 'act_now' | 'shelter', string> = {
+  monitor: '#4caf50',
+  prepare: '#ffeb3b',
+  act_now: '#ff9800',
+  shelter: '#d50000',
+};
+
+const IMPACT_SEVERITY_COLOR: Record<'critical' | 'elevated' | 'watch' | 'low' | 'none', string> = {
+  critical: '#d50000',
+  elevated: '#ff9800',
+  watch: '#ffeb3b',
+  low: '#9e9e9e',
+  none: '#616161',
 };
 
 const RISK_LABEL: Record<HealthStatus, string> = {
@@ -105,10 +127,17 @@ export class CommandCenterPanel extends Panel {
       .sort((a, b) => criticalRank(b) - criticalRank(a));
     this.setCount(concerning.length);
 
+    const actionBrief = getActiveActionBrief();
+    const personalImpact = getPersonalImpactReport();
+    const redundancy = getProviderRedundancyReport();
+
     return `
       <div style="padding:14px;display:flex;flex-direction:column;gap:14px;">
         ${this.renderRiskHeadline(report.status, report.summary)}
+        ${this.renderActionBrief(actionBrief)}
+        ${this.renderPersonalImpact(personalImpact.impacts)}
         ${this.renderTopThings(concerning)}
+        ${this.renderProviderRedundancy(redundancy)}
         ${this.renderWatchNext(feedAudit.entries.length, feedAudit.entries.filter((e) => e.level !== 'fresh' && e.level !== 'unknown').length)}
         ${this.renderRecommendations(report.recommendations)}
       </div>
@@ -166,6 +195,65 @@ export class CommandCenterPanel extends Panel {
           ? `${totalFeeds} feeds fresh — nothing drifting.`
           : `<strong style="color:#ff9800;">${drifting}</strong> of ${totalFeeds} sentinel feeds drifting. See Diagnostic → Feeds.`}
       </div>
+    </div>`;
+  }
+
+  private renderActionBrief(brief: ActionBrief | undefined): string {
+    if (!brief) return '';
+    const tierColor = ACTION_TIER_COLOR[brief.tier];
+    const actions = brief.recommendedActions.length === 0
+      ? ''
+      : `<ul style="margin:6px 0 0 0;padding-left:18px;font-size:12px;line-height:1.5;">
+          ${brief.recommendedActions.map((a) => `<li>${escapeHtml(a)}</li>`).join('')}
+        </ul>`;
+    const watch = brief.confirmingSources.length === 0
+      ? ''
+      : `<div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:6px;">
+          <span style="text-transform:uppercase;letter-spacing:0.05em;">Watch next</span> · ${escapeHtml(brief.confirmingSources.slice(0, 4).join(', '))}
+        </div>`;
+    return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${tierColor};border-radius:4px;padding:10px 12px;background:rgba(255,255,255,0.02);">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-weight:700;font-size:13px;">${escapeHtml(brief.headline)}</span>
+        <span style="font-size:10px;color:${tierColor};text-transform:uppercase;letter-spacing:0.06em;">${escapeHtml(brief.tier)}</span>
+      </div>
+      ${actions}
+      ${watch}
+    </div>`;
+  }
+
+  private renderPersonalImpact(impacts: readonly PersonalImpact[]): string {
+    const surfacing = impacts.filter((i) => i.severity !== 'none' && i.severity !== 'low').slice(0, 3);
+    if (surfacing.length === 0) return '';
+    return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:12px;">
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:8px;">Your personal impact</div>
+      ${surfacing.map((i) => this.renderImpactRow(i)).join('')}
+    </div>`;
+  }
+
+  private renderImpactRow(i: PersonalImpact): string {
+    const color = IMPACT_SEVERITY_COLOR[i.severity];
+    const exposures = i.exposures.length === 0
+      ? '<em>no direct personal exposure</em>'
+      : i.exposures.slice(0, 2).map((e) => escapeHtml(e.label)).join(', ');
+    return `<div style="display:flex;gap:10px;padding:6px 0;">
+      <span style="font-size:10px;color:${color};font-weight:700;text-transform:uppercase;min-width:60px;">${escapeHtml(i.severity)}</span>
+      <div style="flex:1;font-size:12px;">
+        <div>${escapeHtml(i.description)}</div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:3px;">${exposures}</div>
+        ${i.recommendedAction ? `<div style="font-size:11px;color:var(--accent,#4a9eff);margin-top:3px;">→ ${escapeHtml(i.recommendedAction)}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  private renderProviderRedundancy(report: ReturnType<typeof getProviderRedundancyReport>): string {
+    if (report.domains.length === 0) return '';
+    const stressed = report.domains.filter((d) => d.verdict !== 'redundant_agreement');
+    if (stressed.length === 0) return '';
+    return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:12px;">
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Provider stress</div>
+      <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.5;">
+        ${stressed.slice(0, 3).map((d) => `<li><strong>${escapeHtml(d.domain)}</strong>: ${escapeHtml(d.reason)}</li>`).join('')}
+      </ul>
     </div>`;
   }
 

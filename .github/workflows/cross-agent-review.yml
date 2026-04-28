@@ -1,0 +1,24 @@
+name: Cross-agent review gate
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  cross-agent-review:
+    name: Cross-agent review marker
+    if: startsWith(github.head_ref, 'claude/') || startsWith(github.head_ref, 'codex/') || startsWith(github.head_ref, 'copilot/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Check PR review marker
+        run: npm run cross-check -- --ci

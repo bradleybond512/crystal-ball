@@ -75,6 +75,7 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   ABUSEIPDB_API_KEY: 'abuseipdb',
   WINGBITS_API_KEY: 'wingbits',
   WS_RELAY_URL: 'ws_relay',
+  VITE_WS_RELAY_URL: 'vite_ws_relay',
   VITE_OPENSKY_RELAY_URL: 'opensky_relay',
   OPENSKY_CLIENT_ID: 'opensky',
   OPENSKY_CLIENT_SECRET: 'opensky_secret',

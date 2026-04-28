@@ -1635,3 +1635,134 @@ body.is-desktop-macos #unifiedSettingsMount {
   background: var(--mac-accent-hover, #409cff);
   border-color: var(--mac-accent-hover, #409cff);
 }
+
+/* ============================================================
+ * Native macOS polish — Command Center, System Diagnostic,
+ * Algorithm Diagnostic, Shortage Radar (gap #4 from
+ * docs/ELITE_REMAINING_GAPS_FOR_CLAUDE.md). All scoped to
+ * body.is-desktop-macos so the web build keeps the existing UI.
+ * ============================================================ */
+
+body.is-desktop-macos .panel[data-panel-id="command-center"],
+body.is-desktop-macos .panel[data-panel-id="system-diagnostic"],
+body.is-desktop-macos .panel[data-panel-id="algorithm-diagnostic"],
+body.is-desktop-macos .panel[data-panel-id="shortage-radar"] {
+  background: var(--mac-window-bg, #1c1c1e);
+  border: 1px solid var(--mac-card-border, rgba(255, 255, 255, 0.1));
+  border-radius: var(--mac-card-radius, 12px);
+  box-shadow: var(--mac-card-shadow);
+  overflow: hidden;
+}
+
+body.is-desktop-macos .panel[data-panel-id="command-center"] .panel-content,
+body.is-desktop-macos .panel[data-panel-id="system-diagnostic"] .panel-content,
+body.is-desktop-macos .panel[data-panel-id="algorithm-diagnostic"] .panel-content,
+body.is-desktop-macos .panel[data-panel-id="shortage-radar"] .panel-content {
+  font-family: var(--mac-font);
+  color: var(--mac-label);
+  background: transparent;
+}
+
+/* Native segmented-control treatment for the System Diagnostic tabs. */
+body.is-desktop-macos .syd-tabs {
+  background: var(--mac-fill, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 2px;
+  margin: 8px 12px;
+  gap: 2px !important;
+  border: none !important;
+}
+
+body.is-desktop-macos .syd-tabs .syd-tab {
+  border: none !important;
+  border-radius: 6px;
+  background: transparent !important;
+  color: var(--mac-secondary-label) !important;
+  font-weight: 500;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+body.is-desktop-macos .syd-tabs .syd-tab[style*="border-bottom"] {
+  /* Active tab — replace the bottom-border indicator with a
+     macOS-style raised segment. */
+  background: var(--mac-surface, #2c2c2e) !important;
+  color: var(--mac-label) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+}
+
+body.is-desktop-macos .syd-tabs .syd-tab:hover {
+  color: var(--mac-label) !important;
+}
+
+/* Native button treatment inside the panels. */
+body.is-desktop-macos .syd-refresh,
+body.is-desktop-macos .syd-self-test {
+  font-family: var(--mac-font);
+  font-weight: 500;
+  font-size: 12px;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  border: 0.5px solid var(--mac-card-border) !important;
+  background: var(--mac-fill) !important;
+  color: var(--mac-label) !important;
+  transition: background 140ms ease;
+}
+
+body.is-desktop-macos .syd-refresh:hover,
+body.is-desktop-macos .syd-self-test:not([disabled]):hover {
+  background: var(--mac-surface-hover) !important;
+}
+
+body.is-desktop-macos .syd-self-test:not([disabled]) {
+  background: var(--mac-accent) !important;
+  border-color: var(--mac-accent) !important;
+  color: #fff !important;
+}
+
+body.is-desktop-macos .syd-self-test:not([disabled]):hover {
+  background: var(--mac-accent-hover) !important;
+  border-color: var(--mac-accent-hover) !important;
+}
+
+/* Inspector-drawer feel for the per-row panel rows. */
+body.is-desktop-macos .panel[data-panel-id="system-diagnostic"] .panel-content > div > div[style*="border:1px solid"],
+body.is-desktop-macos .panel[data-panel-id="algorithm-diagnostic"] .panel-content > div > div[style*="border:1px solid"],
+body.is-desktop-macos .panel[data-panel-id="shortage-radar"] .panel-content > div > div[style*="border:1px solid"] {
+  background: var(--mac-surface) !important;
+  border-color: var(--mac-card-border) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: background 140ms ease;
+}
+
+body.is-desktop-macos .panel[data-panel-id="system-diagnostic"] .panel-content > div > div[style*="border:1px solid"]:hover,
+body.is-desktop-macos .panel[data-panel-id="algorithm-diagnostic"] .panel-content > div > div[style*="border:1px solid"]:hover,
+body.is-desktop-macos .panel[data-panel-id="shortage-radar"] .panel-content > div > div[style*="border:1px solid"]:hover {
+  background: var(--mac-surface-hover) !important;
+}
+
+/* Risk headline glow gets a subtle blur — feels native-mac vibrant. */
+body.is-desktop-macos .panel[data-panel-id="command-center"] .panel-content > div > div:first-child > div:first-child > span:first-child {
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+/* Compact toolbar polish — extend the existing macOS toolbar look
+   to the new panels' headers. */
+body.is-desktop-macos .panel[data-panel-id="command-center"] .panel-header,
+body.is-desktop-macos .panel[data-panel-id="system-diagnostic"] .panel-header,
+body.is-desktop-macos .panel[data-panel-id="algorithm-diagnostic"] .panel-header,
+body.is-desktop-macos .panel[data-panel-id="shortage-radar"] .panel-header {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.03), transparent);
+  border-bottom: 0.5px solid var(--mac-separator);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Reduced-motion fallback: drop the transitions for a11y. */
+@media (prefers-reduced-motion: reduce) {
+  body.is-desktop-macos .syd-tabs .syd-tab,
+  body.is-desktop-macos .syd-refresh,
+  body.is-desktop-macos .syd-self-test,
+  body.is-desktop-macos .panel[data-panel-id="system-diagnostic"] .panel-content > div > div[style*="border:1px solid"] {
+    transition: none !important;
+  }
+}

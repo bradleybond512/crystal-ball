@@ -33,6 +33,36 @@ import {
   type DiagnosticTrace,
   type WeatherDiagnostic,
 } from './weather-warning-diagnostics';
+import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
+
+/**
+ * Time the urgency call and emit one evaluation record into the
+ * algorithm ledger. Records the priority + acknowledgement-required
+ * flag + match kind as compact detail; ground-truth outcome (warning
+ * landed before impact / dismissed by user / etc.) is appended later
+ * by the closed-loop layer once the mission resolves.
+ */
+function recordWeatherUrgency(
+  match: PolygonMatchResult,
+  invoke: () => WeatherUrgencyDecision,
+  now: number,
+): WeatherUrgencyDecision {
+  const startedAt = Date.now();
+  const decision = invoke();
+  const durationMs = Date.now() - startedAt;
+  recordAlgorithmEvaluation('weather-urgency', {
+    durationMs,
+    at: now,
+    label: decision.priority,
+    detail: {
+      matchKind: match.matchKind,
+      threatLevel: match.threatLevel,
+      hazardKind: match.hazardKind,
+      persistentInApp: decision.persistentInApp,
+    },
+  });
+  return decision;
+}
 
 // ── Public types ─────────────────────────────────────────────────────────
 
@@ -112,12 +142,20 @@ export function routeWeatherAlert(
   // Step 1: find the strongest match across all saved places.
   const strongest = pickStrongestMatch(alert, places, now);
 
-  // Step 2: when we have any match, derive urgency.
+  // Step 2: when we have any match, derive urgency. Recording the
+  // urgency decision into the algorithm-evaluation ledger lets the
+  // closed-loop diagnostics surface "weather-urgency fired N times,
+  // mean priority X, last-seen at T" without coupling the pure
+  // urgency engine to the ledger.
   const urgency = strongest && strongest.match.matchKind !== 'no_match'
-    ? urgencyFor(strongest.match, options.previousDelivery, {
+    ? recordWeatherUrgency(
+        strongest.match,
+        () => urgencyFor(strongest.match, options.previousDelivery, {
+          now,
+          quietHoursBypassHazards: options.quietHoursBypassHazards,
+        }),
         now,
-        quietHoursBypassHazards: options.quietHoursBypassHazards,
-      })
+      )
     : undefined;
 
   // Step 3: when urgency is at banner+, build the Storm Mode payload.

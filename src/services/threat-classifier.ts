@@ -389,6 +389,7 @@ import {
   ApiError,
   type ClassifyEventResponse,
 } from '@/generated/client/crystalball/intelligence/v1/service_client';
+import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
 
 const classifyClient = new IntelligenceServiceClient('', { fetch: (...args) => globalThis.fetch(...args) });
 
@@ -466,13 +467,41 @@ function flushBatch(): void {
 
  await waitForGap();
 
+ const callStartedAt = Date.now();
  try {
  const resp = await classifyClient.classifyEvent({
  title: job.title, description: '', source: '', country: '',
  });
- job.resolve(toThreat(resp));
+ const result = toThreat(resp);
+ // Record one evaluation per AI classification. Pure-keyword
+ // classifications skip the queue entirely, so this only fires
+ // when the cloud AI was actually consulted.
+ recordAlgorithmEvaluation('threat-classifier', {
+ durationMs: Date.now() - callStartedAt,
+ score: result?.confidence,
+ label: result ? `${result.level}/${result.category}` : 'null',
+ detail: {
+ variant: job.variant,
+ attempts: job.attempts ?? 0,
+ source: result?.source ?? 'llm',
+ },
+ });
+ job.resolve(result);
  consecutivePauses = 0;
  } catch (error) {
+ // Record the failure so the health aggregator sees errors,
+ // not just successes. Use label='error' (matches timeAndRecord's
+ // convention) so the closed-loop layer can reason about hit rate.
+ recordAlgorithmEvaluation('threat-classifier', {
+ durationMs: Date.now() - callStartedAt,
+ label: 'error',
+ detail: {
+ variant: job.variant,
+ attempts: job.attempts ?? 0,
+ statusCode: error instanceof ApiError ? error.statusCode : undefined,
+ },
+ notes: error instanceof Error ? error.message : String(error),
+ });
  if (error instanceof ApiError && (error.statusCode === 429 || error.statusCode >= 500)) {
  batchPaused = true;
  consecutivePauses++;

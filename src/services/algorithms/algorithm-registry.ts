@@ -297,6 +297,17 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     criticality: 'low',
   },
   {
+    id: 'threat-classifier',
+    label: 'AI threat classifier',
+    version: '1.0.0',
+    domain: 'classification',
+    healthDomain: 'reasoning_hypothesis',
+    ownerFeature: 'threat_classifier',
+    dependencies: { sources: [], providers: ['anthropic', 'groq', 'openrouter'], services: [] },
+    outputs: ['ranking', 'notification_decision'],
+    criticality: 'medium',
+  },
+  {
     id: 'hypothesis-accuracy',
     label: 'Hypothesis accuracy tracker',
     version: '1.0.0',

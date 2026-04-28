@@ -193,13 +193,13 @@ test('sidecar routes — collected', () => {
 
 test('sidecar routes — report', () => {
   writeReport();
-  // eslint-disable-next-line no-console
+   
   console.log(`\nSidecar audit: ${rendererRoutes.size} renderer call sites, ${sidecarRoutes.size} sidecar handlers, ${dangling.length} dangling, ${orphaned.length} orphan.`);
   if (dangling.length > 0) {
-    // eslint-disable-next-line no-console
+     
     console.log('First 10 dangling:');
     for (const d of dangling.slice(0, 10)) {
-      // eslint-disable-next-line no-console
+       
       console.log(`  ${d.route}  <-  ${d.callers[0]}`);
     }
   }

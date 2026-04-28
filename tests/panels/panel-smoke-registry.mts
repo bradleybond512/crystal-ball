@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Panel id -> factory map. Each entry returns a freshly constructed Panel
  * instance the harness can mount. Anything not listed here is reported by

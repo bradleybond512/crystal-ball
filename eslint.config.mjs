@@ -133,7 +133,13 @@ export default tseslint.config(
   // TypeScript parser but skip the typed-checked rules that require
   // tsconfig.json membership (test files are excluded from tsconfig).
   {
- files: ['src/**/__tests__/**/*.ts', 'src/**/__tests__/**/*.mts', 'src/**/*.test.ts', 'src/**/*.test.mts'],
+ files: [
+ 'src/**/__tests__/**/*.ts', 'src/**/__tests__/**/*.mts',
+ 'src/**/*.test.ts', 'src/**/*.test.mts',
+ // tests/ directory at the repo root (e.g. tests/panels/ smoke
+ // harness) — same TS parser, no tsconfig membership required.
+ 'tests/**/*.ts', 'tests/**/*.mts',
+ ],
  languageOptions: {
  parser: tseslint.parser,
  parserOptions: { sourceType: 'module' },

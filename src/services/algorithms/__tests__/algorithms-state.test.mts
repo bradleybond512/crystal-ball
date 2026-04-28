@@ -78,6 +78,31 @@ test('toHealthDefinition: registry entry without healthDomain projects to "other
   assert.equal(proj.algorithmId, 'experimental-ranker');
 });
 
+test('regression: all previously-tracked health domains are still represented', () => {
+  // The pre-PR catalog had 12 health domains hand-maintained in
+  // algorithms-state.ts. Deriving from the registry must not silently
+  // drop any of them (Codex review of #179 caught evidence-graph and
+  // baseline-deviation missing). This test pins the contract.
+  const required = new Set([
+    'truth_score',
+    'evidence_graph',
+    'situation_clustering',
+    'baseline_deviation',
+    'compound_risk',
+    'forecast_calibration',
+    'watchlist_relevance',
+    'negative_evidence',
+    'shortage_score',
+    'weather_polygon',
+    'weather_urgency',
+    'reasoning_hypothesis',
+  ]);
+  const present = new Set(getAlgorithmDefinitions().map((d) => d.domain));
+  for (const dom of required) {
+    assert.ok(present.has(dom), `health domain "${dom}" must remain represented in the derived catalog`);
+  }
+});
+
 test('runtime-registered algorithms surface in getAlgorithmDefinitions after a reset', () => {
   registerAlgorithm({
     id: 'late-registered',

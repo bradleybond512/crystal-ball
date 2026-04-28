@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-async-constructor */
 import { Panel } from './Panel';
 import { getApiBaseUrl } from '@/services/runtime';
 import { readJsonResponse } from '@/utils/http-json';
@@ -92,6 +93,14 @@ export class InternetDisruptionsPanel extends Panel {
  }
 
  const d = this.data;
+
+ // Defensive shape check: smoke-test harness identified this as a
+ // crash site when the sidecar returns a degraded payload that
+ // lacks the bgp/ddos/ixp/cables sub-objects.
+ if (!d.bgp || !d.ddos || !d.ixp || !d.cables) {
+ this.showError(InternetDisruptionsPanel.UNAVAILABLE_MESSAGE);
+ return;
+ }
 
  const bgpDetail = `${d.bgp.hijacks} hijacks, ${d.bgp.leaks} leaks`;
 

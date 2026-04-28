@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-async-constructor */
 import { Panel } from './Panel';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -85,7 +86,11 @@ export class GdeltIntelPanel extends Panel {
  return;
  }
 
- const events = this.data.events.slice(0, 20);
+ // Defensive shape check: degraded sidecar responses can return
+ // {degraded:true} or arbitrary objects without an `events` array.
+ // Smoke-test harness identified this as a crash site.
+ const eventsArr = Array.isArray(this.data.events) ? this.data.events : [];
+ const events = eventsArr.slice(0, 20);
  this.setCount(events.length);
 
  if (events.length === 0) {

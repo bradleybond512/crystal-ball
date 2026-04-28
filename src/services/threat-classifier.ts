@@ -527,12 +527,15 @@ export function classifyWithAI(
   const existing = inFlightByTitle.get(dedupKey);
   if (existing) return existing;
 
-  const promise = new Promise<ThreatClassification | null>((resolve) => {
- if (batchQueue.length >= MAX_QUEUE_LENGTH) {
+  // Queue-full early-drop: skip the dedup cache entirely so the next
+  // call for the same title (after the queue has drained) gets a fresh
+  // attempt rather than the stuck `null` from this drop.
+  if (batchQueue.length >= MAX_QUEUE_LENGTH) {
  console.warn(`[Classify] Queue full (${MAX_QUEUE_LENGTH}), dropping classification for: ${title.slice(0, 60)}`);
- resolve(null);
- return;
- }
+ return Promise.resolve(null);
+  }
+
+  const promise = new Promise<ThreatClassification | null>((resolve) => {
  batchQueue.push({
  title,
  variant,

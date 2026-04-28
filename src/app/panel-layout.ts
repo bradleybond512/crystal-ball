@@ -1107,6 +1107,30 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ // Wire saved-places into the insights state singleton so the new
+ // panels see the user's home/family/travel places out of the box.
+ // Re-runs whenever saved places change.
+ void import('@/services/insights/data-bridge').then(({ bridgeSavedPlacesToProfile, adaptExistingSavedPlace, bridgeSourcesToProviderRedundancy }) => {
+ void import('@/services/saved-places').then(({ getSavedPlaces, subscribeSavedPlaces }) => {
+ const sync = () => bridgeSavedPlacesToProfile(getSavedPlaces().map((p) => adaptExistingSavedPlace(p)));
+ sync();
+ if (typeof subscribeSavedPlaces === 'function') subscribeSavedPlaces(sync);
+ });
+ // Periodic provider-snapshot bridge so Command Center's "Provider
+ // Stress" + System Diagnostic's redundancy view stay current.
+ void import('@/services/api-diagnostic').then(({ diagnoseAll }) => {
+ const tick = () => {
+ try {
+ const r = diagnoseAll();
+ bridgeSourcesToProviderRedundancy(r.sources);
+ } catch (error) {
+ console.warn('[provider-bridge] snapshot failed:', error);
+ }
+ };
+ tick();
+ setInterval(tick, 30_000);
+ });
+ });
  this.ctx.panels['cascade-simulator'] = new CascadeSimulatorPanel();
  this.ctx.panels['emergency-broadcast'] = new EmergencyBroadcastPanel();
  this.ctx.panels['satellite-change'] = new SatelliteChangePanel();

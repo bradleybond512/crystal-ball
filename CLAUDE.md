@@ -41,6 +41,16 @@ Five additional pure-deterministic services close the gameplan's product-experie
 
 Action Briefs (`reaction-playbooks.ts` + `action-briefs.ts`) are now rendered inside the Command Center when an active situation is set via `setActiveSituation()`.
 
+### Replay harness + ADS-B aggregator + data bridge (final gaps)
+
+- **`src/services/ops/replay-harness.ts`** — runs `ReplayFixture[]` through the four expectation kinds (`warning_before_impact`, `no_silent_signal`, `requires_confirmation`, `user_action_observed`) and produces a deterministic pass/fail report. Combines with `replay-fixtures-catalog.ts` to prove "Crystal Ball would warn earlier next time".
+- **`src/services/insights/data-bridge.ts`** — bridges live data into the insights state singleton: `bridgeWeatherAlertsToInsights()` translates `WeatherAlert[]` into `IncomingEvent[]` + sets the highest-severity-near-saved-place alert as the active situation; `bridgeSourcesToProviderRedundancy()` translates `SourceDiagnostic[]` into provider snapshots; `bridgeSavedPlacesToProfile()` + `adaptExistingSavedPlace()` install the user's saved places. Wired into `src/app/data-loader.ts` (weather refresh) and `src/app/panel-layout.ts` (boot + 30s provider tick).
+- **`src/services/adsb/adsb-aggregate.ts`** — pure deterministic merger over OpenSky/ADSBExchange/Wingbits snapshots. Per-aircraft confidence (1 provider 0.55, 2 providers 0.85, 3+ 0.95) with linear decay after 60 s + cap 0.6 when every contributing provider is degraded. Status verdict: `healthy` / `degraded` / `silent`.
+
+### Native macOS polish (gap #4)
+
+`src/styles/macos-native.css` ends with a section scoped to `body.is-desktop-macos` that retreats the four new panels (Command Center / System Diagnostic / Algorithm Diagnostic / Shortage Radar) with native dark surfaces, segmented-control tabs, accent-colored primary buttons, inspector-drawer hover treatment, and toolbar-style headers with backdrop blur. `prefers-reduced-motion` disables the transitions.
+
 ### Diagnostic scripts
 
 - `npm run docs:check` runs `scripts/check-docs-freshness.mjs` to flag README/docs that are out of step with the source (panel counts, secret-key counts, etc.).
@@ -292,7 +302,7 @@ Ghost Mode: polling ×5, analytics suppressed, notifications suppressed, dark cr
 
 ## Settings / API Keys
 
-API keys entered via gear icon → API Keys tab. None embed the brand in their names; all 49 supported keys are generic API names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc).
+API keys entered via gear icon → API Keys tab. None embed the brand in their names; all 48 supported keys are generic API names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc).
 
 ## Secret Scan Guardrail
 

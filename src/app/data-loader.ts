@@ -1386,6 +1386,16 @@ export class DataLoaderManager implements AppModule {
  void import('@/services/offline-staleness').then(({ recordSourceUpdate }) => { recordSourceUpdate('weather', Date.now()); });
  updateStormPreparednessContext({ weatherAlerts: alerts });
 
+ // Wire weather alerts into the insights state singleton so Command
+ // Center, Personal Impact, and Action Briefs all reflect the same
+ // data view.
+ try {
+ const { bridgeWeatherAlertsToInsights } = await import('@/services/insights/data-bridge');
+ bridgeWeatherAlertsToInsights(alerts);
+ } catch (error) {
+ console.warn('[data-loader] insights bridge failed:', error);
+ }
+
  // Wire weather into correlation matrix, anomaly detection, and convergence
  const severeCount = alerts.filter(a => a.severity === 'Extreme' || a.severity === 'Severe').length;
  ingestWeatherAnomalySignals(alerts.length, severeCount);

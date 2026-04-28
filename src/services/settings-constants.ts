@@ -57,6 +57,7 @@ export const PLAINTEXT_KEYS = new Set<RuntimeSecretKey>([
   'OLLAMA_API_URL',
   'OLLAMA_MODEL',
   'WS_RELAY_URL',
+  'VITE_WS_RELAY_URL',
   'VITE_OPENSKY_RELAY_URL',
   'ACLED_EMAIL',
 ]);
@@ -130,6 +131,7 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   ABUSEIPDB_API_KEY: 'AbuseIPDB API Key',
   WINGBITS_API_KEY: 'Wingbits API Key',
   WS_RELAY_URL: 'WebSocket Relay URL',
+  VITE_WS_RELAY_URL: 'Vite WebSocket Relay URL',
   VITE_OPENSKY_RELAY_URL: 'OpenSky Relay URL',
   OPENSKY_CLIENT_ID: 'OpenSky Client ID',
   OPENSKY_CLIENT_SECRET: 'OpenSky Client Secret',
@@ -186,6 +188,7 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   OPENSKY_CLIENT_SECRET: 'OpenSky military aircraft tracking (OAuth secret). Paired with OPENSKY_CLIENT_ID.',
   VITE_OPENSKY_RELAY_URL: 'Self-hosted OpenSky relay URL — bypasses public rate limits. Optional.',
   WS_RELAY_URL: 'Generic WebSocket relay URL for live feeds.',
+  VITE_WS_RELAY_URL: 'Build-time WebSocket relay URL exposed to the Vite client (mirrors WS_RELAY_URL).',
   AISSTREAM_API_KEY: 'AISStream maritime vessel tracking — military, dark ships, cargo. Free.',
   WINGBITS_API_KEY: 'Wingbits aircraft metadata enrichment (operator, type, registration). Paid.',
   NASA_FIRMS_API_KEY: 'NASA FIRMS — 7,000+ satellite-detected wildfires worldwide. Free.',

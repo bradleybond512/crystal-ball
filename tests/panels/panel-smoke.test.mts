@@ -262,11 +262,11 @@ test('panel-smoke summary', () => {
   for (const r of reports) unique.set(r.id, r);
   const finalRows = [...unique.values()].sort((a, b) => a.id.localeCompare(b.id));
   writeReports(finalRows);
-  // eslint-disable-next-line no-console
+   
   console.log('\n' + renderMarkdown(finalRows));
 
   if (POST_MOUNT_ERRORS.length > 0) {
-    // eslint-disable-next-line no-console
+     
     console.log(`\nNote: ${POST_MOUNT_ERRORS.length} post-mount async error(s) ignored (panel timers continue past mount).`);
   }
   // Force-exit. Mounted panels register setInterval refresh timers that

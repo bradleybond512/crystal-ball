@@ -5,6 +5,30 @@
 - **App name**: Crystal Ball
 - **Bundle ID**: `com.bradleybond.crystalball`
 - **Stack**: Tauri 2 + TypeScript + Vite + DeckGL + Node.js sidecar (port 46123)
+- **Algorithm intelligence plan**: `docs/ALGORITHM_INTELLIGENCE_ENHANCEMENT_PLAN.md` — implemented 7-PR stack under `src/services/intelligence/` (truth scoring, evidence graph, situation clustering, negative evidence, baseline deviation, compound risk, forecast calibration, watchlist relevance).
+- **Weather warning remediation**: `docs/WEATHER_WARNING_REMEDIATION_PLAN.md` — implemented 4-PR stack under `src/services/weather/` (NWS polygon matching, urgency ladder, Personal Storm Mode payload, miss diagnostics). PR 5 (UI) deferred.
+- **Insights/notifications plan**: `docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md` — implemented 4-PR stack under `src/services/insights/` (Big Event Detector + Confidence/Urgency Matrix, What Changed Digest, Action Briefs + Reaction Playbooks, Presentation Export). PRs 4 (notification ladder wiring) + 5 (UI) deferred.
+- **Shortage forecast plan**: `docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md` — implemented 4 batches under `src/services/shortage/` covering 8 commodities (wheat, corn, rice, soybeans on the food side; diesel, gasoline, natural gas, jet fuel on the energy side).
+- **API expansion plan**: `docs/API_SOURCE_EXPANSION_FREE_OPTIONS.md` — free/free-tier API redundancy list + Claude-ready prompts.
+
+## Foundation Intelligence Layers
+
+Four pure-deterministic, fixture-tested service layers. **No DOM, no fetch, no globals — input-output pure. 600+ unit tests.**
+
+- **`src/services/intelligence/`** — explainable scoring foundation. Every score has a `ConfidenceBreakdown`, every claim has provenance via `EvidenceNode/Edge`, contradictions surface separately rather than averaging away. Exported types (`NormalizedFact`, `TruthScore`, `Situation`, `CompoundRiskResult`, `RelevanceResult`, etc.) are the contract for downstream consumers.
+- **`src/services/weather/`** — saved-place-aware NWS pipeline. `matchAlertToPlace` does point-in-polygon + UGC zone fallback. `urgencyFor` produces the delivery rung + meaningful-change repeat-suppression interval. `buildStormModePayload` produces the Storm Mode card. `diagnoseAlert` walks the 7-stage pipeline trace for "why didn't I get warned?".
+- **`src/services/insights/`** — UX scaffolding. `detectBigEvent` runs the 8-trigger taxonomy. `computeDigest` produces the What Changed Digest. `buildActionBrief` reads from a 10-category playbook library. `toMarkdown` / `toClipboardSummary` / `toShareSheetText` / `toClaudeDebugPacket` format any briefing.
+- **`src/services/shortage/`** — 8 deterministic commodity forecast models. Each takes a `ShortageInputBag` (provenance-aware), runs through 7 driver buckets (production / inventory / transport / policy / demand / price / cross_domain), produces a `ShortageForecast` with drivers + confidence + data gaps. Seasonal multipliers honor the calendar.
+
+Test scripts: `npm run test:intelligence` / `test:weather` / `test:insights{,2,3,6}` / `test:shortage`.
+
+Plan invariants honored across all four layers:
+
+- Every score includes an explanation
+- Every source-derived claim carries provenance
+- Stale data reduces confidence (never silently disappears)
+- Contradictions surface, not averaged away
+- Every output is testable with static fixtures (no live fetch in the unit tests)
 
 ## Commands
 
@@ -113,6 +137,44 @@ src/                        # TypeScript frontend (Vite)
     reasoning-memory.ts         # IDB KV store on shared crystalball_db
     reasoning-debug.ts          # 200-entry ring buffer log
     reasoning-metrics.ts        # latency histograms + counters
+    # ── Algorithm intelligence foundation (see docs/ALGORITHM_INTELLIGENCE_ENHANCEMENT_PLAN.md) ──
+    intelligence/types.ts                    # NormalizedFact, EvidenceNode/Edge, TruthScore, AlgorithmExplanation, ConfidenceBreakdown
+    intelligence/truth-score.ts              # multi-source truth scoring (formula + 5-point label)
+    intelligence/evidence-graph.ts           # typed graph + derivedFrom-aware independent-source counter
+    intelligence/confidence-explanation.ts   # 100-point breakdown + missingConfirmation hints
+    intelligence/situation-clustering.ts     # union-find clustering across space/time/source/type
+    intelligence/negative-evidence.ts        # expected follow-on signals + missing-signal penalty
+    intelligence/baseline-deviation.ts       # rolling-window store + z-score / percentile / 8-level labels
+    intelligence/compound-risk.ts            # cross-domain compound score with cascade-pair table
+    intelligence/forecast-calibration.ts     # Brier scoring + per-domain accuracy + per-source multipliers
+    intelligence/watchlist-relevance.ts      # "Should I care?" filter + feedback-adjusted thresholds
+    # ── Weather warning remediation (see docs/WEATHER_WARNING_REMEDIATION_PLAN.md) ──
+    weather/weather-threat-types.ts          # 16-hazard taxonomy, AlertPolygon, NwsAlertMinimal, SavedPlace, PolygonMatchResult
+    weather/nws-polygon-match.ts             # ray-casting + UGC zone fallback + threat-level escalation
+    weather/weather-urgency.ts               # 6-rung delivery priority + acknowledgment escalation + watch windows
+    weather/personal-storm-mode.ts           # Storm Mode payload (4 activation tiers, arrival window)
+    weather/preparedness-actions.ts          # per-hazard action library (16 hazards)
+    weather/weather-warning-diagnostics.ts   # 7-stage pipeline trace for "why didn't I get warned?"
+    # ── Insights & notifications (see docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md) ──
+    insights/confidence-urgency-matrix.ts    # 4-corner Confidence × Urgency matrix + 5-tier SituationTier
+    insights/big-event-detector.ts           # 8-trigger detector with weight + rationale per trigger
+    insights/change-memory.ts                # snapshot store for what-changed deltas
+    insights/what-changed-digest.ts          # 9-ChangeKind delta engine, polarity- and weight-sorted output
+    insights/reaction-playbooks.ts           # 10-category static playbook library
+    insights/action-briefs.ts                # 4-tier action briefs (monitor/prepare/act_now/shelter)
+    insights/presentation-export.ts          # Markdown / clipboard / share / Claude debug packet formatters
+    # ── Shortage forecasts (see docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md) ──
+    shortage/shortage-types.ts               # ShortageDriver, ShortageInput, ShortageForecast, CommodityPlaybook
+    shortage/shortage-score.ts               # weighted scoring across 7 driver buckets + freshness + confidence + data-gap detection
+    shortage/commodity-playbooks.ts          # static fact sheets per commodity
+    shortage/wheat-shortage-risk.ts          # food, 60d horizon, Black Sea + Bosphorus + Suez chokepoints
+    shortage/corn-shortage-risk.ts           # food, 90d horizon, pollination heat anomaly amplifier
+    shortage/rice-shortage-risk.ts           # food, 90d horizon, monsoon + India ban + Thai 5% benchmark
+    shortage/soybeans-shortage-risk.ts       # food, 90d horizon, La Niña + China crush + USDA condition
+    shortage/diesel-shortage-risk.ts         # energy, 30d horizon, Gulf + Hormuz + Rotterdam + Singapore
+    shortage/gasoline-shortage-risk.ts       # energy, 30d horizon, Colonial Pipeline + driving season
+    shortage/natural-gas-shortage-risk.ts    # energy, 60d horizon, HDD/CDD + LNG export + cold-snap flag
+    shortage/jet-fuel-shortage-risk.ts       # energy, 30d horizon, SAF constraint + airport shortage alert
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes
                                 # /api/analyst-state + /api/analyst-commands

@@ -73,13 +73,13 @@ jobs:
             });
 
             if (prs.length > 0) {
-              await github.rest.pulls.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: prs[0].number,
-                body: body
-              });
-              console.log(`Updated PR #${prs[0].number}`);
+              // Don't clobber the body on existing PRs. The cross-agent
+              // review gate requires a marker in the PR body (per
+              // scripts/cross-agent-check.mjs), and rewriting the body
+              // on every push would erase that marker and re-fail the
+              // gate. Keep the auto-PR for creation only; let humans /
+              // agents own the body text after that.
+              console.log(`PR #${prs[0].number} already exists; leaving body untouched.`);
               core.setOutput('pr_number', String(prs[0].number));
             } else {
               const { data: pr } = await github.rest.pulls.create({

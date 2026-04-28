@@ -24,6 +24,25 @@ export type AlgorithmOutputKind =
 
 export type AlgorithmCriticality = 'low' | 'medium' | 'high' | 'safety';
 
+/** Constrained health-aggregator domain tag. Mirrors `AlgorithmDomain`
+ *  in `algorithm-evaluation-ledger.ts`; redeclared locally so this
+ *  module stays pure-data and doesn't import from the ledger. The two
+ *  enums are kept in sync by a unit test. */
+export type AlgorithmHealthDomain =
+  | 'truth_score'
+  | 'evidence_graph'
+  | 'situation_clustering'
+  | 'baseline_deviation'
+  | 'compound_risk'
+  | 'forecast_calibration'
+  | 'watchlist_relevance'
+  | 'negative_evidence'
+  | 'shortage_score'
+  | 'weather_polygon'
+  | 'weather_urgency'
+  | 'reasoning_hypothesis'
+  | 'other';
+
 export interface AlgorithmDependencies {
   sources: readonly string[];
   providers: readonly string[];
@@ -41,6 +60,10 @@ export interface AlgorithmDefinition {
   /** Domain tag — matches `FactDomain` from intelligence/types where
    *  applicable, but kept free-form for cross-cutting algorithms. */
   domain: string;
+  /** Constrained health-aggregator domain. The diagnostics surface
+   *  (`algorithms-state.ts` + `algorithm-health.ts`) groups algorithms
+   *  by this field; missing entries default to 'other'. */
+  healthDomain?: AlgorithmHealthDomain;
   /** Owning feature id (joins with the diagnostics feature registry). */
   ownerFeature: string;
   dependencies: AlgorithmDependencies;
@@ -60,6 +83,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'NWS polygon matching',
     version: '1.0.0',
     domain: 'weather',
+    healthDomain: 'weather_polygon',
     ownerFeature: 'weather_warning',
     dependencies: { sources: ['weather'], providers: ['nws-alerts'], services: [] },
     outputs: ['ranking'],
@@ -70,6 +94,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Weather urgency',
     version: '1.0.0',
     domain: 'weather',
+    healthDomain: 'weather_urgency',
     ownerFeature: 'weather_warning',
     dependencies: { sources: ['weather'], providers: ['nws-alerts'], services: ['nws-polygon-match'] },
     outputs: ['notification_decision'],
@@ -80,6 +105,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Personal Storm Mode payload',
     version: '1.0.0',
     domain: 'weather',
+    healthDomain: 'weather_urgency',
     ownerFeature: 'weather_warning',
     dependencies: { sources: ['weather'], providers: ['nws-alerts'], services: ['weather-urgency', 'nws-polygon-match'] },
     outputs: ['brief'],
@@ -92,6 +118,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Big Event Detector',
     version: '1.0.0',
     domain: 'insights',
+    healthDomain: 'reasoning_hypothesis',
     ownerFeature: 'big_events',
     dependencies: { sources: [], providers: [], services: ['truth-score'] },
     outputs: ['ranking', 'notification_decision'],
@@ -102,6 +129,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Confidence × Urgency matrix',
     version: '1.0.0',
     domain: 'insights',
+    healthDomain: 'reasoning_hypothesis',
     ownerFeature: 'big_events',
     dependencies: { sources: [], providers: [], services: [] },
     outputs: ['notification_decision'],
@@ -112,6 +140,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'What Changed Digest',
     version: '1.0.0',
     domain: 'insights',
+    healthDomain: 'reasoning_hypothesis',
     ownerFeature: 'digest',
     dependencies: { sources: [], providers: [], services: [] },
     outputs: ['brief'],
@@ -124,6 +153,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Truth scoring',
     version: '1.0.0',
     domain: 'intelligence',
+    healthDomain: 'truth_score',
     ownerFeature: 'intelligence',
     dependencies: { sources: [], providers: [], services: [] },
     outputs: ['risk_score'],
@@ -134,6 +164,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Situation clustering',
     version: '1.0.0',
     domain: 'intelligence',
+    healthDomain: 'situation_clustering',
     ownerFeature: 'intelligence',
     dependencies: { sources: [], providers: [], services: ['truth-score'] },
     outputs: ['situation'],
@@ -144,6 +175,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Negative evidence engine',
     version: '1.0.0',
     domain: 'intelligence',
+    healthDomain: 'negative_evidence',
     ownerFeature: 'intelligence',
     dependencies: { sources: [], providers: [], services: ['truth-score'] },
     outputs: ['risk_score'],
@@ -154,6 +186,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Compound risk index',
     version: '1.0.0',
     domain: 'intelligence',
+    healthDomain: 'compound_risk',
     ownerFeature: 'intelligence',
     dependencies: { sources: [], providers: [], services: ['situation-clustering', 'truth-score'] },
     outputs: ['risk_score', 'ranking'],
@@ -164,6 +197,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Forecast calibration',
     version: '1.0.0',
     domain: 'intelligence',
+    healthDomain: 'forecast_calibration',
     ownerFeature: 'intelligence',
     dependencies: { sources: [], providers: [], services: [] },
     outputs: ['risk_score'],
@@ -174,6 +208,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Watchlist relevance',
     version: '1.0.0',
     domain: 'intelligence',
+    healthDomain: 'watchlist_relevance',
     ownerFeature: 'intelligence',
     dependencies: { sources: [], providers: [], services: [] },
     outputs: ['ranking'],
@@ -186,6 +221,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Wheat shortage risk',
     version: '1.0.0',
     domain: 'food',
+    healthDomain: 'shortage_score',
     ownerFeature: 'shortage_forecast',
     dependencies: { sources: ['shortage'], providers: ['usda', 'fao', 'noaa'], services: [] },
     outputs: ['forecast', 'risk_score'],
@@ -196,6 +232,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Diesel shortage risk',
     version: '1.0.0',
     domain: 'energy',
+    healthDomain: 'shortage_score',
     ownerFeature: 'shortage_forecast',
     dependencies: { sources: ['shortage'], providers: ['eia', 'cme'], services: [] },
     outputs: ['forecast', 'risk_score'],
@@ -209,6 +246,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Relevance learner',
     version: '1.0.0',
     domain: 'learning',
+    healthDomain: 'watchlist_relevance',
     ownerFeature: 'analyst',
     dependencies: { sources: [], providers: [], services: [] },
     outputs: ['ranking'],
@@ -219,6 +257,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Source feedback',
     version: '1.0.0',
     domain: 'learning',
+    healthDomain: 'reasoning_hypothesis',
     ownerFeature: 'analyst',
     dependencies: { sources: [], providers: [], services: [] },
     outputs: ['ranking'],
@@ -229,6 +268,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Correlation feedback',
     version: '1.0.0',
     domain: 'learning',
+    healthDomain: 'reasoning_hypothesis',
     ownerFeature: 'analyst',
     dependencies: { sources: [], providers: [], services: [] },
     outputs: ['ranking'],
@@ -239,6 +279,7 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     label: 'Hypothesis accuracy tracker',
     version: '1.0.0',
     domain: 'learning',
+    healthDomain: 'reasoning_hypothesis',
     ownerFeature: 'analyst',
     dependencies: { sources: [], providers: [], services: [] },
     outputs: ['ranking'],

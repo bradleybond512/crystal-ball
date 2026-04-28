@@ -1396,6 +1396,21 @@ export class DataLoaderManager implements AppModule {
  console.warn('[data-loader] insights bridge failed:', error);
  }
 
+ // Wire weather alerts into the mission ledger (closed-loop ops PR 2).
+ // Each (alert × saved place) pair runs through polygon match +
+ // urgency engine + mission bridge so time-to-warn / near-miss /
+ // replay-fixture surfaces have real records to read from.
+ try {
+ const [{ routeAndBridgeWeatherAlerts }, { getPersonalProfile }] = await Promise.all([
+ import('@/services/ops/weather-mission-bridge'),
+ import('@/services/insights/insights-state'),
+ ]);
+ const places = getPersonalProfile().savedPlaces;
+ if (places.length > 0) routeAndBridgeWeatherAlerts(alerts, places);
+ } catch (error) {
+ console.warn('[data-loader] mission bridge failed:', error);
+ }
+
  // Wire weather into correlation matrix, anomaly detection, and convergence
  const severeCount = alerts.filter(a => a.severity === 'Extreme' || a.severity === 'Severe').length;
  ingestWeatherAnomalySignals(alerts.length, severeCount);

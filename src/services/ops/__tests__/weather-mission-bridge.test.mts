@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { bridgeWeatherDecisionToMission } from '../weather-mission-bridge.ts';
+import { bridgeWeatherDecisionToMission, legacyAlertToNwsMinimal, routeAndBridgeWeatherAlerts } from '../weather-mission-bridge.ts';
 import { getMissionLedger, resetMissionState } from '../mission-state.ts';
 import { routeWeatherAlert } from '@/services/weather/weather-warning-router';
 import type { AlertPolygon, NwsAlertMinimal, SavedPlace } from '@/services/weather/weather-threat-types';
@@ -112,6 +112,97 @@ test('mission id includes alertId + placeId so two places see two missions for t
   assert.equal(all.length, 2);
   const placeIds = all.map((m) => m.placeId).sort();
   assert.deepEqual(placeIds, ['home', 'office']);
+});
+
+test('suppressed decision (e.g. quiet hours blocks non-bypass hazard) does NOT open a mission', () => {
+  // Winter Storm Warning is non-bypass + quiet hours active + bypass off
+  // → router returns shouldSuppress: true. The bridge must respect that
+  // contract; otherwise we'd record warnings the user never saw.
+  const decision = routeWeatherAlert(
+    alert({ event: 'Winter Storm Warning', severity: 'moderate' }),
+    [HOME],
+    { now: NOW, quietHoursActive: true, quietHoursBypassEnabled: false },
+  );
+  assert.equal(decision.shouldSuppress, true);
+  assert.notEqual(decision.match!.matchKind, 'no_match', 'sanity: it WAS a real match');
+  const result = bridgeWeatherDecisionToMission(decision, { now: NOW });
+  assert.equal(result, undefined, 'suppressed → no mission opened');
+  assert.equal(getMissionLedger().all().length, 0);
+});
+
+test('digest-tier alert opens mission (app_watch) but does NOT record user_notified', () => {
+  // Wind Advisory → priority 'digest' → queued for next morning/evening
+  // digest, NOT delivered now. user_notified must wait for digest render.
+  const decision = routeWeatherAlert(
+    alert({ event: 'Wind Advisory', severity: 'minor' }),
+    [HOME],
+    { now: NOW },
+  );
+  assert.equal(decision.urgency!.priority, 'digest');
+  assert.equal(decision.shouldSuppress, false, 'digest is NOT a suppression');
+  const result = bridgeWeatherDecisionToMission(decision, { now: NOW });
+  assert.ok(result, 'digest alert still opens an active mission');
+  const kinds = result!.mission.events.map((e) => e.kind).sort();
+  assert.ok(kinds.includes('app_watch'));
+  assert.ok(!kinds.includes('user_notified'),
+    'digest-tier user_notified should be deferred to digest-render time');
+});
+
+// ── Adapter + production orchestrator ──────────────────────────────────
+
+test('legacyAlertToNwsMinimal: lowercases severity + wraps single ring', () => {
+  const minimal = legacyAlertToNwsMinimal({
+    id: 'urn:legacy',
+    event: 'Severe Thunderstorm Warning',
+    severity: 'Severe',
+    onset: new Date(NOW),
+    expires: new Date(NOW + 60_000),
+    coordinates: [
+      [-87.0, 41.50], [-86.50, 41.50], [-86.50, 41.80], [-87.0, 41.80], [-87.0, 41.50],
+    ],
+  });
+  assert.equal(minimal.severity, 'severe');
+  assert.equal(minimal.polygon!.rings.length, 1);
+  assert.equal(minimal.polygon!.rings[0]!.length, 5);
+  assert.equal(minimal.messageType, 'alert');
+});
+
+test('legacyAlertToNwsMinimal: missing/short coordinates → no polygon (zone fallback)', () => {
+  const minimal = legacyAlertToNwsMinimal({
+    id: 'urn:no-poly',
+    event: 'Wind Advisory',
+    severity: 'Minor',
+    onset: new Date(NOW),
+    expires: new Date(NOW + 60_000),
+  });
+  assert.equal(minimal.polygon, undefined);
+});
+
+test('routeAndBridgeWeatherAlerts: opens missions for matched alerts only', () => {
+  resetMissionState();
+  const places = [{ placeId: 'home', label: 'La Porte, IN', latitude: 41.610, longitude: -86.722 }];
+  const matched = {
+    id: 'urn:matched',
+    event: 'Severe Thunderstorm Warning',
+    severity: 'Severe' as const,
+    onset: new Date(NOW),
+    expires: new Date(NOW + 30 * 60_000),
+    coordinates: ENVELOPING.rings[0]!.map(([lng, lat]) => [lng, lat] as [number, number]),
+  };
+  const farAway = {
+    id: 'urn:far',
+    event: 'Severe Thunderstorm Warning',
+    severity: 'Severe' as const,
+    onset: new Date(NOW),
+    expires: new Date(NOW + 30 * 60_000),
+    coordinates: FAR.rings[0]!.map(([lng, lat]) => [lng, lat] as [number, number]),
+  };
+  const results = routeAndBridgeWeatherAlerts([matched, farAway], places, { now: NOW });
+  assert.equal(results.length, 1, 'far alert is dropped (no matched place)');
+  assert.equal(results[0]!.alertId, 'urn:matched');
+  assert.equal(results[0]!.placeId, 'home');
+  assert.ok(results[0]!.mission, 'matched alert opened a mission');
+  assert.equal(getMissionLedger().all().length, 1);
 });
 
 test('bridge is JSON-serializable (audit-trail invariant)', () => {

@@ -765,6 +765,89 @@ const failedImports = new Set();
 const fallbackCounts = new Map();
 const cloudPreferred = new Set();
 
+/**
+ * Shape-aware degraded response for unknown sidecar routes.
+ *
+ * Background: the desktop sidecar only ships ~20 of the ~150 /api/* routes
+ * the panels expect (the rest used to live on the Vercel deployment, which
+ * is no longer up). Returning 404 here triggers panel-side error handlers
+ * that spam the console + show error toasts. Returning shape-aware empty
+ * 200s lets panels render a graceful "unavailable" state.
+ *
+ * The shape is inferred from the URL suffix: panels usually destructure a
+ * known field name (`alerts`, `events`, `pulses`, `data`), so we infer the
+ * most likely top-level array name and stub it as []. `degraded: true` +
+ * `reason` are always present so panels can show a degraded banner.
+ */
+const DEGRADED_SHAPE_BY_SUFFIX = [
+  { suffix: 'alerts', key: 'alerts' },
+  { suffix: 'events', key: 'events' },
+  { suffix: 'pulses', key: 'pulses' },
+  { suffix: 'iocs', key: 'iocs' },
+  { suffix: 'feed', key: 'items' },
+  { suffix: 'crises', key: 'crises' },
+  { suffix: 'reports', key: 'reports' },
+  { suffix: 'warnings', key: 'warnings' },
+  { suffix: 'incidents', key: 'incidents' },
+  { suffix: 'breaches', key: 'breaches' },
+  { suffix: 'series', key: 'series' },
+  { suffix: 'search', key: 'results' },
+  { suffix: 'lookup', key: 'results' },
+  { suffix: 'snapshot', key: 'snapshot' },
+  { suffix: 'news', key: 'items' },
+  { suffix: 'flights', key: 'flights' },
+  { suffix: 'fleet', key: 'fleet' },
+  { suffix: 'tle', key: 'tle' },
+  { suffix: 'quotes', key: 'quotes' },
+  { suffix: 'markets', key: 'markets' },
+  { suffix: 'filings', key: 'filings' },
+  { suffix: 'cve', key: 'cve' },
+  // Suffixes added when the second/third handler waves landed; keep in
+  // sync with what the underlying Vercel handler returns when present.
+  { suffix: 'fires', key: 'fires' },
+  { suffix: 'readings', key: 'readings' },
+  { suffix: 'pulses-recent', key: 'pulses' },
+  { suffix: 'drop', key: 'entries' },
+  { suffix: 'urls', key: 'urls' },
+  { suffix: 'sanctions', key: 'sanctions' },
+  { suffix: 'documents', key: 'documents' },
+  { suffix: 'observations', key: 'observations' },
+  { suffix: 'register', key: 'documents' },
+  { suffix: 'kev', key: 'kev' },
+  { suffix: 'posture', key: 'posture' },
+  { suffix: 'indicators', key: 'indicators' },
+  { suffix: 'ncc', key: 'prefixes' },
+  { suffix: 'atlas', key: 'anchors' },
+  { suffix: 'info', key: 'result' },
+  { suffix: 'lookup-ip', key: 'result' },
+];
+
+function buildDegradedResponse(pathname) {
+  const reason = 'Local handler unavailable in this build. Panel running in degraded mode.';
+  // Last segment of the path drives the shape inference.
+  const lastSegment = pathname.split('/').filter(Boolean).pop() || '';
+  for (const { suffix, key } of DEGRADED_SHAPE_BY_SUFFIX) {
+    if (lastSegment.endsWith(suffix)) {
+      return json({
+        [key]: [],
+        degraded: true,
+        reason,
+        endpoint: pathname,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+  }
+  // Default shape — caller-friendly: empty data array + degraded flag.
+  return json({
+    data: [],
+    items: [],
+    degraded: true,
+    reason,
+    endpoint: pathname,
+    generatedAt: new Date().toISOString(),
+  });
+}
+
 const TRAFFIC_LOG_MAX = 200;
 const trafficLog = Array.from({length: TRAFFIC_LOG_MAX});
 let _trafficHead = 0;
@@ -4272,7 +4355,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── Bitcoin Abuse ransomware/fraud address feed ──────────────────────────
   if (requestUrl.pathname === '/api/bitcoinabuse-feed') {
  const apiKey = process.env.BITCOINABUSE_API_KEY ?? '';
- if (!apiKey) return json({ error: 'BITCOINABUSE_API_KEY not configured' }, 403);
+ if (!apiKey) return json({ items: [], degraded: true, reason: 'BITCOINABUSE_API_KEY not configured', source: 'bitcoinabuse.com', generatedAt: new Date().toISOString() });
  const cached = getCached('bitcoinabuse-feed');
  if (cached) return json(cached);
  try {
@@ -4345,7 +4428,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── Vulners CVE intelligence ─────────────────────────────────────────────
   if (requestUrl.pathname === '/api/vulners-search') {
  const apiKey = process.env.VULNERS_API_KEY ?? '';
- if (!apiKey) return json({ error: 'VULNERS_API_KEY not configured' }, 403);
+ if (!apiKey) return json({ items: [], degraded: true, reason: 'VULNERS_API_KEY not configured', source: 'vulners.com', generatedAt: new Date().toISOString() });
  const q = requestUrl.searchParams.get('q') ?? 'type:cve order:publishDate';
  const cached = getCached(`vulners-${q}`);
  if (cached) return json(cached);
@@ -4373,14 +4456,19 @@ async function dispatch(requestUrl, req, routes, context) {
  setCached(`vulners-${q}`, results, 2 * 60 * 60 * 1000);
  return json(results);
  } catch (error) {
- return json({ error: `vulners error: ${error.message ?? error}` }, 502);
+ // Vulners free tier blocks unauthenticated lucene queries with 403.
+ // Degrade gracefully so the panel renders an empty CVE list with a
+ // banner rather than a 502 error.
+ return json({ items: [], degraded: true, reason: `vulners error: ${error.message ?? error}`, source: 'vulners.com', generatedAt: new Date().toISOString() });
  }
   }
 
   // ── MediaStack global news ───────────────────────────────────────────────
   if (requestUrl.pathname === '/api/mediastack-news') {
  const apiKey = process.env.MEDIASTACK_API_KEY ?? '';
- if (!apiKey) return json({ error: 'MEDIASTACK_API_KEY not configured' }, 403);
+ // Degrade gracefully so the panel renders an empty news list rather
+ // than a 403 error when the optional MediaStack key isn't set.
+ if (!apiKey) return json([]);
  const cached = getCached('mediastack-news');
  if (cached) return json(cached);
  try {
@@ -4419,7 +4507,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── Pulsedive threat intelligence ───────────────────────────────────────
   if (requestUrl.pathname === '/api/pulsedive-feed') {
  const apiKey = process.env.PULSEDIVE_API_KEY ?? '';
- if (!apiKey) return json({ error: 'PULSEDIVE_API_KEY not configured' }, 403);
+ if (!apiKey) return json({ items: [], degraded: true, reason: 'PULSEDIVE_API_KEY not configured', source: 'pulsedive.com', generatedAt: new Date().toISOString() });
  const cached = getCached('pulsedive-feed');
  if (cached) return json(cached);
  try {
@@ -4451,7 +4539,9 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── Have I Been Pwned domain breach check ───────────────────────────────
   if (requestUrl.pathname === '/api/hibp-breaches') {
  const apiKey = process.env.HIBP_API_KEY ?? '';
- if (!apiKey) return json({ error: 'HIBP_API_KEY not configured' }, 403);
+ // Degrade gracefully when the key isn't set so panels render an empty
+ // breach list with a banner instead of a 403 error storm.
+ if (!apiKey) return json({ breaches: [], degraded: true, reason: 'HIBP_API_KEY not configured', source: 'haveibeenpwned.com', generatedAt: new Date().toISOString() });
  const domain = requestUrl.searchParams.get('domain');
  const cacheKey = `hibp-${domain ?? 'recent'}`;
  const cached = getCached(cacheKey);
@@ -4558,14 +4648,17 @@ async function dispatch(requestUrl, req, routes, context) {
  setCached('openaq-readings', readings, 30 * 60 * 1000);
  return json(readings);
  } catch (error) {
- return json({ error: `openaq error: ${error.message ?? error}` }, 502);
+ // OpenAQ v2 returns 410 since they migrated to v3 with API keys. We
+ // degrade gracefully so the panel renders an empty list with a
+ // banner rather than a 502 error storm.
+ return json({ readings: [], degraded: true, reason: `openaq error: ${error.message ?? error}`, source: 'openaq.org', generatedAt: new Date().toISOString() });
  }
   }
 
   // ── GeoNames place search ────────────────────────────────────────────────
   if (requestUrl.pathname === '/api/geonames-search') {
  const username = process.env.GEONAMES_USERNAME ?? '';
- if (!username) return json({ error: 'GEONAMES_USERNAME not configured' }, 403);
+ if (!username) return json({ results: [], degraded: true, reason: 'GEONAMES_USERNAME not configured', source: 'geonames.org', generatedAt: new Date().toISOString() });
  const q = requestUrl.searchParams.get('q');
  if (!q) return json({ error: 'q parameter required' }, 400);
  const cacheKey = `geonames-${q}`;
@@ -4649,7 +4742,10 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── IPInfo IP intelligence lookup ────────────────────────────────────────
   if (requestUrl.pathname === '/api/ipinfo-lookup') {
  const token = process.env.IPINFO_TOKEN ?? '';
- if (!token) return json({ error: 'IPINFO_TOKEN not configured' }, 403);
+ // Degrade gracefully so the panel can render an empty result with a
+ // banner rather than a 403 error when the optional IPinfo token
+ // isn't set.
+ if (!token) return json({ result: null, degraded: true, reason: 'IPINFO_TOKEN not configured', source: 'ipinfo.io', generatedAt: new Date().toISOString() });
  const ip = requestUrl.searchParams.get('ip');
  if (!ip) return json({ error: 'ip parameter required' }, 400);
  const cacheKey = `ipinfo-${ip}`;
@@ -4760,7 +4856,10 @@ async function dispatch(requestUrl, req, routes, context) {
  setCached('reliefweb-crises', reports, 2 * 60 * 60 * 1000);
  return json(reports);
  } catch (error) {
- return json({ error: `reliefweb error: ${error.message ?? error}` }, 502);
+ // Degrade gracefully — ReliefWeb v1 returns 410, and v2 requires an
+ // approved-appname registration we don't have. Panels render an
+ // empty list with a banner rather than receiving a 502 error.
+ return json({ reports: [], degraded: true, reason: `reliefweb error: ${error.message ?? error}`, source: 'reliefweb.int', generatedAt: new Date().toISOString() });
  }
   }
 
@@ -6839,7 +6938,11 @@ async function dispatch(requestUrl, req, routes, context) {
  if (cloudResponse) return cloudResponse;
  }
  logOnce(context.logger, requestUrl.pathname, 'no local handler');
- return json({ error: 'No local handler for this endpoint', endpoint: requestUrl.pathname }, 404);
+ // Graceful degraded fallback: instead of 404 (which causes panels to
+ // throw and spam the error log), return a shape-aware empty payload
+ // with `degraded: true` so panels render an "unavailable" state.
+ // This is the desktop sidecar — no cloud is wired in this build.
+ return buildDegradedResponse(requestUrl.pathname);
   }
 
   try {

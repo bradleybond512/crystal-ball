@@ -326,7 +326,12 @@ test('uses local handler response when local handler succeeds', async () => {
   }
 });
 
-test('returns 404 when local route does not exist and cloudFallback is off', async () => {
+test('returns graceful degraded payload when local route does not exist and cloudFallback is off', async () => {
+  // Was previously a hard 404. We now return 200 with an empty
+  // shape-aware payload (`degraded: true` + `reason`) so panels render
+  // an empty state with a banner instead of crashing on .filter() of
+  // an error response. The cloud fallback is dead (the parked
+  // crystalball.app domain), so this is the only realistic path.
   const remote = await setupRemoteServer();
   const localApi = await setupApiDir({});
 
@@ -340,9 +345,11 @@ test('returns 404 when local route does not exist and cloudFallback is off', asy
 
   try {
  const response = await authFetch(`http://127.0.0.1:${port}/api/not-found`);
- assert.equal(response.status, 404);
+ assert.equal(response.status, 200);
  const body = await response.json();
- assert.equal(body.error, 'No local handler for this endpoint');
+ assert.equal(body.degraded, true);
+ assert.equal(typeof body.reason, 'string');
+ assert.equal(body.endpoint, '/api/not-found');
  assert.equal(remote.hits.length, 0);
   } finally {
  await app.close();

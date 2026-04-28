@@ -39,6 +39,11 @@ interface PanelReport {
   reason: string;
   textLength: number;
   durationMs: number;
+  /** Any unhandledRejection or uncaughtException observed while this
+   *  panel was mounted. Captured per-panel via process listeners
+   *  installed/removed inside the test() body. Empty array (or
+   *  omitted) when none. */
+  asyncErrors?: string[];
 }
 
 const reports: PanelReport[] = [];
@@ -203,12 +208,17 @@ for (const entry of inventory) {
       await new Promise<void>((resolve) => setTimeout(resolve, 200));
 
       const verdict = classify(el, factory.minTextLength ?? 1);
-      // If a fire-and-forget refresh threw and the panel is still empty,
-      // upgrade the verdict to `errored` so the report flags it.
-      const finalState: PanelState = (verdict.state === 'silent' && localErrors.length > 0) || (localErrors.length > 0 && verdict.textLength === 0)
+      // Async errors are a hard signal: if a fire-and-forget refresh
+      // rejected and the panel did not recover to `rendered`, classify
+      // as `errored`. A panel that catches internally and renders a
+      // proper degraded banner WITHOUT triggering unhandledRejection
+      // stays `degraded`. A panel stuck on a loading banner with a
+      // bubbled-up rejection becomes `errored`.
+      const hasAsyncError = localErrors.length > 0;
+      const finalState: PanelState = hasAsyncError && verdict.state !== 'rendered'
         ? 'errored'
         : verdict.state;
-      const finalReason = localErrors.length > 0 && finalState === 'errored'
+      const finalReason = hasAsyncError && finalState === 'errored'
         ? errorMessage(localErrors[0]).slice(0, 240)
         : verdict.reason;
 
@@ -219,6 +229,9 @@ for (const entry of inventory) {
         reason: finalReason,
         textLength: verdict.textLength,
         durationMs: Math.round(performance.now() - startedAt),
+        asyncErrors: hasAsyncError
+          ? localErrors.map((e) => errorMessage(e).slice(0, 240))
+          : undefined,
       };
 
       try {

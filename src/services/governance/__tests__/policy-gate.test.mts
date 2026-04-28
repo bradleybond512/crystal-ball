@@ -155,21 +155,26 @@ describe('gateAdjustmentProposal — sensitive-data flags', () => {
   });
 });
 
-describe('gateAdjustmentProposal — missing algorithm metadata', () => {
-  it('defaults to medium criticality + unknown domain when algorithm is absent', () => {
+describe('gateAdjustmentProposal — missing algorithm metadata (fail-closed)', () => {
+  it('requires user approval even with full evidence when algorithm metadata is absent', () => {
     const input: GateInput = {
       proposal: applyProposal(),
-      evidenceCount: 25,
+      evidenceCount: 100,
       replayPassed: true,
       backtestPassed: true,
     };
     const result = gateAdjustmentProposal(input);
-    // medium criticality + replay + ≥20 samples → allow_auto
-    assert.equal(result.verdict.decision, 'allow_auto');
-    assert.equal(result.verdict.ruleId, 'algo_tuning_gate_lowmed_ready');
+    assert.equal(result.verdict.decision, 'require_user_approval');
+    assert.equal(result.verdict.ruleId, 'policy_gate_unknown_algorithm');
+    // The required-evidence hint names the algorithm so the operator
+    // knows exactly what to register.
+    assert.ok(
+      result.verdict.requiredEvidence.some((e) => e.includes('register algorithm')),
+      'requiredEvidence should include a "register algorithm" hint',
+    );
   });
 
-  it('still gates without evidence when algorithm metadata is absent', () => {
+  it('requires user approval without evidence when algorithm metadata is absent', () => {
     const input: GateInput = {
       proposal: applyProposal(),
       evidenceCount: 0,
@@ -178,6 +183,34 @@ describe('gateAdjustmentProposal — missing algorithm metadata', () => {
     };
     const result = gateAdjustmentProposal(input);
     assert.equal(result.verdict.decision, 'require_user_approval');
+    assert.equal(result.verdict.ruleId, 'policy_gate_unknown_algorithm');
+  });
+
+  it('does NOT auto-apply noop proposals when algorithm metadata is absent', () => {
+    const input: GateInput = {
+      proposal: noopProposal(),
+      evidenceCount: 100,
+      replayPassed: true,
+      backtestPassed: true,
+    };
+    const result = gateAdjustmentProposal(input);
+    // Even noop proposals fail closed without registry metadata —
+    // the host has to decide whether to surface the unknown algorithm.
+    assert.equal(result.verdict.decision, 'require_user_approval');
+    assert.equal(result.verdict.ruleId, 'policy_gate_unknown_algorithm');
+  });
+
+  it('autoApplyOnly() excludes proposals with missing algorithm metadata', () => {
+    const knownReady = gateAdjustmentProposal(lowMedReady());
+    const unknownReady = gateAdjustmentProposal({
+      proposal: applyProposal('mystery-algo'),
+      evidenceCount: 100,
+      replayPassed: true,
+      backtestPassed: true,
+    });
+    const result = autoApplyOnly([knownReady, unknownReady]);
+    assert.equal(result.length, 1);
+    assert.equal(result[0]?.proposal.algorithmId, 'demo-algo');
   });
 });
 

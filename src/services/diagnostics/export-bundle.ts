@@ -233,15 +233,30 @@ export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExp
     notificationTraces,
     recentEvents,
     selfTest: input.selfTest ? cloneSelfTest(input.selfTest) : undefined,
-    failurePrediction: input.failurePrediction,
-    qualityDebt,
-    trustBudget: input.trustBudget,
-    improvementPlan: input.improvementPlan,
-    scenarioCoverage: input.scenarioCoverage,
+    // Strategic sections — pass through redactStrategicSection so any
+    // user-supplied free text (reasons, recommendations, handoff
+    // outline, evidence detail) gets the same email/phone/bearer/coord
+    // scrub the rest of the bundle gets.
+    failurePrediction: redactStrategicSection(input.failurePrediction),
+    qualityDebt: redactStrategicSection(qualityDebt),
+    trustBudget: redactStrategicSection(input.trustBudget),
+    improvementPlan: redactStrategicSection(input.improvementPlan),
+    scenarioCoverage: redactStrategicSection(input.scenarioCoverage),
     truncations,
   };
 
   return enforceByteCap(bundle, caps.maxBundleBytes);
+}
+
+/** Structural-clone redactor for strategic-self-improvement export
+ *  sections. These types come from upstream services that don't
+ *  guarantee absence of free-text user input, so we pass them through
+ *  the same pipeline that scrubs the rest of the bundle. Returns
+ *  undefined when input is undefined so callers can keep the field
+ *  optional. */
+function redactStrategicSection<T>(value: T | undefined): T | undefined {
+  if (value === undefined) return undefined;
+  return redactDetail(value) as T;
 }
 
 /** Convenience: serialize the bundle to JSON. */

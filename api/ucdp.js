@@ -14,6 +14,10 @@ const CACHE_TTL_MS = 30 * 60 * 1000;
 
 const cache = new Map();
 
+// Test-only: scrub the module cache between tests so each case sees a
+// pristine fetch path.
+export function __resetCacheForTests() { cache.clear(); }
+
 function jsonResponse(payload, status, corsHeaders) {
   return Response.json(payload, {
     status,
@@ -23,6 +27,30 @@ function jsonResponse(payload, status, corsHeaders) {
 
 function degraded(reason) {
   return { events: [], degraded: true, reason, source: 'ucdp.uu.se', generatedAt: new Date().toISOString() };
+}
+
+// ── Input validation (extracted to keep handler complexity low) ────
+const RE_SIMPLE_ID = /^[A-Za-z0-9 _.-]{1,64}$/;
+const RE_ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function buildUcdpParams(searchParams) {
+  const params = new URLSearchParams();
+  // Country / Region: simple identifiers only. Refuse newlines / shell
+  // metachars / wide unicode by accepting an explicit allowlist.
+  for (const key of ['Country', 'Region']) {
+    const v = searchParams.get(key);
+    if (v && RE_SIMPLE_ID.test(v)) params.set(key, v);
+  }
+  // StartDate / EndDate: ISO-ish YYYY-MM-DD only.
+  for (const key of ['StartDate', 'EndDate']) {
+    const v = searchParams.get(key);
+    if (v && RE_ISO_DATE.test(v) && !Number.isNaN(Date.parse(v))) params.set(key, v);
+  }
+  // pagesize: clamp to upstream-supported range [1..1000], default 200.
+  const psRaw = Number.parseInt(searchParams.get('pagesize') ?? '', 10);
+  const pagesize = Number.isFinite(psRaw) && psRaw > 0 ? Math.min(1000, psRaw) : 200;
+  params.set('pagesize', String(pagesize));
+  return params;
 }
 
 export default async function handler(req) {
@@ -35,12 +63,7 @@ export default async function handler(req) {
   if (!token) return jsonResponse(degraded('UCDP_API_TOKEN not set'), 200, cors);
 
   const url = new URL(req.url);
-  const params = new URLSearchParams();
-  for (const key of ['Country', 'Region', 'StartDate', 'EndDate', 'pagesize']) {
-    const v = url.searchParams.get(key);
-    if (v) params.set(key, v);
-  }
-  if (!params.has('pagesize')) params.set('pagesize', '200');
+  const params = buildUcdpParams(url.searchParams);
 
   const cacheKey = params.toString();
   const cached = cache.get(cacheKey);

@@ -5,10 +5,12 @@
  */
 
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
+import { requireAppAuth, clampQueryParam } from './_auth.js';
 
 export const config = { runtime: 'edge' };
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
+const MAX_QUERY_LENGTH = 1024;
 const cache = new Map();
 
 const j = (payload, status, cors) => Response.json(payload, {
@@ -23,12 +25,17 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'GET') return j({ error: 'Method not allowed' }, 405, cors);
 
+  // Key-spending oracle path. Gate before we hit the upstream.
+  const denied = requireAppAuth(req, cors);
+  if (denied) return denied;
+
   const key = process.env.VULNERS_API_KEY;
   if (!key) return j(degraded('VULNERS_API_KEY not set'), 200, cors);
 
   const url = new URL(req.url);
-  const query = url.searchParams.get('query') || 'type:cve AND order:published';
-  const size = Math.min(50, Number.parseInt(url.searchParams.get('size') || '25', 10) || 25);
+  const query = clampQueryParam(url.searchParams.get('query'), MAX_QUERY_LENGTH) || 'type:cve AND order:published';
+  const sizeRaw = Number.parseInt(url.searchParams.get('size') || '25', 10);
+  const size = Math.max(1, Math.min(50, Number.isFinite(sizeRaw) ? sizeRaw : 25));
   const cacheKey = `${query}|${size}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return j(cached.payload, 200, cors);

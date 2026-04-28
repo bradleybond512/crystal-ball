@@ -4,6 +4,7 @@
  */
 
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
+import { requireAppAuth, isLikelyIp } from './_auth.js';
 
 export const config = { runtime: 'edge' };
 
@@ -22,12 +23,17 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'GET') return j({ error: 'Method not allowed' }, 405, cors);
 
+  // Key-spending oracle path. Gate before we hit the upstream.
+  const denied = requireAppAuth(req, cors);
+  if (denied) return denied;
+
   const token = process.env.IPINFO_TOKEN || process.env.IPINFO_API_KEY;
   if (!token) return j(degraded('IPINFO_TOKEN not set'), 200, cors);
 
   const url = new URL(req.url);
   const ip = (url.searchParams.get('ip') || '').trim();
   if (!ip) return j({ error: 'ip query param required' }, 400, cors);
+  if (!isLikelyIp(ip)) return j({ error: 'Invalid IP format' }, 400, cors);
   const cached = cache.get(ip);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return j(cached.payload, 200, cors);
   try {

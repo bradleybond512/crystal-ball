@@ -284,6 +284,28 @@ async function main() {
  }),
   );
 
+  // Scenario coverage spot-check — gate per
+  // docs/CLAUDE_POST_PR197_INTEGRATION_HANDOFF_2026-04-28.md item 6.
+  // Runs the TypeScript coverage script as a child process so this
+  // plain-Node script doesn't have to import the TS library directly.
+  // Lenient when tsx is unavailable (CI environment without npm ci):
+  // CI enforces this via the dedicated `scenarios:check` job in
+  // .github/workflows/release-integrity.yml.
+  const scenarioScript = path.join(repoRoot, 'scripts', 'check-scenario-coverage.mts');
+  const tsxBin = path.join(repoRoot, 'node_modules', '.bin', 'tsx');
+  // sonar-disable-next-line: tsxBin is an absolute path inside the repo's
+  // own node_modules — not a $PATH lookup.
+  const scenarioResult = spawnSync(tsxBin, [scenarioScript], { // NOSONAR
+ cwd: repoRoot,
+ encoding: 'utf8',
+  });
+  if (scenarioResult.error && scenarioResult.error.code === 'ENOENT') {
+ console.warn('[release:doctor] Skipped scenario coverage check (npx not on PATH).');
+  } else if (scenarioResult.status !== 0) {
+ const stderr = scenarioResult.stderr?.trim() || scenarioResult.stdout?.trim() || 'check-scenario-coverage failed';
+ issues.push(`scenario coverage regression: ${stderr.split('\n').join(' | ')}`);
+  }
+
   if (issues.length > 0) {
  console.error(`[release:doctor] Blocked for ${targetTag}:`);
  for (const issue of issues) {

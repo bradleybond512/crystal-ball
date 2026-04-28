@@ -41,6 +41,7 @@ export type RuntimeSecretKey =
   | 'NEWSDATA_API_KEY'
   | 'VIRUSTOTAL_API_KEY'
   | 'SHODAN_API_KEY'
+  | 'UCDP_API_TOKEN'
   | 'FMP_API_KEY'
   | 'OWM_API_KEY'
   | 'GREYNOISE_API_KEY'
@@ -68,6 +69,7 @@ export type RuntimeFeatureId =
   | 'internetOutages'
   | 'acledConflicts'
   | 'acledAirstrikes'
+  | 'ucdpEvents'
   | 'abuseChThreatIntel'
   | 'alienvaultOtxThreatIntel'
   | 'abuseIpdbThreatIntel'
@@ -170,6 +172,7 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   internetOutages: true,
   acledConflicts: true,
   acledAirstrikes: true,
+  ucdpEvents: true,
   abuseChThreatIntel: true,
   alienvaultOtxThreatIntel: true,
   abuseIpdbThreatIntel: true,
@@ -299,6 +302,14 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  requiredSecrets: ['ACLED_ACCESS_TOKEN'],
  desktopRequiredSecrets: [],
  fallback: 'Conflict/protest overlays are hidden.',
+  },
+  {
+ id: 'ucdpEvents',
+ name: 'UCDP georeferenced events',
+ description: 'Uppsala Conflict Data Program — peer-reviewed georeferenced conflict events feed.',
+ requiredSecrets: ['UCDP_API_TOKEN'],
+ desktopRequiredSecrets: [],
+ fallback: 'UCDP overlay shows degraded state until a token is provided.',
   },
   {
  id: 'acledAirstrikes',

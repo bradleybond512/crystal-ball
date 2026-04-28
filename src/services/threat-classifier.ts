@@ -423,13 +423,21 @@ const STAGGER_BASE_MS = 2100;
 const STAGGER_JITTER_MS = 200;
 const MIN_GAP_MS = 2000;
 const MAX_RETRIES = 2;
-const MAX_QUEUE_LENGTH = 100;
+// Queue ceiling raised from 100 → 500 to absorb ingestion bursts. The real
+// throughput governor is STAGGER_BASE_MS, not queue depth — the queue just
+// needs enough headroom to ride out a 30-source ingest tick without
+// dropping classifications.
+const MAX_QUEUE_LENGTH = 500;
 let batchPaused = false;
 let batchInFlight = false;
 let batchTimer: ReturnType<typeof setTimeout> | null = null;
 let lastRequestAt = 0;
 let consecutivePauses = 0;
 const batchQueue: BatchJob[] = [];
+// Dedup: when the same headline is enqueued multiple times in close
+// succession (multiple feeds covering the same story), we share the
+// classification rather than firing the API call N times.
+const inFlightByTitle = new Map<string, Promise<ThreatClassification | null>>();
 
 async function waitForGap(): Promise<void> {
   const elapsed = Date.now() - lastRequestAt;
@@ -512,15 +520,33 @@ export function classifyWithAI(
   title: string,
   variant: string
 ): Promise<ThreatClassification | null> {
-  return new Promise((resolve) => {
+  // Dedup: an identical title already in flight or queued shares the result
+  // promise. This is the single biggest queue-pressure reducer when
+  // multiple feeds cover the same headline within one ingest tick.
+  const dedupKey = `${variant}::${title}`;
+  const existing = inFlightByTitle.get(dedupKey);
+  if (existing) return existing;
+
+  const promise = new Promise<ThreatClassification | null>((resolve) => {
  if (batchQueue.length >= MAX_QUEUE_LENGTH) {
  console.warn(`[Classify] Queue full (${MAX_QUEUE_LENGTH}), dropping classification for: ${title.slice(0, 60)}`);
  resolve(null);
  return;
  }
- batchQueue.push({ title, variant, resolve });
+ batchQueue.push({
+ title,
+ variant,
+ resolve: (v) => {
+ // Clear the dedup entry on the first resolve so future calls
+ // (after this title has been classified) re-enqueue cleanly.
+ inFlightByTitle.delete(dedupKey);
+ resolve(v);
+ },
+ });
  scheduleBatch();
   });
+  inFlightByTitle.set(dedupKey, promise);
+  return promise;
 }
 
 // ── Confidence Calibration ───────────────────────────────────────────────────

@@ -7,6 +7,7 @@
  */
 
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
+import { requireAppAuth, isLikelyAccount } from './_auth.js';
 
 export const config = { runtime: 'edge' };
 
@@ -80,5 +81,15 @@ export default async function handler(req) {
 
   const url = new URL(req.url);
   const account = url.searchParams.get('account');
-  return account ? lookupAccount(account, cors) : fetchCatalog(cors);
+
+  // Account lookup is the key-spending oracle path. Gate it.
+  if (account) {
+    const denied = requireAppAuth(req, cors);
+    if (denied) return denied;
+    if (!isLikelyAccount(account)) {
+      return j({ error: 'Invalid account format' }, 400, cors);
+    }
+    return lookupAccount(account, cors);
+  }
+  return fetchCatalog(cors);
 }

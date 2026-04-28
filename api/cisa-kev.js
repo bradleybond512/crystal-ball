@@ -18,6 +18,10 @@ const RECENT_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
 
 let _cache = null;
 
+// Test-only: lets api/__tests__/cisa-kev.test.mjs scrub the module
+// cache between cases so each test sees a pristine fetch path.
+export function __resetCacheForTests() { _cache = null; }
+
 function jsonResponse(payload, status, corsHeaders) {
   return Response.json(payload, {
     status,
@@ -53,7 +57,11 @@ export default async function handler(req) {
   if (req.method !== 'GET') return jsonResponse({ error: 'Method not allowed' }, 405, cors);
 
   const url = new URL(req.url);
-  const limit = Math.max(1, Math.min(500, Number.parseInt(url.searchParams.get('limit') ?? '200', 10) || 200));
+  // Fail-safe limit parse: non-numeric / missing / out-of-range all
+  // fall back to 200 to dodge `slice(0, NaN) → []` which would silently
+  // empty the panel.
+  const limitRaw = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
+  const limit = Math.max(1, Math.min(500, Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 200));
 
   if (_cache && Date.now() - _cache.at < CACHE_TTL_MS) {
     return jsonResponse(_cache.threats.slice(0, limit), 200, cors);

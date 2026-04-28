@@ -4,6 +4,7 @@
  */
 
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
+import { requireAppAuth, clampQueryParam } from './_auth.js';
 
 export const config = { runtime: 'edge' };
 
@@ -44,17 +45,26 @@ function endpointFor(itype, indicator) {
   }
 }
 
+// Conservative cap: VirusTotal accepts URLs up to ~2k, hashes are
+// fixed-width, IPs/domains are short. 4096 chars is generous and
+// blocks abuse via gigantic payloads.
+const MAX_INDICATOR_LENGTH = 4096;
+
 export default async function handler(req) {
   const cors = getCorsHeaders(req, 'GET, OPTIONS');
   if (isDisallowedOrigin(req)) return j({ error: 'Origin not allowed' }, 403, cors);
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'GET') return j({ error: 'Method not allowed' }, 405, cors);
 
+  // Key-spending oracle path. Gate before we hit the upstream.
+  const denied = requireAppAuth(req, cors);
+  if (denied) return denied;
+
   const key = process.env.VIRUSTOTAL_API_KEY;
   if (!key) return j(degraded('VIRUSTOTAL_API_KEY not set'), 200, cors);
 
   const url = new URL(req.url);
-  const indicator = (url.searchParams.get('indicator') || '').trim();
+  const indicator = clampQueryParam(url.searchParams.get('indicator'), MAX_INDICATOR_LENGTH);
   if (!indicator) return j({ error: 'indicator query param required' }, 400, cors);
   const itype = (url.searchParams.get('type') || detectType(indicator)).toLowerCase();
   const endpoint = endpointFor(itype, indicator);

@@ -28,12 +28,22 @@ export class BreakthroughsTickerPanel extends Panel {
  const track = document.createElement('div');
  track.className = 'breakthroughs-ticker-track';
 
+ // Render an immediate placeholder so the panel never goes silent
+ // before setItems() is called externally. The smoke-test harness
+ // identified this as a "silent" panel; a placeholder + data-attr
+ // gives the harness something to assert and the user something
+ // to read while news loads.
+ const placeholder = document.createElement('span');
+ placeholder.className = 'ticker-item ticker-placeholder';
+ placeholder.textContent = 'Loading science breakthroughs…';
+ placeholder.dataset.placeholder = 'true';
+ track.append(placeholder);
+
  wrapper.append(track);
  this.tickerTrack = track;
 
  // Clear loading state and append the ticker
- this.content.innerHTML = '';
- this.content.append(wrapper);
+ this.content.replaceChildren(wrapper);
   }
 
   /**

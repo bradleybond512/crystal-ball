@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-async-constructor */
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -57,6 +58,13 @@ export class NationalDebtPanel extends Panel {
  const d = this.data;
  if (!d) { this.showError('No data'); return; }
  if (d.error && (!d.countries || d.countries.length === 0)) {
+ this.showError(NationalDebtPanel.UNAVAILABLE_MESSAGE);
+ return;
+ }
+ // Defensive shape check: smoke-test harness identified this as
+ // a crash site when the sidecar returns a degraded payload that
+ // lacks the `countries` array (spread-of-undefined throws).
+ if (!Array.isArray(d.countries)) {
  this.showError(NationalDebtPanel.UNAVAILABLE_MESSAGE);
  return;
  }

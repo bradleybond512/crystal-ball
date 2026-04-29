@@ -2050,11 +2050,23 @@ export class DeckGLMap {
  id: 'faa-cameras',
  data: cameras,
  getPosition: d => [d.lon, d.lat],
- getRadius: d => (d.alertProximityMi !== null ? 8 : 4),
+ // Bumped from 4/8 → 6/12 base radius so 3,000+ cameras stay
+ // visible on satellite/terrain basemaps where small pale-blue
+ // dots used to disappear.
+ getRadius: d => (d.alertProximityMi !== null ? 12 : 6),
  getFillColor: d =>
- d.alertProximityMi !== null ? [255, 160, 60, 220] : [100, 180, 255, 80],
- radiusMinPixels: 4,
- radiusMaxPixels: 12,
+ d.alertProximityMi !== null
+ ? [255, 160, 60, 240]    // amber, near full alpha
+ : [100, 180, 255, 160],  // pale blue, ~63% alpha (was 31%)
+ stroked: true,
+ lineWidthMinPixels: 1,
+ getLineColor: d =>
+ d.alertProximityMi !== null
+ ? [80, 40, 0, 255]
+ : [40, 90, 140, 200],
+ // Min/max pixel radius keeps the dots visible at every zoom.
+ radiusMinPixels: 5,
+ radiusMaxPixels: 16,
  pickable: true,
  autoHighlight: true,
  });

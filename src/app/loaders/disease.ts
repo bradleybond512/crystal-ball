@@ -42,7 +42,12 @@ export async function loadDiseaseOutbreaks(ctx: AppContext): Promise<void> {
   } catch (error) {
  // eslint-disable-next-line no-console
  console.warn('[disease-outbreaks] fetch failed', error);
- (ctx.panels['disease-outbreaks'] as DiseaseOutbreakPanel | undefined)?.update([]);
+ // Surface an actionable degraded state instead of an empty list
+ // (which used to render identically to "no outbreaks today" — the
+ // user couldn't tell whether the world was quiet or the upstream
+ // sources were down).
+ const reason = error instanceof Error ? error.message : 'all sources failed';
+ (ctx.panels['disease-outbreaks'] as DiseaseOutbreakPanel | undefined)?.showUpstreamUnavailable(reason);
   }
 }
 

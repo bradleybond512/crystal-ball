@@ -16,6 +16,28 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 let dbInstance: IDBDatabase | null = null;
 
+/** True when running in an environment without IndexedDB (smoke
+ *  harness under happy-dom, certain Node test environments).
+ *  Detected once at module load, then re-checked at openDB() time so
+ *  hot-loading IndexedDB later still works. When false, the alert
+ *  store degrades to in-memory no-ops rather than throwing. */
+function isIndexedDbAvailable(): boolean {
+  try {
+    return typeof indexedDB !== 'undefined';
+  } catch {
+    return false;
+  }
+}
+
+/** Sentinel error subtype so callers can distinguish "no IDB"
+ *  (degrade gracefully) from real DB failures (log + retry). */
+class IndexedDbUnavailableError extends Error {
+  constructor() {
+    super('IndexedDB is not available in this environment');
+    this.name = 'IndexedDbUnavailableError';
+  }
+}
+
 /** Create indexes on the unified_alerts object store. */
 function createAlertIndexes(store: IDBObjectStore): void {
   store.createIndex('timestamp', 'timestamp', { unique: false });
@@ -64,6 +86,9 @@ function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
  */
 function openDB(): Promise<IDBDatabase> {
   if (dbInstance) return Promise.resolve(dbInstance);
+  if (!isIndexedDbAvailable()) {
+    return Promise.reject(new IndexedDbUnavailableError());
+  }
 
   return new Promise<IDBDatabase>((resolve, reject) => {
  // First, open without specifying a version to get the current version.
@@ -126,6 +151,10 @@ async function withStore<T>(
   fn: (store: IDBObjectStore) => IDBRequest | void,
   extractResult = false,
 ): Promise<T> {
+  // Fast path for IndexedDB-less environments (smoke harness, headless
+  // Node). Re-throw the sentinel so AlertDB callers can convert it to
+  // a no-op default rather than crashing.
+  if (!isIndexedDbAvailable()) throw new IndexedDbUnavailableError();
   for (let attempt = 0; attempt < 2; attempt++) {
  try {
  const db = await openDB();
@@ -187,6 +216,11 @@ async function initAlertDB(instance: AlertDB): Promise<void> {
   }
 }
 
+/** Identify the no-IDB sentinel error so callers can degrade silently. */
+function isUnavailableError(error: unknown): boolean {
+  return error instanceof IndexedDbUnavailableError;
+}
+
 class AlertDB {
   private ready: Promise<void> | null = null;
 
@@ -196,19 +230,33 @@ class AlertDB {
  return this.ready;
   }
 
+  /** True when IndexedDB is unavailable (e.g. happy-dom smoke env).
+   *  Public methods short-circuit to safe defaults in that case. */
+  isAvailable(): boolean {
+ return isIndexedDbAvailable();
+  }
+
   /** Upsert a single alert. */
   async put(alert: UnifiedAlert): Promise<void> {
+ if (!this.isAvailable()) return;
  await this.ensureReady();
+ try {
  await withStore<void>('readwrite', (store) => store.put(alert));
+ } catch (error) {
+ if (isUnavailableError(error)) return;
+ throw error;
+ }
   }
 
   /** Batch upsert alerts in a single transaction. */
   async putBatch(alerts: UnifiedAlert[]): Promise<void> {
  if (alerts.length === 0) return;
+ if (!this.isAvailable()) return;
  await this.ensureReady();
 
+ try {
  const db = await openDB();
- return new Promise<void>((resolve, reject) => {
+ return await new Promise<void>((resolve, reject) => {
  const tx = db.transaction(STORE_NAME, 'readwrite');
  const store = tx.objectStore(STORE_NAME);
  for (const alert of alerts) {
@@ -219,17 +267,28 @@ class AlertDB {
  reject(tx.error ?? new Error('[alert-store] Batch put failed'));
  });
  });
+ } catch (error) {
+ if (isUnavailableError(error)) return;
+ throw error;
+ }
   }
 
   /** Query alerts with optional filters. */
   async getAll(opts?: AlertQueryOpts): Promise<UnifiedAlert[]> {
+ if (!this.isAvailable()) return [];
  await this.ensureReady();
 
- const all = await withStore<UnifiedAlert[]>(
+ let all: UnifiedAlert[] | undefined;
+ try {
+ all = await withStore<UnifiedAlert[]>(
  'readonly',
  (store) => store.getAll(),
  true,
  );
+ } catch (error) {
+ if (isUnavailableError(error)) return [];
+ throw error;
+ }
 
  let results = all ?? [];
 
@@ -255,13 +314,20 @@ class AlertDB {
 
   /** Full-text search across title and body (case-insensitive). */
   async search(text: string): Promise<UnifiedAlert[]> {
+ if (!this.isAvailable()) return [];
  await this.ensureReady();
 
- const all = await withStore<UnifiedAlert[]>(
+ let all: UnifiedAlert[] | undefined;
+ try {
+ all = await withStore<UnifiedAlert[]>(
  'readonly',
  (store) => store.getAll(),
  true,
  );
+ } catch (error) {
+ if (isUnavailableError(error)) return [];
+ throw error;
+ }
 
  const lower = text.toLowerCase();
  const results = (all ?? []).filter(
@@ -276,10 +342,12 @@ class AlertDB {
 
   /** Delete alerts older than 30 days. Returns count deleted. */
   async prune(): Promise<number> {
+ if (!this.isAvailable()) return 0;
  const cutoff = Date.now() - THIRTY_DAYS_MS;
 
+ try {
  const db = await openDB();
- return new Promise<number>((resolve, reject) => {
+ return await new Promise<number>((resolve, reject) => {
  const tx = db.transaction(STORE_NAME, 'readwrite');
  const store = tx.objectStore(STORE_NAME);
  const index = store.index('timestamp');
@@ -301,17 +369,32 @@ class AlertDB {
  reject(tx.error ?? new Error('[alert-store] Prune failed'));
  });
  });
+ } catch (error) {
+ if (isUnavailableError(error)) return 0;
+ throw error;
+ }
   }
 
   /** Aggregate statistics for the alert store. */
   async getStats(): Promise<AlertStats> {
+ if (!this.isAvailable()) {
+ return { total: 0, bySource: {}, bySeverity: {}, thisWeek: 0, lastWeek: 0 };
+ }
  await this.ensureReady();
 
- const all = await withStore<UnifiedAlert[]>(
+ let all: UnifiedAlert[] | undefined;
+ try {
+ all = await withStore<UnifiedAlert[]>(
  'readonly',
  (store) => store.getAll(),
  true,
  );
+ } catch (error) {
+ if (isUnavailableError(error)) {
+ return { total: 0, bySource: {}, bySeverity: {}, thisWeek: 0, lastWeek: 0 };
+ }
+ throw error;
+ }
 
  const alerts = all ?? [];
  const now = Date.now();

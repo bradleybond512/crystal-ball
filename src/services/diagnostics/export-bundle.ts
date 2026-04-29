@@ -331,12 +331,34 @@ const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 const PHONE_PATTERN = /\b\+?\d{1,3}[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g;
 const BEARER_PATTERN = /\bBearer\s[A-Za-z0-9._\-+/=]{8,}\b/g;
 const LONG_HEX_PATTERN = /\b[a-f0-9]{32,}\b/gi;
+// Common credential-leak shapes inside free-text reason / lastError /
+// log lines. Catches "password=...", "pwd:...", "key=...", "secret:..."
+// and the OpenAI / similar "sk-..." prefix tokens. The structural
+// key-name redaction handles {password: '...'} object literals; this
+// regex set covers the path where credentials appear inside concatenated
+// strings, log lines, and URL query params.
+// Two simpler patterns — split to keep regex complexity below the
+// SonarJS threshold while covering the same lexicons.
+const CRED_PHRASE_WORD_PATTERN = /\b(?:password|passwd|pwd|secret)\s*[:=]\s*\S+/gi;
+const CRED_PHRASE_TOKEN_PATTERN = /\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token)\s*[:=]\s*\S+/gi;
+const SK_TOKEN_PATTERN = /\bsk-[A-Za-z0-9_\-]{16,}\b/g;
+const URL_CRED_QUERY_PATTERN = /([?&](?:access_token|api_key|apikey|key|token|secret|password)=)([^&\s]+)/gi;
+
+function redactCredPhrase(match: string): string {
+  const sep = match.includes('=') ? '=' : ':';
+  const key = match.split(/[:=]/)[0] ?? match;
+  return `${key}${sep}${REDACTED}`;
+}
 
 function redactString(s: string): string {
   return s
     .replace(EMAIL_PATTERN, REDACTED)
     .replace(PHONE_PATTERN, REDACTED)
     .replace(BEARER_PATTERN, `Bearer ${REDACTED}`)
+    .replace(CRED_PHRASE_WORD_PATTERN, redactCredPhrase)
+    .replace(CRED_PHRASE_TOKEN_PATTERN, redactCredPhrase)
+    .replace(SK_TOKEN_PATTERN, REDACTED)
+    .replace(URL_CRED_QUERY_PATTERN, (_m, prefix: string) => `${prefix}${REDACTED}`)
     .replace(LONG_HEX_PATTERN, REDACTED);
 }
 

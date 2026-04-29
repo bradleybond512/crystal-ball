@@ -52,3 +52,26 @@ export { cyberThreatsToSituations } from './cyber-adapter';
 
 export type { WeatherAdapterInput } from './weather-adapter';
 export { weatherAlertsToSituations } from './weather-adapter';
+
+export type {
+  ExposureGraph,
+  ExposureSavedPlace,
+  ExposureWatchlist,
+  ExposureDevice,
+  ExposureScore,
+} from './exposure-graph';
+export {
+  scoreGeoExposure,
+  scoreCyberExposure,
+  scoreCountryExposure,
+  exposureToLevel,
+  setExposureGraph,
+  getExposureGraph,
+  resetExposureGraphForTests,
+} from './exposure-graph';
+
+export type { WatchWindowEvaluation, WatchWindowInput } from './watch-window';
+export {
+  evaluateWatchWindow,
+  applyWatchWindowEvaluation,
+} from './watch-window';

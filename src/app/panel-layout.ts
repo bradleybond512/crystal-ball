@@ -1118,47 +1118,60 @@ export class PanelLayoutManager implements AppModule {
  });
  // Periodic provider-snapshot bridge so Command Center's "Provider
  // Stress" + System Diagnostic's redundancy view stay current.
- void import('@/services/api-diagnostic').then(({ diagnoseAll }) => {
- // Wire the source collector for live-diagnostics-snapshot so
- // SystemDiagnosticPanel + CommandCenterPanel render real source
- // state instead of the [] default.
- void import('@/services/diagnostics/live-diagnostics-snapshot').then(({ setSourceCollector }) => {
+ // All recurring loops here go through registerRecurringLoop() so
+ // they show up in System Diagnostic, dedupe across HMR, and pause
+ // when document.visibilityState === 'hidden' (priority='low').
+ void Promise.all([
+ import('@/services/api-diagnostic'),
+ import('@/services/diagnostics/recurring-loops'),
+ import('@/services/diagnostics/live-diagnostics-snapshot'),
+ ]).then(([{ diagnoseAll }, { registerRecurringLoop }, { setSourceCollector }]) => {
  setSourceCollector(() => diagnoseAll().sources);
- });
- const tick = () => {
+ registerRecurringLoop(
+ 'provider-snapshot-bridge',
+ () => {
  try {
  const r = diagnoseAll();
  bridgeSourcesToProviderRedundancy(r.sources);
  } catch (error) {
  console.warn('[provider-bridge] snapshot failed:', error);
  }
- };
- tick();
- setInterval(tick, 30_000);
+ },
+ 30_000,
+ { priority: 'normal', runImmediately: true },
+ );
  });
  // Periodic sidecar /api/health probe so System Diagnostic + Command
- // Center reflect actual sidecar reachability instead of the
- // 'unknown' default. Skips the network call in the web build.
- void import('@/services/diagnostics/sidecar-probe').then(({ probeSidecarHealth }) => {
- const tick = () => {
+ // Center reflect actual sidecar reachability. Skips the network
+ // call in the web build.
+ void Promise.all([
+ import('@/services/diagnostics/sidecar-probe'),
+ import('@/services/diagnostics/recurring-loops'),
+ ]).then(([{ probeSidecarHealth }, { registerRecurringLoop }]) => {
+ registerRecurringLoop(
+ 'sidecar-health-probe',
+ () => {
  void probeSidecarHealth().catch((error) => {
  console.warn('[sidecar-probe] tick failed:', error);
  });
- };
- tick();
- setInterval(tick, 30_000);
+ },
+ 30_000,
+ { priority: 'normal', runImmediately: true },
+ );
  });
- // Periodic quality-debt collector — feeds the singleton registry
- // from algorithm health + failure prediction + provider snapshots
- // so System Diagnostic's Quality Debt tab + the export bundle
- // carry live evidence instead of an empty list.
+ // Periodic quality-debt collector. Priority='low' so it pauses
+ // when the document is hidden (the export bundle and System
+ // Diagnostic catch up on next tick once visible again).
  void Promise.all([
  import('@/services/quality/quality-debt-state'),
  import('@/services/algorithms/algorithms-state'),
  import('@/services/algorithms/algorithm-health'),
  import('@/services/algorithms/algorithm-evaluation-ledger'),
- ]).then(([qualityState, algoState, algoHealth, algoLedger]) => {
- const tick = () => {
+ import('@/services/diagnostics/recurring-loops'),
+ ]).then(([qualityState, algoState, algoHealth, algoLedger, { registerRecurringLoop }]) => {
+ registerRecurringLoop(
+ 'quality-debt-collector',
+ () => {
  try {
  const calibrations = algoLedger.summarizeCalibration(
  algoState.getAlgorithmEvaluationLedger().all(),
@@ -1174,9 +1187,10 @@ export class PanelLayoutManager implements AppModule {
  } catch (error) {
  console.warn('[quality-debt] tick failed:', error);
  }
- };
- tick();
- setInterval(tick, 60_000);
+ },
+ 60_000,
+ { priority: 'low', runImmediately: true },
+ );
  }).catch((error) => {
  console.warn('[quality-debt] failed to wire collector:', error);
  });

@@ -75,3 +75,15 @@ export {
   evaluateWatchWindow,
   applyWatchWindowEvaluation,
 } from './watch-window';
+
+// ── Phase 5: Compound Threat Engine ──────────────────────────────────────
+export type {
+  CascadePathId,
+  CascadePathDefinition,
+  CompoundDetectionInput,
+  CompoundDetectionResult,
+} from './compound-threat';
+export {
+  detectCompoundThreats,
+  DEFAULT_CASCADE_PATHS,
+} from './compound-threat';

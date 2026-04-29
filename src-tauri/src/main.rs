@@ -2335,8 +2335,13 @@ fn main() {
     objc_msgSend(mgr, req_sel);
     // Leak the manager intentionally so it lives for the process lifetime.
     // Without this, deallocation cancels the authorization.
-    objc_retain(mgr);
-    std::mem::forget(mgr);
+    //
+    // `objc_retain` is what keeps the object alive — calling
+    // `std::mem::forget(mgr)` on a `*mut c_void` is a no-op because
+    // raw pointers implement Copy (the original goes out of scope
+    // either way). The retain bumped the refcount so the object
+    // already outlives this scope.
+    let _ = objc_retain(mgr);
    }
   }
  }

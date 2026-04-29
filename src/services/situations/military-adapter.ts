@@ -16,6 +16,11 @@ import {
   type Situation,
   type SituationSeverity,
 } from './situation-types';
+import {
+  scoreCountryExposure,
+  scoreGeoExposure,
+  type ExposureGraph,
+} from './exposure-graph';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -37,6 +42,13 @@ export interface TheaterPostureInput {
   postureScore: number;
   /** 0..1 prior score, so whatChanged can show direction. */
   priorScore?: number;
+  /** Optional theater coordinates so the geo exposure scorer can
+   *  match against saved places + current location. */
+  centroid?: { lat: number; lon: number };
+  /** Optional ISO 3166-1 alpha-3 country codes the theater spans
+   *  (e.g. ['CHN','TWN'] for the Taiwan Strait). Drives country-watchlist
+   *  exposure matching. */
+  countries?: readonly string[];
   /** Source-attributed evidence rows from the host's threat-convergence
    *  / escalation-forecast / military-flights pipelines. */
   evidence: readonly {
@@ -57,19 +69,28 @@ export interface TheaterPostureInput {
 
 export interface MilitaryAdapterInput {
   postures: readonly TheaterPostureInput[];
-  /** Optional saved-place coordinates — reserved for Phase 2 user
-   *  exposure (e.g. travel risk near a specific theater). Phase 1
-   *  uses presence-only as a small exposure bump. */
+  /** Phase 2: full exposure graph. When present, drives userExposure
+   *  via scoreGeoExposure() (saved-place proximity to theater centroid)
+   *  + scoreCountryExposure() (country watchlist match). */
+  exposureGraph?: ExposureGraph;
+  /** Phase 1 fallback for callers that haven't migrated. */
   savedPlaces?: readonly { id: string; name: string; lat: number; lon: number }[];
   now?: () => number;
 }
 
 export function militaryPosturesToSituations(input: MilitaryAdapterInput): Situation[] {
   const now = input.now ?? Date.now;
+  const graph: ExposureGraph = input.exposureGraph ?? {
+    savedPlaces: (input.savedPlaces ?? []).map((p) => ({
+      id: p.id, name: p.name, lat: p.lat, lon: p.lon, tags: [], primary: false,
+    })),
+    watchlist: { countries: [], sectors: [], tickers: [], vendors: [], cves: [] },
+    device: { osLabels: [], versions: [] },
+  };
   return (input.postures ?? [])
     // Filter out 'normal' postures — they don't make the high-impact list.
     .filter((p) => p.posture !== 'normal')
-    .map((p) => postureToSituation(p, input.savedPlaces ?? [], now()));
+    .map((p) => postureToSituation(p, graph, now()));
 }
 
 // ── Internals ───────────────────────────────────────────────────────────
@@ -84,7 +105,7 @@ const POSTURE_SCORE_FLOOR: Record<TheaterPosture, number> = {
 
 function postureToSituation(
   p: TheaterPostureInput,
-  savedPlaces: readonly { id: string; name: string; lat: number; lon: number }[],
+  graph: ExposureGraph,
   ts: number,
 ): Situation {
   // The score floor enforces that 'strike_ready' lands at least
@@ -109,10 +130,14 @@ function postureToSituation(
   const independentSources = new Set(p.agreeingSources).size;
   const confidence = Math.min(0.95, 0.5 + 0.1 * independentSources);
 
-  // Phase 1 user exposure: presence of saved places gives a small
-  // bump (the user has *something* to lose). Phase 2 will reason
-  // about specific exposure (travel route, watchlisted ticker, etc.).
-  const userExposure = savedPlaces.length > 0 ? 0.25 : 0.1;
+  // Phase 2: combine geo (saved place near theater) + country
+  // (theater country on user watchlist). Take the max so a watched
+  // country alone produces meaningful exposure even when the user
+  // has no nearby saved places.
+  const geoExposure = scoreGeoExposure(p.centroid, graph);
+  const countryExposure = scoreCountryExposure(p.countries ?? [], graph);
+  const userExposure = Math.max(geoExposure.score, countryExposure.score);
+  const exposureReasons = [...geoExposure.reasons, ...countryExposure.reasons];
 
   const direction = typeof p.priorScore === 'number'
     ? (p.postureScore - p.priorScore > 0.05 ? 'rising' : p.postureScore - p.priorScore < -0.05 ? 'falling' : 'steady')
@@ -157,13 +182,17 @@ function postureToSituation(
     urgency,
     userExposure,
     personalImpact: {
-      summary: severity === 'critical' || severity === 'emergency'
+      summary: exposureReasons.length > 0
+        ? exposureReasons[0] ?? 'Watchlist exposure'
+        : severity === 'critical' || severity === 'emergency'
         ? 'May affect travel, fuel prices, and shipping if escalation continues.'
         : 'Indirect exposure: market and commodity volatility possible.',
-      level: severity === 'emergency' ? 'high' : severity === 'critical' ? 'medium' : 'low',
-      reasons: severity === 'critical' || severity === 'emergency'
-        ? ['Theater posture meets strike-readiness threshold']
-        : [],
+      level: userExposure >= 0.85 ? 'severe' : userExposure >= 0.6 ? 'high' : userExposure >= 0.35 ? 'medium' : 'low',
+      reasons: exposureReasons.length > 0
+        ? exposureReasons
+        : (severity === 'critical' || severity === 'emergency'
+          ? ['Theater posture meets strike-readiness threshold']
+          : []),
     },
     evidence: p.evidence,
     sourceAgreement: {
@@ -195,9 +224,9 @@ function postureToSituation(
       createdReason: `Theater ${p.theaterId} posture is '${p.posture}' (score ${p.postureScore.toFixed(2)})`,
       severityRationale: `Posture floor ${floor.toFixed(2)} + raw score ${p.postureScore.toFixed(2)} → max ${score.toFixed(2)} → tier '${severity}'`,
       confidenceRationale: `${independentSources} independent agreeing source(s) → confidence ${confidence.toFixed(2)}`,
-      exposureRationale: savedPlaces.length > 0
-        ? 'Saved-place presence gives a small exposure bump (Phase 2 will refine)'
-        : 'No saved places — minimal user exposure',
+      exposureRationale: exposureReasons.length > 0
+        ? `Personal exposure graph: ${exposureReasons.join('; ')}`
+        : 'No saved-place proximity or country watchlist match — minimal user exposure',
       sourceContributions: Object.fromEntries(
         p.agreeingSources.map((s) => [s, 1 / Math.max(1, p.agreeingSources.length)]),
       ),

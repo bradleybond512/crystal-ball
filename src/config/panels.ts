@@ -263,8 +263,9 @@ const FULL_MAP_LAYERS: MapLayers = {
   convergenceRings: true,
   threatHeatmap: false,
   sigintConvergence: true,
-  // Weather overlay layers
-  weatherRadar: false,
+  // Weather overlay layers — radar on by default so users see
+  // precipitation tiles out of the box without hunting for the toggle.
+  weatherRadar: true,
   weatherSatellite: false,
   lightning: false,
   owmTemperature: false,

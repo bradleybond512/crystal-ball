@@ -83,6 +83,14 @@ for (const [id, bundle] of Object.entries(PANEL_FIXTURES)) {
     await Promise.resolve();
     await new Promise<void>((resolve) => setTimeout(resolve, 250));
 
+    // If the panel exposes a direct-update path (data-loader-driven
+    // panels that don't fetch on mount), drive it now and re-wait
+    // for the debounced setContent to flush.
+    if (bundle.directUpdate) {
+      await bundle.directUpdate(panel as unknown);
+      await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    }
+
     const verdict = classify(el, factory.minTextLength ?? 1);
 
     try {
@@ -97,11 +105,12 @@ for (const [id, bundle] of Object.entries(PANEL_FIXTURES)) {
 
     reports.push({ id, ...verdict });
 
-    // Acceptance: with a fixture installed, the panel should reach
-    // `rendered`. Some panels are fed by direct update()/setRequests()
-    // calls (not fetch), so under the smoke factory they stay in a
-    // documented degraded state — those skip the assertion.
-    const SETRESQUEST_ONLY = new Set(['shortage-radar', 'nws-alerts']);
+    // Acceptance: with a fixture installed (URL-based or direct-update),
+    // the panel should reach `rendered`. shortage-radar is the
+    // remaining exception — it uses `panel.setRequests([...])` and
+    // its smoke factory doesn't expose that method without seeding
+    // commodity inputs the harness doesn't have.
+    const SETRESQUEST_ONLY = new Set(['shortage-radar']);
     if (SETRESQUEST_ONLY.has(id)) return;
     assert.equal(
       verdict.state,

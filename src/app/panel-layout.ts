@@ -1119,6 +1119,12 @@ export class PanelLayoutManager implements AppModule {
  // Periodic provider-snapshot bridge so Command Center's "Provider
  // Stress" + System Diagnostic's redundancy view stay current.
  void import('@/services/api-diagnostic').then(({ diagnoseAll }) => {
+ // Wire the source collector for live-diagnostics-snapshot so
+ // SystemDiagnosticPanel + CommandCenterPanel render real source
+ // state instead of the [] default.
+ void import('@/services/diagnostics/live-diagnostics-snapshot').then(({ setSourceCollector }) => {
+ setSourceCollector(() => diagnoseAll().sources);
+ });
  const tick = () => {
  try {
  const r = diagnoseAll();
@@ -1126,6 +1132,18 @@ export class PanelLayoutManager implements AppModule {
  } catch (error) {
  console.warn('[provider-bridge] snapshot failed:', error);
  }
+ };
+ tick();
+ setInterval(tick, 30_000);
+ });
+ // Periodic sidecar /api/health probe so System Diagnostic + Command
+ // Center reflect actual sidecar reachability instead of the
+ // 'unknown' default. Skips the network call in the web build.
+ void import('@/services/diagnostics/sidecar-probe').then(({ probeSidecarHealth }) => {
+ const tick = () => {
+ void probeSidecarHealth().catch((error) => {
+ console.warn('[sidecar-probe] tick failed:', error);
+ });
  };
  tick();
  setInterval(tick, 30_000);

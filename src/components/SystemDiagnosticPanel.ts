@@ -13,19 +13,19 @@
 
 import { Panel } from './Panel';
 import {
-  getPanelHealthRegistry,
-  getFeatureHealthRegistry,
-  getNotificationTraceRegistry,
   getDiagnosticEventBus,
+  getFeatureHealthRegistry,
   getFeedSentinels,
+  getNotificationTraceRegistry,
+  getPanelHealthRegistry,
 } from '@/services/diagnostics/diagnostics-state';
 import {
   aggregateSystemHealth,
   contextFromSnapshots,
 } from '@/services/diagnostics/system-health';
+import { getLiveDiagnosticsSnapshot } from '@/services/diagnostics/live-diagnostics-snapshot';
 import {
   auditFeeds,
-  type FeedHealthSnapshot,
   type FeedAuditEntry,
 } from '@/services/diagnostics/sentinel-feed-audit';
 import {
@@ -112,43 +112,40 @@ export class SystemDiagnosticPanel extends Panel {
   }
 
   private collect(): DiagnosticContext {
-    const panelReg = getPanelHealthRegistry();
+    // Pull the live snapshot — sources, providers, sidecar, feeds,
+    // notifications, panels, and recent events all in one place.
+    // Until PR roadmap-04-29, this method passed sources:[], providers:[]
+    // and a hard-coded unknown sidecar, which made the diagnostic surface
+    // less truthful than the underlying services.
+    const snapshot = getLiveDiagnosticsSnapshot();
     const featureReg = getFeatureHealthRegistry();
-    const notifReg = getNotificationTraceRegistry();
-    const eventBus = getDiagnosticEventBus();
     const sentinels = getFeedSentinels();
 
-    const panelsList = panelReg.all();
-    const sources: never[] = [];
-    const providers: never[] = [];
-    const notifSummary = notifReg.summary();
-    const sidecar = {
-      status: 'unknown' as HealthStatus,
-      authenticated: false,
-      reason: 'Sidecar adapter not wired into the diagnostic panel yet.',
-    };
-    const featureContext = contextFromSnapshots({ panels: panelsList, sources, providers });
+    const featureContext = contextFromSnapshots({
+      panels: snapshot.panels,
+      sources: snapshot.sources,
+      providers: snapshot.providers,
+    });
     const features = featureReg.all(featureContext);
     const report = aggregateSystemHealth({
-      panels: panelsList,
+      panels: snapshot.panels,
       features,
-      sources,
-      providers,
-      notifications: notifSummary,
-      sidecar,
+      sources: snapshot.sources,
+      providers: snapshot.providers,
+      notifications: snapshot.notificationSummary,
+      sidecar: snapshot.sidecar,
     });
-    const feedSnapshots: FeedHealthSnapshot[] = [];
-    const feedAudit = auditFeeds({ sentinels, snapshots: feedSnapshots });
-    const recentEvents = eventBus.query().slice(-20);
+    const feedAudit = auditFeeds({ sentinels, snapshots: snapshot.feedSnapshots });
+    const recentEvents = snapshot.recentEvents.slice(-20);
     const unhealthyCount =
       features.filter((f) => f.status !== 'healthy' && f.status !== 'unknown').length +
-      panelsList.filter((p) => p.status === 'failing' || p.status === 'unsafe').length;
+      snapshot.panels.filter((p) => p.status === 'failing' || p.status === 'unsafe').length;
 
     return {
       report,
       features,
-      panels: panelsList,
-      notifSummary,
+      panels: [...snapshot.panels],
+      notifSummary: snapshot.notificationSummary,
       feedAudit,
       recentEvents,
       unhealthyCount,

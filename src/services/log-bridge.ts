@@ -344,26 +344,86 @@ function recentBreadcrumbTail(n: number): Breadcrumb[] {
 
 async function copyDiagnostics(): Promise<void> {
   try {
- const bundle = await invokeTauri<string>('copy_diagnostics', {});
- const clientSummary = [
- '',
- '--- Client breadcrumbs (most recent last) ---',
- ...breadcrumbs.slice(-30).map(b => {
+ // Frontend bundle first (schema v2 + strategic sections + redacted).
+ const { composeFrontendDiagnosticsExport } = await import(
+ '@/services/diagnostics/frontend-export-composer'
+ );
+ const { isDesktopRuntime } = await import('@/services/runtime');
+
+ // Pull app metadata. Version + variant come from Vite's __APP_VERSION__
+ // / __APP_VARIANT__ globals when available; otherwise fall back to
+ // safe placeholders so the bundle still ships.
+ const appMeta = readAppMeta();
+ const envMeta = readEnvMeta();
+
+ // Rust appendix is best-effort — if invokeTauri throws (web build
+ // or unavailable command), we ship the frontend bundle alone.
+ let appendix = '';
+ if (isDesktopRuntime()) {
+ try {
+ appendix = (await invokeTauri<string>('copy_diagnostics', {})) ?? '';
+ } catch (error) {
+ appendix = `(copy_diagnostics failed: ${
+ error instanceof Error ? error.message : String(error)
+ })`;
+ }
+ }
+
+ const breadcrumbTail = breadcrumbs.slice(-30).map(b => {
  const t = new Date(b.ts).toISOString();
  const data = b.data ? ` ${JSON.stringify(b.data).slice(0, 200)}` : '';
  return `${t} [${b.level}] ${b.category}: ${b.message}${data}`;
- }),
- ].join('\n');
- const full = (bundle ?? '') + clientSummary;
- if (full) {
- await navigator.clipboard.writeText(full);
+ }).join('\n');
+
+ const combinedAppendix = [
+ appendix,
+ breadcrumbTail
+ ? `\n--- Client breadcrumbs (most recent last) ---\n${breadcrumbTail}`
+ : '',
+ ].filter(Boolean).join('\n').trim();
+
+ const { markdown } = composeFrontendDiagnosticsExport({
+ app: appMeta,
+ env: envMeta,
+ appendix: combinedAppendix || undefined,
+ });
+
+ await navigator.clipboard.writeText(markdown);
  showToast('Diagnostics copied to clipboard');
- logToDesktop('INFO', 'diagnostics bundle copied via Cmd+Shift+D');
- }
+ logToDesktop('INFO', 'diagnostics bundle copied via Cmd+Shift+D', {
+ schemaVersion: 2,
+ markdownChars: markdown.length,
+ hasRustAppendix: appendix.length > 0,
+ });
   } catch (error) {
  const msg = error instanceof Error ? error.message : String(error);
  showToast(`Diagnostics copy failed: ${msg}`);
   }
+}
+
+function readAppMeta(): { variant: string; version: string; runtime: 'desktop' | 'web' } {
+  const g = globalThis as unknown as { __APP_VERSION__?: string; __APP_VARIANT__?: string };
+  const version = g.__APP_VERSION__ ?? '0.0.0';
+  const variant = g.__APP_VARIANT__ ?? 'full';
+  // We avoid awaiting isDesktopRuntime() here because this helper runs
+  // sync inside an already-async block; the import already happened.
+  // Best-effort detection: __TAURI_INTERNALS__ is the Tauri 2 marker.
+  const runtime: 'desktop' | 'web' =
+    (globalThis as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ ===
+    undefined
+      ? 'web'
+      : 'desktop';
+  return { variant, version, runtime };
+}
+
+function readEnvMeta(): { locale?: string; timezone?: string; isMacOs?: boolean } {
+  return {
+    locale: typeof navigator === 'undefined' ? undefined : navigator.language,
+    timezone:
+      typeof Intl === 'undefined' ? undefined : Intl.DateTimeFormat().resolvedOptions().timeZone,
+    isMacOs:
+      typeof navigator === 'undefined' ? undefined : /mac/i.test(navigator.platform ?? ''),
+  };
 }
 
 function showToast(message: string): void {

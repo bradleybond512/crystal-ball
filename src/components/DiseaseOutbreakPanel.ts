@@ -28,6 +28,18 @@ export class DiseaseOutbreakPanel extends Panel {
  this.render();
   }
 
+  /** Surface a clear "upstream sources unavailable" state when the
+   *  loader catches a fetch failure. Distinct from update([]) which
+   *  legitimately means "no outbreaks reported today." */
+  public showUpstreamUnavailable(reason?: string): void {
+ const detail = reason ? `: ${reason}` : '';
+ this.setContent(
+ `<div class="panel-empty">Disease outbreak sources unavailable${escapeHtml(detail)}.<br/>` +
+ `Sources: WHO Disease Outbreak News + ReliefWeb + ProMED — will retry on the next 15-min refresh.</div>`,
+ );
+ this.setCount(0);
+  }
+
   private render(): void {
  if (this.outbreaks.length === 0) {
  this.setContent('<div class="panel-empty">No active outbreaks reported.</div>');

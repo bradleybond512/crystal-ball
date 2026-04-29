@@ -3441,11 +3441,26 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadExtendedForecast(): Promise<void> {
+ const panel = this.ctx.panels['extended-forecast'] as ExtendedForecastPanel | undefined;
+ // Pick the user's first saved place when available; fall back to
+ // NYC only when no saved places are configured. Old behavior
+ // always loaded NYC even for Indiana users.
+ let lat = 40.71, lon = -74.01, label = 'New York';
  try {
- const forecast = await fetchExtendedForecast(40.71, -74.01, 'New York');
- (this.ctx.panels['extended-forecast'] as ExtendedForecastPanel | undefined)?.update(forecast);
+ const { getSavedPlaces } = await import('@/services/saved-places');
+ const home = getSavedPlaces()[0];
+ if (home) {
+ lat = home.lat; lon = home.lon; label = home.name;
+ }
+ } catch { /* fall back to NYC */ }
+ try {
+ const forecast = await fetchExtendedForecast(lat, lon, label);
+ panel?.update(forecast);
  } catch (error) {
  console.warn('[extended-forecast] fetch failed', error);
+ // Surface the empty state instead of leaving the panel stuck on
+ // its initial 'Fetching forecast data...' loading banner.
+ panel?.update(null);
  }
   }
 
@@ -3460,12 +3475,16 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadTidePredictions(): Promise<void> {
+ const panel = this.ctx.panels['tide-predictions'] as TidePredictionsPanel | undefined;
  try {
  const defaultStation = TIDE_STATIONS[0]!;
  const data = await fetchTidePredictions(defaultStation.id);
- (this.ctx.panels['tide-predictions'] as TidePredictionsPanel | undefined)?.update(data);
+ panel?.update(data);
  } catch (error) {
  console.warn('[tide-predictions] fetch failed', error);
+ // Surface the empty state instead of staying stuck on the
+ // initial 'Fetching tide data...' loading banner.
+ panel?.update(null);
  }
   }
 

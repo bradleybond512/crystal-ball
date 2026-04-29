@@ -100,8 +100,10 @@ function toCachedCII(proto: CiiScore): CachedCIIScore {
 }
 
 function toCachedStrategicRisk(risks: StrategicRisk[], ciiScores: CiiScore[]): CachedStrategicRisk {
-  const global = risks[0];
-  const ciiMap = new Map(ciiScores.map((s) => [s.region, s]));
+  const risksArr = Array.isArray(risks) ? risks : [];
+  const ciiArr = Array.isArray(ciiScores) ? ciiScores : [];
+  const global = risksArr[0];
+  const ciiMap = new Map(ciiArr.map((s) => [s.region, s]));
   return {
  score: global?.score ?? 0,
  level: SEVERITY_REVERSE[global?.level ?? ''] ?? 'low',
@@ -120,9 +122,12 @@ function toCachedStrategicRisk(risks: StrategicRisk[], ciiScores: CiiScore[]): C
 }
 
 function toRiskScores(resp: GetRiskScoresResponse): CachedRiskScores {
+  // Defensive — degraded sidecar shapes can omit either array.
+  const ciiScores = Array.isArray(resp?.ciiScores) ? resp.ciiScores : [];
+  const strategicRisks = Array.isArray(resp?.strategicRisks) ? resp.strategicRisks : [];
   return {
- cii: resp.ciiScores.map((s) => toCachedCII(s)),
- strategicRisk: toCachedStrategicRisk(resp.strategicRisks, resp.ciiScores),
+ cii: ciiScores.map((s) => toCachedCII(s)),
+ strategicRisk: toCachedStrategicRisk(strategicRisks, ciiScores),
  protestCount: 0,
  computedAt: new Date().toISOString(),
  cached: true,

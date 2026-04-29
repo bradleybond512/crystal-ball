@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, unicorn/no-array-callback-reference */
 /**
  * Unified infrastructure service module -- replaces two legacy services:
  * - src/services/outages.ts (Cloudflare Radar internet outages)
@@ -175,7 +176,10 @@ export async function fetchServiceStatuses(): Promise<ServiceStatusResponse> {
  });
   }, emptyStatusFallback);
 
-  const services = resp.statuses.map(toServiceResult);
+  // Defensive — some deployments / smoke fixtures return a degraded
+  // shape without `statuses`. Coerce to [] so .map doesn't crash.
+  const statuses = Array.isArray(resp?.statuses) ? resp.statuses : [];
+  const services = statuses.map(toServiceResult);
 
   return {
  success: true,

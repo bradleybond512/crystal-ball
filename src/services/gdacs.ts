@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/prefer-nullish-coalescing */
 import { createCircuitBreaker } from '@/utils';
 
 export interface GDACSEvent {
@@ -63,8 +64,12 @@ export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
 
  const data: GDACSResponse = await response.json();
 
+ // Defensive — sidecar can return `{ ok:true, items:[], data:[] }`
+ // (the smoke harness's default) or any degraded shape that drops
+ // the `features` array. Coerce to [] so .filter doesn't crash.
+ const features = Array.isArray(data?.features) ? data.features : [];
  const seen = new Set<string>();
- return data.features
+ return features
  .filter(f => {
  if (f.geometry?.type !== 'Point') return false;
  const key = `${f.properties.eventtype}-${f.properties.eventid}`;

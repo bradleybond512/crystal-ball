@@ -101,8 +101,10 @@ function toPostureSummary(proto: TheaterPosture): TheaterPostureSummary {
 }
 
 function toPostureData(resp: GetTheaterPostureResponse): CachedTheaterPosture {
+  // Defensive — degraded sidecar shapes can omit `theaters`.
+  const theaters = Array.isArray(resp?.theaters) ? resp.theaters : [];
   // eslint-disable-next-line unicorn/no-array-callback-reference
-  const postures = resp.theaters.map(toPostureSummary);
+  const postures = theaters.map(toPostureSummary);
   const totalFlights = postures.reduce((sum, p) => sum + p.totalAircraft, 0);
   return {
  postures,

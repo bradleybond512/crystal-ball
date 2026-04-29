@@ -15,6 +15,7 @@ import {
   type Situation,
   type SituationSeverity,
 } from './situation-types';
+import { scoreCyberExposure, type ExposureGraph } from './exposure-graph';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -77,13 +78,33 @@ export interface CyberAdapterUserContext {
 
 export interface CyberAdapterInput {
   threats: readonly CyberThreatInput[];
+  /** Phase 2: full exposure graph. When present, drives userExposure
+   *  via scoreCyberExposure(). */
+  exposureGraph?: ExposureGraph;
+  /** Phase 1 fallback for callers that haven't migrated. */
   user?: CyberAdapterUserContext;
   now?: () => number;
 }
 
 export function cyberThreatsToSituations(input: CyberAdapterInput): Situation[] {
   const now = input.now ?? Date.now;
-  return (input.threats ?? []).map((t) => threatToSituation(t, input.user ?? {}, now()));
+  // Synthesize a graph from the legacy `user` input when no explicit
+  // graph is supplied — preserves Phase 1 behavior.
+  const graph: ExposureGraph = input.exposureGraph ?? {
+    savedPlaces: [],
+    watchlist: {
+      countries: [],
+      sectors: input.user?.watchedSectors ?? [],
+      tickers: [],
+      vendors: input.user?.userVendors ?? [],
+      cves: [],
+    },
+    device: {
+      osLabels: input.user?.userVendors ?? [],
+      versions: [],
+    },
+  };
+  return (input.threats ?? []).map((t) => threatToSituation(t, graph, now()));
 }
 
 // ── Internals ───────────────────────────────────────────────────────────
@@ -110,7 +131,7 @@ const CRITICAL_INFRA_SECTORS: ReadonlySet<CyberSector> = new Set([
 
 function threatToSituation(
   t: CyberThreatInput,
-  user: CyberAdapterUserContext,
+  graph: ExposureGraph,
   ts: number,
 ): Situation {
   // Take the highest stage reached as the primary score driver.
@@ -121,23 +142,24 @@ function threatToSituation(
   const hitsCriticalInfra = t.affectedSectors.some((s) => CRITICAL_INFRA_SECTORS.has(s));
   if (hitsCriticalInfra) score = Math.min(1, score + 0.1);
 
-  // User exposure: vendor or sector match → bump exposure (and score).
-  const userVendors = (user.userVendors ?? []).map((v) => v.toLowerCase());
-  const userVendorMatch = t.affectedVendors.some((v) =>
-    userVendors.some((u) => v.toLowerCase().includes(u)),
+  // Phase 2: scoreCyberExposure walks the exposure graph (device OS,
+  // vendor watchlist, sector watchlist, explicit CVE flags) and
+  // returns a (score, reasons, contributions) breakdown.
+  const exposure = scoreCyberExposure(
+    {
+      affectedVendors: t.affectedVendors,
+      affectedSectors: t.affectedSectors,
+      cveId: t.threatId,
+    },
+    graph,
   );
-  const userSectorMatch = (user.watchedSectors ?? []).some((s) => t.affectedSectors.includes(s));
-  let userExposure = 0.1;
-  const exposureReasons: string[] = [];
-  if (userVendorMatch) {
-    userExposure = Math.max(userExposure, 0.85);
-    exposureReasons.push(`Affected vendor matches user OS / software`);
-    score = Math.min(1, score + 0.1);
-  }
-  if (userSectorMatch) {
-    userExposure = Math.max(userExposure, 0.6);
-    exposureReasons.push(`Affected sector is on user watchlist`);
-  }
+  const userExposure = exposure.score;
+  const exposureReasons = [...exposure.reasons];
+  const userVendorMatch = exposure.contributions['vendor-match'] !== undefined;
+  const userSectorMatch = exposure.contributions['sector-match'] !== undefined;
+  // Vendor match also bumps the severity score (a CVE you actually
+  // run is more impactful than a CVE you don't).
+  if (userVendorMatch) score = Math.min(1, score + 0.1);
 
   const severity: SituationSeverity = severityFromScore(score);
 

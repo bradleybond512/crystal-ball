@@ -20,13 +20,24 @@ import {
   type Situation,
   type SituationSeverity,
 } from './situation-types';
+import {
+  exposureToLevel,
+  scoreGeoExposure,
+  type ExposureGraph,
+} from './exposure-graph';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
 export interface WeatherAdapterInput {
   alerts: readonly WeatherAlert[];
-  /** Optional saved-place coordinates for Phase 2 user-exposure
-   *  scoring. Phase 1 uses this only when present to bump exposure. */
+  /**
+   * Phase 2: Personal Exposure Graph drives userExposure.
+   * Pass the user's full graph (saved places, current location).
+   * Phase 1's standalone savedPlaces input remains for back-compat
+   * — when both are present, the graph wins.
+   */
+  exposureGraph?: ExposureGraph;
+  /** Phase 1 fallback for callers that haven't migrated to the graph. */
   savedPlaces?: readonly { id: string; name: string; lat: number; lon: number }[];
   /** Optional clock for tests. */
   now?: () => number;
@@ -37,7 +48,21 @@ export interface WeatherAdapterInput {
 export function weatherAlertsToSituations(input: WeatherAdapterInput): Situation[] {
   const now = input.now ?? Date.now;
   const alerts = input.alerts ?? [];
-  return alerts.map((alert) => alertToSituation(alert, input.savedPlaces ?? [], now()));
+  // If an exposure graph is supplied, use it. Otherwise synthesize a
+  // minimal one from the legacy savedPlaces input.
+  const graph: ExposureGraph = input.exposureGraph ?? {
+    savedPlaces: (input.savedPlaces ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      lat: p.lat,
+      lon: p.lon,
+      tags: [],
+      primary: false,
+    })),
+    watchlist: { countries: [], sectors: [], tickers: [], vendors: [], cves: [] },
+    device: { osLabels: [], versions: [] },
+  };
+  return alerts.map((alert) => alertToSituation(alert, graph, now()));
 }
 
 // ── Internals ───────────────────────────────────────────────────────────
@@ -52,7 +77,7 @@ const NWS_TO_SCORE: Record<WeatherAlert['severity'], number> = {
 
 function alertToSituation(
   alert: WeatherAlert,
-  savedPlaces: readonly { id: string; name: string; lat: number; lon: number }[],
+  graph: ExposureGraph,
   ts: number,
 ): Situation {
   const score = NWS_TO_SCORE[alert.severity] ?? 0.2;
@@ -64,9 +89,16 @@ function alertToSituation(
   // Linear ramp: 0 min → 1.0 urgency, 60+ min → 0.3 urgency.
   const urgency = clamp01(1 - minutesToOnset / 90);
 
-  // Phase 1 user-exposure: simple distance check vs saved places.
-  // Phase 2 will use polygon-match + watchlist + travel routes.
-  const { exposure, exposureReasons } = computeWeatherExposure(alert, savedPlaces);
+  // Phase 2: scoreGeoExposure walks the full ExposureGraph (saved
+  // places + current location) and returns a (score, reasons,
+  // contributions) breakdown. Phase 3 will swap radial distance for
+  // polygon-match using the existing weather/nws-polygon-match
+  // service.
+  const exposureScore = alert.centroid
+    ? scoreGeoExposure({ lat: alert.centroid[1], lon: alert.centroid[0] }, graph)
+    : { score: 0.1, reasons: [], contributions: { 'no-centroid': 0.1 } };
+  const exposure = exposureScore.score;
+  const exposureReasons = exposureScore.reasons;
 
   const evidence = [
     {
@@ -129,7 +161,7 @@ function alertToSituation(
     userExposure: exposure,
     personalImpact: {
       summary: exposureReasons.length > 0
-        ? `Affects ${savedPlaces.length > 0 ? 'a saved place' : 'your area'}`
+        ? `Affects ${exposureReasons[0]?.includes('Current location') ? 'your current location' : 'a saved place'}`
         : 'No direct exposure detected',
       level: exposureToLevel(exposure),
       reasons: exposureReasons,
@@ -154,8 +186,8 @@ function alertToSituation(
       severityRationale: `NWS severity '${alert.severity}' → score ${score.toFixed(2)} → tier '${severity}'`,
       confidenceRationale: 'NWS is the authoritative source for US weather alerts (baseline 0.9).',
       exposureRationale: exposureReasons.length > 0
-        ? `Saved place(s) within proximity radius: ${exposureReasons.join('; ')}`
-        : 'No saved places within proximity radius — exposure scored from severity only.',
+        ? `Personal exposure graph: ${exposureReasons.join('; ')}`
+        : 'No saved places or current location within proximity radius — exposure scored as baseline (0.1).',
       sourceContributions: { NWS: 1.0 },
       thresholdsCrossed: [`severity:${severity}`, `urgency:${urgency.toFixed(2)}`],
     },
@@ -166,54 +198,8 @@ function alertToSituation(
   };
 }
 
-/** Phase 1 user-exposure: cheap radial proximity. Phase 2 will use
- *  the existing polygon-match service. */
-function computeWeatherExposure(
-  alert: WeatherAlert,
-  savedPlaces: readonly { id: string; name: string; lat: number; lon: number }[],
-): { exposure: number; exposureReasons: string[] } {
-  if (savedPlaces.length === 0 || !alert.centroid) {
-    return { exposure: 0.1, exposureReasons: [] };
-  }
-  const reasons: string[] = [];
-  let maxExposure = 0.1;
-  for (const place of savedPlaces) {
-    const km = haversineKm(alert.centroid[1], alert.centroid[0], place.lat, place.lon);
-    if (km < 25) {
-      maxExposure = Math.max(maxExposure, 0.95);
-      reasons.push(`${place.name} within 25 km of alert centroid`);
-    } else if (km < 80) {
-      maxExposure = Math.max(maxExposure, 0.6);
-      reasons.push(`${place.name} within 80 km of alert centroid`);
-    } else if (km < 200) {
-      maxExposure = Math.max(maxExposure, 0.25);
-    }
-  }
-  return { exposure: maxExposure, exposureReasons: reasons };
-}
-
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 function clamp01(n: number): number {
   if (n < 0) return 0;
   if (n > 1) return 1;
   return n;
-}
-
-function exposureToLevel(exposure: number): 'none' | 'low' | 'medium' | 'high' | 'severe' {
-  if (exposure >= 0.85) return 'severe';
-  if (exposure >= 0.6) return 'high';
-  if (exposure >= 0.35) return 'medium';
-  if (exposure >= 0.15) return 'low';
-  return 'none';
 }

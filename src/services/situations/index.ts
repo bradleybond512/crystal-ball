@@ -53,6 +53,7 @@ export { cyberThreatsToSituations } from './cyber-adapter';
 export type { WeatherAdapterInput } from './weather-adapter';
 export { weatherAlertsToSituations } from './weather-adapter';
 
+// ── Phase 2: Personal Exposure Graph ─────────────────────────────────────
 export type {
   ExposureGraph,
   ExposureSavedPlace,
@@ -70,11 +71,36 @@ export {
   resetExposureGraphForTests,
 } from './exposure-graph';
 
+// ── Phase 3: Watch Windows ───────────────────────────────────────────────
 export type { WatchWindowEvaluation, WatchWindowInput } from './watch-window';
 export {
   evaluateWatchWindow,
   applyWatchWindowEvaluation,
 } from './watch-window';
+
+// ── Phase 4: Domain Superpowers ──────────────────────────────────────────
+export type {
+  MilitaryPatternId,
+  MilitaryPatternFeature,
+  MilitaryPatternMatch,
+  MilitaryPatternDefinition,
+} from './military-patterns';
+export {
+  matchMilitaryPattern,
+  matchAllMilitaryPatterns,
+  DEFAULT_MILITARY_PATTERNS,
+} from './military-patterns';
+
+export type { CyberStormModePayload } from './cyber-storm-mode';
+export { buildCyberStormMode } from './cyber-storm-mode';
+
+export type {
+  NowcastSignal,
+  NowcastSignalKind,
+  NowcastEvaluation,
+  NowcastInput,
+} from './weather-nowcast';
+export { evaluateWeatherNowcast } from './weather-nowcast';
 
 // ── Phase 5: Compound Threat Engine ──────────────────────────────────────
 export type {

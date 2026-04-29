@@ -68,7 +68,11 @@ export class GdeltIntelPanel extends Panel {
  this.error = null;
  } catch (error) {
  if (this.isAbortError(error)) return;
- this.error = error instanceof Error ? error.message : 'Failed to fetch';
+ // Source: GDELT 2.0 (free, no key needed). Stale cache will be
+ // shown when available; otherwise the panel surfaces this message.
+ this.error = error instanceof Error
+ ? `GDELT unreachable: ${error.message}. Will retry every 15 min.`
+ : 'GDELT unavailable. Source: gdeltproject.org (free, no key needed). Will retry every 15 min.';
  }
 
  this.loading = false;

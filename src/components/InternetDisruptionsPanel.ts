@@ -47,7 +47,8 @@ function row(label: string, severity: string, detail: string): string {
 }
 
 export class InternetDisruptionsPanel extends Panel {
-  private static readonly UNAVAILABLE_MESSAGE = 'Internet disruption data unavailable right now';
+  private static readonly UNAVAILABLE_MESSAGE =
+    'Internet disruption data unavailable. Sources: Cloudflare Radar (free) + RIPE NCC. Cloudflare key is optional in Settings → API Keys for richer data. Will retry on the next refresh.';
   private data: CommsHealthResponse | null = null;
   private error: string | null = null;
   private loading = true;

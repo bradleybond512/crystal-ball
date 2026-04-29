@@ -23,7 +23,8 @@ function formatPrice(usd: number): string {
 }
 
 export class FuelPricesPanel extends Panel {
-  private static readonly UNAVAILABLE_MESSAGE = 'Fuel price data unavailable right now';
+  private static readonly UNAVAILABLE_MESSAGE =
+    'Fuel price data unavailable. Source: U.S. EIA (free key required at eia.gov; add it in Settings → API Keys). Will retry on the next refresh.';
   private data: FuelPricesResponse | null = null;
   private loading = true;
   private error: string | null = null;

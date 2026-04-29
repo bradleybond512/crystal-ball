@@ -54,7 +54,8 @@ function formatUpdated(updatedAt: number): string {
 }
 
 export class FearGreedPanel extends Panel {
-  private static readonly UNAVAILABLE_MESSAGE = 'Sentiment data unavailable right now';
+  private static readonly UNAVAILABLE_MESSAGE =
+    'Crypto Fear & Greed unavailable. Source: alternative.me (free, no key needed) — the upstream API is currently unreachable. Will retry on the next refresh.';
   private data: FearGreedResponse | null = null;
   private loading = true;
   private error: string | null = null;

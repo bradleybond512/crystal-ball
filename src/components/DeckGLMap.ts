@@ -327,6 +327,32 @@ function getOverlayColors() {
 let _cachedTheme: string | null = null;
 let COLORS = getOverlayColors();
 
+/** Severity → color triplet for weather alerts. Three variants:
+ *  - 'icon'   : opaque punchy color for the centroid pin
+ *  - 'stroke' : same hue as icon, full alpha for polygon outline
+ *  - 'fill'   : same hue at low alpha so polygon fill doesn't
+ *               obscure underlying basemap labels.
+ *  Used by both the icon layer and the polygon layer so the visual
+ *  treatment stays consistent across the two rendering paths. */
+function weatherSeverityColor(
+  severity: 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown',
+  variant: 'icon' | 'stroke' | 'fill',
+): [number, number, number, number] {
+  // Base RGB by severity tier
+  let rgb: [number, number, number];
+  if (severity === 'Extreme') rgb = [255, 0, 0];
+  else if (severity === 'Severe') rgb = [255, 100, 0];
+  else if (severity === 'Moderate') rgb = [255, 170, 0];
+  else rgb = [100, 150, 255];
+
+  let alpha: number;
+  if (variant === 'fill') alpha = 60;          // ~24%
+  else if (variant === 'stroke') alpha = 220;  // ~86%
+  else alpha = severity === 'Extreme' ? 200 : severity === 'Severe' ? 180 : severity === 'Moderate' ? 160 : 180;
+
+  return [rgb[0], rgb[1], rgb[2], alpha];
+}
+
 // SVG icons as data URLs for different marker shapes
 // ── Canvas-drawn icon atlas (SVG data URIs fail in WKWebView WebGL) ──
 // All icons are drawn onto a single 32-tall sprite sheet using Canvas 2D API.
@@ -1387,8 +1413,12 @@ export class DeckGLMap {
  layers.push(this.createGhostLayer('iran-events-layer', this.iranEvents, d => [d.longitude, d.latitude], { radiusMinPixels: 12 }));
  }
 
- // Weather alerts layer
+ // Weather alerts layer — polygon shape (so user can see what
+ // area is covered) + centroid icon (so the alert is visible
+ // even when zoomed out and the polygon collapses to a pixel).
  if (mapLayers.weather && filteredWeatherAlerts.length > 0) {
+ const polyLayer = this.createWeatherPolygonLayer(filteredWeatherAlerts);
+ if (polyLayer) layers.push(polyLayer);
  layers.push(this.createWeatherLayer(filteredWeatherAlerts));
  }
 
@@ -2232,13 +2262,37 @@ export class DeckGLMap {
  getSize: 24,
  sizeMinPixels: 14,
  sizeMaxPixels: 28,
- getColor: (d) => {
- if (d.severity === 'Extreme') return [255, 0, 0, 200] as [number, number, number, number];
- if (d.severity === 'Severe') return [255, 100, 0, 180] as [number, number, number, number];
- if (d.severity === 'Moderate') return [255, 170, 0, 160] as [number, number, number, number];
- return COLORS.weather;
- },
+ getColor: (d) => weatherSeverityColor(d.severity, 'icon'),
  pickable: true,
+ });
+  }
+
+  /** Polygon outline + fill for each NWS alert. Until now we only
+   *  drew a centroid pin, so the user couldn't see what area was
+   *  covered by the alert. Filters alerts that lack polygon
+   *  coordinates (some alerts ship as pure geometry-less area
+   *  descriptions). */
+  private createWeatherPolygonLayer(alerts: WeatherAlert[]): PolygonLayer | null {
+ const polygonAlerts = alerts.filter((a) => a.coordinates?.length >= 3);
+ if (polygonAlerts.length === 0) return null;
+
+ return new PolygonLayer<WeatherAlert>({
+ id: 'weather-polygons-layer',
+ data: polygonAlerts,
+ getPolygon: (d) => d.coordinates,
+ getFillColor: (d) => weatherSeverityColor(d.severity, 'fill'),
+ getLineColor: (d) => weatherSeverityColor(d.severity, 'stroke'),
+ lineWidthUnits: 'pixels',
+ getLineWidth: 1.5,
+ stroked: true,
+ filled: true,
+ pickable: true,
+ // Update triggers so palette color changes propagate without
+ // a full layer rebuild.
+ updateTriggers: {
+ getFillColor: polygonAlerts.length,
+ getLineColor: polygonAlerts.length,
+ },
  });
   }
 
@@ -4147,6 +4201,13 @@ export class DeckGLMap {
  { key: 'pipelines', label: t('components.deckgl.layers.pipelines'), icon: '&#128738;' },
  { key: 'outages', label: t('components.deckgl.layers.internetOutages'), icon: '&#128225;' },
  { key: 'weather', label: t('components.deckgl.layers.weatherAlerts'), icon: '&#9928;' },
+ { key: 'weatherRadar', label: 'Weather Radar', icon: '&#127783;' },
+ { key: 'weatherSatellite', label: 'Satellite', icon: '&#128752;' },
+ { key: 'lightning', label: 'Lightning', icon: '&#9889;' },
+ { key: 'owmTemperature', label: 'Temperature (OWM)', icon: '&#127777;' },
+ { key: 'owmPrecipitation', label: 'Precipitation (OWM)', icon: '&#9748;' },
+ { key: 'owmClouds', label: 'Clouds (OWM)', icon: '&#9729;' },
+ { key: 'owmWind', label: 'Wind (OWM)', icon: '&#127788;' },
  { key: 'economic', label: t('components.deckgl.layers.economicCenters'), icon: '&#128176;' },
  { key: 'waterways', label: t('components.deckgl.layers.strategicWaterways'), icon: '&#9875;' },
  { key: 'natural', label: t('components.deckgl.layers.naturalEvents'), icon: '&#127755;' },
@@ -4184,6 +4245,13 @@ export class DeckGLMap {
  { key: 'displacement', label: t('components.deckgl.layers.displacementFlows'), icon: '&#128101;' },
  { key: 'climate', label: t('components.deckgl.layers.climateAnomalies'), icon: '&#127787;' },
  { key: 'weather', label: t('components.deckgl.layers.weatherAlerts'), icon: '&#9928;' },
+ { key: 'weatherRadar', label: 'Weather Radar', icon: '&#127783;' },
+ { key: 'weatherSatellite', label: 'Satellite', icon: '&#128752;' },
+ { key: 'lightning', label: 'Lightning', icon: '&#9889;' },
+ { key: 'owmTemperature', label: 'Temperature (OWM)', icon: '&#127777;' },
+ { key: 'owmPrecipitation', label: 'Precipitation (OWM)', icon: '&#9748;' },
+ { key: 'owmClouds', label: 'Clouds (OWM)', icon: '&#9729;' },
+ { key: 'owmWind', label: 'Wind (OWM)', icon: '&#127788;' },
  { key: 'outages', label: t('components.deckgl.layers.internetOutages'), icon: '&#128225;' },
  { key: 'cyberThreats', label: t('components.deckgl.layers.cyberThreats'), icon: '&#128737;' },
  { key: 'natural', label: t('components.deckgl.layers.naturalEvents'), icon: '&#127755;' },

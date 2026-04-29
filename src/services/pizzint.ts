@@ -107,7 +107,14 @@ const defaultStatus: PizzIntStatus = {
 // ── Public API ──────────────────────────────────────────────────────────────
 
 export async function fetchPizzIntStatus(): Promise<PizzIntStatus> {
-  return pizzintBreaker.execute(async () => {
+  // The breaker's persistCache layer JSON-serializes lastUpdate to an
+  // ISO string. Rehydrate it back to a Date here so every consumer
+  // (indicator, dashboards, debug bundle) gets a real Date instance.
+  const rehydrate = (status: PizzIntStatus): PizzIntStatus => ({
+    ...status,
+    lastUpdate: status.lastUpdate instanceof Date ? status.lastUpdate : new Date(status.lastUpdate as unknown as string),
+  });
+  const result = await pizzintBreaker.execute(async () => {
  const resp = await fetch(`${getApiBaseUrl()}/api/pizzint/dashboard`);
  if (!resp.ok) throw new Error(`PizzINT dashboard returned ${resp.status}`);
  const raw = await resp.json() as DashboardResponse;
@@ -146,6 +153,7 @@ export async function fetchPizzIntStatus(): Promise<PizzIntStatus> {
  locations,
  };
   }, defaultStatus);
+  return rehydrate(result);
 }
 
 export async function fetchGdeltTensions(): Promise<GdeltTensionPair[]> {

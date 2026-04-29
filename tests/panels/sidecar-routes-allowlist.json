@@ -1,0 +1,34 @@
+{
+  "_comment": "Allowlist for sidecar-only routes — routes the sidecar serves that no renderer file calls. Each entry must be classified as one of:\n  - intentionalInternal: server-to-server / admin / health probe; never called from the renderer.\n  - futureUi: route exists for an unbuilt panel; expected to gain a renderer caller soon.\n  - deprecated: legacy route slated for removal.\nThe sidecar-routes-allowlist test fails when a NEW sidecar-only route appears that's not in any list. To clear, classify it here.",
+  "_updated": "2026-04-29 — initial classification by P10 of CLAUDE_FUNCTIONALITY_DIAGNOSTICS_PERFORMANCE_ROADMAP",
+
+  "intentionalInternal": [
+    "/api",
+    "/api/[domain]/v1/[rpc]",
+    "/api/eia/[[...path]]",
+    "/api/local-status",
+    "/api/register-interest",
+    "/api/version",
+    "/gps/nmea"
+  ],
+
+  "futureUi": [
+    "/api/acled/refresh",
+    "/api/adsb-aggregate",
+    "/api/bgpview-asn",
+    "/api/cyber-threats",
+    "/api/data/city-coords",
+    "/api/disease-outbreaks",
+    "/api/economic",
+    "/api/military-flights",
+    "/api/news-aggregate",
+    "/api/sitrep-bundle",
+    "/api/space-weather",
+    "/api/ucdp",
+    "/api/urlhaus-feed",
+    "/api/usni-fleet",
+    "/api/youtube/embed"
+  ],
+
+  "deprecated": []
+}

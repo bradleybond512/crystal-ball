@@ -1148,6 +1148,38 @@ export class PanelLayoutManager implements AppModule {
  tick();
  setInterval(tick, 30_000);
  });
+ // Periodic quality-debt collector — feeds the singleton registry
+ // from algorithm health + failure prediction + provider snapshots
+ // so System Diagnostic's Quality Debt tab + the export bundle
+ // carry live evidence instead of an empty list.
+ void Promise.all([
+ import('@/services/quality/quality-debt-state'),
+ import('@/services/algorithms/algorithms-state'),
+ import('@/services/algorithms/algorithm-health'),
+ import('@/services/algorithms/algorithm-evaluation-ledger'),
+ ]).then(([qualityState, algoState, algoHealth, algoLedger]) => {
+ const tick = () => {
+ try {
+ const calibrations = algoLedger.summarizeCalibration(
+ algoState.getAlgorithmEvaluationLedger().all(),
+ );
+ const report = algoHealth.aggregateAlgorithmHealth({
+ definitions: algoState.getAlgorithmDefinitions(),
+ calibrations,
+ });
+ qualityState.collectLiveQualityDebt({
+ algorithmHealth: report.algorithms,
+ smokeOutcomes: qualityState.smokeOutcomesFromLiveSnapshot(),
+ });
+ } catch (error) {
+ console.warn('[quality-debt] tick failed:', error);
+ }
+ };
+ tick();
+ setInterval(tick, 60_000);
+ }).catch((error) => {
+ console.warn('[quality-debt] failed to wire collector:', error);
+ });
  });
  this.ctx.panels['cascade-simulator'] = new CascadeSimulatorPanel();
  this.ctx.panels['emergency-broadcast'] = new EmergencyBroadcastPanel();

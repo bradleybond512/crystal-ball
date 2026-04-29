@@ -29,6 +29,7 @@ import {
   getNotificationTraceRegistry,
 } from './diagnostics-state';
 import { summarizeScenarioCoverage } from '@/services/scenarios/scenario-library';
+import { getActiveQualityDebt } from '@/services/quality/quality-debt-state';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ export function composeFrontendDiagnosticsExport(
   // not block the overall export; the missing field just stays
   // undefined and the consumer will see only what was available.
   const scenarioCoverage = safe(() => summarizeScenarioCoverage());
+  const qualityDebt = safe(() => getActiveQualityDebt());
 
   const bundle = buildExportBundle({
     now,
@@ -89,6 +91,7 @@ export function composeFrontendDiagnosticsExport(
     },
     events: { snapshot: [...snapshot.recentEvents] },
     scenarioCoverage,
+    qualityDebt,
   });
 
   let markdown = exportBundleToMarkdown(bundle);

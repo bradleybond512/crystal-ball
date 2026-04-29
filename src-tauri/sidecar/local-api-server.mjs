@@ -3361,12 +3361,18 @@ async function dispatch(requestUrl, req, routes, context) {
   // weathercams.faa.gov `/api/cameras/{id}/images/last/N` endpoint
   // returns metadata + an `imageUri` pointing at the
   // images.wcams-static.faa.gov CDN.
+  //
+  // Optional ?count=N (1-24) returns a frames[] array for client-side
+  // timelapse playback ("video"). Default count=1 preserves the
+  // single-image contract the panel previously used.
   if (requestUrl.pathname === '/api/faa-camera-image') {
  const cameraId = (requestUrl.searchParams.get('cameraId') ?? '').replace(/\D/g, '');
  if (!cameraId) return json({ error: 'cameraId required' }, 400);
+ const rawCount = Number.parseInt(requestUrl.searchParams.get('count') ?? '1', 10);
+ const count = Number.isFinite(rawCount) ? Math.max(1, Math.min(24, rawCount)) : 1;
  try {
  const resp = await fetchWithTimeout(
- `https://weathercams.faa.gov/api/cameras/${cameraId}/images/last/1`,
+ `https://weathercams.faa.gov/api/cameras/${cameraId}/images/last/${count}`,
  {
  headers: {
  Accept: 'application/json',
@@ -3377,17 +3383,25 @@ async function dispatch(requestUrl, req, routes, context) {
  },
  10000,
  );
- if (!resp.ok) return json({ imageUrl: null, degraded: true, reason: `weathercams returned ${resp.status}` });
+ if (!resp.ok) return json({ imageUrl: null, frames: [], degraded: true, reason: `weathercams returned ${resp.status}` });
  const raw = await resp.json();
- const item = Array.isArray(raw?.payload) ? raw.payload[0] : null;
- if (!item?.imageUri) return json({ imageUrl: null, degraded: true, reason: 'No recent image for this camera' });
+ const items = Array.isArray(raw?.payload) ? raw.payload : [];
+ if (items.length === 0 || !items[0]?.imageUri) {
+ return json({ imageUrl: null, frames: [], degraded: true, reason: 'No recent image for this camera' });
+ }
+ // Frames are oldest → newest for natural timelapse playback.
+ const frames = items
+ .filter((it) => typeof it?.imageUri === 'string')
+ .map((it) => ({ imageUrl: it.imageUri, imageDatetime: it.imageDatetime }))
+ .reverse();
  return json({
- imageUrl: item.imageUri,
- imageDatetime: item.imageDatetime,
+ imageUrl: items[0].imageUri,            // back-compat: latest single image
+ imageDatetime: items[0].imageDatetime,  // back-compat
+ frames,                                 // new: timelapse loop
  cameraId,
  });
  } catch (error) {
- return json({ imageUrl: null, degraded: true, reason: `image lookup failed: ${error?.message ?? error}` });
+ return json({ imageUrl: null, frames: [], degraded: true, reason: `image lookup failed: ${error?.message ?? error}` });
  }
   }
 

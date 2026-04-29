@@ -11,6 +11,13 @@ export class FAAWeatherCamsPanel extends Panel {
   private alertOnly = false;
   private selectedCam: ScoredFAACamera | null = null;
   private digestText: string | null = null;
+  // Timelapse / "video" playback state — frames pulled lazily when
+  // user clicks Play loop on the selected camera. Frames are
+  // ordered oldest → newest so we can step forward through them.
+  private loopFrames: { imageUrl: string; imageDatetime?: string }[] = [];
+  private loopIndex = 0;
+  private loopTimer: ReturnType<typeof setInterval> | null = null;
+  private loopCameraId: string | null = null;
 
   constructor() {
  super({ id: 'faa-weather-cams', title: 'FAA Weather Cams', className: 'panel-wide' });
@@ -117,7 +124,18 @@ export class FAAWeatherCamsPanel extends Panel {
  for (const td of [tdName, tdLoc, tdAlert, tdScore, tdTime]) tr.append(td);
 
  tr.addEventListener('click', () => {
- this.selectedCam = this.selectedCam?.id === cam.id ? null : cam;
+ const newSelection = this.selectedCam?.id === cam.id ? null : cam;
+ // Pause any running loop when the user changes selection /
+ // closes the viewer. Reset frames so a fresh selection starts
+ // from a clean state.
+ const newSelectionId = newSelection ? newSelection.id : null;
+ if (newSelectionId !== this.loopCameraId) {
+ this._pauseLoop();
+ this.loopCameraId = null;
+ this.loopFrames = [];
+ this.loopIndex = 0;
+ }
+ this.selectedCam = newSelection;
  // The sidecar returns imageUrl='/api/faa-camera-image?...' as a
  // resolver pointer, not a direct CDN URL. Lazy-resolve here so
  // each click only spends one upstream call (the 927-camera
@@ -165,10 +183,48 @@ export class FAAWeatherCamsPanel extends Panel {
 
  const img = document.createElement('img');
  img.className = 'faa-cam-image';
+ // When the loop is playing for this camera, src is the current
+ // frame; otherwise it's the latest single image with a cache
+ // buster so reopening the panel shows fresh data.
+ if (this.loopCameraId === cam.id && this.loopFrames.length > 0) {
+ const frame = this.loopFrames[this.loopIndex];
+ if (frame) img.src = frame.imageUrl;
+ } else {
  const epoch = new Date(cam.lastUpdated).getTime();
  img.src = `${cam.imageUrl}${cam.imageUrl.includes('?') ? '&' : '?'}t=${epoch}`;
+ }
  img.alt = cam.name;
  img.loading = 'lazy';
+
+ // Frame indicator (shown only while a loop is playing).
+ const frameLabel = document.createElement('div');
+ frameLabel.className = 'faa-cam-frame-label';
+ if (this.loopCameraId === cam.id && this.loopFrames.length > 0) {
+ const total = this.loopFrames.length;
+ const frame = this.loopFrames[this.loopIndex];
+ const ts = frame?.imageDatetime ? new Date(frame.imageDatetime).toLocaleTimeString() : '';
+ frameLabel.textContent = `Frame ${this.loopIndex + 1} / ${total}${ts ? ' · ' + ts : ''}`;
+ }
+
+ // Controls row: Play loop / Pause + Analyze conditions.
+ const controls = document.createElement('div');
+ controls.className = 'faa-cam-controls';
+
+ const loopBtn = document.createElement('button');
+ loopBtn.className = 'faa-loop-btn';
+ const isPlayingThisCam = this.loopCameraId === cam.id && this.loopTimer !== null;
+ const hasPausedLoopForThisCam = this.loopCameraId === cam.id && this.loopFrames.length > 0;
+ if (isPlayingThisCam) {
+ loopBtn.textContent = '⏸ Pause loop';
+ } else if (hasPausedLoopForThisCam) {
+ loopBtn.textContent = '▶ Resume loop';
+ } else {
+ loopBtn.textContent = '▶ Play recent loop';
+ }
+ loopBtn.addEventListener('click', () => {
+ if (isPlayingThisCam) this._pauseLoop();
+ else void this._playLoop(cam);
+ });
 
  const analyzeBtn = document.createElement('button');
  analyzeBtn.className = 'faa-analyze-btn';
@@ -176,10 +232,72 @@ export class FAAWeatherCamsPanel extends Panel {
  analyzeBtn.disabled = !!cam.aiConditions;
  analyzeBtn.addEventListener('click', () => { void this._analyzeCamera(cam, analyzeBtn); });
 
+ controls.append(loopBtn);
+ controls.append(analyzeBtn);
+
  div.append(header);
  div.append(img);
- div.append(analyzeBtn);
+ if (frameLabel.textContent) div.append(frameLabel);
+ div.append(controls);
  return div;
+  }
+
+  /** Fetch the last 12 frames for the camera and start a 1-second
+   *  cycle through them. Reuses already-loaded frames if the user
+   *  clicks Play / Pause / Play. */
+  private async _playLoop(cam: ScoredFAACamera): Promise<void> {
+ // Different camera → reset state.
+ if (this.loopCameraId !== cam.id) {
+ this._pauseLoop();
+ this.loopFrames = [];
+ this.loopIndex = 0;
+ this.loopCameraId = cam.id;
+ }
+ // Lazy-fetch frames the first time.
+ if (this.loopFrames.length === 0) {
+ try {
+ // Strip leading `/api/` and the resolver pointer so we hit
+ // the count=12 path against the canonical sidecar route.
+ const url = `${getApiBaseUrl()}/api/faa-camera-image?cameraId=${encodeURIComponent(cam.id)}&count=12`;
+ const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+ if (!res.ok) throw new Error(`HTTP ${res.status}`);
+ const data = await res.json() as {
+ frames?: { imageUrl: string; imageDatetime?: string }[];
+ imageUrl?: string;
+ degraded?: boolean;
+ reason?: string;
+ };
+ if (data.degraded || !data.frames || data.frames.length === 0) {
+ // Fall back to the single latest image — at least the user
+ // sees something change rather than a silent no-op.
+ if (data.imageUrl) {
+ this.loopFrames = [{ imageUrl: data.imageUrl }];
+ } else {
+ return;
+ }
+ } else {
+ this.loopFrames = data.frames;
+ }
+ } catch {
+ return;
+ }
+ }
+ this.loopIndex = 0;
+ this.render();
+ // 1-second cadence works well for FAA's typical 5-min image
+ // interval — 12 frames cover roughly an hour.
+ this.loopTimer = setInterval(() => {
+ if (this.loopFrames.length === 0) return;
+ this.loopIndex = (this.loopIndex + 1) % this.loopFrames.length;
+ this.render();
+ }, 1000);
+  }
+
+  private _pauseLoop(): void {
+ if (this.loopTimer !== null) {
+ clearInterval(this.loopTimer);
+ this.loopTimer = null;
+ }
   }
 
   private async _analyzeCamera(cam: ScoredFAACamera, btn: HTMLButtonElement): Promise<void> {

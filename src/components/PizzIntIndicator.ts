@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional */
 import type { PizzIntStatus, GdeltTensionPair } from '@/types';
 import { t } from '@/services/i18n';
 import { h, replaceChildren } from '@/utils/dom-utils';
@@ -135,8 +136,14 @@ export class PizzIntIndicator {
  return `${t('components.pizzint.statusQuiet')} ${loc.current_popularity}%`;
   }
 
-  private formatTimeAgo(date: Date): string {
- const diff = Date.now() - date.getTime();
+  private formatTimeAgo(date: Date | string | number | undefined): string {
+ // Defensive — the persisted-cache layer JSON-serializes `lastUpdate`
+ // and rehydrates it as an ISO string, not a Date instance. Calling
+ // .getTime() on a string used to throw and break the entire PizzInt
+ // indicator render path (load failed -> indicator never shown).
+ const ms = toEpochMs(date);
+ if (!Number.isFinite(ms)) return t('components.pizzint.justNow');
+ const diff = Date.now() - ms;
  if (diff < 60_000) return t('components.pizzint.justNow');
  if (diff < 3_600_000) return t('components.pizzint.minutesAgo', { m: String(Math.floor(diff / 60_000)) });
  return t('components.pizzint.hoursAgo', { h: String(Math.floor(diff / 3_600_000)) });
@@ -159,4 +166,13 @@ export class PizzIntIndicator {
   public show(): void {
  this.element.style.display = '';
   }
+}
+
+/** Defensively coerce a Date | ISO-string | epoch-ms to epoch ms.
+ *  Returns NaN for any other input so the caller can fall back. */
+function toEpochMs(value: Date | string | number | undefined | null): number {
+  if (!value) return Number.NaN;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  return Date.parse(String(value));
 }

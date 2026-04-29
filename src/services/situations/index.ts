@@ -87,3 +87,15 @@ export {
   detectCompoundThreats,
   DEFAULT_CASCADE_PATHS,
 } from './compound-threat';
+
+// ── Phase 6: After-Action + Self-Learning ────────────────────────────────
+export type {
+  GroundTruthObservation,
+  AfterActionInput,
+  AfterActionReport,
+  AfterActionRecommendation,
+} from './after-action';
+export {
+  reviewSituation,
+  applyAfterActionReview,
+} from './after-action';

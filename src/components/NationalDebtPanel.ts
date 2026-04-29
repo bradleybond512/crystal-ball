@@ -25,7 +25,8 @@ function debtColor(pct: number): string {
 }
 
 export class NationalDebtPanel extends Panel {
-  private static readonly UNAVAILABLE_MESSAGE = 'National debt data unavailable right now';
+  private static readonly UNAVAILABLE_MESSAGE =
+    'National debt data unavailable. Source: World Bank (free, no key needed) — likely the upstream API is unreachable. Will retry on the next refresh.';
   private data: NationalDebtResponse | null = null;
   private sortAsc = false;
 

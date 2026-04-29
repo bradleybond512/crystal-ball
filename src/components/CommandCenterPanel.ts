@@ -9,15 +9,14 @@
 
 import { Panel } from './Panel';
 import {
-  getPanelHealthRegistry,
   getFeatureHealthRegistry,
-  getNotificationTraceRegistry,
   getFeedSentinels,
 } from '@/services/diagnostics/diagnostics-state';
 import {
   aggregateSystemHealth,
   contextFromSnapshots,
 } from '@/services/diagnostics/system-health';
+import { getLiveDiagnosticsSnapshot } from '@/services/diagnostics/live-diagnostics-snapshot';
 import { auditFeeds } from '@/services/diagnostics/sentinel-feed-audit';
 import {
   getActiveActionBrief,
@@ -99,28 +98,28 @@ export class CommandCenterPanel extends Panel {
   }
 
   private buildHtml(): string {
-    const panelReg = getPanelHealthRegistry();
+    // Pull live source/provider/sidecar/feed state instead of the empty
+    // arrays + hard-coded unknown sidecar that used to drive this panel.
+    const snapshot = getLiveDiagnosticsSnapshot();
     const featureReg = getFeatureHealthRegistry();
-    const notifReg = getNotificationTraceRegistry();
     const sentinels = getFeedSentinels();
 
-    const panels = panelReg.all();
-    const ctx = contextFromSnapshots({ panels, sources: [], providers: [] });
+    const panels = snapshot.panels;
+    const ctx = contextFromSnapshots({
+      panels,
+      sources: snapshot.sources,
+      providers: snapshot.providers,
+    });
     const features = featureReg.all(ctx);
-    const sidecar = {
-      status: 'unknown' as HealthStatus,
-      authenticated: false,
-      reason: 'Sidecar adapter not wired into Command Center yet.',
-    };
     const report = aggregateSystemHealth({
       panels,
       features,
-      sources: [],
-      providers: [],
-      notifications: notifReg.summary(),
-      sidecar,
+      sources: snapshot.sources,
+      providers: snapshot.providers,
+      notifications: snapshot.notificationSummary,
+      sidecar: snapshot.sidecar,
     });
-    const feedAudit = auditFeeds({ sentinels, snapshots: [] });
+    const feedAudit = auditFeeds({ sentinels, snapshots: snapshot.feedSnapshots });
 
     const concerning = features
       .filter((f) => f.status !== 'healthy' && f.status !== 'unknown')

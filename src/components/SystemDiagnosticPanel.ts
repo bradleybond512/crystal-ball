@@ -24,6 +24,7 @@ import {
   contextFromSnapshots,
 } from '@/services/diagnostics/system-health';
 import { getLiveDiagnosticsSnapshot } from '@/services/diagnostics/live-diagnostics-snapshot';
+import { getActiveQualityDebt } from '@/services/quality/quality-debt-state';
 import {
   auditFeeds,
   type FeedAuditEntry,
@@ -42,7 +43,7 @@ import { escapeHtml } from '@/utils/sanitize';
 
 const REFRESH_MS = 5000;
 
-type Tab = 'overview' | 'features' | 'panels' | 'notifications' | 'feeds' | 'self_test';
+type Tab = 'overview' | 'features' | 'panels' | 'notifications' | 'feeds' | 'quality_debt' | 'self_test';
 
 const STATUS_COLOR: Record<HealthStatus, string> = {
   healthy: '#4caf50',
@@ -172,6 +173,7 @@ export class SystemDiagnosticPanel extends Panel {
       { id: 'panels', label: 'Panels' },
       { id: 'notifications', label: 'Notifications' },
       { id: 'feeds', label: 'Feeds' },
+      { id: 'quality_debt', label: 'Quality Debt' },
       { id: 'self_test', label: 'Self-Test' },
     ];
     return `<div class="syd-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border-subtle,#333);">
@@ -199,10 +201,45 @@ export class SystemDiagnosticPanel extends Panel {
       case 'feeds': {
         return this.renderFeeds(ctx);
       }
+      case 'quality_debt': {
+        return this.renderQualityDebt();
+      }
       case 'self_test': {
         return this.renderSelfTest();
       }
     }
+  }
+
+  private renderQualityDebt(): string {
+    const debt = getActiveQualityDebt();
+    if (debt.length === 0) {
+      return `<div style="padding:12px;color:var(--text-secondary,#aaa);font-size:12px;">No active quality debt — diagnostics surface is clean.</div>`;
+    }
+    const SEV_COLOR: Record<string, string> = {
+      critical: '#d50000',
+      high: '#f44336',
+      medium: '#ff9800',
+      low: '#9e9e9e',
+    };
+    const rows = debt.slice(0, 25).map((d) => {
+      const color = SEV_COLOR[d.severity] ?? '#9e9e9e';
+      return `<div style="border-left:3px solid ${color};padding:6px 10px;margin-bottom:6px;background:rgba(255,255,255,0.02);">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;">
+          <strong>${escapeHtml(d.category)}</strong>
+          <span style="color:${color};text-transform:uppercase;font-size:9px;letter-spacing:0.05em;">${escapeHtml(d.severity)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:3px;">${escapeHtml(d.impact)}</div>
+        ${d.recommendedFix ? `<div style="font-size:11px;color:#4a9eff;margin-top:3px;">→ ${escapeHtml(d.recommendedFix)}</div>` : ''}
+        <div style="font-size:10px;color:var(--text-secondary,#888);margin-top:3px;font-family:ui-monospace,monospace;">id=${escapeHtml(d.id)} owner=${escapeHtml(d.ownerArea)}</div>
+      </div>`;
+    }).join('');
+    const more = debt.length > 25
+      ? `<div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:8px;">+ ${debt.length - 25} more not shown.</div>`
+      : '';
+    return `<div style="padding:12px;">
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-bottom:8px;">${debt.length} active item(s) · sorted by impact</div>
+      ${rows}${more}
+    </div>`;
   }
 
   private renderOverview(ctx: DiagnosticContext): string {

@@ -18,7 +18,13 @@ import {
   type AlgorithmHealthStatus,
 } from '@/services/algorithms/algorithm-health';
 import { summarizeCalibration } from '@/services/algorithms/algorithm-evaluation-ledger';
-import { proposeAdjustments, type AdjustmentProposal } from '@/services/algorithms/safe-adjustment';
+import { proposeAdjustments } from '@/services/algorithms/safe-adjustment';
+import {
+  gateAdjustmentProposal,
+  type GatedProposal,
+} from '@/services/governance/policy-gate';
+import type { AlgorithmDefinition as HealthAlgorithmDefinition } from '@/services/algorithms/algorithm-health';
+import type { PolicyDecision } from '@/services/governance/policy-engine';
 import { escapeHtml } from '@/utils/sanitize';
 
 const REFRESH_MS = 15_000;
@@ -29,6 +35,40 @@ const STATUS_COLOR: Record<AlgorithmHealthStatus, string> = {
   failing: '#f44336',
   unsafe: '#d50000',
   unknown: '#9e9e9e',
+};
+
+interface PolicyVerdictDisplay {
+  label: string;
+  color: string;
+  background: string;
+  helper: string;
+}
+
+const POLICY_DISPLAY: Record<PolicyDecision, PolicyVerdictDisplay> = {
+  allow_auto: {
+    label: 'Allowed automatically',
+    color: '#4caf50',
+    background: 'rgba(76,175,80,0.10)',
+    helper: 'Policy gate cleared this proposal for local auto-apply.',
+  },
+  require_user_approval: {
+    label: 'Needs user approval',
+    color: '#ffb74d',
+    background: 'rgba(255,183,77,0.10)',
+    helper: 'Policy gate withholds auto-apply until you approve in-app.',
+  },
+  require_pr_review: {
+    label: 'Needs PR review',
+    color: '#4a9eff',
+    background: 'rgba(74,158,255,0.10)',
+    helper: 'Promotion / provider-config requires a PR with cross-agent review.',
+  },
+  deny: {
+    label: 'Denied',
+    color: '#f44336',
+    background: 'rgba(244,67,54,0.10)',
+    helper: 'Safety-critical or fact-assertion change — never auto-applied.',
+  },
 };
 
 export class AlgorithmDiagnosticPanel extends Panel {
@@ -64,8 +104,32 @@ export class AlgorithmDiagnosticPanel extends Panel {
     const calibrations = summarizeCalibration(ledger.all());
     const report = aggregateAlgorithmHealth({ definitions, calibrations });
     const proposals = proposeAdjustments({ reports: [...report.algorithms], tunings: [] });
-    const proposalsById = new Map<string, AdjustmentProposal>();
-    for (const p of proposals) proposalsById.set(p.algorithmId, p);
+    const definitionsById = new Map<string, HealthAlgorithmDefinition>();
+    for (const d of definitions) definitionsById.set(d.algorithmId, d);
+    // Gate every proposal through the policy engine so the UI never
+    // implies a proposal is auto-applyable when policy says otherwise.
+    // Algorithms missing from the registry fail closed via policy-gate
+    // (require_user_approval).
+    const gatedById = new Map<string, GatedProposal>();
+    for (const p of proposals) {
+      const def = definitionsById.get(p.algorithmId);
+      const cal = report.algorithms.find((a) => a.algorithmId === p.algorithmId)?.calibration;
+      const gated = gateAdjustmentProposal({
+        proposal: p,
+        algorithm: def
+          // Policy-gate's GateInput.algorithm uses the registry's
+          // 'id' field; the health definition uses 'algorithmId'.
+          // Adapt by constructing the picked shape directly.
+          ? { id: def.algorithmId, criticality: def.criticality, domain: def.domain }
+          : undefined,
+        evidenceCount: cal?.graded ?? 0,
+        // No replay/backtest harness wired into the live UI yet; treat
+        // both as missing evidence so the gate stays conservative.
+        replayPassed: false,
+        backtestPassed: false,
+      });
+      gatedById.set(p.algorithmId, gated);
+    }
 
     const concerning = report.algorithms.filter((a) => a.status !== 'healthy' && a.status !== 'unknown');
     this.setCount(concerning.length);
@@ -76,7 +140,7 @@ export class AlgorithmDiagnosticPanel extends Panel {
 
     const rows = [...report.algorithms]
       .sort((a, b) => severityRank(b.status) - severityRank(a.status) || a.algorithmId.localeCompare(b.algorithmId))
-      .map((a) => this.renderRow(a, proposalsById.get(a.algorithmId)))
+      .map((a) => this.renderRow(a, gatedById.get(a.algorithmId)))
       .join('');
 
     const html = `<div style="padding:12px;display:flex;flex-direction:column;gap:12px;">
@@ -93,14 +157,14 @@ export class AlgorithmDiagnosticPanel extends Panel {
     this.setContent(html);
   }
 
-  private renderRow(a: AlgorithmHealth, proposal: AdjustmentProposal | undefined): string {
+  private renderRow(a: AlgorithmHealth, gated: GatedProposal | undefined): string {
     const color = STATUS_COLOR[a.status];
     const cal = a.calibration;
     const calStr = cal
       ? `n=${cal.graded} · hit ${(cal.hitRate * 100).toFixed(0)}% · weighted ${(cal.weightedHitRate * 100).toFixed(0)}% · ${cal.meanDurationMs.toFixed(0)} ms`
       : 'no graded samples';
     const criticalBadge = renderCriticalityBadge(a.criticality);
-    const proposalHtml = renderProposalHtml(proposal);
+    const proposalHtml = renderProposalHtml(gated);
     return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:6px;">
@@ -117,14 +181,34 @@ export class AlgorithmDiagnosticPanel extends Panel {
   }
 }
 
-function renderProposalHtml(proposal: AdjustmentProposal | undefined): string {
-  if (!proposal || proposal.verdict === 'noop' || proposal.verdict === 'no_tunable') return '';
+function renderProposalHtml(gated: GatedProposal | undefined): string {
+  if (!gated) return '';
+  const proposal = gated.proposal;
+  if (proposal.verdict === 'noop' || proposal.verdict === 'no_tunable') return '';
+
+  const display = POLICY_DISPLAY[gated.verdict.decision];
   const effect = proposal.predictedEffect
-    ? `<div style="margin-top:3px;">${escapeHtml(proposal.predictedEffect)}</div>`
+    ? `<div style="margin-top:3px;color:var(--text-secondary,#aaa);">${escapeHtml(proposal.predictedEffect)}</div>`
     : '';
-  return `<div style="font-size:11px;color:var(--accent,#4a9eff);margin-top:6px;padding:6px 8px;background:rgba(74,158,255,0.07);border-radius:3px;">
-    <strong>${escapeHtml(proposal.verdict.toUpperCase())}:</strong> ${escapeHtml(proposal.rationale)}
+  // Required-evidence list — explains *why* a proposal isn't auto-applyable.
+  const requiredHtml = gated.verdict.requiredEvidence.length === 0
+    ? ''
+    : `<div style="margin-top:6px;font-size:10px;color:var(--text-secondary,#aaa);">
+         <strong style="color:${display.color};">Required evidence:</strong>
+         <ul style="margin:2px 0 0;padding-left:16px;">
+           ${gated.verdict.requiredEvidence.map((e) => `<li>${escapeHtml(e)}</li>`).join('')}
+         </ul>
+       </div>`;
+
+  return `<div data-policy-decision="${escapeHtml(gated.verdict.decision)}" style="font-size:11px;margin-top:6px;padding:6px 8px;background:${display.background};border-radius:3px;border-left:3px solid ${display.color};">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+      <strong style="color:${display.color};">${escapeHtml(display.label)}</strong>
+      <span style="font-size:9px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(proposal.verdict)}</span>
+    </div>
+    <div style="margin-top:3px;">${escapeHtml(proposal.rationale)}</div>
     ${effect}
+    <div style="margin-top:4px;font-size:10px;color:var(--text-secondary,#aaa);font-style:italic;">${escapeHtml(display.helper)}</div>
+    ${requiredHtml}
   </div>`;
 }
 

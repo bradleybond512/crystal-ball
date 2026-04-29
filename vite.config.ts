@@ -897,7 +897,86 @@ export default defineConfig({
  return 'cesium';
  }
  }
+ // Panel chunk split — per
+ // docs/CLAUDE_FUNCTIONALITY_DIAGNOSTICS_PERFORMANCE_ROADMAP_2026-04-29.md
+ // Priority 7. The single 'panels' chunk used to hold every
+ // *Panel.ts. Split into recognizable groups so the browser can
+ // skip irrelevant chunks for variants that don't use them, and so
+ // raw chunk sizes shrink to under the 1.2 MB warning limit.
  if (id.includes('/src/components/') && id.endsWith('Panel.ts')) {
+ const file = id.split('/').pop() ?? '';
+ // Diagnostic / admin panels — heavyweight transitive imports
+ // (failure-prediction, scenarios library, policy-gate). Only
+ // mounted when the user opens the diagnostic surfaces.
+ if (
+ file.startsWith('SystemDiagnostic')
+ || file.startsWith('AlgorithmDiagnostic')
+ || file.startsWith('ApiDiagnostic')
+ || file.startsWith('CommandCenter')
+ || file.startsWith('Diagnostic')
+ || file.startsWith('DebugAnalyst')
+ || file.startsWith('Reasoning')
+ || file.startsWith('AnalystHud')
+ ) {
+ return 'panels-diagnostic';
+ }
+ // News / intel-feed panels — share GenericIntelFeed base.
+ if (
+ file.startsWith('News')
+ || file.startsWith('LiveNews')
+ || file.startsWith('Gdelt')
+ || file.startsWith('GenericIntelFeed')
+ || file.includes('Intel')
+ || file.includes('Telegram')
+ ) {
+ return 'panels-feeds';
+ }
+ // Hazards / weather / disaster panels.
+ if (
+ file.startsWith('Nws')
+ || file.startsWith('Weather')
+ || file.startsWith('Earthquake')
+ || file.startsWith('Wildfire')
+ || file.startsWith('Volcano')
+ || file.startsWith('Tsunami')
+ || file.startsWith('Tropical')
+ || file.startsWith('Pollen')
+ || file.startsWith('AirQuality')
+ || file.startsWith('FAAWeather')
+ || file.startsWith('Hazard')
+ || file.startsWith('Avalanche')
+ || file.startsWith('Climate')
+ || file.startsWith('Hazmat')
+ || file.startsWith('OilSpill')
+ || file.startsWith('TidePredictions')
+ ) {
+ return 'panels-hazards';
+ }
+ // Markets / finance panels.
+ if (
+ file.startsWith('Market')
+ || file.startsWith('Crypto')
+ || file.startsWith('Forex')
+ || file.startsWith('Bond')
+ || file.startsWith('FearGreed')
+ || file.startsWith('FuelPrices')
+ || file.startsWith('NationalDebt')
+ || file.startsWith('FdicFailures')
+ || file.startsWith('EdgarFilings')
+ || file.startsWith('Finance')
+ || file.startsWith('Polymarket')
+ || file.startsWith('Stablecoin')
+ || file.startsWith('Etf')
+ || file.startsWith('Macro')
+ || file.startsWith('Commodity')
+ || file.startsWith('Heatmap')
+ || file.startsWith('Federal')
+ || file.startsWith('Trade')
+ || file.startsWith('SupplyChain')
+ || file.startsWith('Economic')
+ ) {
+ return 'panels-markets';
+ }
  return 'panels';
  }
  // Give lazy-loaded locale chunks a recognizable prefix so the

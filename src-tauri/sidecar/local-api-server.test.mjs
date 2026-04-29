@@ -1690,3 +1690,259 @@ test('/api/faa-cam-digest — returns 400 when cameras array has fewer than 2 it
  await localApi.cleanup();
   }
 });
+
+// ── Trust-boundary tests for sensitive routes ──────────────────────────
+// docs/CLAUDE_EXTRA_BUG_SECURITY_CHECKS_2026-04-29.md Priority 1.
+// Until this PR, /api/local-env-update and /api/local-validate-secret
+// did NOT call isValidToken — any process on 127.0.0.1 could mutate
+// the running sidecar's process.env or probe stolen credentials.
+// Token check is now mandatory; the renderer already passed one.
+
+async function withSecuredSidecar(fn) {
+  const localApi = await setupApiDir({});
+  const originalToken = process.env.LOCAL_API_TOKEN;
+  process.env.LOCAL_API_TOKEN = 'security-test-token';
+  const app = await createLocalApiServer({
+ port: 0,
+ apiDir: localApi.apiDir,
+ logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+  try {
+ await fn(port, 'security-test-token');
+  } finally {
+ if (originalToken === undefined) {
+ delete process.env.LOCAL_API_TOKEN;
+ } else {
+ process.env.LOCAL_API_TOKEN = originalToken;
+ }
+ await app.close();
+ await localApi.cleanup();
+  }
+}
+
+test('rejects unauthenticated POST to /api/local-env-update', async () => {
+  await withSecuredSidecar(async (port) => {
+ const res = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ key: 'OWM_API_KEY', value: 'attacker-injected' }),
+ });
+ assert.equal(res.status, 401);
+ const body = await res.json();
+ assert.equal(body.error, 'Unauthorized');
+ // Confirm the env was NOT mutated by the unauth attempt.
+ assert.notEqual(process.env.OWM_API_KEY, 'attacker-injected');
+  });
+});
+
+test('rejects /api/local-env-update with wrong bearer token', async () => {
+  await withSecuredSidecar(async (port) => {
+ const res = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': 'Bearer wrong-token',
+ },
+ body: JSON.stringify({ key: 'OWM_API_KEY', value: 'x' }),
+ });
+ assert.equal(res.status, 401);
+  });
+});
+
+test('accepts /api/local-env-update with valid token + clears value after', async () => {
+  await withSecuredSidecar(async (port, token) => {
+ const res = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'OWM_API_KEY', value: 'legit-key-value' }),
+ });
+ assert.equal(res.status, 200);
+ const body = await res.json();
+ assert.equal(body.ok, true);
+ // Reset so we don't leak between tests.
+ await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'OWM_API_KEY', value: '' }),
+ });
+  });
+});
+
+test('rejects /api/local-env-update with malformed JSON body (after auth)', async () => {
+  await withSecuredSidecar(async (port, token) => {
+ const res = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: 'this is not json {',
+ });
+ assert.equal(res.status, 400);
+ const body = await res.json();
+ assert.equal(typeof body.error, 'string');
+ // Error must NOT echo the submitted body content.
+ assert.doesNotMatch(body.error, /this is not json/);
+  });
+});
+
+test('rejects /api/local-env-update with key outside allowlist', async () => {
+  await withSecuredSidecar(async (port, token) => {
+ const res = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'PATH', value: '/attacker/bin' }),
+ });
+ assert.equal(res.status, 403);
+ const body = await res.json();
+ assert.match(body.error, /allowlist/i);
+  });
+});
+
+test('rejects /api/local-env-update with non-POST method', async () => {
+  await withSecuredSidecar(async (port, token) => {
+ const res = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {
+ method: 'GET',
+ headers: { 'Authorization': `Bearer ${token}` },
+ });
+ assert.equal(res.status, 405);
+  });
+});
+
+test('rejects unauthenticated POST to /api/local-validate-secret', async () => {
+  await withSecuredSidecar(async (port) => {
+ const res = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ key: 'OWM_API_KEY', value: 'stolen-key-to-test' }),
+ });
+ assert.equal(res.status, 401);
+  });
+});
+
+test('rejects /api/local-validate-secret with wrong bearer token', async () => {
+  await withSecuredSidecar(async (port) => {
+ const res = await fetch(`http://127.0.0.1:${port}/api/local-validate-secret`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': 'Bearer wrong-token',
+ },
+ body: JSON.stringify({ key: 'OWM_API_KEY', value: 'x' }),
+ });
+ assert.equal(res.status, 401);
+  });
+});
+
+test('error responses on /api/local-env-update never echo submitted secret values', async () => {
+  await withSecuredSidecar(async (port, token) => {
+ const SECRET_VALUE = 'highly-sensitive-canary-12345';
+ const res = await fetch(`http://127.0.0.1:${port}/api/local-env-update`, {
+ method: 'POST',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': `Bearer ${token}`,
+ },
+ body: JSON.stringify({ key: 'NOT_AN_ALLOWED_KEY', value: SECRET_VALUE }),
+ });
+ assert.equal(res.status, 403);
+ const text = await res.text();
+ assert.doesNotMatch(text, new RegExp(SECRET_VALUE));
+  });
+});
+
+// ── SSRF regression matrix ─────────────────────────────────────────────
+// docs/CLAUDE_EXTRA_BUG_SECURITY_CHECKS_2026-04-29.md Priority 1.
+// Existing SSRF tests cover localhost + 10/8 + 172.16/12 + 192.168/16
+// + non-http + credentials. These add the corner cases the doc names:
+//   - IPv6 loopback / link-local / unique-local
+//   - IPv4-mapped IPv6 ("::ffff:127.0.0.1")
+//   - IPv4 link-local (169.254.x — AWS / cloud metadata)
+//   - IPv4 0/8 + multicast
+//   - encoded IP forms (decimal, octal, hex)
+
+async function withSidecar(fn) {
+  const localApi = await setupApiDir({});
+  const app = await createLocalApiServer({
+ port: 0,
+ apiDir: localApi.apiDir,
+ logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+  try {
+ await fn(port);
+  } finally {
+ await app.close();
+ await localApi.cleanup();
+  }
+}
+
+const SSRF_LITERAL_BLOCK_CASES = [
+  // IPv6
+  { url: 'http://[::1]/', label: 'IPv6 loopback' },
+  { url: 'http://[fe80::1]/', label: 'IPv6 link-local' },
+  { url: 'http://[fc00::1]/', label: 'IPv6 unique-local fc00::/7' },
+  { url: 'http://[fd00::1]/', label: 'IPv6 unique-local fd00::/8' },
+  // IPv4-mapped IPv6 — must reject because the v4 portion is loopback
+  { url: 'http://[::ffff:127.0.0.1]/', label: 'IPv4-mapped IPv6 loopback' },
+  { url: 'http://[::ffff:10.0.0.1]/', label: 'IPv4-mapped IPv6 private' },
+  // IPv4 ranges not in original tests
+  { url: 'http://169.254.169.254/', label: 'AWS / GCP metadata service (169.254/16)' },
+  { url: 'http://169.254.0.1/', label: 'IPv4 link-local 169.254/16' },
+  { url: 'http://0.0.0.0/', label: 'IPv4 0.0.0.0/8 (this network)' },
+  { url: 'http://224.0.0.1/', label: 'IPv4 multicast 224+' },
+];
+
+for (const { url, label } of SSRF_LITERAL_BLOCK_CASES) {
+  test(`rss-proxy SSRF blocks ${label}`, async () => {
+ await withSidecar(async (port) => {
+ const proxyUrl = `http://127.0.0.1:${port}/api/rss-proxy?url=${encodeURIComponent(url)}`;
+ const res = await authFetch(proxyUrl);
+ assert.equal(res.status, 403, `expected 403 for ${url}, got ${res.status}`);
+ });
+  });
+}
+
+test('rss-proxy SSRF blocks decimal-encoded IPv4 loopback (2130706433 = 127.0.0.1)', async () => {
+  await withSidecar(async (port) => {
+ // Node URL parses "http://2130706433/" with hostname "2130706433".
+ // That doesn't match isPrivateIP's dotted-quad regex, so it relies
+ // on DNS to resolve it — which on most networks returns NXDOMAIN
+ // because it isn't a registered name. The expected outcome is
+ // "DNS resolution failed" → 403, NOT a successful fetch to 127.0.0.1.
+ const url = 'http://2130706433/';
+ const proxyUrl = `http://127.0.0.1:${port}/api/rss-proxy?url=${encodeURIComponent(url)}`;
+ const res = await authFetch(proxyUrl);
+ assert.equal(res.status, 403, `expected 403 for ${url}, got ${res.status}`);
+  });
+});
+
+test('rss-proxy SSRF blocks userinfo even when host is public-looking', async () => {
+  await withSidecar(async (port) => {
+ const url = 'http://attacker:password@example.com/';
+ const proxyUrl = `http://127.0.0.1:${port}/api/rss-proxy?url=${encodeURIComponent(url)}`;
+ const res = await authFetch(proxyUrl);
+ assert.equal(res.status, 403);
+ const body = await res.json();
+ assert.match(body.error, /credentials/i);
+  });
+});
+
+test('rss-proxy SSRF blocks file:// protocol', async () => {
+  await withSidecar(async (port) => {
+ const url = 'file:///etc/passwd';
+ const proxyUrl = `http://127.0.0.1:${port}/api/rss-proxy?url=${encodeURIComponent(url)}`;
+ const res = await authFetch(proxyUrl);
+ assert.equal(res.status, 403);
+  });
+});

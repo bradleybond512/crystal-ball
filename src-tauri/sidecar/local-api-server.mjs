@@ -5485,6 +5485,12 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   if (requestUrl.pathname === '/api/local-env-update') {
+ // Require bearer auth — these handlers mutate process.env and so
+ // must not be reachable from any other process on 127.0.0.1.
+ // Renderer already sends the token via runtime-config.ts.
+ if (!isValidToken(req.headers['authorization'] || '')) {
+ return json({ error: 'Unauthorized' }, 401);
+ }
  if (req.method === 'POST') {
  const body = await readBody(req);
  if (body) {
@@ -5513,6 +5519,12 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   if (requestUrl.pathname === '/api/local-validate-secret') {
+ // Require bearer auth — this handler probes credentials against
+ // upstream providers, which a malicious local process could abuse
+ // to test stolen API keys without the user noticing.
+ if (!isValidToken(req.headers['authorization'] || '')) {
+ return json({ error: 'Unauthorized' }, 401);
+ }
  if (req.method !== 'POST') {
  return json({ error: 'POST required' }, 405);
  }

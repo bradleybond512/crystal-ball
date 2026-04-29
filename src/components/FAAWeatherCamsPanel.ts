@@ -253,12 +253,23 @@ export class FAAWeatherCamsPanel extends Panel {
   }
 
   public setDisasterMode(active: boolean, disasterCameras?: ScoredFAACamera[]): void {
- if (active && disasterCameras) {
- this.cameras = disasterCameras;
+ // Disaster-mode flips the alert-only filter on/off. It does NOT
+ // overwrite this.cameras with just the disaster subset — that
+ // used to leave the panel showing nothing when no severe weather
+ // / GDACS events were active. The panel always loads the full
+ // camera list and uses `alertOnly` to filter at render time.
+ if (active && disasterCameras && disasterCameras.length > 0) {
+ // Merge: keep the existing full list + ensure the disaster
+ // subset is included with up-to-date alert proximity scores.
+ const byId = new Map(this.cameras.map((c) => [c.id, c]));
+ for (const cam of disasterCameras) byId.set(cam.id, cam);
+ this.cameras = [...byId.values()];
  this.alertOnly = true;
- } else if (!active) {
+ } else {
+ // Either disaster mode is off, or active without any proximate
+ // cameras — show the full list. Lazy-load if we don't have it yet.
  this.alertOnly = false;
- void this.load();
+ if (this.cameras.length === 0) void this.load();
  }
  this.render();
   }

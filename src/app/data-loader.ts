@@ -383,9 +383,14 @@ export class DataLoaderManager implements AppModule {
  if (detail) unifiedAlertStore.ingest([normalizeResourceAlert(detail)]);
  });
 
- // Disaster-proximate FAA cameras — formerly gated on disaster mode entry,
- // now loaded unconditionally once at startup so the user always has the
- // most-active camera set. Re-runs are unnecessary (mode triggers removed).
+ // Disaster-proximate FAA cameras — informs the panel's disaster
+ // mode badge so cameras near severe weather are highlighted, but
+ // does NOT touch the map's camera layer. The full
+ // `loadFAACameras()` task already populates the map with every
+ // scored camera; overwriting it here used to clear the map down
+ // to the disaster subset (or to [] when no severe disasters were
+ // active), which is why FAA cams disappeared from the map at
+ // startup.
  void (async () => {
  try {
  const [raw, nwsResult, gdacsResult] = await Promise.all([
@@ -394,7 +399,7 @@ export class DataLoaderManager implements AppModule {
  withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000),
  ]);
  const proximate = getDisasterProximateCameras(raw, nwsResult.data, gdacsResult.data);
- this.ctx.map?.setFAACameras(proximate);
+ // Panel-side disaster badge only — map keeps the full set.
  (this.ctx.panels['faa-weather-cams'] as FAAWeatherCamsPanel | undefined)?.setDisasterMode(true, proximate);
  } catch { /* non-critical */ }
  })();

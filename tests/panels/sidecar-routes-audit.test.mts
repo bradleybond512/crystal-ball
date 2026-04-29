@@ -193,14 +193,56 @@ test('sidecar routes — collected', () => {
 
 test('sidecar routes — report', () => {
   writeReport();
-   
+
   console.log(`\nSidecar audit: ${rendererRoutes.size} renderer call sites, ${sidecarRoutes.size} sidecar handlers, ${dangling.length} dangling, ${orphaned.length} orphan.`);
   if (dangling.length > 0) {
-     
+
     console.log('First 10 dangling:');
     for (const d of dangling.slice(0, 10)) {
-       
+
       console.log(`  ${d.route}  <-  ${d.callers[0]}`);
     }
+  }
+});
+
+// Plan: docs/CLAUDE_FUNCTIONALITY_DIAGNOSTICS_PERFORMANCE_ROADMAP_2026-04-29.md
+// Priority 10. Each sidecar-only route must be classified into the
+// allowlist (intentionalInternal / futureUi / deprecated) before this
+// test passes. New unclassified sidecar-only routes fail the test —
+// this stops dead-code accretion and forces an explicit decision.
+test('sidecar routes — every sidecar-only route is classified', () => {
+  const allowlistPath = path.join(projectRoot, 'tests', 'panels', 'sidecar-routes-allowlist.json');
+  let allowlist: { intentionalInternal?: string[]; futureUi?: string[]; deprecated?: string[] };
+  try {
+    allowlist = JSON.parse(readFileSync(allowlistPath, 'utf8'));
+  } catch (error) {
+    throw new Error(
+      `sidecar-routes-allowlist.json missing or unreadable: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  const classified = new Set<string>([
+    ...(allowlist.intentionalInternal ?? []),
+    ...(allowlist.futureUi ?? []),
+    ...(allowlist.deprecated ?? []),
+  ]);
+  const unclassified = orphaned.filter((r) => !classified.has(r));
+  if (unclassified.length > 0) {
+    throw new Error(
+      `Sidecar-only routes not classified in tests/panels/sidecar-routes-allowlist.json:\n  ${unclassified.join('\n  ')}\n` +
+        `Add each to intentionalInternal / futureUi / deprecated.`,
+    );
+  }
+  // Also flag entries in the allowlist that are no longer sidecar-only
+  // (route was deleted OR a renderer caller was added) so the list
+  // doesn't accrete stale entries.
+  const stillOrphan = new Set(orphaned);
+  const stale = [...classified].filter((r) => !stillOrphan.has(r));
+  if (stale.length > 0) {
+
+    console.log(`\n[allowlist] ${stale.length} stale entr${stale.length === 1 ? 'y' : 'ies'} in sidecar-routes-allowlist.json (route no longer sidecar-only):`);
+    for (const r of stale)
+      console.log(`  ${r}`);
   }
 });

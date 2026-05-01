@@ -52,6 +52,7 @@ const DEFAULT_ALT = 2_500_000;
 const LAYER_WEIGHTS: Record<string, number> = {
   // High-priority threat signals
   airstrikes: 3,
+  'strike-packages': 2.5,
   conflicts: 2.5,
   military: 2.2,
   // Disasters
@@ -66,7 +67,9 @@ const LAYER_WEIGHTS: Record<string, number> = {
   fires: 1.5,
   gpsJamming: 1.5,
   hotspots: 1.5,
+  lightningStrikes: 1.5,
   protests: 1.5,
+  redFlagWarnings: 1.5,
   weather: 1.2,
   // Background activity
   flights: 1,
@@ -76,6 +79,14 @@ const LAYER_WEIGHTS: Record<string, number> = {
   satellites: 1,
   disease: 1,
   displacement: 1,
+  bases: 1,
+  cables: 1,
+  spaceports: 1,
+  waterways: 1,
+  // Lower-priority static reference layers
+  minerals: 0.8,
+  weatherRadar: 0.6,
+  weatherSatellite: 0.6,
 };
 
 /** Future power-reduction levels. See {@link AutoFollowEngine.setPowerMode}. */

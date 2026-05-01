@@ -232,7 +232,14 @@ export class Globe4DManager {
     const viewer = this.deps.viewer;
     const dataManager = this.deps.dataManager;
     if (!viewer || !dataManager) return;
-    this.trails = new GlobeTrails(viewer, dataManager);
+    // Drive the trail cutoff from the time machine so trails stay visible
+    // during historical scrubbing instead of disappearing when their timestamps
+    // fall outside (Date.now() - windowMs).
+    const timeMachine = this.deps.timeMachine;
+    const getPlaybackTime = timeMachine
+      ? () => timeMachine.getCurrentMs()
+      : () => Date.now();
+    this.trails = new GlobeTrails(viewer, dataManager, getPlaybackTime);
     this.trails.mount();
     this.pillars = new GlobePillars(viewer, dataManager);
     this.pillars.mount();

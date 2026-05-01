@@ -819,11 +819,28 @@ function readEnvSecret(key: RuntimeSecretKey): string {
   return typeof envValue === 'string' ? envValue.trim() : '';
 }
 
+/**
+ * Pick-list copy: only keys present in {@link defaultToggles} are accepted.
+ * Prevents prototype pollution via `__proto__` / `constructor` keys in
+ * attacker-controlled localStorage values.
+ */
+function pickKnownToggles(
+  raw: unknown,
+): Partial<Record<RuntimeFeatureId, boolean>> {
+  if (!raw || typeof raw !== 'object') return {};
+  const out: Partial<Record<RuntimeFeatureId, boolean>> = {};
+  for (const key of Object.keys(defaultToggles) as RuntimeFeatureId[]) {
+ const value = (raw as Record<string, unknown>)[key];
+ if (typeof value === 'boolean') out[key] = value;
+  }
+  return out;
+}
+
 function readStoredToggles(): Record<RuntimeFeatureId, boolean> {
   try {
  const stored = localStorage.getItem(TOGGLES_STORAGE_KEY);
  if (!stored) return { ...defaultToggles };
- const parsed = JSON.parse(stored) as Partial<Record<RuntimeFeatureId, boolean>>;
+ const parsed = pickKnownToggles(JSON.parse(stored));
  return { ...defaultToggles, ...parsed };
   } catch {
  return { ...defaultToggles };
@@ -956,7 +973,7 @@ if (typeof window !== 'undefined') {
  void loadDesktopSecrets();
  } else if (e.key === TOGGLES_STORAGE_KEY && e.newValue) {
  try {
- const parsed = JSON.parse(e.newValue) as Partial<Record<RuntimeFeatureId, boolean>>;
+ const parsed = pickKnownToggles(JSON.parse(e.newValue));
  Object.assign(runtimeConfig.featureToggles, parsed);
  notifyConfigChanged();
  } catch { /* ignore malformed JSON */ }

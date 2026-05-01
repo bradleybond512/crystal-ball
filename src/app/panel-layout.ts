@@ -227,6 +227,7 @@ import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
 import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
 import { SatelliteChangePanel } from '@/components/SatelliteChangePanel';
+import { SatelliteIntelPanel } from '@/components/SatelliteIntelPanel';
 import { EconomicStressPanel } from '@/components/EconomicStressPanel';
 import { FederalRegisterPanel } from '@/components/FederalRegisterPanel';
 import { NuclearRiskPanel } from '@/components/NuclearRiskPanel';
@@ -1198,6 +1199,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['cascade-simulator'] = new CascadeSimulatorPanel();
  this.ctx.panels['emergency-broadcast'] = new EmergencyBroadcastPanel();
  this.ctx.panels['satellite-change'] = new SatelliteChangePanel();
+ this.ctx.panels['satellite-intel'] = new SatelliteIntelPanel();
 
  // Weather upgrade panels
  this.ctx.panels['extended-forecast'] = new ExtendedForecastPanel();

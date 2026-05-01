@@ -3,6 +3,7 @@
 // All sources are free and require no API key.
 
 import { getApiBaseUrl } from '@/services/runtime';
+import { iso3ToIso2Code, nameToCountryCode } from '@/services/country-geometry';
 
 // ── Nextstrain variant frequency ─────────────────────────────────────────────
 
@@ -244,6 +245,55 @@ function extractCountry(title: string): string {
 }
 
 // ── Derived helpers ───────────────────────────────────────────────────────────
+
+function coordsFromIso2(iso2: string, countries: CovidCountry[]): [number, number] | null {
+  const m = countries.find(c => c.iso2 === iso2.toUpperCase());
+  if (!m || (m.lat === 0 && m.lon === 0)) return null;
+  return [m.lat, m.lon];
+}
+
+function coordsFromNameFold(name: string, countries: CovidCountry[]): [number, number] | null {
+  const needle = name.toLowerCase();
+  let match = countries.find(c => c.country.toLowerCase() === needle);
+  match ??= countries.find(c => {
+ const hay = c.country.toLowerCase();
+ return hay.startsWith(needle.slice(0, 5)) || needle.startsWith(hay.slice(0, 5));
+  });
+  if (!match || (match.lat === 0 && match.lon === 0)) return null;
+  return [match.lat, match.lon];
+}
+
+// Resolve an outbreak's country to lat/lon in the disease.sh country list.
+// Priority order:
+//   1. ISO3 → ISO2 lookup (most reliable, used by ReliefWeb EpidemicEvent)
+//   2. Country-geometry name → ISO2 lookup (handles aliases like "DR Congo")
+//   3. Exact case-insensitive name match, then 5-char prefix fold (legacy
+//      fallback for WhoDonAlert entries that only have a parsed name).
+export function resolveOutbreakCoords(
+  name: string,
+  countries: CovidCountry[],
+  iso3?: string,
+): [number, number] | null {
+  if (iso3 && /^[A-Z]{3}$/i.test(iso3.trim())) {
+ const iso2 = iso3ToIso2Code(iso3);
+ if (iso2) {
+ const fromIso = coordsFromIso2(iso2, countries);
+ if (fromIso) return fromIso;
+ }
+  }
+
+  const trimmed = name.trim();
+  if (trimmed.length > 0) {
+ const aliasIso2 = nameToCountryCode(trimmed);
+ if (aliasIso2) {
+ const fromAlias = coordsFromIso2(aliasIso2, countries);
+ if (fromAlias) return fromAlias;
+ }
+ return coordsFromNameFold(trimmed, countries);
+  }
+
+  return null;
+}
 
 export function getGlobalVariants(data: DiseaseIntelData): NextstrainClade[] {
   const global = data.variants.find(v => v.location.toLowerCase() === 'global');

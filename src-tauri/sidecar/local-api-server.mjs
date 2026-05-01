@@ -6844,14 +6844,51 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!r.ok) throw new Error(`OpenSky HTTP ${r.status}`);
  const data = await r.json();
  const MILITARY_SQUAWKS = new Set(['7700', '7600', '7500']);
- const MILITARY_ICAO_PREFIXES = ['ae', 'a9', '43', '47', '48', '4b', '4c'];
+ // Verified country-tagged ICAO 24-bit hex ranges (ads-b.nl/icao.php).
+ // Each range: [startHex, endHex]. Inclusive on both ends.
+ const MILITARY_HEX_RANGES = [
+ ['ADF7C7', 'ADF7CF'], ['AE0000', 'AFFFFF'], ['A00000', 'A3FFFF'], // USA
+ ['43C000', '43CFFF'],                                              // UK
+ ['3A0000', '3AFFFF'], ['3B0000', '3BFFFF'],                        // France
+ ['3F0000', '3FFFFF'],                                              // Germany
+ ['738000', '73FFFF'],                                              // Israel
+ ['4D0000', '4D03FF'],                                              // NATO AWACS
+ ['300000', '33FFFF'],                                              // Italy
+ ['340000', '37FFFF'],                                              // Spain
+ ['480000', '480FFF'],                                              // Netherlands
+ ['4BA000', '4BCFFF'],                                              // Turkey
+ ['710000', '717FFF'],                                              // Saudi Arabia
+ ['896000', '896FFF'],                                              // UAE
+ ['06A000', '06AFFF'],                                              // Qatar
+ ['706000', '706FFF'],                                              // Kuwait
+ ['840000', '87FFFF'],                                              // Japan
+ ['718000', '71FFFF'],                                              // South Korea
+ ['7CF800', '7CFFFF'],                                              // Australia
+ ['C00000', 'C0FFFF'],                                              // Canada
+ ['800000', '83FFFF'],                                              // India
+ ['760000', '767FFF'],                                              // Pakistan
+ ['500000', '5003FF'],                                              // Egypt
+ ['488000', '48FFFF'],                                              // Poland
+ ['468000', '46FFFF'],                                              // Greece
+ ['4A8000', '4AFFFF'],                                              // Sweden
+ ['478000', '47FFFF'],                                              // Norway
+ ['768000', '76FFFF'],                                              // Singapore
+ ];
+ const isMilitaryHex = (hex) => {
+ if (!hex) return false;
+ const upper = hex.toUpperCase();
+ if (!/^[0-9A-F]{6}$/.test(upper)) return false;
+ for (const [start, end] of MILITARY_HEX_RANGES) {
+ if (upper >= start && upper <= end) return true;
+ }
+ return false;
+ };
  const military = (data.states ?? []).filter(state => {
  if (state[8] === true) return false;
  if (state[6] == null || state[5] == null) return false;
- const icao24 = (state[0] ?? '').toLowerCase();
  const squawk = state[14] ?? '';
  if (MILITARY_SQUAWKS.has(squawk)) return true;
- return MILITARY_ICAO_PREFIXES.some(prefix => icao24.startsWith(prefix));
+ return isMilitaryHex(state[0] ?? '');
  }).map(state => ({
  icao24: state[0],
  callsign: (state[1] ?? '').trim(),

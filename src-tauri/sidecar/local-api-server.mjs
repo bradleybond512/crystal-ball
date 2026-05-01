@@ -116,6 +116,21 @@ function wmMissingKeys() {
   });
 }
 
+/**
+ * Parse + bounds-validate a lat/lon pair from query string params.
+ * Returns null if either is missing, non-finite, or outside the valid range.
+ * Lat must be in [-90, 90]; lon in [-180, 180]. Used by routes that interpolate
+ * coords into upstream URLs to prevent invalid-range queries and cache pollution.
+ */
+function parseLatLon(latRaw, lonRaw) {
+  if (latRaw == null || lonRaw == null) return null;
+  const lat = Number(latRaw);
+  const lon = Number(lonRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { lat, lon };
+}
+
 const brotliCompressAsync = promisify(brotliCompress);
 const gzipAsync = promisify(gzip);
 
@@ -3865,10 +3880,12 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Air Quality proxy (Open-Meteo, no API key, forwards lat/lon) ──────────
   if (requestUrl.pathname === '/api/air-quality-proxy') {
- const lat = requestUrl.searchParams.get('lat');
- const lon = requestUrl.searchParams.get('lon');
- if (!lat || !lon) return json({ error: 'Missing lat or lon query parameters' }, 400);
- const aqUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&current=us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide&timezone=auto`;
+ const coords = parseLatLon(
+ requestUrl.searchParams.get('lat'),
+ requestUrl.searchParams.get('lon'),
+ );
+ if (!coords) return json({ error: 'Missing or invalid lat/lon query parameters' }, 400);
+ const aqUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${coords.lat}&longitude=${coords.lon}&current=us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide&timezone=auto`;
  try {
  const resp = await fetchWithTimeout(aqUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
  if (!resp.ok) return json({ error: `air-quality upstream error: ${resp.status}` }, 502);
@@ -6167,10 +6184,14 @@ async function dispatch(requestUrl, req, routes, context) {
  const cached = getCached(cacheKey, CACHE_TTL);
  if (cached) return json(cached);
 
- const lat = Number(requestUrl.searchParams.get('lat'));
- const lon = Number(requestUrl.searchParams.get('lon'));
+ const coords = parseLatLon(
+ requestUrl.searchParams.get('lat'),
+ requestUrl.searchParams.get('lon'),
+ );
  const dist = Number(requestUrl.searchParams.get('dist') ?? '250');
- const hasArea = Number.isFinite(lat) && Number.isFinite(lon) && Number.isFinite(dist);
+ const hasArea = coords != null && Number.isFinite(dist) && dist > 0 && dist <= 500;
+ const lat = coords?.lat ?? 0;
+ const lon = coords?.lon ?? 0;
 
  const SOURCE_TIMEOUT = 3000;
 
@@ -6736,11 +6757,16 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── HIFLD critical infrastructure (hospitals, urgent care) ──────────────
   if (requestUrl.pathname === '/api/hifld-infrastructure') {
- const lat = parseFloat(requestUrl.searchParams.get('lat') ?? '0');
- const lon = parseFloat(requestUrl.searchParams.get('lon') ?? '0');
- const radiusMiles = parseFloat(requestUrl.searchParams.get('radius') ?? '50');
-
- if (!lat || !lon) return json({ assets: [] });
+ const coords = parseLatLon(
+ requestUrl.searchParams.get('lat'),
+ requestUrl.searchParams.get('lon'),
+ );
+ if (!coords) return json({ assets: [] });
+ const { lat, lon } = coords;
+ const radiusMilesRaw = parseFloat(requestUrl.searchParams.get('radius') ?? '50');
+ const radiusMiles = Number.isFinite(radiusMilesRaw) && radiusMilesRaw > 0 && radiusMilesRaw <= 500
+ ? radiusMilesRaw
+ : 50;
 
  const cached = getCached(`hifld-${lat.toFixed(2)}-${lon.toFixed(2)}`, 24 * 60 * 60 * 1000);
  if (cached) return json(cached);

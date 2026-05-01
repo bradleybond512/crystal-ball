@@ -739,7 +739,10 @@ export class GlobeDataManager {
  const { fetchEarthquakes } = await import('@/services/earthquakes');
  const quakes = await fetchEarthquakes();
 
- this.aftershockForecasts.clear();
+ // Build a fresh map and atomic-swap at the end so concurrent readers
+ // (e.g. getAftershockForecast during a refresh tick) never observe an
+ // empty in-progress map.
+ const nextForecasts = new Map<string, AftershockForecast>();
 
  for (const eq of quakes) {
  const lat = eq.location?.latitude;
@@ -747,7 +750,7 @@ export class GlobeDataManager {
  if (lat == null || lon == null) continue;
 
  if (eq.magnitude >= 4 && eq.id) {
- this.aftershockForecasts.set(
+ nextForecasts.set(
  eq.id,
  computeAftershockForecast(eq.id, lat, lon, eq.magnitude),
  );
@@ -787,6 +790,8 @@ export class GlobeDataManager {
  setEntityTimestamp(eqEntity, new Date(eq.occurredAt));
  }
  }
+
+ this.aftershockForecasts = nextForecasts;
   }
 
   private async loadGDACS(): Promise<void> {
@@ -878,7 +883,9 @@ export class GlobeDataManager {
  const { fetchTropicalCyclones } = await import('@/services/tropical-cyclones');
  const cyclones = await fetchTropicalCyclones();
 
- this.cycloneCones.clear();
+ // Build a fresh cones map and atomic-swap at the end so concurrent
+ // readers (getCycloneCone) never see an empty in-progress map.
+ const nextCones = new Map<string, ForecastCone>();
 
  // Drop tracked positions for cyclones that fell out of the active feed.
  const liveIds = new Set(cyclones.map((tc) => tc.id));
@@ -899,7 +906,7 @@ export class GlobeDataManager {
  : [...existing, { lat: tc.lat, lon: tc.lon, timeMs: advisoryMs }].slice(-6);
  this.cycloneTracks.set(tc.id, track);
  const cone = computeCycloneCone(tc.id, track);
- if (cone) this.cycloneCones.set(tc.id, cone);
+ if (cone) nextCones.set(tc.id, cone);
 
  const isCat3Plus = tc.category === 'category_3' || tc.category === 'category_4' || tc.category === 'category_5';
  const isCat1Plus = isCat3Plus || tc.category === 'category_1' || tc.category === 'category_2';
@@ -933,6 +940,8 @@ export class GlobeDataManager {
  description: `${tc.name} — ${tc.category.replace('_', ' ')} (${tc.basin})\n${tc.movement}\n${tc.headline}`,
  });
  }
+
+ this.cycloneCones = nextCones;
   }
 
   private async loadFires(): Promise<void> {

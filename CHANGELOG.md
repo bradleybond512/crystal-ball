@@ -4,6 +4,8 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.10.22] - 2026-05-01
+
 ### Added
 
 - **Performance and crash diagnostics** (`src/services/log-bridge.ts`): 100-entry breadcrumb ring buffer (log + longtask + slow-refresh + memory + visibility + network + INP + fetch-burst categories). `PerformanceObserver` for long tasks >100 ms and INP `event` entries >200 ms. Memory watchdog samples `performance.memory` every ~60 s and warns above 70% heap usage. Visibility / online / offline breadcrumbs. `window.onerror` and `unhandledrejection` now attach the last 10 breadcrumbs to crash reports. `Cmd+Shift+D` diagnostics copy includes the last 30 client-side breadcrumbs alongside the Tauri bundle.

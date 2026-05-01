@@ -174,6 +174,11 @@ function aisBuildSnapshot() {
   for (const [mmsi, v] of aisState.vessels) {
  if (v.timestamp < cutoff) aisState.vessels.delete(mmsi);
   }
+  // Same TTL eviction for the military-candidate Map so it doesn't grow
+  // without bound over long-running sessions.
+  for (const [mmsi, r] of aisState.candidateReports) {
+ if (r.timestamp < cutoff) aisState.candidateReports.delete(mmsi);
+  }
   if (aisState.vessels.size > AIS_MAX_VESSELS) {
  // Linear scan: find the Nth-oldest timestamp, then evict everything older.
  const excess = aisState.vessels.size - AIS_MAX_VESSELS;
@@ -2378,10 +2383,10 @@ async function dispatch(requestUrl, req, routes, context) {
  channelId = cached.channelId;
  } else {
  // Resolve handle → channel ID by scraping the channel page
- const pageRes = await fetch(`https://www.youtube.com/${handle}`, {
+ const pageRes = await fetchWithTimeout(`https://www.youtube.com/${handle}`, {
  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
  redirect: 'follow',
- });
+ }, 10_000);
  if (pageRes.ok) {
  const html = await pageRes.text();
  const idMatch = html.match(/"externalId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"/);
@@ -2395,9 +2400,9 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!channelId) return json({ videoIds: [], error: 'Could not resolve channel ID' }, 200);
 
  // Fetch the public RSS feed (no API key required, returns up to 15 videos newest-to-oldest)
- const rssRes = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
+ const rssRes = await fetchWithTimeout(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
  headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CrystalBall/1.0)' },
- });
+ }, 10_000);
  if (!rssRes.ok) throw new Error(`RSS ${rssRes.status}`);
  const xml = await rssRes.text();
 

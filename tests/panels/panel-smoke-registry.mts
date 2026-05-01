@@ -153,6 +153,7 @@ export const PANEL_SMOKE_REGISTRY: Record<string, SmokeFactory> = {
   'sanctions-crossref': wrap(async () => { const m = await import('@/components/SanctionsCrossRefPanel'); return new m.SanctionsCrossRefPanel(); }),
   'satellite-change': wrap(async () => { const m = await import('@/components/SatelliteChangePanel'); return new m.SatelliteChangePanel(); }),
   'satellite-fires': wrap(async () => { const m = await import('@/components/SatelliteFiresPanel'); return new m.SatelliteFiresPanel(); }),
+  'satellite-intel': wrap(async () => { const m = await import('@/components/SatelliteIntelPanel'); return new m.SatelliteIntelPanel(); }),
   'scenario-simulator': wrap(async () => { const m = await import('@/components/ScenarioSimulatorPanel'); return new m.ScenarioSimulatorPanel(); }),
   'security-advisories': wrap(async () => { const m = await import('@/components/SecurityAdvisoriesPanel'); return new m.SecurityAdvisoriesPanel(); }),
   'service-status': wrap(async () => { const m = await import('@/components/ServiceStatusPanel'); return new m.ServiceStatusPanel(); }),

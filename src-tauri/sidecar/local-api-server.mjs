@@ -699,14 +699,37 @@ async function buildRouteTable(root) {
 }
 
 const REQUEST_BODY_CACHE = Symbol('requestBodyCache');
+const REQUEST_BODY_OVERFLOW = Symbol('requestBodyOverflow');
+const MAX_REQUEST_BODY_BYTES = 16 * 1024 * 1024; // 16 MB
+
+class RequestBodyTooLargeError extends Error {
+  constructor(limit) {
+    super(`Request body exceeds ${limit} bytes`);
+    this.name = 'RequestBodyTooLargeError';
+    this.statusCode = 413;
+    this.limit = limit;
+  }
+}
 
 async function readBody(req) {
   if (Object.prototype.hasOwnProperty.call(req, REQUEST_BODY_CACHE)) {
- return req[REQUEST_BODY_CACHE];
+    return req[REQUEST_BODY_CACHE];
+  }
+  if (req[REQUEST_BODY_OVERFLOW]) {
+    throw new RequestBodyTooLargeError(MAX_REQUEST_BODY_BYTES);
   }
 
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > MAX_REQUEST_BODY_BYTES) {
+      req[REQUEST_BODY_OVERFLOW] = true;
+      try { req.destroy?.(); } catch { /* socket already gone */ }
+      throw new RequestBodyTooLargeError(MAX_REQUEST_BODY_BYTES);
+    }
+    chunks.push(chunk);
+  }
   const body = chunks.length ? Buffer.concat(chunks) : undefined;
   req[REQUEST_BODY_CACHE] = body;
   return body;
@@ -7278,23 +7301,33 @@ export async function createLocalApiServer(options = {}) {
  }
  } catch (error) {
  const durationMs = Date.now() - start;
+ const errorStatus = Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 600
+ ? error.statusCode
+ : 500;
+ if (errorStatus >= 500) {
  context.logger.error('[local-api] fatal', error);
  const host = (() => { try { return new URL(req.url || '/', `http://x`).host; } catch { return 'unknown'; } })();
  wmRecordHostFailure(host, error?.message || String(error));
+ }
 
  if (!skipRecord) {
  recordTraffic({
  timestamp: new Date().toISOString(),
  method: req.method,
  path: requestUrl.pathname + (requestUrl.search || ''),
- status: 500,
+ status: errorStatus,
  durationMs,
  error: error.message,
  });
  }
 
- res.writeHead(500, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
- res.end(JSON.stringify({ error: 'Internal server error' }));
+ const errorBody = errorStatus === 413
+ ? { error: 'Payload too large', limit: error.limit ?? MAX_REQUEST_BODY_BYTES }
+ : errorStatus < 500
+ ? { error: error.message || 'Bad request' }
+ : { error: 'Internal server error' };
+ res.writeHead(errorStatus, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+ res.end(JSON.stringify(errorBody));
  }
   });
 

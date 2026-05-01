@@ -102,7 +102,7 @@ export class GlobePredictions {
   showAftershock(forecast: AftershockForecast): void {
     this.clear();
     for (const ring of forecast.rings) {
-      if (ring.magnitudeThreshold !== AFTERSHOCK_DISPLAY_THRESHOLD) continue;
+      if (ring.magnitudeThreshold < AFTERSHOCK_DISPLAY_THRESHOLD) continue;
       this.activeEntities.push(this.source.entities.add(new Entity({
         position: Cartesian3.fromDegrees(forecast.epicenterLon, forecast.epicenterLat),
         ellipse: new EllipseGraphics({

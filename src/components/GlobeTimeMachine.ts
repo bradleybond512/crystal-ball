@@ -24,6 +24,7 @@ export class GlobeTimeMachine {
   private rafId: number | null = null;
   private lastFrame = 0;
   private debounceId: number | null = null;
+  private timeChangeListeners: ((ms: number) => void)[] = [];
 
   constructor(viewer: Viewer, dataManager: GlobeDataManager, container: HTMLElement) {
  this.viewer = viewer;
@@ -103,6 +104,7 @@ export class GlobeTimeMachine {
  this.liveIndicator = null;
  this.playBtn = null;
  this.speedPills = [];
+ this.timeChangeListeners = [];
  // Ensure layers return to unfiltered state
  this.dataManager.applyTimeFilter(null);
   }
@@ -128,6 +130,38 @@ export class GlobeTimeMachine {
  if (this.slider) this.slider.value = String(clamped);
  this.scheduleFilter();
  this.updateUi();
+ this.notifyTimeChange();
+  }
+
+  /**
+   * Public read-only accessors for 4D mode consumers (Globe4DManager, swimlane).
+   * Avoid mutating these directly — go through {@link setTime}, {@link setSpeed}, {@link play}/{@link pause}.
+   */
+  getCurrentMs(): number { return this.currentMs; }
+  getSpeed(): number { return this.speed; }
+  isPlaying(): boolean { return this.playing; }
+  isLive(): boolean { return this.live; }
+
+  /**
+   * Register a callback fired whenever the current time changes (scrub, play tick, snap-to-now).
+   * Returns an unsubscribe function. Listeners are invoked synchronously after internal state
+   * is updated; keep them cheap or debounce inside the listener.
+   */
+  onTimeChange(listener: (ms: number) => void): () => void {
+ this.timeChangeListeners.push(listener);
+ return () => {
+ this.timeChangeListeners = this.timeChangeListeners.filter(l => l !== listener);
+ };
+  }
+
+  private notifyTimeChange(): void {
+ for (const listener of this.timeChangeListeners) {
+ try { listener(this.currentMs); }
+ catch (error) {
+ // eslint-disable-next-line no-console
+ console.error('[GlobeTimeMachine] time-change listener threw', error);
+ }
+ }
   }
 
   play(): void {
@@ -180,6 +214,7 @@ export class GlobeTimeMachine {
  this.viewer.clock.currentTime = JulianDate.fromDate(new Date(this.currentMs));
  this.dataManager.applyTimeFilter(null);
  this.updateUi();
+ this.notifyTimeChange();
   }
 
   private scheduleFilter(): void {

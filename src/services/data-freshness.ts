@@ -44,7 +44,8 @@ export type DataSourceId =
   | 's2_underground' // S2 Underground intelligence (GhostMaps)
   | 'faa_weather_cams' // FAA weather camera network
   | 'adsb' // ADS-B live aircraft tracking (OpenSky)
-  | 'adsb-military'; // Military ADS-B flight tracking
+  | 'adsb-military' // Military ADS-B flight tracking
+  | 'webcams'; // Aggregated webcam feeds (Windy + DOT + YouTube)
 
 export type FreshnessStatus = 'fresh' | 'stale' | 'very_stale' | 'no_data' | 'disabled' | 'error';
 
@@ -119,6 +120,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   faa_weather_cams: { name: 'FAA Weather Cameras', requiredForRisk: false, panelId: 'faa-weather-cams' },
   adsb: { name: 'ADS-B Aircraft', requiredForRisk: false, panelId: 'air-traffic' },
   'adsb-military': { name: 'Military ADS-B', requiredForRisk: false, panelId: 'geo-intel' },
+  webcams: { name: 'Webcam Aggregator', requiredForRisk: false, panelId: 'live-webcams' },
 };
 
 class DataFreshnessTracker {
@@ -398,6 +400,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   faa_weather_cams: 'FAA weather camera data unavailable—camera feed not responding',
   adsb: 'Live aircraft positions unavailable—ADS-B tracking offline',
   'adsb-military': 'Military aircraft positions unavailable—military ADS-B tracking offline',
+  webcams: 'Webcam feeds unavailable—Windy/DOT/YouTube aggregation offline',
 };
 
 /**

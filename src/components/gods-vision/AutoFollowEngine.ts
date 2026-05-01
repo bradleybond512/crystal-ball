@@ -15,6 +15,7 @@
 import {
   Cartesian3,
   Cartographic,
+  JulianDate,
   Math as CesiumMath,
   type Viewer,
   type Entity,
@@ -79,7 +80,7 @@ function entityToLatLon(entity: Entity): { lat: number; lon: number } | null {
   const pos = entity.position;
   if (!pos) return null;
   try {
- const cart = pos.getValue(new Date() as unknown as import('cesium').JulianDate);
+ const cart = pos.getValue(JulianDate.fromDate(new Date()));
  if (!cart) return null;
  const carto = Cartographic.fromCartesian(cart);
  return {
@@ -89,6 +90,53 @@ function entityToLatLon(entity: Entity): { lat: number; lon: number } | null {
   } catch {
  return null;
   }
+}
+
+/** Inner edge of the temporal-weight band: |Δt| ≤ 30 min → 2× boost. */
+const TEMPORAL_BOOST_INNER_MS = 30 * 60 * 1000;
+/** Outer edge of the temporal-weight band: |Δt| ≥ 6 h → 0.5× damp. */
+const TEMPORAL_BOOST_OUTER_MS = 6 * 60 * 60 * 1000;
+const TEMPORAL_BOOST_MAX = 2;
+const TEMPORAL_BOOST_MIN = 0.5;
+
+/**
+ * Multiplicative weight applied to an entity's score based on the proximity
+ * of its timestamp to the current playback time. Designed for AI Director
+ * mode 4D playback so the camera tracks events that were happening *then*,
+ * not just events that are happening *now*.
+ *
+ * - |Δt| ≤ 30 min → 2.0 × score
+ * - |Δt| ≥  6 h   → 0.5 × score
+ * - between → log-linear interpolation
+ */
+export function temporalWeight(tsMs: number | null, playbackMs: number | null): number {
+  if (tsMs === null || playbackMs === null) return 1;
+  const dt = Math.abs(tsMs - playbackMs);
+  if (dt <= TEMPORAL_BOOST_INNER_MS) return TEMPORAL_BOOST_MAX;
+  if (dt >= TEMPORAL_BOOST_OUTER_MS) return TEMPORAL_BOOST_MIN;
+  const inner = Math.log(TEMPORAL_BOOST_INNER_MS);
+  const outer = Math.log(TEMPORAL_BOOST_OUTER_MS);
+  const here = Math.log(dt);
+  const fraction = (here - inner) / (outer - inner);
+  return TEMPORAL_BOOST_MAX + (TEMPORAL_BOOST_MIN - TEMPORAL_BOOST_MAX) * fraction;
+}
+
+/**
+ * Extract entity timestamp (last-updated) in ms epoch from PropertyBag.
+ * Returns null if no timestamp is set.
+ */
+function entityTimestampMs(entity: Entity, julian: JulianDate): number | null {
+  try {
+ const bag = entity.properties?.getValue(julian) as { timestamp?: Date | string | number } | undefined;
+ const ts = bag?.timestamp;
+ if (ts instanceof Date) return ts.getTime();
+ if (typeof ts === 'number' && Number.isFinite(ts)) return ts;
+ if (typeof ts === 'string') {
+ const parsed = Date.parse(ts);
+ return Number.isFinite(parsed) ? parsed : null;
+ }
+  } catch { /* none */ }
+  return null;
 }
 
 export class AutoFollowEngine {
@@ -101,6 +149,8 @@ export class AutoFollowEngine {
   private opts: Required<AutoFollowOptions>;
   private onTargetChange: ((target: FollowTarget | null, index: number, total: number) => void) | null = null;
   private dataSources: () => Map<string, CustomDataSource>;
+  /** Active 4D playback time, or null when scoring against wall-clock NOW. */
+  private playbackMs: number | null = null;
 
   constructor(
  viewer: Viewer,
@@ -172,6 +222,20 @@ export class AutoFollowEngine {
  this.advanceToNext();
   }
 
+  /**
+   * Refresh targets relative to a specific playback time. Used by 4D
+   * AI Director mode so the camera follows what was important at the
+   * point in time being played back, not just wall-clock NOW.
+   */
+  refreshAtTime(playbackMs: number): void {
+ this.playbackMs = Number.isFinite(playbackMs) ? playbackMs : null;
+ this.refreshTargets();
+ this.playbackMs = null;
+ if (this.targets.length > 0 && this._active) {
+ this.flyToCurrentTarget();
+ }
+  }
+
   private refreshTargets(): void {
  const scored: FollowTarget[] = [];
  const sources = this.dataSources();
@@ -187,20 +251,24 @@ export class AutoFollowEngine {
  const entities = source.entities.values;
  // Sample up to 10 entities per layer to keep target list manageable
  const step = Math.max(1, Math.floor(entities.length / 10));
+ const julian = JulianDate.fromDate(new Date());
  for (let i = 0; i < entities.length; i += step) {
  const entity = entities[i]!;
  const loc = entityToLatLon(entity);
  if (!loc) continue;
 
+ const tsMs = entityTimestampMs(entity, julian);
+ const baseScore = weight + simpleHash(entity.id) * 0.5;
+
  scored.push({
  id: entity.id,
  layer: layerName,
- name: (entity.description?.getValue(new Date() as unknown as import('cesium').JulianDate) as string)
+ name: (entity.description?.getValue(julian) as string)
  ?? entity.name
  ?? layerName,
  lat: loc.lat,
  lon: loc.lon,
- score: weight + simpleHash(entity.id) * 0.5, // Deterministic jitter to vary cycle order
+ score: baseScore * temporalWeight(tsMs, this.playbackMs),
  });
  }
  }

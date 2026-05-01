@@ -572,3 +572,223 @@ export async function synthesizeThreats(): Promise<SynthesisReport> {
   cacheReport(report);
   return report;
 }
+
+// ── Space-time clustering + warm-up baseline (additive helpers) ─────────────
+//
+// These complement the existing country-set merge in buildCrossDomainClusters
+// without replacing it. They surface clusters that don't share country tags
+// (open-ocean cyclones, global IP-range cyber, etc.) by grouping situations
+// that fall within a temporal × spatial window. The baseline tracker tells
+// callers whether the per-region anomaly ratio has accumulated enough
+// observations to be trustworthy ("warm").
+
+export const THEATER_TEMPORAL_WINDOW_MS = 6 * 60 * 60 * 1000; // 6h
+export const THEATER_SPATIAL_MAX_KM = 500;
+export const BASELINE_WARMUP_THRESHOLD = 5;
+
+const BASELINE_KEY = 'crystalball-threat-synthesis-baseline-v1';
+const BASELINE_CYCLES_KEY = 'crystalball-threat-synthesis-baseline-cycles-v1';
+const BASELINE_HALFLIFE_MS = 24 * 60 * 60 * 1000;
+const EARTH_RADIUS_KM = 6371;
+
+export interface TheaterClusterOptions {
+  temporalWindowMs?: number;
+  spatialMaxKm?: number;
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a = Math.sin(dLat / 2) ** 2
+ + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function shareTheater(a: Situation, b: Situation, opts: Required<TheaterClusterOptions>): boolean {
+  if (a.geo.countries.some(c => b.geo.countries.includes(c))) return true;
+
+  const dt = Math.abs((a.lastUpdated ?? a.firstSeen) - (b.lastUpdated ?? b.firstSeen));
+  if (dt > opts.temporalWindowMs) return false;
+
+  if (
+ typeof a.geo.lat !== 'number' || typeof a.geo.lon !== 'number'
+ || typeof b.geo.lat !== 'number' || typeof b.geo.lon !== 'number'
+  ) return false;
+
+  return haversineKm(a.geo.lat, a.geo.lon, b.geo.lat, b.geo.lon) <= opts.spatialMaxKm;
+}
+
+/**
+ * Union-find clustering of situations that fall in the same theater.
+ * Two situations share a theater when they share a country code, OR are
+ * within {@link THEATER_SPATIAL_MAX_KM} of each other AND their last-updated
+ * timestamps fall within {@link THEATER_TEMPORAL_WINDOW_MS}. The temporal
+ * window prevents stale archive items from dragging fresh incidents into a
+ * giant catch-all cluster.
+ *
+ * Resolved situations are excluded.
+ */
+export function clusterByTimeSpace(
+  situations: Situation[],
+  options: TheaterClusterOptions = {},
+): Situation[][] {
+  const opts: Required<TheaterClusterOptions> = {
+ temporalWindowMs: options.temporalWindowMs ?? THEATER_TEMPORAL_WINDOW_MS,
+ spatialMaxKm: options.spatialMaxKm ?? THEATER_SPATIAL_MAX_KM,
+  };
+  const active = situations.filter(s => s.phase !== 'resolved');
+  const parent = active.map((_, i) => i);
+  const find = (i: number): number => {
+ let root = i;
+ while (parent[root] !== root) root = parent[root]!;
+ while (parent[i] !== root) {
+ const next = parent[i]!;
+ parent[i] = root;
+ i = next;
+ }
+ return root;
+  };
+  const union = (i: number, j: number): void => {
+ const ri = find(i);
+ const rj = find(j);
+ if (ri !== rj) parent[ri] = rj;
+  };
+
+  for (let i = 0; i < active.length; i++) {
+ for (let j = i + 1; j < active.length; j++) {
+ const a = active[i];
+ const b = active[j];
+ if (!a || !b) continue;
+ if (shareTheater(a, b, opts)) union(i, j);
+ }
+  }
+
+  const groupsByRoot = new Map<number, Situation[]>();
+  for (const [i, sit] of active.entries()) {
+ if (!sit) continue;
+ const root = find(i);
+ const bucket = groupsByRoot.get(root);
+ if (bucket) bucket.push(sit);
+ else groupsByRoot.set(root, [sit]);
+  }
+  return [...groupsByRoot.values()];
+}
+
+/**
+ * Public-facing alias for {@link clusterByTimeSpace}. Reads naturally at
+ * call sites: `groupByTheater(situationEngine.getSituations())`.
+ */
+export function groupByTheater(
+  situations: Situation[],
+  options: TheaterClusterOptions = {},
+): Situation[][] {
+  return clusterByTimeSpace(situations, options);
+}
+
+// ── Counterfactual baseline (signal-density warm-up tracker) ──────────────
+
+interface BaselineEntry {
+  rollingCount: number;
+  lastUpdated: number;
+}
+type BaselineMap = Record<string, BaselineEntry>;
+
+function loadBaseline(): BaselineMap {
+  try {
+ const raw = localStorage.getItem(BASELINE_KEY);
+ if (!raw) return {};
+ return JSON.parse(raw) as BaselineMap;
+  } catch {
+ return {};
+  }
+}
+
+function saveBaseline(map: BaselineMap): void {
+  try {
+ localStorage.setItem(BASELINE_KEY, JSON.stringify(map));
+  } catch { /* quota or private mode */ }
+}
+
+function regionKey(label: string): string {
+  return label.trim().toLowerCase().replace(/\s+/g, '-').slice(0, 40);
+}
+
+function readBaselineCycles(): number {
+  try {
+ const raw = localStorage.getItem(BASELINE_CYCLES_KEY);
+ const parsed = raw ? Number.parseInt(raw, 10) : 0;
+ return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  } catch {
+ return 0;
+  }
+}
+
+function incrementBaselineCycles(): void {
+  try {
+ localStorage.setItem(BASELINE_CYCLES_KEY, String(readBaselineCycles() + 1));
+  } catch { /* quota or private mode */ }
+}
+
+/**
+ * Decay-adjusted observed/baseline ratio for a region. Returns 1 when the
+ * baseline has too few samples to compare against (caller treats 1 as "no
+ * amplification"). Use {@link warmupStatus} to gate on warm baselines.
+ */
+export function threatBaselineAnomaly(region: string, count: number): number {
+  const map = loadBaseline();
+  const entry = map[regionKey(region)];
+  if (!entry || entry.rollingCount <= 0.5) return 1;
+  const decay = Math.exp(-(Date.now() - entry.lastUpdated) / BASELINE_HALFLIFE_MS);
+  const decayed = entry.rollingCount * decay;
+  return decayed > 0 ? count / decayed : 1;
+}
+
+/**
+ * Update the baseline tracker with the current cycle's groups. Each group's
+ * region key gets an EMA-smoothed rolling count (α = 0.3, decayed by 1-day
+ * half-life). Increments the cycle counter so {@link warmupStatus} can
+ * surface progress toward {@link BASELINE_WARMUP_THRESHOLD}.
+ */
+export function recordThreatBaseline(groups: Situation[][]): void {
+  const map = loadBaseline();
+  const now = Date.now();
+  for (const group of groups) {
+ const first = group[0];
+ if (!first) continue;
+ const region = first.geo.label || first.geo.countries.join(',') || 'global';
+ const key = regionKey(region);
+ const prev = map[key];
+ if (prev) {
+ const decay = Math.exp(-(now - prev.lastUpdated) / BASELINE_HALFLIFE_MS);
+ map[key] = {
+ rollingCount: prev.rollingCount * decay * 0.7 + group.length * 0.3,
+ lastUpdated: now,
+ };
+ } else {
+ map[key] = { rollingCount: group.length, lastUpdated: now };
+ }
+  }
+  saveBaseline(map);
+  if (groups.length > 0) incrementBaselineCycles();
+}
+
+export interface WarmupStatus {
+  cycles: number;
+  threshold: number;
+  warm: boolean;
+}
+
+/**
+ * Whether the counterfactual baseline has accumulated enough observations
+ * to produce reliable anomaly ratios. UIs gate "anomaly" badges on `warm`
+ * and surface `cycles / threshold` while the baseline calibrates.
+ */
+export function warmupStatus(): WarmupStatus {
+  const cycles = readBaselineCycles();
+  return {
+ cycles,
+ threshold: BASELINE_WARMUP_THRESHOLD,
+ warm: cycles >= BASELINE_WARMUP_THRESHOLD,
+  };
+}

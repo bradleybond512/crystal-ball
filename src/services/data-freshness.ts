@@ -45,6 +45,82 @@ export type DataSourceId =
   | 'faa_weather_cams' // FAA weather camera network
   | 'adsb' // ADS-B live aircraft tracking (OpenSky)
   | 'adsb-military' // Military ADS-B flight tracking
+    | "maritime-safety"
+    | "inciweb"
+    | "cisa-advisories"
+    | "nuclear-monitor"
+    | "marine-hazards"
+    | "disease-outbreak"
+    | "avalanche-hazard"
+    | "evacuation-router"
+    | "disease-intel"
+    | "wpc-winter-weather"
+    | "fema-disasters"
+    | "power-grid-alerts"
+    | "wpc-excessive-rainfall"
+    | "congress-defense"
+    | "flood-gauges"
+    | "telegram-intel"
+    | "spaceflight-news"
+    | "rainviewer-radar"
+    | "lightning"
+    | "copernicus-cems"
+    | "faa-nas-status"
+    | "phmsa-pipeline"
+    | "air-quality"
+    | "radiation-monitoring"
+    | "dam-safety"
+    | "nrc-nuclear"
+    | "offline-alert-cache"
+    | "spc-outlook"
+    | "aerospace-reentry"
+    | "un-security-council"
+    | "oref-alerts"
+    | "wildfire-smoke"
+    | "offline-map-cache"
+    | "spc-mesoscale"
+    | "s2-underground"
+    | "federal-register"
+    | "hazmat-incidents"
+    | "power-grid"
+    | "gps-interference"
+    | "faa-cameras"
+    | "combatant-commands"
+    | "water-quality"
+    | "allied-military"
+    | "ofac-sanctions"
+    | "amtrak-alerts"
+    | "tropical-cyclones"
+    | "fdic-failures"
+    | "internet-outages"
+    | "drought-monitor"
+    | "hdx-crisis"
+    | "oil-spill-tracker"
+    | "inpe-fires"
+    | "cyber-extra"
+    | "ntsb-investigations"
+    | "aviation-hazards"
+    | "habsos"
+    | "wsb-sentiment"
+    | "ecdc-surveillance"
+    | "volcano-alerts"
+    | "space-weather"
+    | "food-insecurity"
+    | "space-launches"
+    | "iaea-nuclear"
+    | "live-news"
+    | "dsca-arms-transfers"
+    | "ripe-atlas"
+    | "foreign-mil-news"
+    | "cpc-outlook"
+    | "noaa-buoys"
+    | "world-bank"
+    | "nws-alerts"
+    | "state-dept-advisories"
+    | "tsunami-alerts"
+    | "supply-chain-impact"
+    | "faa-tfrs"
+    | "usgs-pager"
   | 'webcams'; // Aggregated webcam feeds (Windy + DOT + YouTube)
 
 export type FreshnessStatus = 'fresh' | 'stale' | 'very_stale' | 'no_data' | 'disabled' | 'error';
@@ -121,6 +197,82 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   adsb: { name: 'ADS-B Aircraft', requiredForRisk: false, panelId: 'air-traffic' },
   'adsb-military': { name: 'Military ADS-B', requiredForRisk: false, panelId: 'geo-intel' },
   webcams: { name: 'Webcam Aggregator', requiredForRisk: false, panelId: 'live-webcams' },
+  "maritime-safety": { name: "Maritime Safety", requiredForRisk: false },
+  "inciweb": { name: "Inciweb", requiredForRisk: false },
+  "cisa-advisories": { name: "Cisa Advisories", requiredForRisk: false },
+  "nuclear-monitor": { name: "Nuclear Monitor", requiredForRisk: false },
+  "marine-hazards": { name: "Marine Hazards", requiredForRisk: false },
+  "disease-outbreak": { name: "Disease Outbreak", requiredForRisk: false },
+  "avalanche-hazard": { name: "Avalanche Hazard", requiredForRisk: false },
+  "evacuation-router": { name: "Evacuation Router", requiredForRisk: false },
+  "disease-intel": { name: "Disease Intel", requiredForRisk: false },
+  "wpc-winter-weather": { name: "Wpc Winter Weather", requiredForRisk: false },
+  "fema-disasters": { name: "Fema Disasters", requiredForRisk: false },
+  "power-grid-alerts": { name: "Power Grid Alerts", requiredForRisk: false },
+  "wpc-excessive-rainfall": { name: "Wpc Excessive Rainfall", requiredForRisk: false },
+  "congress-defense": { name: "Congress Defense", requiredForRisk: false },
+  "flood-gauges": { name: "Flood Gauges", requiredForRisk: false },
+  "telegram-intel": { name: "Telegram Intel", requiredForRisk: false },
+  "spaceflight-news": { name: "Spaceflight News", requiredForRisk: false },
+  "rainviewer-radar": { name: "Rainviewer Radar", requiredForRisk: false },
+  "lightning": { name: "Lightning", requiredForRisk: false },
+  "copernicus-cems": { name: "Copernicus Cems", requiredForRisk: false },
+  "faa-nas-status": { name: "Faa Nas Status", requiredForRisk: false },
+  "phmsa-pipeline": { name: "Phmsa Pipeline", requiredForRisk: false },
+  "air-quality": { name: "Air Quality", requiredForRisk: false },
+  "radiation-monitoring": { name: "Radiation Monitoring", requiredForRisk: false },
+  "dam-safety": { name: "Dam Safety", requiredForRisk: false },
+  "nrc-nuclear": { name: "Nrc Nuclear", requiredForRisk: false },
+  "offline-alert-cache": { name: "Offline Alert Cache", requiredForRisk: false },
+  "spc-outlook": { name: "Spc Outlook", requiredForRisk: false },
+  "aerospace-reentry": { name: "Aerospace Reentry", requiredForRisk: false },
+  "un-security-council": { name: "Un Security Council", requiredForRisk: false },
+  "oref-alerts": { name: "Oref Alerts", requiredForRisk: false },
+  "wildfire-smoke": { name: "Wildfire Smoke", requiredForRisk: false },
+  "offline-map-cache": { name: "Offline Map Cache", requiredForRisk: false },
+  "spc-mesoscale": { name: "Spc Mesoscale", requiredForRisk: false },
+  "s2-underground": { name: "S2 Underground", requiredForRisk: false },
+  "federal-register": { name: "Federal Register", requiredForRisk: false },
+  "hazmat-incidents": { name: "Hazmat Incidents", requiredForRisk: false },
+  "power-grid": { name: "Power Grid", requiredForRisk: false },
+  "gps-interference": { name: "Gps Interference", requiredForRisk: false },
+  "faa-cameras": { name: "Faa Cameras", requiredForRisk: false },
+  "combatant-commands": { name: "Combatant Commands", requiredForRisk: false },
+  "water-quality": { name: "Water Quality", requiredForRisk: false },
+  "allied-military": { name: "Allied Military", requiredForRisk: false },
+  "ofac-sanctions": { name: "Ofac Sanctions", requiredForRisk: false },
+  "amtrak-alerts": { name: "Amtrak Alerts", requiredForRisk: false },
+  "tropical-cyclones": { name: "Tropical Cyclones", requiredForRisk: false },
+  "fdic-failures": { name: "Fdic Failures", requiredForRisk: false },
+  "internet-outages": { name: "Internet Outages", requiredForRisk: false },
+  "drought-monitor": { name: "Drought Monitor", requiredForRisk: false },
+  "hdx-crisis": { name: "Hdx Crisis", requiredForRisk: false },
+  "oil-spill-tracker": { name: "Oil Spill Tracker", requiredForRisk: false },
+  "inpe-fires": { name: "Inpe Fires", requiredForRisk: false },
+  "cyber-extra": { name: "Cyber Extra", requiredForRisk: false },
+  "ntsb-investigations": { name: "Ntsb Investigations", requiredForRisk: false },
+  "aviation-hazards": { name: "Aviation Hazards", requiredForRisk: false },
+  "habsos": { name: "Habsos", requiredForRisk: false },
+  "wsb-sentiment": { name: "Wsb Sentiment", requiredForRisk: false },
+  "ecdc-surveillance": { name: "Ecdc Surveillance", requiredForRisk: false },
+  "volcano-alerts": { name: "Volcano Alerts", requiredForRisk: false },
+  "space-weather": { name: "Space Weather", requiredForRisk: false },
+  "food-insecurity": { name: "Food Insecurity", requiredForRisk: false },
+  "space-launches": { name: "Space Launches", requiredForRisk: false },
+  "iaea-nuclear": { name: "Iaea Nuclear", requiredForRisk: false },
+  "live-news": { name: "Live News", requiredForRisk: false },
+  "dsca-arms-transfers": { name: "Dsca Arms Transfers", requiredForRisk: false },
+  "ripe-atlas": { name: "Ripe Atlas", requiredForRisk: false },
+  "foreign-mil-news": { name: "Foreign Mil News", requiredForRisk: false },
+  "cpc-outlook": { name: "Cpc Outlook", requiredForRisk: false },
+  "noaa-buoys": { name: "Noaa Buoys", requiredForRisk: false },
+  "world-bank": { name: "World Bank", requiredForRisk: false },
+  "nws-alerts": { name: "Nws Alerts", requiredForRisk: false },
+  "state-dept-advisories": { name: "State Dept Advisories", requiredForRisk: false },
+  "tsunami-alerts": { name: "Tsunami Alerts", requiredForRisk: false },
+  "supply-chain-impact": { name: "Supply Chain Impact", requiredForRisk: false },
+  "faa-tfrs": { name: "Faa Tfrs", requiredForRisk: false },
+  "usgs-pager": { name: "Usgs Pager", requiredForRisk: false },
 };
 
 class DataFreshnessTracker {
@@ -401,6 +553,84 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   adsb: 'Live aircraft positions unavailable—ADS-B tracking offline',
   'adsb-military': 'Military aircraft positions unavailable—military ADS-B tracking offline',
   webcams: 'Webcam feeds unavailable—Windy/DOT/YouTube aggregation offline',
+  // Per-service gap messages added in Pass 7 freshness wiring. Generic by default;
+  // refine individual entries when the service ships dedicated copy.
+  "maritime-safety": "Maritime safety data unavailable",
+  "inciweb": "Wildfire incident data unavailable",
+  "cisa-advisories": "CISA advisory feed unavailable",
+  "nuclear-monitor": "Nuclear monitor data unavailable",
+  "marine-hazards": "Marine hazard data unavailable",
+  "disease-outbreak": "Disease outbreak data unavailable",
+  "avalanche-hazard": "Avalanche hazard data unavailable",
+  "evacuation-router": "Evacuation routing data unavailable",
+  "disease-intel": "Disease intelligence data unavailable",
+  "wpc-winter-weather": "WPC winter-weather data unavailable",
+  "fema-disasters": "FEMA disaster data unavailable",
+  "power-grid-alerts": "Power-grid alerts unavailable",
+  "wpc-excessive-rainfall": "WPC excessive-rainfall data unavailable",
+  "congress-defense": "Congress defense data unavailable",
+  "flood-gauges": "Flood-gauge data unavailable",
+  "telegram-intel": "Telegram intel data unavailable",
+  "spaceflight-news": "Spaceflight news unavailable",
+  "rainviewer-radar": "RainViewer radar unavailable",
+  "lightning": "Lightning-strike data unavailable",
+  "copernicus-cems": "Copernicus CEMS data unavailable",
+  "faa-nas-status": "FAA NAS status unavailable",
+  "phmsa-pipeline": "PHMSA pipeline data unavailable",
+  "air-quality": "Air-quality data unavailable",
+  "radiation-monitoring": "Radiation monitoring data unavailable",
+  "dam-safety": "Dam-safety data unavailable",
+  "nrc-nuclear": "NRC nuclear data unavailable",
+  "spc-outlook": "SPC outlook data unavailable",
+  "aerospace-reentry": "Aerospace reentry data unavailable",
+  "un-security-council": "UN Security Council data unavailable",
+  "oref-alerts": "Oref alerts unavailable",
+  "wildfire-smoke": "Wildfire-smoke data unavailable",
+  "spc-mesoscale": "SPC mesoscale discussion data unavailable",
+  "federal-register": "Federal Register data unavailable",
+  "hazmat-incidents": "HAZMAT incident data unavailable",
+  "power-grid": "Power-grid data unavailable",
+  "gps-interference": "GPS interference data unavailable",
+  "faa-cameras": "FAA camera data unavailable",
+  "combatant-commands": "Combatant commands data unavailable",
+  "water-quality": "Water-quality data unavailable",
+  "allied-military": "Allied military data unavailable",
+  "ofac-sanctions": "OFAC sanctions data unavailable",
+  "amtrak-alerts": "Amtrak alerts unavailable",
+  "tropical-cyclones": "Tropical-cyclone data unavailable",
+  "fdic-failures": "FDIC bank-failure data unavailable",
+  "internet-outages": "Internet outage data unavailable",
+  "drought-monitor": "Drought monitor data unavailable",
+  "hdx-crisis": "HDX crisis data unavailable",
+  "oil-spill-tracker": "Oil-spill tracker unavailable",
+  "inpe-fires": "INPE fire data unavailable",
+  "cyber-extra": "Cyber extras data unavailable",
+  "ntsb-investigations": "NTSB investigations unavailable",
+  "aviation-hazards": "Aviation-hazard data unavailable",
+  "habsos": "HABSOS data unavailable",
+  "wsb-sentiment": "WSB sentiment data unavailable",
+  "ecdc-surveillance": "ECDC surveillance data unavailable",
+  "volcano-alerts": "Volcano alerts unavailable",
+  "space-weather": "Space-weather data unavailable",
+  "food-insecurity": "Food-insecurity data unavailable",
+  "space-launches": "Space-launch data unavailable",
+  "iaea-nuclear": "IAEA nuclear data unavailable",
+  "live-news": "Live news feed unavailable",
+  "dsca-arms-transfers": "DSCA arms-transfer data unavailable",
+  "ripe-atlas": "RIPE Atlas data unavailable",
+  "foreign-mil-news": "Foreign military news unavailable",
+  "cpc-outlook": "CPC outlook data unavailable",
+  "noaa-buoys": "NOAA buoy data unavailable",
+  "world-bank": "World Bank data unavailable",
+  "nws-alerts": "NWS alerts unavailable",
+  "state-dept-advisories": "State Department advisories unavailable",
+  "tsunami-alerts": "Tsunami alerts unavailable",
+  "supply-chain-impact": "Supply-chain impact data unavailable",
+  "faa-tfrs": "FAA TFR data unavailable",
+  "usgs-pager": "USGS PAGER data unavailable",
+  "offline-alert-cache": "Offline alert cache unavailable",
+  "offline-map-cache": "Offline map cache unavailable",
+  "s2-underground": "S2 Underground feed unavailable",
 };
 
 /**

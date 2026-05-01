@@ -257,6 +257,59 @@ interface GlobeLayer {
   loaded: boolean;
 }
 
+/** Common shape of `entity.properties.getValue(julian)` for timestamp lookup. */
+interface TimestampedProperties { timestamp?: Date | string | number }
+
+/** Per-entity position+timestamp tuple for trail rendering. */
+export interface EntityPositionSample {
+  id: string;
+  lat: number;
+  lon: number;
+  timeMs: number;
+}
+
+/** Per-entity sample with severity + description for pillars / degradation. */
+export interface EntityTimestampedSample extends EntityPositionSample {
+  severity: number;
+  description: string;
+}
+
+/** A single time-range block for one swimlane lane. */
+export interface EventBlock {
+  id: string;
+  layerName: string;
+  category: 'conflicts' | 'disasters' | 'military' | 'seismic' | 'cyber' | 'weather';
+  startMs: number;
+  endMs: number;
+  severity: number;
+  name: string;
+  lat?: number;
+  lon?: number;
+  isForecast: boolean;
+}
+
+/** Layer-name to severity multiplier for pillars + event blocks. */
+const LAYER_BASE_SEVERITY: Record<string, number> = {
+  airstrikes: 10,
+  conflicts: 8,
+  gdacs: 7,
+  cyber: 6,
+  cyclones: 6,
+  earthquakes: 5,
+  gpsJamming: 5,
+  fires: 4,
+};
+
+/** Swimlane category → contributing layer names. */
+const SWIMLANE_CATEGORY_MAP: Record<EventBlock['category'], string[]> = {
+  conflicts: ['conflicts', 'airstrikes'],
+  disasters: ['gdacs', 'cyclones'],
+  military: ['flights', 'vessels', 'darkVessels'],
+  seismic: ['earthquakes', 'volcanoes'],
+  cyber: ['cyber', 'gpsJamming'],
+  weather: ['fires'],
+};
+
 // Layers that get auto-clustered at low zoom, keyed by layer name → category color.
 const CLUSTER_LAYERS: Record<string, Color> = {
   earthquakes: Color.fromCssColorString('#ff8c00'),
@@ -1822,6 +1875,110 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
 
   getBuildingTier(): string {
  return this.buildingManager?.providerName ?? 'Not loaded';
+  }
+
+  /**
+   * Returns position+timestamp pairs for visible entities in the named layer.
+   * Used by GlobeTrails to build comet tails.
+   */
+  getEntityPositionHistory(layerName: string): EntityPositionSample[] {
+ const layer = this.layers.get(layerName);
+ if (!layer?.source.show) return [];
+ const results: EntityPositionSample[] = [];
+ const now = JulianDate.fromDate(new Date());
+ for (const entity of layer.source.entities.values) {
+ if (!entity.show) continue;
+ const pos = entity.position?.getValue(now);
+ if (!pos) continue;
+ const carto = Cartographic.fromCartesian(pos);
+ let timeMs = Date.now();
+ try {
+ const bag = entity.properties?.getValue(now) as TimestampedProperties | undefined;
+ const ts = bag?.timestamp;
+ if (ts) timeMs = ts instanceof Date ? ts.getTime() : Number(ts);
+ } catch { /* no timestamp — fall back to now */ }
+ results.push({
+ id: String(entity.id),
+ lat: CesiumMath.toDegrees(carto.latitude),
+ lon: CesiumMath.toDegrees(carto.longitude),
+ timeMs,
+ });
+ }
+ return results;
+  }
+
+  /**
+   * Returns entities with severity metadata for pillar and degradation rendering.
+   */
+  getLayerEntitiesWithTimestamps(layerName: string): EntityTimestampedSample[] {
+ const layer = this.layers.get(layerName);
+ if (!layer?.source.show) return [];
+ const baseSeverity = LAYER_BASE_SEVERITY[layerName] ?? 1;
+ const now = JulianDate.fromDate(new Date());
+ const results: EntityTimestampedSample[] = [];
+ for (const entity of layer.source.entities.values) {
+ if (!entity.show) continue;
+ const pos = entity.position?.getValue(now);
+ if (!pos) continue;
+ const carto = Cartographic.fromCartesian(pos);
+ let timeMs = Date.now();
+ try {
+ const bag = entity.properties?.getValue(now) as TimestampedProperties | undefined;
+ const ts = bag?.timestamp;
+ if (ts) timeMs = ts instanceof Date ? ts.getTime() : Number(ts);
+ } catch { /* no timestamp */ }
+ const desc = entity.description?.getValue(now) as unknown;
+ results.push({
+ id: String(entity.id),
+ lat: CesiumMath.toDegrees(carto.latitude),
+ lon: CesiumMath.toDegrees(carto.longitude),
+ timeMs,
+ severity: baseSeverity,
+ description: typeof desc === 'string' ? desc : (entity.name ?? layerName),
+ });
+ }
+ return results;
+  }
+
+  /**
+   * Returns event blocks grouped by swimlane category for timeline rendering.
+   */
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- nested by design: category × layer × entity. Restructuring into helpers split the timestamp/severity/coord assembly across functions and made the data flow harder to follow than the linear loop.
+  getEventBlocks(): EventBlock[] {
+ const nowMs = Date.now();
+ const blocks: EventBlock[] = [];
+ const now = JulianDate.fromDate(new Date());
+ for (const [category, layerNames] of Object.entries(SWIMLANE_CATEGORY_MAP) as [EventBlock['category'], string[]][]) {
+ for (const layerName of layerNames) {
+ const layer = this.layers.get(layerName);
+ if (!layer) continue;
+ for (const entity of layer.source.entities.values) {
+ const pos = entity.position?.getValue(now);
+ if (!pos) continue;
+ const carto = Cartographic.fromCartesian(pos);
+ let timeMs = nowMs;
+ try {
+ const bag = entity.properties?.getValue(now) as TimestampedProperties | undefined;
+ const ts = bag?.timestamp;
+ if (ts) timeMs = ts instanceof Date ? ts.getTime() : Number(ts);
+ } catch { /* use now */ }
+ const desc = entity.description?.getValue(now) as unknown;
+ blocks.push({
+ id: String(entity.id),
+ layerName,
+ category,
+ startMs: timeMs,
+ endMs: timeMs + 3_600_000,
+ severity: LAYER_BASE_SEVERITY[layerName] ?? 1,
+ name: typeof desc === 'string' ? desc : (entity.name ?? layerName),
+ lat: CesiumMath.toDegrees(carto.latitude),
+ lon: CesiumMath.toDegrees(carto.longitude),
+ isForecast: timeMs > nowMs,
+ });
+ }
+ }
+ }
+ return blocks;
   }
 
 }

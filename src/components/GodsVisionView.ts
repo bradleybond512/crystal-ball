@@ -177,7 +177,6 @@ export class GodsVisionView {
  viewer,
  () => this.dataManager?.getDataSources() ?? new Map<string, CustomDataSource>(),
  );
- this.autoFollow.setMode(this.currentMode);
  this.autoFollow.setOnTargetChange((target, index, total) => {
  this.hud?.updateAutoFollowState(target, index, total);
  });
@@ -491,7 +490,8 @@ export class GodsVisionView {
   private handleModeChange(e: Event): void {
  const detail = (e as CustomEvent<ModeChangedDetail>).detail;
  this.currentMode = detail.mode;
- this.autoFollow?.setMode(detail.mode);
+ // AutoFollow no longer reprioritizes by mode — single-mode design.
+ // Mode here drives theming and audio cues only.
  this.applyModeTheme(detail.mode);
   }
 

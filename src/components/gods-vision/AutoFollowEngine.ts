@@ -2,14 +2,14 @@
  * AutoFollowEngine — Intelligent auto-pilot for God's Eye camera.
  *
  * Reads entity positions from GlobeDataManager's CustomDataSources,
- * scores them by layer importance (mode-weighted), and flies the camera
- * to the highest-priority targets in a cycle.
+ * scores them against a single flat layer-weight table, and flies the
+ * camera to the highest-priority targets in a cycle.
  *
- * Mode awareness:
- *  - War mode → prioritize conflicts, airstrikes, military
- *  - Disaster → prioritize earthquakes, GDACS, volcanoes, cyclones, fires
- *  - Finance → overview orbit, minimal fly-to
- *  - Peace/Ghost → balanced scoring
+ * Single-mode design: the intelligence surface is always on at full
+ * weighting. There is no per-mode reprioritization. Future power-saving
+ * variants ('reduced' / 'minimal') are reserved for {@link setPowerMode}
+ * — they affect update frequency and entity sample size, never which
+ * content gets prioritized.
  */
 
 import {
@@ -21,7 +21,6 @@ import {
   type Entity,
   type CustomDataSource,
 } from 'cesium';
-import type { AppMode } from '@/services/mode-manager';
 
 export interface FollowTarget {
   id: string;
@@ -42,30 +41,45 @@ const DEFAULT_CYCLE_MS = 12_000;
 const DEFAULT_FLY_DURATION = 2.5;
 const DEFAULT_ALT = 2_500_000;
 
-/** Per-layer base importance (higher = more likely to be followed). */
+/**
+ * Flat per-layer importance. A single Record applied unconditionally —
+ * the intelligence surface does not reprioritize by app mode.
+ *
+ * Aliases (military / weather / shipping / satellites) are included so
+ * future data sources registered under those names get sensible weights
+ * without needing to re-edit this table.
+ */
 const LAYER_WEIGHTS: Record<string, number> = {
-  earthquakes: 3,
-  gdacs: 4,
-  conflicts: 3,
-  airstrikes: 4,
-  volcanoes: 3,
-  cyclones: 4,
-  fires: 2,
-  flights: 1.5,
-  vessels: 1,
-  darkVessels: 2.5,
-  nuclear: 1,
-  cyber: 1.5,
-  gpsJamming: 2,
+  // High-priority threat signals
+  airstrikes: 3,
+  conflicts: 2.5,
+  military: 2.2,
+  // Disasters
+  earthquakes: 2,
+  gdacs: 2,
+  volcanoes: 2,
+  nuclear: 2,
+  cyclones: 1.8,
+  // Mid-priority signals
+  darkVessels: 1.8,
+  cyber: 1.6,
+  fires: 1.5,
+  gpsJamming: 1.5,
+  hotspots: 1.5,
   protests: 1.5,
+  weather: 1.2,
+  // Background activity
+  flights: 1,
+  vessels: 1,
+  shipping: 1,
+  satChange: 1,
+  satellites: 1,
   disease: 1,
   displacement: 1,
-  hotspots: 2,
-  satChange: 2,
 };
 
-/** Mode-specific multipliers for layer weights. */
-const MODE_MULTIPLIERS: Record<string, Record<string, number>> = {};
+/** Future power-reduction levels. See {@link AutoFollowEngine.setPowerMode}. */
+export type AutoFollowPowerMode = 'full' | 'reduced' | 'minimal';
 
 /** Deterministic 0-1 value from a string, used for stable jitter. */
 function simpleHash(s: string): number {
@@ -145,7 +159,6 @@ export class AutoFollowEngine {
   private currentIndex = 0;
   private cycleTimer: ReturnType<typeof setInterval> | null = null;
   private _active = false;
-  private mode: AppMode | null = null;
   private opts: Required<AutoFollowOptions>;
   private onTargetChange: ((target: FollowTarget | null, index: number, total: number) => void) | null = null;
   private dataSources: () => Map<string, CustomDataSource>;
@@ -178,8 +191,16 @@ export class AutoFollowEngine {
  return this.targets.length;
   }
 
-  setMode(mode: AppMode | null): void {
- this.mode = mode;
+  /**
+   * Future power-reduction modes control update frequency and entity count,
+   * not content weighting. Currently a stub — the engine always runs at
+   * 'full'. Wiring will plug in here when battery-saver / reduced-CPU
+   * variants are implemented.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  setPowerMode(_level: AutoFollowPowerMode): void {
+ // Stub — see JSDoc. Wiring lands when battery-saver / reduced-CPU
+ // variants are implemented.
   }
 
   setOnTargetChange(cb: (target: FollowTarget | null, index: number, total: number) => void): void {
@@ -242,9 +263,7 @@ export class AutoFollowEngine {
 
  for (const [layerName, source] of sources) {
  if (!source.show) continue;
- const baseWeight = LAYER_WEIGHTS[layerName] ?? 1;
- const modeMulti = (this.mode ? MODE_MULTIPLIERS[this.mode]?.[layerName] : 1) ?? 1;
- const weight = baseWeight * modeMulti;
+ const weight = LAYER_WEIGHTS[layerName] ?? 1;
 
  if (weight < 0.5) continue; // Skip nearly-zero-weight layers
 
@@ -297,7 +316,7 @@ export class AutoFollowEngine {
  this.onTargetChange?.(target, this.currentIndex, this.targets.length);
   }
 
-  /** Return the top-N priority targets using the current mode weights.
+  /** Return the top-N priority targets using the layer-weight table.
  *  Safe to call at any time — triggers a fresh scoring pass. */
   getPriorityTargets(n: number): FollowTarget[] {
  this.refreshTargets();

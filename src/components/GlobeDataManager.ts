@@ -36,6 +36,7 @@ import {
   computeCycloneCone,
   type AftershockForecast,
   type ForecastCone,
+  type TrackPoint,
 } from '@/services/forecast-engine';
 
 import {
@@ -360,6 +361,10 @@ export class GlobeDataManager {
   private cameraMoveSub: (() => void) | null = null;
   private aftershockForecasts = new Map<string, AftershockForecast>();
   private cycloneCones = new Map<string, ForecastCone>();
+  // Persists across loadTropicalCyclones() calls so we can derive an actual
+  // heading from successive advisories. The single-point fallback (random
+  // hash bearing) only fires for first-sighting cyclones.
+  private cycloneTracks = new Map<string, TrackPoint[]>();
 
   constructor(viewer: Viewer) {
  this.viewer = viewer;
@@ -875,11 +880,25 @@ export class GlobeDataManager {
 
  this.cycloneCones.clear();
 
+ // Drop tracked positions for cyclones that fell out of the active feed.
+ const liveIds = new Set(cyclones.map((tc) => tc.id));
+ for (const id of this.cycloneTracks.keys()) {
+ if (!liveIds.has(id)) this.cycloneTracks.delete(id);
+ }
+
  for (const tc of cyclones) {
  const advisoryMs = tc.advisoryTime instanceof Date ? tc.advisoryTime.getTime() : Date.now();
- const cone = computeCycloneCone(tc.id, [
- { lat: tc.lat, lon: tc.lon, timeMs: advisoryMs },
- ]);
+ const existing = this.cycloneTracks.get(tc.id) ?? [];
+ const last = existing[existing.length - 1];
+ // Append only when the advisory has actually progressed; the upstream
+ // feed re-serves the same advisory on every poll until a new one lands,
+ // and duplicate timestamps would not change the derived heading.
+ const isSameAdvisory = last?.timeMs === advisoryMs && last?.lat === tc.lat && last?.lon === tc.lon;
+ const track = isSameAdvisory
+ ? existing
+ : [...existing, { lat: tc.lat, lon: tc.lon, timeMs: advisoryMs }].slice(-6);
+ this.cycloneTracks.set(tc.id, track);
+ const cone = computeCycloneCone(tc.id, track);
  if (cone) this.cycloneCones.set(tc.id, cone);
 
  const isCat3Plus = tc.category === 'category_3' || tc.category === 'category_4' || tc.category === 'category_5';

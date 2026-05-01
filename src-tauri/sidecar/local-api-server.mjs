@@ -7155,7 +7155,10 @@ async function dispatch(requestUrl, req, routes, context) {
  const resp = await fetchWithTimeout(feed.url, {
  headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/json' },
  }, 10_000);
- if (!resp.ok) return [];
+ if (!resp.ok) {
+ console.warn(`[dot-traffic-cams] ${feed.state} feed HTTP ${resp.status}`);
+ return [];
+ }
  const data = await resp.json();
  const cams = [];
  if (feed.parser === 'caltrans') {

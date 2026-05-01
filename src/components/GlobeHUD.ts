@@ -17,6 +17,14 @@ export interface HUDState {
   disasters?: number;
   nearestHotspot?: { name: string; distanceKm: number } | null;
   tickerItems?: string[];
+  fourDActive?: boolean;
+  fourDPlaybackMode?: 'documentary' | 'director' | 'heartbeat';
+}
+
+function fourDBadgeLabel(mode: 'documentary' | 'director' | 'heartbeat' | undefined): string {
+  if (mode === 'director') return '4D · DIRECTOR';
+  if (mode === 'heartbeat') return '4D · HEARTBEAT';
+  return '4D';
 }
 
 function sunAltitudeDeg(lat: number, lon: number, date: Date): number {
@@ -93,6 +101,7 @@ export class GlobeHUD {
   private audioEnabled = false;
   private clusteringEnabled = true;
   private clockId: number | null = null;
+  private fourDBadgeEl: HTMLElement | null = null;
 
   // Cached DOM refs
   private threatEl: HTMLElement | null = null;
@@ -144,6 +153,11 @@ export class GlobeHUD {
  card.append(this.clockEl);
  const threatLabel = this.el('div', 'ge-hud-micro-label', 'THREAT ASSESSMENT');
  card.append(threatLabel);
+ this.fourDBadgeEl = document.createElement('div');
+ this.fourDBadgeEl.className = 'ge-hud-4d-badge';
+ this.fourDBadgeEl.textContent = '4D';
+ this.fourDBadgeEl.style.display = 'none';
+ card.append(this.fourDBadgeEl);
  this.threatEl = this.el('div', 'ge-hud-threat-value ge-threat-nominal', 'NOMINAL');
  card.append(this.threatEl);
  this.threatDetailEl = this.el('div', 'ge-hud-threat-detail', '');
@@ -602,6 +616,13 @@ export class GlobeHUD {
  const items = state.tickerItems.length ? state.tickerItems : ['Awaiting feeds…'];
  this.tickerTrackEl.textContent = items.join(' • ') + ' • ' + items.join(' • ');
  }
+ if (state.fourDActive !== undefined && this.fourDBadgeEl) {
+ this.fourDBadgeEl.style.display = state.fourDActive ? 'inline-flex' : 'none';
+ if (state.fourDActive) {
+ this.fourDBadgeEl.textContent = fourDBadgeLabel(state.fourDPlaybackMode);
+ }
+ }
+ if (state.fourDPlaybackMode !== undefined && this.fourDBadgeEl?.style.display !== 'none' && this.fourDBadgeEl) this.fourDBadgeEl.textContent = fourDBadgeLabel(state.fourDPlaybackMode);
   }
 
   private updateCameraContext(): void {
@@ -809,5 +830,6 @@ export class GlobeHUD {
  this.element.remove();
  this.onLayerToggle = null;
  this.onExit = null;
+ this.fourDBadgeEl = null;
   }
 }

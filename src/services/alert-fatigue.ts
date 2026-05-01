@@ -21,10 +21,27 @@ interface FatigueState {
 
 let state: FatigueState = { ackTimestamps: [], lastWarningTs: 0, bulkDismissCount: 0 };
 
+/**
+ * Pick-list copy: only known FatigueState keys are accepted with type-checked
+ * values. Prevents prototype pollution via `__proto__` / `constructor` keys
+ * in attacker-controlled localStorage values.
+ */
+function pickFatigueState(raw: unknown): Partial<FatigueState> {
+  if (!raw || typeof raw !== 'object') return {};
+  const r = raw as Record<string, unknown>;
+  const out: Partial<FatigueState> = {};
+  if (Array.isArray(r.ackTimestamps)) {
+    out.ackTimestamps = r.ackTimestamps.filter((t): t is number => typeof t === 'number');
+  }
+  if (typeof r.lastWarningTs === 'number') out.lastWarningTs = r.lastWarningTs;
+  if (typeof r.bulkDismissCount === 'number') out.bulkDismissCount = r.bulkDismissCount;
+  return out;
+}
+
 function load(): void {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) state = { ...state, ...(JSON.parse(raw) as Partial<FatigueState>) };
+    if (raw) state = { ...state, ...pickFatigueState(JSON.parse(raw)) };
   } catch { /* noop */ }
 }
 

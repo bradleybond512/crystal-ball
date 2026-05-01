@@ -8,6 +8,7 @@
  */
 
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export type MilitaryOperator =
   | 'usaf' | 'usn' | 'usmc' | 'usa'
@@ -168,12 +169,18 @@ export async function fetchMilitaryAdsb(): Promise<MilitaryFlight[]> {
   const now = Date.now();
   if (_cache && now - _cache.ts < CLIENT_CACHE_TTL) return _cache.data;
 
-  const res = await fetch(`${getApiBaseUrl()}/api/adsb-military`, {
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) throw new Error(`adsb-military: ${res.status}`);
-  const raw: unknown = await res.json();
-  const flights = parseMilitaryFlights(raw);
-  _cache = { data: flights, ts: now };
-  return flights;
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/api/adsb-military`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) throw new Error(`adsb-military: ${res.status}`);
+    const raw: unknown = await res.json();
+    const flights = parseMilitaryFlights(raw);
+    _cache = { data: flights, ts: now };
+    dataFreshness.recordUpdate('adsb-military', flights.length);
+    return flights;
+  } catch (error) {
+    dataFreshness.recordError('adsb-military', String(error));
+    throw error;
+  }
 }

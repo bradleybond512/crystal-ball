@@ -72,10 +72,22 @@ export class GlobeTrails {
   private trails = new Map<string, TrailEntry>();
   private destroyed = false;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Returns the reference time used for the trail-window cutoff. In live
+   * mode this is `Date.now()`; in 4D historical playback the host supplies
+   * a getter that resolves to the current scrubbed time so trails stay
+   * visible at older timestamps.
+   */
+  private getPlaybackTime: () => number;
 
-  constructor(viewer: Viewer, dataManager: GlobeDataManager) {
+  constructor(
+    viewer: Viewer,
+    dataManager: GlobeDataManager,
+    getPlaybackTime: () => number = () => Date.now(),
+  ) {
     this.viewer = viewer;
     this.dataManager = dataManager;
+    this.getPlaybackTime = getPlaybackTime;
     this.source = new CustomDataSource('4d-trails');
   }
 
@@ -154,7 +166,7 @@ export class GlobeTrails {
     trail.head = (trail.head + 1) % MAX_POINTS_PER_TRAIL;
     if (trail.count < MAX_POINTS_PER_TRAIL) trail.count++;
 
-    const cutoff = Date.now() - windowMs;
+    const cutoff = this.getPlaybackTime() - windowMs;
     while (trail.count > 0) {
       const oldest = ((trail.head - trail.count + MAX_POINTS_PER_TRAIL) % MAX_POINTS_PER_TRAIL) * POINT_STRIDE;
       if ((trail.buffer[oldest + 2] ?? 0) >= cutoff) break;

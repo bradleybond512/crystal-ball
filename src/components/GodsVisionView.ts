@@ -10,6 +10,7 @@ import { GlobeDataManager } from '@/components/GlobeDataManager';
 import { GlobeHUD } from '@/components/GlobeHUD';
 import { GlobeTimeMachine } from '@/components/GlobeTimeMachine';
 import { AutoFollowEngine } from '@/components/gods-vision/AutoFollowEngine';
+import { Globe4DManager } from '@/components/gods-vision/Globe4DManager';
 import { GlobePulse } from '@/components/gods-vision/GlobePulse';
 import { GlobeArcs } from '@/components/gods-vision/GlobeArcs';
 import { GlobeHeatmap } from '@/components/gods-vision/GlobeHeatmap';
@@ -69,6 +70,7 @@ export class GodsVisionView {
   private hud: GlobeHUD | null = null;
   private timeMachine: GlobeTimeMachine | null = null;
   private autoFollow: AutoFollowEngine | null = null;
+  private fourD: Globe4DManager | null = null;
   private reactorBeacons: GlobeReactorBeacons | null = null;
   private globePulse: GlobePulse | null = null;
   private globeArcs: GlobeArcs | null = null;
@@ -252,6 +254,22 @@ export class GodsVisionView {
  this.hud.setOnHeatmapToggle((enabled) => this.globeHeatmap?.setEnabled(enabled));
  this.hud.setOnNavigationToggle(() => void this.toggleNavigation());
 
+ // 4D mode orchestrator (T toggles; D/I/H pick playback mode; Tab/[/]/Esc cycle UI).
+ this.fourD = new Globe4DManager({
+ hud: this.hud,
+ timeMachine: this.timeMachine,
+ dataManager: this.dataManager,
+ autoFollow: this.autoFollow,
+ viewer: this.globe?.cesiumViewer ?? null,
+ overlayContainer: this.container,
+ });
+ this.fourD.onChange((state) => {
+ this.hud?.updateState({
+ fourDActive: state.active,
+ fourDPlaybackMode: state.playbackMode,
+ });
+ });
+
  // Navigation HUD + Panel
  this.navHud = new NavigationHUD(this.container);
  this.navHud.mount();
@@ -357,6 +375,9 @@ export class GodsVisionView {
 
  this.timeMachine?.destroy();
  this.timeMachine = null;
+
+ this.fourD?.destroy();
+ this.fourD = null;
 
  this.reactorBeacons?.destroy();
  this.reactorBeacons = null;
@@ -571,6 +592,13 @@ export class GodsVisionView {
 
  // ── Normal mode keys ──────────────────────────────
 
+ // Esc clears any active Tier 2 overlay before the existing Esc-exits handler runs.
+ if (ke.key === 'Escape' && this.fourD?.hasActiveTier2()) {
+ this.fourD.clearTier2();
+ ke.stopPropagation();
+ return;
+ }
+
  // ESC exits God's Eye
  if (ke.key === 'Escape') {
  this.exit();
@@ -600,6 +628,23 @@ export class GodsVisionView {
  if (ke.key === 'n' || ke.key === 'N') {
  void this.toggleNavigation();
  return;
+ }
+
+ // T toggles 4D mode. Avoid stealing Cmd+T (open new tab in browsers).
+ if (ke.key === 't' || ke.key === 'T') {
+ if (ke.metaKey || ke.ctrlKey || ke.altKey) return;
+ this.fourD?.toggle();
+ return;
+ }
+
+ // 4D-only shortcuts: D/I/H playback, Tab collapse, [/] zoom.
+ if (this.fourD?.isActive() && !ke.metaKey && !ke.ctrlKey && !ke.altKey) {
+ if (ke.key === 'd' || ke.key === 'D') { this.fourD.setPlaybackMode('documentary'); return; }
+ if (ke.key === 'i' || ke.key === 'I') { this.fourD.setPlaybackMode('director'); return; }
+ if (ke.key === 'h' || ke.key === 'H') { this.fourD.setPlaybackMode('heartbeat'); return; }
+ if (ke.key === 'Tab') { ke.preventDefault(); this.fourD.toggleSwimlaneCollapse(); return; }
+ if (ke.key === '[') { this.fourD.swimlaneZoomIn(); return; }
+ if (ke.key === ']') { this.fourD.swimlaneZoomOut(); return; }
  }
 
  // Bookmark save: Cmd+1-5

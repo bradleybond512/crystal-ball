@@ -118,3 +118,18 @@ function annotateSatellite(name: string, noradId: number): SatelliteAnnotation |
   }
   return null;
 }
+
+/** True for satellites worth tracking passes for: ISS, recon birds, military. */
+export function isReconOrMilitary(classification: SatelliteClassification): boolean {
+  return classification === 'notable' || classification === 'military';
+}
+
+export function getClassificationLabel(classification: SatelliteClassification): string {
+  const labels: Record<SatelliteClassification, string> = {
+    notable: 'NOTABLE',
+    military: 'MILITARY',
+    constellation: 'CONSTELLATION',
+    normal: 'CIVIL',
+  };
+  return labels[classification];
+}

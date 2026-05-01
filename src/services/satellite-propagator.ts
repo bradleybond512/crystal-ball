@@ -20,13 +20,27 @@ export interface OrbitPath {
   points: [number, number, number][]; // [lon, lat, altKm]
 }
 
+export interface SatellitePass {
+  satelliteId: string;
+  satelliteName: string;
+  locationId: string;
+  locationName: string;
+  riseTime: number;
+  maxElevationTime: number;
+  setTime: number;
+  maxElevation: number;
+  duration: number;
+}
+
 type PositionListener = (positions: SatellitePosition[]) => void;
 type OrbitPathListener = (path: OrbitPath) => void;
+type PassListener = (passes: SatellitePass[]) => void;
 
 class SatellitePropagator {
   private worker: Worker | null = null;
   private positionListeners: PositionListener[] = [];
   private orbitPathListeners: OrbitPathListener[] = [];
+  private passListeners: PassListener[] = [];
   private latestPositions: SatellitePosition[] = [];
 
   start(catalog: SatelliteTLE[]): void {
@@ -38,7 +52,7 @@ class SatellitePropagator {
  );
 
  this.worker.addEventListener('message', (e: MessageEvent) => {
- const msg = e.data as { type: string; positions?: SatellitePosition[]; noradId?: number; points?: [number, number, number][] };
+ const msg = e.data as { type: string; positions?: SatellitePosition[]; noradId?: number; points?: [number, number, number][]; passes?: SatellitePass[] };
 
  if (msg.type === 'positions' && msg.positions) {
  this.latestPositions = msg.positions;
@@ -51,6 +65,12 @@ class SatellitePropagator {
  const path: OrbitPath = { noradId: msg.noradId, points: msg.points };
  for (const listener of this.orbitPathListeners) {
  listener(path);
+ }
+ }
+
+ if (msg.type === 'passes' && msg.passes) {
+ for (const listener of this.passListeners) {
+ listener(msg.passes);
  }
  }
  });
@@ -98,6 +118,27 @@ class SatellitePropagator {
  this.orbitPathListeners.push(listener);
  return () => {
  this.orbitPathListeners = this.orbitPathListeners.filter(l => l !== listener);
+ };
+  }
+
+  requestPasses(satellites: SatelliteTLE[], locations: { id: string; name: string; lat: number; lon: number; alt?: number }[], durationHours = 6): void {
+ this.worker?.postMessage({
+ type: 'computePasses',
+ satellites: satellites.map(s => ({
+ noradId: s.noradId,
+ name: s.name,
+ line1: s.line1,
+ line2: s.line2,
+ })),
+ locations,
+ durationHours,
+ });
+  }
+
+  onPasses(listener: PassListener): () => void {
+ this.passListeners.push(listener);
+ return () => {
+ this.passListeners = this.passListeners.filter(l => l !== listener);
  };
   }
 

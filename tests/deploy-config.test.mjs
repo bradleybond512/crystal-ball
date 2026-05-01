@@ -28,11 +28,13 @@ describe('deploy/cache configuration guardrails', () => {
   });
 
   it('keeps PWA precache glob free of HTML files', () => {
+ // The intent here is *no HTML in precache*. Other static asset extensions
+ // (json for the manifest, etc.) may be added freely.
  assert.match(
  viteConfigSource,
- /globPatterns:\s*\['\*\*\/\*\.\{js,css,ico,png,svg,woff2\}'\]/
+ /globPatterns:\s*\['\*\*\/\*\.\{[a-z0-9,]+\}'\]/i,
  );
- assert.doesNotMatch(viteConfigSource, /globPatterns:\s*\['\*\*\/\*\.\{js,css,html/);
+ assert.doesNotMatch(viteConfigSource, /globPatterns:\s*\['\*\*\/\*\.\{[^}]*\bhtml\b[^}]*\}'\]/);
   });
 
   it('explicitly disables navigateFallback when HTML is not precached', () => {

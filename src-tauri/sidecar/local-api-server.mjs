@@ -7039,6 +7039,131 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // -- Windy Webcams API v3 -- search by location or country
+  if (requestUrl.pathname === '/api/windy-webcams') {
+ const apiKey = process.env.WINDY_WEBCAMS_API_KEY;
+ if (!apiKey) return json({ webcams: [], error: 'WINDY_WEBCAMS_API_KEY not configured' }, 503);
+ const latRaw = requestUrl.searchParams.get('lat');
+ const lonRaw = requestUrl.searchParams.get('lon');
+ const lat = parseFloat(latRaw ?? 'NaN');
+ const lon = parseFloat(lonRaw ?? 'NaN');
+ const radius = Math.min(500, Math.max(1, parseFloat(requestUrl.searchParams.get('radius') ?? '50') || 50));
+ const country = requestUrl.searchParams.get('country');
+ const limit = Math.min(50, Math.max(1, parseInt(requestUrl.searchParams.get('limit') ?? '20', 10) || 20));
+ const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
+ if (!hasCoords && !country) {
+ return json({ webcams: [], error: 'Provide lat+lon or country' }, 400);
+ }
+ const cacheKey = `windy-webcams-${hasCoords ? `${lat}-${lon}-${radius}` : 'none'}-${country ?? 'none'}-${limit}`;
+ const cached = getCached(cacheKey, 30 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ let url = 'https://api.windy.com/webcams/api/v3/webcams?include=images,location,player';
+ if (hasCoords) {
+ url += `&nearby=${lat},${lon},${radius}`;
+ }
+ if (country) {
+ url += `&countries=${encodeURIComponent(country)}`;
+ }
+ url += `&limit=${limit}`;
+ const resp = await fetchWithTimeout(url, {
+ headers: {
+ 'x-windy-api-key': apiKey,
+ 'User-Agent': 'CrystalBall/1.0',
+ },
+ }, 12_000);
+ if (!resp.ok) throw new Error(`Windy HTTP ${resp.status}`);
+ const data = await resp.json();
+ const webcams = (data?.webcams ?? []).map(w => ({
+ id: String(w.webcamId ?? w.id ?? ''),
+ title: w.title ?? '',
+ city: w.location?.city ?? '',
+ country: w.location?.country ?? '',
+ countryCode: w.location?.countryCode ?? '',
+ region: w.location?.region ?? '',
+ lat: w.location?.latitude ?? 0,
+ lon: w.location?.longitude ?? 0,
+ thumbnail: w.images?.current?.preview ?? w.images?.daylight?.preview ?? '',
+ playerUrl: w.player?.day?.embed ?? `https://webcams.windy.com/webcams/public/embed/player/${String(w.webcamId ?? w.id ?? '').replace(/[^a-zA-Z0-9_-]/g, '')}/day`,
+ status: w.status ?? 'active',
+ lastUpdated: w.lastUpdatedOn ?? '',
+ }));
+ const result = { webcams, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 30 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: error?.message ?? 'unknown' });
+ return json({ webcams: [], error: error?.message ?? 'unknown' }, 502);
+ }
+  }
+
+  // -- US DOT traffic cameras (public 511 feeds) — Caltrans + 511 NY
+  if (requestUrl.pathname === '/api/dot-traffic-cams') {
+ const state = requestUrl.searchParams.get('state') || 'all';
+ const cacheKey = `dot-cams-${state}`;
+ const cached = getCached(cacheKey, 5 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const feeds = [
+ { state: 'CA', url: 'https://cwwp2.dot.ca.gov/data/d7/cctv/cctvStatusD07.json', parser: 'caltrans' },
+ { state: 'NY', url: 'https://511ny.org/api/getTransportationConditions?key=public&format=json&eventCategory=cameras', parser: 'ny511' },
+ ];
+ const targetFeeds = state === 'all' ? feeds : feeds.filter(f => f.state === state.toUpperCase());
+ const results = await Promise.allSettled(targetFeeds.map(async (feed) => {
+ const resp = await fetchWithTimeout(feed.url, {
+ headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/json' },
+ }, 10_000);
+ if (!resp.ok) return [];
+ const data = await resp.json();
+ const cams = [];
+ if (feed.parser === 'caltrans') {
+ const items = Array.isArray(data) ? data : data?.data ?? [];
+ let idx = 0;
+ for (const c of items) {
+ if (!c.cctv?.imageUrl) continue;
+ cams.push({
+ id: `dot-ca-${c.cctv?.index ?? idx}`,
+ title: c.cctv?.location?.locationName ?? `CA Camera ${idx + 1}`,
+ state: 'CA',
+ lat: c.cctv?.location?.latitude ?? 0,
+ lon: c.cctv?.location?.longitude ?? 0,
+ imageUrl: c.cctv.imageUrl,
+ direction: c.cctv?.location?.direction ?? '',
+ });
+ idx++;
+ }
+ } else if (feed.parser === 'ny511') {
+ const items = Array.isArray(data) ? data : data?.cameras ?? data?.features ?? [];
+ let idx = 0;
+ for (const c of items) {
+ const props = c.properties ?? c;
+ if (!props.imageUrl && !props.url) continue;
+ cams.push({
+ id: `dot-ny-${props.id ?? idx}`,
+ title: props.name ?? props.description ?? `NY Camera ${idx + 1}`,
+ state: 'NY',
+ lat: props.latitude ?? c.geometry?.coordinates?.[1] ?? 0,
+ lon: props.longitude ?? c.geometry?.coordinates?.[0] ?? 0,
+ imageUrl: props.imageUrl ?? props.url ?? '',
+ direction: props.direction ?? '',
+ });
+ idx++;
+ }
+ }
+ return cams;
+ }));
+ const allCams = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+ const result = { cameras: allCams, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 5 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: error?.message ?? 'unknown' });
+ return json({ cameras: [], error: error?.message ?? 'unknown' }, 502);
+ }
+  }
+
   if (context.cloudFallback && cloudPreferred.has(requestUrl.pathname)) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context);
  if (cloudResponse) return cloudResponse;

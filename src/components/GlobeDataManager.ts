@@ -31,6 +31,12 @@ import { satellitePropagator, type SatellitePosition } from '@/services/satellit
 import { fetchLightningStrikes } from '@/services/lightning';
 import { fetchRedFlagWarnings } from '@/services/red-flag-warnings';
 import { getRadarTileUrl, fetchRadarFrames } from '@/services/rainviewer-radar';
+import {
+  computeAftershockForecast,
+  computeCycloneCone,
+  type AftershockForecast,
+  type ForecastCone,
+} from '@/services/forecast-engine';
 
 import {
   UNDERSEA_CABLES,
@@ -352,6 +358,8 @@ export class GlobeDataManager {
   private satelliteCatalog: SatelliteTLE[] = [];
   private unsubPositions: (() => void) | null = null;
   private cameraMoveSub: (() => void) | null = null;
+  private aftershockForecasts = new Map<string, AftershockForecast>();
+  private cycloneCones = new Map<string, ForecastCone>();
 
   constructor(viewer: Viewer) {
  this.viewer = viewer;
@@ -726,10 +734,19 @@ export class GlobeDataManager {
  const { fetchEarthquakes } = await import('@/services/earthquakes');
  const quakes = await fetchEarthquakes();
 
+ this.aftershockForecasts.clear();
+
  for (const eq of quakes) {
  const lat = eq.location?.latitude;
  const lon = eq.location?.longitude;
  if (lat == null || lon == null) continue;
+
+ if (eq.magnitude >= 4 && eq.id) {
+ this.aftershockForecasts.set(
+ eq.id,
+ computeAftershockForecast(eq.id, lat, lon, eq.magnitude),
+ );
+ }
 
  const isMajor = eq.magnitude >= 5;
  const color = isMajor ? C.earthquake : C.earthquakeMinor;
@@ -856,7 +873,15 @@ export class GlobeDataManager {
  const { fetchTropicalCyclones } = await import('@/services/tropical-cyclones');
  const cyclones = await fetchTropicalCyclones();
 
+ this.cycloneCones.clear();
+
  for (const tc of cyclones) {
+ const advisoryMs = tc.advisoryTime instanceof Date ? tc.advisoryTime.getTime() : Date.now();
+ const cone = computeCycloneCone(tc.id, [
+ { lat: tc.lat, lon: tc.lon, timeMs: advisoryMs },
+ ]);
+ if (cone) this.cycloneCones.set(tc.id, cone);
+
  const isCat3Plus = tc.category === 'category_3' || tc.category === 'category_4' || tc.category === 'category_5';
  const isCat1Plus = isCat3Plus || tc.category === 'category_1' || tc.category === 'category_2';
  const color = cycloneColor(tc.category, isCat3Plus, isCat1Plus);
@@ -1721,6 +1746,14 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
   setLayerVisible(name: string, visible: boolean): void {
  const layer = this.layers.get(name);
  if (layer) layer.source.show = visible;
+  }
+
+  getAftershockForecast(earthquakeId: string): AftershockForecast | null {
+ return this.aftershockForecasts.get(earthquakeId) ?? null;
+  }
+
+  getCycloneCone(cycloneId: string): ForecastCone | null {
+ return this.cycloneCones.get(cycloneId) ?? null;
   }
 
   getEntityCount(): number {

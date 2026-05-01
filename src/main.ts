@@ -1,6 +1,7 @@
 /* eslint-disable sonarjs/no-duplicated-branches, no-console, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/slow-regex, sonarjs/anchor-precedence, sonarjs/regex-complexity, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-empty-function, @typescript-eslint/no-floating-promises, unicorn/prefer-top-level-await */
 import './styles/base-layer.css';
 import './styles/happy-theme.css';
+import './styles/gods-eye-4d.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as Sentry from '@sentry/browser';
 import { inject } from '@vercel/analytics';

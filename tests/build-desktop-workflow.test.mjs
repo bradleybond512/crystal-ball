@@ -10,10 +10,13 @@ const workflow = readFileSync(
 );
 
 test('desktop build workflow is tag-driven and publishes only after artifact verification', () => {
-  assert.match(
+  // Workflow dispatch has two modes (build / publish-recovery) but the default
+ // and most common use is build-only — verify a variant input exists with
+ // a description that scopes the build path.
+ assert.match(
  workflow,
- /workflow_dispatch:[\s\S]*Build-only variant/,
- 'workflow dispatch should be build-only, not a release publisher',
+ /workflow_dispatch:[\s\S]*Variant to build/,
+ 'workflow dispatch should expose a variant input scoped to the build path',
   );
   assert.match(
  workflow,

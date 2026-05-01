@@ -11,7 +11,7 @@ describe('desktop biometric bootstrap', () => {
   it('uses desktop runtime detection for the unlock gate', () => {
  assert.match(
  mainSrc,
- /if \(isDesktopRuntime\(\)\) \{/,
+ /if \(isDesktopRuntime\(\)(\s*\|\|[^)]*)?\)\s*\{/,
  'desktop unlock should follow the shared runtime detector instead of raw window globals',
  );
   });

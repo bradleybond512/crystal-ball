@@ -36,6 +36,10 @@ All notable changes to Crystal Ball are documented here.
 
 - **Dependency overrides** (`package.json`): forced `protobufjs ^7.5.5` and `dompurify ^3.4.0` via overrides to close the transitive CVEs from `@xenova/transformers → onnxruntime-web → onnx-proto → protobufjs` and `cesium / posthog-js → dompurify`. `npm audit: 0 vulnerabilities`.
 
+## [2.10.21] - 2026-04-28
+
+Backfilled placeholder for the 2.10.21 release tag (cut without a CHANGELOG entry). The substantive changes shipped in this version are captured under [Unreleased] above and were promoted via patch bumps between 2.10.5 and 2.10.21. See `git log v2.10.5..v2.10.21` for the per-commit history.
+
 ## [2.10.5] - 2026-04-18
 
 ### Added

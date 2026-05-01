@@ -241,3 +241,19 @@ export function forecastRegions(): ForecastResult[] {
 export function getHighRiskRegions(): ForecastResult[] {
   return forecastRegions().filter(r => r.risk24h >= HIGH_RISK_THRESHOLD);
 }
+
+/**
+ * Strict-monotonic trend over the last three EMA samples.
+ * Returns 'up' only when v[-3] < v[-2] < v[-1], 'down' only when reversed, 'stable' otherwise.
+ * Use this when you want a tighter "three consecutive moves in the same direction" signal
+ * than {@link forecastRegions}' slope-regression trend.
+ */
+export function strictMonotonicTrend(emaValues: number[]): ForecastResult['trending'] {
+  if (emaValues.length < 3) return 'stable';
+  const a = emaValues[emaValues.length - 3]!;
+  const b = emaValues[emaValues.length - 2]!;
+  const c = emaValues[emaValues.length - 1]!;
+  if (c > b && b > a) return 'up';
+  if (c < b && b < a) return 'down';
+  return 'stable';
+}

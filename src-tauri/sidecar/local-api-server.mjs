@@ -2453,12 +2453,8 @@ async function dispatch(requestUrl, req, routes, context) {
  return json({ error: 'Registration service not configured — use cloud endpoint directly' }, 503);
  }
  try {
- const body = await new Promise((resolve, reject) => {
- const chunks = [];
- req.on('data', c => chunks.push(c));
- req.on('end', () => resolve(Buffer.concat(chunks).toString()));
- req.on('error', reject);
- });
+ const bodyBuf = await readBody(req);
+ const body = bodyBuf ? bodyBuf.toString() : '';
  const parsed = JSON.parse(body);
  const email = parsed.email;
  if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -3621,10 +3617,18 @@ async function dispatch(requestUrl, req, routes, context) {
  fetchWithTimeout(WHO_DON_URL, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
  ]);
 
- const nextstrain = nsRes.status  === 'fulfilled' && nsRes.value.ok  ? await nsRes.value.json()  : null;
- const covidCountries = dsRes.status  === 'fulfilled' && dsRes.value.ok  ? await dsRes.value.json()  : null;
- const reliefweb = rwRes.status  === 'fulfilled' && rwRes.value.ok  ? await rwRes.value.json()  : null;
- const whoDon = whoRes.status === 'fulfilled' && whoRes.value.ok ? await whoRes.value.json() : null;
+ // Per-source JSON parsing — one bad response shouldn't kill the others.
+ const safeJson = async (settled) => {
+ if (settled.status !== 'fulfilled' || !settled.value.ok) return null;
+ try { return await settled.value.json(); } catch { return null; }
+ };
+
+ const [nextstrain, covidCountries, reliefweb, whoDon] = await Promise.all([
+ safeJson(nsRes),
+ safeJson(dsRes),
+ safeJson(rwRes),
+ safeJson(whoRes),
+ ]);
 
  const result = { nextstrain, covidCountries, reliefweb, whoDon, fetchedAt: new Date().toISOString() };
  setCached('disease-intel', result);

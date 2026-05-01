@@ -73,7 +73,12 @@ export class SatelliteIntelPanel extends Panel {
 
   private triggerComputePasses(): void {
     const places = getSavedPlaces().map(p => ({ id: p.id, name: p.name, lat: p.lat, lon: p.lon }));
-    void computePasses(places);
+    computePasses(places).catch((error) => {
+      // The catalog fetcher already swallows network errors via its circuit
+      // breaker, so reaching this branch means the contract changed. Log loudly.
+      // eslint-disable-next-line no-console
+      console.warn('[SatelliteIntelPanel] computePasses rejected:', error);
+    });
   }
 
   private classificationBadge(classification: string): string {

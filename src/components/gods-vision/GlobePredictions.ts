@@ -42,6 +42,7 @@ export class GlobePredictions {
   private viewer: Viewer;
   private source: CustomDataSource;
   private activeEntities: Entity[] = [];
+  private addPromise: Promise<unknown> | null = null;
 
   constructor(viewer: Viewer) {
     this.viewer = viewer;
@@ -49,7 +50,8 @@ export class GlobePredictions {
   }
 
   mount(): void {
-    this.viewer.dataSources.add(this.source).catch((error: unknown) => {
+    this.addPromise = this.viewer.dataSources.add(this.source);
+    this.addPromise.catch((error: unknown) => {
       // eslint-disable-next-line no-console
       console.error('[GlobePredictions] dataSources.add failed', error);
     });
@@ -57,7 +59,12 @@ export class GlobePredictions {
 
   destroy(): void {
     this.clear();
-    this.viewer.dataSources.remove(this.source, true);
+    // Chain the remove off the add promise so it doesn't leak when the
+    // add resolves after destroy.
+    const pending = this.addPromise ?? Promise.resolve();
+    pending
+      .then(() => this.viewer.dataSources.remove(this.source, true))
+      .catch(() => { /* add failed — nothing to remove */ });
   }
 
   clear(): void {

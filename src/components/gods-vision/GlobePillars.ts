@@ -53,6 +53,7 @@ export class GlobePillars {
   private pillars = new Map<string, PillarEntity>();
   private destroyed = false;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private addPromise: Promise<unknown> | null = null;
 
   constructor(viewer: Viewer, dataManager: GlobeDataManager) {
     this.viewer = viewer;
@@ -61,7 +62,8 @@ export class GlobePillars {
   }
 
   mount(): void {
-    this.viewer.dataSources.add(this.source).catch((error: unknown) => {
+    this.addPromise = this.viewer.dataSources.add(this.source);
+    this.addPromise.catch((error: unknown) => {
       // eslint-disable-next-line no-console
       console.error('[GlobePillars] dataSources.add failed', error);
     });
@@ -77,7 +79,12 @@ export class GlobePillars {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    this.viewer.dataSources.remove(this.source, true);
+    // Chain the remove off the add promise so it doesn't leak when the
+    // add resolves after destroy.
+    const pending = this.addPromise ?? Promise.resolve();
+    pending
+      .then(() => this.viewer.dataSources.remove(this.source, true))
+      .catch(() => { /* add failed — nothing to remove */ });
     this.pillars.clear();
   }
 

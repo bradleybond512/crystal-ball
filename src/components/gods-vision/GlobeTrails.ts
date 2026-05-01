@@ -79,6 +79,7 @@ export class GlobeTrails {
    * visible at older timestamps.
    */
   private getPlaybackTime: () => number;
+  private addPromise: Promise<unknown> | null = null;
 
   constructor(
     viewer: Viewer,
@@ -92,7 +93,8 @@ export class GlobeTrails {
   }
 
   mount(): void {
-    this.viewer.dataSources.add(this.source).catch((error: unknown) => {
+    this.addPromise = this.viewer.dataSources.add(this.source);
+    this.addPromise.catch((error: unknown) => {
       // eslint-disable-next-line no-console
       console.error('[GlobeTrails] dataSources.add failed', error);
     });
@@ -108,7 +110,12 @@ export class GlobeTrails {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    this.viewer.dataSources.remove(this.source, true);
+    // If the add hasn't settled, chain the remove so we don't leak the
+    // data source into the viewer when add resolves after destroy.
+    const pending = this.addPromise ?? Promise.resolve();
+    pending
+      .then(() => this.viewer.dataSources.remove(this.source, true))
+      .catch(() => { /* add failed — nothing to remove */ });
     this.trails.clear();
   }
 

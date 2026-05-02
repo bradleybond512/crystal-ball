@@ -6,6 +6,8 @@
  * Returns gauges currently at or above flood stage across the US.
  */
 
+import { dataFreshness } from './data-freshness';
+
 export interface FloodGauge {
   id: string;
   siteNo: string;
@@ -46,7 +48,7 @@ let cache: { gauges: FloodGauge[]; fetchedAt: number } | null = null;
 function toNumber(v: number | string | null | undefined): number | null {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
-  return isNaN(n) ? null : n;
+  return Number.isNaN(n) ? null : n;
 }
 
 function mapCategory(status: string): FloodGauge['floodCategory'] | null {
@@ -66,9 +68,12 @@ export async function fetchFloodGauges(): Promise<FloodGauge[]> {
  signal: AbortSignal.timeout(12_000),
  headers: { Accept: 'application/json' },
  });
- if (!res.ok) return cache?.gauges ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('flood-gauges', `HTTP ${res.status}`);
+ return cache?.gauges ?? [];
+ }
 
- const data: WaterWatchResponse = await res.json();
+ const data = await res.json() as WaterWatchResponse;
  const sites = data.sites ?? data.site ?? [];
 
  const gauges: FloodGauge[] = [];
@@ -104,8 +109,10 @@ export async function fetchFloodGauges(): Promise<FloodGauge[]> {
  gauges.sort((a, b) => order[a.floodCategory] - order[b.floodCategory]);
 
  cache = { gauges, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('flood-gauges', gauges.length);
  return gauges;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('flood-gauges', String(error));
  return cache?.gauges ?? [];
   }
 }

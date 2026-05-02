@@ -6,6 +6,8 @@
  * Free, no authentication, CORS-enabled.
  */
 
+import { dataFreshness } from './data-freshness';
+
 export type NasDelayType = 'departure' | 'arrival' | 'ground-stop' | 'ground-delay' | 'closure' | 'general';
 
 export interface NasDelay {
@@ -62,8 +64,11 @@ function parseDelayMinutes(delayStr: string): number | null {
   const normalized = delayStr.toLowerCase().trim();
 
   // Match "2 hrs 15 mins", "1 hr 20 mins", "45 mins", "1 hr", "2 hours", etc.
+  // Patterns are bounded to small inputs from FAA API; backtracking risk is bounded.
+  /* eslint-disable sonarjs/slow-regex */
   const hoursMatch = /(\d+)\s*hr(?:s|ours?)?/.exec(normalized);
   const minsMatch = /(\d+)\s*min(?:s|utes?)?/.exec(normalized);
+  /* eslint-enable sonarjs/slow-regex */
 
   const hours = hoursMatch ? Number.parseInt(hoursMatch[1] ?? '0', 10) : 0;
   const minutes = minsMatch ? Number.parseInt(minsMatch[1] ?? '0', 10) : 0;
@@ -175,8 +180,10 @@ export async function fetchNasStatus(): Promise<NasStatus> {
   );
 
   const delays: NasDelay[] = [];
+  let rejectedCount = 0;
   for (const r of results) {
  if (r.status === 'fulfilled' && r.value) delays.push(r.value);
+ else if (r.status === 'rejected') rejectedCount++;
   }
 
   // Sort: critical first, then by delay minutes desc
@@ -195,6 +202,11 @@ export async function fetchNasStatus(): Promise<NasStatus> {
   };
 
   cache = { status, fetchedAt: Date.now() };
+  if (rejectedCount === results.length) {
+ dataFreshness.recordError('faa-nas-status', `all ${rejectedCount} airport requests failed`);
+  } else {
+ dataFreshness.recordUpdate('faa-nas-status', delays.length);
+  }
   return status;
 }
 

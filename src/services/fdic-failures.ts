@@ -3,6 +3,8 @@
  * Source: https://banks.data.fdic.gov/api/failures (free, public, CORS-enabled)
  */
 
+import { dataFreshness } from './data-freshness';
+
 export type BankResolutionType = 'purchase-assumption' | 'payout' | 'open-bank-assistance' | 'other';
 
 export interface BankFailure {
@@ -97,10 +99,11 @@ export async function fetchBankFailures(): Promise<FdicFailureSummary> {
  });
 
  if (!res.ok) {
+ dataFreshness.recordError('fdic-failures', `HTTP ${res.status}`);
  return cache?.data ?? { failures: [], totalFailuresLastYear: 0, totalAssetsCoveredM: 0, fetchedAt: new Date() };
  }
 
- const json: FdicResponse = await res.json();
+ const json = await res.json() as FdicResponse;
  const twoYearsAgo = new Date(now - 2 * 365 * 24 * 60 * 60 * 1000);
  const oneYearAgo = new Date(now - 365 * 24 * 60 * 60 * 1000);
 
@@ -146,8 +149,10 @@ export async function fetchBankFailures(): Promise<FdicFailureSummary> {
  };
 
  cache = { data: summary, ts: now };
+ dataFreshness.recordUpdate('fdic-failures', failures.length);
  return summary;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('fdic-failures', String(error));
  return (
  cache?.data ?? { failures: [], totalFailuresLastYear: 0, totalAssetsCoveredM: 0, fetchedAt: new Date() }
  );

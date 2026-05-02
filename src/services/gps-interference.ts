@@ -1,5 +1,6 @@
 import { cellToLatLng } from 'h3-js';
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface GpsJamHex {
   h3: string;
@@ -37,7 +38,10 @@ export async function fetchGpsInterference(): Promise<GpsJamData | null> {
  const resp = await fetch(`${base}/api/gpsjam`, {
  signal: AbortSignal.timeout(20_000),
  });
- if (!resp.ok) return cachedData;
+ if (!resp.ok) {
+ dataFreshness.recordError('gps-interference', `HTTP ${resp.status}`);
+ return cachedData;
+ }
 
  const raw = await resp.json() as {
  date: string;
@@ -75,8 +79,10 @@ export async function fetchGpsInterference(): Promise<GpsJamData | null> {
  hexes,
  };
  cachedAt = now;
+ dataFreshness.recordUpdate('gps-interference', hexes.length);
  return cachedData;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('gps-interference', String(error));
  return cachedData;
   }
 }
@@ -85,12 +91,13 @@ export function getGpsInterferenceByRegion(data: GpsJamData): Record<string, Gps
   const regions: Record<string, GpsJamHex[]> = {};
   for (const hex of data.hexes) {
  const region = classifyRegion(hex.lat, hex.lon);
- if (!regions[region]) regions[region] = [];
+ regions[region] ??= [];
  regions[region].push(hex);
   }
   return regions;
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- flat region lookup table; refactor would obscure the geographic boundaries
 function classifyRegion(lat: number, lon: number): string {
   if (lat >= 29 && lat <= 42 && lon >= 43 && lon <= 63) return 'iran-iraq';
   if (lat >= 31 && lat <= 37 && lon >= 35 && lon <= 43) return 'levant';

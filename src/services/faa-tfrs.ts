@@ -9,6 +9,8 @@
  *  - Type 14: Space operations (launch corridor hazard)
  */
 
+import { dataFreshness } from './data-freshness';
+
 export interface FaaTfr {
   id: string;
   notamId: string;
@@ -53,7 +55,7 @@ function scoreSeverity(type: string, notamClass: string): FaaTfr['severity'] {
 function parseDate(str: string | null | undefined): Date | null {
   if (!str) return null;
   const d = new Date(str);
-  return isNaN(d.getTime()) ? null : d;
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function getText(el: Element, tag: string): string {
@@ -104,8 +106,9 @@ export async function fetchFaaTfrs(): Promise<FaaTfr[]> {
  const severity = scoreSeverity(type, notamClass);
  const description = `TFR ${notamId}: ${type} near ${city}, ${state}`.trim();
 
+ const idSuffix = notamId || `${facilityDesig}-${startStr}`;
  tfrs.push({
- id: `tfr-${notamId || `${facilityDesig}-${startStr}`}`,
+ id: `tfr-${idSuffix}`,
  notamId,
  facilityDesig,
  type,
@@ -126,8 +129,10 @@ export async function fetchFaaTfrs(): Promise<FaaTfr[]> {
  .slice(0, 50);
 
  cache = { tfrs: alertable, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('faa-tfrs', alertable.length);
  return alertable;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('faa-tfrs', String(error));
  return cache?.tfrs ?? [];
   }
 }

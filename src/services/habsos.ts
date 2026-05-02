@@ -4,6 +4,8 @@
  * Fallback: NOAA NCCOS HAB bulletin RSS
  */
 
+import { dataFreshness } from './data-freshness';
+
 export type HabSpecies =
   | 'Karenia'
   | 'Alexandrium'
@@ -133,7 +135,7 @@ function parseEsriDate(raw: number | string | null | undefined): Date {
   if (raw === null || raw === undefined) return new Date();
   if (typeof raw === 'number') return new Date(raw);
   const parsed = new Date(raw);
-  return isNaN(parsed.getTime()) ? new Date() : parsed;
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
 function fromEsriFeatures(features: EsriFeature[]): HabObservation[] {
@@ -159,15 +161,17 @@ function fromEsriFeatures(features: EsriFeature[]): HabObservation[] {
  a.CELLCOUNT !== null && a.CELLCOUNT !== undefined ? Number(a.CELLCOUNT) : null;
  const severity = computeHabSeverity(species, cellCount, impacts);
 
+ // eslint-disable-next-line sonarjs/pseudo-random -- ID jitter, not security-sensitive
+ const fallbackId = Math.random().toString(36).slice(2);
  results.push({
- id: `habsos-${a.OBJECTID ?? Math.random().toString(36).slice(2)}`,
+ id: `habsos-${a.OBJECTID ?? fallbackId}`,
  description: description || details || 'HAB observation',
  species,
  region,
  state,
  lat: a.Y ?? null,
  lon: a.X ?? null,
- cellCount: cellCount !== null && !isNaN(cellCount) ? cellCount : null,
+ cellCount: cellCount !== null && !Number.isNaN(cellCount) ? cellCount : null,
  sampleDate,
  affectedArea: a.AFFECTED_AREA ?? '',
  impacts,
@@ -180,6 +184,7 @@ function fromEsriFeatures(features: EsriFeature[]): HabObservation[] {
 
 function stripHtml(html: string): string {
   return html
+ // eslint-disable-next-line sonarjs/slow-regex -- HTML stripping on bounded RSS content
  .replace(/<[^>]+>/g, ' ')
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
@@ -194,9 +199,9 @@ function stripHtml(html: string): string {
 function extractText(xml: string, tag: string): string {
   const cdataRe = new RegExp(String.raw`<${tag}[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/${tag}>`, 'i');
   const plainRe = new RegExp(String.raw`<${tag}[^>]*>([\s\S]*?)<\/${tag}>`, 'i');
-  const cdataMatch = xml.match(cdataRe);
+  const cdataMatch = cdataRe.exec(xml);
   if (cdataMatch) return (cdataMatch[1] ?? '').trim();
-  const plainMatch = xml.match(plainRe);
+  const plainMatch = plainRe.exec(xml);
   if (plainMatch) return stripHtml(plainMatch[1] ?? '').trim();
   return '';
 }
@@ -217,7 +222,7 @@ function fromRssFallback(xmlText: string): HabObservation[] {
  const pubDateStr = extractText(block, 'pubDate');
 
  const sampleDate = pubDateStr ? new Date(pubDateStr) : new Date();
- if (isNaN(sampleDate.getTime()) || sampleDate.getTime() < cutoff) continue;
+ if (Number.isNaN(sampleDate.getTime()) || sampleDate.getTime() < cutoff) continue;
 
  const combinedText = title + ' ' + description;
  const species = detectSpecies(null, combinedText);
@@ -264,7 +269,7 @@ export async function fetchHabObservations(): Promise<HabObservation[]> {
   try {
  const res = await fetch(ESRI_URL, { signal: AbortSignal.timeout(12_000) });
  if (res.ok) {
- const json: EsriResponse = await res.json();
+ const json = await res.json() as EsriResponse;
  if (Array.isArray(json.features) && json.features.length > 0) {
  observations = fromEsriFeatures(json.features);
  }
@@ -287,7 +292,10 @@ export async function fetchHabObservations(): Promise<HabObservation[]> {
  }
   }
 
-  if (observations.length === 0) return cache?.data ?? [];
+  if (observations.length === 0) {
+ dataFreshness.recordError('habsos', 'no observations from ESRI or RSS fallback');
+ return cache?.data ?? [];
+  }
 
   observations.sort((a, b) => {
  const sev = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
@@ -297,6 +305,7 @@ export async function fetchHabObservations(): Promise<HabObservation[]> {
 
   const data = observations.slice(0, 40);
   cache = { data, ts: Date.now() };
+  dataFreshness.recordUpdate('habsos', data.length);
   return data;
 }
 

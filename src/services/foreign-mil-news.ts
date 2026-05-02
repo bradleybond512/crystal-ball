@@ -9,6 +9,8 @@
  * Cache TTL: 15 minutes.
  */
 
+import { dataFreshness } from './data-freshness';
+
 export type MilNewsSource = 'Russia-MoD' | 'China-PLA' | 'TASS' | 'Xinhua' | 'RT' | 'Other';
 
 export interface ForeignMilNewsItem {
@@ -48,10 +50,13 @@ interface MilCache {
 
 let _cache: MilCache | null = null;
 
+// Keyword filter for news article relevance — input is bounded RSS feed text.
+// eslint-disable-next-line sonarjs/regex-complexity
 const MILITARY_KEYWORDS = /military|army|navy|air force|missile|nuclear|weapon|exercise|drill|troops|soldier|combat|submarine|warship|hypersonic|strategic|defense|deterrence|conflict|operation|deploy|patrol/i;
 
 function stripHtml(html: string): string {
   return html
+ // eslint-disable-next-line sonarjs/slow-regex -- HTML stripping on bounded RSS content
  .replace(/<[^>]+>/g, ' ')
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
@@ -221,6 +226,11 @@ export async function fetchForeignMilNews(): Promise<ForeignMilNewsItem[]> {
 
   const items = deduped.slice(0, 50);
   _cache = { items, fetchedAt: Date.now() };
+  if (results.every(r => r.status === 'rejected')) {
+ dataFreshness.recordError('foreign-mil-news', `all ${results.length} feed requests rejected`);
+  } else {
+ dataFreshness.recordUpdate('foreign-mil-news', items.length);
+  }
   return items;
 }
 

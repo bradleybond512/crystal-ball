@@ -14,6 +14,8 @@
  * and the IAEA/NRC nuclear services.
  */
 
+import { dataFreshness } from './data-freshness';
+
 export interface HazmatIncident {
   id: string;
   title: string;
@@ -87,6 +89,8 @@ function scoreSeverity(title: string, description: string): HazmatIncident['seve
 }
 
 function extractState(text: string): string {
+  // Bounded input from RSS feeds; backtracking risk negligible.
+  // eslint-disable-next-line sonarjs/regex-complexity
   const stateMatch = /\b([A-Z]{2})\b(?=\s*\d{5}|,\s+USA?|,\s+United States)/.exec(text);
   if (stateMatch?.[1]) return stateMatch[1];
   const states = [
@@ -123,6 +127,7 @@ async function fetchRss(feedUrl: string, source: HazmatIncident['source']): Prom
 
  for (const item of items) {
  const title = item.querySelector('title')?.textContent?.trim() ?? '';
+ // eslint-disable-next-line sonarjs/slow-regex -- HTML stripping on bounded RSS content
  const description = (item.querySelector('description')?.textContent ?? '').replace(/<[^>]+>/g, '').trim();
  const link = item.querySelector('link')?.textContent?.trim() ?? '';
  const pubDateStr = item.querySelector('pubDate')?.textContent?.trim() ?? '';
@@ -171,7 +176,8 @@ export async function fetchHazmatIncidents(): Promise<HazmatIncident[]> {
   // Dedupe by title
   const seen = new Set<string>();
   const deduped: HazmatIncident[] = [];
-  for (const i of combined.sort((a, b) => b.reportedAt.getTime() - a.reportedAt.getTime())) {
+  const sortedCombined = [...combined].sort((a, b) => b.reportedAt.getTime() - a.reportedAt.getTime());
+  for (const i of sortedCombined) {
  const key = i.title.toLowerCase().replace(/\W/g, '').slice(0, 40);
  if (!seen.has(key)) {
  seen.add(key);
@@ -184,6 +190,11 @@ export async function fetchHazmatIncidents(): Promise<HazmatIncident[]> {
  .slice(0, 50);
 
   cache = { incidents: recent, fetchedAt: Date.now() };
+  if ([epaResult, csbResult, phmsaResult].every(r => r.status === 'rejected')) {
+ dataFreshness.recordError('hazmat-incidents', 'all 3 RSS feeds rejected');
+  } else {
+ dataFreshness.recordUpdate('hazmat-incidents', recent.length);
+  }
   return recent;
 }
 

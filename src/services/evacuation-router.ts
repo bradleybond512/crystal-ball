@@ -1,5 +1,6 @@
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
 import { getSavedPlaces, type SavedPlace } from './saved-places';
+import { dataFreshness } from './data-freshness';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -160,11 +161,18 @@ async function fetchOsrmRoute(from: LatLon, to: LatLon, waypoints: LatLon[]): Pr
  ? `${getApiBaseUrl()}/api/osrm-route?coords=${encodeURIComponent(coords)}`
  : `https://router.project-osrm.org/route/v1/driving/${coords}?${params}`;
 
-  const resp = await fetch(url);
-  if (!resp.ok) {
+  try {
+ const resp = await fetch(url);
+ if (!resp.ok) {
  throw new Error(`OSRM request failed: HTTP ${resp.status}`);
+ }
+ const data = await resp.json() as OsrmResponse;
+ dataFreshness.recordUpdate('evacuation-router', data.routes?.length ?? 0);
+ return data;
+  } catch (error) {
+ dataFreshness.recordError('evacuation-router', String(error));
+ throw error;
   }
-  return resp.json() as Promise<OsrmResponse>;
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────

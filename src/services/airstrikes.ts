@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import { isFeatureAvailable } from '@/services/runtime-config';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface AirstrikeEvent {
   id: string;
@@ -17,6 +18,32 @@ export interface AirstrikeEvent {
   notes: string;
 }
 
+interface AcledRawEvent {
+  event_id_cnty?: string;
+  event_date?: string;
+  country?: string;
+  admin1?: string;
+  location?: string;
+  latitude?: string | number;
+  longitude?: string | number;
+  actor1?: string;
+  actor2?: string;
+  event_type?: string;
+  sub_event_type?: string;
+  fatalities?: string | number;
+  notes?: string;
+}
+
+function asStr(v: string | undefined): string {
+  return v ?? '';
+}
+
+function asNum(v: string | number | undefined): number {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') return Number.parseFloat(v);
+  return Number.NaN;
+}
+
 let _cache: { data: AirstrikeEvent[]; ts: number } | null = null;
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
@@ -32,25 +59,27 @@ export async function fetchAirstrikes(): Promise<AirstrikeEvent[]> {
  const json = await res.json() as { events?: unknown[]; error?: string };
  if (!json.events) return _cache?.data ?? [];
 
- const events: AirstrikeEvent[] = (json.events as Record<string, unknown>[]).map(e => ({
- id: String(e.event_id_cnty ?? ''),
- date: String(e.event_date ?? ''),
- country: String(e.country ?? ''),
- region: String(e.admin1 ?? ''),
- location: String(e.location ?? ''),
- lat: Number.parseFloat(String(e.latitude ?? '0')),
- lon: Number.parseFloat(String(e.longitude ?? '0')),
- actor: String(e.actor1 ?? ''),
- targetActor: String(e.actor2 ?? ''),
- eventType: String(e.event_type ?? ''),
- subEventType: String(e.sub_event_type ?? ''),
- fatalities: Number.parseInt(String(e.fatalities ?? '0'), 10) || 0,
- notes: String(e.notes ?? ''),
- })).filter(e => e.id && !isNaN(e.lat) && !isNaN(e.lon));
+ const events: AirstrikeEvent[] = (json.events as AcledRawEvent[]).map(e => ({
+ id: asStr(e.event_id_cnty),
+ date: asStr(e.event_date),
+ country: asStr(e.country),
+ region: asStr(e.admin1),
+ location: asStr(e.location),
+ lat: asNum(e.latitude),
+ lon: asNum(e.longitude),
+ actor: asStr(e.actor1),
+ targetActor: asStr(e.actor2),
+ eventType: asStr(e.event_type),
+ subEventType: asStr(e.sub_event_type),
+ fatalities: typeof e.fatalities === 'number' ? e.fatalities : Number.parseInt(asStr(e.fatalities as string | undefined), 10) || 0,
+ notes: asStr(e.notes),
+ })).filter(e => e.id && !Number.isNaN(e.lat) && !Number.isNaN(e.lon));
 
  _cache = { data: events, ts: Date.now() };
+ dataFreshness.recordUpdate('acled_airstrikes', events.length);
  return events;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('acled_airstrikes', String(error));
  return _cache?.data ?? [];
   }
 }

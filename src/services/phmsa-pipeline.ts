@@ -3,6 +3,8 @@
  * Sources: PHMSA and DOT RSS feeds via rss-proxy
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type PipelineType =
   | 'gas-transmission'
   | 'gas-distribution'
@@ -133,7 +135,7 @@ function detectCause(text: string): PipelineIncidentCause {
 }
 
 function extractNumber(text: string, pattern: RegExp): number {
-  const m = text.match(pattern);
+  const m = pattern.exec(text);
   return m?.[1] ? Number.parseInt(m[1], 10) : 0;
 }
 
@@ -150,7 +152,7 @@ function detectIgnition(text: string): boolean {
 function extractState(text: string): string {
   // Look for US state abbreviations in context
   const m = /\b([A-Z]{2})\b/.exec(text);
-  return m?.[1] ? m[1] : '';
+  return m?.[1] ?? '';
 }
 
 function computeSeverity(
@@ -177,12 +179,12 @@ function isRelevant(title: string, description: string): boolean {
 function titleHash(title: string): string {
   let h = 0;
   for (let i = 0; i < title.length; i++) {
- h = ((h << 5) - h + title.charCodeAt(i)) | 0;
+ h = Math.trunc((h << 5) - h + (title.codePointAt(i) ?? 0));
   }
   return `phmsa-${Math.abs(h)}`;
 }
 
-function parseFeedXml(text: string, _feedUrl: string): PipelineIncident[] {
+function parseFeedXml(text: string): PipelineIncident[] {
   const parser = new DOMParser();
   const doc = parser.parseFromString(text, 'text/xml');
   if (doc.querySelector('parsererror')) return [];
@@ -213,9 +215,11 @@ function parseFeedXml(text: string, _feedUrl: string): PipelineIncident[] {
  const combined = `${title} ${description}`;
  const pipelineType = detectPipelineType(combined);
  const cause = detectCause(combined);
+ /* eslint-disable sonarjs/slow-regex -- bounded PHMSA RSS-feed text */
  const fatalities = extractNumber(combined, /(\d+)\s*(?:fatali|death|dead)/i);
  const injuries = extractNumber(combined, /(\d+)\s*(?:injur|wound)/i);
  const evacuations = extractNumber(combined, /(\d+)\s*(?:evacuat)/i);
+ /* eslint-enable sonarjs/slow-regex */
  const ignition = detectIgnition(combined);
  const severity = computeSeverity(fatalities, injuries, evacuations, ignition, title);
  const state = extractState(combined);
@@ -256,7 +260,7 @@ export async function fetchPipelineIncidents(): Promise<PipelineIncident[]> {
  });
  if (!res.ok) return [] as PipelineIncident[];
  const text = await res.text();
- return parseFeedXml(text, feedUrl);
+ return parseFeedXml(text);
  }),
   );
 
@@ -290,6 +294,7 @@ export async function fetchPipelineIncidents(): Promise<PipelineIncident[]> {
  .slice(0, 30);
 
   cache = { data: filtered, ts: now };
+  dataFreshness.recordUpdate('phmsa-pipeline', filtered.length);
   return filtered;
 }
 

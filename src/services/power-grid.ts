@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface GridAlert {
   id: string;
@@ -75,5 +76,6 @@ export async function fetchGridStatus(): Promise<GridStatus[]> {
  }
 
   cachedData = { data: statuses, fetchedAt: now };
+  dataFreshness.recordUpdate('power-grid', statuses.length);
   return statuses;
 }

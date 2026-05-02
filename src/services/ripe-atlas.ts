@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface RipeAtlasAnchor {
   id: number;
@@ -39,5 +40,6 @@ export async function fetchRipeAtlasStatus(): Promise<RipeAtlasStatus> {
   };
 
   cache = { data: result, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('ripe-atlas', result.anchors.length);
   return result;
 }

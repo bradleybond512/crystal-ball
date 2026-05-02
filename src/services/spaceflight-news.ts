@@ -1,6 +1,8 @@
 // Spaceflight News API v4 — free, no auth, CORS-enabled
 // https://api.spaceflightnewsapi.net/v4/articles/
 
+import { dataFreshness } from '@/services/data-freshness';
+
 const API_URL = 'https://api.spaceflightnewsapi.net/v4/articles/?limit=20&ordering=-published_at';
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
@@ -35,6 +37,7 @@ export async function fetchSpaceflightNews(): Promise<SpaceflightArticle[]> {
   try {
  const res = await fetch(API_URL, { signal: AbortSignal.timeout(10_000) });
  if (!res.ok) {
+ dataFreshness.recordError('spaceflight-news', `HTTP ${res.status}`);
  _cache = { articles: [], ts: Date.now() };
  return [];
  }
@@ -52,8 +55,10 @@ export async function fetchSpaceflightNews(): Promise<SpaceflightArticle[]> {
  events: (r.events ?? []).map(e => ({ id: e.event_id, name: e.provider })),
  }));
  _cache = { articles, ts: Date.now() };
+ dataFreshness.recordUpdate('spaceflight-news', articles.length);
  return articles;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('spaceflight-news', String(error));
  _cache = { articles: [], ts: Date.now() };
  return [];
   }

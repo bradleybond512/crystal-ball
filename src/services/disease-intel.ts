@@ -4,6 +4,7 @@
 
 import { getApiBaseUrl } from '@/services/runtime';
 import { iso3ToIso2Code, nameToCountryCode } from '@/services/country-geometry';
+import { dataFreshness } from '@/services/data-freshness';
 
 // ── Nextstrain variant frequency ─────────────────────────────────────────────
 
@@ -84,27 +85,33 @@ let _cache: { data: DiseaseIntelData; ts: number } | null = null;
 export async function fetchDiseaseIntel(): Promise<DiseaseIntelData> {
   if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS) return _cache.data;
 
-  const base = getApiBaseUrl();
-  const res = await fetch(`${base}/api/disease-intel`, { signal: AbortSignal.timeout(25_000) });
-  if (!res.ok) throw new Error(`disease-intel: ${res.status}`);
+  try {
+    const base = getApiBaseUrl();
+    const res = await fetch(`${base}/api/disease-intel`, { signal: AbortSignal.timeout(25_000) });
+    if (!res.ok) throw new Error(`disease-intel: ${res.status}`);
 
-  const raw = await res.json() as {
- nextstrain: unknown;
- covidCountries: unknown;
- reliefweb: unknown;
- whoDon: unknown;
-  };
+    const raw = await res.json() as {
+   nextstrain: unknown;
+   covidCountries: unknown;
+   reliefweb: unknown;
+   whoDon: unknown;
+    };
 
-  const data: DiseaseIntelData = {
- variants: parseNextstrain(raw.nextstrain),
- covidCountries: parseCovidCountries(raw.covidCountries),
- epidemicEvents: parseEpidemicEvents(raw.reliefweb),
- whoDon: parseWhoDon(raw.whoDon),
- fetchedAt: new Date(),
-  };
+    const data: DiseaseIntelData = {
+   variants: parseNextstrain(raw.nextstrain),
+   covidCountries: parseCovidCountries(raw.covidCountries),
+   epidemicEvents: parseEpidemicEvents(raw.reliefweb),
+   whoDon: parseWhoDon(raw.whoDon),
+   fetchedAt: new Date(),
+    };
 
-  _cache = { data, ts: Date.now() };
-  return data;
+    _cache = { data, ts: Date.now() };
+    dataFreshness.recordUpdate('disease-intel', data.covidCountries.length + data.epidemicEvents.length + data.whoDon.length);
+    return data;
+  } catch (error) {
+    dataFreshness.recordError('disease-intel', String(error));
+    throw error;
+  }
 }
 
 // ── Parsers ───────────────────────────────────────────────────────────────────

@@ -4,6 +4,8 @@
  * Products: RCM (Regional Climate Monthly), HLS (Seasonal Hazard), REC (Record Events)
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type ClimateOutlookType =
   | 'monthly-discussion'
   | 'seasonal-hazard'
@@ -58,7 +60,7 @@ async function fetchProductList(type: string, limit: number): Promise<NWSProduct
  signal: AbortSignal.timeout(12_000),
  });
  if (!res.ok) return [];
- const json: NWSProductListResponse = await res.json();
+ const json = (await res.json()) as NWSProductListResponse;
  return json['@graph'] ?? [];
   } catch {
  return [];
@@ -159,7 +161,7 @@ function computeOutlookSeverity(
 function safeDate(raw: string | null | undefined): Date {
   if (!raw) return new Date();
   const d = new Date(raw);
-  return isNaN(d.getTime()) ? new Date() : d;
+  return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
 async function processProductList(
@@ -219,41 +221,47 @@ const SEVERITY_ORDER: Record<ClimateOutlook['severity'], number> = {
 export async function fetchCpcOutlooks(): Promise<ClimateOutlook[]> {
   if (cache && Date.now() - cache.ts < CACHE_TTL_MS) return cache.data;
 
-  // Fetch product lists in parallel
-  const [rcmResult, hlsResult, recResult] = await Promise.allSettled([
- fetchProductList('RCM', 5),
- fetchProductList('HLS', 5),
- fetchProductList('REC', 5),
-  ]);
+  try {
+    // Fetch product lists in parallel
+    const [rcmResult, hlsResult, recResult] = await Promise.allSettled([
+   fetchProductList('RCM', 5),
+   fetchProductList('HLS', 5),
+   fetchProductList('REC', 5),
+    ]);
 
-  const rcmItems = rcmResult.status === 'fulfilled' ? rcmResult.value : [];
-  const hlsItems = hlsResult.status === 'fulfilled' ? hlsResult.value : [];
-  const recItems = recResult.status === 'fulfilled' ? recResult.value : [];
+    const rcmItems = rcmResult.status === 'fulfilled' ? rcmResult.value : [];
+    const hlsItems = hlsResult.status === 'fulfilled' ? hlsResult.value : [];
+    const recItems = recResult.status === 'fulfilled' ? recResult.value : [];
 
-  // Fetch product texts in parallel across all lists (up to 2 per list)
-  const [rcmOutlooks, hlsOutlooks, recOutlooks] = await Promise.allSettled([
- processProductList(rcmItems, 2),
- processProductList(hlsItems, 2),
- processProductList(recItems, 2),
-  ]);
+    // Fetch product texts in parallel across all lists (up to 2 per list)
+    const [rcmOutlooks, hlsOutlooks, recOutlooks] = await Promise.allSettled([
+   processProductList(rcmItems, 2),
+   processProductList(hlsItems, 2),
+   processProductList(recItems, 2),
+    ]);
 
-  const all: ClimateOutlook[] = [
- ...(rcmOutlooks.status === 'fulfilled' ? rcmOutlooks.value : []),
- ...(hlsOutlooks.status === 'fulfilled' ? hlsOutlooks.value : []),
- ...(recOutlooks.status === 'fulfilled' ? recOutlooks.value : []),
-  ];
+    const all: ClimateOutlook[] = [
+   ...(rcmOutlooks.status === 'fulfilled' ? rcmOutlooks.value : []),
+   ...(hlsOutlooks.status === 'fulfilled' ? hlsOutlooks.value : []),
+   ...(recOutlooks.status === 'fulfilled' ? recOutlooks.value : []),
+    ];
 
-  if (all.length === 0) return cache?.data ?? [];
+    if (all.length === 0) return cache?.data ?? [];
 
-  all.sort((a, b) => {
- const sev = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
- if (sev !== 0) return sev;
- return b.issuanceTime.getTime() - a.issuanceTime.getTime();
-  });
+    all.sort((a, b) => {
+   const sev = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+   if (sev !== 0) return sev;
+   return b.issuanceTime.getTime() - a.issuanceTime.getTime();
+    });
 
-  const data = all.slice(0, 15);
-  cache = { data, ts: Date.now() };
-  return data;
+    const data = all.slice(0, 15);
+    cache = { data, ts: Date.now() };
+    dataFreshness.recordUpdate('cpc-outlook', data.length);
+    return data;
+  } catch (error) {
+    dataFreshness.recordError('cpc-outlook', String(error));
+    throw error;
+  }
 }
 
 export function cpcSeverityClass(severity: ClimateOutlook['severity']): string {

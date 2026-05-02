@@ -1,3 +1,5 @@
+import { dataFreshness } from '@/services/data-freshness';
+
 export type AlliedCountry = 'UK' | 'NATO' | 'Australia' | 'Canada' | 'EU' | 'IISS' | 'Other';
 
 export interface AlliedMilitaryItem {
@@ -37,13 +39,16 @@ interface Cache {
 
 let _cache: Cache | null = null;
 
+// eslint-disable-next-line sonarjs/slow-regex -- bounded RSS feed body
+const HTML_TAG_RE = /<[^>]*>/g;
+
 function proxyFeedUrl(feedUrl: string): string {
   return `/api/rss-proxy?url=${encodeURIComponent(feedUrl)}`;
 }
 
 function stripHtml(html: string): string {
   return html
- .replace(/<[^>]+>/g, ' ')
+ .replace(HTML_TAG_RE, ' ')
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
  .replace(/&gt;/g, '>')
@@ -77,10 +82,8 @@ function detectSeverity(category: AlliedMilitaryItem['category'], text: string):
  case 'exercise': {
  return 'medium';
  }
- case 'procurement':
- case 'diplomatic':
- case 'general':
  default: {
+ // procurement, diplomatic, general
  return 'low';
  }
   }
@@ -164,6 +167,7 @@ function parseFeed(xmlText: string, feed: AlliedFeed): AlliedMilitaryItem[] {
 export async function fetchAlliedMilitary(): Promise<AlliedMilitaryItem[]> {
   if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS) return _cache.items;
 
+  try {
   const results = await Promise.allSettled(
  FEEDS.map(async (feed) => {
  const res = await fetch(proxyFeedUrl(feed.url), {
@@ -195,7 +199,12 @@ export async function fetchAlliedMilitary(): Promise<AlliedMilitaryItem[]> {
 
   const items = deduped.slice(0, 50);
   _cache = { items, ts: Date.now() };
+  dataFreshness.recordUpdate('allied-military', items.length);
   return items;
+  } catch (error) {
+ dataFreshness.recordError('allied-military', String(error));
+ return _cache?.items ?? [];
+  }
 }
 
 export function alliedSeverityClass(severity: AlliedMilitaryItem['severity']): string {

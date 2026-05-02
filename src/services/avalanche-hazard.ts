@@ -4,6 +4,8 @@
  * Forecast: https://api.avalanche.org/v2/public/products/avalanche-forecast?zone_id={id}
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type AvalancheDanger = 0 | 1 | 2 | 3 | 4 | 5;
 // 0=No Rating, 1=Low, 2=Moderate, 3=Considerable, 4=High, 5=Extreme
 
@@ -84,7 +86,7 @@ interface RawForecast {
 }
 
 function extractDangerValue(v: number | RawDangerRating | undefined): AvalancheDanger {
-  if (v === undefined || v === null) return 0;
+  if (v === undefined) return 0;
   if (typeof v === 'number') return clampDanger(v);
   if (typeof v === 'object' && v.danger_rating) {
  const val = v.danger_rating.value;
@@ -95,7 +97,7 @@ function extractDangerValue(v: number | RawDangerRating | undefined): AvalancheD
 }
 
 function clampDanger(n: number): AvalancheDanger {
-  if (isNaN(n)) return 0;
+  if (Number.isNaN(n)) return 0;
   if (n <= 0) return 0;
   if (n >= 5) return 5;
   return n as AvalancheDanger;
@@ -196,8 +198,8 @@ function buildForecast(zone: RawZone, raw: RawForecast): AvalancheForecast | nul
  avalancheProblems: problems,
  headline,
  bottomLine,
- validDate: validDate instanceof Date && !isNaN(validDate.getTime()) ? validDate : new Date(),
- expiryDate: expiryDate instanceof Date && !isNaN(expiryDate.getTime()) ? expiryDate : new Date(Date.now() + 24 * 60 * 60 * 1000),
+ validDate: validDate instanceof Date && !Number.isNaN(validDate.getTime()) ? validDate : new Date(),
+ expiryDate: expiryDate instanceof Date && !Number.isNaN(expiryDate.getTime()) ? expiryDate : new Date(Date.now() + 24 * 60 * 60 * 1000),
  url: zoneUrl,
  severity: dangerToSeverity(maxDanger),
   };
@@ -241,8 +243,10 @@ export async function fetchAvalancheHazard(): Promise<AvalancheReport> {
  };
 
  cache = { report, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('avalanche-hazard', forecasts.length);
  return report;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('avalanche-hazard', String(error));
  return cache?.report ?? emptyAvalancheReport();
   }
 }

@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import { translateText } from '@/services/summarization';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface OrefAlert {
   id: string;
@@ -46,6 +47,7 @@ async function ensureLocationMapLoaded(): Promise<void> {
   if (locationMapPromise) { await locationMapPromise; return; }
   locationMapPromise = import('./oref-locations').then(m => {
  locationTranslator = m.translateLocation;
+  // eslint-disable-next-line no-console -- diagnostic warning for retry path
   }).catch(() => { locationMapPromise = null; console.warn('[OREF] Failed to load location translations, will retry'); });
   await locationMapPromise;
 }
@@ -107,7 +109,7 @@ function hasHebrew(text: string): boolean {
 }
 
 function alertNeedsTranslation(alert: OrefAlert): boolean {
-  return hasHebrew(alert.title) || alert.data.some(hasHebrew) || hasHebrew(alert.desc);
+  return hasHebrew(alert.title) || alert.data.some(d => hasHebrew(d)) || hasHebrew(alert.desc);
 }
 
 function escapeRegExp(s: string): string {
@@ -117,12 +119,16 @@ function escapeRegExp(s: string): string {
 function buildTranslationPrompt(alerts: OrefAlert[]): string {
   const lines: string[] = [];
   for (const a of alerts) {
- lines.push(`ALERT[${a.id}]: ${a.title || '(none)'}`);
- lines.push(`AREAS[${a.id}]: ${a.data.join(', ') || '(none)'}`, `DESC[${a.id}]: ${a.desc || '(none)'}`);
+ lines.push(
+ `ALERT[${a.id}]: ${a.title || '(none)'}`,
+ `AREAS[${a.id}]: ${a.data.join(', ') || '(none)'}`,
+ `DESC[${a.id}]: ${a.desc || '(none)'}`,
+ );
   }
   return 'Translate each line from Hebrew to English. Keep the ALERT/AREAS/DESC labels and IDs exactly as-is. Only translate the text after the colon.\n' + lines.join('\n');
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- Hebrew translation parser; refactor deferred
 function parseTranslationResponse(raw: string, alerts: OrefAlert[]): void {
   const lines = raw.split('\n');
   for (const alert of alerts) {
@@ -134,17 +140,17 @@ function parseTranslationResponse(raw: string, alerts: OrefAlert[]): void {
  let areas: string[] | null = null;
  let desc: string | null = null;
  for (const line of lines) {
- const alertMatch = line.match(reAlert);
+ const alertMatch = reAlert.exec(line);
  if (alertMatch?.[1]) title = alertMatch[1].trim();
- const areasMatch = line.match(reAreas);
+ const areasMatch = reAreas.exec(line);
  if (areasMatch?.[1]) areas = areasMatch[1].split(',').map(s => s.trim());
- const descMatch = line.match(reDesc);
+ const descMatch = reDesc.exec(line);
  if (descMatch?.[1]) desc = descMatch[1].trim();
  }
  if (title === null && areas === null && desc === null) continue;
  const entry = {
  title: title && !hasHebrew(title) ? title : staticTranslate(alert.title),
- data: areas && !areas.some(hasHebrew) ? areas : alert.data.map(d => locationTranslator ? locationTranslator(staticTranslate(d)) : staticTranslate(d)),
+ data: areas && !areas.some(d => hasHebrew(d)) ? areas : alert.data.map(d => locationTranslator ? locationTranslator(staticTranslate(d)) : staticTranslate(d)),
  desc: desc && !hasHebrew(desc) ? desc : staticTranslate(alert.desc),
  };
  translationCache.set(alert.id, entry);
@@ -202,6 +208,7 @@ async function translateAlerts(alerts: OrefAlert[]): Promise<boolean> {
  translated = true;
  }
  } catch (error) {
+ // eslint-disable-next-line no-console -- diagnostic warning for translation failure
  console.warn('OREF alert translation failed', error);
  } finally {
  translationPromise = null;
@@ -231,22 +238,25 @@ export async function fetchOrefAlerts(): Promise<OrefAlertsResponse> {
  headers: { Accept: 'application/json' },
  });
  if (!res.ok) {
+ dataFreshness.recordError('oref-alerts', `HTTP ${res.status}`);
  return { configured: false, alerts: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: `HTTP ${res.status}` };
  }
- const data: OrefAlertsResponse = await res.json();
+ const data = (await res.json()) as OrefAlertsResponse;
  cachedResponse = data;
  lastFetchAt = now;
+ dataFreshness.recordUpdate('oref-alerts', data.alerts.length);
 
  if (data.alerts.length) {
  translateAlerts(data.alerts).then((didTranslate) => {
  if (didTranslate) {
  for (const cb of updateCallbacks) cb({ ...data, alerts: applyTranslations(data.alerts) });
  }
- }).catch(() => {});
+ }).catch(() => { /* translation is best-effort */ });
  }
 
  return { ...data, alerts: applyTranslations(data.alerts) };
   } catch (error) {
+ dataFreshness.recordError('oref-alerts', String(error));
  return { configured: false, alerts: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: String(error) };
   }
 }
@@ -258,10 +268,11 @@ export async function fetchOrefHistory(): Promise<OrefHistoryResponse> {
  headers: { Accept: 'application/json' },
  });
  if (!res.ok) {
+ // eslint-disable-next-line no-console -- diagnostic warning for upstream failure
  console.warn('[OREF History] HTTP', res.status);
  return { configured: false, history: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: `HTTP ${res.status}` };
  }
- const data: OrefHistoryResponse = await res.json();
+ const data = (await res.json()) as OrefHistoryResponse;
 
  if (data.history?.length) {
  const recentWaves = data.history.slice(-50);

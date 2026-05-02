@@ -4,6 +4,7 @@
  * Docs: https://www.weather.gov/documentation/services-web-api
  */
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface NWSAlert {
   id: string;
@@ -25,24 +26,29 @@ let cache: { data: NWSAlert[]; ts: number } | null = null;
 export async function fetchNWSAlerts(): Promise<NWSAlert[]> {
   if (cache && Date.now() - cache.ts < CACHE_TTL_MS) return cache.data;
   try {
- const res = await fetch(`${getApiBaseUrl()}/api/nws-alerts`, {
- signal: AbortSignal.timeout(12_000),
- });
- if (!res.ok) return cache?.data ?? [];
- const data = (await res.json()) as NWSAlert[];
- cache = { data, ts: Date.now() };
- return data;
-  } catch {
- return cache?.data ?? [];
+    const res = await fetch(`${getApiBaseUrl()}/api/nws-alerts`, {
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) {
+      dataFreshness.recordError('nws-alerts', `HTTP ${res.status}`);
+      return cache?.data ?? [];
+    }
+    const data = (await res.json()) as NWSAlert[];
+    cache = { data, ts: Date.now() };
+    dataFreshness.recordUpdate('nws-alerts', data.length);
+    return data;
+  } catch (error) {
+    dataFreshness.recordError('nws-alerts', String(error));
+    return cache?.data ?? [];
   }
 }
 
 export function nwsSeverityClass(severity: NWSAlert['severity']): string {
   return {
- Extreme: 'eq-row eq-major',
- Severe: 'eq-row eq-strong',
- Moderate: 'eq-row eq-moderate',
- Minor: 'eq-row',
- Unknown: 'eq-row',
+    Extreme: 'eq-row eq-major',
+    Severe: 'eq-row eq-strong',
+    Moderate: 'eq-row eq-moderate',
+    Minor: 'eq-row',
+    Unknown: 'eq-row',
   }[severity] ?? 'eq-row';
 }

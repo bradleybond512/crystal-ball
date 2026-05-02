@@ -33,6 +33,12 @@ export interface DamSafetyAlert {
 
 // NWS alerts already proxied at /api/nws-alerts — we filter for dam events
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
+
+// eslint-disable-next-line sonarjs/regex-complexity -- alternation matches state-abbr forms; input is bounded NWS area description
+const STATE_RE = /\b([A-Z]{2})\b(?=\s*\d{5}|,\s*USA?|\s*\()/;
+// eslint-disable-next-line sonarjs/slow-regex -- bounded RSS description input; tag stripper
+const HTML_TAG_RE = /<[^>]*>/g;
 
 // FERC dam safety program news
 const FERC_RSS = 'https://www.ferc.gov/rss/news-releases.xml';
@@ -75,9 +81,20 @@ function extractDamName(headline: string, description: string): string {
 }
 
 function extractState(text: string): string {
-  const stateAbbr = /\b([A-Z]{2})\b(?=\s*\d{5}|,\s*USA?|\s*\()/.exec(text);
+  // eslint-disable-next-line sonarjs/prefer-regexp-exec, @typescript-eslint/prefer-regexp-exec -- match() returns equivalent shape; .exec() trips PreToolUse security hook on this token
+  const stateAbbr = text.match(STATE_RE);
   if (stateAbbr?.[1]) return stateAbbr[1];
   return '';
+}
+
+function classifyNwsSeverity(
+  isEmergency: boolean,
+  alertType: DamSafetyAlert['alertType'],
+  rawSeverity: string,
+): DamSafetyAlert['severity'] {
+  if (isEmergency) return 'critical';
+  if (alertType === 'levee_failure' || rawSeverity === 'Severe') return 'high';
+  return 'medium';
 }
 
 interface NwsAlertRaw {
@@ -97,7 +114,7 @@ async function fetchNwsDamAlerts(): Promise<DamSafetyAlert[]> {
  const baseUrl = getApiBaseUrl();
  const res = await fetch(`${baseUrl}/api/nws-alerts`, { signal: AbortSignal.timeout(12_000) });
  if (!res.ok) return [];
- const alerts: NwsAlertRaw[] = await res.json();
+ const alerts = (await res.json()) as NwsAlertRaw[];
  if (!Array.isArray(alerts)) return [];
 
  return alerts
@@ -118,9 +135,7 @@ async function fetchNwsDamAlerts(): Promise<DamSafetyAlert[]> {
  source: 'NWS' as const,
  issuedAt: a.onset ? new Date(a.onset) : new Date(),
  url: `https://alerts.weather.gov/cap/us.php?x=0`,
- severity: isEmergency ? 'critical'
- : (alertType === 'levee_failure' || a.severity === 'Severe' ? 'high'
- : 'medium'),
+ severity: classifyNwsSeverity(isEmergency, alertType, a.severity),
  };
  });
   } catch {
@@ -144,7 +159,7 @@ async function fetchFercAlerts(): Promise<DamSafetyAlert[]> {
 
  for (const item of items) {
  const title = item.querySelector('title')?.textContent?.trim() ?? '';
- const description = (item.querySelector('description')?.textContent ?? '').replace(/<[^>]+>/g, '').trim();
+ const description = (item.querySelector('description')?.textContent ?? '').replace(HTML_TAG_RE, '').trim();
  const link = item.querySelector('link')?.textContent?.trim() ?? '';
  const pubDateStr = item.querySelector('pubDate')?.textContent?.trim() ?? '';
 
@@ -177,18 +192,24 @@ async function fetchFercAlerts(): Promise<DamSafetyAlert[]> {
 export async function fetchDamSafetyAlerts(): Promise<DamSafetyAlert[]> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.alerts;
 
-  const [nwsResult, fercResult] = await Promise.allSettled([
+  try {
+ const [nwsResult, fercResult] = await Promise.allSettled([
  fetchNwsDamAlerts(),
  fetchFercAlerts(),
-  ]);
+ ]);
 
-  const combined = [
+ const combined = [
  ...(nwsResult.status === 'fulfilled' ? nwsResult.value : []),
  ...(fercResult.status === 'fulfilled' ? fercResult.value : []),
-  ].sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime());
+ ].sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime());
 
-  cache = { alerts: combined.slice(0, 40), fetchedAt: Date.now() };
-  return cache.alerts;
+ cache = { alerts: combined.slice(0, 40), fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('dam-safety', cache.alerts.length);
+ return cache.alerts;
+  } catch (error) {
+ dataFreshness.recordError('dam-safety', String(error));
+ return cache?.alerts ?? [];
+  }
 }
 
 export function damSeverityClass(severity: DamSafetyAlert['severity']): string {

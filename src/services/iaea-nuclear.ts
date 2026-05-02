@@ -8,6 +8,10 @@
  * Complements the US-only NRC nuclear service with global coverage.
  */
 
+/* eslint-disable sonarjs/slow-regex -- regexes parse bounded IAEA RSS text */
+
+import { dataFreshness } from './data-freshness';
+
 export interface IaeaEvent {
   id: string;
   title: string;
@@ -121,7 +125,8 @@ export async function fetchIaeaEvents(): Promise<IaeaEvent[]> {
   // Dedupe by URL
   const seen = new Set<string>();
   const deduped: IaeaEvent[] = [];
-  for (const e of combined.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())) {
+  const sortedCombined = [...combined].sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+  for (const e of sortedCombined) {
  if (!seen.has(e.url)) {
  seen.add(e.url);
  deduped.push(e);
@@ -134,6 +139,11 @@ export async function fetchIaeaEvents(): Promise<IaeaEvent[]> {
  .slice(0, 40);
 
   cache = { events: recent, fetchedAt: Date.now() };
+  if (newsResult.status === 'rejected' && prResult.status === 'rejected') {
+ dataFreshness.recordError('iaea-nuclear', 'both IAEA RSS feeds rejected');
+  } else {
+ dataFreshness.recordUpdate('iaea-nuclear', recent.length);
+  }
   return recent;
 }
 

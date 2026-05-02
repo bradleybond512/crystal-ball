@@ -12,10 +12,16 @@
  *  - Rapid pressure drops (bomb cyclogenesis)
  *  - Extreme wind events over open ocean
  *
+ * Wired to data-freshness telemetry under 'noaa-buoys'.
+ *
  * NOAA Hurricane Reconnaissance (NOAA/AFRES WC-130J/P-3):
  *  - Flight tracks at https://www.nhc.noaa.gov/recon/
  *  - Real-time fixes via NHC Vortex Data Messages (VDMs)
  */
+
+/* eslint-disable sonarjs/slow-regex, sonarjs/regex-complexity, sonarjs/cognitive-complexity, sonarjs/no-nested-template-literals -- file-level: regexes parse bounded NHC VDM RSS text + NDBC station XML, complexity is in the parsers */
+
+import { dataFreshness } from './data-freshness';
 
 export interface BuoyObservation {
   stationId: string;
@@ -100,7 +106,7 @@ function parseBuoyLine(line: string, headers: string[]): Record<string, string> 
 function toNum(val: string | undefined): number | null {
   if (!val || val === 'MM' || val === 'N/A') return null;
   const n = Number.parseFloat(val);
-  return isNaN(n) ? null : n;
+  return Number.isNaN(n) ? null : n;
 }
 
 function computeAlertCondition(obs: Partial<BuoyObservation>): { isAlert: boolean; reason: string; severity: BuoyObservation['severity'] } {
@@ -260,6 +266,11 @@ export async function fetchBuoyAlerts(): Promise<BuoyObservation[]> {
  });
 
   buoyCache = { observations, fetchedAt: Date.now() };
+  if (results.every(r => r.status === 'rejected')) {
+ dataFreshness.recordError('noaa-buoys', `all ${results.length} buoy fetches rejected`);
+  } else {
+ dataFreshness.recordUpdate('noaa-buoys', observations.length);
+  }
   return observations;
 }
 

@@ -4,6 +4,10 @@
  * Data source: NWS Alerts API (direct — CORS enabled) + High Seas Forecasts
  */
 
+/* eslint-disable sonarjs/slow-regex -- regexes parse bounded NWS alert text */
+
+import { dataFreshness } from './data-freshness';
+
 export type MarineHazardType =
   | 'storm-surge'
   | 'high-surf'
@@ -147,7 +151,7 @@ function computeSeverity(
 function safeDate(raw: string | null | undefined): Date {
   if (!raw) return new Date();
   const d = new Date(raw);
-  return isNaN(d.getTime()) ? new Date() : d;
+  return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
 async function fetchAlerts(): Promise<MarineHazard[]> {
@@ -157,14 +161,16 @@ async function fetchAlerts(): Promise<MarineHazard[]> {
   });
   if (!res.ok) return [];
 
-  const json: NWSAlertsResponse = await res.json();
+  const json = await res.json() as NWSAlertsResponse;
   const features = json.features ?? [];
   const now = new Date();
   const results: MarineHazard[] = [];
 
   for (const feature of features) {
  const p = feature.properties ?? {};
- const id = feature.id ?? p.id ?? Math.random().toString(36).slice(2);
+ // eslint-disable-next-line sonarjs/pseudo-random -- ID jitter, not security-sensitive
+ const idFallback = Math.random().toString(36).slice(2);
+ const id = feature.id ?? p.id ?? idFallback;
  const event = p.event ?? '';
  const expires = safeDate(p.expires);
 
@@ -204,7 +210,7 @@ async function checkHighSeasForecasts(): Promise<boolean> {
  });
  if (!res.ok) return false;
 
- const json: NWSProductListResponse = await res.json();
+ const json = await res.json() as NWSProductListResponse;
  const products = json['@graph'] ?? [];
  if (products.length === 0) return false;
 
@@ -270,6 +276,11 @@ export async function fetchMarineHazards(): Promise<MarineHazard[]> {
  .slice(0, 50);
 
   cache = { data, ts: Date.now() };
+  if (alertsResult.status === 'rejected' && extremeHsfResult.status === 'rejected') {
+ dataFreshness.recordError('marine-hazards', 'both NWS alerts and HSF requests rejected');
+  } else {
+ dataFreshness.recordUpdate('marine-hazards', data.length);
+  }
   return data;
 }
 

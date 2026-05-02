@@ -11,6 +11,7 @@
  */
 import { getApiBaseUrl } from '@/services/runtime';
 import { loadProximityConfig, haversineKm } from '@/services/proximity-filter';
+import { dataFreshness } from '@/services/data-freshness';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -410,5 +411,10 @@ export async function fetchNuclearStatus(): Promise<NuclearMonitorData> {
   };
 
   cache = { data, fetchedAt: Date.now() };
+  if (stationsResult.status === 'rejected' && anomaliesResult.status === 'rejected') {
+ dataFreshness.recordError('nuclear-monitor', 'both RadNet and seismic anomaly requests rejected');
+  } else {
+ dataFreshness.recordUpdate('nuclear-monitor', stations.length + seismicAnomalies.length);
+  }
   return data;
 }

@@ -3,6 +3,10 @@
  * Sources: NTSB RSS feeds via rss-proxy
  */
 
+/* eslint-disable sonarjs/slow-regex, sonarjs/regex-complexity -- regexes parse bounded NTSB RSS feeds */
+
+import { dataFreshness } from './data-freshness';
+
 export type NtsbMode =
   | 'aviation'
   | 'rail'
@@ -135,6 +139,7 @@ function detectGoTeam(title: string, description: string): boolean {
 }
 
 function extractNumber(text: string, pattern: RegExp): number {
+  // eslint-disable-next-line sonarjs/prefer-regexp-exec -- API receives RegExp arg
   const m = text.match(pattern);
   return m?.[1] ? Number.parseInt(m[1] ?? '0', 10) : 0;
 }
@@ -168,11 +173,12 @@ function computeSeverity(
 function titleHash(title: string): string {
   let h = 0;
   for (let i = 0; i < title.length; i++) {
- h = ((h << 5) - h + title.charCodeAt(i)) | 0;
+ h = Math.trunc((h << 5) - h + (title.codePointAt(i) ?? 0));
   }
   return `ntsb-${Math.abs(h)}`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- _feedUrl reserved for future per-feed routing
 function parseFeedXml(text: string, _feedUrl: string): NtsbInvestigation[] {
   const parser = new DOMParser();
   const doc = parser.parseFromString(text, 'text/xml');
@@ -278,6 +284,11 @@ export async function fetchNtsbInvestigations(): Promise<NtsbInvestigation[]> {
  .slice(0, 30);
 
   cache = { data: filtered, ts: now };
+  if (results.every(r => r.status === 'rejected')) {
+ dataFreshness.recordError('ntsb-investigations', `all ${results.length} feeds rejected`);
+  } else {
+ dataFreshness.recordUpdate('ntsb-investigations', filtered.length);
+  }
   return filtered;
 }
 

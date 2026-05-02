@@ -8,6 +8,8 @@
  * to document government-ordered internet shutdowns.
  */
 
+import { dataFreshness } from './data-freshness';
+
 export interface IodaOutage {
   id: string;
   entityType: 'country' | 'asn' | 'region';
@@ -67,9 +69,12 @@ export async function fetchIodaOutages(): Promise<IodaOutage[]> {
  signal: AbortSignal.timeout(12_000),
  headers: { Accept: 'application/json' },
  });
- if (!res.ok) return cache?.outages ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('internet-outages', `HTTP ${res.status}`);
+ return cache?.outages ?? [];
+ }
 
- const data: IodaResponse = await res.json();
+ const data = await res.json() as IodaResponse;
  const alerts: IodaAlert[] = data.data ?? data.alerts ?? [];
 
  const outages: IodaOutage[] = alerts
@@ -79,8 +84,10 @@ export async function fetchIodaOutages(): Promise<IodaOutage[]> {
  const startTime = new Date(a.from * 1000);
  const endTime = a.until ? new Date(a.until * 1000) : null;
  const isOngoing = !endTime || endTime.getTime() > Date.now();
- const entityType = (a.entity?.type === 'country' ? 'country'
- : (a.entity?.type === 'asn' ? 'asn' : 'region')) as IodaOutage['entityType'];
+ let entityType: IodaOutage['entityType'];
+ if (a.entity?.type === 'country') entityType = 'country';
+ else if (a.entity?.type === 'asn') entityType = 'asn';
+ else entityType = 'region';
 
  return {
  id: `ioda-${a.entity?.code ?? i}-${a.from}`,
@@ -106,8 +113,10 @@ export async function fetchIodaOutages(): Promise<IodaOutage[]> {
  });
 
  cache = { outages: outages.slice(0, 50), fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('internet-outages', cache.outages.length);
  return cache.outages;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('internet-outages', String(error));
  return cache?.outages ?? [];
   }
 }

@@ -9,6 +9,8 @@
  * We use the tile overlay for map visualization.
  */
 
+import { dataFreshness } from './data-freshness';
+
 export interface LightningStrike {
   lat: number;
   lon: number;
@@ -36,7 +38,10 @@ export async function fetchLightningStrikes(): Promise<LightningStrike[]> {
  signal: AbortSignal.timeout(8000),
  headers: { Accept: 'application/json' },
  });
- if (!res.ok) return cache?.strikes ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('lightning', `HTTP ${res.status}`);
+ return cache?.strikes ?? [];
+ }
 
  const data = await res.json() as BlitzStrike[];
 
@@ -48,8 +53,10 @@ export async function fetchLightningStrikes(): Promise<LightningStrike[]> {
  }));
 
  cache = { strikes, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('lightning', strikes.length);
  return strikes;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('lightning', String(error));
  return cache?.strikes ?? [];
   }
 }

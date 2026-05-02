@@ -2,6 +2,7 @@
 // Docs: https://open-meteo.com/en/docs/air-quality-api
 // Covers US AQI, European AQI, PM2.5, PM10, ozone, NO2, SO2
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface AirQualityReading {
   city: string;
@@ -113,21 +114,27 @@ export async function fetchGlobalAirQuality(): Promise<AirQualityReading[]> {
  return cache.readings;
   }
 
-  // Fetch all cities in parallel (stagger to avoid rate limiting)
-  const results = await Promise.allSettled(
- MONITORED_CITIES.map(c => fetchCityAQ(c)),
-  );
+  try {
+    // Fetch all cities in parallel (stagger to avoid rate limiting)
+    const results = await Promise.allSettled(
+   MONITORED_CITIES.map(c => fetchCityAQ(c)),
+    );
 
-  const readings: AirQualityReading[] = [];
-  for (const r of results) {
- if (r.status === 'fulfilled' && r.value) readings.push(r.value);
+    const readings: AirQualityReading[] = [];
+    for (const r of results) {
+   if (r.status === 'fulfilled' && r.value) readings.push(r.value);
+    }
+
+    // Sort worst AQI first
+    readings.sort((a, b) => b.aqi - a.aqi);
+
+    cache = { readings, fetchedAt: Date.now() };
+    dataFreshness.recordUpdate('air-quality', readings.length);
+    return readings;
+  } catch (error) {
+    dataFreshness.recordError('air-quality', String(error));
+    return cache?.readings ?? [];
   }
-
-  // Sort worst AQI first
-  readings.sort((a, b) => b.aqi - a.aqi);
-
-  cache = { readings, fetchedAt: Date.now() };
-  return readings;
 }
 
 export interface AirQualityAlert {

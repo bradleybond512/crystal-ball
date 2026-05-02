@@ -4,6 +4,8 @@
  * Returns weekly drought conditions by state. Data updates once a week (Thursdays).
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type DroughtLevel = 'D0' | 'D1' | 'D2' | 'D3' | 'D4';
 
 export interface DroughtState {
@@ -136,9 +138,70 @@ interface RawDroughtRow {
 }
 
 function toNum(v: number | string | undefined): number {
-  if (v === undefined || v === null) return 0;
+  if (v === undefined) return 0;
   const n = typeof v === 'string' ? Number.parseFloat(v) : v;
-  return isNaN(n) ? 0 : n;
+  return Number.isNaN(n) ? 0 : n;
+}
+
+const SEVERITY_ORDER: Record<DroughtState['severity'], number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  none: 4,
+};
+
+function parseDroughtRow(row: RawDroughtRow): { state: DroughtState; mapDateStr: string } | null {
+  const stateName = row.State ?? '';
+  if (!stateName) return null;
+
+  const none = toNum(row.None);
+  const d0 = toNum(row.D0);
+  const d1 = toNum(row.D1);
+  const d2 = toNum(row.D2);
+  const d3 = toNum(row.D3);
+  const d4 = toNum(row.D4);
+
+  // Only include states with any D1+ drought
+  if (d1 + d2 + d3 + d4 <= 0) return null;
+
+  const mapDateStr = row.MapDate ?? row.ReleaseDate ?? '';
+  const validStartStr = row.ValidStart ?? mapDateStr;
+  const validEndStr = row.ValidEnd ?? mapDateStr;
+
+  const validStart = validStartStr ? new Date(validStartStr) : new Date();
+  const validEnd = validEndStr ? new Date(validEndStr) : new Date();
+
+  const maxLevel = computeMaxLevel(d0, d1, d2, d3, d4);
+  const severity = computeSeverity(d0, d1, d2, d3, d4);
+  const stateAbbr = resolveAbbr(stateName);
+
+  return {
+ state: {
+ id: `drought-${stateAbbr.toLowerCase()}`,
+ state: stateName,
+ stateAbbr,
+ validStart,
+ validEnd,
+ none,
+ d0,
+ d1,
+ d2,
+ d3,
+ d4,
+ maxLevel,
+ severity,
+ },
+ mapDateStr,
+  };
+}
+
+function sortDroughtStates(states: DroughtState[]): DroughtState[] {
+  return [...states].sort((a, b) => {
+ const sd = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+ if (sd !== 0) return sd;
+ return (b.d3 + b.d4) - (a.d3 + a.d4);
+  });
 }
 
 export async function fetchDroughtMonitor(): Promise<DroughtSummary> {
@@ -156,67 +219,18 @@ export async function fetchDroughtMonitor(): Promise<DroughtSummary> {
  if (!Array.isArray(json)) return cache?.summary ?? emptyDroughtSummary();
 
  let validDate: Date | null = null;
- const states: DroughtState[] = [];
+ const collected: DroughtState[] = [];
 
  for (const row of json) {
- const stateName = row.State ?? '';
- if (!stateName) continue;
-
- const none = toNum(row.None);
- const d0 = toNum(row.D0);
- const d1 = toNum(row.D1);
- const d2 = toNum(row.D2);
- const d3 = toNum(row.D3);
- const d4 = toNum(row.D4);
-
- // Only include states with any D1+ drought
- if (d1 + d2 + d3 + d4 <= 0) continue;
-
- const mapDateStr = row.MapDate ?? row.ReleaseDate ?? '';
- const validStartStr = row.ValidStart ?? mapDateStr;
- const validEndStr = row.ValidEnd ?? mapDateStr;
-
- const validStart = validStartStr ? new Date(validStartStr) : new Date();
- const validEnd = validEndStr ? new Date(validEndStr) : new Date();
-
- if (!validDate && mapDateStr) {
- validDate = new Date(mapDateStr);
+ const parsed = parseDroughtRow(row);
+ if (!parsed) continue;
+ if (!validDate && parsed.mapDateStr) {
+ validDate = new Date(parsed.mapDateStr);
+ }
+ collected.push(parsed.state);
  }
 
- const maxLevel = computeMaxLevel(d0, d1, d2, d3, d4);
- const severity = computeSeverity(d0, d1, d2, d3, d4);
- const stateAbbr = resolveAbbr(stateName);
-
- states.push({
- id: `drought-${stateAbbr.toLowerCase()}`,
- state: stateName,
- stateAbbr,
- validStart,
- validEnd,
- none,
- d0,
- d1,
- d2,
- d3,
- d4,
- maxLevel,
- severity,
- });
- }
-
- // Sort: most severe first, then by d3+d4 percentage descending
- const sOrder: Record<DroughtState['severity'], number> = {
- critical: 0,
- high: 1,
- medium: 2,
- low: 3,
- none: 4,
- };
- states.sort((a, b) => {
- const sd = sOrder[a.severity] - sOrder[b.severity];
- if (sd !== 0) return sd;
- return (b.d3 + b.d4) - (a.d3 + a.d4);
- });
+ const states = sortDroughtStates(collected);
 
  // National D3+D4 percentage — simple average across all states in response
  let nationalD3D4Pct = 0;
@@ -233,8 +247,10 @@ export async function fetchDroughtMonitor(): Promise<DroughtSummary> {
  };
 
  cache = { summary, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('drought-monitor', summary.states.length);
  return summary;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('drought-monitor', String(error));
  return cache?.summary ?? emptyDroughtSummary();
   }
 }

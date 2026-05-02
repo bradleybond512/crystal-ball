@@ -1,3 +1,5 @@
+import { dataFreshness } from '@/services/data-freshness';
+
 /**
  * USGS PAGER (Prompt Assessment of Global Earthquakes for Response)
  * Public GeoJSON feed — no authentication required
@@ -102,9 +104,12 @@ export async function fetchPagerEvents(): Promise<PagerEvent[]> {
  signal: AbortSignal.timeout(12_000),
  headers: { Accept: 'application/json' },
  });
- if (!res.ok) return cache?.events ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('usgs-pager', `HTTP ${res.status}`);
+ return cache?.events ?? [];
+ }
 
- const data: UsgsGeoJson = await res.json();
+ const data = (await res.json()) as UsgsGeoJson;
  const events: PagerEvent[] = [];
 
  for (const f of data.features ?? []) {
@@ -115,9 +120,6 @@ export async function fetchPagerEvents(): Promise<PagerEvent[]> {
 
  const [lon, lat, depth] = f.geometry.coordinates;
  const labels = alertLevelLabel(alertLevel);
- const losspager = p.products?.losspager?.[0];
- const impact2 = losspager?.properties?.impact2 ?? '';
-
  events.push({
  id: `pager-${f.id}`,
  place: p.place ?? '',
@@ -130,7 +132,7 @@ export async function fetchPagerEvents(): Promise<PagerEvent[]> {
  alertLevel,
  estimatedFatalities: labels.fatalities,
  estimatedLosses: labels.losses,
- populationExposed: impact2 ? null : null, // enriched if detail endpoint fetched
+ populationExposed: null, // enriched if detail endpoint fetched
  url: p.url,
  severity: alertLevelToSeverity(alertLevel),
  });
@@ -141,8 +143,10 @@ export async function fetchPagerEvents(): Promise<PagerEvent[]> {
  events.sort((a, b) => alertOrder[a.alertLevel] - alertOrder[b.alertLevel] || b.magnitude - a.magnitude);
 
  cache = { events, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('usgs-pager', events.length);
  return events;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('usgs-pager', String(error));
  return cache?.events ?? [];
   }
 }

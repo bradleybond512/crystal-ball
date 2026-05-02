@@ -10,6 +10,7 @@
  */
 import { getApiBaseUrl } from '@/services/runtime';
 import { loadProximityConfig, haversineKm } from '@/services/proximity-filter';
+import { dataFreshness } from '@/services/data-freshness';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -359,5 +360,6 @@ export async function fetchWaterQuality(): Promise<WaterQualityData> {
   };
 
   cache = { data, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('water-quality', alerts.length);
   return data;
 }

@@ -3,6 +3,7 @@
  * Public API — no authentication required
  */
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface VolcanoAlert {
   id: string;
@@ -25,11 +26,16 @@ export async function fetchVolcanoAlerts(): Promise<VolcanoAlert[]> {
  const res = await fetch(`${getApiBaseUrl()}/api/volcano-alerts`, {
  signal: AbortSignal.timeout(12_000),
  });
- if (!res.ok) return cache?.data ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('volcano-alerts', `HTTP ${res.status}`);
+ return cache?.data ?? [];
+ }
  const data = (await res.json()) as VolcanoAlert[];
  cache = { data, ts: Date.now() };
+ dataFreshness.recordUpdate('volcano-alerts', data.length);
  return data;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('volcano-alerts', String(error));
  return cache?.data ?? [];
   }
 }

@@ -1,8 +1,10 @@
 import { XMLParser } from 'fast-xml-parser';
+import { dataFreshness } from '@/services/data-freshness';
 
 export type WinterWeatherHazardType = 'snow' | 'ice';
 export type WinterWeatherThreshold = '4in' | '8in' | '12in' | '0.25in';
 export type WinterWeatherProbabilityTier = 'slight' | 'moderate' | 'high';
+export type WinterWeatherProbabilityPercent = 10 | 40 | 70;
 
 export interface WinterWeatherOutlook {
   id: string;
@@ -10,7 +12,7 @@ export interface WinterWeatherOutlook {
   hazardType: WinterWeatherHazardType;
   threshold: WinterWeatherThreshold;
   probabilityTier: WinterWeatherProbabilityTier;
-  probabilityPercent: 10 | 40 | 70;
+  probabilityPercent: WinterWeatherProbabilityPercent;
   headline: string;
   issuedAt: Date;
   startsAt: Date;
@@ -161,6 +163,7 @@ function styleToProbability(styleUrl: string | undefined, name: string | undefin
 }
 
 function parseIssuedAt(description: string | undefined): Date {
+  // eslint-disable-next-line sonarjs/slow-regex -- bounded WPC RSS-feed HTML
   const normalized = (description ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   const match = /Issued:\s*(\d{2})(\d{2})Z\s+\w+\s+([A-Z]{3})\s+(\d{1,2}),\s+(\d{4})/i.exec(normalized);
   if (!match) return new Date();
@@ -194,6 +197,7 @@ function describeThreshold(descriptor: WinterWeatherProductDescriptor): string {
   return descriptor.threshold.replace('in', ' inches');
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- combinatorial severity matrix; refactor deferred
 function toSeverity(
   descriptor: WinterWeatherProductDescriptor,
   day: 1 | 2 | 3,
@@ -303,5 +307,6 @@ export async function fetchWinterWeatherOutlooks(): Promise<WinterWeatherOutlook
  });
 
   cache = { data, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('wpc-winter-weather', data.length);
   return data;
 }

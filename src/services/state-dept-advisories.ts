@@ -1,3 +1,5 @@
+import { dataFreshness } from '@/services/data-freshness';
+
 /**
  * US State Department country-level travel advisories.
  * RSS feeds through /api/rss-proxy
@@ -55,6 +57,7 @@ const SEVERITY_MAP: Record<AdvisoryLevel, TravelAdvisory['severity']> = {
 
 function stripHtml(html: string): string {
   return html
+ // eslint-disable-next-line sonarjs/slow-regex -- input is bounded RSS-feed HTML
  .replace(/<[^>]+>/g, ' ')
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
@@ -68,7 +71,8 @@ function stripHtml(html: string): string {
 }
 
 function parseAdvisoryTitle(title: string): { country: string; level: AdvisoryLevel } | null {
-  // Matches: "Chad - Level 3: Reconsider Travel" or with en-dash
+  // Matches: "Chad - Level 3: Reconsider Travel" or with en-dash.
+  // eslint-disable-next-line sonarjs/slow-regex -- bounded State Dept advisory titles
   const match = /^(.+?)\s*[-\u2013\u2014]\s*Level\s*(\d)/i.exec(title);
   if (!match) return null;
   const country = match[1]!.trim();
@@ -156,6 +160,7 @@ export async function fetchTravelAdvisories(): Promise<TravelAdvisory[]> {
 
   const advisories = sorted.slice(0, 100);
   _cache = { advisories, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('state-dept-advisories', advisories.length);
   return advisories;
 }
 

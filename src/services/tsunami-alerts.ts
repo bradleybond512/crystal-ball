@@ -5,6 +5,8 @@
  * Atlantic: https://www.tsunami.gov/events/xml/ATAQAtom.xml
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export interface TsunamiAlert {
   id: string;
   title: string;
@@ -71,19 +73,25 @@ async function fetchFeed(feedUrl: string, region: TsunamiAlert['region']): Promi
 export async function fetchTsunamiAlerts(): Promise<TsunamiAlert[]> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.alerts;
 
-  const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f.url, f.region)));
-  const alerts: TsunamiAlert[] = [];
-  for (const r of results) {
- if (r.status === 'fulfilled') alerts.push(...r.value);
+  try {
+    const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f.url, f.region)));
+    const alerts: TsunamiAlert[] = [];
+    for (const r of results) {
+      if (r.status === 'fulfilled') alerts.push(...r.value);
+    }
+
+    // Keep last 48 hours
+    const recent = alerts
+      .filter(a => Date.now() - a.pubDate.getTime() < 48 * 60 * 60 * 1000)
+      .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+
+    cache = { alerts: recent, fetchedAt: Date.now() };
+    dataFreshness.recordUpdate('tsunami-alerts', recent.length);
+    return recent;
+  } catch (error) {
+    dataFreshness.recordError('tsunami-alerts', String(error));
+    return cache?.alerts ?? [];
   }
-
-  // Keep last 48 hours
-  const recent = alerts
- .filter(a => Date.now() - a.pubDate.getTime() < 48 * 60 * 60 * 1000)
- .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
-
-  cache = { alerts: recent, fetchedAt: Date.now() };
-  return recent;
 }
 
 export function tsunamiSeverityClass(severity: TsunamiAlert['severity']): string {

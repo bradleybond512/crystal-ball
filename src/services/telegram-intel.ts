@@ -1,5 +1,6 @@
 import { proxyUrl } from '@/utils';
 import { isDesktopRuntime } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 const DISABLED_RESPONSE: TelegramFeedResponse = {
   source: 'telegram', earlySignal: false, enabled: false,
@@ -53,13 +54,19 @@ export async function fetchTelegramFeed(limit = 50): Promise<TelegramFeedRespons
 
   if (cachedResponse && Date.now() - cachedAt < CACHE_TTL) return cachedResponse;
 
-  const res = await fetch(telegramFeedUrl(limit));
-  if (!res.ok) throw new Error(`Telegram feed ${res.status}`);
+  try {
+    const res = await fetch(telegramFeedUrl(limit));
+    if (!res.ok) throw new Error(`Telegram feed ${res.status}`);
 
-  const json = (await res.json()) as TelegramFeedResponse;
-  cachedResponse = json;
-  cachedAt = Date.now();
-  return json;
+    const json = (await res.json()) as TelegramFeedResponse;
+    cachedResponse = json;
+    cachedAt = Date.now();
+    dataFreshness.recordUpdate('telegram-intel', json.items?.length ?? 0);
+    return json;
+  } catch (error) {
+    dataFreshness.recordError('telegram-intel', String(error));
+    throw error;
+  }
 }
 
 export function formatTelegramTime(ts: string): string {

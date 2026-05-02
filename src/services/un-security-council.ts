@@ -8,6 +8,8 @@
  * Cache TTL: 20 minutes.
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type UnScItemType =
   | 'resolution' | 'presidential-statement' | 'press-statement'
   | 'meeting' | 'briefing' | 'sanctions' | 'general';
@@ -55,6 +57,7 @@ const CONFLICT_REGIONS = [
 
 function stripHtml(html: string): string {
   return html
+ // eslint-disable-next-line sonarjs/slow-regex -- bounded UN RSS-feed HTML
  .replace(/<[^>]+>/g, ' ')
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
@@ -239,6 +242,7 @@ export async function fetchUnSecurityCouncil(): Promise<UnScItem[]> {
 
   const items = deduped.slice(0, 50);
   _cache = { items, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('un-security-council', items.length);
   return items;
 }
 

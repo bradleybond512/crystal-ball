@@ -1,3 +1,5 @@
+import { dataFreshness } from '@/services/data-freshness';
+
 /**
  * Global tropical cyclone / hurricane / typhoon monitoring
  *
@@ -129,7 +131,7 @@ async function fetchNhcStorms(): Promise<TropicalCyclone[]> {
  headers: { Accept: 'application/json' },
  });
  if (!res.ok) return [];
- const data: NhcResponse = await res.json();
+ const data = (await res.json()) as NhcResponse;
  const storms = data.activeStorms ?? [];
 
  return storms.map(s => {
@@ -158,6 +160,7 @@ async function fetchNhcStorms(): Promise<TropicalCyclone[]> {
   }
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- JTWC RSS regex parser; refactor deferred
 async function fetchJtwcStorms(): Promise<TropicalCyclone[]> {
   try {
  const proxyUrl = `/api/rss-proxy?url=${encodeURIComponent(JTWC_RSS)}`;
@@ -179,15 +182,19 @@ async function fetchJtwcStorms(): Promise<TropicalCyclone[]> {
  const pubDateStr = item.querySelector('pubDate')?.textContent?.trim() ?? '';
 
  // JTWC titles like: "Tropical Storm 01W Advisory 001"
+ /* eslint-disable sonarjs/slow-regex -- bounded JTWC RSS-feed text */
  const windMatch = /(\d+)\s*KT/i.exec(description);
  const latMatch = /(\d+\.\d+)[NS]/i.exec(description);
  const lonMatch = /(\d+\.\d+)[EW]/i.exec(description);
  const latNeg = /S\b/.test((/\d+\.\d+([NS])/i.exec(description))?.[0] ?? '' );
  const lonNeg = /W\b/.test((/\d+\.\d+([EW])/i.exec(description))?.[0] ?? '' );
+ /* eslint-enable sonarjs/slow-regex */
 
  const windKts = windMatch?.[1] ? Number.parseInt(windMatch[1], 10) : null;
- const lat = latMatch?.[1] ? (Number.parseFloat(latMatch[1]) * (latNeg ? -1 : 1)) : 0;
- const lon = lonMatch?.[1] ? (Number.parseFloat(lonMatch[1]) * (lonNeg ? -1 : 1)) : 0;
+ const latSign = latNeg ? -1 : 1;
+ const lonSign = lonNeg ? -1 : 1;
+ const lat = latMatch?.[1] ? Number.parseFloat(latMatch[1]) * latSign : 0;
+ const lon = lonMatch?.[1] ? Number.parseFloat(lonMatch[1]) * lonSign : 0;
  const category = windKts === null ? 'unknown' : categoryFromWind(windKts);
 
  // Determine basin from lon/lat
@@ -237,6 +244,7 @@ export async function fetchTropicalCyclones(): Promise<TropicalCyclone[]> {
   storms.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
   cache = { storms, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('tropical-cyclones', storms.length);
   return storms;
 }
 

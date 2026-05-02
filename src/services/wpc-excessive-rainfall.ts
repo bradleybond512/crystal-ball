@@ -4,11 +4,14 @@
  * https://www.wpc.ncep.noaa.gov/exper/eromap/geojson/Day1_Latest.geojson
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type ExcessiveRainfallRisk = 'marginal' | 'slight' | 'moderate' | 'high';
+export type ExcessiveRainfallDay = 1 | 2 | 3;
 
 export interface ExcessiveRainfallOutlook {
   id: string;
-  day: 1 | 2 | 3;
+  day: ExcessiveRainfallDay;
   riskLevel: ExcessiveRainfallRisk;
   riskText: string;
   headline: string;
@@ -62,27 +65,35 @@ const RISK_BY_DN: Record<number, ExcessiveRainfallRisk | null> = {
 
 function toSeverity(risk: ExcessiveRainfallRisk): ExcessiveRainfallOutlook['severity'] {
   switch (risk) {
- case 'high':
+ case 'high': {
  return 'critical';
- case 'moderate':
+ }
+ case 'moderate': {
  return 'high';
- case 'slight':
+ }
+ case 'slight': {
  return 'medium';
- default:
+ }
+ default: {
  return 'low';
+ }
   }
 }
 
 function riskLabel(risk: ExcessiveRainfallRisk): string {
   switch (risk) {
- case 'high':
+ case 'high': {
  return 'High';
- case 'moderate':
+ }
+ case 'moderate': {
  return 'Moderate';
- case 'slight':
+ }
+ case 'slight': {
  return 'Slight';
- case 'marginal':
+ }
+ case 'marginal': {
  return 'Marginal';
+ }
   }
 }
 
@@ -183,5 +194,6 @@ export async function fetchExcessiveRainfallOutlooks(): Promise<ExcessiveRainfal
  });
 
   cache = { data, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('wpc-excessive-rainfall', data.length);
   return data;
 }

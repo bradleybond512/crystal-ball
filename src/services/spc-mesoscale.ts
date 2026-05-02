@@ -4,6 +4,8 @@
  * Data source: https://www.spc.noaa.gov/products/md/rss.xml (via rss-proxy)
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type MdType = 'tornado' | 'severe-thunderstorm' | 'fire-weather' | 'flooding' | 'winter' | 'general';
 
 export interface MesoscaleDiscussion {
@@ -35,6 +37,7 @@ const US_STATE_ABBREVS = new Set([
 
 function stripHtml(html: string): string {
   return html
+ // eslint-disable-next-line sonarjs/slow-regex -- bounded NOAA RSS-feed text
  .replace(/<[^>]+>/g, ' ')
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
@@ -49,9 +52,9 @@ function stripHtml(html: string): string {
 function extractText(xml: string, tag: string): string {
   const cdataRe = new RegExp(String.raw`<${tag}[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/${tag}>`, 'i');
   const plainRe = new RegExp(String.raw`<${tag}[^>]*>([\s\S]*?)<\/${tag}>`, 'i');
-  const cdataMatch = xml.match(cdataRe);
+  const cdataMatch = cdataRe.exec(xml);
   if (cdataMatch) return (cdataMatch[1] ?? '').trim();
-  const plainMatch = xml.match(plainRe);
+  const plainMatch = plainRe.exec(xml);
   if (plainMatch) return stripHtml(plainMatch[1] ?? '').trim();
   return '';
 }
@@ -112,7 +115,7 @@ function parseItems(xmlText: string): MesoscaleDiscussion[] {
  if (!title) continue;
 
  const pubDate = pubDateStr ? new Date(pubDateStr) : new Date();
- if (isNaN(pubDate.getTime()) || pubDate.getTime() < cutoff) continue;
+ if (Number.isNaN(pubDate.getTime()) || pubDate.getTime() < cutoff) continue;
 
  const numMatch = /Mesoscale Discussion\s+(\d+)/i.exec(title);
  if (!numMatch) continue;
@@ -159,7 +162,10 @@ export async function fetchMesoscaleDiscussions(): Promise<MesoscaleDiscussion[]
   try {
  const proxyUrl = `/api/rss-proxy?url=${encodeURIComponent(SPC_RSS_URL)}`;
  const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(12_000) });
- if (!res.ok) return cache?.data ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('spc-mesoscale', `HTTP ${res.status}`);
+ return cache?.data ?? [];
+ }
 
  const xmlText = await res.text();
  const items = parseItems(xmlText);
@@ -172,8 +178,10 @@ export async function fetchMesoscaleDiscussions(): Promise<MesoscaleDiscussion[]
 
  const data = items.slice(0, 25);
  cache = { data, ts: Date.now() };
+ dataFreshness.recordUpdate('spc-mesoscale', data.length);
  return data;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('spc-mesoscale', String(error));
  return cache?.data ?? [];
   }
 }

@@ -9,6 +9,8 @@
  * Cache TTL: 30 minutes.
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type SanctionProgram =
   | 'Russia' | 'Iran' | 'North Korea' | 'China' | 'Venezuela'
   | 'Terrorism' | 'Narcotics' | 'Cyber' | 'Human Rights' | 'Other';
@@ -55,6 +57,7 @@ const PROGRAM_PATTERNS: { program: SanctionProgram; pattern: RegExp }[] = [
 
 function stripHtml(html: string): string {
   return html
+ // eslint-disable-next-line sonarjs/slow-regex -- input is bounded RSS-feed HTML, not user data
  .replace(/<[^>]+>/g, ' ')
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
@@ -239,6 +242,7 @@ export async function fetchSanctions(): Promise<SanctionDesignation[]> {
 
   const items = deduped.slice(0, 40);
   _cache = { items, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('ofac-sanctions', items.length);
   return items;
 }
 

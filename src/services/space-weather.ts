@@ -1,6 +1,7 @@
 // NOAA Space Weather Prediction Center — free, CORS-enabled, no API key required
 // Docs: https://services.swpc.noaa.gov/
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface SpaceWeatherData {
   kpIndex: number | null; // 0–9 planetary geomagnetic index
@@ -43,6 +44,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- composes 5 SWPC feed parsers; refactor deferred
 export async function fetchSpaceWeather(): Promise<SpaceWeatherData> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
  return cache.data;
@@ -65,7 +67,7 @@ export async function fetchSpaceWeather(): Promise<SpaceWeatherData> {
  const rows = kpRaw.value as number[][];
  const last = rows[rows.length - 1];
  const kpVal = last ? Number(last[1]) : Number.NaN;
- if (!isNaN(kpVal)) kpIndex = kpVal;
+ if (!Number.isNaN(kpVal)) kpIndex = kpVal;
   }
 
   // Parse solar wind (Bz from mag data)
@@ -78,7 +80,7 @@ export async function fetchSpaceWeather(): Promise<SpaceWeatherData> {
  const last = rows[rows.length - 1];
  if (last) {
  const bzVal = Number.parseFloat(last[3] ?? '');
- if (!isNaN(bzVal)) bz = bzVal;
+ if (!Number.isNaN(bzVal)) bz = bzVal;
  }
   }
 
@@ -91,8 +93,8 @@ export async function fetchSpaceWeather(): Promise<SpaceWeatherData> {
  if (last) {
  const speed = Number.parseFloat(last[1] ?? '');
  const density = Number.parseFloat(last[2] ?? '');
- if (!isNaN(speed)) solarWindSpeed = speed;
- if (!isNaN(density)) solarWindDensity = density;
+ if (!Number.isNaN(speed)) solarWindSpeed = speed;
+ if (!Number.isNaN(density)) solarWindDensity = density;
  }
   }
 
@@ -140,6 +142,7 @@ export async function fetchSpaceWeather(): Promise<SpaceWeatherData> {
   };
 
   cache = { data, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('space-weather', alertMessages.length);
   return data;
 }
 
@@ -162,7 +165,7 @@ const DONKI_CACHE_TTL_MS = 30 * 60 * 1000;
 export async function fetchDonkiEvents(): Promise<DonkiEvent[]> {
   if (donkiCache && Date.now() - donkiCache.ts < DONKI_CACHE_TTL_MS) return donkiCache.events;
   try {
- const res = await fetch(`${getApiBaseUrl()}/api/donki-events`, { signal: AbortSignal.timeout(15000) });
+ const res = await fetch(`${getApiBaseUrl()}/api/donki-events`, { signal: AbortSignal.timeout(15_000) });
  if (!res.ok) {
  donkiCache = { events: [], ts: Date.now() };
  return [];

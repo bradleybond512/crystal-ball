@@ -7,6 +7,7 @@
  */
 import { getApiBaseUrl } from '@/services/runtime';
 import { isFeatureAvailable } from '@/services/runtime-config';
+import { dataFreshness } from '@/services/data-freshness';
 import type { CyberThreat } from '@/types';
 
 // ── Feed-specific interfaces ──────────────────────────────────────────────────
@@ -111,12 +112,17 @@ export async function fetchThreatFoxIOCs(): Promise<CyberThreat[]> {
   if (cached) return cached;
   try {
  const res = await fetch(`${getApiBaseUrl()}/api/threatfox-iocs`, { method: 'GET' });
- if (!res.ok) return [];
+ if (!res.ok) {
+ dataFreshness.recordError('cyber-extra', `threatfox: ${res.status}`);
+ return [];
+ }
  const data = (await res.json()) as CyberThreat[];
  if (!Array.isArray(data)) return [];
  setCached('threatfox', data);
+ dataFreshness.recordUpdate('cyber-extra', data.length);
  return data;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('cyber-extra', String(error));
  return [];
   }
 }

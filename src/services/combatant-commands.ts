@@ -1,3 +1,5 @@
+import { dataFreshness } from '@/services/data-freshness';
+
 export type CombatantCommand =
   | 'CENTCOM'
   | 'INDOPACOM'
@@ -51,9 +53,12 @@ function proxyFeedUrl(feedUrl: string): string {
   return `/api/rss-proxy?url=${encodeURIComponent(feedUrl)}`;
 }
 
+// eslint-disable-next-line sonarjs/slow-regex -- bounded HTML-tag stripping; input is RSS feed body, not user-controlled
+const HTML_TAG_RE = /<[^>]*>/g;
+
 function stripHtml(html: string): string {
   return html
- .replace(/<[^>]+>/g, ' ')
+ .replace(HTML_TAG_RE, ' ')
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
  .replace(/&gt;/g, '>')
@@ -152,6 +157,7 @@ const SEVERITY_ORDER: Record<CommandRelease['severity'], number> = {
 export async function fetchCombatantCommands(): Promise<CommandRelease[]> {
   if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS) return _cache.items;
 
+  try {
   const results = await Promise.allSettled(
  FEEDS.map(async ({ command, url }) => {
  const res = await fetch(proxyFeedUrl(url), {
@@ -187,7 +193,12 @@ export async function fetchCombatantCommands(): Promise<CommandRelease[]> {
 
   const items = deduped.slice(0, 60);
   _cache = { items, ts: Date.now() };
+  dataFreshness.recordUpdate('combatant-commands', items.length);
   return items;
+  } catch (error) {
+  dataFreshness.recordError('combatant-commands', String(error));
+  return _cache?.items ?? [];
+  }
 }
 
 export function commandSeverityClass(severity: CommandRelease['severity']): string {

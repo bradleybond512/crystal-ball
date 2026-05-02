@@ -13,6 +13,8 @@
  * transmission failures, cyber attacks on grid infrastructure.
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export interface PowerGridAlert {
   id: string;
   title: string;
@@ -93,6 +95,7 @@ async function fetchRssFeed(feedUrl: string, source: PowerGridAlert['source']): 
 
  for (const item of items) {
  const title = item.querySelector('title')?.textContent?.trim() ?? '';
+ // eslint-disable-next-line sonarjs/slow-regex -- input is bounded NERC/DOE RSS feed
  const description = (item.querySelector('description')?.textContent ?? '').replace(/<[^>]+>/g, '').trim();
  const link = item.querySelector('link')?.textContent?.trim() ?? '';
  const pubDateStr = item.querySelector('pubDate')?.textContent?.trim() ?? '';
@@ -137,7 +140,8 @@ export async function fetchPowerGridAlerts(): Promise<PowerGridAlert[]> {
   // Dedupe by title similarity
   const seen = new Set<string>();
   const deduped: PowerGridAlert[] = [];
-  for (const a of combined.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())) {
+  const sortedByDateDesc = [...combined].sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+  for (const a of sortedByDateDesc) {
  const key = a.title.toLowerCase().replace(/\W/g, '').slice(0, 40);
  if (!seen.has(key)) {
  seen.add(key);
@@ -151,6 +155,7 @@ export async function fetchPowerGridAlerts(): Promise<PowerGridAlert[]> {
  .slice(0, 40);
 
   cache = { alerts: recent, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('power-grid-alerts', recent.length);
   return recent;
 }
 

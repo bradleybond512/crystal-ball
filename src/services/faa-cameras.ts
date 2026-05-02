@@ -1,6 +1,7 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import type { NWSAlert } from '@/services/nws-alerts';
 import type { GDACSEvent } from '@/services/gdacs';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface FAACamera {
   id: string;
@@ -47,11 +48,16 @@ export async function fetchFAACameras(): Promise<FAACamera[]> {
  const res = await fetch(`${getApiBaseUrl()}/api/faa-cameras`, {
  signal: AbortSignal.timeout(15_000),
  });
- if (!res.ok) return cache?.data ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('faa-cameras', `HTTP ${res.status}`);
+ return cache?.data ?? [];
+ }
  const data = parseFAACamerasResponse(await res.json());
  cache = { data, ts: Date.now() };
+ dataFreshness.recordUpdate('faa-cameras', data.length);
  return data;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('faa-cameras', String(error));
  return cache?.data ?? [];
   }
 }

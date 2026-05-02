@@ -12,6 +12,8 @@
  * Phase 4 = Emergency  Phase 5 = Catastrophe/Famine
  */
 
+import { dataFreshness } from './data-freshness';
+
 export type IpcPhase = 1 | 2 | 3 | 4 | 5;
 
 export interface FoodInsecurityAlert {
@@ -68,11 +70,14 @@ async function fetchFewsNet(): Promise<FoodInsecurityAlert[]> {
  const items = doc.querySelectorAll('item');
  return [...items].slice(0, 30).map((item, i) => {
  const title = item.querySelector('title')?.textContent?.trim() ?? '';
+ // RSS description from controlled FEWS NET feed; backtracking risk bounded.
+ // eslint-disable-next-line sonarjs/slow-regex
  const description = (item.querySelector('description')?.textContent ?? '').replace(/<[^>]+>/g, '').trim();
  const link = item.querySelector('link')?.textContent?.trim() ?? '';
  const pubDateStr = item.querySelector('pubDate')?.textContent?.trim() ?? '';
 
- // FEWS NET titles often start with country name
+ // FEWS NET titles often start with country name; bounded input.
+ /* eslint-disable-next-line sonarjs/slow-regex */
  const countryMatch = /^([A-Z][a-zA-Z\s]+?)(?:\s*[-–:|]|\s+Food)/.exec(title);
  const country = countryMatch?.[1]?.trim() ?? 'Unknown';
 
@@ -120,7 +125,7 @@ async function fetchIpc(): Promise<FoodInsecurityAlert[]> {
  });
  if (!res.ok) return [];
 
- const data: IpcResponse = await res.json();
+ const data = await res.json() as IpcResponse;
  const records: IpcRecord[] = data.body ?? data.data ?? [];
 
  // Filter to IPC Phase 3+ (Crisis or worse)
@@ -128,8 +133,9 @@ async function fetchIpc(): Promise<FoodInsecurityAlert[]> {
  .filter(r => (r.phase ?? 0) >= 3)
  .map(r => {
  const phase = (r.phase ?? null) as IpcPhase | null;
+ const idFallback = `${r.country_code}-${r.period}`;
  return {
- id: `ipc-${r.id ?? `${r.country_code}-${r.period}`}`,
+ id: `ipc-${r.id ?? idFallback}`,
  country: r.country ?? 'Unknown',
  countryCode: r.country_code ?? '',
  title: r.title ?? `IPC Phase ${phase} — ${r.country}`,
@@ -165,6 +171,11 @@ export async function fetchFoodInsecurityAlerts(): Promise<FoodInsecurityAlert[]
   combined.sort((a, b) => sOrder[a.severity] - sOrder[b.severity] || b.pubDate.getTime() - a.pubDate.getTime());
 
   cache = { alerts: combined.slice(0, 60), fetchedAt: Date.now() };
+  if (fewsResult.status === 'rejected' && ipcResult.status === 'rejected') {
+ dataFreshness.recordError('food-insecurity', 'both FEWS NET and IPC requests rejected');
+  } else {
+ dataFreshness.recordUpdate('food-insecurity', cache.alerts.length);
+  }
   return cache.alerts;
 }
 

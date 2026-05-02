@@ -12,6 +12,8 @@
  * serious enough to warrant federal response resources.
  */
 
+import { dataFreshness } from './data-freshness';
+
 export type FemaDeclarationType =
   | 'DR' // Major Disaster Declaration
   | 'EM' // Emergency Declaration
@@ -34,6 +36,7 @@ export interface FemaDeclaration {
   id: string;
   disasterNumber: number;
   declarationType: FemaDeclarationType;
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- FEMA API returns either a known incidentType or a freeform string from new categories
   incidentType: FemaIncidentType | string;
   declarationTitle: string;
   state: string;
@@ -63,6 +66,7 @@ export interface FemaShelter {
   capacity: number | null;
   currentOccupancy: number | null;
   disasterNumber: number | null;
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- FEMA API may return values outside the known set
   shelterStatus: 'Open' | 'Closed' | 'Full' | string;
   acceptingEvacuees: boolean;
   petFriendly: boolean;
@@ -140,17 +144,22 @@ export async function fetchFemaDeclarations(daysBack = 90): Promise<FemaDeclarat
  const since = new Date(Date.now() - daysBack * 24 * 3_600_000).toISOString().slice(0, 10);
  const url = `${FEMA_API}/DisasterDeclarationsSummaries?$filter=declarationDate ge '${since}'&$orderby=declarationDate desc&$top=100&$format=json`;
  const res = await fetch(url, { signal: AbortSignal.timeout(12_000), headers: { Accept: 'application/json' } });
- if (!res.ok) return declarationsCache?.items ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('fema-disasters', `declarations HTTP ${res.status}`);
+ return declarationsCache?.items ?? [];
+ }
 
- const data: FemaApiResponse<FemaApiDeclaration> = await res.json();
+ const data = await res.json() as FemaApiResponse<FemaApiDeclaration>;
  const raw = data.DisasterDeclarationsSummaries ?? [];
 
  const items: FemaDeclaration[] = raw.map(d => {
  const declType = (d.declarationType ?? 'DR') as FemaDeclarationType;
  const incType = d.incidentType ?? 'Other';
  const isOpen = !d.closeoutDate && !d.closeoutDatetime && !d.disasterCloseoutDate;
+ // eslint-disable-next-line sonarjs/pseudo-random -- ID jitter, not security-sensitive
+ const fallbackId = Math.random();
  return {
- id: `fema-${d.disasterNumber ?? Math.random()}`,
+ id: `fema-${d.disasterNumber ?? fallbackId}`,
  disasterNumber: d.disasterNumber ?? 0,
  declarationType: declType,
  incidentType: incType,
@@ -174,8 +183,10 @@ export async function fetchFemaDeclarations(daysBack = 90): Promise<FemaDeclarat
  });
 
  declarationsCache = { items, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('fema-disasters', items.length);
  return items;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('fema-disasters', String(error));
  return declarationsCache?.items ?? [];
   }
 }
@@ -188,13 +199,18 @@ export async function fetchFemaShelters(): Promise<FemaShelter[]> {
   try {
  const url = `${FEMA_API}/OpenedShelters?$filter=shelterStatus eq 'Open'&$top=200&$format=json`;
  const res = await fetch(url, { signal: AbortSignal.timeout(12_000), headers: { Accept: 'application/json' } });
- if (!res.ok) return sheltersCache?.items ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('fema-disasters', `shelters HTTP ${res.status}`);
+ return sheltersCache?.items ?? [];
+ }
 
- const data: FemaApiResponse<FemaApiShelter> = await res.json();
+ const data = await res.json() as FemaApiResponse<FemaApiShelter>;
  const raw = data.OpenedShelters ?? [];
 
- const items: FemaShelter[] = raw.map(s => ({
- id: `shelter-${s.shelterId ?? `${s.shelterName}-${s.city}`}`,
+ const items: FemaShelter[] = raw.map(s => {
+ const shelterIdFallback = `${s.shelterName}-${s.city}`;
+ return {
+ id: `shelter-${s.shelterId ?? shelterIdFallback}`,
  shelterName: s.shelterName ?? 'Unknown Shelter',
  address: s.address1 ?? '',
  city: s.city ?? '',
@@ -209,11 +225,14 @@ export async function fetchFemaShelters(): Promise<FemaShelter[]> {
  acceptingEvacuees: s.acceptingEvacuees ?? true,
  petFriendly: s.petFriendly ?? false,
  accessibilityCompliant: s.ada ?? false,
- }));
+ };
+ });
 
  sheltersCache = { items, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('fema-disasters', items.length);
  return items;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('fema-disasters', String(error));
  return sheltersCache?.items ?? [];
   }
 }

@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface FederalDocument {
   id: string;
@@ -18,12 +19,17 @@ export async function fetchFederalRegister(): Promise<FederalDocument[]> {
   if (_cache && Date.now() - _cacheTs < CACHE_TTL_MS) return _cache;
   try {
  const res = await fetch(`${getApiBaseUrl()}/api/federal-register`, { signal: AbortSignal.timeout(8000) });
- if (!res.ok) return [];
+ if (!res.ok) {
+ dataFreshness.recordError('federal-register', `HTTP ${res.status}`);
+ return [];
+ }
  const data = await res.json() as { documents: FederalDocument[] };
  _cache = Array.isArray(data.documents) ? data.documents : [];
  _cacheTs = Date.now();
+ dataFreshness.recordUpdate('federal-register', _cache.length);
  return _cache;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('federal-register', String(error));
  return [];
   }
 }

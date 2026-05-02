@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface InpeHotspot {
   id: string;
@@ -23,14 +24,17 @@ export async function fetchInpeFires(): Promise<InpeHotspot[]> {
   try {
  const res = await fetch(`${getApiBaseUrl()}/api/inpe-fires`, { signal: AbortSignal.timeout(15_000) });
  if (!res.ok) {
+ dataFreshness.recordError('inpe-fires', `HTTP ${res.status}`);
  _cache = { hotspots: [], ts: Date.now() };
  return [];
  }
  const raw = await res.json() as (InpeHotspot & { acqTime: string })[];
  const hotspots = raw.map(h => ({ ...h, acqTime: new Date(h.acqTime) }));
  _cache = { hotspots, ts: Date.now() };
+ dataFreshness.recordUpdate('inpe-fires', hotspots.length);
  return hotspots;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('inpe-fires', String(error));
  _cache = { hotspots: [], ts: Date.now() };
  return [];
   }

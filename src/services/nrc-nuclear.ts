@@ -7,6 +7,8 @@
  * unusual events, reactor trips, radiological releases.
  */
 
+import { dataFreshness } from './data-freshness';
+
 export interface NrcEvent {
   id: string;
   title: string;
@@ -69,7 +71,10 @@ export async function fetchNrcEvents(): Promise<NrcEvent[]> {
 
   try {
  const res = await fetch(rssProxyUrl(NRC_RSS), { signal: AbortSignal.timeout(12_000) });
- if (!res.ok) return cache?.events ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('nrc-nuclear', `HTTP ${res.status}`);
+ return cache?.events ?? [];
+ }
 
  const text = await res.text();
  const parser = new DOMParser();
@@ -93,7 +98,10 @@ export async function fetchNrcEvents(): Promise<NrcEvent[]> {
 
  const rawKey = (title + pubDateStr).slice(0, 60);
  let shortId = '';
- try { shortId = btoa(unescape(encodeURIComponent(rawKey))).slice(0, 20); } catch { shortId = rawKey.replace(/\W/g, '').slice(0, 20); }
+ try {
+ const utf8 = new TextEncoder().encode(rawKey);
+ shortId = btoa(String.fromCodePoint(...utf8)).slice(0, 20);
+ } catch { shortId = rawKey.replace(/\W/g, '').slice(0, 20); }
  events.push({
  id: `nrc-${shortId}`,
  title,
@@ -112,8 +120,10 @@ export async function fetchNrcEvents(): Promise<NrcEvent[]> {
  .slice(0, 30);
 
  cache = { events: recent, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('nrc-nuclear', recent.length);
  return recent;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('nrc-nuclear', String(error));
  return cache?.events ?? [];
   }
 }

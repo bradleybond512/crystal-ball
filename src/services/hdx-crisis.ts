@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export type CrisisType = 'conflict' | 'displacement' | 'food-insecurity' | 'disease' | 'disaster' | 'other';
 
@@ -24,14 +25,17 @@ export async function fetchHdxCrises(): Promise<HumanitarianCrisis[]> {
   try {
  const res = await fetch(`${getApiBaseUrl()}/api/hdx-crises`, { signal: AbortSignal.timeout(15_000) });
  if (!res.ok) {
+ dataFreshness.recordError('hdx-crisis', `HTTP ${res.status}`);
  _cache = { crises: [], ts: Date.now() };
  return [];
  }
  const raw = await res.json() as (HumanitarianCrisis & { updatedAt: string })[];
  const crises = raw.map(r => ({ ...r, updatedAt: new Date(r.updatedAt) }));
  _cache = { crises, ts: Date.now() };
+ dataFreshness.recordUpdate('hdx-crisis', crises.length);
  return crises;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('hdx-crisis', String(error));
  _cache = { crises: [], ts: Date.now() };
  return [];
   }

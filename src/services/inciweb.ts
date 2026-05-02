@@ -13,8 +13,14 @@
  *  - Cause (lightning, human, under investigation)
  *
  * Complements VIIRS/MODIS satellite heat detection with human-operated data.
+ *
+ * Wired to data-freshness telemetry.
  * VIIRS shows where fire pixels are; InciWeb shows the human response.
  */
+
+/* eslint-disable sonarjs/slow-regex, sonarjs/regex-complexity, sonarjs/no-nested-template-literals -- regexes parse bounded InciWeb RSS text */
+
+import { dataFreshness } from './data-freshness';
 
 export interface IncidentReport {
   id: string;
@@ -64,10 +70,11 @@ function detectIncidentType(title: string, description: string): IncidentReport[
 
 function extractNumber(text: string, patterns: RegExp[]): number | null {
   for (const pattern of patterns) {
+ // eslint-disable-next-line sonarjs/prefer-regexp-exec -- API receives RegExp[]
  const match = text.match(pattern);
  if (match?.[1]) {
  const num = Number.parseFloat(match[1].replace(/,/g, ''));
- if (!isNaN(num)) return num;
+ if (!Number.isNaN(num)) return num;
  }
   }
   return null;
@@ -196,6 +203,11 @@ export async function fetchInciwebIncidents(): Promise<IncidentReport[]> {
   });
 
   cache = { incidents: incidents.slice(0, 80), fetchedAt: Date.now() };
+  if (mainResult.status === 'rejected' && evacResult.status === 'rejected') {
+ dataFreshness.recordError('inciweb', 'both InciWeb RSS feeds rejected');
+  } else {
+ dataFreshness.recordUpdate('inciweb', cache.incidents.length);
+  }
   return cache.incidents;
 }
 

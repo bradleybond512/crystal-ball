@@ -7,6 +7,9 @@
  * hydrographic office notices to mariners.
  */
 
+
+import { dataFreshness } from './data-freshness';
+
 export interface MaritimeWarning {
   id: string;
   msgYear: number;
@@ -95,7 +98,7 @@ function scoreSeverity(category: MaritimeWarning['category']): MaritimeWarning['
 function parseDate(str: string | null | undefined): Date | null {
   if (!str) return null;
   const d = new Date(str);
-  return isNaN(d.getTime()) ? null : d;
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 export async function fetchMaritimeWarnings(): Promise<MaritimeWarning[]> {
@@ -106,9 +109,12 @@ export async function fetchMaritimeWarnings(): Promise<MaritimeWarning[]> {
  signal: AbortSignal.timeout(15_000),
  headers: { Accept: 'application/json' },
  });
- if (!res.ok) return cache?.warnings ?? [];
+ if (!res.ok) {
+ dataFreshness.recordError('maritime-safety', `HTTP ${res.status}`);
+ return cache?.warnings ?? [];
+ }
 
- const data: NgaMsiResponse = await res.json();
+ const data = await res.json() as NgaMsiResponse;
  const items: NgaMsiWarning[] = data.broadcastWarn ?? data.items ?? [];
 
  const now = Date.now();
@@ -152,8 +158,10 @@ export async function fetchMaritimeWarnings(): Promise<MaritimeWarning[]> {
  .slice(0, 100);
 
  cache = { warnings: filtered, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('maritime-safety', filtered.length);
  return filtered;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('maritime-safety', String(error));
  return cache?.warnings ?? [];
   }
 }

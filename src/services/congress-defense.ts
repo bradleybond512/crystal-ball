@@ -1,9 +1,16 @@
 // US Congressional defense activity — HASC/SASC news, defense bills, military votes
 // RSS feeds through /api/rss-proxy
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type CongressDefenseType =
   | 'ndaa' | 'authorization' | 'appropriation' | 'sanction-bill'
   | 'hearing' | 'vote' | 'statement' | 'general';
+
+type CongressSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+// eslint-disable-next-line sonarjs/slow-regex -- bounded RSS feed body, not user-controlled
+const HTML_TAG_RE = /<[^>]*>/g;
 
 export interface CongressDefenseItem {
   id: string;
@@ -13,7 +20,7 @@ export interface CongressDefenseItem {
   itemType: CongressDefenseType;
   pubDate: Date;
   url: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
+  severity: CongressSeverity;
   keywords: string[];
 }
 
@@ -40,7 +47,7 @@ function proxyUrl(feedUrl: string): string {
 
 function stripHtml(html: string): string {
   return html
- .replace(/<[^>]+>/g, ' ')
+ .replace(HTML_TAG_RE, ' ')
  .replace(/&amp;/g, '&')
  .replace(/&lt;/g, '<')
  .replace(/&gt;/g, '>')
@@ -164,7 +171,7 @@ async function fetchFeed(feedUrl: string): Promise<CongressDefenseItem[]> {
  if (!isRelevant(raw.title, raw.description)) continue;
 
  const pubDate = raw.pubDateStr ? new Date(raw.pubDateStr) : new Date();
- if (isNaN(pubDate.getTime())) continue;
+ if (Number.isNaN(pubDate.getTime())) continue;
 
  const itemType = detectItemType(raw.title, raw.description);
  const keywords = extractKeywords(raw.title, raw.description);
@@ -200,6 +207,7 @@ const SEVERITY_ORDER: Record<'critical' | 'high' | 'medium' | 'low', number> = {
 export async function fetchCongressDefense(): Promise<CongressDefenseItem[]> {
   if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS) return _cache.items;
 
+  try {
   const results = await Promise.allSettled(FEED_URLS.map(url => fetchFeed(url)));
 
   const combined: CongressDefenseItem[] = [];
@@ -231,7 +239,12 @@ export async function fetchCongressDefense(): Promise<CongressDefenseItem[]> {
 
   const items = deduped.slice(0, 40);
   _cache = { items, ts: Date.now() };
+  dataFreshness.recordUpdate('congress-defense', items.length);
   return items;
+  } catch (error) {
+ dataFreshness.recordError('congress-defense', String(error));
+ return _cache?.items ?? [];
+  }
 }
 
 export function congressSeverityClass(severity: CongressDefenseItem['severity']): string {

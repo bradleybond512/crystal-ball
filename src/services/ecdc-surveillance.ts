@@ -3,6 +3,8 @@
  * Sources: ECDC RSS feeds via rss-proxy
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type EcdcReportType =
   | 'rapid-risk-assessment'
   | 'threat-report'
@@ -188,7 +190,7 @@ function titleHash(title: string): string {
   // Simple deterministic hash for deduplication
   let h = 0;
   for (let i = 0; i < title.length; i++) {
- h = ((h << 5) - h + title.charCodeAt(i)) | 0;
+ h = Math.trunc((h << 5) - h + (title.codePointAt(i) ?? 0));
   }
   return `ecdc-${h}`;
 }
@@ -252,6 +254,7 @@ export async function fetchEcdcAlerts(): Promise<EcdcAlert[]> {
 
   const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
 
+  try {
   const results = await Promise.allSettled(
  ECDC_FEEDS.map(async (feedUrl) => {
  const res = await fetch(rssProxyUrl(feedUrl), {
@@ -294,7 +297,12 @@ export async function fetchEcdcAlerts(): Promise<EcdcAlert[]> {
  .slice(0, 40);
 
   cache = { data: filtered, ts: now };
+  dataFreshness.recordUpdate('ecdc-surveillance', filtered.length);
   return filtered;
+  } catch (error) {
+ dataFreshness.recordError('ecdc-surveillance', String(error));
+ return cache?.data ?? [];
+  }
 }
 
 export function ecdcSeverityClass(severity: EcdcAlert['severity']): string {

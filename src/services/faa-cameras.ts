@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 import type { NWSAlert } from '@/services/nws-alerts';
 import type { GDACSEvent } from '@/services/gdacs';
 
@@ -50,8 +51,10 @@ export async function fetchFAACameras(): Promise<FAACamera[]> {
  if (!res.ok) return cache?.data ?? [];
  const data = parseFAACamerasResponse(await res.json());
  cache = { data, ts: Date.now() };
+ dataFreshness.recordUpdate('faa-cameras', data.length);
  return data;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('faa-cameras', String(error));
  return cache?.data ?? [];
   }
 }

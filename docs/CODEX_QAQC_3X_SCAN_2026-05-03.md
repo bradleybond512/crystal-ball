@@ -1,22 +1,27 @@
-# Codex QA/QC 3x Scan Findings
+# Codex QA/QC 6x Scan Findings
 
 Date: 2026-05-03
 
 Branch scanned: `claude/domain-superpowers`
 
-Log root: `/tmp/crystalball-qaqc-3x-20260503-114431`
+Log roots:
+
+- `/tmp/crystalball-qaqc-3x-20260503-114431`
+- `/tmp/crystalball-qaqc-3x-more-20260503-142743`
 
 ## Scope
 
-Codex ran the same full QA/QC gate set three times against the current dirty
-worktree. The worktree already contained the domain-superpowers commit plus
-uncommitted source and docs changes. No source fixes were made during this scan.
+Codex ran the same full QA/QC gate set six times against the current dirty
+worktree. The first scan covered passes 1-3, then the requested follow-up scan
+covered passes 4-6. The worktree already contained the domain-superpowers commit
+plus uncommitted source and docs changes. No source fixes were made during this
+scan.
 
 ## Result
 
 Release stance: not ready.
 
-The failures below reproduced across all three passes unless marked otherwise.
+The failures below reproduced across all six passes unless marked otherwise.
 
 ## Stable Blockers
 
@@ -27,7 +32,7 @@ Commands:
 - `npm run typecheck:all`
 - `npm run build`
 
-Both commands failed 3/3 passes with the same `gods-vision` contract mismatch.
+Both commands failed 6/6 passes with the same `gods-vision` contract mismatch.
 
 Primary failing files:
 
@@ -58,7 +63,7 @@ Impact:
 
 Command: `npm run test:e2e:runtime`
 
-Result: 7 failed, 5 passed in all 3 passes.
+Result: 7 failed, 5 passed in all 6 passes.
 
 Stable failing scenarios:
 
@@ -122,11 +127,15 @@ Commands:
 - `npm run lint:strict`
 - `npm run lint`
 
-`npm run lint:strict` failed 3/3 after Playwright generated `test-results`
-markdown files. The markdown lint command includes those generated artifacts,
-and the generated `error-context.md` files violate `MD047`.
+`npm run lint:strict` is order-sensitive:
 
-`npm run lint` failed 3/3 with:
+- It passed in pass 4 after `test-results` was cleaned.
+- It failed in passes 1-3 and 5-6 after Playwright generated `test-results`
+  markdown files.
+- The markdown lint command includes those generated artifacts, and the
+  generated `error-context.md` files violate `MD047`.
+
+`npm run lint` failed 6/6 with:
 
 - 2,780 total problems.
 - 2,764 errors.
@@ -141,20 +150,21 @@ Command: `npm run test:feeds`
 
 Stable failures:
 
-- News24: HTTP 403.
-- Bild: empty feed result.
+- News24: HTTP 403 in all 6 passes.
+- Bild: empty feed result in all 6 passes.
 
 Variable failure:
 
-- 20VC Episodes timed out in pass 1, then passed in passes 2 and 3.
+- 20VC Episodes timed out in passes 1, 4, 5, and 6; it passed in passes 2 and
+  3.
 
 Impact:
 
 - The feed catalog has at least two stable upstream drifts and one flaky source.
 
-## Checks Passing 3/3
+## Checks Passing 6/6
 
-The following commands passed all three runs:
+The following commands passed all six runs:
 
 - `npm run lockfile:check`
 - `npm run version:check`
@@ -180,6 +190,18 @@ The following commands passed all three runs:
 - `npm run test:panels:smoke`
 - `npm run bundle:check`
 - `npm run build:sidecar-sebuf`
+
+## Additional Passes 4-6
+
+The second requested 3x scan confirmed the same release stance: not ready.
+
+New or clarified findings:
+
+- `npm run lint:strict` passes from a clean workspace when `test-results` does
+  not exist, then fails after runtime E2E writes Playwright markdown artifacts.
+- Feed validation now shows 20VC timeout flakiness in 4/6 total passes.
+- No previously failing release blocker cleared during passes 4-6.
+- No new stable source-level blocker appeared beyond the existing failure set.
 
 ## Recommended Fix Order
 

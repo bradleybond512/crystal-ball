@@ -388,7 +388,7 @@ const ICON_DRAW_FNS: Record<string, IconDrawFn> = {
 
  
 let _iconAtlas: any = null;
-let _iconMapping: Record<string, { x: number; y: number; width: number; height: number; mask: boolean }> | null = null;
+let _iconMapping: Record<string, { x: number; y: number; width: number; height: number; anchorX: number; anchorY: number; mask: boolean }> | null = null;
 
 // DeckGL accepts HTMLCanvasElement at runtime but types only allow string | Texture
  
@@ -407,14 +407,25 @@ function getIconAtlas(): any {
     ctx.translate(i * ICON_SIZE, 0);
     ICON_DRAW_FNS[name!]!(ctx);
     ctx.restore();
-    mapping[name!] = { x: i * ICON_SIZE, y: 0, width: ICON_SIZE, height: ICON_SIZE, mask: true };
+    // Anchor each icon at its center, not the DeckGL default of bottom-center.
+    // Without explicit anchorY, every icon (planes, cyclones, fires, …) is
+    // drawn with its bottom edge at the geo point — visually offset upward
+    // by half the icon height. The displacement is in screen pixels, so it
+    // looks larger at low zoom and becomes obvious once you pan in close
+    // enough to compare planes against runways.
+    mapping[name!] = {
+      x: i * ICON_SIZE, y: 0,
+      width: ICON_SIZE, height: ICON_SIZE,
+      anchorX: ICON_SIZE / 2, anchorY: ICON_SIZE / 2,
+      mask: true,
+    };
   }
   _iconAtlas = canvas;
   _iconMapping = mapping;
   return canvas;
 }
 
-function getIconMapping(): Record<string, { x: number; y: number; width: number; height: number; mask: boolean }> {
+function getIconMapping(): Record<string, { x: number; y: number; width: number; height: number; anchorX: number; anchorY: number; mask: boolean }> {
   if (!_iconMapping) getIconAtlas();
   return _iconMapping!;
 }

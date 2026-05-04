@@ -243,9 +243,9 @@ class ParallelAnalysisService {
  // upstream NER service returns no entities, which previously threw
  // "filter is not a function" inside this hot path.
  const list: NEREntity[] = Array.isArray(entities) ? entities : [];
- const locations = list.filter(e => e.type.includes('LOC'));
- const people = list.filter(e => e.type.includes('PER'));
- const orgs = list.filter(e => e.type.includes('ORG'));
+ const locations = list.filter(e => e.type?.includes('LOC'));
+ const people = list.filter(e => e.type?.includes('PER'));
+ const orgs = list.filter(e => e.type?.includes('ORG'));
 
  const geopoliticalLocations = locations.filter(e =>
  FLASHPOINT_KEYWORDS.some(fp => e.text.toLowerCase().includes(fp))

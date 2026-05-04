@@ -344,7 +344,47 @@
       "remote-hosts": "gibs.earthdata.nasa.gov",
       "ports": "443",
       "protocol": "tcp",
-      "notes": "NASA GIBS satellite imagery"
+      "notes": "NASA GIBS satellite imagery + GOES weather tiles"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.adsb.lol",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "ADS-B fallback (free, no key) — military flights"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.airplanes.live",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "ADS-B fallback (free, no key) — military flights"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "opendata.adsb.fi",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "ADS-B fallback (free, no key) — military flights"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.opensanctions.org",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "OpenSanctions catalog API (sanctions dataset metadata)"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "data.opensanctions.org",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "OpenSanctions bulk dataset downloads"
     },
     {
       "action": "allow",

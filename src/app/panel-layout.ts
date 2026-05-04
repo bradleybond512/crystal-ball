@@ -292,7 +292,7 @@ export class PanelLayoutManager implements AppModule {
   private readonly applyTimeRangeFilterDebounced: () => void;
   private readonly _onUpdateState = () => { this.renderSidebarUpdateBtn(); };
 
-  /** Saved panel order from before a mode switch so Peace Mode can restore it. */
+  /** Saved panel order from before a Ghost-mode switch so the default state can restore it. */
   private _preModeOrder: string[] = [];
 
   /** Panels always kept at the top regardless of mode (video feeds / live streams). */
@@ -1568,9 +1568,15 @@ export class PanelLayoutManager implements AppModule {
   }
 
   /**
- * Reorder the panels grid to surface the most relevant panels for the
- * active mode. Anchors (live-news, live-webcams) always stay at the top.
- * Returning to Peace Mode restores the user's original order.
+ * Reorder the panels grid so anchors (live-news, live-webcams) stay at
+ * the top and the unified priority panel list (formerly per-mode, now
+ * always-on) floats just below them. Returning to the default state
+ * restores the user's original order.
+ *
+ * The `_mode` parameter is retained for the legacy `wm:mode-changed`
+ * event listener — the only canonical modes today are Ghost and
+ * Gods-Vision; Finance/War/Disaster are gone and their priority
+ * lists are unioned.
  */
   private _applyModePanelOrder(_mode: AppMode | null): void {
  const grid = document.getElementById('panelsGrid');
@@ -1581,9 +1587,12 @@ export class PanelLayoutManager implements AppModule {
  .map(el => (el as HTMLElement).dataset.panel ?? '')
  .filter(k => k.length > 0);
 
- // Mode collapse: former per-mode panel priorities (Finance / War / Disaster)
- // are now merged into a single always-on priority list. Anchors stay first,
- // then the union of all elevated-mode priority panels, then the rest.
+ // The three "PRIORITY" arrays below were originally per-mode (Finance /
+ // War / Disaster) but the modes were collapsed in the mode-manager
+ // refactor — only Ghost and Gods-Vision survived. The arrays are kept
+ // (under their historical names) and unioned into a single always-on
+ // priority list. Anchors stay first, then the priority union, then
+ // the rest.
  if (this._preModeOrder.length === 0) {
  this._preModeOrder = [...currentKeys];
  }

@@ -504,6 +504,8 @@ export const USNI_REGION_COORDINATES: Record<string, { lat: number; lon: number 
   'Baltic Sea': { lat: 58, lon: 20 },
   'Black Sea': { lat: 43.5, lon: 34 },
   'Bay of Bengal': { lat: 14, lon: 87 },
+  'Sulu Sea': { lat: 8.5, lon: 120 },
+  'South Atlantic': { lat: -30, lon: -15 },
   'Bab el-Mandeb Strait': { lat: 12.5, lon: 43.5 },
   'Strait of Hormuz': { lat: 26.5, lon: 56.5 },
   'Taiwan Strait': { lat: 24.5, lon: 119.5 },

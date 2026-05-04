@@ -148,16 +148,28 @@ export const listClimateAnomalies: ClimateServiceHandler['listClimateAnomalies']
  .toISOString()
  .slice(0, 10);
 
- const results = await Promise.allSettled(
- ZONES.map((zone) => fetchZone(zone, startDate, endDate)),
- );
-
+ // Chunked parallel fetch — Open-Meteo's free tier rate-limits
+ // bursts above ~6 req/sec, and firing all 15 zones in parallel
+ // produced HTTP 429 for ~half the zones at every cold start.
+ // 4 zones at a time + 250 ms gap stays under the burst limit and
+ // still completes in <2s.
+ const CHUNK_SIZE = 4;
+ const CHUNK_GAP_MS = 250;
  const anomalies: ClimateAnomaly[] = [];
+ for (let i = 0; i < ZONES.length; i += CHUNK_SIZE) {
+ const chunk = ZONES.slice(i, i + CHUNK_SIZE);
+ const results = await Promise.allSettled(
+ chunk.map((zone) => fetchZone(zone, startDate, endDate)),
+ );
  for (const r of results) {
  if (r.status === 'fulfilled') {
  if (r.value != null) anomalies.push(r.value);
  } else {
  console.error('[CLIMATE]', r.reason?.message ?? r.reason);
+ }
+ }
+ if (i + CHUNK_SIZE < ZONES.length) {
+ await new Promise((resolve) => setTimeout(resolve, CHUNK_GAP_MS));
  }
  }
 

@@ -137,6 +137,7 @@ import { startAlertActivityLog } from '@/services/alert-activity-log';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
 import { LocalIDSPanel } from '@/components/LocalIDSPanel';
+import { LittleSnitchPanel } from '@/components/LittleSnitchPanel';
 import { AlertCenterPanel } from '@/components/AlertCenterPanel';
 import { SituationPanel } from '@/components/SituationPanel';
 import { SpaceWeatherPanel } from '@/components/SpaceWeatherPanel';
@@ -1043,6 +1044,9 @@ export class PanelLayoutManager implements AppModule {
 
  const localIDSPanel = new LocalIDSPanel();
  this.ctx.panels['local-ids'] = localIDSPanel;
+
+ const littleSnitchPanel = new LittleSnitchPanel();
+ this.ctx.panels['little-snitch'] = littleSnitchPanel;
 
  const situationPanel = new SituationPanel();
  this.ctx.panels['situation-awareness'] = situationPanel;

@@ -2023,6 +2023,7 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadLocalIDS(): Promise<void> { return cyberLoaders.loadLocalIDS(this.ctx); }
+  async loadLittleSnitch(): Promise<void> { return cyberLoaders.loadLittleSnitch(this.ctx); }
 
   // Space domain → src/app/loaders/space.ts
   async loadSpaceWeather(): Promise<void> { return spaceLoaders.loadSpaceWeather(this.ctx); }

@@ -9,12 +9,14 @@
  */
 import type { AppContext } from '@/app/app-context';
 import { fetchLocalIDSAlerts } from '@/services/local-ids';
+import { emptyLittleSnitchSnapshot, fetchLittleSnitchSnapshot } from '@/services/little-snitch';
 import { fetchVolcanoAlerts } from '@/services/volcano-alerts';
 import { fetchVolcanoMonitorStatus } from '@/services/volcano-monitor';
 import { fetchSevereWeatherStatus } from '@/services/severe-weather';
 import { fetchShakemapEvents } from '@/services/shakealert';
 import { unifiedAlertStore } from '@/services/unified-alerts';
 import type { LocalIDSPanel } from '@/components/LocalIDSPanel';
+import type { LittleSnitchPanel } from '@/components/LittleSnitchPanel';
 import type { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
 import type { VolcanoMonitorPanel } from '@/components/VolcanoMonitorPanel';
 import type { SevereWeatherPanel } from '@/components/SevereWeatherPanel';
@@ -42,6 +44,17 @@ export async function loadLocalIDS(ctx: AppContext): Promise<void> {
  if (unified.length > 0) unifiedAlertStore.ingest(unified);
   } catch {
  (ctx.panels['local-ids'] as LocalIDSPanel | undefined)?.update([]);
+  }
+}
+
+export async function loadLittleSnitch(ctx: AppContext): Promise<void> {
+  try {
+    const snapshot = await fetchLittleSnitchSnapshot();
+    (ctx.panels['little-snitch'] as LittleSnitchPanel | undefined)?.update(snapshot);
+  } catch {
+    (ctx.panels['little-snitch'] as LittleSnitchPanel | undefined)?.update(
+      emptyLittleSnitchSnapshot('Little Snitch data unavailable'),
+    );
   }
 }
 

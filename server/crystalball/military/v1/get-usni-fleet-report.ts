@@ -95,6 +95,13 @@ const REGION_COORDS: Record<string, { lat: number; lon: number }> = {
   'Baltic Sea': { lat: 58.0, lon: 20.0 },
   'Black Sea': { lat: 43.5, lon: 34.0 },
   'Bay of Bengal': { lat: 14.0, lon: 87.0 },
+  'Sulu Sea': { lat: 8.5, lon: 120.0 },
+  'South Atlantic': { lat: -30.0, lon: -15.0 },
+  // Straits & canals
+  'Bab el-Mandeb Strait': { lat: 12.5, lon: 43.5 },
+  'Strait of Hormuz': { lat: 26.5, lon: 56.5 },
+  'Taiwan Strait': { lat: 24.5, lon: 119.5 },
+  'Suez Canal': { lat: 30.0, lon: 32.5 },
   Yokosuka: { lat: 35.29, lon: 139.67 },
   Japan: { lat: 35.29, lon: 139.67 },
   Sasebo: { lat: 33.16, lon: 129.72 },
@@ -112,6 +119,13 @@ const REGION_COORDS: Record<string, { lat: number; lon: number }> = {
   'Houston, Texas': { lat: 29.76, lon: -95.37 },
   'Souda Bay': { lat: 35.49, lon: 24.08 },
   Naples: { lat: 40.84, lon: 14.25 },
+  // Additional US bases that appear in USNI Fleet Tracker posts
+  Bremerton: { lat: 47.57, lon: -122.63 },
+  Everett: { lat: 47.97, lon: -122.22 },
+  'Kings Bay': { lat: 30.8, lon: -81.56 },
+  Bangor: { lat: 47.73, lon: -122.71 },
+  // Alternate spelling of Rota
+  'Rota Spain': { lat: 36.63, lon: -6.35 },
 };
 
 function getRegionCoords(regionText: string): { lat: number; lon: number } | null {

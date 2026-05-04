@@ -54,7 +54,7 @@ const GAMMA_API = 'https://gamma-api.polymarket.com';
 
 // Polymarket proxy URL (Vercel server route injects Railway secret server-side)
 const POLYMARKET_PROXY_URL = '/api/polymarket';
-const wsRelayUrl = import.meta.env.VITE_WS_RELAY_URL || '';
+const wsRelayUrl: string = (import.meta.env as { VITE_WS_RELAY_URL?: string }).VITE_WS_RELAY_URL ?? '';
 const DIRECT_RAILWAY_POLY_URL = wsRelayUrl
   ? wsRelayUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace(/\/$/, '') + '/polymarket'
   : '';
@@ -73,8 +73,7 @@ let directFetchWorks: boolean | null = null;
 let directFetchProbe: Promise<boolean> | null = null;
 async function probeDirectFetchCapability(): Promise<boolean> {
   if (directFetchWorks !== null) return directFetchWorks;
-  if (!directFetchProbe) {
- directFetchProbe = fetch(`${GAMMA_API}/events?closed=false&active=true&archived=false&order=volume&ascending=false&limit=1`, {
+  directFetchProbe ??= fetch(`${GAMMA_API}/events?closed=false&active=true&archived=false&order=volume&ascending=false&limit=1`, {
  headers: { 'Accept': 'application/json' },
  })
  .then(resp => {
@@ -88,12 +87,47 @@ async function probeDirectFetchCapability(): Promise<boolean> {
  .finally(() => {
  directFetchProbe = null;
  });
-  }
   return directFetchProbe;
+}
+
+// Circuit breaker for Polymarket Tauri+direct path. After 3 consecutive
+// failures we open the breaker for 5 minutes and short-circuit straight
+// to the Vercel proxy, avoiding the 11-tag-slug failure storm visible
+// in the desktop logs whenever gamma-api.polymarket.com flakes.
+const POLY_BREAKER = { fails: 0, openedAt: 0 };
+const POLY_BREAKER_THRESHOLD = 3;
+const POLY_BREAKER_COOLDOWN_MS = 5 * 60_000;
+
+function polyBreakerOpen(): boolean {
+  return POLY_BREAKER.openedAt > 0 && Date.now() - POLY_BREAKER.openedAt < POLY_BREAKER_COOLDOWN_MS;
+}
+
+function recordPolyFailure(): void {
+  POLY_BREAKER.fails += 1;
+  if (POLY_BREAKER.fails >= POLY_BREAKER_THRESHOLD && POLY_BREAKER.openedAt === 0) {
+ POLY_BREAKER.openedAt = Date.now();
+ // eslint-disable-next-line no-console -- one log line on circuit open is the whole point
+ console.warn(`[polymarket] circuit breaker open after ${POLY_BREAKER.fails} fails — using proxy fallback for ${POLY_BREAKER_COOLDOWN_MS / 60_000}min`);
+  }
+}
+
+function recordPolySuccess(): void {
+  if (POLY_BREAKER.openedAt > 0) {
+ // eslint-disable-next-line no-console -- one log line on circuit close
+ console.log('[polymarket] circuit breaker closed — direct path recovered');
+  }
+  POLY_BREAKER.fails = 0;
+  POLY_BREAKER.openedAt = 0;
 }
 
 async function polyFetch(endpoint: 'events' | 'markets', params: Record<string, string>): Promise<Response> {
   const qs = new URLSearchParams(params).toString();
+
+  if (polyBreakerOpen()) {
+ // Skip direct + Tauri paths; jump straight to proxy. They've been
+ // failing too consistently to be worth the round-trip cost.
+ return polyProxyFetch(endpoint, params);
+  }
 
   // Probe direct connectivity once before parallel tag fanout to avoid reset storms.
   const canUseDirect = directFetchWorks === true || (directFetchWorks === null && await probeDirectFetchCapability());
@@ -104,6 +138,7 @@ async function polyFetch(endpoint: 'events' | 'markets', params: Record<string, 
  });
  if (resp.ok) {
  directFetchWorks = true;
+ recordPolySuccess();
  return resp;
  }
  } catch {
@@ -116,6 +151,7 @@ async function polyFetch(endpoint: 'events' | 'markets', params: Record<string, 
  try {
  const body = await tryInvokeTauri<string>('fetch_polymarket', { path: endpoint, params: qs });
  if (body) {
+ recordPolySuccess();
  return new Response(body, {
  status: 200,
  headers: { 'Content-Type': 'application/json' },
@@ -123,6 +159,13 @@ async function polyFetch(endpoint: 'events' | 'markets', params: Record<string, 
  }
  } catch { /* Tauri command failed, fall through to proxy */ }
   }
+
+  recordPolyFailure();
+  return polyProxyFetch(endpoint, params);
+}
+
+// eslint-disable-next-line sonarjs/cognitive-complexity -- 4-fallback chain (proxy → Railway → sebuf → final proxy); refactor would split clarity, tracked separately
+async function polyProxyFetch(endpoint: 'events' | 'markets', params: Record<string, string>): Promise<Response> {
 
   const proxyParams: Record<string, string> = { endpoint };
   for (const [k, v] of Object.entries(params)) {
@@ -135,7 +178,7 @@ async function polyFetch(endpoint: 'events' | 'markets', params: Record<string, 
   try {
  const resp = await fetch(`${POLYMARKET_PROXY_URL}?${proxyQs}`);
  if (resp.ok) {
- const data = await resp.clone().json();
+ const data = await resp.clone().json() as unknown;
  if (Array.isArray(data) && data.length > 0) return resp;
  }
   } catch { /* Proxy unavailable */ }
@@ -145,7 +188,7 @@ async function polyFetch(endpoint: 'events' | 'markets', params: Record<string, 
  try {
  const resp = await fetch(`${DIRECT_RAILWAY_POLY_URL}?${proxyQs}`);
  if (resp.ok) {
- const data = await resp.clone().json();
+ const data = await resp.clone().json() as unknown;
  if (Array.isArray(data) && data.length > 0) return resp;
  }
  } catch { /* Railway unavailable */ }
@@ -210,10 +253,10 @@ function parseMarketPrice(market: PolymarketMarket): number {
   try {
  const pricesStr = market.outcomePrices;
  if (pricesStr) {
- const prices: string[] = JSON.parse(pricesStr);
+ const prices = JSON.parse(pricesStr) as string[];
  if (prices.length >= 1) {
  const parsed = Number.parseFloat(prices[0]!);
- if (!isNaN(parsed)) return parsed * 100;
+ if (!Number.isNaN(parsed)) return parsed * 100;
  }
  }
   } catch { /* keep default */ }
@@ -238,7 +281,7 @@ async function fetchEventsByTag(tag: string, limit = 30): Promise<PolymarketEven
  limit: String(limit),
   });
   if (!response.ok) return [];
-  const data = await response.json();
+  const data = await response.json() as PolymarketEvent[];
   return Array.isArray(data) ? data : [];
 }
 
@@ -253,7 +296,7 @@ async function fetchTopMarkets(): Promise<PredictionMarket[]> {
  limit: '100',
   });
   if (!response.ok) return [];
-  const data: PolymarketMarket[] = await response.json();
+  const data = await response.json() as PolymarketMarket[];
 
   return data
  .filter(m => m.question && !isExcluded(m.question))
@@ -271,6 +314,7 @@ async function fetchTopMarkets(): Promise<PredictionMarket[]> {
 }
 
 export async function fetchPredictions(): Promise<PredictionMarket[]> {
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- variant-aware tag fanout + fallback ladder; pre-existing complexity
   return breaker.execute(async () => {
  const tags = SITE_VARIANT === 'tech' ? TECH_TAGS : GEOPOLITICAL_TAGS;
 
@@ -299,7 +343,7 @@ export async function fetchPredictions(): Promise<PredictionMarket[]> {
  const vol = m.volumeNum ?? (m.volume ? Number.parseFloat(m.volume) : 0);
  const bestVol = best.volumeNum ?? (best.volume ? Number.parseFloat(best.volume) : 0);
  return vol > bestVol ? m : best;
- });
+ }, activeCandidates[0]!);
 
  markets.push({
  title: topMarket.question || event.title,
@@ -433,6 +477,7 @@ function getCountryVariants(country: string): string[] {
   return variants;
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- per-country tag fanout + market-variant filter ladder; pre-existing complexity
 export async function fetchCountryMarkets(country: string): Promise<PredictionMarket[]> {
   const tags = COUNTRY_TAG_MAP[country] ?? ['geopolitics', 'world'];
   const uniqueTags = [...new Set(tags)].slice(0, 3);
@@ -469,7 +514,7 @@ export async function fetchCountryMarkets(country: string): Promise<PredictionMa
  const vol = m.volumeNum ?? (m.volume ? Number.parseFloat(m.volume) : 0);
  const bestVol = best.volumeNum ?? (best.volume ? Number.parseFloat(best.volume) : 0);
  return vol > bestVol ? m : best;
- });
+ }, candidates[0]!);
  markets.push({
  title: topMarket.question || event.title,
  yesPrice: parseMarketPrice(topMarket),
@@ -489,10 +534,10 @@ export async function fetchCountryMarkets(country: string): Promise<PredictionMa
  }
  }
 
- return markets
- .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0))
- .slice(0, 5);
+ markets.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0));
+ return markets.slice(0, 5);
   } catch (error) {
+ // eslint-disable-next-line no-console -- one-shot error log per country fetch failure
  console.error(`[Polymarket] fetchCountryMarkets(${country}) failed:`, error);
  return [];
   }

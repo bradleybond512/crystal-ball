@@ -315,7 +315,7 @@ export class PanelLayoutManager implements AppModule {
   private static readonly DISASTER_PRIORITY = [
  'hazard-alerts',
  'alert-center', 'saved-places', 'tropical-cyclones', 'nws-alerts',
- 'weather', 'earthquakes', 'gdacs-alerts', 'satellite-fires',
+ 'global-weather', 'weather-radar', 'earthquakes', 'gdacs-alerts', 'satellite-fires',
  'volcano-alerts', 'displacement', 'oref-sirens', 'air-quality',
  'wildfire-incidents', 'hazmat-incidents', 'oil-spill',
  'comms-health', 'economic-stress',

@@ -104,36 +104,28 @@ class ParallelAnalysisService {
  const title = cluster.primaryTitle;
  const titleLower = title.toLowerCase();
 
- const perspectives: PerspectiveScore[] = [];
-
- perspectives.push(this.scoreByKeywords(titleLower, cluster));
-
  const sentiment = sentiments?.[i];
- if (sentiment) {
- perspectives.push(this.scoreBySentiment(sentiment));
- }
-
  const entityList = entities?.[i];
- if (entityList) {
- perspectives.push(this.scoreByEntities(entityList));
- }
-
  const embedding = embeddings?.[i];
- if (embedding) {
- perspectives.push(await this.scoreByNovelty(title, embedding));
- }
 
- perspectives.push(this.scoreByVelocity(cluster));
- perspectives.push(this.scoreBySourceDiversity(cluster));
+ const perspectives: PerspectiveScore[] = [
+ this.scoreByKeywords(titleLower),
+ ...(sentiment ? [this.scoreBySentiment(sentiment)] : []),
+ ...(entityList ? [this.scoreByEntities(entityList)] : []),
+ ...(embedding ? [this.scoreByNovelty(title, embedding)] : []),
+ this.scoreByVelocity(cluster),
+ this.scoreBySourceDiversity(cluster),
+ ];
 
  const { finalScore, confidence, disagreement } = this.aggregateScores(perspectives);
 
- const flagged = disagreement > 0.3 || (finalScore > 0.5 && this.isLowKeywordScore(perspectives));
- const flagReason = flagged
- ? (disagreement > 0.3
- ? 'High disagreement between perspectives'
- : 'ML scores high but keyword score low - potential missed story')
- : undefined;
+ let flagReason: string | undefined;
+ if (disagreement > 0.3) {
+ flagReason = 'High disagreement between perspectives';
+ } else if (finalScore > 0.5 && this.isLowKeywordScore(perspectives)) {
+ flagReason = 'ML scores high but keyword score low - potential missed story';
+ }
+ const flagged = flagReason !== undefined;
 
  analyzed.push({
  id: cluster.id,
@@ -185,7 +177,7 @@ class ParallelAnalysisService {
  return report;
   }
 
-  private scoreByKeywords(titleLower: string, _cluster: ClusteredEvent): PerspectiveScore {
+  private scoreByKeywords(titleLower: string): PerspectiveScore {
  let score = 0;
  const reasons: string[] = [];
 
@@ -247,9 +239,13 @@ class ParallelAnalysisService {
   }
 
   private scoreByEntities(entities: NEREntity[]): PerspectiveScore {
- const locations = entities.filter(e => e.type.includes('LOC'));
- const people = entities.filter(e => e.type.includes('PER'));
- const orgs = entities.filter(e => e.type.includes('ORG'));
+ // Defensive coercion: callers occasionally pass null/undefined when the
+ // upstream NER service returns no entities, which previously threw
+ // "filter is not a function" inside this hot path.
+ const list: NEREntity[] = Array.isArray(entities) ? entities : [];
+ const locations = list.filter(e => e.type.includes('LOC'));
+ const people = list.filter(e => e.type.includes('PER'));
+ const orgs = list.filter(e => e.type.includes('ORG'));
 
  const geopoliticalLocations = locations.filter(e =>
  FLASHPOINT_KEYWORDS.some(fp => e.text.toLowerCase().includes(fp))
@@ -276,7 +272,7 @@ class ParallelAnalysisService {
  reasons.push(`orgs(${orgs.map(e => e.text).join(',')})`);
  }
 
- const entityDensity = entities.length;
+ const entityDensity = list.length;
  if (entityDensity > 3) {
  score += 0.15;
  reasons.push(`high-density(${entityDensity})`);
@@ -285,12 +281,12 @@ class ParallelAnalysisService {
  return {
  name: 'entities',
  score: Math.min(1, score),
- confidence: entities.length > 0 ? 0.7 : 0.3,
+ confidence: list.length > 0 ? 0.7 : 0.3,
  reasoning: reasons.length > 0 ? reasons.join(' + ') : 'no significant entities',
  };
   }
 
-  private async scoreByNovelty(title: string, embedding: number[]): Promise<PerspectiveScore> {
+  private scoreByNovelty(title: string, embedding: number[]): PerspectiveScore {
  let maxSimilarity = 0;
  let mostSimilar = '';
 

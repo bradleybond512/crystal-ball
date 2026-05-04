@@ -441,6 +441,21 @@ const ALLOWED_ENV_KEYS = new Set([
 
 const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+// Path aliases for callers that use the renderer's preferred names rather
+// than the canonical handler paths. Each alias is rewritten to its target
+// at the start of the request dispatcher so existing handlers (inline or
+// dynamic-import) match. Avoids forcing the frontend to track historical
+// renamings and keeps every alias listed in one place.
+const ROUTE_ALIASES = {
+  '/api/weather': '/api/nws-alerts',
+  '/api/gdelt-tensions': '/api/gdelt-intel',
+  '/api/usgs-earthquakes': '/api/earthquakes',
+  '/api/acled': '/api/acled-events',
+  '/api/ais-clusters': '/api/ais-snapshot',
+  '/api/firms': '/api/nasa-firms',
+  '/api/opensanctions': '/api/opensanctions-recent',
+};
+
 // ── IP geolocation helpers ────────────────────────────────────────────────
 // ip-api.com batch endpoint: free, no key, up to 100 IPs per request.
 // Note: free tier requires HTTP (not HTTPS).
@@ -7349,6 +7364,9 @@ export async function createLocalApiServer(options = {}) {
 
   const server = createServer(async (req, res) => {
  const requestUrl = new URL(req.url || '/', `http://127.0.0.1:${context.port}`);
+ // Rewrite alias paths to their canonical handlers (see ROUTE_ALIASES).
+ const aliasTarget = ROUTE_ALIASES[requestUrl.pathname];
+ if (aliasTarget) requestUrl.pathname = aliasTarget;
  const reqStartedAt = Date.now();
 
  if (requestUrl.pathname === '/gps/nmea') {

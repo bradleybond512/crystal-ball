@@ -56,3 +56,18 @@ test('air-traffic panel is registered, instantiated, and scheduled', () => {
   assert.match(dataLoader, /loadAdsb\(\)/);
   assert.match(appSource, /scheduleRefresh/);
 });
+
+test('little-snitch panel is registered, instantiated, and scheduled', () => {
+  const panelsConfig = readRepoFile('src/config/panels.ts');
+  const panelLayout = readRepoFile('src/app/panel-layout.ts');
+  const dataLoader = readRepoFile('src/app/data-loader.ts') + '\n' + readRepoFile('src/app/loaders/cyber.ts');
+  const appSource = readRepoFile('src/App.ts');
+
+  assert.match(panelsConfig, /['"]little-snitch['"]\s*:\s*\{/);
+  assert.match(panelsConfig, /panelKeys:\s*\[[^\]]*['"]little-snitch['"]/);
+  assert.match(panelLayout, /new LittleSnitchPanel\(\)/);
+  assert.match(panelLayout, /this\.ctx\.panels\[['"]little-snitch['"]\]\s*=/);
+  assert.match(dataLoader, /fetchLittleSnitchSnapshot/);
+  assert.match(dataLoader, /loadLittleSnitch\(\)/);
+  assert.match(appSource, /this\.dataLoader\.loadLittleSnitch\(\)/);
+});

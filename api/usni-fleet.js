@@ -7,7 +7,9 @@ import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
 
 export const config = { runtime: 'edge' };
 
-const UPSTREAM = 'https://news.usni.org/wp-json/wp/v2/posts?categories=27&per_page=1';
+// Category 4137 is the "fleet-tracker" slug. The previous ID (27) was the
+// retired "fleet-and-marine-tracker" category and now returns an empty list.
+const UPSTREAM = 'https://news.usni.org/wp-json/wp/v2/posts?categories=4137&per_page=1';
 const CACHE_TTL_MS = 30 * 60 * 1000;
 let _cache = null;
 

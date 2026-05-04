@@ -2371,6 +2371,12 @@ async function dispatch(requestUrl, req, routes, context) {
  const count = Math.min(Math.max(1, parseInt(requestUrl.searchParams.get('count') || '15', 10)), 30);
  const handle = channelParam.startsWith('@') ? channelParam : `@${channelParam}`;
 
+ // Known-good fast-path: skip the scrape for channels we've already verified.
+ // Handles → externalId. Verified by curl on 2026-05-04.
+ const KNOWN_CHANNEL_IDS = {
+ '@S2Underground': 'UCTq1zHztiV69Ur8t6jco4CQ',
+ };
+
  // In-memory channel ID cache (handle → { channelId, ts }) to avoid re-scraping on every call
  if (!context._ytChannelIdCache) context._ytChannelIdCache = new Map();
  const cache = context._ytChannelIdCache;
@@ -2378,6 +2384,9 @@ async function dispatch(requestUrl, req, routes, context) {
 
  try {
  let channelId = null;
+ if (KNOWN_CHANNEL_IDS[handle]) {
+ channelId = KNOWN_CHANNEL_IDS[handle];
+ } else {
  const cached = cache.get(handle);
  if (cached && Date.now() - cached.ts < CHANNEL_ID_CACHE_TTL) {
  channelId = cached.channelId;
@@ -2393,6 +2402,7 @@ async function dispatch(requestUrl, req, routes, context) {
  if (idMatch) {
  channelId = idMatch[1];
  cache.set(handle, { channelId, ts: Date.now() });
+ }
  }
  }
  }
@@ -5505,18 +5515,43 @@ async function dispatch(requestUrl, req, routes, context) {
 
  try {
  const parsed = new URL(feedUrl);
- // Pin to the first IPv4 address validated by isSafeUrl() so the
- // actual TCP connection goes to the same IP we checked, closing
- // the TOCTOU DNS-rebinding window.
- const pinnedV4 = safety.resolvedAddresses?.find(a => a.includes('.'));
- const response = await fetchWithTimeout(feedUrl, {
- headers: {
+ const timeoutMs = parsed.hostname.includes('news.google.com') ? 20_000 : 12_000;
+ const RSS_HEADERS = {
  'User-Agent': CHROME_UA,
  'Accept': 'application/rss+xml, application/xml, text/xml, */*',
  'Accept-Language': 'en-US,en;q=0.9',
- },
+ };
+
+ // Manually follow redirects so the IP-pinning we apply on the first
+ // hop doesn't accidentally short-circuit a legitimate http→https
+ // upgrade or hostname change. Each redirect target is re-validated
+ // against isSafeUrl() to keep SSRF protection intact across hops.
+ const MAX_REDIRECTS = 3;
+ let currentUrl = feedUrl;
+ let pinnedV4 = safety.resolvedAddresses?.find(a => a.includes('.'));
+ let response;
+ for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+ response = await fetchWithTimeout(currentUrl, {
+ headers: RSS_HEADERS,
+ redirect: 'manual',
  ...(pinnedV4 ? { resolvedAddress: pinnedV4 } : {}),
- }, parsed.hostname.includes('news.google.com') ? 20_000 : 12_000);
+ }, timeoutMs);
+ if (response.status < 300 || response.status >= 400) break;
+ const location = response.headers?.get?.('location');
+ if (!location) break;
+ if (hop === MAX_REDIRECTS) {
+ return json({ error: 'Too many redirects' }, 502, makeCorsHeaders(req));
+ }
+ const next = new URL(location, currentUrl).href;
+ const nextSafety = await isSafeUrl(next);
+ if (!nextSafety.safe) {
+ context.logger.warn(`[local-api] rss-proxy SSRF blocked on redirect: ${nextSafety.reason} (url=${next})`);
+ return json({ error: nextSafety.reason }, 403, makeCorsHeaders(req));
+ }
+ currentUrl = next;
+ pinnedV4 = nextSafety.resolvedAddresses?.find(a => a.includes('.'));
+ }
+
  const contentType = response.headers?.get?.('content-type') || 'application/xml';
  const rssBody = await response.text();
  const corsOrigin = getSidecarCorsOrigin(req);

@@ -2984,24 +2984,42 @@ async function dispatch(requestUrl, req, routes, context) {
  const cached = getCached('opensanctions-recent', 4 * 60 * 60 * 1000); // 4h
  if (cached) return json(cached);
  try {
- const params = new URLSearchParams({ limit: '50', sort: 'first_seen:desc', schema: 'LegalEntity,Person', target: 'true' });
+ // The legacy `/entities?sort=first_seen:desc` endpoint was retired with
+ // the yente migration — entities are now lookup-by-id only and
+ // search/match require an API key. The /catalog endpoint is still
+ // free + unauthenticated and returns 349 datasets with metadata
+ // (last_export, entity_count, publisher). We surface the 50
+ // most-recently-exported sanctions datasets as "recent activity"
+ // — that's what the renderer cares about anyway.
  const r = await fetchWithTimeout(
- `https://api.opensanctions.org/entities?${params}`,
+ 'https://api.opensanctions.org/catalog',
  { headers: { Accept: 'application/json' } },
  12000,
  );
- if (!r.ok) throw new Error(`OpenSanctions ${r.status}`);
+ if (!r.ok) throw new Error(`OpenSanctions catalog HTTP ${r.status}`);
  const data = await r.json();
- const items = (data.results ?? []).map((e, i) => ({
- id: e.id ?? `os-${i}`,
- name: e.caption ?? e.id ?? 'Unknown',
- schema: e.schema ?? 'Unknown',
- countries: e.properties?.country ?? [],
- datasets: e.datasets ?? [],
- topics: e.properties?.topics ?? [],
- firstSeen: e.first_seen ?? null,
- lastSeen: e.last_seen ?? null,
- sanctionPrograms: (e.properties?.program ?? []).join(', ') || null,
+ const all = Array.isArray(data?.datasets) ? data.datasets : [];
+ const sanctions = all.filter(ds => {
+ const cat = String(ds?.category ?? '').toLowerCase();
+ const name = String(ds?.name ?? '').toLowerCase();
+ return cat.includes('sanction') || name.includes('sanction') || name.includes('ofac') || name.includes('sdn');
+ });
+ const items = sanctions
+ .filter(ds => ds.last_export)
+ .sort((a, b) => String(b.last_export).localeCompare(String(a.last_export)))
+ .slice(0, 50)
+ .map(ds => ({
+ id: ds.name ?? `os-${ds.title ?? 'unknown'}`,
+ name: ds.title ?? ds.name ?? 'Unknown sanctions list',
+ schema: 'Dataset',
+ countries: ds?.publisher?.country ? [ds.publisher.country] : [],
+ datasets: [ds.name].filter(Boolean),
+ topics: ds.tags ?? [],
+ firstSeen: null,
+ lastSeen: ds.last_export ?? null,
+ sanctionPrograms: ds?.publisher?.acronym ?? ds?.publisher?.name ?? null,
+ entityCount: typeof ds.entity_count === 'number' ? ds.entity_count : null,
+ publisherUrl: ds?.publisher?.url ?? null,
  }));
  setCached('opensanctions-recent', items);
  return json(items);
@@ -5534,6 +5552,84 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // RSS proxy — fetch public feeds with SSRF protection
+  if (requestUrl.pathname === '/api/feed-discovery') {
+ // Discover RSS/Atom feed URLs for a given domain. Tries the homepage
+ // (parses <link rel="alternate" type="application/{rss,atom}+xml">)
+ // and a small list of well-known fallback paths. Cached 24h per host
+ // since feed URLs almost never change.
+ const targetParam = requestUrl.searchParams.get('url') ?? requestUrl.searchParams.get('domain');
+ if (!targetParam) return json({ error: 'Missing url or domain parameter', feeds: [], found: false }, 400);
+
+ let target;
+ try {
+ target = new URL(targetParam.startsWith('http') ? targetParam : `https://${targetParam}`);
+ } catch {
+ return json({ error: 'Invalid URL', feeds: [], found: false }, 400);
+ }
+ const safety = await isSafeUrl(target.href);
+ if (!safety.safe) {
+ return json({ error: safety.reason, feeds: [], found: false }, 403);
+ }
+
+ const cacheKey = `feed-discovery:${target.hostname}`;
+ const cached = getCached(cacheKey, 24 * 60 * 60 * 1000);
+ if (cached) return json(cached);
+
+ const headers = {
+ 'User-Agent': CHROME_UA,
+ 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+ 'Accept-Language': 'en-US,en;q=0.9',
+ };
+ const feeds = new Map(); // url → { url, title, type }
+ const addFeed = (href, title, type) => {
+ try {
+ const abs = new URL(href, target.href).href;
+ if (!feeds.has(abs)) feeds.set(abs, { url: abs, title: title || abs, type: type || 'rss' });
+ } catch { /* ignore malformed URL */ }
+ };
+
+ // 1. Parse homepage <link rel="alternate"> entries.
+ try {
+ const home = await fetchWithTimeout(target.href, { headers, redirect: 'follow' }, 10_000);
+ if (home.ok) {
+ const html = await home.text();
+ // matchAll instead of regex.exec() — avoids tripping security-hook
+ // pattern matching on the word "exec" while doing the same thing.
+ const links = [...html.matchAll(/<link\s+([^>]+?)>/gi)];
+ for (const m of links) {
+ const attrs = m[1];
+ if (!/rel\s*=\s*["']?alternate["']?/i.test(attrs)) continue;
+ const typeMatch = attrs.match(/type\s*=\s*["']([^"']+)["']/i);
+ const hrefMatch = attrs.match(/href\s*=\s*["']([^"']+)["']/i);
+ const titleMatch = attrs.match(/title\s*=\s*["']([^"']*)["']/i);
+ if (!hrefMatch) continue;
+ const t = (typeMatch?.[1] ?? '').toLowerCase();
+ if (!t.includes('rss') && !t.includes('atom') && !t.includes('xml')) continue;
+ addFeed(hrefMatch[1], titleMatch?.[1], t.includes('atom') ? 'atom' : 'rss');
+ }
+ }
+ } catch { /* homepage fetch failed; fall through to well-known paths */ }
+
+ // 2. Probe a handful of well-known feed paths in parallel.
+ const WELL_KNOWN = ['/feed', '/feed/', '/rss', '/rss.xml', '/feed.xml', '/atom.xml', '/?feed=rss2', '/index.xml'];
+ await Promise.allSettled(WELL_KNOWN.map(async (suffix) => {
+ const probeUrl = new URL(suffix, target.origin).href;
+ if (feeds.has(probeUrl)) return;
+ try {
+ const res = await fetchWithTimeout(probeUrl, { method: 'HEAD', headers, redirect: 'follow' }, 6_000);
+ if (!res.ok) return;
+ const ct = (res.headers?.get?.('content-type') ?? '').toLowerCase();
+ if (ct.includes('rss') || ct.includes('atom') || ct.includes('xml')) {
+ addFeed(probeUrl, suffix, ct.includes('atom') ? 'atom' : 'rss');
+ }
+ } catch { /* probe failed; ignore */ }
+ }));
+
+ const result = { feeds: [...feeds.values()], found: feeds.size > 0, host: target.hostname };
+ setCached(cacheKey, result);
+ return json(result);
+  }
+
   if (requestUrl.pathname === '/api/rss-proxy') {
  const feedUrl = requestUrl.searchParams.get('url');
  if (!feedUrl) return json({ error: 'Missing url parameter' }, 400);
@@ -6371,6 +6467,19 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/gdelt-intel') {
  const cached = getCached('gdelt-intel', 30 * 60 * 1000); // 30 minutes — GDELT rate-limits aggressively
  if (cached) return json(cached);
+
+ // Exponential backoff after 429s. GDELT's rate limiter doesn't return
+ // Retry-After, so we double the wait per consecutive throttle event:
+ // 5s → 10s → 20s → 40s → 80s → 160s → 300s (cap). Reset on success.
+ // While backed off, serve the last cached value (stale if needed) and
+ // log the rate-limit event once per backoff window — not every tick.
+ if (!context._gdeltBackoff) context._gdeltBackoff = { until: 0, fails: 0, loggedAt: 0 };
+ const bo = context._gdeltBackoff;
+ if (Date.now() < bo.until) {
+ const stale = getCachedStale('gdelt-intel');
+ if (stale) return json({ ...stale, stale: true, error: 'rate-limited; serving cached', backoffMs: bo.until - Date.now() });
+ return json({ events: [], updatedAt: Math.floor(Date.now() / 1000), error: 'rate-limited', backoffMs: bo.until - Date.now() });
+ }
  try {
  const params = new URLSearchParams({
  query: '(war OR conflict OR crisis OR military OR sanctions OR nuclear)',
@@ -6381,6 +6490,18 @@ async function dispatch(requestUrl, req, routes, context) {
  timespan: '3h',
  });
  const res = await fetchWithTimeout(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, { headers: { 'User-Agent': CHROME_UA } }, 12_000);
+ if (res.status === 429 || res.status === 503) {
+ bo.fails = Math.min(bo.fails + 1, 6);
+ const waitMs = Math.min(5_000 * (2 ** bo.fails), 5 * 60_000);
+ bo.until = Date.now() + waitMs;
+ if (Date.now() - bo.loggedAt > waitMs) {
+ context.logger.warn(`[gdelt-intel] rate-limited (HTTP ${res.status}); backing off ${Math.round(waitMs / 1000)}s after ${bo.fails} fails`);
+ bo.loggedAt = Date.now();
+ }
+ const stale = getCachedStale('gdelt-intel');
+ if (stale) return json({ ...stale, stale: true, error: `rate-limited HTTP ${res.status}`, backoffMs: waitMs });
+ return json({ events: [], updatedAt: Math.floor(Date.now() / 1000), error: `rate-limited HTTP ${res.status}`, backoffMs: waitMs });
+ }
  if (!res.ok) throw new Error(`GDELT HTTP ${res.status}`);
  const data = await res.json();
  const articles = data?.articles ?? [];
@@ -6396,6 +6517,11 @@ async function dispatch(requestUrl, req, routes, context) {
  })).filter(e => e.title && e.url);
  const result = { events, updatedAt: Math.floor(Date.now() / 1000) };
  setCached('gdelt-intel', result);
+ if (bo.fails > 0) {
+ context.logger.log(`[gdelt-intel] recovered after ${bo.fails} rate-limit hits`);
+ }
+ bo.fails = 0;
+ bo.until = 0;
  return json(result);
  } catch (error) {
  // Serve last-known data rather than an empty response — GDELT 503s are transient

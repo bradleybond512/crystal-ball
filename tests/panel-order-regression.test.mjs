@@ -35,7 +35,7 @@ describe('panel order regressions', () => {
  );
  assert.match(
  readFileSync(resolve(root, 'src/app/panel-layout.ts'), 'utf8'),
- /private static readonly DISASTER_PRIORITY = \[[\s\S]*?'saved-places'[\s\S]*?'tropical-cyclones'[\s\S]*?'nws-alerts'[\s\S]*?'weather'/,
+ /private static readonly DISASTER_PRIORITY = \[[\s\S]*?'saved-places'[\s\S]*?'tropical-cyclones'[\s\S]*?'nws-alerts'[\s\S]*?'global-weather'[\s\S]*?'weather-radar'/,
  'disaster mode should lift saved places and storm panels ahead of generic disaster feeds',
  );
   });

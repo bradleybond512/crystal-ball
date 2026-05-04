@@ -4,7 +4,7 @@
  * showing misleading "all clear" when we actually have no data.
  */
 
-import { getCSSColor } from '@/utils';
+import { getCSSColor } from '@/utils/theme-colors';
 
 export type DataSourceId =
   | 'acled' // Protests/conflicts

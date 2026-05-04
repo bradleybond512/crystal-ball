@@ -54,6 +54,15 @@ const API_PROVIDERS: ApiProviderDef[] = [
 
 let lastAttemptedProvider = 'none';
 
+// Per-provider failure counters. After PROVIDER_FAILURE_THRESHOLD
+// consecutive failures we stop trying that provider for the rest of
+// the session — this dramatically reduces log spam for chronic-down
+// providers (most commonly Ollama with `socket hang up`) while the
+// other providers in the chain take over.
+const PROVIDER_FAILURE_THRESHOLD = 3;
+const providerFailures = new Map<SummarizationProvider, number>();
+const providerDisabled = new Set<SummarizationProvider>();
+
 // ── Unified API provider caller (via SummarizeArticle RPC) ──
 
 async function tryApiProvider(
@@ -63,6 +72,7 @@ async function tryApiProvider(
   lang?: string,
 ): Promise<SummarizationResult | null> {
   if (!isFeatureAvailable(providerDef.featureId)) return null;
+  if (providerDisabled.has(providerDef.provider)) return null;
   lastAttemptedProvider = providerDef.provider;
   try {
  const resp: SummarizeArticleResponse = await summaryBreaker.execute(async () => {
@@ -70,9 +80,9 @@ async function tryApiProvider(
  provider: providerDef.provider,
  headlines,
  mode: 'brief',
- geoContext: geoContext || '',
+ geoContext: geoContext ?? '',
  variant: SITE_VARIANT,
- lang: lang || 'en',
+ lang: lang ?? 'en',
  });
  }, emptySummaryFallback);
 
@@ -80,19 +90,36 @@ async function tryApiProvider(
  if (resp.skipped || resp.fallback) return null;
 
  const summary = typeof resp.summary === 'string' ? resp.summary.trim() : '';
- if (!summary) return null;
+ if (!summary) {
+ recordProviderFailure(providerDef);
+ return null;
+ }
 
+ providerFailures.delete(providerDef.provider);
  const cached = Boolean(resp.cached);
  const resultProvider = cached ? 'cache' : providerDef.provider;
  return {
  summary,
  provider: resultProvider as SummarizationProvider,
- model: resp.model || providerDef.provider,
+ model: resp.model ?? providerDef.provider,
  cached,
  };
   } catch (error) {
- console.warn(`[Summarization] ${providerDef.label} failed:`, error);
+ recordProviderFailure(providerDef, error);
  return null;
+  }
+}
+
+function recordProviderFailure(providerDef: ApiProviderDef, error?: unknown): void {
+  const count = (providerFailures.get(providerDef.provider) ?? 0) + 1;
+  providerFailures.set(providerDef.provider, count);
+  if (count >= PROVIDER_FAILURE_THRESHOLD) {
+ providerDisabled.add(providerDef.provider);
+ // eslint-disable-next-line no-console
+ console.warn(`[Summarization] disabling ${providerDef.label} for this session after ${count} failures`);
+  } else if (error !== undefined) {
+ // eslint-disable-next-line no-console
+ console.warn(`[Summarization] ${providerDef.label} failed (${count}/${PROVIDER_FAILURE_THRESHOLD}):`, error);
   }
 }
 
@@ -117,10 +144,11 @@ async function tryBrowserT5(headlines: string[], modelId?: string): Promise<Summ
  return {
  summary,
  provider: 'browser',
- model: modelId || 't5-small',
+ model: modelId ?? 't5-small',
  cached: false,
  };
   } catch (error) {
+ // eslint-disable-next-line no-console
  console.warn('[Summarization] Browser T5 failed:', error);
  return null;
   }
@@ -175,6 +203,7 @@ export async function generateSummary(
   return result;
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing complexity; refactor tracked separately
 async function generateSummaryInternal(
   headlines: string[],
   onProgress: ProgressCallback | undefined,
@@ -193,7 +222,9 @@ async function generateSummaryInternal(
  const browserResult = await tryBrowserT5(headlines, 'summarization-beta');
  if (browserResult) {
  const groqProvider = API_PROVIDERS.find(p => p.provider === 'groq');
- if (groqProvider && !options?.skipCloudProviders) tryApiProvider(groqProvider, headlines, geoContext).catch(() => {});
+ if (groqProvider && !options?.skipCloudProviders) {
+ void tryApiProvider(groqProvider, headlines, geoContext).catch(() => undefined);
+ }
 
  return browserResult;
  }
@@ -207,7 +238,7 @@ async function generateSummaryInternal(
  } else {
  const totalSteps = API_PROVIDERS.length + 2;
  if (mlWorker.isAvailable && !options?.skipBrowserFallback) {
- mlWorker.loadModel('summarization-beta').catch(() => {});
+ void mlWorker.loadModel('summarization-beta').catch(() => undefined);
  }
 
  // API providers while model loads
@@ -228,6 +259,7 @@ async function generateSummaryInternal(
  onProgress?.(totalSteps, totalSteps, 'No providers available');
  }
 
+ // eslint-disable-next-line no-console
  console.warn('[BETA] All providers failed');
  return null;
   }
@@ -247,6 +279,7 @@ async function generateSummaryInternal(
  if (browserResult) return browserResult;
   }
 
+  // eslint-disable-next-line no-console
   console.warn('[Summarization] All providers failed');
   return null;
 }
@@ -285,6 +318,7 @@ export async function translateText(
  const summary = typeof resp.summary === 'string' ? resp.summary.trim() : '';
  if (summary) return summary;
  } catch (error) {
+ // eslint-disable-next-line no-console
  console.warn(`${providerDef.label} translation failed`, error);
  }
   }

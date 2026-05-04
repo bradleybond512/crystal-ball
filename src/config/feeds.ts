@@ -539,7 +539,7 @@ const FULL_FEEDS: Record<string, Feed[]> = {
  { name: 'Al Arabiya', url: rss('https://news.google.com/rss/search?q=site:english.alarabiya.net+when:2d&hl=en-US&gl=US&ceid=US:en') },
  // Arab News and Times of Israel removed — 403 from cloud IPs
  { name: 'Guardian ME', url: rss('https://www.theguardian.com/world/middleeast/rss') },
- { name: 'BBC Persian', url: rss('http://feeds.bbci.co.uk/persian/tv-and-radio-37434376/rss.xml') },
+ { name: 'BBC Persian', url: rss('https://feeds.bbci.co.uk/persian/tv-and-radio-37434376/rss.xml') },
  { name: 'Iran International', url: rss('https://news.google.com/rss/search?q=site:iranintl.com+when:2d&hl=en-US&gl=US&ceid=US:en') },
  { name: 'Fars News', url: rss('https://news.google.com/rss/search?q=site:farsnews.ir+when:2d&hl=en-US&gl=US&ceid=US:en') },
  { name: 'L\'Orient-Le Jour', url: rss('https://news.google.com/rss/search?q=site:lorientlejour.com+when:1d&hl=fr&gl=LB&ceid=LB:fr'), lang: 'fr' },
@@ -626,7 +626,8 @@ const FULL_FEEDS: Record<string, Feed[]> = {
   africa: [
  { name: 'Africa News', url: rss('https://news.google.com/rss/search?q=(Africa+OR+Nigeria+OR+Kenya+OR+"South+Africa"+OR+Ethiopia)+when:2d&hl=en-US&gl=US&ceid=US:en') },
  { name: 'Sahel Crisis', url: rss('https://news.google.com/rss/search?q=(Sahel+OR+Mali+OR+Niger+OR+"Burkina+Faso"+OR+Wagner)+when:3d&hl=en-US&gl=US&ceid=US:en') },
- { name: 'News24', url: rss('https://feeds.news24.com/articles/news24/TopStories/rss') },
+ // News24 removed 2026-05-04: hard bot-blocks (HTTP 403) on every fetch variant; no
+ // accept-list bypass possible. BBC Africa + Africanews cover the same ground.
  { name: 'BBC Africa', url: rss('https://feeds.bbci.co.uk/news/world/africa/rss.xml') },
  { name: 'Jeune Afrique', url: rss('https://www.jeuneafrique.com/feed/'), lang: 'fr' },
  { name: 'Africanews', url: { en: rss('https://www.africanews.com/feed/rss'), fr: rss('https://fr.africanews.com/feed/rss') } },
@@ -1044,13 +1045,15 @@ const HAPPY_FEEDS: Record<string, Feed[]> = {
 };
 
 // Variant-aware exports
-export const FEEDS = SITE_VARIANT === 'tech'
-  ? TECH_FEEDS
-  : SITE_VARIANT === 'finance'
- ? FINANCE_FEEDS
- : SITE_VARIANT === 'happy'
- ? HAPPY_FEEDS
- : FULL_FEEDS;
+function selectFeeds() {
+  switch (SITE_VARIANT) {
+ case 'tech': { return TECH_FEEDS; }
+ case 'finance': { return FINANCE_FEEDS; }
+ case 'happy': { return HAPPY_FEEDS; }
+ default: { return FULL_FEEDS; }
+  }
+}
+export const FEEDS = selectFeeds();
 
 export const SOURCE_REGION_MAP: Record<string, { labelKey: string; feedKeys: string[] }> = {
   // Full (geopolitical) variant regions

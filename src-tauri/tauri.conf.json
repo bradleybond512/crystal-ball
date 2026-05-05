@@ -58,6 +58,7 @@
       "sidecar/local-api-server.mjs",
       "sidecar/sitrep-severity.mjs",
       "sidecar/sitrep-filter.mjs",
+      "sidecar/s2u-xmpp.bundle.mjs",
       "sidecar/package.json",
       "sidecar/node",
       "../data",

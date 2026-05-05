@@ -57,7 +57,13 @@ export type RuntimeSecretKey =
   | 'CESIUM_ION_TOKEN'
   | 'GOOGLE_MAPS_API_KEY'
   | 'MAPBOX_API_KEY'
-  | 'MAPTILER_API_KEY';
+  | 'MAPTILER_API_KEY'
+  | 'S2U_XMPP_JID'
+  | 'S2U_XMPP_SECRET'
+  | 'S2U_TAK_URL'
+  | 'S2U_TAK_USERNAME'
+  | 'S2U_TAK_SECRET'
+  | 'S2U_TLS_INSECURE_OPT_IN';
 
 export type RuntimeFeatureId =
   | 'cloudApiFallbackAuth'
@@ -133,7 +139,9 @@ export type RuntimeFeatureId =
   | 'cyberReactorNotifyMap'
   | 'navigationMapbox'
   | 'navigationMaptiler'
-  | 'navigationRouting';
+  | 'navigationRouting'
+  | 's2uXmppFeed'
+  | 's2uTakFeeds';
 
 export interface RuntimeFeatureDefinition {
   id: RuntimeFeatureId;
@@ -237,6 +245,8 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   navigationMapbox: true,
   navigationMaptiler: true,
   navigationRouting: true,
+  s2uXmppFeed: true,
+  s2uTakFeeds: true,
 };
 
 export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
@@ -811,6 +821,20 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  description: 'Route calculation and turn-by-turn directions',
  requiredSecrets: [],
  fallback: 'Uses OSRM (free) when no premium routing keys are configured',
+  },
+  {
+ id: 's2uXmppFeed',
+ name: 'S2U XMPP Wire Feed',
+ description: 'Joins the S2 Underground IRT XMPP MUC rooms (wire / event tracking / emergency) using a JID + password the user supplies.',
+ requiredSecrets: ['S2U_XMPP_JID', 'S2U_XMPP_SECRET'],
+ fallback: 'S2U Intelligence panel hides the wire feed sections.',
+  },
+  {
+ id: 's2uTakFeeds',
+ name: 'S2U TAK Server Feeds',
+ description: 'Reads the S2U public TAK server (Marti API) for data feeds, packages, and CoT points.',
+ requiredSecrets: ['S2U_TAK_URL', 'S2U_TAK_USERNAME', 'S2U_TAK_SECRET'],
+ fallback: 'S2U Intelligence panel hides the TAK server section.',
   },
 ];
 

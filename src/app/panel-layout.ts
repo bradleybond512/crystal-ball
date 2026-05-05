@@ -40,6 +40,7 @@ import {
   SupplyChainPanel,
   SecurityAdvisoriesPanel,
   NetworkRulesPanel,
+  S2UIntelPanel,
   OrefSirensPanel,
   TelegramIntelPanel,
   WatchlistPanel,
@@ -1246,6 +1247,14 @@ export class PanelLayoutManager implements AppModule {
  // opening Little Snitch. Reads from /api/littlesnitch-rules.
  const networkRulesPanel = new NetworkRulesPanel();
  this.ctx.panels['network-rules'] = networkRulesPanel;
+
+ // S2UIntelPanel — surfaces the S2 Underground IRT XMPP MUC rooms
+ // (PR B) and the public TAK server Marti API (PR C). Reads from
+ // /api/s2u-xmpp + /api/s2u-tak-feeds. Refuses to demand creds: when
+ // the sidecar reports configured=false, the panel shows a "Configure
+ // in Settings" empty state.
+ const s2uIntelPanel = new S2UIntelPanel();
+ this.ctx.panels['s2u-intel'] = s2uIntelPanel;
 
  const orefSirensPanel = new OrefSirensPanel();
  this.ctx.panels['oref-sirens'] = orefSirensPanel;

@@ -49,6 +49,7 @@ export * from './TradePolicyPanel';
 export * from './SupplyChainPanel';
 export * from './SecurityAdvisoriesPanel';
 export { NetworkRulesPanel } from './NetworkRulesPanel';
+export { S2UIntelPanel } from './S2UIntelPanel';
 export * from './OrefSirensPanel';
 export * from './TelegramIntelPanel';
 export * from './BreakingNewsBanner';

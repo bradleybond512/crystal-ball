@@ -92,6 +92,8 @@ const RISK_ZONES: RiskZone[] = [
   { name: 'Persian Gulf', lat: 27, lon: 51, radiusKm: 300 },
   { name: 'Gulf of Guinea', lat: 3, lon: 3, radiusKm: 400 },
   { name: 'Somalia Coast', lat: 5, lon: 47, radiusKm: 300 },
+  { name: 'Panama Canal', lat: 9.1, lon: -79.7, radiusKm: 150 },
+  { name: 'Bosphorus Strait', lat: 41.1, lon: 29.0, radiusKm: 100 },
 ];
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -304,4 +306,131 @@ export function getDarkVesselCount(): number {
  }
   }
   return count;
+}
+
+// ── Snapshot-based gap detection (pure-deterministic) ────────────────────────
+
+/**
+ * Lightweight observation shape — typically derived from /api/ais-snapshot
+ * candidate reports. Caller passes accumulated observations across recent
+ * polls; the detector finds vessels whose latest observation is older than
+ * the gap threshold AND was within range of a chokepoint / risk zone.
+ */
+export interface VesselSnapshotObservation {
+  mmsi: string;
+  lat: number;
+  lon: number;
+  observedAt: number;
+  name?: string;
+  shipType?: number;
+}
+
+export interface DarkVesselGapEvent {
+  mmsi: string;
+  vesselName?: string;
+  lastKnownLat: number;
+  lastKnownLon: number;
+  lastSeenAt: number;
+  gapDurationHours: number;
+  nearestChokepoint: string | null;
+  nearestChokepointKm: number | null;
+  riskScore: number;
+}
+
+export interface GapDetectorOptions {
+  thresholdHours?: number;
+  /** Defaults to Date.now() */
+  now?: number;
+  /** Only emit events for vessels whose last position is within this many km
+   * of a chokepoint / risk zone. Default 200 km. */
+  riskZoneRadiusKm?: number;
+}
+
+export const DEFAULT_GAP_THRESHOLD_HOURS = 6;
+
+/** Find the closest risk zone to a position. Returns null if none defined. */
+function nearestRiskZone(lat: number, lon: number): { name: string; distanceKm: number } | null {
+  let best: { name: string; distanceKm: number } | null = null;
+  for (const zone of RISK_ZONES) {
+    const d = haversineKm(lat, lon, zone.lat, zone.lon);
+    if (!best || d < best.distanceKm) {
+      best = { name: zone.name, distanceKm: d };
+    }
+  }
+  return best;
+}
+
+/**
+ * Score gap risk 0..100. Longer gap + closer to chokepoint = higher risk.
+ * Sanctions / military dimensions are tracked separately by the stateful
+ * `detectDarkVessels` path; this function focuses on pure spatiotemporal
+ * gap evidence.
+ */
+export function computeGapRiskScore(gapHours: number, distanceKm: number): number {
+  let score = 0;
+  if (gapHours >= 48) score += 50;
+  else if (gapHours >= 24) score += 35;
+  else if (gapHours >= 12) score += 20;
+  else if (gapHours >= 6) score += 10;
+
+  if (distanceKm <= 50) score += 50;
+  else if (distanceKm <= 100) score += 35;
+  else if (distanceKm <= 150) score += 20;
+  else if (distanceKm <= 200) score += 10;
+
+  return Math.min(100, score);
+}
+
+/**
+ * Pure detector. Given a flat list of vessel observations from the recent
+ * past (callers typically accumulate from poll-to-poll), return the gap
+ * events for vessels that haven't been seen for >= thresholdHours AND
+ * whose last known position was within riskZoneRadiusKm of a chokepoint.
+ *
+ * No state, no side effects.
+ */
+export function detectAisGapEvents(
+  observations: readonly VesselSnapshotObservation[],
+  options: GapDetectorOptions = {},
+): DarkVesselGapEvent[] {
+  const now = options.now ?? Date.now();
+  const thresholdHours = options.thresholdHours ?? DEFAULT_GAP_THRESHOLD_HOURS;
+  const radiusKm = options.riskZoneRadiusKm ?? 200;
+  const thresholdMs = thresholdHours * 60 * 60 * 1000;
+
+  // Group by mmsi, find latest observation per vessel
+  const latest = new Map<string, VesselSnapshotObservation>();
+  for (const obs of observations) {
+    if (!Number.isFinite(obs.lat) || !Number.isFinite(obs.lon)) continue;
+    if (!Number.isFinite(obs.observedAt)) continue;
+    const cur = latest.get(obs.mmsi);
+    if (!cur || obs.observedAt > cur.observedAt) {
+      latest.set(obs.mmsi, obs);
+    }
+  }
+
+  const events: DarkVesselGapEvent[] = [];
+  for (const obs of latest.values()) {
+    const gapMs = now - obs.observedAt;
+    if (gapMs < thresholdMs) continue;
+
+    const nearest = nearestRiskZone(obs.lat, obs.lon);
+    if (!nearest || nearest.distanceKm > radiusKm) continue;
+
+    const gapHours = gapMs / (60 * 60 * 1000);
+    events.push({
+      mmsi: obs.mmsi,
+      vesselName: obs.name,
+      lastKnownLat: obs.lat,
+      lastKnownLon: obs.lon,
+      lastSeenAt: obs.observedAt,
+      gapDurationHours: Math.round(gapHours * 10) / 10,
+      nearestChokepoint: nearest.name,
+      nearestChokepointKm: Math.round(nearest.distanceKm),
+      riskScore: computeGapRiskScore(gapHours, nearest.distanceKm),
+    });
+  }
+
+  events.sort((a, b) => b.riskScore - a.riskScore || b.gapDurationHours - a.gapDurationHours);
+  return events;
 }

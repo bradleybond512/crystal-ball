@@ -67,6 +67,13 @@ export interface WhoDonAlert {
   url: string;
 }
 
+// ── WHO DON ↔ ProMED cross-reference ──────────────────────────────────────────
+
+export interface WhoProMedCrossReference {
+  whoDonId: string;
+  promedIds: string[];
+}
+
 // ── Combined panel data ───────────────────────────────────────────────────────
 
 export interface DiseaseIntelData {
@@ -74,6 +81,7 @@ export interface DiseaseIntelData {
   covidCountries: CovidCountry[];
   epidemicEvents: EpidemicEvent[];
   whoDon: WhoDonAlert[];
+  crossReferencedWithPromed: WhoProMedCrossReference[];
   fetchedAt: Date;
 }
 
@@ -95,6 +103,7 @@ export async function fetchDiseaseIntel(): Promise<DiseaseIntelData> {
    covidCountries: unknown;
    reliefweb: unknown;
    whoDon: unknown;
+   crossReferencedWithPromed?: unknown;
     };
 
     const data: DiseaseIntelData = {
@@ -102,6 +111,7 @@ export async function fetchDiseaseIntel(): Promise<DiseaseIntelData> {
    covidCountries: parseCovidCountries(raw.covidCountries),
    epidemicEvents: parseEpidemicEvents(raw.reliefweb),
    whoDon: parseWhoDon(raw.whoDon),
+   crossReferencedWithPromed: parseCrossReferences(raw.crossReferencedWithPromed),
    fetchedAt: new Date(),
     };
 
@@ -206,6 +216,22 @@ function parseEpidemicEvents(raw: unknown): EpidemicEvent[] {
  };
  })
  .filter((e): e is EpidemicEvent => e !== null);
+}
+
+function parseCrossReferences(raw: unknown): WhoProMedCrossReference[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+ .map((item: unknown) => {
+ if (!item || typeof item !== 'object') return null;
+ const r = item as Record<string, unknown>;
+ const whoDonId = typeof r.whoDonId === 'string' ? r.whoDonId : '';
+ const promedIds = Array.isArray(r.promedIds)
+ ? r.promedIds.filter((p): p is string => typeof p === 'string')
+ : [];
+ if (!whoDonId || promedIds.length === 0) return null;
+ return { whoDonId, promedIds };
+ })
+ .filter((x): x is WhoProMedCrossReference => x !== null);
 }
 
 function parseWhoDon(raw: unknown): WhoDonAlert[] {

@@ -15,6 +15,7 @@ import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
 import { getTakFeeds as s2uTakGetFeeds, getTakSituation as s2uTakGetSituation } from './s2u-tak-client.mjs';
 import { aggregateWastewaterRows, detectSurgeWatches } from './wastewater-aggregate.mjs';
 import { parseProMedRss, summarizeProMedAlerts } from './promed-classify.mjs';
+import { crossReferenceWhoDonWithProMed } from './who-promed-cross-reference.mjs';
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 function isValidToken(authHeader) {
@@ -1386,6 +1387,52 @@ function getCachedStale(key) {
 function setCached(key, data, ttlMs) {
   _sidecarCache.set(key, { data, ts: Date.now(), ...(ttlMs != null && { ttlMs }) });
   _ensureSidecarCacheSweep();
+}
+
+// ── ProMED snapshot helper (shared by /api/promed and /api/disease-intel) ──
+const PROMED_RSS_URL = 'https://promedmail.org/feed/';
+const PROMED_TTL_MS = 15 * 60 * 1000;
+
+async function getOrFetchPromedSnapshot() {
+  const cached = getCached('promed', PROMED_TTL_MS);
+  if (cached) return cached;
+  try {
+    const resp = await fetchWithTimeout(
+      PROMED_RSS_URL,
+      { headers: { Accept: 'application/rss+xml, application/xml, text/xml', 'User-Agent': CHROME_UA } },
+      15_000,
+    );
+    if (!resp.ok) {
+      return {
+        alerts: [],
+        lastFetch: new Date().toISOString(),
+        novelCount: 0,
+        outbreakCount: 0,
+        degraded: true,
+        reason: `ProMED upstream returned HTTP ${resp.status}`,
+      };
+    }
+    const xml = await resp.text();
+    const alerts = parseProMedRss(xml);
+    const { novelCount, outbreakCount } = summarizeProMedAlerts(alerts);
+    const result = {
+      alerts,
+      lastFetch: new Date().toISOString(),
+      novelCount,
+      outbreakCount,
+    };
+    setCached('promed', result);
+    return result;
+  } catch (error) {
+    return {
+      alerts: [],
+      lastFetch: new Date().toISOString(),
+      novelCount: 0,
+      outbreakCount: 0,
+      degraded: true,
+      reason: `promed fetch error: ${error.message ?? error}`,
+    };
+  }
 }
 
 // ── Local IDS log helpers ─────────────────────────────────────────────────
@@ -4055,7 +4102,23 @@ async function dispatch(requestUrl, req, routes, context) {
  safeJson(whoRes),
  ]);
 
- const result = { nextstrain, covidCountries, reliefweb, whoDon, fetchedAt: new Date().toISOString() };
+ const whoDonItems = Array.isArray(whoDon)
+ ? whoDon
+ : Array.isArray(whoDon?.items) ? whoDon.items : [];
+ const promedSnapshot = await getOrFetchPromedSnapshot();
+ const crossReferencedWithPromed = crossReferenceWhoDonWithProMed(
+ whoDonItems,
+ Array.isArray(promedSnapshot.alerts) ? promedSnapshot.alerts : [],
+ );
+
+ const result = {
+ nextstrain,
+ covidCountries,
+ reliefweb,
+ whoDon,
+ crossReferencedWithPromed,
+ fetchedAt: new Date().toISOString(),
+ };
  setCached('disease-intel', result);
  return json(result);
  } catch (error) {
@@ -4065,49 +4128,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── ProMED-mail RSS (no API key, sidecar-side classification) ────────────
   if (requestUrl.pathname === '/api/promed') {
- const cached = getCached('promed', 15 * 60 * 1000);
- if (cached) return json(cached);
-
- const PROMED_RSS_URL = 'https://promedmail.org/feed/';
- try {
- const resp = await fetchWithTimeout(
- PROMED_RSS_URL,
- { headers: { Accept: 'application/rss+xml, application/xml, text/xml', 'User-Agent': CHROME_UA } },
- 15_000,
- );
- if (!resp.ok) {
- const degraded = {
- alerts: [],
- lastFetch: new Date().toISOString(),
- novelCount: 0,
- outbreakCount: 0,
- degraded: true,
- reason: `ProMED upstream returned HTTP ${resp.status}`,
- };
- return json(degraded);
- }
- const xml = await resp.text();
- const alerts = parseProMedRss(xml);
- const { novelCount, outbreakCount } = summarizeProMedAlerts(alerts);
- const result = {
- alerts,
- lastFetch: new Date().toISOString(),
- novelCount,
- outbreakCount,
- };
- setCached('promed', result);
- return json(result);
- } catch (error) {
- const degraded = {
- alerts: [],
- lastFetch: new Date().toISOString(),
- novelCount: 0,
- outbreakCount: 0,
- degraded: true,
- reason: `promed fetch error: ${error.message ?? error}`,
- };
- return json(degraded);
- }
+ const snapshot = await getOrFetchPromedSnapshot();
+ return json(snapshot);
   }
 
   // ── Wastewater epidemiology (CDC NWSS, no API key) ───────────────────────

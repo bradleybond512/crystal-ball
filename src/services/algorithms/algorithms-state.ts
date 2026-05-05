@@ -17,6 +17,7 @@ import {
 } from './algorithm-evaluation-ledger';
 import type { AlgorithmDefinition as HealthDefinition } from './algorithm-health';
 import { listAlgorithms, type AlgorithmDefinition as RegistryDefinition } from './algorithm-registry';
+import { resetAlgorithmLedgerPersistence } from './algorithm-ledger-persistence';
 
 let ledger: AlgorithmEvaluationLedger | undefined;
 let definitions: HealthDefinition[] | undefined;
@@ -34,6 +35,7 @@ export function getAlgorithmDefinitions(): readonly HealthDefinition[] {
 export function resetAlgorithmsState(): void {
   ledger = undefined;
   definitions = undefined;
+  resetAlgorithmLedgerPersistence();
 }
 
 /** Project a registry entry onto the health-aggregator's

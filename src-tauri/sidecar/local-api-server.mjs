@@ -2477,6 +2477,85 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Algorithm extensions (PRs 11-18) ─────────────────────────────────
+  // Renderer-side services compute these and POST a snapshot; sidecar
+  // mirrors the latest payload per bucket and serves it via GET.
+  if (requestUrl.pathname.startsWith('/api/algorithm-state/')) {
+    const bucket = requestUrl.pathname.slice('/api/algorithm-state/'.length);
+    const allowedBuckets = new Set([
+      'ensemble',
+      'drift',
+      'counterfactuals',
+      'llm-grades',
+      'auto-tune',
+      'correlations',
+      'blackswan',
+      'genealogy',
+    ]);
+    if (!allowedBuckets.has(bucket)) {
+      return json({ error: `unknown bucket "${bucket}"` }, 404);
+    }
+    if (!context._algorithmState) context._algorithmState = {};
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        context._algorithmState[bucket] = { ...body, _pushedAt: Date.now() };
+        return json({ ok: true });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const payload = context._algorithmState[bucket] || null;
+      if (!payload) {
+        return json({ available: false, bucket });
+      }
+      const ageMs = Date.now() - (payload._pushedAt || 0);
+      return json({ available: true, bucket, ageMs, stale: ageMs > 10 * 60 * 1000, ...payload });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // Spec aliases — friendlier URLs for the documented per-PR endpoints.
+  if (requestUrl.pathname === '/api/ensemble-decision' && req.method === 'GET') {
+    const domain = requestUrl.searchParams.get('domain') || '';
+    const all = context._algorithmState?.ensemble?.decisions || {};
+    if (domain) return json({ domain, decision: all[domain] || null });
+    return json({ decisions: all });
+  }
+  if (requestUrl.pathname === '/api/drift-status' && req.method === 'GET') {
+    return json(context._algorithmState?.drift || { available: false });
+  }
+  if (requestUrl.pathname === '/api/counterfactuals' && req.method === 'GET') {
+    const eventId = requestUrl.searchParams.get('eventId') || '';
+    const all = context._algorithmState?.counterfactuals?.byEvent || {};
+    if (eventId) return json({ eventId, results: all[eventId] || [] });
+    return json({ all });
+  }
+  if (requestUrl.pathname === '/api/auto-tune' && req.method === 'GET') {
+    const algorithmId = requestUrl.searchParams.get('algorithmId') || '';
+    const all = context._algorithmState?.['auto-tune']?.runs || {};
+    if (algorithmId) return json({ algorithmId, runs: all[algorithmId] || [] });
+    return json({ runs: all });
+  }
+  if (requestUrl.pathname === '/api/algorithm-correlations' && req.method === 'GET') {
+    return json(context._algorithmState?.correlations || { available: false });
+  }
+  if (requestUrl.pathname === '/api/blackswan-status' && req.method === 'GET') {
+    return json(context._algorithmState?.blackswan || { available: false });
+  }
+  if (requestUrl.pathname === '/api/genealogy' && req.method === 'GET') {
+    return json(context._algorithmState?.genealogy || { available: false });
+  }
+  if (requestUrl.pathname === '/api/genealogy/lineage' && req.method === 'GET') {
+    const algorithmId = requestUrl.searchParams.get('algorithmId') || '';
+    const tree = context._algorithmState?.genealogy?.tree || {};
+    if (!algorithmId) return json({ error: 'algorithmId required' }, 400);
+    return json({ algorithmId, lineage: tree[algorithmId] || null });
+  }
+
   if (requestUrl.pathname === '/api/sitrep-bundle') {
     const cacheKey = 'sitrep-bundle';
     const cached = getCached(cacheKey, 5 * 60 * 1000);

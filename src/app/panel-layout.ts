@@ -41,6 +41,7 @@ import {
   SecurityAdvisoriesPanel,
   NetworkRulesPanel,
   S2UIntelPanel,
+  SynthesisPanel,
   OrefSirensPanel,
   TelegramIntelPanel,
   WatchlistPanel,
@@ -1255,6 +1256,14 @@ export class PanelLayoutManager implements AppModule {
  // in Settings" empty state.
  const s2uIntelPanel = new S2UIntelPanel();
  this.ctx.panels['s2u-intel'] = s2uIntelPanel;
+
+ // SynthesisPanel — historical precedent matcher (TF-IDF + cosine)
+ // and cross-domain leading-indicator engine (Granger F-test). Reads
+ // from /api/precedents and /api/leading-indicators; sidecar returns
+ // configured=false until a corpus + time-series feeder is wired in
+ // a follow-up PR. Pure engines ship in Batch 1 PR 1 + 2.
+ const synthesisPanel = new SynthesisPanel();
+ this.ctx.panels['synthesis'] = synthesisPanel;
 
  const orefSirensPanel = new OrefSirensPanel();
  this.ctx.panels['oref-sirens'] = orefSirensPanel;

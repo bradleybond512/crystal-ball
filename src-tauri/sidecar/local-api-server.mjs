@@ -5721,6 +5721,65 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
+  // ── USGS historical analog catalog passthrough ─────────────────────────
+  // Forwards to USGS FDSN event service for events within a 50 km / ±0.5 M
+  // / ±30 km depth box around the query location, last 50 years up to 1
+  // year before the query event. Renderer ranks via
+  // `findHistoricalAnalogs` from src/services/seismic/sequence-matcher.ts.
+  // Cached per-query for 24 h; the historical catalog moves slowly.
+  if (requestUrl.pathname === '/api/historical-analogs') {
+    const lat = Number(requestUrl.searchParams.get('lat'));
+    const lon = Number(requestUrl.searchParams.get('lon'));
+    const mag = Number(requestUrl.searchParams.get('magnitude'));
+    const radiusKm = Number(requestUrl.searchParams.get('radiusKm') ?? 50);
+    const magDelta = Number(requestUrl.searchParams.get('magnitudeDelta') ?? 0.5);
+    const beforeMs = Number(requestUrl.searchParams.get('beforeMs') ?? Date.now());
+    if (
+      !Number.isFinite(lat) || lat < -90 || lat > 90
+      || !Number.isFinite(lon) || lon < -180 || lon > 180
+      || !Number.isFinite(mag) || mag < 0 || mag > 10
+      || !Number.isFinite(radiusKm) || radiusKm <= 0 || radiusKm > 500
+      || !Number.isFinite(magDelta) || magDelta <= 0 || magDelta > 2
+      || !Number.isFinite(beforeMs) || beforeMs <= 0
+    ) {
+      return json({ error: 'invalid query (lat/lon/magnitude/radiusKm/magnitudeDelta/beforeMs)' }, 400);
+    }
+    const cacheKey = `historical-analogs:${lat.toFixed(2)}:${lon.toFixed(2)}:${mag.toFixed(2)}:${radiusKm}:${magDelta}:${Math.floor(beforeMs / (24 * 60 * 60 * 1000))}`;
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      // Last 50 years up to (beforeMs - 1 year) so the event itself
+      // can't appear as its own analog.
+      const startTime = new Date(beforeMs - 50 * 365 * 24 * 60 * 60 * 1000).toISOString();
+      const endTime = new Date(beforeMs - 365 * 24 * 60 * 60 * 1000).toISOString();
+      const params = new URLSearchParams({
+        format: 'geojson',
+        latitude: String(lat),
+        longitude: String(lon),
+        maxradiuskm: String(radiusKm),
+        minmagnitude: String(Math.max(0, mag - magDelta)),
+        maxmagnitude: String(mag + magDelta),
+        starttime: startTime,
+        endtime: endTime,
+        orderby: 'magnitude',
+        limit: '100',
+      });
+      const upstream = `https://earthquake.usgs.gov/fdsnws/event/1/query?${params.toString()}`;
+      const r = await fetchWithTimeout(
+        upstream,
+        { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/sidecar (historical-analogs)' } },
+        20000,
+      );
+      if (!r.ok) throw new Error(`USGS ${r.status}`);
+      const data = await r.json();
+      const payload = { lat, lon, magnitude: mag, radiusKm, magnitudeDelta: magDelta, raw: data };
+      setCached(cacheKey, payload, 24 * 60 * 60 * 1000);
+      return json(payload);
+    } catch (error) {
+      return json({ error: `historical-analogs error: ${error.message ?? error}` }, 502);
+    }
+  }
+
   // ── Travel warning RSS/Atom parser helper ─────────────────────────────────
   function parseTravelWarnings(xml, source) {
  const isAtom = source !== 'DFAT';

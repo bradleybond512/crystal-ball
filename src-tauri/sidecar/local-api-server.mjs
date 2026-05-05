@@ -7094,6 +7094,30 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(snap);
   }
 
+  // ── Synthesis: precedents (corpus-backed TF-IDF cosine matcher) ──────────
+  // Returns configured=false until a corpus is wired in. Engine lives in
+  // src/services/synthesis/precedent-matcher.ts (21 tests passing).
+  if (requestUrl.pathname === '/api/precedents') {
+ return json({
+ configured: false,
+ error: 'corpus not yet ingested',
+ analogs: [],
+ });
+  }
+
+  // ── Synthesis: leading indicators (Granger F-test across signals) ────────
+  // Returns configured=false until rolling daily series for BDI / commodities
+  // / ACLED / ProMED / USGS / CISA KEV are wired in. Engine lives in
+  // src/services/synthesis/leading-indicators.ts (19 tests passing).
+  if (requestUrl.pathname === '/api/leading-indicators') {
+ return json({
+ configured: false,
+ error: 'time series not yet ingested',
+ pairs: [],
+ alerts: [],
+ });
+  }
+
   // ── S2U TAK feeds — Marti API /api/feeds (cached 60s, TLS-pinned) ─────────
   if (requestUrl.pathname === '/api/s2u-tak-feeds') {
  const opts = s2uTakOpts();

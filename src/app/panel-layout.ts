@@ -224,6 +224,7 @@ import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
+import { AlgorithmDiagnosticsPanel } from '@/components/AlgorithmDiagnosticsPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
 import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
@@ -1108,6 +1109,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
+ this.ctx.panels['algorithm-diagnostics'] = new AlgorithmDiagnosticsPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
  // Wire saved-places into the insights state singleton so the new
  // panels see the user's home/family/travel places out of the box.

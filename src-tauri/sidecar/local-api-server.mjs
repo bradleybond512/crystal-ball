@@ -173,6 +173,9 @@ const aisState = {
   socket: null,
   vessels: new Map(),
   candidateReports: new Map(),
+  // 24h-retention log of last position per mmsi — outlives the 30-min vessels
+  // TTL so /api/dark-vessels can find vessels that have been silent 6-24h.
+  darkHistory: new Map(),
   reconnectTimer: null,
   messageCount: 0,
   sequence: 0,
@@ -180,6 +183,8 @@ const aisState = {
   lastSnapshotJson: null,
   activeKey: null,
 };
+
+const AIS_DARK_HISTORY_TTL_MS = 24 * 60 * 60 * 1000;
 
 function aisBuildSnapshot() {
   const now = Date.now();
@@ -252,6 +257,9 @@ function aisProcessMessage(raw) {
   aisState.vessels.set(mmsi, {
  mmsi, name: meta.ShipName || '', lat, lon, timestamp: now,
  shipType: meta.ShipType, heading: pos.TrueHeading, speed: pos.Sog, course: pos.Cog,
+  });
+  aisState.darkHistory.set(mmsi, {
+    mmsi, name: meta.ShipName || '', lat, lon, observedAt: now, shipType: meta.ShipType,
   });
   aisState.messageCount++;
   aisState.lastSnapshotJson = null; // invalidate cache
@@ -1131,6 +1139,85 @@ function makeCorsHeaders(req) {
  'Access-Control-Max-Age': '86400',
  'Vary': 'Origin',
   };
+}
+
+// ── Dark-vessel gap helpers (mirror src/services/dark-vessel.ts) ────────────
+const DARK_VESSEL_RISK_ZONES = [
+  { name: 'Strait of Hormuz', lat: 26.5, lon: 56.3, radiusKm: 200 },
+  { name: 'Bab el-Mandeb', lat: 12.5, lon: 43.5, radiusKm: 150 },
+  { name: 'Red Sea', lat: 20, lon: 38, radiusKm: 400 },
+  { name: 'Suez Canal', lat: 30.5, lon: 32.3, radiusKm: 100 },
+  { name: 'Malacca Strait', lat: 2, lon: 102, radiusKm: 200 },
+  { name: 'Taiwan Strait', lat: 24.5, lon: 119, radiusKm: 200 },
+  { name: 'South China Sea', lat: 12, lon: 115, radiusKm: 500 },
+  { name: 'Black Sea', lat: 43, lon: 34, radiusKm: 400 },
+  { name: 'Baltic Sea', lat: 57, lon: 20, radiusKm: 300 },
+  { name: 'Persian Gulf', lat: 27, lon: 51, radiusKm: 300 },
+  { name: 'Gulf of Guinea', lat: 3, lon: 3, radiusKm: 400 },
+  { name: 'Somalia Coast', lat: 5, lon: 47, radiusKm: 300 },
+  { name: 'Panama Canal', lat: 9.1, lon: -79.7, radiusKm: 150 },
+  { name: 'Bosphorus Strait', lat: 41.1, lon: 29.0, radiusKm: 100 },
+];
+
+function darkVesselHaversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function computeGapRiskScoreSidecar(gapHours, distanceKm) {
+  let score = 0;
+  if (gapHours >= 48) score += 50;
+  else if (gapHours >= 24) score += 35;
+  else if (gapHours >= 12) score += 20;
+  else if (gapHours >= 6) score += 10;
+  if (distanceKm <= 50) score += 50;
+  else if (distanceKm <= 100) score += 35;
+  else if (distanceKm <= 150) score += 20;
+  else if (distanceKm <= 200) score += 10;
+  return Math.min(100, score);
+}
+
+export function detectAisGapEventsSidecar(observations, options = {}) {
+  const now = options.now ?? Date.now();
+  const thresholdHours = options.thresholdHours ?? 6;
+  const radiusKm = options.riskZoneRadiusKm ?? 200;
+  const thresholdMs = thresholdHours * 60 * 60 * 1000;
+  const latest = new Map();
+  for (const obs of observations) {
+    if (!Number.isFinite(obs.lat) || !Number.isFinite(obs.lon)) continue;
+    if (!Number.isFinite(obs.observedAt)) continue;
+    const cur = latest.get(obs.mmsi);
+    if (!cur || obs.observedAt > cur.observedAt) latest.set(obs.mmsi, obs);
+  }
+  const events = [];
+  for (const obs of latest.values()) {
+    const gapMs = now - obs.observedAt;
+    if (gapMs < thresholdMs) continue;
+    let nearest = null;
+    for (const zone of DARK_VESSEL_RISK_ZONES) {
+      const d = darkVesselHaversineKm(obs.lat, obs.lon, zone.lat, zone.lon);
+      if (!nearest || d < nearest.distanceKm) nearest = { name: zone.name, distanceKm: d };
+    }
+    if (!nearest || nearest.distanceKm > radiusKm) continue;
+    const gapHours = gapMs / (60 * 60 * 1000);
+    events.push({
+      mmsi: obs.mmsi,
+      vesselName: obs.name,
+      lastKnownLat: obs.lat,
+      lastKnownLon: obs.lon,
+      lastSeenAt: obs.observedAt,
+      gapDurationHours: Math.round(gapHours * 10) / 10,
+      nearestChokepoint: nearest.name,
+      nearestChokepointKm: Math.round(nearest.distanceKm),
+      riskScore: computeGapRiskScoreSidecar(gapHours, nearest.distanceKm),
+    });
+  }
+  events.sort((a, b) => b.riskScore - a.riskScore || b.gapDurationHours - a.gapDurationHours);
+  return events;
 }
 
 // ── Freight-stress helpers (mirror src/services/maritime/freight-stress.ts) ──
@@ -2908,6 +2995,28 @@ async function dispatch(requestUrl, req, routes, context) {
     }
     const overallLevel = overallScore >= 75 ? 'critical' : overallScore >= 50 ? 'high' : overallScore >= 25 ? 'medium' : 'low';
     return json({ components, overallScore, overallLevel, asOf });
+  }
+
+  // ── Dark vessel gap events (driven by aisState.darkHistory) ─────────────
+  // Lists vessels whose last AIS observation is older than the gap threshold
+  // AND whose last known position is within range of a chokepoint.
+  if (requestUrl.pathname === '/api/dark-vessels') {
+    const now = Date.now();
+    const cutoff = now - AIS_DARK_HISTORY_TTL_MS;
+    for (const [mmsi, obs] of aisState.darkHistory) {
+      if (obs.observedAt < cutoff) aisState.darkHistory.delete(mmsi);
+    }
+    const thresholdHours = Math.max(1, Math.min(24, Number(requestUrl.searchParams.get('thresholdHours') || '6')));
+    const radiusKm = Math.max(10, Math.min(500, Number(requestUrl.searchParams.get('radiusKm') || '200')));
+    const observations = [...aisState.darkHistory.values()];
+    const events = detectAisGapEventsSidecar(observations, { now, thresholdHours, riskZoneRadiusKm: radiusKm });
+    return json({
+      events,
+      sampleSize: observations.length,
+      thresholdHours,
+      radiusKm,
+      asOf: new Date(now).toISOString(),
+    });
   }
 
   // ── ThreatFox IOC feed ───────────────────────────────────────────────────

@@ -5678,6 +5678,47 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch (error) {
  return json({ error: `tsunami-status error: ${error.message ?? error}` }, 502);
  }
+ } catch (error) {
+ return json({ error: `tsunami-status error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── USGS focal mechanism (moment tensor) passthrough ───────────────────
+  // Forwards to USGS FDSN event service for the requested event id and
+  // returns the GeoJSON. Renderer parses with `parseUsgsMomentTensor` from
+  // src/services/seismic/focal-classifier.ts. Cached 30 min/event since
+  // moment tensors are revised slowly after the initial automatic solution.
+  if (requestUrl.pathname === '/api/focal-mechanism') {
+    const eventId = (requestUrl.searchParams.get('eventId') ?? '').trim();
+    // USGS event ids are network code + numeric/alphanumeric, e.g.
+    // us7000abcd, nc73881266, ci40012345. Tight allowlist guards against
+    // path injection in the upstream URL.
+    if (!eventId || !/^[A-Za-z0-9_-]{2,32}$/.test(eventId)) {
+      return json({ error: 'invalid eventId' }, 400);
+    }
+    const cacheKey = `focal-mechanism:${eventId}`;
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      const upstream = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${encodeURIComponent(eventId)}&producttype=moment-tensor`;
+      const r = await fetchWithTimeout(
+        upstream,
+        { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/sidecar (focal-mechanism)' } },
+        15000,
+      );
+      if (r.status === 404) {
+        const empty = { eventId, available: false, reason: 'no moment-tensor product for this event' };
+        setCached(cacheKey, empty, 5 * 60 * 1000);
+        return json(empty);
+      }
+      if (!r.ok) throw new Error(`USGS ${r.status}`);
+      const data = await r.json();
+      const payload = { eventId, available: true, raw: data };
+      setCached(cacheKey, payload, 30 * 60 * 1000);
+      return json(payload);
+    } catch (error) {
+      return json({ error: `focal-mechanism error: ${error.message ?? error}` }, 502);
+    }
   }
 
   // ── Travel warning RSS/Atom parser helper ─────────────────────────────────

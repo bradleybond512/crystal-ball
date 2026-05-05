@@ -36,6 +36,7 @@ import {
   type LifecycleEntry,
   type LifecycleState,
 } from '@/services/algorithms/promotion-gate';
+import { summarizeAnnotations } from '@/services/algorithms/user-feedback';
 import { escapeHtml } from '@/utils/sanitize';
 
 const REFRESH_MS = 15_000;
@@ -85,6 +86,7 @@ export class AlgorithmDiagnosticsPanel extends Panel {
     const html = `
       <div style="padding:8px;font-size:12px;line-height:1.45;">
         ${this.renderOverviewTable(summaries, lifecycles)}
+        ${this.renderAnnotationsSection(summaries.map((s) => s.algorithmId), ledger)}
         ${this.renderShadowSection(shadow)}
         ${this.renderHistorySection(lifecycles)}
       </div>
@@ -163,6 +165,37 @@ export class AlgorithmDiagnosticsPanel extends Panel {
     `;
   }
 
+  private renderAnnotationsSection(
+    algorithmIds: readonly string[],
+    ledger: ReturnType<typeof getAlgorithmEvaluationLedger>,
+  ): string {
+    const rows = algorithmIds
+      .map((id) => {
+        const s = summarizeAnnotations(id, ledger);
+        if (s.total === 0) return null;
+        const lead =
+          s.meanEarlyLeadMs === null
+            ? ''
+            : ` (mean early lead: ${formatLead(s.meanEarlyLeadMs)})`;
+        return `
+          <li>
+            <strong>${escapeHtml(id)}</strong>:
+            ${s.counts.confirmed} confirmed,
+            ${s.counts.false_positive} false positive,
+            ${s.counts.observed_early} early${lead},
+            ${s.counts.missed} missed
+          </li>
+        `;
+      })
+      .filter(Boolean)
+      .join('');
+    if (!rows) return '';
+    return `
+      <h4 style="margin:14px 0 4px 0;">User feedback</h4>
+      <ul style="margin:0;padding-left:14px;">${rows}</ul>
+    `;
+  }
+
   private renderHistorySection(lifecycles: readonly LifecycleEntry[]): string {
     const withHistory = lifecycles.filter((l) => l.transitions.length > 0);
     if (withHistory.length === 0) return '';
@@ -193,6 +226,14 @@ export class AlgorithmDiagnosticsPanel extends Panel {
 function formatNum(n: number): string {
   if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
   return n.toFixed(2);
+}
+
+function formatLead(ms: number): string {
+  const minutes = ms / 60_000;
+  if (minutes < 60) return `${minutes.toFixed(0)}m`;
+  const hours = minutes / 60;
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
 }
 
 function formatTime(at: number): string {

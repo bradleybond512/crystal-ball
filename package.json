@@ -64,6 +64,7 @@
     "test:insights": "tsx --test src/services/insights/__tests__/big-event-detector.test.mts src/services/insights/__tests__/confidence-urgency-matrix.test.mts src/services/insights/__tests__/notification-ladder.test.mts src/services/insights/__tests__/share-packet.test.mts src/services/insights/__tests__/ask-the-data.test.mts src/services/insights/__tests__/action-briefs.test.mts src/services/insights/__tests__/data-bridge.test.mts src/services/insights/__tests__/what-changed-digest.test.mts",
     "test:personal": "tsx --test src/services/personal/__tests__/personal-impact.test.mts",
     "test:adsb": "tsx --test src/services/adsb/__tests__/adsb-aggregate.test.mts",
+    "test:maritime": "tsx --test src/services/maritime/__tests__/chokepoint-monitor.test.mts src/services/maritime/__tests__/chokepoint-aggregator.test.mts",
     "test:seismic": "tsx --test src/services/seismic/__tests__/seismic-normalizer.test.mts src/services/seismic/__tests__/seismic-fusion.test.mts src/services/seismic/__tests__/shaking-estimator.test.mts",
     "test:panels:smoke": "node tests/panels/run-harness.mjs",
     "test:panels:fixtures": "tsx --import ./tests/panels/register-hook.mjs --test tests/panels/panel-fixtures.test.mts",

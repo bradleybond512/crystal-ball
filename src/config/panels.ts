@@ -20,6 +20,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'strategic-risk': { name: 'Strategic Risk Overview', enabled: true, priority: 1 },
   'strategic-posture': { name: 'AI Strategic Posture', enabled: true, priority: 1 },
   insights: { name: 'AI Insights', enabled: true, priority: 1 },
+  'maritime-intel': { name: 'Maritime Intel', enabled: true, priority: 1 },
   cii: { name: 'Country Instability', enabled: true, priority: 1 },
   'geo-hubs': { name: 'Geopolitical Hubs', enabled: true, priority: 1 },
   'live-news': { name: 'Live News', enabled: true, priority: 1 },
@@ -957,7 +958,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   // Full (geopolitical) variant
   intelligence: {
  labelKey: 'header.panelCatIntelligence',
- panelKeys: ['command-center', 'system-diagnostic', 'algorithm-diagnostic', 'shortage-radar', 'watchlist', 'saved-places', 'watchlist-locations', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'notification-digest', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions', 'mediastack-news'],
+ panelKeys: ['command-center', 'system-diagnostic', 'algorithm-diagnostic', 'shortage-radar', 'maritime-intel', 'watchlist', 'saved-places', 'watchlist-locations', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'notification-digest', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions', 'mediastack-news'],
  variants: ['full'],
   },
   regionalNews: {

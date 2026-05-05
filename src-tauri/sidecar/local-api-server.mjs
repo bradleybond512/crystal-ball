@@ -1117,6 +1117,70 @@ function makeCorsHeaders(req) {
   };
 }
 
+// ── Freight-stress helpers (mirror src/services/maritime/freight-stress.ts) ──
+export function parseFredCsvSidecar(csv) {
+  const lines = String(csv).split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) return [];
+  const header = lines[0].split(',');
+  if (header.length < 2) return [];
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    if (cols.length < 2) continue;
+    const date = cols[0].trim();
+    const raw = cols[1].trim();
+    if (!date || raw === '' || raw === '.') continue;
+    const value = Number(raw);
+    if (!Number.isFinite(value)) continue;
+    out.push({ date, value });
+  }
+  return out;
+}
+
+export function computeFreightStressSidecar(series, observations) {
+  if (observations.length === 0) {
+    return { series, current: null, avg12m: null, stdev12m: null, deviationPct: null,
+      zScore: null, trend: 'stable', stressScore: 0, stressLevel: 'low',
+      observationCount: 0, asOf: null };
+  }
+  const sorted = [...observations].sort((a, b) => a.date.localeCompare(b.date));
+  const last = sorted[sorted.length - 1];
+  const current = last.value;
+  const window = sorted.slice(Math.max(0, sorted.length - 13), - 1);
+  const allValues = sorted.map(o => o.value);
+  const trend = (() => {
+    if (allValues.length < 3) return 'stable';
+    const tail = allValues.slice(-3);
+    const slope = (tail[2] - tail[0]) / 2;
+    const refMean = tail.reduce((a, b) => a + b, 0) / 3;
+    const ref = Math.abs(refMean) || 1;
+    if (slope > 0.005 * ref) return 'rising';
+    if (slope < -0.005 * ref) return 'falling';
+    return 'stable';
+  })();
+  if (window.length < 3) {
+    return { series, current, avg12m: null, stdev12m: null, deviationPct: null,
+      zScore: null, trend, stressScore: 0, stressLevel: 'low',
+      observationCount: sorted.length, asOf: last.date };
+  }
+  const values = window.map(o => o.value);
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  let sq = 0;
+  for (const x of values) sq += (x - avg) ** 2;
+  const sdev = values.length < 2 ? 0 : Math.sqrt(sq / (values.length - 1));
+  const deviationPct = avg === 0 ? null : ((current - avg) / avg) * 100;
+  const z = sdev === 0 ? null : (current - avg) / sdev;
+  let score = 0;
+  if (z !== null && Number.isFinite(z)) {
+    const abs = Math.abs(z);
+    score = abs >= 3 ? 100 : abs >= 2 ? 75 + (abs - 2) * 25 : abs >= 1 ? 35 + (abs - 1) * 40 : abs * 35;
+  }
+  const stressScore = Math.round(score);
+  const stressLevel = stressScore >= 75 ? 'critical' : stressScore >= 50 ? 'high' : stressScore >= 25 ? 'medium' : 'low';
+  return { series, current, avg12m: avg, stdev12m: sdev, deviationPct, zScore: z,
+    trend, stressScore, stressLevel, observationCount: sorted.length, asOf: last.date };
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   // Use node:https with IPv4 forced — Node.js built-in fetch (undici) tries IPv6
   // first and some servers (EIA, NASA FIRMS) have broken IPv6 causing ETIMEDOUT.
@@ -2791,6 +2855,43 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch (error) {
  return json({ events: [], error: String(error.message ?? error) });
  }
+  }
+
+  // ── Maritime freight stress (FRED CSV proxy, no API key required) ──────
+  // The Baltic Dry Index is no longer freely accessible. We use the FRED
+  // CSV download for broad commodity-price indicators as a freight-cost
+  // proxy. Default series is PPIACO (PPI: All Commodities). Caller may
+  // override with ?series=PPIACO,PCU484212484212 etc.
+  if (requestUrl.pathname === '/api/freight-stress') {
+    const seriesParam = (requestUrl.searchParams.get('series') || 'PPIACO,PFOODINDEXM')
+      .split(',').map(s => s.trim()).filter(s => /^[A-Z0-9_]+$/i.test(s)).slice(0, 5);
+    if (seriesParam.length === 0) {
+      return json({ error: 'invalid or empty series parameter' }, 400);
+    }
+    const components = [];
+    for (const series of seriesParam) {
+      try {
+        const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}`;
+        const resp = await fetchWithTimeout(url, { headers: { Accept: 'text/csv' } }, 12_000);
+        if (!resp.ok) {
+          components.push({ series, error: `FRED ${resp.status}`, stressScore: 0, stressLevel: 'low' });
+          continue;
+        }
+        const csv = await resp.text();
+        const observations = parseFredCsvSidecar(csv);
+        components.push(computeFreightStressSidecar(series, observations));
+      } catch (error) {
+        components.push({ series, error: String(error?.message ?? error), stressScore: 0, stressLevel: 'low' });
+      }
+    }
+    let overallScore = 0;
+    let asOf = null;
+    for (const c of components) {
+      if (typeof c.stressScore === 'number' && c.stressScore > overallScore) overallScore = c.stressScore;
+      if (c.asOf && (!asOf || c.asOf > asOf)) asOf = c.asOf;
+    }
+    const overallLevel = overallScore >= 75 ? 'critical' : overallScore >= 50 ? 'high' : overallScore >= 25 ? 'medium' : 'low';
+    return json({ components, overallScore, overallLevel, asOf });
   }
 
   // ── ThreatFox IOC feed ───────────────────────────────────────────────────

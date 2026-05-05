@@ -1,0 +1,2 @@
+# Replay fixtures land here at runtime (one JSON file per algorithm,
+# committed only when curated as a regression-test corpus).

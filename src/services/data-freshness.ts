@@ -121,6 +121,7 @@ export type DataSourceId =
     | "supply-chain-impact"
     | "faa-tfrs"
     | "usgs-pager"
+    | "wastewater"
   | 'webcams'; // Aggregated webcam feeds (Windy + DOT + YouTube)
 
 export type FreshnessStatus = 'fresh' | 'stale' | 'very_stale' | 'no_data' | 'disabled' | 'error';
@@ -273,6 +274,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   "supply-chain-impact": { name: "Supply Chain Impact", requiredForRisk: false },
   "faa-tfrs": { name: "Faa Tfrs", requiredForRisk: false },
   "usgs-pager": { name: "Usgs Pager", requiredForRisk: false },
+  "wastewater": { name: "Wastewater Surveillance", requiredForRisk: false, panelId: "disease-outbreaks" },
 };
 
 class DataFreshnessTracker {
@@ -628,6 +630,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   "supply-chain-impact": "Supply-chain impact data unavailable",
   "faa-tfrs": "FAA TFR data unavailable",
   "usgs-pager": "USGS PAGER data unavailable",
+  "wastewater": "Wastewater surveillance data unavailable",
   "offline-alert-cache": "Offline alert cache unavailable",
   "offline-map-cache": "Offline map cache unavailable",
   "s2-underground": "S2 Underground feed unavailable",

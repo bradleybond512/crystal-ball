@@ -13,6 +13,7 @@ import { pathToFileURL } from 'node:url';
 import { scoreAllDomains } from './sitrep-severity.mjs';
 import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
 import { getTakFeeds as s2uTakGetFeeds, getTakSituation as s2uTakGetSituation } from './s2u-tak-client.mjs';
+import { aggregateWastewaterRows, detectSurgeWatches } from './wastewater-aggregate.mjs';
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 function isValidToken(authHeader) {
@@ -3979,6 +3980,53 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
  } catch (error) {
  return json({ error: `disease-intel fetch error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── Wastewater epidemiology (CDC NWSS, no API key) ───────────────────────
+  if (requestUrl.pathname === '/api/wastewater') {
+ const cached = getCached('wastewater', 30 * 60 * 1000);
+ if (cached) return json(cached);
+
+ const NWSS_COVID_URL = 'https://data.cdc.gov/resource/2ew6-ywp6.json?$limit=5000&$order=date_end%20DESC';
+ try {
+ const resp = await fetchWithTimeout(
+ NWSS_COVID_URL,
+ { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+ 20_000,
+ );
+ if (!resp.ok) {
+ const degraded = {
+ signals: [],
+ surgeWatches: [],
+ lastUpdated: null,
+ fetchedAt: new Date().toISOString(),
+ degraded: true,
+ reason: `NWSS upstream returned HTTP ${resp.status}`,
+ };
+ return json(degraded);
+ }
+ const rows = await resp.json();
+ const { signals, lastUpdated } = aggregateWastewaterRows(rows);
+ const surgeWatches = detectSurgeWatches(signals);
+ const result = {
+ signals,
+ surgeWatches,
+ lastUpdated,
+ fetchedAt: new Date().toISOString(),
+ };
+ setCached('wastewater', result);
+ return json(result);
+ } catch (error) {
+ const degraded = {
+ signals: [],
+ surgeWatches: [],
+ lastUpdated: null,
+ fetchedAt: new Date().toISOString(),
+ degraded: true,
+ reason: `wastewater fetch error: ${error.message ?? error}`,
+ };
+ return json(degraded);
  }
   }
 

@@ -5293,6 +5293,49 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── USGS PAGER + ShakeMap rapid impact assessment ────────────────────────
+  // GET /api/seismic-impact?eventId=<id>
+  // Returns the PAGER alert label + ShakeMap maxMMI for the requested
+  // event. The renderer-side pure layer (`impact-assessor.ts`) handles
+  // the per-city affected-population logic; the sidecar's job is just
+  // to fetch + pass through the upstream USGS shapes.
+  if (requestUrl.pathname === '/api/seismic-impact') {
+ const eventId = requestUrl.searchParams.get('eventId');
+ if (!eventId || !/^[A-Za-z0-9_-]{1,64}$/.test(eventId)) {
+ return json({ error: 'invalid or missing eventId' }, 400);
+ }
+ const cacheKey = `seismic-impact:${eventId}`;
+ const cached = getCached(cacheKey);
+ if (cached) return json(cached);
+ try {
+ const detailUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${encodeURIComponent(eventId)}&producttype=shakemap`;
+ const r = await fetchWithTimeout(detailUrl, { headers: { Accept: 'application/json' } }, 15000);
+ if (!r.ok) throw new Error(`USGS detail ${r.status}`);
+ const data = await r.json();
+ const props = data?.properties ?? {};
+ const shakemapProduct = props.products?.shakemap?.[0] ?? null;
+ const maxMmiRaw = shakemapProduct?.properties?.maxmmi ?? null;
+ const maxMmi = maxMmiRaw === null ? null : Number.parseFloat(String(maxMmiRaw));
+ const publishedAtRaw = shakemapProduct?.updateTime ?? null;
+ const result = {
+ eventId,
+ pagerAlert: typeof props.alert === 'string' ? props.alert : null,
+ magnitude: typeof props.mag === 'number' ? props.mag : null,
+ place: typeof props.place === 'string' ? props.place : null,
+ occurredAt: typeof props.time === 'number' ? props.time : null,
+ shakeMap: {
+ maxMmi: Number.isFinite(maxMmi) ? maxMmi : null,
+ publishedAt: typeof publishedAtRaw === 'number' ? publishedAtRaw : null,
+ },
+ sourceUrl: typeof props.url === 'string' ? props.url : null,
+ };
+ setCached(cacheKey, result, 5 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ error: `seismic-impact error: ${error.message ?? error}` }, 502);
+ }
+  }
+
   // ── Travel warning RSS/Atom parser helper ─────────────────────────────────
   function parseTravelWarnings(xml, source) {
  const isAtom = source !== 'DFAT';

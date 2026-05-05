@@ -19,7 +19,11 @@ export type SeismicSource =
   | 'pager'
   | 'gdacs'
   | 'tsunami'
-  | 'shakealert';
+  | 'shakealert'
+  | 'geonet'
+  | 'geofon'
+  | 'ingv'
+  | 'jma';
 
 export type SeismicEventStatus = 'automatic' | 'reviewed' | 'deleted' | 'unknown';
 

@@ -5865,6 +5865,82 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Aftershock forecast: USGS ComCat aftershock cloud passthrough ─────────
+  // GET /api/aftershock-forecast?eventId=<id>&radiusKm=<n>
+  // Returns the mainshock summary + the list of USGS-known aftershocks
+  // within `radiusKm` of the mainshock and within +14 days. The
+  // renderer-side pure layer (`aftershock-watch.ts`) handles the
+  // Omori-Utsu forecast and the observed-vs-expected ratio. 15-min cache.
+  if (requestUrl.pathname === '/api/aftershock-forecast') {
+ const eventId = requestUrl.searchParams.get('eventId');
+ if (!eventId || !/^[A-Za-z0-9_-]{1,64}$/.test(eventId)) {
+ return json({ error: 'invalid or missing eventId' }, 400);
+ }
+ const radiusRaw = requestUrl.searchParams.get('radiusKm');
+ const radiusKm = (() => {
+ if (!radiusRaw) return 100;
+ const n = Number.parseInt(radiusRaw, 10);
+ return Number.isFinite(n) && n > 0 && n <= 500 ? n : 100;
+ })();
+ const cacheKey = `aftershock-forecast:${eventId}:${radiusKm}`;
+ const cached = getCached(cacheKey);
+ if (cached) return json(cached);
+ try {
+ const detailUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${encodeURIComponent(eventId)}`;
+ const r = await fetchWithTimeout(detailUrl, { headers: { Accept: 'application/json' } }, 15000);
+ if (!r.ok) throw new Error(`USGS detail ${r.status}`);
+ const detail = await r.json();
+ const props = detail?.properties ?? {};
+ const coords = detail?.geometry?.coordinates ?? null;
+ const mainLon = Array.isArray(coords) && typeof coords[0] === 'number' ? coords[0] : null;
+ const mainLat = Array.isArray(coords) && typeof coords[1] === 'number' ? coords[1] : null;
+ const mainDepth = Array.isArray(coords) && typeof coords[2] === 'number' ? coords[2] : null;
+ const occurredAt = typeof props.time === 'number' ? props.time : null;
+ const magnitude = typeof props.mag === 'number' ? props.mag : null;
+ if (mainLat === null || mainLon === null || occurredAt === null || magnitude === null) {
+ return json({ error: 'mainshock missing required fields' }, 502);
+ }
+ const start = new Date(occurredAt + 1).toISOString();
+ const end = new Date(occurredAt + 14 * 24 * 60 * 60 * 1000).toISOString();
+ const degBuf = (radiusKm / 111) * 1.4;
+ const cloudUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${encodeURIComponent(start)}&endtime=${encodeURIComponent(end)}&minlatitude=${mainLat - degBuf}&maxlatitude=${mainLat + degBuf}&minlongitude=${mainLon - degBuf}&maxlongitude=${mainLon + degBuf}&minmagnitude=2.5&orderby=time-asc`;
+ const cr = await fetchWithTimeout(cloudUrl, { headers: { Accept: 'application/json' } }, 20000);
+ if (!cr.ok) throw new Error(`USGS cloud ${cr.status}`);
+ const cloud = await cr.json();
+ const features = Array.isArray(cloud?.features) ? cloud.features : [];
+ const aftershocks = features
+ .filter((f) => f && f.id !== eventId)
+ .map((f) => ({
+ id: typeof f.id === 'string' ? f.id : null,
+ magnitude: typeof f?.properties?.mag === 'number' ? f.properties.mag : null,
+ depthKm: Array.isArray(f?.geometry?.coordinates) && typeof f.geometry.coordinates[2] === 'number' ? f.geometry.coordinates[2] : null,
+ lat: Array.isArray(f?.geometry?.coordinates) && typeof f.geometry.coordinates[1] === 'number' ? f.geometry.coordinates[1] : null,
+ lon: Array.isArray(f?.geometry?.coordinates) && typeof f.geometry.coordinates[0] === 'number' ? f.geometry.coordinates[0] : null,
+ occurredAt: typeof f?.properties?.time === 'number' ? f.properties.time : null,
+ place: typeof f?.properties?.place === 'string' ? f.properties.place : '',
+ url: typeof f?.properties?.url === 'string' ? f.properties.url : null,
+ }));
+ const result = {
+ mainshock: {
+ eventId,
+ magnitude,
+ lat: mainLat,
+ lon: mainLon,
+ depthKm: mainDepth,
+ occurredAt,
+ place: typeof props.place === 'string' ? props.place : '',
+ },
+ radiusKm,
+ aftershocks,
+ fetchedAt: Date.now(),
+ };
+ setCached(cacheKey, result, 15 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ error: `aftershock-forecast error: ${error.message ?? error}` }, 502);
+ }
+  }
+
   // ── Travel warning RSS/Atom parser helper ─────────────────────────────────
   function parseTravelWarnings(xml, source) {
  const isAtom = source !== 'DFAT';

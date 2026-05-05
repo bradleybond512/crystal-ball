@@ -5445,6 +5445,44 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Tsunami status: PTWC Atom + 10 NDBC DART buoys ────────────────────────
+  // GET /api/tsunami-status
+  // Returns the raw PTWC Atom XML and per-buoy realtime2 .txt bodies.
+  // The renderer's `tsunami-reasoner.ts` parses both into structured
+  // bulletins + DART anomalies. 15-minute cache.
+  if (requestUrl.pathname === '/api/tsunami-status') {
+ const cacheKey = 'tsunami-status';
+ const cached = getCached(cacheKey);
+ if (cached) return json(cached);
+ const DART_BUOYS = ['46411','46412','46413','46407','51407','55023','55012','55015','32401','32412'];
+ const ptwcUrl = 'https://www.tsunami.gov/events/xml/PAAQAtom.xml';
+ try {
+ const ptwcRes = await fetchWithTimeout(ptwcUrl, { headers: { Accept: 'application/atom+xml,application/xml;q=0.9' } }, 15000);
+ const ptwcXml = ptwcRes.ok ? await ptwcRes.text() : '';
+ const dartResults = await Promise.all(
+ DART_BUOYS.map(async (id) => {
+ try {
+ const dr = await fetchWithTimeout(`https://www.ndbc.noaa.gov/data/realtime2/${id}.txt`, { headers: { Accept: 'text/plain' } }, 12000);
+ if (!dr.ok) return { buoyId: id, ok: false, body: null, status: dr.status };
+ const body = await dr.text();
+ return { buoyId: id, ok: true, body, status: dr.status };
+ } catch (error) {
+ return { buoyId: id, ok: false, body: null, error: String(error?.message ?? error) };
+ }
+ }),
+ );
+ const result = {
+ fetchedAt: Date.now(),
+ ptwc: { ok: ptwcRes.ok, status: ptwcRes.status, xml: ptwcXml },
+ dart: dartResults,
+ };
+ setCached(cacheKey, result, 15 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ error: `tsunami-status error: ${error.message ?? error}` }, 502);
+ }
+  }
+
   // ── Travel warning RSS/Atom parser helper ─────────────────────────────────
   function parseTravelWarnings(xml, source) {
  const isAtom = source !== 'DFAT';

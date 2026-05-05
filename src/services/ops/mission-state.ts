@@ -11,6 +11,7 @@
  */
 
 import { createMissionLedger, type MissionLedger } from './mission-ledger';
+import { resetMissionLedgerPersistence } from './mission-ledger-persistence';
 
 let ledger: MissionLedger | undefined;
 
@@ -21,4 +22,5 @@ export function getMissionLedger(): MissionLedger {
 
 export function resetMissionState(): void {
   ledger = undefined;
+  resetMissionLedgerPersistence();
 }

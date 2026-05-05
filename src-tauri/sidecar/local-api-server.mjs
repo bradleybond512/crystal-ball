@@ -5130,6 +5130,47 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── USGS FDSN catalog passthrough (pre-arrival detector poll) ─────────
+  // Forwards to USGS FDSN event service with the descope spec's exact
+  // shape: format=geojson, limit=50, minmagnitude defaults to 4,
+  // orderby=time. The renderer polls every 30 s and feeds the result
+  // through `findPreArrivalEvents` from src/services/seismic/waveform-
+  // detector.ts. Cached for 25 s so a faster-than-poll caller still
+  // sees stable batches.
+  if (requestUrl.pathname === '/api/fdsn-catalog') {
+    const minMagnitude = Number(requestUrl.searchParams.get('minMagnitude') ?? '4');
+    const limit = Number(requestUrl.searchParams.get('limit') ?? '50');
+    if (
+      !Number.isFinite(minMagnitude) || minMagnitude < 0 || minMagnitude > 10
+      || !Number.isFinite(limit) || limit <= 0 || limit > 200
+    ) {
+      return json({ error: 'invalid query (minMagnitude, limit)' }, 400);
+    }
+    const cacheKey = `fdsn-catalog:${minMagnitude}:${limit}`;
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      const params = new URLSearchParams({
+        format: 'geojson',
+        limit: String(limit),
+        minmagnitude: String(minMagnitude),
+        orderby: 'time',
+      });
+      const upstream = `https://earthquake.usgs.gov/fdsnws/event/1/query?${params.toString()}`;
+      const r = await fetchWithTimeout(
+        upstream,
+        { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/sidecar (fdsn-catalog)' } },
+        15000,
+      );
+      if (!r.ok) throw new Error(`USGS ${r.status}`);
+      const data = await r.json();
+      setCached(cacheKey, data, 25_000);
+      return json(data);
+    } catch (error) {
+      return json({ error: `fdsn-catalog error: ${error.message ?? error}` }, 502);
+    }
+  }
+
   // ── USGS focal mechanism (moment tensor) passthrough ───────────────────
   // Forwards to USGS FDSN event service for the requested event id and
   // returns the GeoJSON. Renderer parses with `parseUsgsMomentTensor` from

@@ -59,6 +59,7 @@
       "sidecar/sitrep-severity.mjs",
       "sidecar/sitrep-filter.mjs",
       "sidecar/s2u-xmpp.bundle.mjs",
+      "sidecar/s2u-tak-client.mjs",
       "sidecar/package.json",
       "sidecar/node",
       "../data",

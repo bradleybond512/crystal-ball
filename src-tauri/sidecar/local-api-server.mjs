@@ -12,6 +12,7 @@ import os from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { scoreAllDomains } from './sitrep-severity.mjs';
 import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
+import { getTakFeeds as s2uTakGetFeeds, getTakSituation as s2uTakGetSituation } from './s2u-tak-client.mjs';
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 function isValidToken(authHeader) {
@@ -356,6 +357,21 @@ if (process.env.S2U_XMPP_JID && process.env.S2U_XMPP_SECRET) {
   });
 }
 // ── end S2U XMPP Manager ─────────────────────────────────────────────────
+
+// ── S2U TAK Marti Client ─────────────────────────────────────────────────
+// Pure helpers + thin HTTPS-with-pinning client; uses Node built-in https
+// so no bundle is needed. Pins the published cert fingerprint by default;
+// bypass requires S2U_TLS_INSECURE_OPT_IN=true. (Module imported at top.)
+
+function s2uTakOpts() {
+  return {
+ url: process.env.S2U_TAK_URL || '',
+ username: process.env.S2U_TAK_USERNAME || '',
+ password: process.env.S2U_TAK_SECRET || '',
+ insecureOptIn: String(process.env.S2U_TLS_INSECURE_OPT_IN || '').toLowerCase() === 'true',
+  };
+}
+// ── end S2U TAK Marti Client ─────────────────────────────────────────────
 
 // Monkey-patch globalThis.fetch to force IPv4 for HTTPS requests.
 // Node.js built-in fetch (undici) tries IPv6 first via Happy Eyeballs.
@@ -6886,6 +6902,26 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/s2u-xmpp') {
  const snap = await s2uXmppSnapshot();
  return json(snap);
+  }
+
+  // ── S2U TAK feeds — Marti API /api/feeds (cached 60s, TLS-pinned) ─────────
+  if (requestUrl.pathname === '/api/s2u-tak-feeds') {
+ const opts = s2uTakOpts();
+ if (!opts.url || !opts.username || !opts.password) {
+ return json({ ok: false, configured: false, error: 'creds-missing', feeds: [] }, 503);
+ }
+ const result = await s2uTakGetFeeds(opts);
+ return json({ configured: true, ...result });
+  }
+
+  // ── S2U TAK situation — clientEndPoints + sync/search public packages ─────
+  if (requestUrl.pathname === '/api/s2u-situation') {
+ const opts = s2uTakOpts();
+ if (!opts.url || !opts.username || !opts.password) {
+ return json({ ok: false, configured: false, error: 'creds-missing' }, 503);
+ }
+ const result = await s2uTakGetSituation(opts);
+ return json({ configured: true, ...result });
   }
 
   // ── Local IDS — Suricata + Zeek alerts (desktop-only, reads local log files) ──

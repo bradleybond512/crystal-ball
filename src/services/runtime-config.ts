@@ -63,7 +63,10 @@ export type RuntimeSecretKey =
   | 'S2U_TAK_URL'
   | 'S2U_TAK_USERNAME'
   | 'S2U_TAK_SECRET'
-  | 'S2U_TLS_INSECURE_OPT_IN';
+  | 'S2U_TLS_INSECURE_OPT_IN'
+  | 'WEBHOOK_URL_1'
+  | 'WEBHOOK_URL_2'
+  | 'WEBHOOK_URL_3';
 
 export type RuntimeFeatureId =
   | 'cloudApiFallbackAuth'

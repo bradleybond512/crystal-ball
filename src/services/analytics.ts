@@ -115,6 +115,9 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   S2U_TAK_USERNAME: 's2u_tak_username',
   S2U_TAK_SECRET: 's2u_tak_secret',
   S2U_TLS_INSECURE_OPT_IN: 's2u_tls_insecure',
+  WEBHOOK_URL_1: 'webhook_url_1',
+  WEBHOOK_URL_2: 'webhook_url_2',
+  WEBHOOK_URL_3: 'webhook_url_3',
 };
 
 // ── Typed event schemas (allowlisted properties per event) ──

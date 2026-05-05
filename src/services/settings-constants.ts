@@ -181,6 +181,9 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   S2U_TAK_USERNAME: 'S2U TAK Username',
   S2U_TAK_SECRET: 'S2U TAK Password',
   S2U_TLS_INSECURE_OPT_IN: 'S2U TLS: Allow Insecure (opt-in)',
+  WEBHOOK_URL_1: 'Webhook URL #1',
+  WEBHOOK_URL_2: 'Webhook URL #2',
+  WEBHOOK_URL_3: 'Webhook URL #3',
 };
 
 /**
@@ -253,6 +256,9 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   S2U_TAK_USERNAME: 'S2U TAK Marti API username. The S2U SOP publishes a read-only public username (GHOSTMAPSPUBLIC) for community access; or use your own.',
   S2U_TAK_SECRET: 'S2U TAK Marti API password. The S2U SOP publishes the public password (S2UndergroundGh0stM@ps) for the read-only GHOSTMAPSPUBLIC account.',
   S2U_TLS_INSECURE_OPT_IN: 'Set to "true" to bypass TLS verification for the S2U TAK server. Off by default — Crystal Ball pins the published cert fingerprint instead. Only enable if pin verification fails.',
+  WEBHOOK_URL_1: 'Outbound webhook URL for TIER_2+ alert delivery. Format auto-detected from URL: discord.com → Discord embed, hooks.slack.com → Slack blocks, anything else → generic JSON POST.',
+  WEBHOOK_URL_2: 'Second webhook URL (optional). Same format auto-detection.',
+  WEBHOOK_URL_3: 'Third webhook URL (optional). Same format auto-detection.',
 };
 
 export interface KeyCategory {

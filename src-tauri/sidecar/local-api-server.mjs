@@ -14,6 +14,7 @@ import { scoreAllDomains } from './sitrep-severity.mjs';
 import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
 import { getTakFeeds as s2uTakGetFeeds, getTakSituation as s2uTakGetSituation } from './s2u-tak-client.mjs';
 import { aggregateWastewaterRows, detectSurgeWatches } from './wastewater-aggregate.mjs';
+import { parseProMedRss, summarizeProMedAlerts } from './promed-classify.mjs';
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 function isValidToken(authHeader) {
@@ -3871,6 +3872,53 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
  } catch (error) {
  return json({ error: `disease-intel fetch error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── ProMED-mail RSS (no API key, sidecar-side classification) ────────────
+  if (requestUrl.pathname === '/api/promed') {
+ const cached = getCached('promed', 15 * 60 * 1000);
+ if (cached) return json(cached);
+
+ const PROMED_RSS_URL = 'https://promedmail.org/feed/';
+ try {
+ const resp = await fetchWithTimeout(
+ PROMED_RSS_URL,
+ { headers: { Accept: 'application/rss+xml, application/xml, text/xml', 'User-Agent': CHROME_UA } },
+ 15_000,
+ );
+ if (!resp.ok) {
+ const degraded = {
+ alerts: [],
+ lastFetch: new Date().toISOString(),
+ novelCount: 0,
+ outbreakCount: 0,
+ degraded: true,
+ reason: `ProMED upstream returned HTTP ${resp.status}`,
+ };
+ return json(degraded);
+ }
+ const xml = await resp.text();
+ const alerts = parseProMedRss(xml);
+ const { novelCount, outbreakCount } = summarizeProMedAlerts(alerts);
+ const result = {
+ alerts,
+ lastFetch: new Date().toISOString(),
+ novelCount,
+ outbreakCount,
+ };
+ setCached('promed', result);
+ return json(result);
+ } catch (error) {
+ const degraded = {
+ alerts: [],
+ lastFetch: new Date().toISOString(),
+ novelCount: 0,
+ outbreakCount: 0,
+ degraded: true,
+ reason: `promed fetch error: ${error.message ?? error}`,
+ };
+ return json(degraded);
  }
   }
 

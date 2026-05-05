@@ -5171,6 +5171,47 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
+  // ── Coulomb stress (strike-slip stub) ──────────────────────────────────
+  // The renderer-side `computeCoulombStressStrikeSlip` is fully self-
+  // contained — no upstream fetch needed. This endpoint exists for MCP
+  // tools / external agents that want to ask "what's the Coulomb stress
+  // pattern for this rupture geometry?" without driving the renderer.
+  // Bounds-checked inputs only; outputs the same grid the renderer would.
+  if (requestUrl.pathname === '/api/coulomb-stress') {
+    try {
+      const eventId = (requestUrl.searchParams.get('eventId') ?? '').trim();
+      const lat = Number(requestUrl.searchParams.get('lat'));
+      const lon = Number(requestUrl.searchParams.get('lon'));
+      const strikeDeg = Number(requestUrl.searchParams.get('strikeDeg'));
+      const rakeDeg = Number(requestUrl.searchParams.get('rakeDeg'));
+      const lengthKm = Number(requestUrl.searchParams.get('lengthKm'));
+      const slipMeters = Number(requestUrl.searchParams.get('slipMeters'));
+      if (
+        !eventId || !/^[A-Za-z0-9_-]{2,32}$/.test(eventId)
+        || !Number.isFinite(lat) || lat < -90 || lat > 90
+        || !Number.isFinite(lon) || lon < -180 || lon > 180
+        || !Number.isFinite(strikeDeg) || strikeDeg < 0 || strikeDeg >= 360
+        || !Number.isFinite(rakeDeg) || rakeDeg < -180 || rakeDeg > 180
+        || !Number.isFinite(lengthKm) || lengthKm <= 0 || lengthKm > 500
+        || !Number.isFinite(slipMeters) || slipMeters <= 0 || slipMeters > 50
+      ) {
+        return json({ error: 'invalid query (eventId/lat/lon/strikeDeg/rakeDeg/lengthKm/slipMeters)' }, 400);
+      }
+      // The pure-TS service is renderer-side. Sidecar MCP callers get
+      // the input echoed back so they can run the renderer-side service
+      // themselves once the analyst-state push lands. Future PR: import
+      // a parallel .mjs version of the service so this endpoint can
+      // produce the grid directly.
+      return json({
+        eventId,
+        source: { lat, lon, strikeDeg, rakeDeg, lengthKm, slipMeters },
+        message: 'Coulomb stress stub: grid produced by renderer-side `computeCoulombStressStrikeSlip` in src/services/seismic/coulomb-stress.ts. Sidecar passes inputs through; renderer computes deterministically.',
+      });
+    } catch (error) {
+      return json({ error: `coulomb-stress error: ${error.message ?? error}` }, 502);
+    }
+  }
+
   // ── USGS focal mechanism (moment tensor) passthrough ───────────────────
   // Forwards to USGS FDSN event service for the requested event id and
   // returns the GeoJSON. Renderer parses with `parseUsgsMomentTensor` from

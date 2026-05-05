@@ -182,6 +182,13 @@ const SOURCE_PRIORITY: Record<SeismicSource, number> = {
   shakealert: 6,
   pager: 5,
   usgs: 4,
+  // Regional authoritative networks rank with USGS for events in their
+  // jurisdictions — they review faster than the global feed in those
+  // regions. Ordered alphabetically among themselves to keep ties stable.
+  geonet: 4,
+  geofon: 4,
+  ingv: 4,
+  jma: 4,
   gdacs: 3,
   emsc: 2,
   tsunami: 1,
@@ -231,6 +238,16 @@ function defaultConfidenceFor(
       case 'pager': { return 0.85;
       }
       case 'usgs': { return 0.7;
+      }
+      // Regional authoritative networks: similar baseline to USGS for
+      // their own jurisdictions where they review fastest.
+      case 'geonet': { return 0.7;
+      }
+      case 'geofon': { return 0.7;
+      }
+      case 'ingv': { return 0.7;
+      }
+      case 'jma': { return 0.7;
       }
       case 'gdacs': { return 0.65;
       }

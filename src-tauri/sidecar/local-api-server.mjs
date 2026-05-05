@@ -1244,6 +1244,46 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   }
 }
 
+/**
+ * Sanitize a single GlobeSeismicOverlay payload from a renderer push.
+ * Returns null if any required field is missing or wrong-typed so the
+ * caller can filter it out. Bounds are mirrored from the Layer 4
+ * emitter's invariants (P/S radius capped at antipode, opacity in [0,1]).
+ */
+export function sanitizeSeismicGlobeOverlay(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.eventId !== 'string' || raw.eventId.length === 0) return null;
+  if (typeof raw.lat !== 'number' || !Number.isFinite(raw.lat) || raw.lat < -90 || raw.lat > 90) return null;
+  if (typeof raw.lon !== 'number' || !Number.isFinite(raw.lon) || raw.lon < -180 || raw.lon > 180) return null;
+  const magnitude = raw.magnitude === null ? null
+    : (typeof raw.magnitude === 'number' && Number.isFinite(raw.magnitude) ? raw.magnitude : null);
+  const pWaveRadiusKm = clampNumber(raw.pWaveRadiusKm, 0, 20100);
+  const sWaveRadiusKm = clampNumber(raw.sWaveRadiusKm, 0, 20100);
+  const pWaveOpacity = clampNumber(raw.pWaveOpacity, 0, 1);
+  const sWaveOpacity = clampNumber(raw.sWaveOpacity, 0, 1);
+  if (pWaveRadiusKm === null || sWaveRadiusKm === null || pWaveOpacity === null || sWaveOpacity === null) return null;
+  const ageSec = typeof raw.ageSec === 'number' && Number.isFinite(raw.ageSec) ? raw.ageSec : 0;
+  return {
+    eventId: raw.eventId,
+    lat: raw.lat,
+    lon: raw.lon,
+    magnitude,
+    pWaveRadiusKm,
+    sWaveRadiusKm,
+    pWaveOpacity,
+    sWaveOpacity,
+    ageSec,
+    expired: raw.expired === true,
+  };
+}
+
+function clampNumber(value, min, max) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
 // CACHE PATTERN: copy this for future cached routes
 const _sidecarCache = new Map(); // key -> { data, ts }
 const SIDECAR_CACHE_MAX = 500;
@@ -2368,6 +2408,49 @@ async function dispatch(requestUrl, req, routes, context) {
         ageMs,
         stale: ageMs > 10 * 60 * 1000,
         ...state,
+      });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Seismic globe overlays (renderer → sidecar mirror; Layer 5/13) ──
+  // Renderer runs the globe-overlay-emitter (Layer 4) and POSTs the
+  // resulting `GlobeSeismicOverlay[]` here every 5s. The God's Eye Cesium
+  // panel (Layer 6) reads from GET. Read-only mirror — same shape as
+  // /api/analyst-state. No bearer auth: route is loopback-only and the
+  // payload is non-sensitive (positions/magnitudes already public).
+  if (requestUrl.pathname === '/api/seismic-globe-overlays') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!Array.isArray(body.overlays)) return json({ error: 'overlays must be an array' }, 400);
+        // Cap at 200 to defend against runaway pushers — Layer 4's
+        // default cap is 50, so 200 leaves headroom for tunable
+        // configurations without enabling unbounded memory growth.
+        const overlays = body.overlays.slice(0, 200).map(sanitizeSeismicGlobeOverlay).filter(Boolean);
+        context._seismicGlobeOverlays = {
+          overlays,
+          asOf: typeof body.asOf === 'number' ? body.asOf : Date.now(),
+        };
+        return json({ ok: true, count: overlays.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const snapshot = context._seismicGlobeOverlays || null;
+      if (!snapshot) {
+        return json({ overlays: [], asOf: 0, available: false });
+      }
+      const ageMs = Date.now() - snapshot.asOf;
+      return json({
+        overlays: snapshot.overlays,
+        asOf: snapshot.asOf,
+        ageMs,
+        stale: ageMs > 60 * 1000,
+        available: true,
       });
     }
     return json({ error: 'Method not allowed' }, 405);

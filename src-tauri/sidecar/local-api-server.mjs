@@ -4,7 +4,7 @@ import { timingSafeEqual } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
 import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { brotliCompress, gzip } from 'node:zlib';
 import path from 'node:path';
@@ -2172,7 +2172,11 @@ async function dispatch(requestUrl, req, routes, context) {
     if (!context._analystCommands) context._analystCommands = [];
     if (req.method === 'POST') {
       try {
-        const body = await req.json();
+        // Node http.IncomingMessage doesn't have .json() — use readBody().
+        // Previous req.json() always threw "req.json is not a function",
+        // 400'ing every analyst-commands POST.
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
         if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
         const kind = typeof body.kind === 'string' ? body.kind : '';
         const allowed = new Set(['thumbs_up', 'thumbs_down', 'dismiss', 'run_skeptic']);
@@ -2212,7 +2216,12 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/analyst-state') {
     if (req.method === 'POST') {
       try {
-        const body = await req.json();
+        // Node http.IncomingMessage doesn't have .json() — use readBody().
+        // Previous req.json() always threw "req.json is not a function",
+        // 400'ing every renderer push and leaving /api/analyst-state with
+        // available:false forever (visible in MCP, AnalystHUD, etc.).
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
         if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
         if (!context._analystState) context._analystState = {};
         // Cap payload size defensively (drop unknown deeply-nested fields).
@@ -2530,7 +2539,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── API Key Auto-Registration routes ─────────────────────────────────────
   if (requestUrl.pathname === '/api/register/newsapi') {
  try {
- const body = await req.json().catch(() => ({}));
+ const body = await readBody(req).then(b => b ? JSON.parse(b.toString()) : {}).catch(() => ({}));
  const { email, password } = body;
  if (!email || !password) return json({ error: 'email and password required' }, 400);
  const resp = await fetchWithTimeout(
@@ -2551,7 +2560,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
   if (requestUrl.pathname === '/api/register/newsdata') {
  try {
- const body = await req.json().catch(() => ({}));
+ const body = await readBody(req).then(b => b ? JSON.parse(b.toString()) : {}).catch(() => ({}));
  const { email, password, firstName, lastName } = body;
  if (!email || !password) return json({ error: 'email and password required' }, 400);
  const resp = await fetchWithTimeout(
@@ -2572,7 +2581,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
   if (requestUrl.pathname === '/api/register/nasa-firms') {
  try {
- const body = await req.json().catch(() => ({}));
+ const body = await readBody(req).then(b => b ? JSON.parse(b.toString()) : {}).catch(() => ({}));
  const { email, firstName, lastName, organization } = body;
  if (!email) return json({ error: 'email required' }, 400);
  const params = new URLSearchParams({
@@ -2601,7 +2610,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── ACLED OAuth connect (exchange username+password for access token) ─────
   if (requestUrl.pathname === '/api/acled/connect') {
  try {
- const body = await req.json().catch(() => ({}));
+ const body = await readBody(req).then(b => b ? JSON.parse(b.toString()) : {}).catch(() => ({}));
  const { email, password } = body;
  if (!email || !password) return json({ error: 'email and password required' }, 400);
  const resp = await fetchWithTimeout(
@@ -2625,7 +2634,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── ACLED OAuth token refresh ─────────────────────────────────────────────
   if (requestUrl.pathname === '/api/acled/refresh') {
  try {
- const body = await req.json().catch(() => ({}));
+ const body = await readBody(req).then(b => b ? JSON.parse(b.toString()) : {}).catch(() => ({}));
  const { refreshToken } = body;
  if (!refreshToken) return json({ error: 'refreshToken required' }, 400);
  const resp = await fetchWithTimeout(
@@ -5552,6 +5561,62 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // RSS proxy — fetch public feeds with SSRF protection
+  if (requestUrl.pathname === '/api/littlesnitch-rules') {
+ // Read the bundled Little Snitch ruleset and return it as parsed JSON.
+ // The renderer's NetworkRulesPanel renders this as a table so the user
+ // can see what outbound traffic Crystal Ball needs without opening
+ // Little Snitch itself. Cached 1h since the file is checked in and
+ // changes only on releases.
+ const cached = getCached('littlesnitch-rules', 60 * 60 * 1000);
+ if (cached) return json(cached);
+
+ // Search a few well-known paths so the handler works in dev and bundled.
+ // resourceRoot is Contents/Resources/_up_ in the bundled app; in dev it
+ // points at the repo root.
+ const candidates = [
+ path.join(context.apiDir, '..', 'tools', 'littlesnitch', 'crystal-ball.lsrules'),
+ path.join(context.apiDir, '..', '..', '..', 'tools', 'littlesnitch', 'crystal-ball.lsrules'),
+ path.join(process.cwd(), 'tools', 'littlesnitch', 'crystal-ball.lsrules'),
+ ];
+
+ let lastError = null;
+ for (const candidate of candidates) {
+ try {
+ const raw = await readFile(candidate, 'utf8');
+ const parsed = JSON.parse(raw);
+ const rules = Array.isArray(parsed?.rules) ? parsed.rules : [];
+ // Group by domain category so the renderer can render section headers
+ // without re-scanning. Categories pulled from each rule's "notes" field.
+ const result = {
+ name: parsed?.name ?? 'Crystal Ball',
+ description: parsed?.description ?? '',
+ ruleCount: rules.length,
+ rules: rules.map((r, i) => ({
+ id: `ls-${i}`,
+ action: r?.action ?? 'allow',
+ process: r?.process ?? 'any',
+ host: r?.['remote-hosts'] ?? r?.['remote-addresses'] ?? '',
+ ports: r?.ports ?? '',
+ protocol: r?.protocol ?? 'tcp',
+ notes: r?.notes ?? '',
+ })),
+ sourcePath: candidate,
+ generatedAt: new Date().toISOString(),
+ };
+ setCached('littlesnitch-rules', result);
+ return json(result);
+ } catch (error) {
+ lastError = error;
+ // try next candidate
+ }
+ }
+ return json({
+ error: 'Little Snitch ruleset not found',
+ details: String(lastError?.message ?? lastError ?? 'unknown'),
+ candidatesTried: candidates,
+ }, 404);
+  }
+
   if (requestUrl.pathname === '/api/feed-discovery') {
  // Discover RSS/Atom feed URLs for a given domain. Tries the homepage
  // (parses <link rel="alternate" type="application/{rss,atom}+xml">)

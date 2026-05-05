@@ -60,57 +60,71 @@ export function createSidecarClient(dataDir = DEFAULT_DATA_DIR) {
     }
   }
 
-  async function get(route, params) {
-    const url = buildUrl(route, params);
-    const token = discoverToken();
-    if (!url || !token) {
-      return { error: 'Crystal Ball is not running. Launch the app to enable data access.', healthy: false };
-    }
+  // Single-attempt fetch helper — used by get/post with a once-on-401 retry
+  // so a sidecar restart that rotated the token doesn't 401 the in-flight call.
+  async function fetchOnce(url, init) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-      });
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
       clearTimeout(timer);
+    }
+  }
+
+  async function get(route, params) {
+    const url = buildUrl(route, params);
+    let token = discoverToken();
+    if (!url || !token) {
+      return { error: 'Crystal Ball is not running. Launch the app to enable data access.', healthy: false };
+    }
+    try {
+      let res = await fetchOnce(url, { headers: { Authorization: `Bearer ${token}` } });
+      // Sidecar restarts rotate the token; re-read the file once and retry.
+      if (res.status === 401) {
+        const fresh = discoverToken();
+        if (fresh && fresh !== token) {
+          token = fresh;
+          res = await fetchOnce(url, { headers: { Authorization: `Bearer ${token}` } });
+        }
+      }
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         return { error: `Sidecar returned ${res.status}: ${text}`, status: res.status };
       }
       return await res.json();
     } catch (err) {
-      clearTimeout(timer);
       return { error: `Request failed: ${err.message}` };
     }
   }
 
   async function post(route, body) {
     const port = discoverPort();
-    const token = discoverToken();
+    let token = discoverToken();
     if (!port || !token) {
       return { error: 'Crystal Ball is not running. Launch the app to enable data access.', healthy: false };
     }
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const url = `http://127.0.0.1:${port}${route}`;
+    const buildInit = (tok) => ({
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
     try {
-      const res = await fetch(`http://127.0.0.1:${port}${route}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
+      let res = await fetchOnce(url, buildInit(token));
+      if (res.status === 401) {
+        const fresh = discoverToken();
+        if (fresh && fresh !== token) {
+          token = fresh;
+          res = await fetchOnce(url, buildInit(token));
+        }
+      }
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         return { error: `Sidecar returned ${res.status}: ${text}`, status: res.status };
       }
       return await res.json();
     } catch (err) {
-      clearTimeout(timer);
       return { error: `Request failed: ${err.message}` };
     }
   }

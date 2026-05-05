@@ -76,6 +76,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   climate: { name: 'Climate Anomalies', enabled: true, priority: 2 },
   'population-exposure': { name: 'Population Exposure', enabled: true, priority: 2 },
   'security-advisories': { name: 'Security Advisories', enabled: true, priority: 2 },
+  'network-rules': { name: 'Network Rules', enabled: true, priority: 3 },
   'oref-sirens': { name: 'Israel Sirens', enabled: true, priority: 2 },
   'telegram-intel': { name: 'Telegram Intel', enabled: true, priority: 2 },
   'space-weather': { name: 'Space Weather', enabled: true, priority: 1 },
@@ -976,7 +977,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   dataTracking: {
  labelKey: 'header.panelCatDataTracking',
- panelKeys: ['monitors', 'cyber-threats', 'threat-inbox', 'local-ids', 'comms-health', 'power-grid', 'ucdp-events', 'nuclear-risk', 'airstrikes', 'displacement', 'security-advisories', 'oref-sirens', 'space-weather', 'spaceflight-news', 'space-launches', 'population-exposure', 'internet-disruptions', 'air-traffic', 'threat-intel-hub', 'geo-intel', 'dark-web', 'anomaly-detection', 'financial-contagion', 'supply-chain-impact', 'nuclear-monitor', 'sigint-panel', 'dark-vessel', 'ics-ot-dashboard', 'ioc-manager', 'network-topology', 'stix-taxii', 'custom-geofence', 'sanctions-crossref', 'emergency-broadcast', 'satellite-change', 'phishstats-feed', 'urlscan-threats', 'bitcoin-abuse', 'cve-tracker', 'vulners-cve', 'pulsedive-intel', 'hibp-breaches', 'reddit-osint', 'ripe-ncc', 'ripe-atlas', 'ipinfo-lookup', 'aerospace-reentry', 'satellite-intel'],
+ panelKeys: ['monitors', 'cyber-threats', 'threat-inbox', 'local-ids', 'comms-health', 'power-grid', 'ucdp-events', 'nuclear-risk', 'airstrikes', 'displacement', 'security-advisories', 'network-rules', 'oref-sirens', 'space-weather', 'spaceflight-news', 'space-launches', 'population-exposure', 'internet-disruptions', 'air-traffic', 'threat-intel-hub', 'geo-intel', 'dark-web', 'anomaly-detection', 'financial-contagion', 'supply-chain-impact', 'nuclear-monitor', 'sigint-panel', 'dark-vessel', 'ics-ot-dashboard', 'ioc-manager', 'network-topology', 'stix-taxii', 'custom-geofence', 'sanctions-crossref', 'emergency-broadcast', 'satellite-change', 'phishstats-feed', 'urlscan-threats', 'bitcoin-abuse', 'cve-tracker', 'vulners-cve', 'pulsedive-intel', 'hibp-breaches', 'reddit-osint', 'ripe-ncc', 'ripe-atlas', 'ipinfo-lookup', 'aerospace-reentry', 'satellite-intel'],
  variants: ['full'],
   },
   hazards: {

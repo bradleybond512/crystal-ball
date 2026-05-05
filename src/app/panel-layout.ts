@@ -39,6 +39,7 @@ import {
   TradePolicyPanel,
   SupplyChainPanel,
   SecurityAdvisoriesPanel,
+  NetworkRulesPanel,
   OrefSirensPanel,
   TelegramIntelPanel,
   WatchlistPanel,
@@ -1238,6 +1239,13 @@ export class PanelLayoutManager implements AppModule {
  void this.callbacks.loadSecurityAdvisories?.();
  });
  this.ctx.panels['security-advisories'] = securityAdvisoriesPanel;
+
+ // NetworkRulesPanel — surfaces tools/littlesnitch/crystal-ball.lsrules
+ // (the bundled Little Snitch ruleset) inside the app so the user can
+ // see exactly which outbound endpoints Crystal Ball needs without
+ // opening Little Snitch. Reads from /api/littlesnitch-rules.
+ const networkRulesPanel = new NetworkRulesPanel();
+ this.ctx.panels['network-rules'] = networkRulesPanel;
 
  const orefSirensPanel = new OrefSirensPanel();
  this.ctx.panels['oref-sirens'] = orefSirensPanel;

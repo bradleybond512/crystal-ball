@@ -30,6 +30,9 @@ src-tauri/sidecar/node/*
 
 # Compiled sebuf gateway bundle (built by scripts/build-sidecar-sebuf.mjs)
 api/[[][[].*.js
+
+# Compiled S2U XMPP sidecar bundle (built by scripts/build-sidecar-xmpp.mjs)
+src-tauri/sidecar/s2u-xmpp.bundle.mjs
 .claudedocs/
 
 # Vault animation frames/videos (replaced by Three.js 3D renderer)

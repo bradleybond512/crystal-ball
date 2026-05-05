@@ -311,6 +311,52 @@ if (process.env.AISSTREAM_API_KEY) {
 }
 // ── end AIS Stream Manager ────────────────────────────────────────────────
 
+// ── S2U XMPP Manager ─────────────────────────────────────────────────────
+// Loads the bundled @xmpp/client wrapper lazily so the sidecar still boots
+// when the bundle hasn't been built (tests, fresh checkout). Never auto-
+// registers an account — refuses to operate without user-supplied creds.
+let s2uXmppModule = null;
+let s2uXmppLoadError = null;
+async function loadS2UXmppModule() {
+  if (s2uXmppModule || s2uXmppLoadError) return s2uXmppModule;
+  try {
+ s2uXmppModule = await import('./s2u-xmpp.bundle.mjs');
+  } catch (error) {
+ s2uXmppLoadError = error?.message ?? String(error);
+ console.warn(`[s2u-xmpp] bundle not loaded: ${s2uXmppLoadError} — run "npm run build:sidecar-xmpp" to enable.`);
+  }
+  return s2uXmppModule;
+}
+async function s2uXmppApplyCreds() {
+  const mod = await loadS2UXmppModule();
+  if (!mod) return;
+  const jid = process.env.S2U_XMPP_JID || '';
+  const password = process.env.S2U_XMPP_SECRET || '';
+  mod.start({ jid, password, log: console });
+}
+async function s2uXmppSnapshot() {
+  const mod = await loadS2UXmppModule();
+  if (!mod) {
+ return {
+ configured: false, connected: false, joinedRooms: [],
+ lastMessage: null, lastConnectedAt: null,
+ lastError: s2uXmppLoadError ?? 'bundle not loaded',
+ nowMs: Date.now(), channels: {},
+ };
+  }
+  return mod.snapshot(Date.now());
+}
+// Auto-start when creds are present at boot. Fire-and-forget on purpose:
+// awaiting here would block the sidecar's HTTP server from coming up
+// while @xmpp/client negotiates SASL.
+if (process.env.S2U_XMPP_JID && process.env.S2U_XMPP_SECRET) {
+  // eslint-disable-next-line unicorn/prefer-top-level-await -- intentional fire-and-forget; do not block sidecar boot on XMPP handshake
+  s2uXmppApplyCreds().catch((error) => {
+ console.warn(`[s2u-xmpp] startup failed: ${error?.message ?? error}`);
+  });
+}
+// ── end S2U XMPP Manager ─────────────────────────────────────────────────
+
 // Monkey-patch globalThis.fetch to force IPv4 for HTTPS requests.
 // Node.js built-in fetch (undici) tries IPv6 first via Happy Eyeballs.
 // Government APIs (EIA, NASA FIRMS, FRED) publish AAAA records but their
@@ -5779,6 +5825,11 @@ async function dispatch(requestUrl, req, routes, context) {
  context.logger.log(`[local-api] env set: ${key}`);
  }
  if (key === 'AISSTREAM_API_KEY') aisOnKeyChanged(value || null);
+ if (key === 'S2U_XMPP_JID' || key === 'S2U_XMPP_SECRET') {
+ s2uXmppApplyCreds().catch((error) => {
+ context.logger.log(`[s2u-xmpp] reapply creds failed: ${error?.message ?? error}`);
+ });
+ }
  moduleCache.clear();
  failedImports.clear();
  cloudPreferred.clear();
@@ -6728,6 +6779,12 @@ async function dispatch(requestUrl, req, routes, context) {
  status: 200,
  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
  });
+  }
+
+  // ── S2U XMPP — wire/event/emergency/main/offtopic MUC rooms ────────────────
+  if (requestUrl.pathname === '/api/s2u-xmpp') {
+ const snap = await s2uXmppSnapshot();
+ return json(snap);
   }
 
   // ── Local IDS — Suricata + Zeek alerts (desktop-only, reads local log files) ──

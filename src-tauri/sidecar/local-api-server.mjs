@@ -1390,6 +1390,44 @@ function clampNumber(value, min, max) {
   return value;
 }
 
+const VALID_EEW_TIERS = new Set([
+  'TIER_1_INFO', 'TIER_2_WATCH', 'TIER_3_WARNING', 'TIER_4_SEVERE', 'TIER_5_EXTREME',
+]);
+
+export function isValidEewTier(value) {
+  return typeof value === 'string' && VALID_EEW_TIERS.has(value);
+}
+
+const VALID_IMESSAGE_STATUSES = new Set(['pending', 'sent', 'failed', 'disabled']);
+
+/**
+ * Sanitize a single EewAlert from a renderer push. Returns null when
+ * required fields are missing or wrong-typed so the caller can drop
+ * malformed entries without losing valid ones.
+ */
+export function sanitizeEewAlert(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.eventId !== 'string' || raw.eventId.length === 0) return null;
+  if (!isValidEewTier(raw.tier)) return null;
+  if (typeof raw.reason !== 'string') return null;
+  if (typeof raw.triggeredAt !== 'number' || !Number.isFinite(raw.triggeredAt)) return null;
+
+  const out = {
+    eventId: raw.eventId,
+    tier: raw.tier,
+    reason: raw.reason.slice(0, 500),
+    triggeredAt: raw.triggeredAt,
+  };
+  if (isValidEewTier(raw.upgradedFrom)) out.upgradedFrom = raw.upgradedFrom;
+  if (typeof raw.imessageStatus === 'string' && VALID_IMESSAGE_STATUSES.has(raw.imessageStatus)) {
+    out.imessageStatus = raw.imessageStatus;
+  }
+  if (typeof raw.imessageError === 'string') {
+    out.imessageError = raw.imessageError.slice(0, 500);
+  }
+  return out;
+}
+
 // CACHE PATTERN: copy this for future cached routes
 const _sidecarCache = new Map(); // key -> { data, ts }
 const SIDECAR_CACHE_MAX = 500;
@@ -2678,6 +2716,52 @@ async function dispatch(requestUrl, req, routes, context) {
       const ageMs = Date.now() - snapshot.asOf;
       return json({
         overlays: snapshot.overlays,
+        asOf: snapshot.asOf,
+        ageMs,
+        stale: ageMs > 60 * 1000,
+        available: true,
+      });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── EEW alert status (renderer → sidecar mirror; Layer 8/13) ──
+  // Renderer runs the eew-alert-engine (Layer 7) on a 30s tick and
+  // POSTs the resulting `{ activeAlerts, highestTier, asOf }` here.
+  // The EEWStatusBar (Layer 9) and any external tools read via GET.
+  if (requestUrl.pathname === '/api/eew-status') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!Array.isArray(body.activeAlerts)) {
+          return json({ error: 'activeAlerts must be an array' }, 400);
+        }
+        const activeAlerts = body.activeAlerts.slice(0, 200).map(sanitizeEewAlert).filter(Boolean);
+        context._eewStatus = {
+          activeAlerts,
+          highestTier: isValidEewTier(body.highestTier) ? body.highestTier : null,
+          lastEventId: typeof body.lastEventId === 'string' ? body.lastEventId : null,
+          asOf: typeof body.asOf === 'number' ? body.asOf : Date.now(),
+        };
+        return json({ ok: true, count: activeAlerts.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const snapshot = context._eewStatus || null;
+      if (!snapshot) {
+        return json({
+          activeAlerts: [], highestTier: null, lastEventId: null, asOf: 0, available: false,
+        });
+      }
+      const ageMs = Date.now() - snapshot.asOf;
+      return json({
+        activeAlerts: snapshot.activeAlerts,
+        highestTier: snapshot.highestTier,
+        lastEventId: snapshot.lastEventId,
         asOf: snapshot.asOf,
         ageMs,
         stale: ageMs > 60 * 1000,

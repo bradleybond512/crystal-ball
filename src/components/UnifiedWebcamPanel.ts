@@ -11,7 +11,10 @@ import {
   projectEquirectangular,
   type OfflineStatus,
 } from '@/services/webcams/panel-extras';
+import { runSmokeDetection, type SmokeAnalysis } from '@/services/webcams/smoke-detector';
 import type { WebcamCategory, WebcamFeed, WebcamSource } from '@/services/webcams/webcam-types';
+
+const SMOKE_DETECT_INTERVAL_MS = 10 * 60 * 1000;
 
 type ViewMode = 'grid' | 'list' | 'map';
 
@@ -49,6 +52,9 @@ export class UnifiedWebcamPanel extends Panel {
   private lastError: string | null = null;
   private offlineStatus = new Map<string, { status: OfflineStatus; checkedAt: number }>();
   private offlineProbeTimer: ReturnType<typeof setInterval> | null = null;
+  private smokeDetectTimer: ReturnType<typeof setInterval> | null = null;
+  private smokeStatus = new Map<string, { analysis: SmokeAnalysis; ranAt: number }>();
+  private smokeDetectEnabled = true;
   private toastEl: HTMLElement | null = null;
 
   constructor() {
@@ -58,12 +64,19 @@ export class UnifiedWebcamPanel extends Panel {
     this.offlineProbeTimer = setInterval(() => {
       void this.probeVisibleFeeds();
     }, OFFLINE_REPROBE_INTERVAL_MS);
+    this.smokeDetectTimer = setInterval(() => {
+      void this.runSmokeDetectForFireCams();
+    }, SMOKE_DETECT_INTERVAL_MS);
   }
 
   public destroy(): void {
     if (this.offlineProbeTimer != null) {
       clearInterval(this.offlineProbeTimer);
       this.offlineProbeTimer = null;
+    }
+    if (this.smokeDetectTimer != null) {
+      clearInterval(this.smokeDetectTimer);
+      this.smokeDetectTimer = null;
     }
     window.removeEventListener('webcam:select', this.handleGlobeSelect as EventListener);
     super.destroy();
@@ -219,6 +232,26 @@ export class UnifiedWebcamPanel extends Panel {
     count.style.fontSize = '12px';
     count.textContent = `${this.displayed.length} of ${this.feeds.length} cams`;
     bar.append(count);
+
+    const smokeToggle = document.createElement('label');
+    smokeToggle.style.fontSize = '11px';
+    smokeToggle.style.opacity = '0.8';
+    smokeToggle.style.cursor = 'pointer';
+    smokeToggle.style.display = 'inline-flex';
+    smokeToggle.style.alignItems = 'center';
+    smokeToggle.style.gap = '4px';
+    const smokeCheckbox = document.createElement('input');
+    smokeCheckbox.type = 'checkbox';
+    smokeCheckbox.checked = this.smokeDetectEnabled;
+    smokeCheckbox.addEventListener('change', () => {
+      this.smokeDetectEnabled = smokeCheckbox.checked;
+      if (this.smokeDetectEnabled) void this.runSmokeDetectForFireCams();
+      else this.smokeStatus.clear();
+      this.render();
+    });
+    smokeToggle.append(smokeCheckbox);
+    smokeToggle.append(document.createTextNode('Smoke Detection'));
+    bar.append(smokeToggle);
 
     return bar;
   }
@@ -414,6 +447,29 @@ export class UnifiedWebcamPanel extends Panel {
       overlay.style.fontSize = '13px';
       overlay.style.pointerEvents = 'none';
       card.append(overlay);
+    }
+
+    const smoke = this.smokeStatus.get(f.id);
+    if (smoke?.analysis.isAlert) {
+      const badge = document.createElement('div');
+      badge.textContent = '🔥 Motion Detected';
+      badge.title = `Smoke prob ${(smoke.analysis.smokeProbability * 100).toFixed(0)}%`;
+      badge.style.position = 'absolute';
+      badge.style.top = '4px';
+      badge.style.left = '4px';
+      badge.style.background = 'rgba(248, 81, 73, 0.92)';
+      badge.style.color = '#fff';
+      badge.style.padding = '2px 6px';
+      badge.style.borderRadius = '3px';
+      badge.style.fontSize = '10px';
+      badge.style.fontWeight = '600';
+      badge.style.cursor = 'pointer';
+      badge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.selectedFeed = f;
+        this.render();
+      });
+      card.append(badge);
     }
 
     card.append(img);
@@ -754,6 +810,31 @@ export class UnifiedWebcamPanel extends Panel {
     wrap.append(legend);
 
     return wrap;
+  }
+
+  // ── Smoke / motion detection (AlertWildfire) ────────────────────────
+
+  private async runSmokeDetectForFireCams(): Promise<void> {
+    if (!this.smokeDetectEnabled) return;
+    const fireCams = this.displayed
+      .filter((f) => f.source === 'ALERTWILDFIRE')
+      .slice(0, 24); // viewport budget — heavy work, keep small
+    if (fireCams.length === 0) return;
+    let updated = false;
+    for (const cam of fireCams) {
+      const existing = this.smokeStatus.get(cam.id);
+      if (existing && Date.now() - existing.ranAt < SMOKE_DETECT_INTERVAL_MS / 2) continue;
+      try {
+        const result = await runSmokeDetection(cam.id, cam.snapshotUrl);
+        if (result.analysis) {
+          this.smokeStatus.set(cam.id, { analysis: result.analysis, ranAt: result.ranAt });
+          updated = true;
+        }
+      } catch {
+        // canvas / CORS errors are expected for cross-origin streams; ignore.
+      }
+    }
+    if (updated) this.render();
   }
 
   // ── Offline probing ──────────────────────────────────────────────────

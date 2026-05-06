@@ -8700,6 +8700,9 @@ async function dispatch(requestUrl, req, routes, context) {
  const feeds = [
  { state: 'CA', url: 'https://cwwp2.dot.ca.gov/data/d7/cctv/cctvStatusD07.json', parser: 'caltrans' },
  { state: 'NY', url: 'https://511ny.org/api/getTransportationConditions?key=public&format=json&eventCategory=cameras', parser: 'ny511' },
+ { state: 'WA', url: 'https://www.wsdot.wa.gov/traffic/api/HighwayCameras/HighwayCameraREST.svc/GetCamerasAsJson?AccessCode=', parser: 'wsdot' },
+ { state: 'CO', url: 'https://data.cotrip.org/api/v1/cameras?apiKey=', parser: 'cotrip' },
+ { state: 'FL', url: 'https://fl511.com/map/Cctv', parser: 'fl511' },
  ];
  const targetFeeds = state === 'all' ? feeds : feeds.filter(f => f.state === state.toUpperCase());
  const results = await Promise.allSettled(targetFeeds.map(async (feed) => {
@@ -8745,6 +8748,61 @@ async function dispatch(requestUrl, req, routes, context) {
  });
  idx++;
  }
+ } else if (feed.parser === 'wsdot') {
+ const items = Array.isArray(data) ? data : [];
+ for (const c of items) {
+ if (c?.IsActive === false) continue;
+ const lat = c?.CameraLocation?.Latitude ?? c?.DisplayLatitude;
+ const lon = c?.CameraLocation?.Longitude ?? c?.DisplayLongitude;
+ if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat === 0 || lon === 0) continue;
+ if (typeof c?.ImageURL !== 'string' || c.ImageURL.length === 0) continue;
+ cams.push({
+ id: `dot-wa-${c.CameraID ?? `${lat}-${lon}`}`,
+ title: c.Title ?? c.CameraLocation?.RoadName ?? 'WA Camera',
+ state: 'WA',
+ lat,
+ lon,
+ imageUrl: c.ImageURL,
+ direction: c.CameraLocation?.Direction ?? '',
+ });
+ }
+ } else if (feed.parser === 'cotrip') {
+ const items = Array.isArray(data?.features) ? data.features : Array.isArray(data) ? data : data?.cameras ?? [];
+ for (const item of items) {
+ const props = item?.properties ?? item ?? {};
+ const lat = props.latitude ?? item?.geometry?.coordinates?.[1];
+ const lon = props.longitude ?? item?.geometry?.coordinates?.[0];
+ const url = props.imageURL ?? props.imageUrl;
+ if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat === 0 || lon === 0) continue;
+ if (typeof url !== 'string' || url.length === 0) continue;
+ cams.push({
+ id: `dot-co-${props.id ?? `${lat}-${lon}`}`,
+ title: props.description ?? props.name ?? 'CO Camera',
+ state: 'CO',
+ lat,
+ lon,
+ imageUrl: url,
+ direction: '',
+ });
+ }
+ } else if (feed.parser === 'fl511') {
+ const items = Array.isArray(data?.cameras) ? data.cameras : Array.isArray(data) ? data : [];
+ for (const c of items) {
+ const lat = c?.Latitude ?? c?.latitude;
+ const lon = c?.Longitude ?? c?.longitude;
+ const url = c?.ImageUrl ?? c?.imageUrl ?? c?.Url ?? c?.url;
+ if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat === 0 || lon === 0) continue;
+ if (typeof url !== 'string' || url.length === 0) continue;
+ cams.push({
+ id: `dot-fl-${c.Id ?? c.id ?? `${lat}-${lon}`}`,
+ title: c.Description ?? c.description ?? 'FL Camera',
+ state: 'FL',
+ lat,
+ lon,
+ imageUrl: url,
+ direction: '',
+ });
+ }
  }
  return cams;
  }));
@@ -8757,6 +8815,45 @@ async function dispatch(requestUrl, req, routes, context) {
  if (stale) return json({ ...stale, stale: true, error: error?.message ?? 'unknown' });
  return json({ cameras: [], error: error?.message ?? 'unknown' }, 502);
  }
+  }
+
+  // ── USGS volcano webcams (static catalog from src/services/webcams/volcano-cam-catalog.ts) ──
+  // The catalog is pinned in code rather than scraped because USGS HVO/CVO/AVO/YVO
+  // pages don't expose a machine-readable index. Refresh cadence is 60s per cam
+  // — the snapshots are served from observatory webservers directly.
+  if (requestUrl.pathname === '/api/webcams/volcano') {
+ const cacheKey = 'webcams-volcano';
+ const cached = getCached(cacheKey, 30 * 60 * 1000);
+ if (cached) return json(cached);
+ const cams = [
+ { id: 'kilauea-summit', name: 'Kīlauea — Summit (KW)', volcano: 'Kilauea', observatory: 'HVO', lat: 19.4067, lon: -155.2834, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/kilauea/KWcam.jpg' },
+ { id: 'kilauea-east-rift', name: 'Kīlauea — East Rift (PG)', volcano: 'Kilauea', observatory: 'HVO', lat: 19.385, lon: -154.95, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/kilauea/PGcam.jpg' },
+ { id: 'mauna-loa-summit', name: 'Mauna Loa — Summit (M1)', volcano: 'Mauna Loa', observatory: 'HVO', lat: 19.475, lon: -155.608, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/mauna_loa/M1cam.jpg' },
+ { id: 'st-helens-johnston', name: 'Mount St. Helens — Johnston Ridge', volcano: 'St. Helens', observatory: 'CVO', lat: 46.276, lon: -122.218, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/cvo/MSHJRO.jpg' },
+ { id: 'st-helens-coldwater', name: 'Mount St. Helens — Coldwater', volcano: 'St. Helens', observatory: 'CVO', lat: 46.295, lon: -122.27, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/cvo/MSHCW.jpg' },
+ { id: 'mount-hood-timberline', name: 'Mount Hood — Timberline', volcano: 'Mount Hood', observatory: 'CVO', lat: 45.331, lon: -121.711, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/cvo/HOODTL.jpg' },
+ { id: 'mount-rainier-camp-muir', name: 'Mount Rainier — Camp Muir', volcano: 'Rainier', observatory: 'CVO', lat: 46.836, lon: -121.731, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/cvo/RAINMUIR.jpg' },
+ { id: 'redoubt-hut', name: 'Redoubt — Hut', volcano: 'Redoubt', observatory: 'AVO', lat: 60.485, lon: -152.742, snapshotUrl: 'https://avo.alaska.edu/webcam/REDhut.jpg' },
+ { id: 'pavlof-cold-bay', name: 'Pavlof — Cold Bay', volcano: 'Pavlof', observatory: 'AVO', lat: 55.42, lon: -161.894, snapshotUrl: 'https://avo.alaska.edu/webcam/PVV.jpg' },
+ { id: 'cleveland-pevolc', name: 'Cleveland — PEvolc', volcano: 'Cleveland', observatory: 'AVO', lat: 52.825, lon: -169.944, snapshotUrl: 'https://avo.alaska.edu/webcam/CLES.jpg' },
+ { id: 'shishaldin', name: 'Shishaldin — ISLE', volcano: 'Shishaldin', observatory: 'AVO', lat: 54.756, lon: -163.97, snapshotUrl: 'https://avo.alaska.edu/webcam/SDPI.jpg' },
+ { id: 'great-sitkin', name: 'Great Sitkin — GSCK', volcano: 'Great Sitkin', observatory: 'AVO', lat: 52.076, lon: -176.13, snapshotUrl: 'https://avo.alaska.edu/webcam/GSCK.jpg' },
+ { id: 'yellowstone-old-faithful', name: 'Yellowstone — Old Faithful', volcano: 'Yellowstone', observatory: 'YVO', lat: 44.46, lon: -110.829, snapshotUrl: 'https://www.nps.gov/webcams-yell/oldfaithvc.jpg' },
+ ];
+ const feeds = cams.map(c => ({
+ id: `USGS_VOLCANO:${c.id}`,
+ source: 'USGS_VOLCANO',
+ name: c.name,
+ lat: c.lat,
+ lon: c.lon,
+ snapshotUrl: c.snapshotUrl,
+ refreshIntervalSec: 60,
+ category: 'volcano',
+ metadata: { volcano: c.volcano, observatory: c.observatory },
+ }));
+ const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 30 * 60 * 1000);
+ return json(result);
   }
 
   if (context.cloudFallback && cloudPreferred.has(requestUrl.pathname)) {

@@ -5,6 +5,8 @@ import type { ScoredFAACamera } from '@/services/faa-cameras';
 import { fetchNWSAlerts } from '@/services/nws-alerts';
 import { fetchGDACSEvents } from '@/services/gdacs';
 import { getApiBaseUrl } from '@/services/runtime';
+import { flightRuleColor } from '@/services/webcams/flight-rule';
+import type { MetarData } from '@/services/webcams/metar-types';
 
 export class FAAWeatherCamsPanel extends Panel {
   private cameras: ScoredFAACamera[] = [];
@@ -99,6 +101,36 @@ export class FAAWeatherCamsPanel extends Panel {
 
  const tdName = document.createElement('td');
  tdName.textContent = cam.name;
+ if (cam.flightRule) {
+ const fr = document.createElement('span');
+ fr.className = 'faa-flight-rule-badge';
+ fr.textContent = cam.flightRule;
+ fr.style.background = flightRuleColor(cam.flightRule);
+ fr.style.color = '#fff';
+ fr.style.padding = '1px 6px';
+ fr.style.borderRadius = '3px';
+ fr.style.fontSize = '11px';
+ fr.style.marginLeft = '6px';
+ tdName.append(fr);
+ }
+ const metarLine = this._formatMetarLine(cam.currentMetar);
+ if (metarLine) {
+ const sub = document.createElement('div');
+ sub.className = 'faa-metar-line';
+ sub.style.fontSize = '11px';
+ sub.style.opacity = '0.7';
+ sub.textContent = metarLine;
+ tdName.append(sub);
+ }
+ if (typeof cam.adsbCount === 'number' && cam.adsbCount > 0) {
+ const chip = document.createElement('span');
+ chip.className = 'faa-adsb-chip';
+ chip.textContent = `✈ ${cam.adsbCount}`;
+ chip.style.marginLeft = '6px';
+ chip.style.fontSize = '11px';
+ chip.style.opacity = '0.75';
+ tdName.append(chip);
+ }
 
  const tdLoc = document.createElement('td');
  tdLoc.textContent = cam.category === 'weather'
@@ -360,6 +392,26 @@ export class FAAWeatherCamsPanel extends Panel {
  // viewer's <img> will 404 and the analyze button stays
  // disabled, but the panel itself stays usable.
  }
+  }
+
+  private _formatMetarLine(metar: MetarData | null | undefined): string {
+ if (!metar) return '';
+ const parts: string[] = [];
+ if (metar.windSpeedKt !== null && metar.windDirDeg !== null) {
+ const dir = String(Math.round(metar.windDirDeg)).padStart(3, '0');
+ const spd = Math.round(metar.windSpeedKt);
+ const gust = metar.windGustKt === null ? '' : `G${Math.round(metar.windGustKt)}`;
+ parts.push(`${dir}°/${spd}${gust}kt`);
+ } else if (metar.windSpeedKt !== null) {
+ parts.push(`${Math.round(metar.windSpeedKt)}kt`);
+ }
+ if (metar.visibilityMi !== null) parts.push(`${metar.visibilityMi}sm`);
+ if (metar.weather) parts.push(metar.weather);
+ if (metar.observedAtSec) {
+ const ageMin = Math.floor((Date.now() / 1000 - metar.observedAtSec) / 60);
+ if (ageMin >= 0 && ageMin < 360) parts.push(`${ageMin}m old`);
+ }
+ return parts.join(' · ');
   }
 
   private _relativeTime(iso: string): string {

@@ -163,6 +163,35 @@ function cachedFetch(key, ttlMs, fetcher) {
 // Pre-compiled regex patterns (avoid re-creation in hot paths)
 const RE_HTML_TAGS = /<[^>]+>/g;
 
+// ── ibi511 platform parser (shared by AZ/ID/GA in /api/webcams/dot-extended) ──
+// Mirrors parseIbi511 in src/services/webcams/adapters/dot-extended.ts.
+function parseIbi511Sidecar(state, raw, buildFeed, pickArray) {
+  const out = [];
+  for (const c of pickArray(raw, ['cameras', 'features', 'data'])) {
+ if (!c || typeof c !== 'object') continue;
+ if (c.IsActive === false) continue;
+ const lat = c.CameraLocation?.Latitude ?? c.Latitude;
+ const lon = c.CameraLocation?.Longitude ?? c.Longitude;
+ const url = c.ImageURL ?? c.ImageUrl;
+ const f = buildFeed({
+ idPrefix: `DOT:${state}`,
+ rawId: c.Id ?? c.CameraID,
+ name: c.Title ?? c.Description ?? c.CameraLocation?.RoadName ?? `${state} Camera`,
+ lat,
+ lon,
+ snapshotUrl: url,
+ metadata: {
+ state,
+ jurisdiction: state,
+ ...(c.CameraLocation?.RoadName ? { route: c.CameraLocation.RoadName } : {}),
+ ...(c.CameraLocation?.Direction ? { direction: c.CameraLocation.Direction } : {}),
+ },
+ });
+ if (f) out.push(f);
+  }
+  return out;
+}
+
 // ── FAA Aviation Weather METAR enrichment helpers ───────────────────────
 // Pure JS port of src/services/webcams/{flight-rule,station-matcher}.ts.
 // The TS unit tests cover the algorithms; this file mirrors them so the
@@ -8689,6 +8718,7 @@ async function dispatch(requestUrl, req, routes, context) {
  { source: 'USGS_STREAM', path: '/api/webcams/streamgauge', shape: 'feeds' },
  { source: 'WINDY', path: '/api/webcams/windy', shape: 'feeds' },
  { source: 'NOAA_COASTAL', path: '/api/webcams/coastal', shape: 'feeds' },
+ { source: 'DOT511', path: '/api/webcams/dot-extended', shape: 'feeds' },
  ];
  const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
  const port = process.env.SIDECAR_PORT ?? '46123';
@@ -8925,6 +8955,176 @@ async function dispatch(requestUrl, req, routes, context) {
  }));
  const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
  setCached(cacheKey, result, 30 * 60 * 1000);
+ return json(result);
+  }
+
+  // ── Extended DOT adapters: OH, AZ, ID, GA, OR, NC, NSW, UK, ROAD511 ──
+  // Phase 2 PR A. State filter via ?state=OH,AZ,... (default = all).
+  if (requestUrl.pathname === '/api/webcams/dot-extended') {
+ const stateFilter = (requestUrl.searchParams.get('state') ?? '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+ const cacheKey = `webcams-dot-extended-${stateFilter.join(',') || 'ALL'}`;
+ const cached = getCached(cacheKey, 5 * 60 * 1000);
+ if (cached) return json(cached);
+
+ const ALL_JURISDICTIONS = ['OH', 'AZ', 'ID', 'GA', 'OR', 'NC', 'NSW', 'UK', 'ROAD511'];
+ const wanted = stateFilter.length > 0 ? stateFilter.filter(s => ALL_JURISDICTIONS.includes(s)) : ALL_JURISDICTIONS;
+
+ const sources = {
+ OH: { url: 'https://publicapi.ohgo.com/api/v1/cameras', headers: {} },
+ AZ: { url: 'https://az511.com/api/get/cameras', headers: {} },
+ ID: { url: 'https://511.idaho.gov/api/get/cameras', headers: {} },
+ GA: { url: 'https://511ga.org/api/get/cameras', headers: {} },
+ OR: { url: 'https://tripcheck.com/api/roadcond/cameras', headers: {} },
+ NC: { url: 'https://services.arcgis.com/KTcxiTD9dsQw4r7Z/arcgis/rest/services/NCDOT_Traffic_Cameras/FeatureServer/0/query?outFields=*&where=1=1&f=geojson', headers: {} },
+ NSW: { url: 'https://api.transport.nsw.gov.au/v1/live/cameras', headers: process.env.NSW_API_KEY ? { Authorization: `apikey ${process.env.NSW_API_KEY}` } : null },
+ UK: { url: 'https://api.data.nationalhighways.co.uk/v1/cameras', headers: process.env.UK_HIGHWAYS_API_KEY ? { 'Ocp-Apim-Subscription-Key': process.env.UK_HIGHWAYS_API_KEY } : null },
+ ROAD511: { url: 'https://api.road511.com/v2/cameras', headers: process.env.ROAD511_API_KEY ? { 'X-API-Key': process.env.ROAD511_API_KEY } : null },
+ };
+
+ const meta = {};
+
+ // Mark gated/disabled sources up front so the client gets a clear signal.
+ if (wanted.includes('NSW') && !sources.NSW.headers) {
+ meta.NSW = { feeds: 0, requiresKey: true, keySource: 'opendata.transport.nsw.gov.au' };
+ }
+ if (wanted.includes('UK') && !sources.UK.headers) {
+ meta.UK = { feeds: 0, requiresKey: true, keySource: 'developer.data.nationalhighways.co.uk' };
+ }
+ if (wanted.includes('ROAD511') && !sources.ROAD511.headers) {
+ meta.ROAD511 = {
+ feeds: 0,
+ isPaid: true,
+ disabled: true,
+ message: 'Road511 covers all 65 US/Canadian DOT jurisdictions (38,219 cameras). Subscribe at road511.com ($29/mo) then add ROAD511_API_KEY to settings.',
+ };
+ }
+
+ const results = await Promise.allSettled(wanted.map(async (j) => {
+ const cfg = sources[j];
+ if (!cfg) return { jurisdiction: j, raw: null };
+ // Gate keyed sources without keys.
+ if ((j === 'NSW' || j === 'UK' || j === 'ROAD511') && !cfg.headers) {
+ return { jurisdiction: j, raw: null };
+ }
+ try {
+ const resp = await fetchWithTimeout(cfg.url, { headers: { Accept: 'application/json', ...(cfg.headers ?? {}) } }, 15000);
+ if (!resp.ok) return { jurisdiction: j, raw: null, error: `HTTP ${resp.status}` };
+ const raw = await resp.json();
+ return { jurisdiction: j, raw };
+ } catch (error) {
+ return { jurisdiction: j, raw: null, error: error?.message ?? 'fetch failed' };
+ }
+ }));
+
+ // Pure parsers mirror src/services/webcams/adapters/dot-extended.ts.
+ const isFiniteCoord = (n) => typeof n === 'number' && Number.isFinite(n) && n !== 0;
+ const pickArray = (payload, keys) => {
+ if (Array.isArray(payload)) return payload;
+ if (payload && typeof payload === 'object') {
+ for (const k of keys) {
+ const v = payload[k];
+ if (Array.isArray(v)) return v;
+ }
+ }
+ return [];
+ };
+ const buildFeed = ({ idPrefix, rawId, name, lat, lon, snapshotUrl, streamUrl, metadata }) => {
+ if (!isFiniteCoord(lat) || !isFiniteCoord(lon)) return null;
+ if (typeof snapshotUrl !== 'string' || snapshotUrl.length === 0) return null;
+ const id = String(rawId ?? `${lat}-${lon}`);
+ return {
+ id: `${idPrefix}:${id}`,
+ source: 'DOT511',
+ name: name || 'Camera',
+ lat,
+ lon,
+ snapshotUrl,
+ ...(streamUrl ? { streamUrl } : {}),
+ refreshIntervalSec: 300,
+ category: 'traffic',
+ metadata,
+ };
+ };
+ const parsers = {
+ OH: (raw) => {
+ const out = [];
+ for (const c of pickArray(raw, ['cameras', 'results', 'data'])) {
+ if (!c || c.isActive === false) continue;
+ const f = buildFeed({ idPrefix: 'DOT:OH', rawId: c.id, name: c.location?.description ?? 'OH Camera', lat: c.location?.latitude, lon: c.location?.longitude, snapshotUrl: c.imageUrl, metadata: { state: 'OH', jurisdiction: 'OH' } });
+ if (f) out.push(f);
+ }
+ return out;
+ },
+ AZ: (raw) => parseIbi511Sidecar('AZ', raw, buildFeed, pickArray),
+ ID: (raw) => parseIbi511Sidecar('ID', raw, buildFeed, pickArray),
+ GA: (raw) => parseIbi511Sidecar('GA', raw, buildFeed, pickArray),
+ OR: (raw) => {
+ const out = [];
+ for (const c of pickArray(raw, ['cameras', 'data'])) {
+ if (!c) continue;
+ const f = buildFeed({ idPrefix: 'DOT:OR', rawId: c.camId, name: c.name ?? 'OR Camera', lat: c.latitude, lon: c.longitude, snapshotUrl: c.streamUrl ?? c.imageUrl, metadata: { state: 'OR', jurisdiction: 'OR', ...(c.direction ? { direction: c.direction } : {}) } });
+ if (f) out.push(f);
+ }
+ return out;
+ },
+ NC: (raw) => {
+ const out = [];
+ for (const feat of pickArray(raw, ['features'])) {
+ const props = feat?.properties ?? {};
+ const coords = feat?.geometry?.coordinates;
+ if (!Array.isArray(coords) || coords.length < 2) continue;
+ const f = buildFeed({ idPrefix: 'DOT:NC', rawId: props.CAMERA_ID, name: props.LOCATION_DESCRIPTION ?? 'NC Camera', lat: coords[1], lon: coords[0], snapshotUrl: props.IMAGE_URL, metadata: { state: 'NC', jurisdiction: 'NC', ...(props.ROUTE ? { route: props.ROUTE } : {}) } });
+ if (f) out.push(f);
+ }
+ return out;
+ },
+ NSW: (raw) => {
+ const out = [];
+ for (const feat of pickArray(raw, ['features'])) {
+ const props = feat?.properties ?? {};
+ const coords = feat?.geometry?.coordinates;
+ if (!Array.isArray(coords) || coords.length < 2) continue;
+ const f = buildFeed({ idPrefix: 'DOT:NSW', rawId: props.title ?? `${coords[1]}-${coords[0]}`, name: props.title ?? 'NSW Camera', lat: coords[1], lon: coords[0], snapshotUrl: props.href, metadata: { country: 'AU', jurisdiction: 'NSW', ...(props.region ? { region: props.region } : {}), ...(props.direction ? { direction: props.direction } : {}) } });
+ if (f) out.push(f);
+ }
+ return out;
+ },
+ UK: (raw) => {
+ const out = [];
+ for (const c of pickArray(raw, ['cameras', 'data'])) {
+ if (!c || c.active === false) continue;
+ const f = buildFeed({ idPrefix: 'DOT:UK', rawId: c.id, name: c.name ?? 'UK Highways Camera', lat: c.coordinates?.latitude, lon: c.coordinates?.longitude, snapshotUrl: c.imageUrl, metadata: { country: 'UK', jurisdiction: 'UK', ...(c.road ? { route: c.road } : {}) } });
+ if (f) out.push(f);
+ }
+ return out;
+ },
+ ROAD511: (raw) => {
+ const out = [];
+ for (const c of pickArray(raw, ['cameras', 'data', 'results'])) {
+ if (!c) continue;
+ const j = String(c.jurisdiction ?? 'UNK');
+ const f = buildFeed({ idPrefix: `DOT:${j}`, rawId: c.id ?? c.cameraId, name: c.name ?? `${j} Camera`, lat: c.lat ?? c.latitude, lon: c.lon ?? c.longitude, snapshotUrl: c.snapshotUrl ?? c.imageUrl, metadata: { state: j, jurisdiction: j, provider: 'ROAD511', ...(c.route ? { route: c.route } : {}), ...(c.direction ? { direction: c.direction } : {}) } });
+ if (f) out.push(f);
+ }
+ return out;
+ },
+ };
+
+ const feeds = [];
+ for (const r of results) {
+ if (r.status !== 'fulfilled') continue;
+ const { jurisdiction, raw, error } = r.value;
+ if (raw == null) {
+ if (error && !meta[jurisdiction]) meta[jurisdiction] = { feeds: 0, error };
+ continue;
+ }
+ const parsed = parsers[jurisdiction]?.(raw) ?? [];
+ feeds.push(...parsed);
+ if (!meta[jurisdiction]) meta[jurisdiction] = { feeds: parsed.length };
+ }
+
+ const result = { feeds, count: feeds.length, sources: meta, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 5 * 60 * 1000);
  return json(result);
   }
 

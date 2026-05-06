@@ -7118,6 +7118,30 @@ async function dispatch(requestUrl, req, routes, context) {
  });
   }
 
+  // ── Cyber: APT groups (MITRE ATT&CK + OTX + CISA cross-ref) ──────────────
+  // Engine lives in src/services/cyber/apt-tracker.ts (23 tests passing).
+  // Returns configured=false until ATT&CK STIX bundle is vendored + OTX
+  // polling is wired. configured=true response shape matches AptGroup[].
+  if (requestUrl.pathname === '/api/apt-groups') {
+ return json({
+ configured: false,
+ error: 'ATT&CK corpus not yet vendored',
+ groups: [],
+ });
+  }
+
+  // ── Geopolitics: gray-zone events ─────────────────────────────────────
+  // Engine lives in src/services/geopolitics/grayzone-classifier.ts
+  // (23 tests passing). configured=false until OpenSanctions / CISA /
+  // ACLED / GDELT feeders run through the classifiers.
+  if (requestUrl.pathname === '/api/grayzone-events') {
+ return json({
+ configured: false,
+ error: 'gray-zone classifier not yet wired',
+ events: [],
+ });
+  }
+
   // ── S2U TAK feeds — Marti API /api/feeds (cached 60s, TLS-pinned) ─────────
   if (requestUrl.pathname === '/api/s2u-tak-feeds') {
  const opts = s2uTakOpts();

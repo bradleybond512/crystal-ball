@@ -42,6 +42,7 @@ import {
   NetworkRulesPanel,
   S2UIntelPanel,
   SynthesisPanel,
+  CyberGeoPanel,
   OrefSirensPanel,
   TelegramIntelPanel,
   WatchlistPanel,
@@ -1264,6 +1265,14 @@ export class PanelLayoutManager implements AppModule {
  // a follow-up PR. Pure engines ship in Batch 1 PR 1 + 2.
  const synthesisPanel = new SynthesisPanel();
  this.ctx.panels['synthesis'] = synthesisPanel;
+
+ // CyberGeoPanel — APT activity table + gray-zone event timeline +
+ // great-power escalation meters. Reads from /api/apt-groups and
+ // /api/grayzone-events. Engines ship in Batch 2 PR 1 (#290) +
+ // PR 2 (#292); the sidecar returns configured=false until live
+ // ingestion lands.
+ const cyberGeoPanel = new CyberGeoPanel();
+ this.ctx.panels['cyber-geo'] = cyberGeoPanel;
 
  const orefSirensPanel = new OrefSirensPanel();
  this.ctx.panels['oref-sirens'] = orefSirensPanel;

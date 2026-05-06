@@ -63,7 +63,8 @@
       "sidecar/package.json",
       "sidecar/node",
       "../data",
-      "../src/config"
+      "../src/config",
+      "../tools/littlesnitch"
     ],
     "windows": {
       "digestAlgorithm": "sha256",

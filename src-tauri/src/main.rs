@@ -37,7 +37,7 @@ const MENU_VIEW_MODE_ID: &str = "view.mode_status";
 #[cfg(feature = "devtools")]
 const MENU_HELP_DEVTOOLS_ID: &str = "help.devtools";
 const TRUSTED_WINDOWS: [&str; 3] = ["main", "settings", "live-channels"];
-const SUPPORTED_SECRET_KEYS: [&str; 55] = [
+const SUPPORTED_SECRET_KEYS: [&str; 58] = [
  "CRYSTALBALL_API_KEY",
  "ANTHROPIC_API_KEY",
  "GROQ_API_KEY",
@@ -93,6 +93,9 @@ const SUPPORTED_SECRET_KEYS: [&str; 55] = [
  "S2U_TAK_USERNAME",
  "S2U_TAK_SECRET",
  "S2U_TLS_INSECURE_OPT_IN",
+ "NSW_API_KEY",
+ "UK_HIGHWAYS_API_KEY",
+ "ROAD511_API_KEY",
 ];
 
 // Rate-limit native notifications: no more than 1 per 30 seconds across all threads.

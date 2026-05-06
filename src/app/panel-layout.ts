@@ -183,6 +183,7 @@ import { CombatantCommandsPanel } from '@/components/CombatantCommandsPanel';
 import { ForeignMilNewsPanel } from '@/components/ForeignMilNewsPanel';
 import { SpcMesoscalePanel } from '@/components/SpcMesoscalePanel';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
+import { UnifiedWebcamPanel } from '@/components/UnifiedWebcamPanel';
 import { CommsHealthPanel } from '@/components/CommsHealthPanel';
 import { PowerGridPanel } from '@/components/PowerGridPanel';
 import { FearGreedPanel } from '@/components/FearGreedPanel';
@@ -1053,6 +1054,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['nws-alerts'] = nwsAlertsPanel;
 
  this.ctx.panels['faa-weather-cams'] = new FAAWeatherCamsPanel();
+ this.ctx.panels['unified-webcams'] = new UnifiedWebcamPanel();
 
  this.ctx.panels['tsunami-alerts'] = new TsunamiAlertsPanel();
  this.ctx.panels['tropical-cyclones'] = new TropicalCyclonesPanel();

@@ -8817,6 +8817,145 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── NPS webcams (requires NPS_API_KEY, free at developer.nps.gov) ──
+  if (requestUrl.pathname === '/api/webcams/nps') {
+ const apiKey = process.env.NPS_API_KEY;
+ if (!apiKey) return json({ feeds: [], requiresKey: true, error: 'NPS_API_KEY not configured' }, 503);
+ const cacheKey = 'webcams-nps';
+ const cached = getCached(cacheKey, 30 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const resp = await fetchWithTimeout(
+ `https://developer.nps.gov/api/v1/webcams?limit=500&api_key=${encodeURIComponent(apiKey)}`,
+ { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/1.0' } },
+ 15000,
+ );
+ if (!resp.ok) return json({ feeds: [], error: `NPS HTTP ${resp.status}` }, 502);
+ const raw = await resp.json();
+ const items = Array.isArray(raw?.data) ? raw.data : [];
+ const feeds = [];
+ for (const cam of items) {
+ if (cam?.status && String(cam.status).toLowerCase() !== 'active') continue;
+ const lat = Number(cam?.latitude);
+ const lon = Number(cam?.longitude);
+ if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat === 0 || lon === 0) continue;
+ const snapshot = cam?.images?.[0]?.url;
+ if (typeof snapshot !== 'string' || snapshot.length === 0) continue;
+ const park = cam?.relatedParks?.[0];
+ feeds.push({
+ id: `NPS:${cam.id ?? `${lat}-${lon}`}`,
+ source: 'NPS',
+ name: cam.title ?? park?.fullName ?? 'NPS Webcam',
+ lat,
+ lon,
+ snapshotUrl: snapshot,
+ refreshIntervalSec: 300,
+ category: 'nature',
+ metadata: {
+ ...(park?.fullName ? { park: park.fullName } : {}),
+ ...(park?.parkCode ? { parkCode: park.parkCode } : {}),
+ ...(park?.states ? { states: park.states } : {}),
+ },
+ isOnline: true,
+ });
+ }
+ const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 30 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: error?.message ?? 'unknown' });
+ return json({ feeds: [], error: error?.message ?? 'unknown' }, 502);
+ }
+  }
+
+  // ── AlertWildfire fire lookout cams (public, no auth) ──
+  if (requestUrl.pathname === '/api/webcams/fire') {
+ const cacheKey = 'webcams-fire';
+ const cached = getCached(cacheKey, 15 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const resp = await fetchWithTimeout(
+ 'https://cameras.alertwildfire.org/v2/cameras.json',
+ { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/1.0' } },
+ 15000,
+ );
+ if (!resp.ok) return json({ feeds: [], error: `AlertWildfire HTTP ${resp.status}` }, 502);
+ const raw = await resp.json();
+ const items = Array.isArray(raw?.cameras) ? raw.cameras : Array.isArray(raw?.features) ? raw.features : Array.isArray(raw) ? raw : [];
+ const feeds = [];
+ for (const item of items) {
+ const props = item?.properties ?? item ?? {};
+ const geom = item?.geometry?.coordinates;
+ if (props.active === false) continue;
+ const status = props.status?.toLowerCase?.();
+ if (status === 'inactive' || status === 'down' || status === 'offline') continue;
+ const lat = props.latitude ?? props.position?.latitude ?? geom?.[1];
+ const lon = props.longitude ?? props.position?.longitude ?? geom?.[0];
+ if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat === 0 || lon === 0) continue;
+ const name = props.name;
+ if (!name) continue;
+ const snapshot = props.imageUrl ?? props.image_url ?? `https://cameras.alertwildfire.org/cameras/${encodeURIComponent(name)}/latest-frame.jpg`;
+ const stream = props.streamUrl ?? props.stream_url ?? props.hd_video;
+ feeds.push({
+ id: `ALERTWILDFIRE:${name}`,
+ source: 'ALERTWILDFIRE',
+ name,
+ lat,
+ lon,
+ snapshotUrl: snapshot,
+ ...(typeof stream === 'string' && stream.length > 0 ? { streamUrl: stream } : {}),
+ refreshIntervalSec: 60,
+ category: 'fire',
+ metadata: {
+ ...(props.state ? { state: props.state } : {}),
+ ...(props.region ? { region: props.region } : {}),
+ ...(props.ptz ? { ptz: 'true' } : {}),
+ },
+ isOnline: true,
+ });
+ }
+ const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 15 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: error?.message ?? 'unknown' });
+ return json({ feeds: [], error: error?.message ?? 'unknown' }, 502);
+ }
+  }
+
+  // ── USGS stream gauge cams (pinned site list, photo URLs from USGS NWIS) ──
+  if (requestUrl.pathname === '/api/webcams/streamgauge') {
+ const cacheKey = 'webcams-streamgauge';
+ const cached = getCached(cacheKey, 60 * 60 * 1000);
+ if (cached) return json(cached);
+ const records = [
+ { siteNo: '11447650', name: 'Sacramento River at Freeport, CA', lat: 38.4555, lon: -121.5021, state: 'CA' },
+ { siteNo: '01646500', name: 'Potomac River near Wash, DC Little Falls Pump Sta', lat: 38.9498, lon: -77.1278, state: 'DC' },
+ { siteNo: '07010000', name: 'Mississippi River at St. Louis, MO', lat: 38.6296, lon: -90.1798, state: 'MO' },
+ { siteNo: '02035000', name: 'James River at Cartersville, VA', lat: 37.6712, lon: -78.0867, state: 'VA' },
+ { siteNo: '03612600', name: 'Ohio River at Olmsted, IL', lat: 37.18, lon: -89.0567, state: 'IL' },
+ { siteNo: '08374550', name: 'Rio Grande at Foster Ranch, TX', lat: 29.6306, lon: -102.0339, state: 'TX' },
+ { siteNo: '14211720', name: 'Willamette River at Portland, OR', lat: 45.5167, lon: -122.6692, state: 'OR' },
+ { siteNo: '12150800', name: 'Snohomish River near Monroe, WA', lat: 47.83, lon: -121.9967, state: 'WA' },
+ ];
+ const feeds = records.map(r => ({
+ id: `USGS_STREAM:${r.siteNo}`,
+ source: 'USGS_STREAM',
+ name: r.name,
+ lat: r.lat,
+ lon: r.lon,
+ snapshotUrl: `https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=${encodeURIComponent(r.siteNo)}`,
+ refreshIntervalSec: 3600,
+ category: 'stream',
+ metadata: { siteNo: r.siteNo, state: r.state },
+ }));
+ const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 60 * 60 * 1000);
+ return json(result);
+  }
+
   // ── USGS volcano webcams (static catalog from src/services/webcams/volcano-cam-catalog.ts) ──
   // The catalog is pinned in code rather than scraped because USGS HVO/CVO/AVO/YVO
   // pages don't expose a machine-readable index. Refresh cadence is 60s per cam

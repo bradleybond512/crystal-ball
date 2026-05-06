@@ -43,6 +43,7 @@ import {
   S2UIntelPanel,
   SynthesisPanel,
   CyberGeoPanel,
+  EconomicIntelPanel,
   OrefSirensPanel,
   TelegramIntelPanel,
   WatchlistPanel,
@@ -1273,6 +1274,13 @@ export class PanelLayoutManager implements AppModule {
  // ingestion lands.
  const cyberGeoPanel = new CyberGeoPanel();
  this.ctx.panels['cyber-geo'] = cyberGeoPanel;
+
+ // EconomicIntelPanel — OFR FSI gauge + commodity stress table +
+ // ENSO phase + 6-month outlook. Reads from /api/financial-stress,
+ // /api/commodity-stress, /api/enso. Engines ship in Batch 3 PR 1
+ // (#295) + PR 2 (#297); sidecar fetcher follows.
+ const economicIntelPanel = new EconomicIntelPanel();
+ this.ctx.panels['economic-intel'] = economicIntelPanel;
 
  const orefSirensPanel = new OrefSirensPanel();
  this.ctx.panels['oref-sirens'] = orefSirensPanel;

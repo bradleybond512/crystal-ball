@@ -163,6 +163,200 @@ function cachedFetch(key, ttlMs, fetcher) {
 // Pre-compiled regex patterns (avoid re-creation in hot paths)
 const RE_HTML_TAGS = /<[^>]+>/g;
 
+// ── FAA Aviation Weather METAR enrichment helpers ───────────────────────
+// Pure JS port of src/services/webcams/{flight-rule,station-matcher}.ts.
+// The TS unit tests cover the algorithms; this file mirrors them so the
+// sidecar can enrich without an extra HTTP hop to the renderer.
+const FAA_METAR_CEILING_COVERS = new Set(['BKN', 'OVC', 'VV']);
+const FAA_METAR_VALID_COVERS = new Set(['SKC', 'CLR', 'FEW', 'SCT', 'BKN', 'OVC', 'VV', 'OVX']);
+
+function faaMetarToFiniteNumber(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim().length > 0) {
+    const cleaned = v.replace(/[+]$/, '').trim();
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function faaParseCloudLayer(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const cover = typeof raw.cover === 'string' ? raw.cover.toUpperCase() : '';
+  if (!FAA_METAR_VALID_COVERS.has(cover)) return null;
+  return { cover, baseFt: faaMetarToFiniteNumber(raw.base) };
+}
+
+function faaParseMetarRow(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const stationId = typeof raw.icaoId === 'string' ? raw.icaoId.trim() : '';
+  if (!stationId) return null;
+  const cloudsRaw = Array.isArray(raw.clouds) ? raw.clouds : [];
+  const clouds = cloudsRaw.map(c => faaParseCloudLayer(c)).filter(Boolean);
+  return {
+    stationId,
+    observedAtSec: faaMetarToFiniteNumber(raw.obsTime),
+    rawObservation: typeof raw.rawOb === 'string' ? raw.rawOb : null,
+    windDirDeg: faaMetarToFiniteNumber(raw.wdir),
+    windSpeedKt: faaMetarToFiniteNumber(raw.wspd),
+    windGustKt: faaMetarToFiniteNumber(raw.wgst),
+    visibilityMi: faaMetarToFiniteNumber(raw.visib),
+    ceilingFt: null,
+    weather: typeof raw.wxString === 'string' && raw.wxString.length > 0 ? raw.wxString : null,
+    tempC: faaMetarToFiniteNumber(raw.temp),
+    dewpointC: faaMetarToFiniteNumber(raw.dewp),
+    altimeterInHg: faaMetarToFiniteNumber(raw.altim),
+    clouds,
+  };
+}
+
+function faaCeilingFromClouds(clouds) {
+  if (!Array.isArray(clouds) || clouds.length === 0) return null;
+  let lowest = null;
+  for (const layer of clouds) {
+    if (!FAA_METAR_CEILING_COVERS.has(layer.cover)) continue;
+    if (typeof layer.baseFt !== 'number' || !Number.isFinite(layer.baseFt)) continue;
+    if (lowest === null || layer.baseFt < lowest) lowest = layer.baseFt;
+  }
+  return lowest;
+}
+
+function faaDeriveFlightRule(visibilityMi, ceilingFt) {
+  const visUnknown = visibilityMi === null || !Number.isFinite(visibilityMi);
+  const ceilUnknown = ceilingFt === null || !Number.isFinite(ceilingFt);
+  if (visUnknown && ceilUnknown) return null;
+  if ((!visUnknown && visibilityMi < 1) || (!ceilUnknown && ceilingFt < 500)) return 'LIFR';
+  if ((!visUnknown && visibilityMi < 3) || (!ceilUnknown && ceilingFt < 1000)) return 'IFR';
+  if ((!visUnknown && visibilityMi <= 5) || (!ceilUnknown && ceilingFt <= 3000)) return 'MVFR';
+  return 'VFR';
+}
+
+function faaHaversineNm(lat1, lon1, lat2, lon2) {
+  const R = 3440.065;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function faaFindNearestStation(lat, lon, stations, maxDistanceNm = 50) {
+  if (!Array.isArray(stations) || stations.length === 0) return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  let best = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const station of stations) {
+    const d = faaHaversineNm(lat, lon, station.lat, station.lon);
+    if (d < bestDist && d <= maxDistanceNm) {
+      best = station;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+function faaCountAdsbWithinRadius(lat, lon, adsb, radiusNm = 25) {
+  if (!adsb || !Array.isArray(adsb.states)) return 0;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return 0;
+  let count = 0;
+  for (const state of adsb.states) {
+    if (!Array.isArray(state)) continue;
+    const acLon = state[5];
+    const acLat = state[6];
+    if (typeof acLat !== 'number' || typeof acLon !== 'number') continue;
+    if (!Number.isFinite(acLat) || !Number.isFinite(acLon)) continue;
+    if (faaHaversineNm(lat, lon, acLat, acLon) <= radiusNm) count++;
+  }
+  return count;
+}
+
+async function fetchFaaMetarStations() {
+  return cachedFetch('faa-metar-stations', 24 * 60 * 60 * 1000, async () => {
+    try {
+      const resp = await fetchWithTimeout(
+        'https://aviationweather.gov/api/data/stationinfo?ids=ALL&format=json',
+        { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/1.0' } },
+        15000,
+      );
+      if (!resp.ok) return [];
+      const raw = await resp.json();
+      if (!Array.isArray(raw)) return [];
+      const out = [];
+      for (const row of raw) {
+        if (!row || typeof row !== 'object') continue;
+        const icaoId = typeof row.icaoId === 'string' ? row.icaoId.trim() : '';
+        const lat = faaMetarToFiniteNumber(row.lat);
+        const lon = faaMetarToFiniteNumber(row.lon);
+        if (!icaoId || lat === null || lon === null) continue;
+        out.push({ icaoId, lat, lon });
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  });
+}
+
+async function fetchFaaMetarsForStations(stationIds) {
+  const unique = Array.from(new Set(stationIds.filter(id => typeof id === 'string' && id.length > 0)));
+  if (unique.length === 0) return new Map();
+  const batches = [];
+  for (let i = 0; i < unique.length; i += 100) batches.push(unique.slice(i, i + 100));
+  const out = new Map();
+  await Promise.allSettled(batches.map(async (batch) => {
+    const cacheKey = `faa-metar-batch-${batch.slice(0, 5).join('|')}-${batch.length}`;
+    const data = await cachedFetch(cacheKey, 5 * 60 * 1000, async () => {
+      try {
+        const ids = batch.join(',');
+        const resp = await fetchWithTimeout(
+          `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(ids)}&format=json`,
+          { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/1.0' } },
+          12000,
+        );
+        if (!resp.ok) return [];
+        const raw = await resp.json();
+        if (!Array.isArray(raw)) return [];
+        return raw.map(r => faaParseMetarRow(r)).filter(Boolean);
+      } catch {
+        return [];
+      }
+    });
+    for (const m of data) {
+      m.ceilingFt = faaCeilingFromClouds(m.clouds);
+      out.set(m.stationId, m);
+    }
+  }));
+  return out;
+}
+
+async function enrichFaaCamerasWithMetar(cameras) {
+  const stations = await fetchFaaMetarStations();
+  if (!Array.isArray(cameras) || cameras.length === 0 || stations.length === 0) {
+    return { cameras, metarByStation: {} };
+  }
+  const camStation = new Map();
+  const stationIds = new Set();
+  for (const cam of cameras) {
+    const nearest = faaFindNearestStation(cam.lat, cam.lon, stations, 50);
+    if (nearest) {
+      camStation.set(cam.id, nearest.icaoId);
+      stationIds.add(nearest.icaoId);
+    }
+  }
+  const metarMap = await fetchFaaMetarsForStations(Array.from(stationIds));
+  const adsb = getCachedStale('adsb');
+  const enriched = cameras.map((cam) => {
+    const stationId = camStation.get(cam.id) ?? null;
+    const metar = stationId ? (metarMap.get(stationId) ?? null) : null;
+    const flightRule = metar ? faaDeriveFlightRule(metar.visibilityMi, metar.ceilingFt) : null;
+    const adsbCount = faaCountAdsbWithinRadius(cam.lat, cam.lon, adsb, 25);
+    return { ...cam, nearestMetarStation: stationId, currentMetar: metar, flightRule, adsbCount };
+  });
+  const metarByStation = Object.fromEntries(metarMap.entries());
+  return { cameras: enriched, metarByStation };
+}
+
 // ── AIS Stream Manager ────────────────────────────────────────────────────
 // Connects directly to aisstream.io using AISSTREAM_API_KEY (set via settings).
 // Maintains in-memory vessel state; serves /api/ais-snapshot with no relay needed.
@@ -3955,6 +4149,10 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── FAA Aviation Weather Cameras (public, no auth) ───────────────────────────
+  // Optional METAR/flight-rule/ADS-B enrichment when ?withMetar=1.
+  // Uses aviationweather.gov stationinfo + metar APIs (public, no auth).
+  // Algorithms mirror src/services/webcams/{flight-rule,station-matcher}.ts
+  // — the TS unit tests cover the underlying logic.
   if (requestUrl.pathname === '/api/faa-cameras') {
  // Old `avcams.faa.gov` host has been decommissioned (DNS no longer
  // resolves). The active service is `weathercams.faa.gov` whose
@@ -4010,7 +4208,10 @@ async function dispatch(requestUrl, req, routes, context) {
  }
  }
  setCached(CACHE_KEY, cameras);
- return json(cameras);
+ const withMetar = requestUrl.searchParams.get('withMetar') === '1';
+ if (!withMetar) return json(cameras);
+ const enriched = await enrichFaaCamerasWithMetar(cameras);
+ return json(enriched);
  } catch {
  return json(getCachedStale(CACHE_KEY) ?? [], 200);
  }
@@ -5843,9 +6044,6 @@ async function dispatch(requestUrl, req, routes, context) {
  };
  setCached(cacheKey, result, 15 * 60 * 1000);
  return json(result);
- } catch (error) {
- return json({ error: `tsunami-status error: ${error.message ?? error}` }, 502);
- }
  } catch (error) {
  return json({ error: `tsunami-status error: ${error.message ?? error}` }, 502);
  }

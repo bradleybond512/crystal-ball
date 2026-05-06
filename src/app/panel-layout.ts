@@ -59,6 +59,7 @@ import {
 } from '@/components';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { TriageBar } from '@/components/TriageBar';
+import { EEWStatusBar } from '@/components/EEWStatusBar';
 import { JustInRail } from '@/components/JustInRail';
 import { startPanelNarrator } from '@/services/panel-narrator';
 import { TodayView } from '@/components/TodayView';
@@ -517,6 +518,12 @@ export class PanelLayoutManager implements AppModule {
 
   private createPanels(): void {
  const panelsGrid = document.getElementById('panelsGrid')!;
+
+ // Mount the EEW status bar at the top of the body — sits above
+ // everything else (above the panel grid + triage bar). Layer 9
+ // of the seismic intelligence stack.
+ const eewStatusBar = new EEWStatusBar();
+ eewStatusBar.mount(document.body);
 
  // Mount the triage bar above the panel grid (auto-hides when nothing is hot).
  const triageBar = new TriageBar();

@@ -8573,6 +8573,183 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Windy webcams (paginated, up to 5000) ──
+  if (requestUrl.pathname === '/api/webcams/windy') {
+ const apiKey = process.env.WINDY_WEBCAMS_API_KEY;
+ if (!apiKey) return json({ feeds: [], requiresKey: true, error: 'WINDY_WEBCAMS_API_KEY not configured' }, 503);
+ const cacheKey = 'webcams-windy-paginated';
+ const cached = getCached(cacheKey, 60 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const HARD_CAP = 5000;
+ const PER_PAGE = 100;
+ const feeds = [];
+ let offset = 0;
+ while (feeds.length < HARD_CAP) {
+ const url = `https://api.windy.com/webcams/api/v3/webcams?include=images,location,player,categories&limit=${PER_PAGE}&offset=${offset}`;
+ const resp = await fetchWithTimeout(url, {
+ headers: { 'x-windy-api-key': apiKey, 'User-Agent': 'CrystalBall/1.0' },
+ }, 15000);
+ if (!resp.ok) break;
+ const data = await resp.json();
+ const items = Array.isArray(data?.webcams) ? data.webcams : [];
+ if (items.length === 0) break;
+ for (const w of items) {
+ if (w?.status && w.status !== 'active') continue;
+ const id = String(w.webcamId ?? w.id ?? '');
+ if (!id) continue;
+ const lat = w.location?.latitude;
+ const lon = w.location?.longitude;
+ if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+ const snapshot = w.images?.current?.preview ?? w.images?.daylight?.preview;
+ if (typeof snapshot !== 'string' || snapshot.length === 0) continue;
+ const stream = w.player?.day?.embed ?? w.player?.full?.embed;
+ const cats = (w.categories ?? []).map(c => (c.name ?? c.id ?? '').toLowerCase());
+ let category = 'weather';
+ if (cats.some(c => c.includes('mount') || c.includes('park') || c.includes('beach'))) category = 'nature';
+ else if (cats.some(c => c.includes('marine') || c.includes('harbor') || c.includes('coast'))) category = 'coastal';
+ else if (cats.some(c => c.includes('traffic') || c.includes('highway'))) category = 'traffic';
+ feeds.push({
+ id: `WINDY:${id}`,
+ source: 'WINDY',
+ name: w.title ?? `Windy ${id}`,
+ lat, lon,
+ snapshotUrl: snapshot,
+ ...(typeof stream === 'string' && stream.length > 0 ? { streamUrl: stream } : {}),
+ refreshIntervalSec: 600,
+ category,
+ metadata: {
+ ...(w.location?.city ? { city: w.location.city } : {}),
+ ...(w.location?.country ? { country: w.location.country } : {}),
+ ...(w.location?.countryCode ? { countryCode: w.location.countryCode } : {}),
+ ...(w.lastUpdatedOn ? { lastUpdatedOn: w.lastUpdatedOn } : {}),
+ },
+ isOnline: true,
+ lastChecked: w.lastUpdatedOn ? Date.parse(w.lastUpdatedOn) || undefined : undefined,
+ });
+ if (feeds.length >= HARD_CAP) break;
+ }
+ if (items.length < PER_PAGE) break;
+ offset += PER_PAGE;
+ }
+ const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 60 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: error?.message ?? 'unknown' });
+ return json({ feeds: [], error: error?.message ?? 'unknown' }, 502);
+ }
+  }
+
+  // ── NOAA coastal/buoy cams (NDBC buoycam, public no-auth) ──
+  if (requestUrl.pathname === '/api/webcams/coastal') {
+ const cacheKey = 'webcams-coastal';
+ const cached = getCached(cacheKey, 30 * 60 * 1000);
+ if (cached) return json(cached);
+ const records = [
+ { stationId: '44025', name: 'NDBC 44025 — Long Island, NY', lat: 40.251, lon: -73.165, agency: 'NDBC', region: 'Mid-Atlantic' },
+ { stationId: '44013', name: 'NDBC 44013 — Boston, MA', lat: 42.346, lon: -70.651, agency: 'NDBC', region: 'Northeast' },
+ { stationId: '46042', name: 'NDBC 46042 — Monterey Bay, CA', lat: 36.789, lon: -122.469, agency: 'NDBC', region: 'California' },
+ { stationId: '46026', name: 'NDBC 46026 — San Francisco, CA', lat: 37.755, lon: -122.839, agency: 'NDBC', region: 'California' },
+ { stationId: '41047', name: 'NDBC 41047 — Northeast Bahamas', lat: 27.467, lon: -71.516, agency: 'NDBC', region: 'Atlantic' },
+ { stationId: '46059', name: 'NDBC 46059 — West California', lat: 38.094, lon: -129.951, agency: 'NDBC', region: 'Pacific' },
+ { stationId: '42040', name: 'NDBC 42040 — Mobile South, AL', lat: 29.205, lon: -88.205, agency: 'NDBC', region: 'Gulf of Mexico' },
+ ];
+ const feeds = records.map(r => ({
+ id: `NOAA_COASTAL:${r.stationId}`,
+ source: 'NOAA_COASTAL',
+ name: r.name,
+ lat: r.lat,
+ lon: r.lon,
+ snapshotUrl: `https://www.ndbc.noaa.gov/buoycam.php?station=${encodeURIComponent(r.stationId)}`,
+ refreshIntervalSec: 600,
+ category: 'coastal',
+ metadata: { stationId: r.stationId, agency: r.agency, region: r.region },
+ }));
+ const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 30 * 60 * 1000);
+ return json(result);
+  }
+
+  // ── Master webcam aggregator (calls all sub-routes, dedupes, filters) ──
+  if (requestUrl.pathname === '/api/webcams') {
+ const sourceFilter = (requestUrl.searchParams.get('source') ?? '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+ const categoryFilter = (requestUrl.searchParams.get('category') ?? '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+ const bbox = requestUrl.searchParams.get('bbox');
+ const cacheKey = `webcams-master-${sourceFilter.join(',')}-${categoryFilter.join(',')}-${bbox ?? ''}`;
+ const cached = getCached(cacheKey, 5 * 60 * 1000);
+ if (cached) return json(cached);
+ const subroutes = [
+ { source: 'FAA', path: '/api/faa-cameras', shape: 'cameras-bare' },
+ { source: 'DOT511', path: '/api/dot-traffic-cams', shape: 'cameras' },
+ { source: 'USGS_VOLCANO', path: '/api/webcams/volcano', shape: 'feeds' },
+ { source: 'NPS', path: '/api/webcams/nps', shape: 'feeds' },
+ { source: 'ALERTWILDFIRE', path: '/api/webcams/fire', shape: 'feeds' },
+ { source: 'USGS_STREAM', path: '/api/webcams/streamgauge', shape: 'feeds' },
+ { source: 'WINDY', path: '/api/webcams/windy', shape: 'feeds' },
+ { source: 'NOAA_COASTAL', path: '/api/webcams/coastal', shape: 'feeds' },
+ ];
+ const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
+ const port = process.env.SIDECAR_PORT ?? '46123';
+ const baseUrl = `http://127.0.0.1:${port}`;
+ const results = await Promise.allSettled(targets.map(async (sub) => {
+ try {
+ const r = await fetchWithTimeout(`${baseUrl}${sub.path}`, { headers: { Accept: 'application/json' } }, 20000);
+ if (!r.ok) return [];
+ const data = await r.json();
+ if (sub.shape === 'feeds') return Array.isArray(data?.feeds) ? data.feeds : [];
+ if (sub.shape === 'cameras') {
+ // DOT/Caltrans: legacy { cameras: [{id, title, state, lat, lon, imageUrl}] }
+ const cams = Array.isArray(data?.cameras) ? data.cameras : [];
+ return cams.map(c => ({
+ id: `DOT:${c.state ?? 'UNK'}:${c.id ?? ''}`,
+ source: 'DOT511',
+ name: c.title ?? `${c.state ?? ''} Camera`,
+ lat: c.lat,
+ lon: c.lon,
+ snapshotUrl: c.imageUrl,
+ refreshIntervalSec: 60,
+ category: 'traffic',
+ metadata: { state: c.state ?? '', ...(c.direction ? { direction: c.direction } : {}) },
+ }));
+ }
+ if (sub.shape === 'cameras-bare') {
+ // FAA: bare array (or { cameras } envelope when withMetar=1)
+ const cams = Array.isArray(data) ? data : Array.isArray(data?.cameras) ? data.cameras : [];
+ return cams.map(c => ({
+ id: `FAA:${c.id}`,
+ source: 'FAA',
+ name: c.name,
+ lat: c.lat,
+ lon: c.lon,
+ snapshotUrl: c.imageUrl,
+ refreshIntervalSec: 300,
+ category: c.category === 'remote' ? 'nature' : c.category === 'coastal' ? 'coastal' : 'weather',
+ metadata: { state: c.state ?? '', faaCategory: c.category ?? '' },
+ isOnline: c.isOnline,
+ lastChecked: Date.parse(c.lastUpdated ?? '') || undefined,
+ }));
+ }
+ return [];
+ } catch {
+ return [];
+ }
+ }));
+ let allFeeds = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+ if (categoryFilter.length > 0) allFeeds = allFeeds.filter(f => categoryFilter.includes(f.category));
+ if (bbox) {
+ const parts = bbox.split(',').map(Number);
+ if (parts.length === 4 && parts.every(Number.isFinite)) {
+ const [minLat, minLon, maxLat, maxLon] = parts;
+ allFeeds = allFeeds.filter(f => f.lat >= minLat && f.lat <= maxLat && f.lon >= minLon && f.lon <= maxLon);
+ }
+ }
+ const result = { feeds: allFeeds, count: allFeeds.length, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 5 * 60 * 1000);
+ return json(result);
+  }
+
   // ── NPS webcams (requires NPS_API_KEY, free at developer.nps.gov) ──
   if (requestUrl.pathname === '/api/webcams/nps') {
  const apiKey = process.env.NPS_API_KEY;

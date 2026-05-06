@@ -84,6 +84,7 @@ export class GlobeHUD {
   private onHeatmapToggle: ((enabled: boolean) => void) | null = null;
   private onSatellitesToggle: ((enabled: boolean) => void) | null = null;
   private onAudioToggle: ((enabled: boolean) => void) | null = null;
+  private onSeismicWavesToggle: ((enabled: boolean) => void) | null = null;
   private onAlertClick: ((lat: number, lon: number, name: string) => void) | null = null;
   private onScreenshot: (() => void) | null = null;
   private onNavigationToggle: (() => void) | null = null;
@@ -93,12 +94,14 @@ export class GlobeHUD {
   private heatmapBtn: HTMLButtonElement | null = null;
   private satBtn: HTMLButtonElement | null = null;
   private audioBtn: HTMLButtonElement | null = null;
+  private seismicWavesBtn: HTMLButtonElement | null = null;
   private terminatorEnabled = false;
   private buildingsEnabled = false;
   private arcsEnabled = false;
   private heatmapEnabled = false;
   private satellitesEnabled = false;
   private audioEnabled = false;
+  private seismicWavesEnabled = true;
   private clusteringEnabled = true;
   private clockId: number | null = null;
   private fourDBadgeEl: HTMLElement | null = null;
@@ -244,6 +247,7 @@ export class GlobeHUD {
  this.buildArcsButton(layerBar);
  this.buildHeatmapButton(layerBar);
  this.buildSatellitesButton(layerBar);
+ this.buildSeismicWavesButton(layerBar);
  this.buildAudioButton(layerBar);
  this.buildScreenshotButton(layerBar);
  this.buildLayerButtons(layerBar);
@@ -434,6 +438,35 @@ export class GlobeHUD {
   setHeatmapEnabled(enabled: boolean): void {
  this.heatmapEnabled = enabled;
  this.heatmapBtn?.classList.toggle('ge-layer-active', enabled);
+  }
+
+  setOnSeismicWavesToggle(cb: (enabled: boolean) => void): void {
+ this.onSeismicWavesToggle = cb;
+  }
+
+  setSeismicWavesEnabled(enabled: boolean): void {
+ this.seismicWavesEnabled = enabled;
+ this.seismicWavesBtn?.classList.toggle('ge-layer-active', enabled);
+  }
+
+  isSeismicWavesEnabled(): boolean {
+ return this.seismicWavesEnabled;
+  }
+
+  private buildSeismicWavesButton(bar: HTMLElement): void {
+ const btn = document.createElement('button');
+ btn.className = `ge-layer-btn${this.seismicWavesEnabled ? ' ge-layer-active' : ''}`;
+ btn.title = 'Toggle animated P/S-wave rings for fused seismic events (Layer 6)';
+ const nameSpan = document.createElement('span');
+ nameSpan.className = 'ge-layer-name';
+ nameSpan.textContent = 'P/S WAVES';
+ btn.append(nameSpan);
+ btn.addEventListener('click', () => {
+ this.setSeismicWavesEnabled(!this.seismicWavesEnabled);
+ this.onSeismicWavesToggle?.(this.seismicWavesEnabled);
+ });
+ this.seismicWavesBtn = btn;
+ bar.append(btn);
   }
 
   private buildHeatmapButton(bar: HTMLElement): void {

@@ -41,7 +41,23 @@ export class UnifiedWebcamPanel extends Panel {
   constructor() {
     super({ id: 'unified-webcams', title: 'Webcams', className: 'panel-wide' });
     void this.load();
+    window.addEventListener('webcam:select', this.handleGlobeSelect as EventListener);
   }
+
+  private handleGlobeSelect = (e: Event): void => {
+    const detail = (e as CustomEvent<{ feedId?: string; feed?: WebcamFeed }>).detail;
+    if (!detail) return;
+    if (detail.feed) {
+      this.selectedFeed = detail.feed;
+      this.render();
+    } else if (detail.feedId) {
+      const found = this.feeds.find((f) => f.id === detail.feedId);
+      if (found) {
+        this.selectedFeed = found;
+        this.render();
+      }
+    }
+  };
 
   private async load(): Promise<void> {
     this.loading = true;

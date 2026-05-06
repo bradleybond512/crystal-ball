@@ -2,6 +2,7 @@ import { getApiBaseUrl } from '@/services/runtime';
 import type { NWSAlert } from '@/services/nws-alerts';
 import type { GDACSEvent } from '@/services/gdacs';
 import { dataFreshness } from '@/services/data-freshness';
+import type { FlightRule, MetarData } from '@/services/webcams/metar-types';
 
 export interface FAACamera {
   id: string;
@@ -13,6 +14,10 @@ export interface FAACamera {
   imageUrl: string;
   isOnline: boolean;
   lastUpdated: string;
+  nearestMetarStation?: string | null;
+  currentMetar?: MetarData | null;
+  flightRule?: FlightRule | null;
+  adsbCount?: number;
 }
 
 export interface ScoredFAACamera extends FAACamera {
@@ -45,8 +50,8 @@ export function parseFAACamerasResponse(payload: unknown): FAACamera[] {
 export async function fetchFAACameras(): Promise<FAACamera[]> {
   if (cache && Date.now() - cache.ts < CACHE_TTL_MS) return cache.data;
   try {
- const res = await fetch(`${getApiBaseUrl()}/api/faa-cameras`, {
- signal: AbortSignal.timeout(15_000),
+ const res = await fetch(`${getApiBaseUrl()}/api/faa-cameras?withMetar=1`, {
+ signal: AbortSignal.timeout(20_000),
  });
  if (!res.ok) {
  dataFreshness.recordError('faa-cameras', `HTTP ${res.status}`);

@@ -51,6 +51,7 @@ export * from './SecurityAdvisoriesPanel';
 export { NetworkRulesPanel } from './NetworkRulesPanel';
 export { S2UIntelPanel } from './S2UIntelPanel';
 export { SynthesisPanel } from './SynthesisPanel';
+export { CyberGeoPanel } from './CyberGeoPanel';
 export * from './OrefSirensPanel';
 export * from './TelegramIntelPanel';
 export * from './BreakingNewsBanner';

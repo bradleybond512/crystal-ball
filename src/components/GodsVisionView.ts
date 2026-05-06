@@ -15,6 +15,8 @@ import { GlobePulse } from '@/components/gods-vision/GlobePulse';
 import { GlobeArcs } from '@/components/gods-vision/GlobeArcs';
 import { GlobeHeatmap } from '@/components/gods-vision/GlobeHeatmap';
 import { GlobeReactorBeacons } from '@/components/GlobeReactorBeacons';
+import { GlobeWebcamLayer } from '@/services/webcams/webcam-globe-layer';
+import { fetchUnifiedWebcams } from '@/services/webcams/fetcher';
 import { FlyModeController } from '@/components/gods-vision/FlyMode/FlyModeController';
 import { BuildingTileManager } from '@/services/building-tiles';
 import type { FlySubMode } from '@/components/gods-vision/FlyMode/flyModeKeybinds';
@@ -72,6 +74,7 @@ export class GodsVisionView {
   private autoFollow: AutoFollowEngine | null = null;
   private fourD: Globe4DManager | null = null;
   private reactorBeacons: GlobeReactorBeacons | null = null;
+  private webcamLayer: GlobeWebcamLayer | null = null;
   private globePulse: GlobePulse | null = null;
   private globeArcs: GlobeArcs | null = null;
   private globeHeatmap: GlobeHeatmap | null = null;
@@ -169,6 +172,15 @@ export class GodsVisionView {
  this.cleanupHandlers.push(() => { this.globeAlertClusters?.destroy(); this.globeAlertClusters = null; });
  this.reactorBeacons = new GlobeReactorBeacons(viewer);
  this.reactorBeacons.mount();
+ this.webcamLayer = new GlobeWebcamLayer(viewer, {
+ fetchFeeds: async () => {
+ const cat = await fetchUnifiedWebcams({ category: 'fire,volcano,coastal' });
+ return cat.feeds;
+ },
+ highSalienceOnly: true,
+ });
+ void this.webcamLayer.mount();
+ this.cleanupHandlers.push(() => { this.webcamLayer?.destroy(); this.webcamLayer = null; });
  }
 
  // Auto-follow engine

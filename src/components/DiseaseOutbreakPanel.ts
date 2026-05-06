@@ -1,13 +1,29 @@
 /* eslint-disable sonarjs/no-nested-conditional, unicorn/no-nested-ternary, unicorn/no-negated-condition */
 import { Panel } from './Panel';
 import type { DiseaseOutbreak, GlobalDiseaseSnapshot } from '@/services/disease-outbreak';
+import type { WastewaterData } from '@/services/wastewater';
+import type { WhoDonAlert, WhoProMedCrossReference } from '@/services/disease-intel';
+import { renderWastewaterTab, renderCrossReferencedTab } from './disease-outbreak-tabs';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { t } from '@/services/i18n';
+
+type Tab = 'outbreaks' | 'wastewater' | 'cross-ref';
+
+const TAB_STORAGE_KEY = 'cb:disease-outbreak-tab';
+const TAB_LABELS: Record<Tab, string> = {
+  outbreaks: 'Outbreaks',
+  wastewater: 'Wastewater',
+  'cross-ref': 'Cross-Referenced',
+};
 
 export class DiseaseOutbreakPanel extends Panel {
   private outbreaks: DiseaseOutbreak[] = [];
   private snapshots: GlobalDiseaseSnapshot[] = [];
+  private wastewater: WastewaterData | null = null;
+  private crossRefs: WhoProMedCrossReference[] = [];
+  private whoDonAlerts: WhoDonAlert[] = [];
   private lastUpdated: Date | null = null;
+  private activeTab: Tab = readStoredTab();
 
   constructor() {
  super({
@@ -15,7 +31,7 @@ export class DiseaseOutbreakPanel extends Panel {
  title: t('panels.diseaseOutbreaks'),
  showCount: true,
  trackActivity: true,
- infoTooltip: 'WHO Disease Outbreak News + ReliefWeb health situation reports. Updated every 15 minutes.',
+ infoTooltip: 'WHO Disease Outbreak News + ReliefWeb + ProMED + CDC NWSS wastewater. Updated every 15 minutes.',
  });
  this.showLoading('Fetching WHO outbreak data...');
   }
@@ -25,6 +41,17 @@ export class DiseaseOutbreakPanel extends Panel {
  this.snapshots = snapshots;
  this.lastUpdated = new Date();
  this.setCount(outbreaks.length);
+ this.render();
+  }
+
+  public setWastewater(data: WastewaterData | null): void {
+ this.wastewater = data;
+ this.render();
+  }
+
+  public setCrossReferences(crossRefs: WhoProMedCrossReference[], whoDonAlerts: WhoDonAlert[]): void {
+ this.crossRefs = crossRefs;
+ this.whoDonAlerts = whoDonAlerts;
  this.render();
   }
 
@@ -40,10 +67,19 @@ export class DiseaseOutbreakPanel extends Panel {
  this.setCount(0);
   }
 
-  private render(): void {
+  private renderTabStrip(): string {
+ const tabs: Tab[] = ['outbreaks', 'wastewater', 'cross-ref'];
+ return `<div class="do-tab-strip" role="tablist" style="display:flex;gap:6px;margin-bottom:6px">
+${tabs.map(tab => {
+ const active = tab === this.activeTab ? 'do-tab-active' : '';
+ return `  <button class="do-tab ${active}" data-tab="${tab}" role="tab" aria-selected="${tab === this.activeTab}" type="button">${escapeHtml(TAB_LABELS[tab])}</button>`;
+}).join('\n')}
+</div>`;
+  }
+
+  private renderOutbreaksTab(): string {
  if (this.outbreaks.length === 0) {
- this.setContent('<div class="panel-empty">No active outbreaks reported.</div>');
- return;
+ return '<div class="panel-empty">No active outbreaks reported.</div>';
  }
 
  const snapshotHtml = this.snapshots.map(s => {
@@ -59,7 +95,6 @@ export class DiseaseOutbreakPanel extends Panel {
 
  const rows = this.outbreaks.slice(0, 50).map(o => {
  const sevClass = sevRowClass(o.severity);
- // sanitizeUrl rejects non-http(s) schemes and private/loopback hosts.
  const safeUrl = o.url ? sanitizeUrl(o.url) : '';
  const link = safeUrl
  ? `<a href="${safeUrl}" target="_blank" rel="noopener" class="do-link">${escapeHtml(o.disease)}</a>`
@@ -75,8 +110,7 @@ export class DiseaseOutbreakPanel extends Panel {
 
  const updatedStr = this.lastUpdated ? timeAgo(this.lastUpdated) : 'never';
 
- this.setContent(`
- <div class="do-panel-content">
+ return `<div class="do-panel-content">
  ${snapshotHtml}
  <table class="eq-table">
  <thead>
@@ -91,12 +125,48 @@ export class DiseaseOutbreakPanel extends Panel {
  <tbody>${rows}</tbody>
  </table>
  <div class="fires-footer">
- <span class="fires-source">WHO · ReliefWeb · ${this.outbreaks.length} reports</span>
+ <span class="fires-source">WHO · ReliefWeb · ProMED · ${this.outbreaks.length} reports</span>
  <span class="fires-updated">Updated ${updatedStr}</span>
  </div>
- </div>
- `);
+ </div>`;
   }
+
+  private render(): void {
+ let body = '';
+ switch (this.activeTab) {
+ case 'outbreaks': { body = this.renderOutbreaksTab(); break;
+ }
+ case 'wastewater': { body = renderWastewaterTab(this.wastewater); break;
+ }
+ case 'cross-ref': { body = renderCrossReferencedTab(this.crossRefs, this.whoDonAlerts); break;
+ }
+ }
+ this.setContent(`${this.renderTabStrip()}${body}`);
+ this.wireTabHandlers();
+  }
+
+  private wireTabHandlers(): void {
+ const root = this.getElement();
+ if (!root) return;
+ const buttons = root.querySelectorAll<HTMLButtonElement>('.do-tab');
+ for (const btn of buttons) {
+ btn.addEventListener('click', () => {
+ const tab = btn.dataset.tab as Tab | undefined;
+ if (!tab || tab === this.activeTab) return;
+ this.activeTab = tab;
+ try { localStorage.setItem(TAB_STORAGE_KEY, tab); } catch { /* noop */ }
+ this.render();
+ });
+ }
+  }
+}
+
+function readStoredTab(): Tab {
+  try {
+ const stored = localStorage.getItem(TAB_STORAGE_KEY);
+ if (stored === 'outbreaks' || stored === 'wastewater' || stored === 'cross-ref') return stored;
+  } catch { /* noop */ }
+  return 'outbreaks';
 }
 
 function sevRowClass(sev: DiseaseOutbreak['severity']): string {

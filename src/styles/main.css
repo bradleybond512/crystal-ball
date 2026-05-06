@@ -3,6 +3,7 @@
 @import './macos-native.css';
 @import './gods-vision.css';
 @import './alerts.css';
+@import './eew-status-bar.css';
 
 /* ============================================================
  Theme Colors — overridden by [data-theme="light"] below

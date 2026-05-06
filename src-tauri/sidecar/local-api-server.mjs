@@ -7130,6 +7130,29 @@ async function dispatch(requestUrl, req, routes, context) {
  });
   }
 
+  // ── Finance: OFR FSI ──────────────────────────────────────────────────
+  // Engine in src/services/finance/stress-monitor.ts (18 tests passing).
+  // configured=false until OFR ASCII fetcher is wired.
+  if (requestUrl.pathname === '/api/financial-stress') {
+ return json({ configured: false, error: 'OFR FSI series not yet ingested' });
+  }
+
+  // ── Finance: commodity stress (12m + 24m σ) ───────────────────────────
+  if (requestUrl.pathname === '/api/commodity-stress') {
+ return json({ configured: false, error: 'commodity series not yet ingested', alerts: [] });
+  }
+
+  // ── Climate: ENSO phase + shortage adjustments ────────────────────────
+  // Engine in src/services/climate/enso-monitor.ts (22 tests passing).
+  // configured=false until NOAA ONI ASCII fetcher is wired.
+  if (requestUrl.pathname === '/api/enso') {
+ return json({
+ configured: false,
+ error: 'NOAA ONI series not yet ingested',
+ shortageAdjustments: [],
+ });
+  }
+
   // ── Geopolitics: gray-zone events ─────────────────────────────────────
   // Engine lives in src/services/geopolitics/grayzone-classifier.ts
   // (23 tests passing). configured=false until OpenSanctions / CISA /

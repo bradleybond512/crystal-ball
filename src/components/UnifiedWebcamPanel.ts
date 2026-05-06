@@ -1,9 +1,19 @@
 /* eslint-disable sonarjs/no-async-constructor */
 import { Panel } from './Panel';
 import { fetchUnifiedWebcams, getFavoriteIds, toggleFavorite } from '@/services/webcams/fetcher';
+import {
+  CATEGORY_MARKER_COLOR,
+  OFFLINE_PROBE_TIMEOUT_MS,
+  OFFLINE_REPROBE_INTERVAL_MS,
+  buildSnapshotFilename,
+  computeBoundsForFeeds,
+  decideOfflineStatus,
+  projectEquirectangular,
+  type OfflineStatus,
+} from '@/services/webcams/panel-extras';
 import type { WebcamCategory, WebcamFeed, WebcamSource } from '@/services/webcams/webcam-types';
 
-type ViewMode = 'grid' | 'list';
+type ViewMode = 'grid' | 'list' | 'map';
 
 const SOURCE_LABELS: Record<WebcamSource, string> = {
   FAA: 'FAA',
@@ -37,11 +47,26 @@ export class UnifiedWebcamPanel extends Panel {
   private favorites = new Set<string>(getFavoriteIds());
   private loading = false;
   private lastError: string | null = null;
+  private offlineStatus = new Map<string, { status: OfflineStatus; checkedAt: number }>();
+  private offlineProbeTimer: ReturnType<typeof setInterval> | null = null;
+  private toastEl: HTMLElement | null = null;
 
   constructor() {
     super({ id: 'unified-webcams', title: 'Webcams', className: 'panel-wide' });
     void this.load();
     window.addEventListener('webcam:select', this.handleGlobeSelect as EventListener);
+    this.offlineProbeTimer = setInterval(() => {
+      void this.probeVisibleFeeds();
+    }, OFFLINE_REPROBE_INTERVAL_MS);
+  }
+
+  public destroy(): void {
+    if (this.offlineProbeTimer != null) {
+      clearInterval(this.offlineProbeTimer);
+      this.offlineProbeTimer = null;
+    }
+    window.removeEventListener('webcam:select', this.handleGlobeSelect as EventListener);
+    super.destroy();
   }
 
   private handleGlobeSelect = (e: Event): void => {
@@ -72,6 +97,7 @@ export class UnifiedWebcamPanel extends Panel {
       this.loading = false;
       this.render();
     }
+    void this.probeVisibleFeeds();
   }
 
   public refresh(): void {
@@ -138,7 +164,9 @@ export class UnifiedWebcamPanel extends Panel {
       return;
     }
 
-    el.append(this.viewMode === 'grid' ? this.buildGrid(list) : this.buildList(list));
+    if (this.viewMode === 'grid') el.append(this.buildGrid(list));
+    else if (this.viewMode === 'list') el.append(this.buildList(list));
+    else el.append(this.buildMap(list));
   }
 
   private buildToolbar(): HTMLElement {
@@ -164,9 +192,13 @@ export class UnifiedWebcamPanel extends Panel {
 
     const viewWrap = document.createElement('div');
     viewWrap.className = 'webcams-view-toggle';
-    for (const mode of ['grid', 'list'] as ViewMode[]) {
+    for (const mode of ['grid', 'list', 'map'] as ViewMode[]) {
       const b = document.createElement('button');
-      b.textContent = mode === 'grid' ? '▦ Grid' : '☰ List';
+      let label: string;
+      if (mode === 'grid') label = '▦ Grid';
+      else if (mode === 'list') label = '☰ List';
+      else label = '🗺 Map';
+      b.textContent = label;
       b.style.background = this.viewMode === mode ? '#1f6feb' : 'transparent';
       b.style.color = this.viewMode === mode ? '#fff' : 'inherit';
       b.style.border = '1px solid #444';
@@ -367,6 +399,23 @@ export class UnifiedWebcamPanel extends Panel {
 
     info.append(meta);
 
+    const offline = this.offlineStatus.get(f.id);
+    if (offline?.status === 'offline') {
+      const overlay = document.createElement('div');
+      overlay.textContent = '⚠ Offline';
+      overlay.style.position = 'absolute';
+      overlay.style.inset = '0';
+      overlay.style.display = 'flex';
+      overlay.style.alignItems = 'center';
+      overlay.style.justifyContent = 'center';
+      overlay.style.background = 'rgba(0,0,0,0.55)';
+      overlay.style.color = '#f85149';
+      overlay.style.fontWeight = '600';
+      overlay.style.fontSize = '13px';
+      overlay.style.pointerEvents = 'none';
+      card.append(overlay);
+    }
+
     card.append(img);
     card.append(star);
     card.append(info);
@@ -415,7 +464,21 @@ export class UnifiedWebcamPanel extends Panel {
       row.append(tdStar);
 
       const tdName = document.createElement('td');
-      tdName.textContent = f.name;
+      const offline = this.offlineStatus.get(f.id);
+      const dot = document.createElement('span');
+      dot.style.display = 'inline-block';
+      dot.style.width = '8px';
+      dot.style.height = '8px';
+      dot.style.borderRadius = '50%';
+      dot.style.marginRight = '6px';
+      let dotColor: string;
+      if (offline?.status === 'online') dotColor = '#3fb950';
+      else if (offline?.status === 'offline') dotColor = '#f85149';
+      else dotColor = '#888';
+      dot.style.background = dotColor;
+      dot.title = offline?.status ?? 'unknown';
+      tdName.append(dot);
+      tdName.append(document.createTextNode(f.name));
       row.append(tdName);
 
       const tdSource = document.createElement('td');
@@ -508,6 +571,218 @@ export class UnifiedWebcamPanel extends Panel {
     }
     div.append(meta);
 
+    const snapBtn = document.createElement('button');
+    snapBtn.textContent = '📷 Snapshot';
+    snapBtn.style.marginTop = '8px';
+    snapBtn.style.padding = '4px 10px';
+    snapBtn.style.background = '#1f6feb';
+    snapBtn.style.color = '#fff';
+    snapBtn.style.border = 'none';
+    snapBtn.style.borderRadius = '3px';
+    snapBtn.style.cursor = 'pointer';
+    snapBtn.addEventListener('click', () => {
+      void this.saveSnapshot(f, img);
+    });
+    div.append(snapBtn);
+
     return div;
+  }
+
+  // ── Snapshot to Downloads ────────────────────────────────────────────
+
+  private async saveSnapshot(f: WebcamFeed, img: HTMLImageElement): Promise<void> {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || 1280;
+      canvas.height = img.naturalHeight || 720;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        this.showToast('Snapshot failed: canvas unavailable');
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const blob: Blob | null = await new Promise((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', 0.92),
+      );
+      if (!blob) {
+        this.showToast('Snapshot failed: canvas blocked (CORS)');
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = buildSnapshotFilename(f.name);
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      this.showToast('Saved to Downloads');
+    } catch (error) {
+      this.showToast(`Snapshot failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private showToast(msg: string): void {
+    if (this.toastEl) this.toastEl.remove();
+    const toast = document.createElement('div');
+    toast.textContent = msg;
+    toast.style.position = 'fixed';
+    toast.style.bottom = '32px';
+    toast.style.left = '50%';
+    toast.style.transform = 'translateX(-50%)';
+    toast.style.background = '#0a1929';
+    toast.style.color = '#fff';
+    toast.style.padding = '8px 16px';
+    toast.style.borderRadius = '4px';
+    toast.style.fontSize = '13px';
+    toast.style.boxShadow = '0 2px 8px rgba(0,0,0,0.4)';
+    toast.style.zIndex = '99999';
+    toast.style.pointerEvents = 'none';
+    document.body.append(toast);
+    this.toastEl = toast;
+    setTimeout(() => {
+      if (this.toastEl === toast) {
+        toast.remove();
+        this.toastEl = null;
+      }
+    }, 2000);
+  }
+
+  // ── Map view (SVG, equirectangular) ──────────────────────────────────
+
+  private buildMap(feeds: WebcamFeed[]): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'webcams-map';
+    wrap.style.padding = '8px';
+    wrap.style.position = 'relative';
+
+    const width = 760;
+    const height = 360;
+    const bounds = computeBoundsForFeeds(feeds);
+
+    if (!bounds) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No cams to plot.';
+      wrap.append(empty);
+      return wrap;
+    }
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', String(height));
+    svg.style.background = '#0a1929';
+    svg.style.borderRadius = '4px';
+    svg.style.border = '1px solid #1f3a5a';
+
+    // Light grid for orientation.
+    for (let i = 1; i < 4; i++) {
+      const xLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      xLine.setAttribute('x1', String((width / 4) * i));
+      xLine.setAttribute('y1', '0');
+      xLine.setAttribute('x2', String((width / 4) * i));
+      xLine.setAttribute('y2', String(height));
+      xLine.setAttribute('stroke', '#1f3a5a');
+      xLine.setAttribute('stroke-dasharray', '2 4');
+      svg.append(xLine);
+      const yLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      yLine.setAttribute('x1', '0');
+      yLine.setAttribute('y1', String((height / 4) * i));
+      yLine.setAttribute('x2', String(width));
+      yLine.setAttribute('y2', String((height / 4) * i));
+      yLine.setAttribute('stroke', '#1f3a5a');
+      yLine.setAttribute('stroke-dasharray', '2 4');
+      svg.append(yLine);
+    }
+
+    const vp = { width, height, bounds, paddingPx: 16 };
+    for (const f of feeds.slice(0, 800)) {
+      const { x, y } = projectEquirectangular(f.lat, f.lon, vp);
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', String(x));
+      circle.setAttribute('cy', String(y));
+      circle.setAttribute('r', '4');
+      circle.setAttribute('fill', CATEGORY_MARKER_COLOR[f.category]);
+      circle.setAttribute('fill-opacity', '0.85');
+      circle.setAttribute('stroke', '#fff');
+      circle.setAttribute('stroke-width', '0.5');
+      circle.style.cursor = 'pointer';
+      const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      titleEl.textContent = `${f.name} (${f.category})`;
+      circle.append(titleEl);
+      circle.addEventListener('click', () => {
+        this.selectedFeed = f;
+        this.render();
+      });
+      svg.append(circle);
+    }
+
+    wrap.append(svg);
+
+    if (feeds.length > 800) {
+      const more = document.createElement('p');
+      more.style.opacity = '0.6';
+      more.style.fontSize = '11px';
+      more.textContent = `+${feeds.length - 800} more cams not plotted (refine filter)`;
+      wrap.append(more);
+    }
+
+    const legend = document.createElement('div');
+    legend.style.display = 'flex';
+    legend.style.gap = '8px';
+    legend.style.flexWrap = 'wrap';
+    legend.style.marginTop = '6px';
+    legend.style.fontSize = '11px';
+    for (const [cat, color] of Object.entries(CATEGORY_MARKER_COLOR)) {
+      const item = document.createElement('span');
+      item.style.display = 'inline-flex';
+      item.style.alignItems = 'center';
+      item.style.gap = '3px';
+      const dot = document.createElement('span');
+      dot.style.display = 'inline-block';
+      dot.style.width = '8px';
+      dot.style.height = '8px';
+      dot.style.borderRadius = '50%';
+      dot.style.background = color;
+      item.append(dot);
+      const label = document.createElement('span');
+      label.textContent = cat;
+      label.style.textTransform = 'capitalize';
+      label.style.opacity = '0.8';
+      item.append(label);
+      legend.append(item);
+    }
+    wrap.append(legend);
+
+    return wrap;
+  }
+
+  // ── Offline probing ──────────────────────────────────────────────────
+
+  private async probeVisibleFeeds(): Promise<void> {
+    if (this.viewMode === 'map') return; // map view doesn't need per-card status
+    const list = this.displayed.slice(0, 60);
+    const now = Date.now();
+    const stale = list.filter((f) => {
+      const cached = this.offlineStatus.get(f.id);
+      return !cached || now - cached.checkedAt > OFFLINE_REPROBE_INTERVAL_MS;
+    });
+    if (stale.length === 0) return;
+    const promises = stale.map(async (f) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), OFFLINE_PROBE_TIMEOUT_MS);
+      try {
+        const resp = await fetch(f.snapshotUrl, { method: 'HEAD', signal: ctrl.signal });
+        const status = decideOfflineStatus({ responseStatus: resp.status });
+        this.offlineStatus.set(f.id, { status, checkedAt: Date.now() });
+      } catch (error) {
+        const errorName = error instanceof Error ? error.name : 'Error';
+        const status = decideOfflineStatus({ errorName, timedOut: errorName === 'AbortError' });
+        this.offlineStatus.set(f.id, { status, checkedAt: Date.now() });
+      } finally {
+        clearTimeout(timer);
+      }
+    });
+    await Promise.allSettled(promises);
+    this.render();
   }
 }

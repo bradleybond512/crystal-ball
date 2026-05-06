@@ -15,6 +15,7 @@ import { GlobePulse } from '@/components/gods-vision/GlobePulse';
 import { GlobeArcs } from '@/components/gods-vision/GlobeArcs';
 import { GlobeHeatmap } from '@/components/gods-vision/GlobeHeatmap';
 import { GlobeReactorBeacons } from '@/components/GlobeReactorBeacons';
+import { GlobeSeismicWaves } from '@/components/GlobeSeismicWaves';
 import { FlyModeController } from '@/components/gods-vision/FlyMode/FlyModeController';
 import { BuildingTileManager } from '@/services/building-tiles';
 import type { FlySubMode } from '@/components/gods-vision/FlyMode/flyModeKeybinds';
@@ -72,6 +73,7 @@ export class GodsVisionView {
   private autoFollow: AutoFollowEngine | null = null;
   private fourD: Globe4DManager | null = null;
   private reactorBeacons: GlobeReactorBeacons | null = null;
+  private seismicWaves: GlobeSeismicWaves | null = null;
   private globePulse: GlobePulse | null = null;
   private globeArcs: GlobeArcs | null = null;
   private globeHeatmap: GlobeHeatmap | null = null;
@@ -169,6 +171,8 @@ export class GodsVisionView {
  this.cleanupHandlers.push(() => { this.globeAlertClusters?.destroy(); this.globeAlertClusters = null; });
  this.reactorBeacons = new GlobeReactorBeacons(viewer);
  this.reactorBeacons.mount();
+ this.seismicWaves = new GlobeSeismicWaves(viewer);
+ this.seismicWaves.mount();
  }
 
  // Auto-follow engine
@@ -251,6 +255,8 @@ export class GodsVisionView {
  this.hud.setOnScreenshot(() => { void this.takeScreenshot(); });
  this.hud.setOnArcsToggle((enabled) => this.globeArcs?.setEnabled(enabled));
  this.hud.setOnHeatmapToggle((enabled) => this.globeHeatmap?.setEnabled(enabled));
+ this.hud.setOnSeismicWavesToggle((enabled) => this.seismicWaves?.setEnabled(enabled));
+ if (this.seismicWaves) this.hud.setSeismicWavesEnabled(this.seismicWaves.isEnabled());
  this.hud.setOnNavigationToggle(() => void this.toggleNavigation());
 
  // 4D mode orchestrator (T toggles; D/I/H pick playback mode; Tab/[/]/Esc cycle UI).
@@ -380,6 +386,9 @@ export class GodsVisionView {
 
  this.reactorBeacons?.destroy();
  this.reactorBeacons = null;
+
+ this.seismicWaves?.destroy();
+ this.seismicWaves = null;
 
  this.hud?.destroy();
  this.hud = null;

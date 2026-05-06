@@ -5780,6 +5780,50 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
+  // ── DYFI ("Did You Feel It?") cdi_zip.xml passthrough ─────────────────────
+  // GET /api/dyfi?eventId=<id>
+  // Returns the raw cdi_zip.xml for the requested USGS event so the
+  // renderer's pure layer (`dyfi-collector.ts`) can parse + aggregate
+  // by state. 15-min cache.
+  if (requestUrl.pathname === '/api/dyfi') {
+ const eventId = requestUrl.searchParams.get('eventId');
+ if (!eventId || !/^[A-Za-z0-9_-]{1,64}$/.test(eventId)) {
+ return json({ error: 'invalid or missing eventId' }, 400);
+ }
+ const cacheKey = `dyfi:${eventId}`;
+ const cached = getCached(cacheKey);
+ if (cached) return json(cached);
+ try {
+ const detailUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${encodeURIComponent(eventId)}&producttype=dyfi`;
+ const detailRes = await fetchWithTimeout(detailUrl, { headers: { Accept: 'application/json' } }, 15000);
+ if (!detailRes.ok) throw new Error(`USGS detail ${detailRes.status}`);
+ const detail = await detailRes.json();
+ const dyfiProduct = detail?.properties?.products?.dyfi?.[0] ?? null;
+ const cdiZipUrl = dyfiProduct?.contents?.['cdi_zip.xml']?.url
+ ?? dyfiProduct?.contents?.['dyfi_zip.xml']?.url
+ ?? null;
+ if (typeof cdiZipUrl !== 'string') {
+ return json({ eventId, available: false, xml: '', fetchedAt: Date.now() });
+ }
+ const xmlRes = await fetchWithTimeout(cdiZipUrl, { headers: { Accept: 'application/xml,text/xml' } }, 15000);
+ if (!xmlRes.ok) throw new Error(`USGS dyfi xml ${xmlRes.status}`);
+ const xml = await xmlRes.text();
+ const result = {
+ eventId,
+ available: true,
+ xml,
+ sourceUrl: cdiZipUrl,
+ maxMmi: typeof dyfiProduct?.properties?.maxmmi === 'string' ? Number.parseFloat(dyfiProduct.properties.maxmmi) : null,
+ numResponses: typeof dyfiProduct?.properties?.numResp === 'string' ? Number.parseInt(dyfiProduct.properties.numResp, 10) : null,
+ fetchedAt: Date.now(),
+ };
+ setCached(cacheKey, result, 15 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ error: `dyfi error: ${error.message ?? error}` }, 502);
+ }
+  }
+
   // ── Travel warning RSS/Atom parser helper ─────────────────────────────────
   function parseTravelWarnings(xml, source) {
  const isAtom = source !== 'DFAT';

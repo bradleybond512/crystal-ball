@@ -9128,6 +9128,79 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
   }
 
+  // ── Proximity search across the master catalog (Phase 2 PR B) ──
+  if (requestUrl.pathname === '/api/webcams/near') {
+ const lat = Number(requestUrl.searchParams.get('lat'));
+ const lon = Number(requestUrl.searchParams.get('lon'));
+ const radiusKm = Number(requestUrl.searchParams.get('radiusKm') ?? 100);
+ const categoryFilter = requestUrl.searchParams.get('category')?.toLowerCase() ?? null;
+ if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(radiusKm) || radiusKm <= 0) {
+ return json({ feeds: [], error: 'lat, lon, radiusKm required' }, 400);
+ }
+ const port = process.env.SIDECAR_PORT ?? '46123';
+ try {
+ const r = await fetchWithTimeout(`http://127.0.0.1:${port}/api/webcams`, { headers: { Accept: 'application/json' } }, 20000);
+ if (!r.ok) return json({ feeds: [], error: `master HTTP ${r.status}` }, 502);
+ const data = await r.json();
+ const all = Array.isArray(data?.feeds) ? data.feeds : [];
+ const haversine = (lat1, lon1, lat2, lon2) => {
+ const toRad = (d) => (d * Math.PI) / 180;
+ const dLat = toRad(lat2 - lat1);
+ const dLon = toRad(lon2 - lon1);
+ const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+ const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+ return 6371.0088 * c;
+ };
+ const scored = [];
+ for (const f of all) {
+ if (categoryFilter && f.category !== categoryFilter) continue;
+ if (!Number.isFinite(f.lat) || !Number.isFinite(f.lon)) continue;
+ const km = haversine(lat, lon, f.lat, f.lon);
+ if (km <= radiusKm) scored.push({ feed: f, km });
+ }
+ scored.sort((a, b) => a.km - b.km);
+ const feeds = scored.map(s => ({ ...s.feed, distanceKm: Number(s.km.toFixed(2)) }));
+ return json({ feeds, count: feeds.length, queryLat: lat, queryLon: lon, radiusKm, updatedAt: Math.floor(Date.now() / 1000) });
+ } catch (error) {
+ return json({ feeds: [], error: error?.message ?? 'fetch failed' }, 502);
+ }
+  }
+
+  // ── Active webcam-trigger events (Phase 2 PR B) ──
+  // GET returns the rolling-window list; POST appends a renderer-derived event.
+  // The registry is in-memory because triggers are best-effort and recoverable
+  // — losing them on sidecar restart is fine; the renderer re-evaluates.
+  if (requestUrl.pathname === '/api/webcams/triggers') {
+ if (req.method === 'POST') {
+ try {
+ const chunks = [];
+ for await (const c of req) chunks.push(c);
+ const body = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+ if (body && typeof body === 'object' && body.kind && Array.isArray(body.affectedCamIds)) {
+ globalThis.__webcamTriggerRegistry ??= [];
+ globalThis.__webcamTriggerRegistry.push({
+ kind: body.kind,
+ triggeredAt: typeof body.triggeredAt === 'number' ? body.triggeredAt : Date.now(),
+ affectedCamIds: body.affectedCamIds,
+ reason: String(body.reason ?? ''),
+ metadata: body.metadata && typeof body.metadata === 'object' ? body.metadata : {},
+ });
+ if (globalThis.__webcamTriggerRegistry.length > 200) {
+ globalThis.__webcamTriggerRegistry.splice(0, globalThis.__webcamTriggerRegistry.length - 200);
+ }
+ return json({ ok: true });
+ }
+ return json({ ok: false, error: 'invalid event' }, 400);
+ } catch {
+ return json({ ok: false, error: 'invalid JSON' }, 400);
+ }
+ }
+ const events = Array.isArray(globalThis.__webcamTriggerRegistry) ? globalThis.__webcamTriggerRegistry : [];
+ const cutoff = Date.now() - 30 * 60 * 1000;
+ const active = events.filter(e => e.triggeredAt >= cutoff);
+ return json({ active, updatedAt: Math.floor(Date.now() / 1000) });
+  }
+
   if (context.cloudFallback && cloudPreferred.has(requestUrl.pathname)) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context);
  if (cloudResponse) return cloudResponse;

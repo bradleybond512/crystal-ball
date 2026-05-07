@@ -5678,9 +5678,6 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch (error) {
  return json({ error: `tsunami-status error: ${error.message ?? error}` }, 502);
  }
- } catch (error) {
- return json({ error: `tsunami-status error: ${error.message ?? error}` }, 502);
- }
   }
 
   // ── USGS FDSN catalog passthrough (pre-arrival detector poll) ─────────
@@ -8186,6 +8183,147 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
  } catch (error) {
  return json({ stations: [], error: `epa-radnet error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── Infrastructure intelligence: power grid (EIA v2) ──────────────────────
+  // GET /api/infrastructure/grid — 7-day demand (D) + net-generation (NG)
+  // for the five biggest US balancing authorities. 15-min cache.
+  if (requestUrl.pathname === '/api/infrastructure/grid') {
+ const eiaKey = process.env.EIA_API_KEY;
+ if (!eiaKey) return json({ rows: [], keyMissing: true, fetchedAt: Date.now() });
+ const cacheKey = 'infrastructure-grid';
+ const cached = getCached(cacheKey, 15 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const base = 'https://api.eia.gov/v2/electricity/rto/daily-region-data/data/';
+ const params = new URLSearchParams({
+ 'api_key': eiaKey,
+ 'frequency': 'daily',
+ 'data[0]': 'value',
+ 'sort[0][column]': 'period',
+ 'sort[0][direction]': 'desc',
+ 'length': '70',
+ });
+ const facets = ['CISO', 'PJM', 'MISO', 'ERCO', 'NYIS']
+ .map((r) => `facets[respondent][]=${encodeURIComponent(r)}`)
+ .join('&');
+ const types = ['D', 'NG'].map((t) => `facets[type][]=${t}`).join('&');
+ const fullUrl = `${base}?${params.toString()}&${facets}&${types}`;
+ const r = await fetchWithTimeout(fullUrl, { headers: { Accept: 'application/json' } }, 15000);
+ if (!r.ok) throw new Error(`EIA HTTP ${r.status}`);
+ const data = await r.json();
+ const rows = Array.isArray(data?.response?.data) ? data.response.data : [];
+ const result = {
+ rows: rows.map((row) => ({
+ period: typeof row?.period === 'string' ? row.period : null,
+ respondent: typeof row?.respondent === 'string' ? row.respondent : null,
+ type: typeof row?.type === 'string' ? row.type : null,
+ value: row?.value ?? null,
+ })),
+ fetchedAt: Date.now(),
+ };
+ setCached(cacheKey, result, 15 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ rows: [], error: `infrastructure-grid error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── Infrastructure intelligence: power outages (PowerOutage.us) ──────────
+  // GET /api/infrastructure/outages — county-level US rollup. 5-min cache.
+  if (requestUrl.pathname === '/api/infrastructure/outages') {
+ const cacheKey = 'infrastructure-outages';
+ const cached = getCached(cacheKey, 5 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const url = 'https://api.poweroutage.us/api/v1/outages?country=US';
+ const r = await fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15000);
+ if (!r.ok) throw new Error(`PowerOutage.us HTTP ${r.status}`);
+ const data = await r.json();
+ const entitiesRaw = Array.isArray(data?.OutageEntities) ? data.OutageEntities : Array.isArray(data?.outages) ? data.outages : [];
+ const result = {
+ nationalCustomersTracked: typeof data?.ContinentalUSCustomersTrackedTotal === 'number' ? data.ContinentalUSCustomersTrackedTotal : null,
+ entities: entitiesRaw.map((row) => ({
+ StateName: row?.StateName ?? row?.state ?? null,
+ CountyName: row?.CountyName ?? row?.county ?? null,
+ CustomersTracked: row?.CustomersTracked ?? row?.customersTracked ?? null,
+ CustomersAffected: row?.CustomersAffected ?? row?.customersAffected ?? null,
+ RecordDateTime: row?.RecordDateTime ?? row?.recordDateTime ?? null,
+ UtilityCompany: row?.UtilityCompany ?? row?.utility ?? null,
+ })),
+ fetchedAt: Date.now(),
+ };
+ setCached(cacheKey, result, 5 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ entities: [], error: `infrastructure-outages error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── Infrastructure intelligence: BGP hijacks (Cloudflare Radar) ──────────
+  // GET /api/infrastructure/bgp — recent BGP hijack events. 10-min cache.
+  if (requestUrl.pathname === '/api/infrastructure/bgp') {
+ const cfToken = process.env.CLOUDFLARE_API_TOKEN;
+ const cacheKey = 'infrastructure-bgp';
+ const cached = getCached(cacheKey, 10 * 60 * 1000);
+ if (cached) return json(cached);
+ if (!cfToken) return json({ events: [], keyMissing: true, fetchedAt: Date.now() });
+ try {
+ const url = 'https://api.cloudflare.com/client/v4/radar/bgp/hijacks/events?dateRange=1d&per_page=20';
+ const r = await fetchWithTimeout(url, {
+ headers: {
+ Accept: 'application/json',
+ Authorization: `Bearer ${cfToken}`,
+ },
+ }, 15000);
+ if (!r.ok) throw new Error(`Cloudflare Radar HTTP ${r.status}`);
+ const data = await r.json();
+ const eventsRaw = Array.isArray(data?.result?.events)
+ ? data.result.events
+ : Array.isArray(data?.result?.data)
+ ? data.result.data
+ : Array.isArray(data?.events)
+ ? data.events
+ : [];
+ const result = {
+ events: eventsRaw.map((e) => ({
+ id: e?.id ?? null,
+ started_at: e?.started_at ?? e?.startedAt ?? null,
+ ended_at: e?.ended_at ?? e?.endedAt ?? null,
+ detected_origins: e?.detected_origins ?? e?.detectedOrigins ?? [],
+ expected_origin: e?.expected_origin ?? e?.expectedOrigin ?? null,
+ involved_asns: e?.involved_asns ?? e?.involvedAsns ?? [],
+ prefixes: e?.prefixes ?? [],
+ type: e?.type ?? '',
+ })),
+ fetchedAt: Date.now(),
+ };
+ setCached(cacheKey, result, 10 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ events: [], error: `infrastructure-bgp error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── Infrastructure intelligence: radiation (EPA RadNet) ──────────────────
+  // GET /api/infrastructure/radiation — RadNet near-real-time gross gamma.
+  // Reuses the existing /api/epa-radnet-proxy upstream. 30-min cache.
+  if (requestUrl.pathname === '/api/infrastructure/radiation') {
+ const cacheKey = 'infrastructure-radiation';
+ const cached = getCached(cacheKey, 30 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const upstream = 'https://www.epa.gov/enviro/api/radnet/data?media=Air&analyte_group=Gross';
+ const r = await fetchWithTimeout(upstream, { headers: { 'User-Agent': CHROME_UA } }, 15000);
+ if (!r.ok) throw new Error(`RadNet HTTP ${r.status}`);
+ const data = await r.json();
+ const stations = Array.isArray(data) ? data : Array.isArray(data?.stations) ? data.stations : [];
+ const result = { stations, fetchedAt: Date.now() };
+ setCached(cacheKey, result, 30 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ stations: [], error: `infrastructure-radiation error: ${error.message ?? error}` }, 502);
  }
   }
 

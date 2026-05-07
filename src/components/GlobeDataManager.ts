@@ -22,6 +22,7 @@ import {
   PolylineCollection,
   HeadingPitchRoll,
   Transforms,
+  Entity,
   PolygonGraphics,
 } from 'cesium';
 
@@ -493,6 +494,7 @@ export class GlobeDataManager {
  this.registerLayer('strike-packages', () => this.loadStrikePackages());
  this.registerLayer('cyber', () => this.loadCyberThreats());
  this.registerLayer('flights', () => this.loadMilitaryFlights());
+ this.registerLayer('aviationIntel', () => this.loadAviationIntel());
  this.registerLayer('vessels', () => this.loadMilitaryVessels());
  this.registerLayer('darkVessels', () => this.loadDarkVessels());
  this.registerLayer('gpsJamming', () => this.loadGpsJamming());
@@ -1302,6 +1304,144 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  });
  }
  }
+  }
+
+  private async loadAviationIntel(): Promise<void> {
+ const layer = this.layers.get('aviationIntel');
+ if (!layer) return;
+
+ const [{ fetchAviationIntelSnapshot }, helpers] = await Promise.all([
+ import('@/services/aviation/aviation-intel-service'),
+ import('@/services/aviation/aviation-globe-helpers'),
+ ]);
+ const snapshot = await fetchAviationIntelSnapshot();
+
+ layer.source.entities.removeAll();
+
+ for (const tfr of helpers.tfrsWithGeometry(snapshot.notams.data)) {
+ this.addAviationTfrEntity(layer, tfr, helpers);
+ }
+ for (const sigmet of snapshot.sigmets.data) {
+ if (sigmet.polygon.length >= 3) this.addAviationSigmetEntity(layer, sigmet, helpers);
+ }
+ for (const ash of helpers.ashAdvisoriesWithPolygon(snapshot.volcanicAsh.data)) {
+ this.addAviationAshEntity(layer, ash, helpers);
+ }
+ for (const ac of helpers.aircraftWithPosition(snapshot.military.data)) {
+ this.addAviationAircraftEntity(layer, ac, helpers);
+ }
+  }
+
+  private addAviationTfrEntity(
+ layer: GlobeLayer,
+ tfr: import('@/services/aviation/aviation-intel-types').AviationNotam,
+ helpers: typeof import('@/services/aviation/aviation-globe-helpers'),
+  ): void {
+ if (!tfr.center) return;
+ const ring = helpers.circleToPolygon({
+ centerLat: tfr.center.lat,
+ centerLon: tfr.center.lon,
+ radiusNm: tfr.center.radiusNm,
+ });
+ const positions = ring.map((p) => Cartesian3.fromDegrees(p.lon, p.lat));
+ const style = helpers.notamStyle(tfr);
+ const outline = Color.fromCssColorString(style.outlineHex);
+ const fill = Color.fromCssColorString(style.fillHex).withAlpha(style.fillAlpha);
+ layer.source.entities.add(new Entity({
+ id: `aviation-tfr-${tfr.id}`,
+ polygon: new PolygonGraphics({
+ hierarchy: new PolygonHierarchy(positions),
+ material: fill,
+ outline: true,
+ outlineColor: outline,
+ outlineWidth: 2,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ }),
+ description: helpers.notamDescriptionHtml(tfr),
+ name: tfr.notamNumber || tfr.id,
+ }));
+  }
+
+  private addAviationSigmetEntity(
+ layer: GlobeLayer,
+ sigmet: import('@/services/aviation/aviation-intel-types').AviationSigmet,
+ helpers: typeof import('@/services/aviation/aviation-globe-helpers'),
+  ): void {
+ const positions = sigmet.polygon.map((p) => Cartesian3.fromDegrees(p.lon, p.lat));
+ const style = helpers.sigmetStyle(sigmet);
+ const color = Color.fromCssColorString(style.hex);
+ layer.source.entities.add(new Entity({
+ id: `aviation-sigmet-${sigmet.id}`,
+ polygon: new PolygonGraphics({
+ hierarchy: new PolygonHierarchy(positions),
+ material: color.withAlpha(style.fillAlpha),
+ outline: true,
+ outlineColor: color,
+ outlineWidth: 1,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ }),
+ description: helpers.sigmetDescriptionHtml(sigmet),
+ name: `${sigmet.hazard} (${sigmet.severity})`,
+ }));
+  }
+
+  private addAviationAshEntity(
+ layer: GlobeLayer,
+ ash: import('@/services/aviation/aviation-intel-types').VolcanicAshAdvisory,
+ helpers: typeof import('@/services/aviation/aviation-globe-helpers'),
+  ): void {
+ const positions = ash.polygon.map((p) => Cartesian3.fromDegrees(p.lon, p.lat));
+ const color = Color.fromCssColorString(helpers.VOLCANIC_ASH_HEX);
+ layer.source.entities.add(new Entity({
+ id: `aviation-ash-${ash.id}`,
+ polygon: new PolygonGraphics({
+ hierarchy: new PolygonHierarchy(positions),
+ material: color.withAlpha(helpers.VOLCANIC_ASH_FILL_ALPHA),
+ outline: true,
+ outlineColor: color,
+ outlineWidth: 2,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ }),
+ description: `<h3>${ash.volcano} ash advisory</h3><pre>${ash.text}</pre>`,
+ name: `${ash.volcano} ash`,
+ }));
+  }
+
+  private addAviationAircraftEntity(
+ layer: GlobeLayer,
+ ac: import('@/services/aviation/aviation-intel-types').MilitaryAircraft,
+ helpers: typeof import('@/services/aviation/aviation-globe-helpers'),
+  ): void {
+ if (ac.lat === null || ac.lon === null) return;
+ const altMeters = ac.altitudeFt === null ? 0 : ac.altitudeFt * 0.3048;
+ const style = helpers.aircraftStyle(ac);
+ const color = Color.fromCssColorString(style.hex);
+ layer.source.entities.add(new Entity({
+ id: `aviation-mil-${ac.icao24}`,
+ position: Cartesian3.fromDegrees(ac.lon, ac.lat, altMeters),
+ point: {
+ pixelSize: style.emergency ? 10 : 6,
+ color,
+ outlineColor: Color.BLACK,
+ outlineWidth: style.emergency ? 2 : 1,
+ heightReference: HeightReference.NONE,
+ },
+ label: ac.callsign ? {
+ text: ac.callsign,
+ font: '10px monospace',
+ fillColor: color,
+ outlineColor: Color.BLACK,
+ outlineWidth: 2,
+ style: 2,
+ pixelOffset: LABEL_OFFSET_SM,
+ horizontalOrigin: HorizontalOrigin.CENTER,
+ verticalOrigin: VerticalOrigin.BOTTOM,
+ scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+ distanceDisplayCondition: new DistanceDisplayCondition(0, 8e6),
+ } : undefined,
+ description: helpers.aircraftDescriptionHtml(ac),
+ name: ac.callsign ?? ac.icao24,
+ }));
   }
 
   private async loadMilitaryVessels(): Promise<void> {

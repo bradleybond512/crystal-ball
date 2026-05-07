@@ -12,6 +12,12 @@
 
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
+import {
+  filterAcledMaritimeIncidents,
+  WAR_RISK_ZONES,
+  type MaritimeIncident,
+  type AcledEventRow,
+} from '@/services/maritime/maritime-threats';
 
 const REFRESH_MS = 60_000;
 
@@ -95,6 +101,19 @@ function riskScoreColor(score: number): string {
   return '#9e9e9e';
 }
 
+function threatRowColor(t: MaritimeIncident): string {
+  if (t.fatalities >= 5) return '#d50000';
+  if (t.fatalities >= 1) return '#ff9800';
+  if (t.warRiskZones.length > 0) return '#ffeb3b';
+  return '#9e9e9e';
+}
+
+function warZoneCategoryColor(category: 'piracy' | 'state_conflict' | 'missile_drone' | 'mixed'): string {
+  if (category === 'state_conflict' || category === 'missile_drone') return '#d50000';
+  if (category === 'piracy') return '#ff9800';
+  return '#ffeb3b';
+}
+
 function chokepointThreatLevel(darkEventsAtChokepoint: number, hasCriticalRisk: boolean): ThreatLevel {
   if (hasCriticalRisk || darkEventsAtChokepoint >= 3) return 'red';
   if (darkEventsAtChokepoint >= 2) return 'orange';
@@ -120,6 +139,7 @@ export class MaritimeIntelPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private darkEvents: DarkVesselGapEvent[] = [];
   private freightStress: FreightStressResponse | null = null;
+  private threats: MaritimeIncident[] = [];
   private lastFetchAt: number | null = null;
   private lastFetchError: string | null = null;
 
@@ -130,7 +150,7 @@ export class MaritimeIntelPanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Six critical maritime chokepoints with threat-level color coding, freight cost stress (FRED PPIACO + PFOODINDEXM), and active dark-vessel gap events from /api/dark-vessels.',
+        'Six critical maritime chokepoints with threat-level color coding, freight cost stress (FRED PPIACO + PFOODINDEXM), active dark-vessel gap events from /api/dark-vessels, and ACLED maritime incidents within 300km of chokepoints + active war-risk zones.',
     });
     this.start();
   }
@@ -150,6 +170,7 @@ export class MaritimeIntelPanel extends Panel {
   private async refresh(): Promise<void> {
     let darkOk = false;
     let freightOk = false;
+    let threatsOk = false;
     try {
       const resp = await fetch('/api/dark-vessels', {
         headers: { Accept: 'application/json' },
@@ -173,8 +194,22 @@ export class MaritimeIntelPanel extends Panel {
     } catch {
       this.freightStress = null;
     }
+    try {
+      const resp = await fetch('/api/acled-events', {
+        headers: { Accept: 'application/json' },
+      });
+      if (resp.ok) {
+        const body = (await resp.json()) as { events?: AcledEventRow[] };
+        this.threats = filterAcledMaritimeIncidents(Array.isArray(body.events) ? body.events : []);
+        threatsOk = true;
+      }
+    } catch {
+      this.threats = [];
+    }
     this.lastFetchAt = Date.now();
-    this.lastFetchError = !darkOk && !freightOk ? 'Both endpoints unavailable' : null;
+    this.lastFetchError = !darkOk && !freightOk && !threatsOk
+      ? 'All endpoints unavailable'
+      : null;
     this.render();
   }
 
@@ -193,19 +228,69 @@ export class MaritimeIntelPanel extends Panel {
     if (overall === 'high' || overall === 'critical') {
       count += 1;
     }
+    // Threat events from the last 7 days are surfaced as concerning
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    for (const t of this.threats) {
+      if (t.date >= cutoff) count += 1;
+    }
     return count;
   }
 
   private buildHtml(): string {
     const stressBlock = this.renderFreightStress();
     const chokepointsBlock = this.renderChokepoints();
+    const threatsBlock = this.renderThreats();
     const darkBlock = this.renderDarkVessels();
     const footer = this.renderFooter();
     return `<div style="padding:12px;display:flex;flex-direction:column;gap:14px;">
       ${stressBlock}
       ${chokepointsBlock}
+      ${threatsBlock}
       ${darkBlock}
       ${footer}
+    </div>`;
+  }
+
+  private renderThreats(): string {
+    const zoneBadges = WAR_RISK_ZONES.map((z) => {
+      const color = warZoneCategoryColor(z.threatCategory);
+      return `<span title="${escapeHtml(z.rationale)}" style="display:inline-block;padding:2px 6px;border:1px solid ${color};border-radius:8px;font-size:10px;color:${color};margin-right:4px;margin-bottom:4px;">${escapeHtml(z.name)}</span>`;
+    }).join('');
+    if (this.threats.length === 0) {
+      return `<div>
+        <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:6px;">Maritime Threats</div>
+        <div style="margin-bottom:6px;">${zoneBadges}</div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);">No ACLED maritime incidents in the last 30 days. (Requires \`ACLED_ACCESS_TOKEN\` + \`ACLED_EMAIL\` for live data.)</div>
+      </div>`;
+    }
+    const rows = this.threats.slice(0, 10).map((t) => this.renderThreatRow(t)).join('');
+    const more = this.threats.length > 10
+      ? `<div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:4px;">+ ${this.threats.length - 10} more</div>`
+      : '';
+    return `<div>
+      <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:6px;">Maritime Threats (${this.threats.length})</div>
+      <div style="margin-bottom:6px;">${zoneBadges}</div>
+      <div style="display:flex;flex-direction:column;gap:4px;">${rows}</div>
+      ${more}
+    </div>`;
+  }
+
+  private renderThreatRow(t: MaritimeIncident): string {
+    const color = threatRowColor(t);
+    const cpTag = t.nearestChokepoint
+      ? `<span style="color:var(--text-secondary,#aaa);">${escapeHtml(t.nearestChokepoint)} ${t.nearestChokepointKm}km</span>`
+      : '';
+    const zoneTag = t.warRiskZones.length > 0
+      ? `<span style="color:${color};margin-left:6px;">${escapeHtml(t.warRiskZones.join(' · '))}</span>`
+      : '';
+    const fatLabel = t.fatalities > 0 ? `<span style="color:${color};">${t.fatalities} fatalit${t.fatalities === 1 ? 'y' : 'ies'}</span>` : '';
+    return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:3px;padding:6px 8px;font-size:11px;">
+      <div style="display:flex;justify-content:space-between;align-items:start;">
+        <div style="font-weight:600;">${escapeHtml(t.subEventType || t.eventType)} · ${escapeHtml(t.country)}</div>
+        <div style="font-family:ui-monospace,monospace;color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(t.date)}</div>
+      </div>
+      <div style="margin-top:2px;font-size:10px;">${cpTag}${zoneTag}</div>
+      <div style="margin-top:2px;color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(t.location)} · ${escapeHtml(t.actor)} ${fatLabel}</div>
     </div>`;
   }
 

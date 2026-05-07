@@ -1817,6 +1817,158 @@ export function __gdeltGetCacheForTests() {
   return _gdeltCache;
 }
 
+// ── ACLED events poller (sidecar; renderer parsers in
+// src/services/synthesis/acled-poller.ts) ─────────────────────────────
+
+const ACLED_CACHE_LIMIT = 500;
+const ACLED_WINDOW_DAYS = 30;
+const ACLED_POLL_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+let _acledCache = { events: [], asOf: 0, lastError: null };
+let _acledPollTimer = null;
+let _acledPollScheduled = false;
+let _acledPollInFlight = false;
+
+function _acledIsoDateOffset(daysAgo) {
+  const ms = Date.now() - daysAgo * 24 * 60 * 60 * 1000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
+ * Transform a single ACLED record to a HistoricalEvent. Mirrors
+ * transformAcledToHistorical in src/services/synthesis/acled-poller.ts;
+ * duplicated for the .mjs runtime per the parseFredCsvSidecar pattern.
+ */
+export function transformAcledRecordSidecar(record) {
+  if (!record || typeof record !== 'object') return null;
+  const id = record.event_id_cnty;
+  if (typeof id !== 'string' || id.length === 0) return null;
+
+  const fatalities = (() => {
+    const v = record.fatalities;
+    if (v === undefined || v === null) return 0;
+    const n = typeof v === 'number' ? v : Number.parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+  })();
+
+  let intensity = 'low';
+  if (fatalities >= 50) intensity = 'critical';
+  else if (fatalities >= 10) intensity = 'high';
+  else if (fatalities >= 1) intensity = 'medium';
+
+  const actors = [];
+  if (record.actor1) actors.push(record.actor1);
+  if (record.actor2 && record.actor2 !== record.actor1) actors.push(record.actor2);
+
+  const country = record.country || 'Unknown';
+  const placeBits = [record.location, record.admin1, country].filter((s) => typeof s === 'string' && s.length > 0);
+  const location = placeBits.length > 0 ? placeBits.join(', ') : country;
+  const eventType = record.sub_event_type || record.event_type || 'event';
+
+  const a1 = record.actor1 || 'Actor';
+  const a2 = record.actor2 ? ` ↔ ${record.actor2}` : '';
+  const place = record.location ? ` in ${record.location}` : '';
+  const countrySuffix = record.country ? `, ${record.country}` : '';
+  const fatalitySuffix = fatalities > 0 ? ` (${fatalities} fatalities)` : '';
+
+  return {
+    id: `acled-${id}`,
+    date: typeof record.event_date === 'string' && record.event_date.length === 10
+      ? record.event_date
+      : new Date().toISOString().slice(0, 10),
+    location,
+    country,
+    eventType,
+    actors,
+    intensity,
+    summary: `${eventType}: ${a1}${a2}${place}${countrySuffix}${fatalitySuffix}`,
+    source: 'acled',
+  };
+}
+
+async function _pollAcledOnce() {
+  if (_acledPollInFlight) return;
+  _acledPollInFlight = true;
+  try {
+    const accessToken = process.env.ACLED_ACCESS_TOKEN;
+    const email = process.env.ACLED_EMAIL;
+    if (!accessToken || !email) {
+      _acledCache = { ..._acledCache, lastError: 'ACLED_ACCESS_TOKEN and ACLED_EMAIL required' };
+      return;
+    }
+    const since = _acledIsoDateOffset(ACLED_WINDOW_DAYS);
+    const params = new URLSearchParams();
+    params.set('key', accessToken);
+    params.set('email', email);
+    params.set('limit', String(ACLED_CACHE_LIMIT));
+    params.set('event_date', since);
+    params.set('event_date_where', '>=');
+    params.set('fields', 'event_id_cnty|event_date|event_type|sub_event_type|actor1|actor2|country|admin1|location|latitude|longitude|fatalities|notes');
+    params.set('_format', 'json');
+    const url = `https://api.acleddata.com/acled/read?${params.toString()}`;
+
+    const res = await fetchWithTimeout(url, {}, 30_000);
+    if (!res.ok) throw new Error(`ACLED HTTP ${res.status}`);
+    const json = await res.json();
+    const records = Array.isArray(json?.data) ? json.data : [];
+    const events = [];
+    for (const record of records) {
+      const ev = transformAcledRecordSidecar(record);
+      if (ev) events.push(ev);
+    }
+    _acledCache = {
+      events: events.slice(-ACLED_CACHE_LIMIT),
+      asOf: Date.now(),
+      lastError: null,
+    };
+  } catch (error) {
+    _acledCache = {
+      ..._acledCache,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    _acledPollInFlight = false;
+  }
+}
+
+function _scheduleNextAcledPoll() {
+  // Schedule the *next* 06:00 UTC; if we're past today's, target tomorrow's.
+  const now = new Date();
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 6, 0, 0));
+  if (next.getTime() <= now.getTime()) {
+    next.setUTCDate(next.getUTCDate() + 1);
+  }
+  const delay = Math.max(1000, next.getTime() - now.getTime());
+  const timeoutHandle = setTimeout(() => {
+    void _pollAcledOnce();
+    _acledPollTimer = setInterval(() => { void _pollAcledOnce(); }, ACLED_POLL_INTERVAL_MS);
+    if (_acledPollTimer.unref) _acledPollTimer.unref();
+  }, delay);
+  if (timeoutHandle.unref) timeoutHandle.unref();
+}
+
+function _ensureAcledPolling() {
+  if (_acledPollScheduled) return;
+  _acledPollScheduled = true;
+  // Kick once immediately so first request to /api/acled/events
+  // doesn't return empty for a day; then schedule the daily 06:00 UTC.
+  void _pollAcledOnce();
+  _scheduleNextAcledPoll();
+}
+
+/** Test-only hook. */
+export function __acledSetCacheForTests(events) {
+  _acledCache = { events: events.slice(-ACLED_CACHE_LIMIT), asOf: Date.now(), lastError: null };
+}
+
+/** Compute the milliseconds until the next 06:00 UTC. Exported for tests. */
+export function _acledMsUntilNext6UtcSidecar(now = Date.now()) {
+  const d = new Date(now);
+  const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 6, 0, 0));
+  if (next.getTime() <= now) next.setUTCDate(next.getUTCDate() + 1);
+  return next.getTime() - now;
+}
+
 const _sidecarCache = new Map(); // key -> { data, ts }
 const SIDECAR_CACHE_MAX = 500;
 let _sidecarCacheSweepTimer = null;
@@ -3157,6 +3309,25 @@ async function dispatch(requestUrl, req, routes, context) {
       });
     }
     return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── ACLED events corpus (daily 06:00 UTC poll → precedent-matcher) ──
+  // Path with slash to distinguish from the existing on-demand
+  // /api/acled-events route (last-30-day air/drone strikes only).
+  // This route serves the broader cached HistoricalEvent[] used by
+  // the precedent-matcher.
+  if (requestUrl.pathname === '/api/acled/events') {
+    if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+    _ensureAcledPolling();
+    const ageMs = _acledCache.asOf > 0 ? Date.now() - _acledCache.asOf : null;
+    return json({
+      events: _acledCache.events,
+      asOf: _acledCache.asOf,
+      ageMs,
+      stale: ageMs !== null && ageMs > 36 * 60 * 60 * 1000, // > 1.5x the daily poll
+      available: _acledCache.events.length > 0 || _acledCache.asOf > 0,
+      lastError: _acledCache.lastError,
+    });
   }
 
   // ── GDELT 2.0 events corpus (15-min poll → precedent-matcher) ──

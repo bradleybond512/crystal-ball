@@ -2956,6 +2956,96 @@ async function handleIntelGenerate(req, res, context) {
   }
 }
 
+// ── Weather-hazard helpers (PR 1) ────────────────────────────────────────────
+function alertCategoryFor(event) {
+  const e = String(event || '').toLowerCase();
+  if (e.includes('tornado')) return 'tornado';
+  if (e.includes('hurricane') || e.includes('tropical') || e.includes('storm surge')) return 'hurricane';
+  if (e.includes('flood')) return 'flood';
+  if (e.includes('winter') || e.includes('blizzard') || e.includes('ice storm') || e.includes('snow')) return 'winter';
+  if (e.includes('thunderstorm')) return 'thunderstorm';
+  return 'other';
+}
+
+function stormCategoryForSidecar(classification, intensityMph) {
+  const c = String(classification || '').toUpperCase();
+  if (c.startsWith('PT') || c.includes('POST')) return 'PT';
+  if (c.startsWith('TD') || c.includes('DEPRESSION')) return 'TD';
+  if (intensityMph >= 157) return 'HU5';
+  if (intensityMph >= 130) return 'HU4';
+  if (intensityMph >= 111) return 'HU3';
+  if (intensityMph >= 96) return 'HU2';
+  if (intensityMph >= 74) return 'HU1';
+  if (c.startsWith('TS') || c.includes('STORM') || intensityMph >= 39) return 'TS';
+  return 'unknown';
+}
+
+function pctToFractionSidecar(x) {
+  if (x === undefined || x === null || x === '') return 0;
+  const v = parseFloat(x);
+  if (!Number.isFinite(v)) return 0;
+  return v > 1.5 ? v / 100 : v;
+}
+
+function normalizeUsdmDate(s) {
+  if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  return s;
+}
+
+function parseSeaIceForSidecar(csv) {
+  const lines = csv.trim().split(/\r?\n/);
+  const all = [];
+  for (const line of lines) {
+    const cells = line.split(',').map(s => s.trim());
+    const yr = parseInt(cells[0], 10);
+    if (!Number.isFinite(yr) || yr < 1900 || yr > 2200) continue;
+    const mo = parseInt(cells[1], 10);
+    const dy = parseInt(cells[2], 10);
+    const ext = parseFloat(cells[3]);
+    if (!Number.isFinite(mo) || !Number.isFinite(dy) || !Number.isFinite(ext) || ext < 0) continue;
+    all.push({ yr, mo, dy, extent: ext });
+  }
+  if (all.length === 0) return null;
+  // Build climatology + record-low DOY
+  const byDoy = new Map();
+  const minByDoy = new Map();
+  for (const r of all) {
+    const key = `${String(r.mo).padStart(2,'0')}-${String(r.dy).padStart(2,'0')}`;
+    if (r.yr >= 1981 && r.yr <= 2010) {
+      const list = byDoy.get(key) ?? [];
+      list.push(r.extent);
+      byDoy.set(key, list);
+    }
+    const cur = minByDoy.get(key);
+    if (cur === undefined || r.extent < cur) minByDoy.set(key, r.extent);
+  }
+  const medianByDoy = new Map();
+  for (const [k, list] of byDoy) {
+    const sorted = [...list].sort((a, b) => a - b);
+    medianByDoy.set(k, sorted[Math.floor(sorted.length / 2)] ?? 0);
+  }
+  // Latest entry
+  let latest = null;
+  for (const r of all) {
+    if (!latest || (r.yr > latest.yr) || (r.yr === latest.yr && r.mo > latest.mo) || (r.yr === latest.yr && r.mo === latest.mo && r.dy > latest.dy)) {
+      latest = r;
+    }
+  }
+  if (!latest) return null;
+  const key = `${String(latest.mo).padStart(2,'0')}-${String(latest.dy).padStart(2,'0')}`;
+  const median = medianByDoy.get(key);
+  const min = minByDoy.get(key);
+  return {
+    date: `${latest.yr}-${String(latest.mo).padStart(2,'0')}-${String(latest.dy).padStart(2,'0')}`,
+    extentMillionKm2: latest.extent,
+    medianMillionKm2: median ?? undefined,
+    anomalyMillionKm2: median !== undefined ? latest.extent - median : undefined,
+    isRecordLow: min !== undefined && Math.abs(latest.extent - min) < 0.005,
+  };
+}
+
 function extractAlertCentroid(feature) {
   const geom = feature?.geometry;
   if (!geom) return null;
@@ -4468,6 +4558,177 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch {
  return json([], 200);
  }
+  }
+
+  // ── Weather hazards: severity-filtered NWS alerts (PR 1) ─────────────────
+  if (requestUrl.pathname === '/api/weather/alerts') {
+    try {
+      const resp = await fetchWithTimeout(
+        'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update',
+        { headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-Hazards/1.0 (https://github.com/bradleybond512/crystal-ball)' } },
+        12_000,
+      );
+      if (!resp.ok) return json([], 200);
+      const data = await resp.json();
+      const features = Array.isArray(data?.features) ? data.features : [];
+      const HIGH_PREFIXES = [
+        'Tornado Warning', 'Hurricane Warning', 'Flash Flood Warning',
+        'Winter Storm Warning', 'Tropical Storm Warning',
+        'Severe Thunderstorm Warning', 'Blizzard Warning',
+        'Ice Storm Warning', 'Storm Surge Warning', 'Extreme Wind Warning',
+      ];
+      const out = [];
+      for (const f of features) {
+        const p = f?.properties ?? {};
+        const sev = String(p.severity ?? '');
+        const ev = String(p.event ?? '');
+        const isHighSev = sev === 'Extreme' || sev === 'Severe';
+        const isFilteredEvent = HIGH_PREFIXES.some(prefix => ev.startsWith(prefix));
+        if (!isHighSev && !isFilteredEvent) continue;
+        out.push({
+          id: String(p.id ?? ''),
+          event: ev,
+          severity: sev || 'Unknown',
+          certainty: String(p.certainty ?? 'Unknown'),
+          urgency: String(p.urgency ?? 'Unknown'),
+          headline: String(p.headline ?? ''),
+          areaDesc: String(p.areaDesc ?? ''),
+          sent: String(p.sent ?? ''),
+          expires: String(p.expires ?? ''),
+          geometry: f?.geometry ?? undefined,
+          category: alertCategoryFor(ev),
+        });
+      }
+      return json(out);
+    } catch {
+      return json([], 200);
+    }
+  }
+
+  // ── Weather hazards: NHC active tropical cyclones (PR 1) ─────────────────
+  if (requestUrl.pathname === '/api/weather/tropical') {
+    try {
+      const resp = await fetchWithTimeout(
+        'https://www.nhc.noaa.gov/CurrentStorms.json',
+        { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall-Hazards/1.0' } },
+        12_000,
+      );
+      if (!resp.ok) return json([], 200);
+      const data = await resp.json();
+      const list = Array.isArray(data?.activeStorms) ? data.activeStorms : [];
+      const out = list.map((s) => {
+        const lat = parseFloat(String(s.latitudeNumeric ?? s.latitude ?? ''));
+        const lng = parseFloat(String(s.longitudeNumeric ?? s.longitude ?? ''));
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        const intensity = parseFloat(String(s.intensity ?? '0')) || 0;
+        const classification = String(s.classification ?? '');
+        return {
+          id: String(s.id ?? s.binNumber ?? `${s.basin ?? 'AL'}-${s.atcfID ?? ''}`),
+          name: String(s.name ?? 'unnamed'),
+          classification,
+          category: stormCategoryForSidecar(classification, intensity),
+          basin: String(s.basin ?? 'unknown').toUpperCase(),
+          position: { lat, lng },
+          intensityMph: intensity,
+          pressureMb: parseFloat(String(s.pressure ?? '')) || undefined,
+          movement: (s.movementDir != null && s.movementSpeed != null) ? {
+            headingDeg: parseFloat(String(s.movementDir)) || 0,
+            speedMph: parseFloat(String(s.movementSpeed)) || 0,
+          } : undefined,
+          advisoryNumber: String(s.advNum ?? ''),
+          publicAdvisoryUrl: typeof s.publicAdvisory === 'string' ? s.publicAdvisory : undefined,
+          forecastTrackUrl: typeof s.forecastTrack === 'string' ? s.forecastTrack : undefined,
+        };
+      }).filter(Boolean);
+      return json(out);
+    } catch {
+      return json([], 200);
+    }
+  }
+
+  // ── Weather hazards: hurricane track GeoJSON (PR 1) ──────────────────────
+  // Pass-through proxy for the NHC archive forecast track for a given storm.
+  // Caller passes ?url=<encoded forecastTrackUrl>. We restrict to nhc.noaa.gov
+  // hosts to prevent SSRF.
+  if (requestUrl.pathname === '/api/weather/tropical/track') {
+    const target = requestUrl.searchParams.get('url') ?? '';
+    let parsed;
+    try { parsed = new URL(target); } catch { return json({ error: 'invalid url' }, 400); }
+    if (parsed.host !== 'www.nhc.noaa.gov' && parsed.host !== 'nhc.noaa.gov') {
+      return json({ error: 'host not allowed' }, 400);
+    }
+    try {
+      const resp = await fetchWithTimeout(parsed.toString(), { headers: { 'User-Agent': 'CrystalBall-Hazards/1.0' } }, 12_000);
+      if (!resp.ok) return json(null, 200);
+      const text = await resp.text();
+      try { return json(JSON.parse(text), 200); } catch { return json({ raw: text.slice(0, 5000) }, 200); }
+    } catch {
+      return json(null, 200);
+    }
+  }
+
+  // ── Weather hazards: US Drought Monitor weekly snapshot (PR 1) ──────────
+  if (requestUrl.pathname === '/api/weather/drought') {
+    const CACHE_KEY = 'usdm-drought';
+    const CACHE_TTL = 6 * 60 * 60 * 1000; // 6h — USDM updates weekly
+    const cached = getCached(CACHE_KEY, CACHE_TTL);
+    if (cached) return json(cached);
+    try {
+      const resp = await fetchWithTimeout(
+        'https://usdm.climate.unl.edu/USDMStatistics_application_files/data/usstats/dm_total.csv',
+        { headers: { 'User-Agent': 'CrystalBall-Hazards/1.0' } },
+        12_000,
+      );
+      if (!resp.ok) return json(getCachedStale(CACHE_KEY) ?? null, 200);
+      const csv = await resp.text();
+      const lines = csv.trim().split(/\r?\n/);
+      if (lines.length < 2) return json(null, 200);
+      const header = lines[0].split(',').map(s => s.trim().toLowerCase());
+      const idx = (n) => header.indexOf(n);
+      let latest = null;
+      for (const line of lines.slice(1)) {
+        const cells = line.split(',').map(s => s.trim());
+        const date = cells[idx('mapdate')] || cells[0];
+        if (!date) continue;
+        const norm = normalizeUsdmDate(date);
+        const snap = {
+          weekDate: norm,
+          noneFraction: pctToFractionSidecar(cells[idx('none')]),
+          d0Fraction: pctToFractionSidecar(cells[idx('d0')]),
+          d1Fraction: pctToFractionSidecar(cells[idx('d1')]),
+          d2Fraction: pctToFractionSidecar(cells[idx('d2')]),
+          d3Fraction: pctToFractionSidecar(cells[idx('d3')]),
+          d4Fraction: pctToFractionSidecar(cells[idx('d4')]),
+        };
+        if (!latest || snap.weekDate > latest.weekDate) latest = snap;
+      }
+      if (latest) setCached(CACHE_KEY, latest, CACHE_TTL);
+      return json(latest, 200);
+    } catch {
+      return json(getCachedStale(CACHE_KEY) ?? null, 200);
+    }
+  }
+
+  // ── Weather hazards: NSIDC Arctic sea-ice extent (PR 1) ─────────────────
+  if (requestUrl.pathname === '/api/weather/seaice') {
+    const CACHE_KEY = 'nsidc-seaice';
+    const CACHE_TTL = 6 * 60 * 60 * 1000;
+    const cached = getCached(CACHE_KEY, CACHE_TTL);
+    if (cached) return json(cached);
+    try {
+      const resp = await fetchWithTimeout(
+        'https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v3.0.csv',
+        { headers: { 'User-Agent': 'CrystalBall-Hazards/1.0' } },
+        15_000,
+      );
+      if (!resp.ok) return json(getCachedStale(CACHE_KEY) ?? null, 200);
+      const csv = await resp.text();
+      const result = parseSeaIceForSidecar(csv);
+      if (result) setCached(CACHE_KEY, result, CACHE_TTL);
+      return json(result, 200);
+    } catch {
+      return json(getCachedStale(CACHE_KEY) ?? null, 200);
+    }
   }
 
   // ── FAA Aviation Weather Cameras (public, no auth) ───────────────────────────

@@ -152,6 +152,8 @@ import { HazmatIncidentsPanel } from '@/components/HazmatIncidentsPanel';
 import { OilSpillPanel } from '@/components/OilSpillPanel';
 import { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
+import { GridIntelligencePanel } from '@/components/GridIntelligencePanel';
+import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-intelligence-loader';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
@@ -1016,6 +1018,10 @@ export class PanelLayoutManager implements AppModule {
 
  const infrastructurePanel = new InfrastructurePanel();
  this.ctx.panels['infrastructure'] = infrastructurePanel;
+
+ const gridIntelPanel = new GridIntelligencePanel();
+ this.ctx.panels['grid-intelligence'] = gridIntelPanel;
+ startGridIntelligenceLoader(gridIntelPanel);
 
  const strategicRiskPanel = new StrategicRiskPanel();
  strategicRiskPanel.setLocationClickHandler((lat, lon) => {

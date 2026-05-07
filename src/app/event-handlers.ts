@@ -467,6 +467,16 @@ export class EventHandlerManager implements AppModule {
  (document.getElementById('headerThemeToggle') as HTMLElement)?.click();
  });
 
+ // Toolbar overflow — Export Brief button (📄). Both desktop overflow
+ // and the web header use the same dynamic-import handler so the
+ // jsPDF + briefing modules don't bloat the initial bundle.
+ const briefHandler = (btn: HTMLElement | null) => {
+ if (!btn) return;
+ btn.addEventListener('click', () => { void exportBriefAsPdf(btn); });
+ };
+ briefHandler(document.getElementById('toolbarBriefBtn'));
+ briefHandler(document.getElementById('webBriefBtn'));
+
  // Toolbar overflow — Mode button now toggles Ghost Mode
  const toolbarModeBtn = document.getElementById('toolbarModeBtn');
  const updateModeBtn = () => {
@@ -1069,5 +1079,65 @@ export class EventHandlerManager implements AppModule {
  const panel = this.ctx.panels[key];
  panel?.toggle(config.enabled);
  });
+  }
+}
+
+// ── Export Brief PDF ─────────────────────────────────────────────────────
+// Lazy-imports jsPDF + the briefing modules so the initial bundle stays
+// lean. Generates a fresh briefing if none is cached, then triggers a
+// browser download. Works in both web and Tauri's webview — no fs
+// permission scope needed.
+async function exportBriefAsPdf(button: HTMLElement): Promise<void> {
+  const original = button.textContent;
+  const originalTitle = button.title;
+  const setBusy = (msg: string) => {
+ button.setAttribute('aria-busy', 'true');
+ button.title = msg;
+ // Briefly show a spinner glyph in place of the icon.
+ if (button.id === 'webBriefBtn') {
+ const label = button.querySelector('span');
+ if (label) label.textContent = msg;
+ } else {
+ button.textContent = '⏳';
+ }
+  };
+  const reset = () => {
+ button.removeAttribute('aria-busy');
+ button.title = originalTitle;
+ if (button.id === 'webBriefBtn') {
+ const label = button.querySelector('span');
+ if (label) label.textContent = 'Export Brief';
+ } else {
+ button.textContent = original;
+ }
+  };
+  try {
+ setBusy('Generating brief…');
+ const [briefing, brief] = await Promise.all([
+ (async () => {
+ const { getCachedBriefing, generateBriefing } = await import('@/services/intelligence-briefing');
+ const cached = getCachedBriefing();
+ if (cached) return cached;
+ return generateBriefing();
+ })(),
+ import('@/services/export/brief-pdf'),
+ ]);
+ const blob = brief.renderBriefingPdfBlob(briefing);
+ const url = URL.createObjectURL(blob);
+ const anchor = document.createElement('a');
+ anchor.href = url;
+ anchor.download = brief.briefPdfFilename(briefing);
+ document.body.append(anchor);
+ anchor.click();
+ anchor.remove();
+ // Revoke after the browser has had a chance to start the download.
+ setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+ console.error('[brief] Export failed:', error);
+ // Lightweight inline notice — using window.alert keeps the wire
+ // small; a richer toast would belong in a follow-up.
+ window.alert(`Brief export failed: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+ reset();
   }
 }

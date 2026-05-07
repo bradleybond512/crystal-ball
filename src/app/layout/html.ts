@@ -193,6 +193,7 @@ export function buildDesktopLayout(ctx: AppContext): string {
  <button class="mac-toolbar-overflow-btn" id="toolbarSettingsBtn" title="Settings (⌘,)">⚙</button>
  <button class="mac-toolbar-overflow-btn" id="toolbarThemeBtn" title="Toggle theme">☀</button>
  <button class="mac-toolbar-overflow-btn" id="toolbarModeBtn" title="Cycle mode (⌘M)">🕊</button>
+ <button class="mac-toolbar-overflow-btn" id="toolbarBriefBtn" title="Export intelligence brief PDF">📄</button>
  </div>
  <span class="header-clock" id="headerClock" data-tauri-drag-region></span>
  <button class="search-btn" id="searchBtn"><kbd>⌘K</kbd> ${t('header.search')}</button>
@@ -248,6 +249,9 @@ export function buildWebLayout(ctx: AppContext): string {
  ${ctx.isDesktopApp ? '' : `<button class="copy-link-btn" id="copyLinkBtn">${t('header.copyLink')}</button>`}
  <button class="copy-link-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)" style="display:inline-flex;align-items:center;gap:6px;">
  🌍 <span style="font-size:11px;">God's Vision</span>
+ </button>
+ <button class="copy-link-btn" id="webBriefBtn" title="Export intelligence brief PDF" style="display:inline-flex;align-items:center;gap:6px;">
+ 📄 <span style="font-size:11px;">Export Brief</span>
  </button>
  <button class="theme-toggle-btn" id="headerThemeToggle" title="${t('header.toggleTheme')}">
  ${buildThemeIcon()}

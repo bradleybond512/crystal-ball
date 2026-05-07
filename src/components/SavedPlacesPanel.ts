@@ -2,6 +2,7 @@ import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace, type SavedPlaceTag } from '@/services/saved-places';
 import { getSavedPlaceBrief } from '@/services/place-briefs';
+import { computeDistanceKm, unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
 
 interface SavedPlacesPanelOptions {
   focusPlace: (placeId: string) => void;
@@ -27,9 +28,25 @@ const PENCIL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="1
 
 const MAX_PLACES = 20;
 
+interface PlaceThreatSummary {
+  total: number;
+  critical: number;
+  high: number;
+  medium: number;
+}
+
+const SEVERITY_COLOR: Record<UnifiedAlert['severity'], string> = {
+  critical: '#ef4444',
+  high:     '#fb923c',
+  medium:   '#fde68a',
+  low:      '#86efac',
+  info:     '#9ca3af',
+};
+
 export class SavedPlacesPanel extends Panel {
   private options: SavedPlacesPanelOptions;
   private unsubscribeSavedPlaces: (() => void) | null = null;
+  private unsubscribeAlerts: (() => void) | null = null;
   private readonly boundRefresh: () => void;
   private places: SavedPlace[] = [];
 
@@ -82,6 +99,7 @@ export class SavedPlacesPanel extends Panel {
  document.addEventListener('wm:saved-place-weather-updated', this.boundRefresh);
  document.addEventListener('wm:storm-data-updated', this.boundRefresh);
  this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.refresh());
+ this.unsubscribeAlerts = unifiedAlertStore.subscribe(() => this.refresh());
  this.refresh();
   }
 
@@ -93,7 +111,48 @@ export class SavedPlacesPanel extends Panel {
  document.removeEventListener('wm:storm-data-updated', this.boundRefresh);
  this.unsubscribeSavedPlaces?.();
  this.unsubscribeSavedPlaces = null;
+ this.unsubscribeAlerts?.();
+ this.unsubscribeAlerts = null;
  super.destroy();
+  }
+
+  /** Count alerts whose location falls inside a saved place's radius,
+   *  grouped by severity tier. Used to render the threat badges on
+   *  each place card. */
+  private summarizeThreats(place: SavedPlace): PlaceThreatSummary {
+ const summary: PlaceThreatSummary = { total: 0, critical: 0, high: 0, medium: 0 };
+ const alerts = unifiedAlertStore.getAll();
+ for (const alert of alerts) {
+ if (!alert.location) continue;
+ if (alert.acknowledged) continue;
+ const distKm = computeDistanceKm(place.lat, place.lon, alert.location.lat, alert.location.lon);
+ if (distKm > place.radiusKm) continue;
+ summary.total += 1;
+ if (alert.severity === 'critical') summary.critical += 1;
+ else if (alert.severity === 'high') summary.high += 1;
+ else if (alert.severity === 'medium') summary.medium += 1;
+ }
+ return summary;
+  }
+
+  /** Pick the worst severity tier represented in a summary so the
+   *  badge color tracks the most-critical alert in the radius. */
+  private worstSeverity(summary: PlaceThreatSummary): UnifiedAlert['severity'] {
+ if (summary.critical > 0) return 'critical';
+ if (summary.high > 0) return 'high';
+ if (summary.medium > 0) return 'medium';
+ return 'low';
+  }
+
+  /** Render a colored severity-count badge for a place. Returns empty
+   *  string when there are no threats — saving vertical space. */
+  private renderThreatBadge(summary: PlaceThreatSummary): string {
+ if (summary.total === 0) return '';
+ const color = SEVERITY_COLOR[this.worstSeverity(summary)];
+ const tooltip = `${summary.total} alert${summary.total === 1 ? '' : 's'} in radius`
+ + (summary.critical > 0 ? ` · ${summary.critical} critical` : '')
+ + (summary.high > 0 ? ` · ${summary.high} high` : '');
+ return `<span class="watchlist-panel-chip spm-threat-chip" title="${escapeHtml(tooltip)}" style="background:${color};color:#0a0a0c;font-weight:600">⚠ ${summary.total}</span>`;
   }
 
   public refresh(): void {
@@ -128,7 +187,9 @@ export class SavedPlacesPanel extends Panel {
  const brief = getSavedPlaceBrief(place.id);
  const hasStormPosture = brief?.items.some((item) => item.kind === 'preparedness');
  const hasForecastRisk = brief?.items.some((item) => item.kind === 'forecast');
+ const threats = this.summarizeThreats(place);
  const badges = [
+ this.renderThreatBadge(threats),
  place.primary ? '<span class="watchlist-panel-chip">Primary</span>' : '',
  place.offlinePinned ? '<span class="watchlist-panel-chip">Offline</span>' : '',
  brief?.isStale ? '<span class="watchlist-panel-chip">Cached</span>' : '',

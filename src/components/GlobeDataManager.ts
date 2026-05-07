@@ -11,6 +11,7 @@ import {
   DistanceDisplayCondition,
   ColorMaterialProperty,
   ConstantProperty,
+  PolygonHierarchy,
   PropertyBag,
   JulianDate,
   Math as CesiumMath,
@@ -31,6 +32,7 @@ import { satellitePropagator, type SatellitePosition } from '@/services/satellit
 import { fetchLightningStrikes } from '@/services/lightning';
 import { fetchRedFlagWarnings } from '@/services/red-flag-warnings';
 import { getRadarTileUrl, fetchRadarFrames } from '@/services/rainviewer-radar';
+import { getApiBaseUrl } from '@/services/runtime';
 import {
   computeAftershockForecast,
   computeCycloneCone,
@@ -86,6 +88,10 @@ const ICON_SATELLITE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
 `);
 
 // ── Colors ──────────────────────────────────────────────────
+
+/** Hurricane forecast track + uncertainty cone color (PR 3). */
+const STORM_TRACK_COLOR_HEX = '#9333ea';
+
 
 const C = {
   // Seismic
@@ -405,6 +411,7 @@ export class GlobeDataManager {
  this.registerLayer('weatherSatellite', () => this.loadWeatherSatellite());
  this.registerLayer('lightningStrikes', () => this.loadLightningStrikes());
  this.registerLayer('redFlagWarnings', () => this.loadRedFlagWarnings());
+ this.registerLayer('weatherHazards', () => this.loadWeatherHazards());
 
  this.registerLayer('streetTiles', () => {
  // Managed by StreetTileManager, not data source
@@ -1680,6 +1687,141 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  });
  }
  } catch { /* lightning unavailable */ }
+  }
+
+  /**
+   * Weather Hazards layer (PR 3 of weather-hazards stack).
+   *
+   * Renders three things from PR 1's data sources:
+   *   1. NWS alert polygons   — tornado/hurricane/flood/winter colored fills
+   *   2. Hurricane forecast track + uncertainty cone (NHC GeoJSON)
+   *   3. Storm-center billboards (note: visual overlap with the existing
+   *      `cyclones` layer is expected when both are enabled — this
+   *      layer is the "weather hazard" view, the other is the general
+   *      cyclone tracker)
+   *
+   * Click on any alert polygon → Cesium description popup with the
+   * alert event, area description, headline, and expires-in time.
+   */
+  private async loadWeatherHazards(): Promise<void> {
+    const layer = this.layers.get('weatherHazards');
+    if (!layer) return;
+    try {
+      const [
+        { fetchHazardAlerts, fetchTropicalStorms },
+        { alertsToPolygonDescriptors, stormsToBillboards },
+      ] = await Promise.all([
+        import('@/services/weather/nws-hazards'),
+        import('./weather-hazard-globe-helpers'),
+      ]);
+      const [alerts, storms] = await Promise.all([fetchHazardAlerts(), fetchTropicalStorms()]);
+      for (const p of alertsToPolygonDescriptors(alerts)) {
+        this.addAlertPolygon(layer, p);
+      }
+      for (const b of stormsToBillboards(storms)) {
+        this.addStormBillboard(layer, b);
+      }
+      for (const s of storms) {
+        if (s.forecastTrackUrl) await this.addStormForecastTrack(layer, s);
+      }
+    } catch { /* hazards unavailable */ }
+  }
+
+  private addAlertPolygon(
+    layer: GlobeLayer,
+    p: import('./weather-hazard-globe-helpers').AlertPolygonDescriptor,
+  ): void {
+    const flat = p.rings[0]!;
+    const fillColor = Color.fromCssColorString(p.color).withAlpha(0.35);
+    const outlineColor = Color.fromCssColorString(p.color);
+    layer.source.entities.add({
+      name: `weather-alert-${p.alertId}`,
+      polygon: {
+        hierarchy: new PolygonHierarchy(Cartesian3.fromDegreesArray(flat)),
+        material: new ColorMaterialProperty(fillColor),
+        outline: true,
+        outlineColor,
+        outlineWidth: 2,
+        heightReference: HeightReference.CLAMP_TO_GROUND,
+      },
+      description: p.description,
+    });
+  }
+
+  private addStormBillboard(
+    layer: GlobeLayer,
+    b: import('./weather-hazard-globe-helpers').StormBillboardDescriptor,
+  ): void {
+    layer.source.entities.add({
+      position: Cartesian3.fromDegrees(b.position.lng, b.position.lat),
+      billboard: {
+        image: ICON_CYCLONE,
+        color: Color.fromCssColorString(b.color),
+        scale: 0.6,
+        heightReference: HeightReference.CLAMP_TO_GROUND,
+        scaleByDistance: new NearFarScalar(1e5, 1.5, 1e7, 0.6),
+        verticalOrigin: VerticalOrigin.CENTER,
+        horizontalOrigin: HorizontalOrigin.CENTER,
+      },
+      label: {
+        text: b.name,
+        font: '11px monospace',
+        fillColor: Color.fromCssColorString(b.color),
+        outlineColor: Color.BLACK,
+        outlineWidth: 2,
+        style: 2,
+        pixelOffset: LABEL_OFFSET,
+        horizontalOrigin: HorizontalOrigin.CENTER,
+        verticalOrigin: VerticalOrigin.BOTTOM,
+        scaleByDistance: new NearFarScalar(1e5, 1, 1e7, 0.3),
+        distanceDisplayCondition: new DistanceDisplayCondition(0, 1.5e7),
+      },
+      description: b.description,
+    });
+  }
+
+  private async addStormForecastTrack(
+    layer: GlobeLayer,
+    s: import('@/services/weather/nws-hazards').NhcStorm,
+  ): Promise<void> {
+    if (!s.forecastTrackUrl) return;
+    try {
+      const trackUrl = `${getApiBaseUrl()}/api/weather/tropical/track?url=${encodeURIComponent(s.forecastTrackUrl)}`;
+      const resp = await fetch(trackUrl);
+      if (!resp.ok) return;
+      const trackJson: unknown = await resp.json();
+      const { parseHurricaneTrack } = await import('@/services/weather/nws-hazards');
+      const { trackToDescriptor } = await import('./weather-hazard-globe-helpers');
+      const parsed = parseHurricaneTrack(trackJson, s.id);
+      if (!parsed) return;
+      const desc = trackToDescriptor(parsed, s);
+      if (desc.trackPolyline.length >= 4) {
+        layer.source.entities.add({
+          polyline: {
+            positions: Cartesian3.fromDegreesArray(desc.trackPolyline),
+            width: 3,
+            material: Color.fromCssColorString(STORM_TRACK_COLOR_HEX).withAlpha(0.9),
+            clampToGround: true,
+          },
+          name: `track-${s.id}`,
+        });
+      }
+      if (desc.uncertaintyCone) {
+        layer.source.entities.add({
+          polygon: {
+            hierarchy: new PolygonHierarchy(Cartesian3.fromDegreesArray(desc.uncertaintyCone)),
+            material: new ColorMaterialProperty(
+              Color.fromCssColorString(STORM_TRACK_COLOR_HEX).withAlpha(0.18),
+            ),
+            outline: true,
+            outlineColor: Color.fromCssColorString(STORM_TRACK_COLOR_HEX),
+            outlineWidth: 1,
+            heightReference: HeightReference.CLAMP_TO_GROUND,
+          },
+          name: `cone-${s.id}`,
+        });
+      }
+    } catch { /* track unavailable */ }
   }
 
   private async loadRedFlagWarnings(): Promise<void> {

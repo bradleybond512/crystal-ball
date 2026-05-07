@@ -609,6 +609,7 @@ export interface MapLayers {
   owmClouds: boolean;
   owmWind: boolean;
   redFlagWarnings: boolean;
+  weatherHazards: boolean;
   buildings3d: boolean;
   satellites: boolean;
   aircraft3d: boolean;

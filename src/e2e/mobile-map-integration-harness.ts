@@ -150,7 +150,7 @@ const layers = {
   owmClouds: false,
   owmWind: false,
   redFlagWarnings: false,
-  buildings3d: false,
+  weatherHazards: false,  buildings3d: false,
   satellites: false,
   aircraft3d: false,
   streetTiles: false,

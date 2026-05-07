@@ -200,6 +200,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'command-center': { name: 'Command Center', enabled: true, priority: 1 },
   'algorithm-diagnostic': { name: 'Algorithm Diagnostic', enabled: true, priority: 3 },
   'shortage-radar': { name: 'Shortage Radar', enabled: true, priority: 1 },
+  'weather-hazard': { name: 'Weather Hazards', enabled: true, priority: 1 },
   'cascade-simulator': { name: 'Cascade Simulator', enabled: true, priority: 2 },
   'emergency-broadcast': { name: 'Emergency Broadcasts', enabled: true, priority: 2 },
   'satellite-change': { name: 'Satellite Change Detection', enabled: true, priority: 2 },

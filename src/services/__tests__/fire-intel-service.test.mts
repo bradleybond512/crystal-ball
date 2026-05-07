@@ -5,6 +5,7 @@ import {
   clusterHotspots,
   rankIncidentsByThreat,
   categorizeAqi,
+  findNearestPerimeter,
 } from '../wildfires/fire-intel-helpers.ts';
 import type { MapFire } from '../wildfires/index.ts';
 import type { IncidentReport } from '../inciweb.ts';
@@ -151,4 +152,38 @@ test('categorizeAqi: thresholds map per EPA US AQI scale', () => {
 test('categorizeAqi: NaN / Infinity → unknown', () => {
   assert.equal(categorizeAqi(Number.NaN), 'unknown');
   assert.equal(categorizeAqi(Number.POSITIVE_INFINITY), 'unknown');
+});
+
+// ── findNearestPerimeter ─────────────────────────────────────────────────
+
+test('findNearestPerimeter: empty list → null', () => {
+  assert.equal(findNearestPerimeter(34, -118, [], 50), null);
+});
+
+test('findNearestPerimeter: returns nearest within range', () => {
+  const perimeters = [
+    { lat: 34.10, lon: -118.20, id: 'A' },
+    { lat: 34.50, lon: -118.50, id: 'B' },
+    { lat: 40.00, lon: -100.00, id: 'C' },
+  ];
+  // Hotspot at LA → A is closest (~few km), B ~50+km, C far away
+  const r = findNearestPerimeter(34.10, -118.21, perimeters, 50);
+  assert.ok(r);
+  assert.equal(r.perimeter.id, 'A');
+  assert.ok(r.distanceKm < 5);
+});
+
+test('findNearestPerimeter: returns null when nothing within maxKm', () => {
+  const perimeters = [{ lat: 40, lon: -100, id: 'far' }];
+  assert.equal(findNearestPerimeter(34, -118, perimeters, 50), null);
+});
+
+test('findNearestPerimeter: ignores NaN coordinates', () => {
+  const perimeters = [
+    { lat: Number.NaN, lon: -118, id: 'broken' },
+    { lat: 34.10, lon: -118.20, id: 'A' },
+  ];
+  const r = findNearestPerimeter(34.10, -118.21, perimeters, 50);
+  assert.ok(r);
+  assert.equal(r.perimeter.id, 'A');
 });

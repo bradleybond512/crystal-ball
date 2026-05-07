@@ -22,9 +22,11 @@ import {
   PolylineCollection,
   HeadingPitchRoll,
   Transforms,
+  PolygonGraphics,
 } from 'cesium';
 
 import { applyClustering } from '@/components/globeClustering';
+import { escapeHtml } from '@/utils/sanitize';
 import { modelLoader } from '@/services/model-loader';
 import { BuildingTileManager } from '@/services/building-tiles';
 import { fetchSatelliteCatalog, filterNotable, type SatelliteTLE } from '@/services/satellite-catalog';
@@ -219,16 +221,110 @@ function cycloneScale(isCat5: boolean, isCat3Plus: boolean, isCat1Plus: boolean)
   return 0.35;
 }
 
-function fireColor(confidence: string): Color {
-  if (confidence === 'FIRE_CONFIDENCE_HIGH') return C.fireHigh;
-  if (confidence === 'FIRE_CONFIDENCE_NOMINAL') return C.fireNominal;
-  return C.fireLow;
+interface PerimeterLike {
+  name: string;
+  acres: number | null;
+  containmentPct: number | null;
+  state: string | null;
+  lat: number;
+  lon: number;
+  geometry: { type: 'Polygon' | 'MultiPolygon'; coordinates: number[][][] | number[][][][] } | null;
 }
 
-function fireScale(confidence: string): number {
-  if (confidence === 'FIRE_CONFIDENCE_HIGH') return 0.3;
-  if (confidence === 'FIRE_CONFIDENCE_NOMINAL') return 0.22;
-  return 0.16;
+function renderPerimeterPolygons(layer: GlobeLayer, perimeters: PerimeterLike[]): void {
+  for (const p of perimeters) {
+    if (!p.geometry) continue;
+    const rings = p.geometry.type === 'Polygon'
+      ? [p.geometry.coordinates as number[][][]]
+      : (p.geometry.coordinates as number[][][][]);
+    for (const polygon of rings) {
+      addPerimeterEntity(layer, p, polygon[0]);
+    }
+  }
+}
+
+function addPerimeterEntity(layer: GlobeLayer, p: PerimeterLike, outerRing: number[][] | undefined): void {
+  const positions = polygonRingToCartesian(outerRing);
+  if (positions.length < 3) return;
+  const cont = p.containmentPct === null ? '—' : `${Math.round(p.containmentPct)}%`;
+  const acresStr = p.acres === null ? '—' : p.acres.toLocaleString();
+  const stateStr = p.state ?? '—';
+  layer.source.entities.add({
+    polygon: new PolygonGraphics({
+      hierarchy: new PolygonHierarchy(positions),
+      material: C.fireHigh.withAlpha(0.12),
+      outline: true,
+      outlineColor: C.fireHigh.withAlpha(0.85),
+      heightReference: HeightReference.CLAMP_TO_GROUND,
+    }),
+    description: `<b>${escapeHtml(p.name)}</b><br/>State: ${escapeHtml(stateStr)}<br/>Acres: ${acresStr}<br/>Containment: ${cont}`,
+  });
+}
+
+function polygonRingToCartesian(outerRing: number[][] | undefined): Cartesian3[] {
+  if (!outerRing || outerRing.length < 3) return [];
+  const positions: Cartesian3[] = [];
+  for (const pt of outerRing) {
+    const px = pt[0];
+    const py = pt[1];
+    if (px === undefined || py === undefined) continue;
+    if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+    positions.push(Cartesian3.fromDegrees(px, py));
+  }
+  return positions;
+}
+
+interface ClusterLike {
+  lat: number;
+  lon: number;
+  fireCount: number;
+  totalFrp: number;
+  maxBrightness: number;
+  highConfidence: boolean;
+  region: string;
+}
+
+function renderHotspotClusters(
+  layer: GlobeLayer,
+  clusters: ClusterLike[],
+  perimeters: PerimeterLike[],
+  findNearest: (lat: number, lon: number, perims: PerimeterLike[], maxKm: number) => { perimeter: PerimeterLike; distanceKm: number } | null,
+): void {
+  for (const c of clusters) {
+    const color = c.highConfidence ? C.fireHigh : C.fireNominal;
+    const scale = c.highConfidence ? 0.65 : 0.5;
+    const nearest = findNearest(c.lat, c.lon, perimeters, 50);
+    const nearestNote = nearest
+      ? `<br/><i>Near: ${escapeHtml(nearest.perimeter.name)} (${nearest.distanceKm.toFixed(1)} km)</i>`
+      : '';
+    const fireEntity = layer.source.entities.add({
+      position: Cartesian3.fromDegrees(c.lon, c.lat),
+      billboard: {
+        image: ICON_FIRE,
+        color,
+        scale,
+        heightReference: HeightReference.CLAMP_TO_GROUND,
+        scaleByDistance: new NearFarScalar(1e4, 1.2, 1e7, 0.15),
+        verticalOrigin: VerticalOrigin.CENTER,
+        horizontalOrigin: HorizontalOrigin.CENTER,
+      },
+      label: c.totalFrp >= 50 ? {
+        text: `${c.fireCount}× ${c.totalFrp.toFixed(0)}MW`,
+        font: '10px monospace',
+        fillColor: color,
+        outlineColor: Color.BLACK,
+        outlineWidth: 2,
+        style: 2,
+        pixelOffset: LABEL_OFFSET_SM,
+        horizontalOrigin: HorizontalOrigin.CENTER,
+        verticalOrigin: VerticalOrigin.BOTTOM,
+        scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+        distanceDisplayCondition: new DistanceDisplayCondition(0, 8e6),
+      } : undefined,
+      description: `<b>FIRMS hotspot cluster</b><br/>Pixels: ${c.fireCount}<br/>Total FRP: ${c.totalFrp.toFixed(1)} MW<br/>Max brightness: ${c.maxBrightness.toFixed(0)} K<br/>Confidence: ${c.highConfidence ? 'high' : 'nominal'}<br/>Region: ${escapeHtml(c.region)}${nearestNote}`,
+    });
+    setEntityTimestamp(fireEntity, new Date());
+  }
 }
 
 function cyberColor(severity: string): Color {
@@ -955,50 +1051,18 @@ export class GlobeDataManager {
  const layer = this.layers.get('fires');
  if (!layer) return;
 
- const { fetchAllFires, flattenFires } = await import('@/services/wildfires');
- const result = await fetchAllFires();
- const fires = flattenFires(result.regions);
+ const { fetchAllFires, flattenFires, toMapFires } = await import('@/services/wildfires');
+ const { fetchActivePerimeters } = await import('@/services/wildfires/fire-intel-service');
+ const { clusterHotspots, findNearestPerimeter } = await import('@/services/wildfires/fire-intel-helpers');
 
- for (const f of fires) {
- const lat = f.location?.latitude;
- const lon = f.location?.longitude;
- if (lat == null || lon == null) continue;
- // Only show significant fires to avoid flooding the globe
- if (f.frp < 10) continue;
+ const [fireResult, perimeters] = await Promise.all([
+ fetchAllFires().catch(() => ({ regions: {}, totalCount: 0 })),
+ fetchActivePerimeters().catch(() => []),
+ ]);
 
- const color = fireColor(f.confidence ?? '');
- const scale = fireScale(f.confidence ?? '') * 0.7;
-
- const fireEntity = layer.source.entities.add({
- position: Cartesian3.fromDegrees(lon, lat),
- billboard: {
- image: ICON_FIRE,
- color,
- scale,
- heightReference: HeightReference.CLAMP_TO_GROUND,
- scaleByDistance: new NearFarScalar(1e4, 1.2, 1e7, 0.15),
- verticalOrigin: VerticalOrigin.CENTER,
- horizontalOrigin: HorizontalOrigin.CENTER,
- },
- label: f.frp >= 50 ? {
- text: `Fire ${f.frp.toFixed(0)}MW`,
- font: '10px monospace',
- fillColor: color,
- outlineColor: Color.BLACK,
- outlineWidth: 2,
- style: 2,
- pixelOffset: LABEL_OFFSET_SM,
- horizontalOrigin: HorizontalOrigin.CENTER,
- verticalOrigin: VerticalOrigin.BOTTOM,
- scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
- distanceDisplayCondition: new DistanceDisplayCondition(0, 8e6),
- } : undefined,
- description: `Fire — FRP: ${f.frp.toFixed(1)} MW | Brightness: ${f.brightness.toFixed(0)} | ${f.region}`,
- });
- if (f.detectedAt) {
- setEntityTimestamp(fireEntity, new Date(f.detectedAt));
- }
- }
+ renderPerimeterPolygons(layer, perimeters);
+ const clusters = clusterHotspots(toMapFires(flattenFires(fireResult.regions)), { gridDeg: 0.1, topN: 500 });
+ renderHotspotClusters(layer, clusters, perimeters, findNearestPerimeter);
   }
 
   private async loadConflicts(): Promise<void> {

@@ -57,11 +57,35 @@ export async function loadWildfireIntel(ctx: AppContext): Promise<void> {
  const places = getSavedPlaces();
  const snapshot = await fetchFireIntelSnapshot(places);
  panel.update(snapshot);
+ emitFireTriggerEvent(snapshot);
   } catch (error) {
  // eslint-disable-next-line no-console
  console.warn('[wildfire-intel] fetch failed', error);
  panel.showUpstreamUnavailable(error instanceof Error ? error.message : String(error));
   }
+}
+
+/**
+ * Emit a `wildfire:fire-trigger` CustomEvent for the top-3 threat-ranked
+ * incidents that have lat/lon. Webcam aggregators (or other consumers)
+ * can listen and call evaluateFireTrigger() against their spatial index.
+ * Skipped silently when nothing has coordinates.
+ */
+function emitFireTriggerEvent(snapshot: { rankedThreats: { incident: { id: string; lat: number | null; lon: number | null; name: string; updatedAt: Date } }[] }): void {
+  if (typeof globalThis === 'undefined' || typeof CustomEvent === 'undefined') return;
+  const inputs = snapshot.rankedThreats
+ .slice(0, 3)
+ .map(t => t.incident)
+ .filter(inc => inc.lat !== null && inc.lon !== null)
+ .map(inc => ({
+ id: inc.id,
+ lat: inc.lat as number,
+ lon: inc.lon as number,
+ name: inc.name,
+ detectedAt: inc.updatedAt.getTime(),
+ }));
+  if (inputs.length === 0) return;
+  globalThis.dispatchEvent(new CustomEvent('wildfire:fire-trigger', { detail: { incidents: inputs } }));
 }
 
 export async function loadHazmatIncidents(ctx: AppContext, triggerCompoundEval: () => void): Promise<void> {

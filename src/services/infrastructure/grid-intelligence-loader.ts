@@ -26,7 +26,16 @@ import {
   type BgpSummary,
   type RadSummary,
 } from './grid-monitor';
+import {
+  outagesToStateOverlay,
+  radiationToHotspots,
+  bgpToBanner,
+  type OutageOverlayRow,
+  type RadHotspotRow,
+  type BgpBannerState,
+} from './infrastructure-overlay';
 import type { GridIntelligencePanel } from '@/components/GridIntelligencePanel';
+import { InfrastructureBannerBar } from '@/components/InfrastructureBannerBar';
 
 const POLL_GRID_MS = 15 * 60 * 1000;
 const POLL_OUTAGES_MS = 5 * 60 * 1000;
@@ -35,27 +44,70 @@ const POLL_RADIATION_MS = 30 * 60 * 1000;
 
 const FETCH_TIMEOUT_MS = 20_000;
 
+export interface InfrastructureOverlayState {
+  outageStates: OutageOverlayRow[];
+  radiationHotspots: RadHotspotRow[];
+  bgpBanner: BgpBannerState;
+}
+
+export type OverlaySubscriber = (state: InfrastructureOverlayState) => void;
+
 export interface GridIntelligenceLoaderHandle {
   stop(): void;
   refresh(): Promise<void>;
+  /** Subscribe to overlay-state updates after every refresh. The
+   *  callback is invoked once with the current state on subscribe. */
+  subscribe(fn: OverlaySubscriber): () => void;
+  getOverlayState(): InfrastructureOverlayState;
 }
 
+const EMPTY_OVERLAY: InfrastructureOverlayState = {
+  outageStates: [],
+  radiationHotspots: [],
+  bgpBanner: { visible: false, severity: 'none', message: '', criticalEvents: [] },
+};
+
 export function startGridIntelligenceLoader(panel: GridIntelligencePanel): GridIntelligenceLoaderHandle {
+  let outages: OutageSummary | null = null;
+  let bgp: BgpSummary | null = null;
+  let radiation: RadSummary | null = null;
+  const subscribers = new Set<OverlaySubscriber>();
+  let lastState: InfrastructureOverlayState = EMPTY_OVERLAY;
+
+  const banner = safeEnsureBanner();
+
+  const recomputeAndPushOverlay = (): void => {
+    const state: InfrastructureOverlayState = {
+      outageStates: outagesToStateOverlay(outages),
+      radiationHotspots: radiationToHotspots(radiation),
+      bgpBanner: bgpToBanner(bgp),
+    };
+    lastState = state;
+    banner?.setState(state.bgpBanner);
+    for (const fn of subscribers) {
+      // eslint-disable-next-line no-console -- diagnostic for a misbehaving subscriber
+      try { fn(state); } catch (error) { console.warn('[grid-intelligence-loader] subscriber threw', error); }
+    }
+  };
+
   const refreshGrid = async (): Promise<void> => {
     const snap = await fetchGrid();
     panel.update({ grid: snap });
   };
   const refreshOutages = async (): Promise<void> => {
-    const summary = await fetchOutages();
-    panel.update({ outages: summary });
+    outages = await fetchOutages();
+    panel.update({ outages });
+    recomputeAndPushOverlay();
   };
   const refreshBgp = async (): Promise<void> => {
-    const summary = await fetchBgp();
-    panel.update({ bgp: summary });
+    bgp = await fetchBgp();
+    panel.update({ bgp });
+    recomputeAndPushOverlay();
   };
   const refreshRadiation = async (): Promise<void> => {
-    const summary = await fetchRadiation();
-    panel.update({ radiation: summary });
+    radiation = await fetchRadiation();
+    panel.update({ radiation });
+    recomputeAndPushOverlay();
   };
 
   const refreshAll = async (): Promise<void> => {
@@ -74,9 +126,32 @@ export function startGridIntelligenceLoader(panel: GridIntelligencePanel): GridI
   return {
     stop(): void {
       for (const id of intervals) clearInterval(id);
+      subscribers.clear();
     },
     refresh: refreshAll,
+    subscribe(fn: OverlaySubscriber): () => void {
+      subscribers.add(fn);
+      // eslint-disable-next-line no-console -- diagnostic for a misbehaving subscriber
+      try { fn(lastState); } catch (error) { console.warn('[grid-intelligence-loader] subscriber threw on attach', error); }
+      return () => { subscribers.delete(fn); };
+    },
+    getOverlayState(): InfrastructureOverlayState {
+      return lastState;
+    },
   };
+}
+
+/** Banner DOM is renderer-only; tests that import this module under
+ *  Node would otherwise crash on `document` access. */
+function safeEnsureBanner(): InfrastructureBannerBar | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    return InfrastructureBannerBar.ensure();
+  } catch (error) {
+    // eslint-disable-next-line no-console -- diagnostic for a banner mount failure
+    console.warn('[grid-intelligence-loader] banner mount failed', error);
+    return null;
+  }
 }
 
 // ─── Per-source fetch + parse ─────────────────────────────────────────

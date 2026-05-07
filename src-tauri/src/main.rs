@@ -106,6 +106,10 @@ const NOTIFICATION_RATE_LIMIT: Duration = Duration::from_secs(30);
 // iMessage has its own rate-limit state so user-initiated Test sends aren't
 // blocked by background native notifications. Same 30s window between iMessages.
 static IMESSAGE_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
+// Voice alerts (`say`) are more disruptive than push, so we use a 5s
+// floor to avoid stacked utterances when several alerts fire at once.
+static VOICE_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
+const VOICE_RATE_LIMIT: Duration = Duration::from_secs(5);
 const MIN_CACHE_FLUSH_INTERVAL: Duration = Duration::from_secs(2);
 
 struct LocalApiState {
@@ -997,6 +1001,65 @@ end tell"#
  if !status.success() {
  return Err("Messages app rejected the send (recipient unreachable, not signed in, or blocked)".to_string());
  }
+ Ok(())
+ }
+}
+
+/// Speak a short alert message aloud via macOS `say`. No-op on non-macOS.
+/// Same trusted-window + length-cap + sanitization pattern as
+/// `send_notification`, with a separate 5-second rate limit so stacked
+/// alerts don't queue overlapping utterances.
+#[tauri::command]
+fn speak_aloud(
+ webview: Webview,
+ text: String,
+ voice: Option<String>,
+ rate: Option<u32>,
+) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
+ #[cfg(not(target_os = "macos"))]
+ {
+ let _ = (text, voice, rate);
+ return Ok(());
+ }
+ #[cfg(target_os = "macos")]
+ {
+ {
+ let mut last = VOICE_LAST_SENT.lock().unwrap_or_else(|p| p.into_inner());
+ if let Some(t) = *last {
+ if t.elapsed() < VOICE_RATE_LIMIT {
+ return Ok(()); // suppressed — too soon
+ }
+ }
+ *last = Some(Instant::now());
+ }
+
+ let text = truncate_to_bytes(&text, 256);
+ let voice_name = voice.as_deref().unwrap_or("Samantha");
+ let voice_name = truncate_to_bytes(voice_name, 32);
+ let speech_rate = rate.unwrap_or(180).clamp(90, 360);
+
+ // Sanitize: strip control chars + characters that could break `say` argv
+ // parsing. `say` takes the message as a positional arg via std::process::Command,
+ // so shell metacharacters aren't an issue, but we still reject control chars
+ // to avoid embedded escape sequences.
+ let sanitize = |s: &str| -> String {
+ s.chars()
+ .filter(|c| !matches!(c, '\x00'..='\x1f' | '\x7f'))
+ .collect()
+ };
+ let safe_text = sanitize(text);
+ let safe_voice = sanitize(voice_name);
+ if safe_text.trim().is_empty() {
+ return Err("speak_aloud: empty text".to_string());
+ }
+
+ Command::new("say")
+ .args(["-v", &safe_voice, "-r", &speech_rate.to_string(), &safe_text])
+ .stdout(Stdio::null())
+ .stderr(Stdio::null())
+ .spawn()
+ .map_err(|e| format!("say spawn failed: {e}"))?;
  Ok(())
  }
 }
@@ -2290,6 +2353,7 @@ fn main() {
  fetch_polymarket,
  send_notification,
  send_imessage,
+ speak_aloud,
  install_update,
  update_mode_label
  ])

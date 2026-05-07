@@ -47,7 +47,7 @@ const WM_HOST_STATS_CAP = 100;
 const wmHostFailures = new Map(); // host → { count, lastError, lastAt }
 const EXPECTED_API_KEYS = [
   'ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'FRED_API_KEY', 'EIA_API_KEY',
-  'NEWSDATA_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY',
+  'NEWSDATA_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY',
   'OWM_API_KEY', 'FINNHUB_API_KEY', 'NEWSAPI_KEY', 'AVIATIONSTACK_API',
   'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY',
   'CESIUM_ION_TOKEN', 'GROQ_API_KEY', 'OPENROUTER_API_KEY',
@@ -730,7 +730,7 @@ const ALLOWED_ENV_KEYS = new Set([
   'CLOUDFLARE_API_TOKEN', 'ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'URLHAUS_AUTH_KEY',
   'OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'WINGBITS_API_KEY', 'WS_RELAY_URL',
   'VITE_OPENSKY_RELAY_URL', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET',
-  'AISSTREAM_API_KEY', 'VITE_WS_RELAY_URL', 'FINNHUB_API_KEY', 'NASA_FIRMS_API_KEY',
+  'AISSTREAM_API_KEY', 'VITE_WS_RELAY_URL', 'FINNHUB_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY',
   'OLLAMA_API_URL', 'OLLAMA_MODEL', 'WTO_API_KEY', 'AVIATIONSTACK_API',
   'ICAO_API_KEY', 'THREATFOX_API_KEY',
   'NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'VIRUSTOTAL_API_KEY',
@@ -755,6 +755,7 @@ const ROUTE_ALIASES = {
   '/api/acled': '/api/acled-events',
   '/api/ais-clusters': '/api/ais-snapshot',
   '/api/firms': '/api/nasa-firms',
+  '/api/wildfire/hotspots': '/api/nasa-firms',
   '/api/opensanctions': '/api/opensanctions-recent',
 };
 
@@ -2565,6 +2566,18 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  if (!response.ok) return fail(`NASA FIRMS probe failed (${response.status})`);
  if (/invalid api key|not authorized|forbidden/i.test(text)) return fail('NASA FIRMS rejected this key');
  return ok('NASA FIRMS key verified');
+ }
+
+ case 'AIRNOW_API_KEY': {
+ const response = await fetchWithTimeout(
+ `https://www.airnowapi.org/aq/observation/latLong/current/?latitude=39.7392&longitude=-104.9903&distance=50&format=application/json&API_KEY=${encodeURIComponent(value)}`,
+ { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }
+ );
+ const text = await response.text();
+ if (isAuthFailure(response.status, text)) return fail('AirNow rejected this key');
+ if (!response.ok) return fail(`AirNow probe failed (${response.status})`);
+ if (/invalid api key|unauthorized|forbidden/i.test(text)) return fail('AirNow rejected this key');
+ return ok('AirNow key verified');
  }
 
  case 'NEWSAPI_KEY': {
@@ -7579,6 +7592,67 @@ async function dispatch(requestUrl, req, routes, context) {
  return json({ fires, count: fires.length });
  } catch (error) {
  return json({ fires: [], error: String(error.message ?? error) }, 500);
+ }
+  }
+
+  // ── NIFC active fire perimeters (free public ArcGIS REST) ────────────────
+  if (requestUrl.pathname === '/api/wildfire/perimeters') {
+ try {
+ const url = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/'
+ + 'WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query'
+ + '?where=1%3D1&outFields=IrwinID,IncidentName,GISAcres,PercentContained,POOState,'
+ + 'ModifiedOnDateTime_dt&f=geojson&resultRecordCount=500';
+ const resp = await fetchWithTimeout(url, {
+ headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
+ }, 20_000);
+ if (!resp.ok) return json({ features: [], error: `nifc upstream ${resp.status}` }, 502);
+ const data = await resp.json();
+ const features = Array.isArray(data?.features) ? data.features : [];
+ return json({ features, count: features.length });
+ } catch (error) {
+ return json({ features: [], error: String(error.message ?? error) }, 500);
+ }
+  }
+
+  // ── InciWeb active wildfire incidents (RSS proxy) ────────────────────────
+  if (requestUrl.pathname === '/api/wildfire/incidents') {
+ try {
+ const resp = await fetchWithTimeout(
+ 'https://inciweb.wildfire.gov/feeds/rss/incidents/',
+ { headers: { 'User-Agent': CHROME_UA, Accept: 'application/rss+xml,application/xml,text/xml' } },
+ 15_000,
+ );
+ if (!resp.ok) return json({ rss: '', error: `inciweb upstream ${resp.status}` }, 502);
+ const rss = await resp.text();
+ return json({ rss, fetchedAt: Date.now() });
+ } catch (error) {
+ return json({ rss: '', error: String(error.message ?? error) }, 500);
+ }
+  }
+
+  // ── EPA AirNow current AQI for a single coordinate ──────────────────────
+  if (requestUrl.pathname === '/api/wildfire/aqi') {
+ const apiKey = process.env.AIRNOW_API_KEY;
+ if (!apiKey) return json({ observations: [], error: 'AIRNOW_API_KEY not configured' }, 503);
+ const lat = Number.parseFloat(requestUrl.searchParams.get('lat') || '');
+ const lon = Number.parseFloat(requestUrl.searchParams.get('lon') || '');
+ if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+ return json({ observations: [], error: 'lat and lon required' }, 400);
+ }
+ try {
+ const url = `https://www.airnowapi.org/aq/observation/latLong/current/`
+ + `?latitude=${encodeURIComponent(lat)}`
+ + `&longitude=${encodeURIComponent(lon)}`
+ + `&distance=50&format=application/json`
+ + `&API_KEY=${encodeURIComponent(apiKey)}`;
+ const resp = await fetchWithTimeout(url, {
+ headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
+ }, 15_000);
+ if (!resp.ok) return json({ observations: [], error: `airnow upstream ${resp.status}` }, 502);
+ const observations = await resp.json();
+ return json({ observations: Array.isArray(observations) ? observations : [] });
+ } catch (error) {
+ return json({ observations: [], error: String(error.message ?? error) }, 500);
  }
   }
 

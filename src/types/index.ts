@@ -588,6 +588,8 @@ export interface MapLayers {
   // OSINT layers
   acledEvents: boolean;
   militaryFlights: boolean;
+  // Aviation intelligence layer (TFRs + SIGMETs + military aircraft + VAAC ash)
+  aviationIntel: boolean;
   // Disease Intelligence layer (choropleth + variant dots + outbreak pins)
   diseaseIntel: boolean;
   // EMA forecast predictive threat overlay

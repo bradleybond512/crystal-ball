@@ -136,6 +136,7 @@ const layers = {
   adsb: false,
   acledEvents: false,
   militaryFlights: false,
+  aviationIntel: false,
   diseaseIntel: false,
   forecastOverlay: false,
   theaterPolygons: false,

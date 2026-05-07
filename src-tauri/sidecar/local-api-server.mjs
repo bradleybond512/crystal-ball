@@ -2057,6 +2057,137 @@ export function __otxSetStateForTests(pulses, cursor = null) {
   _otxState = { pulses: pulses.slice(-OTX_PULSES_LIMIT), cursor, asOf: Date.now(), lastError: null };
 }
 
+// ── MITRE ATT&CK enterprise STIX cache updater (sidecar) ──────────────
+// Pure helpers: src/services/cyber/attack-cache-updater.ts.
+// Strategy: download the ~10 MB enterprise-attack.json once a week,
+// keep it on disk, parse it once into AptGroup[] kept in memory.
+
+const ATTACK_BUNDLE_URL = 'https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json';
+const ATTACK_CACHE_FILENAME = 'attack-cache.json';
+const ATTACK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+let _attackState = {
+  groups: [],
+  lastFetchedAt: null,
+  cacheExists: false,
+  lastError: null,
+};
+let _attackInFlight = false;
+let _attackContextRef = null;
+
+/**
+ * Parse a STIX bundle into AptGroup[]. Mirrors parseAttackBundle in
+ * src/services/cyber/apt-tracker.ts (duplicated for the .mjs runtime).
+ */
+export function parseAttackBundleSidecar(bundle) {
+  if (!bundle || typeof bundle !== 'object') return [];
+  if (bundle.type !== 'bundle' || !Array.isArray(bundle.objects)) return [];
+  const groups = [];
+  for (const obj of bundle.objects) {
+    if (!obj || typeof obj !== 'object') continue;
+    if (obj.type !== 'intrusion-set') continue;
+    if (obj.revoked === true) continue;
+    const refs = Array.isArray(obj.external_references) ? obj.external_references : [];
+    let gcode = null;
+    for (const ref of refs) {
+      if (ref && typeof ref === 'object' && ref.source_name === 'mitre-attack' && typeof ref.external_id === 'string') {
+        gcode = ref.external_id;
+        break;
+      }
+    }
+    if (!gcode || !gcode.startsWith('G')) continue;
+    const name = typeof obj.name === 'string' && obj.name.length > 0 ? obj.name : gcode;
+    const aliasesRaw = Array.isArray(obj.aliases) ? obj.aliases.filter((a) => typeof a === 'string') : [];
+    const aliases = [...new Set(aliasesRaw)].filter((a) => a !== name);
+    groups.push({
+      id: gcode,
+      name,
+      aliases,
+      country: typeof obj.x_mitre_attributed_to === 'string' ? obj.x_mitre_attributed_to : 'Unknown',
+      targetSectors: [],
+      recentTechniques: [],
+      activityScore: 0,
+    });
+  }
+  return groups;
+}
+
+function _attackCachePath() {
+  if (!_attackContextRef) return null;
+  return path.join(_attackContextRef.dataDir, ATTACK_CACHE_FILENAME);
+}
+
+function _hydrateAttackCacheFromDisk() {
+  const cachePath = _attackCachePath();
+  if (!cachePath) return;
+  try {
+    if (!existsSync(cachePath)) return;
+    const stat = statSync(cachePath);
+    const text = readFileSync(cachePath, 'utf-8');
+    const bundle = JSON.parse(text);
+    const groups = parseAttackBundleSidecar(bundle);
+    _attackState = {
+      groups: groups.filter((g) => g.id.length > 0 && g.name.length > 0),
+      lastFetchedAt: stat.mtimeMs,
+      cacheExists: true,
+      lastError: null,
+    };
+  } catch (error) {
+    _attackState = {
+      ..._attackState,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function _refreshAttackCache() {
+  if (_attackInFlight) return;
+  const cachePath = _attackCachePath();
+  if (!cachePath) return;
+  _attackInFlight = true;
+  try {
+    const res = await fetchWithTimeout(ATTACK_BUNDLE_URL, {}, 60_000);
+    if (!res.ok) throw new Error(`ATT&CK HTTP ${res.status}`);
+    const text = await res.text();
+    // Validate before write
+    const bundle = JSON.parse(text);
+    if (!bundle || bundle.type !== 'bundle' || !Array.isArray(bundle.objects)) {
+      throw new Error('not a STIX bundle');
+    }
+    writeFileSync(cachePath, text);
+    const groups = parseAttackBundleSidecar(bundle);
+    _attackState = {
+      groups: groups.filter((g) => g.id.length > 0 && g.name.length > 0),
+      lastFetchedAt: Date.now(),
+      cacheExists: true,
+      lastError: null,
+    };
+  } catch (error) {
+    _attackState = {
+      ..._attackState,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    _attackInFlight = false;
+  }
+}
+
+/** Initialize the cache updater. Hydrates from disk synchronously, then
+ *  refreshes asynchronously if stale. Called once from the sidecar
+ *  startup hook in createLocalApiServer. */
+export function initAttackCacheUpdater(context) {
+  _attackContextRef = context;
+  _hydrateAttackCacheFromDisk();
+  const stale = _attackState.lastFetchedAt === null
+    || Date.now() - _attackState.lastFetchedAt > ATTACK_TTL_MS;
+  if (stale) void _refreshAttackCache();
+}
+
+/** Test-only hook. */
+export function __attackSetStateForTests(groups, lastFetchedAt = Date.now()) {
+  _attackState = { groups, lastFetchedAt, cacheExists: true, lastError: null };
+}
+
 const _sidecarCache = new Map(); // key -> { data, ts }
 const SIDECAR_CACHE_MAX = 500;
 let _sidecarCacheSweepTimer = null;
@@ -3487,6 +3618,25 @@ async function dispatch(requestUrl, req, routes, context) {
       });
     }
     return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── MITRE ATT&CK enterprise groups (weekly cache; apt-tracker corpus) ──
+  if (requestUrl.pathname === '/api/attack/groups') {
+    if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+    const ageMs = _attackState.lastFetchedAt === null
+      ? null
+      : Date.now() - _attackState.lastFetchedAt;
+    const isStale = _attackState.lastFetchedAt === null || (ageMs !== null && ageMs > ATTACK_TTL_MS);
+    return json({
+      groups: _attackState.groups,
+      groupCount: _attackState.groups.length,
+      lastFetchedAt: _attackState.lastFetchedAt,
+      ageMs,
+      isStale,
+      cacheExists: _attackState.cacheExists,
+      available: _attackState.groups.length > 0,
+      lastError: _attackState.lastError,
+    });
   }
 
   // ── OTX (AlienVault) pulses corpus (30-min poll → apt-tracker) ──
@@ -10086,6 +10236,7 @@ export async function createLocalApiServer(options = {}) {
   }
   const context = resolveConfig(options);
   loadVerboseState(context.dataDir);
+  initAttackCacheUpdater(context);
   const routes = await buildRouteTable(context.apiDir);
 
   const server = createServer(async (req, res) => {

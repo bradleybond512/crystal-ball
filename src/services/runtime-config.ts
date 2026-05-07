@@ -31,6 +31,7 @@ export type RuntimeSecretKey =
   | 'AISSTREAM_API_KEY'
   | 'FINNHUB_API_KEY'
   | 'NASA_FIRMS_API_KEY'
+  | 'AIRNOW_API_KEY'
   | 'OLLAMA_API_URL'
   | 'OLLAMA_MODEL'
   | 'WTO_API_KEY'
@@ -84,6 +85,7 @@ export type RuntimeFeatureId =
   | 'openskyRelay'
   | 'finnhubMarkets'
   | 'nasaFirms'
+  | 'epaAirNow'
   | 'aiOllama'
   | 'wtoTrade'
   | 'supplyChain'
@@ -189,6 +191,7 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   openskyRelay: true,
   finnhubMarkets: true,
   nasaFirms: true,
+  epaAirNow: true,
   aiOllama: true,
   wtoTrade: true,
   supplyChain: true,
@@ -391,6 +394,14 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  description: 'Fire Information for Resource Management System satellite data.',
  requiredSecrets: ['NASA_FIRMS_API_KEY'],
  fallback: 'FIRMS fire layer uses public VIIRS feed.',
+  },
+  {
+ id: 'epaAirNow',
+ name: 'EPA AirNow AQI for saved places',
+ description: 'Real-time US AQI per saved place (PM2.5 / O3) — enables wildfire smoke health alerts.',
+ requiredSecrets: ['AIRNOW_API_KEY'],
+ desktopRequiredSecrets: [],
+ fallback: 'Wildfire panel shows AQI as "key required" until configured.',
   },
   {
  id: 'wtoTrade',

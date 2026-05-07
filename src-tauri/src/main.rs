@@ -37,7 +37,7 @@ const MENU_VIEW_MODE_ID: &str = "view.mode_status";
 #[cfg(feature = "devtools")]
 const MENU_HELP_DEVTOOLS_ID: &str = "help.devtools";
 const TRUSTED_WINDOWS: [&str; 3] = ["main", "settings", "live-channels"];
-const SUPPORTED_SECRET_KEYS: [&str; 58] = [
+const SUPPORTED_SECRET_KEYS: [&str; 59] = [
  "CRYSTALBALL_API_KEY",
  "ANTHROPIC_API_KEY",
  "GROQ_API_KEY",
@@ -60,6 +60,7 @@ const SUPPORTED_SECRET_KEYS: [&str; 58] = [
  "VITE_WS_RELAY_URL",
  "FINNHUB_API_KEY",
  "NASA_FIRMS_API_KEY",
+ "AIRNOW_API_KEY",
  "OLLAMA_API_URL",
  "OLLAMA_MODEL",
  "WTO_API_KEY",

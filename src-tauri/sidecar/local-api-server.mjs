@@ -4004,6 +4004,23 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
+  // ── CDC Acute Respiratory Illness by state (SODA, no auth) ──────────────
+  // Public CDC dataset f3zz-zga5 — weekly state-level activity labels.
+  if (requestUrl.pathname === '/api/cdc-ari') {
+    try {
+      // Latest 60 rows is enough for one full week of all 56 reporting jurisdictions.
+      const url = 'https://data.cdc.gov/resource/f3zz-zga5.json?$limit=60&$order=week_end DESC';
+      const resp = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } }, 12_000);
+      if (!resp.ok) {
+        return json({ rows: [], error: `CDC SODA HTTP ${resp.status}` }, 502);
+      }
+      const rows = await resp.json();
+      return json({ rows, asOf: new Date().toISOString() });
+    } catch (error) {
+      return json({ rows: [], error: String(error?.message ?? error) }, 502);
+    }
+  }
+
   // ── ThreatFox IOC feed ───────────────────────────────────────────────────
   if (requestUrl.pathname === '/api/threatfox-iocs') {
  const apiKey = process.env.THREATFOX_API_KEY;

@@ -66,6 +66,7 @@
     "test:personal": "tsx --test src/services/personal/__tests__/personal-impact.test.mts src/services/personal/__tests__/threat-aggregator.test.mts",
     "test:export": "tsx --test src/services/export/__tests__/brief-pdf.test.mts",
     "test:playback": "tsx --test src/services/playback/__tests__/timeline-cursor.test.mts",
+    "test:globe": "tsx --test src/services/globe/__tests__/heatmap-layers.test.mts",
     "test:adsb": "tsx --test src/services/adsb/__tests__/adsb-aggregate.test.mts",
     "test:webcams": "tsx --test src/services/webcams/__tests__/webcam-aggregator.test.mts src/services/webcams/__tests__/flight-rule.test.mts src/services/webcams/__tests__/metar-parser.test.mts src/services/webcams/__tests__/station-matcher.test.mts src/services/webcams/__tests__/dot511-adapter.test.mts src/services/webcams/__tests__/volcano-cam-catalog.test.mts src/services/webcams/__tests__/nps-adapter.test.mts src/services/webcams/__tests__/alertwildfire-adapter.test.mts src/services/webcams/__tests__/streamgauge-adapter.test.mts src/services/webcams/__tests__/windy-adapter.test.mts src/services/webcams/__tests__/noaa-coastal-catalog.test.mts",
     "test:maritime": "tsx --test src/services/maritime/__tests__/freight-stress.test.mts src/services/maritime/__tests__/chokepoint-monitor.test.mts src/services/maritime/__tests__/chokepoint-aggregator.test.mts src/services/__tests__/dark-vessel-gaps.test.mts && node --test src-tauri/sidecar/__tests__/freight-stress-parity.test.mjs src-tauri/sidecar/__tests__/dark-vessel-gaps-parity.test.mjs",

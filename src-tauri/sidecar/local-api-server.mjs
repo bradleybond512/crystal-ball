@@ -1510,6 +1510,299 @@ export function computeFreightStressSidecar(series, observations) {
     trend, stressScore, stressLevel, observationCount: sorted.length, asOf: last.date };
 }
 
+// ── Space Weather helpers (mirror src/services/spaceweather/swpc-monitor.ts) ──
+
+const SPACEWX_HOUR_MS = 60 * 60 * 1000;
+const SPACEWX_XRAY_WINDOW_MS = 6 * SPACEWX_HOUR_MS;
+const SPACEWX_KP_WINDOW_MS = 24 * SPACEWX_HOUR_MS;
+const SPACEWX_ALERTS_WINDOW_MS = 24 * SPACEWX_HOUR_MS;
+const SPACEWX_EARTHWARD_LON_DEG = 30;
+const SPACEWX_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let spacewxStatusCache = null;
+let spacewxStatusCachedAt = 0;
+let spacewxAlertsCache = null;
+let spacewxAlertsCachedAt = 0;
+
+export function classifyXrayFluxSidecar(flux) {
+  if (!Number.isFinite(flux) || flux <= 0) return 'A';
+  if (flux >= 1e-4) return 'X';
+  if (flux >= 1e-5) return 'M';
+  if (flux >= 1e-6) return 'C';
+  if (flux >= 1e-7) return 'B';
+  return 'A';
+}
+
+export function xrayLabelSidecar(flux) {
+  const cls = classifyXrayFluxSidecar(flux);
+  if (cls === 'A') {
+    const m = Math.max(1, Math.round(flux / 1e-8));
+    return `A${Math.min(9, m)}`;
+  }
+  const baseByCls = { B: 1e-7, C: 1e-6, M: 1e-5, X: 1e-4 };
+  const mantissa = flux / baseByCls[cls];
+  return `${cls}${Math.min(99, mantissa).toFixed(1)}`;
+}
+
+export function kpToStormLevelSidecar(kp) {
+  if (!Number.isFinite(kp) || kp < 5) return 'G0';
+  if (kp >= 9) return 'G5';
+  if (kp >= 8) return 'G4';
+  if (kp >= 7) return 'G3';
+  if (kp >= 6) return 'G2';
+  return 'G1';
+}
+
+export function auroraVisibilityLatitudeSidecar(kp) {
+  if (!Number.isFinite(kp) || kp < 5) return 90;
+  if (kp >= 9) return 45;
+  const anchors = [
+    { kp: 5, lat: 60 }, { kp: 6, lat: 57.5 }, { kp: 7, lat: 55 },
+    { kp: 8, lat: 50 }, { kp: 9, lat: 45 },
+  ];
+  for (let i = 0; i < anchors.length - 1; i += 1) {
+    const a = anchors[i];
+    const b = anchors[i + 1];
+    if (kp >= a.kp && kp <= b.kp) {
+      const t = (kp - a.kp) / (b.kp - a.kp);
+      return Math.round((a.lat + (b.lat - a.lat) * t) / 0.5) * 0.5;
+    }
+  }
+  return 90;
+}
+
+export function classifyGpsDisruptionSidecar(cls) {
+  if (cls === 'X') return 'high';
+  if (cls === 'M') return 'moderate';
+  if (cls === 'C') return 'low';
+  return 'none';
+}
+
+function classifyAlertSeveritySidecar(headline) {
+  if (/\bALERT\b/i.test(headline)) return 'alert';
+  if (/\bWARNING\b/i.test(headline)) return 'warning';
+  if (/\bWATCH\b/i.test(headline)) return 'watch';
+  return 'summary';
+}
+
+export function summarizeXrayFluxSidecar(points, now, windowMs = SPACEWX_XRAY_WINDOW_MS) {
+  if (!Array.isArray(points)) return null;
+  const cutoff = now - windowMs;
+  let peak = -Infinity;
+  let peakAt = '';
+  let current = -Infinity;
+  let currentAt = -Infinity;
+  let count = 0;
+  for (const p of points) {
+    if (!p || !Number.isFinite(p.flux)) continue;
+    const t = Date.parse(p.time_tag);
+    if (!Number.isFinite(t) || t < cutoff || t > now) continue;
+    count += 1;
+    if (p.flux > peak) { peak = p.flux; peakAt = p.time_tag; }
+    if (t > currentAt) { currentAt = t; current = p.flux; }
+  }
+  if (count === 0 || !Number.isFinite(peak)) return null;
+  const peakClass = classifyXrayFluxSidecar(peak);
+  return {
+    peakFlux: peak,
+    currentFlux: Number.isFinite(current) ? current : peak,
+    peakClass,
+    peakLabel: xrayLabelSidecar(peak),
+    peakAt,
+    xClassActive: peakClass === 'X',
+    sampleCount: count,
+  };
+}
+
+export function summarizeKpSidecar(points, now, windowMs = SPACEWX_KP_WINDOW_MS) {
+  if (!Array.isArray(points)) return null;
+  const cutoff = now - windowMs;
+  let latest = null;
+  let latestT = -Infinity;
+  let max = -Infinity;
+  for (const p of points) {
+    if (!p || !Number.isFinite(p.kp)) continue;
+    const t = Date.parse(p.time_tag);
+    if (!Number.isFinite(t) || t < cutoff || t > now) continue;
+    if (t > latestT) { latestT = t; latest = p; }
+    if (p.kp > max) max = p.kp;
+  }
+  if (!latest) return null;
+  const kp = latest.kp;
+  return {
+    kp,
+    level: kpToStormLevelSidecar(kp),
+    auroraVisibilityLatN: auroraVisibilityLatitudeSidecar(kp),
+    observedAt: latest.time_tag,
+    kpMax24h: Number.isFinite(max) ? max : kp,
+  };
+}
+
+export function summarizeAlertsSidecar(raw, now, windowMs = SPACEWX_ALERTS_WINDOW_MS) {
+  if (!Array.isArray(raw)) return [];
+  const cutoff = now - windowMs;
+  const out = [];
+  for (const r of raw) {
+    if (!r?.message) continue;
+    const t = Date.parse(r.issue_datetime);
+    if (!Number.isFinite(t) || t < cutoff || t > now) continue;
+    const headline = String(r.message).split('\n').map((s) => s.trim()).find((s) => s.length > 0) || '';
+    if (headline.length === 0) continue;
+    out.push({
+      id: `${r.product_id ?? 'swpc'}-${r.issue_datetime}`,
+      severity: classifyAlertSeveritySidecar(headline),
+      headline,
+      issuedAt: r.issue_datetime,
+    });
+  }
+  out.sort((a, b) => Date.parse(b.issuedAt) - Date.parse(a.issuedAt));
+  return out;
+}
+
+export function filterEarthwardCmesSidecar(raw, now, lonTolDeg = SPACEWX_EARTHWARD_LON_DEG) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const cme of raw) {
+    if (!cme || !Array.isArray(cme.cmeAnalyses) || cme.cmeAnalyses.length === 0) continue;
+    const analysis = cme.cmeAnalyses.find((a) => a?.isMostAccurate)
+      ?? cme.cmeAnalyses[cme.cmeAnalyses.length - 1];
+    if (!analysis) continue;
+    const lon = typeof analysis.longitude === 'number' ? analysis.longitude : null;
+    if (lon === null || Math.abs(lon) > lonTolDeg) continue;
+    const arrivalT = analysis.time21_5 ? Date.parse(analysis.time21_5) : NaN;
+    if (Number.isFinite(arrivalT) && arrivalT < now - 12 * SPACEWX_HOUR_MS) continue;
+    out.push({
+      id: cme.activityID ?? `cme-${out.length}`,
+      startTime: cme.startTime ?? null,
+      speedKmS: typeof analysis.speed === 'number' ? analysis.speed : null,
+      estimatedArrival: analysis.time21_5 ?? null,
+      longitudeDeg: lon,
+      latitudeDeg: typeof analysis.latitude === 'number' ? analysis.latitude : null,
+      halfAngleDeg: typeof analysis.halfAngle === 'number' ? analysis.halfAngle : null,
+      isMostAccurate: analysis.isMostAccurate === true,
+      link: cme.link ?? null,
+    });
+  }
+  out.sort((a, b) => {
+    const ta = a.estimatedArrival ? Date.parse(a.estimatedArrival) : Infinity;
+    const tb = b.estimatedArrival ? Date.parse(b.estimatedArrival) : Infinity;
+    return ta - tb;
+  });
+  return out;
+}
+
+export function buildSpaceweatherStatusSidecar(input) {
+  const now = input.now ?? Date.now();
+  const xray = summarizeXrayFluxSidecar(input.xrayFlux, now);
+  const geomag = summarizeKpSidecar(input.kpIndex, now);
+  const earthwardCmes = filterEarthwardCmesSidecar(input.cmes, now);
+  const peakClass = xray?.peakClass ?? null;
+  return {
+    xray,
+    geomag,
+    gpsDisruption: classifyGpsDisruptionSidecar(peakClass),
+    hfRadioBlackout: !!xray && xray.peakFlux >= 1e-4,
+    earthwardCmes,
+    asOf: new Date(now).toISOString(),
+  };
+}
+
+async function fetchJsonSidecar(url, timeoutMs = 12_000) {
+  try {
+    const resp = await fetchWithTimeout(url, {
+      headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+    }, timeoutMs);
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeXrayPoints(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const r of raw) {
+    if (!r) continue;
+    const flux = Number(r.flux ?? r.observed_flux);
+    const energy = String(r.energy ?? '');
+    if (!Number.isFinite(flux)) continue;
+    // GOES exposes both 0.05-0.4nm and 0.1-0.8nm channels — keep the long channel
+    // when energy tag is present, otherwise accept anything.
+    if (energy && !energy.includes('0.1-0.8')) continue;
+    const time_tag = String(r.time_tag ?? '');
+    if (!time_tag) continue;
+    out.push({ time_tag, flux, energy });
+  }
+  return out;
+}
+
+function normalizeKpPoints(raw) {
+  // SWPC returns ["time_tag","kp_index","estimated_kp","kp"] header row + data.
+  if (!Array.isArray(raw) || raw.length < 2) return [];
+  const out = [];
+  for (let i = 1; i < raw.length; i += 1) {
+    const row = raw[i];
+    if (!Array.isArray(row) || row.length < 2) continue;
+    const time_tag = String(row[0] ?? '');
+    const kp = Number(row[1]);
+    if (!time_tag || !Number.isFinite(kp)) continue;
+    out.push({ time_tag, kp });
+  }
+  return out;
+}
+
+function normalizeAlertRaw(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const r of raw) {
+    if (!r || typeof r.message !== 'string') continue;
+    const issue = r.issue_datetime ? String(r.issue_datetime) : null;
+    if (!issue) continue;
+    // SWPC's issue_datetime is naïve UTC; append Z so Date.parse works.
+    const issueIso = issue.endsWith('Z') ? issue : `${issue.replace(' ', 'T')}Z`;
+    out.push({
+      product_id: r.product_id ?? null,
+      message: r.message,
+      issue_datetime: issueIso,
+    });
+  }
+  return out;
+}
+
+export async function fetchSpaceweatherStatusSidecar() {
+  const now = Date.now();
+  if (spacewxStatusCache && now - spacewxStatusCachedAt < SPACEWX_CACHE_TTL_MS) {
+    return spacewxStatusCache;
+  }
+  const [xrayRaw, kpRaw, cmeRaw] = await Promise.all([
+    fetchJsonSidecar('https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json'),
+    fetchJsonSidecar('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
+    fetchJsonSidecar('https://services.swpc.noaa.gov/json/donki/cme.json'),
+  ]);
+  const status = buildSpaceweatherStatusSidecar({
+    xrayFlux: normalizeXrayPoints(xrayRaw),
+    kpIndex: normalizeKpPoints(kpRaw),
+    cmes: Array.isArray(cmeRaw) ? cmeRaw : [],
+    now,
+  });
+  spacewxStatusCache = status;
+  spacewxStatusCachedAt = now;
+  return status;
+}
+
+export async function fetchSpaceweatherAlertsSidecar() {
+  const now = Date.now();
+  if (spacewxAlertsCache && now - spacewxAlertsCachedAt < SPACEWX_CACHE_TTL_MS) {
+    return spacewxAlertsCache;
+  }
+  const raw = await fetchJsonSidecar('https://services.swpc.noaa.gov/products/alerts.json');
+  const alerts = summarizeAlertsSidecar(normalizeAlertRaw(raw), now);
+  spacewxAlertsCache = alerts;
+  spacewxAlertsCachedAt = now;
+  return alerts;
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   // Use node:https with IPv4 forced — Node.js built-in fetch (undici) tries IPv6
   // first and some servers (EIA, NASA FIRMS) have broken IPv6 causing ETIMEDOUT.
@@ -4785,6 +5078,16 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch {
  return json([], 200);
  }
+  }
+
+  // ── Space Weather status + alerts (mirrors src/services/spaceweather/swpc-monitor.ts) ──
+  if (requestUrl.pathname === '/api/spaceweather/status') {
+    const status = await fetchSpaceweatherStatusSidecar();
+    return json(status);
+  }
+  if (requestUrl.pathname === '/api/spaceweather/alerts') {
+    const alerts = await fetchSpaceweatherAlertsSidecar();
+    return json({ alerts, asOf: new Date().toISOString() });
   }
 
   // ── Air Quality proxy (Open-Meteo, no API key, forwards lat/lon) ──────────

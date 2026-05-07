@@ -146,6 +146,7 @@ import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
+import { WildfireIntelPanel } from '@/components/WildfireIntelPanel';
 import { HazmatIncidentsPanel } from '@/components/HazmatIncidentsPanel';
 import { OilSpillPanel } from '@/components/OilSpillPanel';
 import { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
@@ -997,6 +998,9 @@ export class PanelLayoutManager implements AppModule {
 
  const wildfireIncidentsPanel = new WildfireIncidentsPanel();
  this.ctx.panels['wildfire-incidents'] = wildfireIncidentsPanel;
+
+ const wildfireIntelPanel = new WildfireIntelPanel();
+ this.ctx.panels['wildfire-intel'] = wildfireIntelPanel;
 
  const hazmatIncidentsPanel = new HazmatIncidentsPanel();
  this.ctx.panels['hazmat-incidents'] = hazmatIncidentsPanel;

@@ -18,6 +18,9 @@ import type { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel
 import type { HazmatIncidentsPanel } from '@/components/HazmatIncidentsPanel';
 import type { OilSpillPanel } from '@/components/OilSpillPanel';
 import type { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
+import type { WildfireIntelPanel } from '@/components/WildfireIntelPanel';
+import { fetchFireIntelSnapshot } from '@/services/wildfires/fire-intel-service';
+import { getSavedPlaces } from '@/services/saved-places';
 
 export async function loadAirQuality(ctx: AppContext, triggerCompoundEval: () => void): Promise<void> {
   try {
@@ -44,6 +47,20 @@ export async function loadWildfireIncidents(ctx: AppContext, triggerCompoundEval
  // eslint-disable-next-line no-console
  console.warn('[wildfire-incidents] fetch failed', error);
  (ctx.panels['wildfire-incidents'] as WildfireIncidentsPanel | undefined)?.update([]);
+  }
+}
+
+export async function loadWildfireIntel(ctx: AppContext): Promise<void> {
+  const panel = ctx.panels['wildfire-intel'] as WildfireIntelPanel | undefined;
+  if (!panel) return;
+  try {
+ const places = getSavedPlaces();
+ const snapshot = await fetchFireIntelSnapshot(places);
+ panel.update(snapshot);
+  } catch (error) {
+ // eslint-disable-next-line no-console
+ console.warn('[wildfire-intel] fetch failed', error);
+ panel.showUpstreamUnavailable(error instanceof Error ? error.message : String(error));
   }
 }
 

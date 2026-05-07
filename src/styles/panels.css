@@ -319,6 +319,15 @@
 .sw-footer { display: flex; justify-content: space-between; padding: 8px 0 0; color: var(--text-faint); font-size: 10px; }
 .sw-footer a { color: var(--accent); text-decoration: none; }
 .sw-footer a:hover { text-decoration: underline; }
+.sw-aurora-strip { margin: 8px 0; padding: 8px 10px; background: var(--overlay-subtle); border: 1px solid var(--border); border-radius: 4px; }
+.sw-aurora-label { font-size: 10px; color: var(--text-muted); margin-bottom: 6px; }
+.sw-aurora-empty { font-size: 10px; color: var(--text-dim); font-style: italic; }
+.sw-aurora-bar { position: relative; height: 22px; border-radius: 4px;
+  background: linear-gradient(90deg, #b71c1c 0%, #d50000 25%, #c026d3 50%, #4caf50 100%); }
+.sw-aurora-marker { position: absolute; top: -3px; bottom: -3px; width: 3px;
+  background: var(--text-primary, #fff); border: 1px solid #000; box-shadow: 0 0 4px #fff; }
+.sw-aurora-scale { position: absolute; left: 0; right: 0; bottom: -14px;
+  display: flex; justify-content: space-between; font-size: 9px; color: var(--text-dim); }
 
 /* ----------------------------------------------------------
  Disease Outbreak Panel

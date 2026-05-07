@@ -60,6 +60,7 @@ import {
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { TriageBar } from '@/components/TriageBar';
 import { EEWStatusBar } from '@/components/EEWStatusBar';
+import { startSpaceWeatherStatusBarPoller } from '@/services/spaceweather/status-bar-poller';
 import { JustInRail } from '@/components/JustInRail';
 import { startPanelNarrator } from '@/services/panel-narrator';
 import { TodayView } from '@/components/TodayView';
@@ -528,6 +529,7 @@ export class PanelLayoutManager implements AppModule {
  // of the seismic intelligence stack.
  const eewStatusBar = new EEWStatusBar();
  eewStatusBar.mount(document.body);
+ startSpaceWeatherStatusBarPoller(eewStatusBar);
 
  // Mount the triage bar above the panel grid (auto-hides when nothing is hot).
  const triageBar = new TriageBar();

@@ -31,6 +31,8 @@ import { GlobeSatellites } from '@/components/gods-vision/GlobeSatellites';
 import { GlobeMiniMap } from '@/components/gods-vision/GlobeMiniMap';
 import { GlobeAudio } from '@/components/gods-vision/GlobeAudio';
 import { GlobeAlertClusters } from '@/components/gods-vision/GlobeAlertClusters';
+import { GlobeTimelineSync } from '@/components/gods-vision/GlobeTimelineSync';
+import { GlobeHeatmapToggle } from '@/components/gods-vision/GlobeHeatmapToggle';
 import { StreetTileManager } from '@/services/street-tiles';
 import { GpsTracker, type GpsPosition } from '@/services/gps-tracker';
 import { computeRoute, type RouteResult, type RouteCoord } from '@/services/routing-engine';
@@ -72,6 +74,8 @@ export class GodsVisionView {
   private dataManager: GlobeDataManager | null = null;
   private hud: GlobeHUD | null = null;
   private timeMachine: GlobeTimeMachine | null = null;
+  private timelineSync: GlobeTimelineSync | null = null;
+  private heatmapToggle: GlobeHeatmapToggle | null = null;
   private autoFollow: AutoFollowEngine | null = null;
   private fourD: Globe4DManager | null = null;
   private reactorBeacons: GlobeReactorBeacons | null = null;
@@ -222,7 +226,23 @@ export class GodsVisionView {
  if (viewer && this.dataManager) {
  this.timeMachine = new GlobeTimeMachine(viewer, this.dataManager, this.container);
  this.timeMachine.mount();
+
+ // Bridge cursor → timeline-cursor visibility helper. Renders a
+ // small "N events @ cursor" badge above the scrubber + dispatches
+ // `wm:globe-timeline-cursor` events for layer managers to react.
+ this.timelineSync = new GlobeTimelineSync(this.timeMachine, this.container);
+ this.timelineSync.mount();
+ this.cleanupHandlers.push(() => { this.timelineSync?.destroy(); this.timelineSync = null; });
  }
+
+ // Per-domain heatmap toggle row (seismic / fire / cyber / conflict).
+ // The toggle owns selection + opacity state and dispatches
+ // `wm:globe-heatmap-changed` with deck.gl HexagonLayer configs;
+ // the deck.gl-on-Cesium overlay that consumes those configs is a
+ // follow-up. Visible UI lands now so users see the controls.
+ this.heatmapToggle = new GlobeHeatmapToggle(this.container);
+ this.heatmapToggle.mount();
+ this.cleanupHandlers.push(() => { this.heatmapToggle?.destroy(); this.heatmapToggle = null; });
 
  // Geocode search bar
  if (viewer) {

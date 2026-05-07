@@ -6,7 +6,7 @@ import dns from 'node:dns/promises';
 import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { brotliCompress, gzip } from 'node:zlib';
+import { brotliCompress, gzip, inflateRawSync } from 'node:zlib';
 import path from 'node:path';
 import os from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -1652,6 +1652,171 @@ export function sanitizeEewAlert(raw) {
 }
 
 // CACHE PATTERN: copy this for future cached routes
+// ── GDELT events poller (sidecar; renderer parsers live in
+// src/services/synthesis/gdelt-poller.ts; duplicated here so the .mjs
+// sidecar stays self-contained — same pattern as parseFredCsvSidecar) ──
+
+/**
+ * Extract a single .CSV file from a GDELT zip buffer. GDELT zips are
+ * always single-entry, store-or-deflate. Reads the local file header,
+ * decompresses if compression method is 8 (deflate), passes through
+ * if 0 (stored). Throws on any other format.
+ */
+export function extractSingleFileGdeltZipSidecar(buffer) {
+  if (buffer.length < 30) throw new Error('zip too short');
+  if (buffer.readUInt32LE(0) !== 0x0403_4b50) throw new Error('not a PKZIP local header');
+  const compressionMethod = buffer.readUInt16LE(8);
+  const compressedSize = buffer.readUInt32LE(18);
+  const filenameLen = buffer.readUInt16LE(26);
+  const extraLen = buffer.readUInt16LE(28);
+  const dataOffset = 30 + filenameLen + extraLen;
+  if (compressedSize === 0 || dataOffset + compressedSize > buffer.length) {
+    // Fall through: try to use the rest of the buffer (some zips have
+    // sizes 0 with data-descriptor records — DEFLATE is self-terminating).
+    const tail = buffer.subarray(dataOffset, - 22 /* central directory min */);
+    if (compressionMethod === 8) return inflateRawSync(tail).toString('utf8');
+    if (compressionMethod === 0) return tail.toString('utf8');
+    throw new Error(`unsupported compression method ${compressionMethod}`);
+  }
+  const data = buffer.subarray(dataOffset, dataOffset + compressedSize);
+  if (compressionMethod === 8) return inflateRawSync(data).toString('utf8');
+  if (compressionMethod === 0) return data.toString('utf8');
+  throw new Error(`unsupported compression method ${compressionMethod}`);
+}
+
+/** Parse a GDELT lastupdate.txt manifest to get the events CSV URL. */
+export function parseGdeltLastUpdateSidecar(text) {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    const match = line.match(/^(\d+)\s+([a-f0-9]{32})\s+(\S+)$/i);
+    if (match && match[3].includes('.export.CSV')) {
+      return { size: Number.parseInt(match[1], 10), md5: match[2].toLowerCase(), url: match[3] };
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse + filter a GDELT 2.0 events CSV. Returns HistoricalEvent-shaped
+ * records ready for the precedent-matcher corpus. Mirror of the
+ * pipeline in src/services/synthesis/gdelt-poller.ts; kept duplicated
+ * because the sidecar is .mjs and can't import the .ts module
+ * directly.
+ */
+export function pipelineGdeltCsvToCorpusSidecar(csvText, options = {}) {
+  const minMentions = options.minMentions ?? 60;
+  const conflictOnly = options.conflictOnly ?? true;
+  const out = [];
+  for (const line of csvText.split('\n')) {
+    if (!line) continue;
+    const cols = line.split('\t');
+    if (cols.length < 60) continue;
+    const quadClass = Number.parseInt(cols[26] ?? '', 10);
+    if (quadClass !== 1 && quadClass !== 2 && quadClass !== 3 && quadClass !== 4) continue;
+    if (conflictOnly && quadClass !== 3 && quadClass !== 4) continue;
+    const numMentions = Number.parseFloat(cols[31] ?? '0') || 0;
+    if (numMentions < minMentions) continue;
+    const goldsteinScale = Number.parseFloat(cols[30] ?? '0') || 0;
+    const globalEventId = cols[0];
+    if (!globalEventId) continue;
+
+    const sqlDate = cols[1] ?? '';
+    const date = sqlDate.length === 8
+      ? `${sqlDate.slice(0, 4)}-${sqlDate.slice(4, 6)}-${sqlDate.slice(6, 8)}`
+      : new Date().toISOString().slice(0, 10);
+    const actor1Name = cols[6] ?? '';
+    const actor2Name = cols[16] ?? '';
+    const actor1CountryCode = cols[7] ?? '';
+    const actionGeoFullName = cols[53] ?? '';
+    const actionGeoCountryCode = cols[54] ?? '';
+    const quadLabel = quadClass === 4 ? 'material-conflict'
+      : quadClass === 3 ? 'verbal-conflict'
+      : quadClass === 2 ? 'material-cooperation'
+      : 'verbal-cooperation';
+
+    let intensity = 'low';
+    if (quadClass === 4 && goldsteinScale <= -7 && numMentions >= 200) intensity = 'critical';
+    else if (quadClass === 4 && numMentions >= 200) intensity = 'high';
+    else if (numMentions >= 100) intensity = 'medium';
+
+    const actors = [];
+    if (actor1Name) actors.push(actor1Name);
+    if (actor2Name && actor2Name !== actor1Name) actors.push(actor2Name);
+
+    out.push({
+      id: `gdelt-${globalEventId}`,
+      date,
+      location: actionGeoFullName || actor1CountryCode || 'Unknown',
+      country: actionGeoCountryCode || actor1CountryCode || 'XX',
+      eventType: quadLabel,
+      actors,
+      intensity,
+      summary: `${quadLabel}: ${actor1Name || actor1CountryCode || 'Actor'}${actor2Name ? ` ↔ ${actor2Name}` : ''}${actionGeoFullName ? ` in ${actionGeoFullName}` : ''} (mentions=${numMentions}, Goldstein=${goldsteinScale.toFixed(1)})`,
+      source: 'gdelt',
+    });
+  }
+  return out;
+}
+
+const GDELT_LAST_UPDATE_URL = 'http://data.gdeltproject.org/gdeltv2/lastupdate.txt';
+const GDELT_POLL_INTERVAL_MS = 15 * 60 * 1000;
+const GDELT_CACHE_LIMIT = 500;
+
+let _gdeltCache = { events: [], asOf: 0, lastUrl: null, lastError: null };
+let _gdeltPollTimer = null;
+let _gdeltPollInFlight = false;
+
+async function _pollGdeltOnce() {
+  if (_gdeltPollInFlight) return;
+  _gdeltPollInFlight = true;
+  try {
+    const manifestRes = await fetchWithTimeout(GDELT_LAST_UPDATE_URL, {}, 12_000);
+    if (!manifestRes.ok) throw new Error(`lastupdate.txt HTTP ${manifestRes.status}`);
+    const manifestText = await manifestRes.text();
+    const entry = parseGdeltLastUpdateSidecar(manifestText);
+    if (!entry) throw new Error('no events entry in lastupdate.txt');
+    if (entry.url === _gdeltCache.lastUrl) return; // already processed
+
+    const csvRes = await fetchWithTimeout(entry.url, {}, 30_000);
+    if (!csvRes.ok) throw new Error(`events CSV HTTP ${csvRes.status}`);
+    const buffer = Buffer.from(await csvRes.arrayBuffer());
+    const csvText = extractSingleFileGdeltZipSidecar(buffer);
+    const corpus = pipelineGdeltCsvToCorpusSidecar(csvText);
+
+    _gdeltCache = {
+      events: corpus.slice(-GDELT_CACHE_LIMIT),
+      asOf: Date.now(),
+      lastUrl: entry.url,
+      lastError: null,
+    };
+  } catch (error) {
+    _gdeltCache = {
+      ..._gdeltCache,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    _gdeltPollInFlight = false;
+  }
+}
+
+function _ensureGdeltPolling() {
+  if (_gdeltPollTimer) return;
+  // Fire once on first request, then every 15 minutes thereafter.
+  void _pollGdeltOnce();
+  _gdeltPollTimer = setInterval(() => { void _pollGdeltOnce(); }, GDELT_POLL_INTERVAL_MS);
+  if (_gdeltPollTimer.unref) _gdeltPollTimer.unref();
+}
+
+/** Test-only hook to inject a CSV directly without hitting the network. */
+export function __gdeltSetCacheForTests(events) {
+  _gdeltCache = { events: events.slice(-GDELT_CACHE_LIMIT), asOf: Date.now(), lastUrl: 'test', lastError: null };
+}
+
+/** Test-only hook to inspect the cache. */
+export function __gdeltGetCacheForTests() {
+  return _gdeltCache;
+}
+
 const _sidecarCache = new Map(); // key -> { data, ts }
 const SIDECAR_CACHE_MAX = 500;
 let _sidecarCacheSweepTimer = null;
@@ -2994,6 +3159,23 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── GDELT 2.0 events corpus (15-min poll → precedent-matcher) ──
+  // First request kicks off the polling loop; subsequent requests
+  // serve the cached corpus. Returns up to GDELT_CACHE_LIMIT (500)
+  // newest HistoricalEvent records ready for the matcher.
+  if (requestUrl.pathname === '/api/gdelt/events') {
+    if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+    _ensureGdeltPolling();
+    const ageMs = _gdeltCache.asOf > 0 ? Date.now() - _gdeltCache.asOf : null;
+    return json({
+      events: _gdeltCache.events,
+      asOf: _gdeltCache.asOf,
+      ageMs,
+      stale: ageMs !== null && ageMs > 30 * 60 * 1000, // > 2x the poll interval
+      available: _gdeltCache.events.length > 0 || _gdeltCache.lastUrl !== null,
+      lastError: _gdeltCache.lastError,
+    });
+  }
 
   if (requestUrl.pathname === '/api/sitrep-bundle') {
     const cacheKey = 'sitrep-bundle';

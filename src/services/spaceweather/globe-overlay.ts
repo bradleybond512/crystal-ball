@@ -127,6 +127,28 @@ function buildAuroraRing(status: SpaceWxStatus): AuroraRing | null {
   };
 }
 
+/**
+ * Pulse animation phase — radius linearly oscillates between inner and
+ * outer over `periodMs`, hitting the outer radius at the half-period and
+ * returning to inner at the period boundary. Used by the Cesium overlay
+ * to drive the subsolar X-flare pulse via a CallbackProperty without
+ * keeping per-tick state.
+ */
+export function flarePulseRadiusM(
+  nowMs: number,
+  startMs: number,
+  periodMs: number,
+  innerRadiusM: number,
+  outerRadiusM: number,
+): number {
+  if (!Number.isFinite(periodMs) || periodMs <= 0) return innerRadiusM;
+  const elapsed = ((nowMs - startMs) % periodMs + periodMs) % periodMs;
+  const phase = elapsed / periodMs; // 0..1
+  // Triangle wave: 0 → 1 → 0 across the period.
+  const tri = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
+  return innerRadiusM + (outerRadiusM - innerRadiusM) * tri;
+}
+
 function buildFlarePulse(status: SpaceWxStatus, nowMs: number): FlarePulse | null {
   if (!status.xray?.xClassActive) return null;
   const point = subsolarPoint(nowMs);
@@ -141,7 +163,7 @@ function buildFlarePulse(status: SpaceWxStatus, nowMs: number): FlarePulse | nul
 
 // ── Status banner integration ────────────────────────────────────────────
 
-export type SpaceWxBannerSeverity = 'none' | 'g3' | 'g4' | 'g5' | 'flare';
+export type SpaceWxBannerSeverity = 'none' | 'g4' | 'g5' | 'flare';
 
 export interface SpaceWxBanner {
   severity: SpaceWxBannerSeverity;
@@ -151,11 +173,11 @@ export interface SpaceWxBanner {
   subtitle: string;
 }
 
-/** Map a SpaceWxStatus into the EEWStatusBar banner. Banner shows for
- * G3+ geomagnetic storms or active X-class flares — the user spec
- * required "G4+ storm warnings", we widen to G3 to match the usual
- * SWPC subscriber threshold. Returns severity 'none' when nothing
- * warrants surfacing on the header. */
+/** Map a SpaceWxStatus into the EEWStatusBar banner. Per the spec the
+ * banner only fires for G4+ geomagnetic storms (Kp ≥ 8) — lower-level
+ * storms still surface in the SpaceWeatherPanel itself. An active
+ * X-class flare with no qualifying storm falls through to the flare
+ * banner. Returns severity 'none' otherwise. */
 export function deriveSpaceWxBanner(status: SpaceWxStatus | null): SpaceWxBanner {
   if (!status) return { severity: 'none', label: '', subtitle: '' };
   const level = status.geomag?.level ?? 'G0';
@@ -175,14 +197,6 @@ export function deriveSpaceWxBanner(status: SpaceWxStatus | null): SpaceWxBanner
       label: 'GEOMAGNETIC G4 — SEVERE STORM',
       subtitle: kp === null ? 'grid + GPS + HF degraded'
                             : `Kp ${kp.toFixed(1)} · grid + GPS + HF degraded`,
-    };
-  }
-  if (level === 'G3') {
-    return {
-      severity: 'g3',
-      label: 'GEOMAGNETIC G3 — STRONG STORM',
-      subtitle: kp === null ? 'GPS / HF impacts possible'
-                            : `Kp ${kp.toFixed(1)} · GPS / HF impacts possible`,
     };
   }
   if (xray?.xClassActive) {

@@ -5,6 +5,7 @@ import {
   auroraColorForKp,
   buildOverlayDescriptor,
   deriveSpaceWxBanner,
+  flarePulseRadiusM,
   ringAtLatitude,
   subsolarPoint,
 } from '../globe-overlay.ts';
@@ -146,17 +147,62 @@ test('deriveSpaceWxBanner: G5 storm escalates to extreme banner', () => {
   assert.match(banner.subtitle, /Kp 9\.0/);
 });
 
-test('deriveSpaceWxBanner: G4 / G3 escalate distinctly', () => {
+test('deriveSpaceWxBanner: G4 hits the severe banner (Kp >= 8 threshold)', () => {
   const g4 = deriveSpaceWxBanner(makeStatus({
     geomag: { kp: 8, level: 'G4', auroraVisibilityLatN: 50, observedAt: '', kpMax24h: 8 },
   }));
   assert.equal(g4.severity, 'g4');
   assert.match(g4.label, /SEVERE/);
+});
+
+test('deriveSpaceWxBanner: G3 alone is below threshold and returns none', () => {
+  // Spec narrowed the banner to G4+ (Kp >= 8); G3 storms appear in the
+  // panel but no longer raise the persistent header.
   const g3 = deriveSpaceWxBanner(makeStatus({
     geomag: { kp: 7, level: 'G3', auroraVisibilityLatN: 55, observedAt: '', kpMax24h: 7 },
   }));
-  assert.equal(g3.severity, 'g3');
-  assert.match(g3.label, /STRONG/);
+  assert.equal(g3.severity, 'none');
+});
+
+// ── flarePulseRadiusM ─────────────────────────────────────────────────────
+
+test('flarePulseRadiusM oscillates between inner and outer over the period', () => {
+  const inner = 100_000;
+  const outer = 500_000;
+  const period = 1500;
+  const t0 = 1_745_000_000_000;
+  // At phase 0 (top of period) we sit at inner radius.
+  assert.equal(flarePulseRadiusM(t0, t0, period, inner, outer), inner);
+  // At half-period we sit at outer radius.
+  assert.equal(flarePulseRadiusM(t0 + period / 2, t0, period, inner, outer), outer);
+  // At full period we wrap back to inner.
+  assert.equal(flarePulseRadiusM(t0 + period, t0, period, inner, outer), inner);
+});
+
+test('flarePulseRadiusM stays within [inner, outer] for any time', () => {
+  const inner = 200_000;
+  const outer = 800_000;
+  const period = 1500;
+  for (let dt = 0; dt < period * 4; dt += 37) {
+    const r = flarePulseRadiusM(dt, 0, period, inner, outer);
+    assert.ok(r >= inner - 1e-6 && r <= outer + 1e-6, `radius ${r} out of range at dt=${dt}`);
+  }
+});
+
+test('flarePulseRadiusM falls back to inner radius when period is 0 or negative', () => {
+  assert.equal(flarePulseRadiusM(123, 0, 0, 100, 500), 100);
+  assert.equal(flarePulseRadiusM(123, 0, -1, 100, 500), 100);
+});
+
+// ── deriveSpaceWxBanner: G3 + flare fall-through (resumes the test sequence)
+
+test('deriveSpaceWxBanner: G3 + X-class flare falls through to the flare banner', () => {
+  const banner = deriveSpaceWxBanner(makeStatus({
+    geomag: { kp: 7, level: 'G3', auroraVisibilityLatN: 55, observedAt: '', kpMax24h: 7 },
+    xray: { peakFlux: 2e-4, currentFlux: 2e-4, peakClass: 'X', peakLabel: 'X2.0',
+      peakAt: '', xClassActive: true, sampleCount: 10 },
+  }));
+  assert.equal(banner.severity, 'flare');
 });
 
 test('deriveSpaceWxBanner: G2 storm + X-class flare prefers the flare banner', () => {

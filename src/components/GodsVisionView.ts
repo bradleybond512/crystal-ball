@@ -16,6 +16,7 @@ import { GlobeArcs } from '@/components/gods-vision/GlobeArcs';
 import { GlobeHeatmap } from '@/components/gods-vision/GlobeHeatmap';
 import { GlobeReactorBeacons } from '@/components/GlobeReactorBeacons';
 import { GlobeSeismicWaves } from '@/components/GlobeSeismicWaves';
+import { GlobeSpaceWeatherOverlay } from '@/components/GlobeSpaceWeatherOverlay';
 import { GlobeWebcamLayer } from '@/services/webcams/webcam-globe-layer';
 import { fetchUnifiedWebcams } from '@/services/webcams/fetcher';
 import { FlyModeController } from '@/components/gods-vision/FlyMode/FlyModeController';
@@ -76,6 +77,7 @@ export class GodsVisionView {
   private fourD: Globe4DManager | null = null;
   private reactorBeacons: GlobeReactorBeacons | null = null;
   private seismicWaves: GlobeSeismicWaves | null = null;
+  private spaceWeatherOverlay: GlobeSpaceWeatherOverlay | null = null;
   private webcamLayer: GlobeWebcamLayer | null = null;
   private globePulse: GlobePulse | null = null;
   private globeArcs: GlobeArcs | null = null;
@@ -176,6 +178,8 @@ export class GodsVisionView {
  this.reactorBeacons.mount();
  this.seismicWaves = new GlobeSeismicWaves(viewer);
  this.seismicWaves.mount();
+ this.spaceWeatherOverlay = new GlobeSpaceWeatherOverlay(viewer);
+ this.spaceWeatherOverlay.mount();
  this.webcamLayer = new GlobeWebcamLayer(viewer, {
  fetchFeeds: async () => {
  const cat = await fetchUnifiedWebcams({ category: 'fire,volcano,coastal' });
@@ -401,6 +405,8 @@ export class GodsVisionView {
 
  this.seismicWaves?.destroy();
  this.seismicWaves = null;
+ this.spaceWeatherOverlay?.destroy();
+ this.spaceWeatherOverlay = null;
 
  this.hud?.destroy();
  this.hud = null;

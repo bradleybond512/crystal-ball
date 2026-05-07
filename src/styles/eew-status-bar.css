@@ -72,14 +72,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.eew-bar-spacewx-g3    { background: rgba(234, 88, 12, 0.85);  color: #fff7ed; }
-.eew-bar-spacewx-g4    { background: rgba(220, 38, 38, 0.92);  color: #fef2f2; }
+/* G4+ uses the spec-mandated purple; G5 deepens it with a pulse to match
+ * the seismic TIER_5 EXTREME visual treatment. G3 storms no longer
+ * surface in the persistent header (panel-only). */
+.eew-bar-spacewx-g4    { background: rgba(124, 58, 237, 0.92);  color: #f5f3ff; }
 .eew-bar-spacewx-g5    {
-  background: rgba(159, 18, 57, 0.95);
+  background: rgba(91, 33, 182, 0.95);
   color: #ffffff;
   animation: eew-bar-crimson-pulse 2.4s ease-in-out infinite;
 }
-.eew-bar-spacewx-flare { background: rgba(124, 58, 237, 0.85); color: #f5f3ff; }
+.eew-bar-spacewx-flare { background: rgba(168, 85, 247, 0.85); color: #f5f3ff; }
 
 /* Tier color schemes — outer container background + text */
 .eew-bar-gray    { background: rgba(40, 44, 52, 0.92);  color: #cbd5e1; }

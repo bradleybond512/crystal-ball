@@ -41,7 +41,6 @@ const COLOR_CLASSES: Record<StatusBarState['color'], string> = {
 
 const SPACEWX_CLASSES: Record<SpaceWxBannerSeverity, string> = {
   none: '',
-  g3: 'eew-bar-spacewx-g3',
   g4: 'eew-bar-spacewx-g4',
   g5: 'eew-bar-spacewx-g5',
   flare: 'eew-bar-spacewx-flare',

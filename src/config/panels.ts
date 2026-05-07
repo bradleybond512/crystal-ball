@@ -96,6 +96,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'oil-spill': { name: 'Oil & Chemical Spills', enabled: true, priority: 2 },
   'hazard-alerts': { name: 'Hazard Alerts — Near Me', enabled: true, priority: 1 },
   'infrastructure': { name: 'Critical Infrastructure', enabled: true, priority: 2 },
+  'grid-intelligence': { name: 'Grid & Internet Intelligence', enabled: true, priority: 1 },
   'gdacs-alerts': { name: 'GDACS Disaster Alerts', enabled: true, priority: 2 },
   'volcano-alerts': { name: 'Volcano Alerts', enabled: true, priority: 2 },
   'nws-alerts': { name: 'NWS Hazard Alerts', enabled: true, priority: 1 },

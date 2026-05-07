@@ -2,6 +2,8 @@ import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
 import { getApiBaseUrl } from '@/services/runtime';
 
+type TrendDirection = 'rising' | 'falling' | 'stable';
+
 // ── Sidecar response shapes (mirror engines from PRs #295 + #297) ──────
 
 interface FsiAlert {
@@ -25,7 +27,7 @@ interface CommodityAlert {
   currentPrice: number;
   deviation12mSigma: number;
   deviation24mSigma: number;
-  trend: 'rising' | 'falling' | 'stable';
+  trend: TrendDirection;
   overallRisk: 'low' | 'medium' | 'high' | 'critical';
   message: string;
 }
@@ -50,7 +52,26 @@ interface EnsoResponse {
   error?: string;
 }
 
-type TabId = 'fsi' | 'commodities' | 'enso';
+type TabId = 'fsi' | 'commodities' | 'enso' | 'macro';
+
+type VixGauge = 'calm' | 'elevated' | 'stress' | 'crisis';
+
+interface MacroSeriesSnapshot {
+  series: string;
+  current: number | null;
+  asOf: string | null;
+  mean30: number | null;
+  stddev30: number | null;
+  zScore: number | null;
+  trend: TrendDirection;
+  vixGauge: VixGauge | null;
+  error?: string;
+}
+
+interface MacroStressResponse {
+  components?: MacroSeriesSnapshot[];
+  asOf?: string | null;
+}
 const REFRESH_MS = 5 * 60_000;
 
 // EconomicIntelPanel: financial stress gauge + ENSO status + commodity
@@ -61,9 +82,11 @@ export class EconomicIntelPanel extends Panel {
   private fsi: FinancialStressResponse | null = null;
   private commodities: CommodityStressResponse | null = null;
   private enso: EnsoResponse | null = null;
+  private macro: MacroStressResponse | null = null;
   private fsiError: string | null = null;
   private commoditiesError: string | null = null;
   private ensoError: string | null = null;
+  private macroError: string | null = null;
   private activeTab: TabId = 'fsi';
   private refreshTimer: number | null = null;
 
@@ -89,7 +112,23 @@ export class EconomicIntelPanel extends Panel {
   }
 
   async refresh(): Promise<void> {
- await Promise.all([this.refreshFsi(), this.refreshCommodities(), this.refreshEnso()]);
+ await Promise.all([this.refreshFsi(), this.refreshCommodities(), this.refreshEnso(), this.refreshMacro()]);
+  }
+
+  private async refreshMacro(): Promise<void> {
+ try {
+ const res = await fetch(`${getApiBaseUrl()}/api/macro-stress`);
+ const body = (await res.json().catch(() => null)) as MacroStressResponse | null;
+ if (body) {
+ this.macro = body;
+ this.macroError = null;
+ } else {
+ this.macroError = `Sidecar returned HTTP ${res.status}`;
+ }
+ } catch (error) {
+ this.macroError = error instanceof Error ? error.message : String(error);
+ }
+ this.render();
   }
 
   private async refreshFsi(): Promise<void> {
@@ -152,10 +191,13 @@ export class EconomicIntelPanel extends Panel {
  const fsiBadge = this.fsi?.current ? this.fsi.current.tier : '—';
  const commodityHot = this.commodities?.alerts?.filter((a) => a.overallRisk === 'high' || a.overallRisk === 'critical').length ?? 0;
  const commodityLabel = commodityHot > 0 ? `Commodities · ${commodityHot}` : 'Commodities';
+ const vixComp = this.macro?.components?.find((c) => c.series.toUpperCase() === 'VIXCLS');
+ const macroLabel = vixComp?.vixGauge ? `Macro · VIX ${vixComp.vixGauge}` : 'Macro';
  const tabs: { id: TabId; label: string }[] = [
  { id: 'fsi', label: `FSI · ${fsiBadge}` },
  { id: 'commodities', label: commodityLabel },
  { id: 'enso', label: `ENSO · ${this.enso?.snapshot?.phase ?? '—'}` },
+ { id: 'macro', label: macroLabel },
  ];
  const items = tabs.map((t) => {
  const active = t.id === this.activeTab;
@@ -228,9 +270,35 @@ export class EconomicIntelPanel extends Panel {
  </div>`;
   }
 
+  private renderMacro(): string {
+ if (this.macroError) return `<div style="padding:12px;color:#ef4444;font-size:12px">${escapeHtml(this.macroError)}</div>`;
+ if (!this.macro?.components || this.macro.components.length === 0) {
+ return '<div style="padding:12px;opacity:0.6;font-size:12px">Loading macro stress data…</div>';
+ }
+ const rows = this.macro.components.map((c) => {
+ const arrow = trendArrow(c.trend);
+ const decimals = c.series === 'VIXCLS' ? 2 : 4;
+ const cur = c.current === null ? '—' : c.current.toFixed(decimals);
+ const z = c.zScore === null ? '—' : c.zScore.toFixed(2);
+ const gaugeBadge = c.vixGauge
+ ? `<span style="margin-left:8px;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;text-transform:uppercase;background:${vixGaugeColor(c.vixGauge)};color:#000;">${escapeHtml(c.vixGauge)}</span>`
+ : '';
+ const errLine = c.error ? `<div style="font-size:10px;color:#ef4444;">⚠ ${escapeHtml(c.error)}</div>` : '';
+ return `<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+ <td style="padding:4px 8px;font-family:ui-monospace,monospace;font-weight:600;">${escapeHtml(c.series)}${gaugeBadge}</td>
+ <td style="padding:4px 8px;font-family:ui-monospace,monospace;">${escapeHtml(cur)}</td>
+ <td style="padding:4px 8px;color:var(--text-secondary,#aaa);">${arrow}</td>
+ <td style="padding:4px 8px;font-family:ui-monospace,monospace;">z ${escapeHtml(z)}</td>
+ <td style="padding:4px 8px;color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(c.asOf ?? '—')}${errLine}</td>
+ </tr>`;
+ }).join('');
+ return `<div style="padding:8px;"><div style="font-size:11px;color:var(--text-secondary,#aaa);margin-bottom:6px;">Source: FRED CSV · 30-day rolling z-score</div><table style="width:100%;border-collapse:collapse;font-size:11px;"><tbody>${rows}</tbody></table></div>`;
+  }
+
   private renderActiveTab(): string {
  if (this.activeTab === 'commodities') return this.renderCommodities();
  if (this.activeTab === 'enso') return this.renderEnso();
+ if (this.activeTab === 'macro') return this.renderMacro();
  return this.renderFsi();
   }
 
@@ -253,6 +321,19 @@ export class EconomicIntelPanel extends Panel {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
+
+function vixGaugeColor(g: VixGauge): string {
+  if (g === 'calm') return '#4caf50';
+  if (g === 'elevated') return '#ffeb3b';
+  if (g === 'stress') return '#ff9800';
+  return '#d50000';
+}
+
+function trendArrow(trend: TrendDirection): string {
+  if (trend === 'rising') return '↑';
+  if (trend === 'falling') return '↓';
+  return '→';
+}
 
 function colorForTier(tier: string): string {
   switch (tier) {
@@ -308,16 +389,11 @@ function fsiBarPct(index: number): number {
   return Math.round(((clamped + 3) / 8) * 100);
 }
 
-function arrowForTrend(trend: 'rising' | 'falling' | 'stable'): string {
-  if (trend === 'rising') return '↑';
-  if (trend === 'falling') return '↓';
-  return '→';
-}
 
 function renderCommodityRow(a: CommodityAlert): string {
   const riskColor = colorForRisk(a.overallRisk);
-  const trendArrow = arrowForTrend(a.trend);
-  return `<tr><td style="padding:4px 8px;color:${riskColor};font-weight:600;text-transform:uppercase;font-size:10px">${escapeHtml(a.overallRisk)}</td><td style="padding:4px 8px"><strong>${escapeHtml(a.commodity)}</strong></td><td style="padding:4px 8px;font-family:ui-monospace,monospace">${a.currentPrice.toFixed(2)} <span style="opacity:0.5">${escapeHtml(a.unit)}</span></td><td style="padding:4px 8px;font-family:ui-monospace,monospace">${a.deviation12mSigma >= 0 ? '+' : ''}${a.deviation12mSigma.toFixed(2)}σ</td><td style="padding:4px 8px;text-align:center">${trendArrow}</td></tr>`;
+  const arrow = trendArrow(a.trend);
+  return `<tr><td style="padding:4px 8px;color:${riskColor};font-weight:600;text-transform:uppercase;font-size:10px">${escapeHtml(a.overallRisk)}</td><td style="padding:4px 8px"><strong>${escapeHtml(a.commodity)}</strong></td><td style="padding:4px 8px;font-family:ui-monospace,monospace">${a.currentPrice.toFixed(2)} <span style="opacity:0.5">${escapeHtml(a.unit)}</span></td><td style="padding:4px 8px;font-family:ui-monospace,monospace">${a.deviation12mSigma >= 0 ? '+' : ''}${a.deviation12mSigma.toFixed(2)}σ</td><td style="padding:4px 8px;text-align:center">${arrow}</td></tr>`;
 }
 
 function renderSparkline(series: { date: string; index: number }[]): string {

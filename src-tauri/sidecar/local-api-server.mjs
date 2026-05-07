@@ -1421,6 +1421,95 @@ export function computeSignalWatchSidecar(keyword, listing) {
   };
 }
 
+// ── Macro-stress helpers (mirror src/services/economic/macro-stress.ts) ────
+function vixGaugeForSidecar(value) {
+  if (value === null || !Number.isFinite(value)) return null;
+  if (value < 20) return 'calm';
+  if (value < 30) return 'elevated';
+  if (value < 40) return 'stress';
+  return 'crisis';
+}
+
+export function buildMacroSeriesSnapshotSidecar(series, observations) {
+  if (observations.length === 0) {
+    return { series, current: null, asOf: null, mean30: null, stddev30: null,
+      zScore: null, trend: 'stable', vixGauge: null };
+  }
+  const last = observations[observations.length - 1];
+  const recent = observations.slice(-30);
+  let mean30 = null, stddev30 = null, zScore = null;
+  if (recent.length >= 5) {
+    const sum = recent.reduce((s, o) => s + o.value, 0);
+    mean30 = sum / recent.length;
+    const variance = recent.reduce((s, o) => s + (o.value - mean30) ** 2, 0) / recent.length;
+    stddev30 = Math.sqrt(variance);
+    if (stddev30 > 0) zScore = (last.value - mean30) / stddev30;
+  }
+  let trend = 'stable';
+  if (observations.length >= 10) {
+    const r = observations.slice(-5);
+    const p = observations.slice(-10, -5);
+    const ra = r.reduce((s, o) => s + o.value, 0) / r.length;
+    const pa = p.reduce((s, o) => s + o.value, 0) / p.length;
+    if (pa !== 0) {
+      const pct = (ra - pa) / Math.abs(pa);
+      if (pct > 0.05) trend = 'rising';
+      else if (pct < -0.05) trend = 'falling';
+    }
+  }
+  return {
+    series, current: last.value, asOf: last.date, mean30, stddev30, zScore, trend,
+    vixGauge: series.toUpperCase() === 'VIXCLS' ? vixGaugeForSidecar(last.value) : null,
+  };
+}
+
+// ── Reddit ransomware mentions (mirror src/services/cyber/ransomware-mentions.ts) ──
+const KNOWN_RANSOMWARE_GROUPS_SIDECAR = [
+  'LockBit', 'ALPHV', 'BlackCat', 'Cl0p', 'Clop', 'Royal', 'Akira', 'Play',
+  'Medusa', 'BianLian', 'Rhysida', 'Black Basta', 'Hive', 'Conti', '8Base',
+  'Cactus', 'NoEscape', 'Qilin', 'Trigona', 'Vice Society',
+];
+const GROUP_LOOKUP_SIDECAR = new Map();
+for (const g of KNOWN_RANSOMWARE_GROUPS_SIDECAR) GROUP_LOOKUP_SIDECAR.set(g.toLowerCase(), g);
+
+function extractGroupsSidecar(text) {
+  if (!text) return [];
+  const lower = text.toLowerCase();
+  const found = new Set();
+  for (const [needle, canonical] of GROUP_LOOKUP_SIDECAR) {
+    if (lower.includes(needle)) found.add(canonical);
+  }
+  return [...found].sort();
+}
+
+export function parseRedditRansomwareSidecar(listing) {
+  const children = listing?.data?.children;
+  if (!Array.isArray(children)) return { mentions: [], groupCounts: [] };
+  const mentions = [];
+  for (const c of children) {
+    const d = c?.data;
+    if (!d?.id || !d.title || !d.subreddit || !d.permalink) continue;
+    if (!Number.isFinite(d.created_utc)) continue;
+    mentions.push({
+      id: d.id,
+      title: d.title,
+      subreddit: d.subreddit,
+      url: `https://www.reddit.com${d.permalink}`,
+      createdAt: d.created_utc,
+      score: Number.isFinite(d.score) ? d.score : 0,
+      comments: Number.isFinite(d.num_comments) ? d.num_comments : 0,
+      author: d.author ?? 'unknown',
+      groups: extractGroupsSidecar(`${d.title}\n${d.selftext ?? ''}`),
+    });
+  }
+  mentions.sort((a, b) => b.createdAt - a.createdAt);
+  const counts = new Map();
+  for (const m of mentions) for (const g of m.groups) counts.set(g, (counts.get(g) ?? 0) + 1);
+  const groupCounts = [...counts.entries()].map(([group, count]) => ({ group, count }))
+    .sort((a, b) => b.count - a.count || a.group.localeCompare(b.group));
+  return { mentions, groupCounts };
+}
+
 // ── Dark-vessel gap helpers (mirror src/services/dark-vessel.ts) ────────────
 const DARK_VESSEL_RISK_ZONES = [
   { name: 'Strait of Hormuz', lat: 26.5, lon: 56.3, radiusKm: 200 },
@@ -4018,6 +4107,56 @@ async function dispatch(requestUrl, req, routes, context) {
       return json({ rows, asOf: new Date().toISOString() });
     } catch (error) {
       return json({ rows: [], error: String(error?.message ?? error) }, 502);
+    }
+  }
+
+  // ── Macro stress (FRED CSV proxy: VIX + USD/EUR + USD/JPY) ──────────────
+  if (requestUrl.pathname === '/api/macro-stress') {
+    const seriesParam = (requestUrl.searchParams.get('series') || 'VIXCLS,DEXUSEU,DEXJPUS')
+      .split(',').map(s => s.trim()).filter(s => /^[A-Z0-9_]+$/i.test(s)).slice(0, 5);
+    if (seriesParam.length === 0) {
+      return json({ error: 'invalid or empty series parameter' }, 400);
+    }
+    const components = [];
+    let asOf = null;
+    for (const series of seriesParam) {
+      try {
+        const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}`;
+        const resp = await fetchWithTimeout(url, { headers: { Accept: 'text/csv' } }, 12_000);
+        if (!resp.ok) {
+          components.push({ series, error: `FRED ${resp.status}`, current: null, asOf: null,
+            mean30: null, stddev30: null, zScore: null, trend: 'stable', vixGauge: null });
+          continue;
+        }
+        const csv = await resp.text();
+        const observations = parseFredCsvSidecar(csv);
+        const snap = buildMacroSeriesSnapshotSidecar(series, observations);
+        components.push(snap);
+        if (snap.asOf && (!asOf || snap.asOf > asOf)) asOf = snap.asOf;
+      } catch (error) {
+        components.push({ series, error: String(error?.message ?? error), current: null, asOf: null,
+          mean30: null, stddev30: null, zScore: null, trend: 'stable', vixGauge: null });
+      }
+    }
+    return json({ components, asOf });
+  }
+
+  // ── Reddit ransomware-mentions proxy (no auth) ──────────────────────────
+  if (requestUrl.pathname === '/api/cyber-ransomware-mentions') {
+    try {
+      const limit = Math.min(50, Math.max(1, Number(requestUrl.searchParams.get('limit') || '25')));
+      const url = `https://www.reddit.com/search.json?q=ransomware&sort=new&t=day&limit=${limit}`;
+      const resp = await fetchWithTimeout(url, {
+        headers: { Accept: 'application/json', 'User-Agent': 'crystalball/1.0 (intelligence panel)' },
+      }, 12_000);
+      if (!resp.ok) {
+        return json({ mentions: [], groupCounts: [], error: `Reddit HTTP ${resp.status}` }, 502);
+      }
+      const listing = await resp.json();
+      const { mentions, groupCounts } = parseRedditRansomwareSidecar(listing);
+      return json({ mentions, groupCounts, asOf: new Date().toISOString() });
+    } catch (error) {
+      return json({ mentions: [], groupCounts: [], error: String(error?.message ?? error) }, 502);
     }
   }
 

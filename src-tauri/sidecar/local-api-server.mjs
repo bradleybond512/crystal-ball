@@ -16,6 +16,12 @@ import { getTakFeeds as s2uTakGetFeeds, getTakSituation as s2uTakGetSituation } 
 import { aggregateWastewaterRows, detectSurgeWatches } from './wastewater-aggregate.mjs';
 import { parseProMedRss, summarizeProMedAlerts } from './promed-classify.mjs';
 import { crossReferenceWhoDonWithProMed } from './who-promed-cross-reference.mjs';
+import {
+  parseNwsCapFeatures,
+  parseFemaDisasters,
+  dedupeAlerts,
+  expireAlerts,
+} from './ipaws-aggregate.mjs';
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 function isValidToken(authHeader) {
@@ -4806,6 +4812,61 @@ async function dispatch(requestUrl, req, routes, context) {
     } catch {
       return json(getCachedStale(CACHE_KEY) ?? null, 200);
     }
+  }
+
+  // ── IPAWS unified alerts (NWS CAP + FEMA disaster declarations) ───────────
+  if (requestUrl.pathname === '/api/alerts/active') {
+ const cached = getCached('ipaws-active', 60 * 1000);
+ if (cached) return json(cached);
+
+ const NWS_URL = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert';
+ const FEMA_URL = 'https://www.fema.gov/api/open/v2/disasterDeclarationsSummaries?$top=10&$orderby=declarationDate%20desc';
+ try {
+ const [nwsRes, femaRes] = await Promise.allSettled([
+ fetchWithTimeout(
+ NWS_URL,
+ { headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-IPAWS/1.0 (https://github.com/bradleybond512/crystal-ball)' } },
+ 12_000,
+ ),
+ fetchWithTimeout(
+ FEMA_URL,
+ { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+ 12_000,
+ ),
+ ]);
+
+ const safeJson = async (settled) => {
+ if (settled.status !== 'fulfilled' || !settled.value.ok) return null;
+ try { return await settled.value.json(); } catch { return null; }
+ };
+ const [nwsData, femaData] = await Promise.all([safeJson(nwsRes), safeJson(femaRes)]);
+ const nwsFeatures = Array.isArray(nwsData?.features) ? nwsData.features : [];
+ const femaRows = Array.isArray(femaData?.DisasterDeclarationsSummaries)
+ ? femaData.DisasterDeclarationsSummaries
+ : Array.isArray(femaData) ? femaData : [];
+
+ const combined = [...parseNwsCapFeatures(nwsFeatures), ...parseFemaDisasters(femaRows)];
+ const fresh = expireAlerts(dedupeAlerts(combined), Date.now());
+ const result = {
+ alerts: fresh,
+ fetchedAt: new Date().toISOString(),
+ sources: {
+ nws: nwsData ? 'ok' : 'degraded',
+ fema: femaData ? 'ok' : 'degraded',
+ },
+ };
+ setCached('ipaws-active', result);
+ return json(result);
+ } catch (error) {
+ const degraded = {
+ alerts: [],
+ fetchedAt: new Date().toISOString(),
+ sources: { nws: 'degraded', fema: 'degraded' },
+ degraded: true,
+ reason: `ipaws fetch error: ${error.message ?? error}`,
+ };
+ return json(degraded);
+ }
   }
 
   // ── FAA Aviation Weather Cameras (public, no auth) ───────────────────────────

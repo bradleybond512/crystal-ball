@@ -1969,6 +1969,94 @@ export function _acledMsUntilNext6UtcSidecar(now = Date.now()) {
   return next.getTime() - now;
 }
 
+// ── OTX (AlienVault) pulses poller (sidecar; renderer parsers in
+// src/services/cyber/otx-poller.ts) ───────────────────────────────────
+
+const OTX_PULSES_LIMIT = 200;
+const OTX_POLL_INTERVAL_MS = 30 * 60 * 1000;
+
+let _otxState = { pulses: [], cursor: null, asOf: 0, lastError: null };
+let _otxPollTimer = null;
+let _otxPollInFlight = false;
+
+/**
+ * Pure helper: merge fresh pulses into prior state, dedupe by id, sort
+ * newest-first by `modified`, cap at OTX_PULSES_LIMIT. Mirrors
+ * ingestOtxPulses in src/services/cyber/otx-poller.ts (duplicated for
+ * the .mjs runtime per the parseFredCsvSidecar pattern).
+ */
+export function ingestOtxPulsesSidecar(prior, fresh, cap = OTX_PULSES_LIMIT) {
+  const byId = new Map();
+  for (const p of prior?.pulses ?? []) {
+    if (typeof p?.id === 'string' && p.id.length > 0) byId.set(p.id, p);
+  }
+  for (const p of fresh) {
+    if (typeof p?.id === 'string' && p.id.length > 0) byId.set(p.id, p);
+  }
+  const merged = [...byId.values()].sort((a, b) => {
+    const ka = a.modified ?? a.created ?? '';
+    const kb = b.modified ?? b.created ?? '';
+    return kb.localeCompare(ka);
+  }).slice(0, cap);
+  let cursor = null;
+  for (const p of merged) {
+    const k = p.modified ?? p.created ?? '';
+    if (k && (cursor === null || k > cursor)) cursor = k;
+  }
+  return { pulses: merged, cursor };
+}
+
+async function _pollOtxOnce() {
+  if (_otxPollInFlight) return;
+  _otxPollInFlight = true;
+  try {
+    const apiKey = process.env.OTX_API_KEY;
+    if (!apiKey) {
+      _otxState = { ..._otxState, lastError: 'OTX_API_KEY required' };
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set('limit', '50');
+    if (_otxState.cursor) params.set('modified_since', _otxState.cursor);
+    const url = `https://otx.alienvault.com/api/v1/pulses/subscribed?${params.toString()}`;
+
+    const res = await fetchWithTimeout(url, {
+      headers: { 'X-OTX-API-KEY': apiKey, 'User-Agent': CHROME_UA },
+    }, 30_000);
+    if (!res.ok) throw new Error(`OTX HTTP ${res.status}`);
+    const json = await res.json();
+    const fresh = Array.isArray(json?.results)
+      ? json.results.filter((p) => p && typeof p === 'object' && typeof p.id === 'string' && p.id.length > 0)
+      : Array.isArray(json) ? json.filter((p) => p && typeof p === 'object' && typeof p.id === 'string' && p.id.length > 0) : [];
+    const next = ingestOtxPulsesSidecar(_otxState, fresh);
+    _otxState = {
+      pulses: next.pulses,
+      cursor: next.cursor,
+      asOf: Date.now(),
+      lastError: null,
+    };
+  } catch (error) {
+    _otxState = {
+      ..._otxState,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    _otxPollInFlight = false;
+  }
+}
+
+function _ensureOtxPolling() {
+  if (_otxPollTimer) return;
+  void _pollOtxOnce();
+  _otxPollTimer = setInterval(() => { void _pollOtxOnce(); }, OTX_POLL_INTERVAL_MS);
+  if (_otxPollTimer.unref) _otxPollTimer.unref();
+}
+
+/** Test-only hook. */
+export function __otxSetStateForTests(pulses, cursor = null) {
+  _otxState = { pulses: pulses.slice(-OTX_PULSES_LIMIT), cursor, asOf: Date.now(), lastError: null };
+}
+
 const _sidecarCache = new Map(); // key -> { data, ts }
 const SIDECAR_CACHE_MAX = 500;
 let _sidecarCacheSweepTimer = null;
@@ -2087,6 +2175,96 @@ async function fetchFredSeries(seriesId, apiKey) {
   const obs = data?.observations?.[0];
   if (!obs || obs.value === '.') throw new Error(`No data for ${seriesId}`);
   return Number.parseFloat(obs.value);
+}
+
+/**
+ * Fetch the 90-day observation history for a FRED series. Returns
+ * `{ seriesId, observations:[{date,value}], latestValue, latestDate }`.
+ * Used by the augmented /api/economic-stress route. Mirrors
+ * parseFredObservationsResponse in src/services/economic/fred-poller.ts.
+ */
+export async function fetchFredHistorySidecar(seriesId, apiKey, limit = 90) {
+  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${encodeURIComponent(seriesId)}&api_key=${encodeURIComponent(apiKey)}&file_type=json&sort_order=desc&limit=${limit}`;
+  const res = await fetchWithTimeout(url, {}, 15_000);
+  if (!res.ok) throw new Error(`FRED HTTP ${res.status}`);
+  const data = await res.json();
+  const observations = [];
+  if (Array.isArray(data?.observations)) {
+    for (const item of data.observations) {
+      if (!item || typeof item !== 'object' || typeof item.date !== 'string') continue;
+      const raw = item.value;
+      let value = null;
+      if (typeof raw === 'string' && raw !== '.' && raw.length > 0) {
+        const num = Number.parseFloat(raw);
+        if (Number.isFinite(num)) value = num;
+      } else if (typeof raw === 'number' && Number.isFinite(raw)) {
+        value = raw;
+      }
+      observations.push({ date: item.date, value });
+    }
+  }
+  let latestValue = null;
+  let latestDate = null;
+  for (const o of observations) {
+    if (o.value === null) continue;
+    if (latestDate === null || o.date > latestDate) {
+      latestDate = o.date;
+      latestValue = o.value;
+    }
+  }
+  return { seriesId, observations, latestValue, latestDate };
+}
+
+/**
+ * Fetch OFR Financial Stress Index from financialresearch.gov.
+ * Returns the same shape as fetchFredHistorySidecar.
+ */
+export async function fetchOfrFsiSidecar() {
+  const res = await fetchWithTimeout('https://data.financialresearch.gov/v1/series/get?mnemonic=OFR_FSI', {}, 15_000);
+  if (!res.ok) throw new Error(`OFR FSI HTTP ${res.status}`);
+  const data = await res.json();
+  const observations = [];
+
+  const collect = (arr) => {
+    for (const item of arr) {
+      if (Array.isArray(item) && item.length >= 2) {
+        const date = typeof item[0] === 'string' ? item[0] : null;
+        const raw = item[1];
+        let value = null;
+        if (typeof raw === 'number' && Number.isFinite(raw)) value = raw;
+        else if (typeof raw === 'string' && raw !== '.' && raw.length > 0) {
+          const num = Number.parseFloat(raw);
+          if (Number.isFinite(num)) value = num;
+        }
+        if (date) observations.push({ date, value });
+      } else if (item && typeof item === 'object' && typeof item.date === 'string') {
+        const raw = item.value;
+        let value = null;
+        if (typeof raw === 'number' && Number.isFinite(raw)) value = raw;
+        else if (typeof raw === 'string' && raw !== '.' && raw.length > 0) {
+          const num = Number.parseFloat(raw);
+          if (Number.isFinite(num)) value = num;
+        }
+        observations.push({ date: item.date, value });
+      }
+    }
+  };
+  if (Array.isArray(data)) collect(data);
+  else if (data && typeof data === 'object') {
+    if (Array.isArray(data.observations)) collect(data.observations);
+    else if (Array.isArray(data.data)) collect(data.data);
+  }
+
+  let latestValue = null;
+  let latestDate = null;
+  for (const o of observations) {
+    if (o.value === null) continue;
+    if (latestDate === null || o.date > latestDate) {
+      latestDate = o.date;
+      latestValue = o.value;
+    }
+  }
+  return { mnemonic: 'OFR_FSI', observations, latestValue, latestDate };
 }
 
 function clamp(x) { return Math.min(100, Math.max(0, x)); }
@@ -3309,6 +3487,22 @@ async function dispatch(requestUrl, req, routes, context) {
       });
     }
     return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── OTX (AlienVault) pulses corpus (30-min poll → apt-tracker) ──
+  if (requestUrl.pathname === '/api/otx/pulses') {
+    if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+    _ensureOtxPolling();
+    const ageMs = _otxState.asOf > 0 ? Date.now() - _otxState.asOf : null;
+    return json({
+      pulses: _otxState.pulses,
+      cursor: _otxState.cursor,
+      asOf: _otxState.asOf,
+      ageMs,
+      stale: ageMs !== null && ageMs > 60 * 60 * 1000, // > 2x poll interval
+      available: _otxState.pulses.length > 0 || _otxState.asOf > 0,
+      lastError: _otxState.lastError,
+    });
   }
 
   // ── ACLED events corpus (daily 06:00 UTC poll → precedent-matcher) ──
@@ -7572,14 +7766,20 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   if (requestUrl.pathname === '/api/economic-stress') {
- const cached = getCached('economic-stress', 15 * 60 * 1000);
+ // Cache TTL bumped from 15m to 60m: the stress score is stable
+ // intra-hour and the augmented response now also pulls 90-day
+ // history for 4 additional FRED series + OFR FSI (heavier).
+ const cached = getCached('economic-stress', 60 * 60 * 1000);
  if (cached) return json(cached);
 
  const fredKey = process.env.FRED_API_KEY;
  if (!fredKey) return json({ fredKeyMissing: true, error: 'FRED_API_KEY required' });
 
  try {
- const [t10y2yRes, t10y3mRes, vixRes, fsiRes, gscpiRes, icsaRes, wbRes] = await Promise.allSettled([
+ const [
+ t10y2yRes, t10y3mRes, vixRes, fsiRes, gscpiRes, icsaRes, wbRes,
+ brentRes, goldRes, vixHistRes, usdEurRes, ofrFsiRes,
+ ] = await Promise.allSettled([
  fetchFredSeries('T10Y2Y',  fredKey),
  fetchFredSeries('T10Y3M',  fredKey),
  fetchFredSeries('VIXCLS',  fredKey),
@@ -7587,6 +7787,11 @@ async function dispatch(requestUrl, req, routes, context) {
  fetchFredSeries('GSCPI', fredKey),
  fetchFredSeries('ICSA', fredKey),
  fetchWithTimeout('https://api.worldbank.org/v2/country/WLD/indicator/AG.PRD.FOOD.XD?format=json&mrv=1'),
+ fetchFredHistorySidecar('DCOILBRENTEU',     fredKey, 90),
+ fetchFredHistorySidecar('GOLDAMGBD228NLBM', fredKey, 90),
+ fetchFredHistorySidecar('VIXCLS',           fredKey, 90),
+ fetchFredHistorySidecar('DEXUSEU',          fredKey, 90),
+ fetchOfrFsiSidecar(),
  ]);
 
  const yieldVal  = t10y2yRes.status === 'fulfilled' ? t10y2yRes.value : 0;
@@ -7626,6 +7831,17 @@ async function dispatch(requestUrl, req, routes, context) {
  foodSecurity = { value: null, severity: 'unknown' };
  }
 
+ // Augmented payload: 90-day history for the 4 spec FRED series +
+ // OFR FSI from financialresearch.gov. On any settle-failure the
+ // entry has lastError + empty observations[] — never throws.
+ const additionalSeries = {
+ brent:  brentRes.status   === 'fulfilled' ? brentRes.value   : { seriesId: 'DCOILBRENTEU',     observations: [], latestValue: null, latestDate: null, lastError: String(brentRes.reason?.message ?? brentRes.reason ?? 'fetch failed') },
+ gold:   goldRes.status    === 'fulfilled' ? goldRes.value    : { seriesId: 'GOLDAMGBD228NLBM', observations: [], latestValue: null, latestDate: null, lastError: String(goldRes.reason?.message ?? goldRes.reason ?? 'fetch failed') },
+ vix:    vixHistRes.status === 'fulfilled' ? vixHistRes.value : { seriesId: 'VIXCLS',           observations: [], latestValue: null, latestDate: null, lastError: String(vixHistRes.reason?.message ?? vixHistRes.reason ?? 'fetch failed') },
+ usdEur: usdEurRes.status  === 'fulfilled' ? usdEurRes.value  : { seriesId: 'DEXUSEU',          observations: [], latestValue: null, latestDate: null, lastError: String(usdEurRes.reason?.message ?? usdEurRes.reason ?? 'fetch failed') },
+ ofrFsi: ofrFsiRes.status  === 'fulfilled' ? ofrFsiRes.value  : { mnemonic: 'OFR_FSI',          observations: [], latestValue: null, latestDate: null, lastError: String(ofrFsiRes.reason?.message ?? ofrFsiRes.reason ?? 'fetch failed') },
+ };
+
  const result = {
  stressIndex,
  trend,
@@ -7638,6 +7854,7 @@ async function dispatch(requestUrl, req, routes, context) {
  jobClaims: { value: claimsVal, label: claimsVal > 300_000 ? 'RISING' : 'NORMAL', severity: indicatorSeverity(claimsScore) },
  },
  foodSecurity,
+ additionalSeries,
  updatedAt: new Date().toISOString(),
  };
  setCached('economic-stress', result);

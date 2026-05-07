@@ -1367,6 +1367,54 @@ function makeCorsHeaders(req) {
   };
 }
 
+// ── Signal watch helpers (mirror src/services/synthesis/signal-watch.ts) ──
+export function computeSignalWatchSidecar(keyword, listing) {
+  const children = listing?.data?.children;
+  const posts = [];
+  if (Array.isArray(children)) {
+    for (const c of children) {
+      const d = c?.data;
+      if (!d?.id || !d.title || !d.subreddit || !d.permalink) continue;
+      if (!Number.isFinite(d.created_utc)) continue;
+      posts.push({
+        id: d.id,
+        title: d.title,
+        subreddit: d.subreddit,
+        url: `https://www.reddit.com${d.permalink}`,
+        createdAt: d.created_utc,
+        score: Number.isFinite(d.score) ? d.score : 0,
+        comments: Number.isFinite(d.num_comments) ? d.num_comments : 0,
+        author: d.author ?? 'unknown',
+      });
+    }
+  }
+  posts.sort((a, b) => b.createdAt - a.createdAt);
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const oneHourAgo = nowSec - 3600;
+  const oneDayAgo = nowSec - 86_400;
+  let lastHour = 0, prior = 0;
+  for (const p of posts) {
+    if (p.createdAt >= oneHourAgo && p.createdAt <= nowSec) lastHour += 1;
+    else if (p.createdAt >= oneDayAgo && p.createdAt < oneHourAgo) prior += 1;
+  }
+  const baseline = prior / 23;
+  const surgeRatio = lastHour / Math.max(baseline, 0.1);
+  let surgeLevel = 'normal';
+  if (surgeRatio >= 5) surgeLevel = 'spike';
+  else if (surgeRatio >= 2.5) surgeLevel = 'surge';
+  else if (surgeRatio >= 1.5) surgeLevel = 'elevated';
+  return {
+    keyword,
+    lastHourCount: lastHour,
+    baselineRate: Number(baseline.toFixed(3)),
+    surgeRatio: Number(surgeRatio.toFixed(2)),
+    surgeLevel,
+    totalSeen: posts.length,
+    recent: posts.slice(0, 10),
+  };
+}
+
 // ── Dark-vessel gap helpers (mirror src/services/dark-vessel.ts) ────────────
 const DARK_VESSEL_RISK_ZONES = [
   { name: 'Strait of Hormuz', lat: 26.5, lon: 56.3, radiusKm: 200 },
@@ -3919,6 +3967,35 @@ async function dispatch(requestUrl, req, routes, context) {
       radiusKm,
       asOf: new Date(now).toISOString(),
     });
+  }
+
+  // ── Signal watch (Reddit keyword velocity, no auth) ─────────────────────
+  if (requestUrl.pathname === '/api/signal-watch') {
+    const q = (requestUrl.searchParams.get('q') || '').trim();
+    if (!q || q.length > 100) {
+      return json({ error: 'q parameter required (1-100 chars)' }, 400);
+    }
+    if (!/^[\w\s+\-.,'#]+$/.test(q)) {
+      return json({ error: 'q contains unsupported characters' }, 400);
+    }
+    try {
+      const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&sort=new&t=day&limit=100`;
+      const resp = await fetchWithTimeout(url, {
+        headers: { Accept: 'application/json', 'User-Agent': 'crystalball/1.0 (intelligence panel)' },
+      }, 12_000);
+      if (!resp.ok) {
+        return json({ error: `Reddit HTTP ${resp.status}`, keyword: q,
+          lastHourCount: 0, baselineRate: 0, surgeRatio: 0, surgeLevel: 'normal',
+          totalSeen: 0, recent: [] }, 502);
+      }
+      const listing = await resp.json();
+      const result = computeSignalWatchSidecar(q, listing);
+      return json({ ...result, asOf: new Date().toISOString() });
+    } catch (error) {
+      return json({ error: String(error?.message ?? error), keyword: q,
+        lastHourCount: 0, baselineRate: 0, surgeRatio: 0, surgeLevel: 'normal',
+        totalSeen: 0, recent: [] }, 502);
+    }
   }
 
   // ── ThreatFox IOC feed ───────────────────────────────────────────────────

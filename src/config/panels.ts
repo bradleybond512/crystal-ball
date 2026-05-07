@@ -92,6 +92,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'humanitarian-crisis': { name: 'Humanitarian Crises', enabled: true, priority: 2 },
   'air-quality': { name: 'Air Quality', enabled: true, priority: 2 },
   'wildfire-incidents': { name: 'Wildfires (InciWeb)', enabled: true, priority: 2 },
+  'wildfire-intel': { name: 'Wildfire Intel', enabled: true, priority: 1 },
   'hazmat-incidents': { name: 'Hazmat Incidents', enabled: true, priority: 2 },
   'oil-spill': { name: 'Oil & Chemical Spills', enabled: true, priority: 2 },
   'hazard-alerts': { name: 'Hazard Alerts — Near Me', enabled: true, priority: 1 },
@@ -991,7 +992,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   hazards: {
  labelKey: 'header.panelCatHazards',
 
- panelKeys: ['satellite-fires', 'earthquakes', 'emsc-seismic', 'gdacs-alerts', 'volcano-alerts', 'nws-alerts', 'faa-weather-cams', 'tsunami-alerts', 'tropical-cyclones', 'climate', 'wildfire-incidents', 'hazmat-incidents', 'oil-spill', 'fcdo-warnings', 'dfat-warnings', 'gac-warnings', 'avalanche-hazard', 'wildfire-smoke', 'spc-mesoscale', 'amtrak-alerts', 'habsos', 'global-weather', 'extended-forecast', 'tide-predictions', 'pollen', 'weather-radar'],
+ panelKeys: ['wildfire-intel', 'satellite-fires', 'earthquakes', 'emsc-seismic', 'gdacs-alerts', 'volcano-alerts', 'nws-alerts', 'faa-weather-cams', 'tsunami-alerts', 'tropical-cyclones', 'climate', 'wildfire-incidents', 'hazmat-incidents', 'oil-spill', 'fcdo-warnings', 'dfat-warnings', 'gac-warnings', 'avalanche-hazard', 'wildfire-smoke', 'spc-mesoscale', 'amtrak-alerts', 'habsos', 'global-weather', 'extended-forecast', 'tide-predictions', 'pollen', 'weather-radar'],
  variants: ['full'],
   },
   healthEnv: {

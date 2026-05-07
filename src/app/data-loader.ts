@@ -567,6 +567,7 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'federalRegister', task: () => runGuarded('federalRegister', () => this.loadFederalRegister()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'airQuality', task: () => runGuarded('airQuality', () => this.loadAirQuality()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'wildfireIncidents', task: () => runGuarded('wildfireIncidents', () => this.loadWildfireIncidents()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'wildfireIntel', task: () => runGuarded('wildfireIntel', () => this.loadWildfireIntel()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'hazmatIncidents', task: () => runGuarded('hazmatIncidents', () => this.loadHazmatIncidents()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'oilSpills', task: () => runGuarded('oilSpills', () => this.loadOilSpills()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'gdacsAlerts', task: () => runGuarded('gdacsAlerts', () => this.loadGDACSAlerts()) });
@@ -1946,6 +1947,7 @@ export class DataLoaderManager implements AppModule {
   // in as a callback rather than importing it from the loader module.
   async loadAirQuality(): Promise<void> { return hazardLoaders.loadAirQuality(this.ctx, () => void this.evaluateCompoundThreats()); }
   async loadWildfireIncidents(): Promise<void> { return hazardLoaders.loadWildfireIncidents(this.ctx, () => void this.evaluateCompoundThreats()); }
+  async loadWildfireIntel(): Promise<void> { return hazardLoaders.loadWildfireIntel(this.ctx); }
   async loadHazmatIncidents(): Promise<void> { return hazardLoaders.loadHazmatIncidents(this.ctx, () => void this.evaluateCompoundThreats()); }
   async loadOilSpills(): Promise<void> { return hazardLoaders.loadOilSpills(this.ctx); }
 

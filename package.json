@@ -71,6 +71,7 @@
     "test:playback": "tsx --test src/services/playback/__tests__/timeline-cursor.test.mts",
     "test:globe": "tsx --test src/services/globe/__tests__/heatmap-layers.test.mts",
     "test:adsb": "tsx --test src/services/adsb/__tests__/adsb-aggregate.test.mts",
+    "test:sanctions": "tsx --test src/services/sanctions/__tests__/ofac.test.mts",
     "test:synthesis": "tsx --test src/services/synthesis/__tests__/signal-watch.test.mts",
     "test:bio": "tsx --test src/services/biosurveillance/__tests__/cdc-ari.test.mts",
     "test:macro": "tsx --test src/services/economic/__tests__/macro-stress.test.mts src/services/cyber/__tests__/ransomware-mentions.test.mts",

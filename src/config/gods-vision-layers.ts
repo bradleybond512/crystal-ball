@@ -67,7 +67,13 @@ export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
  name: 'Fires',
  category: 'intelligence',
  enabled: false,
- description: 'NASA FIRMS satellite fire detections',
+ description: 'NASA FIRMS satellite fire detections + NIFC active perimeters',
+  },
+  airQuality: {
+ name: 'Air Quality',
+ category: 'intelligence',
+ enabled: false,
+ description: 'PurpleAir community PM2.5 sensors colored by AQI band',
   },
   volcanoes: {
  name: 'Volcanoes',

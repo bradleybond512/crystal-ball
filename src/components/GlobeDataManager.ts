@@ -534,6 +534,7 @@ export class GlobeDataManager {
  this.registerLayer('volcanoes', () => this.loadVolcanoes());
  this.registerLayer('cyclones', () => this.loadTropicalCyclones());
  this.registerLayer('fires', () => this.loadFires());
+ this.registerLayer('airQuality', () => this.loadAirQuality());
  this.registerLayer('conflicts', () => this.loadConflicts());
  this.registerLayer('airstrikes', () => this.loadAirstrikes());
  this.registerLayer('strike-packages', () => this.loadStrikePackages());
@@ -1101,17 +1102,22 @@ export class GlobeDataManager {
  const { fetchAllFires, flattenFires, toMapFires } = await import('@/services/wildfires');
  const { fetchActivePerimeters } = await import('@/services/wildfires/fire-intel-service');
  const { clusterHotspots, findNearestPerimeter } = await import('@/services/wildfires/fire-intel-helpers');
- const { fetchPurpleAirSnapshot } = await import('@/services/airquality/purpleair-service');
 
- const [fireResult, perimeters, purpleAir] = await Promise.all([
+ const [fireResult, perimeters] = await Promise.all([
  fetchAllFires().catch(() => ({ regions: {}, totalCount: 0 })),
  fetchActivePerimeters().catch(() => []),
- fetchPurpleAirSnapshot().catch(() => ({ sensors: [], source: 'unknown' as const, fetchedAt: Date.now() })),
  ]);
 
  renderPerimeterPolygons(layer, perimeters);
  const clusters = clusterHotspots(toMapFires(flattenFires(fireResult.regions)), { gridDeg: 0.1, topN: 500 });
  renderHotspotClusters(layer, clusters, perimeters, findNearestPerimeter);
+  }
+
+  private async loadAirQuality(): Promise<void> {
+ const layer = this.layers.get('airQuality');
+ if (!layer) return;
+ const { fetchPurpleAirSnapshot } = await import('@/services/airquality/purpleair-service');
+ const purpleAir = await fetchPurpleAirSnapshot().catch(() => ({ sensors: [], source: 'unknown' as const, fetchedAt: Date.now() }));
  renderPurpleAirDots(layer, purpleAir.sensors);
   }
 

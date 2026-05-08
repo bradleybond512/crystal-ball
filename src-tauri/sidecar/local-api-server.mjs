@@ -7811,7 +7811,7 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/wildfire/incidents') {
  try {
  const resp = await fetchWithTimeout(
- 'https://inciweb.wildfire.gov/feeds/rss/incidents/',
+ 'https://inciweb.wildfire.gov/incidents/rss.xml',
  { headers: { 'User-Agent': CHROME_UA, Accept: 'application/rss+xml,application/xml,text/xml' } },
  15_000,
  );
@@ -7856,9 +7856,15 @@ async function dispatch(requestUrl, req, routes, context) {
   // are kept upstream-side; the renderer applies confidence + AQI scoring.
   if (requestUrl.pathname === '/api/airquality/purpleair') {
  const apiKey = process.env.PURPLEAIR_API_KEY;
+ if (!apiKey) {
+ return json({
+ sensors: [],
+ keyMissing: true,
+ error: 'PURPLEAIR_API_KEY required — public www.purpleair.com/json endpoint is no longer served',
+ }, 503);
+ }
  const fields = 'sensor_index,pm2.5,latitude,longitude,location_type,confidence,name,last_seen';
  try {
- if (apiKey) {
  const url = `https://api.purpleair.com/v1/sensors?fields=${encodeURIComponent(fields)}&location_type=0`;
  const resp = await fetchWithTimeout(url, {
  headers: {
@@ -7867,20 +7873,10 @@ async function dispatch(requestUrl, req, routes, context) {
  'User-Agent': CHROME_UA,
  },
  }, 20_000);
- if (resp.ok) {
+ if (!resp.ok) return json({ sensors: [], error: `purpleair upstream ${resp.status}` }, 502);
  const payload = await resp.json();
  const sensors = sidecarParseV1Sensors(payload);
  return json({ sensors, source: 'v1', fetchedAt: Date.now() });
- }
- // Fall through to the public endpoint if the v1 call fails.
- }
- const fallbackResp = await fetchWithTimeout('https://www.purpleair.com/json', {
- headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
- }, 20_000);
- if (!fallbackResp.ok) return json({ sensors: [], error: `purpleair upstream ${fallbackResp.status}` }, 502);
- const payload = await fallbackResp.json();
- const sensors = sidecarParsePublicJson(payload);
- return json({ sensors, source: 'public', fetchedAt: Date.now() });
  } catch (error) {
  return json({ sensors: [], error: String(error.message ?? error) }, 500);
  }
@@ -9683,11 +9679,13 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Power Grid (EIA electricity RTO demand/capacity) ──────────────
   if (requestUrl.pathname === '/api/power-grid') {
+ const eiaKey = process.env.EIA_API_KEY;
+ if (!eiaKey) return json({ regions: [], keyMissing: true, error: 'EIA_API_KEY required' }, 503);
  const cached = getCached('power-grid', 15 * 60 * 1000);
  if (cached) return json(cached);
  try {
  // EIA Open Data API — Real-Time Operating grid demand by region
- const eiaUrl = 'https://api.eia.gov/v2/electricity/rto/region-data/data/?frequency=hourly&data[0]=value&facets[type][]=D&facets[type][]=NG&length=200&sort[0][column]=period&sort[0][direction]=desc';
+ const eiaUrl = `https://api.eia.gov/v2/electricity/rto/region-data/data/?api_key=${encodeURIComponent(eiaKey)}&frequency=hourly&data[0]=value&facets[type][]=D&facets[type][]=NG&length=200&sort[0][column]=period&sort[0][direction]=desc`;
  const r = await fetchWithTimeout(eiaUrl, { headers: { 'User-Agent': CHROME_UA } }, 15000);
  if (!r.ok) throw new Error(`EIA HTTP ${r.status}`);
  const raw = await r.json();
@@ -9726,13 +9724,14 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Grid Alerts (NERC public alerts RSS) ────────────────────────
   if (requestUrl.pathname === '/api/grid-alerts') {
+ const eiaKey = process.env.EIA_API_KEY;
+ if (!eiaKey) return json({ alerts: [], keyMissing: true, error: 'EIA_API_KEY required' }, 503);
  const cached = getCached('grid-alerts', 15 * 60 * 1000);
  if (cached) return json(cached);
  try {
- const rssUrl = 'https://www.nerc.com/pa/rrm/bpsa/Pages/Alerts.aspx';
  // NERC does not have a clean RSS; fall back to EIA system alerts or return empty
  // Try EIA grid emergency data as a proxy
- const eiaAlertUrl = 'https://api.eia.gov/v2/electricity/rto/region-data/data/?frequency=hourly&data[0]=value&facets[type][]=D&length=50&sort[0][column]=period&sort[0][direction]=desc';
+ const eiaAlertUrl = `https://api.eia.gov/v2/electricity/rto/region-data/data/?api_key=${encodeURIComponent(eiaKey)}&frequency=hourly&data[0]=value&facets[type][]=D&length=50&sort[0][column]=period&sort[0][direction]=desc`;
  const r = await fetchWithTimeout(eiaAlertUrl, { headers: { 'User-Agent': CHROME_UA } }, 12000);
  if (!r.ok) throw new Error(`EIA alerts HTTP ${r.status}`);
  const raw = await r.json();

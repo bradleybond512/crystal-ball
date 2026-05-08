@@ -13,6 +13,35 @@ The user-invoked `npm run backup-keys` and `npm run restore-keys` scripts are th
 only sanctioned entry points; do not call them on the user's behalf without an
 explicit, in-turn instruction.
 
+### Backup workflow
+
+`npm run backup-keys` reads each known `crystal-ball/*` key from the keychain and
+writes a single encrypted archive to
+`~/Library/Mobile Documents/com~apple~CloudDocs/CrystalBall/keys-backup-YYYYMMDD-{engine}.enc`.
+Plaintext is never written to iCloud. The encryption engine is auto-selected:
+
+1. **age** (preferred) — ChaCha20-Poly1305 AEAD with Argon2id KDF. `brew install age`.
+2. **gpg** — AES-256 + SHA-512 S2K (65M iterations) + OpenPGP MDC.
+3. **openssl** (fallback) — AES-256-CBC + PBKDF2-HMAC-SHA256 (600,000 iters,
+   NIST SP 800-132 2023) + sidecar HMAC-SHA256 (`*.enc.hmac`) for integrity.
+
+Output filename embeds the engine so restore knows what to do
+(`-age.enc`, `-gpg.enc`, or `-openssl.enc`). Files are written with mode 600.
+
+### Restore workflow
+
+`npm run restore-keys -- /path/to/keys-backup-YYYYMMDD-engine.enc` decrypts the
+archive and writes each `KEY=value` back to the keychain (idempotent under `-U`).
+Engine is auto-detected from the filename suffix.
+
+Use `npm run restore-keys -- --verify <path>` first to decrypt the archive and
+list the contained KEY names (values are never printed) — confirms the backup
+is valid before committing to a keychain write.
+
+Integrity is verified BEFORE any keychain writes:
+- age + gpg fail decryption when the AEAD/MDC tag mismatches.
+- openssl recomputes the sidecar HMAC and aborts on mismatch.
+
 ## Project Overview
 
 - **App name**: Crystal Ball

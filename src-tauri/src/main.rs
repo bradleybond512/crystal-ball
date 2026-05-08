@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use keyring::Entry;
@@ -155,6 +156,40 @@ struct PersistentCache {
  last_flush_at: Mutex<Option<Instant>>,
 }
 
+/// Maximum time we'll wait on a single `Entry::get_password()` call.
+/// macOS will block that call indefinitely if the user has an ACL
+/// dialog pending or Keychain Access is unlocked mid-fetch — this
+/// timeout lets the sidecar boot anyway.
+const KEYCHAIN_PER_CALL_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Run a single keychain `get_password()` call on a worker thread
+/// and wait at most `timeout` for the answer. Returns:
+///   - `Ok(Some(value))` if the entry was read and is non-empty
+///   - `Ok(None)` if the entry is absent or the read errored
+///   - `Err(())` if the timeout elapsed first
+///
+/// On timeout the worker thread is intentionally orphaned: the
+/// `keyring` crate has no cancel API, so the only option is to
+/// stop waiting on the channel. The leaked thread will resolve
+/// (or be reaped at shutdown) once the keychain finally responds.
+fn read_keychain_entry_with_timeout(
+ service: &'static str,
+ key: String,
+ timeout: Duration,
+) -> Result<Option<String>, ()> {
+ let (tx, rx) = mpsc::channel::<Option<String>>();
+ std::thread::spawn(move || {
+ let value = Entry::new(service, &key)
+ .ok()
+ .and_then(|e| e.get_password().ok())
+ .map(|s| s.trim().to_string())
+ .filter(|s| !s.is_empty());
+ // Receiver may be gone (timeout already fired); ignore send failure.
+ let _ = tx.send(value);
+ });
+ rx.recv_timeout(timeout).map_err(|_| ())
+}
+
 impl SecretsCache {
  /// Empty cache, ready to be `manage()`d at builder time without
  /// touching the macOS Keychain. The actual secrets are populated
@@ -169,8 +204,14 @@ impl SecretsCache {
 
  /// Blocking keychain query. Replaces the in-memory map atomically.
  /// MUST be called off the main thread (`spawn_blocking` etc.).
- fn populate_from_keychain(&self) {
- let loaded = Self::read_keychain_blocking();
+ ///
+ /// `app` is optional so non-Tauri callers (tests, the
+ /// `load_from_keychain` shim) can invoke this without an
+ /// `AppHandle`. When provided, timeout warnings land in the
+ /// desktop log so the operator can tell which keychain entries
+ /// are blocked by an ACL prompt.
+ fn populate_from_keychain(&self, app: Option<&AppHandle>) {
+ let loaded = Self::read_keychain_blocking(app);
  if let Ok(mut guard) = self.secrets.lock() {
  *guard = loaded;
  }
@@ -178,11 +219,22 @@ impl SecretsCache {
 
  /// Pulled out so callers can run the load on whichever thread they
  /// like and write the result into a shared cache themselves.
- /// Same logic as the old `load_from_keychain` constructor.
- fn read_keychain_blocking() -> HashMap<String, String> {
- // Try consolidated vault first — single keychain prompt
- if let Ok(entry) = Entry::new(KEYRING_SERVICE, "secrets-vault") {
- if let Ok(json) = entry.get_password() {
+ ///
+ /// Each `Entry::get_password()` call is wrapped in
+ /// `read_keychain_entry_with_timeout` so a hung ACL prompt on
+ /// any single key does NOT stall the rest of the load (or the
+ /// sidecar startup that depends on it). On timeout we log a
+ /// warning and skip that key — features that need it will return
+ /// the existing 503 + `keyMissing` error path until it's
+ /// re-fetched on the next launch.
+ fn read_keychain_blocking(app: Option<&AppHandle>) -> HashMap<String, String> {
+ // Try consolidated vault first — single keychain read.
+ match read_keychain_entry_with_timeout(
+ KEYRING_SERVICE,
+ "secrets-vault".to_string(),
+ KEYCHAIN_PER_CALL_TIMEOUT,
+ ) {
+ Ok(Some(json)) => {
  if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&json) {
  let secrets: HashMap<String, String> = map
  .into_iter()
@@ -194,23 +246,48 @@ impl SecretsCache {
  return secrets;
  }
  }
+ Ok(None) => {
+ // No vault entry yet — fall through to migration.
+ }
+ Err(()) => {
+ log_keychain_timeout(app, "secrets-vault");
+ // Vault unreachable → still try migration; if every per-key
+ // read also times out, we end up with an empty map and the
+ // sidecar boots without secrets. Caller logs the count.
+ }
  }
 
  // Migration: read individual keys (old format), consolidate into vault.
- // This triggers one keychain prompt per key — happens only once.
+ // Each call has its own timeout so a single stuck ACL prompt can't
+ // halt the whole loop.
  let mut secrets = HashMap::new();
+ let mut migration_attempted = false;
  for key in SUPPORTED_SECRET_KEYS.iter() {
- if let Ok(entry) = Entry::new(KEYRING_SERVICE, key) {
- if let Ok(value) = entry.get_password() {
- let trimmed = value.trim().to_string();
- if !trimmed.is_empty() {
- secrets.insert((*key).to_string(), trimmed);
+ migration_attempted = true;
+ match read_keychain_entry_with_timeout(
+ KEYRING_SERVICE,
+ (*key).to_string(),
+ KEYCHAIN_PER_CALL_TIMEOUT,
+ ) {
+ Ok(Some(value)) => {
+ secrets.insert((*key).to_string(), value);
+ }
+ Ok(None) => { /* not present; skip silently */ }
+ Err(()) => {
+ log_keychain_timeout(app, key);
+ // continue — other keys may still respond
  }
  }
  }
- }
+ // (`migration_attempted` is true once we've entered the loop.
+ // Keeping the flag for symmetry with the prior write-vault gate
+ // below: we only persist the consolidated vault if at least one
+ // per-key read produced something.)
+ let _ = migration_attempted;
 
- // Write consolidated vault and clean up individual entries
+ // Write consolidated vault and clean up individual entries —
+ // only if we actually loaded something. Vault writes are also
+ // best-effort: if Keychain refuses, the next launch will retry.
  if !secrets.is_empty() {
  if let Ok(json) = serde_json::to_string(&secrets) {
  if let Ok(vault_entry) = Entry::new(KEYRING_SERVICE, "secrets-vault") {
@@ -229,12 +306,26 @@ impl SecretsCache {
  }
 
  /// Convenience constructor — synchronous load for tests + any
- /// non-Tauri caller. Behaviour identical to the pre-fix version.
+ /// non-Tauri caller. Behaviour identical to the pre-fix version
+ /// except that per-call timeouts now apply (so this can no longer
+ /// hang on a stuck ACL prompt).
  #[allow(dead_code)]
  fn load_from_keychain() -> Self {
  let cache = Self::empty();
- cache.populate_from_keychain();
+ cache.populate_from_keychain(None);
  cache
+ }
+}
+
+/// Standalone helper so callers can log keychain timeouts without
+/// needing access to `SecretsCache` internals (the desktop-log
+/// helper requires an `AppHandle`, which tests don't have).
+fn log_keychain_timeout(app: Option<&AppHandle>, key: &str) {
+ let secs = KEYCHAIN_PER_CALL_TIMEOUT.as_secs();
+ let msg = format!("Keychain entry '{key}' timed out after {secs}s — skipping");
+ match app {
+ Some(handle) => append_desktop_log(handle, "WARN", &msg),
+ None => eprintln!("[secrets] {msg}"),
  }
 }
 
@@ -2424,7 +2515,10 @@ fn main() {
  let setup_handle = app.handle().clone();
  tauri::async_runtime::spawn_blocking(move || {
  let cache = setup_handle.state::<SecretsCache>();
- cache.populate_from_keychain();
+ // populate_from_keychain has per-call timeouts so this returns
+ // in bounded time even if individual keychain entries are blocked
+ // by ACL prompts — see KEYCHAIN_PER_CALL_TIMEOUT.
+ cache.populate_from_keychain(Some(&setup_handle));
  let loaded = cache
  .secrets
  .lock()
@@ -2435,6 +2529,12 @@ fn main() {
  "INFO",
  &format!("secrets-cache: loaded {loaded} keys from keychain (async)"),
  );
+ // Sidecar spawn is unconditional. start_local_api generates its
+ // own auth token via generate_local_token() — it does not
+ // depend on the keychain. Even when populate timed out and the
+ // cache is empty, the sidecar boots and serves routes that
+ // don't require API keys; routes that do return 503 +
+ // `keyMissing` until the cache is filled on a future launch.
  if let Err(err) = start_local_api(&setup_handle) {
  append_desktop_log(
  &setup_handle,

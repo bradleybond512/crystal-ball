@@ -5,6 +5,7 @@ import {
   auroraColorForKp,
   buildOverlayDescriptor,
   deriveSpaceWxBanner,
+  flarePulseRadiusAt,
   ringAtLatitude,
   subsolarPoint,
 } from '../globe-overlay.ts';
@@ -174,4 +175,33 @@ test('deriveSpaceWxBanner: G1/G2 alone returns none', () => {
     geomag: { kp: 5, level: 'G1', auroraVisibilityLatN: 60, observedAt: '', kpMax24h: 5 },
   }));
   assert.equal(banner.severity, 'none');
+});
+
+const PULSE = { subsolarLonDeg: 0, subsolarLatDeg: 0, pulsePeriodMs: 1000, innerRadiusM: 100, outerRadiusM: 500 };
+
+test('flarePulseRadiusAt: phase 0 sits at innerRadius', () => {
+  assert.equal(flarePulseRadiusAt(0, PULSE), 100);
+});
+
+test('flarePulseRadiusAt: phase 0.5 sits at outerRadius', () => {
+  assert.equal(flarePulseRadiusAt(500, PULSE), 500);
+});
+
+test('flarePulseRadiusAt: phase 0.25 is halfway up the ramp', () => {
+  assert.equal(flarePulseRadiusAt(250, PULSE), 300);
+});
+
+test('flarePulseRadiusAt: phase 0.75 is halfway down the ramp', () => {
+  assert.equal(flarePulseRadiusAt(750, PULSE), 300);
+});
+
+test('flarePulseRadiusAt: wraps cleanly across multiple periods', () => {
+  assert.equal(flarePulseRadiusAt(2500, PULSE), flarePulseRadiusAt(500, PULSE));
+});
+
+test('flarePulseRadiusAt: tolerates zero-period pulse without dividing by zero', () => {
+  const degenerate = { ...PULSE, pulsePeriodMs: 0 };
+  const r = flarePulseRadiusAt(123, degenerate);
+  assert.ok(Number.isFinite(r), 'radius must be finite');
+  assert.ok(r >= PULSE.innerRadiusM && r <= PULSE.outerRadiusM, 'radius must stay in bounds');
 });

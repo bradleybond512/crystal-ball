@@ -195,5 +195,20 @@ export function deriveSpaceWxBanner(status: SpaceWxStatus | null): SpaceWxBanner
   return { severity: 'none', label: '', subtitle: '' };
 }
 
+/**
+ * Triangle-wave pulse radius for the subsolar X-flare halo. Phase ramps
+ * 0→1 over the first half of `pulsePeriodMs`, then 1→0 over the second
+ * half, mapping linearly between `innerRadiusM` and `outerRadiusM`. The
+ * Cesium `CallbackProperty` driving the entity sample-evaluates this on
+ * each frame.
+ */
+export function flarePulseRadiusAt(elapsedMs: number, pulse: FlarePulse): number {
+  const period = Math.max(1, pulse.pulsePeriodMs);
+  const norm = ((elapsedMs % period) + period) % period; // safe under negative elapsed
+  const phase = norm / period; // 0..1
+  const tri = phase < 0.5 ? phase * 2 : 2 - phase * 2; // 0..1..0
+  return pulse.innerRadiusM + (pulse.outerRadiusM - pulse.innerRadiusM) * tri;
+}
+
 // Useful fixed values from J2000 epoch — exported for test stability checks.
 export const _internal = { J2000_MS };

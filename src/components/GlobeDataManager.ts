@@ -579,6 +579,7 @@ export class GlobeDataManager {
  this.registerLayer('lightningStrikes', () => this.loadLightningStrikes());
  this.registerLayer('redFlagWarnings', () => this.loadRedFlagWarnings());
  this.registerLayer('weatherHazards', () => this.loadWeatherHazards());
+ this.registerLayer('wastewaterStates', () => this.loadWastewaterStates());
 
  this.registerLayer('streetTiles', () => {
  // Managed by StreetTileManager, not data source
@@ -2260,6 +2261,56 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
         });
       }
     } catch { /* track unavailable */ }
+  }
+
+  /**
+   * Wastewater Genomics — color US states by SARS-CoV-2 wastewater
+   * percentile (CDC NWSS, dataset 2ew6-ywp6). Renders one colored
+   * point primitive at each state's centroid, scaled by level.
+   * 'low' states are dropped to keep the globe legible.
+   */
+  private async loadWastewaterStates(): Promise<void> {
+    const layer = this.layers.get('wastewaterStates');
+    if (!layer) return;
+    try {
+      const [
+        { fetchWastewaterSurveillance },
+        { buildWastewaterStateEntities },
+      ] = await Promise.all([
+        import('@/services/biosurveillance/wastewater-service'),
+        import('./wastewater-globe-helpers'),
+      ]);
+      const snapshot = await fetchWastewaterSurveillance();
+      const entities = buildWastewaterStateEntities(snapshot.states);
+      for (const e of entities) {
+        layer.source.entities.add({
+          name: `wastewater-state-${e.stateCode}`,
+          position: Cartesian3.fromDegrees(e.lon, e.lat),
+          point: {
+            color: Color.fromCssColorString(e.fillColor).withAlpha(0.7),
+            outlineColor: Color.fromCssColorString(e.fillColor),
+            outlineWidth: 2,
+            pixelSize: e.radiusPx,
+            heightReference: HeightReference.CLAMP_TO_GROUND,
+            scaleByDistance: new NearFarScalar(1e5, 1.2, 1e7, 0.6),
+          },
+          label: {
+            text: e.stateCode,
+            font: '11px monospace',
+            fillColor: Color.WHITE,
+            outlineColor: Color.BLACK,
+            outlineWidth: 2,
+            style: 2,
+            pixelOffset: LABEL_OFFSET,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+            verticalOrigin: VerticalOrigin.BOTTOM,
+            scaleByDistance: new NearFarScalar(1e5, 1, 1e7, 0.3),
+            distanceDisplayCondition: new DistanceDisplayCondition(0, 1.5e7),
+          },
+          description: e.description,
+        });
+      }
+    } catch { /* wastewater overlay unavailable */ }
   }
 
   private async loadRedFlagWarnings(): Promise<void> {

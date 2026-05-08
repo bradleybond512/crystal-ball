@@ -14,6 +14,7 @@ import { scoreAllDomains } from './sitrep-severity.mjs';
 import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
 import { getTakFeeds as s2uTakGetFeeds, getTakSituation as s2uTakGetSituation } from './s2u-tak-client.mjs';
 import { aggregateWastewaterRows, detectSurgeWatches } from './wastewater-aggregate.mjs';
+import { buildBiosurveillanceWastewater } from './biosurveillance-wastewater.mjs';
 import { parseProMedRss, summarizeProMedAlerts } from './promed-classify.mjs';
 import { crossReferenceWhoDonWithProMed } from './who-promed-cross-reference.mjs';
 import {
@@ -5646,6 +5647,53 @@ async function dispatch(requestUrl, req, routes, context) {
  };
  return json(degraded);
  }
+  }
+
+  // ── Biosurveillance wastewater (CDC NWSS, site + state rollup, 24h cache) ──
+  if (requestUrl.pathname === '/api/biosurveillance/wastewater') {
+    const CACHE_KEY = 'biosurveillance-wastewater';
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h per spec
+    const cached = getCached(CACHE_KEY, CACHE_TTL);
+    if (cached) return json(cached);
+
+    const NWSS_URL = 'https://data.cdc.gov/resource/2ew6-ywp6.json?$limit=5000&$order=date_end%20DESC';
+    try {
+      const resp = await fetchWithTimeout(
+        NWSS_URL,
+        { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+        20_000,
+      );
+      if (!resp.ok) {
+        const stale = getCachedStale(CACHE_KEY);
+        if (stale) return json({ ...stale, degraded: true, reason: `NWSS upstream HTTP ${resp.status}` });
+        return json({
+          national: { trend: 'stable', medianPercentile15d: null, activeStates: 0, risingStates: 0 },
+          states: [],
+          topSites: [],
+          asOfDate: null,
+          fetchedAt: new Date().toISOString(),
+          degraded: true,
+          reason: `NWSS upstream HTTP ${resp.status}`,
+        });
+      }
+      const rows = await resp.json();
+      const result = buildBiosurveillanceWastewater(rows);
+      setCached(CACHE_KEY, result, CACHE_TTL);
+      return json(result);
+    } catch (error) {
+      const stale = getCachedStale(CACHE_KEY);
+      const reason = `wastewater fetch error: ${error?.message ?? error}`;
+      if (stale) return json({ ...stale, degraded: true, reason });
+      return json({
+        national: { trend: 'stable', medianPercentile15d: null, activeStates: 0, risingStates: 0 },
+        states: [],
+        topSites: [],
+        asOfDate: null,
+        fetchedAt: new Date().toISOString(),
+        degraded: true,
+        reason,
+      });
+    }
   }
 
   // ── HDX (UN OCHA) humanitarian crisis datasets ───────────────────────────

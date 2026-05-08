@@ -41,9 +41,25 @@ test('decideNotification: geomagnetic Kp 8 (G4) fires', () => {
   assert.match(decision.payload?.body ?? '', /G4|Kp/);
 });
 
-test('decideNotification: geomagnetic Kp 7 (G3) does not fire', () => {
-  const decision = decideNotification({ kind: 'geomagnetic', kpIndex: 7 });
+test('decideNotification: geomagnetic Kp 6 below threshold', () => {
+  const decision = decideNotification({ kind: 'geomagnetic', kpIndex: 6 });
   assert.equal(decision.shouldFire, false);
+  assert.equal(decision.reason, 'kp-below-threshold');
+});
+
+test('decideNotification: geomagnetic Kp 7 (G3) fires at medium', () => {
+  const decision = decideNotification({ kind: 'geomagnetic', kpIndex: 7 });
+  assert.equal(decision.shouldFire, true);
+  assert.equal(decision.payload?.threatType, 'geomagnetic_g3');
+  assert.equal(decision.payload?.threatLevel, 'medium');
+  assert.match(decision.payload?.body ?? '', /G3|Kp 7/);
+});
+
+test('decideNotification: geomagnetic Kp 9 (G5) fires critical', () => {
+  const decision = decideNotification({ kind: 'geomagnetic', kpIndex: 9 });
+  assert.equal(decision.shouldFire, true);
+  assert.equal(decision.payload?.threatLevel, 'critical');
+  assert.match(decision.payload?.body ?? '', /G5/);
 });
 
 test('decideNotification: CAP Extreme + Immediate fires', () => {
@@ -60,7 +76,7 @@ test('decideNotification: CAP Extreme + Immediate fires', () => {
   assert.match(decision.payload?.title ?? '', /Tornado Warning/);
 });
 
-test('decideNotification: CAP Severe + Immediate does NOT fire', () => {
+test('decideNotification: CAP Severe + Immediate fires at high', () => {
   const decision = decideNotification({
     kind: 'cap',
     severity: 'Severe',
@@ -69,7 +85,22 @@ test('decideNotification: CAP Severe + Immediate does NOT fire', () => {
     headline: 'Severe Thunderstorm',
     areaDesc: 'X',
   });
+  assert.equal(decision.shouldFire, true);
+  assert.equal(decision.payload?.threatType, 'cap_severe');
+  assert.equal(decision.payload?.threatLevel, 'high');
+});
+
+test('decideNotification: CAP Moderate + Immediate does NOT fire', () => {
+  const decision = decideNotification({
+    kind: 'cap',
+    severity: 'Moderate',
+    urgency: 'Immediate',
+    event: 'Special Weather Statement',
+    headline: 'X',
+    areaDesc: 'X',
+  });
   assert.equal(decision.shouldFire, false);
+  assert.equal(decision.reason, 'cap-not-extreme-immediate');
 });
 
 test('decideNotification: CAP Extreme + Expected does NOT fire (not immediate)', () => {
@@ -107,25 +138,69 @@ test('decideNotification: hurricane without nhcStorm payload returns todo skip',
   assert.equal(decision.reason, 'todo-data-feed-pending');
 });
 
-test('decideNotification: wildfire containment < 10 fires', () => {
+test('decideNotification: wildfire <10% containment + >10k acres fires', () => {
+  const decision = decideNotification({
+    kind: 'wildfire',
+    nifc: { name: 'Park Fire', state: 'CA', containment: 5, acres: 50_000 },
+  });
+  assert.equal(decision.shouldFire, true);
+  assert.equal(decision.payload?.threatType, 'wildfire_extreme');
+  assert.match(decision.payload?.body ?? '', /50,000 acres/);
+});
+
+test('decideNotification: wildfire <10% containment but <10k acres does NOT fire', () => {
+  const decision = decideNotification({
+    kind: 'wildfire',
+    nifc: { name: 'Tiny Fire', state: 'CA', containment: 5, acres: 4_500 },
+  });
+  assert.equal(decision.shouldFire, false);
+  assert.equal(decision.reason, 'wildfire-below-acre-threshold');
+});
+
+test('decideNotification: wildfire containment 25 does NOT fire (containment gate)', () => {
+  const decision = decideNotification({
+    kind: 'wildfire',
+    nifc: { name: 'Park Fire', state: 'CA', containment: 25, acres: 100_000 },
+  });
+  assert.equal(decision.shouldFire, false);
+  assert.equal(decision.reason, 'wildfire-containment-above-threshold');
+});
+
+test('decideNotification: wildfire missing acres bails out (cannot guess size)', () => {
   const decision = decideNotification({
     kind: 'wildfire',
     nifc: { name: 'Park Fire', state: 'CA', containment: 5 },
   });
-  assert.equal(decision.shouldFire, true);
-  assert.equal(decision.payload?.threatType, 'wildfire_extreme');
-});
-
-test('decideNotification: wildfire containment 25 does NOT fire', () => {
-  const decision = decideNotification({
-    kind: 'wildfire',
-    nifc: { name: 'Park Fire', state: 'CA', containment: 25 },
-  });
   assert.equal(decision.shouldFire, false);
+  assert.equal(decision.reason, 'wildfire-below-acre-threshold');
 });
 
 test('decideNotification: wildfire without nifc payload returns todo skip', () => {
   const decision = decideNotification({ kind: 'wildfire' });
   assert.equal(decision.shouldFire, false);
   assert.equal(decision.reason, 'todo-data-feed-pending');
+});
+
+// ── Solar flares ─────────────────────────────────────────────────────────
+
+test('decideNotification: X-class solar flare fires', () => {
+  const decision = decideNotification({
+    kind: 'solar_flare',
+    peakClass: 'X',
+    peakLabel: 'X2.7',
+    peakAt: '2026-05-08T12:00:00Z',
+  });
+  assert.equal(decision.shouldFire, true);
+  assert.equal(decision.payload?.threatType, 'solar_flare_x');
+  assert.equal(decision.payload?.threatLevel, 'high');
+  assert.match(decision.payload?.title ?? '', /X2\.7/);
+});
+
+test('decideNotification: M-class solar flare does NOT fire', () => {
+  const decision = decideNotification({
+    kind: 'solar_flare',
+    peakClass: 'M',
+    peakLabel: 'M5.4',
+  });
+  assert.equal(decision.shouldFire, false);
 });

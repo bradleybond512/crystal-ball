@@ -78,7 +78,23 @@ test('routeAlertToImessage: seismic body includes magnitude and place', () => {
   assert.match(result.body ?? '', /Anchorage/);
 });
 
-test('routeAlertToImessage: geomagnetic body includes G level and Kp index', () => {
+test('routeAlertToImessage: geomagnetic Kp 9 (G5) sends and body shows G5', () => {
+  const payload: NotificationPayload = {
+    title: 'Crystal Ball — Geomagnetic G5',
+    body: 'unused',
+    sound: 'Basso',
+    threatType: 'geomagnetic_g4',
+    threatLevel: 'critical',
+    dedupeKey: 'geomag:G5',
+    meta: { kpIndex: 9 },
+  };
+  const result = routeAlertToImessage(payload, settings({ threatTypes: ['geomagnetic_g4'] }));
+  assert.equal(result.send, true);
+  assert.match(result.body ?? '', /G5/);
+  assert.match(result.body ?? '', /Kp 9/);
+});
+
+test('routeAlertToImessage: geomagnetic Kp 8 (G4) push-only — no iMessage', () => {
   const payload: NotificationPayload = {
     title: 'Crystal Ball — Geomagnetic G4',
     body: 'unused',
@@ -89,9 +105,8 @@ test('routeAlertToImessage: geomagnetic body includes G level and Kp index', () 
     meta: { kpIndex: 8 },
   };
   const result = routeAlertToImessage(payload, settings({ threatTypes: ['geomagnetic_g4'] }));
-  assert.equal(result.send, true);
-  assert.match(result.body ?? '', /G4/);
-  assert.match(result.body ?? '', /Kp 8/);
+  assert.equal(result.send, false);
+  assert.equal(result.reason, 'geomagnetic-below-kp9');
 });
 
 test('routeAlertToImessage: wildfire body includes name, state, containment', () => {
@@ -102,13 +117,77 @@ test('routeAlertToImessage: wildfire body includes name, state, containment', ()
     threatType: 'wildfire_extreme',
     threatLevel: 'high',
     dedupeKey: 'wildfire:Park Fire:CA',
-    meta: { name: 'Park Fire', state: 'CA', containment: 5 },
+    meta: { name: 'Park Fire', state: 'CA', containment: 5, acres: 50_000 },
   };
   const result = routeAlertToImessage(payload, settings({ threatTypes: ['wildfire_extreme'] }));
   assert.equal(result.send, true);
   assert.match(result.body ?? '', /Park Fire/);
   assert.match(result.body ?? '', /CA/);
   assert.match(result.body ?? '', /5%/);
+});
+
+// ── Tornado-warning iMessage gate ────────────────────────────────────────────
+
+test('routeAlertToImessage: cap_extreme Tornado Warning sends with shelter body', () => {
+  const payload: NotificationPayload = {
+    title: 'Crystal Ball — Tornado Warning',
+    body: 'unused',
+    sound: 'Basso',
+    threatType: 'cap_extreme',
+    threatLevel: 'critical',
+    dedupeKey: 'cap:tor1',
+    meta: { event: 'Tornado Warning', areaDesc: 'La Porte, IN', severity: 'Extreme', urgency: 'Immediate' },
+  };
+  const result = routeAlertToImessage(payload, settings({ threatTypes: ['cap_extreme'] }));
+  assert.equal(result.send, true);
+  assert.match(result.body ?? '', /Tornado Warning/);
+  assert.match(result.body ?? '', /La Porte/);
+  assert.match(result.body ?? '', /shelter/i);
+});
+
+test('routeAlertToImessage: cap_extreme Hurricane Warning skipped — not tornado', () => {
+  const payload: NotificationPayload = {
+    title: 'Crystal Ball — Hurricane Warning',
+    body: 'unused',
+    sound: 'Basso',
+    threatType: 'cap_extreme',
+    threatLevel: 'critical',
+    dedupeKey: 'cap:hur1',
+    meta: { event: 'Hurricane Warning', areaDesc: 'Miami', severity: 'Extreme', urgency: 'Immediate' },
+  };
+  const result = routeAlertToImessage(payload, settings({ threatTypes: ['cap_extreme'] }));
+  assert.equal(result.send, false);
+  assert.equal(result.reason, 'cap-extreme-not-tornado');
+});
+
+test('routeAlertToImessage: solar_flare_x sends with X-class body', () => {
+  const payload: NotificationPayload = {
+    title: 'Crystal Ball — X2.7 Solar Flare',
+    body: 'unused',
+    sound: 'Sosumi',
+    threatType: 'solar_flare_x',
+    threatLevel: 'high',
+    dedupeKey: 'flare:X2.7',
+    meta: { peakClass: 'X', peakLabel: 'X2.7' },
+  };
+  const result = routeAlertToImessage(payload, settings({ threatTypes: ['solar_flare_x'] }));
+  assert.equal(result.send, true);
+  assert.match(result.body ?? '', /X2\.7/);
+});
+
+test('routeAlertToImessage: cap_severe is not in iMessage whitelist', () => {
+  const payload: NotificationPayload = {
+    title: 'Crystal Ball — Severe Thunderstorm Warning',
+    body: 'unused',
+    sound: 'Sosumi',
+    threatType: 'cap_severe',
+    threatLevel: 'high',
+    dedupeKey: 'cap:sev1',
+    meta: { event: 'Severe Thunderstorm Warning' },
+  };
+  const result = routeAlertToImessage(payload, settings({ threatTypes: ['cap_extreme'] }));
+  assert.equal(result.send, false);
+  assert.equal(result.reason, 'threat-type-not-eligible');
 });
 
 test('routeAlertToImessage: hurricane body includes name, category, projected landfall', () => {

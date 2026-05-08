@@ -37,6 +37,16 @@ export interface GeomagneticEvent {
   observedAt?: string;
 }
 
+export interface SolarFlareEvent {
+  kind: 'solar_flare';
+  /** Flare class. We only fire on X (peak X-ray flux ≥ 1e-4 W/m²). */
+  peakClass: 'X' | 'M' | 'C' | 'B' | 'A';
+  /** Numeric label like 'X2.7', 'M5.4' — surfaced in the body. */
+  peakLabel: string;
+  /** ISO timestamp of the flare peak. */
+  peakAt?: string;
+}
+
 export interface CapEvent {
   kind: 'cap';
   severity: 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown';
@@ -54,12 +64,22 @@ export interface HurricaneEvent {
 
 export interface WildfireEvent {
   kind: 'wildfire';
-  nifc?: { name: string; state: string; containment: number };
+  /** NIFC perimeter snapshot. `acres` was added when the perimeter
+   *  feed wired in — older callers without acreage will be gated out
+   *  by the size threshold. */
+  nifc?: { name: string; state: string; containment: number; acres?: number };
 }
+
+/** Wildfire firing rule: acres > 10 000 AND containment < 10 %. The
+ *  acres threshold suppresses the long tail of small fires that already
+ *  populate the panel. Sourced from the user's Live Notification spec. */
+export const WILDFIRE_MIN_ACRES = 10_000;
+export const WILDFIRE_MAX_CONTAINMENT_PCT = 10;
 
 export type NotifiableEvent =
   | SeismicEvent
   | GeomagneticEvent
+  | SolarFlareEvent
   | CapEvent
   | HurricaneEvent
   | WildfireEvent;
@@ -84,6 +104,7 @@ export interface NotificationDecision {
     | 'cap-not-extreme-immediate'
     | 'hurricane-below-cat3'
     | 'wildfire-containment-above-threshold'
+    | 'wildfire-below-acre-threshold'
     | 'todo-data-feed-pending'
     | 'unknown-event-kind';
 }
@@ -117,37 +138,82 @@ function decideSeismic(event: SeismicEvent): NotificationDecision {
   };
 }
 
-function decideGeomagnetic(event: GeomagneticEvent): NotificationDecision {
-  if (typeof event.kpIndex !== 'number' || event.kpIndex < 8) {
+function gLevelForKp(kp: number): 'G3' | 'G4' | 'G5' {
+  if (kp >= 9) return 'G5';
+  if (kp >= 8) return 'G4';
+  return 'G3';
+}
+
+function geomagThreatLevel(kp: number): NotificationThreatLevel {
+  if (kp >= 9) return 'critical';
+  if (kp >= 8) return 'high';
+  return 'medium';
+}
+
+function decideSolarFlare(event: SolarFlareEvent): NotificationDecision {
+  // Only X-class is loud enough to wake the user — M-class auroras are
+  // already covered by the geomagnetic ladder once they trigger Kp.
+  if (event.peakClass !== 'X') {
     return { shouldFire: false, reason: 'kp-below-threshold' };
   }
-  const gLevel = event.kpIndex >= 9 ? 'G5' : 'G4';
+  return {
+    shouldFire: true,
+    payload: {
+      title: `Crystal Ball — ${event.peakLabel} Solar Flare`,
+      body: `${event.peakLabel} solar flare — possible HF radio blackout + GPS disruption`,
+      sound: SOUND_BY_LEVEL.high,
+      threatType: 'solar_flare_x',
+      threatLevel: 'high',
+      dedupeKey: `flare:${event.peakLabel}:${event.peakAt ?? Math.floor(Date.now() / 60_000)}`,
+      meta: { peakClass: event.peakClass, peakLabel: event.peakLabel, peakAt: event.peakAt },
+    },
+  };
+}
+
+function decideGeomagnetic(event: GeomagneticEvent): NotificationDecision {
+  if (typeof event.kpIndex !== 'number' || event.kpIndex < 7) {
+    return { shouldFire: false, reason: 'kp-below-threshold' };
+  }
+  // Severity ladder: Kp 7 = G3 (medium), 8 = G4 (high), 9 = G5 (critical).
+  const kp = event.kpIndex;
+  const gLevel = gLevelForKp(kp);
+  const threatType: NotificationThreatType = kp >= 8 ? 'geomagnetic_g4' : 'geomagnetic_g3';
+  const threatLevel = geomagThreatLevel(kp);
   return {
     shouldFire: true,
     payload: {
       title: `Crystal Ball — Geomagnetic ${gLevel}`,
-      body: `Geomagnetic storm ${gLevel} (Kp ${event.kpIndex}) — possible HF radio + GPS impact`,
-      sound: SOUND_BY_LEVEL.high,
-      threatType: 'geomagnetic_g4',
-      threatLevel: gLevel === 'G5' ? 'critical' : 'high',
+      body: `Geomagnetic storm ${gLevel} (Kp ${kp}) — possible HF radio + GPS impact`,
+      sound: SOUND_BY_LEVEL[threatLevel],
+      threatType,
+      threatLevel,
       dedupeKey: `geomag:${gLevel}:${event.observedAt ?? Math.floor(Date.now() / 60_000)}`,
-      meta: { kpIndex: event.kpIndex, observedAt: event.observedAt },
+      meta: { kpIndex: kp, observedAt: event.observedAt },
     },
   };
 }
 
 function decideCap(event: CapEvent): NotificationDecision {
-  if (event.severity !== 'Extreme' || event.urgency !== 'Immediate') {
+  if (event.urgency !== 'Immediate') {
     return { shouldFire: false, reason: 'cap-not-extreme-immediate' };
   }
+  // Spec: NWS Extreme/Severe CAP alerts → notification ladder. Extreme
+  // wakes the user (critical), Severe is a high-priority push without
+  // the loudest sound.
+  if (event.severity !== 'Extreme' && event.severity !== 'Severe') {
+    return { shouldFire: false, reason: 'cap-not-extreme-immediate' };
+  }
+  const isExtreme = event.severity === 'Extreme';
+  const threatLevel: NotificationThreatLevel = isExtreme ? 'critical' : 'high';
+  const threatType: NotificationThreatType = isExtreme ? 'cap_extreme' : 'cap_severe';
   return {
     shouldFire: true,
     payload: {
       title: `Crystal Ball — ${event.event || 'Emergency Alert'}`,
       body: `${event.headline || event.event}${event.areaDesc ? ` — ${event.areaDesc}` : ''}`,
-      sound: SOUND_BY_LEVEL.critical,
-      threatType: 'cap_extreme',
-      threatLevel: 'critical',
+      sound: SOUND_BY_LEVEL[threatLevel],
+      threatType,
+      threatLevel,
       dedupeKey: `cap:${event.alertId ?? `${event.event}:${event.areaDesc}`}`,
       meta: { event: event.event, severity: event.severity, urgency: event.urgency, areaDesc: event.areaDesc },
     },
@@ -178,19 +244,25 @@ function decideHurricane(event: HurricaneEvent): NotificationDecision {
 }
 
 function decideWildfire(event: WildfireEvent): NotificationDecision {
-  // TODO: NIFC feed wires up in parallel session. When present, gate on
-  // containment < 10.
   if (!event.nifc) {
     return { shouldFire: false, reason: 'todo-data-feed-pending' };
   }
-  if (event.nifc.containment >= 10) {
+  if (event.nifc.containment >= WILDFIRE_MAX_CONTAINMENT_PCT) {
     return { shouldFire: false, reason: 'wildfire-containment-above-threshold' };
+  }
+  // Spec: large fires only — under-10k-acre fires get filtered even when
+  // weakly contained (most stay short-lived). When acreage is unknown the
+  // bridge layer is responsible for back-filling; we bail on missing data
+  // rather than guessing.
+  const acres = typeof event.nifc.acres === 'number' ? event.nifc.acres : null;
+  if (acres === null || acres < WILDFIRE_MIN_ACRES) {
+    return { shouldFire: false, reason: 'wildfire-below-acre-threshold' };
   }
   return {
     shouldFire: true,
     payload: {
       title: `Crystal Ball — Wildfire ${event.nifc.name}`,
-      body: `Wildfire ${event.nifc.name} (${event.nifc.state}) — ${event.nifc.containment}% contained`,
+      body: `Wildfire ${event.nifc.name} (${event.nifc.state}) — ${acres.toLocaleString()} acres, ${event.nifc.containment}% contained`,
       sound: SOUND_BY_LEVEL.high,
       threatType: 'wildfire_extreme',
       threatLevel: 'high',
@@ -205,6 +277,8 @@ export function decideNotification(event: NotifiableEvent): NotificationDecision
     case 'seismic': { return decideSeismic(event);
     }
     case 'geomagnetic': { return decideGeomagnetic(event);
+    }
+    case 'solar_flare': { return decideSolarFlare(event);
     }
     case 'cap': { return decideCap(event);
     }

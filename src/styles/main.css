@@ -19875,3 +19875,104 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
 }
+
+/* ── AI Situation Brief modal ─────────────────────────────────────────── */
+.ai-brief-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(10, 10, 10, 0.65);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+.ai-brief-modal-overlay.active { display: flex; }
+.ai-brief-modal {
+  background: var(--surface);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  width: 90%;
+  max-width: 640px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+}
+.ai-brief-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.10);
+  color: var(--text);
+}
+.ai-brief-modal-title { font-weight: 600; font-size: 14px; letter-spacing: 0.4px; }
+.ai-brief-modal-close {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 6px;
+  line-height: 1;
+}
+.ai-brief-modal-content {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.ai-brief-paragraph {
+  margin: 0 0 14px;
+}
+.ai-brief-paragraph.is-revealing {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+}
+.ai-brief-paragraph.is-revealing.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.ai-brief-spinner {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--muted, rgba(255,255,255,0.55));
+}
+.ai-brief-error {
+  padding: 16px;
+  border-radius: 8px;
+  background: rgba(255, 80, 80, 0.08);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ai-brief-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: var(--muted, rgba(255,255,255,0.55));
+}
+.ai-brief-modal-actions { display: inline-flex; gap: 8px; }
+.ai-brief-modal-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ai-brief-modal-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.10); }
+.ai-brief-modal-btn:disabled { opacity: 0.4; cursor: default; }

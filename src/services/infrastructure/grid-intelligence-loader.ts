@@ -167,7 +167,7 @@ async function fetchGrid(): Promise<GridSnapshot | null> {
   return buildGridSnapshot(rows, Date.now());
 }
 
-async function fetchOutages(): Promise<OutageSummary | null> {
+export async function fetchOutages(): Promise<OutageSummary | null> {
   const data = await fetchJson('/api/infrastructure/outages');
   if (!data) return null;
   const entities = Array.isArray((data as { entities?: unknown }).entities) ? (data as { entities: unknown[] }).entities : [];
@@ -181,7 +181,7 @@ async function fetchBgp(): Promise<BgpSummary | null> {
   return buildBgpSummary(events as Parameters<typeof buildBgpSummary>[0], Date.now());
 }
 
-async function fetchRadiation(): Promise<RadSummary | null> {
+export async function fetchRadiation(): Promise<RadSummary | null> {
   const data = await fetchJson('/api/infrastructure/radiation');
   if (!data) return null;
   const stations = Array.isArray((data as { stations?: unknown }).stations) ? (data as { stations: unknown[] }).stations : [];

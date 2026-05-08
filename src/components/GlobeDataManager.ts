@@ -1,4 +1,5 @@
 import {
+  CallbackProperty,
   Cartesian3,
   Cartographic,
   Color,
@@ -16,6 +17,7 @@ import {
   JulianDate,
   Math as CesiumMath,
   Ellipsoid,
+  Rectangle,
   UrlTemplateImageryProvider,
   type ImageryLayer,
   PointPrimitiveCollection,
@@ -373,6 +375,13 @@ function purpleAirDotSize(pm25: number): number {
   return 8;
 }
 
+function radnetDescription(hot: { name: string; cpm: number; severity: string; state: string | null }): string {
+  const head = `<b>RadNet ${escapeHtml(hot.name)}</b>`;
+  const body = `${hot.cpm.toFixed(1)} CPM (${hot.severity})`;
+  const tail = hot.state ? ` · ${hot.state}` : '';
+  return `${head}<br/>${body}${tail}`;
+}
+
 function cyberColor(severity: string): Color {
   if (severity === 'critical') return C.cyberCritical;
   if (severity === 'high') return C.cyberHigh;
@@ -535,6 +544,9 @@ export class GlobeDataManager {
  this.registerLayer('cyclones', () => this.loadTropicalCyclones());
  this.registerLayer('fires', () => this.loadFires());
  this.registerLayer('airQuality', () => this.loadAirQuality());
+ this.registerLayer('spaceWeather', () => this.loadSpaceWeatherOverlay());
+ this.registerLayer('warRiskZones', () => this.loadWarRiskZones());
+ this.registerLayer('infrastructure', () => this.loadInfrastructureOverlay());
  this.registerLayer('conflicts', () => this.loadConflicts());
  this.registerLayer('airstrikes', () => this.loadAirstrikes());
  this.registerLayer('strike-packages', () => this.loadStrikePackages());
@@ -1119,6 +1131,92 @@ export class GlobeDataManager {
  const { fetchPurpleAirSnapshot } = await import('@/services/airquality/purpleair-service');
  const purpleAir = await fetchPurpleAirSnapshot().catch(() => ({ sensors: [], source: 'unknown' as const, fetchedAt: Date.now() }));
  renderPurpleAirDots(layer, purpleAir.sensors);
+  }
+
+  private async loadSpaceWeatherOverlay(): Promise<void> {
+ const layer = this.layers.get('spaceWeather');
+ if (!layer) return;
+ const { fetchSpaceWxStatus, renderSpaceWeatherDescriptor, buildOverlayDescriptor } =
+ await import('./globe/SpaceWeatherGlobeOverlay');
+ const status = await fetchSpaceWxStatus();
+ if (!status) return;
+ renderSpaceWeatherDescriptor(layer, buildOverlayDescriptor(status));
+  }
+
+  private async loadWarRiskZones(): Promise<void> {
+ const layer = this.layers.get('warRiskZones');
+ if (!layer) return;
+ const { WAR_RISK_ZONES } = await import('@/services/maritime/maritime-threats');
+ const { warZoneColors } = await import('@/services/globe/overlay-helpers');
+
+ for (const zone of WAR_RISK_ZONES) {
+ const palette = warZoneColors(zone.threatCategory);
+ const fill = Color.fromCssColorString(palette.fillHex).withAlpha(palette.fillAlpha);
+ const outline = Color.fromCssColorString(palette.outlineHex);
+ layer.source.entities.add({
+ position: Cartesian3.fromDegrees(zone.centerLon, zone.centerLat),
+ ellipse: {
+ semiMajorAxis: zone.radiusKm * 1000,
+ semiMinorAxis: zone.radiusKm * 1000,
+ material: new ColorMaterialProperty(fill),
+ outline: true,
+ outlineColor: outline,
+ outlineWidth: 2,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ },
+ name: `war-risk-${zone.id}`,
+ description: `<b>${escapeHtml(zone.name)}</b><br/>${escapeHtml(zone.rationale)}<br/>Effective: ${zone.effectiveFrom}`,
+ });
+ }
+  }
+
+  private async loadInfrastructureOverlay(): Promise<void> {
+ const layer = this.layers.get('infrastructure');
+ if (!layer) return;
+ const [{ fetchOutages, fetchRadiation }, { outagesToStateOverlay, radiationToHotspots }, { outageRectExtent, radnetPulsePixelSize }] = await Promise.all([
+ import('@/services/infrastructure/grid-intelligence-loader'),
+ import('@/services/infrastructure/infrastructure-overlay'),
+ import('@/services/globe/overlay-helpers'),
+ ]);
+ const [outages, radiation] = await Promise.all([fetchOutages(), fetchRadiation()]);
+
+ for (const row of outagesToStateOverlay(outages)) {
+ const ext = outageRectExtent(row.lat, row.lon, row.severity);
+ const fill = Color.fromCssColorString(row.fillColorHex).withAlpha(row.fillOpacity);
+ const outline = Color.fromCssColorString(row.fillColorHex);
+ layer.source.entities.add({
+ rectangle: {
+ coordinates: Rectangle.fromDegrees(ext.west, ext.south, ext.east, ext.north),
+ material: new ColorMaterialProperty(fill),
+ outline: true,
+ outlineColor: outline,
+ outlineWidth: 1,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ },
+ name: `outage-${row.state}`,
+ description: `<b>${escapeHtml(row.state)} — ${row.severity}</b><br/>${row.customersAffected.toLocaleString()} customers affected across ${row.countyCount} counties`,
+ });
+ }
+
+ for (const hot of radiationToHotspots(radiation)) {
+ const startMs = Date.now();
+ const periodMs = hot.pulsePeriodMs;
+ const pulseColor = Color.fromCssColorString(hot.pulseColorHex);
+ const pixelSize = new CallbackProperty(() => radnetPulsePixelSize(Date.now() - startMs, periodMs), false);
+ layer.source.entities.add({
+ position: Cartesian3.fromDegrees(hot.lon, hot.lat),
+ point: {
+ color: pulseColor,
+ outlineColor: Color.BLACK,
+ outlineWidth: 1,
+ pixelSize,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ scaleByDistance: new NearFarScalar(1e4, 1.4, 1e7, 0.4),
+ },
+ name: `radnet-${hot.name}`,
+ description: radnetDescription(hot),
+ });
+ }
   }
 
   private async loadConflicts(): Promise<void> {

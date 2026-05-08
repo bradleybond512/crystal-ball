@@ -117,6 +117,24 @@ export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
  enabled: true,
  description: 'Satellite imagery change detection at watched locations',
   },
+  spaceWeather: {
+ name: 'Space Wx',
+ category: 'intelligence',
+ enabled: false,
+ description: 'Aurora oval (Kp ≥ 5) + pulsing subsolar X-flare halo',
+  },
+  warRiskZones: {
+ name: 'War Risk',
+ category: 'intelligence',
+ enabled: false,
+ description: 'Lloyd-style war-risk maritime zones — Red Sea, Hormuz, Black Sea, Gulf of Guinea',
+  },
+  infrastructure: {
+ name: 'Infra Outage',
+ category: 'intelligence',
+ enabled: false,
+ description: 'US grid outages by state (severity-colored) + RadNet stations pulsing above threshold',
+  },
   // ── Static Geo Layers ──
   bases: {
  name: 'Mil. Bases',

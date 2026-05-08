@@ -92,6 +92,15 @@ const ICON_SATELLITE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
 </svg>
 `);
 
+// Triangle billboard for live AIS vessels — heading-rotated point.
+// White fill so the per-vessel category color comes through via
+// the billboard.color tint (Cesium multiplies alpha + RGB channels).
+const VESSEL_TRIANGLE_DATAURI = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <path fill="#ffffff" stroke="#000000" stroke-width="1.5" d="M12 2 L20 20 L12 16 L4 20 Z"/>
+</svg>
+`);
+
 // ── Colors ──────────────────────────────────────────────────
 
 /** Hurricane forecast track + uncertainty cone color (PR 3). */
@@ -516,6 +525,7 @@ export class GlobeDataManager {
   private satelliteCatalog: SatelliteTLE[] = [];
   private unsubPositions: (() => void) | null = null;
   private cameraMoveSub: (() => void) | null = null;
+  private maritimeVesselsTimer: ReturnType<typeof setInterval> | null = null;
   private aftershockForecasts = new Map<string, AftershockForecast>();
   private cycloneCones = new Map<string, ForecastCone>();
   // Persists across loadTropicalCyclones() calls so we can derive an actual
@@ -555,6 +565,7 @@ export class GlobeDataManager {
  this.registerLayer('aviationIntel', () => this.loadAviationIntel());
  this.registerLayer('vessels', () => this.loadMilitaryVessels());
  this.registerLayer('darkVessels', () => this.loadDarkVessels());
+ this.registerLayer('maritimeVessels', () => this.loadMaritimeVessels());
  this.registerLayer('gpsJamming', () => this.loadGpsJamming());
  this.registerLayer('satChange', () => this.loadSatelliteChange());
  this.registerLayer('satellites', () => this.loadOrbitalSatellites());
@@ -1663,6 +1674,77 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  }
   }
 
+  /**
+   * Live AIS vessel layer fed by `/api/maritime/vessels` (sidecar's
+   * risk-zone-filtered AIS stream). Renders each vessel as a coloured
+   * point primitive with rotation matching its heading. Refreshes
+   * every 5 minutes; previous entities are cleared on each tick.
+   *
+   * Distinct from `loadMilitaryVessels` (curated warship roster) and
+   * `loadDarkVessels` (AIS gap detector). All three can render
+   * simultaneously when their HUD toggles are on.
+   */
+  private async loadMaritimeVessels(): Promise<void> {
+    await this.refreshMaritimeVessels();
+    this.maritimeVesselsTimer ??= setInterval(
+      () => { void this.refreshMaritimeVessels(); },
+      5 * 60 * 1000,
+    );
+  }
+
+  private async refreshMaritimeVessels(): Promise<void> {
+    const layer = this.layers.get('maritimeVessels');
+    if (!layer) return;
+    const helpers = await import('@/services/maritime/vessel-globe-helpers');
+    let vessels: import('@/services/maritime/vessel-globe-helpers').MaritimeVesselWire[] = [];
+    try {
+      const r = await fetch('/api/maritime/vessels', { headers: { Accept: 'application/json' } });
+      if (!r.ok) return;
+      const body = (await r.json()) as { vessels?: typeof vessels };
+      vessels = Array.isArray(body.vessels) ? helpers.dedupeVesselsByMmsi(body.vessels) : [];
+    } catch {
+      return;
+    }
+    layer.source.entities.removeAll();
+    for (const v of vessels) {
+      const css = helpers.vesselColorCss(v.category);
+      const color = Color.fromCssColorString(css);
+      layer.source.entities.add({
+        id: `maritime-vessel-${v.mmsi}`,
+        position: Cartesian3.fromDegrees(v.lon, v.lat),
+        point: {
+          pixelSize: 8,
+          color,
+          outlineColor: Color.BLACK,
+          outlineWidth: 1,
+          heightReference: HeightReference.CLAMP_TO_GROUND,
+          scaleByDistance: new NearFarScalar(1e5, 1.4, 1.5e7, 0.6),
+          distanceDisplayCondition: new DistanceDisplayCondition(0, 2e7),
+        },
+        billboard: {
+          image: VESSEL_TRIANGLE_DATAURI,
+          color,
+          scale: 0.5,
+          rotation: CesiumMath.toRadians(-helpers.vesselRotationDeg(v.headingDeg)),
+          alignedAxis: Cartesian3.UNIT_Z,
+          heightReference: HeightReference.CLAMP_TO_GROUND,
+          scaleByDistance: new NearFarScalar(1e5, 0.7, 1.5e7, 0.25),
+          distanceDisplayCondition: new DistanceDisplayCondition(0, 1.5e7),
+          verticalOrigin: VerticalOrigin.CENTER,
+          horizontalOrigin: HorizontalOrigin.CENTER,
+        },
+        description: helpers.vesselTooltip(v),
+        properties: {
+          mmsi: v.mmsi,
+          category: v.category,
+          flag: v.flag,
+          zoneId: v.zoneId,
+          observedAt: v.observedAt,
+        },
+      });
+    }
+  }
+
   private async loadDarkVessels(): Promise<void> {
  const layer = this.layers.get('darkVessels');
  if (!layer) return;
@@ -2416,6 +2498,10 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  this.buildingManager = null;
  this.unsubPositions?.();
  this.unsubPositions = null;
+ if (this.maritimeVesselsTimer !== null) {
+ clearInterval(this.maritimeVesselsTimer);
+ this.maritimeVesselsTimer = null;
+ }
  satellitePropagator.stop();
  if (this.satellitePoints) {
  this.viewer.scene.primitives.remove(this.satellitePoints);

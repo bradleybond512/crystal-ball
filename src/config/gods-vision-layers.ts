@@ -45,6 +45,12 @@ export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
  enabled: true,
  description: 'Military and naval vessel positions with heading',
   },
+  maritimeVessels: {
+ name: 'AIS Vessels',
+ category: 'intelligence',
+ enabled: false,
+ description: 'Live AIS positions in maritime risk zones — orange tankers, blue cargo, red military, gray other',
+  },
   darkVessels: {
  name: 'Dark Ships',
  category: 'intelligence',

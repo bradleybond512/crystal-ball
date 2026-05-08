@@ -48,6 +48,7 @@ const wmHostFailures = new Map(); // host → { count, lastError, lastAt }
 const EXPECTED_API_KEYS = [
   'ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'FRED_API_KEY', 'EIA_API_KEY',
   'NEWSDATA_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY',
+  'PURPLEAIR_API_KEY',
   'OWM_API_KEY', 'FINNHUB_API_KEY', 'NEWSAPI_KEY', 'AVIATIONSTACK_API',
   'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY',
   'CESIUM_ION_TOKEN', 'GROQ_API_KEY', 'OPENROUTER_API_KEY',
@@ -730,7 +731,7 @@ const ALLOWED_ENV_KEYS = new Set([
   'CLOUDFLARE_API_TOKEN', 'ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'URLHAUS_AUTH_KEY',
   'OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'WINGBITS_API_KEY', 'WS_RELAY_URL',
   'VITE_OPENSKY_RELAY_URL', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET',
-  'AISSTREAM_API_KEY', 'VITE_WS_RELAY_URL', 'FINNHUB_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY',
+  'AISSTREAM_API_KEY', 'VITE_WS_RELAY_URL', 'FINNHUB_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY', 'PURPLEAIR_API_KEY',
   'OLLAMA_API_URL', 'OLLAMA_MODEL', 'WTO_API_KEY', 'AVIATIONSTACK_API',
   'ICAO_API_KEY', 'THREATFOX_API_KEY',
   'NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'VIRUSTOTAL_API_KEY',
@@ -910,6 +911,85 @@ function json(data, status = 200, extraHeaders = {}) {
  status,
  headers: { 'content-type': 'application/json', ...extraHeaders },
   });
+}
+
+// ── PurpleAir parsers (mirror of src/services/airquality/purpleair-helpers.ts) ──
+
+function sidecarParsePurpleAirNum(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+ const n = Number.parseFloat(v);
+ return Number.isFinite(n) ? n : Number.NaN;
+  }
+  return Number.NaN;
+}
+
+function sidecarParseV1Sensors(payload) {
+  if (!payload || typeof payload !== 'object') return [];
+  const fields = payload.fields;
+  const data = payload.data;
+  if (!Array.isArray(fields) || !Array.isArray(data)) return [];
+  const idx = {
+ id: fields.indexOf('sensor_index'),
+ pm25: fields.indexOf('pm2.5'),
+ lat: fields.indexOf('latitude'),
+ lon: fields.indexOf('longitude'),
+ locationType: fields.indexOf('location_type'),
+ confidence: fields.indexOf('confidence'),
+ name: fields.indexOf('name'),
+ lastSeen: fields.indexOf('last_seen'),
+  };
+  if (idx.id < 0 || idx.pm25 < 0 || idx.lat < 0 || idx.lon < 0) return [];
+  const out = [];
+  for (const row of data) {
+ if (!Array.isArray(row)) continue;
+ const id = sidecarParsePurpleAirNum(row[idx.id]);
+ const pm25 = sidecarParsePurpleAirNum(row[idx.pm25]);
+ const lat = sidecarParsePurpleAirNum(row[idx.lat]);
+ const lon = sidecarParsePurpleAirNum(row[idx.lon]);
+ if (!Number.isFinite(id) || !Number.isFinite(pm25)) continue;
+ if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+ const locationType = idx.locationType >= 0 ? sidecarParsePurpleAirNum(row[idx.locationType]) : 0;
+ const confidence = idx.confidence >= 0 ? sidecarParsePurpleAirNum(row[idx.confidence]) : 100;
+ const lastSeen = idx.lastSeen >= 0 ? sidecarParsePurpleAirNum(row[idx.lastSeen]) : null;
+ const nameVal = idx.name >= 0 && typeof row[idx.name] === 'string' ? row[idx.name] : '';
+ out.push({
+ id, pm25, lat, lon,
+ locationType: Number.isFinite(locationType) ? locationType : 0,
+ confidence: Number.isFinite(confidence) ? confidence : 0,
+ name: nameVal || `Sensor ${id}`,
+ lastSeen: lastSeen !== null && Number.isFinite(lastSeen) ? lastSeen : null,
+ });
+  }
+  return out;
+}
+
+function sidecarParsePublicJson(payload) {
+  if (!payload || typeof payload !== 'object') return [];
+  const results = payload.results;
+  if (!Array.isArray(results)) return [];
+  const out = [];
+  for (const row of results) {
+ if (!row || typeof row !== 'object') continue;
+ const id = sidecarParsePurpleAirNum(row.ID);
+ const pm25 = sidecarParsePurpleAirNum(row.PM2_5Value);
+ const lat = sidecarParsePurpleAirNum(row.Lat);
+ const lon = sidecarParsePurpleAirNum(row.Lon);
+ if (!Number.isFinite(id) || !Number.isFinite(pm25)) continue;
+ if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+ const locationType = sidecarParsePurpleAirNum(row.Type);
+ const confidence = sidecarParsePurpleAirNum(row.Conf);
+ const lastSeenSec = row.LastSeen != null ? sidecarParsePurpleAirNum(row.LastSeen) : Number.NaN;
+ const nameVal = typeof row.Label === 'string' ? row.Label : '';
+ out.push({
+ id, pm25, lat, lon,
+ locationType: Number.isFinite(locationType) ? locationType : 0,
+ confidence: Number.isFinite(confidence) ? confidence : 0,
+ name: nameVal || `Sensor ${id}`,
+ lastSeen: Number.isFinite(lastSeenSec) ? lastSeenSec * 1000 : null,
+ });
+  }
+  return out;
 }
 
 function canCompress(headers, body) {
@@ -2578,6 +2658,18 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  if (!response.ok) return fail(`AirNow probe failed (${response.status})`);
  if (/invalid api key|unauthorized|forbidden/i.test(text)) return fail('AirNow rejected this key');
  return ok('AirNow key verified');
+ }
+
+ case 'PURPLEAIR_API_KEY': {
+ const response = await fetchWithTimeout(
+ 'https://api.purpleair.com/v1/keys',
+ { headers: { 'X-API-Key': value, Accept: 'application/json', 'User-Agent': CHROME_UA } }
+ );
+ const text = await response.text();
+ if (isAuthFailure(response.status, text)) return fail('PurpleAir rejected this key');
+ if (!response.ok) return fail(`PurpleAir probe failed (${response.status})`);
+ if (/invalid|unauthorized|forbidden/i.test(text)) return fail('PurpleAir rejected this key');
+ return ok('PurpleAir key verified');
  }
 
  case 'NEWSAPI_KEY': {
@@ -7657,6 +7749,42 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── INPE Queimadas — Brazil wildfire hotspots (last 48h) ─────────────────
+  // ── PurpleAir hyper-local AQI sensors ────────────────────────────────────
+  // Prefers PURPLEAIR_API_KEY (v1/sensors), falls back to the deprecated
+  // public /json endpoint when no key is configured. Outdoor sensors only
+  // are kept upstream-side; the renderer applies confidence + AQI scoring.
+  if (requestUrl.pathname === '/api/airquality/purpleair') {
+ const apiKey = process.env.PURPLEAIR_API_KEY;
+ const fields = 'sensor_index,pm2.5,latitude,longitude,location_type,confidence,name,last_seen';
+ try {
+ if (apiKey) {
+ const url = `https://api.purpleair.com/v1/sensors?fields=${encodeURIComponent(fields)}&location_type=0`;
+ const resp = await fetchWithTimeout(url, {
+ headers: {
+ 'X-API-Key': apiKey,
+ Accept: 'application/json',
+ 'User-Agent': CHROME_UA,
+ },
+ }, 20_000);
+ if (resp.ok) {
+ const payload = await resp.json();
+ const sensors = sidecarParseV1Sensors(payload);
+ return json({ sensors, source: 'v1', fetchedAt: Date.now() });
+ }
+ // Fall through to the public endpoint if the v1 call fails.
+ }
+ const fallbackResp = await fetchWithTimeout('https://www.purpleair.com/json', {
+ headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+ }, 20_000);
+ if (!fallbackResp.ok) return json({ sensors: [], error: `purpleair upstream ${fallbackResp.status}` }, 502);
+ const payload = await fallbackResp.json();
+ const sensors = sidecarParsePublicJson(payload);
+ return json({ sensors, source: 'public', fetchedAt: Date.now() });
+ } catch (error) {
+ return json({ sensors: [], error: String(error.message ?? error) }, 500);
+ }
+  }
+
   if (requestUrl.pathname === '/api/inpe-fires') {
  try {
  const resp = await fetchWithTimeout(

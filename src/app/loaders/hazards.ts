@@ -20,6 +20,7 @@ import type { OilSpillPanel } from '@/components/OilSpillPanel';
 import type { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
 import type { WildfireIntelPanel } from '@/components/WildfireIntelPanel';
 import { fetchFireIntelSnapshot } from '@/services/wildfires/fire-intel-service';
+import { fetchPurpleAirSnapshot } from '@/services/airquality/purpleair-service';
 import { getSavedPlaces } from '@/services/saved-places';
 
 export async function loadAirQuality(ctx: AppContext, triggerCompoundEval: () => void): Promise<void> {
@@ -62,6 +63,18 @@ export async function loadWildfireIntel(ctx: AppContext): Promise<void> {
  // eslint-disable-next-line no-console
  console.warn('[wildfire-intel] fetch failed', error);
  panel.showUpstreamUnavailable(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function loadPurpleAir(ctx: AppContext): Promise<void> {
+  const panel = ctx.panels['wildfire-intel'] as WildfireIntelPanel | undefined;
+  if (!panel) return;
+  try {
+ const snapshot = await fetchPurpleAirSnapshot();
+ panel.updatePurpleAir(snapshot);
+  } catch (error) {
+ // eslint-disable-next-line no-console
+ console.warn('[purpleair] fetch failed', error);
   }
 }
 

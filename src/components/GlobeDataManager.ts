@@ -328,6 +328,51 @@ function renderHotspotClusters(
   }
 }
 
+interface PurpleAirSensorLike {
+  id: number;
+  name: string;
+  lat: number;
+  lon: number;
+  pm25: number;
+  aqi: number;
+  category: 'good' | 'moderate' | 'sensitive' | 'unhealthy' | 'very_unhealthy' | 'hazardous';
+}
+
+const PURPLEAIR_DOT_COLORS: Record<PurpleAirSensorLike['category'], Color> = {
+  good:           Color.fromCssColorString('#00e400'),
+  moderate:       Color.fromCssColorString('#ffff00'),
+  sensitive:      Color.fromCssColorString('#ff7e00'),
+  unhealthy:      Color.fromCssColorString('#ff0000'),
+  very_unhealthy: Color.fromCssColorString('#8f3f97'),
+  hazardous:      Color.fromCssColorString('#7e0023'),
+};
+
+function renderPurpleAirDots(layer: GlobeLayer, sensors: PurpleAirSensorLike[]): void {
+  for (const s of sensors) {
+    layer.source.entities.add({
+      position: Cartesian3.fromDegrees(s.lon, s.lat),
+      point: {
+        color: PURPLEAIR_DOT_COLORS[s.category],
+        outlineColor: Color.BLACK,
+        outlineWidth: 1,
+        pixelSize: purpleAirDotSize(s.pm25),
+        heightReference: HeightReference.CLAMP_TO_GROUND,
+        scaleByDistance: new NearFarScalar(1e4, 1.4, 1e7, 0.4),
+        distanceDisplayCondition: new DistanceDisplayCondition(0, 5e6),
+      },
+      description: `<b>PurpleAir ${escapeHtml(s.name)}</b><br/>PM2.5: ${s.pm25.toFixed(1)} µg/m³<br/>AQI: ${s.aqi} (${s.category.replace('_', ' ')})`,
+    });
+  }
+}
+
+function purpleAirDotSize(pm25: number): number {
+  if (pm25 >= 150) return 14;
+  if (pm25 >= 55)  return 12;
+  if (pm25 >= 35)  return 10;
+  if (pm25 >= 12)  return 9;
+  return 8;
+}
+
 function cyberColor(severity: string): Color {
   if (severity === 'critical') return C.cyberCritical;
   if (severity === 'high') return C.cyberHigh;
@@ -1056,15 +1101,18 @@ export class GlobeDataManager {
  const { fetchAllFires, flattenFires, toMapFires } = await import('@/services/wildfires');
  const { fetchActivePerimeters } = await import('@/services/wildfires/fire-intel-service');
  const { clusterHotspots, findNearestPerimeter } = await import('@/services/wildfires/fire-intel-helpers');
+ const { fetchPurpleAirSnapshot } = await import('@/services/airquality/purpleair-service');
 
- const [fireResult, perimeters] = await Promise.all([
+ const [fireResult, perimeters, purpleAir] = await Promise.all([
  fetchAllFires().catch(() => ({ regions: {}, totalCount: 0 })),
  fetchActivePerimeters().catch(() => []),
+ fetchPurpleAirSnapshot().catch(() => ({ sensors: [], source: 'unknown' as const, fetchedAt: Date.now() })),
  ]);
 
  renderPerimeterPolygons(layer, perimeters);
  const clusters = clusterHotspots(toMapFires(flattenFires(fireResult.regions)), { gridDeg: 0.1, topN: 500 });
  renderHotspotClusters(layer, clusters, perimeters, findNearestPerimeter);
+ renderPurpleAirDots(layer, purpleAir.sensors);
   }
 
   private async loadConflicts(): Promise<void> {

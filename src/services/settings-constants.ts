@@ -26,6 +26,7 @@ export const SIGNUP_URLS: Partial<Record<RuntimeSecretKey, string>> = {
   FINNHUB_API_KEY: 'https://finnhub.io/register',
   NASA_FIRMS_API_KEY: 'https://firms.modaps.eosdis.nasa.gov/api/map_key/',
   AIRNOW_API_KEY: 'https://docs.airnowapi.org/account/request/',
+  PURPLEAIR_API_KEY: 'https://develop.purpleair.com/keys',
   OLLAMA_API_URL: 'https://ollama.com/download',
   OLLAMA_MODEL: 'https://ollama.com/library',
   WTO_API_KEY: 'https://apiportal.wto.org/',
@@ -150,6 +151,7 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   FINNHUB_API_KEY: 'Finnhub API Key',
   NASA_FIRMS_API_KEY: 'NASA FIRMS API Key',
   AIRNOW_API_KEY: 'EPA AirNow API Key',
+  PURPLEAIR_API_KEY: 'PurpleAir API Key (optional)',
   OLLAMA_API_URL: 'Ollama Server URL',
   OLLAMA_MODEL: 'Ollama Model',
   WTO_API_KEY: 'WTO API Key',
@@ -212,6 +214,7 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   WINGBITS_API_KEY: 'Wingbits aircraft metadata enrichment (operator, type, registration). Paid.',
   NASA_FIRMS_API_KEY: 'NASA FIRMS — 7,000+ satellite-detected wildfires worldwide. Free.',
   AIRNOW_API_KEY: 'EPA AirNow — current US AQI (PM2.5 / O3) for any latitude/longitude. Free.',
+  PURPLEAIR_API_KEY: 'PurpleAir — community sensor network, hyper-local PM2.5. Optional — falls back to the public /json endpoint when omitted.',
   ICAO_API_KEY: 'ICAO NOTAMs — airport closures, runway hazards. Paid.',
   AVIATIONSTACK_API: 'AviationStack — airport delay data. Free tier available.',
   // ── Cyber threat intel ─────────────────────────────────────────────────
@@ -273,7 +276,7 @@ export const KEY_CATEGORIES: readonly KeyCategory[] = [
   { id: 'news',     label: 'News',                   tier: 5, keys: ['NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'MEDIASTACK_API_KEY'] },
   { id: 'aviation', label: 'Aviation & Maritime',    tier: 6, keys: ['WINGBITS_API_KEY', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY', 'AVIATIONSTACK_API', 'ICAO_API_KEY'] },
   { id: 'geo',      label: 'Geo & Maps',             tier: 7, keys: ['GOOGLE_MAPS_API_KEY', 'MAPBOX_API_KEY', 'MAPTILER_API_KEY', 'GEONAMES_USERNAME', 'IPINFO_TOKEN', 'CESIUM_ION_TOKEN'] },
-  { id: 'weather',  label: 'Weather & NASA',         tier: 8, keys: ['OWM_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY'] },
+  { id: 'weather',  label: 'Weather & NASA',         tier: 8, keys: ['OWM_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY', 'PURPLEAIR_API_KEY'] },
   { id: 'tactical', label: 'Tactical (TAK / S2U)',   tier: 9, keys: ['S2U_XMPP_JID', 'S2U_XMPP_SECRET', 'S2U_TAK_URL', 'S2U_TAK_USERNAME', 'S2U_TAK_SECRET', 'S2U_TLS_INSECURE_OPT_IN'] },
 ];
 

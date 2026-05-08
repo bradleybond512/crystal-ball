@@ -14,6 +14,8 @@ import type {
 } from '@/services/wildfires/fire-intel-service';
 import type { AqiCategory } from '@/services/wildfires/fire-intel-helpers';
 import type { RankedThreat } from '@/services/wildfires/fire-intel-helpers';
+import type { ScoredPurpleAirSensor, AqiCategory as PurpleAqiCategory } from '@/services/airquality/purpleair-service';
+import { colorForCategory as purpleAirColor } from '@/services/airquality/purpleair-service';
 
 const TOP_THREATS_LIMIT = 10;
 const PERIMETER_LIST_LIMIT = 12;
@@ -40,6 +42,7 @@ const AQI_BADGE_COLORS: Record<AqiCategory, string> = {
 
 export class WildfireIntelPanel extends Panel {
   private snapshot: FireIntelSnapshot | null = null;
+  private purpleAir: { sensors: ScoredPurpleAirSensor[]; source: string; fetchedAt: number } | null = null;
 
   constructor() {
     super({
@@ -48,14 +51,19 @@ export class WildfireIntelPanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Unified wildfire view: NASA FIRMS hotspots (clustered to 0.1° cells) · NIFC active fire perimeters · InciWeb incidents ranked by threat · EPA AirNow AQI for saved places. Refreshes every 15 min.',
+        'Unified wildfire view: NASA FIRMS hotspots (clustered to 0.1° cells) · NIFC active fire perimeters · InciWeb incidents ranked by threat · EPA AirNow AQI for saved places · PurpleAir hyper-local PM2.5. Refreshes every 15 min.',
     });
-    this.showLoading('Joining FIRMS, NIFC, InciWeb, and AirNow…');
+    this.showLoading('Joining FIRMS, NIFC, InciWeb, AirNow, and PurpleAir…');
   }
 
   public update(snapshot: FireIntelSnapshot): void {
     this.snapshot = snapshot;
     this.setCount(snapshot.rankedThreats.length);
+    this.render();
+  }
+
+  public updatePurpleAir(snapshot: { sensors: ScoredPurpleAirSensor[]; source: string; fetchedAt: number }): void {
+    this.purpleAir = snapshot;
     this.render();
   }
 
@@ -84,6 +92,7 @@ export class WildfireIntelPanel extends Panel {
     });
     const topThreats = renderTopThreats(top);
     const perimeterList = renderPerimeterList(snap.perimeters.slice(0, PERIMETER_LIST_LIMIT));
+    const purpleAirSection = renderPurpleAirSection(this.purpleAir);
     const updatedAgo = timeAgo(snap.fetchedAt);
 
     this.setContent(`
@@ -92,8 +101,9 @@ export class WildfireIntelPanel extends Panel {
   ${summary}
   ${topThreats}
   ${perimeterList}
+  ${purpleAirSection}
   <div class="fires-footer">
-    <span class="fires-source">FIRMS · NIFC WFIGS · InciWeb · EPA AirNow</span>
+    <span class="fires-source">FIRMS · NIFC WFIGS · InciWeb · EPA AirNow · PurpleAir</span>
     <span class="fires-updated">Updated ${escapeHtml(updatedAgo)}</span>
   </div>
 </div>`);
@@ -192,6 +202,55 @@ function renderPerimeterList(perimeters: ActiveFirePerimeter[]): string {
     <div style="font-weight:600;font-size:12px;margin-bottom:4px;opacity:0.85">NIFC active perimeters</div>
     <table class="eq-table">
       <thead><tr><th>Incident</th><th>State</th><th style="text-align:right">Acres</th><th>Cont.</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+const PURPLEAIR_LIST_LIMIT = 8;
+const PURPLEAIR_CATEGORY_LABEL: Record<PurpleAqiCategory, string> = {
+  good: 'Good',
+  moderate: 'Moderate',
+  sensitive: 'Sensitive',
+  unhealthy: 'Unhealthy',
+  very_unhealthy: 'Very Unhealthy',
+  hazardous: 'Hazardous',
+};
+
+function renderPurpleAirSection(snap: { sensors: ScoredPurpleAirSensor[]; source: string; fetchedAt: number } | null): string {
+  if (!snap) {
+    return '<div class="wf-purple-empty" style="opacity:0.7;font-size:12px;margin-top:10px">PurpleAir sensors loading…</div>';
+  }
+  if (snap.sensors.length === 0) {
+    return '<div class="wf-purple-empty" style="opacity:0.7;font-size:12px;margin-top:10px">No PurpleAir sensors available right now (public endpoint may be down — set PURPLEAIR_API_KEY in settings to use the v1 API).</div>';
+  }
+  const total = snap.sensors.length;
+  const worst = snap.sensors.slice(0, PURPLEAIR_LIST_LIMIT);
+  const counts: Record<PurpleAqiCategory, number> = {
+    good: 0, moderate: 0, sensitive: 0, unhealthy: 0, very_unhealthy: 0, hazardous: 0,
+  };
+  for (const s of snap.sensors) counts[s.category] += 1;
+
+  const histogram = (Object.keys(counts) as PurpleAqiCategory[])
+    .filter(k => counts[k] > 0)
+    .map(k => `<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:8px;height:8px;background:${purpleAirColor(k)};border-radius:50%"></span>${counts[k]}</span>`)
+    .join(' · ');
+
+  const rows = worst.map(s => {
+    const color = purpleAirColor(s.category);
+    return `<tr>
+      <td><span style="display:inline-block;min-width:28px;text-align:center;padding:1px 4px;background:${color};color:#000;border-radius:3px;font-weight:600">${s.aqi}</span></td>
+      <td>${escapeHtml(s.name.length > 30 ? s.name.slice(0, 28) + '…' : s.name)}</td>
+      <td style="text-align:right">${s.pm25.toFixed(1)} µg/m³</td>
+      <td style="opacity:0.75">${escapeHtml(PURPLEAIR_CATEGORY_LABEL[s.category])}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="wf-purpleair-section" style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08)">
+    <div style="font-weight:600;font-size:12px;margin-bottom:4px;opacity:0.85">PurpleAir hyper-local — top ${worst.length} of ${total} (source: ${escapeHtml(snap.source)})</div>
+    <div style="font-size:11px;opacity:0.75;margin-bottom:6px">${histogram}</div>
+    <table class="eq-table">
+      <thead><tr><th>AQI</th><th>Sensor</th><th style="text-align:right">PM2.5</th><th>Category</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   </div>`;

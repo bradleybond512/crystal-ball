@@ -32,6 +32,7 @@ export type RuntimeSecretKey =
   | 'FINNHUB_API_KEY'
   | 'NASA_FIRMS_API_KEY'
   | 'AIRNOW_API_KEY'
+  | 'PURPLEAIR_API_KEY'
   | 'OLLAMA_API_URL'
   | 'OLLAMA_MODEL'
   | 'WTO_API_KEY'
@@ -86,6 +87,7 @@ export type RuntimeFeatureId =
   | 'finnhubMarkets'
   | 'nasaFirms'
   | 'epaAirNow'
+  | 'purpleAirSensors'
   | 'aiOllama'
   | 'wtoTrade'
   | 'supplyChain'
@@ -192,6 +194,7 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   finnhubMarkets: true,
   nasaFirms: true,
   epaAirNow: true,
+  purpleAirSensors: true,
   aiOllama: true,
   wtoTrade: true,
   supplyChain: true,
@@ -402,6 +405,14 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  requiredSecrets: ['AIRNOW_API_KEY'],
  desktopRequiredSecrets: [],
  fallback: 'Wildfire panel shows AQI as "key required" until configured.',
+  },
+  {
+ id: 'purpleAirSensors',
+ name: 'PurpleAir hyper-local sensors',
+ description: 'Community PurpleAir sensor network — top-500 outdoor PM2.5 readings with EPA AQI conversion. Optional key unlocks the v1 API; without a key the deprecated public /json endpoint is tried.',
+ requiredSecrets: [],
+ desktopRequiredSecrets: [],
+ fallback: 'Falls back to the public /json endpoint when no PURPLEAIR_API_KEY is configured.',
   },
   {
  id: 'wtoTrade',

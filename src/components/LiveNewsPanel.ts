@@ -382,7 +382,7 @@ export class LiveNewsPanel extends Panel {
  if (this.lazyObserver) { this.lazyObserver.disconnect(); this.lazyObserver = null; }
  if (this.idleCallbackId !== null) {
  if ('cancelIdleCallback' in window) (window as any).cancelIdleCallback(this.idleCallbackId);
- else clearTimeout(this.idleCallbackId as ReturnType<typeof setTimeout>);
+ else clearTimeout(this.idleCallbackId as unknown as ReturnType<typeof setTimeout>);
  this.idleCallbackId = null;
  }
  this.renderPlayer();
@@ -1452,7 +1452,7 @@ export class LiveNewsPanel extends Panel {
  if (this.lazyObserver) { this.lazyObserver.disconnect(); this.lazyObserver = null; }
  if (this.idleCallbackId !== null) {
  if ('cancelIdleCallback' in window) (window as any).cancelIdleCallback(this.idleCallbackId);
- else clearTimeout(this.idleCallbackId as ReturnType<typeof setTimeout>);
+ else clearTimeout(this.idleCallbackId as unknown as ReturnType<typeof setTimeout>);
  this.idleCallbackId = null;
  }
 

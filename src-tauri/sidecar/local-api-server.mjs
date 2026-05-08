@@ -1591,6 +1591,92 @@ export function parseRedditRansomwareSidecar(listing) {
   return { mentions, groupCounts };
 }
 
+// ── Vessel classifier (mirror src/services/maritime/vessel-classifier.ts) ──
+const MARITIME_RISK_ZONES_SIDECAR = [
+  { id: 'red-sea',         name: 'Red Sea',          south: 12, north: 22, west: 42,  east: 50 },
+  { id: 'hormuz',           name: 'Strait of Hormuz', south: 25, north: 27, west: 56,  east: 58 },
+  { id: 'black-sea',        name: 'Black Sea',        south: 41, north: 47, west: 28,  east: 42 },
+  { id: 'south-china-sea',  name: 'South China Sea',  south: 0,  north: 25, west: 105, east: 122 },
+];
+
+const MID_TO_FLAG_SIDECAR = {
+  '422': 'Iran', '470': 'United Arab Emirates', '473': 'Egypt', '561': 'Saudi Arabia',
+  '466': 'Kuwait', '408': 'Bahrain', '425': 'Iraq', '443': 'Israel', '475': 'Yemen',
+  '273': 'Russia', '272': 'Ukraine', '271': 'Turkey', '264': 'Romania', '207': 'Bulgaria', '213': 'Georgia',
+  '412': 'China', '413': 'China', '414': 'China', '477': 'Hong Kong',
+  '525': 'Indonesia', '533': 'Malaysia', '563': 'Singapore', '548': 'Philippines', '574': 'Vietnam',
+  '352': 'Panama', '353': 'Panama', '354': 'Panama', '371': 'Panama', '372': 'Panama', '373': 'Panama', '374': 'Panama',
+  '538': 'Marshall Islands', '636': 'Liberia', '637': 'Liberia',
+  '366': 'United States', '367': 'United States', '368': 'United States', '369': 'United States',
+  '232': 'United Kingdom', '233': 'United Kingdom', '234': 'United Kingdom', '235': 'United Kingdom',
+};
+
+export function classifyShipTypeSidecar(shipType) {
+  if (typeof shipType !== 'number' || !Number.isFinite(shipType)) return 'other';
+  if (shipType === 35 || shipType === 55) return 'military';
+  if (shipType >= 80 && shipType <= 89) return 'tanker';
+  if (shipType === 78 || shipType === 79) return 'container';
+  if (shipType >= 70 && shipType <= 77) return 'bulk_carrier';
+  return 'other';
+}
+
+export function flagFromMmsiSidecar(mmsi) {
+  if (typeof mmsi !== 'string' || mmsi.length < 3) return 'Unknown';
+  return MID_TO_FLAG_SIDECAR[mmsi.slice(0, 3)] ?? 'Unknown';
+}
+
+export function zoneForPositionSidecar(lat, lon, zones = MARITIME_RISK_ZONES_SIDECAR) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  for (const z of zones) {
+    if (lat >= z.south && lat <= z.north && lon >= z.west && lon <= z.east) return z;
+  }
+  return null;
+}
+
+export function filterVesselsInRiskZonesSidecar(rows, options = {}) {
+  const zones = options.zones ?? MARITIME_RISK_ZONES_SIDECAR;
+  const maxAgeMs = options.maxAgeMs;
+  const now = options.now ?? Date.now();
+  const out = [];
+  for (const r of rows) {
+    if (!r.mmsi) continue;
+    if (!Number.isFinite(r.lat) || !Number.isFinite(r.lon)) continue;
+    if (Number.isFinite(maxAgeMs) && Number.isFinite(r.timestamp) && now - r.timestamp > maxAgeMs) continue;
+    const zone = zoneForPositionSidecar(r.lat, r.lon, zones);
+    if (!zone) continue;
+    out.push({
+      mmsi: r.mmsi,
+      name: r.name ?? '',
+      lat: r.lat,
+      lon: r.lon,
+      speedKnots: Number.isFinite(r.speed) ? r.speed : null,
+      headingDeg: Number.isFinite(r.heading) ? r.heading : null,
+      shipType: Number.isFinite(r.shipType) ? r.shipType : null,
+      category: classifyShipTypeSidecar(r.shipType),
+      flag: flagFromMmsiSidecar(r.mmsi),
+      zoneId: zone.id,
+      zoneName: zone.name,
+      observedAt: Number.isFinite(r.timestamp) ? r.timestamp : null,
+    });
+  }
+  out.sort((a, b) => {
+    const aT = a.observedAt ?? -Infinity;
+    const bT = b.observedAt ?? -Infinity;
+    return bT - aT;
+  });
+  return out;
+}
+
+export function summarizeVesselsSidecar(vessels) {
+  const byZone = {};
+  const byCategory = { tanker: 0, bulk_carrier: 0, container: 0, military: 0, other: 0 };
+  for (const v of vessels) {
+    byZone[v.zoneName] = (byZone[v.zoneName] ?? 0) + 1;
+    byCategory[v.category] += 1;
+  }
+  return { byZone, byCategory, total: vessels.length };
+}
+
 // ── Dark-vessel gap helpers (mirror src/services/dark-vessel.ts) ────────────
 const DARK_VESSEL_RISK_ZONES = [
   { name: 'Strait of Hormuz', lat: 26.5, lon: 56.3, radiusKm: 200 },
@@ -4263,6 +4349,21 @@ async function dispatch(requestUrl, req, routes, context) {
     } catch (error) {
       return json({ mentions: [], groupCounts: [], error: String(error?.message ?? error) }, 502);
     }
+  }
+
+  // ── Maritime live vessels (filtered from aisState.vessels by risk zone) ──
+  if (requestUrl.pathname === '/api/maritime/vessels') {
+    const maxAgeMs = Math.max(60_000, Math.min(60 * 60_000,
+      Number(requestUrl.searchParams.get('maxAgeMs') || (15 * 60_000))));
+    const rows = [...aisState.vessels.values()];
+    const vessels = filterVesselsInRiskZonesSidecar(rows, { maxAgeMs });
+    const summary = summarizeVesselsSidecar(vessels);
+    return json({
+      vessels,
+      summary,
+      asOf: new Date().toISOString(),
+      sampleSize: rows.length,
+    });
   }
 
   // ── ThreatFox IOC feed ───────────────────────────────────────────────────

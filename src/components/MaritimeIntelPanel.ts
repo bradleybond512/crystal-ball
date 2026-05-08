@@ -18,6 +18,31 @@ import {
   type MaritimeIncident,
   type AcledEventRow,
 } from '@/services/maritime/maritime-threats';
+import type { VesselCategory, ZoneVessel, VesselSummary } from '@/services/maritime/vessel-classifier';
+
+interface LiveVesselsResponse {
+  vessels?: ZoneVessel[];
+  summary?: VesselSummary;
+  asOf?: string;
+  sampleSize?: number;
+  error?: string;
+}
+
+const VESSEL_CATEGORY_COLOR: Record<VesselCategory, string> = {
+  tanker: '#ff5722',
+  bulk_carrier: '#ffeb3b',
+  container: '#2196f3',
+  military: '#d50000',
+  other: '#9e9e9e',
+};
+
+const VESSEL_CATEGORY_LABEL: Record<VesselCategory, string> = {
+  tanker: 'Tanker',
+  bulk_carrier: 'Bulk',
+  container: 'Container',
+  military: 'Military',
+  other: 'Other',
+};
 
 const REFRESH_MS = 60_000;
 
@@ -140,6 +165,9 @@ export class MaritimeIntelPanel extends Panel {
   private darkEvents: DarkVesselGapEvent[] = [];
   private freightStress: FreightStressResponse | null = null;
   private threats: MaritimeIncident[] = [];
+  private liveVessels: ZoneVessel[] = [];
+  private liveSummary: VesselSummary | null = null;
+  private liveSampleSize: number | null = null;
   private lastFetchAt: number | null = null;
   private lastFetchError: string | null = null;
 
@@ -150,7 +178,7 @@ export class MaritimeIntelPanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Six critical maritime chokepoints with threat-level color coding, freight cost stress (FRED PPIACO + PFOODINDEXM), active dark-vessel gap events from /api/dark-vessels, and ACLED maritime incidents within 300km of chokepoints + active war-risk zones.',
+        'Six critical maritime chokepoints with threat-level color coding, freight cost stress (FRED PPIACO + PFOODINDEXM), active dark-vessel gap events from /api/dark-vessels, ACLED maritime incidents, and live AIS vessels in 4 risk zones (Red Sea, Hormuz, Black Sea, South China Sea) via /api/maritime/vessels.',
     });
     this.start();
   }
@@ -168,49 +196,71 @@ export class MaritimeIntelPanel extends Panel {
   }
 
   private async refresh(): Promise<void> {
-    let darkOk = false;
-    let freightOk = false;
-    let threatsOk = false;
-    try {
-      const resp = await fetch('/api/dark-vessels', {
-        headers: { Accept: 'application/json' },
-      });
-      if (resp.ok) {
-        const body = (await resp.json()) as DarkVesselsResponse;
-        this.darkEvents = Array.isArray(body.events) ? body.events : [];
-        darkOk = true;
-      }
-    } catch {
-      this.darkEvents = [];
-    }
-    try {
-      const resp = await fetch('/api/freight-stress', {
-        headers: { Accept: 'application/json' },
-      });
-      if (resp.ok) {
-        this.freightStress = (await resp.json()) as FreightStressResponse;
-        freightOk = true;
-      }
-    } catch {
-      this.freightStress = null;
-    }
-    try {
-      const resp = await fetch('/api/acled-events', {
-        headers: { Accept: 'application/json' },
-      });
-      if (resp.ok) {
-        const body = (await resp.json()) as { events?: AcledEventRow[] };
-        this.threats = filterAcledMaritimeIncidents(Array.isArray(body.events) ? body.events : []);
-        threatsOk = true;
-      }
-    } catch {
-      this.threats = [];
-    }
+    const [darkOk, freightOk, threatsOk, liveOk] = await Promise.all([
+      this.refreshDark(),
+      this.refreshFreight(),
+      this.refreshThreats(),
+      this.refreshLive(),
+    ]);
     this.lastFetchAt = Date.now();
-    this.lastFetchError = !darkOk && !freightOk && !threatsOk
+    this.lastFetchError = !darkOk && !freightOk && !threatsOk && !liveOk
       ? 'All endpoints unavailable'
       : null;
     this.render();
+  }
+
+  private async refreshDark(): Promise<boolean> {
+    try {
+      const resp = await fetch('/api/dark-vessels', { headers: { Accept: 'application/json' } });
+      if (!resp.ok) return false;
+      const body = (await resp.json()) as DarkVesselsResponse;
+      this.darkEvents = Array.isArray(body.events) ? body.events : [];
+      return true;
+    } catch {
+      this.darkEvents = [];
+      return false;
+    }
+  }
+
+  private async refreshFreight(): Promise<boolean> {
+    try {
+      const resp = await fetch('/api/freight-stress', { headers: { Accept: 'application/json' } });
+      if (!resp.ok) return false;
+      this.freightStress = (await resp.json()) as FreightStressResponse;
+      return true;
+    } catch {
+      this.freightStress = null;
+      return false;
+    }
+  }
+
+  private async refreshThreats(): Promise<boolean> {
+    try {
+      const resp = await fetch('/api/acled-events', { headers: { Accept: 'application/json' } });
+      if (!resp.ok) return false;
+      const body = (await resp.json()) as { events?: AcledEventRow[] };
+      this.threats = filterAcledMaritimeIncidents(Array.isArray(body.events) ? body.events : []);
+      return true;
+    } catch {
+      this.threats = [];
+      return false;
+    }
+  }
+
+  private async refreshLive(): Promise<boolean> {
+    try {
+      const resp = await fetch('/api/maritime/vessels', { headers: { Accept: 'application/json' } });
+      if (!resp.ok) return false;
+      const body = (await resp.json()) as LiveVesselsResponse;
+      this.liveVessels = Array.isArray(body.vessels) ? body.vessels : [];
+      this.liveSummary = body.summary ?? null;
+      this.liveSampleSize = typeof body.sampleSize === 'number' ? body.sampleSize : null;
+      return true;
+    } catch {
+      this.liveVessels = [];
+      this.liveSummary = null;
+      return false;
+    }
   }
 
   private render(): void {
@@ -233,6 +283,9 @@ export class MaritimeIntelPanel extends Panel {
     for (const t of this.threats) {
       if (t.date >= cutoff) count += 1;
     }
+    if (this.liveSummary && this.liveSummary.byCategory.military > 0) {
+      count += this.liveSummary.byCategory.military;
+    }
     return count;
   }
 
@@ -240,14 +293,71 @@ export class MaritimeIntelPanel extends Panel {
     const stressBlock = this.renderFreightStress();
     const chokepointsBlock = this.renderChokepoints();
     const threatsBlock = this.renderThreats();
+    const liveBlock = this.renderLiveVessels();
     const darkBlock = this.renderDarkVessels();
     const footer = this.renderFooter();
     return `<div style="padding:12px;display:flex;flex-direction:column;gap:14px;">
       ${stressBlock}
       ${chokepointsBlock}
       ${threatsBlock}
+      ${liveBlock}
       ${darkBlock}
       ${footer}
+    </div>`;
+  }
+
+  private renderLiveVessels(): string {
+    const summary = this.liveSummary;
+    const sample = this.liveSampleSize ?? 0;
+    if (!summary || summary.total === 0) {
+      const reason = sample === 0
+        ? 'AIS feed not connected. Configure \`AISSTREAM_API_KEY\` in settings to populate live vessels.'
+        : `${sample} vessels in feed but none currently inside the four risk zones.`;
+      return `<div>
+        <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:6px;">Live Vessels (Risk Zones)</div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);">${escapeHtml(reason)}</div>
+      </div>`;
+    }
+    const zoneStrip = Object.entries(summary.byZone)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => `<span style="display:inline-block;padding:2px 8px;border:1px solid var(--border-subtle,#333);border-radius:8px;font-size:10px;margin-right:4px;margin-bottom:4px;">${escapeHtml(name)} <strong>${count}</strong></span>`)
+      .join('');
+    const catStrip = (Object.keys(summary.byCategory) as VesselCategory[])
+      .filter((cat) => summary.byCategory[cat] > 0)
+      .map((cat) => {
+        const color = VESSEL_CATEGORY_COLOR[cat];
+        const label = VESSEL_CATEGORY_LABEL[cat];
+        const count = summary.byCategory[cat];
+        return `<span style="display:inline-block;padding:2px 8px;border:1px solid ${color};border-radius:8px;font-size:10px;color:${color};margin-right:4px;margin-bottom:4px;">${escapeHtml(label)} <strong>${count}</strong></span>`;
+      })
+      .join('');
+    const rows = this.liveVessels.slice(0, 25).map((v) => this.renderVesselRow(v)).join('');
+    const more = this.liveVessels.length > 25
+      ? `<div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:4px;">+ ${this.liveVessels.length - 25} more</div>`
+      : '';
+    return `<div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary,#aaa);">Live Vessels (Risk Zones) · ${summary.total} of ${sample}</div>
+      </div>
+      <div style="margin-bottom:4px;">${zoneStrip}</div>
+      <div style="margin-bottom:8px;">${catStrip}</div>
+      <div style="display:flex;flex-direction:column;gap:3px;">${rows}</div>
+      ${more}
+    </div>`;
+  }
+
+  private renderVesselRow(v: ZoneVessel): string {
+    const color = VESSEL_CATEGORY_COLOR[v.category];
+    const label = VESSEL_CATEGORY_LABEL[v.category];
+    const speed = v.speedKnots === null ? '—' : `${v.speedKnots.toFixed(1)} kn`;
+    const heading = v.headingDeg === null ? '—' : `${Math.round(v.headingDeg)}°`;
+    const name = v.name && v.name.length > 0 ? v.name : `MMSI ${v.mmsi}`;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:3px;font-size:11px;gap:8px;">
+      <div style="min-width:0;flex:1;">
+        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(name)} <span style="color:var(--text-secondary,#aaa);font-size:10px;font-weight:400;">${escapeHtml(v.flag)}</span></div>
+        <div style="color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(v.zoneName)} · ${escapeHtml(speed)} · hdg ${escapeHtml(heading)}</div>
+      </div>
+      <div style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(label)}</div>
     </div>`;
   }
 

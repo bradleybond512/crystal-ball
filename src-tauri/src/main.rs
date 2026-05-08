@@ -156,7 +156,30 @@ struct PersistentCache {
 }
 
 impl SecretsCache {
- fn load_from_keychain() -> Self {
+ /// Empty cache, ready to be `manage()`d at builder time without
+ /// touching the macOS Keychain. The actual secrets are populated
+ /// asynchronously from `setup()` so the UI window renders before
+ /// any blocking keychain calls happen — see issue notes on the
+ /// startup-freeze bug this fixes.
+ fn empty() -> Self {
+ SecretsCache {
+ secrets: Mutex::new(HashMap::new()),
+ }
+ }
+
+ /// Blocking keychain query. Replaces the in-memory map atomically.
+ /// MUST be called off the main thread (`spawn_blocking` etc.).
+ fn populate_from_keychain(&self) {
+ let loaded = Self::read_keychain_blocking();
+ if let Ok(mut guard) = self.secrets.lock() {
+ *guard = loaded;
+ }
+ }
+
+ /// Pulled out so callers can run the load on whichever thread they
+ /// like and write the result into a shared cache themselves.
+ /// Same logic as the old `load_from_keychain` constructor.
+ fn read_keychain_blocking() -> HashMap<String, String> {
  // Try consolidated vault first — single keychain prompt
  if let Ok(entry) = Entry::new(KEYRING_SERVICE, "secrets-vault") {
  if let Ok(json) = entry.get_password() {
@@ -168,9 +191,7 @@ impl SecretsCache {
  })
  .map(|(k, v)| (k, v.trim().to_string()))
  .collect();
- return SecretsCache {
- secrets: Mutex::new(secrets),
- };
+ return secrets;
  }
  }
  }
@@ -204,9 +225,16 @@ impl SecretsCache {
  }
  }
 
- SecretsCache {
- secrets: Mutex::new(secrets),
+ secrets
  }
+
+ /// Convenience constructor — synchronous load for tests + any
+ /// non-Tauri caller. Behaviour identical to the pre-fix version.
+ #[allow(dead_code)]
+ fn load_from_keychain() -> Self {
+ let cache = Self::empty();
+ cache.populate_from_keychain();
+ cache
  }
 }
 
@@ -2322,7 +2350,10 @@ fn main() {
  .menu(build_app_menu)
  .on_menu_event(handle_menu_event)
  .manage(LocalApiState::default())
- .manage(SecretsCache::load_from_keychain())
+ // Empty SecretsCache — populated asynchronously from `setup()`.
+ // Keeps the macOS Keychain off the main thread so the UI window
+ // can render immediately on launch.
+ .manage(SecretsCache::empty())
  .plugin(tauri_plugin_biometry::init())
  .plugin(tauri_plugin_clipboard_manager::init())
  .plugin(corelocation::init())
@@ -2377,14 +2408,42 @@ fn main() {
  ),
  );
 
- if let Err(err) = start_local_api(&app.handle()) {
+ // Off-main-thread keychain load + sidecar boot.
+ //
+ // The Tauri builder runs on the main UI thread; calling
+ // `Entry::get_password()` there blocks until macOS Keychain
+ // responds (multiple seconds when the user has a populated
+ // vault, sometimes longer if Keychain Access is unlocked
+ // mid-call). That freeze is what made Crystal Ball appear
+ // hung after each rebuild.
+ //
+ // Sidecar startup intentionally lives inside the same task
+ // because `start_local_api` reads `app.state::<SecretsCache>()`
+ // to inject env vars — running it before the populate would
+ // ship an empty env to the sidecar.
+ let setup_handle = app.handle().clone();
+ tauri::async_runtime::spawn_blocking(move || {
+ let cache = setup_handle.state::<SecretsCache>();
+ cache.populate_from_keychain();
+ let loaded = cache
+ .secrets
+ .lock()
+ .map(|m| m.len())
+ .unwrap_or(0);
  append_desktop_log(
- &app.handle(),
+ &setup_handle,
+ "INFO",
+ &format!("secrets-cache: loaded {loaded} keys from keychain (async)"),
+ );
+ if let Err(err) = start_local_api(&setup_handle) {
+ append_desktop_log(
+ &setup_handle,
  "ERROR",
  &format!("local API sidecar failed to start: {err}"),
  );
  eprintln!("[tauri] local API sidecar failed to start: {err}");
  }
+ });
 
  // Request Location Services authorization so the app appears in
  // System Settings > Privacy & Security > Location Services.

@@ -477,6 +477,20 @@ export class EventHandlerManager implements AppModule {
  briefHandler(document.getElementById('toolbarBriefBtn'));
  briefHandler(document.getElementById('webBriefBtn'));
 
+ // AI Brief — separate from the PDF export. Lazy-imports the modal +
+ // generator + llm-adapter so the chunk only loads when the user clicks.
+ const aiBriefHandler = (btn: HTMLElement | null) => {
+ if (!btn) return;
+ btn.addEventListener('click', () => {
+ void (async () => {
+ const { getAiBriefModal } = await import('@/components/AiBriefModal');
+ await getAiBriefModal().open();
+ })();
+ });
+ };
+ aiBriefHandler(document.getElementById('toolbarAiBriefBtn'));
+ aiBriefHandler(document.getElementById('webAiBriefBtn'));
+
  // Toolbar overflow — Mode button now toggles Ghost Mode
  const toolbarModeBtn = document.getElementById('toolbarModeBtn');
  const updateModeBtn = () => {

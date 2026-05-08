@@ -1,5 +1,18 @@
 # Crystal Ball — Claude Code Context
 
+## KEYCHAIN — ABSOLUTE PROHIBITION
+
+Never access, modify, or delete macOS Keychain entries under any circumstances.
+This includes: `security delete-generic-password`, `security add-generic-password`,
+`security find-generic-password`, the `keyring` crate's `Entry::delete()`, or any
+equivalent. Keychain operations are reserved for the running application only.
+Violation caused a full key loss incident on 2026-05-08 requiring manual re-entry
+of 29 API credentials.
+
+The user-invoked `npm run backup-keys` and `npm run restore-keys` scripts are the
+only sanctioned entry points; do not call them on the user's behalf without an
+explicit, in-turn instruction.
+
 ## Project Overview
 
 - **App name**: Crystal Ball

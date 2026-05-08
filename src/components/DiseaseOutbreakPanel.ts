@@ -4,6 +4,11 @@ import type { DiseaseOutbreak, GlobalDiseaseSnapshot } from '@/services/disease-
 import type { WastewaterData } from '@/services/wastewater';
 import type { WhoDonAlert, WhoProMedCrossReference } from '@/services/disease-intel';
 import { renderWastewaterTab, renderCrossReferencedTab } from './disease-outbreak-tabs';
+import { renderWastewaterSitesTab } from './wastewater-sites-tab';
+import {
+  fetchWastewaterSurveillance,
+  type WastewaterSurveillance,
+} from '@/services/biosurveillance/wastewater-service';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { t } from '@/services/i18n';
 import {
@@ -13,17 +18,19 @@ import {
   type AriSnapshot,
 } from '@/services/biosurveillance/cdc-ari';
 
-type Tab = 'outbreaks' | 'wastewater' | 'cross-ref' | 'flu';
+type Tab = 'outbreaks' | 'wastewater' | 'wastewater-sites' | 'cross-ref' | 'flu';
 
 const TAB_STORAGE_KEY = 'cb:disease-outbreak-tab';
 const TAB_LABELS: Record<Tab, string> = {
   outbreaks: 'Outbreaks',
   wastewater: 'Wastewater',
+  'wastewater-sites': 'Wastewater Sites',
   'cross-ref': 'Cross-Referenced',
   flu: 'Flu Surveillance',
 };
 
 const ARI_REFRESH_MS = 6 * 60 * 60 * 1000;
+const WW_SITES_REFRESH_MS = 24 * 60 * 60 * 1000;
 
 export class DiseaseOutbreakPanel extends Panel {
   private outbreaks: DiseaseOutbreak[] = [];
@@ -34,6 +41,8 @@ export class DiseaseOutbreakPanel extends Panel {
   private ari: AriSnapshot | null = null;
   private ariError: string | null = null;
   private ariTimer: ReturnType<typeof setInterval> | null = null;
+  private wwSites: WastewaterSurveillance | null = null;
+  private wwSitesTimer: ReturnType<typeof setInterval> | null = null;
   private lastUpdated: Date | null = null;
   private activeTab: Tab = readStoredTab();
 
@@ -47,6 +56,7 @@ export class DiseaseOutbreakPanel extends Panel {
  });
  this.showLoading('Fetching WHO outbreak data...');
  this.startAriPolling();
+ this.startWastewaterSitesPolling();
   }
 
   private startAriPolling(): void {
@@ -60,6 +70,32 @@ export class DiseaseOutbreakPanel extends Panel {
  clearInterval(this.ariTimer);
  this.ariTimer = null;
  }
+ if (this.wwSitesTimer !== null) {
+ clearInterval(this.wwSitesTimer);
+ this.wwSitesTimer = null;
+ }
+  }
+
+  private startWastewaterSitesPolling(): void {
+ if (this.wwSitesTimer !== null) return;
+ setTimeout(() => void this.refreshWastewaterSites(), 0);
+ this.wwSitesTimer = setInterval(() => void this.refreshWastewaterSites(), WW_SITES_REFRESH_MS);
+  }
+
+  private async refreshWastewaterSites(): Promise<void> {
+ try {
+ this.wwSites = await fetchWastewaterSurveillance();
+ if (this.activeTab === 'wastewater-sites') this.render();
+ } catch {
+ /* degraded payload returned by service; ignore */
+ }
+  }
+
+  /** Allow the host to inject the wastewater-surveillance snapshot
+   *  instead of (or in addition to) the panel's own poll loop. */
+  public setWastewaterSites(snapshot: WastewaterSurveillance | null): void {
+ this.wwSites = snapshot;
+ this.render();
   }
 
   /** Allow the host to inject ARI data instead of (or in addition to) the
@@ -125,7 +161,7 @@ export class DiseaseOutbreakPanel extends Panel {
   }
 
   private renderTabStrip(): string {
- const tabs: Tab[] = ['outbreaks', 'wastewater', 'cross-ref', 'flu'];
+ const tabs: Tab[] = ['outbreaks', 'wastewater', 'wastewater-sites', 'cross-ref', 'flu'];
  return `<div class="do-tab-strip" role="tablist" style="display:flex;gap:6px;margin-bottom:6px">
 ${tabs.map(tab => {
  const active = tab === this.activeTab ? 'do-tab-active' : '';
@@ -195,6 +231,8 @@ ${tabs.map(tab => {
  }
  case 'wastewater': { body = renderWastewaterTab(this.wastewater); break;
  }
+ case 'wastewater-sites': { body = renderWastewaterSitesTab(this.wwSites); break;
+ }
  case 'cross-ref': { body = renderCrossReferencedTab(this.crossRefs, this.whoDonAlerts); break;
  }
  case 'flu': { body = this.renderFluTab(); break;
@@ -245,7 +283,13 @@ ${tabs.map(tab => {
 function readStoredTab(): Tab {
   try {
  const stored = localStorage.getItem(TAB_STORAGE_KEY);
- if (stored === 'outbreaks' || stored === 'wastewater' || stored === 'cross-ref' || stored === 'flu') return stored;
+ if (
+ stored === 'outbreaks' ||
+ stored === 'wastewater' ||
+ stored === 'wastewater-sites' ||
+ stored === 'cross-ref' ||
+ stored === 'flu'
+ ) return stored;
   } catch { /* noop */ }
   return 'outbreaks';
 }

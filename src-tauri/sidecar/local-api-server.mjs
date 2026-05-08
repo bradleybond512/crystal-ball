@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { brotliCompress, gzip } from 'node:zlib';
 import path from 'node:path';
 import os from 'node:os';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { scoreAllDomains } from './sitrep-severity.mjs';
 import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
 import { getTakFeeds as s2uTakGetFeeds, getTakSituation as s2uTakGetSituation } from './s2u-tak-client.mjs';
@@ -22,6 +22,23 @@ import {
   dedupeAlerts,
   expireAlerts,
 } from './ipaws-aggregate.mjs';
+import { loadEnvFile } from './env-local-loader.mjs';
+
+// Keychain-loss fallback: a 2026-05-08 incident wiped the macOS Keychain
+// vault, taking 29 API credentials with it. If the keychain is empty
+// (process.env not seeded by the Tauri host), fall back to a plaintext
+// .env.local at the project root. The file lives outside the bundle and
+// is gitignored — Brad keeps a synced copy in iCloud Drive via
+// scripts/backup-keys.sh. Real keychain values still take precedence.
+{
+  const sidecarDir = path.dirname(fileURLToPath(import.meta.url));
+  const envLocalPath = path.join(sidecarDir, '..', '..', '.env.local');
+  const applied = loadEnvFile(envLocalPath, process.env);
+  if (applied > 0) {
+    process.stderr.write(`[sidecar] loaded ${applied} fallback keys from .env.local\n`);
+  }
+}
+
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 function isValidToken(authHeader) {

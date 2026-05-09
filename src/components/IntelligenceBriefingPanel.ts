@@ -58,6 +58,7 @@ export class IntelligenceBriefingPanel extends Panel {
   private _collapsedSections = new Set<string>();
   private _loading = false;
   private _error: string | null = null;
+  private _downloading = false;
 
   constructor() {
  super({
@@ -97,6 +98,63 @@ export class IntelligenceBriefingPanel extends Panel {
  this.renderError();
  } finally {
  this._loading = false;
+ }
+  }
+
+  /** Build the enhanced multi-section PDF report and trigger download.
+   *  Falls back to the simple renderer (renderBriefingPdfBlob) when the
+   *  enhanced collector or renderer throws — spec: keep the existing
+   *  simple export as a fallback. */
+  private async handleDownloadReport(): Promise<void> {
+ if (this._downloading) return;
+ this._downloading = true;
+ this.render();
+ try {
+ const blob = await this.buildReportBlob();
+ const filename = await this.buildReportFilename();
+ const url = URL.createObjectURL(blob);
+ const anchor = document.createElement('a');
+ anchor.href = url;
+ anchor.download = filename;
+ document.body.append(anchor);
+ anchor.click();
+ anchor.remove();
+ setTimeout(() => URL.revokeObjectURL(url), 1000);
+ } catch (error) {
+ // The enhanced path already falls back internally; reaching this
+ // catch means even the simple renderer failed. Surface the reason.
+ window.alert(`Report download failed: ${error instanceof Error ? error.message : String(error)}`);
+ } finally {
+ this._downloading = false;
+ this.render();
+ }
+  }
+
+  private async buildReportBlob(): Promise<Blob> {
+ try {
+ const [{ collectEnhancedBriefing }, { renderEnhancedBriefingPdfBlob }] = await Promise.all([
+ import('@/services/export/enhanced-brief-snapshot'),
+ import('@/services/export/enhanced-brief-generator'),
+ ]);
+ const input = await collectEnhancedBriefing();
+ return renderEnhancedBriefingPdfBlob(input);
+ } catch (enhancedError) {
+ // Fallback path — use the simple renderer over the cached briefing.
+ console.warn('[ib-panel] Enhanced report failed, falling back to simple PDF:', enhancedError);
+ const briefing = getCachedBriefing();
+ if (!briefing) throw enhancedError;
+ const { renderBriefingPdfBlob } = await import('@/services/export/brief-pdf');
+ return renderBriefingPdfBlob(briefing);
+ }
+  }
+
+  private async buildReportFilename(): Promise<string> {
+ try {
+ const { enhancedBriefPdfFilename } = await import('@/services/export/enhanced-brief-generator');
+ return enhancedBriefPdfFilename({ dataCurrentAt: Date.now() } as never);
+ } catch {
+ const iso = new Date().toISOString().slice(0, 10);
+ return `crystal-ball-intel-brief-${iso}.pdf`;
  }
   }
 
@@ -234,8 +292,26 @@ export class IntelligenceBriefingPanel extends Panel {
  refreshBtn.addEventListener('click', () => { void this.handleGenerate(); });
  right.append(refreshBtn);
 
+ right.append(this.createDownloadReportButton());
+
  header.append(right);
  return header;
+  }
+
+  /** "Download Report" button \u2014 kicks off the enhanced PDF pipeline.
+   *  Disables itself while a download is in flight so a fast double-click
+   *  doesn't fire two collectors. */
+  private createDownloadReportButton(): HTMLButtonElement {
+ const btn = document.createElement('button');
+ btn.dataset.testid = 'ib-download-report';
+ btn.style.cssText = 'background:rgba(192,132,252,0.1);border:1px solid rgba(192,132,252,0.3);border-radius:4px;padding:0.2rem 0.5rem;font-size:0.68rem;color:#c084fc;cursor:pointer;transition:background 0.15s;';
+ btn.textContent = this._downloading ? '\u2B07\uFE0F Building\u2026' : '\u2B07\uFE0F Download Report';
+ btn.disabled = this._downloading;
+ if (this._downloading) btn.style.opacity = '0.6';
+ btn.addEventListener('mouseenter', () => { if (!this._downloading) btn.style.background = 'rgba(192,132,252,0.2)'; });
+ btn.addEventListener('mouseleave', () => { if (!this._downloading) btn.style.background = 'rgba(192,132,252,0.1)'; });
+ btn.addEventListener('click', () => { void this.handleDownloadReport(); });
+ return btn;
   }
 
   private renderSection(section: BriefingSection): HTMLElement {

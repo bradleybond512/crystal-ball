@@ -144,6 +144,7 @@ import { WeatherRadarPanel } from '@/components/WeatherRadarPanel';
 import { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import { PollenPanel } from '@/components/PollenPanel';
 import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
+import { SanctionsPanel } from '@/components/SanctionsPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
@@ -996,6 +997,9 @@ export class PanelLayoutManager implements AppModule {
 
  const openSanctionsPanel = new OpenSanctionsPanel();
  this.ctx.panels['opensanctions'] = openSanctionsPanel;
+
+ const sanctionsIntelPanel = new SanctionsPanel();
+ this.ctx.panels['sanctions-intel'] = sanctionsIntelPanel;
 
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { OfacCache } from './ofac-cache.mjs';
 import http, { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import https from 'node:https';
@@ -4435,13 +4436,72 @@ async function dispatch(requestUrl, req, routes, context) {
       Number(requestUrl.searchParams.get('maxAgeMs') || (15 * 60_000))));
     const rows = [...aisState.vessels.values()];
     const vessels = filterVesselsInRiskZonesSidecar(rows, { maxAgeMs });
+    // Cross-reference each vessel against the OFAC SDN cache. Match
+    // is opportunistic — if the cache hasn't loaded yet we just
+    // return the vessels unflagged rather than blocking on a fresh
+    // 28MB download mid-request.
+    let sanctionedCount = 0;
+    if (ofacCache.indexes) {
+      for (const v of vessels) {
+        const m = ofacCache.matchVessel({ name: v.name, imo: v.imo ?? null, callSign: v.callSign ?? null });
+        if (m.matched) {
+          v.sanctioned = true;
+          v.sanctionedReason = m.reason;
+          v.sanctionedBadge = m.badge;
+          sanctionedCount++;
+        }
+      }
+    } else {
+      // Kick off a background refresh so the next call can flag.
+      ofacCache.ensureLoaded().catch(() => {});
+    }
     const summary = summarizeVesselsSidecar(vessels);
     return json({
       vessels,
       summary,
+      sanctionedCount,
       asOf: new Date().toISOString(),
       sampleSize: rows.length,
     });
+  }
+
+  // ── OFAC SDN: search ─────────────────────────────────────────────────────
+  // GET /api/sanctions/search?q=...&type=vessel|aircraft|individual|entity&limit=50
+  if (requestUrl.pathname === '/api/sanctions/search') {
+    const q = requestUrl.searchParams.get('q') ?? '';
+    const type = requestUrl.searchParams.get('type');
+    const limit = Number.parseInt(requestUrl.searchParams.get('limit') ?? '50', 10);
+    if (!q.trim()) return json({ hits: [], meta: ofacCache.getCacheMeta() });
+    try {
+      await ofacCache.ensureLoaded();
+      const hits = ofacCache.searchSanctions(q, {
+        type: type && ['individual','vessel','aircraft','entity','unknown'].includes(type) ? type : undefined,
+        limit: Number.isFinite(limit) ? limit : 50,
+      });
+      return json({ hits, meta: ofacCache.getCacheMeta() });
+    } catch (error) {
+      return json({ hits: [], error: `sanctions-search error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── OFAC SDN: all sanctioned vessels (for AIS cross-reference) ──────────
+  if (requestUrl.pathname === '/api/sanctions/vessels') {
+    try {
+      await ofacCache.ensureLoaded();
+      return json({ vessels: ofacCache.getSanctionedVessels(), meta: ofacCache.getCacheMeta() });
+    } catch (error) {
+      return json({ vessels: [], error: `sanctions-vessels error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── OFAC SDN: all sanctioned aircraft ────────────────────────────────────
+  if (requestUrl.pathname === '/api/sanctions/aircraft') {
+    try {
+      await ofacCache.ensureLoaded();
+      return json({ aircraft: ofacCache.getSanctionedAircraft(), meta: ofacCache.getCacheMeta() });
+    } catch (error) {
+      return json({ aircraft: [], error: `sanctions-aircraft error: ${error.message ?? error}` }, 502);
+    }
   }
 
   // ── ThreatFox IOC feed ───────────────────────────────────────────────────
@@ -10966,6 +11026,7 @@ export async function createLocalApiServer(options = {}) {
   const context = resolveConfig(options);
   loadVerboseState(context.dataDir);
   const routes = await buildRouteTable(context.apiDir);
+  const ofacCache = new OfacCache({ dataDir: context.dataDir });
 
   const server = createServer(async (req, res) => {
  const requestUrl = new URL(req.url || '/', `http://127.0.0.1:${context.port}`);

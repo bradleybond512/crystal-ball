@@ -19,7 +19,9 @@ export type NotificationThreatType =
   | 'cap_severe'
   | 'cap_extreme'
   | 'wildfire_extreme'
-  | 'hurricane_cat3';
+  | 'hurricane_cat3'
+  | 'air_quality_unhealthy'
+  | 'market_stress';
 
 export type NotificationThreatLevel = 'low' | 'medium' | 'high' | 'critical';
 

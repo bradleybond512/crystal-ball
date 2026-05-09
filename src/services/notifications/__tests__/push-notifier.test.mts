@@ -2,15 +2,24 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { decideNotification, type NotifiableEvent } from '../push-notifier.ts';
 
-test('decideNotification: seismic M5.5 (TIER_2) does not fire', () => {
+test('decideNotification: seismic M5.5 below pushMinMagnitude=6 does not fire', () => {
   const event: NotifiableEvent = {
     kind: 'seismic',
     magnitude: 5.5,
     place: 'Test Region',
   };
-  const decision = decideNotification(event);
+  const decision = decideNotification(event, {
+    thresholds: {
+      seismic: { pushMinMagnitude: 6.0, voiceMinMagnitude: 7.0 },
+      geomagnetic: { pushMinKp: 7, voiceMinKp: 8 },
+      wildfire: { pushMinFRP: 100, radiusKm: 50 },
+      airQuality: { pushMinAQI: 150 },
+      economic: { pushMinVIX: 30, ofrFsiSigmas: 2.0 },
+      hurricane: { pushMinCategory: 3 },
+    },
+  });
   assert.equal(decision.shouldFire, false);
-  assert.equal(decision.reason, 'tier-below-threshold');
+  assert.equal(decision.reason, 'magnitude-below-threshold');
 });
 
 test('decideNotification: seismic M6.4 (TIER_3) fires with tier metadata', () => {
@@ -41,7 +50,7 @@ test('decideNotification: geomagnetic Kp 8 (G4) fires', () => {
   assert.match(decision.payload?.body ?? '', /G4|Kp/);
 });
 
-test('decideNotification: geomagnetic Kp 6 below threshold', () => {
+test('decideNotification: geomagnetic Kp 6 below default pushMinKp=7 does not fire', () => {
   const decision = decideNotification({ kind: 'geomagnetic', kpIndex: 6 });
   assert.equal(decision.shouldFire, false);
   assert.equal(decision.reason, 'kp-below-threshold');

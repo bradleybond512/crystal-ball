@@ -133,19 +133,8 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'nato-news': { name: 'NATO Press', enabled: true, priority: 1 },
   'acaps-crises': { name: 'ACAPS Crisis Index', enabled: true, priority: 2 },
   'liveuamap': { name: 'Ukraine Frontline (LiveUA)', enabled: true, priority: 1 },
-  'phishstats-feed': { name: 'PhishStats Threats', enabled: true, priority: 2 },
-  'urlscan-threats': { name: 'URLScan Threat Feed', enabled: true, priority: 2 },
-  'bitcoin-abuse': { name: 'Bitcoin Abuse Tracker', enabled: true, priority: 2 },
-  'cve-tracker': { name: 'CVE Tracker', enabled: true, priority: 2 },
-  'vulners-cve': { name: 'Vulners CVE Intel', enabled: true, priority: 2 },
-  'mediastack-news': { name: 'MediaStack News', enabled: true, priority: 2 },
-  'pulsedive-intel': { name: 'Pulsedive Threat Intel', enabled: true, priority: 2 },
-  'hibp-breaches': { name: 'Breach Exposure', enabled: true, priority: 2 },
-  'reddit-osint': { name: 'Reddit Signals', enabled: true, priority: 2 },
-  'openaq-monitor': { name: 'OpenAQ Air Quality', enabled: true, priority: 2 },
   'ripe-ncc': { name: 'RIPE NCC BGP', enabled: true, priority: 2 },
   'ripe-atlas': { name: 'RIPE Atlas', enabled: true, priority: 2 },
-  'ipinfo-lookup': { name: 'IPInfo Lookup', enabled: true, priority: 2 },
   'aerospace-reentry': { name: 'Aerospace Reentry Tracker', enabled: true, priority: 2 },
   'satellite-intel': { name: 'Satellite Intel', enabled: true, priority: 2 },
   'amtrak-alerts': { name: 'Amtrak Service Alerts', enabled: true, priority: 2 },
@@ -987,7 +976,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   // Full (geopolitical) variant
   intelligence: {
  labelKey: 'header.panelCatIntelligence',
- panelKeys: ['threat-dashboard', 'command-center', 'system-diagnostic', 'algorithm-diagnostic', 'aviation-intel', 'shortage-radar', 'maritime-intel', 'watchlist', 'saved-places', 'watchlist-locations', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'synthesis', 'cyber-geo', 'economic-intel', 'notification-digest', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions', 'mediastack-news'],
+ panelKeys: ['threat-dashboard', 'command-center', 'system-diagnostic', 'algorithm-diagnostic', 'aviation-intel', 'shortage-radar', 'maritime-intel', 'watchlist', 'saved-places', 'watchlist-locations', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'synthesis', 'cyber-geo', 'economic-intel', 'notification-digest', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions'],
  variants: ['full'],
   },
   regionalNews: {
@@ -1007,7 +996,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   dataTracking: {
  labelKey: 'header.panelCatDataTracking',
- panelKeys: ['monitors', 'cyber-threats', 'threat-inbox', 'local-ids', 'comms-health', 'power-grid', 'ucdp-events', 'nuclear-risk', 'airstrikes', 'displacement', 'security-advisories', 'network-rules', 's2u-intel', 'oref-sirens', 'space-weather', 'spaceflight-news', 'space-launches', 'population-exposure', 'internet-disruptions', 'air-traffic', 'threat-intel-hub', 'geo-intel', 'dark-web', 'anomaly-detection', 'financial-contagion', 'supply-chain-impact', 'nuclear-monitor', 'sigint-panel', 'dark-vessel', 'ics-ot-dashboard', 'ioc-manager', 'network-topology', 'stix-taxii', 'custom-geofence', 'sanctions-crossref', 'emergency-broadcast', 'satellite-change', 'phishstats-feed', 'urlscan-threats', 'bitcoin-abuse', 'cve-tracker', 'vulners-cve', 'pulsedive-intel', 'hibp-breaches', 'reddit-osint', 'ripe-ncc', 'ripe-atlas', 'ipinfo-lookup', 'aerospace-reentry', 'satellite-intel'],
+ panelKeys: ['monitors', 'cyber-threats', 'threat-inbox', 'local-ids', 'comms-health', 'power-grid', 'ucdp-events', 'nuclear-risk', 'airstrikes', 'displacement', 'security-advisories', 'network-rules', 's2u-intel', 'oref-sirens', 'space-weather', 'spaceflight-news', 'space-launches', 'population-exposure', 'internet-disruptions', 'air-traffic', 'threat-intel-hub', 'geo-intel', 'dark-web', 'anomaly-detection', 'financial-contagion', 'supply-chain-impact', 'nuclear-monitor', 'sigint-panel', 'dark-vessel', 'ics-ot-dashboard', 'ioc-manager', 'network-topology', 'stix-taxii', 'custom-geofence', 'sanctions-crossref', 'emergency-broadcast', 'satellite-change', 'ripe-ncc', 'ripe-atlas', 'aerospace-reentry', 'satellite-intel'],
  variants: ['full'],
   },
   hazards: {
@@ -1018,7 +1007,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   healthEnv: {
  labelKey: 'header.panelCatHealthEnv',
- panelKeys: ['hazard-alerts', 'infrastructure', 'giving', 'daily-wisdom', 'stoic-reflections', 'biblical-encouragement', 'alan-watts-reflections', 'mckenna-visions', 'disease-outbreaks', 'disease-intel', 'humanitarian-crisis', 'air-quality', 'food-insecurity', 'offline-maps', 'evacuation', 'family-tracker', 'radiation-decay', 'resource-inventory', 'water-quality', 'ecdc-surveillance', 'openaq-monitor'],
+ panelKeys: ['hazard-alerts', 'infrastructure', 'giving', 'daily-wisdom', 'stoic-reflections', 'biblical-encouragement', 'alan-watts-reflections', 'mckenna-visions', 'disease-outbreaks', 'disease-intel', 'humanitarian-crisis', 'air-quality', 'food-insecurity', 'offline-maps', 'evacuation', 'family-tracker', 'radiation-decay', 'resource-inventory', 'water-quality', 'ecdc-surveillance'],
  variants: ['full'],
   },
 

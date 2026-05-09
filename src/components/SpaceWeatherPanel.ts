@@ -6,6 +6,13 @@ import type {
   SpaceWxAlert,
   EarthwardCme,
 } from '@/services/spaceweather/swpc-monitor';
+import {
+  buildDefaultImageryResponse,
+  formatLastUpdated,
+  isSolarImageryResponse,
+  type SolarImageryResponse,
+  type SolarImageryStatus,
+} from '@/services/spaceweather/solar-imagery';
 import { escapeHtml } from '@/utils/sanitize';
 import { t } from '@/services/i18n';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -22,6 +29,9 @@ import {
 } from './space-weather-helpers';
 
 const STATUS_REFRESH_MS = 5 * 60 * 1000;
+const IMAGERY_REFRESH_MS = 15 * 60 * 1000;
+
+type Tab = 'status' | 'imagery';
 
 interface AlertsResponse {
   alerts?: SpaceWxAlert[];
@@ -34,6 +44,12 @@ export class SpaceWeatherPanel extends Panel {
   private statusFetchedAt: number | null = null;
   private statusFetchError: string | null = null;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private activeTab: Tab = 'status';
+  private imagery: SolarImageryResponse = buildDefaultImageryResponse(new Date(0).toISOString());
+  private imageryFetchedAt: number | null = null;
+  private imageryFetchError: string | null = null;
+  private imageryTimer: ReturnType<typeof setInterval> | null = null;
+  private modalEl: HTMLDivElement | null = null;
 
   constructor() {
     super({
@@ -42,11 +58,42 @@ export class SpaceWeatherPanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'NOAA SWPC: X-ray flare class, geomagnetic Kp + G0–G5 storm level, aurora visibility, GPS / HF disruption risk, earthward CMEs.',
+        'NOAA SWPC: X-ray flare class, geomagnetic Kp + G0–G5 storm level, aurora visibility, GPS / HF disruption risk, earthward CMEs. Solar Imagery tab: live SDO + LASCO from NASA.',
     });
     this.showLoading('Fetching NOAA space weather...');
     queueMicrotask(() => { void this.refreshStatus(); });
     this.refreshTimer = setInterval(() => void this.refreshStatus(), STATUS_REFRESH_MS);
+    // Single delegated click handler so we don't fight the setContent
+    // debounce when wiring tab / imagery buttons.
+    this.getContentElement().addEventListener('click', (event) => this.onContentClick(event));
+  }
+
+  private onContentClick(event: MouseEvent): void {
+    const target = event.target as Element | null;
+    if (!target) return;
+    const tabBtn = target.closest<HTMLElement>('.sw-tab[data-sw-tab]');
+    if (tabBtn) {
+      const next = tabBtn.dataset.swTab as Tab | undefined;
+      if (!next || next === this.activeTab) return;
+      this.activeTab = next;
+      this.render();
+      if (next === 'imagery') {
+        void this.refreshImagery();
+        this.imageryTimer ??= setInterval(() => void this.refreshImagery(), IMAGERY_REFRESH_MS);
+      }
+      return;
+    }
+    const refreshBtn = target.closest<HTMLElement>('[data-sw-imagery-refresh]');
+    if (refreshBtn) {
+      void this.refreshImagery();
+      return;
+    }
+    const openBtn = target.closest<HTMLElement>('[data-sw-imagery-open]');
+    if (openBtn) {
+      const slug = openBtn.dataset.swImageryOpen;
+      const img = slug ? this.imagery.images.find((i) => i.slug === slug) : null;
+      if (img) this.openModal(img);
+    }
   }
 
   public update(data: SpaceWeatherData): void {
@@ -59,6 +106,11 @@ export class SpaceWeatherPanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    if (this.imageryTimer) {
+      clearInterval(this.imageryTimer);
+      this.imageryTimer = null;
+    }
+    this.closeModal();
     super.destroy();
   }
 
@@ -99,18 +151,28 @@ export class SpaceWeatherPanel extends Panel {
 
   private render(): void {
     this.setCount(this.computeBadgeCount());
-    if (!this.data && !this.status) {
+    if (!this.data && !this.status && this.activeTab === 'status') {
       this.setContent('<div class="panel-empty">Space weather data unavailable.</div>');
       return;
     }
-    const sections = [
+    const tabBar = `<div class="sw-tabs" role="tablist">
+      <button class="sw-tab${this.activeTab === 'status' ? ' sw-tab--active' : ''}"
+        role="tab" data-sw-tab="status" type="button">Status</button>
+      <button class="sw-tab${this.activeTab === 'imagery' ? ' sw-tab--active' : ''}"
+        role="tab" data-sw-tab="imagery" type="button">Solar Imagery</button>
+    </div>`;
+    const body = this.activeTab === 'imagery' ? this.renderImagery() : this.renderStatus();
+    this.setContent(`<div class="sw-panel-content">${tabBar}${body}</div>`);
+  }
+
+  private renderStatus(): string {
+    return [
       this.renderHeadlineGrid(),
       this.renderAuroraStrip(),
       this.renderEarthwardCmes(),
       this.renderAlerts(),
       this.renderFooter(),
     ].filter((s) => s.length > 0).join('');
-    this.setContent(`<div class="sw-panel-content">${sections}</div>`);
   }
 
   // ── Headline metrics ──────────────────────────────────────────────────
@@ -252,5 +314,126 @@ export class SpaceWeatherPanel extends Panel {
       <span class="fires-updated">Updated ${escapeHtml(ageStr)}${errBadge}</span>
     </div>`;
   }
+
+  // ── Solar Imagery tab ──────────────────────────────────────────────────
+
+  private renderImagery(): string {
+    const now = Date.now();
+    const cards = this.imagery.images.map((img) => this.renderImageryCard(img, now)).join('');
+    const sourceFooter = this.imageryFetchError
+      ? `<span style="color:#ff9800;">⚠ ${escapeHtml(this.imageryFetchError)}</span>`
+      : `<span class="fires-source">NASA SDO · SOHO/LASCO</span>`;
+    const fetchedLabel = this.imageryFetchedAt
+      ? timeAgo(new Date(this.imageryFetchedAt))
+      : 'never';
+    return `<div class="sw-imagery">
+      <div class="sw-imagery-toolbar">
+        <button type="button" class="sw-imagery-refresh" data-sw-imagery-refresh>
+          ↻ Refresh imagery
+        </button>
+        <span class="sw-imagery-meta">Catalog fetched ${escapeHtml(fetchedLabel)}</span>
+      </div>
+      <div class="sw-imagery-grid">${cards}</div>
+      <div class="fires-footer">
+        ${sourceFooter}
+        <span class="fires-updated">Auto-refresh every 15 min</span>
+      </div>
+    </div>`;
+  }
+
+  private renderImageryCard(image: SolarImageryStatus, nowMs: number): string {
+    const lastModMs = image.lastModified ? Date.parse(image.lastModified) : null;
+    const ageLabel = formatLastUpdated(
+      lastModMs !== null && Number.isFinite(lastModMs) ? lastModMs : null,
+      nowMs,
+    );
+    const upstreamWarn = image.upstreamStatus !== 'ok' && image.upstreamStatus !== 'unknown'
+      ? `<span class="sw-imagery-warn" title="upstream ${escapeHtml(image.upstreamStatus)}">⚠</span>`
+      : '';
+    const base = getApiBaseUrl();
+    const src = `${base}${image.proxyUrl}`;
+    return `<figure class="sw-imagery-card" data-sw-imagery-slug="${escapeHtml(image.slug)}">
+      <button type="button" class="sw-imagery-img-btn"
+        data-sw-imagery-open="${escapeHtml(image.slug)}"
+        aria-label="Open ${escapeHtml(image.label)} full size">
+        <img class="sw-imagery-img" src="${escapeHtml(src)}"
+          alt="${escapeHtml(image.label)} — ${escapeHtml(image.description)}"
+          loading="lazy" />
+      </button>
+      <figcaption class="sw-imagery-cap">
+        <div class="sw-imagery-label">${escapeHtml(image.label)} ${upstreamWarn}</div>
+        <div class="sw-imagery-desc">${escapeHtml(image.description)}</div>
+        <div class="sw-imagery-time">${escapeHtml(ageLabel)}</div>
+      </figcaption>
+    </figure>`;
+  }
+
+  private async refreshImagery(): Promise<void> {
+    try {
+      const base = getApiBaseUrl();
+      const resp = await fetch(`${base}/api/spaceweather/imagery`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const body: unknown = await resp.json();
+      if (!isSolarImageryResponse(body)) throw new Error('malformed imagery payload');
+      this.imagery = body;
+      this.imageryFetchedAt = Date.now();
+      this.imageryFetchError = null;
+    } catch (error) {
+      this.imageryFetchError = error instanceof Error ? error.message : String(error);
+    }
+    if (this.activeTab === 'imagery') this.render();
+  }
+
+  private openModal(image: SolarImageryStatus): void {
+    this.closeModal();
+    const modal = document.createElement('div');
+    modal.className = 'sw-imagery-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-label', `${image.label} full size`);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'sw-imagery-modal-close';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.textContent = '×';
+
+    const figure = document.createElement('figure');
+    figure.className = 'sw-imagery-modal-figure';
+
+    const img = document.createElement('img');
+    img.src = `${getApiBaseUrl()}${image.proxyUrl}`;
+    img.alt = image.label;
+
+    const caption = document.createElement('figcaption');
+    caption.textContent = `${image.label} — ${image.description}`;
+
+    figure.append(img, caption);
+    modal.append(closeBtn, figure);
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal || event.target === closeBtn) this.closeModal();
+    });
+
+    document.body.append(modal);
+    this.modalEl = modal;
+
+    const onEsc = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        this.closeModal();
+        document.removeEventListener('keydown', onEsc);
+      }
+    };
+    document.addEventListener('keydown', onEsc);
+  }
+
+  private closeModal(): void {
+    if (this.modalEl) {
+      this.modalEl.remove();
+      this.modalEl = null;
+    }
+  }
+
 }
 

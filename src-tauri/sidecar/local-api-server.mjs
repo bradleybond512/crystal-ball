@@ -1847,6 +1847,67 @@ const SPACEWX_ALERTS_WINDOW_MS = 24 * SPACEWX_HOUR_MS;
 const SPACEWX_EARTHWARD_LON_DEG = 30;
 const SPACEWX_CACHE_TTL_MS = 5 * 60 * 1000;
 
+// Solar imagery catalog — kept in sync with
+// src/services/spaceweather/solar-imagery.ts (the renderer-side source
+// of truth). The slug allowlist is the SSRF guard for the byte proxy.
+const SOLAR_IMAGERY_TTL_MS = 15 * 60 * 1000;
+const SOLAR_IMAGERY_BYTES_TTL_MS = 15 * 60 * 1000;
+export const SOLAR_IMAGERY_CATALOG = Object.freeze([
+  Object.freeze({
+    slug: 'sdo-aia-171',
+    label: 'SDO AIA 171Å',
+    description: 'Quiet corona — coronal loops at ~600 000 K. Bright active regions and coronal holes.',
+    upstreamUrl: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0171.jpg',
+  }),
+  Object.freeze({
+    slug: 'sdo-aia-304',
+    label: 'SDO AIA 304Å',
+    description: 'Chromosphere / transition region at ~50 000 K. Filaments, prominences, and erupting plasma.',
+    upstreamUrl: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0304.jpg',
+  }),
+  Object.freeze({
+    slug: 'sdo-hmi-magnetogram',
+    label: 'SDO HMI Magnetogram',
+    description: 'Photospheric line-of-sight magnetic field. Sunspots and active-region polarity.',
+    upstreamUrl: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_HMIBC.jpg',
+  }),
+  Object.freeze({
+    slug: 'lasco-c2',
+    label: 'LASCO C2',
+    description: 'Coronagraph 2–6 R☉. Earliest visibility for halo CMEs after eruption.',
+    upstreamUrl: 'https://soho.nascom.nasa.gov/data/realtime/c2/1024/latest.jpg',
+  }),
+  Object.freeze({
+    slug: 'lasco-c3',
+    label: 'LASCO C3',
+    description: 'Wider coronagraph 3.5–32 R☉. Tracks CMEs once they leave C2 field.',
+    upstreamUrl: 'https://soho.nascom.nasa.gov/data/realtime/c3/1024/latest.jpg',
+  }),
+]);
+
+/** HEAD probe for an upstream solar imagery URL. Returns the
+ *  Last-Modified header (ISO-normalised when possible) and a short
+ *  upstream status string for diagnostics. Never throws — failures
+ *  surface as `{ lastModified: null, upstreamStatus: 'timeout' | ... }`. */
+async function probeUpstreamLastModified(upstreamUrl) {
+  try {
+    const resp = await fetchWithTimeout(
+      upstreamUrl,
+      { method: 'HEAD', headers: { 'User-Agent': CHROME_UA } },
+      8_000,
+    );
+    if (!resp.ok) return { lastModified: null, upstreamStatus: `http_${resp.status}` };
+    const raw = resp.headers.get('last-modified');
+    if (!raw) return { lastModified: null, upstreamStatus: 'ok' };
+    const ms = Date.parse(raw);
+    if (!Number.isFinite(ms)) return { lastModified: raw, upstreamStatus: 'ok' };
+    return { lastModified: new Date(ms).toISOString(), upstreamStatus: 'ok' };
+  } catch (error) {
+    const reason = error?.name === 'AbortError' ? 'timeout' : 'error';
+    return { lastModified: null, upstreamStatus: reason };
+  }
+}
+
 let spacewxStatusCache = null;
 let spacewxStatusCachedAt = 0;
 let spacewxAlertsCache = null;
@@ -5926,6 +5987,76 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/spaceweather/alerts') {
     const alerts = await fetchSpaceweatherAlertsSidecar();
     return json({ alerts, asOf: new Date().toISOString() });
+  }
+
+  // ── Solar imagery catalog (metadata) — mirrors
+  //    src/services/spaceweather/solar-imagery.ts ────────────────────────
+  if (requestUrl.pathname === '/api/spaceweather/imagery') {
+    const cached = getCached('spaceweather-imagery', SOLAR_IMAGERY_TTL_MS);
+    if (cached) return json(cached);
+    const images = await Promise.all(
+      SOLAR_IMAGERY_CATALOG.map(async (entry) => {
+        const probe = await probeUpstreamLastModified(entry.upstreamUrl);
+        return {
+          slug: entry.slug,
+          label: entry.label,
+          description: entry.description,
+          proxyUrl: `/api/spaceweather/imagery/${entry.slug}.jpg`,
+          lastModified: probe.lastModified,
+          upstreamStatus: probe.upstreamStatus,
+        };
+      }),
+    );
+    const response = { asOf: new Date().toISOString(), images };
+    setCached('spaceweather-imagery', response, SOLAR_IMAGERY_TTL_MS);
+    return json(response);
+  }
+
+  // ── Solar imagery proxy (bytes) ────────────────────────────────────────
+  // Streams a NASA JPEG through the sidecar so the renderer never hits
+  // NASA directly (consistent caching, CORS-safe). Slug is matched against
+  // a static allowlist; any other path falls through to 404.
+  if (requestUrl.pathname.startsWith('/api/spaceweather/imagery/')) {
+    const tail = requestUrl.pathname.slice('/api/spaceweather/imagery/'.length);
+    const slug = tail.endsWith('.jpg') ? tail.slice(0, -'.jpg'.length) : null;
+    const entry = slug ? SOLAR_IMAGERY_CATALOG.find((e) => e.slug === slug) : null;
+    if (!entry) return json({ error: 'unknown solar imagery slug' }, 404);
+    const cacheKey = `spaceweather-imagery-bytes:${entry.slug}`;
+    const cachedBytes = getCached(cacheKey, SOLAR_IMAGERY_BYTES_TTL_MS);
+    if (cachedBytes) {
+      return new Response(cachedBytes.body, {
+        status: 200,
+        headers: {
+          'content-type': 'image/jpeg',
+          'cache-control': `public, max-age=${Math.floor(SOLAR_IMAGERY_BYTES_TTL_MS / 1000)}`,
+          ...(cachedBytes.lastModified && { 'last-modified': cachedBytes.lastModified }),
+        },
+      });
+    }
+    try {
+      const upstream = await fetchWithTimeout(
+        entry.upstreamUrl,
+        { headers: { Accept: 'image/jpeg, image/*', 'User-Agent': CHROME_UA } },
+        20_000,
+      );
+      if (!upstream.ok) {
+        return json({ error: `upstream ${upstream.status} for ${entry.slug}` }, 502);
+      }
+      const buffer = await upstream.arrayBuffer();
+      const lastModified = upstream.headers.get('last-modified') ?? null;
+      const body = new Uint8Array(buffer);
+      setCached(cacheKey, { body, lastModified }, SOLAR_IMAGERY_BYTES_TTL_MS);
+      return new Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'image/jpeg',
+          'cache-control': `public, max-age=${Math.floor(SOLAR_IMAGERY_BYTES_TTL_MS / 1000)}`,
+          ...(lastModified && { 'last-modified': lastModified }),
+        },
+      });
+    } catch (error) {
+      return json({ error: `imagery proxy fetch error: ${error.message ?? error}` }, 502);
+    }
   }
 
   // ── Air Quality proxy (Open-Meteo, no API key, forwards lat/lon) ──────────

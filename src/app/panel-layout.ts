@@ -232,6 +232,7 @@ import { CompoundThreatPanel } from '@/components/CompoundThreatPanel';
 import { CorrelationMatrixPanel } from '@/components/CorrelationMatrixPanel';
 import { StrikePackagesPanel } from '@/components/StrikePackagesPanel';
 import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
+import { FeedHealthPanel } from '@/components/FeedHealthPanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
@@ -1139,6 +1140,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['correlation-matrix'] = new CorrelationMatrixPanel();
  this.ctx.panels['strike-packages'] = new StrikePackagesPanel();
  this.ctx.panels['api-diagnostic'] = new ApiDiagnosticPanel();
+ this.ctx.panels['feed-health'] = new FeedHealthPanel();
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();

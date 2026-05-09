@@ -43,6 +43,44 @@ import { loadEnvFile } from './env-local-loader.mjs';
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
+// ── Feed health tracker ───────────────────────────────────────────────────
+// Lightweight per-route success/failure ledger surfaced at /api/health.feeds.
+// Production routes call recordFeedSuccess / recordFeedFailure as they
+// finish; FeedHealthPanel displays the rolled-up state. Bounded memory:
+// one entry per known feed key; no history retained.
+const _feedTracker = new Map();
+
+export function recordFeedSuccess(key, atMs = Date.now()) {
+  if (!key) return;
+  const existing = _feedTracker.get(key) ?? { key };
+  existing.lastSuccessAt = atMs;
+  existing.lastAttemptAt = atMs;
+  existing.lastError = null;
+  _feedTracker.set(key, existing);
+}
+
+export function recordFeedFailure(key, error, atMs = Date.now()) {
+  if (!key) return;
+  const existing = _feedTracker.get(key) ?? { key };
+  existing.lastError = String(error?.message ?? error ?? 'unknown error');
+  existing.lastAttemptAt = atMs;
+  _feedTracker.set(key, existing);
+}
+
+export function getFeedSnapshots() {
+  return [..._feedTracker.values()].map((s) => ({
+    key: s.key,
+    lastSuccessAt: s.lastSuccessAt ?? null,
+    lastError: s.lastError ?? null,
+    lastAttemptAt: s.lastAttemptAt ?? null,
+  }));
+}
+
+/** @internal — for tests. Drops all tracked feed state. */
+export function _resetFeedTracker() {
+  _feedTracker.clear();
+}
+
 function isValidToken(authHeader) {
   const tok = process.env.LOCAL_API_TOKEN;
   if (!tok) return false;
@@ -11134,6 +11172,13 @@ export async function createLocalApiServer(options = {}) {
  }
  const mem = process.memoryUsage();
  const missing = wmMissingKeys();
+ // Reflect the AIS connection state into the feed-health tracker so
+ // FeedHealthPanel can render it without per-message instrumentation.
+ if (aisState.socket?.readyState === 1) {
+   recordFeedSuccess('ais', aisState.lastSnapshotAt || Date.now());
+ } else if (aisState.lastSnapshotAt > 0) {
+   recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
+ }
  res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
  res.end(JSON.stringify({
  ok: true,
@@ -11147,6 +11192,7 @@ export async function createLocalApiServer(options = {}) {
  keys_configured: EXPECTED_API_KEYS.length - missing.length,
  keys_total: EXPECTED_API_KEYS.length,
  keys_missing: missing,
+ feeds: getFeedSnapshots(),
  }));
  return;
  }

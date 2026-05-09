@@ -200,6 +200,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'correlation-matrix': { name: 'Correlation Matrix', enabled: true, priority: 2 },
   'strike-packages': { name: 'Strike Packages', enabled: true, priority: 2 },
   'api-diagnostic': { name: 'API Diagnostic', enabled: true, priority: 3 },
+  'feed-health': { name: 'Feed Health', enabled: true, priority: 2 },
   'system-diagnostic': { name: 'System Diagnostic', enabled: true, priority: 1 },
   'command-center': { name: 'Command Center', enabled: true, priority: 1 },
   'algorithm-diagnostic': { name: 'Algorithm Diagnostic', enabled: true, priority: 3 },

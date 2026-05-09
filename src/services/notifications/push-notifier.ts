@@ -10,6 +10,7 @@
 import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { isDesktopRuntime } from '@/services/runtime';
 import { tierForMagnitude } from './eew-tiers';
+import { loadThresholds, type ThresholdConfig } from '@/services/config/alert-thresholds';
 import {
   type NotificationChannel,
   type NotificationLedger,
@@ -28,6 +29,37 @@ export interface SeismicEvent {
   lon?: number;
   /** ETA seconds until S-waves reach the user, when computed. */
   etaSeconds?: number;
+}
+
+export interface WildfireFrpEvent {
+  kind: 'wildfire-frp';
+  /** Fire Radiative Power in megawatts. */
+  frpMw: number;
+  lat: number;
+  lon: number;
+  /** Distance from the user's saved place in km — or null when unknown. */
+  distanceKm: number | null;
+  detectedAt?: string;
+  source?: 'firms-modis' | 'firms-viirs' | 'inciweb' | 'nifc';
+  detectionId?: string;
+}
+
+export interface AirQualityEvent {
+  kind: 'air-quality';
+  /** US AQI (0–500). */
+  aqi: number;
+  pollutant?: 'pm2_5' | 'pm10' | 'ozone' | 'nitrogen_dioxide' | 'unknown';
+  observedAt?: string;
+  station?: string;
+}
+
+export interface MarketEvent {
+  kind: 'market';
+  /** Current VIX value. */
+  vix?: number;
+  /** OFR Financial Stress Index z-score. */
+  ofrFsiSigmas?: number;
+  observedAt?: string;
 }
 
 export interface GeomagneticEvent {
@@ -82,7 +114,10 @@ export type NotifiableEvent =
   | SolarFlareEvent
   | CapEvent
   | HurricaneEvent
-  | WildfireEvent;
+  | WildfireEvent
+  | WildfireFrpEvent
+  | AirQualityEvent
+  | MarketEvent;
 
 export interface NotificationPayload {
   title: string;
@@ -100,11 +135,17 @@ export interface NotificationDecision {
   payload?: NotificationPayload;
   reason?:
     | 'tier-below-threshold'
+    | 'magnitude-below-threshold'
     | 'kp-below-threshold'
     | 'cap-not-extreme-immediate'
     | 'hurricane-below-cat3'
+    | 'hurricane-below-threshold'
     | 'wildfire-containment-above-threshold'
     | 'wildfire-below-acre-threshold'
+    | 'wildfire-frp-below-threshold'
+    | 'wildfire-out-of-radius'
+    | 'aqi-below-threshold'
+    | 'market-below-threshold'
     | 'todo-data-feed-pending'
     | 'unknown-event-kind';
 }
@@ -116,9 +157,13 @@ const SOUND_BY_LEVEL: Record<NotificationThreatLevel, string> = {
   low: 'Tink',
 };
 
-function decideSeismic(event: SeismicEvent): NotificationDecision {
+function decideSeismic(event: SeismicEvent, thresholds: ThresholdConfig): NotificationDecision {
+  if (typeof event.magnitude !== 'number'
+    || event.magnitude < thresholds.seismic.pushMinMagnitude) {
+    return { shouldFire: false, reason: 'magnitude-below-threshold' };
+  }
   const tier = tierForMagnitude(event.magnitude);
-  if (tier === null || tier === 'TIER_2') {
+  if (tier === null) {
     return { shouldFire: false, reason: 'tier-below-threshold' };
   }
   const threatType = (`seismic_${tier.toLowerCase().replace('_', '')}` as NotificationThreatType);
@@ -138,10 +183,11 @@ function decideSeismic(event: SeismicEvent): NotificationDecision {
   };
 }
 
-function gLevelForKp(kp: number): 'G3' | 'G4' | 'G5' {
+function gLevelForKp(kp: number): 'G2' | 'G3' | 'G4' | 'G5' {
   if (kp >= 9) return 'G5';
   if (kp >= 8) return 'G4';
-  return 'G3';
+  if (kp >= 7) return 'G3';
+  return 'G2';
 }
 
 function geomagThreatLevel(kp: number): NotificationThreatLevel {
@@ -170,11 +216,15 @@ function decideSolarFlare(event: SolarFlareEvent): NotificationDecision {
   };
 }
 
-function decideGeomagnetic(event: GeomagneticEvent): NotificationDecision {
-  if (typeof event.kpIndex !== 'number' || event.kpIndex < 7) {
+function decideGeomagnetic(event: GeomagneticEvent, thresholds: ThresholdConfig): NotificationDecision {
+  if (typeof event.kpIndex !== 'number'
+    || event.kpIndex < thresholds.geomagnetic.pushMinKp) {
     return { shouldFire: false, reason: 'kp-below-threshold' };
   }
-  // Severity ladder: Kp 7 = G3 (medium), 8 = G4 (high), 9 = G5 (critical).
+  // Severity ladder: Kp 5-6 = G2 (medium), 7 = G3 (medium), 8 = G4 (high),
+  // 9 = G5 (critical). The threshold gate above lets the user dial in the
+  // floor (e.g. only fire on Kp >= 7); the level/type below report the
+  // actual storm class so the body matches what NOAA published.
   const kp = event.kpIndex;
   const gLevel = gLevelForKp(kp);
   const threatType: NotificationThreatType = kp >= 8 ? 'geomagnetic_g4' : 'geomagnetic_g3';
@@ -188,7 +238,7 @@ function decideGeomagnetic(event: GeomagneticEvent): NotificationDecision {
       threatType,
       threatLevel,
       dedupeKey: `geomag:${gLevel}:${event.observedAt ?? Math.floor(Date.now() / 60_000)}`,
-      meta: { kpIndex: kp, observedAt: event.observedAt },
+      meta: { kpIndex: kp, observedAt: event.observedAt, gLevel },
     },
   };
 }
@@ -220,14 +270,17 @@ function decideCap(event: CapEvent): NotificationDecision {
   };
 }
 
-function decideHurricane(event: HurricaneEvent): NotificationDecision {
-  // TODO: NHC feed wires up in parallel session. When present, gate on
-  // category >= 3.
+function decideHurricane(event: HurricaneEvent, thresholds: ThresholdConfig): NotificationDecision {
   if (!event.nhcStorm) {
     return { shouldFire: false, reason: 'todo-data-feed-pending' };
   }
-  if (event.nhcStorm.category < 3) {
-    return { shouldFire: false, reason: 'hurricane-below-cat3' };
+  if (event.nhcStorm.category < thresholds.hurricane.pushMinCategory) {
+    return {
+      shouldFire: false,
+      reason: thresholds.hurricane.pushMinCategory === 3
+        ? 'hurricane-below-cat3'
+        : 'hurricane-below-threshold',
+    };
   }
   return {
     shouldFire: true,
@@ -272,19 +325,109 @@ function decideWildfire(event: WildfireEvent): NotificationDecision {
   };
 }
 
-export function decideNotification(event: NotifiableEvent): NotificationDecision {
+function decideWildfireFrp(event: WildfireFrpEvent, thresholds: ThresholdConfig): NotificationDecision {
+  if (typeof event.frpMw !== 'number' || event.frpMw < thresholds.wildfire.pushMinFRP) {
+    return { shouldFire: false, reason: 'wildfire-frp-below-threshold' };
+  }
+  if (event.distanceKm !== null && event.distanceKm > thresholds.wildfire.radiusKm) {
+    return { shouldFire: false, reason: 'wildfire-out-of-radius' };
+  }
+  const distanceLabel = event.distanceKm === null ? 'unknown distance' : `${event.distanceKm.toFixed(0)} km`;
+  return {
+    shouldFire: true,
+    payload: {
+      title: `Crystal Ball — Wildfire detected`,
+      body: `Active fire ${distanceLabel} away — FRP ${Math.round(event.frpMw)} MW`,
+      sound: SOUND_BY_LEVEL.high,
+      threatType: 'wildfire_extreme',
+      threatLevel: 'high',
+      dedupeKey: `wildfire-frp:${event.detectionId ?? `${event.lat.toFixed(2)},${event.lon.toFixed(2)}`}`,
+      meta: { frpMw: event.frpMw, lat: event.lat, lon: event.lon, distanceKm: event.distanceKm,
+        source: event.source, detectedAt: event.detectedAt },
+    },
+  };
+}
+
+function aqiToLevel(aqi: number): NotificationThreatLevel {
+  if (aqi >= 300) return 'critical';
+  if (aqi >= 200) return 'high';
+  return 'medium';
+}
+
+function decideAirQuality(event: AirQualityEvent, thresholds: ThresholdConfig): NotificationDecision {
+  if (typeof event.aqi !== 'number' || event.aqi < thresholds.airQuality.pushMinAQI) {
+    return { shouldFire: false, reason: 'aqi-below-threshold' };
+  }
+  const level: NotificationThreatLevel = aqiToLevel(event.aqi);
+  return {
+    shouldFire: true,
+    payload: {
+      title: `Crystal Ball — AQI ${event.aqi}`,
+      body: `Air quality unhealthy${event.pollutant ? ` (${event.pollutant})` : ''}${event.station ? ` near ${event.station}` : ''}`,
+      sound: SOUND_BY_LEVEL[level],
+      threatType: 'air_quality_unhealthy',
+      threatLevel: level,
+      dedupeKey: `aqi:${event.station ?? 'unknown'}:${Math.floor(event.aqi / 25)}`,
+      meta: { aqi: event.aqi, pollutant: event.pollutant, station: event.station,
+        observedAt: event.observedAt },
+    },
+  };
+}
+
+function decideMarket(event: MarketEvent, thresholds: ThresholdConfig): NotificationDecision {
+  const vixHit = typeof event.vix === 'number' && event.vix >= thresholds.economic.pushMinVIX;
+  const ofrHit = typeof event.ofrFsiSigmas === 'number'
+    && event.ofrFsiSigmas >= thresholds.economic.ofrFsiSigmas;
+  if (!vixHit && !ofrHit) {
+    return { shouldFire: false, reason: 'market-below-threshold' };
+  }
+  const parts: string[] = [];
+  if (vixHit && typeof event.vix === 'number') parts.push(`VIX ${event.vix.toFixed(1)}`);
+  if (ofrHit && typeof event.ofrFsiSigmas === 'number') parts.push(`OFR FSI ${event.ofrFsiSigmas.toFixed(1)}σ`);
+  return {
+    shouldFire: true,
+    payload: {
+      title: `Crystal Ball — Market stress`,
+      body: parts.join(' · '),
+      sound: SOUND_BY_LEVEL.high,
+      threatType: 'market_stress',
+      threatLevel: 'high',
+      dedupeKey: `market:${event.observedAt ?? Math.floor(Date.now() / (5 * 60_000))}`,
+      meta: { vix: event.vix, ofrFsiSigmas: event.ofrFsiSigmas, observedAt: event.observedAt },
+    },
+  };
+}
+
+export interface DecideOptions {
+  /** Override the persisted thresholds. Pure code paths (tests) should
+   *  pass an explicit ThresholdConfig; production code can omit this and
+   *  the helper will pull the latest persisted values via loadThresholds(). */
+  thresholds?: ThresholdConfig;
+}
+
+export function decideNotification(
+  event: NotifiableEvent,
+  options: DecideOptions = {},
+): NotificationDecision {
+  const thresholds = options.thresholds ?? loadThresholds();
   switch (event.kind) {
-    case 'seismic': { return decideSeismic(event);
+    case 'seismic': { return decideSeismic(event, thresholds);
     }
-    case 'geomagnetic': { return decideGeomagnetic(event);
+    case 'geomagnetic': { return decideGeomagnetic(event, thresholds);
     }
     case 'solar_flare': { return decideSolarFlare(event);
     }
     case 'cap': { return decideCap(event);
     }
-    case 'hurricane': { return decideHurricane(event);
+    case 'hurricane': { return decideHurricane(event, thresholds);
     }
     case 'wildfire': { return decideWildfire(event);
+    }
+    case 'wildfire-frp': { return decideWildfireFrp(event, thresholds);
+    }
+    case 'air-quality': { return decideAirQuality(event, thresholds);
+    }
+    case 'market': { return decideMarket(event, thresholds);
     }
     default: { return { shouldFire: false, reason: 'unknown-event-kind' };
     }
@@ -310,9 +453,9 @@ async function defaultSend(payload: NotificationPayload): Promise<void> {
 
 export async function firePushForEvent(
   event: NotifiableEvent,
-  opts: FirePushOptions = {},
+  opts: FirePushOptions & DecideOptions = {},
 ): Promise<{ fired: boolean; entry?: NotificationLedgerEntry; reason?: string }> {
-  const decision = decideNotification(event);
+  const decision = decideNotification(event, { thresholds: opts.thresholds });
   if (!decision.shouldFire || !decision.payload) {
     return { fired: false, reason: decision.reason };
   }

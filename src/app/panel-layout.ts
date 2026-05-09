@@ -144,6 +144,7 @@ import { WeatherRadarPanel } from '@/components/WeatherRadarPanel';
 import { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import { PollenPanel } from '@/components/PollenPanel';
 import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
+import { SanctionsPanel } from '@/components/SanctionsPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
@@ -234,6 +235,8 @@ import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
+import { ThreatDashboard } from '@/components/ThreatDashboard';
+import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
 import { AviationIntelPanel } from '@/components/AviationIntelPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
@@ -310,7 +313,7 @@ export class PanelLayoutManager implements AppModule {
   private _preModeOrder: string[] = [];
 
   /** Panels always kept at the top regardless of mode (video feeds / live streams). */
-  private static readonly MODE_ANCHORS = ['watchlist', 'alert-center', 'live-news', 'live-webcams'];
+  private static readonly MODE_ANCHORS = ['threat-dashboard', 'watchlist', 'alert-center', 'live-news', 'live-webcams'];
 
   /** Panels floated to top in Finance Mode. */
   private static readonly FINANCE_PRIORITY = [
@@ -995,6 +998,9 @@ export class PanelLayoutManager implements AppModule {
  const openSanctionsPanel = new OpenSanctionsPanel();
  this.ctx.panels['opensanctions'] = openSanctionsPanel;
 
+ const sanctionsIntelPanel = new SanctionsPanel();
+ this.ctx.panels['sanctions-intel'] = sanctionsIntelPanel;
+
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;
 
@@ -1136,6 +1142,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
+ this.ctx.panels['threat-dashboard'] = new ThreatDashboard();
+ startThreatAggregator();
  this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
  this.ctx.panels['weather-hazard'] = new WeatherHazardPanel();

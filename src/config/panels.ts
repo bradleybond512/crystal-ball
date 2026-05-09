@@ -7,6 +7,7 @@ import { SITE_VARIANT } from './variant';
 // ============================================
 // Panel order matters. Lead with watchlists and escalation workflow before raw feeds.
 const FULL_PANELS: Record<string, PanelConfig> = {
+  'threat-dashboard': { name: 'Threat Dashboard', enabled: true, priority: 1 },
   map: { name: 'Global Map', enabled: true, priority: 1 },
   watchlist: { name: 'Watchlist & Playbooks', enabled: true, priority: 1 },
   'saved-places': { name: 'Saved Places', enabled: true, priority: 1 },
@@ -118,6 +119,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'air-traffic': { name: 'Air Traffic', enabled: true, priority: 2 },
   'global-weather': { name: 'Global Weather', enabled: true, priority: 1 },
   'opensanctions': { name: 'Global Sanctions', enabled: true, priority: 2 },
+  'sanctions-intel': { name: 'OFAC Sanctions Intel', enabled: true, priority: 2 },
   'edgar-filings': { name: 'SEC EDGAR Filings', enabled: true, priority: 2 },
   'isw-reports': { name: 'ISW Situation Reports', enabled: true, priority: 1 },
   'reliefweb-crises': { name: 'UN OCHA Crisis Reports', enabled: true, priority: 1 },
@@ -984,7 +986,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   // Full (geopolitical) variant
   intelligence: {
  labelKey: 'header.panelCatIntelligence',
- panelKeys: ['command-center', 'system-diagnostic', 'algorithm-diagnostic', 'aviation-intel', 'shortage-radar', 'maritime-intel', 'watchlist', 'saved-places', 'watchlist-locations', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'synthesis', 'cyber-geo', 'economic-intel', 'notification-digest', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions', 'mediastack-news'],
+ panelKeys: ['threat-dashboard', 'command-center', 'system-diagnostic', 'algorithm-diagnostic', 'aviation-intel', 'shortage-radar', 'maritime-intel', 'watchlist', 'saved-places', 'watchlist-locations', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'synthesis', 'cyber-geo', 'economic-intel', 'notification-digest', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions', 'mediastack-news'],
  variants: ['full'],
   },
   regionalNews: {

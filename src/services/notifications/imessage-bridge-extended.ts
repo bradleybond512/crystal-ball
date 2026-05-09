@@ -15,17 +15,25 @@ export type ImessageThreatType =
   | 'seismic_tier4'
   | 'seismic_tier5'
   | 'geomagnetic_g4'
+  | 'solar_flare_x'
   | 'wildfire_extreme'
-  | 'hurricane_cat3';
+  | 'hurricane_cat3'
+  | 'cap_extreme';
 
 const VALID_THREAT_TYPES: ReadonlySet<ImessageThreatType> = new Set([
   'seismic_tier3',
   'seismic_tier4',
   'seismic_tier5',
   'geomagnetic_g4',
+  'solar_flare_x',
   'wildfire_extreme',
   'hurricane_cat3',
+  'cap_extreme',
 ]);
+
+/** Tornado-warning text the spec wants to escalate to iMessage. NWS uses
+ *  the literal string "Tornado Warning" in `event` / `headline`. */
+const TORNADO_WARNING_RE = /\btornado\s+warning\b/i;
 
 export const DEFAULT_IMESSAGE_THREAT_TYPES: readonly ImessageThreatType[] = ['seismic_tier5'];
 
@@ -42,7 +50,9 @@ export interface ImessageRouteDecision {
     | 'disabled'
     | 'missing-recipient'
     | 'threat-type-not-in-whitelist'
-    | 'threat-type-not-eligible';
+    | 'threat-type-not-eligible'
+    | 'cap-extreme-not-tornado'
+    | 'geomagnetic-below-kp9';
 }
 
 function buildSeismicBody(payload: NotificationPayload): string {
@@ -81,6 +91,25 @@ function buildHurricaneBody(payload: NotificationPayload): string {
   return `Crystal Ball — Hurricane ${name} Cat ${category}${landfall ? `: projected landfall ${landfall}` : ''}`;
 }
 
+function buildCapTornadoBody(payload: NotificationPayload): string {
+  const meta = payload.meta ?? {};
+  const event = typeof meta.event === 'string' ? meta.event : 'Tornado Warning';
+  const area = typeof meta.areaDesc === 'string' ? meta.areaDesc : '';
+  return `Crystal Ball — ${event}${area ? ` for ${area}` : ''}: take shelter immediately`;
+}
+
+function buildSolarFlareBody(payload: NotificationPayload): string {
+  const meta = payload.meta ?? {};
+  const peakLabel = typeof meta.peakLabel === 'string' ? meta.peakLabel : 'X-class';
+  return `Crystal Ball — ${peakLabel} solar flare: HF radio blackout + GPS impact possible`;
+}
+
+function isTornadoWarning(payload: NotificationPayload): boolean {
+  const meta = payload.meta ?? {};
+  const event = typeof meta.event === 'string' ? meta.event : '';
+  return TORNADO_WARNING_RE.test(event) || TORNADO_WARNING_RE.test(payload.title);
+}
+
 function bodyForThreatType(payload: NotificationPayload): string {
   switch (payload.threatType) {
     case 'seismic_tier3':
@@ -96,6 +125,12 @@ function bodyForThreatType(payload: NotificationPayload): string {
     }
     case 'hurricane_cat3': {
       return buildHurricaneBody(payload);
+    }
+    case 'cap_extreme': {
+      return buildCapTornadoBody(payload);
+    }
+    case 'solar_flare_x': {
+      return buildSolarFlareBody(payload);
     }
     default: {
       return payload.title;
@@ -116,6 +151,19 @@ export function routeAlertToImessage(
   }
   if (!settings.threatTypes.includes(threatType)) {
     return { send: false, reason: 'threat-type-not-in-whitelist' };
+  }
+  // Spec: only Tornado Warnings escalate to iMessage among CAP Extreme
+  // events; other Extreme events (Hurricane Warning, Flash Flood, etc.)
+  // stay push-only.
+  if (threatType === 'cap_extreme' && !isTornadoWarning(payload)) {
+    return { send: false, reason: 'cap-extreme-not-tornado' };
+  }
+  // Spec: Kp≥9 (G5) is the iMessage cutoff for geomagnetic storms; G4
+  // (Kp 8) is push-only. The dispatcher uses one threatType for both so
+  // we read meta.kpIndex here.
+  if (threatType === 'geomagnetic_g4') {
+    const kp = typeof payload.meta?.kpIndex === 'number' ? payload.meta.kpIndex : 0;
+    if (kp < 9) return { send: false, reason: 'geomagnetic-below-kp9' };
   }
   return { send: true, body: bodyForThreatType(payload) };
 }

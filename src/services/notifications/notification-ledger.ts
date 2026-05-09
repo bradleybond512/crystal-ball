@@ -13,7 +13,10 @@ export type NotificationThreatType =
   | 'seismic_tier3'
   | 'seismic_tier4'
   | 'seismic_tier5'
+  | 'geomagnetic_g3'
   | 'geomagnetic_g4'
+  | 'solar_flare_x'
+  | 'cap_severe'
   | 'cap_extreme'
   | 'wildfire_extreme'
   | 'hurricane_cat3';

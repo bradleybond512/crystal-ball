@@ -74,6 +74,8 @@ import {
   ICON_BASE,
   ICON_BASE_NAVAL,
   ICON_BASE_AIR,
+  ICON_TRANSPORT,
+  ICON_HELICOPTER,
   ICON_AIRSTRIKE,
   ICON_DARK_VESSEL,
   ICON_GPS_JAM,
@@ -420,6 +422,45 @@ function diseaseScale(casesPerM: number): number {
 
 const LABEL_OFFSET = new Cartesian3(0, -20, 0) as unknown as import('cesium').Cartesian2;
 const LABEL_OFFSET_SM = new Cartesian3(0, -18, 0) as unknown as import('cesium').Cartesian2;
+
+const COMMERCIAL_FLIGHT_HEX: Record<
+  import('@/services/aviation/commercial-flights-classify').FlightCategory,
+  string
+> = {
+  military: '#ffeb3b',
+  commercial: '#4a9eff',
+  cargo: '#9c27b0',
+  helicopter: '#8bc34a',
+  general_aviation: '#9e9e9e',
+};
+
+function categoryRank(
+  category: import('@/services/aviation/commercial-flights-classify').FlightCategory,
+): number {
+  if (category === 'commercial') return 0;
+  if (category === 'cargo') return 1;
+  if (category === 'helicopter') return 2;
+  if (category === 'general_aviation') return 3;
+  return 4;
+}
+
+function commercialFlightDescriptionHtml(
+  flight: import('@/services/aviation/commercial-flights-classify').LiveFlight,
+): string {
+  const lines: string[] = [
+    `<h3>${escapeHtml(flight.callsign ?? flight.icao24)}</h3>`,
+    `<div>Category: ${escapeHtml(flight.category.replace(/_/g, ' '))}</div>`,
+    flight.operatorName ? `<div>Operator: ${escapeHtml(flight.operatorName)}</div>` : '',
+    flight.originCountry ? `<div>Origin: ${escapeHtml(flight.originCountry)}</div>` : '',
+    flight.altitudeFt === null ? '' : `<div>Altitude: ${flight.altitudeFt} ft</div>`,
+    flight.velocityKts === null ? '' : `<div>Speed: ${flight.velocityKts} kt</div>`,
+    flight.headingDeg === null ? '' : `<div>Heading: ${Math.round(flight.headingDeg)}°</div>`,
+    flight.emergency
+      ? `<strong style="color:#d50000;">EMERGENCY squawk ${escapeHtml(flight.squawk ?? '')}</strong>`
+      : '',
+  ];
+  return lines.filter(Boolean).join('\n');
+}
 
 function setEntityTimestamp(entity: import('cesium').Entity, when: Date): void {
   entity.properties ??= new PropertyBag();
@@ -1561,11 +1602,15 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  const layer = this.layers.get('aviationIntel');
  if (!layer) return;
 
- const [{ fetchAviationIntelSnapshot }, helpers] = await Promise.all([
+ const [{ fetchAviationIntelSnapshot }, helpers, { fetchLiveFlights }] = await Promise.all([
  import('@/services/aviation/aviation-intel-service'),
  import('@/services/aviation/aviation-globe-helpers'),
+ import('@/services/aviation/commercial-flights-service'),
  ]);
- const snapshot = await fetchAviationIntelSnapshot();
+ const [snapshot, liveFlights] = await Promise.all([
+ fetchAviationIntelSnapshot(),
+ fetchLiveFlights(),
+ ]);
 
  layer.source.entities.removeAll();
 
@@ -1581,6 +1626,112 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  for (const ac of helpers.aircraftWithPosition(snapshot.military.data)) {
  this.addAviationAircraftEntity(layer, ac, helpers);
  }
+ // Commercial / cargo / GA flights — emergencies always render with a red
+ // pulse; non-emergency flights are capped to keep the globe usable.
+ for (const flight of this.selectFlightsForGlobe(liveFlights.flights)) {
+ this.addCommercialFlightEntity(layer, flight);
+ }
+  }
+
+  private selectFlightsForGlobe(
+ flights: readonly import('@/services/aviation/commercial-flights-classify').LiveFlight[],
+  ): import('@/services/aviation/commercial-flights-classify').LiveFlight[] {
+ const NON_EMERGENCY_CAP = 1500;
+ const out: import('@/services/aviation/commercial-flights-classify').LiveFlight[] = [];
+ const nonEmergency: import('@/services/aviation/commercial-flights-classify').LiveFlight[] = [];
+ for (const f of flights) {
+ if (f.onGround) continue;
+ if (f.emergency) {
+ out.push(f);
+ } else if (f.category !== 'military') {
+ // Military aircraft are already rendered via the existing
+ // aircraftWithPosition pass — skip to avoid duplicates.
+ nonEmergency.push(f);
+ }
+ }
+ // Sort cargo + commercial first so the cap doesn't drop the most
+ // recognisable category.
+ nonEmergency.sort((a, b) => categoryRank(a.category) - categoryRank(b.category));
+ for (const f of nonEmergency.slice(0, NON_EMERGENCY_CAP)) out.push(f);
+ return out;
+  }
+
+  private addCommercialFlightEntity(
+ layer: GlobeLayer,
+ flight: import('@/services/aviation/commercial-flights-classify').LiveFlight,
+  ): void {
+ const altMeters = flight.altitudeFt === null ? 0 : flight.altitudeFt * 0.3048;
+ const heading = flight.headingDeg ?? 0;
+ const colorHex = COMMERCIAL_FLIGHT_HEX[flight.category] ?? '#9e9e9e';
+ const color = Color.fromCssColorString(colorHex);
+ if (flight.emergency) {
+ // Red pulsing dot — pulsing achieved via a CallbackProperty on alpha.
+ const startMs = Date.now();
+ const pulse = new CallbackProperty(() => {
+ const t = ((Date.now() - startMs) % 1200) / 1200;
+ const alpha = 0.4 + 0.6 * Math.abs(Math.sin(t * Math.PI));
+ return Color.RED.withAlpha(alpha);
+ }, false);
+ layer.source.entities.add(new Entity({
+ id: `aviation-flight-${flight.icao24}`,
+ position: Cartesian3.fromDegrees(flight.lon, flight.lat, altMeters),
+ point: {
+ pixelSize: 14,
+ color: pulse,
+ outlineColor: Color.WHITE,
+ outlineWidth: 2,
+ heightReference: HeightReference.NONE,
+ },
+ label: flight.callsign ? {
+ text: `${flight.callsign}  SQ ${flight.squawk ?? ''}`,
+ font: '11px monospace',
+ fillColor: Color.RED,
+ outlineColor: Color.BLACK,
+ outlineWidth: 2,
+ style: 2,
+ pixelOffset: LABEL_OFFSET_SM,
+ horizontalOrigin: HorizontalOrigin.CENTER,
+ verticalOrigin: VerticalOrigin.BOTTOM,
+ scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+ distanceDisplayCondition: new DistanceDisplayCondition(0, 1.5e7),
+ } : undefined,
+ description: commercialFlightDescriptionHtml(flight),
+ name: flight.callsign ?? flight.icao24,
+ }));
+ return;
+ }
+ const icon = flight.category === 'helicopter' ? ICON_HELICOPTER : ICON_TRANSPORT;
+ layer.source.entities.add(new Entity({
+ id: `aviation-flight-${flight.icao24}`,
+ position: Cartesian3.fromDegrees(flight.lon, flight.lat, altMeters),
+ billboard: {
+ image: icon,
+ color,
+ scale: 0.22,
+ rotation: CesiumMath.toRadians(-heading),
+ alignedAxis: Cartesian3.UNIT_Z,
+ heightReference: HeightReference.NONE,
+ horizontalOrigin: HorizontalOrigin.CENTER,
+ verticalOrigin: VerticalOrigin.CENTER,
+ scaleByDistance: new NearFarScalar(1e5, 0.9, 1.5e7, 0.25),
+ distanceDisplayCondition: new DistanceDisplayCondition(0, 8e6),
+ },
+ label: flight.callsign ? {
+ text: flight.callsign,
+ font: '9px monospace',
+ fillColor: color,
+ outlineColor: Color.BLACK,
+ outlineWidth: 2,
+ style: 2,
+ pixelOffset: LABEL_OFFSET_SM,
+ horizontalOrigin: HorizontalOrigin.CENTER,
+ verticalOrigin: VerticalOrigin.BOTTOM,
+ scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+ distanceDisplayCondition: new DistanceDisplayCondition(0, 3e6),
+ } : undefined,
+ description: commercialFlightDescriptionHtml(flight),
+ name: flight.callsign ?? flight.icao24,
+ }));
   }
 
   private addAviationTfrEntity(

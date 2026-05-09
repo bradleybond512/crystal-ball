@@ -28,11 +28,37 @@ import {
   type AviationSigmet,
   type MilitaryAircraft,
 } from '@/services/aviation/aviation-intel-service';
+import {
+  fetchLiveFlights,
+  type LiveFlightsEnvelope,
+} from '@/services/aviation/commercial-flights-service';
+import {
+  emergencyLabel,
+  flightsInsideHazardZones,
+  type FlightCategory,
+  type LiveFlight,
+} from '@/services/aviation/commercial-flights-classify';
 import { escapeHtml } from '@/utils/sanitize';
 
 const REFRESH_MS = 5 * 60 * 1000;
 
-type Tab = 'notams' | 'sigmets' | 'pireps' | 'military' | 'delays';
+type Tab = 'notams' | 'sigmets' | 'pireps' | 'military' | 'delays' | 'flights';
+
+const FLIGHT_CATEGORY_LABEL: Record<FlightCategory, string> = {
+  military: 'Military',
+  commercial: 'Commercial',
+  cargo: 'Cargo',
+  helicopter: 'Helicopter',
+  general_aviation: 'General Aviation',
+};
+
+const FLIGHT_CATEGORY_HEX: Record<FlightCategory, string> = {
+  military: '#ffeb3b',
+  commercial: '#4a9eff',
+  cargo: '#9c27b0',
+  helicopter: '#8bc34a',
+  general_aviation: '#9e9e9e',
+};
 
 const HAZARD_COLOR: Record<AviationSigmet['hazard'], string> = {
   volcanic_ash: '#ff9800',
@@ -67,6 +93,7 @@ interface TabState {
   pireps: AviationFetchEnvelope<AviationPirep> | null;
   military: AviationFetchEnvelope<MilitaryAircraft> | null;
   delays: AviationFetchEnvelope<AirportGroundDelay> | null;
+  flights: LiveFlightsEnvelope | null;
 }
 
 export class AviationIntelPanel extends Panel {
@@ -78,6 +105,7 @@ export class AviationIntelPanel extends Panel {
     pireps: null,
     military: null,
     delays: null,
+    flights: null,
   };
   private loading = false;
 
@@ -88,7 +116,7 @@ export class AviationIntelPanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'TFRs, SIGMETs, PIREPs, military aircraft, airport delays. Refreshes every 5 min.',
+        'TFRs, SIGMETs, PIREPs, military aircraft, airport delays, and live commercial/cargo/GA flights with emergency squawk and TFR/SIGMET cross-reference. Refreshes every 5 min (live flights every 10 min — OpenSky rate limit).',
     });
     this.start();
   }
@@ -110,14 +138,15 @@ export class AviationIntelPanel extends Panel {
     if (this.loading) return;
     this.loading = true;
     try {
-      const [notams, sigmets, pireps, military, delays] = await Promise.all([
+      const [notams, sigmets, pireps, military, delays, flights] = await Promise.all([
         fetchNotams(),
         fetchSigmets(),
         fetchPireps(),
         fetchMilitaryAircraft(),
         fetchAirportDelays(),
+        fetchLiveFlights(),
       ]);
-      this.state = { notams, sigmets, pireps, military, delays };
+      this.state = { notams, sigmets, pireps, military, delays, flights };
     } catch {
       // Errors are surfaced as `degraded: true` in the envelopes — nothing
       // to do here beyond letting the previous snapshot stay visible.
@@ -128,12 +157,13 @@ export class AviationIntelPanel extends Panel {
   }
 
   private render(): void {
-    const counts = {
+    const counts: Record<Tab, number> = {
       notams: selectTfrs(this.state.notams?.data ?? []).length,
       sigmets: this.state.sigmets?.data.length ?? 0,
       pireps: this.state.pireps?.data.length ?? 0,
       military: this.state.military?.data.length ?? 0,
       delays: this.state.delays?.data.length ?? 0,
+      flights: this.state.flights?.counts.total ?? 0,
     };
     const totalCount = Object.values(counts).reduce((a, b) => a + b, 0);
     this.setCount(totalCount);
@@ -157,6 +187,7 @@ export class AviationIntelPanel extends Panel {
       { id: 'pireps', label: 'PIREPs' },
       { id: 'military', label: 'Military' },
       { id: 'delays', label: 'Delays' },
+      { id: 'flights', label: 'Live Flights' },
     ];
     return `
       <div style="display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:6px;">
@@ -210,10 +241,14 @@ export class AviationIntelPanel extends Panel {
       case 'delays': {
         return banner + this.renderDelays(envelope as AviationFetchEnvelope<AirportGroundDelay>);
       }
+      case 'flights': {
+        return banner + this.renderFlights(envelope as LiveFlightsEnvelope);
+      }
     }
   }
 
-  private envelopeFor(tab: Tab): AviationFetchEnvelope<unknown> | null {
+  private envelopeFor(tab: Tab): { degraded: boolean; reason?: string; source: string } | null {
+    if (tab === 'flights') return this.state.flights;
     return this.state[tab];
   }
 
@@ -382,6 +417,101 @@ export class AviationIntelPanel extends Panel {
         `;
       })
       .join('');
+  }
+
+  private renderFlights(env: LiveFlightsEnvelope): string {
+    const c = env.counts;
+    if (env.flights.length === 0) {
+      return `<div style="opacity:0.6;">No flights tracked. ${escapeHtml(env.reason ?? '')}</div>`;
+    }
+    const categoryRow = (Object.keys(FLIGHT_CATEGORY_LABEL) as FlightCategory[])
+      .filter((cat) => c[cat] > 0)
+      .map((cat) => {
+        const hex = FLIGHT_CATEGORY_HEX[cat];
+        return `<span style="display:inline-block;padding:2px 8px;border:1px solid ${hex};border-radius:8px;font-size:11px;color:${hex};margin:0 4px 4px 0;">${escapeHtml(
+          FLIGHT_CATEGORY_LABEL[cat],
+        )} <strong>${c[cat]}</strong></span>`;
+      })
+      .join('');
+
+    const emergencyBlock = c.emergency > 0
+      ? this.renderEmergencyBlock(env.flights)
+      : '';
+
+    const tfrs = (this.state.notams?.data ?? []).filter(
+      (n) => (n.classification === 'TFR' || /TFR/i.test(n.text)) && n.center !== undefined,
+    );
+    const sigmets = this.state.sigmets?.data ?? [];
+    const inHazard = flightsInsideHazardZones(env.flights, tfrs, sigmets);
+    const hazardBlock = inHazard.length > 0
+      ? this.renderHazardBlock(inHazard)
+      : '';
+
+    const summaryLine = `<div style="font-size:11px;opacity:0.8;margin-bottom:6px;">
+        Total: <strong>${c.total}</strong> · Emergency: <strong style="color:${
+      c.emergency > 0 ? '#d50000' : 'inherit'
+    };">${c.emergency}</strong> · In TFR/SIGMET: <strong style="color:${
+      inHazard.length > 0 ? '#ff9800' : 'inherit'
+    };">${inHazard.length}</strong>
+      </div>`;
+
+    return `
+      ${summaryLine}
+      <div style="margin-bottom:6px;">${categoryRow}</div>
+      ${emergencyBlock}
+      ${hazardBlock}
+    `;
+  }
+
+  private renderEmergencyBlock(flights: readonly LiveFlight[]): string {
+    const emergencies = flights.filter((f) => f.emergency);
+    if (emergencies.length === 0) return '';
+    const rows = emergencies
+      .slice(0, 20)
+      .map((f) => {
+        const labelText = f.emergencySquawk ? emergencyLabel(f.emergencySquawk) : 'Emergency';
+        const where = `${f.lat.toFixed(2)}°, ${f.lon.toFixed(2)}°`;
+        const callsign = f.callsign ?? `ICAO ${f.icao24}`;
+        return `<div style="margin:4px 0;padding:6px;border-left:3px solid #d50000;background:rgba(213,0,0,0.10);">
+          <div style="display:flex;justify-content:space-between;font-weight:700;color:#d50000;">
+            <span>${escapeHtml(callsign)} • SQ ${escapeHtml(f.squawk ?? '')} • ${escapeHtml(labelText)}</span>
+            <span style="font-size:11px;">${escapeHtml(where)}</span>
+          </div>
+          <div style="font-size:11px;opacity:0.85;">
+            ${escapeHtml(FLIGHT_CATEGORY_LABEL[f.category])}${f.operatorName ? ` · ${escapeHtml(f.operatorName)}` : ''}${
+              f.altitudeFt === null ? '' : ` · ${f.altitudeFt} ft`
+            }${f.velocityKts === null ? '' : ` · ${f.velocityKts} kt`}
+          </div>
+        </div>`;
+      })
+      .join('');
+    return `<h4 style="margin:8px 0 4px 0;color:#d50000;">⚠ Unusual squawks (${emergencies.length})</h4>${rows}`;
+  }
+
+  private renderHazardBlock(
+    flights: readonly (LiveFlight & { hazards: { tfrIds: string[]; sigmetIds: string[] } })[],
+  ): string {
+    const rows = flights
+      .slice(0, 20)
+      .map((f) => {
+        const callsign = f.callsign ?? `ICAO ${f.icao24}`;
+        const tfrTag = f.hazards.tfrIds.length > 0
+          ? `<span style="color:#f44336;">TFR ${escapeHtml(f.hazards.tfrIds.join(', '))}</span>`
+          : '';
+        const sigmetTag = f.hazards.sigmetIds.length > 0
+          ? `<span style="color:#ffeb3b;">${escapeHtml(f.hazards.sigmetIds.join(', '))}</span>`
+          : '';
+        const sep = tfrTag && sigmetTag ? ' · ' : '';
+        return `<div style="margin:4px 0;padding:6px;border-left:3px solid #ff9800;background:rgba(255,152,0,0.08);">
+          <div style="display:flex;justify-content:space-between;font-weight:600;">
+            <span>${escapeHtml(callsign)} • ${escapeHtml(FLIGHT_CATEGORY_LABEL[f.category])}</span>
+            <span style="font-size:11px;opacity:0.8;">${f.lat.toFixed(2)}°, ${f.lon.toFixed(2)}°</span>
+          </div>
+          <div style="font-size:11px;">${tfrTag}${sep}${sigmetTag}</div>
+        </div>`;
+      })
+      .join('');
+    return `<h4 style="margin:8px 0 4px 0;color:#ff9800;">In TFR / SIGMET zones (${flights.length})</h4>${rows}`;
   }
 
   private wireHandlers(): void {

@@ -9940,6 +9940,162 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Live flights — all categories (commercial, cargo, military, GA, helo) ─
+  // Wraps OpenSky `states/all`, classifies by callsign + hex range, and returns
+  // a category breakdown plus the full classified list. 10-min cache because
+  // OpenSky's anonymous tier is rate-limited to ~100 req/day.
+  if (requestUrl.pathname === '/api/aviation/flights') {
+ const CACHE_TTL = 10 * 60 * 1000;
+ const cached = getCached('aviation-flights', CACHE_TTL);
+ if (cached) return json(cached);
+
+ const clientId = process.env.OPENSKY_CLIENT_ID?.trim() || '';
+ const clientSecret = process.env.OPENSKY_CLIENT_SECRET?.trim() || '';
+ const headers = { 'User-Agent': CHROME_UA };
+ if (clientId && clientSecret) {
+ const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+ headers['Authorization'] = `Basic ${creds}`;
+ }
+
+ const PASSENGER_AIRLINES = new Set([
+ 'AAL','DAL','UAL','SWA','JBU','ASA','SKW','RPA','ENY','ACA','WJA','BAW','VIR',
+ 'AFR','DLH','KLM','IBE','AZA','AUA','SWR','SAS','FIN','THY','UAE','ETD','QTR',
+ 'SVA','ELY','JAL','ANA','KAL','AAR','CES','CSN','CCA','SIA','CPA','QFA','ANZ',
+ 'AMX','LAN','TAM','AVA','RYR','EZY','WZZ','TRA','THA','MAS','AIC','IGO','EIN','AEE',
+ ]);
+ const CARGO_AIRLINES = new Set([
+ 'FDX','UPS','ABX','CKS','GTI','CLX','ABW','EVA','CAL','CKK','GEC','POT','SOO',
+ 'ICE','CTM','ABD','DHX','BCS','GLO',
+ ]);
+ const MILITARY_PREFIXES = new Set([
+ 'RCH','REACH','CNV','PAT','GOLD','SHELL','TEAL','HOMER','MAGIC','SENTRY','RIVET',
+ 'PYTHON','RAGE','VIPER','EAGLE','RAIDER','DOOM','BISON','ARMY','PEDRO','DUSTOFF',
+ 'NATO','RRR','ASCOT','RAFAIR','AUSY','CFC','CANFORCE','MIL','NAVY','AF',
+ ]);
+ const HELO_HINTS = ['HEMS','LIFEFLIGHT','AIRMED','MERCY','MEDFLIGHT','CARESTAR','CHP','COASTGUARD','USCG','RESCUE'];
+ const EMERGENCY_SQUAWKS = new Set(['7500', '7600', '7700']);
+ const MILITARY_HEX_RANGES = [
+ ['ADF7C7','ADF7CF'], ['AE0000','AFFFFF'], ['A00000','A3FFFF'], ['43C000','43CFFF'],
+ ['3A0000','3AFFFF'], ['3B0000','3BFFFF'], ['3F0000','3FFFFF'], ['738000','73FFFF'],
+ ['4D0000','4D03FF'], ['300000','33FFFF'], ['340000','37FFFF'], ['480000','480FFF'],
+ ['4BA000','4BCFFF'], ['710000','717FFF'], ['896000','896FFF'], ['06A000','06AFFF'],
+ ['706000','706FFF'], ['840000','87FFFF'], ['718000','71FFFF'], ['7CF800','7CFFFF'],
+ ['C00000','C0FFFF'], ['800000','83FFFF'], ['760000','767FFF'], ['500000','5003FF'],
+ ['488000','48FFFF'], ['468000','46FFFF'], ['4A8000','4AFFFF'], ['478000','47FFFF'],
+ ['768000','76FFFF'],
+ ];
+ const isMilitaryHex = (hex) => {
+ if (!hex) return false;
+ const upper = hex.toUpperCase();
+ if (!/^[0-9A-F]{6}$/.test(upper)) return false;
+ for (const [s, e] of MILITARY_HEX_RANGES) {
+ if (upper >= s && upper <= e) return true;
+ }
+ return false;
+ };
+ const operatorPrefix = (callsign) => {
+ if (!callsign) return null;
+ const upper = callsign.trim().toUpperCase();
+ if (upper.length < 3) return null;
+ const prefix = upper.slice(0, 3);
+ return /^[A-Z]{3}$/.test(prefix) ? prefix : null;
+ };
+ const classify = (state) => {
+ const icao24 = (state[0] ?? '').toString().toLowerCase().trim();
+ const callsignRaw = (state[1] ?? '').toString().trim();
+ const callsign = callsignRaw.length > 0 ? callsignRaw : null;
+ const lat = state[6];
+ const lon = state[5];
+ if (!icao24 || lat == null || lon == null) return null;
+ const squawk = state[14] ?? null;
+ const emergency = EMERGENCY_SQUAWKS.has(squawk);
+ const upperCallsign = callsign ? callsign.toUpperCase() : '';
+ const prefix = operatorPrefix(callsign);
+ let category;
+ let operatorIcao = prefix;
+ if (
+ isMilitaryHex(icao24) ||
+ (prefix && MILITARY_PREFIXES.has(prefix)) ||
+ (upperCallsign && [...MILITARY_PREFIXES].some((m) => upperCallsign.startsWith(m)))
+ ) {
+ category = 'military';
+ } else if (prefix && CARGO_AIRLINES.has(prefix)) {
+ category = 'cargo';
+ } else if (prefix && PASSENGER_AIRLINES.has(prefix)) {
+ category = 'commercial';
+ } else if (HELO_HINTS.some((h) => upperCallsign.startsWith(h))) {
+ category = 'helicopter';
+ } else {
+ category = 'general_aviation';
+ operatorIcao = prefix; // may still be a 3-letter prefix we don't know
+ }
+ return {
+ icao24,
+ callsign,
+ originCountry: (state[2] ?? '').toString().trim() || null,
+ category,
+ operatorIcao,
+ operatorName: null, // operator-name lookup happens renderer-side
+ lat,
+ lon,
+ altitudeFt: state[7] == null ? null : Math.round(state[7] * 3.28084),
+ velocityKts: state[9] == null ? null : Math.round(state[9] * 1.94384),
+ headingDeg: state[10] == null ? null : state[10],
+ squawk,
+ emergency,
+ emergencySquawk: emergency ? squawk : null,
+ onGround: state[8] === true,
+ lastSeen: typeof state[4] === 'number' ? state[4] * 1000 : Date.now(),
+ };
+ };
+ try {
+ const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
+ if (r.status === 429) {
+ const env = {
+ flights: [], counts: { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 },
+ fetchedAt: Date.now(), degraded: true, reason: 'rate limited', source: 'opensky-network.org',
+ };
+ return json(env, 429);
+ }
+ if (!r.ok) throw new Error(`OpenSky HTTP ${r.status}`);
+ const data = await r.json();
+ const flights = [];
+ const counts = { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 };
+ for (const state of (data.states ?? [])) {
+ if (!Array.isArray(state) || state.length < 15) continue;
+ const flight = classify(state);
+ if (!flight) continue;
+ flights.push(flight);
+ counts[flight.category] += 1;
+ counts.total += 1;
+ if (flight.emergency) {
+ counts.emergency += 1;
+ if (flight.emergencySquawk === '7500') counts.squawk7500 += 1;
+ else if (flight.emergencySquawk === '7600') counts.squawk7600 += 1;
+ else if (flight.emergencySquawk === '7700') counts.squawk7700 += 1;
+ }
+ }
+ const envelope = {
+ flights,
+ counts,
+ fetchedAt: Date.now(),
+ degraded: false,
+ source: 'opensky-network.org',
+ };
+ setCached('aviation-flights', envelope);
+ return json(envelope);
+ } catch (error) {
+ return json({
+ flights: [],
+ counts: { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 },
+ fetchedAt: Date.now(),
+ degraded: true,
+ reason: error?.message ?? String(error),
+ source: 'opensky-network.org',
+ }, 502);
+ }
+  }
+
   // ── Tor relay metrics ────────────────────────────────────────────────────
   if (requestUrl.pathname === '/api/tor-metrics') {
  const cached = getCached('tor-metrics', 60 * 60 * 1000);

@@ -122,6 +122,10 @@ export default tseslint.config(
   // Block 4: Test files — relaxed rules
   {
  files: ['**/*.test.*', 'e2e/**'],
+ plugins: {
+ unicorn,
+ sonarjs,
+ },
  rules: {
  'no-console': 'off',
  'sonarjs/cognitive-complexity': 'off',
@@ -260,6 +264,10 @@ export default tseslint.config(
  'src/components/EmergencyBroadcastPanel.ts',
  'src/components/SatelliteChangePanel.ts',
  ],
+ plugins: {
+ unicorn,
+ sonarjs,
+ },
  rules: {
  'no-console': 'off',
  '@typescript-eslint/no-floating-promises': 'off',

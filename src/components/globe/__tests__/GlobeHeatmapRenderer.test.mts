@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- Cesium-viewer mock */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 

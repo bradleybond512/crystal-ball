@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/no-nested-template-literals */
 /**
  * Aviation Intelligence Panel — PR 2 of the aviation stack.
  *

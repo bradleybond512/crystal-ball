@@ -10,16 +10,14 @@ import {
 const ORIGINAL_FETCH = globalThis.fetch;
 
 function mockFetch(handler: (url: string) => Response | Promise<Response>): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).fetch = (input: unknown): Promise<Response> => {
+  Reflect.set(globalThis, 'fetch', (input: unknown): Promise<Response> => {
     const url = typeof input === 'string' ? input : (input as { url: string }).url;
     return Promise.resolve(handler(url));
-  };
+  });
 }
 
 function restoreFetch(): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).fetch = ORIGINAL_FETCH;
+  Reflect.set(globalThis, 'fetch', ORIGINAL_FETCH);
 }
 
 beforeEach(() => clearLiveFlightsCache());

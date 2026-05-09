@@ -29,6 +29,8 @@ import {
 } from 'cesium';
 
 import { applyClustering } from '@/components/globeClustering';
+import { GlobeHeatmapRenderer } from '@/components/globe/GlobeHeatmapRenderer';
+import { coerceTimestampMs, opacityForEntity } from '@/components/globe/cursor-opacity';
 import { escapeHtml } from '@/utils/sanitize';
 import { modelLoader } from '@/services/model-loader';
 import { BuildingTileManager } from '@/services/building-tiles';
@@ -424,6 +426,51 @@ function setEntityTimestamp(entity: import('cesium').Entity, when: Date): void {
   entity.properties.addProperty('timestamp', new ConstantProperty(when));
 }
 
+/** Read an entity's `timestamp` property and coerce to ms epoch.
+ *  Returns null when no timestamp is set. Used by cursor-window
+ *  opacity. Exported for tests. */
+export function readEntityTimestampMs(entity: import('cesium').Entity): number | null {
+  const props = entity.properties;
+  if (!props) return null;
+  // PropertyBag.getValue takes a JulianDate; pass a fresh one — the
+  // timestamp is stored as a ConstantProperty so the time arg is
+  // ignored, but the API requires it.
+  const v = props.getValue(JulianDate.now()) as { timestamp?: unknown } | undefined;
+  return coerceTimestampMs(v?.timestamp);
+}
+
+/** Apply an alpha multiplier to whatever color-bearing graphic an
+ *  entity carries (point / billboard / rectangle / polygon / polyline).
+ *  Reads the current color, swaps alpha, writes back. Cesium's
+ *  `Color.withAlpha()` returns a fresh instance so we don't mutate
+ *  shared color objects. */
+export function applyEntityAlpha(entity: import('cesium').Entity, alpha: number): void {
+  const a = Math.max(0, Math.min(1, alpha));
+  const now = JulianDate.now();
+  const setColorWithAlpha = (
+    holder: { color?: import('cesium').Property } | undefined | null,
+    setter: (next: ConstantProperty) => void,
+  ): void => {
+    if (!holder?.color) return;
+    const raw: unknown = holder.color.getValue(now);
+    if (raw instanceof Color) setter(new ConstantProperty(raw.withAlpha(a)));
+  };
+  setColorWithAlpha(entity.point, (p) => { entity.point!.color = p; });
+  setColorWithAlpha(entity.billboard, (p) => { entity.billboard!.color = p; });
+  if (entity.rectangle?.material instanceof ColorMaterialProperty) {
+    const mat = entity.rectangle.material;
+    setColorWithAlpha({ color: mat.color }, (p) => { mat.color = p; });
+  }
+  if (entity.polygon?.material instanceof ColorMaterialProperty) {
+    const mat = entity.polygon.material;
+    setColorWithAlpha({ color: mat.color }, (p) => { mat.color = p; });
+  }
+  if (entity.polyline?.material instanceof ColorMaterialProperty) {
+    const mat = entity.polyline.material;
+    setColorWithAlpha({ color: mat.color }, (p) => { mat.color = p; });
+  }
+}
+
 interface GlobeLayer {
   source: CustomDataSource;
   load: () => void | Promise<void>;
@@ -526,6 +573,8 @@ export class GlobeDataManager {
   private unsubPositions: (() => void) | null = null;
   private cameraMoveSub: (() => void) | null = null;
   private maritimeVesselsTimer: ReturnType<typeof setInterval> | null = null;
+  private heatmapRenderer: GlobeHeatmapRenderer | null = null;
+  private cursorListener: ((event: Event) => void) | null = null;
   private aftershockForecasts = new Map<string, AftershockForecast>();
   private cycloneCones = new Map<string, ForecastCone>();
   // Persists across loadTropicalCyclones() calls so we can derive an actual
@@ -596,6 +645,44 @@ export class GlobeDataManager {
  if (!DEFERRED_LAYER_ALTITUDE[name]) void this.loadLayer(name);
  }
  this.setupDeferredLayerLoading();
+
+ // Heatmap renderer self-manages via the wm:globe-heatmap-changed event bus.
+ this.heatmapRenderer = new GlobeHeatmapRenderer(this.viewer);
+ this.heatmapRenderer.mount();
+
+ // Timeline cursor → entity opacity wiring. Fades out-of-window
+ // entities to 0.3 alpha so playback visibly affects the globe.
+ this.cursorListener = (event) => this.handleCursorChange(event);
+ document.addEventListener('wm:globe-timeline-cursor', this.cursorListener);
+  }
+
+  /** Apply cursor-window opacity to every time-stamped entity in
+   *  every loaded data source. Called from the cursor event listener.
+   *  Public so tests can drive it without dispatching DOM events. */
+  applyCursorOpacity(cursorMs: number): { faded: number; full: number; timeless: number } {
+ const result = { faded: 0, full: 0, timeless: 0 };
+ for (const [, layer] of this.layers) {
+ for (const entity of layer.source.entities.values) {
+ const ts = readEntityTimestampMs(entity);
+ if (ts === null) {
+ result.timeless += 1;
+ // Timeless entities are never faded — leave them alone.
+ continue;
+ }
+ const alpha = opacityForEntity(ts, cursorMs);
+ applyEntityAlpha(entity, alpha);
+ if (alpha < 1) result.faded += 1;
+ else result.full += 1;
+ }
+ }
+ return result;
+  }
+
+  private handleCursorChange(event: Event): void {
+ const detail = (event as CustomEvent<{ cursorMs?: unknown }>).detail;
+ const ms = Number(detail?.cursorMs);
+ if (!Number.isFinite(ms)) return;
+ this.applyCursorOpacity(ms);
   }
 
   private checkDeferredLayers = (): void => {
@@ -2489,6 +2576,12 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
   }
 
   destroy(): void {
+ if (this.cursorListener) {
+ document.removeEventListener('wm:globe-timeline-cursor', this.cursorListener);
+ this.cursorListener = null;
+ }
+ this.heatmapRenderer?.destroy();
+ this.heatmapRenderer = null;
  this.cameraMoveSub?.();
  this.cameraMoveSub = null;
  for (const [, layer] of this.layers) {

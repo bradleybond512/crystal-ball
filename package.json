@@ -69,7 +69,7 @@
     "test:personal": "tsx --test src/services/personal/__tests__/personal-impact.test.mts src/services/personal/__tests__/threat-aggregator.test.mts",
     "test:export": "tsx --test src/services/export/__tests__/brief-pdf.test.mts",
     "test:playback": "tsx --test src/services/playback/__tests__/timeline-cursor.test.mts",
-    "test:globe": "tsx --test src/services/globe/__tests__/heatmap-layers.test.mts",
+    "test:globe": "tsx --test src/services/globe/__tests__/heatmap-layers.test.mts src/components/globe/__tests__/heatmap-grid.test.mts src/components/globe/__tests__/cursor-opacity.test.mts src/components/globe/__tests__/GlobeHeatmapRenderer.test.mts",
     "test:adsb": "tsx --test src/services/adsb/__tests__/adsb-aggregate.test.mts",
     "test:synthesis": "tsx --test src/services/synthesis/__tests__/signal-watch.test.mts",
     "test:bio": "tsx --test src/services/biosurveillance/__tests__/cdc-ari.test.mts",

@@ -385,13 +385,8 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  document.dispatchEvent(new CustomEvent('cb:toggle-today'));
  }
- // Cmd+K (mac) / Ctrl+K (windows / linux) — toggle command palette
- if ((e.metaKey || e.ctrlKey) && e.key === 'k' && !e.shiftKey && !e.altKey) {
- const active = document.activeElement;
- if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return;
- e.preventDefault();
- document.dispatchEvent(new CustomEvent('cb:toggle-cmdk'));
- }
+ // Cmd+K is owned by the central shortcut registry installed in
+ // panel-layout (services/keyboard/shortcut-bootstrap).
  // Cmd+Shift+W — toggle Watchlist editor. Browsers reserve this for
  // "close all tabs" and will not let preventDefault override it, so
  // desktop-only on purpose.

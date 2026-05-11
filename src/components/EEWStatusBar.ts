@@ -20,6 +20,12 @@ import {
   type StatusBarState,
 } from '../services/seismic/eew-status-bar-helpers';
 import type { EewAlert } from '../services/seismic/eew-alert-engine';
+import {
+  deriveSpaceWxBanner,
+  type SpaceWxBanner,
+  type SpaceWxBannerSeverity,
+} from '../services/spaceweather/globe-overlay';
+import type { SpaceWxStatus } from '../services/spaceweather/swpc-monitor';
 
 const ENDPOINT = '/api/eew-status';
 const POLL_INTERVAL_MS = 5000;
@@ -33,16 +39,26 @@ const COLOR_CLASSES: Record<StatusBarState['color'], string> = {
   crimson: 'eew-bar-crimson',
 };
 
+const SPACEWX_CLASSES: Record<SpaceWxBannerSeverity, string> = {
+  none: '',
+  g3: 'eew-bar-spacewx-g3',
+  g4: 'eew-bar-spacewx-g4',
+  g5: 'eew-bar-spacewx-g5',
+  flare: 'eew-bar-spacewx-flare',
+};
+
 export class EEWStatusBar {
   private root: HTMLElement | null = null;
   private labelEl: HTMLElement | null = null;
   private subtitleEl: HTMLElement | null = null;
   private imessageBadgeEl: HTMLElement | null = null;
+  private spaceWxEl: HTMLElement | null = null;
   private expandedEl: HTMLElement | null = null;
   private mounted = false;
   private expanded = false;
   private currentPayload: EewStatusPayload | null = null;
   private currentState: StatusBarState = deriveStatusBarState(null);
+  private currentSpaceWx: SpaceWxBanner = { severity: 'none', label: '', subtitle: '' };
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private subtitleTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -66,7 +82,11 @@ export class EEWStatusBar {
     this.imessageBadgeEl.className = 'eew-bar-imessage-badge';
     this.imessageBadgeEl.style.display = 'none';
 
-    main.append(this.labelEl, this.subtitleEl, this.imessageBadgeEl);
+    this.spaceWxEl = document.createElement('span');
+    this.spaceWxEl.className = 'eew-bar-spacewx';
+    this.spaceWxEl.style.display = 'none';
+
+    main.append(this.labelEl, this.subtitleEl, this.imessageBadgeEl, this.spaceWxEl);
     main.addEventListener('click', () => this.toggleExpanded());
 
     this.expandedEl = document.createElement('div');
@@ -94,7 +114,23 @@ export class EEWStatusBar {
     this.labelEl = null;
     this.subtitleEl = null;
     this.imessageBadgeEl = null;
+    this.spaceWxEl = null;
     this.expandedEl = null;
+  }
+
+  /**
+   * Update the space-weather banner overlay. The bar is shared with seismic
+   * EEW, so a non-`none` severity adds a coloured pill to the right of the
+   * subtitle without overriding the seismic state.
+   */
+  setSpaceWeatherStatus(status: SpaceWxStatus | null): void {
+    this.currentSpaceWx = deriveSpaceWxBanner(status);
+    this.renderSpaceWxBanner();
+  }
+
+  /** @internal */
+  __getSpaceWxBanner(): SpaceWxBanner {
+    return this.currentSpaceWx;
   }
 
   /**
@@ -150,7 +186,25 @@ export class EEWStatusBar {
     this.labelEl.textContent = this.currentState.label;
     this.refreshSubtitle();
     this.renderImessageBadge();
+    this.renderSpaceWxBanner();
     this.renderExpanded();
+  }
+
+  private renderSpaceWxBanner(): void {
+    if (!this.spaceWxEl) return;
+    const banner = this.currentSpaceWx;
+    if (banner.severity === 'none') {
+      this.spaceWxEl.style.display = 'none';
+      this.spaceWxEl.textContent = '';
+      this.spaceWxEl.className = 'eew-bar-spacewx';
+      return;
+    }
+    this.spaceWxEl.style.display = '';
+    this.spaceWxEl.className = `eew-bar-spacewx ${SPACEWX_CLASSES[banner.severity]}`;
+    this.spaceWxEl.textContent = banner.subtitle.length > 0
+      ? `${banner.label} · ${banner.subtitle}`
+      : banner.label;
+    this.spaceWxEl.setAttribute('title', `${banner.label}\n${banner.subtitle}`);
   }
 
   private refreshSubtitle(): void {

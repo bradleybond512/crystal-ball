@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use keyring::Entry;
@@ -37,7 +38,7 @@ const MENU_VIEW_MODE_ID: &str = "view.mode_status";
 #[cfg(feature = "devtools")]
 const MENU_HELP_DEVTOOLS_ID: &str = "help.devtools";
 const TRUSTED_WINDOWS: [&str; 3] = ["main", "settings", "live-channels"];
-const SUPPORTED_SECRET_KEYS: [&str; 58] = [
+const SUPPORTED_SECRET_KEYS: [&str; 60] = [
  "CRYSTALBALL_API_KEY",
  "ANTHROPIC_API_KEY",
  "GROQ_API_KEY",
@@ -60,6 +61,8 @@ const SUPPORTED_SECRET_KEYS: [&str; 58] = [
  "VITE_WS_RELAY_URL",
  "FINNHUB_API_KEY",
  "NASA_FIRMS_API_KEY",
+ "AIRNOW_API_KEY",
+ "PURPLEAIR_API_KEY",
  "OLLAMA_API_URL",
  "OLLAMA_MODEL",
  "WTO_API_KEY",
@@ -105,6 +108,10 @@ const NOTIFICATION_RATE_LIMIT: Duration = Duration::from_secs(30);
 // iMessage has its own rate-limit state so user-initiated Test sends aren't
 // blocked by background native notifications. Same 30s window between iMessages.
 static IMESSAGE_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
+// Voice alerts (`say`) are more disruptive than push, so we use a 5s
+// floor to avoid stacked utterances when several alerts fire at once.
+static VOICE_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
+const VOICE_RATE_LIMIT: Duration = Duration::from_secs(5);
 const MIN_CACHE_FLUSH_INTERVAL: Duration = Duration::from_secs(2);
 
 struct LocalApiState {
@@ -149,11 +156,85 @@ struct PersistentCache {
  last_flush_at: Mutex<Option<Instant>>,
 }
 
+/// Maximum time we'll wait on a single `Entry::get_password()` call.
+/// macOS will block that call indefinitely if the user has an ACL
+/// dialog pending or Keychain Access is unlocked mid-fetch — this
+/// timeout lets the sidecar boot anyway.
+const KEYCHAIN_PER_CALL_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Run a single keychain `get_password()` call on a worker thread
+/// and wait at most `timeout` for the answer. Returns:
+///   - `Ok(Some(value))` if the entry was read and is non-empty
+///   - `Ok(None)` if the entry is absent or the read errored
+///   - `Err(())` if the timeout elapsed first
+///
+/// On timeout the worker thread is intentionally orphaned: the
+/// `keyring` crate has no cancel API, so the only option is to
+/// stop waiting on the channel. The leaked thread will resolve
+/// (or be reaped at shutdown) once the keychain finally responds.
+fn read_keychain_entry_with_timeout(
+ service: &'static str,
+ key: String,
+ timeout: Duration,
+) -> Result<Option<String>, ()> {
+ let (tx, rx) = mpsc::channel::<Option<String>>();
+ std::thread::spawn(move || {
+ let value = Entry::new(service, &key)
+ .ok()
+ .and_then(|e| e.get_password().ok())
+ .map(|s| s.trim().to_string())
+ .filter(|s| !s.is_empty());
+ // Receiver may be gone (timeout already fired); ignore send failure.
+ let _ = tx.send(value);
+ });
+ rx.recv_timeout(timeout).map_err(|_| ())
+}
+
 impl SecretsCache {
- fn load_from_keychain() -> Self {
- // Try consolidated vault first — single keychain prompt
- if let Ok(entry) = Entry::new(KEYRING_SERVICE, "secrets-vault") {
- if let Ok(json) = entry.get_password() {
+ /// Empty cache, ready to be `manage()`d at builder time without
+ /// touching the macOS Keychain. The actual secrets are populated
+ /// asynchronously from `setup()` so the UI window renders before
+ /// any blocking keychain calls happen — see issue notes on the
+ /// startup-freeze bug this fixes.
+ fn empty() -> Self {
+ SecretsCache {
+ secrets: Mutex::new(HashMap::new()),
+ }
+ }
+
+ /// Blocking keychain query. Replaces the in-memory map atomically.
+ /// MUST be called off the main thread (`spawn_blocking` etc.).
+ ///
+ /// `app` is optional so non-Tauri callers (tests, the
+ /// `load_from_keychain` shim) can invoke this without an
+ /// `AppHandle`. When provided, timeout warnings land in the
+ /// desktop log so the operator can tell which keychain entries
+ /// are blocked by an ACL prompt.
+ fn populate_from_keychain(&self, app: Option<&AppHandle>) {
+ let loaded = Self::read_keychain_blocking(app);
+ if let Ok(mut guard) = self.secrets.lock() {
+ *guard = loaded;
+ }
+ }
+
+ /// Pulled out so callers can run the load on whichever thread they
+ /// like and write the result into a shared cache themselves.
+ ///
+ /// Each `Entry::get_password()` call is wrapped in
+ /// `read_keychain_entry_with_timeout` so a hung ACL prompt on
+ /// any single key does NOT stall the rest of the load (or the
+ /// sidecar startup that depends on it). On timeout we log a
+ /// warning and skip that key — features that need it will return
+ /// the existing 503 + `keyMissing` error path until it's
+ /// re-fetched on the next launch.
+ fn read_keychain_blocking(app: Option<&AppHandle>) -> HashMap<String, String> {
+ // Try consolidated vault first — single keychain read.
+ match read_keychain_entry_with_timeout(
+ KEYRING_SERVICE,
+ "secrets-vault".to_string(),
+ KEYCHAIN_PER_CALL_TIMEOUT,
+ ) {
+ Ok(Some(json)) => {
  if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&json) {
  let secrets: HashMap<String, String> = map
  .into_iter()
@@ -162,28 +243,51 @@ impl SecretsCache {
  })
  .map(|(k, v)| (k, v.trim().to_string()))
  .collect();
- return SecretsCache {
- secrets: Mutex::new(secrets),
- };
+ return secrets;
  }
+ }
+ Ok(None) => {
+ // No vault entry yet — fall through to migration.
+ }
+ Err(()) => {
+ log_keychain_timeout(app, "secrets-vault");
+ // Vault unreachable → still try migration; if every per-key
+ // read also times out, we end up with an empty map and the
+ // sidecar boots without secrets. Caller logs the count.
  }
  }
 
  // Migration: read individual keys (old format), consolidate into vault.
- // This triggers one keychain prompt per key — happens only once.
+ // Each call has its own timeout so a single stuck ACL prompt can't
+ // halt the whole loop.
  let mut secrets = HashMap::new();
+ let mut migration_attempted = false;
  for key in SUPPORTED_SECRET_KEYS.iter() {
- if let Ok(entry) = Entry::new(KEYRING_SERVICE, key) {
- if let Ok(value) = entry.get_password() {
- let trimmed = value.trim().to_string();
- if !trimmed.is_empty() {
- secrets.insert((*key).to_string(), trimmed);
+ migration_attempted = true;
+ match read_keychain_entry_with_timeout(
+ KEYRING_SERVICE,
+ (*key).to_string(),
+ KEYCHAIN_PER_CALL_TIMEOUT,
+ ) {
+ Ok(Some(value)) => {
+ secrets.insert((*key).to_string(), value);
+ }
+ Ok(None) => { /* not present; skip silently */ }
+ Err(()) => {
+ log_keychain_timeout(app, key);
+ // continue — other keys may still respond
  }
  }
  }
- }
+ // (`migration_attempted` is true once we've entered the loop.
+ // Keeping the flag for symmetry with the prior write-vault gate
+ // below: we only persist the consolidated vault if at least one
+ // per-key read produced something.)
+ let _ = migration_attempted;
 
- // Write consolidated vault and clean up individual entries
+ // Write consolidated vault and clean up individual entries —
+ // only if we actually loaded something. Vault writes are also
+ // best-effort: if Keychain refuses, the next launch will retry.
  if !secrets.is_empty() {
  if let Ok(json) = serde_json::to_string(&secrets) {
  if let Ok(vault_entry) = Entry::new(KEYRING_SERVICE, "secrets-vault") {
@@ -198,9 +302,30 @@ impl SecretsCache {
  }
  }
 
- SecretsCache {
- secrets: Mutex::new(secrets),
+ secrets
  }
+
+ /// Convenience constructor — synchronous load for tests + any
+ /// non-Tauri caller. Behaviour identical to the pre-fix version
+ /// except that per-call timeouts now apply (so this can no longer
+ /// hang on a stuck ACL prompt).
+ #[allow(dead_code)]
+ fn load_from_keychain() -> Self {
+ let cache = Self::empty();
+ cache.populate_from_keychain(None);
+ cache
+ }
+}
+
+/// Standalone helper so callers can log keychain timeouts without
+/// needing access to `SecretsCache` internals (the desktop-log
+/// helper requires an `AppHandle`, which tests don't have).
+fn log_keychain_timeout(app: Option<&AppHandle>, key: &str) {
+ let secs = KEYCHAIN_PER_CALL_TIMEOUT.as_secs();
+ let msg = format!("Keychain entry '{key}' timed out after {secs}s — skipping");
+ match app {
+ Some(handle) => append_desktop_log(handle, "WARN", &msg),
+ None => eprintln!("[secrets] {msg}"),
  }
 }
 
@@ -996,6 +1121,65 @@ end tell"#
  if !status.success() {
  return Err("Messages app rejected the send (recipient unreachable, not signed in, or blocked)".to_string());
  }
+ Ok(())
+ }
+}
+
+/// Speak a short alert message aloud via macOS `say`. No-op on non-macOS.
+/// Same trusted-window + length-cap + sanitization pattern as
+/// `send_notification`, with a separate 5-second rate limit so stacked
+/// alerts don't queue overlapping utterances.
+#[tauri::command]
+fn speak_aloud(
+ webview: Webview,
+ text: String,
+ voice: Option<String>,
+ rate: Option<u32>,
+) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
+ #[cfg(not(target_os = "macos"))]
+ {
+ let _ = (text, voice, rate);
+ return Ok(());
+ }
+ #[cfg(target_os = "macos")]
+ {
+ {
+ let mut last = VOICE_LAST_SENT.lock().unwrap_or_else(|p| p.into_inner());
+ if let Some(t) = *last {
+ if t.elapsed() < VOICE_RATE_LIMIT {
+ return Ok(()); // suppressed — too soon
+ }
+ }
+ *last = Some(Instant::now());
+ }
+
+ let text = truncate_to_bytes(&text, 256);
+ let voice_name = voice.as_deref().unwrap_or("Samantha");
+ let voice_name = truncate_to_bytes(voice_name, 32);
+ let speech_rate = rate.unwrap_or(180).clamp(90, 360);
+
+ // Sanitize: strip control chars + characters that could break `say` argv
+ // parsing. `say` takes the message as a positional arg via std::process::Command,
+ // so shell metacharacters aren't an issue, but we still reject control chars
+ // to avoid embedded escape sequences.
+ let sanitize = |s: &str| -> String {
+ s.chars()
+ .filter(|c| !matches!(c, '\x00'..='\x1f' | '\x7f'))
+ .collect()
+ };
+ let safe_text = sanitize(text);
+ let safe_voice = sanitize(voice_name);
+ if safe_text.trim().is_empty() {
+ return Err("speak_aloud: empty text".to_string());
+ }
+
+ Command::new("say")
+ .args(["-v", &safe_voice, "-r", &speech_rate.to_string(), &safe_text])
+ .stdout(Stdio::null())
+ .stderr(Stdio::null())
+ .spawn()
+ .map_err(|e| format!("say spawn failed: {e}"))?;
  Ok(())
  }
 }
@@ -2257,7 +2441,10 @@ fn main() {
  .menu(build_app_menu)
  .on_menu_event(handle_menu_event)
  .manage(LocalApiState::default())
- .manage(SecretsCache::load_from_keychain())
+ // Empty SecretsCache — populated asynchronously from `setup()`.
+ // Keeps the macOS Keychain off the main thread so the UI window
+ // can render immediately on launch.
+ .manage(SecretsCache::empty())
  .plugin(tauri_plugin_biometry::init())
  .plugin(tauri_plugin_clipboard_manager::init())
  .plugin(corelocation::init())
@@ -2289,6 +2476,7 @@ fn main() {
  fetch_polymarket,
  send_notification,
  send_imessage,
+ speak_aloud,
  install_update,
  update_mode_label
  ])
@@ -2311,14 +2499,51 @@ fn main() {
  ),
  );
 
- if let Err(err) = start_local_api(&app.handle()) {
+ // Off-main-thread keychain load + sidecar boot.
+ //
+ // The Tauri builder runs on the main UI thread; calling
+ // `Entry::get_password()` there blocks until macOS Keychain
+ // responds (multiple seconds when the user has a populated
+ // vault, sometimes longer if Keychain Access is unlocked
+ // mid-call). That freeze is what made Crystal Ball appear
+ // hung after each rebuild.
+ //
+ // Sidecar startup intentionally lives inside the same task
+ // because `start_local_api` reads `app.state::<SecretsCache>()`
+ // to inject env vars — running it before the populate would
+ // ship an empty env to the sidecar.
+ let setup_handle = app.handle().clone();
+ tauri::async_runtime::spawn_blocking(move || {
+ let cache = setup_handle.state::<SecretsCache>();
+ // populate_from_keychain has per-call timeouts so this returns
+ // in bounded time even if individual keychain entries are blocked
+ // by ACL prompts — see KEYCHAIN_PER_CALL_TIMEOUT.
+ cache.populate_from_keychain(Some(&setup_handle));
+ let loaded = cache
+ .secrets
+ .lock()
+ .map(|m| m.len())
+ .unwrap_or(0);
  append_desktop_log(
- &app.handle(),
+ &setup_handle,
+ "INFO",
+ &format!("secrets-cache: loaded {loaded} keys from keychain (async)"),
+ );
+ // Sidecar spawn is unconditional. start_local_api generates its
+ // own auth token via generate_local_token() — it does not
+ // depend on the keychain. Even when populate timed out and the
+ // cache is empty, the sidecar boots and serves routes that
+ // don't require API keys; routes that do return 503 +
+ // `keyMissing` until the cache is filled on a future launch.
+ if let Err(err) = start_local_api(&setup_handle) {
+ append_desktop_log(
+ &setup_handle,
  "ERROR",
  &format!("local API sidecar failed to start: {err}"),
  );
  eprintln!("[tauri] local API sidecar failed to start: {err}");
  }
+ });
 
  // Request Location Services authorization so the app appears in
  // System Settings > Privacy & Security > Location Services.

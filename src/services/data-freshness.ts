@@ -45,6 +45,7 @@ export type DataSourceId =
   | 'faa_weather_cams' // FAA weather camera network
   | 'adsb' // ADS-B live aircraft tracking (OpenSky)
   | 'adsb-military' // Military ADS-B flight tracking
+  | 'aviation-intel' // Aviation intel: NOTAMs, SIGMETs, PIREPs, military aircraft, delays
     | "maritime-safety"
     | "inciweb"
     | "cisa-advisories"
@@ -197,6 +198,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   faa_weather_cams: { name: 'FAA Weather Cameras', requiredForRisk: false, panelId: 'faa-weather-cams' },
   adsb: { name: 'ADS-B Aircraft', requiredForRisk: false, panelId: 'air-traffic' },
   'adsb-military': { name: 'Military ADS-B', requiredForRisk: false, panelId: 'geo-intel' },
+  'aviation-intel': { name: 'Aviation Intel', requiredForRisk: false, panelId: 'aviation-intel' },
   webcams: { name: 'Webcam Aggregator', requiredForRisk: false, panelId: 'live-webcams' },
   "maritime-safety": { name: "Maritime Safety", requiredForRisk: false },
   "inciweb": { name: "Inciweb", requiredForRisk: false },
@@ -554,6 +556,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   faa_weather_cams: 'FAA weather camera data unavailable—camera feed not responding',
   adsb: 'Live aircraft positions unavailable—ADS-B tracking offline',
   'adsb-military': 'Military aircraft positions unavailable—military ADS-B tracking offline',
+  'aviation-intel': 'Aviation feeds unavailable—NOTAMs / SIGMETs / PIREPs / military / delays offline',
   webcams: 'Webcam feeds unavailable—Windy/DOT/YouTube aggregation offline',
   // Per-service gap messages added in Pass 7 freshness wiring. Generic by default;
   // refine individual entries when the service ships dedicated copy.

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { OfacCache } from './ofac-cache.mjs';
 import http, { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import https from 'node:https';
@@ -9,15 +10,77 @@ import { promisify } from 'node:util';
 import { brotliCompress, gzip } from 'node:zlib';
 import path from 'node:path';
 import os from 'node:os';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { scoreAllDomains } from './sitrep-severity.mjs';
 import { filterAllDomains, buildCitations } from './sitrep-filter.mjs';
 import { getTakFeeds as s2uTakGetFeeds, getTakSituation as s2uTakGetSituation } from './s2u-tak-client.mjs';
 import { aggregateWastewaterRows, detectSurgeWatches } from './wastewater-aggregate.mjs';
+import { buildBiosurveillanceWastewater } from './biosurveillance-wastewater.mjs';
 import { parseProMedRss, summarizeProMedAlerts } from './promed-classify.mjs';
 import { crossReferenceWhoDonWithProMed } from './who-promed-cross-reference.mjs';
+import {
+  parseNwsCapFeatures,
+  parseFemaDisasters,
+  dedupeAlerts,
+  expireAlerts,
+} from './ipaws-aggregate.mjs';
+import { loadEnvFile } from './env-local-loader.mjs';
+
+// Keychain-loss fallback: a 2026-05-08 incident wiped the macOS Keychain
+// vault, taking 29 API credentials with it. If the keychain is empty
+// (process.env not seeded by the Tauri host), fall back to a plaintext
+// .env.local at the project root. The file lives outside the bundle and
+// is gitignored — Brad keeps a synced copy in iCloud Drive via
+// scripts/backup-keys.sh. Real keychain values still take precedence.
+{
+  const sidecarDir = path.dirname(fileURLToPath(import.meta.url));
+  const envLocalPath = path.join(sidecarDir, '..', '..', '.env.local');
+  const applied = loadEnvFile(envLocalPath, process.env);
+  if (applied > 0) {
+    process.stderr.write(`[sidecar] loaded ${applied} fallback keys from .env.local\n`);
+  }
+}
+
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
+// ── Feed health tracker ───────────────────────────────────────────────────
+// Lightweight per-route success/failure ledger surfaced at /api/health.feeds.
+// Production routes call recordFeedSuccess / recordFeedFailure as they
+// finish; FeedHealthPanel displays the rolled-up state. Bounded memory:
+// one entry per known feed key; no history retained.
+const _feedTracker = new Map();
+
+export function recordFeedSuccess(key, atMs = Date.now()) {
+  if (!key) return;
+  const existing = _feedTracker.get(key) ?? { key };
+  existing.lastSuccessAt = atMs;
+  existing.lastAttemptAt = atMs;
+  existing.lastError = null;
+  _feedTracker.set(key, existing);
+}
+
+export function recordFeedFailure(key, error, atMs = Date.now()) {
+  if (!key) return;
+  const existing = _feedTracker.get(key) ?? { key };
+  existing.lastError = String(error?.message ?? error ?? 'unknown error');
+  existing.lastAttemptAt = atMs;
+  _feedTracker.set(key, existing);
+}
+
+export function getFeedSnapshots() {
+  return [..._feedTracker.values()].map((s) => ({
+    key: s.key,
+    lastSuccessAt: s.lastSuccessAt ?? null,
+    lastError: s.lastError ?? null,
+    lastAttemptAt: s.lastAttemptAt ?? null,
+  }));
+}
+
+/** @internal — for tests. Drops all tracked feed state. */
+export function _resetFeedTracker() {
+  _feedTracker.clear();
+}
+
 function isValidToken(authHeader) {
   const tok = process.env.LOCAL_API_TOKEN;
   if (!tok) return false;
@@ -41,7 +104,8 @@ const WM_HOST_STATS_CAP = 100;
 const wmHostFailures = new Map(); // host → { count, lastError, lastAt }
 const EXPECTED_API_KEYS = [
   'ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'FRED_API_KEY', 'EIA_API_KEY',
-  'NEWSDATA_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY',
+  'NEWSDATA_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY',
+  'PURPLEAIR_API_KEY',
   'OWM_API_KEY', 'FINNHUB_API_KEY', 'NEWSAPI_KEY', 'AVIATIONSTACK_API',
   'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY',
   'CESIUM_ION_TOKEN', 'GROQ_API_KEY', 'OPENROUTER_API_KEY',
@@ -724,7 +788,7 @@ const ALLOWED_ENV_KEYS = new Set([
   'CLOUDFLARE_API_TOKEN', 'ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'URLHAUS_AUTH_KEY',
   'OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'WINGBITS_API_KEY', 'WS_RELAY_URL',
   'VITE_OPENSKY_RELAY_URL', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET',
-  'AISSTREAM_API_KEY', 'VITE_WS_RELAY_URL', 'FINNHUB_API_KEY', 'NASA_FIRMS_API_KEY',
+  'AISSTREAM_API_KEY', 'VITE_WS_RELAY_URL', 'FINNHUB_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY', 'PURPLEAIR_API_KEY',
   'OLLAMA_API_URL', 'OLLAMA_MODEL', 'WTO_API_KEY', 'AVIATIONSTACK_API',
   'ICAO_API_KEY', 'THREATFOX_API_KEY',
   'NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'VIRUSTOTAL_API_KEY',
@@ -749,6 +813,7 @@ const ROUTE_ALIASES = {
   '/api/acled': '/api/acled-events',
   '/api/ais-clusters': '/api/ais-snapshot',
   '/api/firms': '/api/nasa-firms',
+  '/api/wildfire/hotspots': '/api/nasa-firms',
   '/api/opensanctions': '/api/opensanctions-recent',
 };
 
@@ -903,6 +968,85 @@ function json(data, status = 200, extraHeaders = {}) {
  status,
  headers: { 'content-type': 'application/json', ...extraHeaders },
   });
+}
+
+// ── PurpleAir parsers (mirror of src/services/airquality/purpleair-helpers.ts) ──
+
+function sidecarParsePurpleAirNum(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+ const n = Number.parseFloat(v);
+ return Number.isFinite(n) ? n : Number.NaN;
+  }
+  return Number.NaN;
+}
+
+function sidecarParseV1Sensors(payload) {
+  if (!payload || typeof payload !== 'object') return [];
+  const fields = payload.fields;
+  const data = payload.data;
+  if (!Array.isArray(fields) || !Array.isArray(data)) return [];
+  const idx = {
+ id: fields.indexOf('sensor_index'),
+ pm25: fields.indexOf('pm2.5'),
+ lat: fields.indexOf('latitude'),
+ lon: fields.indexOf('longitude'),
+ locationType: fields.indexOf('location_type'),
+ confidence: fields.indexOf('confidence'),
+ name: fields.indexOf('name'),
+ lastSeen: fields.indexOf('last_seen'),
+  };
+  if (idx.id < 0 || idx.pm25 < 0 || idx.lat < 0 || idx.lon < 0) return [];
+  const out = [];
+  for (const row of data) {
+ if (!Array.isArray(row)) continue;
+ const id = sidecarParsePurpleAirNum(row[idx.id]);
+ const pm25 = sidecarParsePurpleAirNum(row[idx.pm25]);
+ const lat = sidecarParsePurpleAirNum(row[idx.lat]);
+ const lon = sidecarParsePurpleAirNum(row[idx.lon]);
+ if (!Number.isFinite(id) || !Number.isFinite(pm25)) continue;
+ if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+ const locationType = idx.locationType >= 0 ? sidecarParsePurpleAirNum(row[idx.locationType]) : 0;
+ const confidence = idx.confidence >= 0 ? sidecarParsePurpleAirNum(row[idx.confidence]) : 100;
+ const lastSeen = idx.lastSeen >= 0 ? sidecarParsePurpleAirNum(row[idx.lastSeen]) : null;
+ const nameVal = idx.name >= 0 && typeof row[idx.name] === 'string' ? row[idx.name] : '';
+ out.push({
+ id, pm25, lat, lon,
+ locationType: Number.isFinite(locationType) ? locationType : 0,
+ confidence: Number.isFinite(confidence) ? confidence : 0,
+ name: nameVal || `Sensor ${id}`,
+ lastSeen: lastSeen !== null && Number.isFinite(lastSeen) ? lastSeen : null,
+ });
+  }
+  return out;
+}
+
+function sidecarParsePublicJson(payload) {
+  if (!payload || typeof payload !== 'object') return [];
+  const results = payload.results;
+  if (!Array.isArray(results)) return [];
+  const out = [];
+  for (const row of results) {
+ if (!row || typeof row !== 'object') continue;
+ const id = sidecarParsePurpleAirNum(row.ID);
+ const pm25 = sidecarParsePurpleAirNum(row.PM2_5Value);
+ const lat = sidecarParsePurpleAirNum(row.Lat);
+ const lon = sidecarParsePurpleAirNum(row.Lon);
+ if (!Number.isFinite(id) || !Number.isFinite(pm25)) continue;
+ if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+ const locationType = sidecarParsePurpleAirNum(row.Type);
+ const confidence = sidecarParsePurpleAirNum(row.Conf);
+ const lastSeenSec = row.LastSeen != null ? sidecarParsePurpleAirNum(row.LastSeen) : Number.NaN;
+ const nameVal = typeof row.Label === 'string' ? row.Label : '';
+ out.push({
+ id, pm25, lat, lon,
+ locationType: Number.isFinite(locationType) ? locationType : 0,
+ confidence: Number.isFinite(confidence) ? confidence : 0,
+ name: nameVal || `Sensor ${id}`,
+ lastSeen: Number.isFinite(lastSeenSec) ? lastSeenSec * 1000 : null,
+ });
+  }
+  return out;
 }
 
 function canCompress(headers, body) {
@@ -1367,6 +1511,229 @@ function makeCorsHeaders(req) {
   };
 }
 
+// ── Signal watch helpers (mirror src/services/synthesis/signal-watch.ts) ──
+export function computeSignalWatchSidecar(keyword, listing) {
+  const children = listing?.data?.children;
+  const posts = [];
+  if (Array.isArray(children)) {
+    for (const c of children) {
+      const d = c?.data;
+      if (!d?.id || !d.title || !d.subreddit || !d.permalink) continue;
+      if (!Number.isFinite(d.created_utc)) continue;
+      posts.push({
+        id: d.id,
+        title: d.title,
+        subreddit: d.subreddit,
+        url: `https://www.reddit.com${d.permalink}`,
+        createdAt: d.created_utc,
+        score: Number.isFinite(d.score) ? d.score : 0,
+        comments: Number.isFinite(d.num_comments) ? d.num_comments : 0,
+        author: d.author ?? 'unknown',
+      });
+    }
+  }
+  posts.sort((a, b) => b.createdAt - a.createdAt);
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const oneHourAgo = nowSec - 3600;
+  const oneDayAgo = nowSec - 86_400;
+  let lastHour = 0, prior = 0;
+  for (const p of posts) {
+    if (p.createdAt >= oneHourAgo && p.createdAt <= nowSec) lastHour += 1;
+    else if (p.createdAt >= oneDayAgo && p.createdAt < oneHourAgo) prior += 1;
+  }
+  const baseline = prior / 23;
+  const surgeRatio = lastHour / Math.max(baseline, 0.1);
+  let surgeLevel = 'normal';
+  if (surgeRatio >= 5) surgeLevel = 'spike';
+  else if (surgeRatio >= 2.5) surgeLevel = 'surge';
+  else if (surgeRatio >= 1.5) surgeLevel = 'elevated';
+  return {
+    keyword,
+    lastHourCount: lastHour,
+    baselineRate: Number(baseline.toFixed(3)),
+    surgeRatio: Number(surgeRatio.toFixed(2)),
+    surgeLevel,
+    totalSeen: posts.length,
+    recent: posts.slice(0, 10),
+  };
+}
+
+// ── Macro-stress helpers (mirror src/services/economic/macro-stress.ts) ────
+function vixGaugeForSidecar(value) {
+  if (value === null || !Number.isFinite(value)) return null;
+  if (value < 20) return 'calm';
+  if (value < 30) return 'elevated';
+  if (value < 40) return 'stress';
+  return 'crisis';
+}
+
+export function buildMacroSeriesSnapshotSidecar(series, observations) {
+  if (observations.length === 0) {
+    return { series, current: null, asOf: null, mean30: null, stddev30: null,
+      zScore: null, trend: 'stable', vixGauge: null };
+  }
+  const last = observations[observations.length - 1];
+  const recent = observations.slice(-30);
+  let mean30 = null, stddev30 = null, zScore = null;
+  if (recent.length >= 5) {
+    const sum = recent.reduce((s, o) => s + o.value, 0);
+    mean30 = sum / recent.length;
+    const variance = recent.reduce((s, o) => s + (o.value - mean30) ** 2, 0) / recent.length;
+    stddev30 = Math.sqrt(variance);
+    if (stddev30 > 0) zScore = (last.value - mean30) / stddev30;
+  }
+  let trend = 'stable';
+  if (observations.length >= 10) {
+    const r = observations.slice(-5);
+    const p = observations.slice(-10, -5);
+    const ra = r.reduce((s, o) => s + o.value, 0) / r.length;
+    const pa = p.reduce((s, o) => s + o.value, 0) / p.length;
+    if (pa !== 0) {
+      const pct = (ra - pa) / Math.abs(pa);
+      if (pct > 0.05) trend = 'rising';
+      else if (pct < -0.05) trend = 'falling';
+    }
+  }
+  return {
+    series, current: last.value, asOf: last.date, mean30, stddev30, zScore, trend,
+    vixGauge: series.toUpperCase() === 'VIXCLS' ? vixGaugeForSidecar(last.value) : null,
+  };
+}
+
+// ── Reddit ransomware mentions (mirror src/services/cyber/ransomware-mentions.ts) ──
+const KNOWN_RANSOMWARE_GROUPS_SIDECAR = [
+  'LockBit', 'ALPHV', 'BlackCat', 'Cl0p', 'Clop', 'Royal', 'Akira', 'Play',
+  'Medusa', 'BianLian', 'Rhysida', 'Black Basta', 'Hive', 'Conti', '8Base',
+  'Cactus', 'NoEscape', 'Qilin', 'Trigona', 'Vice Society',
+];
+const GROUP_LOOKUP_SIDECAR = new Map();
+for (const g of KNOWN_RANSOMWARE_GROUPS_SIDECAR) GROUP_LOOKUP_SIDECAR.set(g.toLowerCase(), g);
+
+function extractGroupsSidecar(text) {
+  if (!text) return [];
+  const lower = text.toLowerCase();
+  const found = new Set();
+  for (const [needle, canonical] of GROUP_LOOKUP_SIDECAR) {
+    if (lower.includes(needle)) found.add(canonical);
+  }
+  return [...found].sort();
+}
+
+export function parseRedditRansomwareSidecar(listing) {
+  const children = listing?.data?.children;
+  if (!Array.isArray(children)) return { mentions: [], groupCounts: [] };
+  const mentions = [];
+  for (const c of children) {
+    const d = c?.data;
+    if (!d?.id || !d.title || !d.subreddit || !d.permalink) continue;
+    if (!Number.isFinite(d.created_utc)) continue;
+    mentions.push({
+      id: d.id,
+      title: d.title,
+      subreddit: d.subreddit,
+      url: `https://www.reddit.com${d.permalink}`,
+      createdAt: d.created_utc,
+      score: Number.isFinite(d.score) ? d.score : 0,
+      comments: Number.isFinite(d.num_comments) ? d.num_comments : 0,
+      author: d.author ?? 'unknown',
+      groups: extractGroupsSidecar(`${d.title}\n${d.selftext ?? ''}`),
+    });
+  }
+  mentions.sort((a, b) => b.createdAt - a.createdAt);
+  const counts = new Map();
+  for (const m of mentions) for (const g of m.groups) counts.set(g, (counts.get(g) ?? 0) + 1);
+  const groupCounts = [...counts.entries()].map(([group, count]) => ({ group, count }))
+    .sort((a, b) => b.count - a.count || a.group.localeCompare(b.group));
+  return { mentions, groupCounts };
+}
+
+// ── Vessel classifier (mirror src/services/maritime/vessel-classifier.ts) ──
+const MARITIME_RISK_ZONES_SIDECAR = [
+  { id: 'red-sea',         name: 'Red Sea',          south: 12, north: 22, west: 42,  east: 50 },
+  { id: 'hormuz',           name: 'Strait of Hormuz', south: 25, north: 27, west: 56,  east: 58 },
+  { id: 'black-sea',        name: 'Black Sea',        south: 41, north: 47, west: 28,  east: 42 },
+  { id: 'south-china-sea',  name: 'South China Sea',  south: 0,  north: 25, west: 105, east: 122 },
+];
+
+const MID_TO_FLAG_SIDECAR = {
+  '422': 'Iran', '470': 'United Arab Emirates', '473': 'Egypt', '561': 'Saudi Arabia',
+  '466': 'Kuwait', '408': 'Bahrain', '425': 'Iraq', '443': 'Israel', '475': 'Yemen',
+  '273': 'Russia', '272': 'Ukraine', '271': 'Turkey', '264': 'Romania', '207': 'Bulgaria', '213': 'Georgia',
+  '412': 'China', '413': 'China', '414': 'China', '477': 'Hong Kong',
+  '525': 'Indonesia', '533': 'Malaysia', '563': 'Singapore', '548': 'Philippines', '574': 'Vietnam',
+  '352': 'Panama', '353': 'Panama', '354': 'Panama', '371': 'Panama', '372': 'Panama', '373': 'Panama', '374': 'Panama',
+  '538': 'Marshall Islands', '636': 'Liberia', '637': 'Liberia',
+  '366': 'United States', '367': 'United States', '368': 'United States', '369': 'United States',
+  '232': 'United Kingdom', '233': 'United Kingdom', '234': 'United Kingdom', '235': 'United Kingdom',
+};
+
+export function classifyShipTypeSidecar(shipType) {
+  if (typeof shipType !== 'number' || !Number.isFinite(shipType)) return 'other';
+  if (shipType === 35 || shipType === 55) return 'military';
+  if (shipType >= 80 && shipType <= 89) return 'tanker';
+  if (shipType === 78 || shipType === 79) return 'container';
+  if (shipType >= 70 && shipType <= 77) return 'bulk_carrier';
+  return 'other';
+}
+
+export function flagFromMmsiSidecar(mmsi) {
+  if (typeof mmsi !== 'string' || mmsi.length < 3) return 'Unknown';
+  return MID_TO_FLAG_SIDECAR[mmsi.slice(0, 3)] ?? 'Unknown';
+}
+
+export function zoneForPositionSidecar(lat, lon, zones = MARITIME_RISK_ZONES_SIDECAR) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  for (const z of zones) {
+    if (lat >= z.south && lat <= z.north && lon >= z.west && lon <= z.east) return z;
+  }
+  return null;
+}
+
+export function filterVesselsInRiskZonesSidecar(rows, options = {}) {
+  const zones = options.zones ?? MARITIME_RISK_ZONES_SIDECAR;
+  const maxAgeMs = options.maxAgeMs;
+  const now = options.now ?? Date.now();
+  const out = [];
+  for (const r of rows) {
+    if (!r.mmsi) continue;
+    if (!Number.isFinite(r.lat) || !Number.isFinite(r.lon)) continue;
+    if (Number.isFinite(maxAgeMs) && Number.isFinite(r.timestamp) && now - r.timestamp > maxAgeMs) continue;
+    const zone = zoneForPositionSidecar(r.lat, r.lon, zones);
+    if (!zone) continue;
+    out.push({
+      mmsi: r.mmsi,
+      name: r.name ?? '',
+      lat: r.lat,
+      lon: r.lon,
+      speedKnots: Number.isFinite(r.speed) ? r.speed : null,
+      headingDeg: Number.isFinite(r.heading) ? r.heading : null,
+      shipType: Number.isFinite(r.shipType) ? r.shipType : null,
+      category: classifyShipTypeSidecar(r.shipType),
+      flag: flagFromMmsiSidecar(r.mmsi),
+      zoneId: zone.id,
+      zoneName: zone.name,
+      observedAt: Number.isFinite(r.timestamp) ? r.timestamp : null,
+    });
+  }
+  out.sort((a, b) => {
+    const aT = a.observedAt ?? -Infinity;
+    const bT = b.observedAt ?? -Infinity;
+    return bT - aT;
+  });
+  return out;
+}
+
+export function summarizeVesselsSidecar(vessels) {
+  const byZone = {};
+  const byCategory = { tanker: 0, bulk_carrier: 0, container: 0, military: 0, other: 0 };
+  for (const v of vessels) {
+    byZone[v.zoneName] = (byZone[v.zoneName] ?? 0) + 1;
+    byCategory[v.category] += 1;
+  }
+  return { byZone, byCategory, total: vessels.length };
+}
+
 // ── Dark-vessel gap helpers (mirror src/services/dark-vessel.ts) ────────────
 const DARK_VESSEL_RISK_ZONES = [
   { name: 'Strait of Hormuz', lat: 26.5, lon: 56.3, radiusKm: 200 },
@@ -1518,6 +1885,67 @@ const SPACEWX_KP_WINDOW_MS = 24 * SPACEWX_HOUR_MS;
 const SPACEWX_ALERTS_WINDOW_MS = 24 * SPACEWX_HOUR_MS;
 const SPACEWX_EARTHWARD_LON_DEG = 30;
 const SPACEWX_CACHE_TTL_MS = 5 * 60 * 1000;
+
+// Solar imagery catalog — kept in sync with
+// src/services/spaceweather/solar-imagery.ts (the renderer-side source
+// of truth). The slug allowlist is the SSRF guard for the byte proxy.
+const SOLAR_IMAGERY_TTL_MS = 15 * 60 * 1000;
+const SOLAR_IMAGERY_BYTES_TTL_MS = 15 * 60 * 1000;
+export const SOLAR_IMAGERY_CATALOG = Object.freeze([
+  Object.freeze({
+    slug: 'sdo-aia-171',
+    label: 'SDO AIA 171Å',
+    description: 'Quiet corona — coronal loops at ~600 000 K. Bright active regions and coronal holes.',
+    upstreamUrl: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0171.jpg',
+  }),
+  Object.freeze({
+    slug: 'sdo-aia-304',
+    label: 'SDO AIA 304Å',
+    description: 'Chromosphere / transition region at ~50 000 K. Filaments, prominences, and erupting plasma.',
+    upstreamUrl: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0304.jpg',
+  }),
+  Object.freeze({
+    slug: 'sdo-hmi-magnetogram',
+    label: 'SDO HMI Magnetogram',
+    description: 'Photospheric line-of-sight magnetic field. Sunspots and active-region polarity.',
+    upstreamUrl: 'https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_HMIBC.jpg',
+  }),
+  Object.freeze({
+    slug: 'lasco-c2',
+    label: 'LASCO C2',
+    description: 'Coronagraph 2–6 R☉. Earliest visibility for halo CMEs after eruption.',
+    upstreamUrl: 'https://soho.nascom.nasa.gov/data/realtime/c2/1024/latest.jpg',
+  }),
+  Object.freeze({
+    slug: 'lasco-c3',
+    label: 'LASCO C3',
+    description: 'Wider coronagraph 3.5–32 R☉. Tracks CMEs once they leave C2 field.',
+    upstreamUrl: 'https://soho.nascom.nasa.gov/data/realtime/c3/1024/latest.jpg',
+  }),
+]);
+
+/** HEAD probe for an upstream solar imagery URL. Returns the
+ *  Last-Modified header (ISO-normalised when possible) and a short
+ *  upstream status string for diagnostics. Never throws — failures
+ *  surface as `{ lastModified: null, upstreamStatus: 'timeout' | ... }`. */
+async function probeUpstreamLastModified(upstreamUrl) {
+  try {
+    const resp = await fetchWithTimeout(
+      upstreamUrl,
+      { method: 'HEAD', headers: { 'User-Agent': CHROME_UA } },
+      8_000,
+    );
+    if (!resp.ok) return { lastModified: null, upstreamStatus: `http_${resp.status}` };
+    const raw = resp.headers.get('last-modified');
+    if (!raw) return { lastModified: null, upstreamStatus: 'ok' };
+    const ms = Date.parse(raw);
+    if (!Number.isFinite(ms)) return { lastModified: raw, upstreamStatus: 'ok' };
+    return { lastModified: new Date(ms).toISOString(), upstreamStatus: 'ok' };
+  } catch (error) {
+    const reason = error?.name === 'AbortError' ? 'timeout' : 'error';
+    return { lastModified: null, upstreamStatus: reason };
+  }
+}
 
 let spacewxStatusCache = null;
 let spacewxStatusCachedAt = 0;
@@ -1942,6 +2370,61 @@ export function sanitizeEewAlert(raw) {
     out.imessageError = raw.imessageError.slice(0, 500);
   }
   return out;
+}
+
+// ── Synthesis correlation event sanitiser (mirror of
+// src/services/synthesis/correlation-engine.ts) ──
+const VALID_CORRELATION_TYPES = new Set([
+  'seismic-nuclear',
+  'space-weather-cascade',
+  'wildfire-air-quality',
+  'infra-cyber',
+  'hurricane-fuel',
+  'multi-hazard',
+]);
+const VALID_SEVERITIES = new Set(['low', 'medium', 'high', 'critical']);
+const VALID_DOMAINS = new Set([
+  'seismic', 'nuclear', 'space-weather', 'wildfire', 'air-quality',
+  'cyber', 'infrastructure', 'hurricane', 'fuel', 'flood', 'volcano', 'disease',
+]);
+
+export function sanitizeCorrelationEvent(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (!VALID_CORRELATION_TYPES.has(raw.type)) return null;
+  if (!VALID_SEVERITIES.has(raw.severity)) return null;
+  if (!Array.isArray(raw.domains)) return null;
+  const domains = raw.domains.filter((d) => typeof d === 'string' && VALID_DOMAINS.has(d));
+  if (domains.length === 0) return null;
+  if (typeof raw.description !== 'string') return null;
+  const triggeredAtMs = typeof raw.triggeredAt === 'string'
+    ? Date.parse(raw.triggeredAt)
+    : (typeof raw.triggeredAt === 'number' ? raw.triggeredAt : NaN);
+  if (!Number.isFinite(triggeredAtMs)) return null;
+  if (!Array.isArray(raw.components)) return null;
+  const components = raw.components
+    .slice(0, 50)
+    .map((c) => {
+      if (!c || typeof c !== 'object') return null;
+      if (typeof c.domain !== 'string' || !VALID_DOMAINS.has(c.domain)) return null;
+      if (typeof c.source !== 'string' || typeof c.description !== 'string') return null;
+      const out = {
+        domain: c.domain,
+        source: c.source.slice(0, 200),
+        description: c.description.slice(0, 500),
+      };
+      if (typeof c.severity === 'string' && VALID_SEVERITIES.has(c.severity)) out.severity = c.severity;
+      return out;
+    })
+    .filter(Boolean);
+  if (components.length === 0) return null;
+  return {
+    type: raw.type,
+    severity: raw.severity,
+    domains,
+    description: raw.description.slice(0, 500),
+    triggeredAt: new Date(triggeredAtMs).toISOString(),
+    components,
+  };
 }
 
 // CACHE PATTERN: copy this for future cached routes
@@ -2422,6 +2905,30 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  if (!response.ok) return fail(`NASA FIRMS probe failed (${response.status})`);
  if (/invalid api key|not authorized|forbidden/i.test(text)) return fail('NASA FIRMS rejected this key');
  return ok('NASA FIRMS key verified');
+ }
+
+ case 'AIRNOW_API_KEY': {
+ const response = await fetchWithTimeout(
+ `https://www.airnowapi.org/aq/observation/latLong/current/?latitude=39.7392&longitude=-104.9903&distance=50&format=application/json&API_KEY=${encodeURIComponent(value)}`,
+ { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }
+ );
+ const text = await response.text();
+ if (isAuthFailure(response.status, text)) return fail('AirNow rejected this key');
+ if (!response.ok) return fail(`AirNow probe failed (${response.status})`);
+ if (/invalid api key|unauthorized|forbidden/i.test(text)) return fail('AirNow rejected this key');
+ return ok('AirNow key verified');
+ }
+
+ case 'PURPLEAIR_API_KEY': {
+ const response = await fetchWithTimeout(
+ 'https://api.purpleair.com/v1/keys',
+ { headers: { 'X-API-Key': value, Accept: 'application/json', 'User-Agent': CHROME_UA } }
+ );
+ const text = await response.text();
+ if (isAuthFailure(response.status, text)) return fail('PurpleAir rejected this key');
+ if (!response.ok) return fail(`PurpleAir probe failed (${response.status})`);
+ if (/invalid|unauthorized|forbidden/i.test(text)) return fail('PurpleAir rejected this key');
+ return ok('PurpleAir key verified');
  }
 
  case 'NEWSAPI_KEY': {
@@ -2956,6 +3463,96 @@ async function handleIntelGenerate(req, res, context) {
   }
 }
 
+// ── Weather-hazard helpers (PR 1) ────────────────────────────────────────────
+function alertCategoryFor(event) {
+  const e = String(event || '').toLowerCase();
+  if (e.includes('tornado')) return 'tornado';
+  if (e.includes('hurricane') || e.includes('tropical') || e.includes('storm surge')) return 'hurricane';
+  if (e.includes('flood')) return 'flood';
+  if (e.includes('winter') || e.includes('blizzard') || e.includes('ice storm') || e.includes('snow')) return 'winter';
+  if (e.includes('thunderstorm')) return 'thunderstorm';
+  return 'other';
+}
+
+function stormCategoryForSidecar(classification, intensityMph) {
+  const c = String(classification || '').toUpperCase();
+  if (c.startsWith('PT') || c.includes('POST')) return 'PT';
+  if (c.startsWith('TD') || c.includes('DEPRESSION')) return 'TD';
+  if (intensityMph >= 157) return 'HU5';
+  if (intensityMph >= 130) return 'HU4';
+  if (intensityMph >= 111) return 'HU3';
+  if (intensityMph >= 96) return 'HU2';
+  if (intensityMph >= 74) return 'HU1';
+  if (c.startsWith('TS') || c.includes('STORM') || intensityMph >= 39) return 'TS';
+  return 'unknown';
+}
+
+function pctToFractionSidecar(x) {
+  if (x === undefined || x === null || x === '') return 0;
+  const v = parseFloat(x);
+  if (!Number.isFinite(v)) return 0;
+  return v > 1.5 ? v / 100 : v;
+}
+
+function normalizeUsdmDate(s) {
+  if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  return s;
+}
+
+function parseSeaIceForSidecar(csv) {
+  const lines = csv.trim().split(/\r?\n/);
+  const all = [];
+  for (const line of lines) {
+    const cells = line.split(',').map(s => s.trim());
+    const yr = parseInt(cells[0], 10);
+    if (!Number.isFinite(yr) || yr < 1900 || yr > 2200) continue;
+    const mo = parseInt(cells[1], 10);
+    const dy = parseInt(cells[2], 10);
+    const ext = parseFloat(cells[3]);
+    if (!Number.isFinite(mo) || !Number.isFinite(dy) || !Number.isFinite(ext) || ext < 0) continue;
+    all.push({ yr, mo, dy, extent: ext });
+  }
+  if (all.length === 0) return null;
+  // Build climatology + record-low DOY
+  const byDoy = new Map();
+  const minByDoy = new Map();
+  for (const r of all) {
+    const key = `${String(r.mo).padStart(2,'0')}-${String(r.dy).padStart(2,'0')}`;
+    if (r.yr >= 1981 && r.yr <= 2010) {
+      const list = byDoy.get(key) ?? [];
+      list.push(r.extent);
+      byDoy.set(key, list);
+    }
+    const cur = minByDoy.get(key);
+    if (cur === undefined || r.extent < cur) minByDoy.set(key, r.extent);
+  }
+  const medianByDoy = new Map();
+  for (const [k, list] of byDoy) {
+    const sorted = [...list].sort((a, b) => a - b);
+    medianByDoy.set(k, sorted[Math.floor(sorted.length / 2)] ?? 0);
+  }
+  // Latest entry
+  let latest = null;
+  for (const r of all) {
+    if (!latest || (r.yr > latest.yr) || (r.yr === latest.yr && r.mo > latest.mo) || (r.yr === latest.yr && r.mo === latest.mo && r.dy > latest.dy)) {
+      latest = r;
+    }
+  }
+  if (!latest) return null;
+  const key = `${String(latest.mo).padStart(2,'0')}-${String(latest.dy).padStart(2,'0')}`;
+  const median = medianByDoy.get(key);
+  const min = minByDoy.get(key);
+  return {
+    date: `${latest.yr}-${String(latest.mo).padStart(2,'0')}-${String(latest.dy).padStart(2,'0')}`,
+    extentMillionKm2: latest.extent,
+    medianMillionKm2: median ?? undefined,
+    anomalyMillionKm2: median !== undefined ? latest.extent - median : undefined,
+    isRecordLow: min !== undefined && Math.abs(latest.extent - min) < 0.005,
+  };
+}
+
 function extractAlertCentroid(feature) {
   const geom = feature?.geometry;
   if (!geom) return null;
@@ -3280,6 +3877,52 @@ async function dispatch(requestUrl, req, routes, context) {
         lastEventId: snapshot.lastEventId,
         asOf: snapshot.asOf,
         ageMs,
+        stale: ageMs > 60 * 1000,
+        available: true,
+      });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Synthesis correlations (renderer → sidecar mirror) ─────────────────
+  // Renderer-side `correlation-engine.correlateThreats()` runs every 15s,
+  // POSTs the resulting events here. Any consumer (banner, MCP, external
+  // tools) reads via GET. Same shape as /api/eew-status.
+  if (requestUrl.pathname === '/api/synthesis/correlations') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!Array.isArray(body.events)) {
+          return json({ error: 'events must be an array' }, 400);
+        }
+        const events = body.events
+          .slice(0, 500)
+          .map(sanitizeCorrelationEvent)
+          .filter(Boolean);
+        context._synthesisCorrelations = {
+          events,
+          highestSeverity: typeof body.highestSeverity === 'string' ? body.highestSeverity : null,
+          asOf: typeof body.asOf === 'number' ? body.asOf : Date.now(),
+        };
+        return json({ ok: true, count: events.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const snapshot = context._synthesisCorrelations || null;
+      if (!snapshot) {
+        return json({ events: [], highestSeverity: null, asOf: 0, available: false });
+      }
+      const ageMs = Date.now() - snapshot.asOf;
+      return json({
+        events: snapshot.events,
+        highestSeverity: snapshot.highestSeverity,
+        asOf: snapshot.asOf,
+        ageMs,
+        // 15s poll → consider stale at ~3 missed cycles.
         stale: ageMs > 60 * 1000,
         available: true,
       });
@@ -3829,6 +4472,179 @@ async function dispatch(requestUrl, req, routes, context) {
       radiusKm,
       asOf: new Date(now).toISOString(),
     });
+  }
+
+  // ── Signal watch (Reddit keyword velocity, no auth) ─────────────────────
+  if (requestUrl.pathname === '/api/signal-watch') {
+    const q = (requestUrl.searchParams.get('q') || '').trim();
+    if (!q || q.length > 100) {
+      return json({ error: 'q parameter required (1-100 chars)' }, 400);
+    }
+    if (!/^[\w\s+\-.,'#]+$/.test(q)) {
+      return json({ error: 'q contains unsupported characters' }, 400);
+    }
+    try {
+      const url = `https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&sort=new&t=day&limit=100`;
+      const resp = await fetchWithTimeout(url, {
+        headers: { Accept: 'application/json', 'User-Agent': 'crystalball/1.0 (intelligence panel)' },
+      }, 12_000);
+      if (!resp.ok) {
+        return json({ error: `Reddit HTTP ${resp.status}`, keyword: q,
+          lastHourCount: 0, baselineRate: 0, surgeRatio: 0, surgeLevel: 'normal',
+          totalSeen: 0, recent: [] }, 502);
+      }
+      const listing = await resp.json();
+      const result = computeSignalWatchSidecar(q, listing);
+      return json({ ...result, asOf: new Date().toISOString() });
+    } catch (error) {
+      return json({ error: String(error?.message ?? error), keyword: q,
+        lastHourCount: 0, baselineRate: 0, surgeRatio: 0, surgeLevel: 'normal',
+        totalSeen: 0, recent: [] }, 502);
+    }
+  }
+
+  // ── CDC Acute Respiratory Illness by state (SODA, no auth) ──────────────
+  // Public CDC dataset f3zz-zga5 — weekly state-level activity labels.
+  if (requestUrl.pathname === '/api/cdc-ari') {
+    try {
+      // Latest 60 rows is enough for one full week of all 56 reporting jurisdictions.
+      const url = 'https://data.cdc.gov/resource/f3zz-zga5.json?$limit=60&$order=week_end DESC';
+      const resp = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } }, 12_000);
+      if (!resp.ok) {
+        return json({ rows: [], error: `CDC SODA HTTP ${resp.status}` }, 502);
+      }
+      const rows = await resp.json();
+      return json({ rows, asOf: new Date().toISOString() });
+    } catch (error) {
+      return json({ rows: [], error: String(error?.message ?? error) }, 502);
+    }
+  }
+
+  // ── Macro stress (FRED CSV proxy: VIX + USD/EUR + USD/JPY) ──────────────
+  if (requestUrl.pathname === '/api/macro-stress') {
+    const seriesParam = (requestUrl.searchParams.get('series') || 'VIXCLS,DEXUSEU,DEXJPUS')
+      .split(',').map(s => s.trim()).filter(s => /^[A-Z0-9_]+$/i.test(s)).slice(0, 5);
+    if (seriesParam.length === 0) {
+      return json({ error: 'invalid or empty series parameter' }, 400);
+    }
+    const components = [];
+    let asOf = null;
+    for (const series of seriesParam) {
+      try {
+        const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}`;
+        const resp = await fetchWithTimeout(url, { headers: { Accept: 'text/csv' } }, 12_000);
+        if (!resp.ok) {
+          components.push({ series, error: `FRED ${resp.status}`, current: null, asOf: null,
+            mean30: null, stddev30: null, zScore: null, trend: 'stable', vixGauge: null });
+          continue;
+        }
+        const csv = await resp.text();
+        const observations = parseFredCsvSidecar(csv);
+        const snap = buildMacroSeriesSnapshotSidecar(series, observations);
+        components.push(snap);
+        if (snap.asOf && (!asOf || snap.asOf > asOf)) asOf = snap.asOf;
+      } catch (error) {
+        components.push({ series, error: String(error?.message ?? error), current: null, asOf: null,
+          mean30: null, stddev30: null, zScore: null, trend: 'stable', vixGauge: null });
+      }
+    }
+    return json({ components, asOf });
+  }
+
+  // ── Reddit ransomware-mentions proxy (no auth) ──────────────────────────
+  if (requestUrl.pathname === '/api/cyber-ransomware-mentions') {
+    try {
+      const limit = Math.min(50, Math.max(1, Number(requestUrl.searchParams.get('limit') || '25')));
+      const url = `https://www.reddit.com/search.json?q=ransomware&sort=new&t=day&limit=${limit}`;
+      const resp = await fetchWithTimeout(url, {
+        headers: { Accept: 'application/json', 'User-Agent': 'crystalball/1.0 (intelligence panel)' },
+      }, 12_000);
+      if (!resp.ok) {
+        return json({ mentions: [], groupCounts: [], error: `Reddit HTTP ${resp.status}` }, 502);
+      }
+      const listing = await resp.json();
+      const { mentions, groupCounts } = parseRedditRansomwareSidecar(listing);
+      return json({ mentions, groupCounts, asOf: new Date().toISOString() });
+    } catch (error) {
+      return json({ mentions: [], groupCounts: [], error: String(error?.message ?? error) }, 502);
+    }
+  }
+
+  // ── Maritime live vessels (filtered from aisState.vessels by risk zone) ──
+  if (requestUrl.pathname === '/api/maritime/vessels') {
+    const maxAgeMs = Math.max(60_000, Math.min(60 * 60_000,
+      Number(requestUrl.searchParams.get('maxAgeMs') || (15 * 60_000))));
+    const rows = [...aisState.vessels.values()];
+    const vessels = filterVesselsInRiskZonesSidecar(rows, { maxAgeMs });
+    // Cross-reference each vessel against the OFAC SDN cache. Match
+    // is opportunistic — if the cache hasn't loaded yet we just
+    // return the vessels unflagged rather than blocking on a fresh
+    // 28MB download mid-request.
+    let sanctionedCount = 0;
+    if (context.ofacCache?.indexes) {
+      for (const v of vessels) {
+        const m = context.ofacCache.matchVessel({ name: v.name, imo: v.imo ?? null, callSign: v.callSign ?? null });
+        if (m.matched) {
+          v.sanctioned = true;
+          v.sanctionedReason = m.reason;
+          v.sanctionedBadge = m.badge;
+          sanctionedCount++;
+        }
+      }
+    } else if (context.ofacCache) {
+      // Kick off a background refresh so the next call can flag.
+      context.ofacCache.ensureLoaded().catch(() => {});
+    }
+    const summary = summarizeVesselsSidecar(vessels);
+    return json({
+      vessels,
+      summary,
+      sanctionedCount,
+      asOf: new Date().toISOString(),
+      sampleSize: rows.length,
+    });
+  }
+
+  // ── OFAC SDN: search ─────────────────────────────────────────────────────
+  // GET /api/sanctions/search?q=...&type=vessel|aircraft|individual|entity&limit=50
+  if (requestUrl.pathname === '/api/sanctions/search') {
+    const q = requestUrl.searchParams.get('q') ?? '';
+    const type = requestUrl.searchParams.get('type');
+    const limit = Number.parseInt(requestUrl.searchParams.get('limit') ?? '50', 10);
+    if (!context.ofacCache) return json({ hits: [], error: 'sanctions cache unavailable' }, 503);
+    if (!q.trim()) return json({ hits: [], meta: context.ofacCache.getCacheMeta() });
+    try {
+      await context.ofacCache.ensureLoaded();
+      const hits = context.ofacCache.searchSanctions(q, {
+        type: type && ['individual','vessel','aircraft','entity','unknown'].includes(type) ? type : undefined,
+        limit: Number.isFinite(limit) ? limit : 50,
+      });
+      return json({ hits, meta: context.ofacCache.getCacheMeta() });
+    } catch (error) {
+      return json({ hits: [], error: `sanctions-search error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── OFAC SDN: all sanctioned vessels (for AIS cross-reference) ──────────
+  if (requestUrl.pathname === '/api/sanctions/vessels') {
+    if (!context.ofacCache) return json({ vessels: [], error: 'sanctions cache unavailable' }, 503);
+    try {
+      await context.ofacCache.ensureLoaded();
+      return json({ vessels: context.ofacCache.getSanctionedVessels(), meta: context.ofacCache.getCacheMeta() });
+    } catch (error) {
+      return json({ vessels: [], error: `sanctions-vessels error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── OFAC SDN: all sanctioned aircraft ────────────────────────────────────
+  if (requestUrl.pathname === '/api/sanctions/aircraft') {
+    if (!context.ofacCache) return json({ aircraft: [], error: 'sanctions cache unavailable' }, 503);
+    try {
+      await context.ofacCache.ensureLoaded();
+      return json({ aircraft: context.ofacCache.getSanctionedAircraft(), meta: context.ofacCache.getCacheMeta() });
+    } catch (error) {
+      return json({ aircraft: [], error: `sanctions-aircraft error: ${error.message ?? error}` }, 502);
+    }
   }
 
   // ── ThreatFox IOC feed ───────────────────────────────────────────────────
@@ -4470,6 +5286,232 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Weather hazards: severity-filtered NWS alerts (PR 1) ─────────────────
+  if (requestUrl.pathname === '/api/weather/alerts') {
+    try {
+      const resp = await fetchWithTimeout(
+        'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update',
+        { headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-Hazards/1.0 (https://github.com/bradleybond512/crystal-ball)' } },
+        12_000,
+      );
+      if (!resp.ok) return json([], 200);
+      const data = await resp.json();
+      const features = Array.isArray(data?.features) ? data.features : [];
+      const HIGH_PREFIXES = [
+        'Tornado Warning', 'Hurricane Warning', 'Flash Flood Warning',
+        'Winter Storm Warning', 'Tropical Storm Warning',
+        'Severe Thunderstorm Warning', 'Blizzard Warning',
+        'Ice Storm Warning', 'Storm Surge Warning', 'Extreme Wind Warning',
+      ];
+      const out = [];
+      for (const f of features) {
+        const p = f?.properties ?? {};
+        const sev = String(p.severity ?? '');
+        const ev = String(p.event ?? '');
+        const isHighSev = sev === 'Extreme' || sev === 'Severe';
+        const isFilteredEvent = HIGH_PREFIXES.some(prefix => ev.startsWith(prefix));
+        if (!isHighSev && !isFilteredEvent) continue;
+        out.push({
+          id: String(p.id ?? ''),
+          event: ev,
+          severity: sev || 'Unknown',
+          certainty: String(p.certainty ?? 'Unknown'),
+          urgency: String(p.urgency ?? 'Unknown'),
+          headline: String(p.headline ?? ''),
+          areaDesc: String(p.areaDesc ?? ''),
+          sent: String(p.sent ?? ''),
+          expires: String(p.expires ?? ''),
+          geometry: f?.geometry ?? undefined,
+          category: alertCategoryFor(ev),
+        });
+      }
+      return json(out);
+    } catch {
+      return json([], 200);
+    }
+  }
+
+  // ── Weather hazards: NHC active tropical cyclones (PR 1) ─────────────────
+  if (requestUrl.pathname === '/api/weather/tropical') {
+    try {
+      const resp = await fetchWithTimeout(
+        'https://www.nhc.noaa.gov/CurrentStorms.json',
+        { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall-Hazards/1.0' } },
+        12_000,
+      );
+      if (!resp.ok) return json([], 200);
+      const data = await resp.json();
+      const list = Array.isArray(data?.activeStorms) ? data.activeStorms : [];
+      const out = list.map((s) => {
+        const lat = parseFloat(String(s.latitudeNumeric ?? s.latitude ?? ''));
+        const lng = parseFloat(String(s.longitudeNumeric ?? s.longitude ?? ''));
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        const intensity = parseFloat(String(s.intensity ?? '0')) || 0;
+        const classification = String(s.classification ?? '');
+        return {
+          id: String(s.id ?? s.binNumber ?? `${s.basin ?? 'AL'}-${s.atcfID ?? ''}`),
+          name: String(s.name ?? 'unnamed'),
+          classification,
+          category: stormCategoryForSidecar(classification, intensity),
+          basin: String(s.basin ?? 'unknown').toUpperCase(),
+          position: { lat, lng },
+          intensityMph: intensity,
+          pressureMb: parseFloat(String(s.pressure ?? '')) || undefined,
+          movement: (s.movementDir != null && s.movementSpeed != null) ? {
+            headingDeg: parseFloat(String(s.movementDir)) || 0,
+            speedMph: parseFloat(String(s.movementSpeed)) || 0,
+          } : undefined,
+          advisoryNumber: String(s.advNum ?? ''),
+          publicAdvisoryUrl: typeof s.publicAdvisory === 'string' ? s.publicAdvisory : undefined,
+          forecastTrackUrl: typeof s.forecastTrack === 'string' ? s.forecastTrack : undefined,
+        };
+      }).filter(Boolean);
+      return json(out);
+    } catch {
+      return json([], 200);
+    }
+  }
+
+  // ── Weather hazards: hurricane track GeoJSON (PR 1) ──────────────────────
+  // Pass-through proxy for the NHC archive forecast track for a given storm.
+  // Caller passes ?url=<encoded forecastTrackUrl>. We restrict to nhc.noaa.gov
+  // hosts to prevent SSRF.
+  if (requestUrl.pathname === '/api/weather/tropical/track') {
+    const target = requestUrl.searchParams.get('url') ?? '';
+    let parsed;
+    try { parsed = new URL(target); } catch { return json({ error: 'invalid url' }, 400); }
+    if (parsed.host !== 'www.nhc.noaa.gov' && parsed.host !== 'nhc.noaa.gov') {
+      return json({ error: 'host not allowed' }, 400);
+    }
+    try {
+      const resp = await fetchWithTimeout(parsed.toString(), { headers: { 'User-Agent': 'CrystalBall-Hazards/1.0' } }, 12_000);
+      if (!resp.ok) return json(null, 200);
+      const text = await resp.text();
+      try { return json(JSON.parse(text), 200); } catch { return json({ raw: text.slice(0, 5000) }, 200); }
+    } catch {
+      return json(null, 200);
+    }
+  }
+
+  // ── Weather hazards: US Drought Monitor weekly snapshot (PR 1) ──────────
+  if (requestUrl.pathname === '/api/weather/drought') {
+    const CACHE_KEY = 'usdm-drought';
+    const CACHE_TTL = 6 * 60 * 60 * 1000; // 6h — USDM updates weekly
+    const cached = getCached(CACHE_KEY, CACHE_TTL);
+    if (cached) return json(cached);
+    try {
+      const resp = await fetchWithTimeout(
+        'https://usdm.climate.unl.edu/USDMStatistics_application_files/data/usstats/dm_total.csv',
+        { headers: { 'User-Agent': 'CrystalBall-Hazards/1.0' } },
+        12_000,
+      );
+      if (!resp.ok) return json(getCachedStale(CACHE_KEY) ?? null, 200);
+      const csv = await resp.text();
+      const lines = csv.trim().split(/\r?\n/);
+      if (lines.length < 2) return json(null, 200);
+      const header = lines[0].split(',').map(s => s.trim().toLowerCase());
+      const idx = (n) => header.indexOf(n);
+      let latest = null;
+      for (const line of lines.slice(1)) {
+        const cells = line.split(',').map(s => s.trim());
+        const date = cells[idx('mapdate')] || cells[0];
+        if (!date) continue;
+        const norm = normalizeUsdmDate(date);
+        const snap = {
+          weekDate: norm,
+          noneFraction: pctToFractionSidecar(cells[idx('none')]),
+          d0Fraction: pctToFractionSidecar(cells[idx('d0')]),
+          d1Fraction: pctToFractionSidecar(cells[idx('d1')]),
+          d2Fraction: pctToFractionSidecar(cells[idx('d2')]),
+          d3Fraction: pctToFractionSidecar(cells[idx('d3')]),
+          d4Fraction: pctToFractionSidecar(cells[idx('d4')]),
+        };
+        if (!latest || snap.weekDate > latest.weekDate) latest = snap;
+      }
+      if (latest) setCached(CACHE_KEY, latest, CACHE_TTL);
+      return json(latest, 200);
+    } catch {
+      return json(getCachedStale(CACHE_KEY) ?? null, 200);
+    }
+  }
+
+  // ── Weather hazards: NSIDC Arctic sea-ice extent (PR 1) ─────────────────
+  if (requestUrl.pathname === '/api/weather/seaice') {
+    const CACHE_KEY = 'nsidc-seaice';
+    const CACHE_TTL = 6 * 60 * 60 * 1000;
+    const cached = getCached(CACHE_KEY, CACHE_TTL);
+    if (cached) return json(cached);
+    try {
+      const resp = await fetchWithTimeout(
+        'https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v3.0.csv',
+        { headers: { 'User-Agent': 'CrystalBall-Hazards/1.0' } },
+        15_000,
+      );
+      if (!resp.ok) return json(getCachedStale(CACHE_KEY) ?? null, 200);
+      const csv = await resp.text();
+      const result = parseSeaIceForSidecar(csv);
+      if (result) setCached(CACHE_KEY, result, CACHE_TTL);
+      return json(result, 200);
+    } catch {
+      return json(getCachedStale(CACHE_KEY) ?? null, 200);
+    }
+  }
+
+  // ── IPAWS unified alerts (NWS CAP + FEMA disaster declarations) ───────────
+  if (requestUrl.pathname === '/api/alerts/active') {
+ const cached = getCached('ipaws-active', 60 * 1000);
+ if (cached) return json(cached);
+
+ const NWS_URL = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert';
+ const FEMA_URL = 'https://www.fema.gov/api/open/v2/disasterDeclarationsSummaries?$top=10&$orderby=declarationDate%20desc';
+ try {
+ const [nwsRes, femaRes] = await Promise.allSettled([
+ fetchWithTimeout(
+ NWS_URL,
+ { headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-IPAWS/1.0 (https://github.com/bradleybond512/crystal-ball)' } },
+ 12_000,
+ ),
+ fetchWithTimeout(
+ FEMA_URL,
+ { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+ 12_000,
+ ),
+ ]);
+
+ const safeJson = async (settled) => {
+ if (settled.status !== 'fulfilled' || !settled.value.ok) return null;
+ try { return await settled.value.json(); } catch { return null; }
+ };
+ const [nwsData, femaData] = await Promise.all([safeJson(nwsRes), safeJson(femaRes)]);
+ const nwsFeatures = Array.isArray(nwsData?.features) ? nwsData.features : [];
+ const femaRows = Array.isArray(femaData?.DisasterDeclarationsSummaries)
+ ? femaData.DisasterDeclarationsSummaries
+ : Array.isArray(femaData) ? femaData : [];
+
+ const combined = [...parseNwsCapFeatures(nwsFeatures), ...parseFemaDisasters(femaRows)];
+ const fresh = expireAlerts(dedupeAlerts(combined), Date.now());
+ const result = {
+ alerts: fresh,
+ fetchedAt: new Date().toISOString(),
+ sources: {
+ nws: nwsData ? 'ok' : 'degraded',
+ fema: femaData ? 'ok' : 'degraded',
+ },
+ };
+ setCached('ipaws-active', result);
+ return json(result);
+ } catch (error) {
+ const degraded = {
+ alerts: [],
+ fetchedAt: new Date().toISOString(),
+ sources: { nws: 'degraded', fema: 'degraded' },
+ degraded: true,
+ reason: `ipaws fetch error: ${error.message ?? error}`,
+ };
+ return json(degraded);
+ }
+  }
+
   // ── FAA Aviation Weather Cameras (public, no auth) ───────────────────────────
   // Optional METAR/flight-rule/ADS-B enrichment when ?withMetar=1.
   // Uses aviationweather.gov stationinfo + metar APIs (public, no auth).
@@ -4870,6 +5912,53 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Biosurveillance wastewater (CDC NWSS, site + state rollup, 24h cache) ──
+  if (requestUrl.pathname === '/api/biosurveillance/wastewater') {
+    const CACHE_KEY = 'biosurveillance-wastewater';
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h per spec
+    const cached = getCached(CACHE_KEY, CACHE_TTL);
+    if (cached) return json(cached);
+
+    const NWSS_URL = 'https://data.cdc.gov/resource/2ew6-ywp6.json?$limit=5000&$order=date_end%20DESC';
+    try {
+      const resp = await fetchWithTimeout(
+        NWSS_URL,
+        { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+        20_000,
+      );
+      if (!resp.ok) {
+        const stale = getCachedStale(CACHE_KEY);
+        if (stale) return json({ ...stale, degraded: true, reason: `NWSS upstream HTTP ${resp.status}` });
+        return json({
+          national: { trend: 'stable', medianPercentile15d: null, activeStates: 0, risingStates: 0 },
+          states: [],
+          topSites: [],
+          asOfDate: null,
+          fetchedAt: new Date().toISOString(),
+          degraded: true,
+          reason: `NWSS upstream HTTP ${resp.status}`,
+        });
+      }
+      const rows = await resp.json();
+      const result = buildBiosurveillanceWastewater(rows);
+      setCached(CACHE_KEY, result, CACHE_TTL);
+      return json(result);
+    } catch (error) {
+      const stale = getCachedStale(CACHE_KEY);
+      const reason = `wastewater fetch error: ${error?.message ?? error}`;
+      if (stale) return json({ ...stale, degraded: true, reason });
+      return json({
+        national: { trend: 'stable', medianPercentile15d: null, activeStates: 0, risingStates: 0 },
+        states: [],
+        topSites: [],
+        asOfDate: null,
+        fetchedAt: new Date().toISOString(),
+        degraded: true,
+        reason,
+      });
+    }
+  }
+
   // ── HDX (UN OCHA) humanitarian crisis datasets ───────────────────────────
   if (requestUrl.pathname === '/api/hdx-crises') {
  try {
@@ -5088,6 +6177,76 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/spaceweather/alerts') {
     const alerts = await fetchSpaceweatherAlertsSidecar();
     return json({ alerts, asOf: new Date().toISOString() });
+  }
+
+  // ── Solar imagery catalog (metadata) — mirrors
+  //    src/services/spaceweather/solar-imagery.ts ────────────────────────
+  if (requestUrl.pathname === '/api/spaceweather/imagery') {
+    const cached = getCached('spaceweather-imagery', SOLAR_IMAGERY_TTL_MS);
+    if (cached) return json(cached);
+    const images = await Promise.all(
+      SOLAR_IMAGERY_CATALOG.map(async (entry) => {
+        const probe = await probeUpstreamLastModified(entry.upstreamUrl);
+        return {
+          slug: entry.slug,
+          label: entry.label,
+          description: entry.description,
+          proxyUrl: `/api/spaceweather/imagery/${entry.slug}.jpg`,
+          lastModified: probe.lastModified,
+          upstreamStatus: probe.upstreamStatus,
+        };
+      }),
+    );
+    const response = { asOf: new Date().toISOString(), images };
+    setCached('spaceweather-imagery', response, SOLAR_IMAGERY_TTL_MS);
+    return json(response);
+  }
+
+  // ── Solar imagery proxy (bytes) ────────────────────────────────────────
+  // Streams a NASA JPEG through the sidecar so the renderer never hits
+  // NASA directly (consistent caching, CORS-safe). Slug is matched against
+  // a static allowlist; any other path falls through to 404.
+  if (requestUrl.pathname.startsWith('/api/spaceweather/imagery/')) {
+    const tail = requestUrl.pathname.slice('/api/spaceweather/imagery/'.length);
+    const slug = tail.endsWith('.jpg') ? tail.slice(0, -'.jpg'.length) : null;
+    const entry = slug ? SOLAR_IMAGERY_CATALOG.find((e) => e.slug === slug) : null;
+    if (!entry) return json({ error: 'unknown solar imagery slug' }, 404);
+    const cacheKey = `spaceweather-imagery-bytes:${entry.slug}`;
+    const cachedBytes = getCached(cacheKey, SOLAR_IMAGERY_BYTES_TTL_MS);
+    if (cachedBytes) {
+      return new Response(cachedBytes.body, {
+        status: 200,
+        headers: {
+          'content-type': 'image/jpeg',
+          'cache-control': `public, max-age=${Math.floor(SOLAR_IMAGERY_BYTES_TTL_MS / 1000)}`,
+          ...(cachedBytes.lastModified && { 'last-modified': cachedBytes.lastModified }),
+        },
+      });
+    }
+    try {
+      const upstream = await fetchWithTimeout(
+        entry.upstreamUrl,
+        { headers: { Accept: 'image/jpeg, image/*', 'User-Agent': CHROME_UA } },
+        20_000,
+      );
+      if (!upstream.ok) {
+        return json({ error: `upstream ${upstream.status} for ${entry.slug}` }, 502);
+      }
+      const buffer = await upstream.arrayBuffer();
+      const lastModified = upstream.headers.get('last-modified') ?? null;
+      const body = new Uint8Array(buffer);
+      setCached(cacheKey, { body, lastModified }, SOLAR_IMAGERY_BYTES_TTL_MS);
+      return new Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'image/jpeg',
+          'cache-control': `public, max-age=${Math.floor(SOLAR_IMAGERY_BYTES_TTL_MS / 1000)}`,
+          ...(lastModified && { 'last-modified': lastModified }),
+        },
+      });
+    } catch (error) {
+      return json({ error: `imagery proxy fetch error: ${error.message ?? error}` }, 502);
+    }
   }
 
   // ── Air Quality proxy (Open-Meteo, no API key, forwards lat/lon) ──────────
@@ -7027,7 +8186,100 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── NIFC active fire perimeters (free public ArcGIS REST) ────────────────
+  if (requestUrl.pathname === '/api/wildfire/perimeters') {
+ try {
+ const url = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/'
+ + 'WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query'
+ + '?where=1%3D1&outFields=IrwinID,IncidentName,GISAcres,PercentContained,POOState,'
+ + 'ModifiedOnDateTime_dt&f=geojson&resultRecordCount=500';
+ const resp = await fetchWithTimeout(url, {
+ headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
+ }, 20_000);
+ if (!resp.ok) return json({ features: [], error: `nifc upstream ${resp.status}` }, 502);
+ const data = await resp.json();
+ const features = Array.isArray(data?.features) ? data.features : [];
+ return json({ features, count: features.length });
+ } catch (error) {
+ return json({ features: [], error: String(error.message ?? error) }, 500);
+ }
+  }
+
+  // ── InciWeb active wildfire incidents (RSS proxy) ────────────────────────
+  if (requestUrl.pathname === '/api/wildfire/incidents') {
+ try {
+ const resp = await fetchWithTimeout(
+ 'https://inciweb.wildfire.gov/incidents/rss.xml',
+ { headers: { 'User-Agent': CHROME_UA, Accept: 'application/rss+xml,application/xml,text/xml' } },
+ 15_000,
+ );
+ if (!resp.ok) return json({ rss: '', error: `inciweb upstream ${resp.status}` }, 502);
+ const rss = await resp.text();
+ return json({ rss, fetchedAt: Date.now() });
+ } catch (error) {
+ return json({ rss: '', error: String(error.message ?? error) }, 500);
+ }
+  }
+
+  // ── EPA AirNow current AQI for a single coordinate ──────────────────────
+  if (requestUrl.pathname === '/api/wildfire/aqi') {
+ const apiKey = process.env.AIRNOW_API_KEY;
+ if (!apiKey) return json({ observations: [], error: 'AIRNOW_API_KEY not configured' }, 503);
+ const lat = Number.parseFloat(requestUrl.searchParams.get('lat') || '');
+ const lon = Number.parseFloat(requestUrl.searchParams.get('lon') || '');
+ if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+ return json({ observations: [], error: 'lat and lon required' }, 400);
+ }
+ try {
+ const url = `https://www.airnowapi.org/aq/observation/latLong/current/`
+ + `?latitude=${encodeURIComponent(lat)}`
+ + `&longitude=${encodeURIComponent(lon)}`
+ + `&distance=50&format=application/json`
+ + `&API_KEY=${encodeURIComponent(apiKey)}`;
+ const resp = await fetchWithTimeout(url, {
+ headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
+ }, 15_000);
+ if (!resp.ok) return json({ observations: [], error: `airnow upstream ${resp.status}` }, 502);
+ const observations = await resp.json();
+ return json({ observations: Array.isArray(observations) ? observations : [] });
+ } catch (error) {
+ return json({ observations: [], error: String(error.message ?? error) }, 500);
+ }
+  }
+
   // ── INPE Queimadas — Brazil wildfire hotspots (last 48h) ─────────────────
+  // ── PurpleAir hyper-local AQI sensors ────────────────────────────────────
+  // Prefers PURPLEAIR_API_KEY (v1/sensors), falls back to the deprecated
+  // public /json endpoint when no key is configured. Outdoor sensors only
+  // are kept upstream-side; the renderer applies confidence + AQI scoring.
+  if (requestUrl.pathname === '/api/airquality/purpleair') {
+ const apiKey = process.env.PURPLEAIR_API_KEY;
+ if (!apiKey) {
+ return json({
+ sensors: [],
+ keyMissing: true,
+ error: 'PURPLEAIR_API_KEY required — public www.purpleair.com/json endpoint is no longer served',
+ }, 503);
+ }
+ const fields = 'sensor_index,pm2.5,latitude,longitude,location_type,confidence,name,last_seen';
+ try {
+ const url = `https://api.purpleair.com/v1/sensors?fields=${encodeURIComponent(fields)}&location_type=0`;
+ const resp = await fetchWithTimeout(url, {
+ headers: {
+ 'X-API-Key': apiKey,
+ Accept: 'application/json',
+ 'User-Agent': CHROME_UA,
+ },
+ }, 20_000);
+ if (!resp.ok) return json({ sensors: [], error: `purpleair upstream ${resp.status}` }, 502);
+ const payload = await resp.json();
+ const sensors = sidecarParseV1Sensors(payload);
+ return json({ sensors, source: 'v1', fetchedAt: Date.now() });
+ } catch (error) {
+ return json({ sensors: [], error: String(error.message ?? error) }, 500);
+ }
+  }
+
   if (requestUrl.pathname === '/api/inpe-fires') {
  try {
  const resp = await fetchWithTimeout(
@@ -8792,6 +10044,162 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Live flights — all categories (commercial, cargo, military, GA, helo) ─
+  // Wraps OpenSky `states/all`, classifies by callsign + hex range, and returns
+  // a category breakdown plus the full classified list. 10-min cache because
+  // OpenSky's anonymous tier is rate-limited to ~100 req/day.
+  if (requestUrl.pathname === '/api/aviation/flights') {
+ const CACHE_TTL = 10 * 60 * 1000;
+ const cached = getCached('aviation-flights', CACHE_TTL);
+ if (cached) return json(cached);
+
+ const clientId = process.env.OPENSKY_CLIENT_ID?.trim() || '';
+ const clientSecret = process.env.OPENSKY_CLIENT_SECRET?.trim() || '';
+ const headers = { 'User-Agent': CHROME_UA };
+ if (clientId && clientSecret) {
+ const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+ headers['Authorization'] = `Basic ${creds}`;
+ }
+
+ const PASSENGER_AIRLINES = new Set([
+ 'AAL','DAL','UAL','SWA','JBU','ASA','SKW','RPA','ENY','ACA','WJA','BAW','VIR',
+ 'AFR','DLH','KLM','IBE','AZA','AUA','SWR','SAS','FIN','THY','UAE','ETD','QTR',
+ 'SVA','ELY','JAL','ANA','KAL','AAR','CES','CSN','CCA','SIA','CPA','QFA','ANZ',
+ 'AMX','LAN','TAM','AVA','RYR','EZY','WZZ','TRA','THA','MAS','AIC','IGO','EIN','AEE',
+ ]);
+ const CARGO_AIRLINES = new Set([
+ 'FDX','UPS','ABX','CKS','GTI','CLX','ABW','EVA','CAL','CKK','GEC','POT','SOO',
+ 'ICE','CTM','ABD','DHX','BCS','GLO',
+ ]);
+ const MILITARY_PREFIXES = new Set([
+ 'RCH','REACH','CNV','PAT','GOLD','SHELL','TEAL','HOMER','MAGIC','SENTRY','RIVET',
+ 'PYTHON','RAGE','VIPER','EAGLE','RAIDER','DOOM','BISON','ARMY','PEDRO','DUSTOFF',
+ 'NATO','RRR','ASCOT','RAFAIR','AUSY','CFC','CANFORCE','MIL','NAVY','AF',
+ ]);
+ const HELO_HINTS = ['HEMS','LIFEFLIGHT','AIRMED','MERCY','MEDFLIGHT','CARESTAR','CHP','COASTGUARD','USCG','RESCUE'];
+ const EMERGENCY_SQUAWKS = new Set(['7500', '7600', '7700']);
+ const MILITARY_HEX_RANGES = [
+ ['ADF7C7','ADF7CF'], ['AE0000','AFFFFF'], ['A00000','A3FFFF'], ['43C000','43CFFF'],
+ ['3A0000','3AFFFF'], ['3B0000','3BFFFF'], ['3F0000','3FFFFF'], ['738000','73FFFF'],
+ ['4D0000','4D03FF'], ['300000','33FFFF'], ['340000','37FFFF'], ['480000','480FFF'],
+ ['4BA000','4BCFFF'], ['710000','717FFF'], ['896000','896FFF'], ['06A000','06AFFF'],
+ ['706000','706FFF'], ['840000','87FFFF'], ['718000','71FFFF'], ['7CF800','7CFFFF'],
+ ['C00000','C0FFFF'], ['800000','83FFFF'], ['760000','767FFF'], ['500000','5003FF'],
+ ['488000','48FFFF'], ['468000','46FFFF'], ['4A8000','4AFFFF'], ['478000','47FFFF'],
+ ['768000','76FFFF'],
+ ];
+ const isMilitaryHex = (hex) => {
+ if (!hex) return false;
+ const upper = hex.toUpperCase();
+ if (!/^[0-9A-F]{6}$/.test(upper)) return false;
+ for (const [s, e] of MILITARY_HEX_RANGES) {
+ if (upper >= s && upper <= e) return true;
+ }
+ return false;
+ };
+ const operatorPrefix = (callsign) => {
+ if (!callsign) return null;
+ const upper = callsign.trim().toUpperCase();
+ if (upper.length < 3) return null;
+ const prefix = upper.slice(0, 3);
+ return /^[A-Z]{3}$/.test(prefix) ? prefix : null;
+ };
+ const classify = (state) => {
+ const icao24 = (state[0] ?? '').toString().toLowerCase().trim();
+ const callsignRaw = (state[1] ?? '').toString().trim();
+ const callsign = callsignRaw.length > 0 ? callsignRaw : null;
+ const lat = state[6];
+ const lon = state[5];
+ if (!icao24 || lat == null || lon == null) return null;
+ const squawk = state[14] ?? null;
+ const emergency = EMERGENCY_SQUAWKS.has(squawk);
+ const upperCallsign = callsign ? callsign.toUpperCase() : '';
+ const prefix = operatorPrefix(callsign);
+ let category;
+ let operatorIcao = prefix;
+ if (
+ isMilitaryHex(icao24) ||
+ (prefix && MILITARY_PREFIXES.has(prefix)) ||
+ (upperCallsign && [...MILITARY_PREFIXES].some((m) => upperCallsign.startsWith(m)))
+ ) {
+ category = 'military';
+ } else if (prefix && CARGO_AIRLINES.has(prefix)) {
+ category = 'cargo';
+ } else if (prefix && PASSENGER_AIRLINES.has(prefix)) {
+ category = 'commercial';
+ } else if (HELO_HINTS.some((h) => upperCallsign.startsWith(h))) {
+ category = 'helicopter';
+ } else {
+ category = 'general_aviation';
+ operatorIcao = prefix; // may still be a 3-letter prefix we don't know
+ }
+ return {
+ icao24,
+ callsign,
+ originCountry: (state[2] ?? '').toString().trim() || null,
+ category,
+ operatorIcao,
+ operatorName: null, // operator-name lookup happens renderer-side
+ lat,
+ lon,
+ altitudeFt: state[7] == null ? null : Math.round(state[7] * 3.28084),
+ velocityKts: state[9] == null ? null : Math.round(state[9] * 1.94384),
+ headingDeg: state[10] == null ? null : state[10],
+ squawk,
+ emergency,
+ emergencySquawk: emergency ? squawk : null,
+ onGround: state[8] === true,
+ lastSeen: typeof state[4] === 'number' ? state[4] * 1000 : Date.now(),
+ };
+ };
+ try {
+ const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
+ if (r.status === 429) {
+ const env = {
+ flights: [], counts: { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 },
+ fetchedAt: Date.now(), degraded: true, reason: 'rate limited', source: 'opensky-network.org',
+ };
+ return json(env, 429);
+ }
+ if (!r.ok) throw new Error(`OpenSky HTTP ${r.status}`);
+ const data = await r.json();
+ const flights = [];
+ const counts = { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 };
+ for (const state of (data.states ?? [])) {
+ if (!Array.isArray(state) || state.length < 15) continue;
+ const flight = classify(state);
+ if (!flight) continue;
+ flights.push(flight);
+ counts[flight.category] += 1;
+ counts.total += 1;
+ if (flight.emergency) {
+ counts.emergency += 1;
+ if (flight.emergencySquawk === '7500') counts.squawk7500 += 1;
+ else if (flight.emergencySquawk === '7600') counts.squawk7600 += 1;
+ else if (flight.emergencySquawk === '7700') counts.squawk7700 += 1;
+ }
+ }
+ const envelope = {
+ flights,
+ counts,
+ fetchedAt: Date.now(),
+ degraded: false,
+ source: 'opensky-network.org',
+ };
+ setCached('aviation-flights', envelope);
+ return json(envelope);
+ } catch (error) {
+ return json({
+ flights: [],
+ counts: { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 },
+ fetchedAt: Date.now(),
+ degraded: true,
+ reason: error?.message ?? String(error),
+ source: 'opensky-network.org',
+ }, 502);
+ }
+  }
+
   // ── Tor relay metrics ────────────────────────────────────────────────────
   if (requestUrl.pathname === '/api/tor-metrics') {
  const cached = getCached('tor-metrics', 60 * 60 * 1000);
@@ -8825,11 +10233,13 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Power Grid (EIA electricity RTO demand/capacity) ──────────────
   if (requestUrl.pathname === '/api/power-grid') {
+ const eiaKey = process.env.EIA_API_KEY;
+ if (!eiaKey) return json({ regions: [], keyMissing: true, error: 'EIA_API_KEY required' }, 503);
  const cached = getCached('power-grid', 15 * 60 * 1000);
  if (cached) return json(cached);
  try {
  // EIA Open Data API — Real-Time Operating grid demand by region
- const eiaUrl = 'https://api.eia.gov/v2/electricity/rto/region-data/data/?frequency=hourly&data[0]=value&facets[type][]=D&facets[type][]=NG&length=200&sort[0][column]=period&sort[0][direction]=desc';
+ const eiaUrl = `https://api.eia.gov/v2/electricity/rto/region-data/data/?api_key=${encodeURIComponent(eiaKey)}&frequency=hourly&data[0]=value&facets[type][]=D&facets[type][]=NG&length=200&sort[0][column]=period&sort[0][direction]=desc`;
  const r = await fetchWithTimeout(eiaUrl, { headers: { 'User-Agent': CHROME_UA } }, 15000);
  if (!r.ok) throw new Error(`EIA HTTP ${r.status}`);
  const raw = await r.json();
@@ -8868,13 +10278,14 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Grid Alerts (NERC public alerts RSS) ────────────────────────
   if (requestUrl.pathname === '/api/grid-alerts') {
+ const eiaKey = process.env.EIA_API_KEY;
+ if (!eiaKey) return json({ alerts: [], keyMissing: true, error: 'EIA_API_KEY required' }, 503);
  const cached = getCached('grid-alerts', 15 * 60 * 1000);
  if (cached) return json(cached);
  try {
- const rssUrl = 'https://www.nerc.com/pa/rrm/bpsa/Pages/Alerts.aspx';
  // NERC does not have a clean RSS; fall back to EIA system alerts or return empty
  // Try EIA grid emergency data as a proxy
- const eiaAlertUrl = 'https://api.eia.gov/v2/electricity/rto/region-data/data/?frequency=hourly&data[0]=value&facets[type][]=D&length=50&sort[0][column]=period&sort[0][direction]=desc';
+ const eiaAlertUrl = `https://api.eia.gov/v2/electricity/rto/region-data/data/?api_key=${encodeURIComponent(eiaKey)}&frequency=hourly&data[0]=value&facets[type][]=D&length=50&sort[0][column]=period&sort[0][direction]=desc`;
  const r = await fetchWithTimeout(eiaAlertUrl, { headers: { 'User-Agent': CHROME_UA } }, 12000);
  if (!r.ok) throw new Error(`EIA alerts HTTP ${r.status}`);
  const raw = await r.json();
@@ -8960,6 +10371,147 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
  } catch (error) {
  return json({ stations: [], error: `epa-radnet error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── Infrastructure intelligence: power grid (EIA v2) ──────────────────────
+  // GET /api/infrastructure/grid — 7-day demand (D) + net-generation (NG)
+  // for the five biggest US balancing authorities. 15-min cache.
+  if (requestUrl.pathname === '/api/infrastructure/grid') {
+ const eiaKey = process.env.EIA_API_KEY;
+ if (!eiaKey) return json({ rows: [], keyMissing: true, fetchedAt: Date.now() });
+ const cacheKey = 'infrastructure-grid';
+ const cached = getCached(cacheKey, 15 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const base = 'https://api.eia.gov/v2/electricity/rto/daily-region-data/data/';
+ const params = new URLSearchParams({
+ 'api_key': eiaKey,
+ 'frequency': 'daily',
+ 'data[0]': 'value',
+ 'sort[0][column]': 'period',
+ 'sort[0][direction]': 'desc',
+ 'length': '70',
+ });
+ const facets = ['CISO', 'PJM', 'MISO', 'ERCO', 'NYIS']
+ .map((r) => `facets[respondent][]=${encodeURIComponent(r)}`)
+ .join('&');
+ const types = ['D', 'NG'].map((t) => `facets[type][]=${t}`).join('&');
+ const fullUrl = `${base}?${params.toString()}&${facets}&${types}`;
+ const r = await fetchWithTimeout(fullUrl, { headers: { Accept: 'application/json' } }, 15000);
+ if (!r.ok) throw new Error(`EIA HTTP ${r.status}`);
+ const data = await r.json();
+ const rows = Array.isArray(data?.response?.data) ? data.response.data : [];
+ const result = {
+ rows: rows.map((row) => ({
+ period: typeof row?.period === 'string' ? row.period : null,
+ respondent: typeof row?.respondent === 'string' ? row.respondent : null,
+ type: typeof row?.type === 'string' ? row.type : null,
+ value: row?.value ?? null,
+ })),
+ fetchedAt: Date.now(),
+ };
+ setCached(cacheKey, result, 15 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ rows: [], error: `infrastructure-grid error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── Infrastructure intelligence: power outages (PowerOutage.us) ──────────
+  // GET /api/infrastructure/outages — county-level US rollup. 5-min cache.
+  if (requestUrl.pathname === '/api/infrastructure/outages') {
+ const cacheKey = 'infrastructure-outages';
+ const cached = getCached(cacheKey, 5 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const url = 'https://api.poweroutage.us/api/v1/outages?country=US';
+ const r = await fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15000);
+ if (!r.ok) throw new Error(`PowerOutage.us HTTP ${r.status}`);
+ const data = await r.json();
+ const entitiesRaw = Array.isArray(data?.OutageEntities) ? data.OutageEntities : Array.isArray(data?.outages) ? data.outages : [];
+ const result = {
+ nationalCustomersTracked: typeof data?.ContinentalUSCustomersTrackedTotal === 'number' ? data.ContinentalUSCustomersTrackedTotal : null,
+ entities: entitiesRaw.map((row) => ({
+ StateName: row?.StateName ?? row?.state ?? null,
+ CountyName: row?.CountyName ?? row?.county ?? null,
+ CustomersTracked: row?.CustomersTracked ?? row?.customersTracked ?? null,
+ CustomersAffected: row?.CustomersAffected ?? row?.customersAffected ?? null,
+ RecordDateTime: row?.RecordDateTime ?? row?.recordDateTime ?? null,
+ UtilityCompany: row?.UtilityCompany ?? row?.utility ?? null,
+ })),
+ fetchedAt: Date.now(),
+ };
+ setCached(cacheKey, result, 5 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ entities: [], error: `infrastructure-outages error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── Infrastructure intelligence: BGP hijacks (Cloudflare Radar) ──────────
+  // GET /api/infrastructure/bgp — recent BGP hijack events. 10-min cache.
+  if (requestUrl.pathname === '/api/infrastructure/bgp') {
+ const cfToken = process.env.CLOUDFLARE_API_TOKEN;
+ const cacheKey = 'infrastructure-bgp';
+ const cached = getCached(cacheKey, 10 * 60 * 1000);
+ if (cached) return json(cached);
+ if (!cfToken) return json({ events: [], keyMissing: true, fetchedAt: Date.now() });
+ try {
+ const url = 'https://api.cloudflare.com/client/v4/radar/bgp/hijacks/events?dateRange=1d&per_page=20';
+ const r = await fetchWithTimeout(url, {
+ headers: {
+ Accept: 'application/json',
+ Authorization: `Bearer ${cfToken}`,
+ },
+ }, 15000);
+ if (!r.ok) throw new Error(`Cloudflare Radar HTTP ${r.status}`);
+ const data = await r.json();
+ const eventsRaw = Array.isArray(data?.result?.events)
+ ? data.result.events
+ : Array.isArray(data?.result?.data)
+ ? data.result.data
+ : Array.isArray(data?.events)
+ ? data.events
+ : [];
+ const result = {
+ events: eventsRaw.map((e) => ({
+ id: e?.id ?? null,
+ started_at: e?.started_at ?? e?.startedAt ?? null,
+ ended_at: e?.ended_at ?? e?.endedAt ?? null,
+ detected_origins: e?.detected_origins ?? e?.detectedOrigins ?? [],
+ expected_origin: e?.expected_origin ?? e?.expectedOrigin ?? null,
+ involved_asns: e?.involved_asns ?? e?.involvedAsns ?? [],
+ prefixes: e?.prefixes ?? [],
+ type: e?.type ?? '',
+ })),
+ fetchedAt: Date.now(),
+ };
+ setCached(cacheKey, result, 10 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ events: [], error: `infrastructure-bgp error: ${error.message ?? error}` }, 502);
+ }
+  }
+
+  // ── Infrastructure intelligence: radiation (EPA RadNet) ──────────────────
+  // GET /api/infrastructure/radiation — RadNet near-real-time gross gamma.
+  // Reuses the existing /api/epa-radnet-proxy upstream. 30-min cache.
+  if (requestUrl.pathname === '/api/infrastructure/radiation') {
+ const cacheKey = 'infrastructure-radiation';
+ const cached = getCached(cacheKey, 30 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const upstream = 'https://www.epa.gov/enviro/api/radnet/data?media=Air&analyte_group=Gross';
+ const r = await fetchWithTimeout(upstream, { headers: { 'User-Agent': CHROME_UA } }, 15000);
+ if (!r.ok) throw new Error(`RadNet HTTP ${r.status}`);
+ const data = await r.json();
+ const stations = Array.isArray(data) ? data : Array.isArray(data?.stations) ? data.stations : [];
+ const result = { stations, fetchedAt: Date.now() };
+ setCached(cacheKey, result, 30 * 60 * 1000);
+ return json(result);
+ } catch (error) {
+ return json({ stations: [], error: `infrastructure-radiation error: ${error.message ?? error}` }, 502);
  }
   }
 
@@ -9820,6 +11372,8 @@ export async function createLocalApiServer(options = {}) {
   const context = resolveConfig(options);
   loadVerboseState(context.dataDir);
   const routes = await buildRouteTable(context.apiDir);
+  const ofacCache = new OfacCache({ dataDir: context.dataDir });
+  context.ofacCache = ofacCache;
 
   const server = createServer(async (req, res) => {
  const requestUrl = new URL(req.url || '/', `http://127.0.0.1:${context.port}`);
@@ -9879,6 +11433,13 @@ export async function createLocalApiServer(options = {}) {
  }
  const mem = process.memoryUsage();
  const missing = wmMissingKeys();
+ // Reflect the AIS connection state into the feed-health tracker so
+ // FeedHealthPanel can render it without per-message instrumentation.
+ if (aisState.socket?.readyState === 1) {
+   recordFeedSuccess('ais', aisState.lastSnapshotAt || Date.now());
+ } else if (aisState.lastSnapshotAt > 0) {
+   recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
+ }
  res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
  res.end(JSON.stringify({
  ok: true,
@@ -9892,6 +11453,7 @@ export async function createLocalApiServer(options = {}) {
  keys_configured: EXPECTED_API_KEYS.length - missing.length,
  keys_total: EXPECTED_API_KEYS.length,
  keys_missing: missing,
+ feeds: getFeedSnapshots(),
  }));
  return;
  }

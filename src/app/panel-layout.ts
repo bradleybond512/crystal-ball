@@ -60,6 +60,8 @@ import {
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { TriageBar } from '@/components/TriageBar';
 import { EEWStatusBar } from '@/components/EEWStatusBar';
+import { CorrelationAlertBanner } from '@/components/CorrelationAlertBanner';
+import { startSpaceWeatherStatusBarPoller } from '@/services/spaceweather/status-bar-poller';
 import { JustInRail } from '@/components/JustInRail';
 import { startPanelNarrator } from '@/services/panel-narrator';
 import { TodayView } from '@/components/TodayView';
@@ -143,13 +145,17 @@ import { WeatherRadarPanel } from '@/components/WeatherRadarPanel';
 import { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import { PollenPanel } from '@/components/PollenPanel';
 import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
+import { SanctionsPanel } from '@/components/SanctionsPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
+import { WildfireIntelPanel } from '@/components/WildfireIntelPanel';
 import { HazmatIncidentsPanel } from '@/components/HazmatIncidentsPanel';
 import { OilSpillPanel } from '@/components/OilSpillPanel';
 import { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
+import { GridIntelligencePanel } from '@/components/GridIntelligencePanel';
+import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-intelligence-loader';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
@@ -227,10 +233,15 @@ import { CompoundThreatPanel } from '@/components/CompoundThreatPanel';
 import { CorrelationMatrixPanel } from '@/components/CorrelationMatrixPanel';
 import { StrikePackagesPanel } from '@/components/StrikePackagesPanel';
 import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
+import { FeedHealthPanel } from '@/components/FeedHealthPanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
+import { ThreatDashboard } from '@/components/ThreatDashboard';
+import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
+import { AviationIntelPanel } from '@/components/AviationIntelPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
+import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
 import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
 import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
@@ -304,7 +315,7 @@ export class PanelLayoutManager implements AppModule {
   private _preModeOrder: string[] = [];
 
   /** Panels always kept at the top regardless of mode (video feeds / live streams). */
-  private static readonly MODE_ANCHORS = ['watchlist', 'alert-center', 'live-news', 'live-webcams'];
+  private static readonly MODE_ANCHORS = ['threat-dashboard', 'watchlist', 'alert-center', 'live-news', 'live-webcams'];
 
   /** Panels floated to top in Finance Mode. */
   private static readonly FINANCE_PRIORITY = [
@@ -525,6 +536,12 @@ export class PanelLayoutManager implements AppModule {
  // of the seismic intelligence stack.
  const eewStatusBar = new EEWStatusBar();
  eewStatusBar.mount(document.body);
+ startSpaceWeatherStatusBarPoller(eewStatusBar);
+
+ // Mount the cross-domain correlation banner. Self-fetches from
+ // /api/synthesis/correlations every 15s; hidden when no events.
+ const correlationBanner = new CorrelationAlertBanner();
+ correlationBanner.mount(document.body);
 
  // Mount the triage bar above the panel grid (auto-hides when nothing is hot).
  const triageBar = new TriageBar();
@@ -988,6 +1005,9 @@ export class PanelLayoutManager implements AppModule {
  const openSanctionsPanel = new OpenSanctionsPanel();
  this.ctx.panels['opensanctions'] = openSanctionsPanel;
 
+ const sanctionsIntelPanel = new SanctionsPanel();
+ this.ctx.panels['sanctions-intel'] = sanctionsIntelPanel;
+
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;
 
@@ -996,6 +1016,9 @@ export class PanelLayoutManager implements AppModule {
 
  const wildfireIncidentsPanel = new WildfireIncidentsPanel();
  this.ctx.panels['wildfire-incidents'] = wildfireIncidentsPanel;
+
+ const wildfireIntelPanel = new WildfireIntelPanel();
+ this.ctx.panels['wildfire-intel'] = wildfireIntelPanel;
 
  const hazmatIncidentsPanel = new HazmatIncidentsPanel();
  this.ctx.panels['hazmat-incidents'] = hazmatIncidentsPanel;
@@ -1008,6 +1031,10 @@ export class PanelLayoutManager implements AppModule {
 
  const infrastructurePanel = new InfrastructurePanel();
  this.ctx.panels['infrastructure'] = infrastructurePanel;
+
+ const gridIntelPanel = new GridIntelligencePanel();
+ this.ctx.panels['grid-intelligence'] = gridIntelPanel;
+ startGridIntelligenceLoader(gridIntelPanel);
 
  const strategicRiskPanel = new StrategicRiskPanel();
  strategicRiskPanel.setLocationClickHandler((lat, lon) => {
@@ -1119,10 +1146,15 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['correlation-matrix'] = new CorrelationMatrixPanel();
  this.ctx.panels['strike-packages'] = new StrikePackagesPanel();
  this.ctx.panels['api-diagnostic'] = new ApiDiagnosticPanel();
+ this.ctx.panels['feed-health'] = new FeedHealthPanel();
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
+ this.ctx.panels['threat-dashboard'] = new ThreatDashboard();
+ startThreatAggregator();
+ this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ this.ctx.panels['weather-hazard'] = new WeatherHazardPanel();
  this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
  // Wire saved-places into the insights state singleton so the new
  // panels see the user's home/family/travel places out of the box.

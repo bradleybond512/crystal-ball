@@ -4,6 +4,7 @@
 @import './gods-vision.css';
 @import './alerts.css';
 @import './eew-status-bar.css';
+@import './correlation-banner.css';
 
 /* ============================================================
  Theme Colors — overridden by [data-theme="light"] below
@@ -7257,6 +7258,43 @@ a.prediction-link:hover {
 
 /* Help Tab */
 .us-help-content { padding: 4px 12px 16px; font-size: 12px; line-height: 1.6; color: var(--text-secondary); overflow-y: auto; }
+
+/* Thresholds Tab */
+.us-thresholds-content { padding: 4px 12px 16px; font-size: 12px; color: var(--text-secondary); overflow-y: auto; max-height: 100%; }
+.us-thresholds-intro { color: var(--text-dim); margin-bottom: 12px; }
+.us-thresholds-error { color: var(--semantic-critical, #ff453a); padding: 6px 10px; border: 1px solid currentColor; border-radius: 4px; margin-bottom: 12px; font-size: 11px; }
+.us-threshold-group { border: 1px solid var(--border); border-radius: 4px; margin-bottom: 12px; padding: 8px 12px 4px; }
+.us-threshold-group legend { color: var(--text); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 4px; }
+.us-threshold-row { display: grid; grid-template-columns: 1fr auto; align-items: center; padding: 6px 0; gap: 12px; border-bottom: 1px solid var(--border-subtle); }
+.us-threshold-row:last-child { border-bottom: none; }
+.us-threshold-label { color: var(--text-secondary); font-size: 11px; }
+.us-threshold-input { display: flex; align-items: center; gap: 8px; }
+.us-threshold-slider { width: 140px; }
+.us-threshold-number { width: 64px; padding: 2px 6px; font-variant-numeric: tabular-nums; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 3px; }
+.us-threshold-unit { color: var(--text-dim); font-size: 10px; min-width: 28px; }
+.us-thresholds-actions { display: flex; justify-content: flex-end; padding: 8px 0; }
+.us-thresholds-reset { padding: 4px 12px; background: transparent; color: var(--text-dim); border: 1px solid var(--border-strong); border-radius: 3px; font-size: 11px; cursor: pointer; }
+.us-thresholds-reset:hover { border-color: var(--text-faint); color: var(--text-secondary); }
+
+/* Feed Health Panel */
+.feed-health-panel { font-size: 11px; padding: 8px 10px; }
+.feed-health-summary { display: flex; gap: 12px; padding: 4px 0 8px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 8px; font-size: 11px; }
+.feed-health-total { color: var(--text-dim); margin-left: auto; }
+.feed-health-section { margin-bottom: 12px; }
+.feed-health-section-title { color: var(--text-muted); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 0; }
+.feed-health-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.feed-health-table th { text-align: left; color: var(--text-muted); padding: 4px 6px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 9px; text-transform: uppercase; }
+.feed-health-table td { padding: 4px 6px; border-bottom: 1px solid var(--border-subtle); }
+.feed-health-row.feed-health-error { background: color-mix(in srgb, var(--semantic-critical, #d50000) 8%, transparent); }
+.feed-health-row.feed-health-stale { background: color-mix(in srgb, var(--semantic-warning, #ffeb3b) 6%, transparent); }
+.feed-health-name { color: var(--text); font-weight: 500; white-space: nowrap; }
+.feed-health-endpoint { color: var(--text-dim); font-family: ui-monospace, monospace; font-size: 9px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-health-age { color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.feed-health-status { white-space: nowrap; font-weight: 600; }
+.feed-health-icon { margin-right: 4px; }
+.feed-health-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.feed-health-footer { padding: 6px 0 0; color: var(--text-dim); font-size: 10px; text-align: right; }
+.feed-health-error-msg { color: var(--semantic-warning, #f97316); }
 .us-help-section { margin-bottom: 18px; }
 .us-help-section h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent); margin: 0 0 8px; }
 .us-help-section p { margin: 0 0 6px; }
@@ -19875,3 +19913,104 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
 }
+
+/* ── AI Situation Brief modal ─────────────────────────────────────────── */
+.ai-brief-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(10, 10, 10, 0.65);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+.ai-brief-modal-overlay.active { display: flex; }
+.ai-brief-modal {
+  background: var(--surface);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  width: 90%;
+  max-width: 640px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+}
+.ai-brief-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.10);
+  color: var(--text);
+}
+.ai-brief-modal-title { font-weight: 600; font-size: 14px; letter-spacing: 0.4px; }
+.ai-brief-modal-close {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 6px;
+  line-height: 1;
+}
+.ai-brief-modal-content {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.ai-brief-paragraph {
+  margin: 0 0 14px;
+}
+.ai-brief-paragraph.is-revealing {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+}
+.ai-brief-paragraph.is-revealing.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.ai-brief-spinner {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--muted, rgba(255,255,255,0.55));
+}
+.ai-brief-error {
+  padding: 16px;
+  border-radius: 8px;
+  background: rgba(255, 80, 80, 0.08);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ai-brief-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: var(--muted, rgba(255,255,255,0.55));
+}
+.ai-brief-modal-actions { display: inline-flex; gap: 8px; }
+.ai-brief-modal-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ai-brief-modal-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.10); }
+.ai-brief-modal-btn:disabled { opacity: 0.4; cursor: default; }

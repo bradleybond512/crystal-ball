@@ -39,7 +39,26 @@ interface GrayZoneResponse {
   error?: string;
 }
 
-type TabId = 'apt' | 'grayzone' | 'escalation';
+type TabId = 'apt' | 'grayzone' | 'escalation' | 'ransomware';
+
+interface RansomwareMention {
+  id: string;
+  title: string;
+  subreddit: string;
+  url: string;
+  createdAt: number;
+  score: number;
+  comments: number;
+  author: string;
+  groups: string[];
+}
+
+interface RansomwareResponse {
+  mentions?: RansomwareMention[];
+  groupCounts?: { group: string; count: number }[];
+  asOf?: string;
+  error?: string;
+}
 const REFRESH_MS = 5 * 60_000;
 
 // CyberGeoPanel: APT activity table (sorted by score), gray-zone event
@@ -50,8 +69,10 @@ const REFRESH_MS = 5 * 60_000;
 export class CyberGeoPanel extends Panel {
   private apt: AptGroupsResponse | null = null;
   private grayzone: GrayZoneResponse | null = null;
+  private ransomware: RansomwareResponse | null = null;
   private aptError: string | null = null;
   private grayzoneError: string | null = null;
+  private ransomwareError: string | null = null;
   private activeTab: TabId = 'apt';
   private refreshTimer: number | null = null;
 
@@ -77,7 +98,23 @@ export class CyberGeoPanel extends Panel {
   }
 
   async refresh(): Promise<void> {
- await Promise.all([this.refreshApt(), this.refreshGrayzone()]);
+ await Promise.all([this.refreshApt(), this.refreshGrayzone(), this.refreshRansomware()]);
+  }
+
+  private async refreshRansomware(): Promise<void> {
+ try {
+ const res = await fetch(`${getApiBaseUrl()}/api/cyber-ransomware-mentions`);
+ const body = (await res.json().catch(() => null)) as RansomwareResponse | null;
+ if (body) {
+ this.ransomware = body;
+ this.ransomwareError = body.error ?? null;
+ } else {
+ this.ransomwareError = `Sidecar returned HTTP ${res.status}`;
+ }
+ } catch (error) {
+ this.ransomwareError = error instanceof Error ? error.message : String(error);
+ }
+ this.render();
   }
 
   private async refreshApt(): Promise<void> {
@@ -122,10 +159,12 @@ export class CyberGeoPanel extends Panel {
   private renderTabs(): string {
  const aptHot = this.apt?.groups?.filter((g) => g.activityScore >= 60).length ?? 0;
  const gzCount = this.grayzone?.events?.length ?? 0;
+ const ransomCount = this.ransomware?.mentions?.length ?? 0;
  const tabs: { id: TabId; label: string; count: number }[] = [
  { id: 'apt', label: 'APT Activity', count: aptHot },
  { id: 'grayzone', label: 'Gray Zone', count: gzCount },
  { id: 'escalation', label: 'Escalation', count: countActorsActive(this.grayzone?.events ?? []) },
+ { id: 'ransomware', label: 'Ransomware', count: ransomCount },
  ];
  const items = tabs.map((t) => {
  const active = t.id === this.activeTab;
@@ -183,9 +222,23 @@ export class CyberGeoPanel extends Panel {
  return `<div>${rows}</div>`;
   }
 
+  private renderRansomware(): string {
+ if (this.ransomwareError) return `<div style="padding:12px;color:#ef4444;font-size:12px">${escapeHtml(this.ransomwareError)}</div>`;
+ if (!this.ransomware) return '<div style="padding:12px;opacity:0.6;font-size:12px">Loading ransomware mentions…</div>';
+ const mentions = this.ransomware.mentions ?? [];
+ const groups = this.ransomware.groupCounts ?? [];
+ if (mentions.length === 0) {
+ return '<div style="padding:12px;opacity:0.6;font-size:12px">No recent ransomware mentions on Reddit (last 24h).</div>';
+ }
+ const groupChips = renderGroupChips(groups);
+ const rows = mentions.slice(0, 25).map((m) => renderRansomwareRow(m)).join('');
+ return `<div>${groupChips}<div>${rows}</div></div>`;
+  }
+
   private renderActiveTab(): string {
  if (this.activeTab === 'grayzone') return this.renderGrayzone();
  if (this.activeTab === 'escalation') return this.renderEscalation();
+ if (this.activeTab === 'ransomware') return this.renderRansomware();
  return this.renderApt();
   }
 
@@ -259,6 +312,33 @@ function colorForSeverity(severity: string): string {
     default: { return '#9ca3af';
     }
   }
+}
+
+function renderGroupChips(groups: readonly { group: string; count: number }[]): string {
+  if (groups.length === 0) {
+    return '<div style="font-size:11px;opacity:0.6;padding:6px 10px;">No recognized group names in current mention set.</div>';
+  }
+  const chips = groups.map((g) => {
+    const label = `${escapeHtml(g.group)} · ${g.count}`;
+    return `<span style="display:inline-block;padding:2px 8px;border:1px solid #fca5a5;border-radius:8px;font-size:10px;color:#fca5a5;">${label}</span>`;
+  }).join('');
+  return `<div style="padding:8px 10px;display:flex;flex-wrap:wrap;gap:4px;">${chips}</div>`;
+}
+
+function renderGroupBadges(groups: readonly string[]): string {
+  if (groups.length === 0) return '';
+  const inner = groups.map((g) => `<span style="color:#fca5a5;font-weight:600;">${escapeHtml(g)}</span>`).join(' · ');
+  return ` <span style="margin-left:6px;">${inner}</span>`;
+}
+
+function renderRansomwareRow(m: RansomwareMention): string {
+  const ageHours = Math.max(0, Math.round((Date.now() / 1000 - m.createdAt) / 3600));
+  const ageStr = ageHours < 24 ? `${ageHours}h ago` : `${Math.round(ageHours / 24)}d ago`;
+  const groupBadges = renderGroupBadges(m.groups);
+  return `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener" style="display:block;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:11px;color:inherit;text-decoration:none;line-height:1.4;">
+    <div><strong>${escapeHtml(m.title.slice(0, 200))}</strong>${groupBadges}</div>
+    <div style="opacity:0.6;font-size:10px;margin-top:2px;">r/${escapeHtml(m.subreddit)} · ${escapeHtml(m.author)} · ${ageStr} · ${m.score} pts · ${m.comments} comments</div>
+  </a>`;
 }
 
 function countActorsActive(events: readonly GrayZoneEvent[]): number {

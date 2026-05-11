@@ -31,6 +31,8 @@ export type RuntimeSecretKey =
   | 'AISSTREAM_API_KEY'
   | 'FINNHUB_API_KEY'
   | 'NASA_FIRMS_API_KEY'
+  | 'AIRNOW_API_KEY'
+  | 'PURPLEAIR_API_KEY'
   | 'OLLAMA_API_URL'
   | 'OLLAMA_MODEL'
   | 'WTO_API_KEY'
@@ -84,6 +86,8 @@ export type RuntimeFeatureId =
   | 'openskyRelay'
   | 'finnhubMarkets'
   | 'nasaFirms'
+  | 'epaAirNow'
+  | 'purpleAirSensors'
   | 'aiOllama'
   | 'wtoTrade'
   | 'supplyChain'
@@ -189,6 +193,8 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   openskyRelay: true,
   finnhubMarkets: true,
   nasaFirms: true,
+  epaAirNow: true,
+  purpleAirSensors: true,
   aiOllama: true,
   wtoTrade: true,
   supplyChain: true,
@@ -391,6 +397,22 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  description: 'Fire Information for Resource Management System satellite data.',
  requiredSecrets: ['NASA_FIRMS_API_KEY'],
  fallback: 'FIRMS fire layer uses public VIIRS feed.',
+  },
+  {
+ id: 'epaAirNow',
+ name: 'EPA AirNow AQI for saved places',
+ description: 'Real-time US AQI per saved place (PM2.5 / O3) — enables wildfire smoke health alerts.',
+ requiredSecrets: ['AIRNOW_API_KEY'],
+ desktopRequiredSecrets: [],
+ fallback: 'Wildfire panel shows AQI as "key required" until configured.',
+  },
+  {
+ id: 'purpleAirSensors',
+ name: 'PurpleAir hyper-local sensors',
+ description: 'Community PurpleAir sensor network — top-500 outdoor PM2.5 readings with EPA AQI conversion. Optional key unlocks the v1 API; without a key the deprecated public /json endpoint is tried.',
+ requiredSecrets: [],
+ desktopRequiredSecrets: [],
+ fallback: 'Falls back to the public /json endpoint when no PURPLEAIR_API_KEY is configured.',
   },
   {
  id: 'wtoTrade',

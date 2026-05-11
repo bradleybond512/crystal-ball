@@ -44,7 +44,90 @@ interface LeadingIndicatorsResponse {
   error?: string;
 }
 
-type TabId = 'precedents' | 'indicators';
+type TabId = 'precedents' | 'indicators' | 'signals';
+
+function readWatchKeywords(): string[] {
+  try {
+    const raw = localStorage.getItem(WATCH_KEYWORDS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        const out = parsed.filter((k): k is string => typeof k === 'string' && k.length > 0 && k.length <= 100);
+        if (out.length > 0) return out;
+      }
+    }
+  } catch { /* fallthrough */ }
+  return DEFAULT_WATCH_KEYWORDS;
+}
+
+function createEmptySignalResult(keyword: string, error: string): SignalWatchResult {
+  return {
+    keyword,
+    lastHourCount: 0,
+    baselineRate: 0,
+    surgeRatio: 0,
+    surgeLevel: 'normal',
+    totalSeen: 0,
+    recent: [],
+    error,
+  };
+}
+
+function surgeColor(level: SurgeLevel): string {
+  if (level === 'spike') return '#d50000';
+  if (level === 'surge') return '#ff5722';
+  if (level === 'elevated') return '#ff9800';
+  return '#4caf50';
+}
+
+function renderSignalRow(s: SignalWatchResult): string {
+  const color = surgeColor(s.surgeLevel);
+  const errLine = s.error
+    ? `<div style="font-size:10px;color:#ef4444;margin-top:2px;">⚠ ${escapeHtml(s.error)}</div>`
+    : '';
+  const recentItems = s.recent.slice(0, 3).map((p) => {
+    const ageH = Math.max(0, Math.round((Date.now() / 1000 - p.createdAt) / 3600));
+    return `<div style="font-size:10px;opacity:0.7;margin-top:2px;">↳ <a href="${escapeHtml(p.url)}" target="_blank" rel="noopener" style="color:inherit;">${escapeHtml(p.title.slice(0, 100))}</a> · ${ageH}h ago</div>`;
+  }).join('');
+  return `<div style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:11px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div><strong>${escapeHtml(s.keyword)}</strong>
+        <span style="margin-left:8px;color:${color};font-weight:700;text-transform:uppercase;font-size:10px;">${s.surgeLevel}</span>
+      </div>
+      <div style="font-family:ui-monospace,monospace;font-size:10px;opacity:0.7;">×${s.surgeRatio.toFixed(2)} · ${s.lastHourCount}/h vs ${s.baselineRate.toFixed(2)}/h baseline</div>
+    </div>
+    ${errLine}
+    ${recentItems}
+  </div>`;
+}
+
+interface SignalPost {
+  id: string;
+  title: string;
+  subreddit: string;
+  url: string;
+  createdAt: number;
+  score: number;
+  comments: number;
+  author: string;
+}
+
+type SurgeLevel = 'normal' | 'elevated' | 'surge' | 'spike';
+
+interface SignalWatchResult {
+  keyword: string;
+  lastHourCount: number;
+  baselineRate: number;
+  surgeRatio: number;
+  surgeLevel: SurgeLevel;
+  totalSeen: number;
+  recent: SignalPost[];
+  error?: string;
+  asOf?: string;
+}
+
+const WATCH_KEYWORDS_STORAGE_KEY = 'cb:synthesis:watch-keywords';
+const DEFAULT_WATCH_KEYWORDS = ['Taiwan', 'Hormuz', 'cyberattack'];
 
 const REFRESH_MS = 5 * 60_000;
 
@@ -83,7 +166,28 @@ export class SynthesisPanel extends Panel {
   }
 
   async refresh(): Promise<void> {
- await Promise.all([this.refreshPrecedents(), this.refreshIndicators()]);
+ await Promise.all([this.refreshPrecedents(), this.refreshIndicators(), this.refreshSignals()]);
+  }
+
+  private async refreshSignals(): Promise<void> {
+ const keywords = readWatchKeywords();
+ const results: SignalWatchResult[] = [];
+ for (const kw of keywords.slice(0, 5)) {
+ try {
+ const res = await fetch(`${getApiBaseUrl()}/api/signal-watch?q=${encodeURIComponent(kw)}`);
+ const body = (await res.json().catch(() => null)) as SignalWatchResult | null;
+ if (body) {
+ results.push(body);
+ } else {
+ results.push(createEmptySignalResult(kw, `Sidecar HTTP ${res.status}`));
+ }
+ } catch (error) {
+ const msg = error instanceof Error ? error.message : String(error);
+ results.push(createEmptySignalResult(kw, msg));
+ }
+ }
+ this.signals = results;
+ this.render();
   }
 
   private async refreshPrecedents(): Promise<void> {
@@ -119,18 +223,23 @@ export class SynthesisPanel extends Panel {
  this.render();
   }
 
+  private signals: SignalWatchResult[] = [];
+
   private updateCount(): void {
  const analogs = this.precedents?.analogs?.length ?? 0;
  const alerts = this.indicators?.alerts?.length ?? 0;
- this.setCount(analogs + alerts);
+ const signalSurges = this.signals.filter((s) => s.surgeLevel !== 'normal').length;
+ this.setCount(analogs + alerts + signalSurges);
   }
 
   private renderTabs(): string {
  const analogCount = this.precedents?.analogs?.length ?? 0;
  const alertCount = this.indicators?.alerts?.length ?? 0;
+ const surgeCount = this.signals.filter((s) => s.surgeLevel !== 'normal').length;
  const tabs: { id: TabId; label: string; count: number }[] = [
  { id: 'precedents', label: 'Precedents', count: analogCount },
  { id: 'indicators', label: 'Leading Indicators', count: alertCount },
+ { id: 'signals', label: 'Signal Watch', count: surgeCount },
  ];
  const items = tabs.map((t) => {
  const active = t.id === this.activeTab;
@@ -218,8 +327,18 @@ export class SynthesisPanel extends Panel {
  return `${lastAnalyzed}<div style="border-bottom:1px solid var(--panel-border,#2a2a2c);padding:6px 10px;font-size:11px;font-weight:600;opacity:0.8">Active alerts</div>${alertItems}${pairsSection}`;
   }
 
+  private renderSignals(): string {
+ if (this.signals.length === 0) {
+ return '<div style="padding:12px;opacity:0.6;font-size:12px">Loading signal watch…</div>';
+ }
+ const headerHtml = `<div style="padding:6px 10px;font-size:10px;opacity:0.6;border-bottom:1px solid var(--panel-border,#2a2a2c);">Reddit post velocity vs 23h baseline · keywords from <code>cb:synthesis:watch-keywords</code> (defaults: ${DEFAULT_WATCH_KEYWORDS.join(', ')})</div>`;
+ const rows = this.signals.map((s) => renderSignalRow(s)).join('');
+ return `${headerHtml}<div>${rows}</div>`;
+  }
+
   private renderActiveTab(): string {
  if (this.activeTab === 'indicators') return this.renderIndicators();
+ if (this.activeTab === 'signals') return this.renderSignals();
  return this.renderPrecedents();
   }
 

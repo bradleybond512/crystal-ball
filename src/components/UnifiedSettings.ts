@@ -8,6 +8,14 @@ import { escapeHtml } from '@/utils/sanitize';
 import { trackLanguageChange } from '@/services/analytics';
 import type { PanelConfig } from '@/types';
 import { RuntimeConfigPanel } from './RuntimeConfigPanel';
+import {
+  RANGES as THRESHOLD_RANGES,
+  loadThresholds,
+  resetThresholds,
+  saveThresholds,
+  validateOrdering,
+  type ThresholdConfig,
+} from '@/services/config/alert-thresholds';
 import type { StatusPanel } from './StatusPanel';
 import { isYouTubeConnected, signInToYouTube, signOutOfYouTube, initYouTubeAccountListeners } from '@/services/youtube-account';
 import { getImessageSettings, saveImessageSettings, sendImessage, type ImessageThreshold } from '@/services/imessage-bridge';
@@ -46,7 +54,7 @@ export interface UnifiedSettingsConfig {
   openEditPlace?: (placeId: string) => void;
 }
 
-type TabId = 'general' | 'panels' | 'sources' | 'api-keys' | 'places' | 'status' | 'help' | 'debug';
+type TabId = 'general' | 'panels' | 'sources' | 'api-keys' | 'thresholds' | 'places' | 'status' | 'help' | 'debug';
 
 export class UnifiedSettings {
   private overlay: HTMLElement;
@@ -117,6 +125,11 @@ export class UnifiedSettings {
  if (panelItem?.dataset.panel) {
  this.config.togglePanel(panelItem.dataset.panel);
  this.renderPanelsTab();
+ return;
+ }
+
+ if (target.closest('.us-thresholds-reset')) {
+ this.handleThresholdReset();
  return;
  }
 
@@ -354,6 +367,8 @@ export class UnifiedSettings {
  this.sourceFilter = target.value;
  this.renderSourcesGrid();
  this.updateSourcesCounter();
+ } else if (target.dataset.thresholdPath) {
+ this.handleThresholdChange(target.dataset.thresholdPath, target.value);
  }
  });
 
@@ -479,6 +494,7 @@ export class UnifiedSettings {
  <button class="${this.tabClass('panels')}" data-tab="panels">${t('header.tabPanels')}</button>
  <button class="${this.tabClass('sources')}" data-tab="sources">${t('header.tabSources')}</button>
  <button class="${this.tabClass('api-keys')}" data-tab="api-keys">${t('header.tabApiKeys')}</button>
+ <button class="${this.tabClass('thresholds')}" data-tab="thresholds">Thresholds</button>
  <button class="${this.tabClass('places')}" data-tab="places">Places</button>
  <button class="${this.tabClass('status')}" data-tab="status">${t('panels.status')}</button>
  <button class="${this.tabClass('help')}" data-tab="help">Help</button>
@@ -516,6 +532,9 @@ export class UnifiedSettings {
  </div>
  </div>
  <div class="${apiKeyPanelClass}" data-panel-id="api-keys"></div>
+ <div class="unified-settings-tab-panel${this.activeTab === 'thresholds' ? ' active' : ''}" data-panel-id="thresholds">
+ ${this.renderThresholdsContent()}
+ </div>
  <div class="unified-settings-tab-panel${this.activeTab === 'places' ? ' active' : ''}" data-panel-id="places">
  <div class="us-places-content" id="usPlacesContent"></div>
  </div>
@@ -811,6 +830,106 @@ export class UnifiedSettings {
 
   public refreshStatusTab(): void {
  if (this.activeTab === 'status') this.renderStatusTab();
+  }
+
+  // ── Thresholds tab ───────────────────────────────────────────────────
+
+  private renderThresholdsContent(): string {
+    const c = loadThresholds();
+    const ranges = THRESHOLD_RANGES;
+    const errs = validateOrdering(c);
+    const errBlock = errs.length === 0 ? '' :
+      `<div class="us-thresholds-error">${errs.map(e => escapeHtml(e)).join('<br/>')}</div>`;
+    return `<div class="us-thresholds-content">
+      <p class="us-thresholds-intro">
+        Crystal Ball only fires push alerts when an event exceeds the
+        thresholds below. Adjust to taste — values persist across sessions.
+      </p>
+      ${errBlock}
+      ${this.thresholdGroup('Seismic — earthquakes (USGS / EEW)', [
+        { path: 'seismic.pushMinMagnitude', label: 'Min magnitude for push',
+          value: c.seismic.pushMinMagnitude, range: ranges.seismic.pushMinMagnitude,
+          unit: 'M' },
+        { path: 'seismic.voiceMinMagnitude', label: 'Min magnitude for voice',
+          value: c.seismic.voiceMinMagnitude, range: ranges.seismic.voiceMinMagnitude,
+          unit: 'M' },
+      ])}
+      ${this.thresholdGroup('Geomagnetic — solar storm (NOAA SWPC)', [
+        { path: 'geomagnetic.pushMinKp', label: 'Min Kp index for push',
+          value: c.geomagnetic.pushMinKp, range: ranges.geomagnetic.pushMinKp, unit: 'Kp' },
+        { path: 'geomagnetic.voiceMinKp', label: 'Min Kp index for voice',
+          value: c.geomagnetic.voiceMinKp, range: ranges.geomagnetic.voiceMinKp, unit: 'Kp' },
+      ])}
+      ${this.thresholdGroup('Wildfire — FIRMS satellite detections', [
+        { path: 'wildfire.pushMinFRP', label: 'Min Fire Radiative Power for push',
+          value: c.wildfire.pushMinFRP, range: ranges.wildfire.pushMinFRP, unit: 'MW' },
+        { path: 'wildfire.radiusKm', label: 'Alert radius from saved places',
+          value: c.wildfire.radiusKm, range: ranges.wildfire.radiusKm, unit: 'km' },
+      ])}
+      ${this.thresholdGroup('Air quality — AirNow / PurpleAir', [
+        { path: 'airQuality.pushMinAQI', label: 'Min US AQI for push',
+          value: c.airQuality.pushMinAQI, range: ranges.airQuality.pushMinAQI, unit: 'AQI' },
+      ])}
+      ${this.thresholdGroup('Markets — VIX + OFR Financial Stress Index', [
+        { path: 'economic.pushMinVIX', label: 'Min VIX for push',
+          value: c.economic.pushMinVIX, range: ranges.economic.pushMinVIX, unit: '' },
+        { path: 'economic.ofrFsiSigmas', label: 'OFR FSI z-score threshold',
+          value: c.economic.ofrFsiSigmas, range: ranges.economic.ofrFsiSigmas, unit: 'σ' },
+      ])}
+      ${this.thresholdGroup('Hurricanes — NHC tropical cyclones', [
+        { path: 'hurricane.pushMinCategory', label: 'Min Saffir-Simpson category',
+          value: c.hurricane.pushMinCategory, range: ranges.hurricane.pushMinCategory,
+          unit: 'cat' },
+      ])}
+      <div class="us-thresholds-actions">
+        <button class="us-thresholds-reset" type="button">Restore defaults</button>
+      </div>
+    </div>`;
+  }
+
+  private thresholdGroup(
+    title: string,
+    rows: { path: string; label: string; value: number;
+      range: { min: number; max: number; step: number }; unit: string }[],
+  ): string {
+    const inputs = rows.map(r => `
+      <div class="us-threshold-row">
+        <label class="us-threshold-label" for="threshold-${r.path}">
+          ${escapeHtml(r.label)}
+        </label>
+        <div class="us-threshold-input">
+          <input type="range" min="${r.range.min}" max="${r.range.max}" step="${r.range.step}"
+            value="${r.value}" data-threshold-path="${escapeHtml(r.path)}"
+            class="us-threshold-slider" />
+          <input type="number" min="${r.range.min}" max="${r.range.max}" step="${r.range.step}"
+            value="${r.value}" data-threshold-path="${escapeHtml(r.path)}"
+            id="threshold-${r.path}" class="us-threshold-number" />
+          <span class="us-threshold-unit">${escapeHtml(r.unit)}</span>
+        </div>
+      </div>`).join('');
+    return `<fieldset class="us-threshold-group">
+      <legend>${escapeHtml(title)}</legend>
+      ${inputs}
+    </fieldset>`;
+  }
+
+  private handleThresholdChange(path: string, raw: string): void {
+    const numeric = Number.parseFloat(raw);
+    if (!Number.isFinite(numeric)) return;
+    const current = loadThresholds();
+    const [bucket, field] = path.split('.') as [keyof ThresholdConfig, string];
+    const next: ThresholdConfig = {
+      ...current,
+      [bucket]: { ...(current[bucket] as unknown as Record<string, number>), [field]: numeric },
+    } as ThresholdConfig;
+    saveThresholds(next);
+    // Re-render the whole modal so paired slider+number input stay in sync.
+    this.render();
+  }
+
+  private handleThresholdReset(): void {
+    resetThresholds();
+    this.render();
   }
 
   private renderHelpContent(): string {

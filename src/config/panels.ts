@@ -216,6 +216,8 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'tide-predictions': { name: 'Tide Predictions', enabled: true, priority: 2 },
   'pollen': { name: 'Pollen & Allergy', enabled: true, priority: 1 },
   'weather-radar': { name: 'Weather Radar', enabled: true, priority: 1 },
+  'goes-satellite': { name: 'GOES Satellite', enabled: true, priority: 1 },
+  'flood-monitor': { name: 'Flood Monitor', enabled: true, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {
@@ -1015,7 +1017,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   hazards: {
  labelKey: 'header.panelCatHazards',
 
- panelKeys: ['wildfire-intel', 'satellite-fires', 'earthquakes', 'emsc-seismic', 'gdacs-alerts', 'volcano-alerts', 'nws-alerts', 'faa-weather-cams', 'faa-tfrs', 'tsunami-alerts', 'tropical-cyclones', 'climate', 'wildfire-incidents', 'hazmat-incidents', 'oil-spill', 'fcdo-warnings', 'dfat-warnings', 'gac-warnings', 'avalanche-hazard', 'wildfire-smoke', 'spc-mesoscale', 'amtrak-alerts', 'habsos', 'global-weather', 'extended-forecast', 'tide-predictions', 'pollen', 'weather-radar'],
+ panelKeys: ['wildfire-intel', 'satellite-fires', 'earthquakes', 'emsc-seismic', 'gdacs-alerts', 'volcano-alerts', 'nws-alerts', 'faa-weather-cams', 'faa-tfrs', 'tsunami-alerts', 'tropical-cyclones', 'climate', 'wildfire-incidents', 'hazmat-incidents', 'oil-spill', 'fcdo-warnings', 'dfat-warnings', 'gac-warnings', 'avalanche-hazard', 'wildfire-smoke', 'spc-mesoscale', 'amtrak-alerts', 'habsos', 'global-weather', 'extended-forecast', 'tide-predictions', 'pollen', 'weather-radar', 'goes-satellite', 'flood-monitor'],
  variants: ['full'],
   },
   healthEnv: {

@@ -39,6 +39,7 @@ import { satellitePropagator, type SatellitePosition } from '@/services/satellit
 import { fetchLightningStrikes } from '@/services/lightning';
 import { fetchRedFlagWarnings } from '@/services/red-flag-warnings';
 import { getRadarTileUrl, fetchRadarFrames } from '@/services/rainviewer-radar';
+import { getGoesWmsTileUrl } from '@/services/satellite-weather';
 import { getApiBaseUrl } from '@/services/runtime';
 import {
   computeAftershockForecast,
@@ -669,6 +670,7 @@ export class GlobeDataManager {
  this.registerLayer('lightningStrikes', () => this.loadLightningStrikes());
  this.registerLayer('redFlagWarnings', () => this.loadRedFlagWarnings());
  this.registerLayer('weatherHazards', () => this.loadWeatherHazards());
+ this.registerLayer('floodAlerts', () => this.loadFloodAlerts());
  this.registerLayer('wastewaterStates', () => this.loadWastewaterStates());
 
  this.registerLayer('streetTiles', () => {
@@ -2331,11 +2333,52 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
   }
 
   private loadWeatherSatellite(): void {
- // Disabled: Iowa State TMS layer name `goes_conus_geocolor` returns a pink
- // "Invalid TMS Request" PNG for every tile, which Cesium renders as a
- // magenta overlay across the entire globe. Original fix in commit 44a56901,
- // lost in godsvision-tier1 integration merge (#171). Re-enable once a working
- // tile source is wired up in satellite-weather.ts.
+ try {
+ const tileUrl = getGoesWmsTileUrl('geocolor');
+ const provider = new UrlTemplateImageryProvider({ url: tileUrl, maximumLevel: 7 });
+ const imgLayer = this.viewer.imageryLayers.addImageryProvider(provider);
+ imgLayer.alpha = 0.7;
+ this.weatherImageryLayers.push(imgLayer);
+ } catch { /* satellite imagery unavailable */ }
+  }
+
+  private async loadFloodAlerts(): Promise<void> {
+ const layer = this.layers.get('floodAlerts');
+ if (!layer) return;
+ try {
+ const base = getApiBaseUrl();
+ const r = await fetch(`${base}/api/floods/warnings`, { signal: AbortSignal.timeout(10_000) });
+ if (!r.ok) return;
+ const data = await r.json() as { alerts?: { id: string; event: string; severity: string; headline: string; polygon: { type: string; coordinates: number[][][] } | null }[] };
+ const alerts = data?.alerts ?? [];
+ const SEVERITY_COLORS: Record<string, string> = {
+ Extreme: '#cc0000',
+ Severe: '#ff4400',
+ Moderate: '#ff8800',
+ Minor: '#ffcc00',
+ };
+ for (const alert of alerts) {
+ if (!alert.polygon?.coordinates?.[0]) continue;
+ const outerRing = alert.polygon.coordinates[0];
+ const flat = outerRing.flatMap(coord => [coord[0] ?? 0, coord[1] ?? 0]);
+ if (flat.length < 6) continue;
+ const fillHex = SEVERITY_COLORS[alert.severity] ?? '#0088ff';
+ const fillColor = Color.fromCssColorString(fillHex).withAlpha(0.35);
+ const outlineColor = Color.fromCssColorString(fillHex).withAlpha(0.8);
+ layer.source.entities.add({
+ name: alert.id,
+ polygon: {
+ hierarchy: new PolygonHierarchy(Cartesian3.fromDegreesArray(flat)),
+ material: new ColorMaterialProperty(fillColor),
+ outline: true,
+ outlineColor,
+ outlineWidth: 2,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ },
+ description: escapeHtml(alert.headline),
+ });
+ }
+ } catch { /* flood alerts unavailable */ }
   }
 
   private async loadLightningStrikes(): Promise<void> {

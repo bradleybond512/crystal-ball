@@ -296,6 +296,8 @@ import { SavedPlaceModal } from '@/components/SavedPlaceModal';
 import type { GeoHubActivity } from '@/services/geo-activity';
 import type { TechHubActivity } from '@/services/tech-activity';
 import { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
+import { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
+import { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
 // HTML builders (app shell + map + sidebar) live in a sibling module.
 import * as htmlBuilders from '@/app/layout/html';
 
@@ -1273,6 +1275,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['weather-radar'] = new WeatherRadarPanel();
  this.ctx.panels['tide-predictions'] = new TidePredictionsPanel();
  this.ctx.panels['pollen'] = new PollenPanel();
+ this.ctx.panels['goes-satellite'] = new GoesSatellitePanel();
+ this.ctx.panels['flood-monitor'] = new FloodMonitorPanel();
 
  this.ctx.panels['stoic-reflections'] = new StoicQuotePanel();
  this.ctx.panels['biblical-encouragement'] = new BiblicalQuotePanel();

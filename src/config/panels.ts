@@ -230,6 +230,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'severe-weather': { name: 'Severe Weather / SPC', enabled: true, priority: 1 },
   'shakealert': { name: 'ShakeAlert + ShakeMaps', enabled: true, priority: 2 },
   'sms-command-interface': { name: 'SMS Command Interface', enabled: true, priority: 3 },
+  'what-changed': { name: 'What Changed', enabled: true, priority: 2 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {

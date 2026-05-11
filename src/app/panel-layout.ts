@@ -160,6 +160,7 @@ import { PulsediveIntelPanel } from '@/components/PulsediveIntelPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { OpenaqMonitorPanel } from '@/components/OpenaqMonitorPanel';
+import { WhatChangedPanel } from '@/components/WhatChangedPanel';
 import { MediastackNewsPanel } from '@/components/MediastackNewsPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
 import { WildfireIntelPanel } from '@/components/WildfireIntelPanel';
@@ -1082,6 +1083,8 @@ export class PanelLayoutManager implements AppModule {
 
  const openaqMonitorPanel = new OpenaqMonitorPanel();
  this.ctx.panels['openaq-monitor'] = openaqMonitorPanel;
+
+ this.ctx.panels['what-changed'] = new WhatChangedPanel();
 
  const mediastackNewsPanel = new MediastackNewsPanel();
  this.ctx.panels['mediastack-news'] = mediastackNewsPanel;

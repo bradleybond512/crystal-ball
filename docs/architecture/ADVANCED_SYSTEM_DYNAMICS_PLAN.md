@@ -5,6 +5,7 @@
 This document translates the next major leap for Crystal Ball into an implementation-grade plan.
 
 The goal is to evolve Crystal Ball from:
+
 - event aggregation
 - feed monitoring
 - map visualization
@@ -15,6 +16,7 @@ into:
 > a civilization-scale adaptive reasoning engine that models how complex systems behave under stress.
 
 This plan addresses the next layer of capability beyond the existing roadmap:
+
 - civilization physics
 - pressure accumulation
 - recovery modeling
@@ -43,6 +45,7 @@ Crystal Ball should model systems not just as events, but as dynamic entities wi
 Every major civilization subsystem should expose a dynamic state model.
 
 Examples:
+
 - ports
 - power grids
 - telecom networks
@@ -56,6 +59,7 @@ Examples:
 - emergency services
 
 Each subsystem should track:
+
 - pressure
 - capacity
 - resilience
@@ -98,6 +102,7 @@ interface SystemState {
 ### 1.2 Define System Types
 
 Start with:
+
 - `port`
 - `airport`
 - `power_grid`
@@ -114,6 +119,7 @@ Start with:
 ### 1.3 Add Derived Metrics
 
 For each system type, calculate:
+
 - baseline normal activity
 - current deviation
 - dependency exposure
@@ -124,6 +130,7 @@ For each system type, calculate:
 ### 1.4 Initial MVP
 
 Implement three system types first:
+
 1. internet regions
 2. ports/shipping corridors
 3. severe weather logistics regions
@@ -141,6 +148,7 @@ Most crises are not sudden. Pressure builds silently.
 Crystal Ball should track accumulated stress across systems and identify threshold risk.
 
 Examples:
+
 - drought pressure accumulating before food instability
 - congestion pressure accumulating before logistics failure
 - cyber probing accumulating before a major outage
@@ -186,6 +194,7 @@ interface PressureSignal {
 ### 2.3 Add Temporal Accumulation
 
 Pressure should:
+
 - increase when abnormal signals persist
 - decay when conditions normalize
 - escalate when multiple categories overlap
@@ -194,6 +203,7 @@ Pressure should:
 ### 2.4 MVP Output
 
 Create a `pressureTimeline` for regions and systems:
+
 - 24h trend
 - 7d trend
 - 30d trend
@@ -211,6 +221,7 @@ Crystal Ball must not only model collapse. It must also model recovery.
 This prevents doom bias and improves realism.
 
 Track:
+
 - repair velocity
 - restoration timelines
 - aid arrival
@@ -250,6 +261,7 @@ interface RecoveryState {
 ### 3.3 Recovery Indicators
 
 Examples:
+
 - power restored percentage
 - ports reopening
 - flight operations resuming
@@ -275,6 +287,7 @@ Use recovery arcs, cooling pressure fields, and stabilization indicators.
 Human systems adapt under stress.
 
 Crystal Ball should model behavioral responses such as:
+
 - panic buying
 - evacuation
 - migration
@@ -320,6 +333,7 @@ interface BehavioralSignal {
 ### 4.3 Data Sources
 
 Potential inputs:
+
 - local news
 - emergency alerts
 - traffic congestion
@@ -333,6 +347,7 @@ Potential inputs:
 ### 4.4 MVP
 
 Start with:
+
 - evacuation behavior
 - civil unrest acceleration
 - panic buying / shortage signals
@@ -346,6 +361,7 @@ Start with:
 Crystal Ball should expose what civilization depends on.
 
 Visualize:
+
 - chokepoints
 - single points of failure
 - dependency concentration
@@ -390,6 +406,7 @@ interface DependencyEdge {
 ### 5.3 Heatmap Views
 
 Create overlays for:
+
 - dependency density
 - chokepoint risk
 - single point of failure risk
@@ -399,6 +416,7 @@ Create overlays for:
 ### 5.4 MVP
 
 Start with:
+
 - ports
 - undersea cables
 - cloud regions
@@ -416,6 +434,7 @@ The system should learn what pre-crisis conditions look like.
 A crisis signature is a recognizable precursor pattern.
 
 Examples:
+
 - pre-blackout pattern
 - pre-shortage pattern
 - pre-conflict escalation
@@ -445,6 +464,7 @@ interface CrisisSignature {
 ### 6.2 Signature Matching
 
 Implement matching logic:
+
 - signal presence
 - signal strength
 - sequence order
@@ -455,6 +475,7 @@ Implement matching logic:
 ### 6.3 Initial Crisis Signatures
 
 Start with:
+
 1. regional internet instability
 2. port disruption cascade
 3. severe weather logistics disruption
@@ -468,6 +489,7 @@ When a partial match appears:
 > “This region matches 4 of 7 known precursors for logistics disruption within 72 hours.”
 
 Include:
+
 - matched signals
 - missing signals
 - confidence
@@ -489,6 +511,7 @@ Instead of one generic AI summary, use analyst roles.
 ## Agent Types
 
 Initial agents:
+
 - cyber analyst
 - logistics analyst
 - climate/weather analyst
@@ -507,6 +530,7 @@ Initial agents:
 ### 7.1 Agent Input Contract
 
 Each agent receives:
+
 - normalized events
 - system state
 - pressure signals
@@ -532,6 +556,7 @@ interface AnalystFinding {
 ### 7.3 Synthesis Layer
 
 A synthesis agent merges findings into:
+
 - operational summary
 - key risks
 - disagreements
@@ -541,6 +566,7 @@ A synthesis agent merges findings into:
 ### 7.4 Trust Rule
 
 AI findings must never be presented without:
+
 - evidence
 - confidence
 - uncertainty
@@ -557,6 +583,7 @@ Crystal Ball should actively identify conflicting evidence.
 This is essential for trust.
 
 Examples:
+
 - official reports say port is open, satellite/ship data suggests congestion
 - government says internet is normal, BGP data shows route instability
 - local reports say calm, emergency data shows rising calls
@@ -608,6 +635,7 @@ Civilization has rhythms.
 Crystal Ball should learn normal patterns and detect when they break.
 
 Examples:
+
 - shipping rhythms
 - internet traffic rhythms
 - migration rhythms
@@ -624,6 +652,7 @@ Examples:
 ### 9.1 Baseline Models
 
 For each monitored system, store:
+
 - hourly baseline
 - daily baseline
 - weekly baseline
@@ -633,6 +662,7 @@ For each monitored system, store:
 ### 9.2 Rhythm Break Detection
 
 Flag:
+
 - sudden silence
 - abnormal spikes
 - atypical timing
@@ -642,6 +672,7 @@ Flag:
 ### 9.3 MVP
 
 Start with:
+
 - aviation volume anomalies
 - shipping lane anomalies
 - internet outage anomalies
@@ -701,6 +732,7 @@ interface CivilizationPulse {
 ### 10.2 UI
 
 Show:
+
 - current pulse
 - 24h delta
 - 7d delta
@@ -717,6 +749,7 @@ Show:
 Users should be able to run hypothetical scenarios.
 
 Examples:
+
 - major port shutdown
 - undersea cable cut
 - regional blackout
@@ -758,6 +791,7 @@ interface ScenarioOutput {
 ### 11.3 MVP
 
 Start with prebuilt scenarios:
+
 - port shutdown
 - cloud region outage
 - internet backbone instability
@@ -774,6 +808,7 @@ Humans understand stories better than raw telemetry.
 Crystal Ball should generate concise operational narratives.
 
 Examples:
+
 - “Supply chain pressure is intensifying across Southeast Asia.”
 - “Cyber instability is spreading through telecom infrastructure.”
 - “Food system fragility is rising due to drought and livestock disease.”
@@ -795,6 +830,7 @@ Examples:
 ### 12.2 Narrative Rules
 
 Every narrative must include:
+
 - what changed
 - why it matters
 - evidence
@@ -812,6 +848,7 @@ The system should understand what the user needs to know.
 Avoid dumping everything.
 
 Prioritize:
+
 - material changes
 - new risks
 - local relevance
@@ -826,6 +863,7 @@ Prioritize:
 ### 13.1 User Context Model
 
 Store user preferences locally:
+
 - regions of interest
 - risk domains
 - travel areas
@@ -836,6 +874,7 @@ Store user preferences locally:
 ### 13.2 Attention Ranking
 
 Rank items by:
+
 - severity
 - novelty
 - confidence
@@ -867,6 +906,7 @@ Crystal Ball should reason across past, present, and future.
 ### 14.2 UI
 
 Provide:
+
 - time scrubber
 - trend trails
 - future projection cones
@@ -889,6 +929,7 @@ It is emotional situational awareness.
 ## Implementation Tasks
 
 Visual variables:
+
 - motion density
 - glow intensity
 - map tension
@@ -897,6 +938,7 @@ Visual variables:
 - instability ripple frequency
 
 Map these variables to:
+
 - global pulse
 - local system stress
 - conflict intensity
@@ -912,6 +954,7 @@ Map these variables to:
 Crystal Ball should reveal the hidden machinery of civilization.
 
 Show:
+
 - undersea cables
 - cloud regions
 - internet exchanges
@@ -929,6 +972,7 @@ Show:
 ### 16.1 Hidden Infrastructure Dataset Registry
 
 Create registry for:
+
 - dataset name
 - source
 - refresh cadence
@@ -940,6 +984,7 @@ Create registry for:
 ### 16.2 First Hidden Layers
 
 Start with:
+
 - undersea cables
 - internet outages
 - cloud regions
@@ -954,6 +999,7 @@ Start with:
 ## Milestone 1 — Data Foundation
 
 Create:
+
 - system state schema
 - pressure signal schema
 - dependency edge schema
@@ -963,6 +1009,7 @@ Create:
 ## Milestone 2 — First Dynamic Scores
 
 Implement:
+
 - pressure accumulation
 - system stress scores
 - recovery state tracking
@@ -971,6 +1018,7 @@ Implement:
 ## Milestone 3 — First Advanced UX
 
 Implement:
+
 - What Changed panel
 - pulse dashboard
 - pressure overlays
@@ -980,6 +1028,7 @@ Implement:
 ## Milestone 4 — Intelligence Layer
 
 Implement:
+
 - crisis signatures
 - multi-agent analyst outputs
 - contradiction detection
@@ -988,6 +1037,7 @@ Implement:
 ## Milestone 5 — Simulation + Future Modeling
 
 Implement:
+
 - future shadows
 - strategic simulation mode
 - replayable timeline

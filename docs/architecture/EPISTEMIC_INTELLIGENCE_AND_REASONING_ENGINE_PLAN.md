@@ -3,6 +3,7 @@
 ## Purpose
 
 This document defines the next major evolution of Crystal Ball beyond:
+
 - event aggregation
 - feed correlation
 - situation clustering
@@ -18,6 +19,7 @@ Meaning:
 Crystal Ball should not merely detect events.
 
 It should continuously reason about:
+
 - what it believes
 - why it believes it
 - what contradicts those beliefs
@@ -30,9 +32,11 @@ It should continuously reason about:
 - what historically tends to happen next
 
 This transforms Crystal Ball from:
+
 - an intelligence dashboard
 
 into:
+
 - a disciplined world-state reasoning engine.
 
 ---
@@ -79,6 +83,7 @@ A belief is:
 > a probabilistic interpretation of reality supported by evidence and constrained by uncertainty.
 
 Examples:
+
 - “Regional internet instability appears infrastructure-related.”
 - “Port congestion pressure is worsening.”
 - “Food-system fragility is increasing in this region.”
@@ -86,6 +91,7 @@ Examples:
 
 Beliefs are not facts.
 They are:
+
 - evidence-backed interpretations.
 
 ---
@@ -120,6 +126,7 @@ interface BeliefState {
 ## Key Behaviors
 
 Beliefs should:
+
 - gain confidence from corroborating evidence
 - lose confidence from contradictions
 - decay if evidence becomes stale
@@ -135,6 +142,7 @@ Beliefs should:
 ### PR 1 — Belief State Contracts
 
 Add:
+
 - `BeliefState`
 - `ExpectedSignal`
 - `InvalidatingSignal`
@@ -162,6 +170,7 @@ belief-engine.ts
 ```
 
 Responsibilities:
+
 - create beliefs
 - update confidence
 - track evidence
@@ -185,6 +194,7 @@ Belief:
 > “This is likely a genuine military escalation.”
 
 Assumptions:
+
 - aircraft telemetry is accurate
 - movement differs from seasonal baseline
 - official messaging remains tense
@@ -192,6 +202,7 @@ Assumptions:
 - no strong de-escalation indicators appear
 
 If assumptions fail:
+
 - confidence automatically degrades.
 
 ---
@@ -224,6 +235,7 @@ assumption-engine.ts
 ```
 
 Responsibilities:
+
 - evaluate assumptions
 - detect failed assumptions
 - adjust confidence
@@ -232,6 +244,7 @@ Responsibilities:
 ### PR 4 — Assumption UI
 
 Situation Detail should expose:
+
 - key assumptions
 - assumption health
 - failed assumptions
@@ -253,12 +266,14 @@ Situation:
 “Large aircraft surge near Taiwan.”
 
 Hypotheses:
+
 - routine exercise
 - coercive signaling
 - escalation preparation
 - logistical redeployment
 
 Each hypothesis:
+
 - competes for evidence
 - gains/loses confidence
 - defines expected signals
@@ -298,6 +313,7 @@ hypothesis-engine.ts
 ```
 
 Responsibilities:
+
 - manage competing hypotheses
 - normalize probability weights
 - update ranking
@@ -306,6 +322,7 @@ Responsibilities:
 ### PR 6 — Hypothesis View
 
 Situation Detail should expose:
+
 - competing hypotheses
 - probability movement
 - invalidating evidence
@@ -322,6 +339,7 @@ Crystal Ball should model:
 > confidence in the confidence system.
 
 Examples:
+
 - poor replay coverage
 - low source redundancy
 - weak calibration history
@@ -362,6 +380,7 @@ meta-confidence.ts
 ### PR 8 — Confidence Explainability
 
 Every major Situation and Belief should expose:
+
 - confidence
 - meta-confidence
 - why confidence changed
@@ -383,6 +402,7 @@ If a belief were true, what else should happen?
 Example:
 
 If escalation is genuine:
+
 - additional NOTAMs expected
 - embassy advisories expected
 - ISR activity expected
@@ -390,6 +410,7 @@ If escalation is genuine:
 - logistics shifts expected
 
 If these fail to appear:
+
 - confidence weakens.
 
 ---
@@ -421,6 +442,7 @@ counterfactual-engine.ts
 ```
 
 Responsibilities:
+
 - generate expected signals
 - evaluate outcomes
 - adjust beliefs/hypotheses
@@ -428,6 +450,7 @@ Responsibilities:
 ### PR 10 — Missing Expectations UI
 
 Situation Detail should expose:
+
 - expected but missing indicators
 - invalidated expectations
 - pending expectations
@@ -441,6 +464,7 @@ Situation Detail should expose:
 Crystal Ball should detect when reasoning may be distorted.
 
 Bias types:
+
 - recency bias
 - confirmation bias
 - sensational-source overweighting
@@ -480,6 +504,7 @@ bias-detection.ts
 ### PR 12 — Diagnostic Surfacing
 
 Expose bias findings in:
+
 - Intelligence Workbench
 - Algorithm Diagnostics
 - Situation Detail (advanced mode)
@@ -495,6 +520,7 @@ Crystal Ball should track:
 > how surprising a signal is.
 
 Surprise matters because:
+
 - rare patterns often matter
 - low-severity but highly abnormal events may indicate emergence
 
@@ -538,6 +564,7 @@ surprise-engine.ts
 ```
 
 Integrate into:
+
 - What Changed ranking
 - escalation scoring
 - weak signal prioritization
@@ -551,6 +578,7 @@ Integrate into:
 The app needs memory compression.
 
 It should remember:
+
 - what mattered
 - what repeated
 - what forecasts failed
@@ -602,6 +630,7 @@ strategic-memory.ts
 ```
 
 Responsibilities:
+
 - summarize resolved situations
 - extract heuristics
 - feed replay/simulation
@@ -653,6 +682,7 @@ Upgrade causal templates into weighted causal graphs.
 ### PR 16 — Causal Forecasting
 
 Use causal graphs for:
+
 - future shadows
 - watch windows
 - scenario simulation
@@ -665,6 +695,7 @@ Use causal graphs for:
 ## Concept
 
 Visualize:
+
 - uncertainty
 - disagreement
 - blind spots
@@ -678,6 +709,7 @@ Not just risk.
 ## UI Modes
 
 Confidence overlays:
+
 - high disagreement zones
 - low observability regions
 - stale-source regions
@@ -691,6 +723,7 @@ Confidence overlays:
 ### PR 17 — Confidence Weather Overlay
 
 Add globe overlays for:
+
 - confidence
 - uncertainty
 - source health
@@ -706,6 +739,7 @@ Add globe overlays for:
 Crystal Ball should dynamically allocate attention.
 
 Not every situation deserves equal:
+
 - compute
 - refresh rate
 - notification intensity
@@ -753,6 +787,7 @@ attention-allocation.ts
 ```
 
 Responsibilities:
+
 - prioritize refreshes
 - rank compute effort
 - reduce unnecessary noise
@@ -768,6 +803,7 @@ Measure:
 > information value.
 
 Meaning:
+
 - which sources reduce uncertainty most
 - which collection actions improve confidence most
 - which signals improve lead time most
@@ -801,6 +837,7 @@ information-value.ts
 ```
 
 Use for:
+
 - collection requirements
 - source acquisition
 - attention allocation
@@ -815,22 +852,27 @@ Use for:
 Crystal Ball should reason across timescales.
 
 ### Immediate
+
 - minutes
 - safety-critical alerts
 
 ### Tactical
+
 - hours
 - local disruptions
 
 ### Operational
+
 - days
 - logistics and infrastructure shifts
 
 ### Strategic
+
 - weeks/months
 - geopolitical and economic stress
 
 ### Civilizational
+
 - long-term fragility trends
 
 ---
@@ -840,6 +882,7 @@ Crystal Ball should reason across timescales.
 ### PR 20 — Timescale Layering
 
 Add timescale metadata to:
+
 - situations
 - forecasts
 - beliefs
@@ -853,12 +896,14 @@ Add timescale metadata to:
 ## Concept
 
 Separate:
+
 - deterministic findings
 - AI-generated hypotheses
 - analyst-confirmed conclusions
 - unresolved machine speculation
 
 This preserves:
+
 - trust
 - provenance
 - explainability
@@ -882,6 +927,7 @@ interface IntelligenceProvenance {
 ### PR 21 — Provenance Layer
 
 Attach provenance metadata to:
+
 - narratives
 - forecasts
 - hypotheses
@@ -896,6 +942,7 @@ Attach provenance metadata to:
 Crystal Ball should evaluate itself continuously.
 
 Questions:
+
 - Did we warn early enough?
 - Were we too noisy?
 - Which assumptions failed?
@@ -912,6 +959,7 @@ Questions:
 ### PR 22 — Self-Evaluation Dashboard
 
 Add operational metrics for:
+
 - calibration
 - lead time
 - replay accuracy
@@ -956,6 +1004,7 @@ docs/contracts/
 ```
 
 Add:
+
 - belief-state.md
 - hypothesis.md
 - assumption.md
@@ -969,6 +1018,7 @@ Add:
 # Recommended Replay Fixtures
 
 Add replay suites for:
+
 - false escalation
 - hidden buildup
 - contradictory evidence
@@ -984,14 +1034,23 @@ Add replay suites for:
 # Best Next 10 PRs
 
 ## PR 1 — Belief State Contracts
+
 ## PR 2 — Belief Engine
+
 ## PR 3 — Assumption Engine
+
 ## PR 4 — Competitive Hypothesis Engine
+
 ## PR 5 — Meta-Confidence Layer
+
 ## PR 6 — Counterfactual Reasoning
+
 ## PR 7 — Surprise Modeling
+
 ## PR 8 — Strategic Memory Store
+
 ## PR 9 — Confidence Weather Overlay
+
 ## PR 10 — Attention Allocation Engine
 
 ---
@@ -999,6 +1058,7 @@ Add replay suites for:
 # Ultimate Strategic Shift
 
 Crystal Ball is no longer just evolving into:
+
 - a world monitor
 - a threat map
 - an alerting system
@@ -1011,9 +1071,11 @@ It is evolving into:
 The defining capability becomes:
 
 Not:
+
 - “what happened?”
 
 But:
+
 - “what do we currently believe?”
 - “why do we believe it?”
 - “what could invalidate it?”

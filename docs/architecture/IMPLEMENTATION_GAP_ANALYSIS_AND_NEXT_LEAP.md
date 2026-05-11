@@ -5,6 +5,7 @@
 This document compares the current Crystal Ball codebase direction against the strategic architecture plans and identifies the highest-value next design leap.
 
 The existing app already has substantial pieces of the future system:
+
 - many ingestion services
 - many panels
 - data freshness tracking
@@ -30,6 +31,7 @@ The next step is reorganizing the system into a clear intelligence architecture 
 ## 1. Broad Data Coverage
 
 The current codebase already appears to ingest many domains:
+
 - news
 - markets
 - earthquakes
@@ -96,6 +98,7 @@ The problem is converting this coverage into unified reasoning.
 ## 2. Early Intelligence Infrastructure Already Exists
 
 The repo already references important intelligence services such as:
+
 - signal aggregator
 - temporal baseline
 - geo-convergence
@@ -123,6 +126,7 @@ The architecture should build on these existing primitives instead of replacing 
 ## 3. Test Coverage Suggests Many Advanced Concepts Already Exist
 
 Package scripts indicate tests for:
+
 - what-changed digest
 - personal impact
 - resilience model
@@ -247,6 +251,7 @@ Claude should add adapters that convert existing source outputs into observation
 Do not rewrite every service immediately.
 
 Start with adapters for:
+
 - earthquakes
 - NWS / GDACS
 - internet outages
@@ -268,6 +273,7 @@ The app appears to track many event types, but long-term reasoning requires pers
 Create a shared entity registry.
 
 Entities include:
+
 - country
 - region
 - city
@@ -339,6 +345,7 @@ interface SystemState {
 ## First System Types
 
 Start with domains already well represented in the repo:
+
 - seismic impact regions
 - weather-affected logistics regions
 - maritime chokepoints
@@ -373,6 +380,7 @@ fetchInternetOutages()
 ## Implementation Rule
 
 Every important loader should eventually produce:
+
 - observations
 - entity references
 - system state deltas
@@ -395,6 +403,7 @@ The app should answer:
 > What materially changed since the last time I looked?
 
 It should rank changes by:
+
 - novelty
 - severity
 - confidence
@@ -455,6 +464,7 @@ interface EvidenceNode {
 ## Value
 
 This enables:
+
 - explainability
 - contradiction detection
 - source reliability scoring
@@ -472,6 +482,7 @@ Most apps only show confidence.
 Crystal Ball should show where reality is unclear.
 
 Examples:
+
 - official reports conflict with sensor data
 - local news conflicts with satellite observations
 - outage provider data conflicts with BGP data
@@ -482,6 +493,7 @@ Examples:
 Create `ContradictionFinding` outputs from evidence graph comparison.
 
 These should appear in:
+
 - event detail views
 - What Changed
 - analyst narratives
@@ -497,6 +509,7 @@ Negative evidence means expected confirming signals are missing.
 
 Example:
 A supposed major attack is reported, but:
+
 - no outage spike
 - no official alert
 - no emergency chatter
@@ -511,6 +524,7 @@ This makes Crystal Ball feel more intelligent and less hype-driven.
 ## Implementation
 
 Extend evidence scoring with:
+
 - expected signals
 - missing signals
 - stale signals
@@ -566,6 +580,7 @@ Users should primarily interact with situations, not individual feed items.
 # 10. Add Situation Lifecycle
 
 Situations should have lifecycle states:
+
 - emerging
 - escalating
 - active
@@ -626,6 +641,7 @@ interface ScoreDriver {
 Example:
 
 Cyber Tension +14 because:
+
 - CISA KEV growth +4
 - regional outage expansion +5
 - BGP instability +3
@@ -646,6 +662,7 @@ Many panels can become clutter.
 Panels should become intelligence lenses over shared state.
 
 Examples:
+
 - Cyber Lens
 - Logistics Lens
 - Weather Lens
@@ -666,6 +683,7 @@ Lenses should read from shared intelligence objects, not duplicate logic.
 For power users and Claude implementation, create a debug/analyst view that shows the reasoning chain.
 
 Workbench sections:
+
 - observations
 - entities
 - evidence graph
@@ -689,6 +707,7 @@ The app has many services. Without contracts, complexity grows.
 ## Required Contracts
 
 Create TypeScript contracts for:
+
 - Observation
 - EvidenceNode
 - WorldEntity
@@ -723,6 +742,7 @@ The codebase already has data freshness concepts.
 Upgrade this into scoring.
 
 Every derived insight should account for:
+
 - source reliability
 - source freshness
 - source agreement
@@ -741,6 +761,7 @@ The repo already has ops tests around time-to-warn.
 Make this a top-level quality metric.
 
 For each situation, track:
+
 - first weak signal
 - first material change
 - first alert
@@ -759,6 +780,7 @@ The package scripts reference forecast calibration tests.
 This should become an operational loop.
 
 For predictions:
+
 - store forecast
 - define resolution criteria
 - evaluate outcome
@@ -774,6 +796,7 @@ This prevents “AI prediction theater.”
 The repo appears to include mission ledger tests.
 
 Use this as a permanent memory for:
+
 - generated insights
 - notifications
 - decisions
@@ -789,6 +812,7 @@ This creates a learning system.
 # 20. Add Quality Gates for Intelligence
 
 Before surfacing a major conclusion, require:
+
 - minimum evidence count
 - source independence check
 - freshness check
@@ -826,6 +850,7 @@ Watchlists should not just be saved searches.
 They should be active monitoring models.
 
 Examples:
+
 - Red Sea shipping
 - H5N1 food system risk
 - Midwest severe weather
@@ -834,6 +859,7 @@ Examples:
 - local infrastructure risk
 
 Each watchlist tracks:
+
 - relevant entities
 - pressure trend
 - key indicators
@@ -846,6 +872,7 @@ Each watchlist tracks:
 # 23. Add “Next Indicators to Watch” Everywhere
 
 Every situation and brief should include:
+
 - what would confirm escalation
 - what would reduce concern
 - what signals are missing
@@ -860,6 +887,7 @@ This makes the AI operationally useful.
 Current threat products often over-index on danger.
 
 Crystal Ball should track:
+
 - restoration
 - aid arrival
 - normalization
@@ -879,6 +907,7 @@ Personal impact should not be a separate feature bolted on later.
 Every situation should have a relevance score to the user.
 
 Inputs:
+
 - user location
 - saved locations
 - travel routes
@@ -887,6 +916,7 @@ Inputs:
 - notification preferences
 
 Output:
+
 - local relevance
 - personal impact summary
 - recommended monitoring
@@ -899,6 +929,7 @@ When user opens a situation, show hidden dependencies.
 
 Example:
 A port disruption should show:
+
 - shipping lanes
 - commodities affected
 - fuel exposure
@@ -915,6 +946,7 @@ This is where Crystal Ball feels magical.
 Before building full simulations, implement backtesting.
 
 Replay historical situations through the new model:
+
 - hurricane logistics disruption
 - major cyber outage
 - earthquake + tsunami alert
@@ -922,6 +954,7 @@ Replay historical situations through the new model:
 - civil unrest escalation
 
 Evaluate:
+
 - did weak signals appear?
 - did pressure scores rise?
 - did What Changed catch it?
@@ -978,6 +1011,7 @@ Track outcomes and improve confidence over time.
 ## PR 1: Intelligence Contracts
 
 Add shared types:
+
 - Observation
 - EvidenceNode
 - WorldEntity
@@ -990,6 +1024,7 @@ Add shared types:
 ## PR 2: Observation Adapter MVP
 
 Convert 3-5 existing services into normalized observations:
+
 - earthquakes
 - internet outages
 - NWS/GDACS
@@ -999,6 +1034,7 @@ Convert 3-5 existing services into normalized observations:
 ## PR 3: Situation Store MVP
 
 Cluster observations into situations by:
+
 - geography
 - domain
 - entities
@@ -1032,6 +1068,7 @@ The next major design upgrade is not more richness.
 It is coherence.
 
 Crystal Ball should become an intelligence fabric where:
+
 - feeds become observations
 - observations become evidence
 - evidence updates entities
@@ -1049,6 +1086,7 @@ That is how Crystal Ball moves from impressive to genuinely powerful.
 Crystal Ball should not be the app with the most feeds.
 
 It should be the app that best turns chaotic global telemetry into:
+
 - coherent situations
 - explainable risk
 - personal relevance

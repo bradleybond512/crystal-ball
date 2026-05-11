@@ -32,6 +32,7 @@ Crystal Ball should reply with short, evidence-aware, confidence-aware intellige
 The SMS/iMessage interface should feel like texting an operations center.
 
 It should provide:
+
 - situational summaries
 - What Changed briefs
 - local risk checks
@@ -43,6 +44,7 @@ It should provide:
 - emergency-relevant alerts
 
 But it must not become:
+
 - a surveillance tool
 - an unrestricted remote-control system
 - a spam bot
@@ -60,6 +62,7 @@ It should be:
 > a constrained operational command channel for Crystal Ball intelligence.
 
 Every response should be:
+
 - short enough for SMS
 - grounded in existing Crystal Ball intelligence objects
 - confidence-aware
@@ -86,6 +89,7 @@ Do not send message history to cloud AI unless the user explicitly enables it.
 ## 2. Allowlisted Senders Only
 
 Crystal Ball should only respond to:
+
 - the owner’s phone number
 - explicitly allowlisted contacts
 - optionally a small trusted group
@@ -98,6 +102,7 @@ Default:
 The system should not answer arbitrary private conversations.
 
 It should only respond to messages that match:
+
 - explicit prefix
 - explicit command
 - trusted sender
@@ -119,6 +124,7 @@ Do not process every incoming message as a command.
 Every inbound command and outbound reply should be logged locally.
 
 Audit fields:
+
 - timestamp
 - sender hash or label
 - command
@@ -133,6 +139,7 @@ Audit fields:
 Prevent loops and spam.
 
 Recommended default:
+
 - max 10 commands per sender per hour
 - max 3 long briefs per hour
 - emergency alerts exempt but throttled
@@ -148,6 +155,7 @@ Only explicit commands should trigger replies.
 SMS commands should be read/query oriented by default.
 
 Allowed:
+
 - ask for status
 - ask for brief
 - ask for source health
@@ -156,6 +164,7 @@ Allowed:
 - ask for active situations
 
 Restricted / require local confirmation:
+
 - changing settings
 - changing API keys
 - deleting data
@@ -210,16 +219,19 @@ The SMS/iMessage command interface must be designed against realistic abuse case
 The Mac Messages app stores local message data in a SQLite database under the user Library.
 
 Potential approach:
+
 - watch Messages database for new inbound messages
 - parse new messages from allowlisted senders
 - send replies through AppleScript / Shortcuts / Messages automation
 
 Pros:
+
 - native iMessage/SMS support through the Mac
 - no monthly SMS gateway cost
 - works with the user’s real phone number when Messages sync is enabled
 
 Cons:
+
 - fragile across macOS updates
 - requires Full Disk Access or similar permission
 - database schema may change
@@ -231,12 +243,14 @@ Cons:
 Use Shortcuts automation to pass inbound message contents to a local Crystal Ball endpoint.
 
 Pros:
+
 - user-approved automation flow
 - clearer permissions
 - less direct database scraping
 - easier to reason about privacy
 
 Cons:
+
 - iOS/macOS automation limitations
 - may require manual setup
 - iMessage automation can be constrained
@@ -246,11 +260,13 @@ Cons:
 Use a dedicated SMS number that forwards commands to Crystal Ball API.
 
 Pros:
+
 - reliable SMS webhook model
 - clean inbound/outbound API
 - works even when Mac Messages is not synced
 
 Cons:
+
 - recurring cost
 - separate phone number
 - requires internet-exposed endpoint or relay
@@ -259,17 +275,20 @@ Cons:
 ## Option D — Local Relay App / Menu Bar Companion
 
 Build a small local companion service that:
+
 - watches trusted inbound commands
 - calls Crystal Ball local API
 - sends replies
 - exposes status and permissions
 
 Pros:
+
 - clean architecture
 - can be hardened independently
 - good macOS UX
 
 Cons:
+
 - more engineering effort
 
 ---
@@ -283,6 +302,7 @@ Start with:
 Avoid broad automation at first.
 
 MVP should be:
+
 - local-only
 - read/query only
 - owner-only
@@ -327,6 +347,7 @@ Inbound SMS/iMessage
 ## 1. Message Bridge
 
 Responsible for:
+
 - detecting inbound candidate messages
 - extracting sender, timestamp, text, thread id
 - deduplicating messages
@@ -337,6 +358,7 @@ It should not perform intelligence logic.
 ## 2. Sender Allowlist
 
 Responsible for:
+
 - verifying sender identity
 - owner-only default
 - trusted contacts if enabled
@@ -361,6 +383,7 @@ Do not store plaintext phone numbers if avoidable.
 Responsible for knowing whether the inbound command is safe to answer in the current conversation.
 
 Rules:
+
 - one-on-one owner thread is allowed by default
 - group threads disabled by default
 - trusted group threads require explicit setting
@@ -402,6 +425,7 @@ interface SmsCommand {
 Routes commands to existing Crystal Ball services.
 
 Examples:
+
 - `STATUS` -> system health + active situations
 - `BRIEF` -> OperationalBrief
 - `WHAT CHANGED` -> What Changed digest
@@ -415,6 +439,7 @@ Examples:
 Formats replies for SMS constraints.
 
 Rules:
+
 - short by default
 - include confidence
 - include top drivers
@@ -427,6 +452,7 @@ Rules:
 Applies redaction policy before delivery.
 
 Redacts:
+
 - exact home address
 - exact coordinates
 - personal saved-place names when strict mode is active
@@ -440,6 +466,7 @@ Redacts:
 Outbound messages should be queued before sending.
 
 Responsibilities:
+
 - idempotency
 - retry handling
 - duplicate prevention
@@ -452,6 +479,7 @@ Responsibilities:
 Responsible for sending reply.
 
 Potential implementations:
+
 - AppleScript Messages send
 - Shortcuts bridge
 - Twilio
@@ -559,6 +587,7 @@ Returns supported commands.
 ## CB STATUS
 
 Returns:
+
 - app health
 - source health summary
 - active situation count
@@ -579,6 +608,7 @@ Watch: power outages + road closures.
 Returns short OperationalBrief.
 
 Should include:
+
 - top 3 situations
 - what changed
 - personal relevance if any
@@ -593,6 +623,7 @@ Returns material changes since last check.
 Returns user-local personal impact summary.
 
 Should include:
+
 - weather
 - infrastructure
 - travel
@@ -604,6 +635,7 @@ Should include:
 Returns status of a Watch Mission.
 
 Examples:
+
 - H5N1
 - Red Sea
 - Taiwan
@@ -619,9 +651,11 @@ Example:
 
 ```text
 Cyber risk is elevated because:
+
 1. regional outage reports increased
 2. BGP instability detected
 3. CISA KEV activity elevated
+
 Confidence: medium.
 Limit: only 1 independent source confirms impact.
 ```
@@ -653,6 +687,7 @@ These make the interface significantly more useful without becoming unsafe.
 Temporarily increases monitoring priority for a topic.
 
 Safety:
+
 - owner only
 - expires automatically
 - does not alter permanent watchlists unless confirmed locally
@@ -738,6 +773,7 @@ CB CONFIRM 4821
 ```
 
 Rules:
+
 - confirmation codes expire
 - confirmation is bound to sender + command + thread
 - only one active confirmation per sender unless queued
@@ -861,11 +897,13 @@ Deduplicate by message id / timestamp / sender / command hash.
 ## Authentication
 
 Minimum:
+
 - allowlisted sender
 - `CB` prefix
 - local-only command processor
 
 Better:
+
 - optional PIN for sensitive commands
 
 Example:
@@ -890,6 +928,7 @@ type SmsCommandPermission =
 ## Sensitive Commands
 
 Require local confirmation:
+
 - add/remove watchlists
 - change settings
 - export data
@@ -916,6 +955,7 @@ Require local confirmation:
 SMS replies should avoid exposing overly precise private context.
 
 Examples:
+
 - say “saved place near South Bend” instead of exact home address
 - avoid exact coordinates
 - avoid family/place labels unless user allows
@@ -937,6 +977,7 @@ Do not include personal context in exported SMS replies unless explicitly reques
 ## Local Logs
 
 Audit logs should store:
+
 - hashed sender
 - command type
 - timestamps
@@ -949,6 +990,7 @@ Avoid storing full private conversation history.
 # macOS Permissions
 
 Potential permissions needed:
+
 - Full Disk Access if reading Messages database
 - Automation permission for Messages / Shortcuts
 - Local network permission if using sidecar endpoint
@@ -1052,6 +1094,7 @@ This ensures command parsing and replies work without messaging risk.
 # Unit Tests
 
 Add tests for:
+
 - command parsing
 - authorization
 - unknown commands
@@ -1089,6 +1132,7 @@ src/services/sms/__tests__/sms-delivery-queue.test.mts
 ## Phase 1 — Command Core
 
 Build:
+
 - command parser
 - command types
 - response formatter
@@ -1102,6 +1146,7 @@ No real iMessage integration yet.
 ## Phase 2 — Crystal Ball Intent Router
 
 Wire commands to:
+
 - OperationalBrief
 - What Changed
 - Personal Impact
@@ -1112,6 +1157,7 @@ Wire commands to:
 ## Phase 3 — Confirmation + Redaction
 
 Add:
+
 - confirmation workflows
 - redaction levels
 - privacy boundaries
@@ -1126,6 +1172,7 @@ Add diagnostic status.
 ## Phase 5 — Delivery Queue + Outbound Adapter Prototype
 
 Implement:
+
 - delivery queue
 - AppleScript send or Shortcuts handoff
 - idempotent sending
@@ -1138,6 +1185,7 @@ Owner-only.
 Implement inbound detection.
 
 Strict constraints:
+
 - owner only
 - CB prefix only
 - no group chats
@@ -1146,6 +1194,7 @@ Strict constraints:
 ## Phase 7 — Settings UI
 
 Add settings for:
+
 - enable/disable SMS command interface
 - allowlisted senders
 - command prefix
@@ -1159,6 +1208,7 @@ Add settings for:
 ## Phase 8 — Advanced Commands
 
 Add:
+
 - watch mission commands
 - follow situation
 - simulation commands
@@ -1171,6 +1221,7 @@ Add:
 ## Best First PR
 
 Implement only:
+
 - parser
 - command contracts
 - response formatter
@@ -1202,6 +1253,7 @@ Add sidecar endpoint.
 Add delivery queue and outbound reply adapter.
 
 Only after that:
+
 - inbound iMessage/SMS bridge.
 
 ---
@@ -1228,6 +1280,7 @@ Before enabling real messaging:
 # Non-Goals
 
 This system is not:
+
 - a general SMS chatbot
 - a third-party customer support bot
 - an unrestricted remote control channel
@@ -1250,8 +1303,10 @@ And receive:
 
 ```text
 Crystal Ball: 2 material changes.
+
 1) Midwest storm risk rising; power outage signals increasing.
 2) Cyber source health degraded; confidence reduced.
+
 Local impact: low-moderate near saved places.
 Watch: NWS updates + outage reports.
 ```

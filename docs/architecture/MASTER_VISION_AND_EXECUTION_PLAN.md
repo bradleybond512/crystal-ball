@@ -5,6 +5,7 @@
 Crystal Ball is not merely a monitoring application.
 
 It is not:
+
 - a dashboard
 - a threat feed
 - an OSINT map
@@ -16,6 +17,7 @@ Crystal Ball is the beginning of:
 > a planetary-scale cognitive interface for understanding the state, stability, and future trajectory of civilization.
 
 The platform should ultimately function as:
+
 - a living world model
 - a planetary nervous system
 - a predictive intelligence engine
@@ -24,6 +26,7 @@ The platform should ultimately function as:
 - a civilization-scale situational awareness network
 
 The user experience should feel:
+
 - immersive
 - intelligent
 - alive
@@ -37,9 +40,11 @@ The user experience should feel:
 # Core Philosophy
 
 Most systems answer:
+
 - What happened?
 
 Crystal Ball must answer:
+
 - What changed?
 - Why does it matter?
 - What is connected to it?
@@ -60,6 +65,7 @@ The goal is:
 ## Phase 1 — Aggregation
 
 Ingest:
+
 - events
 - APIs
 - telemetry
@@ -71,6 +77,7 @@ Ingest:
 ## Phase 2 — Correlation
 
 Understand relationships between:
+
 - logistics
 - cyber
 - disease
@@ -82,6 +89,7 @@ Understand relationships between:
 ## Phase 3 — Prediction
 
 Forecast:
+
 - instability
 - escalation
 - cascading failures
@@ -91,6 +99,7 @@ Forecast:
 ## Phase 4 — World Modeling
 
 Model:
+
 - civilization systems
 - infrastructure dependencies
 - transportation
@@ -102,6 +111,7 @@ Model:
 ## Phase 5 — Planetary Cognition
 
 Crystal Ball evolves into:
+
 - a strategic cognition engine
 - a civilization reasoning platform
 - a predictive world-state simulator
@@ -114,6 +124,7 @@ Crystal Ball evolves into:
 ## World-State Engine
 
 Continuously model:
+
 - infrastructure
 - logistics
 - economics
@@ -132,6 +143,7 @@ Every entity becomes part of a living graph.
 ## Weak Signal Detection
 
 Detect:
+
 - precursor indicators
 - subtle anomalies
 - abnormal patterns
@@ -139,6 +151,7 @@ Detect:
 - deviations from baseline behavior
 
 Examples:
+
 - AIS disappearance
 - BGP instability
 - military dispersal
@@ -158,6 +171,7 @@ Detect meaningful instability before mainstream awareness.
 Sometimes the absence of activity matters most.
 
 Examples:
+
 - ports go quiet
 - telemetry vanishes
 - communications stop
@@ -171,6 +185,7 @@ Absence itself becomes intelligence.
 ## Threat Cascade Intelligence
 
 Model:
+
 - second-order effects
 - third-order escalation
 - dependency chains
@@ -190,6 +205,7 @@ The system should automatically connect these pathways.
 Some events create instability wells.
 
 Examples:
+
 - blackouts
 - fuel shortages
 - cyber attacks
@@ -199,6 +215,7 @@ Examples:
 Nearby systems become increasingly unstable.
 
 Visualize:
+
 - pressure fields
 - instability propagation
 - escalation ripples
@@ -215,6 +232,7 @@ Not certainty.
 Probabilistic emergence.
 
 Examples:
+
 - instability gradients
 - cyber pressure buildup
 - economic fragility zones
@@ -227,6 +245,7 @@ Users should visually perceive emerging instability.
 ## Planetary Memory
 
 Remember:
+
 - prior escalation signatures
 - historical crises
 - infrastructure failure behavior
@@ -235,6 +254,7 @@ Remember:
 - market panic signatures
 
 The system learns:
+
 - normal rhythms
 - when the rhythm breaks
 
@@ -245,6 +265,7 @@ The system learns:
 Model civilization itself.
 
 Examples:
+
 - food systems
 - logistics
 - internet infrastructure
@@ -266,6 +287,7 @@ This becomes:
 # UI Vision
 
 The interface should feel:
+
 - cinematic
 - strategic
 - operational
@@ -273,6 +295,7 @@ The interface should feel:
 - alive
 
 Not:
+
 - cluttered dashboards
 - noisy telemetry walls
 - generic monitoring software
@@ -286,6 +309,7 @@ The world itself becomes the interface.
 ## Planetary State View
 
 Visualize:
+
 - global instability
 - infrastructure strain
 - logistics pressure
@@ -301,6 +325,7 @@ The Earth should feel alive.
 ## Domain Overlays
 
 Users phase into:
+
 - cyber
 - logistics
 - shipping
@@ -311,6 +336,7 @@ Users phase into:
 - unrest
 
 Each overlay changes:
+
 - rendering style
 - animations
 - information density
@@ -321,6 +347,7 @@ Each overlay changes:
 ## Event Causality View
 
 Visualize:
+
 - causes
 - dependencies
 - escalation pathways
@@ -328,6 +355,7 @@ Visualize:
 - second-order effects
 
 Using:
+
 - animated causality graphs
 - branching relationship flows
 - operational dependency visualizations
@@ -337,6 +365,7 @@ Using:
 ## Time Intelligence
 
 Allow users to:
+
 - replay escalation
 - scrub through time
 - visualize spread
@@ -349,6 +378,7 @@ The world becomes replayable.
 ## Personal Impact View
 
 Translate global intelligence into:
+
 - local consequences
 - utility disruption
 - ISP instability
@@ -361,16 +391,19 @@ Translate global intelligence into:
 # Elastic Information Density
 
 Far zoom:
+
 - macro instability
 - planetary pulse
 - atmospheric awareness
 
 Medium zoom:
+
 - infrastructure systems
 - transportation networks
 - event clusters
 
 Deep zoom:
+
 - telemetry
 - raw data
 - logs
@@ -391,6 +424,7 @@ Instead:
 > “What materially changed in the world today?”
 
 Examples:
+
 - internet outages expanded
 - military movement intensified
 - fuel exports declined
@@ -404,12 +438,14 @@ This becomes the heartbeat of Crystal Ball.
 # AI Operational Intelligence
 
 The AI behaves like:
+
 - an analyst
 - an operations center
 - a strategic advisor
 - an intelligence synthesis engine
 
 Capabilities:
+
 - summarize instability
 - identify escalation pathways
 - explain cascading effects
@@ -422,6 +458,7 @@ Capabilities:
 # Explainable Intelligence
 
 Every conclusion must explain:
+
 - evidence
 - confidence
 - uncertainty
@@ -438,6 +475,7 @@ Trust is essential.
 One of the hardest and most important challenges.
 
 The platform must reduce planetary complexity into:
+
 - meaningful summaries
 - operational narratives
 - state transitions
@@ -454,6 +492,7 @@ Goal:
 Prevent psychological exhaustion.
 
 Occasionally surface:
+
 - recovery
 - stabilization
 - humanitarian aid
@@ -461,6 +500,7 @@ Occasionally surface:
 - successful mitigation
 
 The platform should understand:
+
 - danger
 - recovery
 - resilience
@@ -470,6 +510,7 @@ The platform should understand:
 # Strategic Time Horizons
 
 Support:
+
 - immediate
 - tactical
 - operational
@@ -481,6 +522,7 @@ Support:
 # Technical Direction
 
 ## Frontend
+
 - Tauri
 - deck.gl
 - MapLibre
@@ -488,6 +530,7 @@ Support:
 - Rust acceleration
 
 ## Backend
+
 - Rust ingestion
 - Python intelligence services
 - Kafka
@@ -496,6 +539,7 @@ Support:
 - Neo4j
 
 ## AI Layer
+
 - local LLMs
 - embeddings
 - vector search

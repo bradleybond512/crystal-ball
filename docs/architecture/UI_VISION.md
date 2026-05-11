@@ -3,12 +3,14 @@
 ## Core Principle
 
 Crystal Ball should not behave like:
+
 - a traditional dashboard
 - a feed reader
 - a static map
 - an analytics panel
 
 The interface should feel like:
+
 - a planetary cognition system
 - a living world model
 - a strategic operations center
@@ -23,6 +25,7 @@ The UI itself becomes:
 # The Problem With Traditional Dashboards
 
 Most intelligence systems fail because they:
+
 - overload the user
 - flatten information hierarchy
 - create alert fatigue
@@ -31,6 +34,7 @@ Most intelligence systems fail because they:
 - overwhelm operators with raw data
 
 Crystal Ball must instead:
+
 - reduce cognitive overload
 - progressively reveal complexity
 - visualize causality
@@ -64,6 +68,7 @@ The platform should use layered intelligence views.
 The emotional centerpiece.
 
 A living Earth interface visualizing:
+
 - instability
 - movement
 - escalation
@@ -75,12 +80,14 @@ A living Earth interface visualizing:
 - cyber health
 
 At this level:
+
 - users perceive patterns
 - users sense tension
 - users identify hotspots
 - users understand the pulse of the planet
 
 This layer prioritizes:
+
 - macro awareness
 - emotional clarity
 - planetary comprehension
@@ -94,6 +101,7 @@ NOT individual events.
 Users can phase into specialized domains.
 
 Examples:
+
 - cyber
 - logistics
 - military
@@ -106,6 +114,7 @@ Examples:
 - civil unrest
 
 Each overlay should modify:
+
 - visual language
 - node behavior
 - animation style
@@ -115,12 +124,14 @@ Each overlay should modify:
 Example:
 
 ## Cyber Overlay
+
 - glowing BGP flows
 - internet outage ripples
 - cable strain visualization
 - attack propagation pulses
 
 ## Shipping Overlay
+
 - maritime arteries
 - congestion visualization
 - choke points
@@ -136,6 +147,7 @@ One of the most important features.
 
 When selecting an event:
 show:
+
 - causes
 - dependencies
 - consequences
@@ -150,6 +162,7 @@ Earthquake -> Port Failure -> Fuel Delays -> Food Risk -> Civil Instability
 This should NOT be text-only.
 
 Use:
+
 - animated causality graphs
 - branching pathways
 - neural-style intelligence flows
@@ -160,6 +173,7 @@ Use:
 # Layer 4 — Time Intelligence
 
 Users should be able to:
+
 - replay escalation
 - scrub backward through time
 - visualize event spread
@@ -176,6 +190,7 @@ This creates operational understanding.
 # Layer 5 — Personal Impact View
 
 The system adapts global intelligence into:
+
 - local consequences
 - travel disruptions
 - infrastructure risks
@@ -194,21 +209,27 @@ This makes the platform personally valuable.
 The interface should progressively reveal detail.
 
 ## Far Zoom
+
 Show:
+
 - macro patterns
 - instability regions
 - global pulse
 - atmospheric awareness
 
 ## Medium Zoom
+
 Show:
+
 - infrastructure systems
 - event relationships
 - logistics movement
 - network topology
 
 ## Deep Zoom
+
 Show:
+
 - raw telemetry
 - sensor feeds
 - source evidence
@@ -223,6 +244,7 @@ Crystal Ball should breathe.
 # The World Should Feel Alive
 
 The map should:
+
 - pulse
 - breathe
 - ripple
@@ -232,6 +254,7 @@ The map should:
 - react dynamically
 
 Examples:
+
 - cyber attacks generate shockwaves
 - internet outages ripple outward
 - storms distort logistics networks
@@ -245,6 +268,7 @@ The user should emotionally feel instability.
 # Visual Style Direction
 
 The interface should feel:
+
 - cinematic
 - operational
 - strategic
@@ -253,6 +277,7 @@ The interface should feel:
 - high-performance
 
 Inspirations:
+
 - NORAD systems
 - submarine tactical displays
 - air traffic systems
@@ -260,6 +285,7 @@ Inspirations:
 - sci-fi operational interfaces
 
 Avoid:
+
 - fake hacker aesthetics
 - neon overload
 - gimmicks
@@ -273,6 +299,7 @@ Avoid:
 The world model likely requires multiple rendering layers.
 
 ## Atmosphere Layer
+
 - weather systems
 - smoke
 - pressure
@@ -280,12 +307,14 @@ The world model likely requires multiple rendering layers.
 - jet streams
 
 ## Orbital Layer
+
 - satellites
 - thermal anomalies
 - wildfire detection
 - ISR systems
 
 ## Infrastructure Layer
+
 - ports
 - airports
 - undersea cables
@@ -293,6 +322,7 @@ The world model likely requires multiple rendering layers.
 - telecom systems
 
 ## Human Layer
+
 - protests
 - migration
 - logistics
@@ -300,6 +330,7 @@ The world model likely requires multiple rendering layers.
 - economic activity
 
 ## Invisible Systems Layer
+
 - cyber activity
 - internet health
 - BGP routing
@@ -315,6 +346,7 @@ The world becomes a stacked intelligence model.
 Crystal Ball should evolve beyond maps alone.
 
 The future interface likely combines:
+
 - spatial intelligence
 - timelines
 - causality graphs
@@ -342,6 +374,7 @@ Instead:
 “What materially changed in the world today?”
 
 Examples:
+
 - internet outages expanded
 - shipping congestion worsened
 - unusual military movement detected
@@ -360,11 +393,13 @@ The interface itself should adapt.
 Examples:
 
 During cyber escalation:
+
 - cyber overlays intensify
 - internet systems surface upward
 - BGP anomalies become visually prominent
 
 During severe weather:
+
 - atmospheric systems dominate rendering
 - logistics disruption layers intensify
 
@@ -375,6 +410,7 @@ The UI becomes context-aware.
 # Immediate UI Roadmap
 
 ## Phase 1
+
 - simplify current layout
 - improve hierarchy
 - reduce clutter
@@ -382,18 +418,21 @@ The UI becomes context-aware.
 - improve animation smoothness
 
 ## Phase 2
+
 - add dynamic world-state rendering
 - add overlay systems
 - implement “What Changed?” intelligence
 - add causality visualization
 
 ## Phase 3
+
 - add replayable timeline systems
 - add predictive simulation
 - add personal impact intelligence
 - add adaptive UI behavior
 
 ## Phase 4
+
 - full world-state engine visualization
 - probabilistic future rendering
 - AI-generated operational summaries
@@ -408,6 +447,7 @@ Crystal Ball should feel like:
 > seeing the pulse of the planet.
 
 The interface should help users:
+
 - comprehend global complexity
 - detect instability early
 - understand causality

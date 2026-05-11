@@ -11,6 +11,7 @@
 
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
+import { sanitizeHtml } from '@/utils/safe-html';
 import {
   generateBriefing,
   getCachedBriefing,
@@ -383,7 +384,7 @@ export class IntelligenceBriefingPanel extends Panel {
  if (section.content) {
  const contentEl = document.createElement('div');
  contentEl.className = 'ib-content';
- contentEl.innerHTML = this.renderMarkdown(section.content);
+ contentEl.innerHTML = sanitizeHtml(this.renderMarkdown(section.content));
  body.append(contentEl);
  }
 

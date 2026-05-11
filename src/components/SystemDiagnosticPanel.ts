@@ -88,11 +88,12 @@ export class SystemDiagnosticPanel extends Panel {
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
   }
 
-  public dispose(): void {
+  public override destroy(): void {
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    super.destroy();
   }
 
   private render(): void {

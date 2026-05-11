@@ -575,6 +575,9 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'oilSpills', task: () => runGuarded('oilSpills', () => this.loadOilSpills()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'gdacsAlerts', task: () => runGuarded('gdacsAlerts', () => this.loadGDACSAlerts()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoAlerts', task: () => runGuarded('volcanoAlerts', () => this.loadVolcanoAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoMonitor', task: () => runGuarded('volcanoMonitor', () => this.loadVolcanoMonitor()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'severeWeather', task: () => runGuarded('severeWeather', () => this.loadSevereWeather()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'shakeAlert', task: () => runGuarded('shakeAlert', () => this.loadShakeAlert()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'nwsAlerts', task: () => runGuarded('nwsAlerts', () => this.loadNWSAlerts()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'faaCameras', task: () => runGuarded('faaCameras', () => this.loadFAACameras()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'savedPlaceWeather', task: () => runGuarded('savedPlaceWeather', () => this.loadSavedPlaceWeather()) });
@@ -2186,6 +2189,9 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadVolcanoAlerts(): Promise<void> { return cyberLoaders.loadVolcanoAlerts(this.ctx); }
+  async loadVolcanoMonitor(): Promise<void> { return cyberLoaders.loadVolcanoMonitor(this.ctx); }
+  async loadSevereWeather(): Promise<void> { return cyberLoaders.loadSevereWeather(this.ctx); }
+  async loadShakeAlert(): Promise<void> { return cyberLoaders.loadShakeAlert(this.ctx); }
 
   async loadNWSAlerts(): Promise<void> {
  try {

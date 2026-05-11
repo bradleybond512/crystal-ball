@@ -166,6 +166,9 @@ import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
 import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
 import { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
+import { VolcanoMonitorPanel } from '@/components/VolcanoMonitorPanel';
+import { SevereWeatherPanel } from '@/components/SevereWeatherPanel';
+import { ShakeAlertPanel } from '@/components/ShakeAlertPanel';
 import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
 import { IswReportsPanel } from '@/components/IswReportsPanel';
 import { NatoNewsPanel } from '@/components/NatoNewsPanel';
@@ -1104,6 +1107,24 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.map?.setCenter(lat, lon, 7);
  });
  this.ctx.panels['volcano-alerts'] = volcanoAlertsPanel;
+
+ const volcanoMonitorPanel = new VolcanoMonitorPanel();
+ volcanoMonitorPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 7);
+ });
+ this.ctx.panels['volcano-monitor'] = volcanoMonitorPanel;
+
+ const severeWeatherPanel = new SevereWeatherPanel();
+ severeWeatherPanel.setWarningClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 6);
+ });
+ this.ctx.panels['severe-weather'] = severeWeatherPanel;
+
+ const shakeAlertPanel = new ShakeAlertPanel();
+ shakeAlertPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 7);
+ });
+ this.ctx.panels['shakealert'] = shakeAlertPanel;
 
  const nwsAlertsPanel = new NWSAlertsPanel();
  this.ctx.panels['nws-alerts'] = nwsAlertsPanel;

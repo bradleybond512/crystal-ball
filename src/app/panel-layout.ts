@@ -148,6 +148,8 @@ import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
 import { SanctionsPanel } from '@/components/SanctionsPanel';
 import { HibpBreachesPanel } from '@/components/HibpBreachesPanel';
 import { IpInfoPanel } from '@/components/IpInfoPanel';
+import { BitcoinAbusePanel } from '@/components/BitcoinAbusePanel';
+import { RedditOsintPanel } from '@/components/RedditOsintPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
@@ -1020,6 +1022,12 @@ export class PanelLayoutManager implements AppModule {
 
  this.ctx.panels['hibp-breaches'] = new HibpBreachesPanel();
  this.ctx.panels['ipinfo-lookup'] = new IpInfoPanel();
+
+ const bitcoinAbusePanel = new BitcoinAbusePanel();
+ this.ctx.panels['bitcoin-abuse'] = bitcoinAbusePanel;
+
+ const redditOsintPanel = new RedditOsintPanel();
+ this.ctx.panels['reddit-osint'] = redditOsintPanel;
 
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;

@@ -133,3 +133,7 @@ export { CorrelationMatrixPanel } from './CorrelationMatrixPanel';
 export { CascadeSimulatorPanel } from './CascadeSimulatorPanel';
 export { EmergencyBroadcastPanel } from './EmergencyBroadcastPanel';
 export { SatelliteChangePanel } from './SatelliteChangePanel';
+
+// New OSINT + crypto panels
+export { BitcoinAbusePanel } from './BitcoinAbusePanel';
+export { RedditOsintPanel } from './RedditOsintPanel';

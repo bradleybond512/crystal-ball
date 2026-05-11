@@ -7583,6 +7583,225 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Reddit OSINT multi-subreddit feed ────────────────────────────────────
+  // Reads up to ~6 threat-relevant subreddits in parallel, no OAuth.
+  // 15-min cache per (subreddit, limit) tuple so a tab switch or another
+  // process probing the route doesn't burn Reddit's ratelimit.
+  if (requestUrl.pathname === '/api/osint/reddit') {
+    const REDDIT_OSINT_TTL_MS = 15 * 60 * 1000;
+    const REDDIT_DEFAULT_SUBS = ['netsec', 'cybersecurity', 'worldnews', 'geopolitics', 'RBI', 'EmergencyManagement'];
+    const subsParam = requestUrl.searchParams.get('subreddits') ?? '';
+    const VALID_SUB = /^[a-z0-9][a-z0-9_]{1,20}$/i;
+    const parsed = subsParam
+      .split(',')
+      .map(s => s.trim().replace(/^r\//i, ''))
+      .filter(s => VALID_SUB.test(s));
+    const subs = parsed.length > 0 ? Array.from(new Set(parsed)) : REDDIT_DEFAULT_SUBS;
+    const limitRaw = Number.parseInt(requestUrl.searchParams.get('limit') ?? '', 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(100, limitRaw) : 25;
+
+    const fetchSub = async (sub) => {
+      const cacheKey = `reddit-osint-${sub.toLowerCase()}-${limit}`;
+      const cached = getCached(cacheKey, REDDIT_OSINT_TTL_MS);
+      if (cached) return { sub, posts: cached, ok: true };
+      try {
+        const resp = await fetchWithTimeout(
+          `https://www.reddit.com/r/${encodeURIComponent(sub)}/new.json?limit=${limit}&raw_json=1`,
+          { headers: { 'User-Agent': 'CrystalBall/2.13 (threat intelligence aggregator)' } },
+          10_000,
+        );
+        if (!resp.ok) return { sub, posts: [], ok: false, reason: `HTTP ${resp.status}` };
+        const data = await resp.json();
+        const children = data?.data?.children ?? [];
+        const posts = [];
+        for (const child of children) {
+          if (child?.kind !== 't3') continue;
+          const p = child.data ?? {};
+          if (p.stickied === true) continue;
+          if (!p.id || !p.title) continue;
+          const permalinkPath = typeof p.permalink === 'string' ? p.permalink : `/r/${p.subreddit ?? sub}/comments/${p.id}`;
+          posts.push({
+            id: p.id,
+            subreddit: p.subreddit ?? sub,
+            title: p.title,
+            url: typeof p.url === 'string' ? p.url : `https://www.reddit.com${permalinkPath}`,
+            permalink: `https://www.reddit.com${permalinkPath}`,
+            score: typeof p.score === 'number' ? p.score : 0,
+            numComments: typeof p.num_comments === 'number' ? p.num_comments : 0,
+            createdUtc: typeof p.created_utc === 'number' ? p.created_utc : 0,
+            flair: typeof p.link_flair_text === 'string' && p.link_flair_text.length > 0 ? p.link_flair_text : null,
+            author: typeof p.author === 'string' && p.author.length > 0 ? p.author : '[deleted]',
+            domain: typeof p.domain === 'string' && p.domain.length > 0 ? p.domain : null,
+            over18: p.over_18 === true,
+          });
+        }
+        setCached(cacheKey, posts, REDDIT_OSINT_TTL_MS);
+        return { sub, posts, ok: true };
+      } catch (error) {
+        return { sub, posts: [], ok: false, reason: error?.message ?? String(error) };
+      }
+    };
+
+    const results = await Promise.all(subs.map(fetchSub));
+    const successfulSubs = [];
+    const reasons = [];
+    const merged = [];
+    for (const r of results) {
+      if (r.ok) {
+        successfulSubs.push(r.sub);
+        for (const post of r.posts) merged.push(post);
+      } else if (r.reason) {
+        reasons.push(`${r.sub}: ${r.reason}`);
+      }
+    }
+    merged.sort((a, b) => b.createdUtc - a.createdUtc);
+    return json({
+      posts: merged,
+      subreddits: successfulSubs,
+      degraded: reasons.length > 0,
+      generatedAt: new Date().toISOString(),
+      reason: reasons.length > 0 ? reasons.join('; ') : null,
+    });
+  }
+
+  // ── CryptoScamDB + Bitcoin Abuse aggregator ──────────────────────────────
+  // No-key default: pulls scam addresses + domains from CryptoScamDB
+  // (public). When BITCOINABUSE_API_KEY is present we'd ALSO union in
+  // Bitcoin Abuse reports — left out of this PR per spec (key-gated).
+  // 6h cache because CryptoScamDB updates slowly.
+  if (requestUrl.pathname === '/api/crypto/bitcoin-abuse') {
+    const CRYPTO_SCAM_TTL_MS = 6 * 60 * 60 * 1000;
+    const cached = getCached('crypto-bitcoin-abuse', CRYPTO_SCAM_TTL_MS);
+    if (cached) return json(cached);
+
+    const normaliseCategory = (raw) => {
+      if (typeof raw !== 'string') return 'other';
+      const lower = raw.toLowerCase();
+      if (lower.includes('ransom')) return 'ransomware';
+      if (lower.includes('phish')) return 'phishing';
+      if (lower.includes('mixer') || lower.includes('tumbler')) return 'mixer';
+      if (lower.includes('darknet') || lower.includes('darkmarket')) return 'darknet';
+      if (lower.includes('mining') || lower.includes('miner')) return 'mining';
+      if (lower.includes('scam') || lower.includes('fraud') || lower.includes('fake')) return 'scam';
+      return 'other';
+    };
+    const stripProtocol = (v) => String(v).replace(/^https?:\/\//i, '').replace(/\/$/, '');
+
+    const recordsFromResult = (raw) => {
+      if (!raw || typeof raw !== 'object') return [];
+      const result = raw.result;
+      if (Array.isArray(result)) return result.filter(r => r && typeof r === 'object').map(r => ({ key: null, rec: r }));
+      if (result && typeof result === 'object') {
+        return Object.entries(result).filter(([_, v]) => v && typeof v === 'object').map(([k, v]) => ({ key: k, rec: v }));
+      }
+      return [];
+    };
+
+    let addresses = [];
+    let domains = [];
+    let degraded = false;
+    let provenance = 'CryptoScamDB';
+
+    try {
+      const [addrResp, domResp] = await Promise.allSettled([
+        fetchWithTimeout('https://api.cryptoscamdb.org/v1/addresses', { headers: { 'User-Agent': 'CrystalBall/2.13' } }, 15_000),
+        fetchWithTimeout('https://api.cryptoscamdb.org/v1/domains', { headers: { 'User-Agent': 'CrystalBall/2.13' } }, 15_000),
+      ]);
+      if (addrResp.status === 'fulfilled' && addrResp.value.ok) {
+        const json = await addrResp.value.json();
+        for (const { key, rec } of recordsFromResult(json)) {
+          const coin = typeof rec.coin === 'string' ? rec.coin.toUpperCase() : '';
+          if (coin && coin !== 'BTC') continue;
+          const address = (typeof rec.address === 'string' && rec.address) || key;
+          if (!address) continue;
+          addresses.push({
+            address,
+            category: normaliseCategory(rec.subcategory ?? rec.category),
+            reportCount: typeof rec.reports === 'number' ? rec.reports : (typeof rec.reportedaddresses === 'number' ? rec.reportedaddresses : 1),
+            name: typeof rec.name === 'string' ? rec.name : undefined,
+          });
+        }
+      } else {
+        degraded = true;
+      }
+      if (domResp.status === 'fulfilled' && domResp.value.ok) {
+        const json = await domResp.value.json();
+        for (const { key, rec } of recordsFromResult(json)) {
+          const domain = (typeof rec.domain === 'string' && rec.domain) || (typeof rec.url === 'string' && rec.url) || key;
+          if (!domain) continue;
+          const statusRaw = typeof rec.status === 'string' ? rec.status.toLowerCase() : '';
+          const status = statusRaw.includes('offline') || statusRaw.includes('inactive') || statusRaw === 'dead' ? 'inactive'
+            : statusRaw.includes('active') || statusRaw === 'online' ? 'active'
+            : 'unknown';
+          domains.push({
+            domain: stripProtocol(domain),
+            category: normaliseCategory(rec.subcategory ?? rec.category),
+            status,
+            name: typeof rec.name === 'string' ? rec.name : undefined,
+            reportedAt: typeof rec.reported === 'string' ? rec.reported : undefined,
+          });
+        }
+      } else {
+        degraded = true;
+      }
+    } catch (error) {
+      degraded = true;
+      provenance = `CryptoScamDB error: ${error?.message ?? error}`;
+    }
+
+    const payload = {
+      addresses,
+      domains,
+      degraded,
+      source: provenance,
+      generatedAt: new Date().toISOString(),
+    };
+    setCached('crypto-bitcoin-abuse', payload, CRYPTO_SCAM_TTL_MS);
+    return json(payload);
+  }
+
+  // ── Per-address check: scam DB lookup + blockchain.info chain stats ──────
+  if (requestUrl.pathname === '/api/crypto/bitcoin-abuse/check') {
+    const address = (requestUrl.searchParams.get('address') ?? '').trim();
+    const isBtc = /^bc1[ac-hj-np-z02-9]+$/i.test(address) || /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(address);
+    if (!isBtc) {
+      return json({ address, scamMatch: null, balanceSat: null, txCount: null, source: 'invalid-address-format', fetchedAt: new Date().toISOString() }, 400);
+    }
+    // Snapshot of the scam feed for cheap address membership check.
+    const feed = getCached('crypto-bitcoin-abuse', 6 * 60 * 60 * 1000);
+    let scamMatch = null;
+    if (feed && Array.isArray(feed.addresses)) {
+      scamMatch = feed.addresses.find(e => typeof e?.address === 'string' && e.address === address) ?? null;
+    }
+    let balanceSat = null;
+    let txCount = null;
+    let provenance = 'blockchain.info';
+    try {
+      const resp = await fetchWithTimeout(
+        `https://blockchain.info/rawaddr/${encodeURIComponent(address)}?limit=0`,
+        { headers: { 'User-Agent': 'CrystalBall/2.13' } },
+        15_000,
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        if (typeof data.final_balance === 'number') balanceSat = data.final_balance;
+        if (typeof data.n_tx === 'number') txCount = data.n_tx;
+      } else {
+        provenance = `blockchain.info HTTP ${resp.status}`;
+      }
+    } catch (error) {
+      provenance = `blockchain.info error: ${error?.message ?? error}`;
+    }
+    return json({
+      address,
+      scamMatch,
+      balanceSat,
+      txCount,
+      source: provenance,
+      fetchedAt: new Date().toISOString(),
+    });
+  }
+
   // ── OpenAQ real-time air quality readings ────────────────────────────────
   if (requestUrl.pathname === '/api/openaq-readings') {
  const cached = getCached('openaq-readings');

@@ -80,6 +80,8 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'security-advisories': { name: 'Security Advisories', enabled: true, priority: 2 },
   'cve-tracker': { name: 'CVE Tracker', enabled: true, priority: 2 },
   'vulners-cve': { name: 'Vulners CVE', enabled: true, priority: 2 },
+  'bitcoin-abuse': { name: 'Bitcoin Abuse', enabled: true, priority: 2 },
+  'reddit-osint': { name: 'Reddit OSINT', enabled: true, priority: 2 },
   'network-rules': { name: 'Network Rules', enabled: true, priority: 3 },
   's2u-intel': { name: 'S2U Intelligence', enabled: true, priority: 1 },
   'synthesis': { name: 'Synthesis', enabled: true, priority: 1 },
@@ -1011,7 +1013,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   dataTracking: {
  labelKey: 'header.panelCatDataTracking',
- panelKeys: ['monitors', 'cyber-threats', 'threat-inbox', 'local-ids', 'comms-health', 'power-grid', 'ucdp-events', 'nuclear-risk', 'airstrikes', 'displacement', 'security-advisories', 'network-rules', 's2u-intel', 'oref-sirens', 'space-weather', 'spaceflight-news', 'space-launches', 'population-exposure', 'internet-disruptions', 'air-traffic', 'threat-intel-hub', 'geo-intel', 'dark-web', 'anomaly-detection', 'financial-contagion', 'supply-chain-impact', 'nuclear-monitor', 'sigint-panel', 'dark-vessel', 'ics-ot-dashboard', 'ioc-manager', 'network-topology', 'stix-taxii', 'custom-geofence', 'sanctions-crossref', 'emergency-broadcast', 'satellite-change', 'ripe-ncc', 'ripe-atlas', 'aerospace-reentry', 'satellite-intel'],
+ panelKeys: ['monitors', 'cyber-threats', 'threat-inbox', 'local-ids', 'comms-health', 'power-grid', 'ucdp-events', 'nuclear-risk', 'airstrikes', 'displacement', 'security-advisories', 'bitcoin-abuse', 'reddit-osint', 'network-rules', 's2u-intel', 'oref-sirens', 'space-weather', 'spaceflight-news', 'space-launches', 'population-exposure', 'internet-disruptions', 'air-traffic', 'threat-intel-hub', 'geo-intel', 'dark-web', 'anomaly-detection', 'financial-contagion', 'supply-chain-impact', 'nuclear-monitor', 'sigint-panel', 'dark-vessel', 'ics-ot-dashboard', 'ioc-manager', 'network-topology', 'stix-taxii', 'custom-geofence', 'sanctions-crossref', 'emergency-broadcast', 'satellite-change', 'ripe-ncc', 'ripe-atlas', 'aerospace-reentry', 'satellite-intel'],
  variants: ['full'],
   },
   hazards: {

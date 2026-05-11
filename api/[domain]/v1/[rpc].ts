@@ -178,7 +178,10 @@ export default async function handler(originalRequest: Request): Promise<Respons
   try {
  corsHeaders = getCorsHeaders(request);
   } catch {
- corsHeaders = { 'Access-Control-Allow-Origin': '*' };
+ return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+ status: 403,
+ headers: { 'Content-Type': 'application/json' },
+ });
   }
 
   // OPTIONS preflight

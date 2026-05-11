@@ -67,6 +67,10 @@ import { startPanelNarrator } from '@/services/panel-narrator';
 import { TodayView } from '@/components/TodayView';
 import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalette } from '@/components/CommandPalette';
+import { HelpOverlay } from '@/components/HelpOverlay';
+import { installShortcuts } from '@/services/keyboard/shortcut-bootstrap';
+import { startDockBadge } from '@/services/native/dock-badge';
+import { startMenubarStatus } from '@/services/native/menubar-status';
 import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
@@ -697,6 +701,28 @@ export class PanelLayoutManager implements AppModule {
  const cmdk = new CommandPalette();
  cmdk.mount(document.body);
  document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
+
+ // Install the centralized shortcut registry (⌘K, ⌘/, ⌘1–9 + sidebar badges)
+ // and mount the keyboard help overlay backed by the same registry.
+ const shortcuts = installShortcuts();
+ const helpOverlay = new HelpOverlay(shortcuts.registry);
+ helpOverlay.mount(document.body);
+ document.addEventListener('cb:toggle-help', () => helpOverlay.toggle());
+
+ // Bridge a couple of palette actions to existing handlers/events.
+ document.addEventListener('cb:toggle-sidebar', () => {
+   document.body.classList.toggle('sidebar-collapsed');
+ });
+ document.addEventListener('cb:export-briefing', () => { void exportBriefingToClipboard(); });
+ document.addEventListener('cb:refresh-all', () => {
+   document.dispatchEvent(new CustomEvent('cb:force-refresh'));
+ });
+
+ // Native macOS polish: dock badge (unread alert count) + menubar tray
+ // (overall threat level). Both no-op silently when the Tauri bridge isn't
+ // available (web builds, headless tests).
+ startDockBadge();
+ startMenubarStatus();
 
  document.addEventListener('cb:focus-map', ((e: Event) => {
  const d = (e as CustomEvent).detail as { lat: number; lon: number; zoom?: number };

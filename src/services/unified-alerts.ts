@@ -9,6 +9,7 @@
 import type { EvidencePack } from './evidence-pack';
 import { alertDB } from './alert-store';
 import { notificationDispatcher, actionForSeverity } from './notification-dispatcher';
+import type { AlertExplanation } from './intelligence/explainer';
 
 export type AlertSource =
   | 'breaking-news'
@@ -59,6 +60,8 @@ export interface UnifiedAlert {
   correlationMembers?: string[];
   /** For `correlation` alerts: the causal pair that matched, e.g. ['earthquake','tsunami']. */
   correlationPair?: [AlertSource, AlertSource];
+  /** Human-readable explanation from the intelligence Explain stage. */
+  explanation?: AlertExplanation;
 }
 
 const STORAGE_KEY = 'wm-unified-alerts-v1';

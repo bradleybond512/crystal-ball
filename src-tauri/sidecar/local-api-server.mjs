@@ -32,6 +32,7 @@ import {
   handleSmsCommand,
 } from './sms-command-parser.mjs';
 import { buildRecentChanges } from './recent-changes.mjs';
+import { explain as explainEvent } from './explainer.mjs';
 
 let _smsConfig = loadSmsConfig();
 const _smsRateLimitMap = new Map();
@@ -5772,6 +5773,87 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch {
  return json([], 200);
  }
+  }
+
+  // ── Intelligence Explain — generate human-readable alert explanations ────
+  // POST { event: ObservationEvent, correlations?: Correlation[] }
+  // Returns AlertExplanation with headline, why, context, relatedEvents,
+  // confidence, and sources. Pure synchronous computation — no caching needed.
+  if (requestUrl.pathname === '/api/intelligence/explain') {
+    if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+    try {
+      const raw = await readBody(req);
+      const body = raw ? JSON.parse(raw.toString()) : null;
+      if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+      const event = body.event;
+      if (!event || typeof event !== 'object') return json({ error: 'event is required' }, 400);
+      if (typeof event.id !== 'string' || !event.id) return json({ error: 'event.id is required' }, 400);
+      if (typeof event.domain !== 'string' || !event.domain) return json({ error: 'event.domain is required' }, 400);
+      if (typeof event.title !== 'string' || !event.title) return json({ error: 'event.title is required' }, 400);
+
+      const VALID_DOMAINS = new Set(['earthquake', 'wildfire', 'aviation', 'weather', 'maritime', 'generic']);
+      if (!VALID_DOMAINS.has(event.domain)) {
+        return json({ error: `unknown domain "${event.domain}"; expected one of: ${[...VALID_DOMAINS].join(', ')}` }, 400);
+      }
+
+      const VALID_SEVERITIES = new Set(['info', 'low', 'moderate', 'high', 'critical']);
+      const severity = VALID_SEVERITIES.has(event.severity) ? event.severity : 'info';
+
+      const sources = Array.isArray(event.sources) ? event.sources.filter((s) => typeof s === 'string') : [];
+
+      const normalizedEvent = {
+        id: String(event.id).slice(0, 200),
+        domain: event.domain,
+        title: String(event.title).slice(0, 200),
+        severity,
+        sources,
+        occurredAt: typeof event.occurredAt === 'number' ? event.occurredAt : undefined,
+        location: typeof event.location === 'string' ? event.location.slice(0, 200) : undefined,
+        lat: typeof event.lat === 'number' && Number.isFinite(event.lat) ? event.lat : undefined,
+        lon: typeof event.lon === 'number' && Number.isFinite(event.lon) ? event.lon : undefined,
+        // Earthquake
+        magnitude: typeof event.magnitude === 'number' ? event.magnitude : undefined,
+        depth: typeof event.depth === 'number' ? event.depth : undefined,
+        nearestCity: typeof event.nearestCity === 'string' ? event.nearestCity : undefined,
+        nearestCityDistKm: typeof event.nearestCityDistKm === 'number' ? event.nearestCityDistKm : undefined,
+        // Wildfire
+        fireName: typeof event.fireName === 'string' ? event.fireName : undefined,
+        acres: typeof event.acres === 'number' ? event.acres : undefined,
+        containmentPct: typeof event.containmentPct === 'number' ? event.containmentPct : undefined,
+        fireBehavior: typeof event.fireBehavior === 'string' ? event.fireBehavior : undefined,
+        windSpeedMph: typeof event.windSpeedMph === 'number' ? event.windSpeedMph : undefined,
+        // Aviation
+        callsign: typeof event.callsign === 'string' ? event.callsign : undefined,
+        aircraftType: typeof event.aircraftType === 'string' ? event.aircraftType : undefined,
+        squawkCode: typeof event.squawkCode === 'string' ? event.squawkCode : undefined,
+        // Weather
+        eventType: typeof event.eventType === 'string' ? event.eventType : undefined,
+        area: typeof event.area === 'string' ? event.area : undefined,
+        expiresAt: typeof event.expiresAt === 'number' ? event.expiresAt : undefined,
+        conditions: typeof event.conditions === 'string' ? event.conditions : undefined,
+        // Maritime
+        vesselName: typeof event.vesselName === 'string' ? event.vesselName : undefined,
+        vesselType: typeof event.vesselType === 'string' ? event.vesselType : undefined,
+        flag: typeof event.flag === 'string' ? event.flag : undefined,
+        behavior: typeof event.behavior === 'string' ? event.behavior : undefined,
+        maritimeContext: typeof event.maritimeContext === 'string' ? event.maritimeContext : undefined,
+      };
+
+      const rawCorrs = Array.isArray(body.correlations) ? body.correlations : [];
+      const correlations = rawCorrs
+        .filter((c) => c && typeof c === 'object' && typeof c.id === 'string' && typeof c.title === 'string')
+        .map((c) => ({
+          id: String(c.id).slice(0, 200),
+          title: String(c.title).slice(0, 200),
+          domain: typeof c.domain === 'string' ? c.domain : 'generic',
+          relevanceScore: typeof c.relevanceScore === 'number' ? c.relevanceScore : undefined,
+        }));
+
+      const explanation = explainEvent(normalizedEvent, correlations);
+      return json({ ok: true, explanation });
+    } catch (error) {
+      return json({ error: String(error?.message || error) }, 500);
+    }
   }
 
   // ── GDACS RSS — Global Disaster Alert & Coordination System events ───────

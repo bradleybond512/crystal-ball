@@ -11208,6 +11208,136 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
+  // ── PhishStats phishing URL feed (free, no key) ─────────────────────────
+  // Wraps phishstats.info API; 30-min cache. Renderer-side parsing handles
+  // the upstream-or-envelope shape.
+  if (requestUrl.pathname === '/api/security/phishing') {
+ const CACHE_TTL = 30 * 60 * 1000;
+ const limit = Math.min(500, Math.max(1, Number(requestUrl.searchParams.get('limit') ?? '50')));
+ const minScore = Math.min(10, Math.max(0, Number(requestUrl.searchParams.get('minScore') ?? '5')));
+ const cacheKey = `phishstats:${limit}:${minScore}`;
+ const cached = getCached(cacheKey, CACHE_TTL);
+ if (cached) return json(cached);
+ try {
+ const url = `https://phishstats.info:2096/api/phishing?_where=(score,gt,${minScore})&_sort=-date&_size=${limit}`;
+ const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 12000);
+ if (!r.ok) return json({ records: [], degraded: true, reason: `HTTP ${r.status}`, fetchedAt: Date.now(), source: 'phishstats.info' }, 502);
+ const data = await r.json();
+ const envelope = { records: Array.isArray(data) ? data : [], fetchedAt: Date.now(), degraded: false, source: 'phishstats.info' };
+ setCached(cacheKey, envelope);
+ return json(envelope);
+ } catch (error) {
+ return json({ records: [], degraded: true, reason: error?.message ?? String(error), fetchedAt: Date.now(), source: 'phishstats.info' }, 502);
+ }
+  }
+
+  // ── urlscan.io threat search (free, no key for public results) ──────────
+  if (requestUrl.pathname === '/api/security/urlscan') {
+ const CACHE_TTL = 15 * 60 * 1000;
+ const q = (requestUrl.searchParams.get('q') ?? 'malicious:true').slice(0, 200);
+ const size = Math.min(100, Math.max(1, Number(requestUrl.searchParams.get('size') ?? '50')));
+ const cacheKey = `urlscan-search:${q}:${size}`;
+ const cached = getCached(cacheKey, CACHE_TTL);
+ if (cached) return json(cached);
+ try {
+ const url = `https://urlscan.io/api/v1/search/?q=${encodeURIComponent(q)}&size=${size}`;
+ const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 12000);
+ if (!r.ok) return json({ results: [], degraded: true, reason: `HTTP ${r.status}`, fetchedAt: Date.now(), source: 'urlscan.io' }, 502);
+ const data = await r.json();
+ const envelope = { results: Array.isArray(data?.results) ? data.results : [], total: data?.total ?? 0, fetchedAt: Date.now(), degraded: false, source: 'urlscan.io' };
+ setCached(cacheKey, envelope);
+ return json(envelope);
+ } catch (error) {
+ return json({ results: [], degraded: true, reason: error?.message ?? String(error), fetchedAt: Date.now(), source: 'urlscan.io' }, 502);
+ }
+  }
+
+  // ── urlscan.io submit (free for public scans, no key required) ──────────
+  // Accepts { url, visibility?: 'public' } and forwards to urlscan submit API.
+  // Validates URL host to block SSRF (private IPs / file:// etc.).
+  if (requestUrl.pathname === '/api/security/urlscan/submit' && req.method === 'POST') {
+ try {
+ const body = await req.json();
+ const target = typeof body?.url === 'string' ? body.url.trim() : '';
+ if (!target) return json({ error: 'url required' }, 400);
+ let parsed;
+ try { parsed = new URL(target); } catch { return json({ error: 'invalid url' }, 400); }
+ if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+ return json({ error: 'only http(s) urls accepted' }, 400);
+ }
+ const host = parsed.hostname.toLowerCase();
+ if (host === 'localhost' || host === '0.0.0.0' || /^127\./.test(host) || /^10\./.test(host)
+ || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || host.endsWith('.local')) {
+ return json({ error: 'private host blocked' }, 400);
+ }
+ const visibility = body?.visibility === 'private' ? 'private' : 'public';
+ const apiKey = process.env.URLSCAN_API_KEY?.trim() || '';
+ const headers = { 'Content-Type': 'application/json', 'User-Agent': CHROME_UA };
+ if (apiKey) headers['API-Key'] = apiKey;
+ const r = await fetchWithTimeout('https://urlscan.io/api/v1/scan/', {
+ method: 'POST',
+ headers,
+ body: JSON.stringify({ url: target, visibility }),
+ }, 12000);
+ if (r.status === 401 && !apiKey) {
+ return json({ error: 'urlscan rejected anonymous submit; configure URLSCAN_API_KEY' }, 401);
+ }
+ if (!r.ok) {
+ const text = await r.text().catch(() => '');
+ return json({ error: `urlscan submit HTTP ${r.status}`, detail: text.slice(0, 400) }, 502);
+ }
+ const data = await r.json();
+ return json({ uuid: data?.uuid ?? null, result: data?.result ?? null, api: data?.api ?? null, visibility, fetchedAt: Date.now(), source: 'urlscan.io' });
+ } catch (error) {
+ return json({ error: error?.message ?? String(error) }, 502);
+ }
+  }
+
+  // ── Pulsedive threat intelligence (free, no key for basic lookups) ──────
+  if (requestUrl.pathname === '/api/security/pulsedive') {
+ const CACHE_TTL = 60 * 60 * 1000;
+ const risk = (requestUrl.searchParams.get('risk') ?? 'high').slice(0, 16);
+ const type = (requestUrl.searchParams.get('type') ?? 'all').slice(0, 16);
+ const limit = Math.min(100, Math.max(1, Number(requestUrl.searchParams.get('limit') ?? '50')));
+ const indicator = (requestUrl.searchParams.get('indicator') ?? '').slice(0, 256);
+ const cacheKey = `pulsedive:${indicator || `${risk}:${type}:${limit}`}`;
+ const cached = getCached(cacheKey, CACHE_TTL);
+ if (cached) return json(cached);
+ try {
+ // Single-indicator lookup → /api/info.php?indicator=…
+ // Explore query   → /api/explore.php?q=is:indicator+risk:…&limit=…
+ let url;
+ const apiKey = process.env.PULSEDIVE_API_KEY?.trim() || '';
+ const keyParam = apiKey ? `&key=${encodeURIComponent(apiKey)}` : '';
+ if (indicator) {
+ url = `https://pulsedive.com/api/info.php?indicator=${encodeURIComponent(indicator)}&pretty=0${keyParam}`;
+ } else {
+ const parts = ['is:indicator'];
+ if (risk && risk !== 'all') parts.push(`risk:${risk}`);
+ if (type && type !== 'all') parts.push(`type:${type}`);
+ url = `https://pulsedive.com/api/explore.php?q=${encodeURIComponent(parts.join(' '))}&limit=${limit}&pretty=0${keyParam}`;
+ }
+ const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 12000);
+ if (!r.ok) return json({ indicators: [], degraded: true, reason: `HTTP ${r.status}`, fetchedAt: Date.now(), source: 'pulsedive.com' }, 502);
+ const data = await r.json();
+ // info.php returns a single indicator object; explore returns { results: [...] }.
+ const indicators = indicator
+ ? (data && typeof data === 'object' && !data.error ? [data] : [])
+ : (Array.isArray(data?.results) ? data.results : []);
+ const envelope = {
+ indicators,
+ query: { risk, type, limit, indicator: indicator || null },
+ fetchedAt: Date.now(),
+ degraded: false,
+ source: 'pulsedive.com',
+ };
+ setCached(cacheKey, envelope);
+ return json(envelope);
+ } catch (error) {
+ return json({ indicators: [], degraded: true, reason: error?.message ?? String(error), fetchedAt: Date.now(), source: 'pulsedive.com' }, 502);
+ }
+  }
+
   // ── Tor relay metrics ────────────────────────────────────────────────────
   if (requestUrl.pathname === '/api/tor-metrics') {
  const cached = getCached('tor-metrics', 60 * 60 * 1000);

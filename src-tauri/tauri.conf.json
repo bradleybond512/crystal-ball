@@ -66,6 +66,7 @@
       "sidecar/who-promed-cross-reference.mjs",
       "sidecar/biosurveillance-wastewater.mjs",
       "sidecar/ofac-cache.mjs",
+      "sidecar/explainer.mjs",
       "sidecar/faa-tfrs.mjs",
       "sidecar/gdacs-rss.mjs",
       "sidecar/feed-latency-config.mjs",

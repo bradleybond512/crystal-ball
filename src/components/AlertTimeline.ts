@@ -95,18 +95,82 @@ export class AlertTimeline {
       const src = document.createElement('span'); src.className = 'at-row-src'; src.textContent = a.source;
       const t = document.createElement('span'); t.className = 'at-row-title'; t.textContent = a.title;
       row.append(src, t);
-      row.addEventListener('click', () => {
-        const pid = panelForAlert(a);
-        jumpToPanel(pid); flashPanel(pid);
-        if (a.location) {
-          document.dispatchEvent(new CustomEvent('cb:focus-map', {
-            detail: { lat: a.location.lat, lon: a.location.lon, zoom: 5 },
-          }));
-          pulseAlertOnMap(a);
+
+      // Expand/collapse explanation when clicking a row that has one
+      if (a.explanation) {
+        const exp = a.explanation;
+        let expanded = false;
+        const expandEl = document.createElement('div');
+        expandEl.className = 'at-row-explain';
+        expandEl.style.display = 'none';
+        Object.assign(expandEl.style, {
+          padding: '4px 6px 6px',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          fontSize: '11px',
+          color: 'rgba(255,255,255,0.6)',
+          lineHeight: '1.5',
+        });
+
+        const whyEl = document.createElement('div');
+        whyEl.style.fontStyle = 'italic';
+        whyEl.textContent = exp.why;
+        expandEl.append(whyEl);
+
+        if (exp.context) {
+          const ctxEl = document.createElement('div');
+          ctxEl.style.marginTop = '3px';
+          ctxEl.textContent = exp.context;
+          expandEl.append(ctxEl);
         }
-        dd.remove();
-        this.openDropdown = null;
-      });
+
+        if (exp.relatedEvents.length > 0) {
+          const relEl = document.createElement('div');
+          relEl.style.marginTop = '3px';
+          relEl.style.color = 'rgba(255,255,255,0.45)';
+          relEl.textContent = `Related: ${exp.relatedEvents.slice(0, 3).join(', ')}`;
+          expandEl.append(relEl);
+        }
+
+        const confEl = document.createElement('div');
+        confEl.style.marginTop = '3px';
+        confEl.style.opacity = '0.5';
+        confEl.textContent = `Confidence: ${exp.confidence} · Sources: ${exp.sources.join(', ')}`;
+        expandEl.append(confEl);
+
+        row.append(expandEl);
+
+        const expandToggle = document.createElement('span');
+        expandToggle.className = 'at-row-expand-toggle';
+        expandToggle.textContent = '▸';
+        Object.assign(expandToggle.style, {
+          marginLeft: '4px',
+          fontSize: '10px',
+          opacity: '0.5',
+          cursor: 'pointer',
+        });
+        t.append(expandToggle);
+
+        row.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          expanded = !expanded;
+          expandEl.style.display = expanded ? 'block' : 'none';
+          expandToggle.textContent = expanded ? '▾' : '▸';
+        });
+      } else {
+        row.addEventListener('click', () => {
+          const pid = panelForAlert(a);
+          jumpToPanel(pid); flashPanel(pid);
+          if (a.location) {
+            document.dispatchEvent(new CustomEvent('cb:focus-map', {
+              detail: { lat: a.location.lat, lon: a.location.lon, zoom: 5 },
+            }));
+            pulseAlertOnMap(a);
+          }
+          dd.remove();
+          this.openDropdown = null;
+        });
+      }
+
       dd.append(row);
     }
     document.body.append(dd);

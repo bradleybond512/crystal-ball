@@ -11,6 +11,11 @@ interface ToastOptions {
   title: string;
   message?: string;
   severity?: Severity;
+  /**
+   * One-sentence "why this matters" explanation from the Explain stage.
+   * Shown below the message, truncated at 120 chars with a "…" expand link.
+   */
+  why?: string;
 }
 
 const SEVERITY_COLORS: Record<Severity, string> = {
@@ -110,6 +115,50 @@ export class Toast {
         lineHeight: '1.4',
       });
       body.append(msg);
+    }
+
+    if (this.options.why) {
+      const WHY_LIMIT = 120;
+      const full = this.options.why;
+      const truncated = full.length > WHY_LIMIT ? `${full.slice(0, WHY_LIMIT - 1)}…` : full;
+      const isLong = full.length > WHY_LIMIT;
+
+      const whyEl = document.createElement('div');
+      Object.assign(whyEl.style, {
+        fontSize: 'var(--text-xs, 11px)',
+        color: 'rgba(255,255,255,0.50)',
+        lineHeight: '1.4',
+        marginTop: '3px',
+        fontStyle: 'italic',
+      });
+
+      const textSpan = document.createElement('span');
+      textSpan.textContent = truncated;
+      whyEl.append(textSpan);
+
+      if (isLong) {
+        let expanded = false;
+        const expandBtn = document.createElement('button');
+        expandBtn.textContent = ' more';
+        Object.assign(expandBtn.style, {
+          background: 'none',
+          border: 'none',
+          color: 'rgba(255,255,255,0.45)',
+          fontSize: 'var(--text-xs, 11px)',
+          cursor: 'pointer',
+          padding: '0',
+          textDecoration: 'underline',
+        });
+        expandBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          expanded = !expanded;
+          textSpan.textContent = expanded ? full : truncated;
+          expandBtn.textContent = expanded ? ' less' : ' more';
+        });
+        whyEl.append(expandBtn);
+      }
+
+      body.append(whyEl);
     }
 
     const dismiss = document.createElement('button');

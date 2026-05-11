@@ -97,7 +97,8 @@ export class GlobePillars {
       for (const e of entities) candidates.push({ ...e, layerName });
     }
     candidates.sort((a, b) => b.severity - a.severity);
-    const top = candidates.slice(0, MAX_PILLARS);
+    type LocatedCandidate = EntityTimestampedSample & { layerName: string; lat: number; lon: number };
+    const top = candidates.filter((e): e is LocatedCandidate => e.lat != null && e.lon != null).slice(0, MAX_PILLARS);
 
     const seenIds = new Set<string>();
     for (const e of top) {

@@ -4,7 +4,7 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
-## [2.13.1] - 2026-05-11
+## [2.14.0] - 2026-05-11
 
 ### Added
 

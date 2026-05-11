@@ -96,6 +96,8 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'disease-intel': { name: 'Disease Intelligence', enabled: true, priority: 2 },
   'humanitarian-crisis': { name: 'Humanitarian Crises', enabled: true, priority: 2 },
   'air-quality': { name: 'Air Quality', enabled: true, priority: 2 },
+  'openaq-monitor': { name: 'Air Quality (OpenAQ)', enabled: true, priority: 2 },
+  'mediastack-news': { name: 'News Feed', enabled: true, priority: 1 },
   'wildfire-incidents': { name: 'Wildfires (InciWeb)', enabled: true, priority: 2 },
   'wildfire-intel': { name: 'Wildfire Intel', enabled: true, priority: 1 },
   'hazmat-incidents': { name: 'Hazmat Incidents', enabled: true, priority: 2 },

@@ -75,6 +75,8 @@
     "test:globe": "tsx --test src/services/globe/__tests__/heatmap-layers.test.mts src/components/globe/__tests__/heatmap-grid.test.mts src/components/globe/__tests__/cursor-opacity.test.mts src/components/globe/__tests__/GlobeHeatmapRenderer.test.mts",
     "test:adsb": "tsx --test src/services/adsb/__tests__/adsb-aggregate.test.mts",
     "test:sanctions": "tsx --test src/services/sanctions/__tests__/ofac.test.mts",
+    "test:openaq": "tsx --test src/services/airquality/__tests__/openaq-service.test.mts",
+    "test:news": "tsx --test src/services/news/__tests__/news-aggregator.test.mts",
     "test:bio": "tsx --test src/services/biosurveillance/__tests__/cdc-ari.test.mts",
     "test:macro": "tsx --test src/services/economic/__tests__/macro-stress.test.mts src/services/cyber/__tests__/ransomware-mentions.test.mts",
     "test:wildfire": "tsx --test src/services/__tests__/fire-intel-service.test.mts",

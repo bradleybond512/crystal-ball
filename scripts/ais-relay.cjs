@@ -2650,8 +2650,10 @@ const ALLOWED_ORIGINS = [
 function getCorsOrigin(req) {
   const origin = req.headers.origin || '';
   if (ALLOWED_ORIGINS.includes(origin)) return origin;
-  // Optional: allow Vercel preview deployments for the project's own previews only.
-  if (ALLOW_VERCEL_PREVIEW_ORIGINS && /^https:\/\/crystalball-[a-z0-9]+-bradleybond512\.vercel\.app$/.test(origin)) return origin;
+  // Optional: allow Crystal Ball's own Vercel preview deployments when explicitly enabled.
+  // Pinned to the bradleybond512 team slug so lookalike third-party projects cannot
+  // match. Vercel preview URL format: {deployment-hash}-{team-slug}.vercel.app
+  if (ALLOW_VERCEL_PREVIEW_ORIGINS && /^https:\/\/[a-z0-9-]+-bradleybond512\.vercel\.app$/.test(origin)) return origin;
   return '';
 }
 

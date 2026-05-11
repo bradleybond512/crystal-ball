@@ -25,6 +25,8 @@ import {
   expireAlerts,
 } from './ipaws-aggregate.mjs';
 import { loadEnvFile } from './env-local-loader.mjs';
+import { fetchAllTfrs, tfrColor } from './faa-tfrs.mjs';
+import { fetchGdacsRss, groupByType, alertLevelRgba } from './gdacs-rss.mjs';
 
 // Keychain-loss fallback: a 2026-05-08 incident wiped the macOS Keychain
 // vault, taking 29 API credentials with it. If the keychain is empty
@@ -5152,6 +5154,40 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── GDACS RSS — Global Disaster Alert & Coordination System events ───────
+  // Fetches https://www.gdacs.org/xml/rss.xml (free, no key) and parses events
+  // grouped by type with alert level, score, coordinates, and country. 30-min
+  // cache aligns with GDACS update cadence. Cross-reference metadata is included
+  // so the panel can overlap with earthquake/hurricane/wildfire data.
+  if (requestUrl.pathname === '/api/disasters/gdacs') {
+    const CACHE_TTL = 30 * 60 * 1000;
+    const cached = getCached('gdacs-rss', CACHE_TTL);
+    if (cached) return json(cached);
+    try {
+      const events = await fetchGdacsRss(fetchWithTimeout);
+      const grouped = groupByType(events);
+      const result = {
+        events,
+        grouped,
+        count: events.length,
+        fetchedAt: Date.now(),
+        degraded: false,
+        source: 'gdacs.org',
+        byType: Object.fromEntries(
+          Object.entries(grouped).map(([k, v]) => [k, v.map((e) => ({ ...e, rgba: alertLevelRgba(e.alertLevel) }))])
+        ),
+      };
+      setCached('gdacs-rss', result, CACHE_TTL);
+      recordFeedSuccess('gdacs-rss');
+      return json(result);
+    } catch (error) {
+      recordFeedFailure('gdacs-rss', error);
+      const stale = getCachedStale('gdacs-rss');
+      if (stale) return json({ ...stale, degraded: true, reason: error?.message ?? String(error) });
+      return json({ events: [], grouped: {}, count: 0, fetchedAt: Date.now(), degraded: true, reason: error?.message ?? String(error), source: 'gdacs.org' }, 502);
+    }
+  }
+
   // ── NOAA NWS All-Hazards alerts ──────────────────────────────────────────
   if (requestUrl.pathname === '/api/nws-alerts') {
  try {
@@ -5703,7 +5739,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Disease Intelligence (Nextstrain + disease.sh + ReliefWeb EP + WHO DON) ──
   if (requestUrl.pathname === '/api/disease-intel') {
- const cached = getCached('disease-intel', 30 * 60 * 1000);
+ const cached = getCached('disease-intel', 15 * 60 * 1000); // was 30 min; WHO DON + ProMED update hourly
  if (cached) return json(cached);
 
  const NEXTSTRAIN_URL =
@@ -5751,7 +5787,7 @@ async function dispatch(requestUrl, req, routes, context) {
  crossReferencedWithPromed,
  fetchedAt: new Date().toISOString(),
  };
- setCached('disease-intel', result);
+ setCached('disease-intel', result, 15 * 60 * 1000);
  return json(result);
  } catch (error) {
  return json({ error: `disease-intel fetch error: ${error.message ?? error}` }, 502);
@@ -6259,7 +6295,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Open-Meteo — current conditions for major global cities (no API key required) ─
   if (requestUrl.pathname === '/api/owm-current') {
- const cached = getCached('owm-current', 30 * 60 * 1000); // 30 min
+ const cached = getCached('owm-current', 10 * 60 * 1000); // was 30 min; OWM updates every 10 min
  if (cached) return json(cached);
  const CITIES = [
  { name: 'New York', lat: 40.71, lon: -74.01 }, { name: 'Los Angeles', lat: 34.05, lon: -118.24 },
@@ -7351,7 +7387,7 @@ async function dispatch(requestUrl, req, routes, context) {
  nearTestSite: nearSite ? { label: nearSite.label, country: nearSite.country } : null,
  };
  });
- setCached('emsc-seismic', events, 10 * 60 * 1000);
+ setCached('emsc-seismic', events, 2 * 60 * 1000); // was 10 min; EMSC publishes every ~1 min
  return json(events);
  } catch (error) {
  return json({ error: `emsc-seismic error: ${error.message ?? error}` }, 502);
@@ -9195,7 +9231,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── GDELT Intelligence (no key required, public API) ──────────────────────
   if (requestUrl.pathname === '/api/gdelt-intel') {
- const cached = getCached('gdelt-intel', 30 * 60 * 1000); // 30 minutes — GDELT rate-limits aggressively
+ const cached = getCached('gdelt-intel', 15 * 60 * 1000); // was 30 min; GDELT updates every 15 min — rate-limit still applies
  if (cached) return json(cached);
 
  // Exponential backoff after 429s. GDELT's rate limiter doesn't return
@@ -9246,7 +9282,7 @@ async function dispatch(requestUrl, req, routes, context) {
  : Date.now(),
  })).filter(e => e.title && e.url);
  const result = { events, updatedAt: Math.floor(Date.now() / 1000) };
- setCached('gdelt-intel', result);
+ setCached('gdelt-intel', result, 15 * 60 * 1000);
  if (bo.fails > 0) {
  context.logger.log(`[gdelt-intel] recovered after ${bo.fails} rate-limit hits`);
  }
@@ -10099,6 +10135,34 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── FAA TFRs — active Temporary Flight Restrictions with polygon geometry ─
+  // Fetches the FAA TFR list HTML, scrapes NOTAM IDs, then fetches each
+  // detail XML concurrently to extract polygon coordinates. 15-min cache
+  // aligns with FAA's NOTAM update cadence.
+  if (requestUrl.pathname === '/api/aviation/tfrs') {
+    const CACHE_TTL = 15 * 60 * 1000;
+    const cached = getCached('aviation-tfrs', CACHE_TTL);
+    if (cached) return json(cached);
+    try {
+      const tfrs = await fetchAllTfrs(fetchWithTimeout);
+      const result = {
+        tfrs: tfrs.map((t) => ({ ...t, color: tfrColor(t.type) })),
+        count: tfrs.length,
+        fetchedAt: Date.now(),
+        degraded: false,
+        source: 'tfr.faa.gov',
+      };
+      setCached('aviation-tfrs', result, CACHE_TTL);
+      recordFeedSuccess('aviation-tfrs');
+      return json(result);
+    } catch (error) {
+      recordFeedFailure('aviation-tfrs', error);
+      const stale = getCachedStale('aviation-tfrs');
+      if (stale) return json({ ...stale, degraded: true, reason: error?.message ?? String(error) });
+      return json({ tfrs: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: error?.message ?? String(error), source: 'tfr.faa.gov' }, 502);
+    }
+  }
+
   // ── Tor relay metrics ────────────────────────────────────────────────────
   if (requestUrl.pathname === '/api/tor-metrics') {
  const cached = getCached('tor-metrics', 60 * 60 * 1000);
@@ -10134,7 +10198,7 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/power-grid') {
  const eiaKey = process.env.EIA_API_KEY;
  if (!eiaKey) return json({ regions: [], keyMissing: true, error: 'EIA_API_KEY required' }, 503);
- const cached = getCached('power-grid', 15 * 60 * 1000);
+ const cached = getCached('power-grid', 5 * 60 * 1000); // was 15 min; EIA grid data refreshes every 5 min
  if (cached) return json(cached);
  try {
  // EIA Open Data API — Real-Time Operating grid demand by region
@@ -10168,7 +10232,7 @@ async function dispatch(requestUrl, req, routes, context) {
  .sort((a, b) => b.demand - a.demand);
 
  const result = { regions, source: 'eia.gov', updatedAt: new Date().toISOString() };
- setCached('power-grid', result);
+ setCached('power-grid', result, 5 * 60 * 1000);
  return json(result);
  } catch (error) {
  return json({ regions: [], error: `power-grid error: ${error.message ?? error}` }, 502);

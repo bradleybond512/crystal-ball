@@ -7296,6 +7296,29 @@ a.prediction-link:hover {
 .feed-health-footer { padding: 6px 0 0; color: var(--text-dim); font-size: 10px; text-align: right; }
 .feed-health-error-msg { color: var(--semantic-warning, #f97316); }
 
+/* Notification History Panel */
+.nh-panel { font-size: 11px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+.nh-filter-bar { display: flex; gap: 6px; flex-wrap: wrap; padding-bottom: 6px; border-bottom: 1px solid var(--border-subtle); }
+.nh-select { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 3px; padding: 3px 6px; font-size: 11px; }
+.nh-clear-btn { margin-left: auto; padding: 3px 10px; background: transparent; color: var(--text-dim); border: 1px solid var(--border-strong); border-radius: 3px; font-size: 11px; cursor: pointer; }
+.nh-clear-btn:hover { border-color: var(--semantic-critical, #d50000); color: var(--semantic-critical, #d50000); }
+.nh-rows { display: flex; flex-direction: column; gap: 2px; max-height: 480px; overflow-y: auto; }
+.nh-row { padding: 6px 8px; border-radius: 3px; cursor: pointer; border: 1px solid transparent; }
+.nh-row:hover { background: var(--surface-hover); border-color: var(--border-subtle); }
+.nh-row-expanded { background: var(--surface-hover); border-color: var(--border-subtle); }
+.nh-row-summary { display: grid; grid-template-columns: 18px 1fr auto auto auto; gap: 8px; align-items: center; }
+.nh-row-icon { font-size: 13px; line-height: 1; text-align: center; }
+.nh-row-title { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nh-row-source { color: var(--text-dim); font-family: ui-monospace, monospace; font-size: 9px; }
+.nh-row-badges { display: flex; gap: 4px; }
+.nh-badge { font-size: 9px; font-weight: 700; letter-spacing: 0.05em; padding: 1px 5px; border-radius: 2px; background: var(--overlay-subtle); }
+.nh-row-time { color: var(--text-dim); font-size: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.nh-row-detail { padding: 8px 4px 4px; border-top: 1px dotted var(--border-subtle); margin-top: 6px; font-size: 10px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 4px; }
+.nh-detail-line { line-height: 1.5; }
+.nh-detail-line strong { color: var(--text); margin-right: 4px; }
+.nh-detail-payload { background: var(--overlay-subtle); padding: 6px 8px; border-radius: 3px; font-family: ui-monospace, monospace; font-size: 10px; white-space: pre-wrap; margin: 0; max-height: 200px; overflow-y: auto; }
+.nh-footer { padding: 4px 0 0; color: var(--text-dim); font-size: 10px; text-align: right; }
+
 /* CVE Tracker Panel */
 .cve-tracker-panel { font-size: 11px; padding: 8px 10px; }
 .cve-tab-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }

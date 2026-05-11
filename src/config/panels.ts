@@ -80,6 +80,8 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'security-advisories': { name: 'Security Advisories', enabled: true, priority: 2 },
   'cve-tracker': { name: 'CVE Tracker', enabled: true, priority: 2 },
   'vulners-cve': { name: 'Vulners CVE', enabled: true, priority: 2 },
+  'bitcoin-abuse': { name: 'Bitcoin Abuse', enabled: true, priority: 2 },
+  'reddit-osint': { name: 'Reddit OSINT', enabled: true, priority: 2 },
   'network-rules': { name: 'Network Rules', enabled: true, priority: 3 },
   's2u-intel': { name: 'S2U Intelligence', enabled: true, priority: 1 },
   'synthesis': { name: 'Synthesis', enabled: true, priority: 1 },
@@ -220,6 +222,9 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'weather-radar': { name: 'Weather Radar', enabled: true, priority: 1 },
   'goes-satellite': { name: 'GOES Satellite', enabled: true, priority: 1 },
   'flood-monitor': { name: 'Flood Monitor', enabled: true, priority: 1 },
+  'volcano-monitor': { name: 'Volcano Monitor', enabled: true, priority: 2 },
+  'severe-weather': { name: 'Severe Weather / SPC', enabled: true, priority: 1 },
+  'shakealert': { name: 'ShakeAlert + ShakeMaps', enabled: true, priority: 2 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {
@@ -301,6 +306,9 @@ const FULL_MAP_LAYERS: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: true,
+  severeWeatherPolygons: true,
+  shakemapOverlay: false,
 };
 
 const FULL_MOBILE_MAP_LAYERS: MapLayers = {
@@ -380,6 +388,9 @@ const FULL_MOBILE_MAP_LAYERS: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 // ============================================
@@ -500,6 +511,9 @@ const TECH_MAP_LAYERS: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 const TECH_MOBILE_MAP_LAYERS: MapLayers = {
@@ -579,6 +593,9 @@ const TECH_MOBILE_MAP_LAYERS: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 // ============================================
@@ -695,6 +712,9 @@ const FINANCE_MAP_LAYERS: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
@@ -774,6 +794,9 @@ const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 // ============================================
@@ -869,6 +892,9 @@ const HAPPY_MAP_LAYERS: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
@@ -948,6 +974,9 @@ const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 // ============================================
@@ -987,13 +1016,13 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   // All variants — essential panels
   core: {
  labelKey: 'header.panelCatCore',
- panelKeys: ['map', 'insights', 'strategic-posture', 'live-news', 'live-webcams'],
+ panelKeys: ['map', 'insights', 'strategic-posture', 'live-news', 'live-webcams', 'unified-webcams'],
   },
 
   // Full (geopolitical) variant
   intelligence: {
  labelKey: 'header.panelCatIntelligence',
- panelKeys: ['threat-dashboard', 'command-center', 'system-diagnostic', 'algorithm-diagnostic', 'aviation-intel', 'shortage-radar', 'shortage-detail-wheat', 'shortage-detail-corn', 'shortage-detail-rice', 'shortage-detail-soybeans', 'shortage-detail-diesel', 'shortage-detail-gasoline', 'shortage-detail-natural-gas', 'shortage-detail-jet-fuel', 'maritime-intel', 'watchlist', 'saved-places', 'watchlist-locations', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'synthesis', 'cyber-geo', 'economic-intel', 'notification-digest', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions'],
+ panelKeys: ['threat-dashboard', 'command-center', 'system-diagnostic', 'algorithm-diagnostic', 'aviation-intel', 'shortage-radar', 'shortage-detail-wheat', 'shortage-detail-corn', 'shortage-detail-rice', 'shortage-detail-soybeans', 'shortage-detail-diesel', 'shortage-detail-gasoline', 'shortage-detail-natural-gas', 'shortage-detail-jet-fuel', 'maritime-intel', 'watchlist', 'saved-places', 'watchlist-locations', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'synthesis', 'cyber-geo', 'economic-intel', 'notification-digest', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'feed-health', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions', 'sanctions-intel'],
  variants: ['full'],
   },
   regionalNews: {
@@ -1013,13 +1042,13 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   dataTracking: {
  labelKey: 'header.panelCatDataTracking',
- panelKeys: ['monitors', 'cyber-threats', 'threat-inbox', 'local-ids', 'comms-health', 'power-grid', 'ucdp-events', 'nuclear-risk', 'airstrikes', 'displacement', 'security-advisories', 'network-rules', 's2u-intel', 'oref-sirens', 'space-weather', 'spaceflight-news', 'space-launches', 'population-exposure', 'internet-disruptions', 'air-traffic', 'threat-intel-hub', 'geo-intel', 'dark-web', 'anomaly-detection', 'financial-contagion', 'supply-chain-impact', 'nuclear-monitor', 'sigint-panel', 'dark-vessel', 'ics-ot-dashboard', 'ioc-manager', 'network-topology', 'stix-taxii', 'custom-geofence', 'sanctions-crossref', 'emergency-broadcast', 'satellite-change', 'ripe-ncc', 'ripe-atlas', 'aerospace-reentry', 'satellite-intel'],
+ panelKeys: ['monitors', 'cyber-threats', 'threat-inbox', 'local-ids', 'comms-health', 'power-grid', 'grid-intelligence', 'cve-tracker', 'vulners-cve', 'hibp-breaches', 'ipinfo-lookup', 'ucdp-events', 'nuclear-risk', 'airstrikes', 'displacement', 'security-advisories', 'bitcoin-abuse', 'reddit-osint', 'network-rules', 's2u-intel', 'oref-sirens', 'space-weather', 'spaceflight-news', 'space-launches', 'population-exposure', 'internet-disruptions', 'air-traffic', 'threat-intel-hub', 'geo-intel', 'dark-web', 'anomaly-detection', 'financial-contagion', 'supply-chain-impact', 'nuclear-monitor', 'sigint-panel', 'dark-vessel', 'ics-ot-dashboard', 'ioc-manager', 'network-topology', 'stix-taxii', 'custom-geofence', 'sanctions-crossref', 'emergency-broadcast', 'satellite-change', 'ripe-ncc', 'ripe-atlas', 'aerospace-reentry', 'satellite-intel'],
  variants: ['full'],
   },
   hazards: {
  labelKey: 'header.panelCatHazards',
 
- panelKeys: ['wildfire-intel', 'satellite-fires', 'earthquakes', 'emsc-seismic', 'gdacs-alerts', 'volcano-alerts', 'nws-alerts', 'faa-weather-cams', 'faa-tfrs', 'tsunami-alerts', 'tropical-cyclones', 'climate', 'wildfire-incidents', 'hazmat-incidents', 'oil-spill', 'fcdo-warnings', 'dfat-warnings', 'gac-warnings', 'avalanche-hazard', 'wildfire-smoke', 'spc-mesoscale', 'amtrak-alerts', 'habsos', 'global-weather', 'extended-forecast', 'tide-predictions', 'pollen', 'weather-radar', 'goes-satellite', 'flood-monitor'],
+ panelKeys: ['wildfire-intel', 'satellite-fires', 'earthquakes', 'emsc-seismic', 'gdacs-alerts', 'volcano-alerts', 'volcano-monitor', 'severe-weather', 'shakealert', 'weather-hazard', 'nws-alerts', 'faa-weather-cams', 'faa-tfrs', 'tsunami-alerts', 'tropical-cyclones', 'climate', 'wildfire-incidents', 'hazmat-incidents', 'oil-spill', 'fcdo-warnings', 'dfat-warnings', 'gac-warnings', 'avalanche-hazard', 'wildfire-smoke', 'spc-mesoscale', 'amtrak-alerts', 'habsos', 'global-weather', 'extended-forecast', 'tide-predictions', 'pollen', 'weather-radar', 'goes-satellite', 'flood-monitor'],
  variants: ['full'],
   },
   healthEnv: {

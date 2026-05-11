@@ -5630,6 +5630,42 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
+  // ── USGS VHP volcanoesHazardLevel + Smithsonian GVP bulletin RSS ─────────
+  // GET /api/volcanoes/status  (30 min cache)
+  if (requestUrl.pathname === '/api/volcanoes/status') {
+    const cacheKey = 'volcanoes-status';
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      const [vhpResp, gvpResp] = await Promise.allSettled([
+        fetchWithTimeout(
+          'https://volcanoes.usgs.gov/vsc/api/volcanoApi/volcanoesHazardLevel',
+          { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+          15_000,
+        ),
+        fetchWithTimeout(
+          'https://volcano.si.edu/news/WeeklyVolcanoActivity.cfm',
+          { headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': CHROME_UA } },
+          12_000,
+        ),
+      ]);
+      let rawVolcanoes = [];
+      if (vhpResp.status === 'fulfilled' && vhpResp.value.ok) {
+        const data = await vhpResp.value.json();
+        rawVolcanoes = Array.isArray(data) ? data : (data?.features ?? data?.volcanoes ?? []);
+      }
+      const gvpXml = (gvpResp.status === 'fulfilled' && gvpResp.value.ok) ? await gvpResp.value.text() : '';
+      const gvpItems = parseGvpRssSidecar(gvpXml);
+      const parsed = rawVolcanoes.map((v, i) => parseVolcanoHazardLevelSidecar(v, i));
+      const withBulletins = mergeGvpBulletinSidecar(parsed, gvpItems);
+      const result = buildVolcanoMonitorStatusSidecar(withBulletins);
+      setCached(cacheKey, result, 30 * 60 * 1000);
+      return json(result);
+    } catch (error) {
+      return json({ error: `volcanoes-status error: ${error.message ?? error}` }, 502);
+    }
+  }
+
   // ── NOAA NWS All-Hazards alerts ──────────────────────────────────────────
   if (requestUrl.pathname === '/api/nws-alerts') {
  try {
@@ -5705,6 +5741,81 @@ async function dispatch(requestUrl, req, routes, context) {
       return json(out);
     } catch {
       return json([], 200);
+    }
+  }
+
+  // ── SPC Convective Outlook summary ──────────────────────────────────────
+  // GET /api/weather/spc-outlook  (30 min cache)
+  if (requestUrl.pathname === '/api/weather/spc-outlook') {
+    const cacheKey = 'weather-spc-outlook';
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      const resp = await fetchWithTimeout(
+        'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson',
+        { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+        12_000,
+      );
+      if (!resp.ok) return json({ maxRisk: null, outlookCount: 0, day1MaxRisk: null, validTime: '' });
+      const data = await resp.json();
+      const features = Array.isArray(data?.features) ? data.features : [];
+      const summary = buildSpcOutlookSummarySidecar(features);
+      setCached(cacheKey, summary, 30 * 60 * 1000);
+      return json(summary);
+    } catch (error) {
+      return json({ error: `spc-outlook error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── NWS active tornado + severe thunderstorm warnings ────────────────────
+  // GET /api/weather/active-warnings  (2 min cache)
+  if (requestUrl.pathname === '/api/weather/active-warnings') {
+    const cacheKey = 'weather-active-warnings';
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      const resp = await fetchWithTimeout(
+        'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update&event=Tornado%20Warning,Severe%20Thunderstorm%20Warning,Tornado%20Watch,Severe%20Thunderstorm%20Watch',
+        { headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-SevereWx/1.0 (https://github.com/bradleybond512/crystal-ball)' } },
+        12_000,
+      );
+      if (!resp.ok) return json([]);
+      const data = await resp.json();
+      const features = Array.isArray(data?.features) ? data.features : [];
+      const nonExpired = filterExpiredWarningsSidecar(features, new Date().toISOString());
+      const warnings = nonExpired.slice(0, 80).map((f, i) => {
+        const p = f.properties ?? {};
+        const event = String(p.event ?? '');
+        const warnType = classifyWarningTypeSidecar(event);
+        let polygon = null;
+        let centroid = null;
+        if (f.geometry?.type === 'Polygon' && Array.isArray(f.geometry.coordinates?.[0])) {
+          polygon = f.geometry.coordinates[0];
+          const ring = polygon;
+          if (ring.length > 0) {
+            const sumLon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+            const sumLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+            centroid = { lat: sumLat, lon: sumLon };
+          }
+        } else {
+          centroid = extractAlertCentroid(f);
+        }
+        return {
+          id: String(p.id ?? `nws-warn-${i}`),
+          event,
+          warnType,
+          headline: String(p.headline ?? ''),
+          areaDesc: String(p.areaDesc ?? ''),
+          onset: String(p.onset ?? ''),
+          expires: String(p.expires ?? ''),
+          polygon,
+          centroid,
+        };
+      });
+      setCached(cacheKey, warnings, 2 * 60 * 1000);
+      return json(warnings);
+    } catch (error) {
+      return json({ error: `active-warnings error: ${error.message ?? error}` }, 502);
     }
   }
 
@@ -7583,6 +7694,225 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Reddit OSINT multi-subreddit feed ────────────────────────────────────
+  // Reads up to ~6 threat-relevant subreddits in parallel, no OAuth.
+  // 15-min cache per (subreddit, limit) tuple so a tab switch or another
+  // process probing the route doesn't burn Reddit's ratelimit.
+  if (requestUrl.pathname === '/api/osint/reddit') {
+    const REDDIT_OSINT_TTL_MS = 15 * 60 * 1000;
+    const REDDIT_DEFAULT_SUBS = ['netsec', 'cybersecurity', 'worldnews', 'geopolitics', 'RBI', 'EmergencyManagement'];
+    const subsParam = requestUrl.searchParams.get('subreddits') ?? '';
+    const VALID_SUB = /^[a-z0-9][a-z0-9_]{1,20}$/i;
+    const parsed = subsParam
+      .split(',')
+      .map(s => s.trim().replace(/^r\//i, ''))
+      .filter(s => VALID_SUB.test(s));
+    const subs = parsed.length > 0 ? Array.from(new Set(parsed)) : REDDIT_DEFAULT_SUBS;
+    const limitRaw = Number.parseInt(requestUrl.searchParams.get('limit') ?? '', 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(100, limitRaw) : 25;
+
+    const fetchSub = async (sub) => {
+      const cacheKey = `reddit-osint-${sub.toLowerCase()}-${limit}`;
+      const cached = getCached(cacheKey, REDDIT_OSINT_TTL_MS);
+      if (cached) return { sub, posts: cached, ok: true };
+      try {
+        const resp = await fetchWithTimeout(
+          `https://www.reddit.com/r/${encodeURIComponent(sub)}/new.json?limit=${limit}&raw_json=1`,
+          { headers: { 'User-Agent': 'CrystalBall/2.13 (threat intelligence aggregator)' } },
+          10_000,
+        );
+        if (!resp.ok) return { sub, posts: [], ok: false, reason: `HTTP ${resp.status}` };
+        const data = await resp.json();
+        const children = data?.data?.children ?? [];
+        const posts = [];
+        for (const child of children) {
+          if (child?.kind !== 't3') continue;
+          const p = child.data ?? {};
+          if (p.stickied === true) continue;
+          if (!p.id || !p.title) continue;
+          const permalinkPath = typeof p.permalink === 'string' ? p.permalink : `/r/${p.subreddit ?? sub}/comments/${p.id}`;
+          posts.push({
+            id: p.id,
+            subreddit: p.subreddit ?? sub,
+            title: p.title,
+            url: typeof p.url === 'string' ? p.url : `https://www.reddit.com${permalinkPath}`,
+            permalink: `https://www.reddit.com${permalinkPath}`,
+            score: typeof p.score === 'number' ? p.score : 0,
+            numComments: typeof p.num_comments === 'number' ? p.num_comments : 0,
+            createdUtc: typeof p.created_utc === 'number' ? p.created_utc : 0,
+            flair: typeof p.link_flair_text === 'string' && p.link_flair_text.length > 0 ? p.link_flair_text : null,
+            author: typeof p.author === 'string' && p.author.length > 0 ? p.author : '[deleted]',
+            domain: typeof p.domain === 'string' && p.domain.length > 0 ? p.domain : null,
+            over18: p.over_18 === true,
+          });
+        }
+        setCached(cacheKey, posts, REDDIT_OSINT_TTL_MS);
+        return { sub, posts, ok: true };
+      } catch (error) {
+        return { sub, posts: [], ok: false, reason: error?.message ?? String(error) };
+      }
+    };
+
+    const results = await Promise.all(subs.map(fetchSub));
+    const successfulSubs = [];
+    const reasons = [];
+    const merged = [];
+    for (const r of results) {
+      if (r.ok) {
+        successfulSubs.push(r.sub);
+        for (const post of r.posts) merged.push(post);
+      } else if (r.reason) {
+        reasons.push(`${r.sub}: ${r.reason}`);
+      }
+    }
+    merged.sort((a, b) => b.createdUtc - a.createdUtc);
+    return json({
+      posts: merged,
+      subreddits: successfulSubs,
+      degraded: reasons.length > 0,
+      generatedAt: new Date().toISOString(),
+      reason: reasons.length > 0 ? reasons.join('; ') : null,
+    });
+  }
+
+  // ── CryptoScamDB + Bitcoin Abuse aggregator ──────────────────────────────
+  // No-key default: pulls scam addresses + domains from CryptoScamDB
+  // (public). When BITCOINABUSE_API_KEY is present we'd ALSO union in
+  // Bitcoin Abuse reports — left out of this PR per spec (key-gated).
+  // 6h cache because CryptoScamDB updates slowly.
+  if (requestUrl.pathname === '/api/crypto/bitcoin-abuse') {
+    const CRYPTO_SCAM_TTL_MS = 6 * 60 * 60 * 1000;
+    const cached = getCached('crypto-bitcoin-abuse', CRYPTO_SCAM_TTL_MS);
+    if (cached) return json(cached);
+
+    const normaliseCategory = (raw) => {
+      if (typeof raw !== 'string') return 'other';
+      const lower = raw.toLowerCase();
+      if (lower.includes('ransom')) return 'ransomware';
+      if (lower.includes('phish')) return 'phishing';
+      if (lower.includes('mixer') || lower.includes('tumbler')) return 'mixer';
+      if (lower.includes('darknet') || lower.includes('darkmarket')) return 'darknet';
+      if (lower.includes('mining') || lower.includes('miner')) return 'mining';
+      if (lower.includes('scam') || lower.includes('fraud') || lower.includes('fake')) return 'scam';
+      return 'other';
+    };
+    const stripProtocol = (v) => String(v).replace(/^https?:\/\//i, '').replace(/\/$/, '');
+
+    const recordsFromResult = (raw) => {
+      if (!raw || typeof raw !== 'object') return [];
+      const result = raw.result;
+      if (Array.isArray(result)) return result.filter(r => r && typeof r === 'object').map(r => ({ key: null, rec: r }));
+      if (result && typeof result === 'object') {
+        return Object.entries(result).filter(([_, v]) => v && typeof v === 'object').map(([k, v]) => ({ key: k, rec: v }));
+      }
+      return [];
+    };
+
+    let addresses = [];
+    let domains = [];
+    let degraded = false;
+    let provenance = 'CryptoScamDB';
+
+    try {
+      const [addrResp, domResp] = await Promise.allSettled([
+        fetchWithTimeout('https://api.cryptoscamdb.org/v1/addresses', { headers: { 'User-Agent': 'CrystalBall/2.13' } }, 15_000),
+        fetchWithTimeout('https://api.cryptoscamdb.org/v1/domains', { headers: { 'User-Agent': 'CrystalBall/2.13' } }, 15_000),
+      ]);
+      if (addrResp.status === 'fulfilled' && addrResp.value.ok) {
+        const json = await addrResp.value.json();
+        for (const { key, rec } of recordsFromResult(json)) {
+          const coin = typeof rec.coin === 'string' ? rec.coin.toUpperCase() : '';
+          if (coin && coin !== 'BTC') continue;
+          const address = (typeof rec.address === 'string' && rec.address) || key;
+          if (!address) continue;
+          addresses.push({
+            address,
+            category: normaliseCategory(rec.subcategory ?? rec.category),
+            reportCount: typeof rec.reports === 'number' ? rec.reports : (typeof rec.reportedaddresses === 'number' ? rec.reportedaddresses : 1),
+            name: typeof rec.name === 'string' ? rec.name : undefined,
+          });
+        }
+      } else {
+        degraded = true;
+      }
+      if (domResp.status === 'fulfilled' && domResp.value.ok) {
+        const json = await domResp.value.json();
+        for (const { key, rec } of recordsFromResult(json)) {
+          const domain = (typeof rec.domain === 'string' && rec.domain) || (typeof rec.url === 'string' && rec.url) || key;
+          if (!domain) continue;
+          const statusRaw = typeof rec.status === 'string' ? rec.status.toLowerCase() : '';
+          const status = statusRaw.includes('offline') || statusRaw.includes('inactive') || statusRaw === 'dead' ? 'inactive'
+            : statusRaw.includes('active') || statusRaw === 'online' ? 'active'
+            : 'unknown';
+          domains.push({
+            domain: stripProtocol(domain),
+            category: normaliseCategory(rec.subcategory ?? rec.category),
+            status,
+            name: typeof rec.name === 'string' ? rec.name : undefined,
+            reportedAt: typeof rec.reported === 'string' ? rec.reported : undefined,
+          });
+        }
+      } else {
+        degraded = true;
+      }
+    } catch (error) {
+      degraded = true;
+      provenance = `CryptoScamDB error: ${error?.message ?? error}`;
+    }
+
+    const payload = {
+      addresses,
+      domains,
+      degraded,
+      source: provenance,
+      generatedAt: new Date().toISOString(),
+    };
+    setCached('crypto-bitcoin-abuse', payload, CRYPTO_SCAM_TTL_MS);
+    return json(payload);
+  }
+
+  // ── Per-address check: scam DB lookup + blockchain.info chain stats ──────
+  if (requestUrl.pathname === '/api/crypto/bitcoin-abuse/check') {
+    const address = (requestUrl.searchParams.get('address') ?? '').trim();
+    const isBtc = /^bc1[ac-hj-np-z02-9]+$/i.test(address) || /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(address);
+    if (!isBtc) {
+      return json({ address, scamMatch: null, balanceSat: null, txCount: null, source: 'invalid-address-format', fetchedAt: new Date().toISOString() }, 400);
+    }
+    // Snapshot of the scam feed for cheap address membership check.
+    const feed = getCached('crypto-bitcoin-abuse', 6 * 60 * 60 * 1000);
+    let scamMatch = null;
+    if (feed && Array.isArray(feed.addresses)) {
+      scamMatch = feed.addresses.find(e => typeof e?.address === 'string' && e.address === address) ?? null;
+    }
+    let balanceSat = null;
+    let txCount = null;
+    let provenance = 'blockchain.info';
+    try {
+      const resp = await fetchWithTimeout(
+        `https://blockchain.info/rawaddr/${encodeURIComponent(address)}?limit=0`,
+        { headers: { 'User-Agent': 'CrystalBall/2.13' } },
+        15_000,
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        if (typeof data.final_balance === 'number') balanceSat = data.final_balance;
+        if (typeof data.n_tx === 'number') txCount = data.n_tx;
+      } else {
+        provenance = `blockchain.info HTTP ${resp.status}`;
+      }
+    } catch (error) {
+      provenance = `blockchain.info error: ${error?.message ?? error}`;
+    }
+    return json({
+      address,
+      scamMatch,
+      balanceSat,
+      txCount,
+      source: provenance,
+      fetchedAt: new Date().toISOString(),
+    });
+  }
+
   // ── OpenAQ real-time air quality readings ────────────────────────────────
   if (requestUrl.pathname === '/api/openaq-readings') {
  const cached = getCached('openaq-readings');
@@ -8115,6 +8445,47 @@ async function dispatch(requestUrl, req, routes, context) {
       return json(data);
     } catch (error) {
       return json({ error: `fdsn-catalog error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── USGS ShakeMap events — M4.5+ in last 7 days ────────────────────────
+  // GET /api/earthquakes/shakemap-events  (30 min cache)
+  if (requestUrl.pathname === '/api/earthquakes/shakemap-events') {
+    const cacheKey = 'shakemap-events-7d';
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      const nowMs = Date.now();
+      const startTime = new Date(nowMs - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const params = new URLSearchParams({
+        format: 'geojson',
+        starttime: startTime,
+        minmagnitude: '4.5',
+        orderby: 'magnitude',
+        limit: '50',
+        producttype: 'shakemap',
+      });
+      const upstream = `https://earthquake.usgs.gov/fdsnws/event/1/query?${params.toString()}`;
+      const r = await fetchWithTimeout(
+        upstream,
+        { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/sidecar (shakemap-events)' } },
+        15_000,
+      );
+      if (!r.ok) throw new Error(`USGS ${r.status}`);
+      const data = await r.json();
+      const features = Array.isArray(data?.features) ? data.features : [];
+      const recent = filterRecentM45PlusSidecar(features, nowMs, 7);
+      const events = recent.map((f, i) => buildShakemapEventSidecar(f, i));
+      const mostSig = mostSignificantEventSidecar(events);
+      const result = {
+        events,
+        mostSignificantEventId: mostSig?.id ?? null,
+        fetchedAt: new Date().toISOString(),
+      };
+      setCached(cacheKey, result, 30 * 60 * 1000);
+      return json(result);
+    } catch (error) {
+      return json({ error: `shakemap-events error: ${error.message ?? error}` }, 502);
     }
   }
 
@@ -11999,6 +12370,239 @@ async function dispatch(requestUrl, req, routes, context) {
  }
  return json({ error: 'Local handler error', reason, endpoint: requestUrl.pathname }, 502);
   }
+}
+
+
+// ── Volcano Monitor pure helpers (exported for parity tests) ─────────────────
+
+export function parseVolcanoHazardLevelSidecar(v, i) {
+  const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
+  const level = cap(v.alertLevel ?? v.alert_level ?? v.currentAlertLevel ?? 'Normal');
+  const normalised = ['Normal', 'Advisory', 'Watch', 'Warning'].includes(level) ? level : 'Normal';
+  return {
+    id: `usgs-vhp-${v.vnum ?? v.id ?? i}`,
+    name: v.volcanoName ?? v.name ?? `Volcano ${i}`,
+    location: [v.state ?? '', v.country ?? ''].filter(Boolean).join(', '),
+    alertLevel: normalised,
+    aviationColor: aviationCodeFromAlertLevelSidecar(normalised),
+    lat: Number.parseFloat(v.latitude ?? v.lat ?? 0),
+    lon: Number.parseFloat(v.longitude ?? v.lon ?? 0),
+    updatedAt: v.activityChangedDate ?? v.updatedAt ?? '',
+    observatory: v.observatoryName ?? v.observatory ?? '',
+  };
+}
+
+export function alertColorFromHazardLevelSidecar(level) {
+  return { Normal: '#22c55e', Advisory: '#eab308', Watch: '#f97316', Warning: '#ef4444' }[level] ?? '#6b7280';
+}
+
+export function aviationCodeFromAlertLevelSidecar(level) {
+  return { Normal: 'Green', Advisory: 'Yellow', Watch: 'Orange', Warning: 'Red' }[level] ?? 'Green';
+}
+
+export function volcanoMarkerHexColorSidecar(alertLevel) {
+  return alertColorFromHazardLevelSidecar(alertLevel);
+}
+
+export function filterNonNormalVolcanoesSidecar(volcanoes) {
+  return volcanoes.filter(v => v.alertLevel !== 'Normal');
+}
+
+export function sortVolcanoesByAlertSeveritySidecar(volcanoes) {
+  const order = { Warning: 3, Watch: 2, Advisory: 1, Normal: 0 };
+  return [...volcanoes].sort((a, b) => (order[b.alertLevel] ?? 0) - (order[a.alertLevel] ?? 0));
+}
+
+export function groupVolcanoesByAlertSidecar(volcanoes) {
+  const groups = { Warning: [], Watch: [], Advisory: [], Normal: [] };
+  for (const v of volcanoes) {
+    const g = groups[v.alertLevel];
+    if (g) g.push(v);
+  }
+  return groups;
+}
+
+export function parseGvpRssSidecar(xmlText) {
+  if (!xmlText || typeof xmlText !== 'string') return [];
+  const items = [];
+  const itemRe = /<item>([\s\S]*?)<\/item>/g;
+  let m;
+  while ((m = itemRe.exec(xmlText)) !== null) {
+    const block = m[1];
+    const title = (/<title[^>]*>([\s\S]*?)<\/title>/.exec(block)?.[1] ?? '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+    const desc  = (/<description[^>]*>([\s\S]*?)<\/description>/.exec(block)?.[1] ?? '').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (title) items.push({ title, description: desc.slice(0, 200) });
+  }
+  return items;
+}
+
+export function mergeGvpBulletinSidecar(volcanoes, gvpItems) {
+  return volcanoes.map(v => {
+    const namePart = v.name.toLowerCase().split(' ')[0];
+    const match = gvpItems.find(g => g.title.toLowerCase().includes(namePart));
+    return match ? { ...v, gvpBulletin: match.description } : v;
+  });
+}
+
+export function buildVolcanoMonitorStatusSidecar(volcanoes) {
+  const active = filterNonNormalVolcanoesSidecar(volcanoes);
+  return {
+    volcanoes: sortVolcanoesByAlertSeveritySidecar(volcanoes),
+    activeCount: active.length,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+// ── Severe Weather pure helpers (exported for parity tests) ──────────────────
+
+export function spcRiskLevelSidecar(dn) {
+  return { TSTM: 1, MRGL: 2, SLGT: 3, ENH: 4, MDT: 5, HIGH: 6 }[String(dn).toUpperCase()] ?? 0;
+}
+
+export function spcRiskLabelSidecar(dn) {
+  const labels = { TSTM: 'Thunderstorm', MRGL: 'Marginal', SLGT: 'Slight', ENH: 'Enhanced', MDT: 'Moderate', HIGH: 'High' };
+  return labels[String(dn).toUpperCase()] ?? String(dn);
+}
+
+export function parseSpcOutlookFeatureSidecar(feature) {
+  const p = feature?.properties ?? {};
+  const dn = String(p.DN ?? p.LABEL ?? '').trim().toUpperCase();
+  return { dn, risk: spcRiskLevelSidecar(dn), label: spcRiskLabelSidecar(dn), validTime: p.VALID ?? p.EXPIRE ?? '' };
+}
+
+export function isActiveTornadoWarningSidecar(eventStr) {
+  return String(eventStr ?? '').toLowerCase().startsWith('tornado warning');
+}
+
+export function isSevereThunderstormWarningSidecar(eventStr) {
+  return String(eventStr ?? '').toLowerCase().startsWith('severe thunderstorm warning');
+}
+
+export function classifyWarningTypeSidecar(eventStr) {
+  const ev = String(eventStr ?? '').toLowerCase();
+  if (ev.startsWith('tornado warning')) return 'tornado';
+  if (ev.startsWith('severe thunderstorm warning')) return 'thunderstorm';
+  if (ev.includes('watch')) return 'watch';
+  return 'other';
+}
+
+export function warningPolygonColorSidecar(warnType) {
+  return { tornado: '#ef4444', thunderstorm: '#f97316', watch: '#eab308' }[warnType] ?? '#6b7280';
+}
+
+export function filterExpiredWarningsSidecar(features, nowIso) {
+  const nowMs = nowIso ? Date.parse(nowIso) : Date.now();
+  return features.filter(f => {
+    const exp = f?.properties?.expires ?? f?.expires ?? '';
+    if (!exp) return true;
+    return Date.parse(exp) > nowMs;
+  });
+}
+
+export function countWarningsByTypeSidecar(warnings) {
+  const counts = { tornado: 0, thunderstorm: 0, watch: 0, other: 0 };
+  for (const w of warnings) {
+    const t = w.warnType ?? classifyWarningTypeSidecar(w.event ?? '');
+    const key = t in counts ? t : 'other';
+    counts[key]++;
+  }
+  return counts;
+}
+
+export function buildSpcOutlookSummarySidecar(features) {
+  const valid = features.map(f => parseSpcOutlookFeatureSidecar(f)).filter(p => p.risk > 0);
+  if (valid.length === 0) return { maxRisk: null, outlookCount: 0, day1MaxRisk: null, validTime: '' };
+  const sorted = [...valid].sort((a, b) => b.risk - a.risk);
+  const top = sorted[0];
+  return { maxRisk: top.dn || null, outlookCount: valid.length, day1MaxRisk: top.dn || null, validTime: top.validTime };
+}
+
+// ── ShakeAlert pure helpers (exported for parity tests) ──────────────────────
+
+export function parseShakemapMmiSidecar(products) {
+  const sm = Array.isArray(products?.shakemap) ? products.shakemap[0] : null;
+  if (!sm) return null;
+  const raw = sm?.properties?.maxmmi ?? null;
+  const val = raw === null ? null : Number.parseFloat(String(raw));
+  return Number.isFinite(val) ? val : null;
+}
+
+export function classifyMmiIntensitySidecar(mmi) {
+  if (mmi === null || mmi === undefined) return 'Not Felt';
+  if (mmi < 2) return 'Not Felt';
+  if (mmi < 4) return 'Weak';
+  if (mmi < 5) return 'Light';
+  if (mmi < 6) return 'Moderate';
+  if (mmi < 7) return 'Strong';
+  if (mmi < 8) return 'Very Strong';
+  if (mmi < 9) return 'Severe';
+  if (mmi < 10) return 'Violent';
+  return 'Extreme';
+}
+
+export function mmiHexColorSidecar(mmi) {
+  if (mmi === null || mmi === undefined || mmi < 2) return '#aaaaaa';
+  if (mmi < 4) return '#7fff00';
+  if (mmi < 5) return '#ffff00';
+  if (mmi < 6) return '#ffcc00';
+  if (mmi < 7) return '#ff8800';
+  if (mmi < 8) return '#ff0000';
+  if (mmi < 9) return '#dd0000';
+  return '#800000';
+}
+
+export function hasShakemapProductSidecar(products) {
+  return Array.isArray(products?.shakemap) && products.shakemap.length > 0;
+}
+
+export function filterRecentM45PlusSidecar(features, nowMs, days) {
+  const cutoff = nowMs - days * 24 * 60 * 60 * 1000;
+  return features.filter(f => {
+    const p = f?.properties ?? {};
+    const mag = typeof p.mag === 'number' ? p.mag : Number.parseFloat(p.mag ?? '0');
+    const time = typeof p.time === 'number' ? p.time : Number.parseFloat(p.time ?? '0');
+    return mag >= 4.5 && time >= cutoff;
+  });
+}
+
+export function buildShakemapEventSidecar(feature, idx) {
+  const p = feature?.properties ?? {};
+  const geom = feature?.geometry ?? {};
+  const coords = Array.isArray(geom?.coordinates) ? geom.coordinates : [];
+  const mag = typeof p.mag === 'number' ? p.mag : Number.parseFloat(p.mag ?? '0');
+  const products = p.products ?? {};
+  const maxMmi = parseShakemapMmiSidecar(products);
+  return {
+    id: feature?.id ?? `usgs-sm-${idx}`,
+    place: String(p.place ?? 'Unknown'),
+    magnitude: mag,
+    depthKm: Array.isArray(coords) && coords.length >= 3 ? Number(coords[2]) : 0,
+    occurredAt: typeof p.time === 'number' ? p.time : Number.parseFloat(p.time ?? '0'),
+    lat: Array.isArray(coords) ? Number(coords[1]) : 0,
+    lon: Array.isArray(coords) ? Number(coords[0]) : 0,
+    hasShakemap: hasShakemapProductSidecar(products),
+    maxMmi,
+    mmiLabel: classifyMmiIntensitySidecar(maxMmi),
+    pagerAlert: typeof p.alert === 'string' ? p.alert : null,
+    detailUrl: typeof p.url === 'string' ? p.url : `https://earthquake.usgs.gov/earthquakes/eventpage/${feature?.id ?? ''}`,
+  };
+}
+
+export function mostSignificantEventSidecar(events) {
+  if (!events || events.length === 0) return null;
+  return [...events].sort((a, b) => b.magnitude - a.magnitude)[0];
+}
+
+export function pagerAlertHexColorSidecar(alert) {
+  return { green: '#22c55e', yellow: '#eab308', orange: '#f97316', red: '#ef4444' }[String(alert ?? '').toLowerCase()] ?? '#6b7280';
+}
+
+export function shakemapAvailabilityLabelSidecar(hasShakemap) {
+  return hasShakemap ? 'ShakeMap available' : 'ShakeMap pending';
+}
+
+export function recentEventsSidecar(features, nowMs, days) {
+  return filterRecentM45PlusSidecar(features, nowMs, days);
 }
 
 export async function createLocalApiServer(options = {}) {

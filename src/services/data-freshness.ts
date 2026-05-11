@@ -123,6 +123,9 @@ export type DataSourceId =
     | "faa-tfrs"
     | "usgs-pager"
     | "wastewater"
+    | "volcano-monitor"
+    | "severe-weather"
+    | "shakealert"
   | 'webcams'; // Aggregated webcam feeds (Windy + DOT + YouTube)
 
 export type FreshnessStatus = 'fresh' | 'stale' | 'very_stale' | 'no_data' | 'disabled' | 'error';
@@ -259,6 +262,9 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   "wsb-sentiment": { name: "Wsb Sentiment", requiredForRisk: false },
   "ecdc-surveillance": { name: "Ecdc Surveillance", requiredForRisk: false },
   "volcano-alerts": { name: "Volcano Alerts", requiredForRisk: false },
+  "volcano-monitor": { name: "Volcano Monitor", requiredForRisk: false, panelId: "volcano-monitor" },
+  "severe-weather": { name: "Severe Weather / SPC", requiredForRisk: false, panelId: "severe-weather" },
+  "shakealert": { name: "ShakeAlert / ShakeMaps", requiredForRisk: false, panelId: "shakealert" },
   "space-weather": { name: "Space Weather", requiredForRisk: false },
   "food-insecurity": { name: "Food Insecurity", requiredForRisk: false },
   "space-launches": { name: "Space Launches", requiredForRisk: false },
@@ -616,6 +622,9 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   "wsb-sentiment": "WSB sentiment data unavailable",
   "ecdc-surveillance": "ECDC surveillance data unavailable",
   "volcano-alerts": "Volcano alerts unavailable",
+  "volcano-monitor": "Volcano monitor data unavailable",
+  "severe-weather": "SPC outlook/active warnings unavailable",
+  "shakealert": "ShakeMap events unavailable",
   "space-weather": "Space-weather data unavailable",
   "food-insecurity": "Food-insecurity data unavailable",
   "space-launches": "Space-launch data unavailable",

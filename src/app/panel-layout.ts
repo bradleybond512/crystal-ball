@@ -148,6 +148,8 @@ import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
 import { SanctionsPanel } from '@/components/SanctionsPanel';
 import { HibpBreachesPanel } from '@/components/HibpBreachesPanel';
 import { IpInfoPanel } from '@/components/IpInfoPanel';
+import { BitcoinAbusePanel } from '@/components/BitcoinAbusePanel';
+import { RedditOsintPanel } from '@/components/RedditOsintPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { OpenaqMonitorPanel } from '@/components/OpenaqMonitorPanel';
@@ -166,6 +168,9 @@ import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
 import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
 import { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
+import { VolcanoMonitorPanel } from '@/components/VolcanoMonitorPanel';
+import { SevereWeatherPanel } from '@/components/SevereWeatherPanel';
+import { ShakeAlertPanel } from '@/components/ShakeAlertPanel';
 import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
 import { IswReportsPanel } from '@/components/IswReportsPanel';
 import { NatoNewsPanel } from '@/components/NatoNewsPanel';
@@ -1023,6 +1028,12 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['hibp-breaches'] = new HibpBreachesPanel();
  this.ctx.panels['ipinfo-lookup'] = new IpInfoPanel();
 
+ const bitcoinAbusePanel = new BitcoinAbusePanel();
+ this.ctx.panels['bitcoin-abuse'] = bitcoinAbusePanel;
+
+ const redditOsintPanel = new RedditOsintPanel();
+ this.ctx.panels['reddit-osint'] = redditOsintPanel;
+
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;
 
@@ -1104,6 +1115,24 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.map?.setCenter(lat, lon, 7);
  });
  this.ctx.panels['volcano-alerts'] = volcanoAlertsPanel;
+
+ const volcanoMonitorPanel = new VolcanoMonitorPanel();
+ volcanoMonitorPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 7);
+ });
+ this.ctx.panels['volcano-monitor'] = volcanoMonitorPanel;
+
+ const severeWeatherPanel = new SevereWeatherPanel();
+ severeWeatherPanel.setWarningClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 6);
+ });
+ this.ctx.panels['severe-weather'] = severeWeatherPanel;
+
+ const shakeAlertPanel = new ShakeAlertPanel();
+ shakeAlertPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 7);
+ });
+ this.ctx.panels['shakealert'] = shakeAlertPanel;
 
  const nwsAlertsPanel = new NWSAlertsPanel();
  this.ctx.panels['nws-alerts'] = nwsAlertsPanel;

@@ -619,6 +619,10 @@ export interface MapLayers {
   // Navigation layers
   streetTiles: boolean;
   navigationRoute: boolean;
+  // New data-source panel globe layers
+  volcanoMonitor: boolean;
+  severeWeatherPolygons: boolean;
+  shakemapOverlay: boolean;
 }
 
 export interface AIDataCenter {

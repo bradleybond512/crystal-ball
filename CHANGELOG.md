@@ -4,6 +4,15 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-05-11
+
+### Added
+
+- **Volcano Monitor panel** (`volcano-monitor`): USGS VHP hazard-level feed + Smithsonian GVP weekly bulletin RSS merged into a single status view. Sidecar endpoint `GET /api/volcanoes/status` (30 min cache). Panel groups non-NORMAL volcanoes by Warning / Watch / Advisory with aviation color badges. Globe layer `volcanoMonitor` adds colored billboard markers.
+- **Severe Weather / SPC panel** (`severe-weather`): SPC Day 1 convective outlook risk level + NWS active tornado and severe thunderstorm warnings. Sidecar endpoints `GET /api/weather/spc-outlook` (30 min) and `GET /api/weather/active-warnings` (2 min). Panel shows outlook risk bar + live warning counts. Globe layer `severeWeatherPolygons` renders NWS warning polygons.
+- **ShakeAlert + USGS ShakeMap panel** (`shakealert`): USGS FDSN M4.5+ events from the past 7 days filtered to those with ShakeMap products. Sidecar endpoint `GET /api/earthquakes/shakemap-events` (30 min cache). Panel lists events with magnitude, MMI intensity label, and ShakeMap availability. Globe layer `shakemapOverlay` adds MMI-colored earthquake markers.
+- **Sidecar parity tests**: 41 new deterministic unit tests across three new `.test.mjs` suites covering all sidecar helper functions for the three panels.
+
 ## [2.10.22] - 2026-05-01
 
 ### Added

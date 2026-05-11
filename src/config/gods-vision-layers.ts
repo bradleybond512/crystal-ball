@@ -270,6 +270,12 @@ export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
  enabled: true,
  description: 'NWS Red Flag Warnings and fire weather watches',
   },
+  floodAlerts: {
+ name: 'Flood Alerts',
+ category: 'intelligence',
+ enabled: false,
+ description: 'NWS active flood watches and warnings — polygons colored by severity',
+  },
 };
 
 const STORAGE_KEY = 'crystalball-gods-vision-layers';

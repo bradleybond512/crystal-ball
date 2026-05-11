@@ -280,6 +280,8 @@ import type { ExtendedForecastPanel } from '@/components/ExtendedForecastPanel';
 import type { WeatherRadarPanel } from '@/components/WeatherRadarPanel';
 import type { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import type { PollenPanel } from '@/components/PollenPanel';
+import type { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
+import type { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
 import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
@@ -573,6 +575,9 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'oilSpills', task: () => runGuarded('oilSpills', () => this.loadOilSpills()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'gdacsAlerts', task: () => runGuarded('gdacsAlerts', () => this.loadGDACSAlerts()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoAlerts', task: () => runGuarded('volcanoAlerts', () => this.loadVolcanoAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoMonitor', task: () => runGuarded('volcanoMonitor', () => this.loadVolcanoMonitor()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'severeWeather', task: () => runGuarded('severeWeather', () => this.loadSevereWeather()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'shakeAlert', task: () => runGuarded('shakeAlert', () => this.loadShakeAlert()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'nwsAlerts', task: () => runGuarded('nwsAlerts', () => this.loadNWSAlerts()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'faaCameras', task: () => runGuarded('faaCameras', () => this.loadFAACameras()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'savedPlaceWeather', task: () => runGuarded('savedPlaceWeather', () => this.loadSavedPlaceWeather()) });
@@ -608,6 +613,8 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'weatherRadar', task: () => runGuarded('weatherRadar', () => this.loadWeatherRadar()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'tidePredictions', task: () => runGuarded('tidePredictions', () => this.loadTidePredictions()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'pollenData', task: () => runGuarded('pollenData', () => this.loadPollenData()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'goesSatellite', task: () => runGuarded('goesSatellite', () => this.loadGoesSatellite()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'floodMonitor', task: () => runGuarded('floodMonitor', () => this.loadFloodMonitor()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'lightning', task: () => runGuarded('lightning', () => this.loadLightning()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'redFlagWarnings', task: () => runGuarded('redFlagWarnings', () => this.loadRedFlagWarnings()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'satellites', task: () => runGuarded('satellites', () => this.loadSatellites()) });
@@ -2182,6 +2189,9 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadVolcanoAlerts(): Promise<void> { return cyberLoaders.loadVolcanoAlerts(this.ctx); }
+  async loadVolcanoMonitor(): Promise<void> { return cyberLoaders.loadVolcanoMonitor(this.ctx); }
+  async loadSevereWeather(): Promise<void> { return cyberLoaders.loadSevereWeather(this.ctx); }
+  async loadShakeAlert(): Promise<void> { return cyberLoaders.loadShakeAlert(this.ctx); }
 
   async loadNWSAlerts(): Promise<void> {
  try {
@@ -3578,6 +3588,31 @@ export class DataLoaderManager implements AppModule {
  (this.ctx.panels['pollen'] as PollenPanel | undefined)?.update(readings);
  } catch (error) {
  console.warn('[pollen] fetch failed', error);
+ }
+  }
+
+  async loadGoesSatellite(): Promise<void> {
+ try {
+ const r = await fetch('/api/satellite/goes');
+ if (!r.ok) return;
+ const data = await r.json();
+ (this.ctx.panels['goes-satellite'] as GoesSatellitePanel | undefined)?.update(data);
+ } catch (error) {
+ console.warn('[goes-satellite] fetch failed', error);
+ }
+  }
+
+  async loadFloodMonitor(): Promise<void> {
+ try {
+ const [gaugesRes, warningsRes] = await Promise.allSettled([
+ fetch('/api/floods/gauges').then(r => r.ok ? r.json() : null),
+ fetch('/api/floods/warnings').then(r => r.ok ? r.json() : null),
+ ]);
+ const panel = this.ctx.panels['flood-monitor'] as FloodMonitorPanel | undefined;
+ if (gaugesRes.status === 'fulfilled' && gaugesRes.value) panel?.updateGauges(gaugesRes.value);
+ if (warningsRes.status === 'fulfilled' && warningsRes.value) panel?.updateWarnings(warningsRes.value);
+ } catch (error) {
+ console.warn('[flood-monitor] fetch failed', error);
  }
   }
 

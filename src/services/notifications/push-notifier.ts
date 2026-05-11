@@ -12,6 +12,10 @@ import { isDesktopRuntime } from '@/services/runtime';
 import { tierForMagnitude } from './eew-tiers';
 import { loadThresholds, type ThresholdConfig } from '@/services/config/alert-thresholds';
 import {
+  record as recordHistory,
+  domainForThreatType,
+} from './notification-history-service';
+import {
   type NotificationChannel,
   type NotificationLedger,
   type NotificationLedgerEntry,
@@ -440,6 +444,13 @@ export interface FirePushOptions {
   ledger?: NotificationLedger;
   /** Override for tests; defaults to the Tauri invoke path. */
   send?: (payload: NotificationPayload) => Promise<void>;
+  /** When `true` (the default), every decision — fired or suppressed —
+   *  is appended to the notification history ring (see
+   *  notification-history-service.ts). Tests pass `false` so the ring
+   *  doesn't accumulate noise across files. */
+  recordHistory?: boolean;
+  /** Producer label written to `NotificationHistoryEntry.source`. */
+  source?: string;
 }
 
 async function defaultSend(payload: NotificationPayload): Promise<void> {
@@ -456,7 +467,22 @@ export async function firePushForEvent(
   opts: FirePushOptions & DecideOptions = {},
 ): Promise<{ fired: boolean; entry?: NotificationLedgerEntry; reason?: string }> {
   const decision = decideNotification(event, { thresholds: opts.thresholds });
+  const source = opts.source ?? 'push-notifier';
+  const shouldRecord = opts.recordHistory !== false;
   if (!decision.shouldFire || !decision.payload) {
+    if (shouldRecord) {
+      recordHistory({
+        domain: domainForThreatType(undefined),
+        source,
+        action: 'suppressed',
+        title: `${event.kind} (suppressed)`,
+        body: decision.reason ?? 'no payload',
+        severity: 'low',
+        suppressedReason: decision.reason,
+        ruleId: `default-${event.kind}`,
+        payload: event as unknown as Record<string, unknown>,
+      });
+    }
     return { fired: false, reason: decision.reason };
   }
   const send = opts.send ?? defaultSend;
@@ -471,6 +497,18 @@ export async function firePushForEvent(
       body: decision.payload.body,
       dedupeKey: decision.payload.dedupeKey,
       meta: decision.payload.meta,
+    });
+  }
+  if (shouldRecord) {
+    recordHistory({
+      domain: domainForThreatType(decision.payload.threatType),
+      source,
+      action: 'fired',
+      title: decision.payload.title,
+      body: decision.payload.body,
+      severity: decision.payload.threatLevel,
+      ruleId: `default-${event.kind}`,
+      payload: { ...decision.payload.meta, event },
     });
   }
   return { fired: true, entry };

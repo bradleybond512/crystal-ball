@@ -179,6 +179,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'water-quality': { name: 'Water Quality', enabled: true, priority: 2 },
   'nuclear-monitor': { name: 'Nuclear Monitor', enabled: true, priority: 2 },
   'notification-digest': { name: 'Notification Digest', enabled: true, priority: 1 },
+  'notification-history': { name: 'Notification History', enabled: true, priority: 2 },
   // Worldview / Palantir / Dragos-inspired panels
   'pattern-of-life': { name: 'Pattern of Life', enabled: true, priority: 2 },
   'sigint-panel': { name: 'SIGINT Monitor', enabled: true, priority: 2 },

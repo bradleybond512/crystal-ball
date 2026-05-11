@@ -2372,6 +2372,61 @@ export function sanitizeEewAlert(raw) {
   return out;
 }
 
+// ── Synthesis correlation event sanitiser (mirror of
+// src/services/synthesis/correlation-engine.ts) ──
+const VALID_CORRELATION_TYPES = new Set([
+  'seismic-nuclear',
+  'space-weather-cascade',
+  'wildfire-air-quality',
+  'infra-cyber',
+  'hurricane-fuel',
+  'multi-hazard',
+]);
+const VALID_SEVERITIES = new Set(['low', 'medium', 'high', 'critical']);
+const VALID_DOMAINS = new Set([
+  'seismic', 'nuclear', 'space-weather', 'wildfire', 'air-quality',
+  'cyber', 'infrastructure', 'hurricane', 'fuel', 'flood', 'volcano', 'disease',
+]);
+
+export function sanitizeCorrelationEvent(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (!VALID_CORRELATION_TYPES.has(raw.type)) return null;
+  if (!VALID_SEVERITIES.has(raw.severity)) return null;
+  if (!Array.isArray(raw.domains)) return null;
+  const domains = raw.domains.filter((d) => typeof d === 'string' && VALID_DOMAINS.has(d));
+  if (domains.length === 0) return null;
+  if (typeof raw.description !== 'string') return null;
+  const triggeredAtMs = typeof raw.triggeredAt === 'string'
+    ? Date.parse(raw.triggeredAt)
+    : (typeof raw.triggeredAt === 'number' ? raw.triggeredAt : NaN);
+  if (!Number.isFinite(triggeredAtMs)) return null;
+  if (!Array.isArray(raw.components)) return null;
+  const components = raw.components
+    .slice(0, 50)
+    .map((c) => {
+      if (!c || typeof c !== 'object') return null;
+      if (typeof c.domain !== 'string' || !VALID_DOMAINS.has(c.domain)) return null;
+      if (typeof c.source !== 'string' || typeof c.description !== 'string') return null;
+      const out = {
+        domain: c.domain,
+        source: c.source.slice(0, 200),
+        description: c.description.slice(0, 500),
+      };
+      if (typeof c.severity === 'string' && VALID_SEVERITIES.has(c.severity)) out.severity = c.severity;
+      return out;
+    })
+    .filter(Boolean);
+  if (components.length === 0) return null;
+  return {
+    type: raw.type,
+    severity: raw.severity,
+    domains,
+    description: raw.description.slice(0, 500),
+    triggeredAt: new Date(triggeredAtMs).toISOString(),
+    components,
+  };
+}
+
 // CACHE PATTERN: copy this for future cached routes
 const _sidecarCache = new Map(); // key -> { data, ts }
 const SIDECAR_CACHE_MAX = 500;
@@ -3822,6 +3877,52 @@ async function dispatch(requestUrl, req, routes, context) {
         lastEventId: snapshot.lastEventId,
         asOf: snapshot.asOf,
         ageMs,
+        stale: ageMs > 60 * 1000,
+        available: true,
+      });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Synthesis correlations (renderer → sidecar mirror) ─────────────────
+  // Renderer-side `correlation-engine.correlateThreats()` runs every 15s,
+  // POSTs the resulting events here. Any consumer (banner, MCP, external
+  // tools) reads via GET. Same shape as /api/eew-status.
+  if (requestUrl.pathname === '/api/synthesis/correlations') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!Array.isArray(body.events)) {
+          return json({ error: 'events must be an array' }, 400);
+        }
+        const events = body.events
+          .slice(0, 500)
+          .map(sanitizeCorrelationEvent)
+          .filter(Boolean);
+        context._synthesisCorrelations = {
+          events,
+          highestSeverity: typeof body.highestSeverity === 'string' ? body.highestSeverity : null,
+          asOf: typeof body.asOf === 'number' ? body.asOf : Date.now(),
+        };
+        return json({ ok: true, count: events.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const snapshot = context._synthesisCorrelations || null;
+      if (!snapshot) {
+        return json({ events: [], highestSeverity: null, asOf: 0, available: false });
+      }
+      const ageMs = Date.now() - snapshot.asOf;
+      return json({
+        events: snapshot.events,
+        highestSeverity: snapshot.highestSeverity,
+        asOf: snapshot.asOf,
+        ageMs,
+        // 15s poll → consider stale at ~3 missed cycles.
         stale: ageMs > 60 * 1000,
         available: true,
       });

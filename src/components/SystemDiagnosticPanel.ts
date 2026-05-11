@@ -34,6 +34,14 @@ import {
   standardSelfTestDefinitions,
   type SelfTestReport,
 } from '@/services/diagnostics/self-test';
+import {
+  VERDICT_BADGE,
+  fetchSidecarSelfTest,
+  formatLatency,
+  overallVerdict,
+  type SidecarSelfTestResult,
+  type SidecarSelfTestSummary,
+} from '@/services/diagnostics/sidecar-self-test';
 import type {
   FeatureHealth,
   HealthStatus,
@@ -70,6 +78,13 @@ export class SystemDiagnosticPanel extends Panel {
   private activeTab: Tab = 'overview';
   private selfTestRunning = false;
   private selfTestReport: SelfTestReport | undefined;
+  private sidecarSelfTest: {
+    running: boolean;
+    asOf: string | null;
+    results: SidecarSelfTestResult[];
+    summary: SidecarSelfTestSummary | null;
+    error: string | null;
+  } = { running: false, asOf: null, results: [], summary: null, error: null };
 
   constructor() {
     super({
@@ -411,12 +426,59 @@ export class SystemDiagnosticPanel extends Panel {
       : `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No self-test report yet. Click below to run.</div>`;
     const btnLabel = this.selfTestRunning ? 'Running…' : 'Run self-test';
     const btnDisabled = this.selfTestRunning ? 'disabled' : '';
-    return `<div style="padding:12px;display:flex;flex-direction:column;gap:10px;">
+    return `<div style="padding:12px;display:flex;flex-direction:column;gap:14px;">
       <div>
         <button class="syd-self-test" ${btnDisabled} style="padding:6px 10px;background:var(--accent,#4a9eff);color:#fff;border:none;border-radius:3px;cursor:${this.selfTestRunning ? 'wait' : 'pointer'};font-size:12px;">${btnLabel}</button>
       </div>
       ${reportHtml}
+      <div style="border-top:1px solid var(--border-subtle,#222);padding-top:10px;">
+        ${this.renderSidecarSelfTest()}
+      </div>
     </div>`;
+  }
+
+  private renderSidecarSelfTest(): string {
+    const sst = this.sidecarSelfTest;
+    const btnLabel = sst.running ? 'Running sidecar probe…' : 'Run sidecar self-test';
+    const btnDisabled = sst.running ? 'disabled' : '';
+    const header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="font-size:11px;text-transform:uppercase;color:var(--text-muted,#888);letter-spacing:0.05em;">Sidecar fan-out probe</div>
+      <button class="syd-sidecar-self-test" ${btnDisabled}
+        style="padding:6px 10px;background:transparent;color:var(--text);border:1px solid var(--border-strong,#444);border-radius:3px;cursor:${sst.running ? 'wait' : 'pointer'};font-size:11px;">${btnLabel}</button>
+    </div>`;
+    if (sst.error && sst.results.length === 0) {
+      return `${header}<div style="color:#ff9800;font-size:11px;">⚠ ${escapeHtml(sst.error)}</div>`;
+    }
+    if (sst.results.length === 0 && !sst.summary) {
+      return `${header}<div style="font-size:11px;color:var(--text-secondary,#aaa);">Probes /api/health, /api/spaceweather/status, /api/freight-stress, /api/security/cves, and 6 more — reports pass/fail + latency per route.</div>`;
+    }
+    return `${header}${this.renderSidecarSelfTestResults(sst.results, sst.summary)}`;
+  }
+
+  private renderSidecarSelfTestResults(
+    results: SidecarSelfTestResult[],
+    summary: SidecarSelfTestSummary | null,
+  ): string {
+    const top = summary ? `<div style="font-size:11px;font-weight:700;color:${VERDICT_BADGE[overallVerdict(summary)].color};margin-bottom:6px;">
+      ${VERDICT_BADGE[overallVerdict(summary)].icon} ${summary.ok} ok · ${summary.degraded} degraded · ${summary.fail} fail · ${summary.total} total
+    </div>` : '';
+    const rows = results.map((r) => {
+      const badge = VERDICT_BADGE[r.verdict];
+      const errLine = r.error
+        ? `<span style="color:#ff9800;font-size:10px;margin-left:8px;">${escapeHtml(r.error)}</span>`
+        : '';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;border-bottom:1px dotted var(--border-subtle,#222);font-size:11px;">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+          <span style="color:${badge.color};font-weight:700;width:54px;display:inline-block;">${badge.icon} ${escapeHtml(badge.label)}</span>
+          <code style="color:var(--text);font-family:ui-monospace,monospace;font-size:10px;">${escapeHtml(r.route)}</code>
+          ${errLine}
+        </div>
+        <div style="color:var(--text-secondary,#aaa);font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap;">
+          HTTP ${r.status === 0 ? '—' : r.status} · ${escapeHtml(formatLatency(r.latencyMs))}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div>${top}${rows}</div>`;
   }
 
   private renderSelfTestResults(r: SelfTestReport): string {
@@ -454,6 +516,33 @@ export class SystemDiagnosticPanel extends Panel {
     }
     const refresh = root.querySelector<HTMLButtonElement>('.syd-refresh');
     refresh?.addEventListener('click', () => this.render());
+    const sidecarBtn = root.querySelector<HTMLButtonElement>('.syd-sidecar-self-test');
+    sidecarBtn?.addEventListener('click', async () => {
+      if (this.sidecarSelfTest.running) return;
+      this.sidecarSelfTest = { ...this.sidecarSelfTest, running: true, error: null };
+      this.render();
+      try {
+        const resp = await fetchSidecarSelfTest();
+        this.sidecarSelfTest = {
+          running: false,
+          asOf: resp.asOf,
+          results: resp.results,
+          summary: resp.summary,
+          error: resp.error ?? null,
+        };
+      } catch (error) {
+        this.sidecarSelfTest = {
+          running: false,
+          asOf: new Date().toISOString(),
+          results: [],
+          summary: null,
+          error: String((error as Error)?.message ?? error),
+        };
+      } finally {
+        this.render();
+      }
+    });
+
     const stBtn = root.querySelector<HTMLButtonElement>('.syd-self-test');
     stBtn?.addEventListener('click', async () => {
       if (this.selfTestRunning) return;

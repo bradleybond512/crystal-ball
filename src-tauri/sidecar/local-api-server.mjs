@@ -2233,6 +2233,81 @@ export async function fetchSpaceweatherAlertsSidecar() {
   return alerts;
 }
 
+// ── Diagnostics self-test helpers ─────────────────────────────────────────
+// Fan-out probe target list. Each route is exercised with a short timeout
+// and classified as ok / degraded / fail. We deliberately pick routes
+// that don't require external network so the self-test is honest about
+// what the sidecar *itself* can serve.
+export const SELF_TEST_TARGETS = [
+  { route: '/api/health',                       method: 'GET', domain: 'meta',     timeoutMs: 1500 },
+  { route: '/api/spaceweather/status',          method: 'GET', domain: 'space',    timeoutMs: 2500 },
+  { route: '/api/spaceweather/alerts',          method: 'GET', domain: 'space',    timeoutMs: 2500 },
+  { route: '/api/freight-stress?series=PPIACO', method: 'GET', domain: 'maritime', timeoutMs: 3000 },
+  { route: '/api/dark-vessels',                 method: 'GET', domain: 'maritime', timeoutMs: 2000 },
+  { route: '/api/space-weather-feeds',          method: 'GET', domain: 'space',    timeoutMs: 3000 },
+  { route: '/api/donki-events',                 method: 'GET', domain: 'space',    timeoutMs: 3000 },
+  { route: '/api/security/cves?severity=critical&limit=5', method: 'GET', domain: 'security', timeoutMs: 3000 },
+  { route: '/api/security/vulners',             method: 'GET', domain: 'security', timeoutMs: 3000 },
+  { route: '/api/openphish-feed',               method: 'GET', domain: 'security', timeoutMs: 2500 },
+];
+
+export function classifySelfTestResult(status, latencyMs, error) {
+  if (error) return 'fail';
+  if (!Number.isFinite(status) || status >= 500) return 'fail';
+  if (status >= 400) return 'fail';
+  if (latencyMs > 5000) return 'degraded';
+  if (latencyMs > 2500) return 'degraded';
+  return 'ok';
+}
+
+export function summarizeSelfTest(results) {
+  const summary = { total: results.length, ok: 0, degraded: 0, fail: 0 };
+  for (const r of results) {
+    if (r.verdict === 'ok') summary.ok += 1;
+    else if (r.verdict === 'degraded') summary.degraded += 1;
+    else summary.fail += 1;
+  }
+  return summary;
+}
+
+async function probeSelfTestTarget(port, target) {
+  const url = `http://127.0.0.1:${port}${target.route}`;
+  const started = Date.now();
+  try {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), target.timeoutMs);
+    let status = 0;
+    let error = null;
+    try {
+      const resp = await fetch(url, {
+        method: target.method,
+        headers: { Accept: 'application/json' },
+        signal: ac.signal,
+      });
+      status = resp.status;
+      // Drain the body so the connection can be reused.
+      await resp.text().catch(() => {});
+    } catch (error_) {
+      error = error_?.name === 'AbortError' ? `timeout after ${target.timeoutMs}ms` : String(error_?.message ?? error_);
+    } finally {
+      clearTimeout(timer);
+    }
+    const latencyMs = Date.now() - started;
+    const verdict = classifySelfTestResult(status, latencyMs, error);
+    return { route: target.route, domain: target.domain, ok: verdict === 'ok',
+      verdict, status, latencyMs, error };
+  } catch (error) {
+    const latencyMs = Date.now() - started;
+    return { route: target.route, domain: target.domain, ok: false,
+      verdict: 'fail', status: 0, latencyMs, error: String(error?.message ?? error) };
+  }
+}
+
+async function runSidecarSelfTest(port) {
+  const results = await Promise.all(SELF_TEST_TARGETS.map((t) => probeSelfTestTarget(port, t)));
+  return { results, summary: summarizeSelfTest(results) };
+}
+
 // ── Security helpers (mirror src/services/security/*-service.ts) ──
 
 const SECURITY_CVE_CACHE = new Map(); // severity → { payload, expiresAt }
@@ -12869,6 +12944,16 @@ export async function createLocalApiServer(options = {}) {
  feeds: getFeedSnapshots(),
  }));
  return;
+ }
+
+ // ── /api/diagnostics/self-test — fan-out probe across 10 domain routes ──
+ // Issues a small HEAD/GET against each route on the same sidecar
+ // process and returns { route, ok, status, latencyMs, error? } per probe.
+ if (requestUrl.pathname === '/api/diagnostics/self-test') {
+   const { results, summary } = await runSidecarSelfTest(context.port);
+   res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify({ results, summary, asOf: new Date().toISOString() }));
+   return;
  }
 
  // ── /api/diag — full diagnostics snapshot for bug reports ─────────

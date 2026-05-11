@@ -5811,6 +5811,93 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── HIBP breach intelligence (haveibeenpwned.com public breaches) ─────────
+  // /api/security/breaches            — full or filtered list (q + limit)
+  // /api/security/breaches/latest     — breaches added in last 90 days
+  if (requestUrl.pathname === '/api/security/breaches' || requestUrl.pathname === '/api/security/breaches/latest') {
+    const CACHE_KEY = 'hibp-breaches-all';
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h per spec
+    let breaches = getCached(CACHE_KEY, CACHE_TTL);
+    if (!breaches) {
+      try {
+        const resp = await fetchWithTimeout(
+          'https://haveibeenpwned.com/api/v3/breaches',
+          { headers: { 'User-Agent': 'CrystalBall-Security/1.0', Accept: 'application/json' } },
+          20_000,
+        );
+        if (resp.ok) {
+          breaches = await resp.json();
+          if (Array.isArray(breaches)) setCached(CACHE_KEY, breaches, CACHE_TTL);
+        } else {
+          breaches = getCachedStale(CACHE_KEY) ?? [];
+        }
+      } catch {
+        breaches = getCachedStale(CACHE_KEY) ?? [];
+      }
+    }
+    if (!Array.isArray(breaches)) breaches = [];
+
+    if (requestUrl.pathname === '/api/security/breaches/latest') {
+      const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+      const recent = breaches.filter(b => {
+        const t = Date.parse(String(b?.AddedDate ?? ''));
+        return Number.isFinite(t) && t >= cutoff;
+      });
+      recent.sort((a, b) => String(b?.AddedDate ?? '').localeCompare(String(a?.AddedDate ?? '')));
+      return json({ breaches: recent, total: recent.length });
+    }
+
+    const q = (requestUrl.searchParams.get('q') ?? '').trim().toLowerCase();
+    const limitRaw = parseInt(requestUrl.searchParams.get('limit') ?? '50', 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 600) : 50;
+    let filtered = breaches;
+    if (q) {
+      filtered = breaches.filter(b => {
+        const hay = `${b?.Name ?? ''}\n${b?.Title ?? ''}\n${b?.Domain ?? ''}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    filtered.sort((a, b) => String(b?.BreachDate ?? '').localeCompare(String(a?.BreachDate ?? '')));
+    return json({ breaches: filtered.slice(0, limit), total: filtered.length });
+  }
+
+  // ── ipinfo.io geo + ASN lookup (1h per-IP cache) ──────────────────────────
+  if (requestUrl.pathname === '/api/security/ipinfo') {
+    const ipRaw = (requestUrl.searchParams.get('ip') ?? '').trim();
+    if (!ipRaw) return json({ error: 'missing ip' }, 400);
+    // Defense-in-depth: validate before forwarding upstream.
+    const IPV4 = /^(?:(?:25[0-5]|2[0-4]\d|1?\d{1,2})\.){3}(?:25[0-5]|2[0-4]\d|1?\d{1,2})$/;
+    const IPV6 = /^[\da-f:]+$/i;
+    const isV4 = IPV4.test(ipRaw);
+    const isV6 = ipRaw.length >= 3 && ipRaw.length <= 39 && ipRaw.includes(':') && IPV6.test(ipRaw);
+    if (!isV4 && !isV6) return json({ error: 'invalid ip' }, 400);
+
+    const cacheKey = `ipinfo:${ipRaw.toLowerCase()}`;
+    const CACHE_TTL = 60 * 60 * 1000; // 1h per spec
+    const cached = getCached(cacheKey, CACHE_TTL);
+    if (cached) return json(cached);
+
+    try {
+      const resp = await fetchWithTimeout(
+        `https://ipinfo.io/${encodeURIComponent(ipRaw)}/json`,
+        { headers: { 'User-Agent': 'CrystalBall-Security/1.0', Accept: 'application/json' } },
+        10_000,
+      );
+      if (!resp.ok) {
+        const stale = getCachedStale(cacheKey);
+        return json(stale ?? { ip: ipRaw, error: `upstream HTTP ${resp.status}` }, stale ? 200 : 502);
+      }
+      const data = await resp.json();
+      data.fetchedAt = new Date().toISOString();
+      setCached(cacheKey, data, CACHE_TTL);
+      return json(data);
+    } catch (error) {
+      const stale = getCachedStale(cacheKey);
+      const reason = error?.message ?? String(error);
+      return json(stale ?? { ip: ipRaw, error: reason }, stale ? 200 : 502);
+    }
+  }
+
   // ── Biosurveillance wastewater (CDC NWSS, site + state rollup, 24h cache) ──
   if (requestUrl.pathname === '/api/biosurveillance/wastewater') {
     const CACHE_KEY = 'biosurveillance-wastewater';

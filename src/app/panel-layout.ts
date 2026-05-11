@@ -145,6 +145,8 @@ import { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import { PollenPanel } from '@/components/PollenPanel';
 import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
 import { SanctionsPanel } from '@/components/SanctionsPanel';
+import { HibpBreachesPanel } from '@/components/HibpBreachesPanel';
+import { IpInfoPanel } from '@/components/IpInfoPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
@@ -1001,6 +1003,9 @@ export class PanelLayoutManager implements AppModule {
 
  const sanctionsIntelPanel = new SanctionsPanel();
  this.ctx.panels['sanctions-intel'] = sanctionsIntelPanel;
+
+ this.ctx.panels['hibp-breaches'] = new HibpBreachesPanel();
+ this.ctx.panels['ipinfo-lookup'] = new IpInfoPanel();
 
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;

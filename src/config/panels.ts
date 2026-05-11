@@ -120,6 +120,8 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'global-weather': { name: 'Global Weather', enabled: true, priority: 1 },
   'opensanctions': { name: 'Global Sanctions', enabled: true, priority: 2 },
   'sanctions-intel': { name: 'OFAC Sanctions Intel', enabled: true, priority: 2 },
+  'hibp-breaches': { name: 'HIBP Breaches', enabled: true, priority: 2 },
+  'ipinfo-lookup': { name: 'IP Info Lookup', enabled: true, priority: 2 },
   'edgar-filings': { name: 'SEC EDGAR Filings', enabled: true, priority: 2 },
   'isw-reports': { name: 'ISW Situation Reports', enabled: true, priority: 1 },
   'reliefweb-crises': { name: 'UN OCHA Crisis Reports', enabled: true, priority: 1 },

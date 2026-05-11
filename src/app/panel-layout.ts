@@ -150,6 +150,8 @@ import { HibpBreachesPanel } from '@/components/HibpBreachesPanel';
 import { IpInfoPanel } from '@/components/IpInfoPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
+import { OpenaqMonitorPanel } from '@/components/OpenaqMonitorPanel';
+import { MediastackNewsPanel } from '@/components/MediastackNewsPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
 import { WildfireIntelPanel } from '@/components/WildfireIntelPanel';
 import { HazmatIncidentsPanel } from '@/components/HazmatIncidentsPanel';
@@ -1026,6 +1028,12 @@ export class PanelLayoutManager implements AppModule {
 
  const airQualityPanel = new AirQualityPanel();
  this.ctx.panels['air-quality'] = airQualityPanel;
+
+ const openaqMonitorPanel = new OpenaqMonitorPanel();
+ this.ctx.panels['openaq-monitor'] = openaqMonitorPanel;
+
+ const mediastackNewsPanel = new MediastackNewsPanel();
+ this.ctx.panels['mediastack-news'] = mediastackNewsPanel;
 
  const wildfireIncidentsPanel = new WildfireIncidentsPanel();
  this.ctx.panels['wildfire-incidents'] = wildfireIncidentsPanel;

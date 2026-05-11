@@ -7627,6 +7627,79 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── OpenAQ v3: nearby stations ──────────────────────────────────────────
+  // GET /api/airquality/openaq?lat=&lon=&radius=50000
+  // Pulls 50 locations near the given coords with parameters_id=2 (PM2.5)
+  // and 1 (PM10). v3 *does* accept anonymous reads for the locations
+  // endpoint; falls back to a 'degraded' empty payload on any error so
+  // the panel can render an empty-state instead of erroring.
+  if (requestUrl.pathname === '/api/airquality/openaq') {
+ const lat = Number.parseFloat(requestUrl.searchParams.get('lat') ?? '');
+ const lon = Number.parseFloat(requestUrl.searchParams.get('lon') ?? '');
+ const radius = Math.max(1000, Math.min(100_000, Number.parseInt(requestUrl.searchParams.get('radius') ?? '50000', 10) || 50_000));
+ if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+ return json({ locations: [], degraded: true, reason: 'lat + lon required', generatedAt: new Date().toISOString() });
+ }
+ const cacheKey = `openaq-nearby:${lat.toFixed(3)},${lon.toFixed(3)},${radius}`;
+ const cached = getCached(cacheKey, 30 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const params = new URLSearchParams({
+ limit: '50',
+ radius: String(radius),
+ coordinates: `${lat},${lon}`,
+ 'parameters_id': '2',
+ });
+ params.append('parameters_id', '1');
+ params.append('parameters_id', '3');
+ params.append('parameters_id', '7');
+ const url = `https://api.openaq.org/v3/locations?${params.toString()}`;
+ const headers = { Accept: 'application/json' };
+ const apiKey = process.env.OPENAQ_API_KEY;
+ if (apiKey) headers['X-API-Key'] = apiKey;
+ const r = await fetchWithTimeout(url, { headers }, 15_000);
+ if (!r.ok) throw new Error(`OpenAQ v3 HTTP ${r.status}`);
+ const data = await r.json();
+ const locations = Array.isArray(data?.results) ? data.results : [];
+ const payload = { locations, generatedAt: new Date().toISOString(), source: 'api.openaq.org/v3' };
+ setCached(cacheKey, payload, 30 * 60 * 1000);
+ return json(payload);
+ } catch (error) {
+ return json({ locations: [], degraded: true, reason: `openaq v3 error: ${error.message ?? error}`, generatedAt: new Date().toISOString() });
+ }
+  }
+
+  // ── OpenAQ v3: global worst readings ────────────────────────────────────
+  // GET /api/airquality/openaq/worst — top-100 most-recently-updated
+  // locations globally, so the renderer can rank/filter to "worst right
+  // now" using the same EPA AQI ladder it uses for the nearby tab.
+  if (requestUrl.pathname === '/api/airquality/openaq/worst') {
+ const cacheKey = 'openaq-worst';
+ const cached = getCached(cacheKey, 30 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const params = new URLSearchParams({
+ limit: '100',
+ 'parameters_id': '2',
+ order_by: 'lastUpdated',
+ sort_order: 'desc',
+ });
+ const url = `https://api.openaq.org/v3/locations?${params.toString()}`;
+ const headers = { Accept: 'application/json' };
+ const apiKey = process.env.OPENAQ_API_KEY;
+ if (apiKey) headers['X-API-Key'] = apiKey;
+ const r = await fetchWithTimeout(url, { headers }, 15_000);
+ if (!r.ok) throw new Error(`OpenAQ v3 HTTP ${r.status}`);
+ const data = await r.json();
+ const locations = Array.isArray(data?.results) ? data.results : [];
+ const payload = { locations, generatedAt: new Date().toISOString(), source: 'api.openaq.org/v3' };
+ setCached(cacheKey, payload, 30 * 60 * 1000);
+ return json(payload);
+ } catch (error) {
+ return json({ locations: [], degraded: true, reason: `openaq v3 error: ${error.message ?? error}`, generatedAt: new Date().toISOString() });
+ }
+  }
+
   // ── GeoNames place search ────────────────────────────────────────────────
   if (requestUrl.pathname === '/api/geonames-search') {
  const username = process.env.GEONAMES_USERNAME ?? '';
@@ -9756,6 +9829,78 @@ async function dispatch(requestUrl, req, routes, context) {
  };
  setCached(cacheKey, response);
  return json(response);
+  }
+
+  // ── News headlines aggregator (GDELT 2.0 Doc, no key required) ─────────
+  // GET /api/news/headlines?topics=security,emergency,weather,geopolitical&limit=50&q=...
+  // Returns the GDELT article list shaped for the renderer's news
+  // aggregator (title/url/source/country/seendate/tone). 15-min cache
+  // per topic-set. Falls back to last-known data on rate-limit, just
+  // like /api/gdelt-intel.
+  if (requestUrl.pathname === '/api/news/headlines') {
+ const topicsRaw = requestUrl.searchParams.get('topics') ?? 'security,geopolitical,weather,emergency';
+ const limit = Math.max(1, Math.min(100, Number.parseInt(requestUrl.searchParams.get('limit') ?? '50', 10) || 50));
+ const q = requestUrl.searchParams.get('q')?.trim() ?? '';
+ const topicMap = {
+ security: '(cyberattack OR ransomware OR breach OR terror OR attack OR shooting)',
+ geopolitical: '(war OR conflict OR sanctions OR nato OR diplomat OR invasion)',
+ natural_disasters: '(earthquake OR hurricane OR tornado OR wildfire OR flood OR tsunami OR volcano)',
+ weather: '(storm OR cyclone OR typhoon OR blizzard OR hailstorm)',
+ emergency: '(evacuation OR rescue OR explosion OR derailment OR pipeline)',
+ economic: '(inflation OR recession OR market OR fed OR tariff)',
+ health: '(outbreak OR pandemic OR virus OR vaccine OR cholera)',
+ };
+ const topics = topicsRaw.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+ const queryParts = topics.map((t) => topicMap[t]).filter(Boolean);
+ const composedQuery = queryParts.length > 0 ? `(${queryParts.join(' OR ')})` : '(news)';
+ const finalQuery = q ? `${composedQuery} AND ${q}` : composedQuery;
+ const cacheKey = `news-headlines:${topics.sort().join(',')}:${q}:${limit}`;
+ const cached = getCached(cacheKey, 15 * 60 * 1000);
+ if (cached) return json(cached);
+ if (!context._headlinesBackoff) context._headlinesBackoff = { until: 0, fails: 0 };
+ const bo = context._headlinesBackoff;
+ if (Date.now() < bo.until) {
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: 'rate-limited; serving cached' });
+ return json({ articles: [], updatedAt: Math.floor(Date.now() / 1000), error: 'rate-limited' });
+ }
+ try {
+ const params = new URLSearchParams({
+ query: finalQuery,
+ mode: 'artlist',
+ maxrecords: String(limit),
+ format: 'json',
+ sort: 'DateDesc',
+ timespan: '24h',
+ });
+ const res = await fetchWithTimeout(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, { headers: { 'User-Agent': CHROME_UA } }, 12_000);
+ if (res.status === 429 || res.status === 503) {
+ bo.fails = Math.min(bo.fails + 1, 6);
+ const waitMs = Math.min(5_000 * (2 ** bo.fails), 5 * 60_000);
+ bo.until = Date.now() + waitMs;
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: `rate-limited HTTP ${res.status}` });
+ return json({ articles: [], updatedAt: Math.floor(Date.now() / 1000), error: `rate-limited HTTP ${res.status}` });
+ }
+ if (!res.ok) throw new Error(`GDELT HTTP ${res.status}`);
+ const data = await res.json();
+ const articles = (Array.isArray(data?.articles) ? data.articles : []).map((a) => ({
+ title: a.title ?? '',
+ url: a.url ?? '',
+ domain: a.domain ?? '',
+ country: a.sourcecountry ?? null,
+ seendate: a.seendate ?? null,
+ tone: typeof a.tone === 'number' ? Math.round(a.tone * 10) / 10 : null,
+ })).filter((a) => a.title && a.url);
+ const result = { articles, topics, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 15 * 60 * 1000);
+ bo.fails = 0; bo.until = 0;
+ return json(result);
+ } catch (error) {
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: error?.message ?? 'unknown' });
+ return json({ articles: [], updatedAt: Math.floor(Date.now() / 1000), error: error?.message ?? 'unknown' });
+ }
   }
 
   // ── GDELT Intelligence (no key required, public API) ──────────────────────

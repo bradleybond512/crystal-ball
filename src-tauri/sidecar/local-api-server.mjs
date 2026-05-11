@@ -4055,6 +4055,122 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Intelligence: correlations (renderer → sidecar mirror) ───────────────
+  // Renderer runs CorrelationEngine every 5 min and POSTs the last 50
+  // correlations here. GET serves them filtered by ?since= and ?limit=.
+  if (requestUrl.pathname === '/api/intelligence/correlations') {
+    if (!context._intelligenceCorrelations) context._intelligenceCorrelations = { correlations: [], pushedAt: 0 };
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || !Array.isArray(body.correlations)) return json({ error: 'correlations must be an array' }, 400);
+        const correlations = body.correlations.slice(0, 50).map(c => ({
+          id: typeof c.id === 'string' ? c.id : '',
+          type: ['spatial', 'temporal', 'entity'].includes(c.type) ? c.type : 'temporal',
+          confidence: typeof c.confidence === 'number' ? Math.min(1, Math.max(0, c.confidence)) : 0,
+          title: typeof c.title === 'string' ? c.title.slice(0, 200) : '',
+          detectedAt: typeof c.detectedAt === 'number' ? c.detectedAt : Date.now(),
+          eventCount: Array.isArray(c.events) ? c.events.length : 0,
+          eventIds: Array.isArray(c.events) ? c.events.map(e => String(e.id ?? '')).slice(0, 10) : [],
+        }));
+        context._intelligenceCorrelations = { correlations, pushedAt: Date.now() };
+        return json({ ok: true, count: correlations.length });
+      } catch (error) {
+        return json({ error: String(error?.message ?? error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const { correlations, pushedAt } = context._intelligenceCorrelations;
+      const since = requestUrl.searchParams.get('since');
+      const limit = requestUrl.searchParams.get('limit');
+      let result = [...correlations];
+      if (since) {
+        const sinceMs = Number(since);
+        if (Number.isFinite(sinceMs)) result = result.filter(c => c.detectedAt >= sinceMs);
+      }
+      if (limit) {
+        const lim = Number(limit);
+        if (Number.isFinite(lim) && lim > 0) result = result.slice(0, lim);
+      }
+      return json({ available: pushedAt > 0, pushedAt, count: result.length, correlations: result });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Intelligence: what-changed (renderer → sidecar snapshot mirror) ───────
+  // Renderer POSTs WorldStateSnapshots. GET /api/intelligence/what-changed?since=
+  // returns a diff report between the snapshot taken at ?since and the most recent.
+  if (requestUrl.pathname === '/api/intelligence/what-changed') {
+    if (!context._intelligenceSnapshots) context._intelligenceSnapshots = [];
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        const snap = {
+          takenAt: typeof body.takenAt === 'number' ? body.takenAt : Date.now(),
+          eventIds: Array.isArray(body.eventIds) ? body.eventIds.slice(0, 2000).map(String) : [],
+          eventDomains: body.eventDomains && typeof body.eventDomains === 'object' ? body.eventDomains : {},
+          correlationIds: Array.isArray(body.correlationIds) ? body.correlationIds.slice(0, 100).map(String) : [],
+          domainCounts: body.domainCounts && typeof body.domainCounts === 'object' ? body.domainCounts : {},
+          severityByDomain: body.severityByDomain && typeof body.severityByDomain === 'object' ? body.severityByDomain : {},
+        };
+        context._intelligenceSnapshots.push(snap);
+        // Keep only last 20 snapshots (covers ~100 min at 5-min cycle)
+        if (context._intelligenceSnapshots.length > 20) context._intelligenceSnapshots.shift();
+        return json({ ok: true, takenAt: snap.takenAt });
+      } catch (error) {
+        return json({ error: String(error?.message ?? error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const snaps = context._intelligenceSnapshots;
+      if (snaps.length === 0) return json({ available: false, message: 'No snapshots yet' });
+      const curr = snaps[snaps.length - 1];
+      const sinceParam = requestUrl.searchParams.get('since');
+      const sinceMs = sinceParam ? Number(sinceParam) : 0;
+      // Find the snapshot closest to (but not after) sinceMs
+      const prev = Number.isFinite(sinceMs) && sinceMs > 0
+        ? [...snaps].reverse().find(s => s.takenAt <= sinceMs) ?? snaps[0]
+        : snaps[0];
+      // Compute diff inline (mirrors what-changed.ts logic)
+      const currIds = new Set(curr.eventIds);
+      const prevIds = new Set(prev.eventIds);
+      const newEventsByDomain = {};
+      for (const id of currIds) {
+        if (!prevIds.has(id)) {
+          const domain = curr.eventDomains[id] ?? 'unknown';
+          if (!newEventsByDomain[domain]) newEventsByDomain[domain] = [];
+          newEventsByDomain[domain].push(id);
+        }
+      }
+      const resolvedEventIds = [...prevIds].filter(id => !currIds.has(id));
+      const severityEscalations = [];
+      for (const domain of Object.keys(curr.severityByDomain)) {
+        const from = prev.severityByDomain[domain] ?? 0;
+        const to = curr.severityByDomain[domain] ?? 0;
+        if (to > from) severityEscalations.push({ domain, from, to });
+      }
+      const currCorrIds = new Set(curr.correlationIds);
+      const prevCorrIds = new Set(prev.correlationIds);
+      const newCorrelationIds = [...currCorrIds].filter(id => !prevCorrIds.has(id));
+      const totalNewEvents = Object.values(newEventsByDomain).reduce((s, ids) => s + ids.length, 0);
+      return json({
+        available: true,
+        since: prev.takenAt,
+        until: curr.takenAt,
+        newEventsByDomain,
+        resolvedEventIds,
+        severityEscalations,
+        newCorrelationIds,
+        totalNewEvents,
+        totalResolved: resolvedEventIds.length,
+      });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
   // ── Seismic globe overlays (renderer → sidecar mirror; Layer 5/13) ──
   // Renderer runs the globe-overlay-emitter (Layer 4) and POSTs the
   // resulting `GlobeSeismicOverlay[]` here every 5s. The God's Eye Cesium

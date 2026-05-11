@@ -150,6 +150,9 @@ import { HibpBreachesPanel } from '@/components/HibpBreachesPanel';
 import { IpInfoPanel } from '@/components/IpInfoPanel';
 import { BitcoinAbusePanel } from '@/components/BitcoinAbusePanel';
 import { RedditOsintPanel } from '@/components/RedditOsintPanel';
+import { PhishstatsFeedPanel } from '@/components/PhishstatsFeedPanel';
+import { UrlscanThreatsPanel } from '@/components/UrlscanThreatsPanel';
+import { PulsediveIntelPanel } from '@/components/PulsediveIntelPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
@@ -1031,6 +1034,15 @@ export class PanelLayoutManager implements AppModule {
 
  const redditOsintPanel = new RedditOsintPanel();
  this.ctx.panels['reddit-osint'] = redditOsintPanel;
+
+ const phishstatsFeedPanel = new PhishstatsFeedPanel();
+ this.ctx.panels['phishstats-feed'] = phishstatsFeedPanel;
+
+ const urlscanThreatsPanel = new UrlscanThreatsPanel();
+ this.ctx.panels['urlscan-threats'] = urlscanThreatsPanel;
+
+ const pulsediveIntelPanel = new PulsediveIntelPanel();
+ this.ctx.panels['pulsedive-intel'] = pulsediveIntelPanel;
 
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;

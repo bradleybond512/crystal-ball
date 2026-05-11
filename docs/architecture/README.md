@@ -24,12 +24,14 @@ This directory contains the long-term architectural vision, intelligence systems
 ## North Star
 
 Crystal Ball should feel like:
+
 - a planetary nervous system
 - a strategic operations center
 - a living intelligence engine
 - a predictive world model
 
 The platform should answer:
+
 - What is happening?
 - Why does it matter?
 - What happens next?

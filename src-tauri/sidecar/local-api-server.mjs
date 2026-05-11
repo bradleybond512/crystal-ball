@@ -2231,6 +2231,173 @@ export async function fetchSpaceweatherAlertsSidecar() {
   return alerts;
 }
 
+// ── Security helpers (mirror src/services/security/*-service.ts) ──
+
+const SECURITY_CVE_CACHE = new Map(); // severity → { payload, expiresAt }
+const SECURITY_CVE_TTL_MS = 24 * 60 * 60 * 1000;
+let securityVulnersCache = null;
+let securityVulnersCacheExpiresAt = 0;
+const SECURITY_VULNERS_TTL_MS = 6 * 60 * 60 * 1000;
+
+function clampInt(value, min, max, fallback) {
+  const n = Number.parseInt(value || '', 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+export function severityForCvssSidecar(score) {
+  if (score === null || score === undefined || !Number.isFinite(score)) return 'none';
+  if (score >= 9.0) return 'critical';
+  if (score >= 7.0) return 'high';
+  if (score >= 4.0) return 'medium';
+  if (score > 0) return 'low';
+  return 'none';
+}
+
+export function pickPrimaryCvssSidecar(metrics) {
+  if (!metrics || typeof metrics !== 'object') return { score: null, vector: null };
+  const candidates = [
+    metrics.cvssMetricV31?.[0],
+    metrics.cvssMetricV30?.[0],
+    metrics.cvssMetricV2?.[0],
+  ];
+  for (const c of candidates) {
+    const data = c?.cvssData;
+    if (data && typeof data.baseScore === 'number') {
+      return {
+        score: data.baseScore,
+        vector: typeof data.vectorString === 'string' ? data.vectorString : null,
+      };
+    }
+  }
+  return { score: null, vector: null };
+}
+
+export function parseCpeProductSidecar(criteria) {
+  if (!criteria || typeof criteria !== 'string') return null;
+  const parts = criteria.split(':');
+  if (parts.length < 5) return null;
+  const vendor = parts[3];
+  const product = parts[4];
+  if (!vendor || !product || vendor === '*' || product === '*') return null;
+  return `${vendor.replace(/_/g, ' ')} ${product.replace(/_/g, ' ')}`;
+}
+
+export function collectAffectedProductsSidecar(configurations) {
+  if (!Array.isArray(configurations)) return [];
+  const seen = new Set();
+  const out = [];
+  const visit = (nodes) => {
+    if (!Array.isArray(nodes)) return;
+    for (const node of nodes) {
+      if (Array.isArray(node?.cpeMatch)) {
+        for (const match of node.cpeMatch) {
+          if (!match.vulnerable) continue;
+          const product = parseCpeProductSidecar(match.criteria);
+          if (product && !seen.has(product)) {
+            seen.add(product);
+            out.push(product);
+            if (out.length >= 5) return;
+          }
+        }
+      }
+      visit(node?.children);
+      if (out.length >= 5) return;
+    }
+  };
+  for (const config of configurations) {
+    visit(config?.nodes);
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+export function parseAndFilterNvdSidecar(payload, severity) {
+  if (!payload || typeof payload !== 'object') return [];
+  const vulns = Array.isArray(payload.vulnerabilities) ? payload.vulnerabilities : [];
+  const out = [];
+  for (const item of vulns) {
+    const cve = item?.cve;
+    if (!cve?.id) continue;
+    const { score, vector } = pickPrimaryCvssSidecar(cve.metrics);
+    if (score === null) continue;
+    if (severity === 'critical' && score < 9.0) continue;
+    if (severity === 'high' && score < 7.0) continue;
+    if (severity === 'all' && score < 7.0) continue; // spec: only High/Critical
+    const descs = Array.isArray(cve.descriptions) ? cve.descriptions : [];
+    const en = descs.find((d) => d?.lang === 'en') ?? descs[0];
+    let description = en?.value ?? '';
+    if (description.length > 350) description = description.slice(0, 347) + '…';
+    out.push({
+      id: cve.id,
+      description,
+      cvssScore: score,
+      cvssVector: vector,
+      severity: severityForCvssSidecar(score),
+      publishedAt: cve.published ?? null,
+      lastModifiedAt: cve.lastModified ?? null,
+      affectedProducts: collectAffectedProductsSidecar(cve.configurations),
+      nvdUrl: `https://nvd.nist.gov/vuln/detail/${cve.id}`,
+    });
+  }
+  out.sort((a, b) => {
+    const sa = a.cvssScore ?? -1;
+    const sb = b.cvssScore ?? -1;
+    if (sa !== sb) return sb - sa;
+    const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+    const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+    return tb - ta;
+  });
+  return out;
+}
+
+export function parseEpssResponseSidecar(payload) {
+  const out = new Map();
+  if (!payload || typeof payload !== 'object') return out;
+  const rows = Array.isArray(payload.data) ? payload.data : [];
+  for (const row of rows) {
+    if (!row?.cve) continue;
+    const epss = Number.parseFloat(row.epss ?? '');
+    const percentile = Number.parseFloat(row.percentile ?? '');
+    if (!Number.isFinite(epss) || epss < 0 || epss > 1) continue;
+    out.set(row.cve, {
+      cve: row.cve,
+      epss,
+      percentile: Number.isFinite(percentile) ? percentile : 0,
+      date: typeof row.date === 'string' ? row.date : null,
+    });
+  }
+  return out;
+}
+
+function readSecurityCveCache(severity) {
+  const cached = SECURITY_CVE_CACHE.get(severity);
+  if (cached && cached.expiresAt > Date.now()) return cached.payload;
+  return null;
+}
+
+function writeSecurityCveCache(severity, payload) {
+  SECURITY_CVE_CACHE.set(severity, { payload, expiresAt: Date.now() + SECURITY_CVE_TTL_MS });
+}
+
+function readSecurityVulnersCache() {
+  if (securityVulnersCache && securityVulnersCacheExpiresAt > Date.now()) {
+    return securityVulnersCache;
+  }
+  return null;
+}
+
+function writeSecurityVulnersCache(payload) {
+  securityVulnersCache = payload;
+  securityVulnersCacheExpiresAt = Date.now() + SECURITY_VULNERS_TTL_MS;
+}
+
+export function _resetSecurityCaches() {
+  SECURITY_CVE_CACHE.clear();
+  securityVulnersCache = null;
+  securityVulnersCacheExpiresAt = 0;
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   // Use node:https with IPv4 forced — Node.js built-in fetch (undici) tries IPv6
   // first and some servers (EIA, NASA FIRMS) have broken IPv6 causing ETIMEDOUT.
@@ -2370,6 +2537,61 @@ export function sanitizeEewAlert(raw) {
     out.imessageError = raw.imessageError.slice(0, 500);
   }
   return out;
+}
+
+// ── Synthesis correlation event sanitiser (mirror of
+// src/services/synthesis/correlation-engine.ts) ──
+const VALID_CORRELATION_TYPES = new Set([
+  'seismic-nuclear',
+  'space-weather-cascade',
+  'wildfire-air-quality',
+  'infra-cyber',
+  'hurricane-fuel',
+  'multi-hazard',
+]);
+const VALID_SEVERITIES = new Set(['low', 'medium', 'high', 'critical']);
+const VALID_DOMAINS = new Set([
+  'seismic', 'nuclear', 'space-weather', 'wildfire', 'air-quality',
+  'cyber', 'infrastructure', 'hurricane', 'fuel', 'flood', 'volcano', 'disease',
+]);
+
+export function sanitizeCorrelationEvent(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (!VALID_CORRELATION_TYPES.has(raw.type)) return null;
+  if (!VALID_SEVERITIES.has(raw.severity)) return null;
+  if (!Array.isArray(raw.domains)) return null;
+  const domains = raw.domains.filter((d) => typeof d === 'string' && VALID_DOMAINS.has(d));
+  if (domains.length === 0) return null;
+  if (typeof raw.description !== 'string') return null;
+  const triggeredAtMs = typeof raw.triggeredAt === 'string'
+    ? Date.parse(raw.triggeredAt)
+    : (typeof raw.triggeredAt === 'number' ? raw.triggeredAt : NaN);
+  if (!Number.isFinite(triggeredAtMs)) return null;
+  if (!Array.isArray(raw.components)) return null;
+  const components = raw.components
+    .slice(0, 50)
+    .map((c) => {
+      if (!c || typeof c !== 'object') return null;
+      if (typeof c.domain !== 'string' || !VALID_DOMAINS.has(c.domain)) return null;
+      if (typeof c.source !== 'string' || typeof c.description !== 'string') return null;
+      const out = {
+        domain: c.domain,
+        source: c.source.slice(0, 200),
+        description: c.description.slice(0, 500),
+      };
+      if (typeof c.severity === 'string' && VALID_SEVERITIES.has(c.severity)) out.severity = c.severity;
+      return out;
+    })
+    .filter(Boolean);
+  if (components.length === 0) return null;
+  return {
+    type: raw.type,
+    severity: raw.severity,
+    domains,
+    description: raw.description.slice(0, 500),
+    triggeredAt: new Date(triggeredAtMs).toISOString(),
+    components,
+  };
 }
 
 // CACHE PATTERN: copy this for future cached routes
@@ -3829,6 +4051,52 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Synthesis correlations (renderer → sidecar mirror) ─────────────────
+  // Renderer-side `correlation-engine.correlateThreats()` runs every 15s,
+  // POSTs the resulting events here. Any consumer (banner, MCP, external
+  // tools) reads via GET. Same shape as /api/eew-status.
+  if (requestUrl.pathname === '/api/synthesis/correlations') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!Array.isArray(body.events)) {
+          return json({ error: 'events must be an array' }, 400);
+        }
+        const events = body.events
+          .slice(0, 500)
+          .map(sanitizeCorrelationEvent)
+          .filter(Boolean);
+        context._synthesisCorrelations = {
+          events,
+          highestSeverity: typeof body.highestSeverity === 'string' ? body.highestSeverity : null,
+          asOf: typeof body.asOf === 'number' ? body.asOf : Date.now(),
+        };
+        return json({ ok: true, count: events.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const snapshot = context._synthesisCorrelations || null;
+      if (!snapshot) {
+        return json({ events: [], highestSeverity: null, asOf: 0, available: false });
+      }
+      const ageMs = Date.now() - snapshot.asOf;
+      return json({
+        events: snapshot.events,
+        highestSeverity: snapshot.highestSeverity,
+        asOf: snapshot.asOf,
+        ageMs,
+        // 15s poll → consider stale at ~3 missed cycles.
+        stale: ageMs > 60 * 1000,
+        available: true,
+      });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
 
   if (requestUrl.pathname === '/api/sitrep-bundle') {
     const cacheKey = 'sitrep-bundle';
@@ -4582,6 +4850,114 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch {
  return json([], 200);
  }
+  }
+
+  // ── NVD CVE feed (no API key required) ──────────────────────────────────
+  // Pulls CVEs published in the last 30 days from the NVD 2.0 API and
+  // filters server-side to High / Critical (CVSS ≥ 7.0). 24-hour cache;
+  // NVD's anonymous rate limit is 5 req per 30s, so we throttle to one
+  // page per request — pagination is not exposed yet.
+  if (requestUrl.pathname === '/api/security/cves') {
+    const severity = (requestUrl.searchParams.get('severity') || 'all').toLowerCase();
+    const limit = clampInt(requestUrl.searchParams.get('limit'), 1, 200, 50);
+    const cached = readSecurityCveCache(severity);
+    if (cached) {
+      return json({ ...cached, fromCache: true });
+    }
+    try {
+      const now = new Date();
+      const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const u = new URL('https://services.nvd.nist.gov/rest/json/cves/2.0');
+      u.searchParams.set('pubStartDate', start.toISOString());
+      u.searchParams.set('pubEndDate', now.toISOString());
+      // resultsPerPage cap is 2000; we only need top High/Critical so 200 is plenty.
+      u.searchParams.set('resultsPerPage', '200');
+      if (severity === 'critical') u.searchParams.set('cvssV3Severity', 'CRITICAL');
+      else if (severity === 'high') u.searchParams.set('cvssV3Severity', 'HIGH');
+      const resp = await fetchWithTimeout(u.toString(), {
+        headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+      }, 20_000);
+      if (!resp.ok) {
+        return json({ records: [], asOf: now.toISOString(), error: `NVD ${resp.status}` }, 200);
+      }
+      const data = await resp.json();
+      const records = parseAndFilterNvdSidecar(data, severity).slice(0, limit);
+      const payload = { records, asOf: now.toISOString() };
+      writeSecurityCveCache(severity, payload);
+      return json(payload);
+    } catch (error) {
+      return json({ records: [], asOf: new Date().toISOString(),
+        error: String(error?.message ?? error) }, 200);
+    }
+  }
+
+  // ── Vulners-style trending CVEs enriched with EPSS scores ───────────────
+  // Pulls recently-modified CVEs from NVD, then queries the FIRST.org
+  // EPSS API (free, no key) for exploit-prediction scores. 6-hour cache
+  // because EPSS only refreshes daily.
+  if (requestUrl.pathname === '/api/security/vulners') {
+    const cached = readSecurityVulnersCache();
+    if (cached) {
+      return json({ ...cached, fromCache: true });
+    }
+    try {
+      const now = new Date();
+      const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const u = new URL('https://services.nvd.nist.gov/rest/json/cves/2.0');
+      u.searchParams.set('lastModStartDate', start.toISOString());
+      u.searchParams.set('lastModEndDate', now.toISOString());
+      u.searchParams.set('resultsPerPage', '100');
+      u.searchParams.set('cvssV3Severity', 'HIGH');
+      const nvdResp = await fetchWithTimeout(u.toString(), {
+        headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+      }, 20_000);
+      if (!nvdResp.ok) {
+        return json({ records: [], asOf: now.toISOString(), error: `NVD ${nvdResp.status}` }, 200);
+      }
+      const nvdData = await nvdResp.json();
+      const cveRecords = parseAndFilterNvdSidecar(nvdData, 'all');
+      // Batch CVE ids into the EPSS API (cap 100 ids per call).
+      const ids = cveRecords.map((r) => r.id).filter((id) => /^CVE-\d{4}-\d+$/.test(id)).slice(0, 100);
+      let epssMap = new Map();
+      if (ids.length > 0) {
+        const epssUrl = `https://api.first.org/data/v1/epss?cve=${ids.join(',')}`;
+        const epssResp = await fetchWithTimeout(epssUrl, {
+          headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+        }, 15_000);
+        if (epssResp.ok) {
+          const epssData = await epssResp.json();
+          epssMap = parseEpssResponseSidecar(epssData);
+        }
+      }
+      const enriched = cveRecords.map((r) => {
+        const score = epssMap.get(r.id);
+        const epss = score?.epss ?? null;
+        return {
+          ...r,
+          epssScore: epss,
+          epssPercentile: score?.percentile ?? null,
+          epssDate: score?.date ?? null,
+          exploitRiskTier: epss === null ? 'unknown'
+            : epss > 0.5 ? 'critical'
+            : epss >= 0.1 ? 'elevated'
+            : 'low',
+        };
+      });
+      enriched.sort((a, b) => {
+        const ea = a.epssScore ?? -1;
+        const eb = b.epssScore ?? -1;
+        if (ea !== eb) return eb - ea;
+        const ca = a.cvssScore ?? -1;
+        const cb = b.cvssScore ?? -1;
+        return cb - ca;
+      });
+      const payload = { records: enriched.slice(0, 100), asOf: now.toISOString() };
+      writeSecurityVulnersCache(payload);
+      return json(payload);
+    } catch (error) {
+      return json({ records: [], asOf: new Date().toISOString(),
+        error: String(error?.message ?? error) }, 200);
+    }
   }
 
   // ── OpenPhish phishing URL feed ──────────────────────────────────────────

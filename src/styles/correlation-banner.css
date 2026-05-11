@@ -1,0 +1,71 @@
+/* Cross-domain correlation banner — sits at the top of the viewport,
+ * directly above EEWStatusBar when both are active. Hidden by default,
+ * shown only when /api/synthesis/correlations reports active events. */
+
+.cb-correlation-banner {
+  position: relative;
+  width: 100%;
+  z-index: 999;
+  padding: 6px 14px;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cb-correlation-banner-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cb-correlation-banner-detail {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 11px;
+}
+
+.cb-correlation-banner-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.cb-correlation-banner-row-title {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.cb-correlation-banner-row-desc {
+  opacity: 0.85;
+}
+
+/* Severity color ladder. */
+.cb-correlation-banner-low      { background: rgba(75, 85, 99, 0.92);   color: #f3f4f6; }
+.cb-correlation-banner-medium   { background: rgba(217, 119, 6, 0.92);  color: #fffbeb; }
+.cb-correlation-banner-high     { background: rgba(220, 38, 38, 0.92);  color: #fef2f2; }
+.cb-correlation-banner-critical {
+  background: rgba(159, 18, 57, 0.96);
+  color: #ffffff;
+  animation: cb-correlation-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes cb-correlation-pulse {
+  0%, 100% { background: rgba(159, 18, 57, 0.96); }
+  50%      { background: rgba(190, 18, 60, 0.96); }
+}

@@ -78,6 +78,8 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   climate: { name: 'Climate Anomalies', enabled: true, priority: 2 },
   'population-exposure': { name: 'Population Exposure', enabled: true, priority: 2 },
   'security-advisories': { name: 'Security Advisories', enabled: true, priority: 2 },
+  'cve-tracker': { name: 'CVE Tracker', enabled: true, priority: 2 },
+  'vulners-cve': { name: 'Vulners CVE', enabled: true, priority: 2 },
   'network-rules': { name: 'Network Rules', enabled: true, priority: 3 },
   's2u-intel': { name: 'S2U Intelligence', enabled: true, priority: 1 },
   'synthesis': { name: 'Synthesis', enabled: true, priority: 1 },

@@ -1403,6 +1403,81 @@ export class DataLoaderManager implements AppModule {
  console.warn('[data-loader] insights bridge failed:', error);
  }
 
+ // Run severe alerts through the Big Event Detector → Notification
+ // Ladder → native/in-app dispatch. Only Extreme/Severe alerts enter
+ // the ladder; lesser severities are not actionable at this rung.
+ // Quiet-hours flag defaults false until settings exposes getQuietHoursActive().
+ try {
+ const [
+ { detectBigEvent },
+ { routeBigEventToLadder },
+ { getNotificationTraceRegistry },
+ ] = await Promise.all([
+ import('@/services/insights/big-event-detector'),
+ import('@/services/insights/notification-ladder'),
+ import('@/services/diagnostics/diagnostics-state'),
+ ]);
+ const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
+ const RUNG_ACTION: Record<string, 'sound+banner' | 'banner' | null> = {
+ announcement: 'sound+banner',
+ critical: 'sound+banner',
+ banner_sound: 'sound+banner',
+ banner: 'banner',
+ in_app: null,
+ silent: null,
+ };
+ const registry = getNotificationTraceRegistry();
+ const severeAlerts = alerts.filter(
+ (a) => a.severity === 'Extreme' || a.severity === 'Severe',
+ );
+ for (const alert of severeAlerts) {
+ const severityScore = SEVERITY_SCORE[alert.severity] ?? 30;
+ const ladderInput = {
+ id: alert.id,
+ domain: 'weather',
+ severityScore,
+ truthScore: 0.85, // NWS is an official source — high prior confidence
+ sourceCount: 1,
+ hasOfficialSource: true,
+ overlappingDomains: ['weather'] as const,
+ userExposure: 50, // conservative default; polygon match refines this
+ potentialImpact: severityScore,
+ };
+ const bigEventResult = detectBigEvent(ladderInput);
+ if (!bigEventResult.isBigEvent) continue;
+ const decision = routeBigEventToLadder(registry, bigEventResult, ladderInput, {
+ domain: 'weather',
+ headline: alert.headline || alert.event,
+ summary: alert.areaDesc ? `${alert.event} — ${alert.areaDesc}` : alert.event,
+ quietHoursActive: false,
+ quietHoursBypassEnabled: true,
+ dedupeMatch: false,
+ });
+ const action = RUNG_ACTION[decision.rung] ?? null;
+ if (decision.dispatched && action) {
+ notificationDispatcher.dispatchNotification(
+ {
+ id: alert.id,
+ source: 'nws',
+ severity: alert.severity === 'Extreme' ? 'critical' : 'high',
+ title: alert.event,
+ body: alert.headline || alert.areaDesc || alert.event,
+ timestamp: Date.now(),
+ location: alert.centroid
+ ? { lat: alert.centroid[1], lon: alert.centroid[0] }
+ : undefined,
+ relevanceScore: severityScore,
+ acknowledged: false,
+ pinned: false,
+ },
+ action,
+ );
+ }
+ }
+ } catch (error) {
+ console.warn('[data-loader] notification ladder failed:', error);
+ }
+
  // Wire weather alerts into the mission ledger (closed-loop ops PR 2).
  // Each (alert × saved place) pair runs through polygon match +
  // urgency engine + mission bridge so time-to-warn / near-miss /

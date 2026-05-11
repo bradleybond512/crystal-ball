@@ -85,11 +85,12 @@ export class CommandCenterPanel extends Panel {
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
   }
 
-  public dispose(): void {
+  public override destroy(): void {
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    super.destroy();
   }
 
   private render(): void {
@@ -132,6 +133,7 @@ export class CommandCenterPanel extends Panel {
 
     return `
       <div style="padding:14px;display:flex;flex-direction:column;gap:14px;">
+        ${this.renderGlobeNav()}
         ${this.renderRiskHeadline(report.status, report.summary)}
         ${this.renderActionBrief(actionBrief)}
         ${this.renderPersonalImpact(personalImpact.impacts)}
@@ -141,6 +143,12 @@ export class CommandCenterPanel extends Panel {
         ${this.renderRecommendations(report.recommendations)}
       </div>
     `;
+  }
+
+  private renderGlobeNav(): string {
+    return `<div style="display:flex;justify-content:flex-end;">
+      <button onclick="document.getElementById('godsVisionBtn')?.click()" style="font-size:10px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;" title="Open God's Vision 3D globe">🌍 Globe</button>
+    </div>`;
   }
 
   private renderRiskHeadline(status: HealthStatus, summary: string): string {

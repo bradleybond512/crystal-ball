@@ -4,7 +4,7 @@
   <head>
  <meta charset="UTF-8" />
  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
- <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https: ws: wss: blob: data:; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://www.youtube.com https://static.cloudflareinsights.com https://vercel.live https://us-assets.i.posthog.com; worker-src 'self' blob:; font-src 'self' data: https:; media-src 'self' data: blob: https:; frame-src 'self' http://127.0.0.1:* http://localhost:* https://crystalball.app https://tech.crystalball.app https://happy.crystalball.app https://www.youtube.com https://www.youtube-nocookie.com;" />
+ <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https: ws: wss: blob: data:; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://www.youtube.com https://static.cloudflareinsights.com https://vercel.live https://us-assets.i.posthog.com; worker-src 'self' blob:; font-src 'self' data: https:; media-src 'self' data: blob: https:; frame-src 'self' http://127.0.0.1:* http://localhost:* https://crystalball.app https://tech.crystalball.app https://happy.crystalball.app https://www.youtube.com https://www.youtube-nocookie.com;" />
  <meta name="referrer" content="strict-origin-when-cross-origin" />
 
  <!-- Primary Meta Tags -->
@@ -93,7 +93,7 @@
 
 
  <!-- Theme: apply stored preference before first paint to prevent FOUC -->
- <script>(function(){try{var t=localStorage.getItem('crystalball-theme');var v=localStorage.getItem('crystalball-variant');if(!v){var h=location.hostname;if(h.startsWith('happy.'))v='happy';else if(h.startsWith('tech.'))v='tech';else if(h.startsWith('finance.'))v='finance';}if(v)document.documentElement.dataset.variant=v;if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t;}else if(v==='happy'){document.documentElement.dataset.theme='light';}}catch(e){}document.documentElement.classList.add('no-transition');})()</script>
+ <script src='/theme-init.js'></script>
 
  <!-- Critical CSS: inline skeleton visible before JS boots -->
  <style>

@@ -67,6 +67,24 @@ export type RuntimeSecretKey =
   | 'S2U_TAK_SECRET'
   | 'S2U_TLS_INSECURE_OPT_IN';
 
+export const ALL_DESKTOP_SECRET_KEYS: RuntimeSecretKey[] = [
+  'CRYSTALBALL_API_KEY', 'ANTHROPIC_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY',
+  'FRED_API_KEY', 'EIA_API_KEY', 'CLOUDFLARE_API_TOKEN', 'ACLED_ACCESS_TOKEN',
+  'ACLED_EMAIL', 'ACLED_REFRESH_TOKEN', 'URLHAUS_AUTH_KEY', 'OTX_API_KEY',
+  'ABUSEIPDB_API_KEY', 'WINGBITS_API_KEY', 'WS_RELAY_URL', 'VITE_WS_RELAY_URL',
+  'VITE_OPENSKY_RELAY_URL', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET',
+  'AISSTREAM_API_KEY', 'FINNHUB_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY',
+  'PURPLEAIR_API_KEY', 'OLLAMA_API_URL', 'OLLAMA_MODEL', 'WTO_API_KEY',
+  'AVIATIONSTACK_API', 'ICAO_API_KEY', 'THREATFOX_API_KEY', 'NEWSAPI_KEY',
+  'NEWSDATA_API_KEY', 'VIRUSTOTAL_API_KEY', 'SHODAN_API_KEY', 'UCDP_API_TOKEN',
+  'FMP_API_KEY', 'OWM_API_KEY', 'GREYNOISE_API_KEY', 'NASA_API_KEY',
+  'URLSCAN_API_KEY', 'BITCOINABUSE_API_KEY', 'VULNERS_API_KEY', 'MEDIASTACK_API_KEY',
+  'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'GEONAMES_USERNAME', 'IPINFO_TOKEN',
+  'CESIUM_ION_TOKEN', 'GOOGLE_MAPS_API_KEY', 'MAPBOX_API_KEY', 'MAPTILER_API_KEY',
+  'S2U_XMPP_JID', 'S2U_XMPP_SECRET', 'S2U_TAK_URL', 'S2U_TAK_USERNAME',
+  'S2U_TAK_SECRET', 'S2U_TLS_INSECURE_OPT_IN',
+];
+
 export type RuntimeFeatureId =
   | 'cloudApiFallbackAuth'
   | 'aiClaude'
@@ -1301,15 +1319,22 @@ export async function loadDesktopSecrets(): Promise<void> {
   if (!isDesktopRuntime()) return;
 
   try {
- // Single batch call to read all keychain secrets at once.
- // This triggers only ONE macOS Keychain prompt instead of 18 individual ones.
- const allSecrets = await invokeTauri<Record<string, string>>('get_all_secrets');
+ const keyResults = await Promise.allSettled(
+ ALL_DESKTOP_SECRET_KEYS.map(async (key) => {
+ const value = await invokeTauri<string | null>('get_secret', { key });
+ return [key, value] as [RuntimeSecretKey, string | null];
+ })
+ );
 
  const syncResults = await Promise.allSettled(
- Object.entries(allSecrets).filter(([, value]) => value && value.trim().length > 0).map(async ([key, value]) => {
- runtimeConfig.secrets[key as RuntimeSecretKey] = { value, source: 'vault' };
+ keyResults
+ .filter((r): r is PromiseFulfilledResult<[RuntimeSecretKey, string | null]> => r.status === 'fulfilled')
+ .filter((r) => r.value[1] && r.value[1].trim().length > 0)
+ .map(async (r) => {
+ const [key, value] = r.value;
+ runtimeConfig.secrets[key] = { value: value!, source: 'vault' };
  try {
- await pushSecretToSidecar(key as RuntimeSecretKey, value);
+ await pushSecretToSidecar(key, value!);
  } catch {
  // Sidecar may not be ready during early bootstrap — secrets are
  // already injected into the sidecar env at launch via keychain.

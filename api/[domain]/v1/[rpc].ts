@@ -178,7 +178,12 @@ export default async function handler(originalRequest: Request): Promise<Respons
   try {
  corsHeaders = getCorsHeaders(request);
   } catch {
- corsHeaders = { 'Access-Control-Allow-Origin': '*' };
+ // CORS helper failure is an internal error — fail closed rather than
+ // opening wildcard CORS, which would allow any origin on authenticated endpoints.
+ return new Response(JSON.stringify({ error: 'Internal server error' }), {
+ status: 500,
+ headers: { 'Content-Type': 'application/json' },
+ });
   }
 
   // OPTIONS preflight

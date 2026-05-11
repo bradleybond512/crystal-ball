@@ -1,0 +1,45 @@
+name: Security Audit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src-tauri/Cargo.toml'
+      - 'src-tauri/Cargo.lock'
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    name: npm audit (high+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=high
+
+  cargo-audit:
+    name: cargo audit (RustSec advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: |
+            ~/.cargo/bin/cargo-audit
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: cargo-audit-${{ runner.os }}-v1
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked 2>/dev/null || true
+      - name: Run cargo audit
+        working-directory: src-tauri
+        run: cargo audit

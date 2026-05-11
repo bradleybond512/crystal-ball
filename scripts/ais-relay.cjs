@@ -58,7 +58,11 @@ const MEMORY_CLEANUP_THRESHOLD_GB = (() => {
 })();
 const RELAY_SHARED_SECRET = process.env.RELAY_SHARED_SECRET || '';
 const RELAY_AUTH_HEADER = (process.env.RELAY_AUTH_HEADER || 'x-relay-key').toLowerCase();
-const ALLOW_UNAUTHENTICATED_RELAY = process.env.ALLOW_UNAUTHENTICATED_RELAY === 'true';
+// Bypass only works in non-production environments to prevent accidental internet-facing unauthenticated relays.
+const ALLOW_UNAUTHENTICATED_RELAY = process.env.NODE_ENV !== 'production'
+  && !process.env.RAILWAY_ENVIRONMENT
+  && !process.env.RAILWAY_PROJECT_ID
+  && process.env.ALLOW_UNAUTHENTICATED_RELAY === 'true';
 const IS_PRODUCTION_RELAY = process.env.NODE_ENV === 'production'
   || !!process.env.RAILWAY_ENVIRONMENT
   || !!process.env.RAILWAY_PROJECT_ID

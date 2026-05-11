@@ -51,6 +51,29 @@ But it must not become:
 
 ---
 
+# Product Standard
+
+The text interface should not be a generic chatbot.
+
+It should be:
+
+> a constrained operational command channel for Crystal Ball intelligence.
+
+Every response should be:
+- short enough for SMS
+- grounded in existing Crystal Ball intelligence objects
+- confidence-aware
+- source-health-aware
+- privacy-preserving
+- auditable
+- safe to send to the requesting user
+
+The core test:
+
+> Could this reply help the user understand what matters without leaking private data or overstating certainty?
+
+---
+
 # Safety and Privacy Principles
 
 ## 1. Local-First
@@ -139,6 +162,44 @@ Restricted / require local confirmation:
 - sending messages to third parties
 - disabling alerts
 - modifying watchlists broadly
+
+---
+
+# Threat Model
+
+The SMS/iMessage command interface must be designed against realistic abuse cases.
+
+## Threats
+
+- spoofed sender identity
+- lost/stolen phone
+- command replay
+- message loop / auto-reply loop
+- group chat leakage
+- sensitive context disclosure
+- malicious contact sending crafted commands
+- accidental command from quoted text
+- prompt injection through SMS text
+- cloud LLM leakage of private context
+- automation permission misuse
+- Messages database schema changes
+- macOS automation failure causing duplicate sends
+
+## Required Mitigations
+
+- allowlisted sender required
+- explicit `CB` prefix required
+- optional owner PIN for sensitive commands
+- dedupe inbound message IDs
+- group chat disabled by default
+- reply only once per command ID
+- max reply chunks per command
+- local-only audit log
+- redaction by default
+- no arbitrary free-form tool execution
+- no secrets, API keys, coordinates, or exact home labels in replies
+- never process quoted previous replies as new commands
+- transport adapter must be idempotent
 
 ---
 
@@ -246,14 +307,17 @@ Recommended order:
 Inbound SMS/iMessage
   -> Local Message Bridge
     -> Sender Allowlist Check
-      -> Command Prefix Check
-        -> Command Parser
-          -> Intent Router
-            -> Crystal Ball Intelligence Services
-              -> Response Formatter
-                -> Safety Filter
-                  -> Outbound Message Adapter
-                    -> SMS/iMessage Reply
+      -> Sender/Thread Context Resolver
+        -> Prefix + Command Boundary Check
+          -> Command Parser
+            -> Authorization + Rate Limit
+              -> Intent Router
+                -> Crystal Ball Intelligence Services
+                  -> Response Formatter
+                    -> Redaction + Safety Filter
+                      -> Delivery Queue
+                        -> Outbound Message Adapter
+                          -> SMS/iMessage Reply
 ```
 
 ---
@@ -292,7 +356,31 @@ interface SmsAllowlistEntry {
 
 Do not store plaintext phone numbers if avoidable.
 
-## 3. Command Parser
+## 3. Thread Context Resolver
+
+Responsible for knowing whether the inbound command is safe to answer in the current conversation.
+
+Rules:
+- one-on-one owner thread is allowed by default
+- group threads disabled by default
+- trusted group threads require explicit setting
+- unknown participants block replies
+- replies should not include private saved-place labels in group threads
+
+Suggested contract:
+
+```ts
+interface SmsThreadContext {
+  threadId: string;
+  participantCount: number;
+  participantsHash: string[];
+  isGroup: boolean;
+  authorization: 'owner_direct' | 'trusted_direct' | 'trusted_group' | 'blocked';
+  redactionLevel: 'normal' | 'strict' | 'minimal';
+}
+```
+
+## 4. Command Parser
 
 Responsible for converting text into structured intents.
 
@@ -309,7 +397,7 @@ interface SmsCommand {
 }
 ```
 
-## 4. Intent Router
+## 5. Intent Router
 
 Routes commands to existing Crystal Ball services.
 
@@ -322,7 +410,7 @@ Examples:
 - `WATCH <topic>` -> Watch Mission status
 - `WHY <topic>` -> evidence-backed explanation
 
-## 5. Response Formatter
+## 6. Response Formatter
 
 Formats replies for SMS constraints.
 
@@ -334,7 +422,32 @@ Rules:
 - no giant walls of text
 - split long messages safely
 
-## 6. Outbound Adapter
+## 7. Response Redactor
+
+Applies redaction policy before delivery.
+
+Redacts:
+- exact home address
+- exact coordinates
+- personal saved-place names when strict mode is active
+- API/source secrets
+- private notes
+- raw logs
+- full URLs if they contain tokens
+
+## 8. Delivery Queue
+
+Outbound messages should be queued before sending.
+
+Responsibilities:
+- idempotency
+- retry handling
+- duplicate prevention
+- chunk ordering
+- failure status
+- delivery audit
+
+## 9. Outbound Adapter
 
 Responsible for sending reply.
 
@@ -344,7 +457,7 @@ Potential implementations:
 - Twilio
 - local notification fallback
 
-## 7. Audit Log
+## 10. Audit Log
 
 Local-only event record.
 
@@ -359,6 +472,9 @@ interface SmsCommandAuditRecord {
   responseSent: boolean;
   usedPersonalContext: boolean;
   usedLLM: boolean;
+  redactionLevel: string;
+  chunksSent: number;
+  transport: string;
   error?: string;
 }
 ```
@@ -387,6 +503,49 @@ CB SOURCES
 CB WHY CYBER RISK UP
 CB ACTIVE
 CB HELP
+```
+
+---
+
+# Command Parsing Rules
+
+## Valid Forms
+
+```text
+CB STATUS
+CB BRIEF
+CB WATCH H5N1
+CB WHY CYBER
+CB LOCAL RISK SOUTH BEND
+```
+
+## Invalid Forms
+
+These should not trigger replies:
+
+```text
+Can CB status tell me something?
+> CB STATUS
+Crystal Ball: CB STATUS
+CB
+```
+
+## Prefix Rules
+
+- prefix must be at start of message after trimming whitespace
+- quoted text should be ignored
+- forwarded messages should be ignored unless explicitly supported later
+- prefix matching should be case-insensitive
+- commands should normalize punctuation
+
+## Ambiguous Commands
+
+If command is ambiguous, reply with short help instead of guessing.
+
+Example:
+
+```text
+Crystal Ball: I need a clearer command. Try: CB STATUS, CB BRIEF, CB WATCH H5N1, or CB HELP.
 ```
 
 ---
@@ -485,6 +644,47 @@ Simple health check.
 
 ---
 
+# Remote Operational Commands
+
+These make the interface significantly more useful without becoming unsafe.
+
+## CB FOLLOW <situation/topic>
+
+Temporarily increases monitoring priority for a topic.
+
+Safety:
+- owner only
+- expires automatically
+- does not alter permanent watchlists unless confirmed locally
+
+## CB UNFOLLOW <topic>
+
+Stops temporary follow mode.
+
+## CB NEXT <situation/topic>
+
+Returns next indicators to watch.
+
+## CB CONFIDENCE <topic>
+
+Explains confidence and meta-confidence.
+
+## CB BLINDSPOTS
+
+Returns current degraded observability.
+
+## CB RECOVERY <topic>
+
+Reports whether a situation is stabilizing or recovering.
+
+## CB THREAD <topic>
+
+Returns short narrative timeline of a situation.
+
+These should be read-only or temporary by default.
+
+---
+
 # Advanced Commands
 
 These should come later.
@@ -501,10 +701,6 @@ CB SIM CHICAGO POWER OUTAGE
 
 Requires careful cost and abuse controls.
 
-## CB FOLLOW <situation>
-
-Temporarily increases monitoring for a situation.
-
 ## CB MUTE <topic>
 
 Should require local confirmation before enabling.
@@ -516,6 +712,51 @@ Should require local confirmation or owner-only mode.
 ## CB EXPORT <situation>
 
 Should require confirmation due to possible sensitive context.
+
+---
+
+# Confirmation Workflows
+
+Sensitive commands should use a two-step confirmation flow.
+
+Example:
+
+```text
+CB ADD WATCH RED SEA
+```
+
+Response:
+
+```text
+Crystal Ball: Add Watch Mission “Red Sea”? Reply CB CONFIRM 4821 within 10 min. This changes monitoring settings.
+```
+
+Then:
+
+```text
+CB CONFIRM 4821
+```
+
+Rules:
+- confirmation codes expire
+- confirmation is bound to sender + command + thread
+- only one active confirmation per sender unless queued
+- failed attempts are rate-limited
+
+Suggested contract:
+
+```ts
+interface PendingSmsConfirmation {
+  id: string;
+  senderId: string;
+  threadId: string;
+  commandType: string;
+  commandPayload: Record<string, string>;
+  codeHash: string;
+  expiresAt: string;
+  attempts: number;
+}
+```
 
 ---
 
@@ -542,6 +783,17 @@ Watch: <next indicators>
 Limits: <uncertainty/blind spot>
 ```
 
+## Response Priority Order
+
+SMS has limited space. Prioritize:
+
+1. direct answer
+2. confidence
+3. top driver
+4. personal relevance if any
+5. next indicator
+6. source limitation
+
 ## Always Include Uncertainty When Relevant
 
 If source health is degraded:
@@ -555,6 +807,52 @@ If single-source:
 ```text
 Limit: single-source signal, not confirmed.
 ```
+
+## Long Brief Strategy
+
+For long answers, send a compact first message and offer follow-up commands.
+
+Example:
+
+```text
+Crystal Ball: 3 active situations. Top: Midwest severe weather logistics risk. Confidence: medium-high. Reply CB DETAILS WEATHER for more.
+```
+
+---
+
+# Reliability and Offline Behavior
+
+## If Crystal Ball Is Running But Some Sources Are Stale
+
+Reply with stale-data limitation.
+
+```text
+Crystal Ball: Local risk low-moderate. Limit: weather source fresh, AIS stale 42m, cyber source degraded.
+```
+
+## If Crystal Ball Is Offline
+
+If the SMS bridge can still respond, reply:
+
+```text
+Crystal Ball: Core app unavailable. Last known brief from 2h ago: <summary>. Confidence reduced.
+```
+
+## If Intelligence Services Are Not Ready
+
+Reply:
+
+```text
+Crystal Ball: Still loading intelligence state. Try CB STATUS again in a minute.
+```
+
+## If Outbound Send Fails
+
+Record failure in audit log and avoid retry storms.
+
+## If Inbound Bridge Restarts
+
+Deduplicate by message id / timestamp / sender / command hash.
 
 ---
 
@@ -622,6 +920,16 @@ Examples:
 - avoid exact coordinates
 - avoid family/place labels unless user allows
 
+## Redaction Levels
+
+```ts
+type SmsRedactionLevel = 'normal' | 'strict' | 'minimal';
+```
+
+- `normal`: owner direct thread
+- `strict`: trusted contact or group thread
+- `minimal`: status-only / no personal context
+
 ## Export Boundary
 
 Do not include personal context in exported SMS replies unless explicitly requested and authorized.
@@ -657,6 +965,7 @@ Add local-only sidecar endpoints:
 POST /api/sms-command
 GET /api/sms-command/audit
 GET /api/sms-command/status
+POST /api/sms-command/confirm
 ```
 
 ## Request
@@ -665,6 +974,7 @@ GET /api/sms-command/status
 interface SmsCommandRequest {
   senderHash: string;
   senderLabel?: string;
+  threadId?: string;
   rawText: string;
   receivedAt: string;
   transport: 'imessage' | 'sms' | 'shortcut' | 'twilio' | 'test';
@@ -680,8 +990,35 @@ interface SmsCommandResponse {
   replyText?: string;
   chunks?: string[];
   requiresConfirmation?: boolean;
+  confirmationId?: string;
   error?: string;
 }
+```
+
+---
+
+# Data Contracts
+
+Suggested service folder:
+
+```text
+src/services/sms/
+```
+
+Suggested files:
+
+```text
+sms-command-types.ts
+sms-command-parser.ts
+sms-command-router.ts
+sms-response-formatter.ts
+sms-redaction.ts
+sms-permissions.ts
+sms-rate-limit.ts
+sms-audit-log.ts
+sms-confirmation.ts
+sms-delivery-queue.ts
+sms-transport-types.ts
 ```
 
 ---
@@ -718,6 +1055,8 @@ Add tests for:
 - command parsing
 - authorization
 - unknown commands
+- ambiguous commands
+- quoted command rejection
 - rate limiting
 - redaction
 - response splitting
@@ -726,6 +1065,11 @@ Add tests for:
 - audit logging
 - no response to non-CB messages
 - group chat disabled by default
+- confirmation code expiry
+- duplicate inbound message handling
+- delivery queue idempotency
+- stale data responses
+- offline responses
 
 Suggested files:
 
@@ -734,6 +1078,8 @@ src/services/sms/__tests__/sms-command-parser.test.mts
 src/services/sms/__tests__/sms-permissions.test.mts
 src/services/sms/__tests__/sms-response-formatter.test.mts
 src/services/sms/__tests__/sms-redaction.test.mts
+src/services/sms/__tests__/sms-confirmation.test.mts
+src/services/sms/__tests__/sms-delivery-queue.test.mts
 ```
 
 ---
@@ -763,22 +1109,31 @@ Wire commands to:
 - Active Situations
 - Watch Missions
 
-## Phase 3 — Local Sidecar Endpoint
+## Phase 3 — Confirmation + Redaction
+
+Add:
+- confirmation workflows
+- redaction levels
+- privacy boundaries
+- sensitive command handling
+
+## Phase 4 — Local Sidecar Endpoint
 
 Expose local command endpoint.
 
 Add diagnostic status.
 
-## Phase 4 — Outbound Adapter Prototype
+## Phase 5 — Delivery Queue + Outbound Adapter Prototype
 
-Implement one safe outbound method:
-- AppleScript send
-or
-- Shortcuts handoff
+Implement:
+- delivery queue
+- AppleScript send or Shortcuts handoff
+- idempotent sending
+- retry limits
 
 Owner-only.
 
-## Phase 5 — Inbound Bridge Prototype
+## Phase 6 — Inbound Bridge Prototype
 
 Implement inbound detection.
 
@@ -788,7 +1143,7 @@ Strict constraints:
 - no group chats
 - no non-command replies
 
-## Phase 6 — Settings UI
+## Phase 7 — Settings UI
 
 Add settings for:
 - enable/disable SMS command interface
@@ -798,8 +1153,10 @@ Add settings for:
 - audit log viewer
 - sensitive command policy
 - transport method
+- redaction level
+- emergency override behavior
 
-## Phase 7 — Advanced Commands
+## Phase 8 — Advanced Commands
 
 Add:
 - watch mission commands
@@ -818,6 +1175,7 @@ Implement only:
 - command contracts
 - response formatter
 - authorization model
+- redaction primitives
 - unit tests
 - CLI simulation script
 
@@ -833,14 +1191,37 @@ Wire to real existing services.
 
 ## Best Fourth PR
 
-Add sidecar endpoint.
+Add confirmation workflows and audit logging.
 
 ## Best Fifth PR
 
-Add outbound reply adapter.
+Add sidecar endpoint.
+
+## Best Sixth PR
+
+Add delivery queue and outbound reply adapter.
 
 Only after that:
 - inbound iMessage/SMS bridge.
+
+---
+
+# Acceptance Criteria
+
+Before enabling real messaging:
+
+- non-CB messages produce no response
+- unknown senders produce no response
+- group chats blocked by default
+- duplicate inbound messages do not duplicate replies
+- sensitive commands require confirmation
+- personal context is redacted correctly
+- logs do not contain raw private conversation history
+- source degradation appears in relevant replies
+- stale intelligence produces a warning
+- rate limits prevent loops
+- outbound failure does not retry indefinitely
+- all command logic can be tested without Messages.app
 
 ---
 
@@ -878,16 +1259,25 @@ Watch: NWS updates + outage reports.
 Or:
 
 ```text
-CB WHY H5N1
+CB CONFIDENCE H5N1
 ```
 
 And receive:
 
 ```text
-H5N1 pressure is elevated because livestock reports, food-system indicators, and official monitoring all moved upward.
-Confidence: medium.
-Limit: export/price impact not yet confirmed.
-Watch: USDA updates + poultry price movement.
+H5N1 confidence: medium. Supporting: livestock reports + official monitoring. Missing: export/price impact. Watch: USDA updates + poultry price movement.
+```
+
+Or:
+
+```text
+CB BLINDSPOTS
+```
+
+And receive:
+
+```text
+Crystal Ball: 2 blind spots. AIS stale in maritime layer; cyber provider redundancy degraded. Confidence reduced for shipping/cyber situations.
 ```
 
 That is the target:

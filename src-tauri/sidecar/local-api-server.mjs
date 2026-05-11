@@ -31,6 +31,7 @@ import {
   loadSmsConfig, saveSmsConfig,
   handleSmsCommand,
 } from './sms-command-parser.mjs';
+import { buildRecentChanges } from './recent-changes.mjs';
 
 let _smsConfig = loadSmsConfig();
 const _smsRateLimitMap = new Map();
@@ -4906,6 +4907,13 @@ async function dispatch(requestUrl, req, routes, context) {
         lastHourCount: 0, baselineRate: 0, surgeRatio: 0, surgeLevel: 'normal',
         totalSeen: 0, recent: [] }, 502);
     }
+  }
+
+  // ── Command Center: recent changes tape ──────────────────────────────────
+  if (requestUrl.pathname === '/api/command-center/recent-changes' && req.method === 'GET') {
+    const alertCache = getCachedStale('ipaws-active');
+    const feedSnapshots = getFeedSnapshots();
+    return json(buildRecentChanges(feedSnapshots, alertCache, Date.now()));
   }
 
   // ── CDC Acute Respiratory Illness by state (SODA, no auth) ──────────────

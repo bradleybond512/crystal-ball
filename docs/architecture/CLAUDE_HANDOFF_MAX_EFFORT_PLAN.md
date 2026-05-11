@@ -5,6 +5,7 @@
 This is the final pre-handoff document for Claude.
 
 The architecture docs now define a large vision:
+
 - planetary cognition
 - world-state modeling
 - intelligence fabric
@@ -18,6 +19,7 @@ The architecture docs now define a large vision:
 This handoff document defines how Claude should implement that vision without degrading code quality, increasing UI fragmentation, or creating untestable intelligence theater.
 
 The goal is to make the next implementation wave:
+
 - incremental
 - testable
 - safe
@@ -50,6 +52,7 @@ The main risk is not missing ambition.
 The main risk is fragmentation.
 
 Without strict implementation discipline, the app can become:
+
 - too many panels
 - too many one-off scores
 - too many independent services
@@ -96,6 +99,7 @@ input fixture -> pure service -> typed output -> tested UI adapter
 ```
 
 Avoid:
+
 - DOM inside intelligence services
 - fetch inside scoring functions
 - global mutable state inside algorithms
@@ -109,6 +113,7 @@ Avoid:
 Before building UI, define the data contract.
 
 Required contracts:
+
 - SituationDetail
 - OperationalBrief
 - MaterialChange
@@ -140,11 +145,13 @@ Good:
 ```text
 Risk score: 82
 Drivers:
+
 - regional outage growth +18
 - provider redundancy degraded +9
 - stale confirmation source -6
 - prior baseline deviation +14
 - negative evidence missing official confirmation -5
+
 ```
 
 ---
@@ -154,6 +161,7 @@ Drivers:
 Any feature that predicts, projects, simulates, or implies future risk must write to forecast calibration.
 
 Every forecast needs:
+
 - issued time
 - horizon
 - confidence
@@ -168,6 +176,7 @@ No prediction theater.
 ## 5. Source Health Must Be User-Visible
 
 Every major Situation should expose:
+
 - fresh sources
 - stale sources
 - degraded providers
@@ -184,6 +193,7 @@ The user should understand when Crystal Ball’s senses are degraded.
 Private user context should remain local-first by default.
 
 Private context includes:
+
 - saved places
 - family places
 - travel routes
@@ -216,6 +226,7 @@ It should answer:
 > What do I need to know right now?
 
 It should show:
+
 - top active Situations
 - material changes
 - personal impacts
@@ -242,6 +253,7 @@ Power users and Claude need inspectability.
 Do not add a new panel just because a feed exists.
 
 Ask first:
+
 - does this feed improve an existing Situation?
 - does it create evidence?
 - does it affect source health?
@@ -256,6 +268,7 @@ If not, do not add it yet.
 ## Guardrail 5 — Existing Intelligence Services Should Be Reused
 
 Before creating a new service, check whether the functionality belongs in or near:
+
 - `src/services/intelligence/`
 - `src/services/insights/`
 - `src/services/personal/`
@@ -281,6 +294,7 @@ docs/architecture/INDEX.md
 ```
 
 Purpose:
+
 - prevent architecture docs from becoming scattered
 - make Claude’s entry point obvious
 - define implementation order
@@ -311,6 +325,7 @@ Suggested phases:
 Create a checklist Claude uses in every PR description.
 
 Checklist:
+
 - contracts added/updated
 - tests added
 - confidence handling added
@@ -329,6 +344,7 @@ Checklist:
 Define which tests Claude should run depending on touched area.
 
 Examples:
+
 - intelligence contracts -> `npm run test:intelligence`
 - insights / What Changed -> `npm run test:insights`
 - personal impact -> `npm run test:personal`
@@ -362,6 +378,7 @@ The app should maintain these invariants:
 ## Phase 0 — Documentation Setup
 
 Add:
+
 - `docs/architecture/INDEX.md`
 - `docs/architecture/IMPLEMENTATION_MILESTONES.md`
 - PR checklist section in architecture docs or `.github/pull_request_template.md` if appropriate
@@ -369,6 +386,7 @@ Add:
 ## Phase 1 — Product Contracts
 
 Create or consolidate product-level contracts:
+
 - `OperationalBrief`
 - `SituationDetail`
 - `SituationSummary`
@@ -400,6 +418,7 @@ Build a canonical Situation Detail surface using existing services.
 It does not need every future field on day one.
 
 MVP sections:
+
 - title / lifecycle / severity / confidence
 - executive summary
 - evidence
@@ -418,6 +437,7 @@ buildOperationalBrief(input) -> OperationalBrief
 ```
 
 Inputs:
+
 - situations
 - material changes
 - source health
@@ -426,6 +446,7 @@ Inputs:
 - degraded providers
 
 Output powers:
+
 - Command Center
 - exports
 - future mobile summary
@@ -440,6 +461,7 @@ evaluatePromotion(input) -> PromotionDecision
 ```
 
 Promotion levels:
+
 - raw_observation
 - correlated_signal
 - material_change
@@ -453,12 +475,14 @@ This prevents alert noise.
 ## Phase 5 — Source Health Integration
 
 Integrate:
+
 - data freshness
 - provider redundancy
 - source reliability
 - stale source penalties
 
 Into:
+
 - Situation Detail
 - OperationalBrief
 - What Changed
@@ -469,6 +493,7 @@ Into:
 Upgrade watchlists into mission-style active monitoring objects.
 
 Each Watch Mission includes:
+
 - scope
 - entities
 - key indicators
@@ -519,6 +544,7 @@ Before opening each PR, Claude should answer:
 Crystal Ball should eventually track its own intelligence quality.
 
 Metrics:
+
 - warning lead time
 - false positive rate
 - forecast calibration score

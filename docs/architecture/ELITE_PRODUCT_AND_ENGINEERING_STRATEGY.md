@@ -5,6 +5,7 @@
 This document enhances the full Crystal Ball plan one more level by defining how the app becomes not only powerful, but defensible, trustworthy, useful, shippable, and emotionally compelling.
 
 Previous documents define:
+
 - planetary cognition
 - world-state modeling
 - advanced system dynamics
@@ -12,6 +13,7 @@ Previous documents define:
 - Claude implementation discipline
 
 This document adds the missing strategic layer:
+
 - product moat
 - user trust model
 - operational workflows
@@ -37,6 +39,7 @@ messy world telemetry -> coherent situations -> trusted explanation -> personal 
 The product moat is not the feeds.
 
 The moat is:
+
 - how well Crystal Ball connects them
 - how well it explains them
 - how well it ranks what matters
@@ -55,6 +58,7 @@ Most apps show events.
 Crystal Ball should remember evolving situations.
 
 A Situation has continuity:
+
 - history
 - evidence
 - contradictions
@@ -75,6 +79,7 @@ Most apps show claims.
 Crystal Ball should show reasoning.
 
 Every major insight should answer:
+
 - what supports this?
 - what contradicts this?
 - what is missing?
@@ -92,6 +97,7 @@ Most intelligence products are either generic or invasive.
 Crystal Ball should be local-first and personal.
 
 It should understand:
+
 - saved places
 - watch missions
 - travel routes
@@ -107,6 +113,7 @@ But it should not leak private context.
 The real victory is warning earlier without crying wolf.
 
 Crystal Ball should measure:
+
 - first weak signal
 - first material change
 - first user warning
@@ -122,6 +129,7 @@ This creates a learning loop and a measurable product advantage.
 The product should not require the user to inspect 30 panels.
 
 The Command Center should compress the world into:
+
 - what changed
 - what matters
 - what affects me
@@ -162,6 +170,7 @@ Crystal Ball should eventually support multiple operator modes.
 Default view.
 
 Shows:
+
 - operational brief
 - top situations
 - what changed
@@ -174,6 +183,7 @@ Shows:
 Immersive planetary view.
 
 Shows:
+
 - world pulse
 - instability flows
 - hidden infrastructure
@@ -185,6 +195,7 @@ Shows:
 Deep reasoning view.
 
 Shows:
+
 - evidence graph
 - contradictions
 - negative evidence
@@ -197,6 +208,7 @@ Shows:
 User-centered mode.
 
 Shows:
+
 - risks near saved places
 - travel impact
 - utilities / infrastructure exposure
@@ -208,6 +220,7 @@ Shows:
 Historical and testing mode.
 
 Shows:
+
 - timeline replay
 - prior decisions
 - forecast outcomes
@@ -219,6 +232,7 @@ Shows:
 Future scenario mode.
 
 Shows:
+
 - what-if scenarios
 - cascade paths
 - confidence bands
@@ -260,6 +274,7 @@ Everything else should either feed these surfaces or remain secondary.
 # App Quality Bar
 
 Crystal Ball should feel elite because it is:
+
 - fast
 - coherent
 - explainable
@@ -280,6 +295,7 @@ Not because it is flashy.
 Crystal Ball must avoid sensationalism.
 
 Every major user-facing insight should include:
+
 - confidence
 - evidence
 - uncertainty
@@ -290,6 +306,7 @@ Every major user-facing insight should include:
 ## Forbidden Product Behavior
 
 Avoid:
+
 - unsupported predictions
 - exaggerated certainty
 - fear-based wording
@@ -401,6 +418,7 @@ The risk is UI sluggishness and background load creep.
 ## Performance Budgets
 
 Recommended targets:
+
 - Command Center initial render under 1 second after app boot data is available
 - Situation Detail open under 250 ms from cached state
 - map interaction stays smooth during refreshes
@@ -440,6 +458,7 @@ Crystal Ball should continuously evaluate itself.
 ## Metrics
 
 Track:
+
 - warning lead time
 - forecast calibration
 - alert fatigue
@@ -456,6 +475,7 @@ Track:
 ## Replay-Based Testing
 
 Use replay fixtures to test:
+
 - missed weather alerts
 - fuel stress
 - ADS-B outage
@@ -477,6 +497,7 @@ User context should remain local by default.
 ## Export Redaction
 
 Export packets should redact:
+
 - exact saved locations
 - home address
 - family places
@@ -507,6 +528,7 @@ Replace feed walls with Situation summaries.
 ## 2. Use Progressive Disclosure
 
 Show:
+
 - top-level brief first
 - evidence on drill-down
 - raw feed only when requested
@@ -642,6 +664,7 @@ Not more feeds.
 Not AI summaries.
 
 Crystal Ball feels magical when it:
+
 - connects events the user would not connect
 - remembers what changed
 - explains why confidence moved

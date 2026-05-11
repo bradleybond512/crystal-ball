@@ -9,6 +9,7 @@ The previous architecture plans define what Crystal Ball should become.
 This document defines how to turn the existing codebase into that product without drowning in disconnected capabilities.
 
 The repo already has many advanced ingredients:
+
 - truth scoring
 - evidence graph
 - negative evidence
@@ -71,6 +72,7 @@ source -> observation -> evidence -> entity -> situation -> decision surface
 ```
 
 Decision surfaces include:
+
 - Command Center
 - What Changed
 - Situation Detail
@@ -97,6 +99,7 @@ The primary object should be the Situation.
 A Situation is a living intelligence object that groups related evidence over time.
 
 Examples:
+
 - "Midwest Severe Weather Logistics Threat"
 - "Red Sea Maritime Disruption"
 - "Regional Internet Instability in Eastern Europe"
@@ -107,6 +110,7 @@ Examples:
 ## Situation Requirements
 
 Each Situation must include:
+
 - title
 - status
 - severity
@@ -128,6 +132,7 @@ Each Situation must include:
 ## Lifecycle
 
 Every Situation must be in one lifecycle state:
+
 - emerging
 - escalating
 - active
@@ -154,6 +159,7 @@ When a user clicks any alert, map event, What Changed item, notification, or com
 ## Required Sections
 
 ### Header
+
 - situation title
 - current lifecycle state
 - severity
@@ -162,20 +168,25 @@ When a user clicks any alert, map event, What Changed item, notification, or com
 - affected regions
 
 ### Executive Summary
+
 One concise paragraph:
+
 - what happened
 - why it matters
 - what changed
 - likely next movement
 
 ### Evidence Stack
+
 Show:
+
 - supporting evidence
 - contradicting evidence
 - stale evidence
 - missing expected evidence
 
 ### Causality Chain
+
 Show:
 
 ```text
@@ -183,14 +194,18 @@ trigger -> system stress -> downstream impact -> user impact
 ```
 
 ### Pressure & Recovery
+
 Show:
+
 - pressure trend
 - recovery trend
 - stress drivers
 - stabilizing drivers
 
 ### What Changed
+
 Show material deltas:
+
 - new evidence
 - severity change
 - confidence change
@@ -199,7 +214,9 @@ Show material deltas:
 - recovery movement
 
 ### Personal Impact
+
 Show relevance to:
+
 - user location
 - saved places
 - travel routes
@@ -208,13 +225,17 @@ Show relevance to:
 - infrastructure dependencies
 
 ### Next Indicators
+
 Show:
+
 - signals that would confirm escalation
 - signals that would reduce concern
 - sources that need refresh
 
 ### Actions
+
 Show action briefs:
+
 - monitor
 - prepare
 - act now
@@ -251,6 +272,7 @@ Diagnostics are important, but should be secondary.
 ## Ranking Formula
 
 Rank items using:
+
 - severity
 - confidence
 - novelty
@@ -320,6 +342,7 @@ No major insight should be promoted unless it passes a quality bar.
 ## Required Checks
 
 Before promoting a finding to Situation Update / Alert / Brief:
+
 - evidence count check
 - source independence check
 - freshness check
@@ -418,6 +441,7 @@ interface SituationSummary {
 ## Claude Task
 
 Create stable contracts for:
+
 - OperationalBrief
 - SituationSummary
 - MaterialChange
@@ -438,6 +462,7 @@ A world intelligence app must know when its senses are degraded.
 ## Surface This Clearly
 
 Examples:
+
 - "AIS coverage degraded in this region"
 - "Only one source confirms this"
 - "Weather source stale by 46 minutes"
@@ -448,6 +473,7 @@ Examples:
 Integrate provider redundancy and data freshness into every high-level insight.
 
 Every Situation should expose:
+
 - source health
 - confidence penalty
 - degraded domains
@@ -464,6 +490,7 @@ The Workbench is how Claude and future contributors debug the reasoning engine.
 ## It Should Show
 
 For any Situation:
+
 - raw observations
 - normalized observations
 - evidence graph
@@ -491,6 +518,7 @@ This will prevent invisible reasoning bugs.
 Predictions must be accountable.
 
 Every forecast should have:
+
 - forecast text
 - issued time
 - forecast horizon
@@ -525,6 +553,7 @@ The app should feel serious, not sensational.
 ## Required Language Patterns
 
 Use:
+
 - "may indicate"
 - "early signal"
 - "confidence limited by"
@@ -534,6 +563,7 @@ Use:
 - "would increase confidence if"
 
 Avoid:
+
 - "will happen"
 - "confirmed" unless verified
 - "guaranteed"
@@ -557,6 +587,7 @@ Watchlists can become passive filters.
 A watchlist should be a living mission file.
 
 Each watchlist contains:
+
 - scope
 - entities
 - baseline state
@@ -569,6 +600,7 @@ Each watchlist contains:
 - forecast history
 
 Examples:
+
 - H5N1 food pressure
 - Red Sea shipping
 - Taiwan escalation
@@ -590,12 +622,14 @@ Real intelligence work is driven by questions.
 ## Examples
 
 For a port disruption:
+
 - Are vessels rerouting or waiting?
 - Are fuel shipments affected?
 - Are nearby ports absorbing traffic?
 - Is the delay temporary or worsening?
 
 For a cyber outage:
+
 - Is this regional or provider-specific?
 - Are BGP routes unstable?
 - Are banks, hospitals, or telecoms affected?
@@ -606,6 +640,7 @@ For a cyber outage:
 Add `openQuestions: IntelligenceQuestion[]` to Situation.
 
 Use them to drive:
+
 - source refresh priorities
 - Ask-the-Data suggestions
 - next indicators
@@ -649,6 +684,7 @@ Generate collection requirements for unresolved situations and contradictions.
 Crystal Ball should remember what it thought before.
 
 For every Situation, store:
+
 - previous assessments
 - confidence changes
 - missed predictions
@@ -678,6 +714,7 @@ Personal impact can become sensitive.
 User-specific context should remain local-first unless explicitly exported.
 
 Personal context includes:
+
 - home location
 - saved places
 - travel routes
@@ -689,6 +726,7 @@ Personal context includes:
 ## Claude Task
 
 Document and enforce boundaries:
+
 - local-only by default
 - no analytics for personal impact content
 - redacted exports unless user opts in
@@ -718,6 +756,7 @@ A serious intelligence product must degrade gracefully.
 ## User-Facing Behavior
 
 The app should say:
+
 - what degraded
 - what is still working
 - how confidence changed
@@ -751,6 +790,7 @@ Command Center
 ## Panels That Should Become Secondary
 
 Raw source panels should be secondary to:
+
 - Situation Detail
 - What Changed
 - Command Center
@@ -765,6 +805,7 @@ They remain useful, but should not dominate the experience.
 A feature is not magical because it looks futuristic.
 
 It is magical if it does at least one of these:
+
 - connects things the user would not connect
 - warns earlier than expected
 - explains uncertainty honestly
@@ -785,6 +826,7 @@ Use these as acceptance criteria for new intelligence features.
 ## PR 1 — Intelligence Product Contracts
 
 Create product-level contracts:
+
 - OperationalBrief
 - SituationSummary
 - SituationDetail
@@ -804,6 +846,7 @@ Use existing intelligence services and progressively enhance.
 ## PR 3 — Operational Importance Ranking
 
 Create shared ranking function for:
+
 - Command Center
 - What Changed
 - alerts
@@ -869,6 +912,7 @@ Crystal Ball already has many advanced subsystems.
 The next leap is orchestration.
 
 The app must converge around:
+
 - Situation objects
 - Operational Briefs
 - Evidence-backed explanations

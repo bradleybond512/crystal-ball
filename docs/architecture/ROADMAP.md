@@ -6,6 +6,7 @@ Crystal Ball is evolving into a planetary-scale predictive intelligence platform
 
 The goal is not merely aggregating feeds.
 The goal is understanding:
+
 - causality
 - escalation
 - instability
@@ -14,6 +15,7 @@ The goal is understanding:
 - future risk
 
 This system should feel like:
+
 - a living planetary nervous system
 - a strategic intelligence center
 - an operational forecasting engine
@@ -28,6 +30,7 @@ This system should feel like:
 Build a continuously updating model of the world.
 
 Track:
+
 - infrastructure
 - weather
 - internet health
@@ -49,6 +52,7 @@ Everything becomes interconnected.
 Detect subtle anomalies before mainstream awareness.
 
 Examples:
+
 - AIS disappearances
 - internet route instability
 - unusual military movement
@@ -67,6 +71,7 @@ Detect precursor patterns.
 Correlate events across domains.
 
 Examples:
+
 - storms -> ports -> fuel -> food
 - disease -> livestock -> shortages -> unrest
 - cyber attacks -> banking instability -> panic
@@ -80,6 +85,7 @@ Crystal Ball should understand second-order effects.
 Generate probabilistic future scenarios.
 
 Outputs:
+
 - escalation probability
 - infrastructure failure risk
 - supply chain disruption likelihood
@@ -93,6 +99,7 @@ Outputs:
 Translate global intelligence into local consequences.
 
 Examples:
+
 - airport disruptions
 - ISP instability
 - severe weather exposure
@@ -105,6 +112,7 @@ Examples:
 ## 6. Explainable AI
 
 Every insight must explain:
+
 - why it matters
 - supporting evidence
 - confidence level
@@ -120,6 +128,7 @@ Trust is essential.
 The world visualization should feel alive.
 
 Features:
+
 - pulsing undersea cables
 - moving logistics flows
 - internet density

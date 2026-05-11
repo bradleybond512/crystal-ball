@@ -5,6 +5,7 @@
 This document defines how to tune Crystal Ball’s algorithms, data sources, scoring systems, calibration loops, and source governance so the app becomes an elite intelligence product rather than a large feed aggregator.
 
 The existing algorithm intelligence plan already covers:
+
 - evidence graph
 - truth scoring
 - negative evidence
@@ -23,6 +24,7 @@ The existing algorithm intelligence plan already covers:
 This document goes further.
 
 It focuses on:
+
 - making algorithms self-auditing
 - making sources competitively scored
 - measuring warning quality
@@ -46,6 +48,7 @@ observe -> score -> explain -> warn -> outcome -> evaluate -> recalibrate
 ```
 
 The app should continuously ask:
+
 - Which sources were early?
 - Which sources were stale?
 - Which sources exaggerated?
@@ -69,6 +72,7 @@ Every data source should have a performance profile.
 Do not treat all sources equally.
 
 Each source should be scored by:
+
 - freshness
 - uptime
 - latency
@@ -167,6 +171,7 @@ Use source role when calculating confidence.
 Each intelligence domain should have a deliberate source portfolio.
 
 A mature domain has:
+
 - early indicator sources
 - official sources
 - independent corroboration
@@ -177,6 +182,7 @@ A mature domain has:
 ## Example: Maritime Domain
 
 Recommended source roles:
+
 - AIS provider: movement sensor
 - port status source: official/logistics confirmer
 - shipping rate source: economic impact
@@ -187,6 +193,7 @@ Recommended source roles:
 ## Example: Cyber Domain
 
 Recommended source roles:
+
 - CISA KEV: official confirmation
 - exploit chatter: weak signal
 - honeypot / GreyNoise / OTX: activity evidence
@@ -197,6 +204,7 @@ Recommended source roles:
 ## Example: Weather + Infrastructure
 
 Recommended source roles:
+
 - NWS/GDACS: official hazard
 - radar/satellite: real-time observation
 - power outage feeds: infrastructure impact
@@ -268,6 +276,7 @@ Hard-coded thresholds eventually become wrong.
 ## Solution
 
 Create a threshold registry with:
+
 - domain
 - signal type
 - current threshold
@@ -317,6 +326,7 @@ interface TunableThreshold {
 Every algorithm should have its own performance profile.
 
 Examples:
+
 - truth scoring
 - situation clustering
 - negative evidence
@@ -369,6 +379,7 @@ Not maximum alerts.
 Not maximum sensitivity.
 
 Useful warning means:
+
 - early enough to matter
 - accurate enough to trust
 - actionable enough to help
@@ -376,6 +387,7 @@ Useful warning means:
 ## Lead-Time Metrics
 
 For every resolved situation:
+
 - first raw signal time
 - first weak signal time
 - first material change time
@@ -455,6 +467,7 @@ Add error taxonomy to forecast calibration / replay harness outputs.
 Replay is the best way to improve without waiting for real crises.
 
 Build a scenario library that covers:
+
 - known missed warnings
 - synthetic edge cases
 - source outage cases
@@ -466,30 +479,40 @@ Build a scenario library that covers:
 ## Scenario Types
 
 ### Fast Escalation
+
 Example:
+
 - tornado warning
 - earthquake / tsunami
 - cyber outage
 
 ### Slow Burn
+
 Example:
+
 - drought -> crop pressure -> food price
 - port congestion -> shipping delay
 - disease outbreak -> travel advisory
 
 ### Contradiction
+
 Example:
+
 - official calm, sensors abnormal
 - social panic, official data normal
 
 ### Recovery
+
 Example:
+
 - power restoration
 - port reopening
 - flood waters receding
 
 ### Blind Spot
+
 Example:
+
 - AIS provider down
 - cyber source stale
 - weather source missing polygon
@@ -509,6 +532,7 @@ Example:
 Create fake-but-realistic data designed to fool the system.
 
 Examples:
+
 - duplicate reports from same source chain appearing independent
 - old event reposted as new
 - sensational headline with no confirming signals
@@ -523,6 +547,7 @@ Prevent Crystal Ball from becoming overconfident.
 ## Claude Tasks
 
 Create adversarial fixtures for:
+
 - truth scoring
 - source independence
 - negative evidence
@@ -545,6 +570,7 @@ Counting them as independent is dangerous.
 Estimate source independence.
 
 Signals:
+
 - same URL origin
 - same quoted agency
 - same timestamp window
@@ -628,6 +654,7 @@ Each domain should have a leading indicator scorecard.
 ## Example: Military Escalation
 
 Indicators:
+
 - tanker aircraft activity
 - ISR aircraft activity
 - NOTAM / TFR changes
@@ -640,6 +667,7 @@ Indicators:
 ## Example: Food System Stress
 
 Indicators:
+
 - crop anomaly
 - drought index
 - export restrictions
@@ -675,6 +703,7 @@ Use these to drive Watch Missions and Collection Requirements.
 Different domains respond at different speeds.
 
 Example:
+
 - weather signal appears before power outage
 - port disruption appears before price move
 - cyber exploit chatter appears before official alert
@@ -710,6 +739,7 @@ Add sources based on blind spots, not vibes.
 ## Rule
 
 New sources should be justified by one of these:
+
 - fills a blind spot
 - improves source independence
 - improves lead time
@@ -810,6 +840,7 @@ These are not random feeds. These categories fill strategic intelligence gaps.
 Notifications should be routed by value, not severity alone.
 
 Routing should consider:
+
 - safety-critical nature
 - confidence
 - personal relevance
@@ -833,6 +864,7 @@ Routing should consider:
 ## Claude Tasks
 
 Tune notification ladder using:
+
 - promotion ladder
 - watchlist relevance
 - user feedback
@@ -864,6 +896,7 @@ Tune notification ladder using:
 ## Claude Tasks
 
 Upgrade What Changed ranking to use deltas from:
+
 - situations
 - evidence graph
 - source health
@@ -879,6 +912,7 @@ Upgrade What Changed ranking to use deltas from:
 Crystal Ball should govern algorithms like production systems.
 
 Each algorithm should have:
+
 - owner area
 - version
 - purpose
@@ -919,6 +953,7 @@ interface AlgorithmRegistryEntry {
 User feedback should tune relevance, not truth.
 
 If user dismisses an alert, it may mean:
+
 - irrelevant to them
 - too frequent
 - bad timing
@@ -929,6 +964,7 @@ It does not necessarily mean the event was false.
 ## Rule
 
 Separate:
+
 - truth calibration
 - relevance calibration
 - notification calibration
@@ -943,6 +979,7 @@ Ensure user feedback is routed to the correct calibration bucket.
 # 22. Elite Quality Metrics
 
 Track:
+
 - time to detect
 - time to warn
 - time to explain
@@ -968,6 +1005,7 @@ These metrics should be visible in Algorithm Diagnostic / Intelligence Workbench
 ## Phase 1 — Measurement Before Tuning
 
 Build:
+
 - source performance ledger
 - algorithm performance ledger
 - warning lead-time records
@@ -978,6 +1016,7 @@ Do not tune aggressively until measurement exists.
 ## Phase 2 — Confidence Quality
 
 Build:
+
 - source independence detection
 - freshness decay profiles
 - blind spot engine
@@ -986,6 +1025,7 @@ Build:
 ## Phase 3 — Better Early Warning
 
 Build:
+
 - leading indicator scorecards
 - cross-domain lag model
 - watch windows
@@ -994,6 +1034,7 @@ Build:
 ## Phase 4 — Better Source Strategy
 
 Build:
+
 - source role profiles
 - domain source portfolios
 - source candidate scoring
@@ -1002,6 +1043,7 @@ Build:
 ## Phase 5 — Tuning & Governance
 
 Build:
+
 - threshold registry
 - algorithm registry
 - safe adjustment proposals

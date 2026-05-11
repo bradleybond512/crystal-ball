@@ -5,6 +5,7 @@
 This document defines the long-term strategy for expanding Crystal Ball’s sensing, collection, enrichment, reasoning, and intelligence reach.
 
 The objective is not:
+
 - “collect every feed on Earth.”
 
 The objective is:
@@ -14,6 +15,7 @@ The objective is:
 This requires more than APIs.
 
 It requires:
+
 - collection doctrine
 - source strategy
 - hidden-system modeling
@@ -28,9 +30,11 @@ It requires:
 - collection gap discovery
 
 This document defines how Crystal Ball evolves from:
+
 - a monitoring platform
 
 into:
+
 - a planetary-scale situational intelligence fabric.
 
 ---
@@ -38,6 +42,7 @@ into:
 # Core Thesis
 
 Most monitoring systems fail because they:
+
 - collect isolated feeds
 - optimize for dashboards
 - chase headlines
@@ -59,9 +64,11 @@ planetary sensing
 ```
 
 The goal is not:
+
 - infinite information.
 
 The goal is:
+
 - maximal situational reach with calibrated uncertainty.
 
 ---
@@ -71,11 +78,13 @@ The goal is:
 ## Strategic Shift
 
 Stop thinking in terms of:
+
 - APIs
 - feeds
 - dashboards
 
 Start thinking in terms of:
+
 - sensing layers
 - observability domains
 - collection objectives
@@ -96,6 +105,7 @@ Crystal Ball should model the world through layered sensing.
 ## Layer 1 — Physical World
 
 Observe:
+
 - weather
 - earthquakes
 - volcanos
@@ -119,6 +129,7 @@ Observe:
 ## Layer 2 — Infrastructure World
 
 Observe:
+
 - power grid status
 - telecom health
 - internet routing
@@ -137,6 +148,7 @@ Observe:
 ## Layer 3 — Human Behavior World
 
 Observe:
+
 - evacuation orders
 - panic buying
 - travel advisories
@@ -152,6 +164,7 @@ Observe:
 ## Layer 4 — Cyber World
 
 Observe:
+
 - exploit chatter
 - BGP instability
 - DNS failures
@@ -166,6 +179,7 @@ Observe:
 ## Layer 5 — Geopolitical World
 
 Observe:
+
 - military movement
 - NOTAMs
 - naval concentration
@@ -180,6 +194,7 @@ Observe:
 ## Layer 6 — Economic / Supply World
 
 Observe:
+
 - commodity volatility
 - fertilizer prices
 - fuel prices
@@ -194,6 +209,7 @@ Observe:
 ## Layer 7 — Information World
 
 Observe:
+
 - misinformation campaigns
 - narrative synchronization
 - coordinated amplification
@@ -210,6 +226,7 @@ Observe:
 The system does NOT need every source.
 
 It needs:
+
 - broad sensing coverage
 - intelligent enrichment
 - uncertainty awareness
@@ -266,6 +283,7 @@ This is one of the most important future systems.
 ### Geographic Blind Spots
 
 Examples:
+
 - low sensor density
 - missing local reporting
 - weak maritime coverage
@@ -275,6 +293,7 @@ Examples:
 ### Domain Blind Spots
 
 Examples:
+
 - no power grid telemetry
 - insufficient cyber visibility
 - no local infrastructure feeds
@@ -283,6 +302,7 @@ Examples:
 ### Dependency Blind Spots
 
 Examples:
+
 - no undersea cable awareness
 - poor rail visibility
 - hidden cloud provider dependencies
@@ -291,6 +311,7 @@ Examples:
 ### Temporal Blind Spots
 
 Examples:
+
 - stale feeds
 - delayed official sources
 - insufficient historical baselines
@@ -298,6 +319,7 @@ Examples:
 ### Epistemic Blind Spots
 
 Examples:
+
 - single-source claims
 - unresolved contradictions
 - weak replay coverage
@@ -314,6 +336,7 @@ collection-gap-engine.ts
 ```
 
 Responsibilities:
+
 - identify missing sensing layers
 - identify stale domains
 - identify weak redundancy
@@ -329,6 +352,7 @@ Responsibilities:
 Do not acquire feeds randomly.
 
 Acquire sources because they:
+
 - reduce uncertainty
 - improve lead time
 - improve redundancy
@@ -349,6 +373,7 @@ These areas are often ignored even by advanced systems.
 Huge strategic opportunity.
 
 Examples:
+
 - grid operator alerts
 - transformer outages
 - telecom degradation
@@ -367,6 +392,7 @@ These are civilization-level signals.
 ## B. Supply Chain Topology
 
 Crystal Ball should increasingly model:
+
 - ports
 - chokepoints
 - warehouses
@@ -387,6 +413,7 @@ But:
 ## C. Public Sensor Meshes
 
 Potential future integration areas:
+
 - ADS-B
 - AIS
 - APRS
@@ -398,6 +425,7 @@ Potential future integration areas:
 - citizen science networks
 
 These dramatically increase:
+
 - ground truth
 - local observability
 - anomaly detection
@@ -409,6 +437,7 @@ These dramatically increase:
 Long-term frontier.
 
 Potential categories:
+
 - satellite weather imagery
 - nighttime light anomalies
 - wildfire detection
@@ -424,6 +453,7 @@ Potential categories:
 ## E. Narrative Intelligence
 
 Track:
+
 - narrative synchronization
 - coordinated messaging
 - unusual silence
@@ -444,6 +474,7 @@ For:
 One of the biggest future differentiators.
 
 Most crises are:
+
 - infrastructure interactions.
 
 Crystal Ball should increasingly model:
@@ -509,9 +540,11 @@ The breakthrough comes from:
 Example:
 
 You may not directly know:
+
 - whether a supply chain is failing.
 
 But you may infer it from:
+
 - port congestion
 - rail delay
 - warehouse backlog
@@ -520,8 +553,11 @@ But you may infer it from:
 - commodity divergence
 
 This is how:
+
 - limited sensors
+
 become:
+
 - broad intelligence reach.
 
 ---
@@ -531,6 +567,7 @@ become:
 Long-term objective:
 
 Build a graph of:
+
 - infrastructure
 - logistics
 - telecom
@@ -551,6 +588,7 @@ undersea cable
 ```
 
 This enables:
+
 - cascading forecasts
 - dependency awareness
 - impact projections
@@ -565,6 +603,7 @@ The app should increasingly feel locally aware.
 Not just globally informed.
 
 Potential local inputs:
+
 - weather alerts
 - road closures
 - outage maps
@@ -583,12 +622,14 @@ The user should feel:
 # 11. Intelligence Compression Layer
 
 The system must increasingly compress overwhelming information into:
+
 - meaningful summaries
 - causal explanations
 - uncertainty-aware narratives
 - operationally relevant changes
 
 Without:
+
 - drowning the user in feeds.
 
 This is one of the most important future differentiators.
@@ -600,6 +641,7 @@ This is one of the most important future differentiators.
 Most systems fail because they lack context.
 
 Crystal Ball should continuously answer:
+
 - Why does this matter?
 - What depends on this?
 - What usually happens next?
@@ -621,6 +663,7 @@ Crystal Ball should proactively ask:
 > “What information should we collect next?”
 
 Examples:
+
 - additional maritime feeds
 - local outage data
 - satellite imagery
@@ -637,6 +680,7 @@ This becomes:
 # 14. Strategic Memory + Historical Analog Layer
 
 The system should increasingly remember:
+
 - what preceded major disruptions
 - what recovery looked like
 - what indicators mattered historically
@@ -644,6 +688,7 @@ The system should increasingly remember:
 - which assumptions broke
 
 This becomes:
+
 - institutional memory
 - historical pattern recognition
 - analog reasoning
@@ -653,6 +698,7 @@ This becomes:
 # 15. Planetary Attention Allocation
 
 Crystal Ball should dynamically decide:
+
 - where to focus compute
 - where to deepen collection
 - where uncertainty is most dangerous
@@ -677,6 +723,7 @@ What would invalidate this?
 ```
 
 This is how the system feels:
+
 - alive
 - contextual
 - intelligent
@@ -732,6 +779,7 @@ The biggest current gaps likely are:
 ## 1. Infrastructure Observability
 
 Need much deeper:
+
 - power
 - telecom
 - cloud
@@ -742,6 +790,7 @@ Need much deeper:
 ## 2. Dependency Graphing
 
 Need explicit:
+
 - cascade modeling
 - hidden dependencies
 - infrastructure topology
@@ -749,6 +798,7 @@ Need explicit:
 ## 3. Strategic Memory
 
 Need:
+
 - long-term analog reasoning
 - replay-informed heuristics
 - institutional learning
@@ -756,12 +806,14 @@ Need:
 ## 4. Collection Gap Discovery
 
 Need:
+
 - automated blind spot detection
 - source acquisition recommendations
 
 ## 5. Planetary Causal Modeling
 
 Need:
+
 - probabilistic causal graphs
 - lag models
 - resilience modeling
@@ -769,6 +821,7 @@ Need:
 ## 6. Information Terrain Modeling
 
 Need:
+
 - narrative analysis
 - source synchronization analysis
 - contradiction mapping
@@ -776,12 +829,14 @@ Need:
 ## 7. Attention Allocation
 
 Need:
+
 - adaptive compute/resource focus
 - uncertainty-weighted prioritization
 
 ## 8. Explainability Depth
 
 Need:
+
 - better “why” explanations
 - better “what next” reasoning
 - better confidence transparency
@@ -791,6 +846,7 @@ Need:
 # 19. Long-Term Vision
 
 The end-state is not:
+
 - a threat map
 - an alert feed
 - a dashboard
@@ -813,6 +869,7 @@ That is the target sensation.
 ## PR 1 — Collection Gap Engine
 
 Detect:
+
 - blind spots
 - stale regions
 - weak redundancy
@@ -821,6 +878,7 @@ Detect:
 ## PR 2 — Infrastructure Intelligence Layer
 
 Add:
+
 - power
 - telecom
 - cloud
@@ -831,6 +889,7 @@ Add:
 ## PR 3 — Planetary Dependency Graph
 
 Model:
+
 - hidden dependencies
 - cascade paths
 - infrastructure relationships
@@ -838,6 +897,7 @@ Model:
 ## PR 4 — Narrative Intelligence Layer
 
 Add:
+
 - synchronization detection
 - contradiction mapping
 - information terrain analysis
@@ -845,6 +905,7 @@ Add:
 ## PR 5 — Strategic Memory Engine
 
 Store:
+
 - analogs
 - replay outcomes
 - learned heuristics
@@ -853,6 +914,7 @@ Store:
 ## PR 6 — Predictive Collection Engine
 
 Continuously recommend:
+
 - next best sources
 - next best indicators
 - uncertainty-reducing collection actions
@@ -860,6 +922,7 @@ Continuously recommend:
 ## PR 7 — Explainability Layer
 
 Upgrade:
+
 - why explanations
 - dependency explanations
 - confidence explanations
@@ -868,12 +931,14 @@ Upgrade:
 ## PR 8 — Planetary Attention Allocation
 
 Allocate:
+
 - compute
 - refresh cadence
 - reasoning depth
 - simulation effort
 
 Based on:
+
 - uncertainty
 - strategic importance
 - hidden dependencies
@@ -883,9 +948,11 @@ Based on:
 # Final Strategic Principle
 
 Crystal Ball does not become elite by:
+
 - collecting infinite information.
 
 It becomes elite by:
+
 - sensing broadly
 - reasoning deeply
 - exposing uncertainty honestly

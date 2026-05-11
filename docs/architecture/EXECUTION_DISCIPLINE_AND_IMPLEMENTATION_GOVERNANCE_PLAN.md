@@ -3,6 +3,7 @@
 ## Purpose
 
 This document exists to ensure the Crystal Ball roadmap remains:
+
 - implementable
 - maintainable
 - coherent
@@ -12,6 +13,7 @@ This document exists to ensure the Crystal Ball roadmap remains:
 - understandable by Claude and future contributors
 
 The project has now evolved beyond:
+
 - feature ideation
 - intelligence concepts
 - feed aggregation
@@ -21,6 +23,7 @@ The new challenge is:
 > execution discipline at planetary cognition scale.
 
 Without strong implementation governance, the architecture risks:
+
 - cognitive sprawl
 - disconnected subsystems
 - duplicated logic
@@ -38,6 +41,7 @@ This document defines the rules required to prevent that.
 # Core Thesis
 
 Crystal Ball should not become:
+
 - “a giant pile of advanced intelligence ideas.”
 
 It should become:
@@ -45,6 +49,7 @@ It should become:
 > a disciplined epistemic and operational intelligence system built on a stable cognitive spine.
 
 The project must optimize for:
+
 - coherence
 - explainability
 - calibration
@@ -54,6 +59,7 @@ The project must optimize for:
 - bounded complexity
 
 Not:
+
 - infinite abstraction.
 
 ---
@@ -83,6 +89,7 @@ Observation
 This is the canonical processing flow.
 
 All advanced systems:
+
 - beliefs
 - hypotheses
 - forecasts
@@ -99,6 +106,7 @@ must connect back to this spine.
 # Architectural Implication
 
 If a subsystem cannot clearly explain:
+
 - where it enters the spine
 - what spine objects it consumes
 - what spine objects it emits
@@ -124,6 +132,7 @@ This becomes the highest-priority architectural invariant.
 ## Problem
 
 Many documents reference:
+
 - events
 - situations
 - evidence
@@ -167,33 +176,43 @@ Strategic Memory
 # Object Definitions
 
 ## Raw Observation
+
 Untrusted incoming data.
 
 ## Evidence Node
+
 Validated or structured observation with provenance.
 
 ## Entity
+
 Person/place/system/object/infrastructure target.
 
 ## Indicator
+
 Meaningful measurable signal.
 
 ## Situation
+
 Operationally relevant state cluster.
 
 ## Belief
+
 Evidence-backed interpretation.
 
 ## Hypothesis
+
 Competing explanation.
 
 ## Forecast
+
 Probabilistic future projection.
 
 ## Operational Brief
+
 Human-readable situational compression.
 
 ## Strategic Memory
+
 Long-term learned heuristic/analog.
 
 ---
@@ -207,6 +226,7 @@ docs/contracts/
 ```
 
 Add:
+
 - observation.md
 - evidence-node.md
 - entity.md
@@ -225,11 +245,13 @@ Add:
 ## Strategic Rule
 
 Claude must clearly separate:
+
 - deterministic systems
 - probabilistic reasoning systems
 - LLM-assisted systems
 
 Without this distinction:
+
 - logic leaks into prompts
 - hallucination risk grows
 - explainability collapses
@@ -241,6 +263,7 @@ Without this distinction:
 Must NEVER depend on LLMs.
 
 Examples:
+
 - source freshness
 - thresholds
 - replay scoring
@@ -261,6 +284,7 @@ Examples:
 Structured uncertainty systems.
 
 Examples:
+
 - hypotheses
 - forecasts
 - analog matching
@@ -273,6 +297,7 @@ Examples:
 # LLM-Assisted Systems
 
 Only for:
+
 - summarization
 - explanation compression
 - narrative generation
@@ -280,6 +305,7 @@ Only for:
 - operational phrasing
 
 LLMs should NOT be:
+
 - source-of-truth engines
 - scoring engines
 - security engines
@@ -302,6 +328,7 @@ docs/architecture/REASONING_BOUNDARY_DOCTRINE.md
 ## Problem
 
 Without bounded cognition, every situation risks:
+
 - excessive simulation
 - runaway reasoning
 - compute explosion
@@ -312,21 +339,27 @@ Without bounded cognition, every situation risks:
 # Reasoning Levels
 
 ## Level 0 — Observation
+
 Raw ingestion only.
 
 ## Level 1 — Correlation
+
 Basic relationships.
 
 ## Level 2 — Situation
+
 Structured operational grouping.
 
 ## Level 3 — Belief/Hypothesis
+
 Competing interpretations.
 
 ## Level 4 — Forecast
+
 Probabilistic future reasoning.
 
 ## Level 5 — Strategic Simulation
+
 Advanced dependency propagation.
 
 ---
@@ -334,6 +367,7 @@ Advanced dependency propagation.
 # Rule
 
 The system should escalate reasoning depth only when justified by:
+
 - uncertainty
 - strategic importance
 - escalation potential
@@ -351,6 +385,7 @@ reasoningDepth: 0 | 1 | 2 | 3 | 4 | 5;
 ```
 
 to:
+
 - situations
 - forecasts
 - simulations
@@ -380,6 +415,7 @@ A feature is only valid if it improves at least one:
 # Non-Useful Features
 
 Avoid:
+
 - visualization gimmicks
 - intelligence theater
 - excessive panel sprawl
@@ -396,7 +432,9 @@ Every major PR should include:
 ```text
 Operational Value:
 Improves:
+
 - <metric>
+
 ```
 
 ---
@@ -408,6 +446,7 @@ Improves:
 The architecture is now extremely ambitious.
 
 Without complexity controls:
+
 - maintenance collapses
 - calibration collapses
 - implementation velocity collapses
@@ -417,6 +456,7 @@ Without complexity controls:
 # Rule
 
 Every subsystem must declare:
+
 - operational value
 - compute cost
 - replay burden
@@ -450,12 +490,14 @@ interface ComplexityBudget {
 ## Strategic Rule
 
 Core intelligence objects must have:
+
 - stable contracts
 - canonical ownership
 - replay fixtures
 - migration discipline
 
 Not:
+
 - informal prose definitions.
 
 ---
@@ -469,6 +511,7 @@ docs/contracts/
 ```
 
 Required:
+
 - Observation
 - Evidence
 - Situation
@@ -502,6 +545,7 @@ They should not redefine them.
 The system now contains many intelligence engines.
 
 Without governance:
+
 - opacity increases
 - calibration weakens
 - replay gaps appear
@@ -512,6 +556,7 @@ Without governance:
 # Required Algorithm Metadata
 
 Each algorithm must declare:
+
 - purpose
 - inputs
 - outputs
@@ -565,18 +610,23 @@ Experimental intelligence systems should not immediately affect users.
 # Promotion Stages
 
 ## Experimental
+
 Internal only.
 
 ## Observed
+
 Visible only in diagnostics.
 
 ## Advisory
+
 Shown with caveats.
 
 ## Operational
+
 Trusted enough for standard UX.
 
 ## Critical
+
 Allowed to drive alerts.
 
 ---
@@ -584,6 +634,7 @@ Allowed to drive alerts.
 # Rule
 
 Promotion requires:
+
 - replay coverage
 - calibration review
 - failure analysis
@@ -617,6 +668,7 @@ Every intelligence system requires replay validation before operational promotio
 # Rule
 
 No subsystem should influence:
+
 - alerts
 - confidence
 - forecasts
@@ -631,6 +683,7 @@ without replay coverage.
 ## Concept
 
 Crystal Ball should visualize:
+
 - observability strength
 - blind spots
 - stale regions
@@ -653,6 +706,7 @@ coverage-map-engine.ts
 ```
 
 Potential overlays:
+
 - source density
 - confidence quality
 - replay coverage
@@ -672,6 +726,7 @@ The roadmap risks infinite source accumulation.
 # Rule
 
 Continuously rank:
+
 - which sources reduce uncertainty most
 - which indicators improve lead time most
 - which domains are under-observed
@@ -706,21 +761,27 @@ The UI risks overwhelming the user.
 # Required Modes
 
 ## Command Mode
+
 High-level operational awareness.
 
 ## Analyst Mode
+
 Deep reasoning.
 
 ## Globe Mode
+
 Planetary context.
 
 ## Explain Mode
+
 Why/dependencies/uncertainty.
 
 ## Replay Mode
+
 Historical analysis.
 
 ## Collection Mode
+
 Blind spots/source health.
 
 ---
@@ -728,6 +789,7 @@ Blind spots/source health.
 # Rule
 
 Each mode should:
+
 - reduce cognitive overload
 - expose only relevant controls
 - emphasize different intelligence layers
@@ -783,6 +845,7 @@ Explicit sequencing is required.
 ## Phase 1 — Spine Stabilization
 
 Build:
+
 - Observation
 - Evidence
 - Entity
@@ -794,6 +857,7 @@ Build:
 ## Phase 2 — Explainability
 
 Build:
+
 - What Changed
 - source health
 - confidence explanations
@@ -804,6 +868,7 @@ Build:
 ## Phase 3 — Calibration
 
 Build:
+
 - replay
 - threshold registry
 - source scoring
@@ -815,6 +880,7 @@ Build:
 ## Phase 4 — Epistemic Layer
 
 Build:
+
 - beliefs
 - hypotheses
 - assumptions
@@ -826,6 +892,7 @@ Build:
 ## Phase 5 — Dependency Intelligence
 
 Build:
+
 - causal graphs
 - hidden systems
 - infrastructure relationships
@@ -836,6 +903,7 @@ Build:
 ## Phase 6 — Strategic Memory
 
 Build:
+
 - analogs
 - heuristics
 - replay-informed memory
@@ -846,6 +914,7 @@ Build:
 ## Phase 7 — Predictive Collection
 
 Build:
+
 - collection gaps
 - information value ranking
 - predictive collection
@@ -856,6 +925,7 @@ Build:
 ## Phase 8 — Planetary Cognition
 
 Build:
+
 - advanced simulations
 - strategic attention allocation
 - multi-timescale reasoning
@@ -868,6 +938,7 @@ Build:
 ## Strategic Rule
 
 Claude should prioritize:
+
 - stable contracts
 - replayability
 - observability
@@ -875,6 +946,7 @@ Claude should prioritize:
 - bounded complexity
 
 Before:
+
 - advanced simulations
 - deep AI reasoning
 - cinematic UX systems
@@ -884,6 +956,7 @@ Before:
 # Rule
 
 If a subsystem cannot:
+
 - explain itself
 - replay itself
 - expose uncertainty
@@ -897,9 +970,11 @@ then it is not mature enough for operational promotion.
 # 17. Final Strategic Principle
 
 Crystal Ball no longer succeeds by:
+
 - adding more features.
 
 It succeeds by:
+
 - preserving coherence under massive intelligence complexity.
 
 The defining challenge is now:
@@ -907,6 +982,7 @@ The defining challenge is now:
 > disciplined execution of calibrated planetary situational intelligence.
 
 That means:
+
 - ontology discipline
 - replay discipline
 - calibration discipline
@@ -917,7 +993,9 @@ That means:
 - explainable uncertainty
 
 That is how the project evolves from:
+
 - concept generation
 
 into:
+
 - elite systems engineering.

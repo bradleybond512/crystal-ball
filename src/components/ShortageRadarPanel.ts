@@ -1,55 +1,181 @@
-/* eslint-disable sonarjs/no-nested-conditional, sonarjs/no-nested-template-literals */
+/* eslint-disable sonarjs/no-nested-template-literals */
 /**
- * Shortage Radar Panel — gap #9 in
- * docs/ELITE_REMAINING_GAPS_FOR_CLAUDE.md.
+ * Shortage Radar Panel — 2×4 overview grid for 8 commodity shortage models.
  *
- * Renders the buildShortageRadar() report so commodity stress is
- * visible in-app instead of hiding inside service tests. The host
- * passes commodity inputs in via setRequests(); the panel sorts,
- * tiers, and renders.
+ * Commodities: wheat · corn · rice · soybeans · diesel · gasoline ·
+ *              natural-gas · jet-fuel
  *
- * Pure DOM render — no fetch, no globals. Defaults to an empty radar
- * when the host hasn't wired live inputs yet (with a friendly empty
- * state explaining what to do next).
+ * Each card shows risk level badge, score, top driver, and trend arrow.
+ * Clicking a card dispatches `wm:shortage-drill-down` so ShortageDetailPanel
+ * can open. CRITICAL transitions are routed to the notification ladder.
+ * After each render the computed state is pushed to the sidecar so
+ * /api/shortage/summary is populated for external tools.
  */
 
 import { Panel } from './Panel';
 import {
-  buildShortageRadar,
-  ALL_RADAR_COMMODITIES,
-  type ShortageRadarRequest,
-  type ShortageRadarReport,
-  type ShortageRadarEntry,
-} from '@/services/shortage/shortage-radar';
-import type { ShortageConfidence } from '@/services/shortage/shortage-types';
+  computeShortageFullSet,
+  ALL_FULLSET_COMMODITIES,
+  type ShortageSummaryEntry,
+  type FullSetCommodity,
+  type RiskLevel,
+  type Trend,
+} from '@/services/shortage/shortage-fullset';
+import type { ShortageInputBag } from '@/services/shortage/shortage-types';
+import { getPlaybook } from '@/services/shortage/commodity-playbooks';
+import { detectBigEvent } from '@/services/insights/big-event-detector';
+import { routeBigEventToLadder } from '@/services/insights/notification-ladder';
+import { getNotificationTraceRegistry } from '@/services/diagnostics/diagnostics-state';
+import { getApiBaseUrl } from '@/services/runtime';
 import { escapeHtml } from '@/utils/sanitize';
 
 const REFRESH_MS = 30_000;
+const SIDECAR_PUSH_TTL_MS = 30 * 60 * 1000; // 30-minute cache
 
-const TIER_COLOR: Record<string, string> = {
+// ── Risk level colors ──────────────────────────────────────────────────────
+
+const RISK_COLOR: Record<RiskLevel, string> = {
   CRITICAL: '#d50000',
-  ELEVATED: '#ff9800',
-  WATCH: '#ffeb3b',
-  CALM: '#4caf50',
+  HIGH:     '#ff9800',
+  MODERATE: '#ffeb3b',
+  LOW:      '#4caf50',
 };
 
-const CONFIDENCE_COLOR: Record<ShortageConfidence, string> = {
-  high: '#4caf50',
-  medium: '#ff9800',
-  low: '#f44336',
+const RISK_BG: Record<RiskLevel, string> = {
+  CRITICAL: 'rgba(213,0,0,0.12)',
+  HIGH:     'rgba(255,152,0,0.10)',
+  MODERATE: 'rgba(255,235,59,0.08)',
+  LOW:      'rgba(76,175,80,0.08)',
 };
 
-function defaultRequests(): ShortageRadarRequest[] {
-  return ALL_RADAR_COMMODITIES.map((c) => ({
-    commodity: c,
-    region: 'global',
-    inputs: {},
-  }));
+// ── Trend arrows ───────────────────────────────────────────────────────────
+
+const TREND_ARROW: Record<Trend, string> = {
+  deteriorating: '▲',
+  stable:        '→',
+  improving:     '▼',
+};
+
+const TREND_COLOR: Record<Trend, string> = {
+  deteriorating: '#f44336',
+  stable:        '#9e9e9e',
+  improving:     '#4caf50',
+};
+
+// ── Commodity display names ───────────────────────────────────────────────
+
+const DISPLAY_NAME: Record<FullSetCommodity, string> = {
+  'wheat':       'Wheat',
+  'corn':        'Corn',
+  'rice':        'Rice',
+  'soybeans':    'Soybeans',
+  'diesel':      'Diesel',
+  'gasoline':    'Gasoline',
+  'natural-gas': 'Nat Gas',
+  'jet-fuel':    'Jet Fuel',
+};
+
+// ── Notification ladder guard ─────────────────────────────────────────────
+// Track previous risk levels to fire only on HIGH → CRITICAL transitions.
+
+const _prevRiskLevels = new Map<FullSetCommodity, RiskLevel>();
+
+function checkAndNotify(entry: ShortageSummaryEntry): void {
+  const prev = _prevRiskLevels.get(entry.commodity);
+  _prevRiskLevels.set(entry.commodity, entry.riskLevel);
+
+  const justCritical = entry.riskLevel === 'CRITICAL' && prev !== 'CRITICAL';
+  if (!justCritical) return;
+
+  try {
+    const input = {
+      id: `shortage-${entry.commodity}-${Date.now()}`,
+      domain: 'shortage',
+      severityScore: entry.riskScore,
+      previousSeverityScore: 0,
+      truthScore: { high: 0.85, medium: 0.65, low: 0.45 }[entry.forecast.confidence] ?? 0.45,
+      sourceCount: new Set(
+        entry.forecast.drivers.flatMap((d) => d.sources ?? [])
+      ).size || 1,
+      hasOfficialSource: false,
+      overlappingDomains: [entry.forecast.domain],
+      userExposure: 30,
+      potentialImpact: entry.riskScore,
+      forecastThresholdCrossed: true,
+    };
+    const result = detectBigEvent(input);
+    if (result.isBigEvent) {
+      routeBigEventToLadder(
+        getNotificationTraceRegistry(),
+        result,
+        input,
+        {
+          domain: 'shortage',
+          headline: `${DISPLAY_NAME[entry.commodity]} shortage risk: CRITICAL`,
+          summary: entry.forecast.drivers.slice(0, 2).map((d) => d.label).join('; '),
+        },
+      );
+    }
+  } catch {
+    // Notification failure must not crash the panel render loop.
+  }
 }
+
+// ── Globe overlay ─────────────────────────────────────────────────────────
+
+function emitGlobeOverlay(entries: ShortageSummaryEntry[]): void {
+  if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
+  const regionRisk: { commodity: string; countries: string[]; riskLevel: RiskLevel; score: number }[] = [];
+  for (const e of entries) {
+    if (e.riskLevel === 'LOW') continue;
+    const pb = getPlaybook(e.commodity);
+    if (pb?.affectedCountries && pb.affectedCountries.length > 0) {
+      regionRisk.push({
+        commodity: e.commodity,
+        countries: pb.affectedCountries,
+        riskLevel: e.riskLevel,
+        score: e.riskScore,
+      });
+    }
+  }
+  window.dispatchEvent(new CustomEvent('wm:shortage-risk-data', { detail: regionRisk }));
+}
+
+// ── Sidecar push ──────────────────────────────────────────────────────────
+
+async function pushToSidecar(entries: ShortageSummaryEntry[]): Promise<void> {
+  const base = getApiBaseUrl();
+  if (!base) return; // web build — no sidecar
+  try {
+    const payload = {
+      entries: entries.map((e) => ({
+        commodity: e.commodity,
+        riskScore: e.riskScore,
+        riskLevel: e.riskLevel,
+        primaryDrivers: e.primaryDrivers,
+        timeToImpact: e.timeToImpact,
+        trend: e.trend,
+        forecast: e.forecast,
+      })),
+      updatedAt: Date.now(),
+      ttlMs: SIDECAR_PUSH_TTL_MS,
+    };
+    await fetch(`${base}/api/shortage/state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(4000),
+    });
+  } catch {
+    // Sidecar push is best-effort; the panel renders locally regardless.
+  }
+}
+
+// ── Panel class ───────────────────────────────────────────────────────────
 
 export class ShortageRadarPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
-  private requests: ShortageRadarRequest[] = defaultRequests();
+  private inputs: Partial<Record<FullSetCommodity, ShortageInputBag>> = {};
 
   constructor() {
     super({
@@ -58,16 +184,22 @@ export class ShortageRadarPanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Cross-commodity shortage risk: wheat, corn, diesel, gasoline, sugar, coffee, cocoa. Sorted by risk score, then confidence. Wire live inputs via setRequests().',
+        'Shortage risk across 8 commodities: wheat, corn, rice, soybeans, diesel, gasoline, natural gas, jet fuel. Sorted by risk. Click a card for the full drill-down.',
     });
     this.start();
   }
 
-  /** Allows the host (data loader / sidecar bridge) to inject live
-   *  inputs. The radar re-renders on the next tick. */
-  public setRequests(requests: readonly ShortageRadarRequest[]): void {
-    this.requests = requests.map((r) => ({ ...r, inputs: { ...r.inputs } }));
+  /** Inject live commodity inputs from the data loader. */
+  public setInputs(inputs: Partial<Record<FullSetCommodity, ShortageInputBag>>): void {
+    this.inputs = { ...inputs };
     this.render();
+  }
+
+  /** Legacy compat shim — previous callers used setRequests(). */
+  public setRequests(requests: readonly { commodity: FullSetCommodity; inputs: ShortageInputBag }[]): void {
+    const map: Partial<Record<FullSetCommodity, ShortageInputBag>> = {};
+    for (const r of requests) map[r.commodity] = r.inputs;
+    this.setInputs(map);
   }
 
   public dispose(): void {
@@ -83,80 +215,106 @@ export class ShortageRadarPanel extends Panel {
   }
 
   private render(): void {
-    const report = buildShortageRadar(this.requests);
-    const concerning = report.entries.filter((e) => e.forecast.riskScore >= 50).length;
-    this.setCount(concerning);
-    this.setContent(this.buildHtml(report));
+    const entries = computeShortageFullSet(this.inputs);
+    const criticalCount = entries.filter((e) => e.riskLevel === 'CRITICAL').length;
+    const alertCount = entries.filter((e) => e.riskLevel === 'CRITICAL' || e.riskLevel === 'HIGH').length;
+    this.setCount(alertCount);
+
+    for (const e of entries) checkAndNotify(e);
+    emitGlobeOverlay(entries);
+    void pushToSidecar(entries);
+
+    this.setContent(this.buildHtml(entries, criticalCount));
   }
 
-  private buildHtml(report: ShortageRadarReport): string {
-    if (report.entries.length === 0) {
-      return `<div style="padding:14px;color:var(--text-secondary,#aaa);font-size:13px;">
-        No commodity feeds wired into the radar yet.<br/><br/>
-        <span style="font-size:11px;">The radar runs the wheat / corn / diesel / gasoline / sugar / coffee / cocoa models. Wire your inputs by calling <code>panel.setRequests(...)</code> from the data loader.</span>
-      </div>`;
+  private buildHtml(entries: ShortageSummaryEntry[], criticalCount: number): string {
+    const plural = criticalCount === 1 ? '' : 'S';
+    const bannerHtml = criticalCount > 0
+      ? `<div style="padding:6px 12px;background:rgba(213,0,0,0.15);border-bottom:1px solid rgba(213,0,0,0.3);font-size:11px;font-weight:700;color:#d50000;letter-spacing:0.04em;">
+           ⚠ ${criticalCount} CRITICAL SHORTAGE${plural} DETECTED
+         </div>`
+      : '';
+
+    // 2×4 grid — ordered by commodity position (not sorted by risk) so
+    // the grid layout stays stable across refreshes. Tier badges provide
+    // the urgency signal.
+    const ordered: ShortageSummaryEntry[] = [];
+    for (const c of ALL_FULLSET_COMMODITIES) {
+      const e = entries.find((x) => x.commodity === c);
+      if (e) ordered.push(e);
     }
-    const recsHtml = report.recommendations.length === 0
-      ? `<div style="font-size:11px;color:var(--text-secondary,#aaa);">All commodities below the elevated threshold.</div>`
-      : `<ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.5;">${report.recommendations.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>`;
-    const rows = report.entries.map((e) => this.renderEntry(e)).join('');
-    return `<div style="padding:12px;display:flex;flex-direction:column;gap:14px;">
-      <div>
-        <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:6px;">Overall</div>
-        <div style="font-size:13px;font-weight:600;">${escapeHtml(report.summary)}</div>
-      </div>
-      <div>
-        <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:6px;">What you should watch</div>
-        ${recsHtml}
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>
-    </div>`;
+
+    const cards = ordered.map((e) => this.buildCard(e)).join('');
+
+    return `${bannerHtml}
+      <div style="padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        ${cards}
+      </div>`;
   }
 
-  private renderEntry(e: ShortageRadarEntry): string {
-    const tier = e.headline.split(': ').pop() ?? 'CALM';
-    const color = TIER_COLOR[tier] ?? '#9e9e9e';
-    const confidenceColor = CONFIDENCE_COLOR[e.forecast.confidence];
-    const drivers = e.topDrivers.length === 0
-      ? `<div style="font-size:11px;color:var(--text-secondary,#aaa);">No drivers above threshold.</div>`
-      : e.topDrivers.map((d) => `<li style="font-size:11px;">${escapeHtml(d)}</li>`).join('');
-    const driverList = e.topDrivers.length === 0
-      ? drivers
-      : `<ul style="margin:4px 0 0 0;padding-left:16px;">${drivers}</ul>`;
-    const gapsHtml = e.forecast.dataGaps.length === 0
-      ? ''
-      : `<div style="font-size:10px;color:#ff9800;margin-top:4px;">⚠ ${e.forecast.dataGaps.length} data gap${e.forecast.dataGaps.length === 1 ? '' : 's'}: ${escapeHtml(e.forecast.dataGaps.slice(0, 3).join('; '))}</div>`;
-    return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:3px;padding:10px 12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-weight:700;font-size:13px;">${escapeHtml(e.headline.split(': ')[0] ?? e.commodity)}</span>
-          <span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(tier)}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:10px;color:${confidenceColor};text-transform:uppercase;">${escapeHtml(e.forecast.confidence)}</span>
-          <span style="font-size:14px;font-weight:700;color:${color};font-family:ui-monospace,monospace;">${e.forecast.riskScore.toFixed(0)}</span>
-        </div>
-      </div>
-      <div style="margin-top:6px;font-size:11px;color:var(--text-secondary,#aaa);">
-        Horizon ${e.forecast.horizonDays}d · ${e.forecast.drivers.length} driver${e.forecast.drivers.length === 1 ? '' : 's'} · region ${escapeHtml(e.forecast.region)}
-      </div>
-      <div style="margin-top:4px;font-size:11px;">
-        <span style="color:var(--text-secondary,#aaa);text-transform:uppercase;font-size:10px;">Top drivers</span>
-        ${driverList}
-      </div>
-      ${gapsHtml}
-      ${this.renderConfirming(e.forecast.confirmingIndicators)}
-    </div>`;
-  }
+  private buildCard(e: ShortageSummaryEntry): string {
+    const color = RISK_COLOR[e.riskLevel];
+    const bg = RISK_BG[e.riskLevel];
+    const arrow = TREND_ARROW[e.trend];
+    const arrowColor = TREND_COLOR[e.trend];
+    const topDriver = e.primaryDrivers[0] ? escapeHtml(e.primaryDrivers[0]) : 'No drivers';
+    const gapDot = e.forecast.dataGaps.length > 0
+      ? `<span title="${escapeHtml(e.forecast.dataGaps[0] ?? '')}" style="color:#ff9800;font-size:10px;" aria-label="data gaps">⚠</span>`
+      : '';
 
-  private renderConfirming(indicators: readonly string[]): string {
-    if (indicators.length === 0) return '';
-    return `<div style="margin-top:6px;font-size:10px;color:var(--text-secondary,#aaa);">
-      <span style="text-transform:uppercase;">Watch next</span> · ${escapeHtml(indicators.slice(0, 3).join(', '))}
+    return `<div
+      data-shortage-commodity="${escapeHtml(e.commodity)}"
+      role="button"
+      tabindex="0"
+      style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:4px;padding:9px 10px;cursor:pointer;background:${bg};transition:filter 0.15s;"
+      onmouseenter="this.style.filter='brightness(1.1)'"
+      onmouseleave="this.style.filter=''"
+    >
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-weight:700;font-size:12px;">${escapeHtml(DISPLAY_NAME[e.commodity])}</span>
+        <span style="display:flex;align-items:center;gap:4px;">
+          ${gapDot}
+          <span style="color:${arrowColor};font-size:12px;" title="${escapeHtml(e.trend)}">${arrow}</span>
+        </span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px;">
+        <span style="font-size:18px;font-weight:700;color:${color};font-family:ui-monospace,monospace;">${e.riskScore.toFixed(0)}</span>
+        <span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.06em;padding:1px 4px;border:1px solid ${color};border-radius:2px;">${e.riskLevel}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text-secondary,#aaa);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(e.primaryDrivers.join(' · '))}">${topDriver}</div>
+      <div style="font-size:10px;color:var(--text-secondary,#777);margin-top:2px;">${escapeHtml(e.timeToImpact)}</div>
     </div>`;
   }
 }
 
-// re-export type for callers that want the driver shape without
-// reaching into the shortage-types module.
-export type { ShortageDriver } from '@/services/shortage/shortage-types';
+// ── Click delegation ───────────────────────────────────────────────────────
+// Attached once at module load so all card clicks dispatch the drill-down
+// event regardless of how many times the panel re-renders.
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (ev) => {
+    const target = (ev.target as Element)?.closest('[data-shortage-commodity]');
+    if (!target) return;
+    const commodity = target.getAttribute('data-shortage-commodity');
+    if (!commodity) return;
+    document.dispatchEvent(
+      new CustomEvent('wm:shortage-drill-down', { detail: { commodity }, bubbles: true }),
+    );
+  });
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    const target = (ev.target as Element)?.closest('[data-shortage-commodity]');
+    if (!target) return;
+    const commodity = target.getAttribute('data-shortage-commodity');
+    if (!commodity) return;
+    document.dispatchEvent(
+      new CustomEvent('wm:shortage-drill-down', { detail: { commodity }, bubbles: true }),
+    );
+  });
+}
+
+// Re-export type for external callers.
+
+
+export {type ShortageSummaryEntry, type FullSetCommodity, type RiskLevel, type Trend} from '@/services/shortage/shortage-fullset';

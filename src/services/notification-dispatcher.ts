@@ -11,9 +11,10 @@
  *  - Quiet hours: suppresses non-critical alerts during configured hours
  */
 
-import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
+import type { UnifiedAlert, AlertSeverity, AlertSource } from './unified-alerts';
 import type { CompoundThreat } from './compound-threat';
 import type { Anomaly } from './anomaly-detection';
+import { shouldNotify, type NotificationDomain } from './notifications/notification-settings-service';
 
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -100,6 +101,51 @@ function isTauriContext(): boolean {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Source → domain mapping
+// ──────────────────────────────────────────────────────────────────────────────
+
+function alertSourceToDomain(source: AlertSource): NotificationDomain {
+  switch (source) {
+    case 'nws':
+    case 'cyclone':
+    case 'spc': { return 'weather';
+    }
+    case 'gdacs':
+    case 'tsunami':
+    case 'volcano':
+    case 'earthquake': { return 'earthquakes';
+    }
+    case 'fire': { return 'wildfire';
+    }
+    case 'aviation-hazard': { return 'aviation';
+    }
+    case 'maritime': { return 'maritime';
+    }
+    case 'disease': { return 'biosurveillance';
+    }
+    case 'space-weather': { return 'space_weather';
+    }
+    case 'power-grid':
+    case 'comms-health':
+    case 'resource': { return 'infrastructure';
+    }
+    case 'oref': // Israeli Color Red — geopolitical/military real-time missile warning
+    case 'breaking-news':
+    case 'hazard':
+    case 'travel-advisory': { return 'geopolitical';
+    }
+    case 'cyber':
+    case 'local-ids':
+    case 'radiation':
+    case 'air-quality':
+    case 'correlation': { return 'cyber';
+    }
+    default: { return 'geopolitical';
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Dispatcher class
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -117,10 +163,14 @@ class NotificationDispatcher {
  // ── Silent action — nothing to do ──
  if (action === 'silent') return;
 
- // ── Ghost Mode — suppress ALL notifications ──
+ // ── Ghost Mode — suppress ALL notifications (outermost gate) ──
  if (isGhostMode()) return;
 
- // ── Quiet hours — suppress unless critical ──
+ // ── Per-domain settings — user's notification preferences ──
+ const domain = alertSourceToDomain(alert.source);
+ if (!shouldNotify(domain, alert.severity)) return;
+
+ // ── Quiet hours (legacy wm-quiet-hours key) — suppress unless critical ──
  if (isQuietHoursActive() && alert.severity !== 'critical') return;
 
  // ── Rate limiting — max 1 per source per RATE_LIMIT_MS ──

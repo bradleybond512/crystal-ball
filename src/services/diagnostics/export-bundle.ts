@@ -41,6 +41,7 @@ import type { DebtItem } from '@/services/quality/quality-debt';
 import type { ImprovementReport } from '@/services/quality/self-improvement-scheduler';
 import type { TrustBudgetReport } from '@/services/ops/trust-budget';
 import type { ScenarioCoverage } from '@/services/scenarios/scenario-library';
+import type { MissionState } from './mission-state-service';
 
 // Imported from PR 7 self-test runner. Kept as a structural type so
 // this module doesn't hard-depend on self-test.ts when self-test
@@ -59,6 +60,39 @@ export interface SelfTestReportShape {
   counts: Record<string, number>;
   totalDurationMs: number;
   summary: string;
+}
+
+// ── New field types (Phase 2: diagnostic completeness) ──────────────────
+
+export interface AlgorithmCalibrationSummary {
+  algorithmId: string;
+  domain: string;
+  graded: number;
+  hitRate: number;
+  weightedHitRate: number;
+  meanDurationMs: number;
+}
+
+export interface MissionStateSummary {
+  state: MissionState;
+  staleFeedCount: number;
+  criticalStaleFeedCount: number;
+}
+
+export interface FeedHealthEntry {
+  id: string;
+  name: string;
+  status: string;
+  lastUpdateIso: string | null;
+}
+
+export interface SystemInfo {
+  appVersion: string;
+  buildHash?: string;
+  /** ms since page load (performance.now()). */
+  uptimeMs?: number;
+  /** JS heap used bytes if available. */
+  memoryUsedBytes?: number;
 }
 
 // ── Public API ──────────────────────────────────────────────────────────
@@ -111,6 +145,14 @@ export interface DiagnosticsExportBundle {
   improvementPlan?: ImprovementReport;
   /** Scenario library coverage by domain + category. */
   scenarioCoverage?: ScenarioCoverage;
+  /** Per-algorithm calibration summaries from the evaluation ledger. */
+  algorithmState?: readonly AlgorithmCalibrationSummary[];
+  /** Overall mission state computed from feed-staleness rules. */
+  missionState?: MissionStateSummary;
+  /** Per-feed freshness snapshot (id, name, status, last update). */
+  feedHealth?: readonly FeedHealthEntry[];
+  /** System runtime info: version, uptime, memory. */
+  systemInfo?: SystemInfo;
   /** Anything truncated for size, recorded so the consumer knows what
    *  was dropped. */
   truncations: ExportTruncationNote[];
@@ -147,6 +189,10 @@ export interface BuildExportBundleInput {
   trustBudget?: TrustBudgetReport;
   improvementPlan?: ImprovementReport;
   scenarioCoverage?: ScenarioCoverage;
+  algorithmState?: readonly AlgorithmCalibrationSummary[];
+  missionState?: MissionStateSummary;
+  feedHealth?: readonly FeedHealthEntry[];
+  systemInfo?: SystemInfo;
   /** Caps; see DEFAULTS below. */
   caps?: Partial<{
     maxNotificationTraces: number;
@@ -242,6 +288,10 @@ export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExp
     trustBudget: redactStrategicSection(input.trustBudget),
     improvementPlan: redactStrategicSection(input.improvementPlan),
     scenarioCoverage: redactStrategicSection(input.scenarioCoverage),
+    algorithmState: input.algorithmState ? [...input.algorithmState] : undefined,
+    missionState: input.missionState ? { ...input.missionState } : undefined,
+    feedHealth: input.feedHealth ? [...input.feedHealth] : undefined,
+    systemInfo: input.systemInfo ? { ...input.systemInfo } : undefined,
     truncations,
   };
 

@@ -25,6 +25,8 @@ export const SIGNUP_URLS: Partial<Record<RuntimeSecretKey, string>> = {
   OPENSKY_CLIENT_SECRET: 'https://opensky-network.org/login?view=registration',
   FINNHUB_API_KEY: 'https://finnhub.io/register',
   NASA_FIRMS_API_KEY: 'https://firms.modaps.eosdis.nasa.gov/api/map_key/',
+  AIRNOW_API_KEY: 'https://docs.airnowapi.org/account/request/',
+  PURPLEAIR_API_KEY: 'https://develop.purpleair.com/keys',
   OLLAMA_API_URL: 'https://ollama.com/download',
   OLLAMA_MODEL: 'https://ollama.com/library',
   WTO_API_KEY: 'https://apiportal.wto.org/',
@@ -52,6 +54,11 @@ export const SIGNUP_URLS: Partial<Record<RuntimeSecretKey, string>> = {
   GOOGLE_MAPS_API_KEY: 'https://console.cloud.google.com/apis/credentials',
   MAPBOX_API_KEY: 'https://account.mapbox.com/auth/signup/',
   MAPTILER_API_KEY: 'https://cloud.maptiler.com/auth/widget?next=https://cloud.maptiler.com/maps/',
+  S2U_XMPP_JID: 'https://s2underground.com/',
+  S2U_XMPP_SECRET: 'https://s2underground.com/',
+  S2U_TAK_URL: 'https://s2underground.com/',
+  S2U_TAK_USERNAME: 'https://s2underground.com/',
+  S2U_TAK_SECRET: 'https://s2underground.com/',
 };
 
 export const PLAINTEXT_KEYS = new Set<RuntimeSecretKey>([
@@ -61,6 +68,10 @@ export const PLAINTEXT_KEYS = new Set<RuntimeSecretKey>([
   'VITE_WS_RELAY_URL',
   'VITE_OPENSKY_RELAY_URL',
   'ACLED_EMAIL',
+  'S2U_XMPP_JID',
+  'S2U_TAK_URL',
+  'S2U_TAK_USERNAME',
+  'S2U_TLS_INSECURE_OPT_IN',
 ]);
 
 /**
@@ -139,6 +150,8 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   AISSTREAM_API_KEY: 'AISStream API Key',
   FINNHUB_API_KEY: 'Finnhub API Key',
   NASA_FIRMS_API_KEY: 'NASA FIRMS API Key',
+  AIRNOW_API_KEY: 'EPA AirNow API Key',
+  PURPLEAIR_API_KEY: 'PurpleAir API Key (optional)',
   OLLAMA_API_URL: 'Ollama Server URL',
   OLLAMA_MODEL: 'Ollama Model',
   WTO_API_KEY: 'WTO API Key',
@@ -166,6 +179,12 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   GOOGLE_MAPS_API_KEY: 'Google Maps API Key',
   MAPBOX_API_KEY: 'Mapbox',
   MAPTILER_API_KEY: 'MapTiler',
+  S2U_XMPP_JID: 'S2U XMPP JID',
+  S2U_XMPP_SECRET: 'S2U XMPP Password',
+  S2U_TAK_URL: 'S2U TAK Server URL',
+  S2U_TAK_USERNAME: 'S2U TAK Username',
+  S2U_TAK_SECRET: 'S2U TAK Password',
+  S2U_TLS_INSECURE_OPT_IN: 'S2U TLS: Allow Insecure (opt-in)',
 };
 
 /**
@@ -194,6 +213,8 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   AISSTREAM_API_KEY: 'AISStream maritime vessel tracking — military, dark ships, cargo. Free.',
   WINGBITS_API_KEY: 'Wingbits aircraft metadata enrichment (operator, type, registration). Paid.',
   NASA_FIRMS_API_KEY: 'NASA FIRMS — 7,000+ satellite-detected wildfires worldwide. Free.',
+  AIRNOW_API_KEY: 'EPA AirNow — current US AQI (PM2.5 / O3) for any latitude/longitude. Free.',
+  PURPLEAIR_API_KEY: 'PurpleAir — community sensor network, hyper-local PM2.5. Optional — falls back to the public /json endpoint when omitted.',
   ICAO_API_KEY: 'ICAO NOTAMs — airport closures, runway hazards. Paid.',
   AVIATIONSTACK_API: 'AviationStack — airport delay data. Free tier available.',
   // ── Cyber threat intel ─────────────────────────────────────────────────
@@ -231,12 +252,19 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   OWM_API_KEY: 'OpenWeatherMap — temp/precip/cloud/wind tile layers. Free tier (limited).',
   MAPBOX_API_KEY: 'Mapbox vector tiles (alternative to MapLibre default).',
   MAPTILER_API_KEY: 'MapTiler vector + raster tiles (alternative to MapLibre default).',
+  // ── S2U Tactical (S2 Underground IRT) ──────────────────────────────────
+  S2U_XMPP_JID: 'Full JID for the S2 Underground XMPP server, e.g. you@xmpp.s2tak.com. Register an account on s2tak.com first; Crystal Ball will not auto-register.',
+  S2U_XMPP_SECRET: 'Password for your S2U XMPP account. Stored in the OS keychain (or the encrypted web vault on browser builds).',
+  S2U_TAK_URL: 'S2U public TAK server base URL, e.g. https://ghostmaps.s2utak.com:8443 — see the S2U SOP for the latest endpoint.',
+  S2U_TAK_USERNAME: 'S2U TAK Marti API username. The S2U SOP publishes a read-only public username (GHOSTMAPSPUBLIC) for community access; or use your own.',
+  S2U_TAK_SECRET: 'S2U TAK Marti API password. The S2U SOP publishes the public password (S2UndergroundGh0stM@ps) for the read-only GHOSTMAPSPUBLIC account.',
+  S2U_TLS_INSECURE_OPT_IN: 'Set to "true" to bypass TLS verification for the S2U TAK server. Off by default — Crystal Ball pins the published cert fingerprint instead. Only enable if pin verification fails.',
 };
 
 export interface KeyCategory {
-  id: 'llm' | 'markets' | 'cyber' | 'conflict' | 'news' | 'aviation' | 'geo' | 'weather';
+  id: 'llm' | 'markets' | 'cyber' | 'conflict' | 'news' | 'aviation' | 'geo' | 'weather' | 'tactical';
   label: string;
-  tier: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  tier: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   keys: RuntimeSecretKey[];
 }
 
@@ -248,7 +276,8 @@ export const KEY_CATEGORIES: readonly KeyCategory[] = [
   { id: 'news',     label: 'News',                   tier: 5, keys: ['NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'MEDIASTACK_API_KEY'] },
   { id: 'aviation', label: 'Aviation & Maritime',    tier: 6, keys: ['WINGBITS_API_KEY', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY', 'AVIATIONSTACK_API', 'ICAO_API_KEY'] },
   { id: 'geo',      label: 'Geo & Maps',             tier: 7, keys: ['GOOGLE_MAPS_API_KEY', 'MAPBOX_API_KEY', 'MAPTILER_API_KEY', 'GEONAMES_USERNAME', 'IPINFO_TOKEN', 'CESIUM_ION_TOKEN'] },
-  { id: 'weather',  label: 'Weather & NASA',         tier: 8, keys: ['OWM_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY'] },
+  { id: 'weather',  label: 'Weather & NASA',         tier: 8, keys: ['OWM_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY', 'PURPLEAIR_API_KEY'] },
+  { id: 'tactical', label: 'Tactical (TAK / S2U)',   tier: 9, keys: ['S2U_XMPP_JID', 'S2U_XMPP_SECRET', 'S2U_TAK_URL', 'S2U_TAK_USERNAME', 'S2U_TAK_SECRET', 'S2U_TLS_INSECURE_OPT_IN'] },
 ];
 
 const KEY_TO_CATEGORY = new Map<RuntimeSecretKey, KeyCategory>();
@@ -316,5 +345,10 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
  id: 'navigation',
  label: 'Navigation & Routing',
  features: ['navigationMapbox', 'navigationMaptiler', 'navigationRouting'],
+  },
+  {
+ id: 'tactical',
+ label: 'Tactical (TAK / S2U)',
+ features: ['s2uXmppFeed', 's2uTakFeeds'],
   },
 ];

@@ -1,4 +1,5 @@
 import {
+  CallbackProperty,
   Cartesian3,
   Cartographic,
   Color,
@@ -11,19 +12,26 @@ import {
   DistanceDisplayCondition,
   ColorMaterialProperty,
   ConstantProperty,
+  PolygonHierarchy,
   PropertyBag,
   JulianDate,
   Math as CesiumMath,
   Ellipsoid,
+  Rectangle,
   UrlTemplateImageryProvider,
   type ImageryLayer,
   PointPrimitiveCollection,
   PolylineCollection,
   HeadingPitchRoll,
   Transforms,
+  Entity,
+  PolygonGraphics,
 } from 'cesium';
 
 import { applyClustering } from '@/components/globeClustering';
+import { GlobeHeatmapRenderer } from '@/components/globe/GlobeHeatmapRenderer';
+import { coerceTimestampMs, opacityForEntity } from '@/components/globe/cursor-opacity';
+import { escapeHtml } from '@/utils/sanitize';
 import { modelLoader } from '@/services/model-loader';
 import { BuildingTileManager } from '@/services/building-tiles';
 import { fetchSatelliteCatalog, filterNotable, type SatelliteTLE } from '@/services/satellite-catalog';
@@ -31,6 +39,7 @@ import { satellitePropagator, type SatellitePosition } from '@/services/satellit
 import { fetchLightningStrikes } from '@/services/lightning';
 import { fetchRedFlagWarnings } from '@/services/red-flag-warnings';
 import { getRadarTileUrl, fetchRadarFrames } from '@/services/rainviewer-radar';
+import { getApiBaseUrl } from '@/services/runtime';
 import {
   computeAftershockForecast,
   computeCycloneCone,
@@ -65,6 +74,8 @@ import {
   ICON_BASE,
   ICON_BASE_NAVAL,
   ICON_BASE_AIR,
+  ICON_TRANSPORT,
+  ICON_HELICOPTER,
   ICON_AIRSTRIKE,
   ICON_DARK_VESSEL,
   ICON_GPS_JAM,
@@ -85,7 +96,20 @@ const ICON_SATELLITE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
 </svg>
 `);
 
+// Triangle billboard for live AIS vessels — heading-rotated point.
+// White fill so the per-vessel category color comes through via
+// the billboard.color tint (Cesium multiplies alpha + RGB channels).
+const VESSEL_TRIANGLE_DATAURI = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <path fill="#ffffff" stroke="#000000" stroke-width="1.5" d="M12 2 L20 20 L12 16 L4 20 Z"/>
+</svg>
+`);
+
 // ── Colors ──────────────────────────────────────────────────
+
+/** Hurricane forecast track + uncertainty cone color (PR 3). */
+const STORM_TRACK_COLOR_HEX = '#9333ea';
+
 
 const C = {
   // Seismic
@@ -213,16 +237,162 @@ function cycloneScale(isCat5: boolean, isCat3Plus: boolean, isCat1Plus: boolean)
   return 0.35;
 }
 
-function fireColor(confidence: string): Color {
-  if (confidence === 'FIRE_CONFIDENCE_HIGH') return C.fireHigh;
-  if (confidence === 'FIRE_CONFIDENCE_NOMINAL') return C.fireNominal;
-  return C.fireLow;
+interface PerimeterLike {
+  name: string;
+  acres: number | null;
+  containmentPct: number | null;
+  state: string | null;
+  lat: number;
+  lon: number;
+  geometry: { type: 'Polygon' | 'MultiPolygon'; coordinates: number[][][] | number[][][][] } | null;
 }
 
-function fireScale(confidence: string): number {
-  if (confidence === 'FIRE_CONFIDENCE_HIGH') return 0.3;
-  if (confidence === 'FIRE_CONFIDENCE_NOMINAL') return 0.22;
-  return 0.16;
+function renderPerimeterPolygons(layer: GlobeLayer, perimeters: PerimeterLike[]): void {
+  for (const p of perimeters) {
+    if (!p.geometry) continue;
+    const rings = p.geometry.type === 'Polygon'
+      ? [p.geometry.coordinates as number[][][]]
+      : (p.geometry.coordinates as number[][][][]);
+    for (const polygon of rings) {
+      addPerimeterEntity(layer, p, polygon[0]);
+    }
+  }
+}
+
+function addPerimeterEntity(layer: GlobeLayer, p: PerimeterLike, outerRing: number[][] | undefined): void {
+  const positions = polygonRingToCartesian(outerRing);
+  if (positions.length < 3) return;
+  const cont = p.containmentPct === null ? '—' : `${Math.round(p.containmentPct)}%`;
+  const acresStr = p.acres === null ? '—' : p.acres.toLocaleString();
+  const stateStr = p.state ?? '—';
+  layer.source.entities.add({
+    polygon: new PolygonGraphics({
+      hierarchy: new PolygonHierarchy(positions),
+      material: C.fireHigh.withAlpha(0.12),
+      outline: true,
+      outlineColor: C.fireHigh.withAlpha(0.85),
+      heightReference: HeightReference.CLAMP_TO_GROUND,
+    }),
+    description: `<b>${escapeHtml(p.name)}</b><br/>State: ${escapeHtml(stateStr)}<br/>Acres: ${acresStr}<br/>Containment: ${cont}`,
+  });
+}
+
+function polygonRingToCartesian(outerRing: number[][] | undefined): Cartesian3[] {
+  if (!outerRing || outerRing.length < 3) return [];
+  const positions: Cartesian3[] = [];
+  for (const pt of outerRing) {
+    const px = pt[0];
+    const py = pt[1];
+    if (px === undefined || py === undefined) continue;
+    if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+    positions.push(Cartesian3.fromDegrees(px, py));
+  }
+  return positions;
+}
+
+interface ClusterLike {
+  lat: number;
+  lon: number;
+  fireCount: number;
+  totalFrp: number;
+  maxBrightness: number;
+  highConfidence: boolean;
+  region: string;
+}
+
+function renderHotspotClusters(
+  layer: GlobeLayer,
+  clusters: ClusterLike[],
+  perimeters: PerimeterLike[],
+  findNearest: (lat: number, lon: number, perims: PerimeterLike[], maxKm: number) => { perimeter: PerimeterLike; distanceKm: number } | null,
+): void {
+  for (const c of clusters) {
+    const color = c.highConfidence ? C.fireHigh : C.fireNominal;
+    const scale = c.highConfidence ? 0.65 : 0.5;
+    const nearest = findNearest(c.lat, c.lon, perimeters, 50);
+    const nearestNote = nearest
+      ? `<br/><i>Near: ${escapeHtml(nearest.perimeter.name)} (${nearest.distanceKm.toFixed(1)} km)</i>`
+      : '';
+    const fireEntity = layer.source.entities.add({
+      position: Cartesian3.fromDegrees(c.lon, c.lat),
+      billboard: {
+        image: ICON_FIRE,
+        color,
+        scale,
+        heightReference: HeightReference.CLAMP_TO_GROUND,
+        scaleByDistance: new NearFarScalar(1e4, 1.2, 1e7, 0.15),
+        verticalOrigin: VerticalOrigin.CENTER,
+        horizontalOrigin: HorizontalOrigin.CENTER,
+      },
+      label: c.totalFrp >= 50 ? {
+        text: `${c.fireCount}× ${c.totalFrp.toFixed(0)}MW`,
+        font: '10px monospace',
+        fillColor: color,
+        outlineColor: Color.BLACK,
+        outlineWidth: 2,
+        style: 2,
+        pixelOffset: LABEL_OFFSET_SM,
+        horizontalOrigin: HorizontalOrigin.CENTER,
+        verticalOrigin: VerticalOrigin.BOTTOM,
+        scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+        distanceDisplayCondition: new DistanceDisplayCondition(0, 8e6),
+      } : undefined,
+      description: `<b>FIRMS hotspot cluster</b><br/>Pixels: ${c.fireCount}<br/>Total FRP: ${c.totalFrp.toFixed(1)} MW<br/>Max brightness: ${c.maxBrightness.toFixed(0)} K<br/>Confidence: ${c.highConfidence ? 'high' : 'nominal'}<br/>Region: ${escapeHtml(c.region)}${nearestNote}`,
+    });
+    setEntityTimestamp(fireEntity, new Date());
+  }
+}
+
+interface PurpleAirSensorLike {
+  id: number;
+  name: string;
+  lat: number;
+  lon: number;
+  pm25: number;
+  aqi: number;
+  category: 'good' | 'moderate' | 'sensitive' | 'unhealthy' | 'very_unhealthy' | 'hazardous';
+}
+
+const PURPLEAIR_DOT_COLORS: Record<PurpleAirSensorLike['category'], Color> = {
+  good:           Color.fromCssColorString('#00e400'),
+  moderate:       Color.fromCssColorString('#ffff00'),
+  sensitive:      Color.fromCssColorString('#ff7e00'),
+  unhealthy:      Color.fromCssColorString('#ff0000'),
+  very_unhealthy: Color.fromCssColorString('#8f3f97'),
+  hazardous:      Color.fromCssColorString('#7e0023'),
+};
+
+function renderPurpleAirDots(layer: GlobeLayer, sensors: PurpleAirSensorLike[]): void {
+  for (const s of sensors) {
+    layer.source.entities.add({
+      position: Cartesian3.fromDegrees(s.lon, s.lat),
+      point: {
+        color: PURPLEAIR_DOT_COLORS[s.category],
+        outlineColor: Color.BLACK,
+        outlineWidth: 1,
+        pixelSize: purpleAirDotSize(s.pm25),
+        heightReference: HeightReference.CLAMP_TO_GROUND,
+        scaleByDistance: new NearFarScalar(1e4, 1.4, 1e7, 0.4),
+        distanceDisplayCondition: new DistanceDisplayCondition(0, 5e6),
+      },
+      description: `<b>PurpleAir ${escapeHtml(s.name)}</b><br/>PM2.5: ${s.pm25.toFixed(1)} µg/m³<br/>AQI: ${s.aqi} (${s.category.replace('_', ' ')})`,
+    });
+  }
+}
+
+function purpleAirDotSize(pm25: number): number {
+  if (pm25 >= 150) return 14;
+  if (pm25 >= 55)  return 12;
+  if (pm25 >= 35)  return 10;
+  if (pm25 >= 12)  return 9;
+  return 8;
+}
+
+function radnetDescription(hot: { name: string; cpm: number; severity: string; state: string | null }): string {
+  const head = `<b>RadNet ${escapeHtml(hot.name)}</b>`;
+  const body = `${hot.cpm.toFixed(1)} CPM (${hot.severity})`;
+  const tail = hot.state ? ` · ${hot.state}` : '';
+  return `${head}<br/>${body}${tail}`;
 }
 
 function cyberColor(severity: string): Color {
@@ -253,9 +423,93 @@ function diseaseScale(casesPerM: number): number {
 const LABEL_OFFSET = new Cartesian3(0, -20, 0) as unknown as import('cesium').Cartesian2;
 const LABEL_OFFSET_SM = new Cartesian3(0, -18, 0) as unknown as import('cesium').Cartesian2;
 
+const COMMERCIAL_FLIGHT_HEX: Record<
+  import('@/services/aviation/commercial-flights-classify').FlightCategory,
+  string
+> = {
+  military: '#ffeb3b',
+  commercial: '#4a9eff',
+  cargo: '#9c27b0',
+  helicopter: '#8bc34a',
+  general_aviation: '#9e9e9e',
+};
+
+function categoryRank(
+  category: import('@/services/aviation/commercial-flights-classify').FlightCategory,
+): number {
+  if (category === 'commercial') return 0;
+  if (category === 'cargo') return 1;
+  if (category === 'helicopter') return 2;
+  if (category === 'general_aviation') return 3;
+  return 4;
+}
+
+function commercialFlightDescriptionHtml(
+  flight: import('@/services/aviation/commercial-flights-classify').LiveFlight,
+): string {
+  const lines: string[] = [
+    `<h3>${escapeHtml(flight.callsign ?? flight.icao24)}</h3>`,
+    `<div>Category: ${escapeHtml(flight.category.replace(/_/g, ' '))}</div>`,
+    flight.operatorName ? `<div>Operator: ${escapeHtml(flight.operatorName)}</div>` : '',
+    flight.originCountry ? `<div>Origin: ${escapeHtml(flight.originCountry)}</div>` : '',
+    flight.altitudeFt === null ? '' : `<div>Altitude: ${flight.altitudeFt} ft</div>`,
+    flight.velocityKts === null ? '' : `<div>Speed: ${flight.velocityKts} kt</div>`,
+    flight.headingDeg === null ? '' : `<div>Heading: ${Math.round(flight.headingDeg)}°</div>`,
+    flight.emergency
+      ? `<strong style="color:#d50000;">EMERGENCY squawk ${escapeHtml(flight.squawk ?? '')}</strong>`
+      : '',
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
 function setEntityTimestamp(entity: import('cesium').Entity, when: Date): void {
   entity.properties ??= new PropertyBag();
   entity.properties.addProperty('timestamp', new ConstantProperty(when));
+}
+
+/** Read an entity's `timestamp` property and coerce to ms epoch.
+ *  Returns null when no timestamp is set. Used by cursor-window
+ *  opacity. Exported for tests. */
+export function readEntityTimestampMs(entity: import('cesium').Entity): number | null {
+  const props = entity.properties;
+  if (!props) return null;
+  // PropertyBag.getValue takes a JulianDate; pass a fresh one — the
+  // timestamp is stored as a ConstantProperty so the time arg is
+  // ignored, but the API requires it.
+  const v = props.getValue(JulianDate.now()) as { timestamp?: unknown } | undefined;
+  return coerceTimestampMs(v?.timestamp);
+}
+
+/** Apply an alpha multiplier to whatever color-bearing graphic an
+ *  entity carries (point / billboard / rectangle / polygon / polyline).
+ *  Reads the current color, swaps alpha, writes back. Cesium's
+ *  `Color.withAlpha()` returns a fresh instance so we don't mutate
+ *  shared color objects. */
+export function applyEntityAlpha(entity: import('cesium').Entity, alpha: number): void {
+  const a = Math.max(0, Math.min(1, alpha));
+  const now = JulianDate.now();
+  const setColorWithAlpha = (
+    holder: { color?: import('cesium').Property } | undefined | null,
+    setter: (next: ConstantProperty) => void,
+  ): void => {
+    if (!holder?.color) return;
+    const raw: unknown = holder.color.getValue(now);
+    if (raw instanceof Color) setter(new ConstantProperty(raw.withAlpha(a)));
+  };
+  setColorWithAlpha(entity.point, (p) => { entity.point!.color = p; });
+  setColorWithAlpha(entity.billboard, (p) => { entity.billboard!.color = p; });
+  if (entity.rectangle?.material instanceof ColorMaterialProperty) {
+    const mat = entity.rectangle.material;
+    setColorWithAlpha({ color: mat.color }, (p) => { mat.color = p; });
+  }
+  if (entity.polygon?.material instanceof ColorMaterialProperty) {
+    const mat = entity.polygon.material;
+    setColorWithAlpha({ color: mat.color }, (p) => { mat.color = p; });
+  }
+  if (entity.polyline?.material instanceof ColorMaterialProperty) {
+    const mat = entity.polyline.material;
+    setColorWithAlpha({ color: mat.color }, (p) => { mat.color = p; });
+  }
 }
 
 interface GlobeLayer {
@@ -359,6 +613,9 @@ export class GlobeDataManager {
   private satelliteCatalog: SatelliteTLE[] = [];
   private unsubPositions: (() => void) | null = null;
   private cameraMoveSub: (() => void) | null = null;
+  private maritimeVesselsTimer: ReturnType<typeof setInterval> | null = null;
+  private heatmapRenderer: GlobeHeatmapRenderer | null = null;
+  private cursorListener: ((event: Event) => void) | null = null;
   private aftershockForecasts = new Map<string, AftershockForecast>();
   private cycloneCones = new Map<string, ForecastCone>();
   // Persists across loadTropicalCyclones() calls so we can derive an actual
@@ -386,13 +643,19 @@ export class GlobeDataManager {
  this.registerLayer('volcanoes', () => this.loadVolcanoes());
  this.registerLayer('cyclones', () => this.loadTropicalCyclones());
  this.registerLayer('fires', () => this.loadFires());
+ this.registerLayer('airQuality', () => this.loadAirQuality());
+ this.registerLayer('spaceWeather', () => this.loadSpaceWeatherOverlay());
+ this.registerLayer('warRiskZones', () => this.loadWarRiskZones());
+ this.registerLayer('infrastructure', () => this.loadInfrastructureOverlay());
  this.registerLayer('conflicts', () => this.loadConflicts());
  this.registerLayer('airstrikes', () => this.loadAirstrikes());
  this.registerLayer('strike-packages', () => this.loadStrikePackages());
  this.registerLayer('cyber', () => this.loadCyberThreats());
  this.registerLayer('flights', () => this.loadMilitaryFlights());
+ this.registerLayer('aviationIntel', () => this.loadAviationIntel());
  this.registerLayer('vessels', () => this.loadMilitaryVessels());
  this.registerLayer('darkVessels', () => this.loadDarkVessels());
+ this.registerLayer('maritimeVessels', () => this.loadMaritimeVessels());
  this.registerLayer('gpsJamming', () => this.loadGpsJamming());
  this.registerLayer('satChange', () => this.loadSatelliteChange());
  this.registerLayer('satellites', () => this.loadOrbitalSatellites());
@@ -405,6 +668,8 @@ export class GlobeDataManager {
  this.registerLayer('weatherSatellite', () => this.loadWeatherSatellite());
  this.registerLayer('lightningStrikes', () => this.loadLightningStrikes());
  this.registerLayer('redFlagWarnings', () => this.loadRedFlagWarnings());
+ this.registerLayer('weatherHazards', () => this.loadWeatherHazards());
+ this.registerLayer('wastewaterStates', () => this.loadWastewaterStates());
 
  this.registerLayer('streetTiles', () => {
  // Managed by StreetTileManager, not data source
@@ -422,6 +687,44 @@ export class GlobeDataManager {
  if (!DEFERRED_LAYER_ALTITUDE[name]) void this.loadLayer(name);
  }
  this.setupDeferredLayerLoading();
+
+ // Heatmap renderer self-manages via the wm:globe-heatmap-changed event bus.
+ this.heatmapRenderer = new GlobeHeatmapRenderer(this.viewer);
+ this.heatmapRenderer.mount();
+
+ // Timeline cursor → entity opacity wiring. Fades out-of-window
+ // entities to 0.3 alpha so playback visibly affects the globe.
+ this.cursorListener = (event) => this.handleCursorChange(event);
+ document.addEventListener('wm:globe-timeline-cursor', this.cursorListener);
+  }
+
+  /** Apply cursor-window opacity to every time-stamped entity in
+   *  every loaded data source. Called from the cursor event listener.
+   *  Public so tests can drive it without dispatching DOM events. */
+  applyCursorOpacity(cursorMs: number): { faded: number; full: number; timeless: number } {
+ const result = { faded: 0, full: 0, timeless: 0 };
+ for (const [, layer] of this.layers) {
+ for (const entity of layer.source.entities.values) {
+ const ts = readEntityTimestampMs(entity);
+ if (ts === null) {
+ result.timeless += 1;
+ // Timeless entities are never faded — leave them alone.
+ continue;
+ }
+ const alpha = opacityForEntity(ts, cursorMs);
+ applyEntityAlpha(entity, alpha);
+ if (alpha < 1) result.faded += 1;
+ else result.full += 1;
+ }
+ }
+ return result;
+  }
+
+  private handleCursorChange(event: Event): void {
+ const detail = (event as CustomEvent<{ cursorMs?: unknown }>).detail;
+ const ms = Number(detail?.cursorMs);
+ if (!Number.isFinite(ms)) return;
+ this.applyCursorOpacity(ms);
   }
 
   private checkDeferredLayers = (): void => {
@@ -948,49 +1251,111 @@ export class GlobeDataManager {
  const layer = this.layers.get('fires');
  if (!layer) return;
 
- const { fetchAllFires, flattenFires } = await import('@/services/wildfires');
- const result = await fetchAllFires();
- const fires = flattenFires(result.regions);
+ const { fetchAllFires, flattenFires, toMapFires } = await import('@/services/wildfires');
+ const { fetchActivePerimeters } = await import('@/services/wildfires/fire-intel-service');
+ const { clusterHotspots, findNearestPerimeter } = await import('@/services/wildfires/fire-intel-helpers');
 
- for (const f of fires) {
- const lat = f.location?.latitude;
- const lon = f.location?.longitude;
- if (lat == null || lon == null) continue;
- // Only show significant fires to avoid flooding the globe
- if (f.frp < 10) continue;
+ const [fireResult, perimeters] = await Promise.all([
+ fetchAllFires().catch(() => ({ regions: {}, totalCount: 0 })),
+ fetchActivePerimeters().catch(() => []),
+ ]);
 
- const color = fireColor(f.confidence ?? '');
- const scale = fireScale(f.confidence ?? '') * 0.7;
+ renderPerimeterPolygons(layer, perimeters);
+ const clusters = clusterHotspots(toMapFires(flattenFires(fireResult.regions)), { gridDeg: 0.1, topN: 500 });
+ renderHotspotClusters(layer, clusters, perimeters, findNearestPerimeter);
+  }
 
- const fireEntity = layer.source.entities.add({
- position: Cartesian3.fromDegrees(lon, lat),
- billboard: {
- image: ICON_FIRE,
- color,
- scale,
- heightReference: HeightReference.CLAMP_TO_GROUND,
- scaleByDistance: new NearFarScalar(1e4, 1.2, 1e7, 0.15),
- verticalOrigin: VerticalOrigin.CENTER,
- horizontalOrigin: HorizontalOrigin.CENTER,
- },
- label: f.frp >= 50 ? {
- text: `Fire ${f.frp.toFixed(0)}MW`,
- font: '10px monospace',
- fillColor: color,
- outlineColor: Color.BLACK,
+  private async loadAirQuality(): Promise<void> {
+ const layer = this.layers.get('airQuality');
+ if (!layer) return;
+ const { fetchPurpleAirSnapshot } = await import('@/services/airquality/purpleair-service');
+ const purpleAir = await fetchPurpleAirSnapshot().catch(() => ({ sensors: [], source: 'unknown' as const, fetchedAt: Date.now() }));
+ renderPurpleAirDots(layer, purpleAir.sensors);
+  }
+
+  private async loadSpaceWeatherOverlay(): Promise<void> {
+ const layer = this.layers.get('spaceWeather');
+ if (!layer) return;
+ const { fetchSpaceWxStatus, renderSpaceWeatherDescriptor, buildOverlayDescriptor } =
+ await import('./globe/SpaceWeatherGlobeOverlay');
+ const status = await fetchSpaceWxStatus();
+ if (!status) return;
+ renderSpaceWeatherDescriptor(layer, buildOverlayDescriptor(status));
+  }
+
+  private async loadWarRiskZones(): Promise<void> {
+ const layer = this.layers.get('warRiskZones');
+ if (!layer) return;
+ const { WAR_RISK_ZONES } = await import('@/services/maritime/maritime-threats');
+ const { warZoneColors } = await import('@/services/globe/overlay-helpers');
+
+ for (const zone of WAR_RISK_ZONES) {
+ const palette = warZoneColors(zone.threatCategory);
+ const fill = Color.fromCssColorString(palette.fillHex).withAlpha(palette.fillAlpha);
+ const outline = Color.fromCssColorString(palette.outlineHex);
+ layer.source.entities.add({
+ position: Cartesian3.fromDegrees(zone.centerLon, zone.centerLat),
+ ellipse: {
+ semiMajorAxis: zone.radiusKm * 1000,
+ semiMinorAxis: zone.radiusKm * 1000,
+ material: new ColorMaterialProperty(fill),
+ outline: true,
+ outlineColor: outline,
  outlineWidth: 2,
- style: 2,
- pixelOffset: LABEL_OFFSET_SM,
- horizontalOrigin: HorizontalOrigin.CENTER,
- verticalOrigin: VerticalOrigin.BOTTOM,
- scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
- distanceDisplayCondition: new DistanceDisplayCondition(0, 8e6),
- } : undefined,
- description: `Fire — FRP: ${f.frp.toFixed(1)} MW | Brightness: ${f.brightness.toFixed(0)} | ${f.region}`,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ },
+ name: `war-risk-${zone.id}`,
+ description: `<b>${escapeHtml(zone.name)}</b><br/>${escapeHtml(zone.rationale)}<br/>Effective: ${zone.effectiveFrom}`,
  });
- if (f.detectedAt) {
- setEntityTimestamp(fireEntity, new Date(f.detectedAt));
  }
+  }
+
+  private async loadInfrastructureOverlay(): Promise<void> {
+ const layer = this.layers.get('infrastructure');
+ if (!layer) return;
+ const [{ fetchOutages, fetchRadiation }, { outagesToStateOverlay, radiationToHotspots }, { outageRectExtent, radnetPulsePixelSize }] = await Promise.all([
+ import('@/services/infrastructure/grid-intelligence-loader'),
+ import('@/services/infrastructure/infrastructure-overlay'),
+ import('@/services/globe/overlay-helpers'),
+ ]);
+ const [outages, radiation] = await Promise.all([fetchOutages(), fetchRadiation()]);
+
+ for (const row of outagesToStateOverlay(outages)) {
+ const ext = outageRectExtent(row.lat, row.lon, row.severity);
+ const fill = Color.fromCssColorString(row.fillColorHex).withAlpha(row.fillOpacity);
+ const outline = Color.fromCssColorString(row.fillColorHex);
+ layer.source.entities.add({
+ rectangle: {
+ coordinates: Rectangle.fromDegrees(ext.west, ext.south, ext.east, ext.north),
+ material: new ColorMaterialProperty(fill),
+ outline: true,
+ outlineColor: outline,
+ outlineWidth: 1,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ },
+ name: `outage-${row.state}`,
+ description: `<b>${escapeHtml(row.state)} — ${row.severity}</b><br/>${row.customersAffected.toLocaleString()} customers affected across ${row.countyCount} counties`,
+ });
+ }
+
+ for (const hot of radiationToHotspots(radiation)) {
+ const startMs = Date.now();
+ const periodMs = hot.pulsePeriodMs;
+ const pulseColor = Color.fromCssColorString(hot.pulseColorHex);
+ const pixelSize = new CallbackProperty(() => radnetPulsePixelSize(Date.now() - startMs, periodMs), false);
+ layer.source.entities.add({
+ position: Cartesian3.fromDegrees(hot.lon, hot.lat),
+ point: {
+ color: pulseColor,
+ outlineColor: Color.BLACK,
+ outlineWidth: 1,
+ pixelSize,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ scaleByDistance: new NearFarScalar(1e4, 1.4, 1e7, 0.4),
+ },
+ name: `radnet-${hot.name}`,
+ description: radnetDescription(hot),
+ });
  }
   }
 
@@ -1233,6 +1598,254 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  }
   }
 
+  private async loadAviationIntel(): Promise<void> {
+ const layer = this.layers.get('aviationIntel');
+ if (!layer) return;
+
+ const [{ fetchAviationIntelSnapshot }, helpers, { fetchLiveFlights }] = await Promise.all([
+ import('@/services/aviation/aviation-intel-service'),
+ import('@/services/aviation/aviation-globe-helpers'),
+ import('@/services/aviation/commercial-flights-service'),
+ ]);
+ const [snapshot, liveFlights] = await Promise.all([
+ fetchAviationIntelSnapshot(),
+ fetchLiveFlights(),
+ ]);
+
+ layer.source.entities.removeAll();
+
+ for (const tfr of helpers.tfrsWithGeometry(snapshot.notams.data)) {
+ this.addAviationTfrEntity(layer, tfr, helpers);
+ }
+ for (const sigmet of snapshot.sigmets.data) {
+ if (sigmet.polygon.length >= 3) this.addAviationSigmetEntity(layer, sigmet, helpers);
+ }
+ for (const ash of helpers.ashAdvisoriesWithPolygon(snapshot.volcanicAsh.data)) {
+ this.addAviationAshEntity(layer, ash, helpers);
+ }
+ for (const ac of helpers.aircraftWithPosition(snapshot.military.data)) {
+ this.addAviationAircraftEntity(layer, ac, helpers);
+ }
+ // Commercial / cargo / GA flights — emergencies always render with a red
+ // pulse; non-emergency flights are capped to keep the globe usable.
+ for (const flight of this.selectFlightsForGlobe(liveFlights.flights)) {
+ this.addCommercialFlightEntity(layer, flight);
+ }
+  }
+
+  private selectFlightsForGlobe(
+ flights: readonly import('@/services/aviation/commercial-flights-classify').LiveFlight[],
+  ): import('@/services/aviation/commercial-flights-classify').LiveFlight[] {
+ const NON_EMERGENCY_CAP = 1500;
+ const out: import('@/services/aviation/commercial-flights-classify').LiveFlight[] = [];
+ const nonEmergency: import('@/services/aviation/commercial-flights-classify').LiveFlight[] = [];
+ for (const f of flights) {
+ if (f.onGround) continue;
+ if (f.emergency) {
+ out.push(f);
+ } else if (f.category !== 'military') {
+ // Military aircraft are already rendered via the existing
+ // aircraftWithPosition pass — skip to avoid duplicates.
+ nonEmergency.push(f);
+ }
+ }
+ // Sort cargo + commercial first so the cap doesn't drop the most
+ // recognisable category.
+ nonEmergency.sort((a, b) => categoryRank(a.category) - categoryRank(b.category));
+ for (const f of nonEmergency.slice(0, NON_EMERGENCY_CAP)) out.push(f);
+ return out;
+  }
+
+  private addCommercialFlightEntity(
+ layer: GlobeLayer,
+ flight: import('@/services/aviation/commercial-flights-classify').LiveFlight,
+  ): void {
+ const altMeters = flight.altitudeFt === null ? 0 : flight.altitudeFt * 0.3048;
+ const heading = flight.headingDeg ?? 0;
+ const colorHex = COMMERCIAL_FLIGHT_HEX[flight.category] ?? '#9e9e9e';
+ const color = Color.fromCssColorString(colorHex);
+ if (flight.emergency) {
+ // Red pulsing dot — pulsing achieved via a CallbackProperty on alpha.
+ const startMs = Date.now();
+ const pulse = new CallbackProperty(() => {
+ const t = ((Date.now() - startMs) % 1200) / 1200;
+ const alpha = 0.4 + 0.6 * Math.abs(Math.sin(t * Math.PI));
+ return Color.RED.withAlpha(alpha);
+ }, false);
+ layer.source.entities.add(new Entity({
+ id: `aviation-flight-${flight.icao24}`,
+ position: Cartesian3.fromDegrees(flight.lon, flight.lat, altMeters),
+ point: {
+ pixelSize: 14,
+ color: pulse,
+ outlineColor: Color.WHITE,
+ outlineWidth: 2,
+ heightReference: HeightReference.NONE,
+ },
+ label: flight.callsign ? {
+ text: `${flight.callsign}  SQ ${flight.squawk ?? ''}`,
+ font: '11px monospace',
+ fillColor: Color.RED,
+ outlineColor: Color.BLACK,
+ outlineWidth: 2,
+ style: 2,
+ pixelOffset: LABEL_OFFSET_SM,
+ horizontalOrigin: HorizontalOrigin.CENTER,
+ verticalOrigin: VerticalOrigin.BOTTOM,
+ scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+ distanceDisplayCondition: new DistanceDisplayCondition(0, 1.5e7),
+ } : undefined,
+ description: commercialFlightDescriptionHtml(flight),
+ name: flight.callsign ?? flight.icao24,
+ }));
+ return;
+ }
+ const icon = flight.category === 'helicopter' ? ICON_HELICOPTER : ICON_TRANSPORT;
+ layer.source.entities.add(new Entity({
+ id: `aviation-flight-${flight.icao24}`,
+ position: Cartesian3.fromDegrees(flight.lon, flight.lat, altMeters),
+ billboard: {
+ image: icon,
+ color,
+ scale: 0.22,
+ rotation: CesiumMath.toRadians(-heading),
+ alignedAxis: Cartesian3.UNIT_Z,
+ heightReference: HeightReference.NONE,
+ horizontalOrigin: HorizontalOrigin.CENTER,
+ verticalOrigin: VerticalOrigin.CENTER,
+ scaleByDistance: new NearFarScalar(1e5, 0.9, 1.5e7, 0.25),
+ distanceDisplayCondition: new DistanceDisplayCondition(0, 8e6),
+ },
+ label: flight.callsign ? {
+ text: flight.callsign,
+ font: '9px monospace',
+ fillColor: color,
+ outlineColor: Color.BLACK,
+ outlineWidth: 2,
+ style: 2,
+ pixelOffset: LABEL_OFFSET_SM,
+ horizontalOrigin: HorizontalOrigin.CENTER,
+ verticalOrigin: VerticalOrigin.BOTTOM,
+ scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+ distanceDisplayCondition: new DistanceDisplayCondition(0, 3e6),
+ } : undefined,
+ description: commercialFlightDescriptionHtml(flight),
+ name: flight.callsign ?? flight.icao24,
+ }));
+  }
+
+  private addAviationTfrEntity(
+ layer: GlobeLayer,
+ tfr: import('@/services/aviation/aviation-intel-types').AviationNotam,
+ helpers: typeof import('@/services/aviation/aviation-globe-helpers'),
+  ): void {
+ if (!tfr.center) return;
+ const ring = helpers.circleToPolygon({
+ centerLat: tfr.center.lat,
+ centerLon: tfr.center.lon,
+ radiusNm: tfr.center.radiusNm,
+ });
+ const positions = ring.map((p) => Cartesian3.fromDegrees(p.lon, p.lat));
+ const style = helpers.notamStyle(tfr);
+ const outline = Color.fromCssColorString(style.outlineHex);
+ const fill = Color.fromCssColorString(style.fillHex).withAlpha(style.fillAlpha);
+ layer.source.entities.add(new Entity({
+ id: `aviation-tfr-${tfr.id}`,
+ polygon: new PolygonGraphics({
+ hierarchy: new PolygonHierarchy(positions),
+ material: fill,
+ outline: true,
+ outlineColor: outline,
+ outlineWidth: 2,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ }),
+ description: helpers.notamDescriptionHtml(tfr),
+ name: tfr.notamNumber || tfr.id,
+ }));
+  }
+
+  private addAviationSigmetEntity(
+ layer: GlobeLayer,
+ sigmet: import('@/services/aviation/aviation-intel-types').AviationSigmet,
+ helpers: typeof import('@/services/aviation/aviation-globe-helpers'),
+  ): void {
+ const positions = sigmet.polygon.map((p) => Cartesian3.fromDegrees(p.lon, p.lat));
+ const style = helpers.sigmetStyle(sigmet);
+ const color = Color.fromCssColorString(style.hex);
+ layer.source.entities.add(new Entity({
+ id: `aviation-sigmet-${sigmet.id}`,
+ polygon: new PolygonGraphics({
+ hierarchy: new PolygonHierarchy(positions),
+ material: color.withAlpha(style.fillAlpha),
+ outline: true,
+ outlineColor: color,
+ outlineWidth: 1,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ }),
+ description: helpers.sigmetDescriptionHtml(sigmet),
+ name: `${sigmet.hazard} (${sigmet.severity})`,
+ }));
+  }
+
+  private addAviationAshEntity(
+ layer: GlobeLayer,
+ ash: import('@/services/aviation/aviation-intel-types').VolcanicAshAdvisory,
+ helpers: typeof import('@/services/aviation/aviation-globe-helpers'),
+  ): void {
+ const positions = ash.polygon.map((p) => Cartesian3.fromDegrees(p.lon, p.lat));
+ const color = Color.fromCssColorString(helpers.VOLCANIC_ASH_HEX);
+ layer.source.entities.add(new Entity({
+ id: `aviation-ash-${ash.id}`,
+ polygon: new PolygonGraphics({
+ hierarchy: new PolygonHierarchy(positions),
+ material: color.withAlpha(helpers.VOLCANIC_ASH_FILL_ALPHA),
+ outline: true,
+ outlineColor: color,
+ outlineWidth: 2,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ }),
+ description: `<h3>${ash.volcano} ash advisory</h3><pre>${ash.text}</pre>`,
+ name: `${ash.volcano} ash`,
+ }));
+  }
+
+  private addAviationAircraftEntity(
+ layer: GlobeLayer,
+ ac: import('@/services/aviation/aviation-intel-types').MilitaryAircraft,
+ helpers: typeof import('@/services/aviation/aviation-globe-helpers'),
+  ): void {
+ if (ac.lat === null || ac.lon === null) return;
+ const altMeters = ac.altitudeFt === null ? 0 : ac.altitudeFt * 0.3048;
+ const style = helpers.aircraftStyle(ac);
+ const color = Color.fromCssColorString(style.hex);
+ layer.source.entities.add(new Entity({
+ id: `aviation-mil-${ac.icao24}`,
+ position: Cartesian3.fromDegrees(ac.lon, ac.lat, altMeters),
+ point: {
+ pixelSize: style.emergency ? 10 : 6,
+ color,
+ outlineColor: Color.BLACK,
+ outlineWidth: style.emergency ? 2 : 1,
+ heightReference: HeightReference.NONE,
+ },
+ label: ac.callsign ? {
+ text: ac.callsign,
+ font: '10px monospace',
+ fillColor: color,
+ outlineColor: Color.BLACK,
+ outlineWidth: 2,
+ style: 2,
+ pixelOffset: LABEL_OFFSET_SM,
+ horizontalOrigin: HorizontalOrigin.CENTER,
+ verticalOrigin: VerticalOrigin.BOTTOM,
+ scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+ distanceDisplayCondition: new DistanceDisplayCondition(0, 8e6),
+ } : undefined,
+ description: helpers.aircraftDescriptionHtml(ac),
+ name: ac.callsign ?? ac.icao24,
+ }));
+  }
+
   private async loadMilitaryVessels(): Promise<void> {
  const layer = this.layers.get('vessels');
  if (!layer) return;
@@ -1298,6 +1911,77 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  },
  });
  }
+  }
+
+  /**
+   * Live AIS vessel layer fed by `/api/maritime/vessels` (sidecar's
+   * risk-zone-filtered AIS stream). Renders each vessel as a coloured
+   * point primitive with rotation matching its heading. Refreshes
+   * every 5 minutes; previous entities are cleared on each tick.
+   *
+   * Distinct from `loadMilitaryVessels` (curated warship roster) and
+   * `loadDarkVessels` (AIS gap detector). All three can render
+   * simultaneously when their HUD toggles are on.
+   */
+  private async loadMaritimeVessels(): Promise<void> {
+    await this.refreshMaritimeVessels();
+    this.maritimeVesselsTimer ??= setInterval(
+      () => { void this.refreshMaritimeVessels(); },
+      5 * 60 * 1000,
+    );
+  }
+
+  private async refreshMaritimeVessels(): Promise<void> {
+    const layer = this.layers.get('maritimeVessels');
+    if (!layer) return;
+    const helpers = await import('@/services/maritime/vessel-globe-helpers');
+    let vessels: import('@/services/maritime/vessel-globe-helpers').MaritimeVesselWire[] = [];
+    try {
+      const r = await fetch('/api/maritime/vessels', { headers: { Accept: 'application/json' } });
+      if (!r.ok) return;
+      const body = (await r.json()) as { vessels?: typeof vessels };
+      vessels = Array.isArray(body.vessels) ? helpers.dedupeVesselsByMmsi(body.vessels) : [];
+    } catch {
+      return;
+    }
+    layer.source.entities.removeAll();
+    for (const v of vessels) {
+      const css = helpers.vesselColorCss(v.category);
+      const color = Color.fromCssColorString(css);
+      layer.source.entities.add({
+        id: `maritime-vessel-${v.mmsi}`,
+        position: Cartesian3.fromDegrees(v.lon, v.lat),
+        point: {
+          pixelSize: 8,
+          color,
+          outlineColor: Color.BLACK,
+          outlineWidth: 1,
+          heightReference: HeightReference.CLAMP_TO_GROUND,
+          scaleByDistance: new NearFarScalar(1e5, 1.4, 1.5e7, 0.6),
+          distanceDisplayCondition: new DistanceDisplayCondition(0, 2e7),
+        },
+        billboard: {
+          image: VESSEL_TRIANGLE_DATAURI,
+          color,
+          scale: 0.5,
+          rotation: CesiumMath.toRadians(-helpers.vesselRotationDeg(v.headingDeg)),
+          alignedAxis: Cartesian3.UNIT_Z,
+          heightReference: HeightReference.CLAMP_TO_GROUND,
+          scaleByDistance: new NearFarScalar(1e5, 0.7, 1.5e7, 0.25),
+          distanceDisplayCondition: new DistanceDisplayCondition(0, 1.5e7),
+          verticalOrigin: VerticalOrigin.CENTER,
+          horizontalOrigin: HorizontalOrigin.CENTER,
+        },
+        description: helpers.vesselTooltip(v),
+        properties: {
+          mmsi: v.mmsi,
+          category: v.category,
+          flag: v.flag,
+          zoneId: v.zoneId,
+          observedAt: v.observedAt,
+        },
+      });
+    }
   }
 
   private async loadDarkVessels(): Promise<void> {
@@ -1682,6 +2366,191 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  } catch { /* lightning unavailable */ }
   }
 
+  /**
+   * Weather Hazards layer (PR 3 of weather-hazards stack).
+   *
+   * Renders three things from PR 1's data sources:
+   *   1. NWS alert polygons   — tornado/hurricane/flood/winter colored fills
+   *   2. Hurricane forecast track + uncertainty cone (NHC GeoJSON)
+   *   3. Storm-center billboards (note: visual overlap with the existing
+   *      `cyclones` layer is expected when both are enabled — this
+   *      layer is the "weather hazard" view, the other is the general
+   *      cyclone tracker)
+   *
+   * Click on any alert polygon → Cesium description popup with the
+   * alert event, area description, headline, and expires-in time.
+   */
+  private async loadWeatherHazards(): Promise<void> {
+    const layer = this.layers.get('weatherHazards');
+    if (!layer) return;
+    try {
+      const [
+        { fetchHazardAlerts, fetchTropicalStorms },
+        { alertsToPolygonDescriptors, stormsToBillboards },
+      ] = await Promise.all([
+        import('@/services/weather/nws-hazards'),
+        import('./weather-hazard-globe-helpers'),
+      ]);
+      const [alerts, storms] = await Promise.all([fetchHazardAlerts(), fetchTropicalStorms()]);
+      for (const p of alertsToPolygonDescriptors(alerts)) {
+        this.addAlertPolygon(layer, p);
+      }
+      for (const b of stormsToBillboards(storms)) {
+        this.addStormBillboard(layer, b);
+      }
+      for (const s of storms) {
+        if (s.forecastTrackUrl) await this.addStormForecastTrack(layer, s);
+      }
+    } catch { /* hazards unavailable */ }
+  }
+
+  private addAlertPolygon(
+    layer: GlobeLayer,
+    p: import('./weather-hazard-globe-helpers').AlertPolygonDescriptor,
+  ): void {
+    const flat = p.rings[0]!;
+    const fillColor = Color.fromCssColorString(p.color).withAlpha(0.35);
+    const outlineColor = Color.fromCssColorString(p.color);
+    layer.source.entities.add({
+      name: `weather-alert-${p.alertId}`,
+      polygon: {
+        hierarchy: new PolygonHierarchy(Cartesian3.fromDegreesArray(flat)),
+        material: new ColorMaterialProperty(fillColor),
+        outline: true,
+        outlineColor,
+        outlineWidth: 2,
+        heightReference: HeightReference.CLAMP_TO_GROUND,
+      },
+      description: p.description,
+    });
+  }
+
+  private addStormBillboard(
+    layer: GlobeLayer,
+    b: import('./weather-hazard-globe-helpers').StormBillboardDescriptor,
+  ): void {
+    layer.source.entities.add({
+      position: Cartesian3.fromDegrees(b.position.lng, b.position.lat),
+      billboard: {
+        image: ICON_CYCLONE,
+        color: Color.fromCssColorString(b.color),
+        scale: 0.6,
+        heightReference: HeightReference.CLAMP_TO_GROUND,
+        scaleByDistance: new NearFarScalar(1e5, 1.5, 1e7, 0.6),
+        verticalOrigin: VerticalOrigin.CENTER,
+        horizontalOrigin: HorizontalOrigin.CENTER,
+      },
+      label: {
+        text: b.name,
+        font: '11px monospace',
+        fillColor: Color.fromCssColorString(b.color),
+        outlineColor: Color.BLACK,
+        outlineWidth: 2,
+        style: 2,
+        pixelOffset: LABEL_OFFSET,
+        horizontalOrigin: HorizontalOrigin.CENTER,
+        verticalOrigin: VerticalOrigin.BOTTOM,
+        scaleByDistance: new NearFarScalar(1e5, 1, 1e7, 0.3),
+        distanceDisplayCondition: new DistanceDisplayCondition(0, 1.5e7),
+      },
+      description: b.description,
+    });
+  }
+
+  private async addStormForecastTrack(
+    layer: GlobeLayer,
+    s: import('@/services/weather/nws-hazards').NhcStorm,
+  ): Promise<void> {
+    if (!s.forecastTrackUrl) return;
+    try {
+      const trackUrl = `${getApiBaseUrl()}/api/weather/tropical/track?url=${encodeURIComponent(s.forecastTrackUrl)}`;
+      const resp = await fetch(trackUrl);
+      if (!resp.ok) return;
+      const trackJson: unknown = await resp.json();
+      const { parseHurricaneTrack } = await import('@/services/weather/nws-hazards');
+      const { trackToDescriptor } = await import('./weather-hazard-globe-helpers');
+      const parsed = parseHurricaneTrack(trackJson, s.id);
+      if (!parsed) return;
+      const desc = trackToDescriptor(parsed, s);
+      if (desc.trackPolyline.length >= 4) {
+        layer.source.entities.add({
+          polyline: {
+            positions: Cartesian3.fromDegreesArray(desc.trackPolyline),
+            width: 3,
+            material: Color.fromCssColorString(STORM_TRACK_COLOR_HEX).withAlpha(0.9),
+            clampToGround: true,
+          },
+          name: `track-${s.id}`,
+        });
+      }
+      if (desc.uncertaintyCone) {
+        layer.source.entities.add({
+          polygon: {
+            hierarchy: new PolygonHierarchy(Cartesian3.fromDegreesArray(desc.uncertaintyCone)),
+            material: new ColorMaterialProperty(
+              Color.fromCssColorString(STORM_TRACK_COLOR_HEX).withAlpha(0.18),
+            ),
+            outline: true,
+            outlineColor: Color.fromCssColorString(STORM_TRACK_COLOR_HEX),
+            outlineWidth: 1,
+            heightReference: HeightReference.CLAMP_TO_GROUND,
+          },
+          name: `cone-${s.id}`,
+        });
+      }
+    } catch { /* track unavailable */ }
+  }
+
+  /**
+   * Wastewater Genomics — color US states by SARS-CoV-2 wastewater
+   * percentile (CDC NWSS, dataset 2ew6-ywp6). Renders one colored
+   * point primitive at each state's centroid, scaled by level.
+   * 'low' states are dropped to keep the globe legible.
+   */
+  private async loadWastewaterStates(): Promise<void> {
+    const layer = this.layers.get('wastewaterStates');
+    if (!layer) return;
+    try {
+      const [
+        { fetchWastewaterSurveillance },
+        { buildWastewaterStateEntities },
+      ] = await Promise.all([
+        import('@/services/biosurveillance/wastewater-service'),
+        import('./wastewater-globe-helpers'),
+      ]);
+      const snapshot = await fetchWastewaterSurveillance();
+      const entities = buildWastewaterStateEntities(snapshot.states);
+      for (const e of entities) {
+        layer.source.entities.add({
+          name: `wastewater-state-${e.stateCode}`,
+          position: Cartesian3.fromDegrees(e.lon, e.lat),
+          point: {
+            color: Color.fromCssColorString(e.fillColor).withAlpha(0.7),
+            outlineColor: Color.fromCssColorString(e.fillColor),
+            outlineWidth: 2,
+            pixelSize: e.radiusPx,
+            heightReference: HeightReference.CLAMP_TO_GROUND,
+            scaleByDistance: new NearFarScalar(1e5, 1.2, 1e7, 0.6),
+          },
+          label: {
+            text: e.stateCode,
+            font: '11px monospace',
+            fillColor: Color.WHITE,
+            outlineColor: Color.BLACK,
+            outlineWidth: 2,
+            style: 2,
+            pixelOffset: LABEL_OFFSET,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+            verticalOrigin: VerticalOrigin.BOTTOM,
+            scaleByDistance: new NearFarScalar(1e5, 1, 1e7, 0.3),
+            distanceDisplayCondition: new DistanceDisplayCondition(0, 1.5e7),
+          },
+          description: e.description,
+        });
+      }
+    } catch { /* wastewater overlay unavailable */ }
+  }
+
   private async loadRedFlagWarnings(): Promise<void> {
  const layer = this.layers.get('redFlagWarnings');
  if (!layer) return;
@@ -1909,6 +2778,12 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
   }
 
   destroy(): void {
+ if (this.cursorListener) {
+ document.removeEventListener('wm:globe-timeline-cursor', this.cursorListener);
+ this.cursorListener = null;
+ }
+ this.heatmapRenderer?.destroy();
+ this.heatmapRenderer = null;
  this.cameraMoveSub?.();
  this.cameraMoveSub = null;
  for (const [, layer] of this.layers) {
@@ -1918,6 +2793,10 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  this.buildingManager = null;
  this.unsubPositions?.();
  this.unsubPositions = null;
+ if (this.maritimeVesselsTimer !== null) {
+ clearInterval(this.maritimeVesselsTimer);
+ this.maritimeVesselsTimer = null;
+ }
  satellitePropagator.stop();
  if (this.satellitePoints) {
  this.viewer.scene.primitives.remove(this.satellitePoints);

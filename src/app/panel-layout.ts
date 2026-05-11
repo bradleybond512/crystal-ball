@@ -39,6 +39,11 @@ import {
   TradePolicyPanel,
   SupplyChainPanel,
   SecurityAdvisoriesPanel,
+  NetworkRulesPanel,
+  S2UIntelPanel,
+  SynthesisPanel,
+  CyberGeoPanel,
+  EconomicIntelPanel,
   OrefSirensPanel,
   TelegramIntelPanel,
   WatchlistPanel,
@@ -54,6 +59,8 @@ import {
 } from '@/components';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { TriageBar } from '@/components/TriageBar';
+import { EEWStatusBar } from '@/components/EEWStatusBar';
+import { startSpaceWeatherStatusBarPoller } from '@/services/spaceweather/status-bar-poller';
 import { JustInRail } from '@/components/JustInRail';
 import { startPanelNarrator } from '@/services/panel-narrator';
 import { TodayView } from '@/components/TodayView';
@@ -137,13 +144,17 @@ import { WeatherRadarPanel } from '@/components/WeatherRadarPanel';
 import { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import { PollenPanel } from '@/components/PollenPanel';
 import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
+import { SanctionsPanel } from '@/components/SanctionsPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
+import { WildfireIntelPanel } from '@/components/WildfireIntelPanel';
 import { HazmatIncidentsPanel } from '@/components/HazmatIncidentsPanel';
 import { OilSpillPanel } from '@/components/OilSpillPanel';
 import { HazardAlertsPanel } from '@/components/HazardAlertsPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
+import { GridIntelligencePanel } from '@/components/GridIntelligencePanel';
+import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-intelligence-loader';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
@@ -178,6 +189,7 @@ import { CombatantCommandsPanel } from '@/components/CombatantCommandsPanel';
 import { ForeignMilNewsPanel } from '@/components/ForeignMilNewsPanel';
 import { SpcMesoscalePanel } from '@/components/SpcMesoscalePanel';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
+import { UnifiedWebcamPanel } from '@/components/UnifiedWebcamPanel';
 import { CommsHealthPanel } from '@/components/CommsHealthPanel';
 import { PowerGridPanel } from '@/components/PowerGridPanel';
 import { FearGreedPanel } from '@/components/FearGreedPanel';
@@ -220,10 +232,16 @@ import { CompoundThreatPanel } from '@/components/CompoundThreatPanel';
 import { CorrelationMatrixPanel } from '@/components/CorrelationMatrixPanel';
 import { StrikePackagesPanel } from '@/components/StrikePackagesPanel';
 import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
+import { FeedHealthPanel } from '@/components/FeedHealthPanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
+import { ThreatDashboard } from '@/components/ThreatDashboard';
+import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
+import { AviationIntelPanel } from '@/components/AviationIntelPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
+import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
+import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
 import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
 import { SatelliteChangePanel } from '@/components/SatelliteChangePanel';
@@ -292,11 +310,11 @@ export class PanelLayoutManager implements AppModule {
   private readonly applyTimeRangeFilterDebounced: () => void;
   private readonly _onUpdateState = () => { this.renderSidebarUpdateBtn(); };
 
-  /** Saved panel order from before a mode switch so Peace Mode can restore it. */
+  /** Saved panel order from before a Ghost-mode switch so the default state can restore it. */
   private _preModeOrder: string[] = [];
 
   /** Panels always kept at the top regardless of mode (video feeds / live streams). */
-  private static readonly MODE_ANCHORS = ['watchlist', 'alert-center', 'live-news', 'live-webcams'];
+  private static readonly MODE_ANCHORS = ['threat-dashboard', 'watchlist', 'alert-center', 'live-news', 'live-webcams'];
 
   /** Panels floated to top in Finance Mode. */
   private static readonly FINANCE_PRIORITY = [
@@ -511,6 +529,13 @@ export class PanelLayoutManager implements AppModule {
 
   private createPanels(): void {
  const panelsGrid = document.getElementById('panelsGrid')!;
+
+ // Mount the EEW status bar at the top of the body — sits above
+ // everything else (above the panel grid + triage bar). Layer 9
+ // of the seismic intelligence stack.
+ const eewStatusBar = new EEWStatusBar();
+ eewStatusBar.mount(document.body);
+ startSpaceWeatherStatusBarPoller(eewStatusBar);
 
  // Mount the triage bar above the panel grid (auto-hides when nothing is hot).
  const triageBar = new TriageBar();
@@ -974,6 +999,9 @@ export class PanelLayoutManager implements AppModule {
  const openSanctionsPanel = new OpenSanctionsPanel();
  this.ctx.panels['opensanctions'] = openSanctionsPanel;
 
+ const sanctionsIntelPanel = new SanctionsPanel();
+ this.ctx.panels['sanctions-intel'] = sanctionsIntelPanel;
+
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;
 
@@ -982,6 +1010,9 @@ export class PanelLayoutManager implements AppModule {
 
  const wildfireIncidentsPanel = new WildfireIncidentsPanel();
  this.ctx.panels['wildfire-incidents'] = wildfireIncidentsPanel;
+
+ const wildfireIntelPanel = new WildfireIntelPanel();
+ this.ctx.panels['wildfire-intel'] = wildfireIntelPanel;
 
  const hazmatIncidentsPanel = new HazmatIncidentsPanel();
  this.ctx.panels['hazmat-incidents'] = hazmatIncidentsPanel;
@@ -994,6 +1025,10 @@ export class PanelLayoutManager implements AppModule {
 
  const infrastructurePanel = new InfrastructurePanel();
  this.ctx.panels['infrastructure'] = infrastructurePanel;
+
+ const gridIntelPanel = new GridIntelligencePanel();
+ this.ctx.panels['grid-intelligence'] = gridIntelPanel;
+ startGridIntelligenceLoader(gridIntelPanel);
 
  const strategicRiskPanel = new StrategicRiskPanel();
  strategicRiskPanel.setLocationClickHandler((lat, lon) => {
@@ -1047,6 +1082,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['nws-alerts'] = nwsAlertsPanel;
 
  this.ctx.panels['faa-weather-cams'] = new FAAWeatherCamsPanel();
+ this.ctx.panels['unified-webcams'] = new UnifiedWebcamPanel();
 
  this.ctx.panels['tsunami-alerts'] = new TsunamiAlertsPanel();
  this.ctx.panels['tropical-cyclones'] = new TropicalCyclonesPanel();
@@ -1104,10 +1140,16 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['correlation-matrix'] = new CorrelationMatrixPanel();
  this.ctx.panels['strike-packages'] = new StrikePackagesPanel();
  this.ctx.panels['api-diagnostic'] = new ApiDiagnosticPanel();
+ this.ctx.panels['feed-health'] = new FeedHealthPanel();
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
+ this.ctx.panels['threat-dashboard'] = new ThreatDashboard();
+ startThreatAggregator();
+ this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ this.ctx.panels['weather-hazard'] = new WeatherHazardPanel();
+ this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
  // Wire saved-places into the insights state singleton so the new
  // panels see the user's home/family/travel places out of the box.
  // Re-runs whenever saved places change.
@@ -1238,6 +1280,44 @@ export class PanelLayoutManager implements AppModule {
  void this.callbacks.loadSecurityAdvisories?.();
  });
  this.ctx.panels['security-advisories'] = securityAdvisoriesPanel;
+
+ // NetworkRulesPanel — surfaces tools/littlesnitch/crystal-ball.lsrules
+ // (the bundled Little Snitch ruleset) inside the app so the user can
+ // see exactly which outbound endpoints Crystal Ball needs without
+ // opening Little Snitch. Reads from /api/littlesnitch-rules.
+ const networkRulesPanel = new NetworkRulesPanel();
+ this.ctx.panels['network-rules'] = networkRulesPanel;
+
+ // S2UIntelPanel — surfaces the S2 Underground IRT XMPP MUC rooms
+ // (PR B) and the public TAK server Marti API (PR C). Reads from
+ // /api/s2u-xmpp + /api/s2u-tak-feeds. Refuses to demand creds: when
+ // the sidecar reports configured=false, the panel shows a "Configure
+ // in Settings" empty state.
+ const s2uIntelPanel = new S2UIntelPanel();
+ this.ctx.panels['s2u-intel'] = s2uIntelPanel;
+
+ // SynthesisPanel — historical precedent matcher (TF-IDF + cosine)
+ // and cross-domain leading-indicator engine (Granger F-test). Reads
+ // from /api/precedents and /api/leading-indicators; sidecar returns
+ // configured=false until a corpus + time-series feeder is wired in
+ // a follow-up PR. Pure engines ship in Batch 1 PR 1 + 2.
+ const synthesisPanel = new SynthesisPanel();
+ this.ctx.panels['synthesis'] = synthesisPanel;
+
+ // CyberGeoPanel — APT activity table + gray-zone event timeline +
+ // great-power escalation meters. Reads from /api/apt-groups and
+ // /api/grayzone-events. Engines ship in Batch 2 PR 1 (#290) +
+ // PR 2 (#292); the sidecar returns configured=false until live
+ // ingestion lands.
+ const cyberGeoPanel = new CyberGeoPanel();
+ this.ctx.panels['cyber-geo'] = cyberGeoPanel;
+
+ // EconomicIntelPanel — OFR FSI gauge + commodity stress table +
+ // ENSO phase + 6-month outlook. Reads from /api/financial-stress,
+ // /api/commodity-stress, /api/enso. Engines ship in Batch 3 PR 1
+ // (#295) + PR 2 (#297); sidecar fetcher follows.
+ const economicIntelPanel = new EconomicIntelPanel();
+ this.ctx.panels['economic-intel'] = economicIntelPanel;
 
  const orefSirensPanel = new OrefSirensPanel();
  this.ctx.panels['oref-sirens'] = orefSirensPanel;
@@ -1568,9 +1648,15 @@ export class PanelLayoutManager implements AppModule {
   }
 
   /**
- * Reorder the panels grid to surface the most relevant panels for the
- * active mode. Anchors (live-news, live-webcams) always stay at the top.
- * Returning to Peace Mode restores the user's original order.
+ * Reorder the panels grid so anchors (live-news, live-webcams) stay at
+ * the top and the unified priority panel list (formerly per-mode, now
+ * always-on) floats just below them. Returning to the default state
+ * restores the user's original order.
+ *
+ * The `_mode` parameter is retained for the legacy `wm:mode-changed`
+ * event listener — the only canonical modes today are Ghost and
+ * Gods-Vision; Finance/War/Disaster are gone and their priority
+ * lists are unioned.
  */
   private _applyModePanelOrder(_mode: AppMode | null): void {
  const grid = document.getElementById('panelsGrid');
@@ -1581,9 +1667,12 @@ export class PanelLayoutManager implements AppModule {
  .map(el => (el as HTMLElement).dataset.panel ?? '')
  .filter(k => k.length > 0);
 
- // Mode collapse: former per-mode panel priorities (Finance / War / Disaster)
- // are now merged into a single always-on priority list. Anchors stay first,
- // then the union of all elevated-mode priority panels, then the rest.
+ // The three "PRIORITY" arrays below were originally per-mode (Finance /
+ // War / Disaster) but the modes were collapsed in the mode-manager
+ // refactor — only Ghost and Gods-Vision survived. The arrays are kept
+ // (under their historical names) and unioned into a single always-on
+ // priority list. Anchors stay first, then the priority union, then
+ // the rest.
  if (this._preModeOrder.length === 0) {
  this._preModeOrder = [...currentKeys];
  }

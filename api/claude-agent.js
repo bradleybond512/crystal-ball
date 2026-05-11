@@ -14,8 +14,12 @@
 
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
 import { validateApiKey } from './_api-key.js';
-import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
+
+// @upstash/ratelimit and @upstash/redis are imported dynamically inside
+// getClaudeAgentRatelimit() so the desktop sidecar (which doesn't bundle
+// these cloud-only packages) can still load this handler. Without dynamic
+// imports the static `import` would throw ERR_MODULE_NOT_FOUND when the
+// sidecar tries to resolve the handler, marking it as cached-failure.
 
 export const config = { runtime: 'edge' };
 
@@ -39,19 +43,28 @@ const MAX_QUERY_LEN = 500;
 // limiter can't reach Upstash so a Redis outage doesn't wedge the endpoint.
 let claudeAgentRatelimit = null;
 
-function getClaudeAgentRatelimit() {
+async function getClaudeAgentRatelimit() {
   if (claudeAgentRatelimit) return claudeAgentRatelimit;
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
 
-  claudeAgentRatelimit = new Ratelimit({
+  try {
+ const [{ Ratelimit }, { Redis }] = await Promise.all([
+ import('@upstash/ratelimit'),
+ import('@upstash/redis'),
+ ]);
+ claudeAgentRatelimit = new Ratelimit({
  redis: new Redis({ url, token }),
  limiter: Ratelimit.slidingWindow(10, '60 s'),
  prefix: 'rl:claude-agent',
  analytics: false,
-  });
-  return claudeAgentRatelimit;
+ });
+ return claudeAgentRatelimit;
+  } catch {
+ // Upstash packages not bundled (e.g. desktop sidecar). Fail open.
+ return null;
+  }
 }
 
 function getClientIp(request) {
@@ -63,7 +76,7 @@ function getClientIp(request) {
 }
 
 async function checkRateLimit(request, corsHeaders) {
-  const rl = getClaudeAgentRatelimit();
+  const rl = await getClaudeAgentRatelimit();
   if (!rl) return null;
 
   try {

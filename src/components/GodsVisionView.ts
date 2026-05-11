@@ -15,6 +15,9 @@ import { GlobePulse } from '@/components/gods-vision/GlobePulse';
 import { GlobeArcs } from '@/components/gods-vision/GlobeArcs';
 import { GlobeHeatmap } from '@/components/gods-vision/GlobeHeatmap';
 import { GlobeReactorBeacons } from '@/components/GlobeReactorBeacons';
+import { GlobeSeismicWaves } from '@/components/GlobeSeismicWaves';
+import { GlobeWebcamLayer } from '@/services/webcams/webcam-globe-layer';
+import { fetchUnifiedWebcams } from '@/services/webcams/fetcher';
 import { FlyModeController } from '@/components/gods-vision/FlyMode/FlyModeController';
 import { BuildingTileManager } from '@/services/building-tiles';
 import type { FlySubMode } from '@/components/gods-vision/FlyMode/flyModeKeybinds';
@@ -28,6 +31,8 @@ import { GlobeSatellites } from '@/components/gods-vision/GlobeSatellites';
 import { GlobeMiniMap } from '@/components/gods-vision/GlobeMiniMap';
 import { GlobeAudio } from '@/components/gods-vision/GlobeAudio';
 import { GlobeAlertClusters } from '@/components/gods-vision/GlobeAlertClusters';
+import { GlobeTimelineSync } from '@/components/gods-vision/GlobeTimelineSync';
+import { GlobeHeatmapToggle } from '@/components/gods-vision/GlobeHeatmapToggle';
 import { StreetTileManager } from '@/services/street-tiles';
 import { GpsTracker, type GpsPosition } from '@/services/gps-tracker';
 import { computeRoute, type RouteResult, type RouteCoord } from '@/services/routing-engine';
@@ -69,9 +74,13 @@ export class GodsVisionView {
   private dataManager: GlobeDataManager | null = null;
   private hud: GlobeHUD | null = null;
   private timeMachine: GlobeTimeMachine | null = null;
+  private timelineSync: GlobeTimelineSync | null = null;
+  private heatmapToggle: GlobeHeatmapToggle | null = null;
   private autoFollow: AutoFollowEngine | null = null;
   private fourD: Globe4DManager | null = null;
   private reactorBeacons: GlobeReactorBeacons | null = null;
+  private seismicWaves: GlobeSeismicWaves | null = null;
+  private webcamLayer: GlobeWebcamLayer | null = null;
   private globePulse: GlobePulse | null = null;
   private globeArcs: GlobeArcs | null = null;
   private globeHeatmap: GlobeHeatmap | null = null;
@@ -169,6 +178,17 @@ export class GodsVisionView {
  this.cleanupHandlers.push(() => { this.globeAlertClusters?.destroy(); this.globeAlertClusters = null; });
  this.reactorBeacons = new GlobeReactorBeacons(viewer);
  this.reactorBeacons.mount();
+ this.seismicWaves = new GlobeSeismicWaves(viewer);
+ this.seismicWaves.mount();
+ this.webcamLayer = new GlobeWebcamLayer(viewer, {
+ fetchFeeds: async () => {
+ const cat = await fetchUnifiedWebcams({ category: 'fire,volcano,coastal' });
+ return cat.feeds;
+ },
+ highSalienceOnly: true,
+ });
+ void this.webcamLayer.mount();
+ this.cleanupHandlers.push(() => { this.webcamLayer?.destroy(); this.webcamLayer = null; });
  }
 
  // Auto-follow engine
@@ -206,7 +226,23 @@ export class GodsVisionView {
  if (viewer && this.dataManager) {
  this.timeMachine = new GlobeTimeMachine(viewer, this.dataManager, this.container);
  this.timeMachine.mount();
+
+ // Bridge cursor → timeline-cursor visibility helper. Renders a
+ // small "N events @ cursor" badge above the scrubber + dispatches
+ // `wm:globe-timeline-cursor` events for layer managers to react.
+ this.timelineSync = new GlobeTimelineSync(this.timeMachine, this.container);
+ this.timelineSync.mount();
+ this.cleanupHandlers.push(() => { this.timelineSync?.destroy(); this.timelineSync = null; });
  }
+
+ // Per-domain heatmap toggle row (seismic / fire / cyber / conflict).
+ // The toggle owns selection + opacity state and dispatches
+ // `wm:globe-heatmap-changed` with deck.gl HexagonLayer configs;
+ // the deck.gl-on-Cesium overlay that consumes those configs is a
+ // follow-up. Visible UI lands now so users see the controls.
+ this.heatmapToggle = new GlobeHeatmapToggle(this.container);
+ this.heatmapToggle.mount();
+ this.cleanupHandlers.push(() => { this.heatmapToggle?.destroy(); this.heatmapToggle = null; });
 
  // Geocode search bar
  if (viewer) {
@@ -251,6 +287,8 @@ export class GodsVisionView {
  this.hud.setOnScreenshot(() => { void this.takeScreenshot(); });
  this.hud.setOnArcsToggle((enabled) => this.globeArcs?.setEnabled(enabled));
  this.hud.setOnHeatmapToggle((enabled) => this.globeHeatmap?.setEnabled(enabled));
+ this.hud.setOnSeismicWavesToggle((enabled) => this.seismicWaves?.setEnabled(enabled));
+ if (this.seismicWaves) this.hud.setSeismicWavesEnabled(this.seismicWaves.isEnabled());
  this.hud.setOnNavigationToggle(() => void this.toggleNavigation());
 
  // 4D mode orchestrator (T toggles; D/I/H pick playback mode; Tab/[/]/Esc cycle UI).
@@ -380,6 +418,9 @@ export class GodsVisionView {
 
  this.reactorBeacons?.destroy();
  this.reactorBeacons = null;
+
+ this.seismicWaves?.destroy();
+ this.seismicWaves = null;
 
  this.hud?.destroy();
  this.hud = null;

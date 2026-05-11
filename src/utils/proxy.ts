@@ -1,7 +1,8 @@
 import { isDesktopRuntime, toRuntimeUrl } from '../services/runtime';
 import { getPersistentCache, setPersistentCache } from '../services/persistent-cache';
 
-const isDev = import.meta.env.DEV;
+const VITE_ENV = (import.meta as { env?: { DEV?: boolean } }).env ?? {};
+const isDev = VITE_ENV.DEV === true;
 const RESPONSE_CACHE_PREFIX = 'api-response:';
 
 interface CachedResponsePayload {
@@ -65,7 +66,7 @@ async function fetchAndPersist(url: string): Promise<Response> {
  const body = await response.clone().text();
  void setPersistentCache(buildResponseCacheKey(url), toCachedPayload(url, response, body));
  } catch (error) {
- console.warn('[proxy] Failed to persist API response cache', error);
+ console.warn('[proxy] Failed to persist API response cache', error); // eslint-disable-line no-console
  }
   }
   return response;
@@ -81,7 +82,7 @@ export async function fetchWithProxy(url: string): Promise<Response> {
 
   if (cached?.data) {
  void fetchAndPersist(url).catch((error) => {
- console.warn('[proxy] Background refresh failed for cached API response', error);
+ console.warn('[proxy] Background refresh failed for cached API response', error); // eslint-disable-line no-console
  });
  return toResponse(cached.data);
   }

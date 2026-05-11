@@ -10,17 +10,20 @@ import {
   fetchCdcSurveillance,
 } from '@/services/disease-outbreak';
 import { fetchDiseaseIntel } from '@/services/disease-intel';
+import { fetchWastewater } from '@/services/wastewater';
 import { fetchHdxCrises } from '@/services/hdx-crisis';
 import type { DiseaseOutbreakPanel } from '@/components/DiseaseOutbreakPanel';
 import type { DiseaseIntelPanel } from '@/components/DiseaseIntelPanel';
 import type { HumanitarianCrisisPanel } from '@/components/HumanitarianCrisisPanel';
 
 export async function loadDiseaseOutbreaks(ctx: AppContext): Promise<void> {
+  const panel = ctx.panels['disease-outbreaks'] as DiseaseOutbreakPanel | undefined;
   try {
- const [outbreaks, snapshots, cdcSignals] = await Promise.all([
+ const [outbreaks, snapshots, cdcSignals, wastewater] = await Promise.all([
  fetchDiseaseOutbreaks(),
  fetchGlobalDiseaseSnapshots(),
  fetchCdcSurveillance(),
+ fetchWastewater(),
  ]);
  const cdcOutbreaks = cdcSignals.map((s, i) => {
  const suffix = s.value === null ? '' : ` (${s.value})`;
@@ -35,10 +38,8 @@ export async function loadDiseaseOutbreaks(ctx: AppContext): Promise<void> {
  severity: (s.severity === 'alert' ? 'high' : 'medium') as 'critical' | 'high' | 'medium' | 'low',
  };
  });
- (ctx.panels['disease-outbreaks'] as DiseaseOutbreakPanel | undefined)?.update(
- [...outbreaks, ...cdcOutbreaks],
- snapshots,
- );
+ panel?.update([...outbreaks, ...cdcOutbreaks], snapshots);
+ panel?.setWastewater(wastewater);
   } catch (error) {
  // eslint-disable-next-line no-console
  console.warn('[disease-outbreaks] fetch failed', error);
@@ -47,7 +48,7 @@ export async function loadDiseaseOutbreaks(ctx: AppContext): Promise<void> {
  // user couldn't tell whether the world was quiet or the upstream
  // sources were down).
  const reason = error instanceof Error ? error.message : 'all sources failed';
- (ctx.panels['disease-outbreaks'] as DiseaseOutbreakPanel | undefined)?.showUpstreamUnavailable(reason);
+ panel?.showUpstreamUnavailable(reason);
   }
 }
 
@@ -55,6 +56,10 @@ export async function loadDiseaseIntel(ctx: AppContext): Promise<void> {
   try {
  const data = await fetchDiseaseIntel();
  (ctx.panels['disease-intel'] as DiseaseIntelPanel | undefined)?.update(data);
+ (ctx.panels['disease-outbreaks'] as DiseaseOutbreakPanel | undefined)?.setCrossReferences(
+ data.crossReferencedWithPromed,
+ data.whoDon,
+ );
  if (ctx.mapLayers.diseaseIntel) {
  ctx.map?.setDiseaseIntel(data);
  }

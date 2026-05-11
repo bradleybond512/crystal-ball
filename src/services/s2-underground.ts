@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '@/services/runtime';
+import { dataFreshness } from '@/services/data-freshness';
 
 export interface S2UndergroundEvent {
   lon: number;
@@ -24,22 +25,25 @@ export async function fetchS2Underground(): Promise<S2UndergroundEvent[]> {
  const json = (await res.json()) as { events?: unknown[]; error?: string };
  if (!json.events) return _cache?.data ?? [];
 
+ const safeStr = (v: unknown): string => typeof v === 'string' ? v : '';
  const events: S2UndergroundEvent[] = (json.events as Record<string, unknown>[])
  .map((e) => ({
  lon: Number(e.lon ?? 0),
  lat: Number(e.lat ?? 0),
- layerTitle: String(e.layerTitle ?? ''),
- name: String(e.name ?? ''),
- description: String(e.description ?? ''),
- eventType: String(e.eventType ?? ''),
- date: String(e.date ?? ''),
- popupInfo: String(e.popupInfo ?? ''),
+ layerTitle: safeStr(e.layerTitle),
+ name: safeStr(e.name),
+ description: safeStr(e.description),
+ eventType: safeStr(e.eventType),
+ date: safeStr(e.date),
+ popupInfo: safeStr(e.popupInfo),
  }))
- .filter((e) => !isNaN(e.lat) && !isNaN(e.lon) && (e.lat !== 0 || e.lon !== 0));
+ .filter((e) => !Number.isNaN(e.lat) && !Number.isNaN(e.lon) && (e.lat !== 0 || e.lon !== 0));
 
  _cache = { data: events, ts: Date.now() };
+ dataFreshness.recordUpdate('s2-underground', events.length);
  return events;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('s2-underground', String(error));
  return _cache?.data ?? [];
   }
 }

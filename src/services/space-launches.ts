@@ -1,6 +1,8 @@
 // Launch Library 2 API — free tier, 300 req/day, CORS-enabled
 // https://ll.thespacedevs.com/2.2.0/launch/upcoming/
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type LaunchCategory = 'military' | 'intelligence' | 'civil' | 'commercial' | 'adversary' | 'other';
 export type LaunchStatus = 'go' | 'tbd' | 'success' | 'failure' | 'hold' | 'other';
 
@@ -152,7 +154,7 @@ interface LL2Launch {
 
 function parseLaunch(raw: LL2Launch): SpaceLaunch | null {
   const netTime = new Date(raw.net);
-  if (isNaN(netTime.getTime())) return null;
+  if (Number.isNaN(netTime.getTime())) return null;
 
   // Filter: only next 30 days
   const now = Date.now();
@@ -241,8 +243,10 @@ export async function fetchSpaceLaunches(): Promise<SpaceLaunch[]> {
 
  const limited = launches.slice(0, 30);
  _cache = { launches: limited, ts: Date.now() };
+ dataFreshness.recordUpdate('space-launches', limited.length);
  return limited;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('space-launches', String(error));
  _cache = { launches: [], ts: Date.now() };
  return [];
   }

@@ -6,6 +6,8 @@
  * Free, no authentication, CORS-enabled.
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type SpillType = 'oil' | 'chemical' | 'vessel' | 'pipeline' | 'facility' | 'other';
 
 export interface OilSpillIncident {
@@ -71,10 +73,11 @@ function isLargeSpill(quantity: string | null, description: string): boolean {
 
   if (/million\s*gall/.test(text)) return true;
 
+  // eslint-disable-next-line sonarjs/slow-regex -- input is bounded NOAA description string
   const gallonsMatch = /([0-9,]+)\s*gall/.exec(text);
   if (gallonsMatch) {
  const gallons = Number.parseInt((gallonsMatch[1] ?? '0').replace(/,/g, ''), 10);
- if (!isNaN(gallons) && gallons > 10_000) return true;
+ if (!Number.isNaN(gallons) && gallons > 10_000) return true;
   }
 
   return false;
@@ -102,6 +105,7 @@ function severityRank(s: OilSpillIncident['severity']): number {
   return SEVERITY_ORDER.indexOf(s);
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- handles parser + dedup + sort; refactor deferred
 export async function fetchOilSpills(): Promise<OilSpillIncident[]> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
  return cache.items;
@@ -114,7 +118,8 @@ export async function fetchOilSpills(): Promise<OilSpillIncident[]> {
  const json = (await res.json()) as NoaaResponse;
  raw = json.objects ?? [];
  }
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('oil-spill-tracker', String(error));
  return cache?.items ?? [];
   }
 
@@ -161,8 +166,8 @@ export async function fetchOilSpills(): Promise<OilSpillIncident[]> {
  location: obj.region_affected ?? '',
  state: obj.state ?? '',
  country: obj.country ?? 'US',
- lat: lat !== null && !isNaN(lat) ? lat : null,
- lon: lon !== null && !isNaN(lon) ? lon : null,
+ lat: lat !== null && !Number.isNaN(lat) ? lat : null,
+ lon: lon !== null && !Number.isNaN(lon) ? lon : null,
  openDate,
  closeDate,
  isOpen,
@@ -183,6 +188,7 @@ export async function fetchOilSpills(): Promise<OilSpillIncident[]> {
 
   const limited = incidents.slice(0, 40);
   cache = { items: limited, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('oil-spill-tracker', limited.length);
   return limited;
 }
 

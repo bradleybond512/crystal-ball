@@ -40,21 +40,33 @@ export const SATELLITE_SOURCES: Record<string, SatelliteSource> = {
   },
 };
 
-/** NOAA GOES WMS endpoint for tiled access */
+/**
+ * NOAA GOES WMTS via NASA GIBS for tiled access.
+ *
+ * Iowa State Mesonet's TMS layer names (`goes_conus_geocolor`, etc.) were
+ * retired and now return a red "Invalid TMS Request" PNG with HTTP 200 —
+ * which MapLibre/Cesium happily render as a magenta overlay across the
+ * map. NASA GIBS publishes the same products with proper 4xx errors when
+ * a layer is unavailable, so MapLibre falls through to a transparent tile
+ * instead of rendering the error image.
+ *
+ * The {z}/{y}/{x} ordering is required by GIBS's WMTS service and matches
+ * the existing satellite basemap config under `public/map-styles/satellite.json`.
+ */
 export function getGoesWmsTileUrl(product: SatelliteProduct = 'geocolor'): string {
   const layerMap: Record<SatelliteProduct, string> = {
- geocolor: 'goes_conus_geocolor',
- infrared: 'goes_conus_ir',
- water_vapor: 'goes_conus_wv',
- visible: 'goes_conus_vis',
+ geocolor: 'GOES-East_ABI_GeoColor',
+ infrared: 'GOES-East_ABI_Band13_Clean_Infrared',
+ water_vapor: 'GOES-East_ABI_Band8_Upper-Level_Water_Vapor',
+ visible: 'GOES-East_ABI_Band2_Red_Visible_1km',
   };
   const layer = layerMap[product];
-  return `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/${layer}/{z}/{x}/{y}.png`;
+  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
 }
 
-/** Himawari satellite tiles from Iowa State Mesonet */
+/** Himawari satellite tiles via NASA GIBS (Iowa State source returns Invalid TMS PNGs). */
 export function getHimawariTileUrl(): string {
-  return 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/himawari_fd_geocolor/{z}/{x}/{y}.png';
+  return 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Himawari_AHI_Band3_Red_Visible_1km/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png';
 }
 
 /** Available satellite products with labels */

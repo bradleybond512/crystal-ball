@@ -82,6 +82,8 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   AISSTREAM_API_KEY: 'aisstream',
   FINNHUB_API_KEY: 'finnhub',
   NASA_FIRMS_API_KEY: 'nasa_firms',
+  AIRNOW_API_KEY: 'airnow',
+  PURPLEAIR_API_KEY: 'purpleair',
   OLLAMA_API_URL: 'ollama_url',
   OLLAMA_MODEL: 'ollama_model',
   WTO_API_KEY: 'wto',
@@ -109,6 +111,12 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   GOOGLE_MAPS_API_KEY: 'google_maps',
   MAPBOX_API_KEY: 'mapbox',
   MAPTILER_API_KEY: 'maptiler',
+  S2U_XMPP_JID: 's2u_xmpp_jid',
+  S2U_XMPP_SECRET: 's2u_xmpp_secret',
+  S2U_TAK_URL: 's2u_tak_url',
+  S2U_TAK_USERNAME: 's2u_tak_username',
+  S2U_TAK_SECRET: 's2u_tak_secret',
+  S2U_TLS_INSECURE_OPT_IN: 's2u_tls_insecure',
 };
 
 // ── Typed event schemas (allowlisted properties per event) ──

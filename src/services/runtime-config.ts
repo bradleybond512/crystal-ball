@@ -31,6 +31,8 @@ export type RuntimeSecretKey =
   | 'AISSTREAM_API_KEY'
   | 'FINNHUB_API_KEY'
   | 'NASA_FIRMS_API_KEY'
+  | 'AIRNOW_API_KEY'
+  | 'PURPLEAIR_API_KEY'
   | 'OLLAMA_API_URL'
   | 'OLLAMA_MODEL'
   | 'WTO_API_KEY'
@@ -57,7 +59,13 @@ export type RuntimeSecretKey =
   | 'CESIUM_ION_TOKEN'
   | 'GOOGLE_MAPS_API_KEY'
   | 'MAPBOX_API_KEY'
-  | 'MAPTILER_API_KEY';
+  | 'MAPTILER_API_KEY'
+  | 'S2U_XMPP_JID'
+  | 'S2U_XMPP_SECRET'
+  | 'S2U_TAK_URL'
+  | 'S2U_TAK_USERNAME'
+  | 'S2U_TAK_SECRET'
+  | 'S2U_TLS_INSECURE_OPT_IN';
 
 export type RuntimeFeatureId =
   | 'cloudApiFallbackAuth'
@@ -78,6 +86,8 @@ export type RuntimeFeatureId =
   | 'openskyRelay'
   | 'finnhubMarkets'
   | 'nasaFirms'
+  | 'epaAirNow'
+  | 'purpleAirSensors'
   | 'aiOllama'
   | 'wtoTrade'
   | 'supplyChain'
@@ -133,7 +143,9 @@ export type RuntimeFeatureId =
   | 'cyberReactorNotifyMap'
   | 'navigationMapbox'
   | 'navigationMaptiler'
-  | 'navigationRouting';
+  | 'navigationRouting'
+  | 's2uXmppFeed'
+  | 's2uTakFeeds';
 
 export interface RuntimeFeatureDefinition {
   id: RuntimeFeatureId;
@@ -181,6 +193,8 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   openskyRelay: true,
   finnhubMarkets: true,
   nasaFirms: true,
+  epaAirNow: true,
+  purpleAirSensors: true,
   aiOllama: true,
   wtoTrade: true,
   supplyChain: true,
@@ -237,6 +251,8 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   navigationMapbox: true,
   navigationMaptiler: true,
   navigationRouting: true,
+  s2uXmppFeed: true,
+  s2uTakFeeds: true,
 };
 
 export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
@@ -381,6 +397,22 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  description: 'Fire Information for Resource Management System satellite data.',
  requiredSecrets: ['NASA_FIRMS_API_KEY'],
  fallback: 'FIRMS fire layer uses public VIIRS feed.',
+  },
+  {
+ id: 'epaAirNow',
+ name: 'EPA AirNow AQI for saved places',
+ description: 'Real-time US AQI per saved place (PM2.5 / O3) — enables wildfire smoke health alerts.',
+ requiredSecrets: ['AIRNOW_API_KEY'],
+ desktopRequiredSecrets: [],
+ fallback: 'Wildfire panel shows AQI as "key required" until configured.',
+  },
+  {
+ id: 'purpleAirSensors',
+ name: 'PurpleAir hyper-local sensors',
+ description: 'Community PurpleAir sensor network — top-500 outdoor PM2.5 readings with EPA AQI conversion. Optional key unlocks the v1 API; without a key the deprecated public /json endpoint is tried.',
+ requiredSecrets: [],
+ desktopRequiredSecrets: [],
+ fallback: 'Falls back to the public /json endpoint when no PURPLEAIR_API_KEY is configured.',
   },
   {
  id: 'wtoTrade',
@@ -811,6 +843,20 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  description: 'Route calculation and turn-by-turn directions',
  requiredSecrets: [],
  fallback: 'Uses OSRM (free) when no premium routing keys are configured',
+  },
+  {
+ id: 's2uXmppFeed',
+ name: 'S2U XMPP Wire Feed',
+ description: 'Joins the S2 Underground IRT XMPP MUC rooms (wire / event tracking / emergency) using a JID + password the user supplies.',
+ requiredSecrets: ['S2U_XMPP_JID', 'S2U_XMPP_SECRET'],
+ fallback: 'S2U Intelligence panel hides the wire feed sections.',
+  },
+  {
+ id: 's2uTakFeeds',
+ name: 'S2U TAK Server Feeds',
+ description: 'Reads the S2U public TAK server (Marti API) for data feeds, packages, and CoT points.',
+ requiredSecrets: ['S2U_TAK_URL', 'S2U_TAK_USERNAME', 'S2U_TAK_SECRET'],
+ fallback: 'S2U Intelligence panel hides the TAK server section.',
   },
 ];
 

@@ -1,0 +1,446 @@
+{
+  "name": "Crystal Ball",
+  "description": "Network rules for Crystal Ball intelligence dashboard. Allows required API endpoints for data feeds, LLM, maps, threat intel, and local services.",
+  "rules": [
+    {
+      "action": "allow",
+      "process": "/Users/bradleybond/Applications/Crystal Ball.app/Contents/MacOS/crystalball",
+      "remote-addresses": "127.0.0.1",
+      "ports": "46123",
+      "protocol": "tcp",
+      "notes": "Sidecar API (local Node.js server)"
+    },
+    {
+      "action": "allow",
+      "process": "/Users/bradleybond/Applications/Crystal Ball.app/Contents/MacOS/crystalball",
+      "remote-addresses": "127.0.0.1",
+      "ports": "46987",
+      "protocol": "tcp",
+      "notes": "cb-control daemon"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.anthropic.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Claude LLM API"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.groq.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Groq LLM API"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "openrouter.ai",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "OpenRouter LLM API"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.stlouisfed.org",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "FRED economic data"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.eia.gov",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "EIA energy data"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "finnhub.io",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Finnhub market data"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "financialmodelingprep.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "FMP market data"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.weather.gov",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "NWS weather alerts"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.openweathermap.org",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "OpenWeatherMap"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "newsapi.org",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "NewsAPI"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "newsdata.io",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Newsdata.io"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.mediastack.com",
+      "ports": "80",
+      "protocol": "tcp",
+      "notes": "Mediastack news (free tier HTTP)"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "acleddata.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "ACLED conflict data"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "urlhaus-api.abuse.ch",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "URLhaus threat intel"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "threatfox-api.abuse.ch",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "ThreatFox threat intel"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "otx.alienvault.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "AlienVault OTX"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.abuseipdb.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "AbuseIPDB"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "www.virustotal.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "VirusTotal"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.greynoise.io",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "GreyNoise"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "urlscan.io",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "urlscan.io"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "vulners.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Vulners CVE database"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "pulsedive.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Pulsedive threat intel"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "haveibeenpwned.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "HIBP breach data"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": ["auth.opensky-network.org", "opensky-network.org"],
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "OpenSky ADS-B"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "customer-api.wingbits.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Wingbits ADS-B"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.aviationstack.com",
+      "ports": "80",
+      "protocol": "tcp",
+      "notes": "Aviationstack (free tier HTTP)"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "applications.icao.int",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "ICAO NOTAMs"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.cesium.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Cesium Ion (3D globe tiles)"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "assets.cesium.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Cesium Ion assets"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.mapbox.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Mapbox"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.maptiler.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "MapTiler"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "maps.googleapis.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Google Maps directions"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-domains": "basemaps.cartocdn.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "CARTO basemap tiles (a/b/c subdomains)"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-domains": "tile.opentopomap.org",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "OpenTopoMap terrain tiles (a/b/c subdomains)"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "ip-api.com",
+      "ports": "80",
+      "protocol": "tcp",
+      "notes": "IP geolocation batch"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.ipquery.io",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "IP enrichment"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "ipinfo.io",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "IPinfo geolocation"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.geonames.org",
+      "ports": "80",
+      "protocol": "tcp",
+      "notes": "GeoNames"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.nasa.gov",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "NASA APIs"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "firms.modaps.eosdis.nasa.gov",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "NASA FIRMS fire data"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "gibs.earthdata.nasa.gov",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "NASA GIBS satellite imagery + GOES weather tiles"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.adsb.lol",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "ADS-B fallback (free, no key) — military flights"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.airplanes.live",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "ADS-B fallback (free, no key) — military flights"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "opendata.adsb.fi",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "ADS-B fallback (free, no key) — military flights"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.opensanctions.org",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "OpenSanctions catalog API (sanctions dataset metadata)"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "data.opensanctions.org",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "OpenSanctions bulk dataset downloads"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "celestrak.org",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "CelesTrak satellite TLEs"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "api.cloudflare.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Cloudflare Radar outages"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "www.bitcoinabuse.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Bitcoin abuse reports"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "www.youtube.com",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "YouTube channel RSS feeds"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-hosts": "crystalball.app",
+      "ports": "443",
+      "protocol": "tcp",
+      "notes": "Crystal Ball remote server"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-addresses": "127.0.0.1",
+      "ports": "1234",
+      "protocol": "tcp",
+      "notes": "LM Studio local LLM"
+    },
+    {
+      "action": "allow",
+      "process": "any",
+      "remote-addresses": "127.0.0.1",
+      "ports": "11434",
+      "protocol": "tcp",
+      "notes": "Ollama local LLM"
+    }
+  ]
+}

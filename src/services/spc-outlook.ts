@@ -5,6 +5,8 @@
  * Iowa State LSR: https://mesonet.agron.iastate.edu/api/1/lsrs.geojson?inc_ts=1&hours=24
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type ConvectiveRisk = 'TSTM' | 'MRGL' | 'SLGT' | 'ENH' | 'MDT' | 'HIGH';
 
 export interface ConvectiveOutlook {
@@ -149,6 +151,7 @@ export async function fetchSpcOutlooks(): Promise<ConvectiveOutlook[]> {
   items.sort((a, b) => RISK_RANK[b.risk] - RISK_RANK[a.risk]);
 
   outlooksCache = { items, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('spc-outlook', items.length);
   return items;
 }
 
@@ -161,7 +164,7 @@ function lsrTypeName(typeCode: string): StormReport['type'] {
   return 'other';
 }
 
-function lsrSeverity(type: StormReport['type'], _magnitude: string): StormReport['severity'] {
+function lsrSeverity(type: StormReport['type']): StormReport['severity'] {
   if (type === 'tornado') return 'critical';
   if (type === 'flooding') return 'high';
   if (type === 'hail' || type === 'wind') return 'medium';
@@ -200,9 +203,7 @@ export async function fetchStormReports(): Promise<StormReport[]> {
  const [lon, lat] = coords;
  const typeCode = props.type ?? '';
  const type = lsrTypeName(typeCode);
- const magnitude = props.magnitude !== null && props.magnitude !== undefined
- ? String(props.magnitude)
- : '';
+ const magnitude = props.magnitude == null ? '' : String(props.magnitude);
  const reportedAt = props.valid ? new Date(props.valid) : new Date();
  items.push({
  id: `lsr-${i}-${lat.toFixed(3)}-${lon.toFixed(3)}`,
@@ -215,7 +216,7 @@ export async function fetchStormReports(): Promise<StormReport[]> {
  lon,
  reportedAt,
  remarks: props.remark ?? '',
- severity: lsrSeverity(type, magnitude),
+ severity: lsrSeverity(type),
  });
  }
 
@@ -224,8 +225,10 @@ export async function fetchStormReports(): Promise<StormReport[]> {
  items.sort((a, b) => sOrder[a.severity] - sOrder[b.severity]);
 
  reportsCache = { items, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('spc-outlook', items.length);
  return items;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('spc-outlook', String(error));
  return reportsCache?.items ?? [];
   }
 }

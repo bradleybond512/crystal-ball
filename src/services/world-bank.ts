@@ -3,6 +3,8 @@
  * Fetches key economic indicators per country with a 1-hour in-memory cache.
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export interface WorldBankProfile {
   iso: string;
   gdpUsd: number | null; // NY.GDP.MKTP.CD
@@ -92,6 +94,7 @@ export async function fetchWorldBankProfile(iso: string): Promise<WorldBankProfi
 
   evictOldCacheEntries();
   profileCache.set(key, { profile, fetchedAt: Date.now() });
+  dataFreshness.recordUpdate('world-bank', 1);
   return profile;
 }
 

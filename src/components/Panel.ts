@@ -850,7 +850,7 @@ export class Panel {
  Panel.tickerStarted = true;
  Panel.heartbeatTickerId = window.setInterval(() => {
  for (const p of Panel.instances) p.updateHeartbeat();
- }, 5000);
+ }, 5000) as unknown as ReturnType<typeof setInterval>;
  document.addEventListener('cb:panel-narrative', (ev: Event) => {
  const detail = (ev as CustomEvent<{ panelId: string; text: string }>).detail;
  if (!detail) return;

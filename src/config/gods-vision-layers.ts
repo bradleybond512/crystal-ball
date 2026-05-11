@@ -45,6 +45,12 @@ export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
  enabled: true,
  description: 'Military and naval vessel positions with heading',
   },
+  maritimeVessels: {
+ name: 'AIS Vessels',
+ category: 'intelligence',
+ enabled: false,
+ description: 'Live AIS positions in maritime risk zones — orange tankers, blue cargo, red military, gray other',
+  },
   darkVessels: {
  name: 'Dark Ships',
  category: 'intelligence',
@@ -67,7 +73,13 @@ export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
  name: 'Fires',
  category: 'intelligence',
  enabled: false,
- description: 'NASA FIRMS satellite fire detections',
+ description: 'NASA FIRMS satellite fire detections + NIFC active perimeters',
+  },
+  airQuality: {
+ name: 'Air Quality',
+ category: 'intelligence',
+ enabled: false,
+ description: 'PurpleAir community PM2.5 sensors colored by AQI band',
   },
   volcanoes: {
  name: 'Volcanoes',
@@ -110,6 +122,24 @@ export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
  category: 'intelligence',
  enabled: true,
  description: 'Satellite imagery change detection at watched locations',
+  },
+  spaceWeather: {
+ name: 'Space Wx',
+ category: 'intelligence',
+ enabled: false,
+ description: 'Aurora oval (Kp ≥ 5) + pulsing subsolar X-flare halo',
+  },
+  warRiskZones: {
+ name: 'War Risk',
+ category: 'intelligence',
+ enabled: false,
+ description: 'Lloyd-style war-risk maritime zones — Red Sea, Hormuz, Black Sea, Gulf of Guinea',
+  },
+  infrastructure: {
+ name: 'Infra Outage',
+ category: 'intelligence',
+ enabled: false,
+ description: 'US grid outages by state (severity-colored) + RadNet stations pulsing above threshold',
   },
   // ── Static Geo Layers ──
   bases: {

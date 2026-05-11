@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Crystal Ball",
   "mainBinaryName": "crystalball",
-  "version": "2.10.22",
+  "version": "2.13.1",
   "identifier": "com.bradleybond.crystalball",
   "build": {
     "beforeDevCommand": "npm run build:sidecar-sebuf && npm run dev",
@@ -58,10 +58,20 @@
       "sidecar/local-api-server.mjs",
       "sidecar/sitrep-severity.mjs",
       "sidecar/sitrep-filter.mjs",
+      "sidecar/s2u-xmpp.bundle.mjs",
+      "sidecar/s2u-tak-client.mjs",
+      "sidecar/ipaws-aggregate.mjs",
+      "sidecar/promed-classify.mjs",
+      "sidecar/wastewater-aggregate.mjs",
+      "sidecar/who-promed-cross-reference.mjs",
+      "sidecar/biosurveillance-wastewater.mjs",
+      "sidecar/ofac-cache.mjs",
+      "sidecar/env-local-loader.mjs",
       "sidecar/package.json",
       "sidecar/node",
       "../data",
-      "../src/config"
+      "../src/config",
+      "../tools/littlesnitch"
     ],
     "windows": {
       "digestAlgorithm": "sha256",

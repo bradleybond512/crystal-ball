@@ -4,6 +4,8 @@
  * Routed through /api/rss-proxy for CORS.
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export type SmokeDensity = 'Light' | 'Medium' | 'Heavy';
 
 export interface SmokePolygon {
@@ -60,7 +62,7 @@ function parseCoordinateString(coordStr: string): [number, number][] {
  if (parts.length < 2) continue;
  const lon = Number.parseFloat(parts[0] ?? 'NaN');
  const lat = Number.parseFloat(parts[1] ?? 'NaN');
- if (!isNaN(lon) && !isNaN(lat)) {
+ if (!Number.isNaN(lon) && !Number.isNaN(lat)) {
  points.push([lon, lat]);
  }
   }
@@ -79,6 +81,7 @@ function computeCentroid(rings: [number, number][][]): [number, number] | undefi
   return [sumLon / ring.length, sumLat / ring.length];
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- KML smoke-polygon parser; refactor deferred
 async function fetchKml(dateStr: string): Promise<SmokePolygon[] | null> {
   const kmlUrl = buildKmlUrl(dateStr);
   const proxyUrl = `/api/rss-proxy?url=${encodeURIComponent(kmlUrl)}`;
@@ -153,7 +156,7 @@ export async function fetchWildfireSmoke(): Promise<WildfireSmokeReport> {
  dateUsed = yesterdayStr;
   }
 
-  if (!polygons) polygons = [];
+  polygons ??= [];
 
   const report: WildfireSmokeReport = {
  polygons,
@@ -165,6 +168,7 @@ export async function fetchWildfireSmoke(): Promise<WildfireSmokeReport> {
   };
 
   cache = { report, fetchedAt: Date.now() };
+  dataFreshness.recordUpdate('wildfire-smoke', polygons.length);
   return report;
 }
 

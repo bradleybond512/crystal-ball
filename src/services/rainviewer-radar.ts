@@ -7,6 +7,8 @@
  * Tiles are 256x256 PNG in standard web mercator (z/x/y).
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export interface RadarFrame {
   path: string;
   time: number;  // Unix epoch seconds
@@ -35,24 +37,30 @@ interface RainViewerResponse {
 export async function fetchRadarFrames(): Promise<RadarState> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.state;
 
-  const res = await fetch(API_URL, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(`RainViewer HTTP ${String(res.status)}`);
+  try {
+ const res = await fetch(API_URL, { signal: AbortSignal.timeout(8000) });
+ if (!res.ok) throw new Error(`RainViewer HTTP ${String(res.status)}`);
 
-  const data = await res.json() as RainViewerResponse;
+ const data = await res.json() as RainViewerResponse;
 
-  const frames: RadarFrame[] = [
+ const frames: RadarFrame[] = [
  ...data.radar.past.map(f => ({ path: f.path, time: f.time, type: 'past' as const })),
  ...data.radar.nowcast.map(f => ({ path: f.path, time: f.time, type: 'forecast' as const })),
-  ];
+ ];
 
-  const state: RadarState = {
+ const state: RadarState = {
  host: data.host,
  frames,
  currentIndex: data.radar.past.length - 1,
-  };
+ };
 
-  cache = { state, fetchedAt: Date.now() };
-  return state;
+ cache = { state, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('rainviewer-radar', frames.length);
+ return state;
+  } catch (error) {
+ dataFreshness.recordError('rainviewer-radar', String(error));
+ throw error;
+  }
 }
 
 export function getRadarTileUrl(state: RadarState, frameIndex?: number): string {

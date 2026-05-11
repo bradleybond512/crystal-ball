@@ -4,7 +4,7 @@
  * showing misleading "all clear" when we actually have no data.
  */
 
-import { getCSSColor } from '@/utils';
+import { getCSSColor } from '@/utils/theme-colors';
 
 export type DataSourceId =
   | 'acled' // Protests/conflicts
@@ -45,6 +45,7 @@ export type DataSourceId =
   | 'faa_weather_cams' // FAA weather camera network
   | 'adsb' // ADS-B live aircraft tracking (OpenSky)
   | 'adsb-military' // Military ADS-B flight tracking
+  | 'aviation-intel' // Aviation intel: NOTAMs, SIGMETs, PIREPs, military aircraft, delays
     | "maritime-safety"
     | "inciweb"
     | "cisa-advisories"
@@ -121,6 +122,7 @@ export type DataSourceId =
     | "supply-chain-impact"
     | "faa-tfrs"
     | "usgs-pager"
+    | "wastewater"
   | 'webcams'; // Aggregated webcam feeds (Windy + DOT + YouTube)
 
 export type FreshnessStatus = 'fresh' | 'stale' | 'very_stale' | 'no_data' | 'disabled' | 'error';
@@ -196,6 +198,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   faa_weather_cams: { name: 'FAA Weather Cameras', requiredForRisk: false, panelId: 'faa-weather-cams' },
   adsb: { name: 'ADS-B Aircraft', requiredForRisk: false, panelId: 'air-traffic' },
   'adsb-military': { name: 'Military ADS-B', requiredForRisk: false, panelId: 'geo-intel' },
+  'aviation-intel': { name: 'Aviation Intel', requiredForRisk: false, panelId: 'aviation-intel' },
   webcams: { name: 'Webcam Aggregator', requiredForRisk: false, panelId: 'live-webcams' },
   "maritime-safety": { name: "Maritime Safety", requiredForRisk: false },
   "inciweb": { name: "Inciweb", requiredForRisk: false },
@@ -273,6 +276,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   "supply-chain-impact": { name: "Supply Chain Impact", requiredForRisk: false },
   "faa-tfrs": { name: "Faa Tfrs", requiredForRisk: false },
   "usgs-pager": { name: "Usgs Pager", requiredForRisk: false },
+  "wastewater": { name: "Wastewater Surveillance", requiredForRisk: false, panelId: "disease-outbreaks" },
 };
 
 class DataFreshnessTracker {
@@ -552,6 +556,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   faa_weather_cams: 'FAA weather camera data unavailable—camera feed not responding',
   adsb: 'Live aircraft positions unavailable—ADS-B tracking offline',
   'adsb-military': 'Military aircraft positions unavailable—military ADS-B tracking offline',
+  'aviation-intel': 'Aviation feeds unavailable—NOTAMs / SIGMETs / PIREPs / military / delays offline',
   webcams: 'Webcam feeds unavailable—Windy/DOT/YouTube aggregation offline',
   // Per-service gap messages added in Pass 7 freshness wiring. Generic by default;
   // refine individual entries when the service ships dedicated copy.
@@ -628,6 +633,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   "supply-chain-impact": "Supply-chain impact data unavailable",
   "faa-tfrs": "FAA TFR data unavailable",
   "usgs-pager": "USGS PAGER data unavailable",
+  "wastewater": "Wastewater surveillance data unavailable",
   "offline-alert-cache": "Offline alert cache unavailable",
   "offline-map-cache": "Offline map cache unavailable",
   "s2-underground": "S2 Underground feed unavailable",

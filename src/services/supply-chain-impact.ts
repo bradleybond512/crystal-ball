@@ -10,6 +10,7 @@
 
 import { getApiBaseUrl } from './runtime';
 import { haversineKm } from './proximity-filter';
+import { dataFreshness } from './data-freshness';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -620,24 +621,30 @@ async function buildDisruptions(
 }
 
 async function refreshData(): Promise<void> {
-  const [conflicts, disasters, vessels] = await Promise.all([
- fetchConflictEvents(),
- fetchDisasterAlerts(),
- fetchVesselClusters(),
-  ]);
+  try {
+    const [conflicts, disasters, vessels] = await Promise.all([
+      fetchConflictEvents(),
+      fetchDisasterAlerts(),
+      fetchVesselClusters(),
+    ]);
 
-  const now = new Date().toISOString();
-  const statuses: ChokepointStatus[] = CHOKEPOINTS.map((cp) => {
- const signals = detectSignalsForChokepoint(cp, conflicts, disasters, vessels);
- const { level, throughputPct } = computeDisruptionLevel(signals);
- return { chokepoint: cp, level, signals, throughputPct, lastUpdated: now };
-  });
+    const now = new Date().toISOString();
+    const statuses: ChokepointStatus[] = CHOKEPOINTS.map((cp) => {
+      const signals = detectSignalsForChokepoint(cp, conflicts, disasters, vessels);
+      const { level, throughputPct } = computeDisruptionLevel(signals);
+      return { chokepoint: cp, level, signals, throughputPct, lastUpdated: now };
+    });
 
-  const disruptions = await buildDisruptions(statuses, now);
-  const forecasts = aggregateForecasts(disruptions);
+    const disruptions = await buildDisruptions(statuses, now);
+    const forecasts = aggregateForecasts(disruptions);
 
-  cachedState = { statuses, disruptions, forecasts, cachedAt: Date.now() };
-  saveCache(cachedState);
+    cachedState = { statuses, disruptions, forecasts, cachedAt: Date.now() };
+    saveCache(cachedState);
+    dataFreshness.recordUpdate('supply-chain-impact', statuses.length);
+  } catch (error) {
+    dataFreshness.recordError('supply-chain-impact', String(error));
+    throw error;
+  }
 }
 
 async function ensureData(): Promise<CachedState> {

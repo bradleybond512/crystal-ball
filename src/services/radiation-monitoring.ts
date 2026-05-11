@@ -13,6 +13,8 @@
  * Very high: 1000+ CPM — potential emergency
  */
 
+import { dataFreshness } from '@/services/data-freshness';
+
 export interface RadiationReading {
   id: string;
   lat: number;
@@ -71,6 +73,7 @@ interface SafecastMeasurement {
   device_id?: number | string;
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- Safecast row parsing fan-out; refactor deferred
 export async function fetchRadiationReadings(): Promise<RadiationReading[]> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.readings;
 
@@ -81,7 +84,7 @@ export async function fetchRadiationReadings(): Promise<RadiationReading[]> {
  });
  if (!res.ok) return cache?.readings ?? [];
 
- const data: SafecastMeasurement[] = await res.json();
+ const data = (await res.json()) as SafecastMeasurement[];
  if (!Array.isArray(data)) return cache?.readings ?? [];
 
  const cutoff = Date.now() - 24 * 3_600_000; // last 24 hours only
@@ -89,11 +92,11 @@ export async function fetchRadiationReadings(): Promise<RadiationReading[]> {
 
  for (const m of data) {
  const cpm = typeof m.value === 'number' ? m.value : Number.parseFloat(String(m.value));
- if (isNaN(cpm) || cpm <= 0) continue;
+ if (Number.isNaN(cpm) || cpm <= 0) continue;
 
  // Normalize to CPM if unit is different
  let normalizedCpm = cpm;
- if (m.unit && m.unit.toLowerCase().includes('usvh')) {
+ if (m.unit?.toLowerCase().includes('usvh')) {
  normalizedCpm = cpm / CPM_TO_USVH;
  }
 
@@ -102,7 +105,7 @@ export async function fetchRadiationReadings(): Promise<RadiationReading[]> {
 
  const lat = typeof m.latitude === 'number' ? m.latitude : Number.parseFloat(String(m.latitude));
  const lon = typeof m.longitude === 'number' ? m.longitude : Number.parseFloat(String(m.longitude));
- if (isNaN(lat) || isNaN(lon)) continue;
+ if (Number.isNaN(lat) || Number.isNaN(lon)) continue;
 
  readings.push({
  id: `safecast-${m.id}`,
@@ -120,10 +123,18 @@ export async function fetchRadiationReadings(): Promise<RadiationReading[]> {
  }
 
  cache = { readings, fetchedAt: Date.now() };
+ dataFreshness.recordUpdate('radiation-monitoring', readings.length);
  return readings;
-  } catch {
+  } catch (error) {
+ dataFreshness.recordError('radiation-monitoring', String(error));
  return cache?.readings ?? [];
   }
+}
+
+function alertSeverityFor(level: RadiationReading['level']): RadiationAlert['severity'] {
+  if (level === 'extreme') return 'critical';
+  if (level === 'very_high') return 'high';
+  return 'medium';
 }
 
 /**
@@ -143,9 +154,7 @@ export async function fetchRadiationAlerts(): Promise<RadiationAlert[]> {
  usvh: r.usvh,
  level: r.level as Exclude<RadiationReading['level'], 'normal' | 'elevated'>,
  capturedAt: r.capturedAt,
- severity: r.level === 'extreme' ? 'critical'
- : (r.level === 'very_high' ? 'high'
- : 'medium'),
+ severity: alertSeverityFor(r.level),
  }));
 }
 

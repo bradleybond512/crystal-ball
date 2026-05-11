@@ -342,7 +342,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | Panel categories | 19 | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
 | MCP tools | 30 | `tools/mcp-server/index.mjs` |
-| Supported secret keys | 48 | `src-tauri/src/main.rs` |
+| Supported secret keys | 60 | `src-tauri/src/main.rs` |
 | Foundation intelligence modules | 24 | `src/services/{intelligence,weather,insights,shortage}/` |
 | Foundation deterministic tests | 600+ | `npm run test:intelligence` + `test:weather` + `test:insights*` + `test:shortage` |
 | Commodity shortage models | 8 (wheat, corn, rice, soybeans, diesel, gasoline, natural gas, jet fuel) | `src/services/shortage/*-shortage-risk.ts` |

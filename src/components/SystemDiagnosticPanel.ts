@@ -48,6 +48,10 @@ import type {
   PanelHealth,
 } from '@/services/diagnostics/system-health-types';
 import { escapeHtml } from '@/utils/sanitize';
+import {
+  getMissionState,
+  type MissionState,
+} from '@/services/diagnostics/mission-state-service';
 
 const REFRESH_MS = 5000;
 
@@ -172,13 +176,19 @@ export class SystemDiagnosticPanel extends Panel {
   private renderHeader(ctx: DiagnosticContext): string {
     const status = ctx.report.status;
     const color = STATUS_COLOR[status];
+    const ms = getMissionState();
+    const msBadgeColor = missionStateColor(ms);
     return `<div class="syd-header" style="padding:8px 12px;border-bottom:1px solid var(--border-subtle,#333);display:flex;justify-content:space-between;align-items:center;">
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};"></span>
         <span style="font-weight:700;color:${color};text-transform:uppercase;font-size:12px;">${status}</span>
         <span style="color:var(--text-secondary,#aaa);font-size:12px;">${escapeHtml(ctx.report.summary)}</span>
+        <span class="syd-mission-badge" title="Feed-staleness mission state" style="font-size:9px;padding:2px 5px;background:${msBadgeColor};color:#fff;border-radius:3px;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(ms)}</span>
       </div>
-      <button class="syd-refresh" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;">Refresh</button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="syd-export" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;">Export JSON</button>
+        <button class="syd-refresh" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;">Refresh</button>
+      </div>
     </div>`;
   }
 
@@ -503,6 +513,32 @@ export class SystemDiagnosticPanel extends Panel {
     return '#9e9e9e';
   }
 
+  private async exportDiagnosticsJson(): Promise<void> {
+    try {
+      const { composeFrontendDiagnosticsExport } = await import(
+        '@/services/diagnostics/frontend-export-composer'
+      );
+      const g = globalThis as unknown as { __APP_VERSION__?: string; __APP_VARIANT__?: string; __TAURI_INTERNALS__?: unknown };
+      const app = {
+        variant: g.__APP_VARIANT__ ?? 'full',
+        version: g.__APP_VERSION__ ?? '0.0.0',
+        runtime: (g.__TAURI_INTERNALS__ === undefined ? 'web' : 'desktop') as 'web' | 'desktop',
+      };
+      const { bundle } = composeFrontendDiagnosticsExport({ app });
+      const { exportBundleToJson } = await import('@/services/diagnostics/export-bundle');
+      const json = exportBundleToJson(bundle);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `crystal-ball-diagnostics-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.warn('[SystemDiagnosticPanel] export failed:', error);
+    }
+  }
+
   private wireHandlers(): void {
     const root = this.getContentElement();
     for (const tabBtn of root.querySelectorAll<HTMLButtonElement>('.syd-tab')) {
@@ -542,7 +578,8 @@ export class SystemDiagnosticPanel extends Panel {
         this.render();
       }
     });
-
+    const exportBtn = root.querySelector<HTMLButtonElement>('.syd-export');
+    exportBtn?.addEventListener('click', () => void this.exportDiagnosticsJson());
     const stBtn = root.querySelector<HTMLButtonElement>('.syd-self-test');
     stBtn?.addEventListener('click', async () => {
       if (this.selfTestRunning) return;
@@ -641,3 +678,10 @@ function formatAge(ms: number): string {
   if (ms < 24 * 60 * 60_000) return `${(ms / (60 * 60_000)).toFixed(1)}h ago`;
   return `${(ms / (24 * 60 * 60_000)).toFixed(1)}d ago`;
 }
+
+function missionStateColor(state: MissionState): string {
+  if (state === 'CRITICAL') return '#d50000';
+  if (state === 'DEGRADED') return '#ff8800';
+  return '#2e7d32';
+}
+

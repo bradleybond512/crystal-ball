@@ -229,6 +229,7 @@ import { SupplyChainImpactPanel } from '@/components/SupplyChainImpactPanel';
 import { WaterQualityPanel } from '@/components/WaterQualityPanel';
 import { NuclearMonitorPanel } from '@/components/NuclearMonitorPanel';
 import { NotificationDigestPanel } from '@/components/NotificationDigestPanel';
+import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel';
 import { PatternOfLifePanel } from '@/components/PatternOfLifePanel';
 import { SigintPanel } from '@/components/SigintPanel';
 import { DarkVesselPanel } from '@/components/DarkVesselPanel';
@@ -1213,6 +1214,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['water-quality'] = new WaterQualityPanel();
  this.ctx.panels['nuclear-monitor'] = new NuclearMonitorPanel();
  this.ctx.panels['notification-digest'] = new NotificationDigestPanel();
+ this.ctx.panels['notification-history'] = new NotificationHistoryPanel();
  // Worldview / Palantir / Dragos-inspired panels
  this.ctx.panels['pattern-of-life'] = new PatternOfLifePanel();
  this.ctx.panels['sigint-panel'] = new SigintPanel();

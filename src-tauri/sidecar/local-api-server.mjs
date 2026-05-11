@@ -3969,6 +3969,72 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Shortage state (renderer → sidecar mirror) ────────────────────────
+  // The ShortageRadarPanel computes shortage forecasts in the renderer and
+  // POSTs the results here after each render cycle. GET /api/shortage/summary
+  // returns the summary array; GET /api/shortage/:commodity returns the full
+  // forecast for a single commodity. 30-minute cache controlled by the
+  // renderer's ttlMs field. No bearer auth: loopback-only, non-sensitive.
+  if (requestUrl.pathname === '/api/shortage/state') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!Array.isArray(body.entries)) return json({ error: 'entries must be an array' }, 400);
+        context._shortageState = {
+          entries: body.entries,
+          updatedAt: typeof body.updatedAt === 'number' ? body.updatedAt : Date.now(),
+          ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : 30 * 60 * 1000,
+        };
+        return json({ ok: true, count: body.entries.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const s = context._shortageState;
+      if (!s) return json({ entries: [], available: false });
+      const ageMs = Date.now() - s.updatedAt;
+      return json({ entries: s.entries, updatedAt: s.updatedAt, ageMs, stale: ageMs > s.ttlMs, available: true });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // GET /api/shortage/summary — returns the UI-ready summary array.
+  if (requestUrl.pathname === '/api/shortage/summary' && req.method === 'GET') {
+    const s = context._shortageState;
+    if (!s) return json([]);
+    const ageMs = Date.now() - s.updatedAt;
+    if (ageMs > s.ttlMs) return json([]);
+    const summary = s.entries.map((e) => ({
+      commodity: e.commodity,
+      riskScore: e.riskScore,
+      riskLevel: e.riskLevel,
+      primaryDrivers: e.primaryDrivers ?? [],
+      timeToImpact: e.timeToImpact ?? '',
+      trend: e.trend ?? 'stable',
+    }));
+    return json(summary);
+  }
+
+  // GET /api/shortage/:commodity — returns full forecast for one commodity.
+  if (requestUrl.pathname.startsWith('/api/shortage/') &&
+      requestUrl.pathname !== '/api/shortage/state' &&
+      requestUrl.pathname !== '/api/shortage/summary' &&
+      req.method === 'GET') {
+    const commodity = requestUrl.pathname.slice('/api/shortage/'.length).split('/')[0];
+    if (!commodity) return json({ error: 'commodity required' }, 400);
+    const VALID = new Set(['wheat','corn','rice','soybeans','diesel','gasoline','natural-gas','jet-fuel']);
+    if (!VALID.has(commodity)) return json({ error: 'unknown commodity' }, 404);
+    const s = context._shortageState;
+    if (!s) return json({ commodity, forecast: null, available: false });
+    const entry = s.entries.find((e) => e.commodity === commodity);
+    if (!entry) return json({ commodity, forecast: null, available: false });
+    const ageMs = Date.now() - s.updatedAt;
+    return json({ commodity, forecast: entry.forecast, riskLevel: entry.riskLevel, trend: entry.trend, ageMs, available: true });
+  }
+
   // Spec aliases — friendlier URLs for the documented per-PR endpoints.
   if (requestUrl.pathname === '/api/ensemble-decision' && req.method === 'GET') {
     const domain = requestUrl.searchParams.get('domain') || '';

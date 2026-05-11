@@ -245,6 +245,7 @@ import { ThreatDashboard } from '@/components/ThreatDashboard';
 import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
 import { AviationIntelPanel } from '@/components/AviationIntelPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
+import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
 import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
@@ -1164,6 +1165,14 @@ export class PanelLayoutManager implements AppModule {
  startThreatAggregator();
  this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
+ this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
+ this.ctx.panels['shortage-detail-rice'] = new ShortageDetailPanel('rice');
+ this.ctx.panels['shortage-detail-soybeans'] = new ShortageDetailPanel('soybeans');
+ this.ctx.panels['shortage-detail-diesel'] = new ShortageDetailPanel('diesel');
+ this.ctx.panels['shortage-detail-gasoline'] = new ShortageDetailPanel('gasoline');
+ this.ctx.panels['shortage-detail-natural-gas'] = new ShortageDetailPanel('natural-gas');
+ this.ctx.panels['shortage-detail-jet-fuel'] = new ShortageDetailPanel('jet-fuel');
  this.ctx.panels['weather-hazard'] = new WeatherHazardPanel();
  this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
  // Wire saved-places into the insights state singleton so the new

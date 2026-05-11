@@ -7,6 +7,7 @@ This document gives Claude a detailed, implementation-ready plan for using Claud
 The goal is not simply to make the app prettier.
 
 The goal is to restructure Crystal Ball around a clear operational cognition model so the UI can support:
+
 - planetary situational awareness
 - evidence-backed intelligence
 - What Changed briefs
@@ -19,6 +20,7 @@ The goal is to restructure Crystal Ball around a clear operational cognition mod
 - future epistemic reasoning systems
 
 Crystal Ball should feel:
+
 - calm under complexity
 - operational
 - cinematic but restrained
@@ -36,6 +38,7 @@ The redesign should produce:
 # Core Design Thesis
 
 Crystal Ball should not look like:
+
 - a generic dashboard
 - a feed wall
 - a map with random panels
@@ -48,6 +51,7 @@ It should feel like:
 > a disciplined planetary intelligence command center.
 
 The UI must help the user answer:
+
 - What changed?
 - What matters now?
 - Why does it matter?
@@ -71,6 +75,7 @@ The biggest risk is:
 The app has many data sources, panels, intelligence services, map overlays, diagnostics, and planned reasoning layers.
 
 If everything is surfaced equally, the user experience becomes:
+
 - overwhelming
 - noisy
 - redundant
@@ -102,6 +107,7 @@ Observation
 This means the UI should not be source-first.
 
 It should be:
+
 - Situation-first
 - Brief-first
 - Evidence-backed
@@ -125,6 +131,7 @@ Answers:
 > What do I need to know right now?
 
 Shows:
+
 - current operational brief
 - top active Situations
 - What Changed
@@ -140,6 +147,7 @@ The canonical drill-down view.
 Every meaningful alert, map marker, SMS command, What Changed item, or notification should eventually resolve to a Situation Detail view.
 
 Shows:
+
 - executive summary
 - severity
 - confidence
@@ -161,6 +169,7 @@ Shows:
 The spatial cognition layer.
 
 Shows:
+
 - geographic distribution
 - instability flows
 - confidence weather
@@ -179,6 +188,7 @@ Answers:
 > What materially changed since I last looked?
 
 Shows:
+
 - new situations
 - severity changes
 - confidence changes
@@ -192,6 +202,7 @@ Shows:
 Advanced/debug view.
 
 Shows:
+
 - evidence graph
 - raw observations
 - source health
@@ -216,6 +227,7 @@ Default.
 High-level operational awareness.
 
 Focus:
+
 - brief
 - top situations
 - personal impact
@@ -226,6 +238,7 @@ Focus:
 Immersive world view.
 
 Focus:
+
 - map overlays
 - domain layers
 - confidence weather
@@ -236,6 +249,7 @@ Focus:
 Deep reasoning view.
 
 Focus:
+
 - evidence
 - contradictions
 - hypotheses
@@ -247,6 +261,7 @@ Focus:
 Why-focused view.
 
 Focus:
+
 - why risk moved
 - what evidence supports it
 - what would invalidate it
@@ -257,6 +272,7 @@ Focus:
 Historical/test view.
 
 Focus:
+
 - timeline replay
 - forecast outcomes
 - prior warnings
@@ -267,6 +283,7 @@ Focus:
 Observability view.
 
 Focus:
+
 - blind spots
 - source health
 - stale data
@@ -308,6 +325,7 @@ Settings
 Every major surface should follow this hierarchy:
 
 ```text
+
 1. Summary
 2. Confidence
 3. Why it matters
@@ -316,6 +334,7 @@ Every major surface should follow this hierarchy:
 6. What changed
 7. What to watch next
 8. Evidence / raw detail
+
 ```
 
 Do not show raw detail before the user understands significance.
@@ -363,6 +382,7 @@ Only on demand.
 # Visual Design Direction
 
 The visual language should be:
+
 - dark, calm, high-contrast
 - precise
 - restrained
@@ -372,6 +392,7 @@ The visual language should be:
 - mature and trustworthy
 
 Avoid:
+
 - constant red everywhere
 - fake hacker green
 - excessive glow
@@ -413,6 +434,7 @@ Claude Design should produce reusable components, not one-off screens.
 ### OperationalBriefCard
 
 Displays:
+
 - summary
 - top 3 situations
 - what changed
@@ -422,6 +444,7 @@ Displays:
 ### SituationCard
 
 Displays:
+
 - title
 - lifecycle state
 - severity
@@ -437,6 +460,7 @@ Displays the full Situation view.
 ### ConfidenceBadge
 
 Displays:
+
 - confidence level
 - meta-confidence if available
 - source degradation indicator
@@ -444,6 +468,7 @@ Displays:
 ### ConfidenceBreakdown
 
 Displays:
+
 - source reliability
 - freshness
 - corroboration
@@ -500,30 +525,36 @@ Switches Command / Globe / Analyst / Explain / Replay / Collection.
 The Command Center should include:
 
 ### Header
+
 - global/state summary
 - current mode
 - last refresh
 - source health status
 
 ### Primary Brief
+
 - one paragraph operational brief
 - top material change
 - top personal impact
 
 ### Top Situations
+
 - 3 to 5 SituationCards
 - ranked by operational importance
 
 ### What Changed
+
 - compact list
 - clearly marked increases/decreases
 
 ### Watch Next
+
 - next indicators
 - missing evidence
 - source limitations
 
 ### Actions
+
 - monitor
 - prepare
 - investigate
@@ -560,6 +591,7 @@ Sections:
 The globe should be beautiful but subordinate to intelligence.
 
 Required lens types:
+
 - Risk Lens
 - Confidence Lens
 - Source Health Lens
@@ -570,6 +602,7 @@ Required lens types:
 - Recovery Lens
 
 Map interactions:
+
 - click region -> regional brief
 - click event -> Situation Detail
 - click layer -> explanation of what the layer means
@@ -581,6 +614,7 @@ Map interactions:
 ## What Changed Requirements
 
 What Changed should be filterable by:
+
 - global
 - local
 - watch missions
@@ -591,6 +625,7 @@ What Changed should be filterable by:
 - recovery
 
 Each item should show:
+
 - changed thing
 - previous state
 - new state
@@ -607,6 +642,7 @@ Collection Mode should answer:
 > Where is Crystal Ball blind?
 
 Show:
+
 - stale sources
 - degraded providers
 - low observability regions
@@ -624,6 +660,7 @@ This is one of the most elite surfaces.
 ## Step 1 — Inventory Existing UI
 
 Claude should inspect:
+
 - panels
 - map overlays
 - command center
@@ -634,6 +671,7 @@ Claude should inspect:
 - data-heavy components
 
 Output:
+
 - component inventory
 - redundant surfaces
 - unclear responsibilities
@@ -656,12 +694,14 @@ Secondary / Deprecated
 ```
 
 Output:
+
 - migration map
 - keep/merge/deprecate recommendations
 
 ## Step 3 — Define Information Architecture
 
 Claude should propose:
+
 - navigation hierarchy
 - mode hierarchy
 - panel ownership
@@ -671,6 +711,7 @@ Claude should propose:
 ## Step 4 — Define Component System
 
 Claude should produce:
+
 - reusable components
 - props/contracts
 - state ownership
@@ -698,6 +739,7 @@ Do not change code yet.
 ## PR 2 — Design Tokens and Visual Semantics
 
 Add or standardize:
+
 - spacing
 - typography
 - color semantics
@@ -709,6 +751,7 @@ Add or standardize:
 ## PR 3 — Core Intelligence Components
 
 Build:
+
 - SituationCard
 - ConfidenceBadge
 - SourceHealthStrip
@@ -720,6 +763,7 @@ No major layout changes yet.
 ## PR 4 — Command Center Redesign MVP
 
 Refactor Command Center around:
+
 - OperationalBrief
 - Top Situations
 - What Changed
@@ -751,6 +795,7 @@ Move raw diagnostics and algorithm internals into Workbench.
 ## PR 10 — Interaction Polish
 
 Add:
+
 - transitions
 - keyboard shortcuts
 - empty states
@@ -775,6 +820,7 @@ Core doctrine:
 Observation -> Evidence -> Entity -> Situation -> Material Change -> Operational Brief -> User Understanding.
 
 Primary surfaces:
+
 1. Command Center
 2. Situation Detail
 3. Globe / Map Lens
@@ -784,6 +830,7 @@ Primary surfaces:
 7. Replay Mode
 
 Design goals:
+
 - reduce panel sprawl
 - make Situations primary
 - make Command Center the default daily surface
@@ -794,6 +841,7 @@ Design goals:
 - keep visual style calm, cinematic, operational, and trustworthy
 
 Deliver:
+
 - information architecture
 - navigation model
 - mode system
@@ -804,6 +852,7 @@ Deliver:
 - design tokens / visual semantics
 
 Avoid:
+
 - flashy hacker UI
 - endless panels
 - excessive red
@@ -811,6 +860,7 @@ Avoid:
 - fake urgency
 - raw-feed-first design
 - AI summaries without evidence
+
 ```
 
 ---
@@ -837,6 +887,7 @@ The UI redesign succeeds if:
 # What Not To Do
 
 Do not:
+
 - redesign everything in one PR
 - hide source health
 - make globe visuals arbitrary

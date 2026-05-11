@@ -603,16 +603,6 @@ fn get_secret(
 }
 
 #[tauri::command]
-fn get_all_secrets(webview: Webview, cache: tauri::State<'_, SecretsCache>) -> Result<HashMap<String, String>, String> {
- require_trusted_window(webview.label())?;
- Ok(cache
- .secrets
- .lock()
- .unwrap_or_else(|e| e.into_inner())
- .clone())
-}
-
-#[tauri::command]
 fn set_secret(
  webview: Webview,
  key: String,
@@ -2472,7 +2462,6 @@ fn main() {
  .invoke_handler(tauri::generate_handler![
  list_supported_secret_keys,
  get_secret,
- get_all_secrets,
  set_secret,
  delete_secret,
  get_local_api_token,

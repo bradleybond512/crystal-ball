@@ -317,7 +317,10 @@ export class PanelLayoutManager implements AppModule {
   private _preModeOrder: string[] = [];
 
   /** Panels always kept at the top regardless of mode (video feeds / live streams). */
-  private static readonly MODE_ANCHORS = ['threat-dashboard', 'watchlist', 'alert-center', 'live-news', 'live-webcams'];
+  private static readonly MODE_ANCHORS = ['command-center', 'threat-dashboard', 'watchlist', 'alert-center', 'live-news', 'live-webcams'];
+
+  /** localStorage key for last-viewed panel (boot scroll restore). */
+  private static readonly LAST_VIEWED_KEY = 'cb-last-viewed-panel';
 
   /** Panels floated to top in Finance Mode. */
   private static readonly FINANCE_PRIORITY = [
@@ -1519,6 +1522,36 @@ export class PanelLayoutManager implements AppModule {
 
  this.applyPanelSettings();
  this.applyInitialUrlState();
+ this.restoreLastViewedPanel();
+ this.startLastViewedTracker();
+  }
+
+  /** Scroll to the last-viewed panel on boot, defaulting to command-center. */
+  private restoreLastViewedPanel(): void {
+ const key = localStorage.getItem(PanelLayoutManager.LAST_VIEWED_KEY) ?? 'command-center';
+ requestAnimationFrame(() => {
+ const panel = this.ctx.panels[key] ?? this.ctx.panels['command-center'];
+ panel?.getElement().scrollIntoView({ behavior: 'instant', block: 'start' });
+ });
+  }
+
+  /** Persist the most-visible panel to localStorage so boot restores it. */
+  private startLastViewedTracker(): void {
+ const panelsGrid = document.getElementById('panelsGrid');
+ if (!panelsGrid || typeof IntersectionObserver === 'undefined') return;
+ const observer = new IntersectionObserver(
+ (entries) => {
+ const visible = entries.find((e) => e.isIntersecting && e.intersectionRatio >= 0.5);
+ if (visible) {
+ const key = (visible.target as HTMLElement).dataset.panel;
+ if (key) localStorage.setItem(PanelLayoutManager.LAST_VIEWED_KEY, key);
+ }
+ },
+ { threshold: 0.5 },
+ );
+ for (const child of panelsGrid.children) {
+ observer.observe(child);
+ }
   }
 
   private _initModeSelector(): void {

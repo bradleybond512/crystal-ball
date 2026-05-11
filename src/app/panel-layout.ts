@@ -234,6 +234,8 @@ import { CorrelationMatrixPanel } from '@/components/CorrelationMatrixPanel';
 import { StrikePackagesPanel } from '@/components/StrikePackagesPanel';
 import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
 import { FeedHealthPanel } from '@/components/FeedHealthPanel';
+import { CveTrackerPanel } from '@/components/CveTrackerPanel';
+import { VulnersCvePanel } from '@/components/VulnersCvePanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
@@ -1286,6 +1288,9 @@ export class PanelLayoutManager implements AppModule {
  void this.callbacks.loadSecurityAdvisories?.();
  });
  this.ctx.panels['security-advisories'] = securityAdvisoriesPanel;
+
+ this.ctx.panels['cve-tracker'] = new CveTrackerPanel();
+ this.ctx.panels['vulners-cve'] = new VulnersCvePanel();
 
  // NetworkRulesPanel — surfaces tools/littlesnitch/crystal-ball.lsrules
  // (the bundled Little Snitch ruleset) inside the app so the user can

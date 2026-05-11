@@ -301,6 +301,9 @@ import * as utilityLoaders from '@/app/loaders/utility';
 import * as hazardLoaders from '@/app/loaders/hazards';
 import * as diseaseLoaders from '@/app/loaders/disease';
 import * as cyberLoaders from '@/app/loaders/cyber';
+import { earthquakesToObservations } from '@/services/intelligence/adapters/earthquake-adapter';
+import { aisDisruptionsToObservations } from '@/services/intelligence/adapters/ais-adapter';
+import { ingest as ingestObservations, getRecent as getRecentObservations } from '@/services/intelligence/observation-store';
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_UNSPECIFIED: 'info',
@@ -1295,6 +1298,7 @@ export class DataLoaderManager implements AppModule {
  ingestEarthquakesToTimeline(earthquakeResult.value);
  ingestEarthquakesToMatrix(earthquakeResult.value);
  ingestEarthquakesUnified(earthquakeResult.value);
+ ingestObservations(earthquakesToObservations(earthquakeResult.value));
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
  dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
@@ -1322,6 +1326,7 @@ export class DataLoaderManager implements AppModule {
  const hasEarthquakes = earthquakeResult.status === 'fulfilled' && earthquakeResult.value.length > 0;
  const hasEonet = eonetResult.status === 'fulfilled' && eonetResult.value.length > 0;
  this.ctx.map?.setLayerReady('natural', hasEarthquakes || hasEonet);
+ this.pushObservationsToSidecar();
 
  // Evaluate disaster auto-trigger (uses cached GDACS data — no extra fetch)
  const earthquakes = earthquakeResult.status === 'fulfilled' ? earthquakeResult.value : [];
@@ -2333,6 +2338,7 @@ export class DataLoaderManager implements AppModule {
  signalAggregator.ingestAisDisruptions(disruptions);
  ingestAisDisruptionsForCII(disruptions);
  ingestAisToDarkVessel(disruptions);
+ ingestObservations(aisDisruptionsToObservations(disruptions));
  (this.ctx.panels.cii as CIIPanel)?.refresh();
  updateAndCheck([
  { type: 'ais_gaps', region: 'global', count: disruptions.length },
@@ -2360,6 +2366,7 @@ export class DataLoaderManager implements AppModule {
  if (hasData) {
  dataFreshness.recordUpdate('ais', shippingCount);
  }
+ this.pushObservationsToSidecar();
  } catch (error) {
  this.ctx.map?.setLayerReady('ais', false);
  this.ctx.statusPanel?.updateFeed('Shipping', { status: 'error', errorMessage: String(error) });
@@ -3681,5 +3688,15 @@ export class DataLoaderManager implements AppModule {
  } catch (error) {
  console.error('[App] RIPE Atlas fetch failed:', error);
  }
+  }
+
+  pushObservationsToSidecar(): void {
+ const recent = getRecentObservations(200);
+ if (recent.length === 0) return;
+ void fetch(`${getApiBaseUrl()}/api/intelligence/observations`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify(recent),
+ }).catch(() => {});
   }
 }

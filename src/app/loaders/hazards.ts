@@ -22,6 +22,8 @@ import type { WildfireIntelPanel } from '@/components/WildfireIntelPanel';
 import { fetchFireIntelSnapshot } from '@/services/wildfires/fire-intel-service';
 import { fetchPurpleAirSnapshot } from '@/services/airquality/purpleair-service';
 import { getSavedPlaces } from '@/services/saved-places';
+import { wildifiresToObservations } from '@/services/intelligence/adapters/wildfire-adapter';
+import { ingest as ingestObservations } from '@/services/intelligence/observation-store';
 
 export async function loadAirQuality(ctx: AppContext, triggerCompoundEval: () => void): Promise<void> {
   try {
@@ -41,6 +43,7 @@ export async function loadWildfireIncidents(ctx: AppContext, triggerCompoundEval
   try {
  const incidents = await fetchInciwebIncidents();
  (ctx.panels['wildfire-incidents'] as WildfireIncidentsPanel | undefined)?.update(incidents);
+ ingestObservations(wildifiresToObservations(incidents));
  void proximityAlertService.checkWildfires(incidents);
  (ctx.panels['hazard-alerts'] as HazardAlertsPanel | undefined)?.refresh();
  triggerCompoundEval();

@@ -4057,6 +4057,48 @@ async function dispatch(requestUrl, req, routes, context) {
     if (algorithmId) return json({ algorithmId, runs: all[algorithmId] || [] });
     return json({ runs: all });
   }
+  // ── /api/intelligence/observations — observation ring-buffer mirror ──
+  // Renderer-side observation-store.ts collects normalized ObservationEvents
+  // and POSTs the recent slice here so MCP tools and diagnostics can read
+  // without importing TypeScript. Ring is capped to 200 entries server-side.
+  if (requestUrl.pathname === '/api/intelligence/observations') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!Array.isArray(body)) return json({ error: 'body must be an array' }, 400);
+        const safe = body.slice(0, 200).map((e) => ({
+          id: String(e.id ?? ''),
+          sourceId: String(e.sourceId ?? ''),
+          domain: String(e.domain ?? ''),
+          timestamp: typeof e.timestamp === 'number' ? e.timestamp : 0,
+          location: e.location && typeof e.location === 'object' ? e.location : null,
+          severity: String(e.severity ?? 'INFO'),
+          title: String(e.title ?? ''),
+          entityIds: Array.isArray(e.entityIds) ? e.entityIds.map(String) : [],
+          tags: Array.isArray(e.tags) ? e.tags.map(String) : [],
+        }));
+        if (!context._intelligenceObs) context._intelligenceObs = [];
+        context._intelligenceObs = safe;
+        return json({ ok: true, count: safe.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const obs = context._intelligenceObs ?? [];
+      const domain = requestUrl.searchParams.get('domain');
+      const since = Number(requestUrl.searchParams.get('since') ?? 0);
+      const limitParam = parseInt(requestUrl.searchParams.get('limit') ?? '50', 10);
+      const limit = Math.min(Math.max(1, limitParam), 200);
+      const filtered = obs
+        .filter((e) => (!domain || e.domain === domain) && (!since || e.timestamp >= since))
+        .slice(0, limit);
+      return json({ observations: filtered, total: obs.length });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
   if (requestUrl.pathname === '/api/algorithm-correlations' && req.method === 'GET') {
     return json(context._algorithmState?.correlations || { available: false });
   }

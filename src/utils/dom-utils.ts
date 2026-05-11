@@ -19,14 +19,14 @@ export function h(
   let allChildren: DomChild[];
 
   if (
- propsOrChild != undefined &&
- typeof propsOrChild === 'object' &&
- !(propsOrChild instanceof Node)
+	propsOrChild != undefined &&
+	typeof propsOrChild === 'object' &&
+	!(propsOrChild instanceof Node)
   ) {
- applyProps(el, propsOrChild as DomProps);
- allChildren = children;
+	applyProps(el, propsOrChild as DomProps);
+	allChildren = children;
   } else {
- allChildren = [propsOrChild as DomChild, ...children];
+	allChildren = [propsOrChild as DomChild, ...children];
   }
 
   appendChildren(el, allChildren);
@@ -63,72 +63,76 @@ export function rawHtml(html: string): DocumentFragment {
 const SAFE_TAGS = new Set([
   'strong', 'em', 'b', 'i', 'br', 'p', 'ul', 'ol', 'li', 'span', 'div', 'a',
 ]);
-const SAFE_ATTRS = new Set(['style', 'class', 'href', 'target', 'rel']);
+const SAFE_ATTRS = new Set(['class', 'href', 'target', 'rel']);
+
+function stripAttrsAndHref(el: Element): void {
+  for (const attr of el.attributes) {
+	if (!SAFE_ATTRS.has(attr.name.toLowerCase())) {
+	  el.removeAttribute(attr.name);
+	}
+  }
+  if (el.hasAttribute('href')) {
+	const href = el.getAttribute('href') ?? '';
+	if (!/^https?:\/\//i.test(href) && !href.startsWith('/') && !href.startsWith('#')) {
+	  el.removeAttribute('href');
+	}
+  }
+}
 
 /** Like rawHtml() but strips tags and attributes not in the allowlist. */
 export function safeHtml(html: string): DocumentFragment {
   const tpl = document.createElement('template');
   tpl.innerHTML = html;
   const walk = (parent: Element | DocumentFragment) => {
- const children = [...parent.childNodes];
- for (const node of children) {
- if (node.nodeType === Node.ELEMENT_NODE) {
- const el = node as Element;
- if (!SAFE_TAGS.has(el.tagName.toLowerCase())) {
- // Unwrap: keep children, remove the element itself
- while (el.firstChild) parent.insertBefore(el.firstChild, el);
- el.remove();
- continue;
- }
- // Strip unsafe attributes
- for (const attr of [...el.attributes]) {
- if (!SAFE_ATTRS.has(attr.name.toLowerCase())) {
- el.removeAttribute(attr.name);
- }
- }
- // Sanitize href to prevent javascript: URIs
- if (el.hasAttribute('href')) {
- const href = el.getAttribute('href') || '';
- if (!/^https?:\/\//i.test(href) && !href.startsWith('/') && !href.startsWith('#')) {
- el.removeAttribute('href');
- }
- }
- walk(el);
- }
- }
+	// eslint-disable-next-line unicorn/no-useless-spread -- childNodes is a live NodeList; spread to static array before mutating
+	for (const node of [...parent.childNodes]) {
+	  if (node.nodeType !== Node.ELEMENT_NODE) continue;
+	  const el = node as Element;
+	  if (!SAFE_TAGS.has(el.tagName.toLowerCase())) {
+		while (el.firstChild) parent.insertBefore(el.firstChild, el);
+		el.remove();
+		continue;
+	  }
+	  stripAttrsAndHref(el);
+	  walk(el);
+	}
   };
   walk(tpl.content);
   return tpl.content;
 }
 
+function applyStyleProp(el: HTMLElement, value: unknown): void {
+  if (typeof value === 'string') {
+	el.style.cssText = value;
+  } else if (typeof value === 'object' && value !== null) {
+	Object.assign(el.style, value as Partial<CSSStyleDeclaration>);
+  }
+}
+
 function applyProps(el: HTMLElement, props: DomProps): void {
   for (const key in props) {
- const value = props[key];
- if (value == undefined || value === false) continue;
+	const value = props[key];
+	if (value == undefined || value === false) continue;
 
- if (key === 'className') {
- el.className = value as string;
- } else if (key === 'style') {
- if (typeof value === 'string') {
- el.style.cssText = value;
- } else if (typeof value === 'object') {
- Object.assign(el.style, value);
- }
- } else if (key === 'dataset') {
- const ds = value as Record<string, string>;
- for (const k in ds) {
- el.dataset[k] = ds[k]!;
- }
- } else if (key.startsWith('on') && typeof value === 'function') {
- el.addEventListener(
- key.slice(2).toLowerCase(),
- value as EventListener,
- );
- } else if (value === true) {
- el.setAttribute(key, '');
- } else {
- el.setAttribute(key, String(value));
- }
+	if (key === 'className') {
+	  el.className = value as string;
+	} else if (key === 'style') {
+	  applyStyleProp(el, value);
+	} else if (key === 'dataset') {
+	  const ds = value as Record<string, string>;
+	  for (const k in ds) {
+		el.dataset[k] = ds[k]!;
+	  }
+	} else if (key.startsWith('on') && typeof value === 'function') {
+	  el.addEventListener(
+		key.slice(2).toLowerCase(),
+		value as EventListener,
+	  );
+	} else if (value === true) {
+	  el.setAttribute(key, '');
+	} else if (typeof value === 'string' || typeof value === 'number') {
+	  el.setAttribute(key, String(value));
+	}
   }
 }
 
@@ -137,11 +141,11 @@ function appendChildren(
   children: DomChild[],
 ): void {
   for (const child of children) {
- if (child == undefined || child === false) continue;
- if (child instanceof Node) {
- parent.append(child);
- } else {
- parent.append(document.createTextNode(String(child)));
- }
+	if (child == undefined || child === false) continue;
+	if (child instanceof Node) {
+	  parent.append(child);
+	} else {
+	  parent.append(document.createTextNode(String(child)));
+	}
   }
 }

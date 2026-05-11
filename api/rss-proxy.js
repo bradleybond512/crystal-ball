@@ -37,7 +37,7 @@ async function checkRateLimit(request, corsHeaders) {
   try {
  const { success, limit, reset } = await rl.limit(getClientIp(request));
  if (success) return null;
- return new Response(JSON.stringify({ error: 'Too many requests' }), {
+ return Response.json({ error: 'Too many requests' }, {
  status: 429,
  headers: {
  'Content-Type': 'application/json',
@@ -49,7 +49,7 @@ async function checkRateLimit(request, corsHeaders) {
  },
  });
   } catch {
- return new Response(JSON.stringify({ error: 'Rate limit unavailable' }), {
+ return Response.json({ error: 'Rate limit unavailable' }, {
  status: 503,
  headers: {
  'Content-Type': 'application/json',
@@ -402,142 +402,161 @@ const ALLOWED_DOMAINS = new Set([
   'www.nhc.noaa.gov', // NHC hurricane recon VDMs RSS
 ]);
 
+const RSS_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
+const MAX_REDIRECTS = 3;
+
+function isAllowedDomain(hostname) {
+  const bare = hostname.replace(/^www\./, '');
+  const withWww = hostname.startsWith('www.') ? hostname : `www.${hostname}`;
+  return ALLOWED_DOMAINS.has(hostname) || ALLOWED_DOMAINS.has(bare) || ALLOWED_DOMAINS.has(withWww);
+}
+
+// Returns a 403 Response if the feed URL fails security validation, null if valid.
+function getFeedValidationError(parsedUrl, corsHeaders) {
+  if (parsedUrl.protocol !== 'https:') {
+     
+    console.warn('[rss-proxy] Rejected non-HTTPS feed URL:', parsedUrl.href);
+    return Response.json({ error: 'Feed URL must use HTTPS' }, {
+      status: 403,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  }
+  if (!isAllowedDomain(parsedUrl.hostname)) {
+    return Response.json({ error: 'Domain not allowed' }, {
+      status: 403,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  }
+  return null;
+}
+
+// Throws if a redirect target fails HTTPS or domain validation.
+function checkRedirectSafe(redirectUrl) {
+  if (redirectUrl.protocol !== 'https:') throw new Error('Redirect to non-HTTPS URL');
+  if (!isAllowedDomain(redirectUrl.hostname)) throw new Error('Redirect to disallowed domain');
+}
+
+// Manual redirect-following fetch with HTTPS + domain validation on each hop.
+async function fetchFeedDirect(feedUrl, timeout) {
+  let currentUrl = feedUrl;
+  let redirectCount = 0;
+
+  while (true) {
+    const response = await fetchWithTimeout(currentUrl, {
+      headers: RSS_HEADERS,
+      redirect: 'manual',
+    }, timeout);
+
+    if (response.status >= 300 && response.status < 400) {
+      if (redirectCount >= MAX_REDIRECTS) throw new Error('Too many redirects');
+      const location = response.headers.get('location');
+      if (!location) break;
+      const redirectUrl = new URL(location, currentUrl);
+      checkRedirectSafe(redirectUrl);
+      currentUrl = redirectUrl.href;
+      redirectCount++;
+      continue;
+    }
+
+    return response;
+  }
+
+  // No location header on a 3xx — follow as non-redirect
+  return fetchWithTimeout(currentUrl, { headers: RSS_HEADERS }, timeout);
+}
+
+// Fetch with Railway relay fallback when direct fetch fails or returns an error.
+async function fetchFeedWithFallback(feedUrl, timeout) {
+  let response;
+  let usedRelay = false;
+  try {
+    response = await fetchFeedDirect(feedUrl, timeout);
+  } catch (directError) {
+    response = await fetchViaRailway(feedUrl, timeout);
+    usedRelay = !!response;
+    if (!response) throw directError;
+  }
+
+  if (!response.ok && !usedRelay) {
+    const relayResponse = await fetchViaRailway(feedUrl, timeout);
+    if (relayResponse?.ok) response = relayResponse;
+  }
+
+  return response;
+}
+
+function buildFeedResponse(response, data, corsHeaders) {
+  const isSuccess = response.status >= 200 && response.status < 300;
+  return new Response(data, {
+    status: response.status,
+    headers: {
+      'Content-Type': response.headers.get('content-type') || 'application/xml',
+      'Cache-Control': isSuccess
+        ? 'public, max-age=120, s-maxage=300, stale-while-revalidate=600'
+        : 'public, max-age=10, s-maxage=30, stale-while-revalidate=60',
+      ...(isSuccess && { 'CDN-Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' }),
+      ...corsHeaders,
+    },
+  });
+}
+
 export default async function handler(req) {
   if (isDisallowedOrigin(req)) {
- return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
- status: 403,
- headers: { 'Content-Type': 'application/json' },
- });
+    return Response.json({ error: 'Origin not allowed' }, {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   const corsHeaders = getCorsHeaders(req, 'GET, OPTIONS');
 
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
- return new Response(null, { status: 204, headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
 
   if (req.method !== 'GET') {
- return new Response(JSON.stringify({ error: 'Method not allowed' }), {
- status: 405,
- headers: { 'Content-Type': 'application/json', ...corsHeaders },
- });
+    return Response.json({ error: 'Method not allowed' }, {
+      status: 405,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
   }
 
   const rateLimitResponse = await checkRateLimit(req, corsHeaders);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const requestUrl = new URL(req.url);
-  const feedUrl = requestUrl.searchParams.get('url');
-
+  const feedUrl = new URL(req.url).searchParams.get('url');
   if (!feedUrl) {
- return Response.json({ error: 'Missing url parameter' }, {
- status: 400,
- headers: { 'Content-Type': 'application/json', ...corsHeaders },
- });
+    return Response.json({ error: 'Missing url parameter' }, {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
   }
 
   try {
- const parsedUrl = new URL(feedUrl);
+    const parsedUrl = new URL(feedUrl);
+    const validationError = getFeedValidationError(parsedUrl, corsHeaders);
+    if (validationError) return validationError;
 
- // Security: Check if domain is allowed (normalize www prefix)
- const hostname = parsedUrl.hostname;
- const bare = hostname.replace(/^www\./, '');
- const withWww = hostname.startsWith('www.') ? hostname : `www.${hostname}`;
- if (!ALLOWED_DOMAINS.has(hostname) && !ALLOWED_DOMAINS.has(bare) && !ALLOWED_DOMAINS.has(withWww)) {
- return Response.json({ error: 'Domain not allowed' }, {
- status: 403,
- headers: { 'Content-Type': 'application/json', ...corsHeaders },
- });
- }
-
- // Google News is slow - use longer timeout
- const isGoogleNews = feedUrl.includes('news.google.com');
- const timeout = isGoogleNews ? 20_000 : 12_000;
-
- const RSS_HEADERS = {
- 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
- 'Accept': 'application/rss+xml, application/xml, text/xml, */*',
- 'Accept-Language': 'en-US,en;q=0.9',
- };
- const MAX_REDIRECTS = 3;
-
- const fetchDirect = async () => {
- let currentUrl = feedUrl;
- let redirectCount = 0;
-
- while (true) {
- const response = await fetchWithTimeout(currentUrl, {
- headers: RSS_HEADERS,
- redirect: 'manual',
- }, timeout);
-
- if (response.status >= 300 && response.status < 400) {
- if (redirectCount >= MAX_REDIRECTS) throw new Error('Too many redirects');
- const location = response.headers.get('location');
- if (!location) break;
- const redirectUrl = new URL(location, currentUrl);
- const rHost = redirectUrl.hostname;
- const rBare = rHost.replace(/^www\./, '');
- const rWithWww = rHost.startsWith('www.') ? rHost : `www.${rHost}`;
- if (!ALLOWED_DOMAINS.has(rHost) && !ALLOWED_DOMAINS.has(rBare) && !ALLOWED_DOMAINS.has(rWithWww)) {
- throw new Error('Redirect to disallowed domain');
- }
- currentUrl = redirectUrl.href;
- redirectCount++;
- continue;
- }
-
- return response;
- }
-
- // No location header on a 3xx — follow as non-redirect
- return fetchWithTimeout(currentUrl, { headers: RSS_HEADERS }, timeout);
- };
-
- let response;
- let usedRelay = false;
- try {
- response = await fetchDirect();
- } catch (directError) {
- response = await fetchViaRailway(feedUrl, timeout);
- usedRelay = !!response;
- if (!response) throw directError;
- }
-
- if (!response.ok && !usedRelay) {
- const relayResponse = await fetchViaRailway(feedUrl, timeout);
- if (relayResponse && relayResponse.ok) {
- response = relayResponse;
- }
- }
-
- const data = await response.text();
- const isSuccess = response.status >= 200 && response.status < 300;
- return new Response(data, {
- status: response.status,
- headers: {
- 'Content-Type': response.headers.get('content-type') || 'application/xml',
- 'Cache-Control': isSuccess
- ? 'public, max-age=120, s-maxage=300, stale-while-revalidate=600'
- : 'public, max-age=10, s-maxage=30, stale-while-revalidate=60',
- ...(isSuccess && { 'CDN-Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' }),
- ...corsHeaders,
- },
- });
+    const timeout = feedUrl.includes('news.google.com') ? 20_000 : 12_000;
+    const response = await fetchFeedWithFallback(feedUrl, timeout);
+    const data = await response.text();
+    return buildFeedResponse(response, data, corsHeaders);
   } catch (error) {
- const isTimeout = error.name === 'AbortError';
- console.error('RSS proxy error:', feedUrl, error.message);
- // Strip query params before echoing the URL to avoid leaking any secrets embedded in them
- let safeUrl = feedUrl;
- try { safeUrl = new URL(feedUrl).origin + new URL(feedUrl).pathname; } catch { /* keep as-is */ }
- return Response.json({
- error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed',
- details: error.message,
- url: safeUrl,
- }, {
- status: isTimeout ? 504 : 502,
- headers: { 'Content-Type': 'application/json', ...corsHeaders },
- });
+    const isTimeout = error.name === 'AbortError';
+     
+    console.error('RSS proxy error:', feedUrl, error.message);
+    // Strip query params before echoing the URL to avoid leaking any secrets embedded in them
+    let safeUrl = feedUrl;
+    try { safeUrl = new URL(feedUrl).origin + new URL(feedUrl).pathname; } catch { /* keep as-is */ }
+    return Response.json({
+      error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed',
+      details: error.message,
+      url: safeUrl,
+    }, {
+      status: isTimeout ? 504 : 502,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
   }
 }

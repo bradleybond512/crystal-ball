@@ -4,10 +4,9 @@ import { setSecretValue } from '@/services/runtime-config';
 import { HUMAN_LABELS, SIGNUP_URLS } from '@/services/settings-constants';
 import { getRegistrationProfile, saveRegistrationProfile } from '@/services/registration-profile';
 import type { RegistrationProfile } from '@/services/registration-profile';
-import { getApiBaseUrl } from '@/services/runtime';
-import { isDesktopRuntime } from '@/services/runtime';
-import { invokeTauri } from '@/services/tauri-bridge';
+import { getApiBaseUrl, isDesktopRuntime } from '@/services/runtime';
 import { h, replaceChildren } from '@/utils/dom-utils';
+import { openExternalSafe } from '@/utils/safe-open';
 
 const REGISTERABLE_SERVICES: Partial<Record<RuntimeSecretKey, {
   endpoint: string;
@@ -67,9 +66,9 @@ export function showApiKeyGate(
  try {
  await setSecretValue(keyName, value);
  onSaved();
- } catch (err) {
+ } catch (error) {
  btn.disabled = false;
- status.textContent = err instanceof Error ? err.message : 'Error saving key';
+ status.textContent = error instanceof Error ? error.message : 'Error saving key';
  }
   };
 
@@ -90,10 +89,8 @@ export function showApiKeyGate(
  if (profile?.email && url) {
  url += (url.includes('?') ? '&' : '?') + 'email=' + encodeURIComponent(profile.email);
  }
- if (isDesktopRuntime() && url) {
- void invokeTauri<void>('open_url', { url }).catch(() => window.open(url, '_blank'));
- } else if (url) {
- window.open(url, '_blank');
+ if (url) {
+ openExternalSafe(url);
  }
  });
  const note = h('p', { className: 'api-key-gate-label' }, 'Opens the signup page in your browser.');
@@ -197,8 +194,7 @@ export function showApiKeyGate(
  }
 
  const saveRegBtn = h('button', { className: 'api-key-gate-save' }, 'Save Profile & Register') as HTMLButtonElement;
- formChildren.push(h('div', { className: 'api-key-gate-row' }, saveRegBtn));
- formChildren.push(regStatus);
+ formChildren.push(h('div', { className: 'api-key-gate-row' }, saveRegBtn), regStatus);
 
  saveRegBtn.addEventListener('click', () => {
  const profile: RegistrationProfile = {
@@ -216,6 +212,7 @@ export function showApiKeyGate(
  return h('div', { className: 'api-key-gate-tab-content' }, ...formChildren) as HTMLElement;
   }
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing complexity, tracked in tech debt
   async function doRegister(profile: RegistrationProfile | null, password: string): Promise<void> {
  const svc = REGISTERABLE_SERVICES[keyName];
  if (!svc) return;
@@ -239,6 +236,7 @@ export function showApiKeyGate(
  const data = await resp.json() as Record<string, unknown>;
 
  if (data.error) {
+ // eslint-disable-next-line @typescript-eslint/no-base-to-string -- server error is string|undefined in practice
  regStatus.textContent = String(data.error);
  return;
  }
@@ -266,8 +264,8 @@ export function showApiKeyGate(
  } else {
  regStatus.textContent = (data.message as string | undefined) ?? 'Registration submitted — check your email.';
  }
- } catch (err) {
- regStatus.textContent = err instanceof Error ? err.message : 'Registration failed';
+ } catch (error) {
+ regStatus.textContent = error instanceof Error ? error.message : 'Registration failed';
  }
   }
 

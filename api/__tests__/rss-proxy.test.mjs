@@ -34,3 +34,34 @@ test('rss-proxy.js: handles missing query params gracefully', async () => {
   try { ({ res } = await invokeHandler(handler, { query: {} })); } finally { restoreFetch(); }
   assert.ok(res.ended || res.body !== null, 'should respond');
 });
+
+// SEC-005: HTTPS enforcement
+test('rss-proxy.js: rejects http:// feed URL with 403', async () => {
+  if (!handler) return;
+  const { res } = await invokeHandler(handler, {
+    query: { url: 'http://rss.cnn.com/rss/edition.rss' },
+  });
+  assert.strictEqual(res.statusCode, 403, 'should reject plain-HTTP feed');
+  assert.ok(
+    typeof res.body === 'object'
+      ? res.body?.error?.includes('HTTPS')
+      : String(res.body).includes('HTTPS'),
+    'error message should mention HTTPS',
+  );
+});
+
+test('rss-proxy.js: rejects disallowed domain even over https', async () => {
+  if (!handler) return;
+  const { res } = await invokeHandler(handler, {
+    query: { url: 'https://evil.example.com/feed.rss' },
+  });
+  assert.strictEqual(res.statusCode, 403, 'should reject disallowed domain');
+});
+
+test('rss-proxy.js: rejects javascript: scheme feed URL', async () => {
+  if (!handler) return;
+  const { res } = await invokeHandler(handler, {
+    query: { url: 'javascript:alert(1)' },
+  });
+  assert.ok(res.statusCode >= 400, 'should reject non-HTTP(S) scheme');
+});

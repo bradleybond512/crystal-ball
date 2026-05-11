@@ -34,3 +34,25 @@ test('version.js: handles missing query params gracefully', async () => {
   try { ({ res } = await invokeHandler(handler, { query: {} })); } finally { restoreFetch(); }
   assert.ok(res.ended || res.body !== null, 'should respond');
 });
+
+// R2-SEC-010: wildcard CORS is an approved exception on this public read-only endpoint.
+// This test documents and pins that it is intentional.
+test('version.js: uses wildcard CORS (approved public-endpoint exception)', async () => {
+  if (!handler) return;
+  const upstream = {
+    tag_name: 'v1.2.3',
+    html_url: 'https://github.com/bradleybond512/crystal-ball/releases/tag/v1.2.3',
+    prerelease: false,
+  };
+  const restoreFetch = mockFetch(new Map([
+    ['github.com', { status: 200, json: upstream }],
+  ]));
+  let response;
+  try {
+    ({ response } = await invokeHandler(handler, {}));
+  } finally {
+    restoreFetch();
+  }
+  const corsHeader = response?.headers?.get('access-control-allow-origin');
+  assert.equal(corsHeader, '*', 'version endpoint must serve wildcard CORS (public read-only exception)');
+});

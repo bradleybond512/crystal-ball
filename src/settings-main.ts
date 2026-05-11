@@ -26,8 +26,9 @@ import {
   type RuntimeSecretKey,
 } from '@/services/runtime-config';
 import { getApiBaseUrl, isDesktopRuntime, resolveLocalApiPort } from '@/services/runtime';
-import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
+import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { escapeHtml } from '@/utils/sanitize';
+import { openExternalSafe } from '@/utils/safe-open';
 import { initI18n, t } from '@/services/i18n';
 import { applyStoredTheme } from '@/utils/theme-manager';
 import { trackFeatureToggle } from '@/services/analytics';
@@ -427,16 +428,7 @@ function initFeatureSectionListeners(area: HTMLElement): void {
  e.preventDefault();
  const url = link.dataset.signupUrl;
  if (!url) return;
- if (isDesktopRuntime()) {
- void invokeTauri<void>('open_url', { url }).catch((error: unknown) => {
- console.warn('[settings] Failed to open signup URL', {
- url,
- error: error instanceof Error ? error.message : String(error),
- });
- });
- } else {
- window.open(url, '_blank');
- }
+ openExternalSafe(url);
  });
   });
 

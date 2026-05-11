@@ -45,6 +45,7 @@ import {
 import { detectPlatform, allButtons, buttonsForPlatform } from '@/components/DownloadBanner';
 import type { Platform } from '@/components/DownloadBanner';
 import { invokeTauri } from '@/services/tauri-bridge';
+import { openExternalSafe } from '@/utils/safe-open';
 import { toggleGhostMode, getMode, setMode } from '@/services/mode-manager';
 import { isAppActive, onActivityChange } from '@/services/app-activity';
 import { playUiClick } from '@/services/sound-manager';
@@ -673,7 +674,7 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  const plat = new URL(a.href, location.origin).searchParams.get('platform') || 'unknown';
  trackDownloadClicked(plat);
- window.open(a.href, '_blank');
+ openExternalSafe(a.href);
  dropdown.classList.remove('open');
  });
  });

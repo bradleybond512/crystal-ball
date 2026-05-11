@@ -19,9 +19,12 @@ import { aggregateSystemHealth, contextFromSnapshots } from './system-health';
 import {
   buildExportBundle,
   exportBundleToMarkdown,
+  type AlgorithmCalibrationSummary,
   type DiagnosticsExportBundle,
   type ExportBundleAppMeta,
   type ExportBundleEnvHints,
+  type FeedHealthEntry,
+  type SystemInfo,
 } from './export-bundle';
 import { getLiveDiagnosticsSnapshot } from './live-diagnostics-snapshot';
 import {
@@ -30,6 +33,12 @@ import {
 } from './diagnostics-state';
 import { summarizeScenarioCoverage } from '@/services/scenarios/scenario-library';
 import { getActiveQualityDebt } from '@/services/quality/quality-debt-state';
+import { getMissionStateDetail } from './mission-state-service';
+import { dataFreshness } from '@/services/data-freshness';
+import {
+  getAlgorithmEvaluationLedger,
+} from '@/services/algorithms/algorithms-state';
+import { summarizeCalibration } from '@/services/algorithms/algorithm-evaluation-ledger';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -75,11 +84,54 @@ export function composeFrontendDiagnosticsExport(
     sidecar: snapshot.sidecar,
   });
 
-  // Strategic sections — best-effort. Failure on any one section does
-  // not block the overall export; the missing field just stays
-  // undefined and the consumer will see only what was available.
+  // Strategic + diagnostic sections — best-effort. Failure on any one
+  // section does not block the overall export.
   const scenarioCoverage = safe(() => summarizeScenarioCoverage());
   const qualityDebt = safe(() => getActiveQualityDebt());
+  const missionStateDetail = safe(() => getMissionStateDetail());
+  const missionState = missionStateDetail
+    ? {
+        state: missionStateDetail.state,
+        staleFeedCount: missionStateDetail.staleFeedCount,
+        criticalStaleFeedCount: missionStateDetail.criticalStaleFeedCount,
+      }
+    : undefined;
+
+  const feedHealth = safe((): FeedHealthEntry[] =>
+    dataFreshness.getAllSources().map((s) => ({
+      id: s.id,
+      name: s.name,
+      status: s.status,
+      lastUpdateIso: s.lastUpdate ? s.lastUpdate.toISOString() : null,
+    })),
+  );
+
+  const algorithmState = safe((): AlgorithmCalibrationSummary[] => {
+    const ledger = getAlgorithmEvaluationLedger();
+    return summarizeCalibration(ledger.all()).map((c) => ({
+      algorithmId: c.algorithmId,
+      domain: c.domain,
+      graded: c.graded,
+      hitRate: Number.isNaN(c.hitRate) ? 0 : c.hitRate,
+      weightedHitRate: Number.isNaN(c.weightedHitRate) ? 0 : c.weightedHitRate,
+      meanDurationMs: Number.isNaN(c.meanDurationMs) ? 0 : c.meanDurationMs,
+    }));
+  });
+
+  const systemInfo = safe((): SystemInfo => {
+    const g = globalThis as unknown as {
+      __APP_VERSION__?: string;
+      performance?: { now(): number };
+      // Chrome-only memory API
+      memory?: { usedJSHeapSize?: number };
+    };
+    return {
+      appVersion: input.app.version,
+      buildHash: input.app.buildHash,
+      uptimeMs: g.performance ? Math.round(g.performance.now()) : undefined,
+      memoryUsedBytes: g.memory?.usedJSHeapSize,
+    };
+  });
 
   const bundle = buildExportBundle({
     now,
@@ -92,6 +144,10 @@ export function composeFrontendDiagnosticsExport(
     events: { snapshot: [...snapshot.recentEvents] },
     scenarioCoverage,
     qualityDebt,
+    missionState,
+    feedHealth,
+    algorithmState,
+    systemInfo,
   });
 
   let markdown = exportBundleToMarkdown(bundle);

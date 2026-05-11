@@ -1301,15 +1301,22 @@ export async function loadDesktopSecrets(): Promise<void> {
   if (!isDesktopRuntime()) return;
 
   try {
- // Single batch call to read all keychain secrets at once.
- // This triggers only ONE macOS Keychain prompt instead of 18 individual ones.
- const allSecrets = await invokeTauri<Record<string, string>>('get_all_secrets');
+ const keys = await invokeTauri<string[]>('list_supported_secret_keys');
+
+ const keyResults = await Promise.allSettled(
+ keys.map(async (key) => {
+ const value = await invokeTauri<string | null>('get_secret', { key });
+ return { key, value };
+ })
+ );
 
  const syncResults = await Promise.allSettled(
- Object.entries(allSecrets).filter(([, value]) => value && value.trim().length > 0).map(async ([key, value]) => {
- runtimeConfig.secrets[key as RuntimeSecretKey] = { value, source: 'vault' };
+ keyResults
+ .filter((r): r is PromiseFulfilledResult<{ key: string; value: string | null }> => r.status === 'fulfilled' && r.value.value != null && r.value.value.trim().length > 0)
+ .map(async ({ value: { key, value } }) => {
+ runtimeConfig.secrets[key as RuntimeSecretKey] = { value: value!, source: 'vault' };
  try {
- await pushSecretToSidecar(key as RuntimeSecretKey, value);
+ await pushSecretToSidecar(key as RuntimeSecretKey, value!);
  } catch {
  // Sidecar may not be ready during early bootstrap — secrets are
  // already injected into the sidecar env at launch via keychain.

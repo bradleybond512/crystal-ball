@@ -108,6 +108,7 @@ export { SupplyChainImpactPanel } from './SupplyChainImpactPanel';
 export { WaterQualityPanel } from './WaterQualityPanel';
 export { NuclearMonitorPanel } from './NuclearMonitorPanel';
 export { NotificationDigestPanel } from './NotificationDigestPanel';
+export { NotificationSettingsPanel } from './NotificationSettingsPanel';
 
 // Worldview / Palantir / Dragos-inspired panels
 export { PatternOfLifePanel } from './PatternOfLifePanel';

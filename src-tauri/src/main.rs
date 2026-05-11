@@ -15,6 +15,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use keyring::Entry;
 use reqwest::Url;
+use sha2::{Digest, Sha256};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuItem, Submenu};
@@ -1237,7 +1238,7 @@ fn copy_app_bundle_preserving_signature(source: &str, dest: &str) -> Result<(), 
 }
 
 #[tauri::command]
-async fn install_update(webview: Webview, download_url: String) -> Result<(), String> {
+async fn install_update(webview: Webview, download_url: String, expected_sha256: Option<String>) -> Result<(), String> {
  require_trusted_window(webview.label())?;
  // Validate the URL comes from GitHub
  let parsed = reqwest::Url::parse(&download_url)
@@ -1249,7 +1250,7 @@ async fn install_update(webview: Webview, download_url: String) -> Result<(), St
 
  #[cfg(not(target_os = "macos"))]
  {
- let _ = download_url;
+ let _ = (download_url, expected_sha256);
  return Err("Auto-install is only supported on macOS".into());
  }
 
@@ -1278,6 +1279,26 @@ async fn install_update(webview: Webview, download_url: String) -> Result<(), St
 
  let bytes = resp.bytes().await
  .map_err(|e| format!("Download read failed: {e}"))?;
+
+ // 1a. Verify SHA-256 of downloaded bytes BEFORE writing to disk or mounting.
+ // This detects corruption and MITM-served payloads before the OS processes the file.
+ let actual_sha256 = {
+ let mut hasher = Sha256::new();
+ hasher.update(&bytes);
+ hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>()
+ };
+ match &expected_sha256 {
+ Some(expected) if !expected.is_empty() => {
+ if actual_sha256 != expected.to_lowercase() {
+ return Err(format!(
+ "SHA-256 mismatch — aborting update: expected {expected}, got {actual_sha256}"
+ ));
+ }
+ }
+ _ => {
+ eprintln!("[updater] WARNING: no expected SHA-256 provided; codesign verification still applies");
+ }
+ }
 
  std::fs::write(tmp_dmg, &bytes)
  .map_err(|e| format!("Write DMG to /tmp failed: {e}"))?;

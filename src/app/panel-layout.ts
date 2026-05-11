@@ -419,12 +419,12 @@ export class PanelLayoutManager implements AppModule {
  const state = this.ctx.updateState;
  if (state?.phase !== 'available' || !state.downloadUrl) return;
 
- const { version, downloadUrl } = state;
+ const { version, downloadUrl, expectedSha256 } = state;
  installBtn.addEventListener('click', () => {
  this.ctx.updateState = { phase: 'installing' };
  this.renderSidebarUpdateBtn();
- invokeTauri<void>('install_update', { downloadUrl }).catch(() => {
- this.ctx.updateState = { phase: 'available', version, downloadUrl };
+ invokeTauri<void>('install_update', { downloadUrl, expectedSha256 }).catch(() => {
+ this.ctx.updateState = { phase: 'available', version, downloadUrl, expectedSha256 };
  this.renderSidebarUpdateBtn();
  });
  });

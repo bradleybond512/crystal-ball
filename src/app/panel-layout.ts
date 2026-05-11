@@ -60,6 +60,7 @@ import {
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { TriageBar } from '@/components/TriageBar';
 import { EEWStatusBar } from '@/components/EEWStatusBar';
+import { CorrelationAlertBanner } from '@/components/CorrelationAlertBanner';
 import { startSpaceWeatherStatusBarPoller } from '@/services/spaceweather/status-bar-poller';
 import { JustInRail } from '@/components/JustInRail';
 import { startPanelNarrator } from '@/services/panel-narrator';
@@ -536,6 +537,11 @@ export class PanelLayoutManager implements AppModule {
  const eewStatusBar = new EEWStatusBar();
  eewStatusBar.mount(document.body);
  startSpaceWeatherStatusBarPoller(eewStatusBar);
+
+ // Mount the cross-domain correlation banner. Self-fetches from
+ // /api/synthesis/correlations every 15s; hidden when no events.
+ const correlationBanner = new CorrelationAlertBanner();
+ correlationBanner.mount(document.body);
 
  // Mount the triage bar above the panel grid (auto-hides when nothing is hot).
  const triageBar = new TriageBar();

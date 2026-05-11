@@ -208,6 +208,9 @@ const allLayersEnabled: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 const allLayersDisabled: MapLayers = {
@@ -283,6 +286,9 @@ const allLayersDisabled: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 const SEEDED_NEWS_LOCATIONS: {

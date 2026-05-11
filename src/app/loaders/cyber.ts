@@ -10,9 +10,15 @@
 import type { AppContext } from '@/app/app-context';
 import { fetchLocalIDSAlerts } from '@/services/local-ids';
 import { fetchVolcanoAlerts } from '@/services/volcano-alerts';
+import { fetchVolcanoMonitorStatus } from '@/services/volcano-monitor';
+import { fetchSevereWeatherStatus } from '@/services/severe-weather';
+import { fetchShakemapEvents } from '@/services/shakealert';
 import { unifiedAlertStore } from '@/services/unified-alerts';
 import type { LocalIDSPanel } from '@/components/LocalIDSPanel';
 import type { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
+import type { VolcanoMonitorPanel } from '@/components/VolcanoMonitorPanel';
+import type { SevereWeatherPanel } from '@/components/SevereWeatherPanel';
+import type { ShakeAlertPanel } from '@/components/ShakeAlertPanel';
 
 export async function loadLocalIDS(ctx: AppContext): Promise<void> {
   try {
@@ -47,5 +53,35 @@ export async function loadVolcanoAlerts(ctx: AppContext): Promise<void> {
  // eslint-disable-next-line no-console
  console.warn('[volcano-alerts] fetch failed', error);
  (ctx.panels['volcano-alerts'] as VolcanoAlertsPanel | undefined)?.update([]);
+  }
+}
+
+export async function loadVolcanoMonitor(ctx: AppContext): Promise<void> {
+  try {
+    const status = await fetchVolcanoMonitorStatus();
+    (ctx.panels['volcano-monitor'] as VolcanoMonitorPanel | undefined)?.update(status);
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('[volcano-monitor] fetch failed', error);
+  }
+}
+
+export async function loadSevereWeather(ctx: AppContext): Promise<void> {
+  try {
+    const status = await fetchSevereWeatherStatus();
+    (ctx.panels['severe-weather'] as SevereWeatherPanel | undefined)?.update(status);
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('[severe-weather] fetch failed', error);
+  }
+}
+
+export async function loadShakeAlert(ctx: AppContext): Promise<void> {
+  try {
+    const status = await fetchShakemapEvents();
+    (ctx.panels.shakealert as ShakeAlertPanel | undefined)?.update(status);
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('[shakealert] fetch failed', error);
   }
 }

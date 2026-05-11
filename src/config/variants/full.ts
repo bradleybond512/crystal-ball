@@ -127,6 +127,9 @@ export const DEFAULT_MAP_LAYERS: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 // Mobile-specific defaults for geopolitical
@@ -206,6 +209,9 @@ export const MOBILE_DEFAULT_MAP_LAYERS: MapLayers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 export const VARIANT_CONFIG: VariantConfig = {

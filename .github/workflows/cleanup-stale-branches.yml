@@ -3,7 +3,13 @@ name: Cleanup stale AI agent branches
 on:
   schedule:
     - cron: '0 9 * * 1'  # Every Monday at 9am UTC
-  workflow_dispatch: # Also runnable manually
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — log what would be deleted/closed without taking action'
+        required: false
+        default: 'true'
+        type: boolean
 
 permissions:
   contents: write
@@ -23,6 +29,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const dryRun = '${{ inputs.dry_run }}' === 'true';
             const agentPrefixes = ['claude/', 'codex/', 'copilot/', 'feat/', 'fix/', 'ui/', 'chore/', 'perf/', 'docs/'];
             const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -40,30 +47,38 @@ jobs:
 
               const updatedAt = new Date(pr.updated_at);
               if (updatedAt < cutoff) {
-                await github.rest.pulls.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: pr.number,
-                  state: 'closed'
-                });
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: pr.number,
-                  body: `⏱️ Auto-closed: no activity for 30+ days. Reopen if this work is still relevant.`
-                });
-                console.log(`Closed stale PR #${pr.number}: ${pr.title}`);
-                closed++;
+                if (dryRun) {
+                  console.log(`[DRY RUN] Would close stale PR #${pr.number}: ${pr.title} (branch: ${pr.head.ref}, last updated: ${pr.updated_at})`);
+                } else {
+                  await github.rest.pulls.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: pr.number,
+                    state: 'closed'
+                  });
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    body: `Auto-closed by cleanup workflow: no activity for 30+ days (last updated ${pr.updated_at}). Reopen if this work is still relevant.`
+                  });
+                  console.log(`Closed stale PR #${pr.number}: ${pr.title} (branch: ${pr.head.ref}, reason: 30+ days inactive)`);
+                  closed++;
+                }
               }
             }
-            console.log(`Closed ${closed} stale PRs.`);
+            if (!dryRun) console.log(`Closed ${closed} stale PRs.`);
 
       - name: Delete merged remote branches
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const agentPrefixes = ['claude/', 'codex/', 'copilot/', 'feat/', 'fix/', 'ui/', 'chore/', 'perf/', 'docs/'];
+            const dryRun = '${{ inputs.dry_run }}' === 'true';
+            // Deletion allowlist is intentionally narrower than the stale-PR list:
+            // only AI-agent branches and dependabot branches are eligible for deletion.
+            // Feature/fix/docs branches are not auto-deleted to prevent accidental loss.
+            const deletionAllowlist = ['claude/', 'codex/', 'copilot/', 'dependabot/'];
 
             const { data: branches } = await github.rest.repos.listBranches({
               owner: context.repo.owner,
@@ -73,17 +88,17 @@ jobs:
 
             let deleted = 0;
             for (const branch of branches) {
-              const isAgentBranch = agentPrefixes.some(p => branch.name.startsWith(p));
-              if (!isAgentBranch) continue;
+              const isAllowed = deletionAllowlist.some(p => branch.name.startsWith(p));
+              if (!isAllowed) continue;
 
-              // Check if this branch has an open PR
+              // Skip branches with open PRs
               const { data: prs } = await github.rest.pulls.list({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 head: `${context.repo.owner}:${branch.name}`,
                 state: 'open'
               });
-              if (prs.length > 0) continue; // Skip if open PR exists
+              if (prs.length > 0) continue;
 
               // Check if branch is fully merged into main
               try {
@@ -93,20 +108,24 @@ jobs:
                   base: branch.name,
                   head: 'main'
                 });
-                // If we get here, main is ahead of or equal to branch — it's merged
-                await github.rest.git.deleteRef({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  ref: `heads/${branch.name}`
-                });
-                console.log(`Deleted merged branch: ${branch.name}`);
-                deleted++;
+                // main is ahead of or equal to branch — it is merged
+                if (dryRun) {
+                  console.log(`[DRY RUN] Would delete merged branch: ${branch.name}`);
+                } else {
+                  await github.rest.git.deleteRef({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ref: `heads/${branch.name}`
+                  });
+                  console.log(`Deleted merged branch: ${branch.name} (reason: fully merged into main, no open PR)`);
+                  deleted++;
+                }
               } catch (e) {
                 // Branch has commits not in main — keep it
                 console.log(`Keeping unmerged branch: ${branch.name}`);
               }
             }
-            console.log(`Deleted ${deleted} merged branches.`);
+            if (!dryRun) console.log(`Deleted ${deleted} merged branches.`);
 
       - name: Report summary
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3

@@ -84,13 +84,32 @@ export class DesktopUpdater implements AppModule {
  document.dispatchEvent(new CustomEvent('wm:update-state'));
   }
 
-  private resolveDownloadUrl(data: { assets?: { name: string; browser_download_url: string }[] }): string {
+  private resolveDownloadInfo(data: { assets?: { name: string; browser_download_url: string }[] }): { url: string; name: string | null } {
  const buildArch = (typeof __BUILD_ARCH__ === 'undefined' ? 'aarch64' : __BUILD_ARCH__) as string;
  const assets = Array.isArray(data.assets) ? data.assets : [];
  const dmg =
  assets.find(a => typeof a.name === 'string' && a.name.endsWith('.dmg') && a.name.includes(buildArch)) ??
  assets.find(a => typeof a.name === 'string' && a.name.endsWith('.dmg'));
- return dmg?.browser_download_url ?? 'https://github.com/bradleybond512/crystal-ball/releases/latest';
+ return {
+ url: dmg?.browser_download_url ?? 'https://github.com/bradleybond512/crystal-ball/releases/latest',
+ name: dmg?.name ?? null,
+ };
+  }
+
+  private async fetchExpectedSha256(
+ assets: { name: string; browser_download_url: string }[],
+ dmgName: string,
+  ): Promise<string | undefined> {
+ const manifestAsset = assets.find(a => a.name === 'release-manifest.json');
+ if (!manifestAsset) return undefined;
+ try {
+ const res = await fetch(manifestAsset.browser_download_url, { signal: AbortSignal.timeout(10_000) });
+ if (!res.ok) return undefined;
+ const manifest = await res.json() as { assets?: { name: string; sha256: string }[] };
+ return manifest.assets?.find(a => a.name === dmgName)?.sha256;
+ } catch {
+ return undefined;
+ }
   }
 
   // eslint-disable-next-line sonarjs/cognitive-complexity -- linear fetch + parse + state branches; splitting hides the flow
@@ -128,19 +147,21 @@ export class DesktopUpdater implements AppModule {
  return;
  }
 
- const downloadUrl = this.resolveDownloadUrl(data);
+ const assets = Array.isArray(data.assets) ? data.assets : [];
+ const { url: downloadUrl, name: dmgName } = this.resolveDownloadInfo(data);
+ const expectedSha256 = dmgName ? await this.fetchExpectedSha256(assets, dmgName) : undefined;
  const dismissKey = `wm-update-dismissed-${remote}`;
  const notifiedKey = `wm-update-notified-${remote}`;
  if (localStorage.getItem(dismissKey) && !manual) {
  this.logUpdaterOutcome('update_available', { current, remote, dismissed: true });
- this.setUpdateState({ phase: 'available', version: remote, downloadUrl });
+ this.setUpdateState({ phase: 'available', version: remote, downloadUrl, expectedSha256 });
  return;
  }
 
  this.logUpdaterOutcome('update_available', { current, remote, dismissed: false });
- this.setUpdateState({ phase: 'available', version: remote, downloadUrl });
+ this.setUpdateState({ phase: 'available', version: remote, downloadUrl, expectedSha256 });
  trackUpdateShown(current, remote);
- await this.showUpdateToast(remote, downloadUrl);
+ await this.showUpdateToast(remote, downloadUrl, expectedSha256);
  // Fire a native macOS notification once per remote version so a
  // background-running app surfaces the update without the user needing
  // to look at the Crystal Ball window.
@@ -175,7 +196,7 @@ export class DesktopUpdater implements AppModule {
  return false;
   }
 
-  private async showUpdateToast(version: string, downloadUrl: string): Promise<void> {
+  private async showUpdateToast(version: string, downloadUrl: string, expectedSha256?: string): Promise<void> {
  const existing = document.querySelector<HTMLElement>('.update-toast');
  if (existing?.dataset.version === version) return;
  existing?.remove();
@@ -214,7 +235,7 @@ export class DesktopUpdater implements AppModule {
  if (canAutoInstall) {
  // Auto-install: download DMG, mount, replace app, relaunch
  if (btn) { btn.textContent = 'Downloading…'; btn.disabled = true; }
- invokeTauri<void>('install_update', { downloadUrl })
+ invokeTauri<void>('install_update', { downloadUrl, expectedSha256 })
  .catch((error: unknown) => {
  this.logUpdaterOutcome('open_failed', {
  downloadUrl,

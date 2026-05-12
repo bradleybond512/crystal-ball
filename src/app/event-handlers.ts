@@ -45,6 +45,7 @@ import {
 import { detectPlatform, allButtons, buttonsForPlatform } from '@/components/DownloadBanner';
 import type { Platform } from '@/components/DownloadBanner';
 import { invokeTauri } from '@/services/tauri-bridge';
+import { openExternalSafe } from '@/utils/safe-open';
 import { toggleGhostMode, getMode, setMode } from '@/services/mode-manager';
 import { isAppActive, onActivityChange } from '@/services/app-activity';
 import { playUiClick } from '@/services/sound-manager';
@@ -384,13 +385,8 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  document.dispatchEvent(new CustomEvent('cb:toggle-today'));
  }
- // Cmd+K (mac) / Ctrl+K (windows / linux) — toggle command palette
- if ((e.metaKey || e.ctrlKey) && e.key === 'k' && !e.shiftKey && !e.altKey) {
- const active = document.activeElement;
- if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') return;
- e.preventDefault();
- document.dispatchEvent(new CustomEvent('cb:toggle-cmdk'));
- }
+ // Cmd+K is owned by the central shortcut registry installed in
+ // panel-layout (services/keyboard/shortcut-bootstrap).
  // Cmd+Shift+W — toggle Watchlist editor. Browsers reserve this for
  // "close all tabs" and will not let preventDefault override it, so
  // desktop-only on purpose.
@@ -673,7 +669,7 @@ export class EventHandlerManager implements AppModule {
  e.preventDefault();
  const plat = new URL(a.href, location.origin).searchParams.get('platform') || 'unknown';
  trackDownloadClicked(plat);
- window.open(a.href, '_blank');
+ openExternalSafe(a.href);
  dropdown.classList.remove('open');
  });
  });

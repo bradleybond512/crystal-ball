@@ -1,4 +1,9 @@
 // Non-sebuf: returns XML/HTML, stays as standalone Vercel function
+// PUBLIC_WILDCARD_CORS: This endpoint is intentionally public and read-only.
+// It returns only the latest release version/tag from GitHub and carries no
+// user data, secrets, or authenticated content. Wildcard CORS is acceptable
+// here and is explicitly documented as an approved exception.
+// Do NOT copy this pattern to endpoints that return user data or accept auth.
 export const config = { runtime: 'edge' };
 
 const RELEASES_URL = 'https://api.github.com/repos/bradleybond512/crystal-ball/releases/latest';

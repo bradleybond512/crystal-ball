@@ -20,6 +20,7 @@ import {
 import { invokeTauri } from '@/services/tauri-bridge';
 import { escapeHtml } from '@/utils/sanitize';
 import { isDesktopRuntime } from '@/services/runtime';
+import { openExternalSafe } from '@/utils/safe-open';
 import { t } from '@/services/i18n';
 import { trackFeatureToggle } from '@/services/analytics';
 import { PLAINTEXT_KEYS, MASKED_SENTINEL } from '@/services/settings-constants';
@@ -590,17 +591,7 @@ export class RuntimeConfigPanel extends Panel {
  if (profile?.email) {
  void navigator.clipboard?.writeText(profile.email).catch(() => { /* no clipboard; ignore */ });
  }
- if (isDesktopRuntime()) {
- void invokeTauri<void>('open_url', { url }).catch((error: unknown) => {
- // eslint-disable-next-line no-console -- user action failure diagnostics
- console.warn('[runtime-config] Failed to open signup URL', {
- url,
- error: error instanceof Error ? error.message : String(error),
- });
- });
- } else {
- window.open(url, '_blank');
- }
+ openExternalSafe(url);
  });
  });
 

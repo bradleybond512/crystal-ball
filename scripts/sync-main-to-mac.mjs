@@ -137,6 +137,22 @@ async function writeJson(filePath, value) {
 
 class SyncBlockedError extends Error {}
 
+// Lock files older than this are assumed to belong to a crashed process
+// and are removed automatically so a fresh run can proceed.
+const STALE_LOCK_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+async function clearStaleLock(lockFile) {
+  try {
+    const s = await stat(lockFile);
+    if (Date.now() - s.mtimeMs > STALE_LOCK_MS) {
+      await rm(lockFile, { force: true });
+      console.warn('[sync-main-to-mac] removed stale lock (older than 12 h); previous run likely crashed');
+    }
+  } catch {
+    // No lock file — nothing to do.
+  }
+}
+
 async function acquireLock(lockFile) {
   await mkdir(path.dirname(lockFile), { recursive: true });
   return open(lockFile, 'wx');
@@ -370,6 +386,7 @@ async function installBuiltApp(repoDir, installPath) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const startedAt = new Date().toISOString();
+  await clearStaleLock(options.lockFile);
   const lockHandle = await acquireLock(options.lockFile).catch((error) => {
  if (error?.code === 'EEXIST') {
  throw new SyncBlockedError('A main sync run is already in progress');

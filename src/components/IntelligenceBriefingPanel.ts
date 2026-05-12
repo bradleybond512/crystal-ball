@@ -11,6 +11,7 @@
 
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
+import { sanitizeHtml } from '@/utils/safe-html';
 import {
   generateBriefing,
   getCachedBriefing,
@@ -23,6 +24,11 @@ import type {
   BriefingProvider,
   ThreatSeverity,
 } from '@/services/intelligence-briefing';
+import {
+  BriefingScheduler,
+  parseTimeString,
+  isValidEmail,
+} from '@/services/intelligence/briefing-scheduler';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -59,12 +65,19 @@ export class IntelligenceBriefingPanel extends Panel {
   private _loading = false;
   private _error: string | null = null;
   private _downloading = false;
+  private readonly _scheduler: BriefingScheduler;
+  private _scheduleCollapsed = true;
 
   constructor() {
  super({
  id: 'intelligence-briefing',
  title: 'Intelligence Briefing',
  });
+
+ this._scheduler = new BriefingScheduler(async () => {
+ await this.handleDownloadReport();
+ });
+ this._scheduler.start();
 
  this._unsub = subscribeBriefing(() => this.render());
 
@@ -78,6 +91,7 @@ export class IntelligenceBriefingPanel extends Panel {
   }
 
   override destroy(): void {
+ this._scheduler.stop();
  this._unsub();
  super.destroy();
   }
@@ -259,6 +273,9 @@ export class IntelligenceBriefingPanel extends Panel {
  wrapper.append(this.renderSection(section));
  }
 
+ // Brief Settings section
+ wrapper.append(this.renderScheduleSection());
+
  el.append(wrapper);
   }
 
@@ -383,7 +400,7 @@ export class IntelligenceBriefingPanel extends Panel {
  if (section.content) {
  const contentEl = document.createElement('div');
  contentEl.className = 'ib-content';
- contentEl.innerHTML = this.renderMarkdown(section.content);
+ contentEl.innerHTML = sanitizeHtml(this.renderMarkdown(section.content));
  body.append(contentEl);
  }
 
@@ -475,6 +492,171 @@ export class IntelligenceBriefingPanel extends Panel {
  return `Generated ${d.toLocaleDateString()} at ${timeStr}`;
   }
 
+
+  private renderScheduleSection(): HTMLElement {
+ const sched = this._scheduler.getSchedule();
+
+ const container = document.createElement('div');
+ container.style.cssText = 'border-bottom:1px solid rgba(255,255,255,0.06);';
+
+ // Section header (collapsible)
+ const sectionHeader = document.createElement('div');
+ sectionHeader.style.cssText = 'display:flex;align-items:center;gap:0.4rem;padding:0.5rem 0.6rem;cursor:pointer;user-select:none;transition:background 0.15s;';
+ sectionHeader.addEventListener('mouseenter', () => { sectionHeader.style.background = 'rgba(255,255,255,0.04)'; });
+ sectionHeader.addEventListener('mouseleave', () => { sectionHeader.style.background = 'transparent'; });
+
+ const arrow = document.createElement('span');
+ arrow.style.cssText = `font-size:0.6rem;opacity:0.5;transition:transform 0.15s;transform:rotate(${this._scheduleCollapsed ? '0deg' : '90deg'});`;
+ arrow.textContent = '\u25B6';
+ sectionHeader.append(arrow);
+
+ const sectionIcon = document.createElement('span');
+ sectionIcon.style.cssText = 'font-size:0.85rem;';
+ sectionIcon.textContent = '\u23F0'; // alarm clock
+ sectionHeader.append(sectionIcon);
+
+ const title = document.createElement('span');
+ title.style.cssText = 'font-size:0.75rem;font-weight:600;flex:1;';
+ title.textContent = 'Brief Settings';
+ sectionHeader.append(title);
+
+ sectionHeader.addEventListener('click', () => {
+ this._scheduleCollapsed = !this._scheduleCollapsed;
+ this.render();
+ });
+ container.append(sectionHeader);
+
+ if (this._scheduleCollapsed) return container;
+
+ // Section body
+ const body = document.createElement('div');
+ body.style.cssText = 'padding:0.5rem 0.6rem 0.75rem;display:flex;flex-direction:column;gap:0.5rem;font-size:0.73rem;';
+
+ // Schedule toggle
+ const toggleRow = document.createElement('label');
+ toggleRow.style.cssText = 'display:flex;align-items:center;gap:0.5rem;cursor:pointer;';
+
+ const checkbox = document.createElement('input');
+ checkbox.type = 'checkbox';
+ checkbox.checked = sched.enabled;
+ checkbox.addEventListener('change', () => {
+ this._scheduler.update({ enabled: checkbox.checked });
+ this.render();
+ });
+ toggleRow.append(checkbox);
+
+ const toggleLabel = document.createElement('span');
+ toggleLabel.textContent = 'Enable daily brief';
+ toggleRow.append(toggleLabel);
+ body.append(toggleRow);
+
+ if (sched.enabled) {
+ // Time picker
+ const timeRow = document.createElement('div');
+ timeRow.style.cssText = 'display:flex;align-items:center;gap:0.5rem;';
+
+ const timeLabel = document.createElement('span');
+ timeLabel.style.cssText = 'opacity:0.7;min-width:3.5rem;';
+ timeLabel.textContent = 'Time:';
+ timeRow.append(timeLabel);
+
+ const hh = String(sched.hour).padStart(2, '0');
+ const mm = String(sched.minute).padStart(2, '0');
+
+ const timePicker = document.createElement('input');
+ timePicker.type = 'time';
+ timePicker.value = `${hh}:${mm}`;
+ timePicker.style.cssText = 'background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:0.2rem 0.4rem;color:inherit;font-size:0.73rem;';
+ timePicker.addEventListener('change', () => {
+ try {
+ const parsed = parseTimeString(timePicker.value);
+ this._scheduler.update({ hour: parsed.hour, minute: parsed.minute });
+ this.render();
+ } catch {
+ // Ignore invalid input
+ }
+ });
+ timeRow.append(timePicker);
+ body.append(timeRow);
+
+ // Output method
+ const outputRow = document.createElement('div');
+ outputRow.style.cssText = 'display:flex;align-items:center;gap:0.5rem;';
+
+ const outputLabel = document.createElement('span');
+ outputLabel.style.cssText = 'opacity:0.7;min-width:3.5rem;';
+ outputLabel.textContent = 'Output:';
+ outputRow.append(outputLabel);
+
+ const outputSelect = document.createElement('select');
+ outputSelect.style.cssText = 'background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:0.2rem 0.4rem;color:inherit;font-size:0.73rem;flex:1;';
+
+ const saveOption = document.createElement('option');
+ saveOption.value = 'save';
+ saveOption.textContent = 'Save to ~/Documents/Crystal Ball Briefs/';
+ outputSelect.append(saveOption);
+
+ const emailOption = document.createElement('option');
+ emailOption.value = 'email';
+ emailOption.textContent = 'Email';
+ outputSelect.append(emailOption);
+
+ outputSelect.value = sched.outputMethod;
+ outputSelect.addEventListener('change', () => {
+ const method = outputSelect.value as 'save' | 'email';
+ this._scheduler.update({ outputMethod: method });
+ this.render();
+ });
+ outputRow.append(outputSelect);
+ body.append(outputRow);
+
+ // Email field (only when email mode)
+ if (sched.outputMethod === 'email') {
+ const emailRow = document.createElement('div');
+ emailRow.style.cssText = 'display:flex;align-items:center;gap:0.5rem;';
+
+ const emailLabel = document.createElement('span');
+ emailLabel.style.cssText = 'opacity:0.7;min-width:3.5rem;';
+ emailLabel.textContent = 'Email:';
+ emailRow.append(emailLabel);
+
+ const emailInput = document.createElement('input');
+ emailInput.type = 'email';
+ emailInput.value = sched.emailAddress;
+ emailInput.placeholder = 'user@example.com';
+ emailInput.style.cssText = 'background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:0.2rem 0.4rem;color:inherit;font-size:0.73rem;flex:1;';
+ emailInput.addEventListener('blur', () => {
+ if (isValidEmail(emailInput.value) || emailInput.value === '') {
+ this._scheduler.update({ emailAddress: emailInput.value });
+ this.render();
+ }
+ });
+ emailRow.append(emailInput);
+ body.append(emailRow);
+ }
+ }
+
+ // Generate Now button
+ const genNowBtn = document.createElement('button');
+ genNowBtn.style.cssText = 'background:rgba(192,132,252,0.1);border:1px solid rgba(192,132,252,0.3);border-radius:4px;padding:0.25rem 0.6rem;font-size:0.7rem;color:#c084fc;cursor:pointer;align-self:flex-start;transition:background 0.15s;';
+ genNowBtn.textContent = 'Generate Now';
+ genNowBtn.addEventListener('mouseenter', () => { genNowBtn.style.background = 'rgba(192,132,252,0.2)'; });
+ genNowBtn.addEventListener('mouseleave', () => { genNowBtn.style.background = 'rgba(192,132,252,0.1)'; });
+ genNowBtn.addEventListener('click', () => { void this.handleDownloadReport(); });
+ body.append(genNowBtn);
+
+ // Last generated
+ const lastGenRow = document.createElement('div');
+ lastGenRow.style.cssText = 'font-size:0.68rem;opacity:0.5;';
+ const lastGenText = sched.lastGeneratedAt != null
+ ? this.formatTimestamp(sched.lastGeneratedAt)
+ : 'Never';
+ lastGenRow.textContent = `Last generated: ${lastGenText}`;
+ body.append(lastGenRow);
+
+ container.append(body);
+ return container;
+  }
   private ensureSpinnerStyle(): void {
  if (document.getElementById('ib-spinner-style')) return;
  const style = document.createElement('style');

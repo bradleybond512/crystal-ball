@@ -2,6 +2,7 @@
  * CountryIntelModal - Shows AI-generated intelligence brief when user clicks a country
  */
 import { escapeHtml } from '@/utils/sanitize';
+import { sanitizeHtml } from '@/utils/safe-html';
 import { t } from '@/services/i18n';
 import { sanitizeUrl } from '@/utils/sanitize';
 import { getCSSColor } from '@/utils';
@@ -71,12 +72,10 @@ export class CountryIntelModal {
  });
   }
 
-  private countryFlag(code: string): string {
+   private countryFlag(code: string): string {
  try {
- return code
- .toUpperCase()
- .split('')
- .map((c) => String.fromCodePoint(0x1_F1_E6 + c.charCodeAt(0) - 65))
+ return [...code.toUpperCase()]
+ .map((c) => String.fromCodePoint(0x1_F1_E6 + (c.codePointAt(0) ?? 65) - 65))
  .join('');
  } catch {
  return '🌍';
@@ -91,13 +90,20 @@ export class CountryIntelModal {
  normal: '--semantic-normal',
  low: '--semantic-low',
  };
- const color = getCSSColor(varMap[level] || '--text-dim');
+ const color = getCSSColor(varMap[level] ?? '--text-dim');
  return `<span class="cii-badge" style="background:${color}20;color:${color};border:1px solid ${color}40">${level.toUpperCase()}</span>`;
+  }
+
+  private scoreColor(pct: number): string {
+ if (pct >= 70) return getCSSColor('--semantic-critical');
+ if (pct >= 50) return getCSSColor('--semantic-high');
+ if (pct >= 30) return getCSSColor('--semantic-elevated');
+ return getCSSColor('--semantic-normal');
   }
 
   private scoreBar(score: number): string {
  const pct = Math.min(100, Math.max(0, score));
- const color = pct >= 70 ? getCSSColor('--semantic-critical') : pct >= 50 ? getCSSColor('--semantic-high') : pct >= 30 ? getCSSColor('--semantic-elevated') : getCSSColor('--semantic-normal');
+ const color = this.scoreColor(pct);
  return `
  <div class="cii-score-bar">
  <div class="cii-score-fill" style="width:${pct}%;background:${color}"></div>
@@ -124,6 +130,23 @@ export class CountryIntelModal {
  this.overlay.classList.add('active');
   }
 
+  private trendArrow(trend: string): string {
+	 if (trend === 'rising') return '↗';
+	 if (trend === 'falling') return '↘';
+	 return '→';
+  }
+
+  private buildSignalChips(signals?: ActiveSignals): string[] {
+	 if (!signals) return [];
+	 const chips: string[] = [];
+	 if (signals.protests > 0) chips.push(`<span class="signal-chip protest">📢 ${signals.protests} ${t('modals.countryIntel.protests')}</span>`);
+	 if (signals.militaryFlights > 0) chips.push(`<span class="signal-chip military">✈️ ${signals.militaryFlights} ${t('modals.countryIntel.militaryAircraft')}</span>`);
+	 if (signals.militaryVessels > 0) chips.push(`<span class="signal-chip military">⚓ ${signals.militaryVessels} ${t('modals.countryIntel.militaryVessels')}</span>`);
+	 if (signals.outages > 0) chips.push(`<span class="signal-chip outage">🌐 ${signals.outages} ${t('modals.countryIntel.outages')}</span>`);
+	 if (signals.earthquakes > 0) chips.push(`<span class="signal-chip quake">🌍 ${signals.earthquakes} ${t('modals.countryIntel.earthquakes')}</span>`);
+	 return chips;
+  }
+
   public show(country: string, code: string, score: CountryScore | null, signals?: ActiveSignals): void {
  this.currentCode = code;
  this.currentName = country;
@@ -147,21 +170,13 @@ export class CountryIntelModal {
  <span title="${t('common.conflict')}">⚔ ${score.components.conflict.toFixed(0)}</span>
  <span title="${t('common.security')}">🛡️ ${score.components.security.toFixed(0)}</span>
  <span title="${t('common.information')}">📡 ${score.components.information.toFixed(0)}</span>
- <span class="cii-trend ${score.trend}">${score.trend === 'rising' ? '↗' : (score.trend === 'falling' ? '↘' : '→')} ${score.trend}</span>
+ <span class="cii-trend ${score.trend}">${this.trendArrow(score.trend)} ${score.trend}</span>
  </div>
  </div>
  `;
  }
 
- const chips: string[] = [];
- if (signals) {
- if (signals.protests > 0) chips.push(`<span class="signal-chip protest">📢 ${signals.protests} ${t('modals.countryIntel.protests')}</span>`);
- if (signals.militaryFlights > 0) chips.push(`<span class="signal-chip military">✈️ ${signals.militaryFlights} ${t('modals.countryIntel.militaryAircraft')}</span>`);
- if (signals.militaryVessels > 0) chips.push(`<span class="signal-chip military">⚓ ${signals.militaryVessels} ${t('modals.countryIntel.militaryVessels')}</span>`);
- if (signals.outages > 0) chips.push(`<span class="signal-chip outage">🌐 ${signals.outages} ${t('modals.countryIntel.outages')}</span>`);
- if (signals.earthquakes > 0) chips.push(`<span class="signal-chip quake">🌍 ${signals.earthquakes} ${t('modals.countryIntel.earthquakes')}</span>`);
- }
- chips.push(`<span class="signal-chip stock-loading">📈 ${t('modals.countryIntel.loadingIndex')}</span>`);
+ const chips = [...this.buildSignalChips(signals), `<span class="signal-chip stock-loading">📈 ${t('modals.countryIntel.loadingIndex')}</span>`];
  html += `<div class="active-signals">${chips.join('')}</div>`;
 
  html += `<div class="country-markets-section"><span class="intel-loading-text">${t('modals.countryIntel.loadingMarkets')}</span></div>`;
@@ -196,7 +211,7 @@ export class CountryIntelModal {
  if (!this.isVisible()) return;
 
  if (data.error || data.skipped || !data.brief) {
- const msg = data.error || data.reason || t('modals.countryIntel.unavailable');
+ const msg = data.error ?? data.reason ?? t('modals.countryIntel.unavailable');
  const briefSection = this.contentEl.querySelector('.intel-brief-section');
  if (briefSection) {
  briefSection.innerHTML = `<div class="intel-error">${escapeHtml(msg)}</div>`;
@@ -208,13 +223,13 @@ export class CountryIntelModal {
  if (!briefSection) return;
 
  const formatted = this.formatBrief(data.brief);
- briefSection.innerHTML = `
+ briefSection.innerHTML = sanitizeHtml(`
  <div class="intel-brief">${formatted}</div>
  <div class="intel-footer">
  ${data.cached ? `<span class="intel-cached">📋 ${t('modals.countryIntel.cached')}</span>` : `<span class="intel-fresh">✨ ${t('modals.countryIntel.fresh')}</span>`}
  <span class="intel-timestamp">${data.generatedAt ? new Date(data.generatedAt).toLocaleTimeString() : ''}</span>
  </div>
- `;
+ `);
   }
 
   public updateMarkets(markets: PredictionMarket[]): void {
@@ -227,7 +242,7 @@ export class CountryIntelModal {
  }
 
  const items = markets.map(market => {
- const href = sanitizeUrl(market.url || '#') || '#';
+ const href = sanitizeUrl(market.url ?? '#') || '#';
  return `
  <div class="market-item">
  <a href="${href}" target="_blank" rel="noopener noreferrer" class="prediction-market-card">

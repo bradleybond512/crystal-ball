@@ -34,25 +34,37 @@ import {
   standardSelfTestDefinitions,
   type SelfTestReport,
 } from '@/services/diagnostics/self-test';
+import {
+  VERDICT_BADGE,
+  fetchSidecarSelfTest,
+  formatLatency,
+  overallVerdict,
+  type SidecarSelfTestResult,
+  type SidecarSelfTestSummary,
+} from '@/services/diagnostics/sidecar-self-test';
 import type {
   FeatureHealth,
   HealthStatus,
   PanelHealth,
 } from '@/services/diagnostics/system-health-types';
 import { escapeHtml } from '@/utils/sanitize';
+import {
+  getMissionState,
+  type MissionState,
+} from '@/services/diagnostics/mission-state-service';
 
 const REFRESH_MS = 5000;
 
 type Tab = 'overview' | 'features' | 'panels' | 'notifications' | 'feeds' | 'quality_debt' | 'self_test';
 
 const STATUS_COLOR: Record<HealthStatus, string> = {
-  healthy: '#4caf50',
-  degraded: '#ffeb3b',
-  stale: '#ff9800',
-  failing: '#f44336',
-  unsafe: '#d50000',
-  blind: '#607d8b',
-  unknown: '#9e9e9e',
+  healthy: 'var(--severity-ok)',
+  degraded: 'var(--severity-medium)',
+  stale:   'var(--severity-high)',
+  failing: 'var(--severity-high)',
+  unsafe:  'var(--severity-critical)',
+  blind:   'var(--severity-info)',
+  unknown: 'var(--severity-info)',
 };
 
 const STATUS_ICON: Record<HealthStatus, string> = {
@@ -70,6 +82,13 @@ export class SystemDiagnosticPanel extends Panel {
   private activeTab: Tab = 'overview';
   private selfTestRunning = false;
   private selfTestReport: SelfTestReport | undefined;
+  private sidecarSelfTest: {
+    running: boolean;
+    asOf: string | null;
+    results: SidecarSelfTestResult[];
+    summary: SidecarSelfTestSummary | null;
+    error: string | null;
+  } = { running: false, asOf: null, results: [], summary: null, error: null };
 
   constructor() {
     super({
@@ -88,11 +107,12 @@ export class SystemDiagnosticPanel extends Panel {
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
   }
 
-  public dispose(): void {
+  public override destroy(): void {
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    super.destroy();
   }
 
   private render(): void {
@@ -102,7 +122,7 @@ export class SystemDiagnosticPanel extends Panel {
       queueMicrotask(() => this.wireHandlers());
     } catch (error) {
       console.warn('[SystemDiagnosticPanel] render failed:', error);
-      this.setContent(`<div style="padding:12px;color:#f44336;">Diagnostic render error: ${escapeHtml(String(error))}</div>`);
+      this.setContent(`<div style="padding:12px;color:var(--severity-critical);">Diagnostic render error: ${escapeHtml(String(error))}</div>`);
     }
   }
 
@@ -156,13 +176,19 @@ export class SystemDiagnosticPanel extends Panel {
   private renderHeader(ctx: DiagnosticContext): string {
     const status = ctx.report.status;
     const color = STATUS_COLOR[status];
+    const ms = getMissionState();
+    const msBadgeColor = missionStateColor(ms);
     return `<div class="syd-header" style="padding:8px 12px;border-bottom:1px solid var(--border-subtle,#333);display:flex;justify-content:space-between;align-items:center;">
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};"></span>
         <span style="font-weight:700;color:${color};text-transform:uppercase;font-size:12px;">${status}</span>
         <span style="color:var(--text-secondary,#aaa);font-size:12px;">${escapeHtml(ctx.report.summary)}</span>
+        <span class="syd-mission-badge" title="Feed-staleness mission state" style="font-size:9px;padding:2px 5px;background:${msBadgeColor};color:#fff;border-radius:3px;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(ms)}</span>
       </div>
-      <button class="syd-refresh" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;">Refresh</button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="syd-export" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;">Export JSON</button>
+        <button class="syd-refresh" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;">Refresh</button>
+      </div>
     </div>`;
   }
 
@@ -216,13 +242,13 @@ export class SystemDiagnosticPanel extends Panel {
       return `<div style="padding:12px;color:var(--text-secondary,#aaa);font-size:12px;">No active quality debt — diagnostics surface is clean.</div>`;
     }
     const SEV_COLOR: Record<string, string> = {
-      critical: '#d50000',
-      high: '#f44336',
-      medium: '#ff9800',
-      low: '#9e9e9e',
+      critical: 'var(--severity-critical)',
+      high:     'var(--severity-high)',
+      medium:   'var(--severity-medium)',
+      low:      'var(--severity-info)',
     };
     const rows = debt.slice(0, 25).map((d) => {
-      const color = SEV_COLOR[d.severity] ?? '#9e9e9e';
+      const color = SEV_COLOR[d.severity] ?? 'var(--severity-info)';
       return `<div style="border-left:3px solid ${color};padding:6px 10px;margin-bottom:6px;background:rgba(255,255,255,0.02);">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;">
           <strong>${escapeHtml(d.category)}</strong>
@@ -309,7 +335,7 @@ export class SystemDiagnosticPanel extends Panel {
     const icon = STATUS_ICON[f.status];
     const userImpact = f.userImpact ? `<div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:3px;">${escapeHtml(f.userImpact)}</div>` : '';
     const action = f.recommendedAction ? `<div style="font-size:11px;color:var(--accent,#4a9eff);margin-top:3px;">→ ${escapeHtml(f.recommendedAction)}</div>` : '';
-    const criticalBadge = f.critical ? `<span style="font-size:9px;padding:1px 4px;background:#d50000;color:#fff;border-radius:2px;margin-left:6px;">CRITICAL</span>` : '';
+    const criticalBadge = f.critical ? `<span style="font-size:9px;padding:1px 4px;background:var(--severity-critical);color:#fff;border-radius:2px;margin-left:6px;">CRITICAL</span>` : '';
     return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:8px;">
@@ -358,7 +384,7 @@ export class SystemDiagnosticPanel extends Panel {
       : `<ul style="margin:0;padding-left:18px;font-size:12px;">${reasons.map(([r, n]) => `<li><strong>${n}</strong> · ${escapeHtml(r)}</li>`).join('')}</ul>`;
     const unsafeHtml = s.unsafeSuppressions.length === 0
       ? ''
-      : `<div style="margin-top:10px;padding:8px;background:#3a0000;border-left:3px solid #d50000;border-radius:3px;">
+      : `<div style="margin-top:10px;padding:8px;background:#3a0000;border-left:3px solid var(--severity-critical);border-radius:3px;">
         <div style="font-size:11px;text-transform:uppercase;color:#ff6666;margin-bottom:4px;">Unsafe suppressions</div>
         ${s.unsafeSuppressions.map((u) => `<div style="font-size:11px;color:#fff;">${escapeHtml(u.candidateId)} · ${escapeHtml(u.reason)}</div>`).join('')}
       </div>`;
@@ -388,7 +414,7 @@ export class SystemDiagnosticPanel extends Panel {
 
   private renderFeedRow(e: FeedAuditEntry): string {
     const color = feedColor(e.level);
-    const safety = e.safetyCritical ? `<span style="font-size:9px;padding:1px 4px;background:#d50000;color:#fff;border-radius:2px;margin-left:6px;">SAFETY</span>` : '';
+    const safety = e.safetyCritical ? `<span style="font-size:9px;padding:1px 4px;background:var(--severity-critical);color:#fff;border-radius:2px;margin-left:6px;">SAFETY</span>` : '';
     const remediation = e.remediation ? `<div style="font-size:11px;color:var(--accent,#4a9eff);margin-top:3px;">→ ${escapeHtml(e.remediation)}</div>` : '';
     return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -410,12 +436,59 @@ export class SystemDiagnosticPanel extends Panel {
       : `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No self-test report yet. Click below to run.</div>`;
     const btnLabel = this.selfTestRunning ? 'Running…' : 'Run self-test';
     const btnDisabled = this.selfTestRunning ? 'disabled' : '';
-    return `<div style="padding:12px;display:flex;flex-direction:column;gap:10px;">
+    return `<div style="padding:12px;display:flex;flex-direction:column;gap:14px;">
       <div>
         <button class="syd-self-test" ${btnDisabled} style="padding:6px 10px;background:var(--accent,#4a9eff);color:#fff;border:none;border-radius:3px;cursor:${this.selfTestRunning ? 'wait' : 'pointer'};font-size:12px;">${btnLabel}</button>
       </div>
       ${reportHtml}
+      <div style="border-top:1px solid var(--border-subtle,#222);padding-top:10px;">
+        ${this.renderSidecarSelfTest()}
+      </div>
     </div>`;
+  }
+
+  private renderSidecarSelfTest(): string {
+    const sst = this.sidecarSelfTest;
+    const btnLabel = sst.running ? 'Running sidecar probe…' : 'Run sidecar self-test';
+    const btnDisabled = sst.running ? 'disabled' : '';
+    const header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="font-size:11px;text-transform:uppercase;color:var(--text-muted,#888);letter-spacing:0.05em;">Sidecar fan-out probe</div>
+      <button class="syd-sidecar-self-test" ${btnDisabled}
+        style="padding:6px 10px;background:transparent;color:var(--text);border:1px solid var(--border-strong,#444);border-radius:3px;cursor:${sst.running ? 'wait' : 'pointer'};font-size:11px;">${btnLabel}</button>
+    </div>`;
+    if (sst.error && sst.results.length === 0) {
+      return `${header}<div style="color:var(--severity-high);font-size:11px;">⚠ ${escapeHtml(sst.error)}</div>`;
+    }
+    if (sst.results.length === 0 && !sst.summary) {
+      return `${header}<div style="font-size:11px;color:var(--text-secondary,#aaa);">Probes /api/health, /api/spaceweather/status, /api/freight-stress, /api/security/cves, and 6 more — reports pass/fail + latency per route.</div>`;
+    }
+    return `${header}${this.renderSidecarSelfTestResults(sst.results, sst.summary)}`;
+  }
+
+  private renderSidecarSelfTestResults(
+    results: SidecarSelfTestResult[],
+    summary: SidecarSelfTestSummary | null,
+  ): string {
+    const top = summary ? `<div style="font-size:11px;font-weight:700;color:${VERDICT_BADGE[overallVerdict(summary)].color};margin-bottom:6px;">
+      ${VERDICT_BADGE[overallVerdict(summary)].icon} ${summary.ok} ok · ${summary.degraded} degraded · ${summary.fail} fail · ${summary.total} total
+    </div>` : '';
+    const rows = results.map((r) => {
+      const badge = VERDICT_BADGE[r.verdict];
+      const errLine = r.error
+        ? `<span style="color:var(--severity-high);font-size:10px;margin-left:8px;">${escapeHtml(r.error)}</span>`
+        : '';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;border-bottom:1px dotted var(--border-subtle,#222);font-size:11px;">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+          <span style="color:${badge.color};font-weight:700;width:54px;display:inline-block;">${badge.icon} ${escapeHtml(badge.label)}</span>
+          <code style="color:var(--text);font-family:ui-monospace,monospace;font-size:10px;">${escapeHtml(r.route)}</code>
+          ${errLine}
+        </div>
+        <div style="color:var(--text-secondary,#aaa);font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap;">
+          HTTP ${r.status === 0 ? '—' : r.status} · ${escapeHtml(formatLatency(r.latencyMs))}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div>${top}${rows}</div>`;
   }
 
   private renderSelfTestResults(r: SelfTestReport): string {
@@ -434,10 +507,36 @@ export class SystemDiagnosticPanel extends Panel {
   }
 
   private severityColor(severity: string): string {
-    if (severity === 'critical' || severity === 'error') return '#f44336';
-    if (severity === 'warning') return '#ff9800';
-    if (severity === 'info') return '#4caf50';
-    return '#9e9e9e';
+    if (severity === 'critical' || severity === 'error') return 'var(--severity-critical)';
+    if (severity === 'warning') return 'var(--severity-high)';
+    if (severity === 'info') return 'var(--severity-ok)';
+    return 'var(--severity-info)';
+  }
+
+  private async exportDiagnosticsJson(): Promise<void> {
+    try {
+      const { composeFrontendDiagnosticsExport } = await import(
+        '@/services/diagnostics/frontend-export-composer'
+      );
+      const g = globalThis as unknown as { __APP_VERSION__?: string; __APP_VARIANT__?: string; __TAURI_INTERNALS__?: unknown };
+      const app = {
+        variant: g.__APP_VARIANT__ ?? 'full',
+        version: g.__APP_VERSION__ ?? '0.0.0',
+        runtime: (g.__TAURI_INTERNALS__ === undefined ? 'web' : 'desktop') as 'web' | 'desktop',
+      };
+      const { bundle } = composeFrontendDiagnosticsExport({ app });
+      const { exportBundleToJson } = await import('@/services/diagnostics/export-bundle');
+      const json = exportBundleToJson(bundle);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `crystal-ball-diagnostics-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.warn('[SystemDiagnosticPanel] export failed:', error);
+    }
   }
 
   private wireHandlers(): void {
@@ -453,6 +552,34 @@ export class SystemDiagnosticPanel extends Panel {
     }
     const refresh = root.querySelector<HTMLButtonElement>('.syd-refresh');
     refresh?.addEventListener('click', () => this.render());
+    const sidecarBtn = root.querySelector<HTMLButtonElement>('.syd-sidecar-self-test');
+    sidecarBtn?.addEventListener('click', async () => {
+      if (this.sidecarSelfTest.running) return;
+      this.sidecarSelfTest = { ...this.sidecarSelfTest, running: true, error: null };
+      this.render();
+      try {
+        const resp = await fetchSidecarSelfTest();
+        this.sidecarSelfTest = {
+          running: false,
+          asOf: resp.asOf,
+          results: resp.results,
+          summary: resp.summary,
+          error: resp.error ?? null,
+        };
+      } catch (error) {
+        this.sidecarSelfTest = {
+          running: false,
+          asOf: new Date().toISOString(),
+          results: [],
+          summary: null,
+          error: String((error as Error)?.message ?? error),
+        };
+      } finally {
+        this.render();
+      }
+    });
+    const exportBtn = root.querySelector<HTMLButtonElement>('.syd-export');
+    exportBtn?.addEventListener('click', () => void this.exportDiagnosticsJson());
     const stBtn = root.querySelector<HTMLButtonElement>('.syd-self-test');
     stBtn?.addEventListener('click', async () => {
       if (this.selfTestRunning) return;
@@ -513,36 +640,31 @@ function severityRankFeed(level: keyof typeof FEED_RANK): number {
 
 function feedColor(level: keyof typeof FEED_RANK): string {
   switch (level) {
-    case 'fresh': {
-      return '#4caf50';
+    case 'fresh': {   return 'var(--severity-ok)';
     }
-    case 'stale': {
-      return '#ff9800';
+    case 'stale': {   return 'var(--severity-high)';
     }
-    case 'late': {
-      return '#f44336';
+    case 'late': {    return 'var(--severity-high)';
     }
-    case 'silent': {
-      return '#d50000';
+    case 'silent': {  return 'var(--severity-critical)';
     }
-    case 'unknown': {
-      return '#9e9e9e';
+    case 'unknown': { return 'var(--severity-info)';
     }
   }
 }
 
 function pickTallyColor(healthy: number, total: number): string {
-  if (total === 0) return '#ff9800';
-  if (healthy === total) return '#4caf50';
-  if (healthy === 0) return '#f44336';
-  return '#ff9800';
+  if (total === 0) return 'var(--severity-high)';
+  if (healthy === total) return 'var(--severity-ok)';
+  if (healthy === 0) return 'var(--severity-critical)';
+  return 'var(--severity-high)';
 }
 
 function selfTestStatusColor(status: string): string {
-  if (status === 'pass') return '#4caf50';
-  if (status === 'warn') return '#ff9800';
-  if (status === 'fail') return '#f44336';
-  return '#9e9e9e';
+  if (status === 'pass') return 'var(--severity-ok)';
+  if (status === 'warn') return 'var(--severity-high)';
+  if (status === 'fail') return 'var(--severity-critical)';
+  return 'var(--severity-info)';
 }
 
 function formatAge(ms: number): string {
@@ -551,3 +673,10 @@ function formatAge(ms: number): string {
   if (ms < 24 * 60 * 60_000) return `${(ms / (60 * 60_000)).toFixed(1)}h ago`;
   return `${(ms / (24 * 60 * 60_000)).toFixed(1)}d ago`;
 }
+
+function missionStateColor(state: MissionState): string {
+  if (state === 'CRITICAL') return 'var(--severity-critical)';
+  if (state === 'DEGRADED') return 'var(--severity-high)';
+  return 'var(--severity-ok)';
+}
+

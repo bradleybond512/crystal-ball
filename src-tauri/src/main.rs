@@ -15,6 +15,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use keyring::Entry;
 use reqwest::Url;
+use sha2::{Digest, Sha256};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuItem, Submenu};
@@ -599,16 +600,6 @@ fn get_secret(
  .lock()
  .map_err(|_| "Lock poisoned".to_string())?;
  Ok(secrets.get(&key).cloned())
-}
-
-#[tauri::command]
-fn get_all_secrets(webview: Webview, cache: tauri::State<'_, SecretsCache>) -> Result<HashMap<String, String>, String> {
- require_trusted_window(webview.label())?;
- Ok(cache
- .secrets
- .lock()
- .unwrap_or_else(|e| e.into_inner())
- .clone())
 }
 
 #[tauri::command]
@@ -1237,7 +1228,7 @@ fn copy_app_bundle_preserving_signature(source: &str, dest: &str) -> Result<(), 
 }
 
 #[tauri::command]
-async fn install_update(webview: Webview, download_url: String) -> Result<(), String> {
+async fn install_update(webview: Webview, download_url: String, expected_sha256: Option<String>) -> Result<(), String> {
  require_trusted_window(webview.label())?;
  // Validate the URL comes from GitHub
  let parsed = reqwest::Url::parse(&download_url)
@@ -1249,7 +1240,7 @@ async fn install_update(webview: Webview, download_url: String) -> Result<(), St
 
  #[cfg(not(target_os = "macos"))]
  {
- let _ = download_url;
+ let _ = (download_url, expected_sha256);
  return Err("Auto-install is only supported on macOS".into());
  }
 
@@ -1278,6 +1269,26 @@ async fn install_update(webview: Webview, download_url: String) -> Result<(), St
 
  let bytes = resp.bytes().await
  .map_err(|e| format!("Download read failed: {e}"))?;
+
+ // 1a. Verify SHA-256 of downloaded bytes BEFORE writing to disk or mounting.
+ // This detects corruption and MITM-served payloads before the OS processes the file.
+ let actual_sha256 = {
+ let mut hasher = Sha256::new();
+ hasher.update(&bytes);
+ hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>()
+ };
+ match &expected_sha256 {
+ Some(expected) if !expected.is_empty() => {
+ if actual_sha256 != expected.to_lowercase() {
+ return Err(format!(
+ "SHA-256 mismatch — aborting update: expected {expected}, got {actual_sha256}"
+ ));
+ }
+ }
+ _ => {
+ eprintln!("[updater] WARNING: no expected SHA-256 provided; codesign verification still applies");
+ }
+ }
 
  std::fs::write(tmp_dmg, &bytes)
  .map_err(|e| format!("Write DMG to /tmp failed: {e}"))?;
@@ -1506,6 +1517,110 @@ async fn open_youtube_logout(app: AppHandle) -> Result<(), String> {
  );
  }
  Ok(())
+}
+
+/// Update the macOS dock badge with an unread-alert count.
+///
+/// `count == 0` clears the badge. We use objc directly rather than Tauri's
+/// platform helper because it avoids enabling additional Tauri features and
+/// matches the pattern already used for `CLLocationManager` initialization.
+/// No-op on non-macOS platforms.
+#[tauri::command]
+fn set_dock_badge(count: u32) -> Result<(), String> {
+ #[cfg(target_os = "macos")]
+ {
+  use std::ffi::{c_void, CString};
+  extern "C" {
+   fn objc_getClass(name: *const u8) -> *mut c_void;
+   fn sel_registerName(name: *const u8) -> *mut c_void;
+   fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
+  }
+  unsafe {
+   let nsapp_cls = objc_getClass(b"NSApplication\0".as_ptr());
+   if nsapp_cls.is_null() { return Ok(()); }
+   let shared_sel = sel_registerName(b"sharedApplication\0".as_ptr());
+   let app_inst = objc_msgSend(nsapp_cls, shared_sel);
+   if app_inst.is_null() { return Ok(()); }
+   let dock_tile_sel = sel_registerName(b"dockTile\0".as_ptr());
+   let tile = objc_msgSend(app_inst, dock_tile_sel);
+   if tile.is_null() { return Ok(()); }
+
+   // Build an NSString from the count (or empty string to clear).
+   let cstr = if count == 0 { CString::new("").unwrap() } else { CString::new(count.to_string()).unwrap() };
+   let nsstring_cls = objc_getClass(b"NSString\0".as_ptr());
+   let from_utf8_sel = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
+   let label = objc_msgSend(nsstring_cls, from_utf8_sel, cstr.as_ptr());
+
+   let set_label_sel = sel_registerName(b"setBadgeLabel:\0".as_ptr());
+   objc_msgSend(tile, set_label_sel, label);
+  }
+ }
+ let _ = count;
+ Ok(())
+}
+
+/// Update the macOS menubar (system tray) status indicator. Accepts one of
+/// "green", "yellow", "red"; anything else clears to green.
+///
+/// The status item itself is created lazily by `ensure_menubar_status_item`
+/// the first time this command runs, and intentionally leaked so it survives
+/// for the process lifetime (NSStatusBar will release it otherwise).
+#[tauri::command]
+fn set_menubar_status(level: String) -> Result<(), String> {
+ #[cfg(target_os = "macos")]
+ {
+  let icon = match level.as_str() {
+   "red" => "🔴 Crystal Ball",
+   "yellow" => "🟡 Crystal Ball",
+   _ => "🟢 Crystal Ball",
+  };
+  unsafe { ensure_menubar_status_item(icon) };
+ }
+ let _ = level;
+ Ok(())
+}
+
+#[cfg(target_os = "macos")]
+static MENUBAR_STATUS_ITEM: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+
+#[cfg(target_os = "macos")]
+unsafe fn ensure_menubar_status_item(title: &str) {
+ use std::ffi::{c_void, CString};
+ extern "C" {
+  fn objc_getClass(name: *const u8) -> *mut c_void;
+  fn sel_registerName(name: *const u8) -> *mut c_void;
+  fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
+  fn objc_retain(obj: *mut c_void) -> *mut c_void;
+ }
+
+ // Lazily create the NSStatusItem once.
+ let item_ptr = MENUBAR_STATUS_ITEM.get_or_init(|| {
+  let bar_cls = objc_getClass(b"NSStatusBar\0".as_ptr());
+  if bar_cls.is_null() { return 0; }
+  let system_sel = sel_registerName(b"systemStatusBar\0".as_ptr());
+  let bar = objc_msgSend(bar_cls, system_sel);
+  if bar.is_null() { return 0; }
+  // -1 == NSVariableStatusItemLength so the title sizes the item.
+  let new_item_sel = sel_registerName(b"statusItemWithLength:\0".as_ptr());
+  let item = objc_msgSend(bar, new_item_sel, -1.0f64);
+  if item.is_null() { return 0; }
+  // Retain so the system status bar can't drop it after our scope.
+  let _ = objc_retain(item);
+  item as usize
+ });
+ if *item_ptr == 0 { return; }
+ let item = *item_ptr as *mut c_void;
+
+ // statusItem.button.title = title
+ let button_sel = sel_registerName(b"button\0".as_ptr());
+ let btn = objc_msgSend(item, button_sel);
+ if btn.is_null() { return; }
+ let cstr = CString::new(title).unwrap_or_else(|_| CString::new("Crystal Ball").unwrap());
+ let nsstring_cls = objc_getClass(b"NSString\0".as_ptr());
+ let from_utf8_sel = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
+ let ns_title = objc_msgSend(nsstring_cls, from_utf8_sel, cstr.as_ptr());
+ let set_title_sel = sel_registerName(b"setTitle:\0".as_ptr());
+ objc_msgSend(btn, set_title_sel, ns_title);
 }
 
 #[tauri::command]
@@ -2451,7 +2566,6 @@ fn main() {
  .invoke_handler(tauri::generate_handler![
  list_supported_secret_keys,
  get_secret,
- get_all_secrets,
  set_secret,
  delete_secret,
  get_local_api_token,
@@ -2478,7 +2592,9 @@ fn main() {
  send_imessage,
  speak_aloud,
  install_update,
- update_mode_label
+ update_mode_label,
+ set_dock_badge,
+ set_menubar_status
  ])
  .setup(|app| {
  // Load persistent cache into memory (avoids 14MB file I/O on every IPC call)

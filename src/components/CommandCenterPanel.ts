@@ -27,32 +27,35 @@ import type { ActionBrief } from '@/services/insights/action-briefs';
 import type { PersonalImpact } from '@/services/personal/personal-impact';
 import type { FeatureHealth, HealthStatus } from '@/services/diagnostics/system-health-types';
 import { escapeHtml } from '@/utils/sanitize';
+import { getSavedPlaces, type SavedPlace } from '@/services/saved-places';
+import { getApiBaseUrl } from '@/services/runtime';
+import type { ImpactSeverity } from '@/services/personal/personal-impact';
 
 const REFRESH_MS = 10_000;
 
 const STATUS_COLOR: Record<HealthStatus, string> = {
-  healthy: '#4caf50',
-  degraded: '#ffeb3b',
-  stale: '#ff9800',
-  failing: '#f44336',
-  unsafe: '#d50000',
-  blind: '#607d8b',
-  unknown: '#9e9e9e',
+  healthy: 'var(--severity-ok)',
+  degraded: 'var(--severity-medium)',
+  stale:   'var(--severity-high)',
+  failing: 'var(--severity-high)',
+  unsafe:  'var(--severity-critical)',
+  blind:   'var(--severity-info)',
+  unknown: 'var(--severity-info)',
 };
 
 const ACTION_TIER_COLOR: Record<'monitor' | 'prepare' | 'act_now' | 'shelter', string> = {
-  monitor: '#4caf50',
-  prepare: '#ffeb3b',
-  act_now: '#ff9800',
-  shelter: '#d50000',
+  monitor: 'var(--severity-ok)',
+  prepare: 'var(--severity-medium)',
+  act_now: 'var(--severity-high)',
+  shelter: 'var(--severity-critical)',
 };
 
 const IMPACT_SEVERITY_COLOR: Record<'critical' | 'elevated' | 'watch' | 'low' | 'none', string> = {
-  critical: '#d50000',
-  elevated: '#ff9800',
-  watch: '#ffeb3b',
-  low: '#9e9e9e',
-  none: '#616161',
+  critical: 'var(--severity-critical)',
+  elevated: 'var(--severity-high)',
+  watch:    'var(--severity-medium)',
+  low:      'var(--severity-info)',
+  none:     'var(--severity-info)',
 };
 
 const RISK_LABEL: Record<HealthStatus, string> = {
@@ -65,8 +68,21 @@ const RISK_LABEL: Record<HealthStatus, string> = {
   unsafe: 'CRITICAL',
 };
 
+interface TapeItem {
+  type: string;
+  label: string;
+  ageMs: number;
+}
+
+const TILE_ORDER_KEY = 'wm-command-center-tile-order';
+
 export class CommandCenterPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private tapeTimer: ReturnType<typeof setInterval> | null = null;
+  private tapeItems: TapeItem[] = [];
+  private isDragging = false;
+  private draggingId: string | null = null;
+  private dragOverId: string | null = null;
 
   constructor() {
     super({
@@ -83,16 +99,25 @@ export class CommandCenterPanel extends Panel {
   private start(): void {
     this.render();
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    void this.fetchTapeItems();
+    this.tapeTimer = setInterval(() => { void this.fetchTapeItems(); }, 5 * 60 * 1000);
+    this.attachDragListeners();
   }
 
-  public dispose(): void {
+  public override destroy(): void {
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    if (this.tapeTimer !== null) {
+      clearInterval(this.tapeTimer);
+      this.tapeTimer = null;
+    }
+    super.destroy();
   }
 
   private render(): void {
+    if (this.isDragging) return;
     const html = this.buildHtml();
     this.setContent(html);
   }
@@ -132,6 +157,8 @@ export class CommandCenterPanel extends Panel {
 
     return `
       <div style="padding:14px;display:flex;flex-direction:column;gap:14px;">
+        ${this.renderGlobeNav()}
+        ${this.renderSavedPlacesTiles()}
         ${this.renderRiskHeadline(report.status, report.summary)}
         ${this.renderActionBrief(actionBrief)}
         ${this.renderPersonalImpact(personalImpact.impacts)}
@@ -139,8 +166,15 @@ export class CommandCenterPanel extends Panel {
         ${this.renderProviderRedundancy(redundancy)}
         ${this.renderWatchNext(feedAudit.entries.length, feedAudit.entries.filter((e) => e.level !== 'fresh' && e.level !== 'unknown').length)}
         ${this.renderRecommendations(report.recommendations)}
+        ${this.renderChangeTape()}
       </div>
     `;
+  }
+
+  private renderGlobeNav(): string {
+    return `<div style="display:flex;justify-content:flex-end;">
+      <button onclick="document.getElementById('godsVisionBtn')?.click()" style="font-size:10px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;" title="Open God's Vision 3D globe">🌍 Globe</button>
+    </div>`;
   }
 
   private renderRiskHeadline(status: HealthStatus, summary: string): string {
@@ -160,7 +194,7 @@ export class CommandCenterPanel extends Panel {
     if (concerning.length === 0) {
       return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:12px;">
         <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Top things that matter</div>
-        <div style="font-size:13px;color:#4caf50;">All features within their calibration floors. No action needed.</div>
+        <div style="font-size:13px;color:var(--severity-ok);">All features within their calibration floors. No action needed.</div>
       </div>`;
     }
     const top = concerning.slice(0, 3);
@@ -192,7 +226,7 @@ export class CommandCenterPanel extends Panel {
       <div style="font-size:12px;">
         ${drifting === 0
           ? `${totalFeeds} feeds fresh — nothing drifting.`
-          : `<strong style="color:#ff9800;">${drifting}</strong> of ${totalFeeds} sentinel feeds drifting. See Diagnostic → Feeds.`}
+          : `<strong style="color:var(--severity-high);">${drifting}</strong> of ${totalFeeds} sentinel feeds drifting. See Diagnostic → Feeds.`}
       </div>
     </div>`;
   }
@@ -263,6 +297,163 @@ export class CommandCenterPanel extends Panel {
       <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.5;">
         ${recs.slice(0, 4).map((r) => `<li>${escapeHtml(r)}</li>`).join('')}
       </ul>
+    </div>`;
+  }
+
+  // ── Saved-places tiles ──────────────────────────────────────────────────
+
+  private loadTileOrder(): string[] {
+    try {
+      const stored = localStorage.getItem(TILE_ORDER_KEY);
+      return stored ? (JSON.parse(stored) as string[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private saveTileOrder(ids: string[]): void {
+    localStorage.setItem(TILE_ORDER_KEY, JSON.stringify(ids));
+  }
+
+  private sortedTiles(places: SavedPlace[]): SavedPlace[] {
+    const order = this.loadTileOrder();
+    return [...places].sort((a, b) => {
+      const ai = order.indexOf(a.id);
+      const bi = order.indexOf(b.id);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }
+
+  private placeSeverity(place: SavedPlace, impacts: readonly PersonalImpact[]): ImpactSeverity {
+    return impacts.find((imp) =>
+      imp.exposures.some((e) => e.exposureId === place.id || e.label === place.name),
+    )?.severity ?? 'none';
+  }
+
+  private placeAlertCount(place: SavedPlace, impacts: readonly PersonalImpact[]): number {
+    return impacts.filter((imp) =>
+      imp.exposures.some((e) => e.exposureId === place.id || e.label === place.name),
+    ).length;
+  }
+
+  private renderTile(place: SavedPlace, severity: ImpactSeverity, alertCount: number): string {
+    const color = IMPACT_SEVERITY_COLOR[severity];
+    const plural = alertCount === 1 ? '' : 's';
+    const countHtml = alertCount > 0
+      ? `<div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:2px;">${alertCount} alert${plural}</div>`
+      : '';
+    return `<div class="ccp-tile" data-tile-id="${escapeHtml(place.id)}" draggable="true"
+      style="flex:0 0 auto;width:100px;padding:8px 10px;border:1px solid var(--border-subtle,#333);border-top:3px solid ${color};border-radius:4px;cursor:grab;background:rgba(255,255,255,0.02);user-select:none;">
+      <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(place.name)}">${escapeHtml(place.name)}</div>
+      <div style="font-size:10px;color:${color};text-transform:uppercase;margin-top:2px;">${escapeHtml(severity)}</div>
+      ${countHtml}
+    </div>`;
+  }
+
+  private renderSavedPlacesTiles(): string {
+    const places = getSavedPlaces().slice(0, 6);
+    const impacts = getPersonalImpactReport().impacts;
+    const sorted = this.sortedTiles(places);
+    const tileHtml = sorted.map((p) =>
+      this.renderTile(p, this.placeSeverity(p, impacts), this.placeAlertCount(p, impacts)),
+    ).join('');
+    const addBtn = `<button data-action="add-place" style="font-size:11px;color:var(--accent,#4a9eff);background:none;border:1px dashed var(--border-subtle,#333);border-radius:4px;padding:6px 10px;cursor:pointer;align-self:flex-start;" title="Add a saved place">+</button>`;
+    return `<div style="padding-bottom:2px;">
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Your places</div>
+      <div class="ccp-tiles-row" style="display:flex;flex-wrap:wrap;gap:8px;">${tileHtml}${addBtn}</div>
+    </div>`;
+  }
+
+  // ── Drag-to-reorder tiles (event delegation — listeners survive re-render) ──
+
+  private attachDragListeners(): void {
+    this.content.addEventListener('dragstart', (e) => this.onDragStart(e));
+    this.content.addEventListener('dragover', (e) => this.onDragOver(e));
+    this.content.addEventListener('drop', (e) => this.onDrop(e));
+    this.content.addEventListener('dragend', () => this.onDragEnd());
+    this.content.addEventListener('click', (e) => this.onContentClick(e));
+  }
+
+  private onDragStart(e: DragEvent): void {
+    const tile = (e.target as HTMLElement).closest<HTMLElement>('[data-tile-id]');
+    if (!tile) return;
+    this.isDragging = true;
+    this.draggingId = tile.dataset.tileId ?? null;
+    e.dataTransfer?.setData('text/plain', this.draggingId ?? '');
+  }
+
+  private onDragOver(e: DragEvent): void {
+    const tile = (e.target as HTMLElement).closest<HTMLElement>('[data-tile-id]');
+    if (!tile) return;
+    e.preventDefault();
+    this.dragOverId = tile.dataset.tileId ?? null;
+  }
+
+  private onDrop(e: DragEvent): void {
+    e.preventDefault();
+    const from = this.draggingId;
+    const to = this.dragOverId;
+    this.isDragging = false;
+    this.draggingId = null;
+    this.dragOverId = null;
+    if (!from || !to || from === to) { this.render(); return; }
+    const ids = this.sortedTiles(getSavedPlaces().slice(0, 6)).map((p) => p.id);
+    const fromIdx = ids.indexOf(from);
+    const toIdx = ids.indexOf(to);
+    if (fromIdx !== -1 && toIdx !== -1) {
+      ids.splice(fromIdx, 1);
+      ids.splice(toIdx, 0, from);
+    }
+    this.saveTileOrder(ids);
+    this.render();
+  }
+
+  private onDragEnd(): void {
+    this.isDragging = false;
+    this.draggingId = null;
+    this.dragOverId = null;
+    this.render();
+  }
+
+  private onContentClick(e: MouseEvent): void {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action="add-place"]');
+    if (!btn) return;
+    document.querySelector<HTMLElement>('[data-panel-id="saved-places"]')?.click();
+  }
+
+  // ── Live change tape ────────────────────────────────────────────────────
+
+  private async fetchTapeItems(): Promise<void> {
+    try {
+      const url = `${getApiBaseUrl()}/api/command-center/recent-changes`;
+      const resp = await fetch(url);
+      if (!resp.ok) return;
+      const data = await resp.json() as { items?: TapeItem[] };
+      this.tapeItems = data.items ?? [];
+      if (!this.isDragging) this.render();
+    } catch {
+      // fail silently — tape stays empty
+    }
+  }
+
+  private formatAge(ms: number): string {
+    const min = Math.floor(ms / 60_000);
+    if (min < 60) return `${min}m`;
+    return `${Math.floor(min / 60)}h`;
+  }
+
+  private renderChangeTape(): string {
+    if (this.tapeItems.length === 0) return '';
+    const items = this.tapeItems.slice(0, 10).map((item) => {
+      const age = this.formatAge(item.ageMs);
+      return `<span style="display:inline-block;padding:0 10px;border-right:1px solid var(--border-subtle,#444);font-size:11px;white-space:nowrap;">${escapeHtml(item.label)}<span style="color:var(--text-secondary,#aaa);margin-left:4px;">${escapeHtml(age)} ago</span></span>`;
+    }).join('');
+    return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:10px;">
+      <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:4px;">What changed (last hour)</div>
+      <div style="overflow-x:auto;display:flex;padding-bottom:4px;">${items}</div>
     </div>`;
   }
 }

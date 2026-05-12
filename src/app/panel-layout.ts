@@ -60,13 +60,19 @@ import {
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { TriageBar } from '@/components/TriageBar';
 import { EEWStatusBar } from '@/components/EEWStatusBar';
+import { CorrelationAlertBanner } from '@/components/CorrelationAlertBanner';
 import { startSpaceWeatherStatusBarPoller } from '@/services/spaceweather/status-bar-poller';
 import { JustInRail } from '@/components/JustInRail';
 import { startPanelNarrator } from '@/services/panel-narrator';
 import { TodayView } from '@/components/TodayView';
 import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalette } from '@/components/CommandPalette';
+import { HelpOverlay } from '@/components/HelpOverlay';
+import { installShortcuts } from '@/services/keyboard/shortcut-bootstrap';
+import { startDockBadge } from '@/services/native/dock-badge';
+import { startMenubarStatus } from '@/services/native/menubar-status';
 import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
+import { startRulesEngineBootstrap } from '@/services/intelligence/rules-bootstrap';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
 import { startCorrelationFeedback } from '@/services/correlation-feedback';
@@ -145,8 +151,18 @@ import { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import { PollenPanel } from '@/components/PollenPanel';
 import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
 import { SanctionsPanel } from '@/components/SanctionsPanel';
+import { HibpBreachesPanel } from '@/components/HibpBreachesPanel';
+import { IpInfoPanel } from '@/components/IpInfoPanel';
+import { BitcoinAbusePanel } from '@/components/BitcoinAbusePanel';
+import { RedditOsintPanel } from '@/components/RedditOsintPanel';
+import { PhishstatsFeedPanel } from '@/components/PhishstatsFeedPanel';
+import { UrlscanThreatsPanel } from '@/components/UrlscanThreatsPanel';
+import { PulsediveIntelPanel } from '@/components/PulsediveIntelPanel';
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
+import { OpenaqMonitorPanel } from '@/components/OpenaqMonitorPanel';
+import { WhatChangedPanel } from '@/components/WhatChangedPanel';
+import { MediastackNewsPanel } from '@/components/MediastackNewsPanel';
 import { WildfireIncidentsPanel } from '@/components/WildfireIncidentsPanel';
 import { WildfireIntelPanel } from '@/components/WildfireIntelPanel';
 import { HazmatIncidentsPanel } from '@/components/HazmatIncidentsPanel';
@@ -161,6 +177,9 @@ import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
 import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
 import { VolcanoAlertsPanel } from '@/components/VolcanoAlertsPanel';
+import { VolcanoMonitorPanel } from '@/components/VolcanoMonitorPanel';
+import { SevereWeatherPanel } from '@/components/SevereWeatherPanel';
+import { ShakeAlertPanel } from '@/components/ShakeAlertPanel';
 import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
 import { IswReportsPanel } from '@/components/IswReportsPanel';
 import { NatoNewsPanel } from '@/components/NatoNewsPanel';
@@ -212,6 +231,10 @@ import { SupplyChainImpactPanel } from '@/components/SupplyChainImpactPanel';
 import { WaterQualityPanel } from '@/components/WaterQualityPanel';
 import { NuclearMonitorPanel } from '@/components/NuclearMonitorPanel';
 import { NotificationDigestPanel } from '@/components/NotificationDigestPanel';
+import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel';
+import { NotificationSettingsPanel } from '@/components/NotificationSettingsPanel';
+import { SituationStorePanel } from '@/components/SituationStorePanel';
+import { ObservationRulesPanel } from '@/components/ObservationRulesPanel';
 import { PatternOfLifePanel } from '@/components/PatternOfLifePanel';
 import { SigintPanel } from '@/components/SigintPanel';
 import { DarkVesselPanel } from '@/components/DarkVesselPanel';
@@ -233,13 +256,19 @@ import { CorrelationMatrixPanel } from '@/components/CorrelationMatrixPanel';
 import { StrikePackagesPanel } from '@/components/StrikePackagesPanel';
 import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
 import { FeedHealthPanel } from '@/components/FeedHealthPanel';
+import { CveTrackerPanel } from '@/components/CveTrackerPanel';
+import { VulnersCvePanel } from '@/components/VulnersCvePanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
+import { PlaybookPanel } from '@/components/PlaybookPanel';
+import { SmsSettingsPanel } from '@/components/SmsSettingsPanel';
 import { ThreatDashboard } from '@/components/ThreatDashboard';
 import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
 import { AviationIntelPanel } from '@/components/AviationIntelPanel';
+import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
+import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
 import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
@@ -281,6 +310,12 @@ import {
 import { t } from '@/services/i18n';
 import { trackCriticalBannerAction } from '@/services/analytics';
 import { alertFamily, getMode, toggleGhostMode, type AppMode } from '@/services/mode-manager';
+import {
+  initSituationalMode, setMode as setSituationalMode,
+  setAutoMode, getAutoMode, isAutoMode, clearManualMode,
+  type SituationalMode, type SituationalModeChangedDetail,
+} from '@/app/mode-manager';
+import { unifiedAlertStore } from '@/services/unified-alerts';
 import { isLowPowerMode, setLowPowerMode } from '@/services/low-power';
 import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import { initModeTransitionCards } from '@/services/mode-transition-card';
@@ -290,6 +325,8 @@ import { SavedPlaceModal } from '@/components/SavedPlaceModal';
 import type { GeoHubActivity } from '@/services/geo-activity';
 import type { TechHubActivity } from '@/services/tech-activity';
 import { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
+import { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
+import { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
 // HTML builders (app shell + map + sidebar) live in a sibling module.
 import * as htmlBuilders from '@/app/layout/html';
 
@@ -314,7 +351,10 @@ export class PanelLayoutManager implements AppModule {
   private _preModeOrder: string[] = [];
 
   /** Panels always kept at the top regardless of mode (video feeds / live streams). */
-  private static readonly MODE_ANCHORS = ['threat-dashboard', 'watchlist', 'alert-center', 'live-news', 'live-webcams'];
+  private static readonly MODE_ANCHORS = ['command-center', 'threat-dashboard', 'watchlist', 'alert-center', 'live-news', 'live-webcams'];
+
+  /** localStorage key for last-viewed panel (boot scroll restore). */
+  private static readonly LAST_VIEWED_KEY = 'cb-last-viewed-panel';
 
   /** Panels floated to top in Finance Mode. */
   private static readonly FINANCE_PRIORITY = [
@@ -419,12 +459,12 @@ export class PanelLayoutManager implements AppModule {
  const state = this.ctx.updateState;
  if (state?.phase !== 'available' || !state.downloadUrl) return;
 
- const { version, downloadUrl } = state;
+ const { version, downloadUrl, expectedSha256 } = state;
  installBtn.addEventListener('click', () => {
  this.ctx.updateState = { phase: 'installing' };
  this.renderSidebarUpdateBtn();
- invokeTauri<void>('install_update', { downloadUrl }).catch(() => {
- this.ctx.updateState = { phase: 'available', version, downloadUrl };
+ invokeTauri<void>('install_update', { downloadUrl, expectedSha256 }).catch(() => {
+ this.ctx.updateState = { phase: 'available', version, downloadUrl, expectedSha256 };
  this.renderSidebarUpdateBtn();
  });
  });
@@ -537,6 +577,11 @@ export class PanelLayoutManager implements AppModule {
  eewStatusBar.mount(document.body);
  startSpaceWeatherStatusBarPoller(eewStatusBar);
 
+ // Mount the cross-domain correlation banner. Self-fetches from
+ // /api/synthesis/correlations every 15s; hidden when no events.
+ const correlationBanner = new CorrelationAlertBanner();
+ correlationBanner.mount(document.body);
+
  // Mount the triage bar above the panel grid (auto-hides when nothing is hot).
  const triageBar = new TriageBar();
  triageBar.mount(panelsGrid.parentElement ?? panelsGrid);
@@ -549,6 +594,7 @@ export class PanelLayoutManager implements AppModule {
  startSidebarHeat();
  startAlertCorrelator();
  startSituationAlertBridge();
+ startRulesEngineBootstrap();
  startSilenceDetector();
  startSourceFeedback();
  startCorrelationFeedback();
@@ -671,6 +717,28 @@ export class PanelLayoutManager implements AppModule {
  const cmdk = new CommandPalette();
  cmdk.mount(document.body);
  document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
+
+ // Install the centralized shortcut registry (⌘K, ⌘/, ⌘1–9 + sidebar badges)
+ // and mount the keyboard help overlay backed by the same registry.
+ const shortcuts = installShortcuts();
+ const helpOverlay = new HelpOverlay(shortcuts.registry);
+ helpOverlay.mount(document.body);
+ document.addEventListener('cb:toggle-help', () => helpOverlay.toggle());
+
+ // Bridge a couple of palette actions to existing handlers/events.
+ document.addEventListener('cb:toggle-sidebar', () => {
+   document.body.classList.toggle('sidebar-collapsed');
+ });
+ document.addEventListener('cb:export-briefing', () => { void exportBriefingToClipboard(); });
+ document.addEventListener('cb:refresh-all', () => {
+   document.dispatchEvent(new CustomEvent('cb:force-refresh'));
+ });
+
+ // Native macOS polish: dock badge (unread alert count) + menubar tray
+ // (overall threat level). Both no-op silently when the Tauri bridge isn't
+ // available (web builds, headless tests).
+ startDockBadge();
+ startMenubarStatus();
 
  document.addEventListener('cb:focus-map', ((e: Event) => {
  const d = (e as CustomEvent).detail as { lat: number; lon: number; zoom?: number };
@@ -1002,11 +1070,37 @@ export class PanelLayoutManager implements AppModule {
  const sanctionsIntelPanel = new SanctionsPanel();
  this.ctx.panels['sanctions-intel'] = sanctionsIntelPanel;
 
+ this.ctx.panels['hibp-breaches'] = new HibpBreachesPanel();
+ this.ctx.panels['ipinfo-lookup'] = new IpInfoPanel();
+
+ const bitcoinAbusePanel = new BitcoinAbusePanel();
+ this.ctx.panels['bitcoin-abuse'] = bitcoinAbusePanel;
+
+ const redditOsintPanel = new RedditOsintPanel();
+ this.ctx.panels['reddit-osint'] = redditOsintPanel;
+
+ const phishstatsFeedPanel = new PhishstatsFeedPanel();
+ this.ctx.panels['phishstats-feed'] = phishstatsFeedPanel;
+
+ const urlscanThreatsPanel = new UrlscanThreatsPanel();
+ this.ctx.panels['urlscan-threats'] = urlscanThreatsPanel;
+
+ const pulsediveIntelPanel = new PulsediveIntelPanel();
+ this.ctx.panels['pulsedive-intel'] = pulsediveIntelPanel;
+
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;
 
  const airQualityPanel = new AirQualityPanel();
  this.ctx.panels['air-quality'] = airQualityPanel;
+
+ const openaqMonitorPanel = new OpenaqMonitorPanel();
+ this.ctx.panels['openaq-monitor'] = openaqMonitorPanel;
+
+ this.ctx.panels['what-changed'] = new WhatChangedPanel();
+
+ const mediastackNewsPanel = new MediastackNewsPanel();
+ this.ctx.panels['mediastack-news'] = mediastackNewsPanel;
 
  const wildfireIncidentsPanel = new WildfireIncidentsPanel();
  this.ctx.panels['wildfire-incidents'] = wildfireIncidentsPanel;
@@ -1078,6 +1172,24 @@ export class PanelLayoutManager implements AppModule {
  });
  this.ctx.panels['volcano-alerts'] = volcanoAlertsPanel;
 
+ const volcanoMonitorPanel = new VolcanoMonitorPanel();
+ volcanoMonitorPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 7);
+ });
+ this.ctx.panels['volcano-monitor'] = volcanoMonitorPanel;
+
+ const severeWeatherPanel = new SevereWeatherPanel();
+ severeWeatherPanel.setWarningClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 6);
+ });
+ this.ctx.panels['severe-weather'] = severeWeatherPanel;
+
+ const shakeAlertPanel = new ShakeAlertPanel();
+ shakeAlertPanel.setEventClickHandler((lat, lon) => {
+ this.ctx.map?.setCenter(lat, lon, 7);
+ });
+ this.ctx.panels['shakealert'] = shakeAlertPanel;
+
  const nwsAlertsPanel = new NWSAlertsPanel();
  this.ctx.panels['nws-alerts'] = nwsAlertsPanel;
 
@@ -1119,6 +1231,10 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['water-quality'] = new WaterQualityPanel();
  this.ctx.panels['nuclear-monitor'] = new NuclearMonitorPanel();
  this.ctx.panels['notification-digest'] = new NotificationDigestPanel();
+ this.ctx.panels['notification-history'] = new NotificationHistoryPanel();
+ this.ctx.panels['notification-settings'] = new NotificationSettingsPanel();
+ this.ctx.panels['situations'] = new SituationStorePanel();
+ this.ctx.panels['observation-rules'] = new ObservationRulesPanel();
  // Worldview / Palantir / Dragos-inspired panels
  this.ctx.panels['pattern-of-life'] = new PatternOfLifePanel();
  this.ctx.panels['sigint-panel'] = new SigintPanel();
@@ -1144,10 +1260,21 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
+ this.ctx.panels['playbook'] = new PlaybookPanel();
+ this.ctx.panels['sms-command-interface'] = new SmsSettingsPanel();
  this.ctx.panels['threat-dashboard'] = new ThreatDashboard();
  startThreatAggregator();
  this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
+ this.ctx.panels['intelligence-feed'] = new IntelligenceFeedPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
+ this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
+ this.ctx.panels['shortage-detail-rice'] = new ShortageDetailPanel('rice');
+ this.ctx.panels['shortage-detail-soybeans'] = new ShortageDetailPanel('soybeans');
+ this.ctx.panels['shortage-detail-diesel'] = new ShortageDetailPanel('diesel');
+ this.ctx.panels['shortage-detail-gasoline'] = new ShortageDetailPanel('gasoline');
+ this.ctx.panels['shortage-detail-natural-gas'] = new ShortageDetailPanel('natural-gas');
+ this.ctx.panels['shortage-detail-jet-fuel'] = new ShortageDetailPanel('jet-fuel');
  this.ctx.panels['weather-hazard'] = new WeatherHazardPanel();
  this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
  // Wire saved-places into the insights state singleton so the new
@@ -1248,6 +1375,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['weather-radar'] = new WeatherRadarPanel();
  this.ctx.panels['tide-predictions'] = new TidePredictionsPanel();
  this.ctx.panels['pollen'] = new PollenPanel();
+ this.ctx.panels['goes-satellite'] = new GoesSatellitePanel();
+ this.ctx.panels['flood-monitor'] = new FloodMonitorPanel();
 
  this.ctx.panels['stoic-reflections'] = new StoicQuotePanel();
  this.ctx.panels['biblical-encouragement'] = new BiblicalQuotePanel();
@@ -1280,6 +1409,9 @@ export class PanelLayoutManager implements AppModule {
  void this.callbacks.loadSecurityAdvisories?.();
  });
  this.ctx.panels['security-advisories'] = securityAdvisoriesPanel;
+
+ this.ctx.panels['cve-tracker'] = new CveTrackerPanel();
+ this.ctx.panels['vulners-cve'] = new VulnersCvePanel();
 
  // NetworkRulesPanel — surfaces tools/littlesnitch/crystal-ball.lsrules
  // (the bundled Little Snitch ruleset) inside the app so the user can
@@ -1484,6 +1616,9 @@ export class PanelLayoutManager implements AppModule {
  // Wire mode selector buttons
  this._initModeSelector();
 
+ // Wire situational mode switcher (monitoring / alert / investigation / briefing)
+ this._initSituationalModeSelector();
+
  // Set up JS-based window drag on toolbar + sidebar drag zone
  this._setupWindowDragRegions();
 
@@ -1508,6 +1643,36 @@ export class PanelLayoutManager implements AppModule {
 
  this.applyPanelSettings();
  this.applyInitialUrlState();
+ this.restoreLastViewedPanel();
+ this.startLastViewedTracker();
+  }
+
+  /** Scroll to the last-viewed panel on boot, defaulting to command-center. */
+  private restoreLastViewedPanel(): void {
+ const key = localStorage.getItem(PanelLayoutManager.LAST_VIEWED_KEY) ?? 'command-center';
+ requestAnimationFrame(() => {
+ const panel = this.ctx.panels[key] ?? this.ctx.panels['command-center'];
+ panel?.getElement().scrollIntoView({ behavior: 'instant', block: 'start' });
+ });
+  }
+
+  /** Persist the most-visible panel to localStorage so boot restores it. */
+  private startLastViewedTracker(): void {
+ const panelsGrid = document.getElementById('panelsGrid');
+ if (!panelsGrid || typeof IntersectionObserver === 'undefined') return;
+ const observer = new IntersectionObserver(
+ (entries) => {
+ const visible = entries.find((e) => e.isIntersecting && e.intersectionRatio >= 0.5);
+ if (visible) {
+ const key = (visible.target as HTMLElement).dataset.panel;
+ if (key) localStorage.setItem(PanelLayoutManager.LAST_VIEWED_KEY, key);
+ }
+ },
+ { threshold: 0.5 },
+ );
+ for (const child of panelsGrid.children) {
+ observer.observe(child);
+ }
   }
 
   private _initModeSelector(): void {
@@ -1611,6 +1776,57 @@ export class PanelLayoutManager implements AppModule {
 
  // Auto-mode-activation notifications deleted in mode collapse —
  // war/disaster modes no longer exist as triggerable states.
+  }
+
+  private _initSituationalModeSelector(): void {
+ // Apply initial body attribute + button states
+ const initial = initSituationalMode();
+ document.body.dataset.mode = initial;
+ this._updateSituationalModeBtns(initial, isAutoMode());
+
+ // Button clicks — delegate so buttons survive any DOM rebuilds
+ document.addEventListener('click', (e) => {
+ const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-mode-key]');
+ if (!btn) return;
+ const key = btn.dataset.modeKey as SituationalMode | undefined;
+ if (key === 'monitoring' || key === 'alert' || key === 'investigation' || key === 'briefing') {
+ setSituationalMode(key);
+ }
+ });
+
+ // "Auto" label click — clear manual override and let auto-mode re-evaluate
+ document.getElementById('situationalModeAutoIndicator')?.addEventListener('click', () => {
+ clearManualMode();
+ const auto = getAutoMode(unifiedAlertStore.getAll());
+ setAutoMode(auto);
+ });
+
+ // React to mode changes: sync body attr + button highlight
+ document.addEventListener('wm:situational-mode-changed', ((e: CustomEvent<SituationalModeChangedDetail>) => {
+ const { mode, auto } = e.detail;
+ document.body.dataset.mode = mode;
+ this._updateSituationalModeBtns(mode, auto);
+ }) as EventListener);
+
+ // Auto-mode evaluation: re-run whenever the alert store changes
+ unifiedAlertStore.subscribe(() => {
+ if (isAutoMode()) {
+ setAutoMode(getAutoMode(unifiedAlertStore.getAll()));
+ }
+ });
+  }
+
+  private _updateSituationalModeBtns(mode: SituationalMode, auto: boolean): void {
+ for (const btn of document.querySelectorAll<HTMLElement>('[data-mode-key]')) {
+ btn.classList.toggle('active', btn.dataset.modeKey === mode);
+ }
+ const autoEl = document.getElementById('situationalModeAutoIndicator');
+ if (autoEl) {
+ autoEl.style.opacity = auto ? '1' : '0.3';
+ autoEl.title = auto
+ ? 'Auto — system is selecting mode based on active alerts (click to re-evaluate)'
+ : 'Manual — click to restore auto-selection';
+ }
   }
 
   /**

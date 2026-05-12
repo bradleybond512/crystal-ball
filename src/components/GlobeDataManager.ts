@@ -39,6 +39,7 @@ import { satellitePropagator, type SatellitePosition } from '@/services/satellit
 import { fetchLightningStrikes } from '@/services/lightning';
 import { fetchRedFlagWarnings } from '@/services/red-flag-warnings';
 import { getRadarTileUrl, fetchRadarFrames } from '@/services/rainviewer-radar';
+import { getGoesWmsTileUrl } from '@/services/satellite-weather';
 import { getApiBaseUrl } from '@/services/runtime';
 import {
   computeAftershockForecast,
@@ -669,7 +670,11 @@ export class GlobeDataManager {
  this.registerLayer('lightningStrikes', () => this.loadLightningStrikes());
  this.registerLayer('redFlagWarnings', () => this.loadRedFlagWarnings());
  this.registerLayer('weatherHazards', () => this.loadWeatherHazards());
+ this.registerLayer('floodAlerts', () => this.loadFloodAlerts());
  this.registerLayer('wastewaterStates', () => this.loadWastewaterStates());
+ this.registerLayer('volcanoMonitor', () => this.loadVolcanoMonitorMarkers());
+ this.registerLayer('severeWeatherPolygons', () => this.loadSevereWeatherPolygons());
+ this.registerLayer('shakemapOverlay', () => this.loadShakemapOverlay());
 
  this.registerLayer('streetTiles', () => {
  // Managed by StreetTileManager, not data source
@@ -2331,11 +2336,52 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
   }
 
   private loadWeatherSatellite(): void {
- // Disabled: Iowa State TMS layer name `goes_conus_geocolor` returns a pink
- // "Invalid TMS Request" PNG for every tile, which Cesium renders as a
- // magenta overlay across the entire globe. Original fix in commit 44a56901,
- // lost in godsvision-tier1 integration merge (#171). Re-enable once a working
- // tile source is wired up in satellite-weather.ts.
+ try {
+ const tileUrl = getGoesWmsTileUrl('geocolor');
+ const provider = new UrlTemplateImageryProvider({ url: tileUrl, maximumLevel: 7 });
+ const imgLayer = this.viewer.imageryLayers.addImageryProvider(provider);
+ imgLayer.alpha = 0.7;
+ this.weatherImageryLayers.push(imgLayer);
+ } catch { /* satellite imagery unavailable */ }
+  }
+
+  private async loadFloodAlerts(): Promise<void> {
+ const layer = this.layers.get('floodAlerts');
+ if (!layer) return;
+ try {
+ const base = getApiBaseUrl();
+ const r = await fetch(`${base}/api/floods/warnings`, { signal: AbortSignal.timeout(10_000) });
+ if (!r.ok) return;
+ const data = await r.json() as { alerts?: { id: string; event: string; severity: string; headline: string; polygon: { type: string; coordinates: number[][][] } | null }[] };
+ const alerts = data?.alerts ?? [];
+ const SEVERITY_COLORS: Record<string, string> = {
+ Extreme: '#cc0000',
+ Severe: '#ff4400',
+ Moderate: '#ff8800',
+ Minor: '#ffcc00',
+ };
+ for (const alert of alerts) {
+ if (!alert.polygon?.coordinates?.[0]) continue;
+ const outerRing = alert.polygon.coordinates[0];
+ const flat = outerRing.flatMap(coord => [coord[0] ?? 0, coord[1] ?? 0]);
+ if (flat.length < 6) continue;
+ const fillHex = SEVERITY_COLORS[alert.severity] ?? '#0088ff';
+ const fillColor = Color.fromCssColorString(fillHex).withAlpha(0.35);
+ const outlineColor = Color.fromCssColorString(fillHex).withAlpha(0.8);
+ layer.source.entities.add({
+ name: alert.id,
+ polygon: {
+ hierarchy: new PolygonHierarchy(Cartesian3.fromDegreesArray(flat)),
+ material: new ColorMaterialProperty(fillColor),
+ outline: true,
+ outlineColor,
+ outlineWidth: 2,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ },
+ description: escapeHtml(alert.headline),
+ });
+ }
+ } catch { /* flood alerts unavailable */ }
   }
 
   private async loadLightningStrikes(): Promise<void> {
@@ -2587,6 +2633,132 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  });
  }
  } catch { /* red flag unavailable */ }
+  }
+
+  private async loadVolcanoMonitorMarkers(): Promise<void> {
+    const layer = this.layers.get('volcanoMonitor');
+    if (!layer) return;
+    try {
+      const { fetchVolcanoMonitorStatus, aviationColorHex } = await import('@/services/volcano-monitor');
+      const status = await fetchVolcanoMonitorStatus();
+      for (const v of status.volcanoes) {
+        const hex = aviationColorHex(v.aviationColor);
+        const color = Color.fromCssColorString(hex);
+        layer.source.entities.add({
+          position: Cartesian3.fromDegrees(v.lon, v.lat),
+          billboard: {
+            image: ICON_VOLCANO,
+            color,
+            scale: 0.7,
+            heightReference: HeightReference.CLAMP_TO_GROUND,
+            scaleByDistance: new NearFarScalar(1e4, 1.5, 1e7, 0.5),
+            verticalOrigin: VerticalOrigin.CENTER,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+          },
+          label: {
+            text: `${v.name} [${v.alertLevel}]`,
+            font: '10px monospace',
+            fillColor: color,
+            outlineColor: Color.BLACK,
+            outlineWidth: 2,
+            style: 2,
+            pixelOffset: LABEL_OFFSET,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+            verticalOrigin: VerticalOrigin.BOTTOM,
+            scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+            distanceDisplayCondition: new DistanceDisplayCondition(0, 6e6),
+          },
+          description: `${v.name} — Alert: ${v.alertLevel} / Aviation: ${v.aviationColor} (${v.observatory})`,
+        });
+      }
+    } catch { /* volcano monitor unavailable */ }
+  }
+
+  private async loadSevereWeatherPolygons(): Promise<void> {
+    const layer = this.layers.get('severeWeatherPolygons');
+    if (!layer) return;
+    try {
+      const { fetchActiveWarnings, warningColor } = await import('@/services/severe-weather');
+      const warnings = await fetchActiveWarnings();
+      for (const w of warnings) {
+        if (!w.polygon || w.polygon.length < 3) {
+          if (w.centroid) {
+            const hex = warningColor(w.warnType);
+            const color = Color.fromCssColorString(hex);
+            layer.source.entities.add({
+              position: Cartesian3.fromDegrees(w.centroid.lon, w.centroid.lat),
+              billboard: {
+                image: ICON_FIRE,
+                color,
+                scale: 0.35,
+                heightReference: HeightReference.CLAMP_TO_GROUND,
+                scaleByDistance: new NearFarScalar(1e4, 1.5, 1e7, 0.4),
+                verticalOrigin: VerticalOrigin.CENTER,
+                horizontalOrigin: HorizontalOrigin.CENTER,
+              },
+              description: `${w.event}: ${w.headline}`,
+            });
+          }
+          continue;
+        }
+        const hex = warningColor(w.warnType);
+        const fillColor = Color.fromCssColorString(hex).withAlpha(0.3);
+        const outlineColor = Color.fromCssColorString(hex);
+        const flat = w.polygon.flatMap(([lng, lat]: [number, number]) => [lng, lat]);
+        layer.source.entities.add({
+          name: `severe-${w.id}`,
+          polygon: {
+            hierarchy: new PolygonHierarchy(Cartesian3.fromDegreesArray(flat)),
+            material: new ColorMaterialProperty(fillColor),
+            outline: true,
+            outlineColor,
+            outlineWidth: 2,
+            heightReference: HeightReference.CLAMP_TO_GROUND,
+          },
+          description: `${w.event}: ${w.headline}`,
+        });
+      }
+    } catch { /* severe weather polygons unavailable */ }
+  }
+
+  private async loadShakemapOverlay(): Promise<void> {
+    const layer = this.layers.get('shakemapOverlay');
+    if (!layer) return;
+    try {
+      const { fetchShakemapEvents, mmiHexColor } = await import('@/services/shakealert');
+      const status = await fetchShakemapEvents();
+      for (const ev of status.events) {
+        const hex = mmiHexColor(ev.maxMmi ?? 0);
+        const color = Color.fromCssColorString(hex);
+        const scale = Math.max(0.4, Math.min(1.2, (ev.magnitude - 4) * 0.25 + 0.4));
+        layer.source.entities.add({
+          position: Cartesian3.fromDegrees(ev.lon, ev.lat),
+          billboard: {
+            image: ICON_EARTHQUAKE,
+            color,
+            scale,
+            heightReference: HeightReference.CLAMP_TO_GROUND,
+            scaleByDistance: new NearFarScalar(1e4, 1.5, 1e7, 0.4),
+            verticalOrigin: VerticalOrigin.CENTER,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+          },
+          label: {
+            text: `M${ev.magnitude.toFixed(1)}${ev.hasShakemap ? ' ✓' : ''}`,
+            font: '10px monospace',
+            fillColor: color,
+            outlineColor: Color.BLACK,
+            outlineWidth: 2,
+            style: 2,
+            pixelOffset: LABEL_OFFSET,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+            verticalOrigin: VerticalOrigin.BOTTOM,
+            scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+            distanceDisplayCondition: new DistanceDisplayCondition(0, 8e6),
+          },
+          description: `M${ev.magnitude.toFixed(1)} — ${ev.place}\nMMI: ${ev.mmiLabel}\nShakeMap: ${ev.hasShakemap ? 'available' : 'not available'}`,
+        });
+      }
+    } catch { /* shakemap overlay unavailable */ }
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -58,11 +58,11 @@ const MEMORY_CLEANUP_THRESHOLD_GB = (() => {
 })();
 const RELAY_SHARED_SECRET = process.env.RELAY_SHARED_SECRET || '';
 const RELAY_AUTH_HEADER = (process.env.RELAY_AUTH_HEADER || 'x-relay-key').toLowerCase();
-const ALLOW_UNAUTHENTICATED_RELAY = process.env.ALLOW_UNAUTHENTICATED_RELAY === 'true';
 const IS_PRODUCTION_RELAY = process.env.NODE_ENV === 'production'
   || !!process.env.RAILWAY_ENVIRONMENT
   || !!process.env.RAILWAY_PROJECT_ID
   || !!process.env.RAILWAY_STATIC_URL;
+const ALLOW_UNAUTHENTICATED_RELAY = process.env.ALLOW_UNAUTHENTICATED_RELAY === 'true' && !IS_PRODUCTION_RELAY;
 const RELAY_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.RELAY_RATE_LIMIT_WINDOW_MS || 60000));
 const RELAY_RATE_LIMIT_MAX = Number.isFinite(Number(process.env.RELAY_RATE_LIMIT_MAX))
   ? Number(process.env.RELAY_RATE_LIMIT_MAX) : 1200;
@@ -85,7 +85,7 @@ const RELAY_OREF_RATE_LIMIT_MAX = Number.isFinite(Number(process.env.RELAY_OREF_
 if (IS_PRODUCTION_RELAY && !RELAY_SHARED_SECRET && !ALLOW_UNAUTHENTICATED_RELAY) {
   console.error('[Relay] Error: RELAY_SHARED_SECRET is required in production');
   console.error('[Relay] Set RELAY_SHARED_SECRET on Railway and Vercel to secure relay endpoints');
-  console.error('[Relay] To bypass temporarily (not recommended), set ALLOW_UNAUTHENTICATED_RELAY=true');
+  console.error('[Relay] To bypass temporarily, set ALLOW_UNAUTHENTICATED_RELAY=true (non-production only)');
   process.exit(1);
 }
 
@@ -2650,8 +2650,10 @@ const ALLOWED_ORIGINS = [
 function getCorsOrigin(req) {
   const origin = req.headers.origin || '';
   if (ALLOWED_ORIGINS.includes(origin)) return origin;
-  // Optional: allow Vercel preview deployments when explicitly enabled.
-  if (ALLOW_VERCEL_PREVIEW_ORIGINS && origin.endsWith('.vercel.app')) return origin;
+  // Optional: allow Crystal Ball's own Vercel preview deployments when explicitly enabled.
+  // Pinned to the bradleybond512 team slug so lookalike third-party projects cannot
+  // match. Vercel preview URL format: {deployment-hash}-{team-slug}.vercel.app
+  if (ALLOW_VERCEL_PREVIEW_ORIGINS && /^https:\/\/[a-z0-9-]+-bradleybond512\.vercel\.app$/.test(origin)) return origin;
   return '';
 }
 

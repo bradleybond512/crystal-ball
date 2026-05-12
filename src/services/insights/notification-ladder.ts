@@ -25,6 +25,7 @@ import type {
   NotificationDomain,
   NotificationUrgency,
 } from '@/services/diagnostics/notification-trace';
+import type { AlertExplanation } from '@/services/intelligence/explainer';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -47,6 +48,12 @@ export interface RouteToLadderOptions {
   dedupeMatch?: boolean;
   /** Optional clock for tests. Defaults to Date.now(). */
   now?: () => number;
+  /**
+   * Pre-computed explanation from the Explain stage. When provided, it
+   * is passed through to `LadderDecision` so the dispatcher can attach
+   * it to the notification payload.
+   */
+  explanation?: AlertExplanation;
 }
 
 export interface LadderDecision {
@@ -59,6 +66,13 @@ export interface LadderDecision {
    *  notification trace registry will surface this as
    *  `unsafeSuppressions`. */
   unsafeSuppression: boolean;
+  /**
+   * Human-readable explanation attached by the Explain stage.
+   * Present when the caller passed `options.explanation`. Undefined
+   * when the caller did not invoke the Explain stage (e.g. tests that
+   * only care about rung assignment).
+   */
+  explanation?: AlertExplanation;
 }
 
 let nextAutoId = 1;
@@ -157,6 +171,7 @@ export function routeBigEventToLadder(
     dispatched: true,
     reason: `Dispatched at rung "${rung}" (priority ${result.deliveryPriority}).`,
     unsafeSuppression: false,
+    explanation: options.explanation,
   };
 }
 

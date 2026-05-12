@@ -25,6 +25,18 @@ import {
   expireAlerts,
 } from './ipaws-aggregate.mjs';
 import { loadEnvFile } from './env-local-loader.mjs';
+import { fetchAllTfrs, tfrColor } from './faa-tfrs.mjs';
+import { fetchGdacsRss, groupByType, alertLevelRgba } from './gdacs-rss.mjs';
+import {
+  loadSmsConfig, saveSmsConfig,
+  handleSmsCommand,
+} from './sms-command-parser.mjs';
+import { buildRecentChanges } from './recent-changes.mjs';
+import { explain as explainEvent } from './explainer.mjs';
+
+let _smsConfig = loadSmsConfig();
+const _smsRateLimitMap = new Map();
+const _smsCommandLog = [];
 
 // Keychain-loss fallback: a 2026-05-08 incident wiped the macOS Keychain
 // vault, taking 29 API credentials with it. If the keychain is empty
@@ -2231,6 +2243,602 @@ export async function fetchSpaceweatherAlertsSidecar() {
   return alerts;
 }
 
+// ── Diagnostics self-test helpers ─────────────────────────────────────────
+// Fan-out probe target list. Each route is exercised with a short timeout
+// and classified as ok / degraded / fail. We deliberately pick routes
+// that don't require external network so the self-test is honest about
+// what the sidecar *itself* can serve.
+export const SELF_TEST_TARGETS = [
+  { route: '/api/health',                       method: 'GET', domain: 'meta',     timeoutMs: 1500 },
+  { route: '/api/spaceweather/status',          method: 'GET', domain: 'space',    timeoutMs: 2500 },
+  { route: '/api/spaceweather/alerts',          method: 'GET', domain: 'space',    timeoutMs: 2500 },
+  { route: '/api/freight-stress?series=PPIACO', method: 'GET', domain: 'maritime', timeoutMs: 3000 },
+  { route: '/api/dark-vessels',                 method: 'GET', domain: 'maritime', timeoutMs: 2000 },
+  { route: '/api/space-weather-feeds',          method: 'GET', domain: 'space',    timeoutMs: 3000 },
+  { route: '/api/donki-events',                 method: 'GET', domain: 'space',    timeoutMs: 3000 },
+  { route: '/api/security/cves?severity=critical&limit=5', method: 'GET', domain: 'security', timeoutMs: 3000 },
+  { route: '/api/security/vulners',             method: 'GET', domain: 'security', timeoutMs: 3000 },
+  { route: '/api/openphish-feed',               method: 'GET', domain: 'security', timeoutMs: 2500 },
+];
+
+export function classifySelfTestResult(status, latencyMs, error) {
+  if (error) return 'fail';
+  if (!Number.isFinite(status) || status >= 500) return 'fail';
+  if (status >= 400) return 'fail';
+  if (latencyMs > 5000) return 'degraded';
+  if (latencyMs > 2500) return 'degraded';
+  return 'ok';
+}
+
+export function summarizeSelfTest(results) {
+  const summary = { total: results.length, ok: 0, degraded: 0, fail: 0 };
+  for (const r of results) {
+    if (r.verdict === 'ok') summary.ok += 1;
+    else if (r.verdict === 'degraded') summary.degraded += 1;
+    else summary.fail += 1;
+  }
+  return summary;
+}
+
+async function probeSelfTestTarget(port, target) {
+  const url = `http://127.0.0.1:${port}${target.route}`;
+  const started = Date.now();
+  try {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), target.timeoutMs);
+    let status = 0;
+    let error = null;
+    try {
+      const resp = await fetch(url, {
+        method: target.method,
+        headers: { Accept: 'application/json' },
+        signal: ac.signal,
+      });
+      status = resp.status;
+      // Drain the body so the connection can be reused.
+      await resp.text().catch(() => {});
+    } catch (error_) {
+      error = error_?.name === 'AbortError' ? `timeout after ${target.timeoutMs}ms` : String(error_?.message ?? error_);
+    } finally {
+      clearTimeout(timer);
+    }
+    const latencyMs = Date.now() - started;
+    const verdict = classifySelfTestResult(status, latencyMs, error);
+    return { route: target.route, domain: target.domain, ok: verdict === 'ok',
+      verdict, status, latencyMs, error };
+  } catch (error) {
+    const latencyMs = Date.now() - started;
+    return { route: target.route, domain: target.domain, ok: false,
+      verdict: 'fail', status: 0, latencyMs, error: String(error?.message ?? error) };
+  }
+}
+
+async function runSidecarSelfTest(port) {
+  const results = await Promise.all(SELF_TEST_TARGETS.map((t) => probeSelfTestTarget(port, t)));
+  return { results, summary: summarizeSelfTest(results) };
+}
+
+// ── Situations sidecar mirror (mirror of src/services/intelligence/situation-store.ts) ──
+const SITUATIONS_LIMIT = 100;
+const _situations = [];
+let _situationIdCounter = 0;
+
+const VALID_SITUATION_STATUS = new Set(['active', 'monitoring', 'resolved']);
+const VALID_SITUATION_SEVERITY = new Set(['info', 'low', 'moderate', 'high', 'critical']);
+
+function nextSituationIdSidecar(now = Date.now()) {
+  _situationIdCounter += 1;
+  return `sit-${now.toString(36)}-${_situationIdCounter}`;
+}
+
+export function validateSituationInput(input) {
+  if (!input || typeof input !== 'object') return { ok: false, error: 'input must be an object' };
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  if (!name) return { ok: false, error: 'name is required' };
+  if (name.length > 200) return { ok: false, error: 'name exceeds 200 chars' };
+  const status = String(input.status ?? '');
+  if (!VALID_SITUATION_STATUS.has(status)) return { ok: false, error: 'invalid status' };
+  const severity = String(input.severity ?? '');
+  if (!VALID_SITUATION_SEVERITY.has(severity)) return { ok: false, error: 'invalid severity' };
+  const domain = typeof input.domain === 'string' && input.domain.length > 0
+    ? input.domain : null;
+  if (!domain) return { ok: false, error: 'domain is required' };
+  const summary = typeof input.summary === 'string'
+    ? input.summary.slice(0, 1000) : '';
+  const observationIds = Array.isArray(input.observationIds)
+    ? input.observationIds.filter((id) => typeof id === 'string').slice(0, 100) : [];
+  const correlationIds = Array.isArray(input.correlationIds)
+    ? input.correlationIds.filter((id) => typeof id === 'string').slice(0, 100) : [];
+  const tags = Array.isArray(input.tags)
+    ? input.tags.filter((t) => typeof t === 'string').slice(0, 50) : [];
+  const confidence = Number(input.confidence);
+  const conf = Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.5;
+  let location = null;
+  if (input.location && typeof input.location === 'object') {
+    const lat = Number(input.location.lat);
+    const lon = Number(input.location.lon);
+    const radiusKm = Number(input.location.radiusKm);
+    if (Number.isFinite(lat) && Number.isFinite(lon)
+      && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
+      && Number.isFinite(radiusKm) && radiusKm > 0) {
+      location = { lat, lon, radiusKm: Math.min(20100, radiusKm) };
+    }
+  }
+  return {
+    ok: true,
+    clean: { name, status, severity, domain, summary, observationIds,
+      correlationIds, tags, confidence: conf, location },
+  };
+}
+
+export function createSituationSidecar(input, now = Date.now()) {
+  const validated = validateSituationInput(input);
+  if (!validated.ok) return validated;
+  const c = validated.clean;
+  const situation = {
+    id: nextSituationIdSidecar(now),
+    startedAt: now,
+    updatedAt: now,
+    name: c.name,
+    status: c.status,
+    severity: c.severity,
+    domain: c.domain,
+    observationIds: c.observationIds,
+    correlationIds: c.correlationIds,
+    summary: c.summary,
+    location: c.location ?? undefined,
+    tags: c.tags,
+    confidence: c.confidence,
+  };
+  _situations.push(situation);
+  if (_situations.length > SITUATIONS_LIMIT) {
+    _situations.splice(0, _situations.length - SITUATIONS_LIMIT);
+  }
+  return { ok: true, situation };
+}
+
+export function listActiveSituationsSidecar() {
+  return _situations
+    .filter((s) => s.status !== 'resolved')
+    .map((s) => ({ ...s }));
+}
+
+export function getSituationSidecar(id) {
+  const found = _situations.find((s) => s.id === id);
+  return found ? { ...found } : null;
+}
+
+export function _resetSituationsSidecar() {
+  _situations.length = 0;
+  _situationIdCounter = 0;
+}
+
+// ── Custom Alert Rules sidecar mirror ────────────────────────────────────
+// Mirrors src/services/intelligence/rules-engine.ts. The sidecar copy is
+// validated server-side; the renderer remains canonical for user state.
+const RULES_LIMIT = 200;
+const _rules = [];
+let _ruleIdCounter = 0;
+
+const VALID_FIELDS_SIDECAR = new Set(['domain', 'severity', 'location', 'keyword',
+  'magnitude', 'containment']);
+const VALID_OPERATORS_SIDECAR = new Set(['equals', 'contains', 'gt', 'lt', 'near']);
+const VALID_ACTIONS_SIDECAR = new Set(['notify', 'escalate', 'log']);
+const VALID_JOINS_SIDECAR = new Set(['AND', 'OR']);
+const SEVERITY_RANK_SIDECAR = {
+  INFO: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4,
+  info: 0, low: 1, medium: 2, moderate: 2, high: 3, critical: 4,
+};
+
+function nextRuleIdSidecar(now = Date.now()) {
+  _ruleIdCounter += 1;
+  return `rule-${now.toString(36)}-${_ruleIdCounter}`;
+}
+
+export function validateRuleInputSidecar(input) {
+  if (!input || typeof input !== 'object') return { ok: false, error: 'input must be an object' };
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  if (!name) return { ok: false, error: 'name is required' };
+  if (name.length > 200) return { ok: false, error: 'name exceeds 200 chars' };
+  if (typeof input.enabled !== 'boolean') return { ok: false, error: 'enabled must be boolean' };
+  if (!VALID_JOINS_SIDECAR.has(input.conditionOperator)) {
+    return { ok: false, error: 'conditionOperator must be AND or OR' };
+  }
+  if (!Array.isArray(input.conditions) || input.conditions.length === 0) {
+    return { ok: false, error: 'at least one condition required' };
+  }
+  const conditions = [];
+  for (const c of input.conditions) {
+    if (!c || typeof c !== 'object') return { ok: false, error: 'invalid condition' };
+    if (!VALID_FIELDS_SIDECAR.has(c.field)) return { ok: false, error: `invalid field: ${c.field}` };
+    if (!VALID_OPERATORS_SIDECAR.has(c.operator)) return { ok: false, error: `invalid operator: ${c.operator}` };
+    if (typeof c.value !== 'string' && typeof c.value !== 'number') {
+      return { ok: false, error: 'condition value must be string or number' };
+    }
+    const clean = { field: c.field, operator: c.operator, value: c.value };
+    if (typeof c.radiusKm === 'number' && Number.isFinite(c.radiusKm) && c.radiusKm > 0) {
+      clean.radiusKm = Math.min(20100, c.radiusKm);
+    }
+    conditions.push(clean);
+  }
+  if (!Array.isArray(input.actions) || input.actions.length === 0) {
+    return { ok: false, error: 'at least one action required' };
+  }
+  const actions = [];
+  for (const a of input.actions) {
+    if (!a || typeof a !== 'object') return { ok: false, error: 'invalid action' };
+    if (!VALID_ACTIONS_SIDECAR.has(a.type)) return { ok: false, error: `invalid action type: ${a.type}` };
+    const clean = { type: a.type };
+    if (typeof a.channel === 'string') clean.channel = a.channel;
+    if (typeof a.note === 'string') clean.note = a.note.slice(0, 500);
+    actions.push(clean);
+  }
+  const id = typeof input.id === 'string' && input.id.length > 0 ? input.id : null;
+  return { ok: true, clean: { id, name, enabled: input.enabled,
+    conditionOperator: input.conditionOperator, conditions, actions } };
+}
+
+export function upsertRuleSidecar(input, now = Date.now()) {
+  const validated = validateRuleInputSidecar(input);
+  if (!validated.ok) return validated;
+  const clean = validated.clean;
+  const existingIndex = clean.id ? _rules.findIndex((r) => r.id === clean.id) : -1;
+  if (existingIndex >= 0) {
+    const existing = _rules[existingIndex];
+    const next = {
+      ...existing,
+      name: clean.name,
+      enabled: clean.enabled,
+      conditionOperator: clean.conditionOperator,
+      conditions: clean.conditions,
+      actions: clean.actions,
+    };
+    _rules[existingIndex] = next;
+    return { ok: true, rule: next, created: false };
+  }
+  const rule = {
+    id: clean.id ?? nextRuleIdSidecar(now),
+    name: clean.name,
+    enabled: clean.enabled,
+    conditionOperator: clean.conditionOperator,
+    conditions: clean.conditions,
+    actions: clean.actions,
+    created: now,
+    triggerCount: 0,
+  };
+  _rules.push(rule);
+  if (_rules.length > RULES_LIMIT) {
+    _rules.splice(0, _rules.length - RULES_LIMIT);
+  }
+  return { ok: true, rule, created: true };
+}
+
+export function listRulesSidecar() {
+  return _rules.map((r) => ({ ...r }));
+}
+
+export function deleteRuleSidecar(id) {
+  const index = _rules.findIndex((r) => r.id === id);
+  if (index === -1) return false;
+  _rules.splice(index, 1);
+  return true;
+}
+
+function parseLatLonSidecar(value) {
+  if (typeof value !== 'string') return null;
+  const parts = value.split(',').map((s) => s.trim());
+  if (parts.length !== 2) return null;
+  const lat = Number(parts[0]);
+  const lon = Number(parts[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { lat, lon };
+}
+
+function haversineKmSidecar(lat1, lon1, lat2, lon2) {
+  const DEG = Math.PI / 180;
+  const dLat = (lat2 - lat1) * DEG;
+  const dLon = (lon2 - lon1) * DEG;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * DEG) * Math.cos(lat2 * DEG) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function extractMagnitudeSidecar(evt) {
+  if (evt.raw && typeof evt.raw === 'object' && typeof evt.raw.magnitude === 'number') {
+    return evt.raw.magnitude;
+  }
+  if (Array.isArray(evt.tags)) {
+    const tag = evt.tags.find((t) => typeof t === 'string' && /^mag[:=]/i.test(t));
+    if (tag) {
+      const n = Number.parseFloat(tag.split(/[:=]/, 2)[1] ?? '');
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  if (typeof evt.title === 'string') {
+    const m = evt.title.match(/\bM(\d+(?:\.\d+)?)\b/);
+    if (m) {
+      const n = Number.parseFloat(m[1]);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return null;
+}
+
+function extractContainmentSidecar(evt) {
+  if (evt.raw && typeof evt.raw === 'object' && typeof evt.raw.containment === 'number') {
+    return evt.raw.containment;
+  }
+  if (Array.isArray(evt.tags)) {
+    const tag = evt.tags.find((t) => typeof t === 'string' && /^containment[:=]/i.test(t));
+    if (tag) {
+      const n = Number.parseFloat(tag.split(/[:=]/, 2)[1] ?? '');
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  if (typeof evt.title === 'string') {
+    const m = evt.title.match(/(\d+(?:\.\d+)?)\s*%\s*contained/i);
+    if (m) {
+      const n = Number.parseFloat(m[1]);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return null;
+}
+
+function matchConditionSidecar(evt, c) {
+  if (c.field === 'domain') return stringMatch(evt.domain, c);
+  if (c.field === 'severity') return severityMatch(evt.severity, c);
+  if (c.field === 'keyword') return keywordMatch(evt, c);
+  if (c.field === 'magnitude') return numberMatch(extractMagnitudeSidecar(evt), c);
+  if (c.field === 'containment') return numberMatch(extractContainmentSidecar(evt), c);
+  if (c.field === 'location') return locationMatch(evt, c);
+  return false;
+}
+
+function stringMatch(actual, c) {
+  if (typeof actual !== 'string') return false;
+  const got = actual.toLowerCase();
+  const want = String(c.value).toLowerCase();
+  if (c.operator === 'equals') return got === want;
+  if (c.operator === 'contains') return got.includes(want);
+  return false;
+}
+
+function keywordMatch(evt, c) {
+  const want = String(c.value).toLowerCase();
+  if (!want) return false;
+  const tags = Array.isArray(evt.tags) ? evt.tags.join(' ') : '';
+  const haystack = `${evt.title ?? ''} ${tags}`.toLowerCase();
+  if (c.operator === 'equals') {
+    return (typeof evt.title === 'string' && evt.title.toLowerCase() === want)
+      || (Array.isArray(evt.tags) && evt.tags.some((t) => typeof t === 'string' && t.toLowerCase() === want));
+  }
+  if (c.operator === 'contains') return haystack.includes(want);
+  return false;
+}
+
+function severityMatch(actual, c) {
+  if (c.operator === 'equals' || c.operator === 'contains') return stringMatch(actual, c);
+  const a = SEVERITY_RANK_SIDECAR[actual];
+  const b = SEVERITY_RANK_SIDECAR[c.value];
+  if (typeof a !== 'number' || typeof b !== 'number') return false;
+  if (c.operator === 'gt') return a > b;
+  if (c.operator === 'lt') return a < b;
+  return false;
+}
+
+function numberMatch(actual, c) {
+  if (actual === null) return false;
+  const wanted = typeof c.value === 'number' ? c.value : Number(c.value);
+  if (!Number.isFinite(wanted)) return false;
+  if (c.operator === 'equals') return actual === wanted;
+  if (c.operator === 'gt') return actual > wanted;
+  if (c.operator === 'lt') return actual < wanted;
+  return false;
+}
+
+function locationMatch(evt, c) {
+  if (c.operator !== 'near') return false;
+  if (!evt.location || typeof evt.location !== 'object') return false;
+  const radius = c.radiusKm;
+  if (typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) return false;
+  const target = parseLatLonSidecar(c.value);
+  if (!target) return false;
+  return haversineKmSidecar(evt.location.lat, evt.location.lon, target.lat, target.lon) <= radius;
+}
+
+export function ruleMatchesSidecar(evt, rule) {
+  if (!rule.enabled || !Array.isArray(rule.conditions) || rule.conditions.length === 0) {
+    return false;
+  }
+  if (rule.conditionOperator === 'OR') {
+    return rule.conditions.some((c) => matchConditionSidecar(evt, c));
+  }
+  return rule.conditions.every((c) => matchConditionSidecar(evt, c));
+}
+
+export function evaluateRulesAgainstEventSidecar(input) {
+  if (!input || typeof input !== 'object') return { ok: false, error: 'invalid body' };
+  const evt = input.event;
+  if (!evt || typeof evt !== 'object') return { ok: false, error: 'event required' };
+  const rules = Array.isArray(input.rules) ? input.rules : _rules;
+  const triggered = rules.filter((r) => ruleMatchesSidecar(evt, r));
+  return { ok: true, triggered };
+}
+
+export function _resetRulesSidecar() {
+  _rules.length = 0;
+  _ruleIdCounter = 0;
+}
+
+// ── Security helpers (mirror src/services/security/*-service.ts) ──
+
+const SECURITY_CVE_CACHE = new Map(); // severity → { payload, expiresAt }
+const SECURITY_CVE_TTL_MS = 24 * 60 * 60 * 1000;
+let securityVulnersCache = null;
+let securityVulnersCacheExpiresAt = 0;
+const SECURITY_VULNERS_TTL_MS = 6 * 60 * 60 * 1000;
+
+function clampInt(value, min, max, fallback) {
+  const n = Number.parseInt(value || '', 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+export function severityForCvssSidecar(score) {
+  if (score === null || score === undefined || !Number.isFinite(score)) return 'none';
+  if (score >= 9.0) return 'critical';
+  if (score >= 7.0) return 'high';
+  if (score >= 4.0) return 'medium';
+  if (score > 0) return 'low';
+  return 'none';
+}
+
+export function pickPrimaryCvssSidecar(metrics) {
+  if (!metrics || typeof metrics !== 'object') return { score: null, vector: null };
+  const candidates = [
+    metrics.cvssMetricV31?.[0],
+    metrics.cvssMetricV30?.[0],
+    metrics.cvssMetricV2?.[0],
+  ];
+  for (const c of candidates) {
+    const data = c?.cvssData;
+    if (data && typeof data.baseScore === 'number') {
+      return {
+        score: data.baseScore,
+        vector: typeof data.vectorString === 'string' ? data.vectorString : null,
+      };
+    }
+  }
+  return { score: null, vector: null };
+}
+
+export function parseCpeProductSidecar(criteria) {
+  if (!criteria || typeof criteria !== 'string') return null;
+  const parts = criteria.split(':');
+  if (parts.length < 5) return null;
+  const vendor = parts[3];
+  const product = parts[4];
+  if (!vendor || !product || vendor === '*' || product === '*') return null;
+  return `${vendor.replace(/_/g, ' ')} ${product.replace(/_/g, ' ')}`;
+}
+
+export function collectAffectedProductsSidecar(configurations) {
+  if (!Array.isArray(configurations)) return [];
+  const seen = new Set();
+  const out = [];
+  const visit = (nodes) => {
+    if (!Array.isArray(nodes)) return;
+    for (const node of nodes) {
+      if (Array.isArray(node?.cpeMatch)) {
+        for (const match of node.cpeMatch) {
+          if (!match.vulnerable) continue;
+          const product = parseCpeProductSidecar(match.criteria);
+          if (product && !seen.has(product)) {
+            seen.add(product);
+            out.push(product);
+            if (out.length >= 5) return;
+          }
+        }
+      }
+      visit(node?.children);
+      if (out.length >= 5) return;
+    }
+  };
+  for (const config of configurations) {
+    visit(config?.nodes);
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+export function parseAndFilterNvdSidecar(payload, severity) {
+  if (!payload || typeof payload !== 'object') return [];
+  const vulns = Array.isArray(payload.vulnerabilities) ? payload.vulnerabilities : [];
+  const out = [];
+  for (const item of vulns) {
+    const cve = item?.cve;
+    if (!cve?.id) continue;
+    const { score, vector } = pickPrimaryCvssSidecar(cve.metrics);
+    if (score === null) continue;
+    if (severity === 'critical' && score < 9.0) continue;
+    if (severity === 'high' && score < 7.0) continue;
+    if (severity === 'all' && score < 7.0) continue; // spec: only High/Critical
+    const descs = Array.isArray(cve.descriptions) ? cve.descriptions : [];
+    const en = descs.find((d) => d?.lang === 'en') ?? descs[0];
+    let description = en?.value ?? '';
+    if (description.length > 350) description = description.slice(0, 347) + '…';
+    out.push({
+      id: cve.id,
+      description,
+      cvssScore: score,
+      cvssVector: vector,
+      severity: severityForCvssSidecar(score),
+      publishedAt: cve.published ?? null,
+      lastModifiedAt: cve.lastModified ?? null,
+      affectedProducts: collectAffectedProductsSidecar(cve.configurations),
+      nvdUrl: `https://nvd.nist.gov/vuln/detail/${cve.id}`,
+    });
+  }
+  out.sort((a, b) => {
+    const sa = a.cvssScore ?? -1;
+    const sb = b.cvssScore ?? -1;
+    if (sa !== sb) return sb - sa;
+    const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+    const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+    return tb - ta;
+  });
+  return out;
+}
+
+export function parseEpssResponseSidecar(payload) {
+  const out = new Map();
+  if (!payload || typeof payload !== 'object') return out;
+  const rows = Array.isArray(payload.data) ? payload.data : [];
+  for (const row of rows) {
+    if (!row?.cve) continue;
+    const epss = Number.parseFloat(row.epss ?? '');
+    const percentile = Number.parseFloat(row.percentile ?? '');
+    if (!Number.isFinite(epss) || epss < 0 || epss > 1) continue;
+    out.set(row.cve, {
+      cve: row.cve,
+      epss,
+      percentile: Number.isFinite(percentile) ? percentile : 0,
+      date: typeof row.date === 'string' ? row.date : null,
+    });
+  }
+  return out;
+}
+
+function readSecurityCveCache(severity) {
+  const cached = SECURITY_CVE_CACHE.get(severity);
+  if (cached && cached.expiresAt > Date.now()) return cached.payload;
+  return null;
+}
+
+function writeSecurityCveCache(severity, payload) {
+  SECURITY_CVE_CACHE.set(severity, { payload, expiresAt: Date.now() + SECURITY_CVE_TTL_MS });
+}
+
+function readSecurityVulnersCache() {
+  if (securityVulnersCache && securityVulnersCacheExpiresAt > Date.now()) {
+    return securityVulnersCache;
+  }
+  return null;
+}
+
+function writeSecurityVulnersCache(payload) {
+  securityVulnersCache = payload;
+  securityVulnersCacheExpiresAt = Date.now() + SECURITY_VULNERS_TTL_MS;
+}
+
+export function _resetSecurityCaches() {
+  SECURITY_CVE_CACHE.clear();
+  securityVulnersCache = null;
+  securityVulnersCacheExpiresAt = 0;
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   // Use node:https with IPv4 forced — Node.js built-in fetch (undici) tries IPv6
   // first and some servers (EIA, NASA FIRMS) have broken IPv6 causing ETIMEDOUT.
@@ -2370,6 +2978,61 @@ export function sanitizeEewAlert(raw) {
     out.imessageError = raw.imessageError.slice(0, 500);
   }
   return out;
+}
+
+// ── Synthesis correlation event sanitiser (mirror of
+// src/services/synthesis/correlation-engine.ts) ──
+const VALID_CORRELATION_TYPES = new Set([
+  'seismic-nuclear',
+  'space-weather-cascade',
+  'wildfire-air-quality',
+  'infra-cyber',
+  'hurricane-fuel',
+  'multi-hazard',
+]);
+const VALID_SEVERITIES = new Set(['low', 'medium', 'high', 'critical']);
+const VALID_DOMAINS = new Set([
+  'seismic', 'nuclear', 'space-weather', 'wildfire', 'air-quality',
+  'cyber', 'infrastructure', 'hurricane', 'fuel', 'flood', 'volcano', 'disease',
+]);
+
+export function sanitizeCorrelationEvent(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (!VALID_CORRELATION_TYPES.has(raw.type)) return null;
+  if (!VALID_SEVERITIES.has(raw.severity)) return null;
+  if (!Array.isArray(raw.domains)) return null;
+  const domains = raw.domains.filter((d) => typeof d === 'string' && VALID_DOMAINS.has(d));
+  if (domains.length === 0) return null;
+  if (typeof raw.description !== 'string') return null;
+  const triggeredAtMs = typeof raw.triggeredAt === 'string'
+    ? Date.parse(raw.triggeredAt)
+    : (typeof raw.triggeredAt === 'number' ? raw.triggeredAt : NaN);
+  if (!Number.isFinite(triggeredAtMs)) return null;
+  if (!Array.isArray(raw.components)) return null;
+  const components = raw.components
+    .slice(0, 50)
+    .map((c) => {
+      if (!c || typeof c !== 'object') return null;
+      if (typeof c.domain !== 'string' || !VALID_DOMAINS.has(c.domain)) return null;
+      if (typeof c.source !== 'string' || typeof c.description !== 'string') return null;
+      const out = {
+        domain: c.domain,
+        source: c.source.slice(0, 200),
+        description: c.description.slice(0, 500),
+      };
+      if (typeof c.severity === 'string' && VALID_SEVERITIES.has(c.severity)) out.severity = c.severity;
+      return out;
+    })
+    .filter(Boolean);
+  if (components.length === 0) return null;
+  return {
+    type: raw.type,
+    severity: raw.severity,
+    domains,
+    description: raw.description.slice(0, 500),
+    triggeredAt: new Date(triggeredAtMs).toISOString(),
+    components,
+  };
 }
 
 // CACHE PATTERN: copy this for future cached routes
@@ -3550,6 +4213,51 @@ async function dispatch(requestUrl, req, routes, context) {
  return new Response(html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'permissions-policy': 'autoplay=*, encrypted-media=*', ...makeCorsHeaders(req) } });
   }
 
+  // ── SMS command interface (pre-auth) ───────────────────────────────────
+  // These routes are intentionally placed before the auth gate so SMS
+  // gateway webhooks (Twilio, etc.) can POST without a LOCAL_API_TOKEN.
+  // Security is enforced by the phone-number allowlist in sms-config.json.
+  if (requestUrl.pathname === '/api/sms/command' && req.method === 'POST') {
+    if (!_smsConfig.enabled) return json({ error: 'SMS command interface is disabled.' }, 503);
+    let smsBody;
+    try { smsBody = JSON.parse(await readBody(req)); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    const from = String(smsBody.from ?? '');
+    const body = String(smsBody.body ?? '');
+    const analystState = context._analystState ?? null;
+    const result = await handleSmsCommand({
+      from, body, analystState,
+      feedSnapshots: getFeedSnapshots(),
+      allowlist: _smsConfig.allowlist ?? [],
+      rateLimitMap: _smsRateLimitMap,
+      commandLog: _smsCommandLog,
+    });
+    return json({ text: result.text }, result.status);
+  }
+
+  if (requestUrl.pathname === '/api/sms/status' && req.method === 'GET') {
+    return json({
+      enabled: _smsConfig.enabled,
+      allowlistSize: (_smsConfig.allowlist ?? []).length,
+      recentCommands: _smsCommandLog.slice(0, 20),
+      uptimeMs: Date.now() - SIDECAR_START_MS,
+    });
+  }
+
+  if (requestUrl.pathname === '/api/sms/config') {
+    const authHeader = req.headers.authorization || '';
+    if (!isValidToken(authHeader)) return json({ error: 'Unauthorized' }, 401);
+    if (req.method === 'GET') {
+      return json(_smsConfig);
+    }
+    if (req.method === 'POST') {
+      let patch;
+      try { patch = JSON.parse(await readBody(req)); } catch { return json({ error: 'Invalid JSON' }, 400); }
+      _smsConfig = { ..._smsConfig, ...patch };
+      saveSmsConfig(_smsConfig);
+      return json(_smsConfig);
+    }
+  }
+
   // ── Global auth gate ────────────────────────────────────────────────────
   // Every endpoint below requires a valid LOCAL_API_TOKEN.  This prevents
   // other local processes, malicious browser scripts, and rogue extensions
@@ -3702,6 +4410,169 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Intelligence: correlations (renderer → sidecar mirror) ───────────────
+  // Renderer runs CorrelationEngine every 5 min and POSTs the last 50
+  // correlations here. GET serves them filtered by ?since= and ?limit=.
+  if (requestUrl.pathname === '/api/intelligence/correlations') {
+    if (!context._intelligenceCorrelations) context._intelligenceCorrelations = { correlations: [], pushedAt: 0 };
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || !Array.isArray(body.correlations)) return json({ error: 'correlations must be an array' }, 400);
+        const correlations = body.correlations.slice(0, 50).map(c => ({
+          id: typeof c.id === 'string' ? c.id : '',
+          type: ['spatial', 'temporal', 'entity'].includes(c.type) ? c.type : 'temporal',
+          confidence: typeof c.confidence === 'number' ? Math.min(1, Math.max(0, c.confidence)) : 0,
+          title: typeof c.title === 'string' ? c.title.slice(0, 200) : '',
+          detectedAt: typeof c.detectedAt === 'number' ? c.detectedAt : Date.now(),
+          eventCount: Array.isArray(c.events) ? c.events.length : 0,
+          eventIds: Array.isArray(c.events) ? c.events.map(e => String(e.id ?? '')).slice(0, 10) : [],
+        }));
+        context._intelligenceCorrelations = { correlations, pushedAt: Date.now() };
+        return json({ ok: true, count: correlations.length });
+      } catch (error) {
+        return json({ error: String(error?.message ?? error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const { correlations, pushedAt } = context._intelligenceCorrelations;
+      const since = requestUrl.searchParams.get('since');
+      const limit = requestUrl.searchParams.get('limit');
+      let result = [...correlations];
+      if (since) {
+        const sinceMs = Number(since);
+        if (Number.isFinite(sinceMs)) result = result.filter(c => c.detectedAt >= sinceMs);
+      }
+      if (limit) {
+        const lim = Number(limit);
+        if (Number.isFinite(lim) && lim > 0) result = result.slice(0, lim);
+      }
+      return json({ available: pushedAt > 0, pushedAt, count: result.length, correlations: result });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Intelligence: nearby-alert summaries (renderer → sidecar mirror) ────
+  // Renderer POSTs per-saved-place event summaries from personal-impact.ts so
+  // MCP tools and the PDF collector can read them without importing TypeScript.
+  if (requestUrl.pathname === '/api/intelligence/nearby') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || !Array.isArray(body.places)) return json({ error: 'places must be an array' }, 400);
+        const places = body.places.slice(0, 50).map(p => ({
+          placeName: typeof p.placeName === 'string' ? p.placeName.slice(0, 100) : '',
+          eventCount: typeof p.eventCount === 'number' ? p.eventCount : 0,
+          topEventTitle: typeof p.topEventTitle === 'string' ? p.topEventTitle.slice(0, 200) : '',
+          topSeverity: typeof p.topSeverity === 'number' ? Math.min(10, Math.max(0, p.topSeverity)) : 0,
+        }));
+        context._intelligenceNearby = { places, pushedAt: Date.now() };
+        return json({ ok: true, count: places.length });
+      } catch (error) {
+        return json({ error: String(error?.message ?? error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const s = context._intelligenceNearby;
+      if (!s) return json({ available: false, places: [] });
+      return json({ available: true, places: s.places, pushedAt: s.pushedAt });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Intelligence: brief generate trigger ─────────────────────────────────
+  // POST records a trigger timestamp so external tools can kick off a PDF
+  // export; GET lets callers poll whether a generation was requested.
+  if (requestUrl.pathname === '/api/intelligence/brief/generate') {
+    if (req.method === 'POST') {
+      context._briefLastTriggeredAt = Date.now();
+      return json({ ok: true, triggeredAt: context._briefLastTriggeredAt });
+    }
+    if (req.method === 'GET') {
+      return json({ triggeredAt: context._briefLastTriggeredAt ?? null });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Intelligence: snapshot diff (renderer → sidecar snapshot mirror) ──────
+  // Renderer POSTs WorldStateSnapshots. GET /api/intelligence/snapshot-diff?since=
+  // returns a diff report between the snapshot taken at ?since and the most recent.
+  //
+  // Originally lived at /api/intelligence/what-changed; renamed because a
+  // newer canonical /api/intelligence/what-changed (ChangeLine[] mirror for
+  // the Intelligence Feed panel) shares that name. Both panels coexist now.
+  if (requestUrl.pathname === '/api/intelligence/snapshot-diff') {
+    if (!context._intelligenceSnapshots) context._intelligenceSnapshots = [];
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        const snap = {
+          takenAt: typeof body.takenAt === 'number' ? body.takenAt : Date.now(),
+          eventIds: Array.isArray(body.eventIds) ? body.eventIds.slice(0, 2000).map(String) : [],
+          eventDomains: body.eventDomains && typeof body.eventDomains === 'object' ? body.eventDomains : {},
+          correlationIds: Array.isArray(body.correlationIds) ? body.correlationIds.slice(0, 100).map(String) : [],
+          domainCounts: body.domainCounts && typeof body.domainCounts === 'object' ? body.domainCounts : {},
+          severityByDomain: body.severityByDomain && typeof body.severityByDomain === 'object' ? body.severityByDomain : {},
+        };
+        context._intelligenceSnapshots.push(snap);
+        // Keep only last 20 snapshots (covers ~100 min at 5-min cycle)
+        if (context._intelligenceSnapshots.length > 20) context._intelligenceSnapshots.shift();
+        return json({ ok: true, takenAt: snap.takenAt });
+      } catch (error) {
+        return json({ error: String(error?.message ?? error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const snaps = context._intelligenceSnapshots;
+      if (snaps.length === 0) return json({ available: false, message: 'No snapshots yet' });
+      const curr = snaps[snaps.length - 1];
+      const sinceParam = requestUrl.searchParams.get('since');
+      const sinceMs = sinceParam ? Number(sinceParam) : 0;
+      // Find the snapshot closest to (but not after) sinceMs
+      const prev = Number.isFinite(sinceMs) && sinceMs > 0
+        ? [...snaps].reverse().find(s => s.takenAt <= sinceMs) ?? snaps[0]
+        : snaps[0];
+      // Compute diff inline (mirrors what-changed.ts logic)
+      const currIds = new Set(curr.eventIds);
+      const prevIds = new Set(prev.eventIds);
+      const newEventsByDomain = {};
+      for (const id of currIds) {
+        if (!prevIds.has(id)) {
+          const domain = curr.eventDomains[id] ?? 'unknown';
+          if (!newEventsByDomain[domain]) newEventsByDomain[domain] = [];
+          newEventsByDomain[domain].push(id);
+        }
+      }
+      const resolvedEventIds = [...prevIds].filter(id => !currIds.has(id));
+      const severityEscalations = [];
+      for (const domain of Object.keys(curr.severityByDomain)) {
+        const from = prev.severityByDomain[domain] ?? 0;
+        const to = curr.severityByDomain[domain] ?? 0;
+        if (to > from) severityEscalations.push({ domain, from, to });
+      }
+      const currCorrIds = new Set(curr.correlationIds);
+      const prevCorrIds = new Set(prev.correlationIds);
+      const newCorrelationIds = [...currCorrIds].filter(id => !prevCorrIds.has(id));
+      const totalNewEvents = Object.values(newEventsByDomain).reduce((s, ids) => s + ids.length, 0);
+      return json({
+        available: true,
+        since: prev.takenAt,
+        until: curr.takenAt,
+        newEventsByDomain,
+        resolvedEventIds,
+        severityEscalations,
+        newCorrelationIds,
+        totalNewEvents,
+        totalResolved: resolvedEventIds.length,
+      });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
   // ── Seismic globe overlays (renderer → sidecar mirror; Layer 5/13) ──
   // Renderer runs the globe-overlay-emitter (Layer 4) and POSTs the
   // resulting `GlobeSeismicOverlay[]` here every 5s. The God's Eye Cesium
@@ -3745,6 +4616,72 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Shortage state (renderer → sidecar mirror) ────────────────────────
+  // The ShortageRadarPanel computes shortage forecasts in the renderer and
+  // POSTs the results here after each render cycle. GET /api/shortage/summary
+  // returns the summary array; GET /api/shortage/:commodity returns the full
+  // forecast for a single commodity. 30-minute cache controlled by the
+  // renderer's ttlMs field. No bearer auth: loopback-only, non-sensitive.
+  if (requestUrl.pathname === '/api/shortage/state') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!Array.isArray(body.entries)) return json({ error: 'entries must be an array' }, 400);
+        context._shortageState = {
+          entries: body.entries,
+          updatedAt: typeof body.updatedAt === 'number' ? body.updatedAt : Date.now(),
+          ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : 30 * 60 * 1000,
+        };
+        return json({ ok: true, count: body.entries.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const s = context._shortageState;
+      if (!s) return json({ entries: [], available: false });
+      const ageMs = Date.now() - s.updatedAt;
+      return json({ entries: s.entries, updatedAt: s.updatedAt, ageMs, stale: ageMs > s.ttlMs, available: true });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // GET /api/shortage/summary — returns the UI-ready summary array.
+  if (requestUrl.pathname === '/api/shortage/summary' && req.method === 'GET') {
+    const s = context._shortageState;
+    if (!s) return json([]);
+    const ageMs = Date.now() - s.updatedAt;
+    if (ageMs > s.ttlMs) return json([]);
+    const summary = s.entries.map((e) => ({
+      commodity: e.commodity,
+      riskScore: e.riskScore,
+      riskLevel: e.riskLevel,
+      primaryDrivers: e.primaryDrivers ?? [],
+      timeToImpact: e.timeToImpact ?? '',
+      trend: e.trend ?? 'stable',
+    }));
+    return json(summary);
+  }
+
+  // GET /api/shortage/:commodity — returns full forecast for one commodity.
+  if (requestUrl.pathname.startsWith('/api/shortage/') &&
+      requestUrl.pathname !== '/api/shortage/state' &&
+      requestUrl.pathname !== '/api/shortage/summary' &&
+      req.method === 'GET') {
+    const commodity = requestUrl.pathname.slice('/api/shortage/'.length).split('/')[0];
+    if (!commodity) return json({ error: 'commodity required' }, 400);
+    const VALID = new Set(['wheat','corn','rice','soybeans','diesel','gasoline','natural-gas','jet-fuel']);
+    if (!VALID.has(commodity)) return json({ error: 'unknown commodity' }, 404);
+    const s = context._shortageState;
+    if (!s) return json({ commodity, forecast: null, available: false });
+    const entry = s.entries.find((e) => e.commodity === commodity);
+    if (!entry) return json({ commodity, forecast: null, available: false });
+    const ageMs = Date.now() - s.updatedAt;
+    return json({ commodity, forecast: entry.forecast, riskLevel: entry.riskLevel, trend: entry.trend, ageMs, available: true });
+  }
+
   // Spec aliases — friendlier URLs for the documented per-PR endpoints.
   if (requestUrl.pathname === '/api/ensemble-decision' && req.method === 'GET') {
     const domain = requestUrl.searchParams.get('domain') || '';
@@ -3767,6 +4704,99 @@ async function dispatch(requestUrl, req, routes, context) {
     if (algorithmId) return json({ algorithmId, runs: all[algorithmId] || [] });
     return json({ runs: all });
   }
+  // ── /api/intelligence/observations — observation ring-buffer mirror ──
+  // Renderer-side observation-store.ts collects normalized ObservationEvents
+  // and POSTs the recent slice here so MCP tools and diagnostics can read
+  // without importing TypeScript. Ring is capped to 200 entries server-side.
+  if (requestUrl.pathname === '/api/intelligence/observations') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!Array.isArray(body)) return json({ error: 'body must be an array' }, 400);
+        const safe = body.slice(0, 200).map((e) => ({
+          id: String(e.id ?? ''),
+          sourceId: String(e.sourceId ?? ''),
+          domain: String(e.domain ?? ''),
+          timestamp: typeof e.timestamp === 'number' ? e.timestamp : 0,
+          location: e.location && typeof e.location === 'object' ? e.location : null,
+          severity: String(e.severity ?? 'INFO'),
+          title: String(e.title ?? ''),
+          entityIds: Array.isArray(e.entityIds) ? e.entityIds.map(String) : [],
+          tags: Array.isArray(e.tags) ? e.tags.map(String) : [],
+        }));
+        if (!context._intelligenceObs) context._intelligenceObs = [];
+        context._intelligenceObs = safe;
+        return json({ ok: true, count: safe.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const obs = context._intelligenceObs ?? [];
+      const domain = requestUrl.searchParams.get('domain');
+      const since = Number(requestUrl.searchParams.get('since') ?? 0);
+      const limitParam = parseInt(requestUrl.searchParams.get('limit') ?? '50', 10);
+      const limit = Math.min(Math.max(1, limitParam), 200);
+      const filtered = obs
+        .filter((e) => (!domain || e.domain === domain) && (!since || e.timestamp >= since))
+        .slice(0, limit);
+      return json({ observations: filtered, total: obs.length });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── /api/intelligence/playbook — pure-data playbook lookup ──────────────
+  // Matches the built-in playbook catalog by domain + severity without
+  // importing TypeScript. The catalog is inlined here; it must stay in sync
+  // with src/services/intelligence/playbooks/.
+  if (requestUrl.pathname === '/api/intelligence/playbook' && req.method === 'GET') {
+    const domain = requestUrl.searchParams.get('domain') || '';
+    const severity = (requestUrl.searchParams.get('severity') || '').toUpperCase();
+    const SEVERITY_RANK = { INFO: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
+    const PLAYBOOKS = [
+      {
+        id: 'earthquake', name: 'Earthquake Response',
+        triggerDomains: ['*'], triggerTags: ['earthquake', 'seismic'],
+        triggerSeverity: ['HIGH', 'CRITICAL'],
+      },
+      {
+        id: 'wildfire', name: 'Wildfire Response',
+        triggerDomains: ['*'], triggerTags: ['wildfire', 'fire'],
+        triggerSeverity: ['HIGH', 'CRITICAL'],
+      },
+      {
+        id: 'aviation-emergency', name: 'Aviation Emergency',
+        triggerDomains: ['aviation'], triggerTags: ['squawk-7700', 'squawk-7600', 'squawk-7500', 'emergency'],
+        triggerSeverity: ['HIGH', 'CRITICAL'],
+      },
+      {
+        id: 'hurricane', name: 'Hurricane / Tropical Cyclone Response',
+        triggerDomains: ['weather'], triggerTags: ['hurricane', 'tropical-storm', 'nhc', 'cyclone'],
+        triggerSeverity: ['MEDIUM', 'HIGH', 'CRITICAL'],
+      },
+      {
+        id: 'cyber-breach', name: 'Cyber Breach Response',
+        triggerDomains: ['cyber'], triggerTags: [],
+        triggerSeverity: ['HIGH', 'CRITICAL'],
+      },
+    ];
+    const tags = new Set((requestUrl.searchParams.get('tags') || '').split(',').filter(Boolean));
+    const candidates = PLAYBOOKS.filter(p => {
+      const domainOk = p.triggerDomains.includes('*') || p.triggerDomains.includes(domain);
+      const severityOk = p.triggerSeverity.includes(severity);
+      return domainOk && severityOk;
+    });
+    if (candidates.length === 0) return json({ playbook: null });
+    let best = candidates[0];
+    let bestScore = -1;
+    for (const p of candidates) {
+      const score = p.triggerTags.filter(t => tags.has(t)).length;
+      if (score > bestScore) { best = p; bestScore = score; }
+    }
+    return json({ playbook: best });
+  }
+
   if (requestUrl.pathname === '/api/algorithm-correlations' && req.method === 'GET') {
     return json(context._algorithmState?.correlations || { available: false });
   }
@@ -3829,6 +4859,176 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Synthesis correlations (renderer → sidecar mirror) ─────────────────
+  // Renderer-side `correlation-engine.correlateThreats()` runs every 15s,
+  // POSTs the resulting events here. Any consumer (banner, MCP, external
+  // tools) reads via GET. Same shape as /api/eew-status.
+  if (requestUrl.pathname === '/api/synthesis/correlations') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        if (!Array.isArray(body.events)) {
+          return json({ error: 'events must be an array' }, 400);
+        }
+        const events = body.events
+          .slice(0, 500)
+          .map(sanitizeCorrelationEvent)
+          .filter(Boolean);
+        context._synthesisCorrelations = {
+          events,
+          highestSeverity: typeof body.highestSeverity === 'string' ? body.highestSeverity : null,
+          asOf: typeof body.asOf === 'number' ? body.asOf : Date.now(),
+        };
+        return json({ ok: true, count: events.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const snapshot = context._synthesisCorrelations || null;
+      if (!snapshot) {
+        return json({ events: [], highestSeverity: null, asOf: 0, available: false });
+      }
+      const ageMs = Date.now() - snapshot.asOf;
+      return json({
+        events: snapshot.events,
+        highestSeverity: snapshot.highestSeverity,
+        asOf: snapshot.asOf,
+        ageMs,
+        // 15s poll → consider stale at ~3 missed cycles.
+        stale: ageMs > 60 * 1000,
+        available: true,
+      });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+
+  // ── /api/intelligence/what-changed — what-changed digest mirror ───────────
+  // Renderer pushes ChangeLine[] from what-changed-digest.ts after each
+  // snapshot comparison. Intelligence Feed panel reads via GET.
+  if (requestUrl.pathname === '/api/intelligence/what-changed') {
+    const VALID_CHANGE_KINDS = new Set([
+      'new', 'cleared', 'score_rose', 'score_fell',
+      'tier_escalated', 'tier_de_escalated',
+      'sources_confirming', 'sources_lost', 'meta_changed',
+    ]);
+    const VALID_POLARITIES = new Set(['worse', 'better', 'neutral']);
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!Array.isArray(body)) return json({ error: 'body must be an array' }, 400);
+        const lines = body.slice(0, 200).map((l) => {
+          if (!l || typeof l !== 'object') return null;
+          if (typeof l.id !== 'string' || typeof l.text !== 'string') return null;
+          if (!VALID_CHANGE_KINDS.has(l.kind)) return null;
+          if (!VALID_POLARITIES.has(l.polarity)) return null;
+          return {
+            id: l.id,
+            kind: l.kind,
+            text: l.text.slice(0, 500),
+            magnitude: typeof l.magnitude === 'number' ? l.magnitude : undefined,
+            polarity: l.polarity,
+            category: typeof l.category === 'string' ? l.category.slice(0, 100) : '',
+            weight: typeof l.weight === 'number' ? l.weight : 5,
+            recordedAt: typeof l.recordedAt === 'number' ? l.recordedAt : Date.now(),
+          };
+        }).filter(Boolean);
+        context._intelligenceWhatChanged = { lines, asOf: Date.now() };
+        return json({ ok: true, count: lines.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const snapshot = context._intelligenceWhatChanged || null;
+      if (!snapshot) return json({ lines: [], asOf: 0, available: false });
+      return json({ lines: snapshot.lines, asOf: snapshot.asOf, available: true });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── /api/intelligence/feed — merged chronological feed ────────────────────
+  // Aggregates observations + synthesis correlations + what-changed lines
+  // into a single sorted FeedItem[] for the Intelligence Feed panel.
+  // Query params: domain=, type=(observation|correlation|change), since=ms, limit=
+  if (requestUrl.pathname === '/api/intelligence/feed') {
+    if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+    const domain = requestUrl.searchParams.get('domain') || '';
+    const typeFilter = requestUrl.searchParams.get('type') || '';
+    const since = Number(requestUrl.searchParams.get('since') ?? 0);
+    const limitParam = parseInt(requestUrl.searchParams.get('limit') ?? '100', 10);
+    const limit = Math.min(Math.max(1, limitParam), 500);
+
+    const items = [];
+
+    if (!typeFilter || typeFilter === 'observation') {
+      const obs = context._intelligenceObs ?? [];
+      for (const e of obs) {
+        if (domain && e.domain !== domain) continue;
+        if (since && e.timestamp < since) continue;
+        items.push({
+          id: `obs:${e.id}`,
+          type: 'observation',
+          timestamp: e.timestamp,
+          domain: e.domain,
+          severity: e.severity,
+          title: e.title,
+          summary: e.tags?.length > 0 ? e.tags.join(', ') : e.domain,
+          data: e,
+        });
+      }
+    }
+
+    if (!typeFilter || typeFilter === 'correlation') {
+      const corr = context._synthesisCorrelations?.events ?? [];
+      for (const c of corr) {
+        const ts = Date.parse(c.triggeredAt);
+        if (since && ts < since) continue;
+        const corrDomain = c.domains?.[0] || 'multi';
+        if (domain && !c.domains?.includes(domain)) continue;
+        items.push({
+          id: `corr:${c.type}:${ts}`,
+          type: 'correlation',
+          timestamp: ts,
+          domain: corrDomain,
+          severity: c.severity,
+          title: c.description.slice(0, 120),
+          summary: `${(c.domains ?? []).join(', ')} — ${c.components?.length ?? 0} signals`,
+          data: c,
+        });
+      }
+    }
+
+    if (!typeFilter || typeFilter === 'change') {
+      const changes = context._intelligenceWhatChanged?.lines ?? [];
+      const changesAsOf = context._intelligenceWhatChanged?.asOf ?? 0;
+      for (const l of changes) {
+        const ts = typeof l.recordedAt === 'number' ? l.recordedAt : changesAsOf;
+        if (since && ts < since) continue;
+        const changeDomain = l.category || 'unknown';
+        if (domain && changeDomain !== domain) continue;
+        const sev = l.polarity === 'worse' ? 'HIGH' : (l.polarity === 'better' ? 'LOW' : 'INFO');
+        items.push({
+          id: `change:${l.id}:${l.kind}`,
+          type: 'change',
+          timestamp: ts,
+          domain: changeDomain,
+          severity: sev,
+          title: l.text,
+          summary: l.kind.replaceAll('_', ' '),
+          data: l,
+        });
+      }
+    }
+
+    items.sort((a, b) => b.timestamp - a.timestamp);
+    const page = items.slice(0, limit);
+    return json({ items: page, total: items.length, generated: Date.now() });
+  }
 
   if (requestUrl.pathname === '/api/sitrep-bundle') {
     const cacheKey = 'sitrep-bundle';
@@ -4402,6 +5602,13 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
+  // ── Command Center: recent changes tape ──────────────────────────────────
+  if (requestUrl.pathname === '/api/command-center/recent-changes' && req.method === 'GET') {
+    const alertCache = getCachedStale('ipaws-active');
+    const feedSnapshots = getFeedSnapshots();
+    return json(buildRecentChanges(feedSnapshots, alertCache, Date.now()));
+  }
+
   // ── CDC Acute Respiratory Illness by state (SODA, no auth) ──────────────
   // Public CDC dataset f3zz-zga5 — weekly state-level activity labels.
   if (requestUrl.pathname === '/api/cdc-ari') {
@@ -4582,6 +5789,114 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch {
  return json([], 200);
  }
+  }
+
+  // ── NVD CVE feed (no API key required) ──────────────────────────────────
+  // Pulls CVEs published in the last 30 days from the NVD 2.0 API and
+  // filters server-side to High / Critical (CVSS ≥ 7.0). 24-hour cache;
+  // NVD's anonymous rate limit is 5 req per 30s, so we throttle to one
+  // page per request — pagination is not exposed yet.
+  if (requestUrl.pathname === '/api/security/cves') {
+    const severity = (requestUrl.searchParams.get('severity') || 'all').toLowerCase();
+    const limit = clampInt(requestUrl.searchParams.get('limit'), 1, 200, 50);
+    const cached = readSecurityCveCache(severity);
+    if (cached) {
+      return json({ ...cached, fromCache: true });
+    }
+    try {
+      const now = new Date();
+      const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const u = new URL('https://services.nvd.nist.gov/rest/json/cves/2.0');
+      u.searchParams.set('pubStartDate', start.toISOString());
+      u.searchParams.set('pubEndDate', now.toISOString());
+      // resultsPerPage cap is 2000; we only need top High/Critical so 200 is plenty.
+      u.searchParams.set('resultsPerPage', '200');
+      if (severity === 'critical') u.searchParams.set('cvssV3Severity', 'CRITICAL');
+      else if (severity === 'high') u.searchParams.set('cvssV3Severity', 'HIGH');
+      const resp = await fetchWithTimeout(u.toString(), {
+        headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+      }, 20_000);
+      if (!resp.ok) {
+        return json({ records: [], asOf: now.toISOString(), error: `NVD ${resp.status}` }, 200);
+      }
+      const data = await resp.json();
+      const records = parseAndFilterNvdSidecar(data, severity).slice(0, limit);
+      const payload = { records, asOf: now.toISOString() };
+      writeSecurityCveCache(severity, payload);
+      return json(payload);
+    } catch (error) {
+      return json({ records: [], asOf: new Date().toISOString(),
+        error: String(error?.message ?? error) }, 200);
+    }
+  }
+
+  // ── Vulners-style trending CVEs enriched with EPSS scores ───────────────
+  // Pulls recently-modified CVEs from NVD, then queries the FIRST.org
+  // EPSS API (free, no key) for exploit-prediction scores. 6-hour cache
+  // because EPSS only refreshes daily.
+  if (requestUrl.pathname === '/api/security/vulners') {
+    const cached = readSecurityVulnersCache();
+    if (cached) {
+      return json({ ...cached, fromCache: true });
+    }
+    try {
+      const now = new Date();
+      const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const u = new URL('https://services.nvd.nist.gov/rest/json/cves/2.0');
+      u.searchParams.set('lastModStartDate', start.toISOString());
+      u.searchParams.set('lastModEndDate', now.toISOString());
+      u.searchParams.set('resultsPerPage', '100');
+      u.searchParams.set('cvssV3Severity', 'HIGH');
+      const nvdResp = await fetchWithTimeout(u.toString(), {
+        headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+      }, 20_000);
+      if (!nvdResp.ok) {
+        return json({ records: [], asOf: now.toISOString(), error: `NVD ${nvdResp.status}` }, 200);
+      }
+      const nvdData = await nvdResp.json();
+      const cveRecords = parseAndFilterNvdSidecar(nvdData, 'all');
+      // Batch CVE ids into the EPSS API (cap 100 ids per call).
+      const ids = cveRecords.map((r) => r.id).filter((id) => /^CVE-\d{4}-\d+$/.test(id)).slice(0, 100);
+      let epssMap = new Map();
+      if (ids.length > 0) {
+        const epssUrl = `https://api.first.org/data/v1/epss?cve=${ids.join(',')}`;
+        const epssResp = await fetchWithTimeout(epssUrl, {
+          headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+        }, 15_000);
+        if (epssResp.ok) {
+          const epssData = await epssResp.json();
+          epssMap = parseEpssResponseSidecar(epssData);
+        }
+      }
+      const enriched = cveRecords.map((r) => {
+        const score = epssMap.get(r.id);
+        const epss = score?.epss ?? null;
+        return {
+          ...r,
+          epssScore: epss,
+          epssPercentile: score?.percentile ?? null,
+          epssDate: score?.date ?? null,
+          exploitRiskTier: epss === null ? 'unknown'
+            : epss > 0.5 ? 'critical'
+            : epss >= 0.1 ? 'elevated'
+            : 'low',
+        };
+      });
+      enriched.sort((a, b) => {
+        const ea = a.epssScore ?? -1;
+        const eb = b.epssScore ?? -1;
+        if (ea !== eb) return eb - ea;
+        const ca = a.cvssScore ?? -1;
+        const cb = b.cvssScore ?? -1;
+        return cb - ca;
+      });
+      const payload = { records: enriched.slice(0, 100), asOf: now.toISOString() };
+      writeSecurityVulnersCache(payload);
+      return json(payload);
+    } catch (error) {
+      return json({ records: [], asOf: new Date().toISOString(),
+        error: String(error?.message ?? error) }, 200);
+    }
   }
 
   // ── OpenPhish phishing URL feed ──────────────────────────────────────────
@@ -5152,6 +6467,157 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Intelligence Explain — generate human-readable alert explanations ────
+  // POST { event: ObservationEvent, correlations?: Correlation[] }
+  // Returns AlertExplanation with headline, why, context, relatedEvents,
+  // confidence, and sources. Pure synchronous computation — no caching needed.
+  if (requestUrl.pathname === '/api/intelligence/explain') {
+    if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+    try {
+      const raw = await readBody(req);
+      const body = raw ? JSON.parse(raw.toString()) : null;
+      if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+      const event = body.event;
+      if (!event || typeof event !== 'object') return json({ error: 'event is required' }, 400);
+      if (typeof event.id !== 'string' || !event.id) return json({ error: 'event.id is required' }, 400);
+      if (typeof event.domain !== 'string' || !event.domain) return json({ error: 'event.domain is required' }, 400);
+      if (typeof event.title !== 'string' || !event.title) return json({ error: 'event.title is required' }, 400);
+
+      const VALID_DOMAINS = new Set(['earthquake', 'wildfire', 'aviation', 'weather', 'maritime', 'generic']);
+      if (!VALID_DOMAINS.has(event.domain)) {
+        return json({ error: `unknown domain "${event.domain}"; expected one of: ${[...VALID_DOMAINS].join(', ')}` }, 400);
+      }
+
+      const VALID_SEVERITIES = new Set(['info', 'low', 'moderate', 'high', 'critical']);
+      const severity = VALID_SEVERITIES.has(event.severity) ? event.severity : 'info';
+
+      const sources = Array.isArray(event.sources) ? event.sources.filter((s) => typeof s === 'string') : [];
+
+      const normalizedEvent = {
+        id: String(event.id).slice(0, 200),
+        domain: event.domain,
+        title: String(event.title).slice(0, 200),
+        severity,
+        sources,
+        occurredAt: typeof event.occurredAt === 'number' ? event.occurredAt : undefined,
+        location: typeof event.location === 'string' ? event.location.slice(0, 200) : undefined,
+        lat: typeof event.lat === 'number' && Number.isFinite(event.lat) ? event.lat : undefined,
+        lon: typeof event.lon === 'number' && Number.isFinite(event.lon) ? event.lon : undefined,
+        // Earthquake
+        magnitude: typeof event.magnitude === 'number' ? event.magnitude : undefined,
+        depth: typeof event.depth === 'number' ? event.depth : undefined,
+        nearestCity: typeof event.nearestCity === 'string' ? event.nearestCity : undefined,
+        nearestCityDistKm: typeof event.nearestCityDistKm === 'number' ? event.nearestCityDistKm : undefined,
+        // Wildfire
+        fireName: typeof event.fireName === 'string' ? event.fireName : undefined,
+        acres: typeof event.acres === 'number' ? event.acres : undefined,
+        containmentPct: typeof event.containmentPct === 'number' ? event.containmentPct : undefined,
+        fireBehavior: typeof event.fireBehavior === 'string' ? event.fireBehavior : undefined,
+        windSpeedMph: typeof event.windSpeedMph === 'number' ? event.windSpeedMph : undefined,
+        // Aviation
+        callsign: typeof event.callsign === 'string' ? event.callsign : undefined,
+        aircraftType: typeof event.aircraftType === 'string' ? event.aircraftType : undefined,
+        squawkCode: typeof event.squawkCode === 'string' ? event.squawkCode : undefined,
+        // Weather
+        eventType: typeof event.eventType === 'string' ? event.eventType : undefined,
+        area: typeof event.area === 'string' ? event.area : undefined,
+        expiresAt: typeof event.expiresAt === 'number' ? event.expiresAt : undefined,
+        conditions: typeof event.conditions === 'string' ? event.conditions : undefined,
+        // Maritime
+        vesselName: typeof event.vesselName === 'string' ? event.vesselName : undefined,
+        vesselType: typeof event.vesselType === 'string' ? event.vesselType : undefined,
+        flag: typeof event.flag === 'string' ? event.flag : undefined,
+        behavior: typeof event.behavior === 'string' ? event.behavior : undefined,
+        maritimeContext: typeof event.maritimeContext === 'string' ? event.maritimeContext : undefined,
+      };
+
+      const rawCorrs = Array.isArray(body.correlations) ? body.correlations : [];
+      const correlations = rawCorrs
+        .filter((c) => c && typeof c === 'object' && typeof c.id === 'string' && typeof c.title === 'string')
+        .map((c) => ({
+          id: String(c.id).slice(0, 200),
+          title: String(c.title).slice(0, 200),
+          domain: typeof c.domain === 'string' ? c.domain : 'generic',
+          relevanceScore: typeof c.relevanceScore === 'number' ? c.relevanceScore : undefined,
+        }));
+
+      const explanation = explainEvent(normalizedEvent, correlations);
+      return json({ ok: true, explanation });
+    } catch (error) {
+      return json({ error: String(error?.message || error) }, 500);
+    }
+  }
+
+  // ── GDACS RSS — Global Disaster Alert & Coordination System events ───────
+  // Fetches https://www.gdacs.org/xml/rss.xml (free, no key) and parses events
+  // grouped by type with alert level, score, coordinates, and country. 30-min
+  // cache aligns with GDACS update cadence. Cross-reference metadata is included
+  // so the panel can overlap with earthquake/hurricane/wildfire data.
+  if (requestUrl.pathname === '/api/disasters/gdacs') {
+    const CACHE_TTL = 30 * 60 * 1000;
+    const cached = getCached('gdacs-rss', CACHE_TTL);
+    if (cached) return json(cached);
+    try {
+      const events = await fetchGdacsRss(fetchWithTimeout);
+      const grouped = groupByType(events);
+      const result = {
+        events,
+        grouped,
+        count: events.length,
+        fetchedAt: Date.now(),
+        degraded: false,
+        source: 'gdacs.org',
+        byType: Object.fromEntries(
+          Object.entries(grouped).map(([k, v]) => [k, v.map((e) => ({ ...e, rgba: alertLevelRgba(e.alertLevel) }))])
+        ),
+      };
+      setCached('gdacs-rss', result, CACHE_TTL);
+      recordFeedSuccess('gdacs-rss');
+      return json(result);
+    } catch (error) {
+      recordFeedFailure('gdacs-rss', error);
+      const stale = getCachedStale('gdacs-rss');
+      if (stale) return json({ ...stale, degraded: true, reason: error?.message ?? String(error) });
+      return json({ events: [], grouped: {}, count: 0, fetchedAt: Date.now(), degraded: true, reason: error?.message ?? String(error), source: 'gdacs.org' }, 502);
+    }
+  }
+
+  // ── USGS VHP volcanoesHazardLevel + Smithsonian GVP bulletin RSS ─────────
+  // GET /api/volcanoes/status  (30 min cache)
+  if (requestUrl.pathname === '/api/volcanoes/status') {
+    const cacheKey = 'volcanoes-status';
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      const [vhpResp, gvpResp] = await Promise.allSettled([
+        fetchWithTimeout(
+          'https://volcanoes.usgs.gov/vsc/api/volcanoApi/volcanoesHazardLevel',
+          { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+          15_000,
+        ),
+        fetchWithTimeout(
+          'https://volcano.si.edu/news/WeeklyVolcanoActivity.cfm',
+          { headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': CHROME_UA } },
+          12_000,
+        ),
+      ]);
+      let rawVolcanoes = [];
+      if (vhpResp.status === 'fulfilled' && vhpResp.value.ok) {
+        const data = await vhpResp.value.json();
+        rawVolcanoes = Array.isArray(data) ? data : (data?.features ?? data?.volcanoes ?? []);
+      }
+      const gvpXml = (gvpResp.status === 'fulfilled' && gvpResp.value.ok) ? await gvpResp.value.text() : '';
+      const gvpItems = parseGvpRssSidecar(gvpXml);
+      const parsed = rawVolcanoes.map((v, i) => parseVolcanoHazardLevelSidecar(v, i));
+      const withBulletins = mergeGvpBulletinSidecar(parsed, gvpItems);
+      const result = buildVolcanoMonitorStatusSidecar(withBulletins);
+      setCached(cacheKey, result, 30 * 60 * 1000);
+      return json(result);
+    } catch (error) {
+      return json({ error: `volcanoes-status error: ${error.message ?? error}` }, 502);
+    }
+  }
+
   // ── NOAA NWS All-Hazards alerts ──────────────────────────────────────────
   if (requestUrl.pathname === '/api/nws-alerts') {
  try {
@@ -5227,6 +6693,81 @@ async function dispatch(requestUrl, req, routes, context) {
       return json(out);
     } catch {
       return json([], 200);
+    }
+  }
+
+  // ── SPC Convective Outlook summary ──────────────────────────────────────
+  // GET /api/weather/spc-outlook  (30 min cache)
+  if (requestUrl.pathname === '/api/weather/spc-outlook') {
+    const cacheKey = 'weather-spc-outlook';
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      const resp = await fetchWithTimeout(
+        'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson',
+        { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } },
+        12_000,
+      );
+      if (!resp.ok) return json({ maxRisk: null, outlookCount: 0, day1MaxRisk: null, validTime: '' });
+      const data = await resp.json();
+      const features = Array.isArray(data?.features) ? data.features : [];
+      const summary = buildSpcOutlookSummarySidecar(features);
+      setCached(cacheKey, summary, 30 * 60 * 1000);
+      return json(summary);
+    } catch (error) {
+      return json({ error: `spc-outlook error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── NWS active tornado + severe thunderstorm warnings ────────────────────
+  // GET /api/weather/active-warnings  (2 min cache)
+  if (requestUrl.pathname === '/api/weather/active-warnings') {
+    const cacheKey = 'weather-active-warnings';
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      const resp = await fetchWithTimeout(
+        'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update&event=Tornado%20Warning,Severe%20Thunderstorm%20Warning,Tornado%20Watch,Severe%20Thunderstorm%20Watch',
+        { headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-SevereWx/1.0 (https://github.com/bradleybond512/crystal-ball)' } },
+        12_000,
+      );
+      if (!resp.ok) return json([]);
+      const data = await resp.json();
+      const features = Array.isArray(data?.features) ? data.features : [];
+      const nonExpired = filterExpiredWarningsSidecar(features, new Date().toISOString());
+      const warnings = nonExpired.slice(0, 80).map((f, i) => {
+        const p = f.properties ?? {};
+        const event = String(p.event ?? '');
+        const warnType = classifyWarningTypeSidecar(event);
+        let polygon = null;
+        let centroid = null;
+        if (f.geometry?.type === 'Polygon' && Array.isArray(f.geometry.coordinates?.[0])) {
+          polygon = f.geometry.coordinates[0];
+          const ring = polygon;
+          if (ring.length > 0) {
+            const sumLon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+            const sumLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+            centroid = { lat: sumLat, lon: sumLon };
+          }
+        } else {
+          centroid = extractAlertCentroid(f);
+        }
+        return {
+          id: String(p.id ?? `nws-warn-${i}`),
+          event,
+          warnType,
+          headline: String(p.headline ?? ''),
+          areaDesc: String(p.areaDesc ?? ''),
+          onset: String(p.onset ?? ''),
+          expires: String(p.expires ?? ''),
+          polygon,
+          centroid,
+        };
+      });
+      setCached(cacheKey, warnings, 2 * 60 * 1000);
+      return json(warnings);
+    } catch (error) {
+      return json({ error: `active-warnings error: ${error.message ?? error}` }, 502);
     }
   }
 
@@ -5703,7 +7244,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Disease Intelligence (Nextstrain + disease.sh + ReliefWeb EP + WHO DON) ──
   if (requestUrl.pathname === '/api/disease-intel') {
- const cached = getCached('disease-intel', 30 * 60 * 1000);
+ const cached = getCached('disease-intel', 15 * 60 * 1000); // was 30 min; WHO DON + ProMED update hourly
  if (cached) return json(cached);
 
  const NEXTSTRAIN_URL =
@@ -5751,7 +7292,7 @@ async function dispatch(requestUrl, req, routes, context) {
  crossReferencedWithPromed,
  fetchedAt: new Date().toISOString(),
  };
- setCached('disease-intel', result);
+ setCached('disease-intel', result, 15 * 60 * 1000);
  return json(result);
  } catch (error) {
  return json({ error: `disease-intel fetch error: ${error.message ?? error}` }, 502);
@@ -5809,6 +7350,93 @@ async function dispatch(requestUrl, req, routes, context) {
  };
  return json(degraded);
  }
+  }
+
+  // ── HIBP breach intelligence (haveibeenpwned.com public breaches) ─────────
+  // /api/security/breaches            — full or filtered list (q + limit)
+  // /api/security/breaches/latest     — breaches added in last 90 days
+  if (requestUrl.pathname === '/api/security/breaches' || requestUrl.pathname === '/api/security/breaches/latest') {
+    const CACHE_KEY = 'hibp-breaches-all';
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h per spec
+    let breaches = getCached(CACHE_KEY, CACHE_TTL);
+    if (!breaches) {
+      try {
+        const resp = await fetchWithTimeout(
+          'https://haveibeenpwned.com/api/v3/breaches',
+          { headers: { 'User-Agent': 'CrystalBall-Security/1.0', Accept: 'application/json' } },
+          20_000,
+        );
+        if (resp.ok) {
+          breaches = await resp.json();
+          if (Array.isArray(breaches)) setCached(CACHE_KEY, breaches, CACHE_TTL);
+        } else {
+          breaches = getCachedStale(CACHE_KEY) ?? [];
+        }
+      } catch {
+        breaches = getCachedStale(CACHE_KEY) ?? [];
+      }
+    }
+    if (!Array.isArray(breaches)) breaches = [];
+
+    if (requestUrl.pathname === '/api/security/breaches/latest') {
+      const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+      const recent = breaches.filter(b => {
+        const t = Date.parse(String(b?.AddedDate ?? ''));
+        return Number.isFinite(t) && t >= cutoff;
+      });
+      recent.sort((a, b) => String(b?.AddedDate ?? '').localeCompare(String(a?.AddedDate ?? '')));
+      return json({ breaches: recent, total: recent.length });
+    }
+
+    const q = (requestUrl.searchParams.get('q') ?? '').trim().toLowerCase();
+    const limitRaw = parseInt(requestUrl.searchParams.get('limit') ?? '50', 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 600) : 50;
+    let filtered = breaches;
+    if (q) {
+      filtered = breaches.filter(b => {
+        const hay = `${b?.Name ?? ''}\n${b?.Title ?? ''}\n${b?.Domain ?? ''}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    filtered.sort((a, b) => String(b?.BreachDate ?? '').localeCompare(String(a?.BreachDate ?? '')));
+    return json({ breaches: filtered.slice(0, limit), total: filtered.length });
+  }
+
+  // ── ipinfo.io geo + ASN lookup (1h per-IP cache) ──────────────────────────
+  if (requestUrl.pathname === '/api/security/ipinfo') {
+    const ipRaw = (requestUrl.searchParams.get('ip') ?? '').trim();
+    if (!ipRaw) return json({ error: 'missing ip' }, 400);
+    // Defense-in-depth: validate before forwarding upstream.
+    const IPV4 = /^(?:(?:25[0-5]|2[0-4]\d|1?\d{1,2})\.){3}(?:25[0-5]|2[0-4]\d|1?\d{1,2})$/;
+    const IPV6 = /^[\da-f:]+$/i;
+    const isV4 = IPV4.test(ipRaw);
+    const isV6 = ipRaw.length >= 3 && ipRaw.length <= 39 && ipRaw.includes(':') && IPV6.test(ipRaw);
+    if (!isV4 && !isV6) return json({ error: 'invalid ip' }, 400);
+
+    const cacheKey = `ipinfo:${ipRaw.toLowerCase()}`;
+    const CACHE_TTL = 60 * 60 * 1000; // 1h per spec
+    const cached = getCached(cacheKey, CACHE_TTL);
+    if (cached) return json(cached);
+
+    try {
+      const resp = await fetchWithTimeout(
+        `https://ipinfo.io/${encodeURIComponent(ipRaw)}/json`,
+        { headers: { 'User-Agent': 'CrystalBall-Security/1.0', Accept: 'application/json' } },
+        10_000,
+      );
+      if (!resp.ok) {
+        const stale = getCachedStale(cacheKey);
+        return json(stale ?? { ip: ipRaw, error: `upstream HTTP ${resp.status}` }, stale ? 200 : 502);
+      }
+      const data = await resp.json();
+      data.fetchedAt = new Date().toISOString();
+      setCached(cacheKey, data, CACHE_TTL);
+      return json(data);
+    } catch (error) {
+      const stale = getCachedStale(cacheKey);
+      const reason = error?.message ?? String(error);
+      return json(stale ?? { ip: ipRaw, error: reason }, stale ? 200 : 502);
+    }
   }
 
   // ── Biosurveillance wastewater (CDC NWSS, site + state rollup, 24h cache) ──
@@ -6259,7 +7887,7 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Open-Meteo — current conditions for major global cities (no API key required) ─
   if (requestUrl.pathname === '/api/owm-current') {
- const cached = getCached('owm-current', 30 * 60 * 1000); // 30 min
+ const cached = getCached('owm-current', 10 * 60 * 1000); // was 30 min; OWM updates every 10 min
  if (cached) return json(cached);
  const CITIES = [
  { name: 'New York', lat: 40.71, lon: -74.01 }, { name: 'Los Angeles', lat: 34.05, lon: -118.24 },
@@ -7018,6 +8646,225 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Reddit OSINT multi-subreddit feed ────────────────────────────────────
+  // Reads up to ~6 threat-relevant subreddits in parallel, no OAuth.
+  // 15-min cache per (subreddit, limit) tuple so a tab switch or another
+  // process probing the route doesn't burn Reddit's ratelimit.
+  if (requestUrl.pathname === '/api/osint/reddit') {
+    const REDDIT_OSINT_TTL_MS = 15 * 60 * 1000;
+    const REDDIT_DEFAULT_SUBS = ['netsec', 'cybersecurity', 'worldnews', 'geopolitics', 'RBI', 'EmergencyManagement'];
+    const subsParam = requestUrl.searchParams.get('subreddits') ?? '';
+    const VALID_SUB = /^[a-z0-9][a-z0-9_]{1,20}$/i;
+    const parsed = subsParam
+      .split(',')
+      .map(s => s.trim().replace(/^r\//i, ''))
+      .filter(s => VALID_SUB.test(s));
+    const subs = parsed.length > 0 ? Array.from(new Set(parsed)) : REDDIT_DEFAULT_SUBS;
+    const limitRaw = Number.parseInt(requestUrl.searchParams.get('limit') ?? '', 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(100, limitRaw) : 25;
+
+    const fetchSub = async (sub) => {
+      const cacheKey = `reddit-osint-${sub.toLowerCase()}-${limit}`;
+      const cached = getCached(cacheKey, REDDIT_OSINT_TTL_MS);
+      if (cached) return { sub, posts: cached, ok: true };
+      try {
+        const resp = await fetchWithTimeout(
+          `https://www.reddit.com/r/${encodeURIComponent(sub)}/new.json?limit=${limit}&raw_json=1`,
+          { headers: { 'User-Agent': 'CrystalBall/2.13 (threat intelligence aggregator)' } },
+          10_000,
+        );
+        if (!resp.ok) return { sub, posts: [], ok: false, reason: `HTTP ${resp.status}` };
+        const data = await resp.json();
+        const children = data?.data?.children ?? [];
+        const posts = [];
+        for (const child of children) {
+          if (child?.kind !== 't3') continue;
+          const p = child.data ?? {};
+          if (p.stickied === true) continue;
+          if (!p.id || !p.title) continue;
+          const permalinkPath = typeof p.permalink === 'string' ? p.permalink : `/r/${p.subreddit ?? sub}/comments/${p.id}`;
+          posts.push({
+            id: p.id,
+            subreddit: p.subreddit ?? sub,
+            title: p.title,
+            url: typeof p.url === 'string' ? p.url : `https://www.reddit.com${permalinkPath}`,
+            permalink: `https://www.reddit.com${permalinkPath}`,
+            score: typeof p.score === 'number' ? p.score : 0,
+            numComments: typeof p.num_comments === 'number' ? p.num_comments : 0,
+            createdUtc: typeof p.created_utc === 'number' ? p.created_utc : 0,
+            flair: typeof p.link_flair_text === 'string' && p.link_flair_text.length > 0 ? p.link_flair_text : null,
+            author: typeof p.author === 'string' && p.author.length > 0 ? p.author : '[deleted]',
+            domain: typeof p.domain === 'string' && p.domain.length > 0 ? p.domain : null,
+            over18: p.over_18 === true,
+          });
+        }
+        setCached(cacheKey, posts, REDDIT_OSINT_TTL_MS);
+        return { sub, posts, ok: true };
+      } catch (error) {
+        return { sub, posts: [], ok: false, reason: error?.message ?? String(error) };
+      }
+    };
+
+    const results = await Promise.all(subs.map(fetchSub));
+    const successfulSubs = [];
+    const reasons = [];
+    const merged = [];
+    for (const r of results) {
+      if (r.ok) {
+        successfulSubs.push(r.sub);
+        for (const post of r.posts) merged.push(post);
+      } else if (r.reason) {
+        reasons.push(`${r.sub}: ${r.reason}`);
+      }
+    }
+    merged.sort((a, b) => b.createdUtc - a.createdUtc);
+    return json({
+      posts: merged,
+      subreddits: successfulSubs,
+      degraded: reasons.length > 0,
+      generatedAt: new Date().toISOString(),
+      reason: reasons.length > 0 ? reasons.join('; ') : null,
+    });
+  }
+
+  // ── CryptoScamDB + Bitcoin Abuse aggregator ──────────────────────────────
+  // No-key default: pulls scam addresses + domains from CryptoScamDB
+  // (public). When BITCOINABUSE_API_KEY is present we'd ALSO union in
+  // Bitcoin Abuse reports — left out of this PR per spec (key-gated).
+  // 6h cache because CryptoScamDB updates slowly.
+  if (requestUrl.pathname === '/api/crypto/bitcoin-abuse') {
+    const CRYPTO_SCAM_TTL_MS = 6 * 60 * 60 * 1000;
+    const cached = getCached('crypto-bitcoin-abuse', CRYPTO_SCAM_TTL_MS);
+    if (cached) return json(cached);
+
+    const normaliseCategory = (raw) => {
+      if (typeof raw !== 'string') return 'other';
+      const lower = raw.toLowerCase();
+      if (lower.includes('ransom')) return 'ransomware';
+      if (lower.includes('phish')) return 'phishing';
+      if (lower.includes('mixer') || lower.includes('tumbler')) return 'mixer';
+      if (lower.includes('darknet') || lower.includes('darkmarket')) return 'darknet';
+      if (lower.includes('mining') || lower.includes('miner')) return 'mining';
+      if (lower.includes('scam') || lower.includes('fraud') || lower.includes('fake')) return 'scam';
+      return 'other';
+    };
+    const stripProtocol = (v) => String(v).replace(/^https?:\/\//i, '').replace(/\/$/, '');
+
+    const recordsFromResult = (raw) => {
+      if (!raw || typeof raw !== 'object') return [];
+      const result = raw.result;
+      if (Array.isArray(result)) return result.filter(r => r && typeof r === 'object').map(r => ({ key: null, rec: r }));
+      if (result && typeof result === 'object') {
+        return Object.entries(result).filter(([_, v]) => v && typeof v === 'object').map(([k, v]) => ({ key: k, rec: v }));
+      }
+      return [];
+    };
+
+    let addresses = [];
+    let domains = [];
+    let degraded = false;
+    let provenance = 'CryptoScamDB';
+
+    try {
+      const [addrResp, domResp] = await Promise.allSettled([
+        fetchWithTimeout('https://api.cryptoscamdb.org/v1/addresses', { headers: { 'User-Agent': 'CrystalBall/2.13' } }, 15_000),
+        fetchWithTimeout('https://api.cryptoscamdb.org/v1/domains', { headers: { 'User-Agent': 'CrystalBall/2.13' } }, 15_000),
+      ]);
+      if (addrResp.status === 'fulfilled' && addrResp.value.ok) {
+        const json = await addrResp.value.json();
+        for (const { key, rec } of recordsFromResult(json)) {
+          const coin = typeof rec.coin === 'string' ? rec.coin.toUpperCase() : '';
+          if (coin && coin !== 'BTC') continue;
+          const address = (typeof rec.address === 'string' && rec.address) || key;
+          if (!address) continue;
+          addresses.push({
+            address,
+            category: normaliseCategory(rec.subcategory ?? rec.category),
+            reportCount: typeof rec.reports === 'number' ? rec.reports : (typeof rec.reportedaddresses === 'number' ? rec.reportedaddresses : 1),
+            name: typeof rec.name === 'string' ? rec.name : undefined,
+          });
+        }
+      } else {
+        degraded = true;
+      }
+      if (domResp.status === 'fulfilled' && domResp.value.ok) {
+        const json = await domResp.value.json();
+        for (const { key, rec } of recordsFromResult(json)) {
+          const domain = (typeof rec.domain === 'string' && rec.domain) || (typeof rec.url === 'string' && rec.url) || key;
+          if (!domain) continue;
+          const statusRaw = typeof rec.status === 'string' ? rec.status.toLowerCase() : '';
+          const status = statusRaw.includes('offline') || statusRaw.includes('inactive') || statusRaw === 'dead' ? 'inactive'
+            : statusRaw.includes('active') || statusRaw === 'online' ? 'active'
+            : 'unknown';
+          domains.push({
+            domain: stripProtocol(domain),
+            category: normaliseCategory(rec.subcategory ?? rec.category),
+            status,
+            name: typeof rec.name === 'string' ? rec.name : undefined,
+            reportedAt: typeof rec.reported === 'string' ? rec.reported : undefined,
+          });
+        }
+      } else {
+        degraded = true;
+      }
+    } catch (error) {
+      degraded = true;
+      provenance = `CryptoScamDB error: ${error?.message ?? error}`;
+    }
+
+    const payload = {
+      addresses,
+      domains,
+      degraded,
+      source: provenance,
+      generatedAt: new Date().toISOString(),
+    };
+    setCached('crypto-bitcoin-abuse', payload, CRYPTO_SCAM_TTL_MS);
+    return json(payload);
+  }
+
+  // ── Per-address check: scam DB lookup + blockchain.info chain stats ──────
+  if (requestUrl.pathname === '/api/crypto/bitcoin-abuse/check') {
+    const address = (requestUrl.searchParams.get('address') ?? '').trim();
+    const isBtc = /^bc1[ac-hj-np-z02-9]+$/i.test(address) || /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(address);
+    if (!isBtc) {
+      return json({ address, scamMatch: null, balanceSat: null, txCount: null, source: 'invalid-address-format', fetchedAt: new Date().toISOString() }, 400);
+    }
+    // Snapshot of the scam feed for cheap address membership check.
+    const feed = getCached('crypto-bitcoin-abuse', 6 * 60 * 60 * 1000);
+    let scamMatch = null;
+    if (feed && Array.isArray(feed.addresses)) {
+      scamMatch = feed.addresses.find(e => typeof e?.address === 'string' && e.address === address) ?? null;
+    }
+    let balanceSat = null;
+    let txCount = null;
+    let provenance = 'blockchain.info';
+    try {
+      const resp = await fetchWithTimeout(
+        `https://blockchain.info/rawaddr/${encodeURIComponent(address)}?limit=0`,
+        { headers: { 'User-Agent': 'CrystalBall/2.13' } },
+        15_000,
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        if (typeof data.final_balance === 'number') balanceSat = data.final_balance;
+        if (typeof data.n_tx === 'number') txCount = data.n_tx;
+      } else {
+        provenance = `blockchain.info HTTP ${resp.status}`;
+      }
+    } catch (error) {
+      provenance = `blockchain.info error: ${error?.message ?? error}`;
+    }
+    return json({
+      address,
+      scamMatch,
+      balanceSat,
+      txCount,
+      source: provenance,
+      fetchedAt: new Date().toISOString(),
+    });
+  }
+
   // ── OpenAQ real-time air quality readings ────────────────────────────────
   if (requestUrl.pathname === '/api/openaq-readings') {
  const cached = getCached('openaq-readings');
@@ -7059,6 +8906,79 @@ async function dispatch(requestUrl, req, routes, context) {
  // degrade gracefully so the panel renders an empty list with a
  // banner rather than a 502 error storm.
  return json({ readings: [], degraded: true, reason: `openaq error: ${error.message ?? error}`, source: 'openaq.org', generatedAt: new Date().toISOString() });
+ }
+  }
+
+  // ── OpenAQ v3: nearby stations ──────────────────────────────────────────
+  // GET /api/airquality/openaq?lat=&lon=&radius=50000
+  // Pulls 50 locations near the given coords with parameters_id=2 (PM2.5)
+  // and 1 (PM10). v3 *does* accept anonymous reads for the locations
+  // endpoint; falls back to a 'degraded' empty payload on any error so
+  // the panel can render an empty-state instead of erroring.
+  if (requestUrl.pathname === '/api/airquality/openaq') {
+ const lat = Number.parseFloat(requestUrl.searchParams.get('lat') ?? '');
+ const lon = Number.parseFloat(requestUrl.searchParams.get('lon') ?? '');
+ const radius = Math.max(1000, Math.min(100_000, Number.parseInt(requestUrl.searchParams.get('radius') ?? '50000', 10) || 50_000));
+ if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+ return json({ locations: [], degraded: true, reason: 'lat + lon required', generatedAt: new Date().toISOString() });
+ }
+ const cacheKey = `openaq-nearby:${lat.toFixed(3)},${lon.toFixed(3)},${radius}`;
+ const cached = getCached(cacheKey, 30 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const params = new URLSearchParams({
+ limit: '50',
+ radius: String(radius),
+ coordinates: `${lat},${lon}`,
+ 'parameters_id': '2',
+ });
+ params.append('parameters_id', '1');
+ params.append('parameters_id', '3');
+ params.append('parameters_id', '7');
+ const url = `https://api.openaq.org/v3/locations?${params.toString()}`;
+ const headers = { Accept: 'application/json' };
+ const apiKey = process.env.OPENAQ_API_KEY;
+ if (apiKey) headers['X-API-Key'] = apiKey;
+ const r = await fetchWithTimeout(url, { headers }, 15_000);
+ if (!r.ok) throw new Error(`OpenAQ v3 HTTP ${r.status}`);
+ const data = await r.json();
+ const locations = Array.isArray(data?.results) ? data.results : [];
+ const payload = { locations, generatedAt: new Date().toISOString(), source: 'api.openaq.org/v3' };
+ setCached(cacheKey, payload, 30 * 60 * 1000);
+ return json(payload);
+ } catch (error) {
+ return json({ locations: [], degraded: true, reason: `openaq v3 error: ${error.message ?? error}`, generatedAt: new Date().toISOString() });
+ }
+  }
+
+  // ── OpenAQ v3: global worst readings ────────────────────────────────────
+  // GET /api/airquality/openaq/worst — top-100 most-recently-updated
+  // locations globally, so the renderer can rank/filter to "worst right
+  // now" using the same EPA AQI ladder it uses for the nearby tab.
+  if (requestUrl.pathname === '/api/airquality/openaq/worst') {
+ const cacheKey = 'openaq-worst';
+ const cached = getCached(cacheKey, 30 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const params = new URLSearchParams({
+ limit: '100',
+ 'parameters_id': '2',
+ order_by: 'lastUpdated',
+ sort_order: 'desc',
+ });
+ const url = `https://api.openaq.org/v3/locations?${params.toString()}`;
+ const headers = { Accept: 'application/json' };
+ const apiKey = process.env.OPENAQ_API_KEY;
+ if (apiKey) headers['X-API-Key'] = apiKey;
+ const r = await fetchWithTimeout(url, { headers }, 15_000);
+ if (!r.ok) throw new Error(`OpenAQ v3 HTTP ${r.status}`);
+ const data = await r.json();
+ const locations = Array.isArray(data?.results) ? data.results : [];
+ const payload = { locations, generatedAt: new Date().toISOString(), source: 'api.openaq.org/v3' };
+ setCached(cacheKey, payload, 30 * 60 * 1000);
+ return json(payload);
+ } catch (error) {
+ return json({ locations: [], degraded: true, reason: `openaq v3 error: ${error.message ?? error}`, generatedAt: new Date().toISOString() });
  }
   }
 
@@ -7351,7 +9271,7 @@ async function dispatch(requestUrl, req, routes, context) {
  nearTestSite: nearSite ? { label: nearSite.label, country: nearSite.country } : null,
  };
  });
- setCached('emsc-seismic', events, 10 * 60 * 1000);
+ setCached('emsc-seismic', events, 2 * 60 * 1000); // was 10 min; EMSC publishes every ~1 min
  return json(events);
  } catch (error) {
  return json({ error: `emsc-seismic error: ${error.message ?? error}` }, 502);
@@ -7477,6 +9397,47 @@ async function dispatch(requestUrl, req, routes, context) {
       return json(data);
     } catch (error) {
       return json({ error: `fdsn-catalog error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── USGS ShakeMap events — M4.5+ in last 7 days ────────────────────────
+  // GET /api/earthquakes/shakemap-events  (30 min cache)
+  if (requestUrl.pathname === '/api/earthquakes/shakemap-events') {
+    const cacheKey = 'shakemap-events-7d';
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    try {
+      const nowMs = Date.now();
+      const startTime = new Date(nowMs - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const params = new URLSearchParams({
+        format: 'geojson',
+        starttime: startTime,
+        minmagnitude: '4.5',
+        orderby: 'magnitude',
+        limit: '50',
+        producttype: 'shakemap',
+      });
+      const upstream = `https://earthquake.usgs.gov/fdsnws/event/1/query?${params.toString()}`;
+      const r = await fetchWithTimeout(
+        upstream,
+        { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall/sidecar (shakemap-events)' } },
+        15_000,
+      );
+      if (!r.ok) throw new Error(`USGS ${r.status}`);
+      const data = await r.json();
+      const features = Array.isArray(data?.features) ? data.features : [];
+      const recent = filterRecentM45PlusSidecar(features, nowMs, 7);
+      const events = recent.map((f, i) => buildShakemapEventSidecar(f, i));
+      const mostSig = mostSignificantEventSidecar(events);
+      const result = {
+        events,
+        mostSignificantEventId: mostSig?.id ?? null,
+        fetchedAt: new Date().toISOString(),
+      };
+      setCached(cacheKey, result, 30 * 60 * 1000);
+      return json(result);
+    } catch (error) {
+      return json({ error: `shakemap-events error: ${error.message ?? error}` }, 502);
     }
   }
 
@@ -9193,9 +11154,81 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(response);
   }
 
+  // ── News headlines aggregator (GDELT 2.0 Doc, no key required) ─────────
+  // GET /api/news/headlines?topics=security,emergency,weather,geopolitical&limit=50&q=...
+  // Returns the GDELT article list shaped for the renderer's news
+  // aggregator (title/url/source/country/seendate/tone). 15-min cache
+  // per topic-set. Falls back to last-known data on rate-limit, just
+  // like /api/gdelt-intel.
+  if (requestUrl.pathname === '/api/news/headlines') {
+ const topicsRaw = requestUrl.searchParams.get('topics') ?? 'security,geopolitical,weather,emergency';
+ const limit = Math.max(1, Math.min(100, Number.parseInt(requestUrl.searchParams.get('limit') ?? '50', 10) || 50));
+ const q = requestUrl.searchParams.get('q')?.trim() ?? '';
+ const topicMap = {
+ security: '(cyberattack OR ransomware OR breach OR terror OR attack OR shooting)',
+ geopolitical: '(war OR conflict OR sanctions OR nato OR diplomat OR invasion)',
+ natural_disasters: '(earthquake OR hurricane OR tornado OR wildfire OR flood OR tsunami OR volcano)',
+ weather: '(storm OR cyclone OR typhoon OR blizzard OR hailstorm)',
+ emergency: '(evacuation OR rescue OR explosion OR derailment OR pipeline)',
+ economic: '(inflation OR recession OR market OR fed OR tariff)',
+ health: '(outbreak OR pandemic OR virus OR vaccine OR cholera)',
+ };
+ const topics = topicsRaw.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+ const queryParts = topics.map((t) => topicMap[t]).filter(Boolean);
+ const composedQuery = queryParts.length > 0 ? `(${queryParts.join(' OR ')})` : '(news)';
+ const finalQuery = q ? `${composedQuery} AND ${q}` : composedQuery;
+ const cacheKey = `news-headlines:${topics.sort().join(',')}:${q}:${limit}`;
+ const cached = getCached(cacheKey, 15 * 60 * 1000);
+ if (cached) return json(cached);
+ if (!context._headlinesBackoff) context._headlinesBackoff = { until: 0, fails: 0 };
+ const bo = context._headlinesBackoff;
+ if (Date.now() < bo.until) {
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: 'rate-limited; serving cached' });
+ return json({ articles: [], updatedAt: Math.floor(Date.now() / 1000), error: 'rate-limited' });
+ }
+ try {
+ const params = new URLSearchParams({
+ query: finalQuery,
+ mode: 'artlist',
+ maxrecords: String(limit),
+ format: 'json',
+ sort: 'DateDesc',
+ timespan: '24h',
+ });
+ const res = await fetchWithTimeout(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, { headers: { 'User-Agent': CHROME_UA } }, 12_000);
+ if (res.status === 429 || res.status === 503) {
+ bo.fails = Math.min(bo.fails + 1, 6);
+ const waitMs = Math.min(5_000 * (2 ** bo.fails), 5 * 60_000);
+ bo.until = Date.now() + waitMs;
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: `rate-limited HTTP ${res.status}` });
+ return json({ articles: [], updatedAt: Math.floor(Date.now() / 1000), error: `rate-limited HTTP ${res.status}` });
+ }
+ if (!res.ok) throw new Error(`GDELT HTTP ${res.status}`);
+ const data = await res.json();
+ const articles = (Array.isArray(data?.articles) ? data.articles : []).map((a) => ({
+ title: a.title ?? '',
+ url: a.url ?? '',
+ domain: a.domain ?? '',
+ country: a.sourcecountry ?? null,
+ seendate: a.seendate ?? null,
+ tone: typeof a.tone === 'number' ? Math.round(a.tone * 10) / 10 : null,
+ })).filter((a) => a.title && a.url);
+ const result = { articles, topics, updatedAt: Math.floor(Date.now() / 1000) };
+ setCached(cacheKey, result, 15 * 60 * 1000);
+ bo.fails = 0; bo.until = 0;
+ return json(result);
+ } catch (error) {
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json({ ...stale, stale: true, error: error?.message ?? 'unknown' });
+ return json({ articles: [], updatedAt: Math.floor(Date.now() / 1000), error: error?.message ?? 'unknown' });
+ }
+  }
+
   // ── GDELT Intelligence (no key required, public API) ──────────────────────
   if (requestUrl.pathname === '/api/gdelt-intel') {
- const cached = getCached('gdelt-intel', 30 * 60 * 1000); // 30 minutes — GDELT rate-limits aggressively
+ const cached = getCached('gdelt-intel', 15 * 60 * 1000); // was 30 min; GDELT updates every 15 min — rate-limit still applies
  if (cached) return json(cached);
 
  // Exponential backoff after 429s. GDELT's rate limiter doesn't return
@@ -9246,7 +11279,7 @@ async function dispatch(requestUrl, req, routes, context) {
  : Date.now(),
  })).filter(e => e.title && e.url);
  const result = { events, updatedAt: Math.floor(Date.now() / 1000) };
- setCached('gdelt-intel', result);
+ setCached('gdelt-intel', result, 15 * 60 * 1000);
  if (bo.fails > 0) {
  context.logger.log(`[gdelt-intel] recovered after ${bo.fails} rate-limit hits`);
  }
@@ -10099,6 +12132,164 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── FAA TFRs — active Temporary Flight Restrictions with polygon geometry ─
+  // Fetches the FAA TFR list HTML, scrapes NOTAM IDs, then fetches each
+  // detail XML concurrently to extract polygon coordinates. 15-min cache
+  // aligns with FAA's NOTAM update cadence.
+  if (requestUrl.pathname === '/api/aviation/tfrs') {
+    const CACHE_TTL = 15 * 60 * 1000;
+    const cached = getCached('aviation-tfrs', CACHE_TTL);
+    if (cached) return json(cached);
+    try {
+      const tfrs = await fetchAllTfrs(fetchWithTimeout);
+      const result = {
+        tfrs: tfrs.map((t) => ({ ...t, color: tfrColor(t.type) })),
+        count: tfrs.length,
+        fetchedAt: Date.now(),
+        degraded: false,
+        source: 'tfr.faa.gov',
+      };
+      setCached('aviation-tfrs', result, CACHE_TTL);
+      recordFeedSuccess('aviation-tfrs');
+      return json(result);
+    } catch (error) {
+      recordFeedFailure('aviation-tfrs', error);
+      const stale = getCachedStale('aviation-tfrs');
+      if (stale) return json({ ...stale, degraded: true, reason: error?.message ?? String(error) });
+      return json({ tfrs: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: error?.message ?? String(error), source: 'tfr.faa.gov' }, 502);
+    }
+  }
+
+  // ── PhishStats phishing URL feed (free, no key) ─────────────────────────
+  // Wraps phishstats.info API; 30-min cache. Renderer-side parsing handles
+  // the upstream-or-envelope shape.
+  if (requestUrl.pathname === '/api/security/phishing') {
+ const CACHE_TTL = 30 * 60 * 1000;
+ const limit = Math.min(500, Math.max(1, Number(requestUrl.searchParams.get('limit') ?? '50')));
+ const minScore = Math.min(10, Math.max(0, Number(requestUrl.searchParams.get('minScore') ?? '5')));
+ const cacheKey = `phishstats:${limit}:${minScore}`;
+ const cached = getCached(cacheKey, CACHE_TTL);
+ if (cached) return json(cached);
+ try {
+ const url = `https://phishstats.info:2096/api/phishing?_where=(score,gt,${minScore})&_sort=-date&_size=${limit}`;
+ const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 12000);
+ if (!r.ok) return json({ records: [], degraded: true, reason: `HTTP ${r.status}`, fetchedAt: Date.now(), source: 'phishstats.info' }, 502);
+ const data = await r.json();
+ const envelope = { records: Array.isArray(data) ? data : [], fetchedAt: Date.now(), degraded: false, source: 'phishstats.info' };
+ setCached(cacheKey, envelope);
+ return json(envelope);
+ } catch (error) {
+ return json({ records: [], degraded: true, reason: error?.message ?? String(error), fetchedAt: Date.now(), source: 'phishstats.info' }, 502);
+ }
+  }
+
+  // ── urlscan.io threat search (free, no key for public results) ──────────
+  if (requestUrl.pathname === '/api/security/urlscan') {
+ const CACHE_TTL = 15 * 60 * 1000;
+ const q = (requestUrl.searchParams.get('q') ?? 'malicious:true').slice(0, 200);
+ const size = Math.min(100, Math.max(1, Number(requestUrl.searchParams.get('size') ?? '50')));
+ const cacheKey = `urlscan-search:${q}:${size}`;
+ const cached = getCached(cacheKey, CACHE_TTL);
+ if (cached) return json(cached);
+ try {
+ const url = `https://urlscan.io/api/v1/search/?q=${encodeURIComponent(q)}&size=${size}`;
+ const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 12000);
+ if (!r.ok) return json({ results: [], degraded: true, reason: `HTTP ${r.status}`, fetchedAt: Date.now(), source: 'urlscan.io' }, 502);
+ const data = await r.json();
+ const envelope = { results: Array.isArray(data?.results) ? data.results : [], total: data?.total ?? 0, fetchedAt: Date.now(), degraded: false, source: 'urlscan.io' };
+ setCached(cacheKey, envelope);
+ return json(envelope);
+ } catch (error) {
+ return json({ results: [], degraded: true, reason: error?.message ?? String(error), fetchedAt: Date.now(), source: 'urlscan.io' }, 502);
+ }
+  }
+
+  // ── urlscan.io submit (free for public scans, no key required) ──────────
+  // Accepts { url, visibility?: 'public' } and forwards to urlscan submit API.
+  // Validates URL host to block SSRF (private IPs / file:// etc.).
+  if (requestUrl.pathname === '/api/security/urlscan/submit' && req.method === 'POST') {
+ try {
+ const body = await req.json();
+ const target = typeof body?.url === 'string' ? body.url.trim() : '';
+ if (!target) return json({ error: 'url required' }, 400);
+ let parsed;
+ try { parsed = new URL(target); } catch { return json({ error: 'invalid url' }, 400); }
+ if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+ return json({ error: 'only http(s) urls accepted' }, 400);
+ }
+ const host = parsed.hostname.toLowerCase();
+ if (host === 'localhost' || host === '0.0.0.0' || /^127\./.test(host) || /^10\./.test(host)
+ || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || host.endsWith('.local')) {
+ return json({ error: 'private host blocked' }, 400);
+ }
+ const visibility = body?.visibility === 'private' ? 'private' : 'public';
+ const apiKey = process.env.URLSCAN_API_KEY?.trim() || '';
+ const headers = { 'Content-Type': 'application/json', 'User-Agent': CHROME_UA };
+ if (apiKey) headers['API-Key'] = apiKey;
+ const r = await fetchWithTimeout('https://urlscan.io/api/v1/scan/', {
+ method: 'POST',
+ headers,
+ body: JSON.stringify({ url: target, visibility }),
+ }, 12000);
+ if (r.status === 401 && !apiKey) {
+ return json({ error: 'urlscan rejected anonymous submit; configure URLSCAN_API_KEY' }, 401);
+ }
+ if (!r.ok) {
+ const text = await r.text().catch(() => '');
+ return json({ error: `urlscan submit HTTP ${r.status}`, detail: text.slice(0, 400) }, 502);
+ }
+ const data = await r.json();
+ return json({ uuid: data?.uuid ?? null, result: data?.result ?? null, api: data?.api ?? null, visibility, fetchedAt: Date.now(), source: 'urlscan.io' });
+ } catch (error) {
+ return json({ error: error?.message ?? String(error) }, 502);
+ }
+  }
+
+  // ── Pulsedive threat intelligence (free, no key for basic lookups) ──────
+  if (requestUrl.pathname === '/api/security/pulsedive') {
+ const CACHE_TTL = 60 * 60 * 1000;
+ const risk = (requestUrl.searchParams.get('risk') ?? 'high').slice(0, 16);
+ const type = (requestUrl.searchParams.get('type') ?? 'all').slice(0, 16);
+ const limit = Math.min(100, Math.max(1, Number(requestUrl.searchParams.get('limit') ?? '50')));
+ const indicator = (requestUrl.searchParams.get('indicator') ?? '').slice(0, 256);
+ const cacheKey = `pulsedive:${indicator || `${risk}:${type}:${limit}`}`;
+ const cached = getCached(cacheKey, CACHE_TTL);
+ if (cached) return json(cached);
+ try {
+ // Single-indicator lookup → /api/info.php?indicator=…
+ // Explore query   → /api/explore.php?q=is:indicator+risk:…&limit=…
+ let url;
+ const apiKey = process.env.PULSEDIVE_API_KEY?.trim() || '';
+ const keyParam = apiKey ? `&key=${encodeURIComponent(apiKey)}` : '';
+ if (indicator) {
+ url = `https://pulsedive.com/api/info.php?indicator=${encodeURIComponent(indicator)}&pretty=0${keyParam}`;
+ } else {
+ const parts = ['is:indicator'];
+ if (risk && risk !== 'all') parts.push(`risk:${risk}`);
+ if (type && type !== 'all') parts.push(`type:${type}`);
+ url = `https://pulsedive.com/api/explore.php?q=${encodeURIComponent(parts.join(' '))}&limit=${limit}&pretty=0${keyParam}`;
+ }
+ const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 12000);
+ if (!r.ok) return json({ indicators: [], degraded: true, reason: `HTTP ${r.status}`, fetchedAt: Date.now(), source: 'pulsedive.com' }, 502);
+ const data = await r.json();
+ // info.php returns a single indicator object; explore returns { results: [...] }.
+ const indicators = indicator
+ ? (data && typeof data === 'object' && !data.error ? [data] : [])
+ : (Array.isArray(data?.results) ? data.results : []);
+ const envelope = {
+ indicators,
+ query: { risk, type, limit, indicator: indicator || null },
+ fetchedAt: Date.now(),
+ degraded: false,
+ source: 'pulsedive.com',
+ };
+ setCached(cacheKey, envelope);
+ return json(envelope);
+ } catch (error) {
+ return json({ indicators: [], degraded: true, reason: error?.message ?? String(error), fetchedAt: Date.now(), source: 'pulsedive.com' }, 502);
+ }
+  }
+
   // ── Tor relay metrics ────────────────────────────────────────────────────
   if (requestUrl.pathname === '/api/tor-metrics') {
  const cached = getCached('tor-metrics', 60 * 60 * 1000);
@@ -10134,7 +12325,7 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/power-grid') {
  const eiaKey = process.env.EIA_API_KEY;
  if (!eiaKey) return json({ regions: [], keyMissing: true, error: 'EIA_API_KEY required' }, 503);
- const cached = getCached('power-grid', 15 * 60 * 1000);
+ const cached = getCached('power-grid', 5 * 60 * 1000); // was 15 min; EIA grid data refreshes every 5 min
  if (cached) return json(cached);
  try {
  // EIA Open Data API — Real-Time Operating grid demand by region
@@ -10168,7 +12359,7 @@ async function dispatch(requestUrl, req, routes, context) {
  .sort((a, b) => b.demand - a.demand);
 
  const result = { regions, source: 'eia.gov', updatedAt: new Date().toISOString() };
- setCached('power-grid', result);
+ setCached('power-grid', result, 5 * 60 * 1000);
  return json(result);
  } catch (error) {
  return json({ regions: [], error: `power-grid error: ${error.message ?? error}` }, 502);
@@ -11263,6 +13454,239 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 }
 
+
+// ── Volcano Monitor pure helpers (exported for parity tests) ─────────────────
+
+export function parseVolcanoHazardLevelSidecar(v, i) {
+  const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
+  const level = cap(v.alertLevel ?? v.alert_level ?? v.currentAlertLevel ?? 'Normal');
+  const normalised = ['Normal', 'Advisory', 'Watch', 'Warning'].includes(level) ? level : 'Normal';
+  return {
+    id: `usgs-vhp-${v.vnum ?? v.id ?? i}`,
+    name: v.volcanoName ?? v.name ?? `Volcano ${i}`,
+    location: [v.state ?? '', v.country ?? ''].filter(Boolean).join(', '),
+    alertLevel: normalised,
+    aviationColor: aviationCodeFromAlertLevelSidecar(normalised),
+    lat: Number.parseFloat(v.latitude ?? v.lat ?? 0),
+    lon: Number.parseFloat(v.longitude ?? v.lon ?? 0),
+    updatedAt: v.activityChangedDate ?? v.updatedAt ?? '',
+    observatory: v.observatoryName ?? v.observatory ?? '',
+  };
+}
+
+export function alertColorFromHazardLevelSidecar(level) {
+  return { Normal: '#22c55e', Advisory: '#eab308', Watch: '#f97316', Warning: '#ef4444' }[level] ?? '#6b7280';
+}
+
+export function aviationCodeFromAlertLevelSidecar(level) {
+  return { Normal: 'Green', Advisory: 'Yellow', Watch: 'Orange', Warning: 'Red' }[level] ?? 'Green';
+}
+
+export function volcanoMarkerHexColorSidecar(alertLevel) {
+  return alertColorFromHazardLevelSidecar(alertLevel);
+}
+
+export function filterNonNormalVolcanoesSidecar(volcanoes) {
+  return volcanoes.filter(v => v.alertLevel !== 'Normal');
+}
+
+export function sortVolcanoesByAlertSeveritySidecar(volcanoes) {
+  const order = { Warning: 3, Watch: 2, Advisory: 1, Normal: 0 };
+  return [...volcanoes].sort((a, b) => (order[b.alertLevel] ?? 0) - (order[a.alertLevel] ?? 0));
+}
+
+export function groupVolcanoesByAlertSidecar(volcanoes) {
+  const groups = { Warning: [], Watch: [], Advisory: [], Normal: [] };
+  for (const v of volcanoes) {
+    const g = groups[v.alertLevel];
+    if (g) g.push(v);
+  }
+  return groups;
+}
+
+export function parseGvpRssSidecar(xmlText) {
+  if (!xmlText || typeof xmlText !== 'string') return [];
+  const items = [];
+  const itemRe = /<item>([\s\S]*?)<\/item>/g;
+  let m;
+  while ((m = itemRe.exec(xmlText)) !== null) {
+    const block = m[1];
+    const title = (/<title[^>]*>([\s\S]*?)<\/title>/.exec(block)?.[1] ?? '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+    const desc  = (/<description[^>]*>([\s\S]*?)<\/description>/.exec(block)?.[1] ?? '').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (title) items.push({ title, description: desc.slice(0, 200) });
+  }
+  return items;
+}
+
+export function mergeGvpBulletinSidecar(volcanoes, gvpItems) {
+  return volcanoes.map(v => {
+    const namePart = v.name.toLowerCase().split(' ')[0];
+    const match = gvpItems.find(g => g.title.toLowerCase().includes(namePart));
+    return match ? { ...v, gvpBulletin: match.description } : v;
+  });
+}
+
+export function buildVolcanoMonitorStatusSidecar(volcanoes) {
+  const active = filterNonNormalVolcanoesSidecar(volcanoes);
+  return {
+    volcanoes: sortVolcanoesByAlertSeveritySidecar(volcanoes),
+    activeCount: active.length,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+// ── Severe Weather pure helpers (exported for parity tests) ──────────────────
+
+export function spcRiskLevelSidecar(dn) {
+  return { TSTM: 1, MRGL: 2, SLGT: 3, ENH: 4, MDT: 5, HIGH: 6 }[String(dn).toUpperCase()] ?? 0;
+}
+
+export function spcRiskLabelSidecar(dn) {
+  const labels = { TSTM: 'Thunderstorm', MRGL: 'Marginal', SLGT: 'Slight', ENH: 'Enhanced', MDT: 'Moderate', HIGH: 'High' };
+  return labels[String(dn).toUpperCase()] ?? String(dn);
+}
+
+export function parseSpcOutlookFeatureSidecar(feature) {
+  const p = feature?.properties ?? {};
+  const dn = String(p.DN ?? p.LABEL ?? '').trim().toUpperCase();
+  return { dn, risk: spcRiskLevelSidecar(dn), label: spcRiskLabelSidecar(dn), validTime: p.VALID ?? p.EXPIRE ?? '' };
+}
+
+export function isActiveTornadoWarningSidecar(eventStr) {
+  return String(eventStr ?? '').toLowerCase().startsWith('tornado warning');
+}
+
+export function isSevereThunderstormWarningSidecar(eventStr) {
+  return String(eventStr ?? '').toLowerCase().startsWith('severe thunderstorm warning');
+}
+
+export function classifyWarningTypeSidecar(eventStr) {
+  const ev = String(eventStr ?? '').toLowerCase();
+  if (ev.startsWith('tornado warning')) return 'tornado';
+  if (ev.startsWith('severe thunderstorm warning')) return 'thunderstorm';
+  if (ev.includes('watch')) return 'watch';
+  return 'other';
+}
+
+export function warningPolygonColorSidecar(warnType) {
+  return { tornado: '#ef4444', thunderstorm: '#f97316', watch: '#eab308' }[warnType] ?? '#6b7280';
+}
+
+export function filterExpiredWarningsSidecar(features, nowIso) {
+  const nowMs = nowIso ? Date.parse(nowIso) : Date.now();
+  return features.filter(f => {
+    const exp = f?.properties?.expires ?? f?.expires ?? '';
+    if (!exp) return true;
+    return Date.parse(exp) > nowMs;
+  });
+}
+
+export function countWarningsByTypeSidecar(warnings) {
+  const counts = { tornado: 0, thunderstorm: 0, watch: 0, other: 0 };
+  for (const w of warnings) {
+    const t = w.warnType ?? classifyWarningTypeSidecar(w.event ?? '');
+    const key = t in counts ? t : 'other';
+    counts[key]++;
+  }
+  return counts;
+}
+
+export function buildSpcOutlookSummarySidecar(features) {
+  const valid = features.map(f => parseSpcOutlookFeatureSidecar(f)).filter(p => p.risk > 0);
+  if (valid.length === 0) return { maxRisk: null, outlookCount: 0, day1MaxRisk: null, validTime: '' };
+  const sorted = [...valid].sort((a, b) => b.risk - a.risk);
+  const top = sorted[0];
+  return { maxRisk: top.dn || null, outlookCount: valid.length, day1MaxRisk: top.dn || null, validTime: top.validTime };
+}
+
+// ── ShakeAlert pure helpers (exported for parity tests) ──────────────────────
+
+export function parseShakemapMmiSidecar(products) {
+  const sm = Array.isArray(products?.shakemap) ? products.shakemap[0] : null;
+  if (!sm) return null;
+  const raw = sm?.properties?.maxmmi ?? null;
+  const val = raw === null ? null : Number.parseFloat(String(raw));
+  return Number.isFinite(val) ? val : null;
+}
+
+export function classifyMmiIntensitySidecar(mmi) {
+  if (mmi === null || mmi === undefined) return 'Not Felt';
+  if (mmi < 2) return 'Not Felt';
+  if (mmi < 4) return 'Weak';
+  if (mmi < 5) return 'Light';
+  if (mmi < 6) return 'Moderate';
+  if (mmi < 7) return 'Strong';
+  if (mmi < 8) return 'Very Strong';
+  if (mmi < 9) return 'Severe';
+  if (mmi < 10) return 'Violent';
+  return 'Extreme';
+}
+
+export function mmiHexColorSidecar(mmi) {
+  if (mmi === null || mmi === undefined || mmi < 2) return '#aaaaaa';
+  if (mmi < 4) return '#7fff00';
+  if (mmi < 5) return '#ffff00';
+  if (mmi < 6) return '#ffcc00';
+  if (mmi < 7) return '#ff8800';
+  if (mmi < 8) return '#ff0000';
+  if (mmi < 9) return '#dd0000';
+  return '#800000';
+}
+
+export function hasShakemapProductSidecar(products) {
+  return Array.isArray(products?.shakemap) && products.shakemap.length > 0;
+}
+
+export function filterRecentM45PlusSidecar(features, nowMs, days) {
+  const cutoff = nowMs - days * 24 * 60 * 60 * 1000;
+  return features.filter(f => {
+    const p = f?.properties ?? {};
+    const mag = typeof p.mag === 'number' ? p.mag : Number.parseFloat(p.mag ?? '0');
+    const time = typeof p.time === 'number' ? p.time : Number.parseFloat(p.time ?? '0');
+    return mag >= 4.5 && time >= cutoff;
+  });
+}
+
+export function buildShakemapEventSidecar(feature, idx) {
+  const p = feature?.properties ?? {};
+  const geom = feature?.geometry ?? {};
+  const coords = Array.isArray(geom?.coordinates) ? geom.coordinates : [];
+  const mag = typeof p.mag === 'number' ? p.mag : Number.parseFloat(p.mag ?? '0');
+  const products = p.products ?? {};
+  const maxMmi = parseShakemapMmiSidecar(products);
+  return {
+    id: feature?.id ?? `usgs-sm-${idx}`,
+    place: String(p.place ?? 'Unknown'),
+    magnitude: mag,
+    depthKm: Array.isArray(coords) && coords.length >= 3 ? Number(coords[2]) : 0,
+    occurredAt: typeof p.time === 'number' ? p.time : Number.parseFloat(p.time ?? '0'),
+    lat: Array.isArray(coords) ? Number(coords[1]) : 0,
+    lon: Array.isArray(coords) ? Number(coords[0]) : 0,
+    hasShakemap: hasShakemapProductSidecar(products),
+    maxMmi,
+    mmiLabel: classifyMmiIntensitySidecar(maxMmi),
+    pagerAlert: typeof p.alert === 'string' ? p.alert : null,
+    detailUrl: typeof p.url === 'string' ? p.url : `https://earthquake.usgs.gov/earthquakes/eventpage/${feature?.id ?? ''}`,
+  };
+}
+
+export function mostSignificantEventSidecar(events) {
+  if (!events || events.length === 0) return null;
+  return [...events].sort((a, b) => b.magnitude - a.magnitude)[0];
+}
+
+export function pagerAlertHexColorSidecar(alert) {
+  return { green: '#22c55e', yellow: '#eab308', orange: '#f97316', red: '#ef4444' }[String(alert ?? '').toLowerCase()] ?? '#6b7280';
+}
+
+export function shakemapAvailabilityLabelSidecar(hasShakemap) {
+  return hasShakemap ? 'ShakeMap available' : 'ShakeMap pending';
+}
+
+export function recentEventsSidecar(features, nowMs, days) {
+  return filterRecentM45PlusSidecar(features, nowMs, days);
+}
+
 export async function createLocalApiServer(options = {}) {
   if (!process.env.LOCAL_API_TOKEN) {
     console.error('[sidecar] FATAL: LOCAL_API_TOKEN not set — refusing to start');
@@ -11355,6 +13779,130 @@ export async function createLocalApiServer(options = {}) {
  feeds: getFeedSnapshots(),
  }));
  return;
+ }
+
+ // ── /api/diagnostics/self-test — fan-out probe across 10 domain routes ──
+ // Issues a small HEAD/GET against each route on the same sidecar
+ // process and returns { route, ok, status, latencyMs, error? } per probe.
+ if (requestUrl.pathname === '/api/diagnostics/self-test') {
+   const { results, summary } = await runSidecarSelfTest(context.port);
+   res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify({ results, summary, asOf: new Date().toISOString() }));
+   return;
+ }
+
+ // ── /api/intelligence/situations — sidecar mirror of the renderer ring ─
+ // GET           — list active situations
+ // GET /:id      — single situation
+ // POST          — manually push a situation (validated server-side)
+ // The mirror is in-process only; the renderer remains canonical for the
+ // user-visible state. Useful for replay tooling + integration tests.
+ if (requestUrl.pathname === '/api/intelligence/situations') {
+   if (req.method === 'GET') {
+     res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ situations: listActiveSituationsSidecar(),
+       asOf: new Date().toISOString() }));
+     return;
+   }
+   if (req.method === 'POST') {
+     let bodyText = '';
+     try {
+       for await (const chunk of req) bodyText += chunk;
+     } catch {
+       bodyText = '';
+     }
+     let parsed = null;
+     try { parsed = bodyText ? JSON.parse(bodyText) : null; } catch { parsed = null; }
+     if (!parsed || typeof parsed !== 'object') {
+       res.writeHead(400, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'invalid JSON body' }));
+       return;
+     }
+     const result = createSituationSidecar(parsed);
+     if (!result.ok) {
+       res.writeHead(400, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: result.error }));
+       return;
+     }
+     res.writeHead(201, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ situation: result.situation }));
+     return;
+   }
+   res.writeHead(405, { 'content-type': 'application/json', ...makeCorsHeaders(req),
+     allow: 'GET, POST' });
+   res.end(JSON.stringify({ error: 'method not allowed' }));
+   return;
+ }
+ const sitDetailMatch = requestUrl.pathname.match(/^\/api\/intelligence\/situations\/([^/]+)$/);
+ if (sitDetailMatch) {
+   const sit = getSituationSidecar(sitDetailMatch[1]);
+   if (!sit) {
+     res.writeHead(404, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: 'situation not found' }));
+     return;
+   }
+   res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify({ situation: sit }));
+   return;
+ }
+
+ // ── /api/intelligence/rules — custom alert rules sidecar mirror ────
+ if (requestUrl.pathname === '/api/intelligence/rules') {
+   if (req.method === 'GET') {
+     res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ rules: listRulesSidecar(),
+       asOf: new Date().toISOString() }));
+     return;
+   }
+   if (req.method === 'POST') {
+     let bodyText = '';
+     try { for await (const chunk of req) bodyText += chunk; } catch { bodyText = ''; }
+     let parsed = null;
+     try { parsed = bodyText ? JSON.parse(bodyText) : null; } catch { parsed = null; }
+     const result = upsertRuleSidecar(parsed);
+     if (!result.ok) {
+       res.writeHead(400, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: result.error }));
+       return;
+     }
+     res.writeHead(result.created ? 201 : 200,
+       { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ rule: result.rule }));
+     return;
+   }
+   res.writeHead(405, { 'content-type': 'application/json', ...makeCorsHeaders(req),
+     allow: 'GET, POST' });
+   res.end(JSON.stringify({ error: 'method not allowed' }));
+   return;
+ }
+ if (requestUrl.pathname === '/api/intelligence/rules/evaluate') {
+   if (req.method !== 'POST') {
+     res.writeHead(405, { 'content-type': 'application/json', ...makeCorsHeaders(req),
+       allow: 'POST' });
+     res.end(JSON.stringify({ error: 'method not allowed' }));
+     return;
+   }
+   let bodyText = '';
+   try { for await (const chunk of req) bodyText += chunk; } catch { bodyText = ''; }
+   let parsed = null;
+   try { parsed = bodyText ? JSON.parse(bodyText) : null; } catch { parsed = null; }
+   const result = evaluateRulesAgainstEventSidecar(parsed);
+   if (!result.ok) {
+     res.writeHead(400, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: result.error }));
+     return;
+   }
+   res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify({ triggered: result.triggered }));
+   return;
+ }
+ const ruleDetailMatch = requestUrl.pathname.match(/^\/api\/intelligence\/rules\/([^/]+)$/);
+ if (ruleDetailMatch && req.method === 'DELETE') {
+   const removed = deleteRuleSidecar(ruleDetailMatch[1]);
+   res.writeHead(removed ? 200 : 404,
+     { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify(removed ? { ok: true } : { error: 'rule not found' }));
+   return;
  }
 
  // ── /api/diag — full diagnostics snapshot for bug reports ─────────

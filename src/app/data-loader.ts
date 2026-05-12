@@ -280,6 +280,11 @@ import type { ExtendedForecastPanel } from '@/components/ExtendedForecastPanel';
 import type { WeatherRadarPanel } from '@/components/WeatherRadarPanel';
 import type { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import type { PollenPanel } from '@/components/PollenPanel';
+import type { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
+import type { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
+import type { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
+import { ingest } from '@/services/intelligence/observation-store';
+import type { ObservationEvent } from '@/types/intelligence';
 import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
@@ -299,6 +304,9 @@ import * as utilityLoaders from '@/app/loaders/utility';
 import * as hazardLoaders from '@/app/loaders/hazards';
 import * as diseaseLoaders from '@/app/loaders/disease';
 import * as cyberLoaders from '@/app/loaders/cyber';
+import { earthquakesToObservations } from '@/services/intelligence/adapters/earthquake-adapter';
+import { aisDisruptionsToObservations } from '@/services/intelligence/adapters/ais-adapter';
+import { ingest as ingestObservations, getRecent as getRecentObservations } from '@/services/intelligence/observation-store';
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_UNSPECIFIED: 'info',
@@ -573,6 +581,9 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'oilSpills', task: () => runGuarded('oilSpills', () => this.loadOilSpills()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'gdacsAlerts', task: () => runGuarded('gdacsAlerts', () => this.loadGDACSAlerts()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoAlerts', task: () => runGuarded('volcanoAlerts', () => this.loadVolcanoAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoMonitor', task: () => runGuarded('volcanoMonitor', () => this.loadVolcanoMonitor()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'severeWeather', task: () => runGuarded('severeWeather', () => this.loadSevereWeather()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'shakeAlert', task: () => runGuarded('shakeAlert', () => this.loadShakeAlert()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'nwsAlerts', task: () => runGuarded('nwsAlerts', () => this.loadNWSAlerts()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'faaCameras', task: () => runGuarded('faaCameras', () => this.loadFAACameras()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'savedPlaceWeather', task: () => runGuarded('savedPlaceWeather', () => this.loadSavedPlaceWeather()) });
@@ -608,6 +619,9 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'weatherRadar', task: () => runGuarded('weatherRadar', () => this.loadWeatherRadar()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'tidePredictions', task: () => runGuarded('tidePredictions', () => this.loadTidePredictions()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'pollenData', task: () => runGuarded('pollenData', () => this.loadPollenData()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'goesSatellite', task: () => runGuarded('goesSatellite', () => this.loadGoesSatellite()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'floodMonitor', task: () => runGuarded('floodMonitor', () => this.loadFloodMonitor()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'intelligenceFeed', task: () => runGuarded('intelligenceFeed', () => this.loadIntelligenceFeed()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'lightning', task: () => runGuarded('lightning', () => this.loadLightning()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'redFlagWarnings', task: () => runGuarded('redFlagWarnings', () => this.loadRedFlagWarnings()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'satellites', task: () => runGuarded('satellites', () => this.loadSatellites()) });
@@ -1288,6 +1302,7 @@ export class DataLoaderManager implements AppModule {
  ingestEarthquakesToTimeline(earthquakeResult.value);
  ingestEarthquakesToMatrix(earthquakeResult.value);
  ingestEarthquakesUnified(earthquakeResult.value);
+ ingestObservations(earthquakesToObservations(earthquakeResult.value));
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
  dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
@@ -1315,6 +1330,7 @@ export class DataLoaderManager implements AppModule {
  const hasEarthquakes = earthquakeResult.status === 'fulfilled' && earthquakeResult.value.length > 0;
  const hasEonet = eonetResult.status === 'fulfilled' && eonetResult.value.length > 0;
  this.ctx.map?.setLayerReady('natural', hasEarthquakes || hasEonet);
+ this.pushObservationsToSidecar();
 
  // Evaluate disaster auto-trigger (uses cached GDACS data — no extra fetch)
  const earthquakes = earthquakeResult.status === 'fulfilled' ? earthquakeResult.value : [];
@@ -1401,6 +1417,81 @@ export class DataLoaderManager implements AppModule {
  bridgeWeatherAlertsToInsights(alerts);
  } catch (error) {
  console.warn('[data-loader] insights bridge failed:', error);
+ }
+
+ // Run severe alerts through the Big Event Detector → Notification
+ // Ladder → native/in-app dispatch. Only Extreme/Severe alerts enter
+ // the ladder; lesser severities are not actionable at this rung.
+ // Quiet-hours flag defaults false until settings exposes getQuietHoursActive().
+ try {
+ const [
+ { detectBigEvent },
+ { routeBigEventToLadder },
+ { getNotificationTraceRegistry },
+ ] = await Promise.all([
+ import('@/services/insights/big-event-detector'),
+ import('@/services/insights/notification-ladder'),
+ import('@/services/diagnostics/diagnostics-state'),
+ ]);
+ const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
+ const RUNG_ACTION: Record<string, 'sound+banner' | 'banner' | null> = {
+ announcement: 'sound+banner',
+ critical: 'sound+banner',
+ banner_sound: 'sound+banner',
+ banner: 'banner',
+ in_app: null,
+ silent: null,
+ };
+ const registry = getNotificationTraceRegistry();
+ const severeAlerts = alerts.filter(
+ (a) => a.severity === 'Extreme' || a.severity === 'Severe',
+ );
+ for (const alert of severeAlerts) {
+ const severityScore = SEVERITY_SCORE[alert.severity] ?? 30;
+ const ladderInput = {
+ id: alert.id,
+ domain: 'weather',
+ severityScore,
+ truthScore: 0.85, // NWS is an official source — high prior confidence
+ sourceCount: 1,
+ hasOfficialSource: true,
+ overlappingDomains: ['weather'] as const,
+ userExposure: 50, // conservative default; polygon match refines this
+ potentialImpact: severityScore,
+ };
+ const bigEventResult = detectBigEvent(ladderInput);
+ if (!bigEventResult.isBigEvent) continue;
+ const decision = routeBigEventToLadder(registry, bigEventResult, ladderInput, {
+ domain: 'weather',
+ headline: alert.headline || alert.event,
+ summary: alert.areaDesc ? `${alert.event} — ${alert.areaDesc}` : alert.event,
+ quietHoursActive: false,
+ quietHoursBypassEnabled: true,
+ dedupeMatch: false,
+ });
+ const action = RUNG_ACTION[decision.rung] ?? null;
+ if (decision.dispatched && action) {
+ notificationDispatcher.dispatchNotification(
+ {
+ id: alert.id,
+ source: 'nws',
+ severity: alert.severity === 'Extreme' ? 'critical' : 'high',
+ title: alert.event,
+ body: alert.headline || alert.areaDesc || alert.event,
+ timestamp: Date.now(),
+ location: alert.centroid
+ ? { lat: alert.centroid[1], lon: alert.centroid[0] }
+ : undefined,
+ relevanceScore: severityScore,
+ acknowledged: false,
+ pinned: false,
+ },
+ action,
+ );
+ }
+ }
+ } catch (error) {
+ console.warn('[data-loader] notification ladder failed:', error);
  }
 
  // Wire weather alerts into the mission ledger (closed-loop ops PR 2).
@@ -2107,6 +2198,9 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadVolcanoAlerts(): Promise<void> { return cyberLoaders.loadVolcanoAlerts(this.ctx); }
+  async loadVolcanoMonitor(): Promise<void> { return cyberLoaders.loadVolcanoMonitor(this.ctx); }
+  async loadSevereWeather(): Promise<void> { return cyberLoaders.loadSevereWeather(this.ctx); }
+  async loadShakeAlert(): Promise<void> { return cyberLoaders.loadShakeAlert(this.ctx); }
 
   async loadNWSAlerts(): Promise<void> {
  try {
@@ -2248,6 +2342,7 @@ export class DataLoaderManager implements AppModule {
  signalAggregator.ingestAisDisruptions(disruptions);
  ingestAisDisruptionsForCII(disruptions);
  ingestAisToDarkVessel(disruptions);
+ ingestObservations(aisDisruptionsToObservations(disruptions));
  (this.ctx.panels.cii as CIIPanel)?.refresh();
  updateAndCheck([
  { type: 'ais_gaps', region: 'global', count: disruptions.length },
@@ -2275,6 +2370,7 @@ export class DataLoaderManager implements AppModule {
  if (hasData) {
  dataFreshness.recordUpdate('ais', shippingCount);
  }
+ this.pushObservationsToSidecar();
  } catch (error) {
  this.ctx.map?.setLayerReady('ais', false);
  this.ctx.statusPanel?.updateFeed('Shipping', { status: 'error', errorMessage: String(error) });
@@ -3506,6 +3602,46 @@ export class DataLoaderManager implements AppModule {
  }
   }
 
+  async loadGoesSatellite(): Promise<void> {
+ try {
+ const r = await fetch('/api/satellite/goes');
+ if (!r.ok) return;
+ const data = await r.json();
+ (this.ctx.panels['goes-satellite'] as GoesSatellitePanel | undefined)?.update(data);
+ } catch (error) {
+ console.warn('[goes-satellite] fetch failed', error);
+ }
+  }
+
+  async loadFloodMonitor(): Promise<void> {
+ try {
+ const [gaugesRes, warningsRes] = await Promise.allSettled([
+ fetch('/api/floods/gauges').then(r => r.ok ? r.json() : null),
+ fetch('/api/floods/warnings').then(r => r.ok ? r.json() : null),
+ ]);
+ const panel = this.ctx.panels['flood-monitor'] as FloodMonitorPanel | undefined;
+ if (gaugesRes.status === 'fulfilled' && gaugesRes.value) panel?.updateGauges(gaugesRes.value);
+ if (warningsRes.status === 'fulfilled' && warningsRes.value) panel?.updateWarnings(warningsRes.value);
+ } catch (error) {
+ console.warn('[flood-monitor] fetch failed', error);
+ }
+  }
+
+  async loadIntelligenceFeed(): Promise<void> {
+ try {
+ const r = await fetch('/api/intelligence/prioritized?limit=100');
+ if (!r.ok) return;
+ const data = await r.json() as { events?: ObservationEvent[] };
+ const events = data?.events;
+ if (Array.isArray(events) && events.length > 0) {
+ ingest(events);
+ void (this.ctx.panels['intelligence-feed'] as IntelligenceFeedPanel | undefined)?.fetchFeed();
+ }
+ } catch (error) {
+ console.warn('[intelligence-feed] fetch failed', error);
+ }
+  }
+
   async loadLightning(): Promise<void> {
  try {
  const strikes = await fetchLightningStrikes();
@@ -3571,5 +3707,15 @@ export class DataLoaderManager implements AppModule {
  } catch (error) {
  console.error('[App] RIPE Atlas fetch failed:', error);
  }
+  }
+
+  pushObservationsToSidecar(): void {
+ const recent = getRecentObservations(200);
+ if (recent.length === 0) return;
+ void fetch(`${getApiBaseUrl()}/api/intelligence/observations`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify(recent),
+ }).catch(() => {});
   }
 }

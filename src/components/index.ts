@@ -108,6 +108,7 @@ export { SupplyChainImpactPanel } from './SupplyChainImpactPanel';
 export { WaterQualityPanel } from './WaterQualityPanel';
 export { NuclearMonitorPanel } from './NuclearMonitorPanel';
 export { NotificationDigestPanel } from './NotificationDigestPanel';
+export { NotificationSettingsPanel } from './NotificationSettingsPanel';
 
 // Worldview / Palantir / Dragos-inspired panels
 export { PatternOfLifePanel } from './PatternOfLifePanel';
@@ -133,3 +134,7 @@ export { CorrelationMatrixPanel } from './CorrelationMatrixPanel';
 export { CascadeSimulatorPanel } from './CascadeSimulatorPanel';
 export { EmergencyBroadcastPanel } from './EmergencyBroadcastPanel';
 export { SatelliteChangePanel } from './SatelliteChangePanel';
+
+// New OSINT + crypto panels
+export { BitcoinAbusePanel } from './BitcoinAbusePanel';
+export { RedditOsintPanel } from './RedditOsintPanel';

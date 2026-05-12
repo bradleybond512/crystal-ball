@@ -157,6 +157,9 @@ const layers = {
   aircraft3d: false,
   streetTiles: false,
   navigationRoute: false,
+  volcanoMonitor: false,
+  severeWeatherPolygons: false,
+  shakemapOverlay: false,
 };
 
 await initI18n();

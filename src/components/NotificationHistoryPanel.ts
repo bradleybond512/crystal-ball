@@ -32,7 +32,10 @@ import {
 } from './notification-history-helpers';
 import { escapeHtml } from '@/utils/sanitize';
 
-const REFRESH_MS = 5000;
+// Spec calls for 30s auto-refresh — the history ring is appended to by
+// the producer pipeline and persisted to IDB, so we don't need to poll
+// faster than the user's expected glance cadence.
+const REFRESH_MS = 30_000;
 
 interface PanelState {
   domain: HistoryDomain | 'all';

@@ -7319,6 +7319,28 @@ a.prediction-link:hover {
 .nh-detail-payload { background: var(--overlay-subtle); padding: 6px 8px; border-radius: 3px; font-family: ui-monospace, monospace; font-size: 10px; white-space: pre-wrap; margin: 0; max-height: 200px; overflow-y: auto; }
 .nh-footer { padding: 4px 0 0; color: var(--text-dim); font-size: 10px; text-align: right; }
 
+/* Situation Store Panel */
+.sit-panel { font-size: 11px; padding: 8px 10px; }
+.sit-rows { display: flex; flex-direction: column; gap: 4px; max-height: 480px; overflow-y: auto; }
+.sit-row { padding: 6px 8px; border-radius: 3px; border: 1px solid transparent; cursor: pointer; }
+.sit-row:hover { background: var(--surface-hover); border-color: var(--border-subtle); }
+.sit-row-expanded { background: var(--surface-hover); border-color: var(--border-subtle); }
+.sit-row-summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sit-row-title-block { flex: 1; min-width: 0; }
+.sit-row-name { color: var(--text); font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sit-row-meta { display: flex; gap: 8px; margin-top: 2px; font-size: 10px; color: var(--text-dim); }
+.sit-row-domain { font-family: ui-monospace, monospace; padding: 0 4px; background: var(--overlay-subtle); border-radius: 2px; }
+.sit-row-time { font-variant-numeric: tabular-nums; }
+.sit-row-count { color: var(--text-dim); }
+.sit-row-sev { font-size: 9px; font-weight: 700; letter-spacing: 0.05em; padding: 2px 6px; background: var(--overlay-subtle); border-radius: 2px; white-space: nowrap; }
+.sit-row-detail { padding: 8px 4px 2px; border-top: 1px dotted var(--border-subtle); margin-top: 6px; font-size: 10px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 4px; }
+.sit-detail-line { line-height: 1.5; }
+.sit-detail-line strong { color: var(--text); margin-right: 4px; }
+.sit-detail-empty { color: var(--text-dim); font-style: italic; }
+.sit-detail-list { margin: 4px 0 0 16px; padding: 0; font-family: ui-monospace, monospace; font-size: 10px; }
+.sit-detail-list li { line-height: 1.4; }
+.sit-tag { display: inline-block; padding: 0 4px; margin: 0 2px 2px 0; background: var(--overlay-medium); border-radius: 2px; font-size: 9px; }
+
 /* CVE Tracker Panel */
 .cve-tracker-panel { font-size: 11px; padding: 8px 10px; }
 .cve-tab-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }

@@ -307,6 +307,12 @@ import {
 import { t } from '@/services/i18n';
 import { trackCriticalBannerAction } from '@/services/analytics';
 import { alertFamily, getMode, toggleGhostMode, type AppMode } from '@/services/mode-manager';
+import {
+  initSituationalMode, setMode as setSituationalMode,
+  setAutoMode, getAutoMode, isAutoMode, clearManualMode,
+  type SituationalMode, type SituationalModeChangedDetail,
+} from '@/app/mode-manager';
+import { unifiedAlertStore } from '@/services/unified-alerts';
 import { isLowPowerMode, setLowPowerMode } from '@/services/low-power';
 import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import { initModeTransitionCards } from '@/services/mode-transition-card';
@@ -1606,6 +1612,9 @@ export class PanelLayoutManager implements AppModule {
  // Wire mode selector buttons
  this._initModeSelector();
 
+ // Wire situational mode switcher (monitoring / alert / investigation / briefing)
+ this._initSituationalModeSelector();
+
  // Set up JS-based window drag on toolbar + sidebar drag zone
  this._setupWindowDragRegions();
 
@@ -1763,6 +1772,57 @@ export class PanelLayoutManager implements AppModule {
 
  // Auto-mode-activation notifications deleted in mode collapse —
  // war/disaster modes no longer exist as triggerable states.
+  }
+
+  private _initSituationalModeSelector(): void {
+ // Apply initial body attribute + button states
+ const initial = initSituationalMode();
+ document.body.dataset.mode = initial;
+ this._updateSituationalModeBtns(initial, isAutoMode());
+
+ // Button clicks — delegate so buttons survive any DOM rebuilds
+ document.addEventListener('click', (e) => {
+ const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-mode-key]');
+ if (!btn) return;
+ const key = btn.dataset.modeKey as SituationalMode | undefined;
+ if (key === 'monitoring' || key === 'alert' || key === 'investigation' || key === 'briefing') {
+ setSituationalMode(key);
+ }
+ });
+
+ // "Auto" label click — clear manual override and let auto-mode re-evaluate
+ document.getElementById('situationalModeAutoIndicator')?.addEventListener('click', () => {
+ clearManualMode();
+ const auto = getAutoMode(unifiedAlertStore.getAll());
+ setAutoMode(auto);
+ });
+
+ // React to mode changes: sync body attr + button highlight
+ document.addEventListener('wm:situational-mode-changed', ((e: CustomEvent<SituationalModeChangedDetail>) => {
+ const { mode, auto } = e.detail;
+ document.body.dataset.mode = mode;
+ this._updateSituationalModeBtns(mode, auto);
+ }) as EventListener);
+
+ // Auto-mode evaluation: re-run whenever the alert store changes
+ unifiedAlertStore.subscribe(() => {
+ if (isAutoMode()) {
+ setAutoMode(getAutoMode(unifiedAlertStore.getAll()));
+ }
+ });
+  }
+
+  private _updateSituationalModeBtns(mode: SituationalMode, auto: boolean): void {
+ for (const btn of document.querySelectorAll<HTMLElement>('[data-mode-key]')) {
+ btn.classList.toggle('active', btn.dataset.modeKey === mode);
+ }
+ const autoEl = document.getElementById('situationalModeAutoIndicator');
+ if (autoEl) {
+ autoEl.style.opacity = auto ? '1' : '0.3';
+ autoEl.title = auto
+ ? 'Auto — system is selecting mode based on active alerts (click to re-evaluate)'
+ : 'Manual — click to restore auto-selection';
+ }
   }
 
   /**

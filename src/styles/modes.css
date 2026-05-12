@@ -1,0 +1,201 @@
+/**
+ * Situational Mode visual states.
+ *
+ * Keyed off body[data-mode="monitoring|alert|investigation|briefing"].
+ * Orthogonal to body[data-app-mode="ghost|gods-vision"].
+ */
+
+/* ── Monitoring — default operating state, green status ───────────────── */
+[data-mode="monitoring"] .status-dot,
+[data-mode="monitoring"] .mac-toolbar-status .status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.6);
+}
+
+[data-mode="monitoring"] .mac-situational-mode-btn[data-mode-key="monitoring"] {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+/* ── Alert — red accents, pulsing sidebar, pinned banner ──────────────── */
+[data-mode="alert"] .status-dot,
+[data-mode="alert"] .mac-toolbar-status .status-dot {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+  animation: cb-mode-dot-pulse 1.2s ease-in-out infinite;
+}
+
+[data-mode="alert"] .mac-sidebar {
+  border-right-color: rgba(239, 68, 68, 0.35);
+}
+
+[data-mode="alert"] .mac-content-toolbar {
+  background: linear-gradient(
+    to bottom,
+    rgba(239, 68, 68, 0.12),
+    rgba(239, 68, 68, 0.04)
+  );
+}
+
+[data-mode="alert"] .mac-situational-mode-btn[data-mode-key="alert"] {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+/* Severity badges pop harder in alert mode */
+[data-mode="alert"] .severity-badge-critical,
+[data-mode="alert"] [data-severity="critical"] {
+  color: #ef4444;
+  font-weight: 700;
+  text-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+[data-mode="alert"] .severity-badge-high,
+[data-mode="alert"] [data-severity="high"] {
+  color: #f97316;
+}
+
+/* ── Investigation — emphasise evidence, de-emphasise noise ───────────── */
+[data-mode="investigation"] .status-dot,
+[data-mode="investigation"] .mac-toolbar-status .status-dot {
+  background: #8b5cf6;
+  box-shadow: 0 0 4px rgba(139, 92, 246, 0.6);
+}
+
+[data-mode="investigation"] .mac-content-toolbar {
+  background: linear-gradient(
+    to bottom,
+    rgba(139, 92, 246, 0.08),
+    transparent
+  );
+}
+
+[data-mode="investigation"] .mac-situational-mode-btn[data-mode-key="investigation"] {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+/* Dim panels that aren't evidence/correlation related */
+[data-mode="investigation"] .panel-section:not([data-panel-key*="correlat"]):not([data-panel-key*="evidence"]):not([data-panel-key*="synthesis"]):not([data-panel-key*="alert"]):not([data-panel-key*="intel"]) {
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+[data-mode="investigation"] .panel-section:not([data-panel-key*="correlat"]):not([data-panel-key*="evidence"]):not([data-panel-key*="synthesis"]):not([data-panel-key*="alert"]):not([data-panel-key*="intel"]):hover {
+  opacity: 1;
+}
+
+/* ── Briefing — quiet, muted palette, emphasise intel feeds ───────────── */
+[data-mode="briefing"] .status-dot,
+[data-mode="briefing"] .mac-toolbar-status .status-dot {
+  background: #64748b;
+  box-shadow: none;
+}
+
+[data-mode="briefing"] .mac-content-toolbar {
+  background: linear-gradient(
+    to bottom,
+    rgba(100, 116, 139, 0.06),
+    transparent
+  );
+}
+
+[data-mode="briefing"] .mac-situational-mode-btn[data-mode-key="briefing"] {
+  background: rgba(100, 116, 139, 0.15);
+  color: #94a3b8;
+  border-color: rgba(100, 116, 139, 0.35);
+}
+
+/* Dim data-heavy panels during briefing */
+[data-mode="briefing"] .panel-section:not([data-panel-key*="intel"]):not([data-panel-key*="insight"]):not([data-panel-key*="brief"]):not([data-panel-key*="situation"]) {
+  opacity: 0.55;
+  transition: opacity 0.25s ease;
+}
+
+[data-mode="briefing"] .panel-section:not([data-panel-key*="intel"]):not([data-panel-key*="insight"]):not([data-panel-key*="brief"]):not([data-panel-key*="situation"]):hover {
+  opacity: 1;
+}
+
+/* ── Mode switcher widget ─────────────────────────────────────────────── */
+.mac-situational-mode-section {
+  padding: 8px 10px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 4px;
+}
+
+.mac-situational-mode-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+  margin-bottom: 6px;
+  padding: 0 2px;
+}
+
+.mac-situational-mode-auto {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.mac-situational-mode-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.mac-situational-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 5px 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mac-situational-mode-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Shared animation ────────────────────────────────────────────────── */
+@keyframes cb-mode-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.65; transform: scale(1.25); }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  [data-mode="alert"] .status-dot,
+  [data-mode="alert"] .mac-toolbar-status .status-dot {
+    animation: none;
+  }
+
+  [data-mode="investigation"] .panel-section,
+  [data-mode="briefing"] .panel-section {
+    transition: none;
+  }
+}

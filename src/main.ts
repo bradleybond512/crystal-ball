@@ -2,6 +2,7 @@
 import './styles/base-layer.css';
 import './styles/happy-theme.css';
 import './styles/gods-eye-4d.css';
+import './styles/modes.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as Sentry from '@sentry/browser';
 import { inject } from '@vercel/analytics';
@@ -376,16 +377,14 @@ if (!('__TAURI_INTERNALS__' in window) && !('__TAURI__' in window)) {
  registerSW({
  onRegisteredSW(_swUrl, registration) {
  if (!registration) return;
- setInterval(async () => {
+ setInterval(() => {
  // Skip the hourly update when the tab is offline or backgrounded
  // so we don't wake the network on mobile devices for no reason.
  if (!navigator.onLine) return;
  if (document.visibilityState === 'hidden') return;
- try {
- await registration.update();
- } catch (error) {
+ registration.update().catch((error: unknown) => {
  console.warn('[PWA] Service worker update check failed', error);
- }
+ });
  }, 60 * 60 * 1000);
  },
  onOfflineReady() {

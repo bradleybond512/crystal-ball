@@ -235,7 +235,8 @@ async function fetchLocalWithStartupRetry(
 //
 // If the renderer is compromised (XSS, supply chain), the attacker
 // already has access to strictly more powerful Tauri IPC commands
-// (get_all_secrets, set_secret, etc.) via window.__TAURI_INTERNALS__.
+// (get_secret/set_secret/delete_secret, each gated by the
+// SUPPORTED_SECRET_KEYS allowlist) via window.__TAURI_INTERNALS__.
 // The fetch patch does not expand the attack surface beyond what IPC
 // already provides.
 //

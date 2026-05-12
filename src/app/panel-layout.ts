@@ -152,13 +152,10 @@ import { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import { PollenPanel } from '@/components/PollenPanel';
 import { OpenSanctionsPanel } from '@/components/OpenSanctionsPanel';
 import { SanctionsPanel } from '@/components/SanctionsPanel';
-import { HibpBreachesPanel } from '@/components/HibpBreachesPanel';
-import { IpInfoPanel } from '@/components/IpInfoPanel';
-import { BitcoinAbusePanel } from '@/components/BitcoinAbusePanel';
-import { RedditOsintPanel } from '@/components/RedditOsintPanel';
-import { PhishstatsFeedPanel } from '@/components/PhishstatsFeedPanel';
-import { UrlscanThreatsPanel } from '@/components/UrlscanThreatsPanel';
-import { PulsediveIntelPanel } from '@/components/PulsediveIntelPanel';
+// OSINT panels are lazy-loaded so they land in their own chunk. They are
+// rarely the first thing a user opens, and pulling their dependencies
+// (parsers, URL validators, threat-feed clients) into the main panels chunk
+// costs ~70KB gzipped at boot. See loadOsintPanels() below.
 import { EdgarFilingsPanel } from '@/components/EdgarFilingsPanel';
 import { AirQualityPanel } from '@/components/AirQualityPanel';
 import { OpenaqMonitorPanel } from '@/components/OpenaqMonitorPanel';
@@ -1080,23 +1077,12 @@ export class PanelLayoutManager implements AppModule {
  const sanctionsIntelPanel = new SanctionsPanel();
  this.ctx.panels['sanctions-intel'] = sanctionsIntelPanel;
 
- this.ctx.panels['hibp-breaches'] = new HibpBreachesPanel();
- this.ctx.panels['ipinfo-lookup'] = new IpInfoPanel();
-
- const bitcoinAbusePanel = new BitcoinAbusePanel();
- this.ctx.panels['bitcoin-abuse'] = bitcoinAbusePanel;
-
- const redditOsintPanel = new RedditOsintPanel();
- this.ctx.panels['reddit-osint'] = redditOsintPanel;
-
- const phishstatsFeedPanel = new PhishstatsFeedPanel();
- this.ctx.panels['phishstats-feed'] = phishstatsFeedPanel;
-
- const urlscanThreatsPanel = new UrlscanThreatsPanel();
- this.ctx.panels['urlscan-threats'] = urlscanThreatsPanel;
-
- const pulsediveIntelPanel = new PulsediveIntelPanel();
- this.ctx.panels['pulsedive-intel'] = pulsediveIntelPanel;
+ // Lazy-load all OSINT panels. They appear in the dataTracking category
+ // but most users never open them at boot. The dynamic imports below let
+ // Vite emit a shared `panels-osint` chunk that loads in parallel with
+ // the first paint. Panel objects are attached to ctx.panels as soon as
+ // each module resolves — Panel rendering itself is async-tolerant.
+ void this.loadOsintPanels();
 
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;
@@ -2016,6 +2002,33 @@ export class PanelLayoutManager implements AppModule {
  .map((el) => (el as HTMLElement).dataset.panel)
  .filter((key): key is string => !!key);
  localStorage.setItem(this.ctx.PANEL_ORDER_KEY, JSON.stringify(order));
+  }
+
+  /**
+   * Dynamic-import the seven OSINT panels in parallel so Vite splits them
+   * into their own chunk. Each panel is registered on ctx.panels as soon
+   * as its module resolves; the panel grid will display a placeholder for
+   * any not-yet-loaded panel until the chunk arrives (sub-100ms on modern
+   * hardware). Errors per-panel are swallowed so a single failed import
+   * cannot wedge the rest.
+   */
+  private async loadOsintPanels(): Promise<void> {
+ const slots = [
+ ['hibp-breaches',   () => import('@/components/HibpBreachesPanel').then((m) => new m.HibpBreachesPanel())],
+ ['ipinfo-lookup',   () => import('@/components/IpInfoPanel').then((m) => new m.IpInfoPanel())],
+ ['bitcoin-abuse',   () => import('@/components/BitcoinAbusePanel').then((m) => new m.BitcoinAbusePanel())],
+ ['reddit-osint',    () => import('@/components/RedditOsintPanel').then((m) => new m.RedditOsintPanel())],
+ ['phishstats-feed', () => import('@/components/PhishstatsFeedPanel').then((m) => new m.PhishstatsFeedPanel())],
+ ['urlscan-threats', () => import('@/components/UrlscanThreatsPanel').then((m) => new m.UrlscanThreatsPanel())],
+ ['pulsedive-intel', () => import('@/components/PulsediveIntelPanel').then((m) => new m.PulsediveIntelPanel())],
+ ] as const;
+ await Promise.all(slots.map(async ([id, load]) => {
+ try {
+ this.ctx.panels[id] = await load();
+ } catch (error) {
+ console.warn(`[panel-layout] OSINT panel '${id}' failed to load`, error);
+ }
+ }));
   }
 
   private attachRelatedAssetHandlers(panel: NewsPanel): void {

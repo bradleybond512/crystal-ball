@@ -1,3 +1,5 @@
+import { tryInvokeTauri } from './tauri-bridge';
+
 // `import.meta.env` is undefined in bare Node (tsx tests); Vite always provides it.
 const VITE_ENV: Record<string, string | undefined> = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
 
@@ -21,7 +23,6 @@ export async function resolveLocalApiPort(): Promise<number> {
   if (_portPromise) return _portPromise;
   _portPromise = (async () => {
  try {
- const { tryInvokeTauri } = await import('@/services/tauri-bridge');
  const port = await tryInvokeTauri<number>('get_local_api_port');
  if (port && port > 0) {
  _resolvedPort = port;
@@ -265,7 +266,6 @@ export function installRuntimeFetchPatch(): void {
  if (tokenRefreshPromise) return tokenRefreshPromise;
  tokenRefreshPromise = (async () => {
  try {
- const { tryInvokeTauri } = await import('@/services/tauri-bridge');
  localApiToken = await tryInvokeTauri<string>('get_local_api_token');
  tokenFetchedAt = Date.now();
  } catch {

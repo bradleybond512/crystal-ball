@@ -3635,7 +3635,7 @@ export class DataLoaderManager implements AppModule {
  const events = data?.events;
  if (Array.isArray(events) && events.length > 0) {
  ingest(events);
- (this.ctx.panels['intelligence-feed'] as IntelligenceFeedPanel | undefined)?.refresh();
+ void (this.ctx.panels['intelligence-feed'] as IntelligenceFeedPanel | undefined)?.fetchFeed();
  }
  } catch (error) {
  console.warn('[intelligence-feed] fetch failed', error);

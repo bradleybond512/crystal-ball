@@ -264,6 +264,7 @@ import { SmsSettingsPanel } from '@/components/SmsSettingsPanel';
 import { ThreatDashboard } from '@/components/ThreatDashboard';
 import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
 import { AviationIntelPanel } from '@/components/AviationIntelPanel';
+import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
@@ -324,7 +325,6 @@ import type { TechHubActivity } from '@/services/tech-activity';
 import { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
 import { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
 import { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
-import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 // HTML builders (app shell + map + sidebar) live in a sibling module.
 import * as htmlBuilders from '@/app/layout/html';
 
@@ -1261,6 +1261,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['threat-dashboard'] = new ThreatDashboard();
  startThreatAggregator();
  this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
+ this.ctx.panels['intelligence-feed'] = new IntelligenceFeedPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
  this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
@@ -1372,7 +1373,6 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['pollen'] = new PollenPanel();
  this.ctx.panels['goes-satellite'] = new GoesSatellitePanel();
  this.ctx.panels['flood-monitor'] = new FloodMonitorPanel();
- this.ctx.panels['intelligence-feed'] = new IntelligenceFeedPanel();
 
  this.ctx.panels['stoic-reflections'] = new StoicQuotePanel();
  this.ctx.panels['biblical-encouragement'] = new BiblicalQuotePanel();

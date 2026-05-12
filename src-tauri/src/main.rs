@@ -1852,6 +1852,86 @@ mod sanitize_path_tests {
  }
 }
 
+#[cfg(test)]
+mod secret_ipc_tests {
+ use super::{require_trusted_window, SUPPORTED_SECRET_KEYS, TRUSTED_WINDOWS};
+
+ // ── trusted-window guard ─────────────────────────────────────────────────
+
+ #[test]
+ fn trusted_window_allows_main() {
+ assert!(require_trusted_window("main").is_ok());
+ }
+
+ #[test]
+ fn trusted_window_allows_settings() {
+ assert!(require_trusted_window("settings").is_ok());
+ }
+
+ #[test]
+ fn trusted_window_allows_live_channels() {
+ assert!(require_trusted_window("live-channels").is_ok());
+ }
+
+ #[test]
+ fn trusted_window_rejects_unknown_label() {
+ assert!(require_trusted_window("evil-popup").is_err());
+ }
+
+ #[test]
+ fn trusted_window_error_names_the_rejected_label() {
+ let err = require_trusted_window("attacker").unwrap_err();
+ assert!(err.contains("attacker"), "error should name the label: {err}");
+ }
+
+ #[test]
+ fn trusted_windows_does_not_contain_wildcard() {
+ assert!(!TRUSTED_WINDOWS.contains(&"*"), "wildcard must never be trusted");
+ }
+
+ // ── SUPPORTED_SECRET_KEYS allowlist ─────────────────────────────────────
+
+ #[test]
+ fn allowlist_contains_anthropic_api_key() {
+ assert!(SUPPORTED_SECRET_KEYS.contains(&"ANTHROPIC_API_KEY"));
+ }
+
+ #[test]
+ fn allowlist_rejects_arbitrary_key() {
+ assert!(!SUPPORTED_SECRET_KEYS.contains(&"TOTALLY_MADE_UP_KEY"));
+ }
+
+ #[test]
+ fn allowlist_rejects_empty_string() {
+ assert!(!SUPPORTED_SECRET_KEYS.contains(&""));
+ }
+
+ #[test]
+ fn allowlist_rejects_sql_injection_attempt() {
+ assert!(!SUPPORTED_SECRET_KEYS.contains(&"' OR 1=1 --"));
+ }
+
+ #[test]
+ fn allowlist_is_non_empty() {
+ assert!(!SUPPORTED_SECRET_KEYS.is_empty());
+ }
+
+ #[test]
+ fn get_secret_key_validation_rejects_disallowed_key() {
+ // Mirrors the guard in the get_secret / set_secret / delete_secret handlers.
+ let key = "NOT_IN_ALLOWLIST";
+ let allowed = SUPPORTED_SECRET_KEYS.contains(&key);
+ assert!(!allowed, "key outside allowlist must be rejected");
+ }
+
+ #[test]
+ fn get_secret_key_validation_accepts_allowed_key() {
+ let key = "ANTHROPIC_API_KEY";
+ let allowed = SUPPORTED_SECRET_KEYS.contains(&key);
+ assert!(allowed, "known key must be accepted");
+ }
+}
+
 fn local_api_paths(app: &AppHandle) -> (PathBuf, PathBuf) {
  let resource_dir = app
  .path()

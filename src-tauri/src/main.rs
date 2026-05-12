@@ -1205,6 +1205,42 @@ fn resolve_update_install_path() -> Result<String, String> {
  }
 }
 
+/// R2-SEC-009/011: mandatory expected-SHA-256 validation for the updater.
+/// Returns the normalized lowercase hex string, or an error describing why
+/// the value is unusable (missing, malformed, wrong length). Pure / side-effect
+/// free so it can be unit-tested without the macOS cfg gate.
+fn validate_expected_sha256(raw: Option<&str>) -> Result<String, String> {
+ let trimmed = raw.map(|s| s.trim()).unwrap_or("");
+ if trimmed.is_empty() {
+ return Err(
+ "Aborting update: no expected SHA-256 supplied (release manifest missing or unreadable)"
+ .to_string(),
+ );
+ }
+ let normalized = trimmed.to_ascii_lowercase();
+ if normalized.len() != 64 || !normalized.chars().all(|c| c.is_ascii_hexdigit()) {
+ return Err(format!(
+ "Aborting update: expected SHA-256 is malformed (must be 64 hex chars), got {} chars",
+ normalized.len()
+ ));
+ }
+ Ok(normalized)
+}
+
+/// R2-SEC-009/011: host allowlist enforced for any URL the updater
+/// will download from. Returns Ok if the URL parses and its host is
+/// one of GitHub's release-asset hosts; Err otherwise.
+fn validate_update_url(raw: &str) -> Result<(), String> {
+ let parsed = reqwest::Url::parse(raw).map_err(|e| format!("Invalid update URL: {e}"))?;
+ let host = parsed.host_str().unwrap_or("");
+ if !matches!(host, "objects.githubusercontent.com" | "github.com" | "codeload.github.com") {
+ return Err(format!(
+ "Update URL host '{host}' is not trusted — must be from github.com"
+ ));
+ }
+ Ok(())
+}
+
 #[cfg(target_os = "macos")]
 fn verify_app_bundle_signature(app_path: &str, label: &str) -> Result<(), String> {
  let verify = Command::new("codesign")
@@ -1238,13 +1274,10 @@ fn copy_app_bundle_preserving_signature(source: &str, dest: &str) -> Result<(), 
 #[tauri::command]
 async fn install_update(webview: Webview, download_url: String, expected_sha256: Option<String>) -> Result<(), String> {
  require_trusted_window(webview.label())?;
- // Validate the URL comes from GitHub
- let parsed = reqwest::Url::parse(&download_url)
- .map_err(|e| format!("Invalid update URL: {e}"))?;
- let host = parsed.host_str().unwrap_or("");
- if !matches!(host, "objects.githubusercontent.com" | "github.com" | "codeload.github.com") {
- return Err(format!("Update URL host '{host}' is not trusted — must be from github.com"));
- }
+ // R2-SEC-009/011: enforce GitHub-host allowlist + mandatory hash up-front
+ // so a bad request is rejected before any network or filesystem activity.
+ validate_update_url(&download_url)?;
+ let _ = validate_expected_sha256(expected_sha256.as_deref())?;
 
  #[cfg(not(target_os = "macos"))]
  {
@@ -1280,22 +1313,19 @@ async fn install_update(webview: Webview, download_url: String, expected_sha256:
 
  // 1a. Verify SHA-256 of downloaded bytes BEFORE writing to disk or mounting.
  // This detects corruption and MITM-served payloads before the OS processes the file.
+ // R2-SEC-009/011: hash verification is MANDATORY. An absent or empty expected
+ // hash means the release manifest was missing or tampered with — abort rather
+ // than fall through to codesign-only verification.
+ let expected_hex = validate_expected_sha256(expected_sha256.as_deref())?;
  let actual_sha256 = {
  let mut hasher = Sha256::new();
  hasher.update(&bytes);
  hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>()
  };
- match &expected_sha256 {
- Some(expected) if !expected.is_empty() => {
- if actual_sha256 != expected.to_lowercase() {
+ if actual_sha256 != expected_hex {
  return Err(format!(
- "SHA-256 mismatch — aborting update: expected {expected}, got {actual_sha256}"
+ "SHA-256 mismatch — aborting update: expected {expected_hex}, got {actual_sha256}"
  ));
- }
- }
- _ => {
- eprintln!("[updater] WARNING: no expected SHA-256 provided; codesign verification still applies");
- }
  }
 
  std::fs::write(tmp_dmg, &bytes)
@@ -1824,6 +1854,86 @@ fn sanitize_path_for_node(p: &Path) -> String {
  stripped.to_string()
  } else {
  s.into_owned()
+ }
+}
+
+#[cfg(test)]
+mod updater_gate_tests {
+ use super::{validate_expected_sha256, validate_update_url};
+
+ // ── validate_expected_sha256 ──────────────────────────────────────
+
+ #[test]
+ fn rejects_missing_hash() {
+ let err = validate_expected_sha256(None).unwrap_err();
+ assert!(err.contains("no expected SHA-256 supplied"), "{err}");
+ }
+
+ #[test]
+ fn rejects_empty_hash() {
+ assert!(validate_expected_sha256(Some("")).is_err());
+ assert!(validate_expected_sha256(Some(" \t ")).is_err());
+ }
+
+ #[test]
+ fn rejects_short_hash() {
+ let err = validate_expected_sha256(Some("abc123")).unwrap_err();
+ assert!(err.contains("malformed"), "{err}");
+ }
+
+ #[test]
+ fn rejects_non_hex_hash() {
+ let bad = "g".repeat(64);
+ assert!(validate_expected_sha256(Some(&bad)).is_err());
+ }
+
+ #[test]
+ fn accepts_valid_hash_and_normalizes_case() {
+ let upper = "A".repeat(64);
+ let got = validate_expected_sha256(Some(&upper)).expect("should accept");
+ assert_eq!(got, "a".repeat(64));
+ }
+
+ #[test]
+ fn accepts_valid_hash_with_surrounding_whitespace() {
+ let raw = format!("  {}  ", "0".repeat(64));
+ let got = validate_expected_sha256(Some(&raw)).expect("should accept");
+ assert_eq!(got, "0".repeat(64));
+ }
+
+ // ── validate_update_url ──────────────────────────────────────────
+
+ #[test]
+ fn accepts_objects_githubusercontent_com() {
+ validate_update_url("https://objects.githubusercontent.com/abc/Crystal-Ball.dmg")
+ .expect("github asset host should be allowed");
+ }
+
+ #[test]
+ fn accepts_github_com() {
+ validate_update_url("https://github.com/bradleybond512/crystal-ball/releases/download/v1.0.0/Crystal-Ball.dmg")
+ .expect("github.com should be allowed");
+ }
+
+ #[test]
+ fn accepts_codeload_github_com() {
+ validate_update_url("https://codeload.github.com/x/y/zip/refs/tags/v1").expect("codeload allowed");
+ }
+
+ #[test]
+ fn rejects_unknown_host() {
+ let err = validate_update_url("https://evil.example.com/Crystal-Ball.dmg").unwrap_err();
+ assert!(err.contains("is not trusted"), "{err}");
+ }
+
+ #[test]
+ fn rejects_lookalike_host() {
+ assert!(validate_update_url("https://github.com.evil.com/x.dmg").is_err());
+ }
+
+ #[test]
+ fn rejects_invalid_url() {
+ assert!(validate_update_url("not a url").is_err());
  }
 }
 

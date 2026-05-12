@@ -4711,6 +4711,54 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Notification trace mirror (renderer → sidecar → MCP) ─────────────
+  // Renderer computes deterministic alert traces via traceAlert() and
+  // POSTs the last N (≤100) here. GET ?eventId= returns the matching
+  // trace; GET without an eventId returns the full list. Loopback-only.
+  if (requestUrl.pathname === '/api/notifications/trace') {
+    if (!context._alertTraces) context._alertTraces = { traces: [], pushedAt: 0 };
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || !Array.isArray(body.traces)) {
+          return json({ error: 'traces must be an array' }, 400);
+        }
+        const traces = body.traces.slice(0, 100).map(t => ({
+          eventId: typeof t.eventId === 'string' ? t.eventId.slice(0, 200) : '',
+          domain: typeof t.domain === 'string' ? t.domain.slice(0, 60) : '',
+          severity: typeof t.severity === 'string' ? t.severity.slice(0, 20) : '',
+          title: typeof t.title === 'string' ? t.title.slice(0, 300) : '',
+          outcome: ['delivered', 'suppressed', 'not-evaluated'].includes(t.outcome) ? t.outcome : 'not-evaluated',
+          channels: Array.isArray(t.channels) ? t.channels.slice(0, 8).map(c => String(c).slice(0, 20)) : [],
+          summary: typeof t.summary === 'string' ? t.summary.slice(0, 500) : '',
+          generatedAt: typeof t.generatedAt === 'number' ? t.generatedAt : Date.now(),
+          stages: Array.isArray(t.stages) ? t.stages.slice(0, 12).map(s => ({
+            name: typeof s.name === 'string' ? s.name.slice(0, 60) : '',
+            status: ['pass', 'fail', 'skip'].includes(s.status) ? s.status : 'skip',
+            detail: typeof s.detail === 'string' ? s.detail.slice(0, 400) : '',
+            value: s.value === undefined ? undefined : (typeof s.value === 'number' || typeof s.value === 'string' ? s.value : String(s.value).slice(0, 80)),
+          })) : [],
+        })).filter(t => t.eventId);
+        context._alertTraces = { traces, pushedAt: Date.now() };
+        return json({ ok: true, count: traces.length });
+      } catch (error) {
+        return json({ error: String(error?.message ?? error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const { traces, pushedAt } = context._alertTraces;
+      const eventId = requestUrl.searchParams.get('eventId');
+      if (eventId) {
+        const trace = traces.find(t => t.eventId === eventId);
+        if (!trace) return json({ available: false, eventId }, 404);
+        return json({ available: true, pushedAt, trace });
+      }
+      return json({ available: pushedAt > 0, pushedAt, count: traces.length, traces });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
   // ── Algorithm extensions (PRs 11-18) ─────────────────────────────────
   // Renderer-side services compute these and POST a snapshot; sidecar
   // mirrors the latest payload per bucket and serves it via GET.

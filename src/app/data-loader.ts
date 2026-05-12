@@ -282,6 +282,9 @@ import type { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import type { PollenPanel } from '@/components/PollenPanel';
 import type { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
 import type { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
+import type { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
+import { ingest } from '@/services/intelligence/observation-store';
+import type { ObservationEvent } from '@/types/intelligence';
 import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
@@ -618,6 +621,7 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'pollenData', task: () => runGuarded('pollenData', () => this.loadPollenData()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'goesSatellite', task: () => runGuarded('goesSatellite', () => this.loadGoesSatellite()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'floodMonitor', task: () => runGuarded('floodMonitor', () => this.loadFloodMonitor()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'intelligenceFeed', task: () => runGuarded('intelligenceFeed', () => this.loadIntelligenceFeed()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'lightning', task: () => runGuarded('lightning', () => this.loadLightning()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'redFlagWarnings', task: () => runGuarded('redFlagWarnings', () => this.loadRedFlagWarnings()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'satellites', task: () => runGuarded('satellites', () => this.loadSatellites()) });
@@ -3620,6 +3624,21 @@ export class DataLoaderManager implements AppModule {
  if (warningsRes.status === 'fulfilled' && warningsRes.value) panel?.updateWarnings(warningsRes.value);
  } catch (error) {
  console.warn('[flood-monitor] fetch failed', error);
+ }
+  }
+
+  async loadIntelligenceFeed(): Promise<void> {
+ try {
+ const r = await fetch('/api/intelligence/prioritized?limit=100');
+ if (!r.ok) return;
+ const data = await r.json() as { events?: ObservationEvent[] };
+ const events = data?.events;
+ if (Array.isArray(events) && events.length > 0) {
+ ingest(events);
+ (this.ctx.panels['intelligence-feed'] as IntelligenceFeedPanel | undefined)?.refresh();
+ }
+ } catch (error) {
+ console.warn('[intelligence-feed] fetch failed', error);
  }
   }
 

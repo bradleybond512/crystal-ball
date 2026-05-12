@@ -316,6 +316,7 @@ import type { TechHubActivity } from '@/services/tech-activity';
 import { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
 import { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
 import { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
+import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 // HTML builders (app shell + map + sidebar) live in a sibling module.
 import * as htmlBuilders from '@/app/layout/html';
 
@@ -1361,6 +1362,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['pollen'] = new PollenPanel();
  this.ctx.panels['goes-satellite'] = new GoesSatellitePanel();
  this.ctx.panels['flood-monitor'] = new FloodMonitorPanel();
+ this.ctx.panels['intelligence-feed'] = new IntelligenceFeedPanel();
 
  this.ctx.panels['stoic-reflections'] = new StoicQuotePanel();
  this.ctx.panels['biblical-encouragement'] = new BiblicalQuotePanel();

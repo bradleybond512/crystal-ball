@@ -3,27 +3,14 @@ import type { GDACSEvent } from '@/services/gdacs';
 import { getEventTypeIcon } from '@/services/gdacs';
 import { getApiBaseUrl } from '@/services/runtime';
 import { escapeHtml } from '@/utils/sanitize';
+import {
+  normalizeGdacsRssEnvelope,
+  type GdacsRssEvent,
+  type GdacsRssEnvelope,
+} from '@/services/gdacs/rss-normalize';
 
-interface RssEvent {
-  id: string;
-  eventType: string;
-  name: string;
-  alertLevel: 'Green' | 'Orange' | 'Red';
-  score: number;
-  country: string;
-  coordinates: [number, number] | null;
-  fromDate: string;
-  severity: string;
-  url: string;
-}
-
-interface RssEnvelope {
-  events: RssEvent[];
-  count: number;
-  fetchedAt: number;
-  degraded: boolean;
-  reason?: string;
-}
+type RssEvent = GdacsRssEvent;
+type RssEnvelope = GdacsRssEnvelope;
 
 type Tab = 'json' | 'rss';
 
@@ -86,9 +73,11 @@ export class GDACSAlertsPanel extends Panel {
     try {
       const resp = await fetch(`${getApiBaseUrl()}/api/disasters/gdacs`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      this.rssData = (await resp.json()) as RssEnvelope;
+      const raw = (await resp.json()) as unknown;
+      this.rssData = normalizeGdacsRssEnvelope(raw);
     } catch {
-      // Keep stale data; sidecar serves cached response on failure
+      // Keep stale data on fetch / parse failure. The sidecar serves a
+      // cached response when it can, and stale > nothing for the user.
     }
     this.render();
   }
@@ -247,3 +236,4 @@ function formatDate(s: string): string {
     return s;
   }
 }
+

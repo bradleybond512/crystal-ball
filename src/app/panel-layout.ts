@@ -261,6 +261,7 @@ import { FeedHealthPanel } from '@/components/FeedHealthPanel';
 import { CveTrackerPanel } from '@/components/CveTrackerPanel';
 import { VulnersCvePanel } from '@/components/VulnersCvePanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
+import { DiagnosticSelfTestPanel } from '@/components/DiagnosticSelfTestPanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { PlaybookPanel } from '@/components/PlaybookPanel';
@@ -1267,6 +1268,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['api-diagnostic'] = new ApiDiagnosticPanel();
  this.ctx.panels['feed-health'] = new FeedHealthPanel();
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
+ this.ctx.panels['self-test'] = new DiagnosticSelfTestPanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
  this.ctx.panels['playbook'] = new PlaybookPanel();

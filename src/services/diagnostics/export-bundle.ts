@@ -84,6 +84,40 @@ export interface FeedHealthEntry {
   name: string;
   status: string;
   lastUpdateIso: string | null;
+  /** Nominal poll interval in ms from FEED_CATALOG (a.k.a. TTL). */
+  ttlMs?: number;
+  /** Observed gap between the two most recent updates in ms. Lets a
+   *  triager compare TTL to reality at a glance. */
+  actualFrequencyMs?: number;
+}
+
+/** Snapshot of a tunable algorithm parameter — used to debug "why did the
+ *  app fire / not fire" by capturing the thresholds and time windows the
+ *  algorithm was running with at the moment the bundle was generated. */
+export interface AlgorithmParameterSummary {
+  algorithmId: string;
+  label: string;
+  domain: string;
+  /** Lower bound on the weighted hit rate before the algorithm is flagged.
+   *  Maps to AlgorithmDefinition.minWeightedHitRate. */
+  minWeightedHitRate?: number;
+  /** Minimum graded sample count before the verdict is believed. */
+  minGradedSamples?: number;
+  /** Latency upper bound (ms). */
+  maxMeanDurationMs?: number;
+  /** Free-form extra parameters (other thresholds, time windows, etc.).
+   *  Kept as a record so callers can extend without growing the schema. */
+  extras?: Record<string, number | string | boolean>;
+}
+
+/** Richer mission-state output from `mission-state-mapper.ts` — the
+ *  4-level + per-domain breakdown. Distinct from the simpler
+ *  MissionStateSummary which is the 3-state menubar rollup. */
+export interface MissionMappingSummary {
+  global: string;
+  domains: Record<string, string>;
+  degradedFeeds: readonly string[];
+  lastUpdated: number;
 }
 
 export interface SystemInfo {
@@ -151,6 +185,11 @@ export interface DiagnosticsExportBundle {
   missionState?: MissionStateSummary;
   /** Per-feed freshness snapshot (id, name, status, last update). */
   feedHealth?: readonly FeedHealthEntry[];
+  /** Algorithm thresholds + time windows in use at bundle-time. */
+  algorithmParameters?: readonly AlgorithmParameterSummary[];
+  /** 4-level + per-domain mission-state mapping (companion to the
+   *  3-level `missionState` rollup above). */
+  missionMapping?: MissionMappingSummary;
   /** System runtime info: version, uptime, memory. */
   systemInfo?: SystemInfo;
   /** Anything truncated for size, recorded so the consumer knows what
@@ -192,6 +231,8 @@ export interface BuildExportBundleInput {
   algorithmState?: readonly AlgorithmCalibrationSummary[];
   missionState?: MissionStateSummary;
   feedHealth?: readonly FeedHealthEntry[];
+  algorithmParameters?: readonly AlgorithmParameterSummary[];
+  missionMapping?: MissionMappingSummary;
   systemInfo?: SystemInfo;
   /** Caps; see DEFAULTS below. */
   caps?: Partial<{
@@ -291,6 +332,15 @@ export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExp
     algorithmState: input.algorithmState ? [...input.algorithmState] : undefined,
     missionState: input.missionState ? { ...input.missionState } : undefined,
     feedHealth: input.feedHealth ? [...input.feedHealth] : undefined,
+    algorithmParameters: input.algorithmParameters ? [...input.algorithmParameters] : undefined,
+    missionMapping: input.missionMapping
+      ? {
+          global: input.missionMapping.global,
+          domains: { ...input.missionMapping.domains },
+          degradedFeeds: [...input.missionMapping.degradedFeeds],
+          lastUpdated: input.missionMapping.lastUpdated,
+        }
+      : undefined,
     systemInfo: input.systemInfo ? { ...input.systemInfo } : undefined,
     truncations,
   };

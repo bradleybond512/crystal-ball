@@ -1,6 +1,6 @@
 # Crystal Ball
 
-Real-time global intelligence platform. Desktop app and web dashboard that aggregates 50+ live data feeds into 229 interactive panels, a 3D Cesium globe with 70 geospatial layers, an explainable algorithm intelligence layer (truth scoring + evidence graph + situation clustering + compound risk + forecast calibration + watchlist relevance), domain-aware shortage / weather / insight engines, AI-powered analysis, and an MCP server that lets Claude Code query it all from the terminal.
+Real-time global intelligence platform. Desktop app and web dashboard that aggregates 50+ live data feeds into 230 interactive panels, a 3D Cesium globe with 70 geospatial layers, an explainable algorithm intelligence layer (truth scoring + evidence graph + situation clustering + compound risk + forecast calibration + watchlist relevance), domain-aware shortage / weather / insight engines, AI-powered analysis, and an MCP server that lets Claude Code query it all from the terminal.
 
 [![Version](https://img.shields.io/github/v/release/bradleybond512/crystal-ball?label=version)](https://github.com/bradleybond512/crystal-ball/releases/latest)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
@@ -15,13 +15,13 @@ Real-time global intelligence platform. Desktop app and web dashboard that aggre
 
 ## What It Does
 
-Crystal Ball pulls data from ACLED, GDACS, NWS, USGS, CISA, ThreatFox, FRED, ADS-B, AIS, CelesTrak, and dozens of other sources, then presents it across a 2D MapLibre map, a 3D Cesium globe, 229 live panels, a unified alert inbox, and a correlation engine that connects events across domains. You can ask Claude Code `/sitrep` and get a synthesized intelligence brief from all active feeds without opening the app.
+Crystal Ball pulls data from ACLED, GDACS, NWS, USGS, CISA, ThreatFox, FRED, ADS-B, AIS, CelesTrak, and dozens of other sources, then presents it across a 2D MapLibre map, a 3D Cesium globe, 230 live panels, a unified alert inbox, and a correlation engine that connects events across domains. You can ask Claude Code `/sitrep` and get a synthesized intelligence brief from all active feeds without opening the app.
 
 Four product variants share one codebase:
 
 | Variant | Panels | Focus |
 |---------|--------|-------|
-| `full` | 229 | Geopolitics, conflict, cyber, infrastructure, disasters, markets |
+| `full` | 230 | Geopolitics, conflict, cyber, infrastructure, disasters, markets |
 | `tech` | 35 | AI, startups, cloud, service health, developer ecosystems |
 | `finance` | 31 | Markets, forex, bonds, commodities, crypto, central banks |
 | `happy` | 10 | Positive news, progress, science, conservation |
@@ -336,8 +336,8 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Panels (full variant) | 229 | `src/config/panels.ts` |
-| Default panel inventory | `229 full / 35 tech / 31 finance / 10 happy` | `src/config/panels.ts` |
+| Panels (full variant) | 230 | `src/config/panels.ts` |
+| Default panel inventory | `230 full / 35 tech / 31 finance / 10 happy` | `src/config/panels.ts` |
 | God's Vision map layers | 70 (26 on by default) | `src/types/index.ts` MapLayers |
 | Panel categories | 19 | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |

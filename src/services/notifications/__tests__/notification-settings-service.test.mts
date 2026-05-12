@@ -10,12 +10,12 @@ import {
   type NotificationSeverity,
 } from '../notification-settings-service.js';
 
-// ── 1. Default settings have all 10 domains enabled ──────────────────────────
-test('default settings have all 10 domains enabled', () => {
+// ── 1. Default settings have all 11 domains enabled ──────────────────────────
+test('default settings have all 11 domains enabled', () => {
   resetSettings();
   const { domains } = getSettings();
   const domainKeys = Object.keys(domains) as NotificationDomain[];
-  assert.equal(domainKeys.length, 10);
+  assert.equal(domainKeys.length, 11);
   for (const key of domainKeys) {
     assert.equal(domains[key].enabled, true, `${key} should be enabled by default`);
   }

@@ -20,7 +20,7 @@ test('markdown lint workflow only lints markdown files changed in the pull reque
  // the recorded base.sha directly.
  assert.match(
  workflow,
- /git diff --name-only "(origin\/\$\{\{ github\.base_ref \}\}\.\.\.HEAD|\$\{\{ github\.event\.pull_request\.base\.sha \}\}" HEAD) -- '\*\.md'/,
+ /git diff --name-only "(origin\/\$\{\{ github\.base_ref \}\}\.\.\.HEAD"|\$\{\{ github\.event\.pull_request\.base\.sha \}\}" HEAD) -- '\*\.md'/,
  'lint workflow should resolve the changed markdown file set from the pull request diff',
   );
   assert.match(

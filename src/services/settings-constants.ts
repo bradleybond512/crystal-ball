@@ -189,6 +189,10 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   CENSYS_API_SECRET: 'Censys API Secret',
   SECURITYTRAILS_API_KEY: 'SecurityTrails API Key',
   WHOISXML_API_KEY: 'WhoisXML API Key',
+  MISP_URL: 'MISP Instance URL',
+  MISP_API_KEY: 'MISP API Key',
+  OPENCTI_URL: 'OpenCTI Instance URL',
+  OPENCTI_API_KEY: 'OpenCTI API Key',
 };
 
 /**
@@ -267,6 +271,10 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   CENSYS_API_SECRET: 'Censys API secret paired with the API ID above.',
   SECURITYTRAILS_API_KEY: 'SecurityTrails — passive DNS and domain history lookups for threat attribution.',
   WHOISXML_API_KEY: 'WhoisXML — domain registration, DNS, and IP data for attacker infrastructure mapping.',
+  MISP_URL: 'MISP (Malware Information Sharing Platform) base URL — your self-hosted instance for indicator sharing.',
+  MISP_API_KEY: 'MISP API key paired with MISP_URL. Used to query events and indicators.',
+  OPENCTI_URL: 'OpenCTI instance base URL — your self-hosted threat-intel platform endpoint.',
+  OPENCTI_API_KEY: 'OpenCTI API key paired with OPENCTI_URL. Used for GraphQL queries over STIX 2.1 objects.',
 };
 
 export interface KeyCategory {
@@ -279,7 +287,7 @@ export interface KeyCategory {
 export const KEY_CATEGORIES: readonly KeyCategory[] = [
   { id: 'llm',      label: 'Core LLMs',              tier: 1, keys: ['ANTHROPIC_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'OLLAMA_API_URL'] },
   { id: 'markets',  label: 'Markets & Macro',        tier: 2, keys: ['FRED_API_KEY', 'EIA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY'] },
-  { id: 'cyber',    label: 'Cyber Threat Intel',     tier: 3, keys: ['OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'URLHAUS_AUTH_KEY', 'THREATFOX_API_KEY', 'VIRUSTOTAL_API_KEY', 'GREYNOISE_API_KEY', 'URLSCAN_API_KEY', 'VULNERS_API_KEY', 'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'BITCOINABUSE_API_KEY', 'CENSYS_API_ID', 'CENSYS_API_SECRET', 'SECURITYTRAILS_API_KEY', 'WHOISXML_API_KEY'] },
+  { id: 'cyber',    label: 'Cyber Threat Intel',     tier: 3, keys: ['OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'URLHAUS_AUTH_KEY', 'THREATFOX_API_KEY', 'VIRUSTOTAL_API_KEY', 'GREYNOISE_API_KEY', 'URLSCAN_API_KEY', 'VULNERS_API_KEY', 'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'BITCOINABUSE_API_KEY', 'CENSYS_API_ID', 'CENSYS_API_SECRET', 'SECURITYTRAILS_API_KEY', 'WHOISXML_API_KEY', 'MISP_URL', 'MISP_API_KEY', 'OPENCTI_URL', 'OPENCTI_API_KEY'] },
   { id: 'conflict', label: 'Conflict & Geopolitics', tier: 4, keys: ['ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'ACLED_REFRESH_TOKEN', 'WTO_API_KEY', 'CLOUDFLARE_API_TOKEN'] },
   { id: 'news',     label: 'News',                   tier: 5, keys: ['NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'MEDIASTACK_API_KEY'] },
   { id: 'aviation', label: 'Aviation & Maritime',    tier: 6, keys: ['WINGBITS_API_KEY', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY', 'AVIATIONSTACK_API', 'ICAO_API_KEY'] },

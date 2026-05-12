@@ -39,7 +39,7 @@ const MENU_VIEW_MODE_ID: &str = "view.mode_status";
 #[cfg(feature = "devtools")]
 const MENU_HELP_DEVTOOLS_ID: &str = "help.devtools";
 const TRUSTED_WINDOWS: [&str; 3] = ["main", "settings", "live-channels"];
-const SUPPORTED_SECRET_KEYS: [&str; 60] = [
+const SUPPORTED_SECRET_KEYS: [&str; 68] = [
  "CRYSTALBALL_API_KEY",
  "ANTHROPIC_API_KEY",
  "GROQ_API_KEY",
@@ -100,6 +100,14 @@ const SUPPORTED_SECRET_KEYS: [&str; 60] = [
  "NSW_API_KEY",
  "UK_HIGHWAYS_API_KEY",
  "ROAD511_API_KEY",
+ "CENSYS_API_ID",
+ "CENSYS_API_SECRET",
+ "SECURITYTRAILS_API_KEY",
+ "WHOISXML_API_KEY",
+ "MISP_URL",
+ "MISP_API_KEY",
+ "OPENCTI_URL",
+ "OPENCTI_API_KEY",
 ];
 
 // Rate-limit native notifications: no more than 1 per 30 seconds across all threads.

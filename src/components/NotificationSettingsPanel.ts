@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/no-nested-template-literals */
+ 
 import { Panel } from './Panel';
 import {
   getSettings,
@@ -19,6 +19,7 @@ const DOMAIN_LABELS: Record<NotificationDomain, string> = {
   geopolitical: 'Geopolitical',
   weather: 'Weather (NWS)',
   cyber: 'Cyber / HIBP',
+  supply: 'Supply / Shortages',
 };
 
 const ALL_DOMAINS: NotificationDomain[] = [
@@ -32,6 +33,7 @@ const ALL_DOMAINS: NotificationDomain[] = [
   'geopolitical',
   'weather',
   'cyber',
+  'supply',
 ];
 
 export class NotificationSettingsPanel extends Panel {

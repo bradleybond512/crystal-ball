@@ -25,9 +25,12 @@ import type { ThreatSeverity } from '../intelligence-briefing';
 import { getApiBaseUrl } from '../runtime';
 import {
   type AlertEntry,
+  type CorrelationEntry,
   type EconomicIndicator,
   type EnhancedBriefingInput,
   type FeedHealthRow,
+  type PersonalizedAlertEntry,
+  type ShortageRadarEntry,
   type SpaceWeatherSnapshot,
   type ThreatMatrixCell,
   type WildfireRanked,
@@ -57,7 +60,7 @@ export async function collectEnhancedBriefing(
 
   // All collectors are independently try/catch'd — never let one section
   // sink the whole snapshot.
-  const [executiveSummary, threatMatrix, activeAlerts, spaceWeather, topWildfires, economicIndicators, feedHealth] =
+  const [executiveSummary, threatMatrix, activeAlerts, spaceWeather, topWildfires, economicIndicators, feedHealth, correlations, shortageRadar, personalizedAlerts] =
     await Promise.all([
       Promise.resolve().then(() => collectExecutiveSummary()),
       Promise.resolve().then(() => collectThreatMatrix()),
@@ -66,11 +69,15 @@ export async function collectEnhancedBriefing(
       Promise.resolve().then(() => collectTopWildfires()),
       collectEconomicIndicators(apiBase),
       Promise.resolve().then(() => collectFeedHealth()),
+      collectCorrelations(apiBase),
+      collectShortageRadar(apiBase),
+      collectPersonalizedAlerts(apiBase),
     ]);
 
   return {
     executiveSummary, threatMatrix, activeAlerts, spaceWeather,
     topWildfires, economicIndicators, feedHealth,
+    correlations, shortageRadar, personalizedAlerts,
     dataCurrentAt: now(), appVersion,
   };
 }
@@ -260,6 +267,65 @@ export function collectFeedHealth(now: number = Date.now()): FeedHealthRow[] {
       label: r.label,
       status: mapHealthStatusToFeedStatus(r.status),
       ageSeconds: r.lastSuccessAt ? Math.max(0, Math.round((now - r.lastSuccessAt) / 1000)) : undefined,
+    }));
+  } catch { return []; }
+}
+
+async function collectCorrelations(apiBaseUrl: string): Promise<CorrelationEntry[]> {
+  try {
+    const r = await fetch(`${apiBaseUrl}/api/intelligence/correlations?limit=5`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) return [];
+    const payload = (await r.json()) as Partial<{
+      correlations: { type: string; confidence: number; title: string; detectedAt: number }[];
+    }>;
+    if (!Array.isArray(payload.correlations)) return [];
+    return payload.correlations.slice(0, 5).map((c) => ({
+      type: (['spatial', 'temporal', 'entity'].includes(c.type) ? c.type : 'temporal') as CorrelationEntry['type'],
+      confidence: typeof c.confidence === 'number' ? c.confidence : 0,
+      title: typeof c.title === 'string' ? c.title : '',
+      detectedAt: typeof c.detectedAt === 'number' ? c.detectedAt : 0,
+    }));
+  } catch { return []; }
+}
+
+async function collectShortageRadar(apiBaseUrl: string): Promise<ShortageRadarEntry[]> {
+  try {
+    const r = await fetch(`${apiBaseUrl}/api/shortage/summary`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) return [];
+    const payload = (await r.json()) as { commodity: string; riskScore: number; riskLevel: string; primaryDrivers: string[]; trend: string }[];
+    if (!Array.isArray(payload)) return [];
+    return payload.map((e) => ({
+      commodity: typeof e.commodity === 'string' ? e.commodity : '',
+      riskScore: typeof e.riskScore === 'number' ? e.riskScore : 0,
+      riskLevel: typeof e.riskLevel === 'string' ? e.riskLevel : 'low',
+      primaryDrivers: Array.isArray(e.primaryDrivers) ? e.primaryDrivers : [],
+      trend: typeof e.trend === 'string' ? e.trend : 'stable',
+    }));
+  } catch { return []; }
+}
+
+async function collectPersonalizedAlerts(apiBaseUrl: string): Promise<PersonalizedAlertEntry[]> {
+  try {
+    const r = await fetch(`${apiBaseUrl}/api/intelligence/nearby`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) return [];
+    const payload = (await r.json()) as Partial<{
+      places: { placeName: string; eventCount: number; topEventTitle: string; topSeverity: number }[];
+    }>;
+    if (!Array.isArray(payload.places)) return [];
+    return payload.places.map((p) => ({
+      placeName: typeof p.placeName === 'string' ? p.placeName : '',
+      eventCount: typeof p.eventCount === 'number' ? p.eventCount : 0,
+      topEventTitle: typeof p.topEventTitle === 'string' ? p.topEventTitle : '',
+      topSeverity: typeof p.topSeverity === 'number' ? p.topSeverity : 0,
     }));
   } catch { return []; }
 }

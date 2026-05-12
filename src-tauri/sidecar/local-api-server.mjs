@@ -4194,6 +4194,49 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Intelligence: nearby-alert summaries (renderer → sidecar mirror) ────
+  // Renderer POSTs per-saved-place event summaries from personal-impact.ts so
+  // MCP tools and the PDF collector can read them without importing TypeScript.
+  if (requestUrl.pathname === '/api/intelligence/nearby') {
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || !Array.isArray(body.places)) return json({ error: 'places must be an array' }, 400);
+        const places = body.places.slice(0, 50).map(p => ({
+          placeName: typeof p.placeName === 'string' ? p.placeName.slice(0, 100) : '',
+          eventCount: typeof p.eventCount === 'number' ? p.eventCount : 0,
+          topEventTitle: typeof p.topEventTitle === 'string' ? p.topEventTitle.slice(0, 200) : '',
+          topSeverity: typeof p.topSeverity === 'number' ? Math.min(10, Math.max(0, p.topSeverity)) : 0,
+        }));
+        context._intelligenceNearby = { places, pushedAt: Date.now() };
+        return json({ ok: true, count: places.length });
+      } catch (error) {
+        return json({ error: String(error?.message ?? error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const s = context._intelligenceNearby;
+      if (!s) return json({ available: false, places: [] });
+      return json({ available: true, places: s.places, pushedAt: s.pushedAt });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Intelligence: brief generate trigger ─────────────────────────────────
+  // POST records a trigger timestamp so external tools can kick off a PDF
+  // export; GET lets callers poll whether a generation was requested.
+  if (requestUrl.pathname === '/api/intelligence/brief/generate') {
+    if (req.method === 'POST') {
+      context._briefLastTriggeredAt = Date.now();
+      return json({ ok: true, triggeredAt: context._briefLastTriggeredAt });
+    }
+    if (req.method === 'GET') {
+      return json({ triggeredAt: context._briefLastTriggeredAt ?? null });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
   // ── Intelligence: what-changed (renderer → sidecar snapshot mirror) ───────
   // Renderer POSTs WorldStateSnapshots. GET /api/intelligence/what-changed?since=
   // returns a diff report between the snapshot taken at ?since and the most recent.

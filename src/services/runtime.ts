@@ -234,8 +234,9 @@ async function fetchLocalWithStartupRetry(
 // client — injecting the token automatically is correct by design.
 //
 // If the renderer is compromised (XSS, supply chain), the attacker
-// already has access to strictly more powerful Tauri IPC commands
-// (get_all_secrets, set_secret, etc.) via window.__TAURI_INTERNALS__.
+// already has access to Tauri IPC commands (get_secret, set_secret,
+// etc.) via window.__TAURI_INTERNALS__, gated by the trusted-window
+// allowlist and per-key SUPPORTED_SECRET_KEYS validation.
 // The fetch patch does not expand the attack surface beyond what IPC
 // already provides.
 //

@@ -14271,6 +14271,43 @@ export async function createLocalApiServer(options = {}) {
    return;
  }
 
+ // ── /api/command-center/summary — assembled 5-question payload ────
+ // Thin data-assembly endpoint. The renderer-side pure layer
+ // (`src/services/intelligence/command-center-summary.ts`) is the
+ // canonical composer. This route simply hands the renderer the
+ // active situations, the rule set, and a coarse feed-health
+ // snapshot so it can run the builder client-side without an extra
+ // round trip per data source.
+ if (requestUrl.pathname === '/api/command-center/summary' && req.method === 'GET') {
+   const situations = listActiveSituationsSidecar();
+   const rules = listRulesSidecar();
+   const feedLastSeen = {};
+   const healthyFeedIds = [];
+   try {
+     for (const [feedId, info] of Object.entries(getFeedHealthSnapshot?.() ?? {})) {
+       if (info && typeof info === 'object') {
+         const lastTs = typeof info.lastSeen === 'number' ? info.lastSeen
+           : typeof info.lastSuccess === 'number' ? info.lastSuccess
+           : null;
+         if (lastTs !== null) feedLastSeen[feedId] = lastTs;
+         if (info.healthy === true || info.status === 'healthy') healthyFeedIds.push(feedId);
+       }
+     }
+   } catch {
+     // Sidecar may not have a feed-health registry yet — degrade
+     // gracefully; the renderer will mark health as DEGRADED.
+   }
+   res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify({
+     situations,
+     rules,
+     feedLastSeen,
+     healthyFeedIds,
+     asOf: new Date().toISOString(),
+   }));
+   return;
+ }
+
  // ── /api/diag — full diagnostics snapshot for bug reports ─────────
  if (requestUrl.pathname === '/api/diag') {
  {

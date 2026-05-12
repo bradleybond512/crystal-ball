@@ -1,6 +1,9 @@
 {
   "_comment": "Allowlist for sidecar-only routes — routes the sidecar serves that no renderer file calls. Each entry must be classified as one of:\n  - intentionalInternal: server-to-server / admin / health probe; never called from the renderer.\n  - futureUi: route exists for an unbuilt panel; expected to gain a renderer caller soon.\n  - deprecated: legacy route slated for removal.\nThe sidecar-routes-allowlist test fails when a NEW sidecar-only route appears that's not in any list. To clear, classify it here.",
-  "_updated": "2026-05-11 — PR198 bug-smash: classify 26 new routes added since the initial classification",
+  "_updated": "2026-05-12 — release-gate: classify /api/sms/command as intentionalInternal (inbound SMS-gateway webhook, never called from renderer).",
+  "_reasons": {
+    "/api/sms/command": "Inbound webhook from SMS gateways (Twilio etc.) — POSTed by the external provider, never by the renderer. Sits before the auth gate; phone-number allowlist in sms-config.json provides authn."
+  },
 
   "intentionalInternal": [
     "/api",
@@ -11,7 +14,8 @@
     "/api/version",
     "/gps/nmea",
     "/api/algorithm-state",
-    "/api/aviation/_aviation-helpers"
+    "/api/aviation/_aviation-helpers",
+    "/api/sms/command"
   ],
 
   "futureUi": [

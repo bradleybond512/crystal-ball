@@ -42,7 +42,7 @@ Those numbers come from the current codebase, not aspirational copy.
 
 | Guide | Focus |
 | --- | --- |
-| [API_KEYS.md](API_KEYS.md) | All 46 API keys — categories, signup URLs, free/paid status |
+| [API_KEYS.md](API_KEYS.md) | All 60 API keys — categories, signup URLs, free/paid status |
 | [DESKTOP_CONFIGURATION.md](DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, and degraded behavior |
 | [API_KEY_DEPLOYMENT.md](API_KEY_DEPLOYMENT.md) | Vercel API access rules, trusted origins, and key requirements |
 | [RELAY_PARAMETERS.md](RELAY_PARAMETERS.md) | Relay environment variables for AIS and OpenSky paths |

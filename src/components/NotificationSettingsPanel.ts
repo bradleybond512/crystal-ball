@@ -2,39 +2,18 @@
 import { Panel } from './Panel';
 import {
   getSettings,
+  resetSettings,
   updateDomainSettings,
   updateGlobalSettings,
   type NotificationDomain,
 } from '@/services/notifications/notification-settings-service';
+import { record as recordHistory } from '@/services/notifications/notification-history-service';
 import { escapeHtml } from '@/utils/sanitize';
-
-const DOMAIN_LABELS: Record<NotificationDomain, string> = {
-  earthquakes: 'Earthquakes',
-  wildfire: 'Wildfire',
-  aviation: 'Aviation',
-  maritime: 'AIS / Maritime',
-  biosurveillance: 'Biosurveillance',
-  space_weather: 'Space Weather',
-  infrastructure: 'Infrastructure',
-  geopolitical: 'Geopolitical',
-  weather: 'Weather (NWS)',
-  cyber: 'Cyber / HIBP',
-  supply: 'Supply / Shortages',
-};
-
-const ALL_DOMAINS: NotificationDomain[] = [
-  'earthquakes',
-  'wildfire',
-  'aviation',
-  'maritime',
-  'biosurveillance',
-  'space_weather',
-  'infrastructure',
-  'geopolitical',
-  'weather',
-  'cyber',
-  'supply',
-];
+import {
+  buildTestHistoryEntry,
+  SETTINGS_DOMAIN_LABELS as DOMAIN_LABELS,
+  SETTINGS_DOMAINS as ALL_DOMAINS,
+} from './notification-settings-helpers';
 
 export class NotificationSettingsPanel extends Panel {
   private settingsChangeListener: (() => void) | null = null;
@@ -51,6 +30,11 @@ export class NotificationSettingsPanel extends Panel {
     this.settingsChangeListener = () => this.render();
     document.addEventListener('wm:notification-settings-changed', this.settingsChangeListener);
     this.render();
+  }
+
+  private fireTestNotification(domain: NotificationDomain): void {
+    const threshold = getSettings().domains[domain].threshold;
+    recordHistory(buildTestHistoryEntry(domain, threshold));
   }
 
   public override destroy(): void {
@@ -139,6 +123,13 @@ export class NotificationSettingsPanel extends Panel {
               Quiet hrs
             </label>
           </td>
+          <td style="padding:6px 8px;text-align:center;">
+            <button type="button" data-action="test-notification" data-domain="${domain}"
+              title="Fire a synthetic ${escapeHtml(DOMAIN_LABELS[domain])} alert into the history ring"
+              style="background:rgba(74,158,255,0.12);color:var(--accent,#4a9eff);border:1px solid var(--accent,#4a9eff);border-radius:3px;padding:2px 8px;font-size:11px;cursor:pointer;white-space:nowrap;">
+              Test
+            </button>
+          </td>
         </tr>`;
     }).join('');
 
@@ -154,6 +145,7 @@ export class NotificationSettingsPanel extends Panel {
                 <th style="padding:4px 8px;text-align:left;color:var(--text-secondary,#aaa);font-weight:600;">Threshold</th>
                 <th style="padding:4px 8px;text-align:left;color:var(--text-secondary,#aaa);font-weight:600;">Channel</th>
                 <th style="padding:4px 8px;text-align:center;color:var(--text-secondary,#aaa);font-weight:600;">Quiet Hrs</th>
+                <th style="padding:4px 8px;text-align:center;color:var(--text-secondary,#aaa);font-weight:600;">Test</th>
               </tr>
             </thead>
             <tbody>
@@ -163,7 +155,16 @@ export class NotificationSettingsPanel extends Panel {
         </div>
       </div>`;
 
-    return `<div style="font-size:13px;">${globalSection}${tableSection}</div>`;
+    const footerSection = `
+      <div style="padding:10px 12px;border-top:1px solid var(--border-subtle,#333);display:flex;justify-content:flex-end;gap:8px;">
+        <button type="button" id="ns-reset-defaults"
+          title="Reset every domain + global settings to defaults"
+          style="background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#444);border-radius:3px;padding:4px 12px;font-size:12px;cursor:pointer;">
+          Reset to defaults
+        </button>
+      </div>`;
+
+    return `<div style="font-size:13px;">${globalSection}${tableSection}${footerSection}</div>`;
   }
 
   private wireHandlers(): void {
@@ -188,6 +189,25 @@ export class NotificationSettingsPanel extends Panel {
     quietEnd?.addEventListener('change', () => {
       updateGlobalSettings({ quietHoursEnd: quietEnd.value });
     });
+
+    const resetBtn = root.querySelector<HTMLButtonElement>('#ns-reset-defaults');
+    resetBtn?.addEventListener('click', () => {
+      // Service auto-persists the reset; re-render via the
+      // wm:notification-settings-changed listener wired in the constructor.
+      // Emit a fresh change event ourselves since resetSettings() doesn't.
+      resetSettings();
+      document.dispatchEvent(
+        new CustomEvent('wm:notification-settings-changed', { detail: getSettings() }),
+      );
+    });
+
+    for (const btn of root.querySelectorAll<HTMLButtonElement>('[data-action="test-notification"]')) {
+      btn.addEventListener('click', () => {
+        const domain = btn.dataset.domain as NotificationDomain | undefined;
+        if (!domain) return;
+        this.fireTestNotification(domain);
+      });
+    }
 
     for (const el of root.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
       '[data-domain][data-field]',

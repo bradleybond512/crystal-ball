@@ -5797,6 +5797,106 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
+  // ── Infrastructure Risk Matrix: per-domain feed passthroughs ────────────
+  // Each route is a thin proxy with its own cache TTL. The renderer-side
+  // pure layer (`src/services/infrarisks/infra-risk-service.ts`) parses
+  // and scores. Graceful-degraded payloads ({ degraded: true }) when
+  // upstream is unreachable so the panel can render an empty-state.
+
+  if (requestUrl.pathname === '/api/infrarisks/power') {
+    const cached = getCached('infrarisks-power', 60_000);
+    if (cached) return json(cached);
+    try {
+      const r = await fetchWithTimeout('https://poweroutage.us/api/stat/county', {
+        headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+      }, 15_000);
+      if (!r.ok) throw new Error(`poweroutage.us HTTP ${r.status}`);
+      const data = await r.json();
+      setCached('infrarisks-power', data, 60_000);
+      return json(data);
+    } catch (error) {
+      return json({ CountyOutages: [], degraded: true, reason: `poweroutage.us error: ${error.message ?? error}` });
+    }
+  }
+
+  if (requestUrl.pathname === '/api/infrarisks/kev') {
+    const cached = getCached('infrarisks-kev', 30 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const r = await fetchWithTimeout('https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json', {
+        headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+      }, 20_000);
+      if (!r.ok) throw new Error(`CISA KEV HTTP ${r.status}`);
+      const data = await r.json();
+      setCached('infrarisks-kev', data, 30 * 60 * 1000);
+      return json(data);
+    } catch (error) {
+      return json({ vulnerabilities: [], degraded: true, reason: `cisa-kev error: ${error.message ?? error}` });
+    }
+  }
+
+  if (requestUrl.pathname === '/api/infrarisks/bgp') {
+    const resource = requestUrl.searchParams.get('resource') || 'AS3356';
+    const cacheKey = `infrarisks-bgp:${resource}`;
+    const cached = getCached(cacheKey, 10 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const url = `https://stat.ripe.net/data/routing-consistency/data.json?resource=${encodeURIComponent(resource)}`;
+      const r = await fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+      if (!r.ok) throw new Error(`RIPE NCC HTTP ${r.status}`);
+      const data = await r.json();
+      setCached(cacheKey, data, 10 * 60 * 1000);
+      return json(data);
+    } catch (error) {
+      return json({ data: { resource, inconsistencies: [] }, degraded: true, reason: `ripe-bgp error: ${error.message ?? error}` });
+    }
+  }
+
+  if (requestUrl.pathname === '/api/infrarisks/acled') {
+    const cacheKey = 'infrarisks-acled';
+    const cached = getCached(cacheKey, 30 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const url = 'https://api.acleddata.com/acled/read/?event_type=Violence%20against%20civilians&limit=50&format=json';
+      const r = await fetchWithTimeout(url, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+      if (!r.ok) {
+        // ACLED gates anonymous reads behind a key on most endpoints —
+        // return an empty payload rather than a 502.
+        return json({ data: [], degraded: true, reason: `acled HTTP ${r.status} (auth may be required)` });
+      }
+      const data = await r.json();
+      setCached(cacheKey, data, 30 * 60 * 1000);
+      return json(data);
+    } catch (error) {
+      return json({ data: [], degraded: true, reason: `acled error: ${error.message ?? error}` });
+    }
+  }
+
+  // POST /api/infrarisks/state — convenience endpoint that orchestrates
+  // the four feeds server-side and returns the composed snapshot. The
+  // renderer can either call this once or call each feed individually
+  // and compose on the client. We expose both so tests + diagnostics
+  // can sample the composed state from a single request.
+  if (requestUrl.pathname === '/api/infrarisks/state' && (req.method === 'POST' || req.method === 'GET')) {
+    const cacheKey = 'infrarisks-state';
+    const cached = getCached(cacheKey, 60_000);
+    if (cached) return json(cached);
+    try {
+      const base = `http://127.0.0.1:${context.port}/api/infrarisks`;
+      const [power, kev, bgp, acled] = await Promise.all([
+        fetchWithTimeout(`${base}/power`, { headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20_000).then((r) => r.ok ? r.json() : null).catch(() => null),
+        fetchWithTimeout(`${base}/kev`, { headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 25_000).then((r) => r.ok ? r.json() : null).catch(() => null),
+        fetchWithTimeout(`${base}/bgp`, { headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20_000).then((r) => r.ok ? r.json() : null).catch(() => null),
+        fetchWithTimeout(`${base}/acled`, { headers: { Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20_000).then((r) => r.ok ? r.json() : null).catch(() => null),
+      ]);
+      const payload = { power, kev, bgp, acled, fetchedAt: Date.now() };
+      setCached(cacheKey, payload, 60_000);
+      return json(payload);
+    } catch (error) {
+      return json({ power: null, kev: null, bgp: null, acled: null, degraded: true, reason: `infrarisks-state error: ${error.message ?? error}` });
+    }
+  }
+
   // ── ThreatFox IOC feed ───────────────────────────────────────────────────
   if (requestUrl.pathname === '/api/threatfox-iocs') {
  const apiKey = process.env.THREATFOX_API_KEY;

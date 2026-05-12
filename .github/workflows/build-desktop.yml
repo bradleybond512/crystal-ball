@@ -315,7 +315,12 @@ jobs:
           Xvfb :99 -screen 0 1440x900x24 &
           export DISPLAY=:99
           sleep 2
-          "$APPIMAGE" --no-sandbox &
+          # Tauri uses WebKitGTK on Linux, not Chromium — the historic
+          # `--no-sandbox` flag was a misleading Chromium-only carry-over.
+          # The bubblewrap sandbox is gated off only when $APPIMAGE is set
+          # (see src-tauri/src/main.rs comment near
+          # WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS).
+          "$APPIMAGE" &
           APP_PID=$!
           sleep 15
           import -window root screenshot.png || true

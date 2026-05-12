@@ -90,7 +90,12 @@ jobs:
           set -x
           echo "DISPLAY=$DISPLAY WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-unset}"
 
-          GDK_BACKEND=x11 "$APPIMAGE_ABS" --no-sandbox 2>&1 | tee /tmp/app.log &
+          # Tauri uses WebKitGTK, not Chromium — `--no-sandbox` was a
+          # misleading carry-over from Electron docs and is silently
+          # ignored by the AppImage binary. The bubblewrap sandbox is
+          # gated off only inside AppImage builds (see comment in
+          # src-tauri/src/main.rs near WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS).
+          GDK_BACKEND=x11 "$APPIMAGE_ABS" 2>&1 | tee /tmp/app.log &
           APP_PID=$!
           sleep 20
 

@@ -274,6 +274,7 @@ import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
 import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { SupplyChainDisruptionPanel } from '@/components/SupplyChainDisruptionPanel';
 import { InfraRiskMatrixPanel } from '@/components/InfraRiskMatrixPanel';
+import { EarthquakeSuperPanel } from '@/components/EarthquakeSuperPanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
 import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
 import { SatelliteChangePanel } from '@/components/SatelliteChangePanel';
@@ -1283,6 +1284,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
  this.ctx.panels['supply-chain-disruption'] = new SupplyChainDisruptionPanel();
  this.ctx.panels['infra-risk-matrix'] = new InfraRiskMatrixPanel();
+ this.ctx.panels['earthquake-super'] = new EarthquakeSuperPanel();
  // Wire saved-places into the insights state singleton so the new
  // panels see the user's home/family/travel places out of the box.
  // Re-runs whenever saved places change.

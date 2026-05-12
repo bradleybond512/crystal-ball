@@ -824,6 +824,8 @@ const ROUTE_ALIASES = {
   '/api/weather': '/api/nws-alerts',
   '/api/gdelt-tensions': '/api/gdelt-intel',
   '/api/usgs-earthquakes': '/api/earthquakes',
+  '/api/earthquake/intelligence': '/api/earthquakes',
+  '/api/earthquake/shakemap': '/api/seismic-impact',
   '/api/acled': '/api/acled-events',
   '/api/ais-clusters': '/api/ais-snapshot',
   '/api/firms': '/api/nasa-firms',
@@ -9534,6 +9536,45 @@ async function dispatch(requestUrl, req, routes, context) {
     } catch (error) {
       trackFailure('usgs', error);
       return json({ events: [], error: String(error.message ?? error), degraded: true }, 200);
+    }
+  }
+
+  // ── Earthquake aftershock forecast lookup ───────────────────────────────
+  // GET /api/earthquake/aftershock-forecast?eventId=<id>
+  // Looks up the event in the cached USGS feed and returns the inputs the
+  // renderer's pure layer (`seismic/aftershock-watch.ts`) needs to compute
+  // an Omori-Utsu forecast: magnitude + occurredAt + lat/lon.
+  if (requestUrl.pathname === '/api/earthquake/aftershock-forecast') {
+    const eventId = requestUrl.searchParams.get('eventId');
+    if (!eventId || !/^[A-Za-z0-9_-]{1,128}$/.test(eventId)) {
+      return json({ error: 'invalid or missing eventId' }, 400);
+    }
+    try {
+      const detailUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=${encodeURIComponent(eventId)}`;
+      const r = await fetchWithTimeout(detailUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+      if (!r.ok) throw new Error(`USGS detail ${r.status}`);
+      const data = await r.json();
+      const props = data?.properties ?? {};
+      const coords = data?.geometry?.coordinates ?? null;
+      const lon = Array.isArray(coords) && typeof coords[0] === 'number' ? coords[0] : null;
+      const lat = Array.isArray(coords) && typeof coords[1] === 'number' ? coords[1] : null;
+      const depth = Array.isArray(coords) && typeof coords[2] === 'number' ? coords[2] : null;
+      const magnitude = typeof props.mag === 'number' ? props.mag : null;
+      const occurredAt = typeof props.time === 'number' ? props.time : null;
+      if (magnitude === null || occurredAt === null) {
+        return json({ error: 'event missing magnitude or time' }, 502);
+      }
+      return json({
+        eventId,
+        magnitude,
+        occurredAt,
+        lat,
+        lon,
+        depthKm: depth,
+        place: typeof props.place === 'string' ? props.place : '',
+      });
+    } catch (error) {
+      return json({ error: `earthquake-aftershock-forecast error: ${error.message ?? error}` }, 502);
     }
   }
 

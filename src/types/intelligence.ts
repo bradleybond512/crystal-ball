@@ -16,6 +16,34 @@ export interface ObservationLocation {
   radiusKm?: number;
 }
 
+// ── Playbook types ────────────────────────────────────────────────────────
+
+export type PlaybookStepCategory = 'monitor' | 'notify' | 'prepare' | 'act' | 'verify';
+
+export interface PlaybookStep {
+  order: number;
+  /** Human-readable instruction shown to the operator. */
+  action: string;
+  category: PlaybookStepCategory;
+  /** True when Crystal Ball can execute this step without user interaction. */
+  automated: boolean;
+  /** Name of the automation function to invoke when automated === true. */
+  automationFn?: string;
+}
+
+export interface Playbook {
+  id: string;
+  name: string;
+  /** Event domains that trigger this playbook. Use '*' to match any domain. */
+  triggerDomains: string[];
+  /** At least one of these tags must appear on the event (empty = any tags). */
+  triggerTags: string[];
+  triggerSeverity: ObservationSeverity[];
+  steps: PlaybookStep[];
+}
+
+// ── ObservationEvent ──────────────────────────────────────────────────────
+
 export interface ObservationEvent {
   /** Stable identifier — should survive duplicate ingestion of the same event. */
   id: string;

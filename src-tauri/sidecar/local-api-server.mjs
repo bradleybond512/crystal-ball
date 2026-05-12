@@ -4440,6 +4440,57 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── /api/intelligence/playbook — pure-data playbook lookup ──────────────
+  // Matches the built-in playbook catalog by domain + severity without
+  // importing TypeScript. The catalog is inlined here; it must stay in sync
+  // with src/services/intelligence/playbooks/.
+  if (requestUrl.pathname === '/api/intelligence/playbook' && req.method === 'GET') {
+    const domain = requestUrl.searchParams.get('domain') || '';
+    const severity = (requestUrl.searchParams.get('severity') || '').toUpperCase();
+    const SEVERITY_RANK = { INFO: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
+    const PLAYBOOKS = [
+      {
+        id: 'earthquake', name: 'Earthquake Response',
+        triggerDomains: ['*'], triggerTags: ['earthquake', 'seismic'],
+        triggerSeverity: ['HIGH', 'CRITICAL'],
+      },
+      {
+        id: 'wildfire', name: 'Wildfire Response',
+        triggerDomains: ['*'], triggerTags: ['wildfire', 'fire'],
+        triggerSeverity: ['HIGH', 'CRITICAL'],
+      },
+      {
+        id: 'aviation-emergency', name: 'Aviation Emergency',
+        triggerDomains: ['aviation'], triggerTags: ['squawk-7700', 'squawk-7600', 'squawk-7500', 'emergency'],
+        triggerSeverity: ['HIGH', 'CRITICAL'],
+      },
+      {
+        id: 'hurricane', name: 'Hurricane / Tropical Cyclone Response',
+        triggerDomains: ['weather'], triggerTags: ['hurricane', 'tropical-storm', 'nhc', 'cyclone'],
+        triggerSeverity: ['MEDIUM', 'HIGH', 'CRITICAL'],
+      },
+      {
+        id: 'cyber-breach', name: 'Cyber Breach Response',
+        triggerDomains: ['cyber'], triggerTags: [],
+        triggerSeverity: ['HIGH', 'CRITICAL'],
+      },
+    ];
+    const tags = new Set((requestUrl.searchParams.get('tags') || '').split(',').filter(Boolean));
+    const candidates = PLAYBOOKS.filter(p => {
+      const domainOk = p.triggerDomains.includes('*') || p.triggerDomains.includes(domain);
+      const severityOk = p.triggerSeverity.includes(severity);
+      return domainOk && severityOk;
+    });
+    if (candidates.length === 0) return json({ playbook: null });
+    let best = candidates[0];
+    let bestScore = -1;
+    for (const p of candidates) {
+      const score = p.triggerTags.filter(t => tags.has(t)).length;
+      if (score > bestScore) { best = p; bestScore = score; }
+    }
+    return json({ playbook: best });
+  }
+
   if (requestUrl.pathname === '/api/algorithm-correlations' && req.method === 'GET') {
     return json(context._algorithmState?.correlations || { available: false });
   }

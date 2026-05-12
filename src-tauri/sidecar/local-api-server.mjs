@@ -1497,21 +1497,67 @@ async function tryCloudFallback(requestUrl, req, context, reason) {
   }
 }
 
-const SIDECAR_ALLOWED_ORIGINS = [
+// Known crystalball.app subdomains. Enumerated rather than glob-matched so a
+// future DNS / certificate misconfig can't silently grant CORS access to an
+// unrelated subdomain (e.g. an attacker-controlled preview host).
+const SIDECAR_PROD_HOSTS = new Set([
+  'crystalball.app',
+  'tech.crystalball.app',
+  'finance.crystalball.app',
+  'happy.crystalball.app',
+  'api.crystalball.app',
+]);
+
+// Dev-server ports the sidecar may legitimately serve. Other localhost ports
+// must NOT receive Access-Control-Allow-Origin reflection — that would let a
+// random local app on a random port read sidecar responses cross-origin.
+const SIDECAR_DEV_PORTS = new Set([
+  '',         // bare http://localhost (port 80) — keep for browser preview tools
+  '3000',     // Vite dev server (full + tech + finance variants)
+  '1420',     // Tauri dev preview default
+  '5173',     // Vite alt default port
+  '46123',    // Sidecar self-origin (port set in DEFAULT_LOCAL_API_PORT)
+]);
+
+const SIDECAR_TAURI_PATTERNS = [
   /^tauri:\/\/localhost$/,
-  /^https?:\/\/localhost(:\d+)?$/,
-  /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+  /^asset:\/\/localhost$/,
   /^https?:\/\/tauri\.localhost(:\d+)?$/,
-  // Only allow exact domain or single-level subdomains (e.g. preview-xyz.crystalball.app).
-  // The previous (.*\.)? pattern was overly broad. Anchored to prevent spoofing
-  // via domains like crystalballEVIL.vercel.app.
-  /^https:\/\/([a-z0-9-]+\.)?crystalball\.app$/,
+  /^https:\/\/[a-z0-9-]+\.tauri\.localhost(:\d+)?$/i,
 ];
+
+// Local-host port extractor — split into match + capture so we can compare
+// the port against SIDECAR_DEV_PORTS rather than letting any port through.
+const SIDECAR_LOCALHOST_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::(\d+))?$/;
+
+export function isSidecarOriginAllowed(origin) {
+  if (!origin) return false;
+  for (const p of SIDECAR_TAURI_PATTERNS) {
+    if (p.test(origin)) return true;
+  }
+  // Match prod host suffix (handles https://crystalball.app and the four
+  // enumerated subdomains; anything else is denied).
+  if (origin.startsWith('https://')) {
+    const host = origin.slice('https://'.length);
+    if (SIDECAR_PROD_HOSTS.has(host)) return true;
+  }
+  const localMatch = SIDECAR_LOCALHOST_RE.test(origin)
+    ? (origin.match(SIDECAR_LOCALHOST_RE) || [])
+    : null;
+  if (localMatch) {
+    const port = localMatch[1] ?? '';
+    if (SIDECAR_DEV_PORTS.has(port)) return true;
+  }
+  return false;
+}
 
 function getSidecarCorsOrigin(req) {
   const origin = req.headers?.origin || req.headers?.get?.('origin') || '';
-  if (origin && SIDECAR_ALLOWED_ORIGINS.some(p => p.test(origin))) return origin;
-   
+  if (isSidecarOriginAllowed(origin)) return origin;
+  // Fail closed: a non-matching browser origin gets reflected back as
+  // `tauri://localhost`, which no real browser will ever send — so the
+  // browser's CORS check rejects the response. There is no CORS_ALLOW_ALL
+  // env override; this is the only fallback path.
   return 'tauri://localhost';
 }
 

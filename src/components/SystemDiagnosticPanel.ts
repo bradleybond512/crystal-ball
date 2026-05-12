@@ -58,13 +58,13 @@ const REFRESH_MS = 5000;
 type Tab = 'overview' | 'features' | 'panels' | 'notifications' | 'feeds' | 'quality_debt' | 'self_test';
 
 const STATUS_COLOR: Record<HealthStatus, string> = {
-  healthy: '#4caf50',
-  degraded: '#ffeb3b',
-  stale: '#ff9800',
-  failing: '#f44336',
-  unsafe: '#d50000',
-  blind: '#607d8b',
-  unknown: '#9e9e9e',
+  healthy: 'var(--severity-ok)',
+  degraded: 'var(--severity-medium)',
+  stale:   'var(--severity-high)',
+  failing: 'var(--severity-high)',
+  unsafe:  'var(--severity-critical)',
+  blind:   'var(--severity-info)',
+  unknown: 'var(--severity-info)',
 };
 
 const STATUS_ICON: Record<HealthStatus, string> = {
@@ -122,7 +122,7 @@ export class SystemDiagnosticPanel extends Panel {
       queueMicrotask(() => this.wireHandlers());
     } catch (error) {
       console.warn('[SystemDiagnosticPanel] render failed:', error);
-      this.setContent(`<div style="padding:12px;color:#f44336;">Diagnostic render error: ${escapeHtml(String(error))}</div>`);
+      this.setContent(`<div style="padding:12px;color:var(--severity-critical);">Diagnostic render error: ${escapeHtml(String(error))}</div>`);
     }
   }
 
@@ -242,13 +242,13 @@ export class SystemDiagnosticPanel extends Panel {
       return `<div style="padding:12px;color:var(--text-secondary,#aaa);font-size:12px;">No active quality debt — diagnostics surface is clean.</div>`;
     }
     const SEV_COLOR: Record<string, string> = {
-      critical: '#d50000',
-      high: '#f44336',
-      medium: '#ff9800',
-      low: '#9e9e9e',
+      critical: 'var(--severity-critical)',
+      high:     'var(--severity-high)',
+      medium:   'var(--severity-medium)',
+      low:      'var(--severity-info)',
     };
     const rows = debt.slice(0, 25).map((d) => {
-      const color = SEV_COLOR[d.severity] ?? '#9e9e9e';
+      const color = SEV_COLOR[d.severity] ?? 'var(--severity-info)';
       return `<div style="border-left:3px solid ${color};padding:6px 10px;margin-bottom:6px;background:rgba(255,255,255,0.02);">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;">
           <strong>${escapeHtml(d.category)}</strong>
@@ -335,7 +335,7 @@ export class SystemDiagnosticPanel extends Panel {
     const icon = STATUS_ICON[f.status];
     const userImpact = f.userImpact ? `<div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:3px;">${escapeHtml(f.userImpact)}</div>` : '';
     const action = f.recommendedAction ? `<div style="font-size:11px;color:var(--accent,#4a9eff);margin-top:3px;">→ ${escapeHtml(f.recommendedAction)}</div>` : '';
-    const criticalBadge = f.critical ? `<span style="font-size:9px;padding:1px 4px;background:#d50000;color:#fff;border-radius:2px;margin-left:6px;">CRITICAL</span>` : '';
+    const criticalBadge = f.critical ? `<span style="font-size:9px;padding:1px 4px;background:var(--severity-critical);color:#fff;border-radius:2px;margin-left:6px;">CRITICAL</span>` : '';
     return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:8px;">
@@ -384,7 +384,7 @@ export class SystemDiagnosticPanel extends Panel {
       : `<ul style="margin:0;padding-left:18px;font-size:12px;">${reasons.map(([r, n]) => `<li><strong>${n}</strong> · ${escapeHtml(r)}</li>`).join('')}</ul>`;
     const unsafeHtml = s.unsafeSuppressions.length === 0
       ? ''
-      : `<div style="margin-top:10px;padding:8px;background:#3a0000;border-left:3px solid #d50000;border-radius:3px;">
+      : `<div style="margin-top:10px;padding:8px;background:#3a0000;border-left:3px solid var(--severity-critical);border-radius:3px;">
         <div style="font-size:11px;text-transform:uppercase;color:#ff6666;margin-bottom:4px;">Unsafe suppressions</div>
         ${s.unsafeSuppressions.map((u) => `<div style="font-size:11px;color:#fff;">${escapeHtml(u.candidateId)} · ${escapeHtml(u.reason)}</div>`).join('')}
       </div>`;
@@ -414,7 +414,7 @@ export class SystemDiagnosticPanel extends Panel {
 
   private renderFeedRow(e: FeedAuditEntry): string {
     const color = feedColor(e.level);
-    const safety = e.safetyCritical ? `<span style="font-size:9px;padding:1px 4px;background:#d50000;color:#fff;border-radius:2px;margin-left:6px;">SAFETY</span>` : '';
+    const safety = e.safetyCritical ? `<span style="font-size:9px;padding:1px 4px;background:var(--severity-critical);color:#fff;border-radius:2px;margin-left:6px;">SAFETY</span>` : '';
     const remediation = e.remediation ? `<div style="font-size:11px;color:var(--accent,#4a9eff);margin-top:3px;">→ ${escapeHtml(e.remediation)}</div>` : '';
     return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -457,7 +457,7 @@ export class SystemDiagnosticPanel extends Panel {
         style="padding:6px 10px;background:transparent;color:var(--text);border:1px solid var(--border-strong,#444);border-radius:3px;cursor:${sst.running ? 'wait' : 'pointer'};font-size:11px;">${btnLabel}</button>
     </div>`;
     if (sst.error && sst.results.length === 0) {
-      return `${header}<div style="color:#ff9800;font-size:11px;">⚠ ${escapeHtml(sst.error)}</div>`;
+      return `${header}<div style="color:var(--severity-high);font-size:11px;">⚠ ${escapeHtml(sst.error)}</div>`;
     }
     if (sst.results.length === 0 && !sst.summary) {
       return `${header}<div style="font-size:11px;color:var(--text-secondary,#aaa);">Probes /api/health, /api/spaceweather/status, /api/freight-stress, /api/security/cves, and 6 more — reports pass/fail + latency per route.</div>`;
@@ -475,7 +475,7 @@ export class SystemDiagnosticPanel extends Panel {
     const rows = results.map((r) => {
       const badge = VERDICT_BADGE[r.verdict];
       const errLine = r.error
-        ? `<span style="color:#ff9800;font-size:10px;margin-left:8px;">${escapeHtml(r.error)}</span>`
+        ? `<span style="color:var(--severity-high);font-size:10px;margin-left:8px;">${escapeHtml(r.error)}</span>`
         : '';
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;border-bottom:1px dotted var(--border-subtle,#222);font-size:11px;">
         <div style="display:flex;align-items:center;gap:8px;min-width:0;">
@@ -507,10 +507,10 @@ export class SystemDiagnosticPanel extends Panel {
   }
 
   private severityColor(severity: string): string {
-    if (severity === 'critical' || severity === 'error') return '#f44336';
-    if (severity === 'warning') return '#ff9800';
-    if (severity === 'info') return '#4caf50';
-    return '#9e9e9e';
+    if (severity === 'critical' || severity === 'error') return 'var(--severity-critical)';
+    if (severity === 'warning') return 'var(--severity-high)';
+    if (severity === 'info') return 'var(--severity-ok)';
+    return 'var(--severity-info)';
   }
 
   private async exportDiagnosticsJson(): Promise<void> {
@@ -640,36 +640,31 @@ function severityRankFeed(level: keyof typeof FEED_RANK): number {
 
 function feedColor(level: keyof typeof FEED_RANK): string {
   switch (level) {
-    case 'fresh': {
-      return '#4caf50';
+    case 'fresh': {   return 'var(--severity-ok)';
     }
-    case 'stale': {
-      return '#ff9800';
+    case 'stale': {   return 'var(--severity-high)';
     }
-    case 'late': {
-      return '#f44336';
+    case 'late': {    return 'var(--severity-high)';
     }
-    case 'silent': {
-      return '#d50000';
+    case 'silent': {  return 'var(--severity-critical)';
     }
-    case 'unknown': {
-      return '#9e9e9e';
+    case 'unknown': { return 'var(--severity-info)';
     }
   }
 }
 
 function pickTallyColor(healthy: number, total: number): string {
-  if (total === 0) return '#ff9800';
-  if (healthy === total) return '#4caf50';
-  if (healthy === 0) return '#f44336';
-  return '#ff9800';
+  if (total === 0) return 'var(--severity-high)';
+  if (healthy === total) return 'var(--severity-ok)';
+  if (healthy === 0) return 'var(--severity-critical)';
+  return 'var(--severity-high)';
 }
 
 function selfTestStatusColor(status: string): string {
-  if (status === 'pass') return '#4caf50';
-  if (status === 'warn') return '#ff9800';
-  if (status === 'fail') return '#f44336';
-  return '#9e9e9e';
+  if (status === 'pass') return 'var(--severity-ok)';
+  if (status === 'warn') return 'var(--severity-high)';
+  if (status === 'fail') return 'var(--severity-critical)';
+  return 'var(--severity-info)';
 }
 
 function formatAge(ms: number): string {
@@ -680,8 +675,8 @@ function formatAge(ms: number): string {
 }
 
 function missionStateColor(state: MissionState): string {
-  if (state === 'CRITICAL') return '#d50000';
-  if (state === 'DEGRADED') return '#ff8800';
-  return '#2e7d32';
+  if (state === 'CRITICAL') return 'var(--severity-critical)';
+  if (state === 'DEGRADED') return 'var(--severity-high)';
+  return 'var(--severity-ok)';
 }
 

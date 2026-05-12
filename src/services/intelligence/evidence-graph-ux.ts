@@ -215,6 +215,31 @@ interface PartitionResult {
   contradicting: { event: ObservationEvent; reason: string }[];
 }
 
+type EventVerdict =
+  | { kind: 'confirm' }
+  | { kind: 'contradict'; reason: string }
+  | { kind: 'skip' };
+
+function classifyEvent(
+  event: ObservationEvent,
+  situation: Situation,
+  situationTags: Set<string>,
+  isLinked: boolean,
+  now: number,
+): EventVerdict {
+  const eventTags = lowerSet(event.tags);
+  if (!isLinked) {
+    if (event.domain !== situation.domain) {
+      const reason = contradictionReason(eventTags, situationTags);
+      return reason ? { kind: 'contradict', reason } : { kind: 'skip' };
+    }
+    if (now - event.timestamp > TEMPORAL_LOOKBACK_MS) return { kind: 'skip' };
+    if (!eventInSituationFootprint(event, situation)) return { kind: 'skip' };
+  }
+  const reason = contradictionReason(eventTags, situationTags);
+  return reason ? { kind: 'contradict', reason } : { kind: 'confirm' };
+}
+
 function partitionEvents(
   situation: Situation,
   events: readonly ObservationEvent[],
@@ -226,24 +251,9 @@ function partitionEvents(
   const contradicting: { event: ObservationEvent; reason: string }[] = [];
 
   for (const event of events) {
-    const eventTags = lowerSet(event.tags);
-    const isLinked = obsIds.has(event.id);
-    if (!isLinked) {
-      if (event.domain !== situation.domain) {
-        const reason = contradictionReason(eventTags, situationTags);
-        if (reason) contradicting.push({ event, reason });
-        continue;
-      }
-      if (now - event.timestamp > TEMPORAL_LOOKBACK_MS) continue;
-      if (!eventInSituationFootprint(event, situation)) continue;
-    }
-
-    const reason = contradictionReason(eventTags, situationTags);
-    if (reason) {
-      contradicting.push({ event, reason });
-      continue;
-    }
-    confirming.push(event);
+    const verdict = classifyEvent(event, situation, situationTags, obsIds.has(event.id), now);
+    if (verdict.kind === 'confirm') confirming.push(event);
+    else if (verdict.kind === 'contradict') contradicting.push({ event, reason: verdict.reason });
   }
 
   return { confirming, contradicting };

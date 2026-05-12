@@ -8,8 +8,6 @@
  * from situation-store. 30 s auto-refresh; also re-renders on situation
  * lifecycle events.
  */
-/* eslint-disable sonarjs/no-nested-template-literals -- short row markup */
-
 import { Panel } from './Panel';
 import { getActive, getSituation } from '@/services/intelligence/situation-store';
 import { getRecent } from '@/services/intelligence/observation-store';

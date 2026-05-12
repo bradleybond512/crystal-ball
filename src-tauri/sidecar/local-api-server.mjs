@@ -25,6 +25,8 @@ import {
   expireAlerts,
 } from './ipaws-aggregate.mjs';
 import { loadEnvFile } from './env-local-loader.mjs';
+import { fetchWithFallback } from './feed-resilience.mjs';
+import { trackSuccess, trackFailure, getAllFeedStatuses, getFeedStatus } from './feed-health-tracker.mjs';
 import { fetchAllTfrs, tfrColor } from './faa-tfrs.mjs';
 import { fetchGdacsRss, groupByType, alertLevelRgba } from './gdacs-rss.mjs';
 import {
@@ -6663,13 +6665,21 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── NOAA NWS All-Hazards alerts ──────────────────────────────────────────
   if (requestUrl.pathname === '/api/nws-alerts') {
  try {
- const resp = await fetchWithTimeout(
- 'https://api.weather.gov/alerts/active?status=actual&message_type=alert&urgency=Immediate,Expected&severity=Extreme,Severe,Moderate',
- { headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-NWS/1.0 (https://github.com/bradleybond512/crystal-ball)' } },
- 12_000,
- );
- if (!resp.ok) return json([], 200);
- const data = await resp.json();
+ const NWS_PRIMARY = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert&urgency=Immediate,Expected&severity=Extreme,Severe,Moderate';
+ const NWS_FALLBACK = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert';
+ let result;
+ try {
+   result = await fetchWithFallback(NWS_PRIMARY, [NWS_FALLBACK], {
+     cacheKey: 'nws-alerts-last-good',
+     timeoutMs: 12_000,
+     headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-NWS/1.0 (https://github.com/bradleybond512/crystal-ball)' },
+   });
+   trackSuccess('nws-alerts', result.source);
+ } catch (error) {
+   trackFailure('nws-alerts', error);
+   return json([], 200);
+ }
+ const data = result.data;
  const features = Array.isArray(data?.features) ? data.features : [];
  const alerts = features.slice(0, 100).map((f, i) => {
  const p = f.properties ?? {};
@@ -6980,9 +6990,11 @@ async function dispatch(requestUrl, req, routes, context) {
  fema: femaData ? 'ok' : 'degraded',
  },
  };
+ trackSuccess('ipaws', 'primary');
  setCached('ipaws-active', result);
  return json(result);
  } catch (error) {
+ trackFailure('ipaws', error);
  const degraded = {
  alerts: [],
  fetchedAt: new Date().toISOString(),
@@ -7654,8 +7666,10 @@ async function dispatch(requestUrl, req, routes, context) {
  const r = settled[i];
  result[key] = (r.status === 'fulfilled' && r.value.ok) ? await r.value.json() : null;
  }
+ trackSuccess('swpc', 'primary');
  return json(result);
  } catch (error) {
+ trackFailure('swpc', error);
  return json({ error: `space-weather-feeds fetch error: ${error.message ?? error}` }, 502);
  }
   }
@@ -9267,6 +9281,46 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── USGS earthquake feed — hourly GeoJSON with daily fallback ────────────────
+  if (requestUrl.pathname === '/api/earthquakes') {
+    const cached = getCached('usgs-earthquakes');
+    if (cached) return json(cached);
+    const USGS_HOURLY = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson';
+    const USGS_DAILY  = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
+    try {
+      const result = await fetchWithFallback(USGS_HOURLY, [USGS_DAILY], {
+        cacheKey: 'usgs-earthquakes-last-good',
+        timeoutMs: 15_000,
+        headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall-USGS/1.0 (https://github.com/bradleybond512/crystal-ball)' },
+      });
+      trackSuccess('usgs', result.source);
+      const features = Array.isArray(result.data?.features) ? result.data.features : [];
+      const events = features.slice(0, 200).map((f) => {
+        const p = f.properties ?? {};
+        const [lon, lat, depth] = f.geometry?.coordinates ?? [0, 0, null];
+        return {
+          id: f.id ?? p.code ?? null,
+          magnitude: p.mag ?? null,
+          magnitudeType: p.magType ?? null,
+          place: p.place ?? null,
+          time: p.time ?? null,
+          depth: depth ?? null,
+          lat, lon,
+          alert: p.alert ?? null,
+          status: p.status ?? null,
+          url: p.url ?? null,
+          degraded: result.degraded,
+          source: result.source,
+        };
+      });
+      setCached('usgs-earthquakes', events, 60_000);
+      return json({ events, degraded: result.degraded, source: result.source });
+    } catch (error) {
+      trackFailure('usgs', error);
+      return json({ events: [], error: String(error.message ?? error), degraded: true }, 200);
+    }
+  }
+
   // ── EMSC seismic + nuclear test site proximity detection ─────────────────
   if (requestUrl.pathname === '/api/emsc-seismic') {
  const cached = getCached('emsc-seismic');
@@ -10082,8 +10136,10 @@ async function dispatch(requestUrl, req, routes, context) {
  })
  );
  const fires = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+ trackSuccess('firms', 'primary');
  return json({ fires, count: fires.length });
  } catch (error) {
+ trackFailure('firms', error);
  return json({ fires: [], error: String(error.message ?? error) }, 500);
  }
   }
@@ -13784,6 +13840,17 @@ export async function createLocalApiServer(options = {}) {
  res.writeHead(404, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
  res.end(JSON.stringify({ error: 'Not found' }));
  return;
+ }
+
+ // ── /api/feeds/health — per-feed resilience status ────────────────────
+ if (requestUrl.pathname === '/api/feeds/health') {
+   return json({ feeds: getAllFeedStatuses(), asOf: new Date().toISOString() });
+ }
+
+ if (requestUrl.pathname.startsWith('/api/feeds/health/')) {
+   const feedId = requestUrl.pathname.slice('/api/feeds/health/'.length);
+   if (!feedId || !/^[\w\-.:]+$/.test(feedId)) return json({ error: 'invalid feedId' }, 400);
+   return json(getFeedStatus(feedId));
  }
 
  // ── /api/health — lightweight liveness probe ──────────────────────

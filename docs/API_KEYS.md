@@ -1,17 +1,24 @@
 # Crystal Ball — API Keys & Data Sources
 
-Crystal Ball integrates with 40+ external data sources. Most features work out of the box with free public APIs, but some layers require API keys for full functionality. Keys are entered via **Settings (gear icon) → API Keys** in both the desktop and web builds.
+Crystal Ball supports **All 60 secret keys** wired through the Tauri desktop runtime
+(see [`src-tauri/src/main.rs`](../src-tauri/src/main.rs) — `SUPPORTED_SECRET_KEYS`). Most
+features work out of the box with free public APIs; the keys below unlock additional
+sources or higher rate limits. Keys are entered via **Settings (gear icon) → API Keys**
+in both the desktop and web builds.
 
-> **Each field in the in-app Settings overlay also shows a one-line description of what the key does, free vs paid, and a "Get key" link** — added in the v2.11 release as part of the documentation refresh.
+> **Each field in the in-app Settings overlay also shows a one-line description of what
+> the key does, free vs paid, and a "Get key" link** — added in the v2.11 release as
+> part of the documentation refresh.
 
 ## Where keys are stored
 
-- **Desktop (Tauri)** — keys live in the macOS Keychain under service name `crystal-ball`. The renderer never sees them; they're injected into the Node.js sidecar at startup and proxied through a bearer-authenticated localhost port.
-- **Web (browser)** — keys live in a passphrase-encrypted vault in IndexedDB. AES-GCM-256 over PBKDF2-SHA-256 (600,000 iterations); ciphertext only, derived key + plaintext map held in module closure for the duration of the session. Auto-locks after 15 min of the tab being hidden. To set up:
-  1. Open Settings → API Keys.
-  2. Pick a passphrase you can remember (≥12 chars). There is no recovery — lost passphrase means destroying the vault and re-entering keys.
-  3. Once unlocked, the per-provider inputs accept and persist your keys across reloads.
-  4. **Save validation** — Anthropic, Groq, OpenRouter, Cesium Ion, Mapbox, and MapTiler keys are probed directly from the browser on save (no Referer leak via `referrerPolicy: 'no-referrer'`); a 401/403 surfaces immediately. Other providers don't accept browser CORS, so they fall through to a non-committal "Saved".
+- **Desktop (Tauri)** — keys live in the macOS Keychain under service name
+  `crystal-ball`. The renderer never sees them; they're injected into the Node.js
+  sidecar at startup and proxied through a bearer-authenticated localhost port.
+- **Web (browser)** — keys live in a passphrase-encrypted vault in IndexedDB.
+  AES-GCM-256 over PBKDF2-SHA-256 (600,000 iterations); ciphertext only, derived
+  key + plaintext map held in module closure for the duration of the session.
+  Auto-locks after 15 min of the tab being hidden.
 
 ## Quick Start — Essential Free Keys
 
@@ -32,87 +39,116 @@ These keys unlock the most impactful features and are free with simple registrat
 
 ### Intelligence & Tracking
 
-| Key | Label | Free? | What It Enables | Signup |
-|-----|-------|-------|-----------------|--------|
-| `ACLED_ACCESS_TOKEN` | ACLED Access Token | Registration | Conflict events, battles, explosions | [developer.acleddata.com](https://developer.acleddata.com/) |
-| `ACLED_EMAIL` | ACLED Email | — | Paired with ACLED token for airstrike data | Same as above |
-| `OPENSKY_CLIENT_ID` | OpenSky Client ID | Free | Military flight tracking (OAuth pair) | [opensky-network.org](https://opensky-network.org/login?view=registration) |
-| `OPENSKY_CLIENT_SECRET` | OpenSky Client Secret | Free | Military flight tracking (OAuth pair) | Same as above |
-| `VITE_OPENSKY_RELAY_URL` | OpenSky Relay URL | — | Relay server URL for OpenSky data | Self-hosted |
-| `AISSTREAM_API_KEY` | AISStream API Key | Free | Military vessel & dark ship tracking | [aisstream.io](https://aisstream.io/authenticate) |
-| `WINGBITS_API_KEY` | Wingbits API Key | Paid | Aircraft metadata enrichment | [wingbits.com](https://wingbits.com/register) |
-| `NASA_FIRMS_API_KEY` | NASA FIRMS Key | Free | Satellite fire detections (FIRMS) | [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/api/area/) |
-| `ICAO_API_KEY` | ICAO NOTAM Key | Paid | Airport closure NOTAMs | [dataservices.icao.int](https://dataservices.icao.int/) |
-| `AVIATIONSTACK_API` | AviationStack Key | Free | Airport delay data | [aviationstack.com](https://aviationstack.com/signup/free) |
+| Key | Free? | What It Enables | Signup |
+|-----|-------|-----------------|--------|
+| `ACLED_ACCESS_TOKEN` | Registration | Conflict events, battles, explosions | [developer.acleddata.com](https://developer.acleddata.com/) |
+| `ACLED_EMAIL` | — | Paired with ACLED token | Same as above |
+| `ACLED_REFRESH_TOKEN` | — | Long-lived refresh for ACLED OAuth | Same as above |
+| `OPENSKY_CLIENT_ID` | Free | Military flight tracking (OAuth pair) | [opensky-network.org](https://opensky-network.org/login?view=registration) |
+| `OPENSKY_CLIENT_SECRET` | Free | Military flight tracking (OAuth pair) | Same as above |
+| `VITE_OPENSKY_RELAY_URL` | — | Relay URL for OpenSky data (self-hosted) | Self-hosted |
+| `WS_RELAY_URL` | — | Generic websocket relay endpoint | Self-hosted |
+| `VITE_WS_RELAY_URL` | — | Browser-side websocket relay URL | Self-hosted |
+| `AISSTREAM_API_KEY` | Free | Military vessel & dark ship tracking | [aisstream.io](https://aisstream.io/authenticate) |
+| `WINGBITS_API_KEY` | Paid | Aircraft metadata enrichment | [wingbits.com](https://wingbits.com/register) |
+| `NASA_FIRMS_API_KEY` | Free | Satellite fire detections (FIRMS) | [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/api/area/) |
+| `ICAO_API_KEY` | Paid | Airport closure NOTAMs | [dataservices.icao.int](https://dataservices.icao.int/) |
+| `AVIATIONSTACK_API` | Free | Airport delay data | [aviationstack.com](https://aviationstack.com/signup/free) |
+| `UCDP_API_TOKEN` | Free | Uppsala Conflict Data Program events | [ucdp.uu.se](https://ucdp.uu.se/) |
 
 ### Cyber Threat Intelligence
 
-| Key | Label | Free? | What It Enables | Signup |
-|-----|-------|-------|-----------------|--------|
-| `THREATFOX_API_KEY` | ThreatFox Key | Free | C2 servers, malware IOCs | [auth.abuse.ch](https://auth.abuse.ch/) |
-| `URLHAUS_AUTH_KEY` | URLhaus Auth Key | Free | Malicious URL indicators | [auth.abuse.ch](https://auth.abuse.ch/) |
-| `OTX_API_KEY` | AlienVault OTX Key | Free | Community threat intelligence | [otx.alienvault.com](https://otx.alienvault.com/) |
-| `ABUSEIPDB_API_KEY` | AbuseIPDB Key | Free (limited) | IP reputation scoring | [abuseipdb.com](https://www.abuseipdb.com/login) |
-| `VIRUSTOTAL_API_KEY` | VirusTotal Key | Free (limited) | IOC reputation lookups | [virustotal.com](https://www.virustotal.com/gui/join-us) |
-| `SHODAN_API_KEY` | Shodan Key | Paid | ICS/SCADA exposure scanning | [account.shodan.io](https://account.shodan.io/) |
-| `URLSCAN_API_KEY` | URLScan.io Key | Free | URL scanner results | [urlscan.io](https://urlscan.io/user/signup) |
-| `BITCOINABUSE_API_KEY` | Bitcoin Abuse Key | Free | Ransomware address tracker | [bitcoinabuse.com](https://www.bitcoinabuse.com/api-docs) |
-| `VULNERS_API_KEY` | Vulners Key | Free (limited) | CVE & exploit intelligence | [vulners.com](https://vulners.com/docs/api/) |
-| `PULSEDIVE_API_KEY` | Pulsedive Key | Free (limited) | Threat indicator scoring | [pulsedive.com](https://pulsedive.com/api/) |
-| `GREYNOISE_API_KEY` | GreyNoise Key | Free (50/day) | Internet noise classification | [greynoise.io](https://www.greynoise.io/plans/community) |
-| `HIBP_API_KEY` | HIBP Key | Free/Paid | Data breach lookups | [haveibeenpwned.com](https://haveibeenpwned.com/API/Key) |
+| Key | Free? | What It Enables | Signup |
+|-----|-------|-----------------|--------|
+| `THREATFOX_API_KEY` | Free | C2 servers, malware IOCs | [auth.abuse.ch](https://auth.abuse.ch/) |
+| `URLHAUS_AUTH_KEY` | Free | Malicious URL indicators | [auth.abuse.ch](https://auth.abuse.ch/) |
+| `OTX_API_KEY` | Free | Community threat intelligence | [otx.alienvault.com](https://otx.alienvault.com/) |
+| `ABUSEIPDB_API_KEY` | Free (limited) | IP reputation scoring | [abuseipdb.com](https://www.abuseipdb.com/login) |
+| `VIRUSTOTAL_API_KEY` | Free (limited) | IOC reputation lookups | [virustotal.com](https://www.virustotal.com/gui/join-us) |
+| `SHODAN_API_KEY` | Paid | ICS/SCADA exposure scanning | [account.shodan.io](https://account.shodan.io/) |
+| `URLSCAN_API_KEY` | Free | URL scanner results | [urlscan.io](https://urlscan.io/user/signup) |
+| `BITCOINABUSE_API_KEY` | Free | Ransomware address tracker | [bitcoinabuse.com](https://www.bitcoinabuse.com/api-docs) |
+| `VULNERS_API_KEY` | Free (limited) | CVE & exploit intelligence | [vulners.com](https://vulners.com/docs/api/) |
+| `PULSEDIVE_API_KEY` | Free (limited) | Threat indicator scoring | [pulsedive.com](https://pulsedive.com/api/) |
+| `GREYNOISE_API_KEY` | Free (50/day) | Internet noise classification | [greynoise.io](https://www.greynoise.io/plans/community) |
+| `HIBP_API_KEY` | Free/Paid | Data breach lookups | [haveibeenpwned.com](https://haveibeenpwned.com/API/Key) |
 
 ### Economics & Markets
 
-| Key | Label | Free? | What It Enables | Signup |
-|-----|-------|-------|-----------------|--------|
-| `FINNHUB_API_KEY` | Finnhub Key | Free (limited) | Real-time stock & crypto data | [finnhub.io](https://finnhub.io/register) |
-| `FMP_API_KEY` | Financial Modeling Prep Key | Free (250 req/day) | Market data fallback | [financialmodelingprep.com](https://financialmodelingprep.com/developer/docs) |
-| `FRED_API_KEY` | FRED Key | Free | Federal Reserve economic data + supply chain | [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) |
-| `EIA_API_KEY` | EIA Key | Free | US energy production & pricing | [eia.gov](https://www.eia.gov/opendata/register.php) |
-| `WTO_API_KEY` | WTO Key | Free | International trade data | [apiportal.wto.org](https://apiportal.wto.org/) |
+| Key | Free? | What It Enables | Signup |
+|-----|-------|-----------------|--------|
+| `FINNHUB_API_KEY` | Free (limited) | Real-time stock & crypto data | [finnhub.io](https://finnhub.io/register) |
+| `FMP_API_KEY` | Free (250 req/day) | Market data fallback | [financialmodelingprep.com](https://financialmodelingprep.com/developer/docs) |
+| `FRED_API_KEY` | Free | Federal Reserve economic data + supply chain | [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) |
+| `EIA_API_KEY` | Free | US energy production & pricing | [eia.gov](https://www.eia.gov/opendata/register.php) |
+| `WTO_API_KEY` | Free | International trade data | [apiportal.wto.org](https://apiportal.wto.org/) |
 
 ### News & Media
 
-| Key | Label | Free? | What It Enables | Signup |
-|-----|-------|-------|-----------------|--------|
-| `NEWSAPI_KEY` | NewsAPI Key | Free (limited) | 150k+ news sources | [newsapi.org](https://newsapi.org/register) |
-| `NEWSDATA_API_KEY` | NewsData Key | Free (limited) | 95k+ news sources | [newsdata.io](https://newsdata.io/register) |
-| `MEDIASTACK_API_KEY` | MediaStack Key | Free (500 req/mo) | 7,500+ news sources | [mediastack.com](https://mediastack.com/signup/free) |
+| Key | Free? | What It Enables | Signup |
+|-----|-------|-----------------|--------|
+| `NEWSAPI_KEY` | Free (limited) | 150k+ news sources | [newsapi.org](https://newsapi.org/register) |
+| `NEWSDATA_API_KEY` | Free (limited) | 95k+ news sources | [newsdata.io](https://newsdata.io/register) |
+| `MEDIASTACK_API_KEY` | Free (500 req/mo) | 7,500+ news sources | [mediastack.com](https://mediastack.com/signup/free) |
 
-### Geolocation & Infrastructure
+### Geolocation, Air Quality & Infrastructure
 
-| Key | Label | Free? | What It Enables | Signup |
-|-----|-------|-------|-----------------|--------|
-| `GEONAMES_USERNAME` | GeoNames Username | Free | Place name lookups | [geonames.org](https://www.geonames.org/login) |
-| `IPINFO_TOKEN` | IPInfo Token | Free (50k/mo) | IP geolocation | [ipinfo.io](https://ipinfo.io/signup) |
-| `BGPVIEW_API_KEY` | BGPView Key | Free | ASN/BGP routing data | [bgpview.io](https://bgpview.io/) |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare Token | Paid | Internet outage detection | [cloudflare.com](https://dash.cloudflare.com/profile/api-tokens) |
-| `NASA_API_KEY` | NASA API Key | Free | Boosts DONKI rate limits | [api.nasa.gov](https://api.nasa.gov/#signUp) |
+| Key | Free? | What It Enables | Signup |
+|-----|-------|-----------------|--------|
+| `GEONAMES_USERNAME` | Free | Place name lookups | [geonames.org](https://www.geonames.org/login) |
+| `IPINFO_TOKEN` | Free (50k/mo) | IP geolocation | [ipinfo.io](https://ipinfo.io/signup) |
+| `CLOUDFLARE_API_TOKEN` | Paid | Internet outage detection | [cloudflare.com](https://dash.cloudflare.com/profile/api-tokens) |
+| `NASA_API_KEY` | Free | Boosts DONKI rate limits | [api.nasa.gov](https://api.nasa.gov/#signUp) |
+| `AIRNOW_API_KEY` | Free | EPA AirNow particulate readings (US) | [docs.airnowapi.org](https://docs.airnowapi.org/) |
+| `PURPLEAIR_API_KEY` | Free | PurpleAir community PM2.5 sensors | [develop.purpleair.com](https://develop.purpleair.com/) |
+
+### Traffic & Highway Cameras
+
+| Key | Free? | What It Enables | Signup |
+|-----|-------|-----------------|--------|
+| `NSW_API_KEY` | Free (registration) | NSW (Australia) transport open data | [opendata.transport.nsw.gov.au](https://opendata.transport.nsw.gov.au/) |
+| `UK_HIGHWAYS_API_KEY` | Free | National Highways (UK) DATEX-II | [webtris.nationalhighways.co.uk](https://webtris.nationalhighways.co.uk/) |
+| `ROAD511_API_KEY` | Paid | 511 multi-state highway camera roll-up | [511.org](https://511.org/) |
 
 ### Mapping & Visualization
 
-| Key | Label | Free? | What It Enables | Signup |
-|-----|-------|-------|-----------------|--------|
-| `GOOGLE_MAPS_API_KEY` | Google Maps Key | Free tier ($200/mo credit, ~28,500 session loads/mo) | Photorealistic 3D building tiles on the God's Vision globe. Enable "Map Tiles API" in Google Cloud Console. Without this key, falls back to Cesium OSM Buildings (needs `CESIUM_ION_TOKEN`), then no 3D buildings. 2D map building extrusions work without any key. | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
-| `CESIUM_ION_TOKEN` | Cesium Ion Token | Free | God's Vision 3D globe (Bing satellite tiles); also used as fallback for 3D buildings when `GOOGLE_MAPS_API_KEY` is absent | [ion.cesium.com](https://ion.cesium.com/signup/) |
-| `OWM_API_KEY` | OpenWeatherMap Key | Free (limited) | Weather map tiles (temperature, precipitation, clouds, wind, pressure) | [openweathermap.org](https://openweathermap.org/api) |
+| Key | Free? | What It Enables | Signup |
+|-----|-------|-----------------|--------|
+| `GOOGLE_MAPS_API_KEY` | Free tier ($200/mo credit, ~28,500 session loads/mo) | Photorealistic 3D building tiles | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
+| `CESIUM_ION_TOKEN` | Free | God's Vision 3D globe (Bing satellite tiles); 3D buildings fallback | [ion.cesium.com](https://ion.cesium.com/signup/) |
+| `OWM_API_KEY` | Free (limited) | Weather map tiles | [openweathermap.org](https://openweathermap.org/api) |
+| `MAPBOX_API_KEY` | Free (50k loads/mo) | Mapbox basemap tiles + geocoding | [account.mapbox.com](https://account.mapbox.com/) |
+| `MAPTILER_API_KEY` | Free (100k tiles/mo) | MapTiler vector tile basemaps | [maptiler.com](https://www.maptiler.com/cloud/) |
 
-### AI Summarization
+### AI Summarization & Local LLM
 
-| Key | Label | Free? | What It Enables | Signup |
-|-----|-------|-------|-----------------|--------|
-| `GROQ_API_KEY` | Groq Key | Paid | Fast LLM summarization | [console.groq.com](https://console.groq.com/keys) |
-| `ANTHROPIC_API_KEY` | Anthropic Key | Paid | Claude AI summaries | [anthropic.com](https://console.anthropic.com/) |
-| `OPENROUTER_API_KEY` | OpenRouter Key | Paid | LLM routing fallback | [openrouter.ai](https://openrouter.ai/settings/keys) |
-| `OLLAMA_API_URL` | Ollama Server URL | Free (self-hosted) | Local LLM inference | [ollama.com](https://ollama.com/download) |
-| `OLLAMA_MODEL` | Ollama Model Name | Free | Model selection (e.g. `llama3`) | [ollama.com/library](https://ollama.com/library) |
+| Key | Free? | What It Enables | Signup |
+|-----|-------|-----------------|--------|
+| `GROQ_API_KEY` | Paid | Fast LLM summarization | [console.groq.com](https://console.groq.com/keys) |
+| `ANTHROPIC_API_KEY` | Paid | Claude AI summaries | [console.anthropic.com](https://console.anthropic.com/) |
+| `OPENROUTER_API_KEY` | Paid | LLM routing fallback | [openrouter.ai](https://openrouter.ai/settings/keys) |
+| `OLLAMA_API_URL` | Free (self-hosted) | Local LLM inference | [ollama.com](https://ollama.com/download) |
+| `OLLAMA_MODEL` | Free | Model selection (e.g. `llama3`) | [ollama.com/library](https://ollama.com/library) |
+
+### Server-to-Server Bridges (S2U / TAK)
+
+These keys configure outbound bridges from the desktop runtime to upstream collaboration
+or tactical situational-awareness servers. They are not consumed by any panel directly.
+
+| Key | Free? | What It Enables | Signup |
+|-----|-------|-----------------|--------|
+| `S2U_XMPP_JID` | Self-hosted | XMPP bridge identity (jabber JID) | Self-hosted |
+| `S2U_XMPP_SECRET` | Self-hosted | XMPP bridge password | Self-hosted |
+| `S2U_TAK_URL` | Self-hosted | TAK server base URL | Self-hosted |
+| `S2U_TAK_USERNAME` | Self-hosted | TAK server username | Self-hosted |
+| `S2U_TAK_SECRET` | Self-hosted | TAK server password / token | Self-hosted |
+| `S2U_TLS_INSECURE_OPT_IN` | — | Explicit opt-in to skip TLS verification for the S2U bridges (dev / lab only) | — |
 
 ### Cloud & Platform
 
-| Key | Label | Free? | What It Enables | Signup |
-|-----|-------|-------|-----------------|--------|
-| `CRYSTALBALL_API_KEY` | Cloud API Key | Paid | Cloud fallback when sidecar is down | [crystalball.app](https://crystalball.app) |
+| Key | Free? | What It Enables | Signup |
+|-----|-------|-----------------|--------|
+| `CRYSTALBALL_API_KEY` | Paid | Cloud fallback when sidecar is down | [crystalball.app](https://crystalball.app) |
 
 ---
 
@@ -146,6 +182,8 @@ These data sources are free and require no registration:
 - Pollen & allergy data (Open-Meteo Air Quality)
 - Red Flag / fire weather warnings (NWS/SPC)
 - Air quality (OpenAQ)
+- PhishStats, urlscan.io public, Pulsedive free tier
+- BGPView (no key required)
 
 ---
 

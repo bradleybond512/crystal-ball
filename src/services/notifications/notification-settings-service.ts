@@ -12,7 +12,8 @@ export type NotificationDomain =
   | 'infrastructure'
   | 'geopolitical'
   | 'weather'
-  | 'cyber';
+  | 'cyber'
+  | 'supply';
 
 export interface DomainSettings {
   enabled: boolean;
@@ -49,6 +50,7 @@ const ALL_DOMAINS: NotificationDomain[] = [
   'geopolitical',
   'weather',
   'cyber',
+  'supply',
 ];
 
 const DEFAULT_DOMAIN_SETTINGS: DomainSettings = {

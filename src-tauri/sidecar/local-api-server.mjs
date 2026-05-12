@@ -4667,10 +4667,33 @@ async function dispatch(requestUrl, req, routes, context) {
     return json(summary);
   }
 
+  // GET /api/shortage/overview — narrow per-commodity rows sorted by riskScore
+  // desc. Shape matches what external tools (MCP, dashboards) want: one row
+  // per commodity with name, riskScore, riskLevel, topDriver, trend.
+  // Returns an empty array if the renderer hasn't pushed state yet or the
+  // state is past its TTL.
+  if (requestUrl.pathname === '/api/shortage/overview' && req.method === 'GET') {
+    const s = context._shortageState;
+    if (!s) return json([]);
+    const ageMs = Date.now() - s.updatedAt;
+    if (ageMs > s.ttlMs) return json([]);
+    const rows = s.entries
+      .map((e) => ({
+        commodity: e.commodity,
+        riskScore: typeof e.riskScore === 'number' ? Math.round(e.riskScore) : 0,
+        riskLevel: e.riskLevel ?? 'LOW',
+        topDriver: (e.primaryDrivers && e.primaryDrivers[0]) || '—',
+        trend: e.trend ?? 'stable',
+      }))
+      .sort((a, b) => b.riskScore - a.riskScore || a.commodity.localeCompare(b.commodity));
+    return json(rows);
+  }
+
   // GET /api/shortage/:commodity — returns full forecast for one commodity.
   if (requestUrl.pathname.startsWith('/api/shortage/') &&
       requestUrl.pathname !== '/api/shortage/state' &&
       requestUrl.pathname !== '/api/shortage/summary' &&
+      requestUrl.pathname !== '/api/shortage/overview' &&
       req.method === 'GET') {
     const commodity = requestUrl.pathname.slice('/api/shortage/'.length).split('/')[0];
     if (!commodity) return json({ error: 'commodity required' }, 400);

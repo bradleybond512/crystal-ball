@@ -81,6 +81,7 @@
     "test:sanctions": "tsx --test src/services/sanctions/__tests__/ofac.test.mts",
     "test:openaq": "tsx --test src/services/airquality/__tests__/openaq-service.test.mts",
     "test:infrarisks": "tsx --test src/services/infrarisks/__tests__/infra-risk-service.test.mts",
+    "test:earthquake": "tsx --test src/services/earthquake/__tests__/earthquake-intelligence.test.mts",
     "test:news": "tsx --test src/services/news/__tests__/news-aggregator.test.mts",
     "test:bio": "tsx --test src/services/biosurveillance/__tests__/cdc-ari.test.mts",
     "test:macro": "tsx --test src/services/economic/__tests__/macro-stress.test.mts src/services/cyber/__tests__/ransomware-mentions.test.mts",

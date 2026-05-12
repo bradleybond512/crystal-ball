@@ -143,6 +143,18 @@ export function buildDesktopLayout(ctx: AppContext): string {
  <button class="mac-alert-family-btn" id="alertFamilyBtn">⚠ Alert Family</button>
  <button class="mac-ghost-mode-btn${ghostActive}" id="ghostModeBtn" title="Ghost Mode — Reduce polling, suppress notifications (⌘⇧G)">👻 Ghost Mode</button>
  <button class="mac-ghost-mode-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)">🌍 God's Vision</button>
+ </div>
+ <div class="mac-situational-mode-section" id="situationalModeSwitcherSection">
+ <div class="mac-situational-mode-label">
+ <span>Mode</span>
+ <span class="mac-situational-mode-auto" id="situationalModeAutoIndicator" title="System is auto-selecting mode based on active alerts">Auto</span>
+ </div>
+ <div class="mac-situational-mode-btns">
+ <button class="mac-situational-mode-btn" data-mode-key="monitoring" title="Monitoring — normal operations, all panels visible">📡 Monitor</button>
+ <button class="mac-situational-mode-btn" data-mode-key="alert" title="Alert — active threats, red accents, critical items pinned">🚨 Alert</button>
+ <button class="mac-situational-mode-btn" data-mode-key="investigation" title="Investigation — focus evidence chain, de-emphasise noise">🔍 Investigate</button>
+ <button class="mac-situational-mode-btn" data-mode-key="briefing" title="Briefing — quiet palette, intel feeds emphasised">📋 Brief</button>
+ </div>
  </div>`}
 
  <!-- Footer: theme, low-power, settings, version, collapse -->

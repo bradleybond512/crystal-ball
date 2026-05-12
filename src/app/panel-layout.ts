@@ -137,6 +137,7 @@ import { startAlertActivityLog } from '@/services/alert-activity-log';
 import { EarthquakesPanel } from '@/components/EarthquakesPanel';
 import { CyberThreatPanel } from '@/components/CyberThreatPanel';
 import { LocalIDSPanel } from '@/components/LocalIDSPanel';
+import { LittleSnitchPanel } from '@/components/LittleSnitchPanel';
 import { AlertCenterPanel } from '@/components/AlertCenterPanel';
 import { SituationPanel } from '@/components/SituationPanel';
 import { SpaceWeatherPanel } from '@/components/SpaceWeatherPanel';
@@ -274,6 +275,7 @@ import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
 import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { SupplyChainDisruptionPanel } from '@/components/SupplyChainDisruptionPanel';
 import { InfraRiskMatrixPanel } from '@/components/InfraRiskMatrixPanel';
+import { EarthquakeSuperPanel } from '@/components/EarthquakeSuperPanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
 import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
 import { SatelliteChangePanel } from '@/components/SatelliteChangePanel';
@@ -1043,6 +1045,9 @@ export class PanelLayoutManager implements AppModule {
  const localIDSPanel = new LocalIDSPanel();
  this.ctx.panels['local-ids'] = localIDSPanel;
 
+ const littleSnitchPanel = new LittleSnitchPanel();
+ this.ctx.panels['little-snitch'] = littleSnitchPanel;
+
  const situationPanel = new SituationPanel();
  this.ctx.panels['situation-awareness'] = situationPanel;
 
@@ -1283,6 +1288,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
  this.ctx.panels['supply-chain-disruption'] = new SupplyChainDisruptionPanel();
  this.ctx.panels['infra-risk-matrix'] = new InfraRiskMatrixPanel();
+ this.ctx.panels['earthquake-super'] = new EarthquakeSuperPanel();
  // Wire saved-places into the insights state singleton so the new
  // panels see the user's home/family/travel places out of the box.
  // Re-runs whenever saved places change.

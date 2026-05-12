@@ -117,6 +117,10 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   S2U_TAK_USERNAME: 's2u_tak_username',
   S2U_TAK_SECRET: 's2u_tak_secret',
   S2U_TLS_INSECURE_OPT_IN: 's2u_tls_insecure',
+  CENSYS_API_ID: 'censys_id',
+  CENSYS_API_SECRET: 'censys_secret',
+  SECURITYTRAILS_API_KEY: 'securitytrails',
+  WHOISXML_API_KEY: 'whoisxml',
 };
 
 // ── Typed event schemas (allowlisted properties per event) ──

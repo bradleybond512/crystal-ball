@@ -119,6 +119,18 @@ export class GlobeTimeMachine {
  }
   }
 
+  getCurrentMs(): number { return this.currentMs; }
+  getSpeed(): number { return this.speed; }
+  isPlaying(): boolean { return this.playing; }
+  isLive(): boolean { return this.live; }
+
+  onTimeChange(listener: (ms: number) => void): () => void {
+ this.timeChangeListeners.push(listener);
+ return () => {
+ this.timeChangeListeners = this.timeChangeListeners.filter(l => l !== listener);
+ };
+  }
+
   setTime(ms: number): void {
  const now = Date.now();
  const min = now - DAY_MS;
@@ -131,27 +143,6 @@ export class GlobeTimeMachine {
  this.scheduleFilter();
  this.updateUi();
  this.notifyTimeChange();
-  }
-
-  /**
-   * Public read-only accessors for 4D mode consumers (Globe4DManager, swimlane).
-   * Avoid mutating these directly — go through {@link setTime}, {@link setSpeed}, {@link play}/{@link pause}.
-   */
-  getCurrentMs(): number { return this.currentMs; }
-  getSpeed(): number { return this.speed; }
-  isPlaying(): boolean { return this.playing; }
-  isLive(): boolean { return this.live; }
-
-  /**
-   * Register a callback fired whenever the current time changes (scrub, play tick, snap-to-now).
-   * Returns an unsubscribe function. Listeners are invoked synchronously after internal state
-   * is updated; keep them cheap or debounce inside the listener.
-   */
-  onTimeChange(listener: (ms: number) => void): () => void {
- this.timeChangeListeners.push(listener);
- return () => {
- this.timeChangeListeners = this.timeChangeListeners.filter(l => l !== listener);
- };
   }
 
   private notifyTimeChange(): void {

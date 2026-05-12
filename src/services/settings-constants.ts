@@ -185,6 +185,10 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   S2U_TAK_USERNAME: 'S2U TAK Username',
   S2U_TAK_SECRET: 'S2U TAK Password',
   S2U_TLS_INSECURE_OPT_IN: 'S2U TLS: Allow Insecure (opt-in)',
+  CENSYS_API_ID: 'Censys API ID',
+  CENSYS_API_SECRET: 'Censys API Secret',
+  SECURITYTRAILS_API_KEY: 'SecurityTrails API Key',
+  WHOISXML_API_KEY: 'WhoisXML API Key',
 };
 
 /**
@@ -259,6 +263,10 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   S2U_TAK_USERNAME: 'S2U TAK Marti API username. The S2U SOP publishes a read-only public username (GHOSTMAPSPUBLIC) for community access; or use your own.',
   S2U_TAK_SECRET: 'S2U TAK Marti API password. The S2U SOP publishes the public password (S2UndergroundGh0stM@ps) for the read-only GHOSTMAPSPUBLIC account.',
   S2U_TLS_INSECURE_OPT_IN: 'Set to "true" to bypass TLS verification for the S2U TAK server. Off by default — Crystal Ball pins the published cert fingerprint instead. Only enable if pin verification fails.',
+  CENSYS_API_ID: 'Censys Search — OSINT on internet-connected hosts and certificates. Free tier (250 queries/month).',
+  CENSYS_API_SECRET: 'Censys API secret paired with the API ID above.',
+  SECURITYTRAILS_API_KEY: 'SecurityTrails — passive DNS and domain history lookups for threat attribution.',
+  WHOISXML_API_KEY: 'WhoisXML — domain registration, DNS, and IP data for attacker infrastructure mapping.',
 };
 
 export interface KeyCategory {
@@ -271,7 +279,7 @@ export interface KeyCategory {
 export const KEY_CATEGORIES: readonly KeyCategory[] = [
   { id: 'llm',      label: 'Core LLMs',              tier: 1, keys: ['ANTHROPIC_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'OLLAMA_API_URL'] },
   { id: 'markets',  label: 'Markets & Macro',        tier: 2, keys: ['FRED_API_KEY', 'EIA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY'] },
-  { id: 'cyber',    label: 'Cyber Threat Intel',     tier: 3, keys: ['OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'URLHAUS_AUTH_KEY', 'THREATFOX_API_KEY', 'VIRUSTOTAL_API_KEY', 'GREYNOISE_API_KEY', 'URLSCAN_API_KEY', 'VULNERS_API_KEY', 'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'BITCOINABUSE_API_KEY'] },
+  { id: 'cyber',    label: 'Cyber Threat Intel',     tier: 3, keys: ['OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'URLHAUS_AUTH_KEY', 'THREATFOX_API_KEY', 'VIRUSTOTAL_API_KEY', 'GREYNOISE_API_KEY', 'URLSCAN_API_KEY', 'VULNERS_API_KEY', 'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'BITCOINABUSE_API_KEY', 'CENSYS_API_ID', 'CENSYS_API_SECRET', 'SECURITYTRAILS_API_KEY', 'WHOISXML_API_KEY'] },
   { id: 'conflict', label: 'Conflict & Geopolitics', tier: 4, keys: ['ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'ACLED_REFRESH_TOKEN', 'WTO_API_KEY', 'CLOUDFLARE_API_TOKEN'] },
   { id: 'news',     label: 'News',                   tier: 5, keys: ['NEWSAPI_KEY', 'NEWSDATA_API_KEY', 'MEDIASTACK_API_KEY'] },
   { id: 'aviation', label: 'Aviation & Maritime',    tier: 6, keys: ['WINGBITS_API_KEY', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY', 'AVIATIONSTACK_API', 'ICAO_API_KEY'] },

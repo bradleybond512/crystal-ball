@@ -604,6 +604,7 @@ export class App {
  { name: 'spaceWeather', fn: () => this.dataLoader.loadSpaceWeather(), intervalMs: 5 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'spaceflightNews', fn: () => this.dataLoader.loadSpaceflightNews(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'localIDS', fn: () => this.dataLoader.loadLocalIDS(), intervalMs: 5 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
+ { name: 'littleSnitch', fn: () => this.dataLoader.loadLittleSnitch(), intervalMs: 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'diseaseOutbreaks', fn: () => this.dataLoader.loadDiseaseOutbreaks(), intervalMs: 15 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'humanitarianCrises', fn: () => this.dataLoader.loadHumanitarianCrises(), intervalMs: 60 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },
  { name: 'ripeAtlas', fn: () => this.dataLoader.loadRipeAtlas(), intervalMs: 10 * 60 * 1000, condition: () => SITE_VARIANT === 'full' },

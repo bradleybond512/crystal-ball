@@ -139,7 +139,7 @@
     "postdesktop:build:full": "node scripts/local-install.mjs"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.10.0",
+    "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.52.0",
     "@tauri-apps/cli": "^2.11.0",
     "@types/canvas-confetti": "^1.9.0",

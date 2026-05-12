@@ -986,6 +986,10 @@ function json(data, status = 200, extraHeaders = {}) {
   });
 }
 
+function emptyPersonalProfile() {
+  return { savedPlaces: [], watchlist: [], interests: [], travelDates: [] };
+}
+
 // ── PurpleAir parsers (mirror of src/services/airquality/purpleair-helpers.ts) ──
 
 function sidecarParsePurpleAirNum(v) {
@@ -4755,6 +4759,52 @@ async function dispatch(requestUrl, req, routes, context) {
         return json({ available: true, pushedAt, trace });
       }
       return json({ available: pushedAt > 0, pushedAt, count: traces.length, traces });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Personal profile (renderer mirror; backs Personal Relevance panel) ──
+  if (requestUrl.pathname === '/api/personal/profile') {
+    if (req.method === 'GET') {
+      const profile = context._personalProfile || null;
+      if (!profile) {
+        return json({ available: false, profile: emptyPersonalProfile() });
+      }
+      return json({ available: true, profile });
+    }
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
+        const safe = {
+          savedPlaces: Array.isArray(body.savedPlaces) ? body.savedPlaces.slice(0, 500) : [],
+          watchlist: Array.isArray(body.watchlist)
+            ? body.watchlist.filter((s) => typeof s === 'string' && s.trim().length > 0).slice(0, 200)
+            : [],
+          interests: Array.isArray(body.interests)
+            ? body.interests.filter((s) => typeof s === 'string').slice(0, 50)
+            : [],
+          travelDates: Array.isArray(body.travelDates)
+            ? body.travelDates
+                .filter(
+                  (t) =>
+                    t &&
+                    typeof t === 'object' &&
+                    typeof t.location === 'string' &&
+                    Number.isFinite(t.lat) &&
+                    Number.isFinite(t.lon) &&
+                    Number.isFinite(t.start) &&
+                    Number.isFinite(t.end),
+                )
+                .slice(0, 100)
+            : [],
+        };
+        context._personalProfile = safe;
+        return json({ ok: true, profile: safe });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
     }
     return json({ error: 'Method not allowed' }, 405);
   }

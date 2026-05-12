@@ -263,6 +263,7 @@ import { OperatorModePanel } from '@/components/OperatorModePanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
+import { PersonalRelevancePanel } from '@/components/PersonalRelevancePanel';
 import { ScenarioReplayPanel } from '@/components/ScenarioReplayPanel';
 import { EvidenceGraphPanel } from '@/components/EvidenceGraphPanel';
 import { PlaybookPanel } from '@/components/PlaybookPanel';
@@ -1264,6 +1265,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
+ this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();
  this.ctx.panels['scenario-replay'] = new ScenarioReplayPanel();
  this.ctx.panels['evidence-graph'] = new EvidenceGraphPanel();
  this.ctx.panels['playbook'] = new PlaybookPanel();

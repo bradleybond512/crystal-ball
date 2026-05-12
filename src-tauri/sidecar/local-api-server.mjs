@@ -4600,6 +4600,130 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
 
+  // ── /api/intelligence/what-changed — what-changed digest mirror ───────────
+  // Renderer pushes ChangeLine[] from what-changed-digest.ts after each
+  // snapshot comparison. Intelligence Feed panel reads via GET.
+  if (requestUrl.pathname === '/api/intelligence/what-changed') {
+    const VALID_CHANGE_KINDS = new Set([
+      'new', 'cleared', 'score_rose', 'score_fell',
+      'tier_escalated', 'tier_de_escalated',
+      'sources_confirming', 'sources_lost', 'meta_changed',
+    ]);
+    const VALID_POLARITIES = new Set(['worse', 'better', 'neutral']);
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!Array.isArray(body)) return json({ error: 'body must be an array' }, 400);
+        const lines = body.slice(0, 200).map((l) => {
+          if (!l || typeof l !== 'object') return null;
+          if (typeof l.id !== 'string' || typeof l.text !== 'string') return null;
+          if (!VALID_CHANGE_KINDS.has(l.kind)) return null;
+          if (!VALID_POLARITIES.has(l.polarity)) return null;
+          return {
+            id: l.id,
+            kind: l.kind,
+            text: l.text.slice(0, 500),
+            magnitude: typeof l.magnitude === 'number' ? l.magnitude : undefined,
+            polarity: l.polarity,
+            category: typeof l.category === 'string' ? l.category.slice(0, 100) : '',
+            weight: typeof l.weight === 'number' ? l.weight : 5,
+            recordedAt: typeof l.recordedAt === 'number' ? l.recordedAt : Date.now(),
+          };
+        }).filter(Boolean);
+        context._intelligenceWhatChanged = { lines, asOf: Date.now() };
+        return json({ ok: true, count: lines.length });
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const snapshot = context._intelligenceWhatChanged || null;
+      if (!snapshot) return json({ lines: [], asOf: 0, available: false });
+      return json({ lines: snapshot.lines, asOf: snapshot.asOf, available: true });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── /api/intelligence/feed — merged chronological feed ────────────────────
+  // Aggregates observations + synthesis correlations + what-changed lines
+  // into a single sorted FeedItem[] for the Intelligence Feed panel.
+  // Query params: domain=, type=(observation|correlation|change), since=ms, limit=
+  if (requestUrl.pathname === '/api/intelligence/feed') {
+    if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+    const domain = requestUrl.searchParams.get('domain') || '';
+    const typeFilter = requestUrl.searchParams.get('type') || '';
+    const since = Number(requestUrl.searchParams.get('since') ?? 0);
+    const limitParam = parseInt(requestUrl.searchParams.get('limit') ?? '100', 10);
+    const limit = Math.min(Math.max(1, limitParam), 500);
+
+    const items = [];
+
+    if (!typeFilter || typeFilter === 'observation') {
+      const obs = context._intelligenceObs ?? [];
+      for (const e of obs) {
+        if (domain && e.domain !== domain) continue;
+        if (since && e.timestamp < since) continue;
+        items.push({
+          id: `obs:${e.id}`,
+          type: 'observation',
+          timestamp: e.timestamp,
+          domain: e.domain,
+          severity: e.severity,
+          title: e.title,
+          summary: e.tags?.length > 0 ? e.tags.join(', ') : e.domain,
+          data: e,
+        });
+      }
+    }
+
+    if (!typeFilter || typeFilter === 'correlation') {
+      const corr = context._synthesisCorrelations?.events ?? [];
+      for (const c of corr) {
+        const ts = Date.parse(c.triggeredAt);
+        if (since && ts < since) continue;
+        const corrDomain = c.domains?.[0] || 'multi';
+        if (domain && !c.domains?.includes(domain)) continue;
+        items.push({
+          id: `corr:${c.type}:${ts}`,
+          type: 'correlation',
+          timestamp: ts,
+          domain: corrDomain,
+          severity: c.severity,
+          title: c.description.slice(0, 120),
+          summary: `${(c.domains ?? []).join(', ')} — ${c.components?.length ?? 0} signals`,
+          data: c,
+        });
+      }
+    }
+
+    if (!typeFilter || typeFilter === 'change') {
+      const changes = context._intelligenceWhatChanged?.lines ?? [];
+      const changesAsOf = context._intelligenceWhatChanged?.asOf ?? 0;
+      for (const l of changes) {
+        const ts = typeof l.recordedAt === 'number' ? l.recordedAt : changesAsOf;
+        if (since && ts < since) continue;
+        const changeDomain = l.category || 'unknown';
+        if (domain && changeDomain !== domain) continue;
+        const sev = l.polarity === 'worse' ? 'HIGH' : (l.polarity === 'better' ? 'LOW' : 'INFO');
+        items.push({
+          id: `change:${l.id}:${l.kind}`,
+          type: 'change',
+          timestamp: ts,
+          domain: changeDomain,
+          severity: sev,
+          title: l.text,
+          summary: l.kind.replaceAll('_', ' '),
+          data: l,
+        });
+      }
+    }
+
+    items.sort((a, b) => b.timestamp - a.timestamp);
+    const page = items.slice(0, limit);
+    return json({ items: page, total: items.length, generated: Date.now() });
+  }
+
   if (requestUrl.pathname === '/api/sitrep-bundle') {
     const cacheKey = 'sitrep-bundle';
     const cached = getCached(cacheKey, 5 * 60 * 1000);

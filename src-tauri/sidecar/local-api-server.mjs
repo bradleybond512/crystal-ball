@@ -2458,6 +2458,298 @@ export function getSituationSidecar(id) {
   return found ? { ...found } : null;
 }
 
+// ── Evidence Graph UX (sidecar port) ──────────────────────────────────────
+// Mirrors src/services/intelligence/evidence-graph-ux.ts so the sidecar
+// route can answer GET /api/intelligence/evidence/:situationId without
+// importing TypeScript. The static tables below must stay in sync with
+// the renderer copy.
+
+const EVIDENCE_EARTH_KM = 6371;
+const EVIDENCE_DEG2RAD = Math.PI / 180;
+const EVIDENCE_DEFAULT_RADIUS_KM = 500;
+const EVIDENCE_TEMPORAL_CONFIDENCE_WINDOW_MS = 60 * 60 * 1000;
+const EVIDENCE_TEMPORAL_LOOKBACK_MS = 6 * 60 * 60 * 1000;
+const EVIDENCE_DEFAULT_REFRESH_BUDGET_MS = 30 * 60 * 1000;
+
+const EVIDENCE_SEVERITY_CONFIDENCE = {
+  CRITICAL: 0.95, HIGH: 0.85, MEDIUM: 0.7, LOW: 0.55, INFO: 0.4,
+};
+
+const EVIDENCE_REFRESH_BUDGET_MS = {
+  weather: 10 * 60 * 1000,
+  earthquake: 5 * 60 * 1000,
+  seismic: 5 * 60 * 1000,
+  cyber: 30 * 60 * 1000,
+  maritime: 15 * 60 * 1000,
+  aviation: 15 * 60 * 1000,
+  conflict: 60 * 60 * 1000,
+  wildfire: 15 * 60 * 1000,
+  space: 30 * 60 * 1000,
+  health: 60 * 60 * 1000,
+  economic: 60 * 60 * 1000,
+};
+
+const EVIDENCE_EXPECTED_SIGNALS = {
+  earthquake: [
+    { sourceId: 'usgs-shakemap', label: 'USGS ShakeMap report' },
+    { sourceId: 'noaa-tsunami', label: 'NOAA tsunami advisory' },
+  ],
+  seismic: [
+    { sourceId: 'usgs-shakemap', label: 'USGS ShakeMap report' },
+    { sourceId: 'noaa-tsunami', label: 'NOAA tsunami advisory' },
+  ],
+  weather: [
+    { sourceId: 'nws-alert', label: 'NWS polygon alert' },
+    { sourceId: 'nws-radar', label: 'NEXRAD radar update' },
+  ],
+  cyber: [
+    { sourceId: 'cisa-kev', label: 'CISA KEV / advisory' },
+    { sourceId: 'cert', label: 'CERT bulletin' },
+  ],
+  maritime: [
+    { sourceId: 'ais', label: 'AIS position update' },
+    { sourceId: 'imo-incident', label: 'IMO incident report' },
+  ],
+  aviation: [
+    { sourceId: 'adsb', label: 'ADS-B track' },
+    { sourceId: 'notam', label: 'FAA NOTAM' },
+  ],
+  conflict: [
+    { sourceId: 'acled', label: 'ACLED event' },
+    { sourceId: 'unhcr-displacement', label: 'UNHCR displacement update' },
+  ],
+  wildfire: [
+    { sourceId: 'firms', label: 'NASA FIRMS hotspot' },
+    { sourceId: 'airnow', label: 'AirNow AQI update' },
+  ],
+  space: [
+    { sourceId: 'noaa-swpc-kp', label: 'NOAA SWPC Kp index' },
+    { sourceId: 'noaa-aurora', label: 'NOAA aurora forecast' },
+  ],
+};
+
+const EVIDENCE_CONTRADICTION_PAIRS = [
+  ['canceled', 'issued'],
+  ['cancelled', 'issued'],
+  ['retracted', 'confirmed'],
+  ['all-clear', 'warning'],
+  ['lifted', 'ordered'],
+  ['reopened', 'closed'],
+  ['false-alarm', 'positive'],
+  ['downgraded', 'upgraded'],
+  ['resolved', 'active'],
+];
+
+function evidenceHaversineKm(lat1, lon1, lat2, lon2) {
+  const dLat = (lat2 - lat1) * EVIDENCE_DEG2RAD;
+  const dLon = (lon2 - lon1) * EVIDENCE_DEG2RAD;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * EVIDENCE_DEG2RAD) * Math.cos(lat2 * EVIDENCE_DEG2RAD)
+    * Math.sin(dLon / 2) ** 2;
+  return EVIDENCE_EARTH_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function evidenceLowerSet(arr) {
+  const out = new Set();
+  if (!Array.isArray(arr)) return out;
+  for (const t of arr) {
+    if (typeof t === 'string') out.add(t.toLowerCase());
+  }
+  return out;
+}
+
+function evidenceTagContains(set, fragment) {
+  for (const tag of set) if (tag.includes(fragment)) return true;
+  return false;
+}
+
+function evidenceContradictionReason(eventTags, situationTags) {
+  for (const [left, right] of EVIDENCE_CONTRADICTION_PAIRS) {
+    if (evidenceTagContains(eventTags, left) && evidenceTagContains(situationTags, right)) {
+      return `event tagged "${left}" while situation is "${right}"`;
+    }
+    if (evidenceTagContains(eventTags, right) && evidenceTagContains(situationTags, left)) {
+      return `event tagged "${right}" while situation is "${left}"`;
+    }
+  }
+  return null;
+}
+
+function evidenceInFootprint(event, situation) {
+  if (!event.location || !situation.location) return true;
+  const dist = evidenceHaversineKm(
+    event.location.lat, event.location.lon,
+    situation.location.lat, situation.location.lon,
+  );
+  return dist <= (situation.location.radiusKm ?? EVIDENCE_DEFAULT_RADIUS_KM);
+}
+
+function evidenceSeverityConfidence(severity) {
+  return EVIDENCE_SEVERITY_CONFIDENCE[severity] ?? 0.5;
+}
+
+function evidenceRefreshBudget(domain) {
+  return EVIDENCE_REFRESH_BUDGET_MS[domain] ?? EVIDENCE_DEFAULT_REFRESH_BUDGET_MS;
+}
+
+function evidenceRound2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+function evidencePartition(situation, events, now) {
+  const obsIds = new Set(situation.observationIds ?? []);
+  const situationTags = evidenceLowerSet(situation.tags);
+  const confirming = [];
+  const contradicting = [];
+  for (const event of events) {
+    const eventTags = evidenceLowerSet(event.tags);
+    const isLinked = obsIds.has(event.id);
+    if (!isLinked) {
+      if (event.domain !== situation.domain) {
+        const reason = evidenceContradictionReason(eventTags, situationTags);
+        if (reason) contradicting.push({ event, reason });
+        continue;
+      }
+      if (now - event.timestamp > EVIDENCE_TEMPORAL_LOOKBACK_MS) continue;
+      if (!evidenceInFootprint(event, situation)) continue;
+    }
+    const reason = evidenceContradictionReason(eventTags, situationTags);
+    if (reason) { contradicting.push({ event, reason }); continue; }
+    confirming.push(event);
+  }
+  return { confirming, contradicting };
+}
+
+function evidenceMissing(situation, confirming) {
+  const expected = EVIDENCE_EXPECTED_SIGNALS[situation.domain] ?? [];
+  if (expected.length === 0) return [];
+  const seenSources = new Set();
+  const seenTags = new Set();
+  for (const e of confirming) {
+    seenSources.add(e.sourceId);
+    for (const t of (e.tags ?? [])) seenTags.add(String(t).toLowerCase());
+  }
+  const out = [];
+  for (const sig of expected) {
+    const seen = seenSources.has(sig.sourceId) || evidenceTagContains(seenTags, sig.sourceId);
+    if (!seen) out.push({ domain: situation.domain, expectedSignal: sig.label });
+  }
+  return out;
+}
+
+function evidenceStale(confirming, now) {
+  const out = [];
+  for (const e of confirming) {
+    const ageMs = now - e.timestamp;
+    if (ageMs > evidenceRefreshBudget(e.domain)) {
+      out.push({ sourceId: e.sourceId, domain: e.domain, title: e.title, ageMs });
+    }
+  }
+  return out;
+}
+
+function evidenceBreakdown(situation, confirming, now) {
+  let spatial = 0;
+  if (confirming.length > 0 && situation.location) {
+    const radius = situation.location.radiusKm > 0
+      ? situation.location.radiusKm : EVIDENCE_DEFAULT_RADIUS_KM;
+    let total = 0;
+    let counted = 0;
+    for (const e of confirming) {
+      if (!e.location) continue;
+      const dist = evidenceHaversineKm(
+        e.location.lat, e.location.lon,
+        situation.location.lat, situation.location.lon,
+      );
+      total += Math.max(0, 1 - dist / radius);
+      counted += 1;
+    }
+    spatial = counted > 0 ? (total / counted) * 25 : 0;
+  }
+  let temporal = 0;
+  if (confirming.length > 0) {
+    let total = 0;
+    for (const e of confirming) {
+      const ageMs = Math.max(0, now - e.timestamp);
+      total += Math.max(0, 1 - ageMs / EVIDENCE_TEMPORAL_CONFIDENCE_WINDOW_MS);
+    }
+    temporal = (total / confirming.length) * 25;
+  }
+  let entity = 0;
+  if (confirming.length >= 2) {
+    const counts = new Map();
+    const universe = new Set();
+    for (const e of confirming) {
+      for (const id of (e.entityIds ?? [])) {
+        universe.add(id);
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+    }
+    if (universe.size > 0) {
+      let shared = 0;
+      for (const n of counts.values()) if (n >= 2) shared += 1;
+      entity = (shared / universe.size) * 25;
+    }
+  }
+  let domain = 0;
+  if (confirming.length > 0) {
+    const domains = new Set();
+    for (const e of confirming) domains.add(e.domain);
+    domain = Math.min(Math.max(0, domains.size - 1), 3) / 3 * 25;
+  }
+  spatial = evidenceRound2(spatial);
+  temporal = evidenceRound2(temporal);
+  entity = evidenceRound2(entity);
+  domain = evidenceRound2(domain);
+  return { spatial, temporal, entity, domain, total: evidenceRound2(spatial + temporal + entity + domain) };
+}
+
+export function assembleEvidenceSidecar(situationId, observations, now = Date.now()) {
+  const situation = getSituationSidecar(situationId);
+  if (!situation) return { ok: false, error: 'situation not found' };
+  const obs = Array.isArray(observations) ? observations : [];
+  // Normalize the posted observation shape into the partition's expected
+  // fields. The renderer's observation-store mirrors timestamp,
+  // location, severity, title, sourceId, domain, tags; entityIds may
+  // be present.
+  const normalized = obs.map((e) => ({
+    id: String(e.id ?? ''),
+    sourceId: String(e.sourceId ?? ''),
+    domain: String(e.domain ?? ''),
+    timestamp: Number(e.timestamp ?? 0),
+    severity: String(e.severity ?? 'INFO'),
+    title: String(e.title ?? ''),
+    location: e.location && typeof e.location === 'object'
+      && Number.isFinite(e.location.lat) && Number.isFinite(e.location.lon)
+      ? { lat: Number(e.location.lat), lon: Number(e.location.lon),
+        radiusKm: Number(e.location.radiusKm ?? 0) || undefined } : undefined,
+    tags: Array.isArray(e.tags) ? e.tags.map(String) : [],
+    entityIds: Array.isArray(e.entityIds) ? e.entityIds.map(String) : [],
+  }));
+  const { confirming, contradicting } = evidencePartition(situation, normalized, now);
+  const confirmingSorted = [...confirming].sort((a, b) => b.timestamp - a.timestamp);
+  const lastVerified = confirmingSorted.length > 0
+    ? confirmingSorted[0].timestamp : situation.startedAt;
+  return {
+    ok: true,
+    report: {
+      situationId: situation.id,
+      confirming: confirmingSorted.map((e) => ({
+        sourceId: e.sourceId, domain: e.domain, title: e.title,
+        timestamp: e.timestamp, confidence: evidenceSeverityConfidence(e.severity),
+      })),
+      contradicting: contradicting.map(({ event, reason }) => ({
+        sourceId: event.sourceId, domain: event.domain, title: event.title,
+        timestamp: event.timestamp, reason,
+      })),
+      missing: evidenceMissing(situation, confirming),
+      stale: evidenceStale(confirming, now),
+      confidenceBreakdown: evidenceBreakdown(situation, confirming, now),
+      lastVerified,
+    },
+  };
+}
+
 export function _resetSituationsSidecar() {
   _situations.length = 0;
   _situationIdCounter = 0;
@@ -14209,6 +14501,32 @@ export async function createLocalApiServer(options = {}) {
    }
    res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
    res.end(JSON.stringify({ situation: sit }));
+   return;
+ }
+
+ // ── /api/intelligence/evidence/:situationId — Evidence Graph UX ────────
+ // Returns the per-situation evidence report (confirming / contradicting /
+ // missing / stale + confidence breakdown). Pure synchronous read over the
+ // sidecar's mirrored situation + observation state.
+ const evidenceMatch = requestUrl.pathname.match(/^\/api\/intelligence\/evidence\/([^/]+)$/);
+ if (evidenceMatch) {
+   if (req.method !== 'GET') {
+     res.writeHead(405, { 'content-type': 'application/json', ...makeCorsHeaders(req),
+       allow: 'GET' });
+     res.end(JSON.stringify({ error: 'method not allowed' }));
+     return;
+   }
+   const situationId = decodeURIComponent(evidenceMatch[1]);
+   const observations = Array.isArray(context._intelligenceObs)
+     ? context._intelligenceObs : [];
+   const result = assembleEvidenceSidecar(situationId, observations);
+   if (!result.ok) {
+     res.writeHead(404, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: result.error }));
+     return;
+   }
+   res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify({ report: result.report, asOf: new Date().toISOString() }));
    return;
  }
 

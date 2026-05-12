@@ -2,7 +2,11 @@ export * from './Panel';
 export * from './VirtualList';
 export { MapComponent } from './Map';
 export * from './MapPopup';
-export { DeckGLMap } from './DeckGLMap';
+// DeckGLMap intentionally NOT re-exported through the barrel — that would
+// pull deck.gl + maplibre into the main chunk. Import it directly from
+// '@/components/DeckGLMap' when you need the runtime class (only
+// MapContainer should, and that path is now lazy).
+export type { DeckGLMap } from './DeckGLMap';
 export { MapContainer, type MapView, type TimeRange, type MapContainerState } from './MapContainer';
 export * from './NewsPanel';
 export * from './MarketPanel';

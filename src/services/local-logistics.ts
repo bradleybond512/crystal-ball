@@ -1,5 +1,6 @@
 import { haversineKm } from './proximity-filter';
 import { readOfflineCacheEntry, writeOfflineCacheEntry } from './offline-alert-cache';
+import { getApiBaseUrl } from './runtime';
 import type { SavedPlace } from './saved-places';
 import {
   LOCAL_LOGISTICS_CATEGORIES,
@@ -251,7 +252,6 @@ export async function fetchLocalLogistics(
   place: SavedPlace,
   options: FetchLocalLogisticsOptions = {},
 ): Promise<LocalLogisticsSnapshot> {
-  const { getApiBaseUrl } = await import('./runtime');
   const categories = (options.categories?.length ? options.categories : [...LOCAL_LOGISTICS_CATEGORIES]).join(',');
   const radiusKm = Math.max(1, Math.min(place.radiusKm, options.radiusKm ?? DEFAULT_RADIUS_KM));
   const limitPerCategory = Math.max(1, Math.min(5, Math.trunc(options.limitPerCategory ?? DEFAULT_LIMIT_PER_CATEGORY)));

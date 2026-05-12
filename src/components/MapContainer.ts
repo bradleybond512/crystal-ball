@@ -4,7 +4,10 @@
  */
 import { isMobileDevice } from '@/utils';
 import { MapComponent } from './Map';
-import { DeckGLMap, type DeckMapView, type CountryClickPayload } from './DeckGLMap';
+// DeckGLMap is type-imported eagerly (zero runtime cost) and runtime-loaded
+// lazily inside init() so deck.gl + maplibre land in their own chunk instead
+// of the main bundle. Mobile and degraded-WebGL paths never load it.
+import type { DeckGLMap as DeckGLMapType, DeckMapView, CountryClickPayload } from './DeckGLMap';
 import type {
   MapLayers,
   Hotspot,
@@ -76,7 +79,7 @@ interface TechEventMarker {
 export class MapContainer {
   private container: HTMLElement;
   private isMobile: boolean;
-  private deckGLMap: DeckGLMap | null = null;
+  private deckGLMap: DeckGLMapType | null = null;
   private svgMap: MapComponent | null = null;
   private initialState: MapContainerState;
   private useDeckGL: boolean;
@@ -89,7 +92,11 @@ export class MapContainer {
  // Use deck.gl on desktop with WebGL support, SVG on mobile
  this.useDeckGL = this.shouldUseDeckGL();
 
- this.init();
+ // Fire-and-forget so the constructor stays sync. The init() call
+ // dynamic-imports DeckGLMap on the desktop path; until it resolves,
+ // public methods short-circuit via the deckGLMap?.… optional chains.
+ // eslint-disable-next-line sonarjs/no-async-constructor
+ void this.init();
   }
 
   private hasWebGLSupport(): boolean {
@@ -125,10 +132,13 @@ export class MapContainer {
  this.svgMap = new MapComponent(this.container, this.initialState);
   }
 
-  private init(): void {
+  private async init(): Promise<void> {
  if (this.useDeckGL) {
  if (import.meta.env.DEV) console.log('[MapContainer] Initializing deck.gl map (desktop mode)'); // eslint-disable-line no-console
  try {
+ // Dynamic import so deck.gl + maplibre land in their own chunk. The
+ // SVG fallback paths above never trigger this load.
+ const { DeckGLMap } = await import('./DeckGLMap');
  this.container.classList.add('deckgl-mode');
  this.deckGLMap = new DeckGLMap(this.container, {
  ...this.initialState,

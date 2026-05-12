@@ -36,3 +36,50 @@ export interface ObservationEvent {
   /** Free-form classifier tags ('earthquake', 'tsunami-risk', 'ais-gap', etc.). */
   tags: string[];
 }
+
+/**
+ * Situation — the primary intelligence product. Aggregates one or more
+ * ObservationEvents and Correlations into a named, named-and-tracked
+ * incident the user can monitor (e.g. "Hurricane Milton — Florida Coast").
+ *
+ * Severity uses the lowercase scoring scale from
+ * `src/services/intelligence/types.ts` so it composes cleanly with the
+ * truth-score / cluster-severity pipeline. The auto-creator in
+ * `situation-detector.ts` maps uppercase ObservationSeverity to the
+ * matching lowercase level when seeding a new Situation.
+ */
+export type SituationStatus = 'active' | 'monitoring' | 'resolved';
+
+export type SituationSeverity = 'info' | 'low' | 'moderate' | 'high' | 'critical';
+
+export interface SituationLocation {
+  lat: number;
+  lon: number;
+  /** Radius of the situation footprint in km — used by `findNear` queries. */
+  radiusKm: number;
+}
+
+export interface Situation {
+  id: string;
+  /** Human-readable name, e.g. "Hurricane Milton — Florida Coast". */
+  name: string;
+  status: SituationStatus;
+  severity: SituationSeverity;
+  /** Domain matching ObservationEvent.domain so cross-domain compound risks
+   *  can still link multiple Situations together. */
+  domain: string;
+  /** ms since epoch when the situation was created. */
+  startedAt: number;
+  /** ms since epoch of the latest update (linked event, status change, …). */
+  updatedAt: number;
+  /** ObservationEvent ids that contributed evidence. */
+  observationIds: string[];
+  /** Correlation ids that referenced this situation. */
+  correlationIds: string[];
+  /** Generated 1-2 sentence summary shown in the panel + briefings. */
+  summary: string;
+  location?: SituationLocation;
+  tags: string[];
+  /** 0–1 confidence the situation is real / current. */
+  confidence: number;
+}

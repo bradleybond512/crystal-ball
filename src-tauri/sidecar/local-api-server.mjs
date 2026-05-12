@@ -2318,6 +2318,101 @@ async function runSidecarSelfTest(port) {
   return { results, summary: summarizeSelfTest(results) };
 }
 
+// ── Situations sidecar mirror (mirror of src/services/intelligence/situation-store.ts) ──
+const SITUATIONS_LIMIT = 100;
+const _situations = [];
+let _situationIdCounter = 0;
+
+const VALID_SITUATION_STATUS = new Set(['active', 'monitoring', 'resolved']);
+const VALID_SITUATION_SEVERITY = new Set(['info', 'low', 'moderate', 'high', 'critical']);
+
+function nextSituationIdSidecar(now = Date.now()) {
+  _situationIdCounter += 1;
+  return `sit-${now.toString(36)}-${_situationIdCounter}`;
+}
+
+export function validateSituationInput(input) {
+  if (!input || typeof input !== 'object') return { ok: false, error: 'input must be an object' };
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  if (!name) return { ok: false, error: 'name is required' };
+  if (name.length > 200) return { ok: false, error: 'name exceeds 200 chars' };
+  const status = String(input.status ?? '');
+  if (!VALID_SITUATION_STATUS.has(status)) return { ok: false, error: 'invalid status' };
+  const severity = String(input.severity ?? '');
+  if (!VALID_SITUATION_SEVERITY.has(severity)) return { ok: false, error: 'invalid severity' };
+  const domain = typeof input.domain === 'string' && input.domain.length > 0
+    ? input.domain : null;
+  if (!domain) return { ok: false, error: 'domain is required' };
+  const summary = typeof input.summary === 'string'
+    ? input.summary.slice(0, 1000) : '';
+  const observationIds = Array.isArray(input.observationIds)
+    ? input.observationIds.filter((id) => typeof id === 'string').slice(0, 100) : [];
+  const correlationIds = Array.isArray(input.correlationIds)
+    ? input.correlationIds.filter((id) => typeof id === 'string').slice(0, 100) : [];
+  const tags = Array.isArray(input.tags)
+    ? input.tags.filter((t) => typeof t === 'string').slice(0, 50) : [];
+  const confidence = Number(input.confidence);
+  const conf = Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.5;
+  let location = null;
+  if (input.location && typeof input.location === 'object') {
+    const lat = Number(input.location.lat);
+    const lon = Number(input.location.lon);
+    const radiusKm = Number(input.location.radiusKm);
+    if (Number.isFinite(lat) && Number.isFinite(lon)
+      && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
+      && Number.isFinite(radiusKm) && radiusKm > 0) {
+      location = { lat, lon, radiusKm: Math.min(20100, radiusKm) };
+    }
+  }
+  return {
+    ok: true,
+    clean: { name, status, severity, domain, summary, observationIds,
+      correlationIds, tags, confidence: conf, location },
+  };
+}
+
+export function createSituationSidecar(input, now = Date.now()) {
+  const validated = validateSituationInput(input);
+  if (!validated.ok) return validated;
+  const c = validated.clean;
+  const situation = {
+    id: nextSituationIdSidecar(now),
+    startedAt: now,
+    updatedAt: now,
+    name: c.name,
+    status: c.status,
+    severity: c.severity,
+    domain: c.domain,
+    observationIds: c.observationIds,
+    correlationIds: c.correlationIds,
+    summary: c.summary,
+    location: c.location ?? undefined,
+    tags: c.tags,
+    confidence: c.confidence,
+  };
+  _situations.push(situation);
+  if (_situations.length > SITUATIONS_LIMIT) {
+    _situations.splice(0, _situations.length - SITUATIONS_LIMIT);
+  }
+  return { ok: true, situation };
+}
+
+export function listActiveSituationsSidecar() {
+  return _situations
+    .filter((s) => s.status !== 'resolved')
+    .map((s) => ({ ...s }));
+}
+
+export function getSituationSidecar(id) {
+  const found = _situations.find((s) => s.id === id);
+  return found ? { ...found } : null;
+}
+
+export function _resetSituationsSidecar() {
+  _situations.length = 0;
+  _situationIdCounter = 0;
+}
+
 // ── Security helpers (mirror src/services/security/*-service.ts) ──
 
 const SECURITY_CVE_CACHE = new Map(); // severity → { payload, expiresAt }
@@ -13212,6 +13307,61 @@ export async function createLocalApiServer(options = {}) {
    const { results, summary } = await runSidecarSelfTest(context.port);
    res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
    res.end(JSON.stringify({ results, summary, asOf: new Date().toISOString() }));
+   return;
+ }
+
+ // ── /api/intelligence/situations — sidecar mirror of the renderer ring ─
+ // GET           — list active situations
+ // GET /:id      — single situation
+ // POST          — manually push a situation (validated server-side)
+ // The mirror is in-process only; the renderer remains canonical for the
+ // user-visible state. Useful for replay tooling + integration tests.
+ if (requestUrl.pathname === '/api/intelligence/situations') {
+   if (req.method === 'GET') {
+     res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ situations: listActiveSituationsSidecar(),
+       asOf: new Date().toISOString() }));
+     return;
+   }
+   if (req.method === 'POST') {
+     let bodyText = '';
+     try {
+       for await (const chunk of req) bodyText += chunk;
+     } catch {
+       bodyText = '';
+     }
+     let parsed = null;
+     try { parsed = bodyText ? JSON.parse(bodyText) : null; } catch { parsed = null; }
+     if (!parsed || typeof parsed !== 'object') {
+       res.writeHead(400, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'invalid JSON body' }));
+       return;
+     }
+     const result = createSituationSidecar(parsed);
+     if (!result.ok) {
+       res.writeHead(400, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: result.error }));
+       return;
+     }
+     res.writeHead(201, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ situation: result.situation }));
+     return;
+   }
+   res.writeHead(405, { 'content-type': 'application/json', ...makeCorsHeaders(req),
+     allow: 'GET, POST' });
+   res.end(JSON.stringify({ error: 'method not allowed' }));
+   return;
+ }
+ const sitDetailMatch = requestUrl.pathname.match(/^\/api\/intelligence\/situations\/([^/]+)$/);
+ if (sitDetailMatch) {
+   const sit = getSituationSidecar(sitDetailMatch[1]);
+   if (!sit) {
+     res.writeHead(404, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: 'situation not found' }));
+     return;
+   }
+   res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify({ situation: sit }));
    return;
  }
 

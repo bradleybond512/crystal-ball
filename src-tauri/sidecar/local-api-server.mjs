@@ -14308,6 +14308,39 @@ export async function createLocalApiServer(options = {}) {
    return;
  }
 
+ // ── /api/intelligence/timeline — unified intelligence timeline ────
+ // Hands the renderer the raw source rows. The renderer's pure layer
+ // (`src/services/intelligence/intelligence-timeline.ts`) does the
+ // merge / dedupe / sort so the renderer-rendered timeline and any
+ // future JSON-export timeline come from the same logic.
+ // Query params (all optional):
+ //   ?limit=N        cap at N events (default 200)
+ //   ?since=ms       drop events with timestamp < ms
+ //   ?domain=name    filter to one domain
+ //   ?type=name      filter to alert | situation | what-changed |
+ //                   notification | diagnostic | acknowledgment
+ if (requestUrl.pathname === '/api/intelligence/timeline' && req.method === 'GET') {
+   const limitRaw = requestUrl.searchParams.get('limit');
+   const sinceRaw = requestUrl.searchParams.get('since');
+   const domain = requestUrl.searchParams.get('domain');
+   const type = requestUrl.searchParams.get('type');
+   const limit = (() => {
+     const n = Number.parseInt(limitRaw ?? '', 10);
+     return Number.isFinite(n) && n > 0 ? Math.min(1000, n) : 200;
+   })();
+   const since = (() => {
+     const n = Number.parseInt(sinceRaw ?? '', 10);
+     return Number.isFinite(n) ? n : null;
+   })();
+   res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify({
+     situations: listActiveSituationsSidecar(),
+     filters: { limit, since, domain, type },
+     asOf: new Date().toISOString(),
+   }));
+   return;
+ }
+
  // ── /api/diag — full diagnostics snapshot for bug reports ─────────
  if (requestUrl.pathname === '/api/diag') {
  {

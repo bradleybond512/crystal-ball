@@ -69,7 +69,11 @@ export type RuntimeSecretKey =
   | 'CENSYS_API_ID'
   | 'CENSYS_API_SECRET'
   | 'SECURITYTRAILS_API_KEY'
-  | 'WHOISXML_API_KEY';
+  | 'WHOISXML_API_KEY'
+  | 'MISP_URL'
+  | 'MISP_API_KEY'
+  | 'OPENCTI_URL'
+  | 'OPENCTI_API_KEY';
 
 export type RuntimeFeatureId =
   | 'cloudApiFallbackAuth'

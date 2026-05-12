@@ -4682,6 +4682,48 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ commodity, forecast: entry.forecast, riskLevel: entry.riskLevel, trend: entry.trend, ageMs, available: true });
   }
 
+  // ── Supply Chain Disruption — renderer POSTs state, MCP reads it back ────
+  // POST /api/supplychain/state — panel pushes current ports/canals/risk snapshot.
+  if (requestUrl.pathname === '/api/supplychain/state' && req.method === 'POST') {
+    try {
+      const body = await req.json();
+      context._supplychainState = {
+        ports: body.ports ?? [],
+        canals: body.canals ?? [],
+        risk: body.risk ?? [],
+        updatedAt: Date.now(),
+        ttlMs: body.ttlMs ?? 30 * 60 * 1000,
+      };
+      return json({ ok: true });
+    } catch {
+      return json({ error: 'invalid body' }, 400);
+    }
+  }
+  // GET /api/supplychain/ports — current port congestion snapshot.
+  if (requestUrl.pathname === '/api/supplychain/ports' && req.method === 'GET') {
+    const s = context._supplychainState;
+    if (!s) return json({ ports: [], available: false });
+    const ageMs = Date.now() - s.updatedAt;
+    if (ageMs > s.ttlMs) return json({ ports: [], available: false, stale: true });
+    return json({ ports: s.ports, ageMs, available: true });
+  }
+  // GET /api/supplychain/canals — current canal queue snapshot.
+  if (requestUrl.pathname === '/api/supplychain/canals' && req.method === 'GET') {
+    const s = context._supplychainState;
+    if (!s) return json({ canals: [], available: false });
+    const ageMs = Date.now() - s.updatedAt;
+    if (ageMs > s.ttlMs) return json({ canals: [], available: false, stale: true });
+    return json({ canals: s.canals, ageMs, available: true });
+  }
+  // GET /api/supplychain/risk — current chokepoint risk scores.
+  if (requestUrl.pathname === '/api/supplychain/risk' && req.method === 'GET') {
+    const s = context._supplychainState;
+    if (!s) return json({ risk: [], available: false });
+    const ageMs = Date.now() - s.updatedAt;
+    if (ageMs > s.ttlMs) return json({ risk: [], available: false, stale: true });
+    return json({ risk: s.risk, ageMs, available: true });
+  }
+
   // Spec aliases — friendlier URLs for the documented per-PR endpoints.
   if (requestUrl.pathname === '/api/ensemble-decision' && req.method === 'GET') {
     const domain = requestUrl.searchParams.get('domain') || '';

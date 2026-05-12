@@ -34,28 +34,28 @@ import type { ImpactSeverity } from '@/services/personal/personal-impact';
 const REFRESH_MS = 10_000;
 
 const STATUS_COLOR: Record<HealthStatus, string> = {
-  healthy: '#4caf50',
-  degraded: '#ffeb3b',
-  stale: '#ff9800',
-  failing: '#f44336',
-  unsafe: '#d50000',
-  blind: '#607d8b',
-  unknown: '#9e9e9e',
+  healthy: 'var(--severity-ok)',
+  degraded: 'var(--severity-medium)',
+  stale:   'var(--severity-high)',
+  failing: 'var(--severity-high)',
+  unsafe:  'var(--severity-critical)',
+  blind:   'var(--severity-info)',
+  unknown: 'var(--severity-info)',
 };
 
 const ACTION_TIER_COLOR: Record<'monitor' | 'prepare' | 'act_now' | 'shelter', string> = {
-  monitor: '#4caf50',
-  prepare: '#ffeb3b',
-  act_now: '#ff9800',
-  shelter: '#d50000',
+  monitor: 'var(--severity-ok)',
+  prepare: 'var(--severity-medium)',
+  act_now: 'var(--severity-high)',
+  shelter: 'var(--severity-critical)',
 };
 
 const IMPACT_SEVERITY_COLOR: Record<'critical' | 'elevated' | 'watch' | 'low' | 'none', string> = {
-  critical: '#d50000',
-  elevated: '#ff9800',
-  watch: '#ffeb3b',
-  low: '#9e9e9e',
-  none: '#616161',
+  critical: 'var(--severity-critical)',
+  elevated: 'var(--severity-high)',
+  watch:    'var(--severity-medium)',
+  low:      'var(--severity-info)',
+  none:     'var(--severity-info)',
 };
 
 const RISK_LABEL: Record<HealthStatus, string> = {
@@ -194,7 +194,7 @@ export class CommandCenterPanel extends Panel {
     if (concerning.length === 0) {
       return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:12px;">
         <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Top things that matter</div>
-        <div style="font-size:13px;color:#4caf50;">All features within their calibration floors. No action needed.</div>
+        <div style="font-size:13px;color:var(--severity-ok);">All features within their calibration floors. No action needed.</div>
       </div>`;
     }
     const top = concerning.slice(0, 3);
@@ -226,7 +226,7 @@ export class CommandCenterPanel extends Panel {
       <div style="font-size:12px;">
         ${drifting === 0
           ? `${totalFeeds} feeds fresh — nothing drifting.`
-          : `<strong style="color:#ff9800;">${drifting}</strong> of ${totalFeeds} sentinel feeds drifting. See Diagnostic → Feeds.`}
+          : `<strong style="color:var(--severity-high);">${drifting}</strong> of ${totalFeeds} sentinel feeds drifting. See Diagnostic → Feeds.`}
       </div>
     </div>`;
   }

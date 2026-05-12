@@ -92,16 +92,16 @@ export const DOMAIN_ICON: Record<HistoryDomain, string> = {
 };
 
 export const SEVERITY_BADGE: Record<HistorySeverity, { color: string; label: string }> = {
-  critical: { color: '#d50000', label: 'CRITICAL' },
-  high:     { color: '#ff5722', label: 'HIGH' },
-  medium:   { color: '#ff9800', label: 'MEDIUM' },
-  low:      { color: '#ffeb3b', label: 'LOW' },
+  critical: { color: 'var(--severity-critical)', label: 'CRITICAL' },
+  high:     { color: 'var(--severity-high)',     label: 'HIGH' },
+  medium:   { color: 'var(--severity-medium)',   label: 'MEDIUM' },
+  low:      { color: 'var(--severity-low)',      label: 'LOW' },
 };
 
 export const ACTION_BADGE: Record<HistoryAction, { color: string; label: string }> = {
-  fired:      { color: '#4caf50', label: 'FIRED' },
-  suppressed: { color: '#9e9e9e', label: 'SUPPRESSED' },
-  escalated:  { color: '#d50000', label: 'ESCALATED' },
+  fired:      { color: 'var(--severity-ok)',       label: 'FIRED' },
+  suppressed: { color: 'var(--severity-info)',     label: 'SUPPRESSED' },
+  escalated:  { color: 'var(--severity-critical)', label: 'ESCALATED' },
 };
 
 // ── Filtering ─────────────────────────────────────────────────────────────

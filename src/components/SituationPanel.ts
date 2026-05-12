@@ -36,11 +36,11 @@ const PHASE_LABELS: Record<SituationPhase, string> = {
 };
 
 const PHASE_COLORS: Record<SituationPhase, string> = {
-  emerging: '#888',
-  developing: '#f0ad4e',
-  active: '#d9534f',
-  'de-escalating': '#5bc0de',
-  resolved: '#5cb85c',
+  emerging:        'var(--severity-info)',
+  developing:      'var(--severity-medium)',
+  active:          'var(--severity-high)',
+  'de-escalating': 'var(--severity-low)',
+  resolved:        'var(--severity-ok)',
 };
 
 const DOMAIN_ICONS: Record<SituationDomain, string> = {
@@ -55,36 +55,36 @@ const DOMAIN_ICONS: Record<SituationDomain, string> = {
 };
 
 const URGENCY_COLORS: Record<ActionUrgency, string> = {
-  immediate: '#d9534f',
-  soon: '#f0ad4e',
-  monitor: '#5bc0de',
-  fyi: '#888',
+  immediate: 'var(--severity-critical)',
+  soon:      'var(--severity-high)',
+  monitor:   'var(--severity-low)',
+  fyi:       'var(--severity-info)',
 };
 
 const SEVERITY_COLORS: Record<ScenarioSeverity, string> = {
-  catastrophic: '#a00',
-  severe: '#d9534f',
-  moderate: '#f0ad4e',
-  minor: '#5bc0de',
-  positive: '#5cb85c',
+  catastrophic: 'var(--severity-critical)',
+  severe:       'var(--severity-high)',
+  moderate:     'var(--severity-medium)',
+  minor:        'var(--severity-low)',
+  positive:     'var(--severity-ok)',
 };
 
 const DOMAIN_COLORS: Record<SituationDomain, string> = {
-  military: '#d9534f',
-  economic: '#f0ad4e',
-  natural_hazard: '#5cb85c',
-  cyber: '#9b59b6',
-  infrastructure: '#e67e22',
-  health: '#3498db',
-  civil_unrest: '#e74c3c',
-  compound: '#1abc9c',
+  military:       'var(--severity-critical)',
+  economic:       'var(--severity-medium)',
+  natural_hazard: 'var(--severity-ok)',
+  cyber:          'var(--domain-cyber)',
+  infrastructure: 'var(--domain-infrastructure)',
+  health:         'var(--domain-biosurveillance)',
+  civil_unrest:   'var(--severity-high)',
+  compound:       'var(--severity-low)',
 };
 
 const VERIFICATION_BADGE: Record<VerificationVerdict, { icon: string; color: string; label: string }> = {
-  verified: { icon: '\u2713', color: '#5cb85c', label: 'Verified' }, // ✓
-  likely: { icon: '~', color: '#f0ad4e', label: 'Likely' },
-  unverified: { icon: '?', color: '#888', label: 'Unverified' },
-  contradicted: { icon: '\u26A0', color: '#d9534f', label: 'Contradicted' }, // ⚠
+  verified:    { icon: '\u2713', color: 'var(--severity-ok)',       label: 'Verified' },
+  likely:      { icon: '~',      color: 'var(--severity-medium)',   label: 'Likely' },
+  unverified:  { icon: '?',      color: 'var(--severity-info)',     label: 'Unverified' },
+  contradicted:{ icon: '\u26A0', color: 'var(--severity-critical)', label: 'Contradicted' },
 };
 
 // ── Panel ────────────────────────────────────────────────────────────────────

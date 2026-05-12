@@ -9,7 +9,18 @@
  * DOM event: wm:situational-mode-changed
  */
 
-export type SituationalMode = 'monitoring' | 'alert' | 'investigation' | 'briefing';
+export type SituationalMode =
+  | 'monitoring'
+  | 'alert'
+  | 'investigation'
+  | 'briefing'
+  /**
+   * Operator — manually toggled dense layout for repeated serious use.
+   * Never auto-triggered. Once set, stays active until the user exits.
+   * Auto-mode logic preserves Operator the same way it preserves
+   * Investigation.
+   */
+  | 'operator';
 
 const STORAGE_KEY = 'wm-situational-mode';
 const QUIET_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 h
@@ -25,7 +36,8 @@ export function initSituationalMode(): SituationalMode {
       saved === 'monitoring' ||
       saved === 'alert' ||
       saved === 'investigation' ||
-      saved === 'briefing'
+      saved === 'briefing' ||
+      saved === 'operator'
     ) {
       _current = saved;
       _manual = true;
@@ -80,7 +92,10 @@ export interface AlertLike {
  *   4. Default → 'monitoring'
  */
 export function getAutoMode(alerts: AlertLike[], now = Date.now()): SituationalMode {
-  if (_manual && _current === 'investigation') return 'investigation';
+  // Manually-set modes that auto-mode must NEVER override. Operator is
+  // explicitly user-controlled per spec; Investigation matches existing
+  // behaviour.
+  if (_manual && (_current === 'investigation' || _current === 'operator')) return _current;
 
   const hasCritical = alerts.some((a) => a.severity === 'critical');
   if (hasCritical) return 'alert';

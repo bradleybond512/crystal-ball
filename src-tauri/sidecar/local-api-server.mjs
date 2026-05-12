@@ -2413,6 +2413,265 @@ export function _resetSituationsSidecar() {
   _situationIdCounter = 0;
 }
 
+// ── Custom Alert Rules sidecar mirror ────────────────────────────────────
+// Mirrors src/services/intelligence/rules-engine.ts. The sidecar copy is
+// validated server-side; the renderer remains canonical for user state.
+const RULES_LIMIT = 200;
+const _rules = [];
+let _ruleIdCounter = 0;
+
+const VALID_FIELDS_SIDECAR = new Set(['domain', 'severity', 'location', 'keyword',
+  'magnitude', 'containment']);
+const VALID_OPERATORS_SIDECAR = new Set(['equals', 'contains', 'gt', 'lt', 'near']);
+const VALID_ACTIONS_SIDECAR = new Set(['notify', 'escalate', 'log']);
+const VALID_JOINS_SIDECAR = new Set(['AND', 'OR']);
+const SEVERITY_RANK_SIDECAR = {
+  INFO: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4,
+  info: 0, low: 1, medium: 2, moderate: 2, high: 3, critical: 4,
+};
+
+function nextRuleIdSidecar(now = Date.now()) {
+  _ruleIdCounter += 1;
+  return `rule-${now.toString(36)}-${_ruleIdCounter}`;
+}
+
+export function validateRuleInputSidecar(input) {
+  if (!input || typeof input !== 'object') return { ok: false, error: 'input must be an object' };
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  if (!name) return { ok: false, error: 'name is required' };
+  if (name.length > 200) return { ok: false, error: 'name exceeds 200 chars' };
+  if (typeof input.enabled !== 'boolean') return { ok: false, error: 'enabled must be boolean' };
+  if (!VALID_JOINS_SIDECAR.has(input.conditionOperator)) {
+    return { ok: false, error: 'conditionOperator must be AND or OR' };
+  }
+  if (!Array.isArray(input.conditions) || input.conditions.length === 0) {
+    return { ok: false, error: 'at least one condition required' };
+  }
+  const conditions = [];
+  for (const c of input.conditions) {
+    if (!c || typeof c !== 'object') return { ok: false, error: 'invalid condition' };
+    if (!VALID_FIELDS_SIDECAR.has(c.field)) return { ok: false, error: `invalid field: ${c.field}` };
+    if (!VALID_OPERATORS_SIDECAR.has(c.operator)) return { ok: false, error: `invalid operator: ${c.operator}` };
+    if (typeof c.value !== 'string' && typeof c.value !== 'number') {
+      return { ok: false, error: 'condition value must be string or number' };
+    }
+    const clean = { field: c.field, operator: c.operator, value: c.value };
+    if (typeof c.radiusKm === 'number' && Number.isFinite(c.radiusKm) && c.radiusKm > 0) {
+      clean.radiusKm = Math.min(20100, c.radiusKm);
+    }
+    conditions.push(clean);
+  }
+  if (!Array.isArray(input.actions) || input.actions.length === 0) {
+    return { ok: false, error: 'at least one action required' };
+  }
+  const actions = [];
+  for (const a of input.actions) {
+    if (!a || typeof a !== 'object') return { ok: false, error: 'invalid action' };
+    if (!VALID_ACTIONS_SIDECAR.has(a.type)) return { ok: false, error: `invalid action type: ${a.type}` };
+    const clean = { type: a.type };
+    if (typeof a.channel === 'string') clean.channel = a.channel;
+    if (typeof a.note === 'string') clean.note = a.note.slice(0, 500);
+    actions.push(clean);
+  }
+  const id = typeof input.id === 'string' && input.id.length > 0 ? input.id : null;
+  return { ok: true, clean: { id, name, enabled: input.enabled,
+    conditionOperator: input.conditionOperator, conditions, actions } };
+}
+
+export function upsertRuleSidecar(input, now = Date.now()) {
+  const validated = validateRuleInputSidecar(input);
+  if (!validated.ok) return validated;
+  const clean = validated.clean;
+  const existingIndex = clean.id ? _rules.findIndex((r) => r.id === clean.id) : -1;
+  if (existingIndex >= 0) {
+    const existing = _rules[existingIndex];
+    const next = {
+      ...existing,
+      name: clean.name,
+      enabled: clean.enabled,
+      conditionOperator: clean.conditionOperator,
+      conditions: clean.conditions,
+      actions: clean.actions,
+    };
+    _rules[existingIndex] = next;
+    return { ok: true, rule: next, created: false };
+  }
+  const rule = {
+    id: clean.id ?? nextRuleIdSidecar(now),
+    name: clean.name,
+    enabled: clean.enabled,
+    conditionOperator: clean.conditionOperator,
+    conditions: clean.conditions,
+    actions: clean.actions,
+    created: now,
+    triggerCount: 0,
+  };
+  _rules.push(rule);
+  if (_rules.length > RULES_LIMIT) {
+    _rules.splice(0, _rules.length - RULES_LIMIT);
+  }
+  return { ok: true, rule, created: true };
+}
+
+export function listRulesSidecar() {
+  return _rules.map((r) => ({ ...r }));
+}
+
+export function deleteRuleSidecar(id) {
+  const index = _rules.findIndex((r) => r.id === id);
+  if (index === -1) return false;
+  _rules.splice(index, 1);
+  return true;
+}
+
+function parseLatLonSidecar(value) {
+  if (typeof value !== 'string') return null;
+  const parts = value.split(',').map((s) => s.trim());
+  if (parts.length !== 2) return null;
+  const lat = Number(parts[0]);
+  const lon = Number(parts[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { lat, lon };
+}
+
+function haversineKmSidecar(lat1, lon1, lat2, lon2) {
+  const DEG = Math.PI / 180;
+  const dLat = (lat2 - lat1) * DEG;
+  const dLon = (lon2 - lon1) * DEG;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * DEG) * Math.cos(lat2 * DEG) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function extractMagnitudeSidecar(evt) {
+  if (evt.raw && typeof evt.raw === 'object' && typeof evt.raw.magnitude === 'number') {
+    return evt.raw.magnitude;
+  }
+  if (Array.isArray(evt.tags)) {
+    const tag = evt.tags.find((t) => typeof t === 'string' && /^mag[:=]/i.test(t));
+    if (tag) {
+      const n = Number.parseFloat(tag.split(/[:=]/, 2)[1] ?? '');
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  if (typeof evt.title === 'string') {
+    const m = evt.title.match(/\bM(\d+(?:\.\d+)?)\b/);
+    if (m) {
+      const n = Number.parseFloat(m[1]);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return null;
+}
+
+function extractContainmentSidecar(evt) {
+  if (evt.raw && typeof evt.raw === 'object' && typeof evt.raw.containment === 'number') {
+    return evt.raw.containment;
+  }
+  if (Array.isArray(evt.tags)) {
+    const tag = evt.tags.find((t) => typeof t === 'string' && /^containment[:=]/i.test(t));
+    if (tag) {
+      const n = Number.parseFloat(tag.split(/[:=]/, 2)[1] ?? '');
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  if (typeof evt.title === 'string') {
+    const m = evt.title.match(/(\d+(?:\.\d+)?)\s*%\s*contained/i);
+    if (m) {
+      const n = Number.parseFloat(m[1]);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return null;
+}
+
+function matchConditionSidecar(evt, c) {
+  if (c.field === 'domain') return stringMatch(evt.domain, c);
+  if (c.field === 'severity') return severityMatch(evt.severity, c);
+  if (c.field === 'keyword') return keywordMatch(evt, c);
+  if (c.field === 'magnitude') return numberMatch(extractMagnitudeSidecar(evt), c);
+  if (c.field === 'containment') return numberMatch(extractContainmentSidecar(evt), c);
+  if (c.field === 'location') return locationMatch(evt, c);
+  return false;
+}
+
+function stringMatch(actual, c) {
+  if (typeof actual !== 'string') return false;
+  const got = actual.toLowerCase();
+  const want = String(c.value).toLowerCase();
+  if (c.operator === 'equals') return got === want;
+  if (c.operator === 'contains') return got.includes(want);
+  return false;
+}
+
+function keywordMatch(evt, c) {
+  const want = String(c.value).toLowerCase();
+  if (!want) return false;
+  const tags = Array.isArray(evt.tags) ? evt.tags.join(' ') : '';
+  const haystack = `${evt.title ?? ''} ${tags}`.toLowerCase();
+  if (c.operator === 'equals') {
+    return (typeof evt.title === 'string' && evt.title.toLowerCase() === want)
+      || (Array.isArray(evt.tags) && evt.tags.some((t) => typeof t === 'string' && t.toLowerCase() === want));
+  }
+  if (c.operator === 'contains') return haystack.includes(want);
+  return false;
+}
+
+function severityMatch(actual, c) {
+  if (c.operator === 'equals' || c.operator === 'contains') return stringMatch(actual, c);
+  const a = SEVERITY_RANK_SIDECAR[actual];
+  const b = SEVERITY_RANK_SIDECAR[c.value];
+  if (typeof a !== 'number' || typeof b !== 'number') return false;
+  if (c.operator === 'gt') return a > b;
+  if (c.operator === 'lt') return a < b;
+  return false;
+}
+
+function numberMatch(actual, c) {
+  if (actual === null) return false;
+  const wanted = typeof c.value === 'number' ? c.value : Number(c.value);
+  if (!Number.isFinite(wanted)) return false;
+  if (c.operator === 'equals') return actual === wanted;
+  if (c.operator === 'gt') return actual > wanted;
+  if (c.operator === 'lt') return actual < wanted;
+  return false;
+}
+
+function locationMatch(evt, c) {
+  if (c.operator !== 'near') return false;
+  if (!evt.location || typeof evt.location !== 'object') return false;
+  const radius = c.radiusKm;
+  if (typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) return false;
+  const target = parseLatLonSidecar(c.value);
+  if (!target) return false;
+  return haversineKmSidecar(evt.location.lat, evt.location.lon, target.lat, target.lon) <= radius;
+}
+
+export function ruleMatchesSidecar(evt, rule) {
+  if (!rule.enabled || !Array.isArray(rule.conditions) || rule.conditions.length === 0) {
+    return false;
+  }
+  if (rule.conditionOperator === 'OR') {
+    return rule.conditions.some((c) => matchConditionSidecar(evt, c));
+  }
+  return rule.conditions.every((c) => matchConditionSidecar(evt, c));
+}
+
+export function evaluateRulesAgainstEventSidecar(input) {
+  if (!input || typeof input !== 'object') return { ok: false, error: 'invalid body' };
+  const evt = input.event;
+  if (!evt || typeof evt !== 'object') return { ok: false, error: 'event required' };
+  const rules = Array.isArray(input.rules) ? input.rules : _rules;
+  const triggered = rules.filter((r) => ruleMatchesSidecar(evt, r));
+  return { ok: true, triggered };
+}
+
+export function _resetRulesSidecar() {
+  _rules.length = 0;
+  _ruleIdCounter = 0;
+}
+
 // ── Security helpers (mirror src/services/security/*-service.ts) ──
 
 const SECURITY_CVE_CACHE = new Map(); // severity → { payload, expiresAt }
@@ -4237,10 +4496,14 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  // ── Intelligence: what-changed (renderer → sidecar snapshot mirror) ───────
-  // Renderer POSTs WorldStateSnapshots. GET /api/intelligence/what-changed?since=
+  // ── Intelligence: snapshot diff (renderer → sidecar snapshot mirror) ──────
+  // Renderer POSTs WorldStateSnapshots. GET /api/intelligence/snapshot-diff?since=
   // returns a diff report between the snapshot taken at ?since and the most recent.
-  if (requestUrl.pathname === '/api/intelligence/what-changed') {
+  //
+  // Originally lived at /api/intelligence/what-changed; renamed because a
+  // newer canonical /api/intelligence/what-changed (ChangeLine[] mirror for
+  // the Intelligence Feed panel) shares that name. Both panels coexist now.
+  if (requestUrl.pathname === '/api/intelligence/snapshot-diff') {
     if (!context._intelligenceSnapshots) context._intelligenceSnapshots = [];
     if (req.method === 'POST') {
       try {
@@ -13580,6 +13843,65 @@ export async function createLocalApiServer(options = {}) {
    }
    res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
    res.end(JSON.stringify({ situation: sit }));
+   return;
+ }
+
+ // ── /api/intelligence/rules — custom alert rules sidecar mirror ────
+ if (requestUrl.pathname === '/api/intelligence/rules') {
+   if (req.method === 'GET') {
+     res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ rules: listRulesSidecar(),
+       asOf: new Date().toISOString() }));
+     return;
+   }
+   if (req.method === 'POST') {
+     let bodyText = '';
+     try { for await (const chunk of req) bodyText += chunk; } catch { bodyText = ''; }
+     let parsed = null;
+     try { parsed = bodyText ? JSON.parse(bodyText) : null; } catch { parsed = null; }
+     const result = upsertRuleSidecar(parsed);
+     if (!result.ok) {
+       res.writeHead(400, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: result.error }));
+       return;
+     }
+     res.writeHead(result.created ? 201 : 200,
+       { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ rule: result.rule }));
+     return;
+   }
+   res.writeHead(405, { 'content-type': 'application/json', ...makeCorsHeaders(req),
+     allow: 'GET, POST' });
+   res.end(JSON.stringify({ error: 'method not allowed' }));
+   return;
+ }
+ if (requestUrl.pathname === '/api/intelligence/rules/evaluate') {
+   if (req.method !== 'POST') {
+     res.writeHead(405, { 'content-type': 'application/json', ...makeCorsHeaders(req),
+       allow: 'POST' });
+     res.end(JSON.stringify({ error: 'method not allowed' }));
+     return;
+   }
+   let bodyText = '';
+   try { for await (const chunk of req) bodyText += chunk; } catch { bodyText = ''; }
+   let parsed = null;
+   try { parsed = bodyText ? JSON.parse(bodyText) : null; } catch { parsed = null; }
+   const result = evaluateRulesAgainstEventSidecar(parsed);
+   if (!result.ok) {
+     res.writeHead(400, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: result.error }));
+     return;
+   }
+   res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify({ triggered: result.triggered }));
+   return;
+ }
+ const ruleDetailMatch = requestUrl.pathname.match(/^\/api\/intelligence\/rules\/([^/]+)$/);
+ if (ruleDetailMatch && req.method === 'DELETE') {
+   const removed = deleteRuleSidecar(ruleDetailMatch[1]);
+   res.writeHead(removed ? 200 : 404,
+     { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+   res.end(JSON.stringify(removed ? { ok: true } : { error: 'rule not found' }));
    return;
  }
 

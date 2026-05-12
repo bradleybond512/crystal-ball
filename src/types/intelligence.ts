@@ -111,3 +111,61 @@ export interface Situation {
   /** 0–1 confidence the situation is real / current. */
   confidence: number;
 }
+
+/**
+ * AlertRule — user-defined IF/THEN rule evaluated against each
+ * ObservationEvent on ingest. Distinct from:
+ *   - `src/services/alert-rules.ts` (operates on UnifiedAlert notification rows)
+ *   - `src/services/alert-rules-engine.ts` (NormalizedFact-driven legacy engine)
+ * The Phase 3 engine in `src/services/intelligence/rules-engine.ts` is the
+ * canonical surface for personalised ObservationEvent alerting.
+ */
+export type RuleConditionField =
+  | 'domain'
+  | 'severity'
+  | 'location'
+  | 'keyword'
+  | 'magnitude'
+  | 'containment';
+
+export type RuleConditionOperator = 'equals' | 'contains' | 'gt' | 'lt' | 'near';
+
+export interface RuleCondition {
+  field: RuleConditionField;
+  operator: RuleConditionOperator;
+  /** Right-hand operand. Strings are case-insensitive for `equals` /
+   *  `contains` matches; numbers are required for `gt` / `lt`. For `near`,
+   *  this is a "lat,lon" comma string OR a saved-place id ("place:home"). */
+  value: string | number;
+  /** Required when `operator === 'near'`. Maximum distance from the event
+   *  location to the value in km. */
+  radiusKm?: number;
+}
+
+export type RuleConditionOperatorJoin = 'AND' | 'OR';
+
+export type RuleActionType = 'notify' | 'escalate' | 'log';
+
+export interface RuleAction {
+  type: RuleActionType;
+  /** Optional channel for `notify` / `escalate` actions: 'push' | 'voice' |
+   *  'imessage'. Implementation maps onto the existing notification ledger. */
+  channel?: 'push' | 'voice' | 'imessage';
+  /** Optional free-form note appended to the dispatched alert. */
+  note?: string;
+}
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  conditions: RuleCondition[];
+  /** Combine conditions with AND (default) or OR. */
+  conditionOperator: RuleConditionOperatorJoin;
+  actions: RuleAction[];
+  /** ms since epoch when the rule was created. */
+  created: number;
+  /** ms since epoch of last match — undefined when never triggered. */
+  lastTriggered?: number;
+  triggerCount: number;
+}

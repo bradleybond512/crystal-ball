@@ -45,7 +45,7 @@ export class WhatChangedPanel extends Panel {
   private async fetchReport(): Promise<void> {
     const since = this.lastFetchAt > 0 ? this.lastFetchAt : Date.now() - 60 * 60 * 1000;
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/intelligence/what-changed?since=${since}`);
+      const res = await fetch(`${getApiBaseUrl()}/api/intelligence/snapshot-diff?since=${since}`);
       if (!res.ok) {
         this.setContent('<div class="panel-empty">Change digest unavailable.</div>');
         return;

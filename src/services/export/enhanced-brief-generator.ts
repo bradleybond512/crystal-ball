@@ -89,6 +89,28 @@ export interface FeedHealthRow {
   ageSeconds?: number;
 }
 
+export interface CorrelationEntry {
+  type: 'spatial' | 'temporal' | 'entity';
+  confidence: number;    // 0–1
+  title: string;
+  detectedAt: number;    // epoch ms
+}
+
+export interface ShortageRadarEntry {
+  commodity: string;
+  riskLevel: string;     // 'low' | 'moderate' | 'elevated' | 'high' | 'critical'
+  riskScore: number;     // 0–100
+  primaryDrivers: string[];
+  trend: string;         // 'rising' | 'stable' | 'falling'
+}
+
+export interface PersonalizedAlertEntry {
+  placeName: string;
+  eventCount: number;
+  topEventTitle: string;
+  topSeverity: number;   // 0–10
+}
+
 export interface EnhancedBriefingInput {
   /** Optional pre-built executive summary (e.g. from AI brief). When
    *  absent, the renderer derives one from the threat matrix. */
@@ -99,6 +121,9 @@ export interface EnhancedBriefingInput {
   topWildfires: WildfireRanked[];
   economicIndicators: EconomicIndicator[];
   feedHealth: FeedHealthRow[];
+  correlations?: CorrelationEntry[];
+  shortageRadar?: ShortageRadarEntry[];
+  personalizedAlerts?: PersonalizedAlertEntry[];
   /** Wall-clock data-current-as-of timestamp shown in the footer. */
   dataCurrentAt: number;
   /** Crystal Ball app version, shown in the footer. */
@@ -168,7 +193,10 @@ export function renderEnhancedBriefingPdf(
   y = renderSpaceWeather(doc, input.spaceWeather, y, onPageBreak);
   y = renderWildfires(doc, input.topWildfires, y, onPageBreak);
   y = renderEconomicIndicators(doc, input.economicIndicators, y, onPageBreak);
-  renderFeedHealth(doc, input.feedHealth, y, onPageBreak);
+  y = renderFeedHealth(doc, input.feedHealth, y, onPageBreak);
+  y = renderCorrelations(doc, input.correlations ?? [], y, onPageBreak);
+  y = renderShortageRadar(doc, input.shortageRadar ?? [], y, onPageBreak);
+  renderPersonalizedAlerts(doc, input.personalizedAlerts ?? [], y, onPageBreak);
 
   // Stamp footer + page numbers across every page.
   const pageCount = doc.getNumberOfPages();
@@ -581,6 +609,156 @@ function formatAge(ageSeconds: number): string {
   if (ageSeconds < 3600) return `${Math.round(ageSeconds / 60)}m ago`;
   if (ageSeconds < 86_400) return `${Math.round(ageSeconds / 3600)}h ago`;
   return `${Math.round(ageSeconds / 86_400)}d ago`;
+}
+
+// ── Pure helpers for new sections (exported for unit tests) ──────────
+
+/** Returns top N correlations sorted by confidence desc, capped at 5. */
+export function topCorrelationsByConfidence(
+  correlations: readonly CorrelationEntry[],
+  topN = 5,
+): CorrelationEntry[] {
+  return [...correlations].sort((a, b) => b.confidence - a.confidence).slice(0, topN);
+}
+
+/** Format a single correlation for text display.
+ *  Returns: "[TYPE] {title}   {confidence%}% confidence" */
+export function formatCorrelationLine(entry: CorrelationEntry): string {
+  const typePart = `[${entry.type.toUpperCase()}]`;
+  const pct = Math.round(entry.confidence * 100);
+  return `${typePart} ${entry.title}   ${pct}% confidence`;
+}
+
+/** Format trend arrow: rising → ↑, falling → ↓, anything else → →. */
+export function formatShortageArrow(trend: string): string {
+  if (trend === 'rising') return '↑';
+  if (trend === 'falling') return '↓';
+  return '→';
+}
+
+/** Prettify commodity name: 'wheat' → 'Wheat', 'natural-gas' → 'Natural Gas'. */
+export function prettifyCommodity(commodity: string): string {
+  return commodity
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/** Format a personalized alert line (without leading bullet). */
+export function formatPersonalAlertLine(entry: PersonalizedAlertEntry): string {
+  return `Events near ${entry.placeName}: ${entry.eventCount} alerts — top: ${entry.topEventTitle} (severity ${entry.topSeverity}/10)`;
+}
+
+// ── Risk-level colors for shortage radar ────────────────────────────
+
+const RISK_LEVEL_COLOR: Readonly<Record<string, [number, number, number]>> = {
+  critical: [194, 0, 0],
+  high:     [217, 86, 0],
+  elevated: [186, 137, 0],
+  moderate: [70, 113, 70],
+  low:      [80, 80, 80],
+};
+
+function riskLevelColor(riskLevel: string): [number, number, number] {
+  return RISK_LEVEL_COLOR[riskLevel.toLowerCase()] ?? [80, 80, 80];
+}
+
+// ── New section renderers ─────────────────────────────────────────────
+
+function renderCorrelations(
+  doc: jsPDF,
+  correlations: readonly CorrelationEntry[],
+  startY: number,
+  onPageBreak: () => number,
+): number {
+  let y = ensureRoomFor(doc, startY, 50, onPageBreak);
+  y = drawSectionHeader(doc, 'CROSS-DOMAIN CORRELATIONS', y);
+  if (correlations.length === 0) {
+    return drawEmptyLine(doc, 'No cross-domain correlations detected.', y) + 14;
+  }
+  const top = topCorrelationsByConfidence(correlations, 5);
+  for (const entry of top) {
+    y = ensureRoomFor(doc, y, 14, onPageBreak);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(40, 40, 40);
+    const line = `• ${formatCorrelationLine(entry)}`;
+    const wrapped = doc.splitTextToSize(line, CONTENT_WIDTH) as string[];
+    for (const wline of wrapped) {
+      y = ensureRoomFor(doc, y, 13, onPageBreak);
+      doc.text(wline, MARGIN, y);
+      y += 13;
+    }
+    y += 2;
+  }
+  return y + 8;
+}
+
+function renderShortageRadar(
+  doc: jsPDF,
+  entries: readonly ShortageRadarEntry[],
+  startY: number,
+  onPageBreak: () => number,
+): number {
+  let y = ensureRoomFor(doc, startY, 50, onPageBreak);
+  y = drawSectionHeader(doc, 'SHORTAGE RADAR', y);
+  if (entries.length === 0) {
+    return drawEmptyLine(doc, 'Shortage forecast data unavailable.', y) + 14;
+  }
+  const col1W = 130;
+  const col2W = 80;
+  const col3W = CONTENT_WIDTH - col1W - col2W;
+  for (const entry of entries) {
+    y = ensureRoomFor(doc, y, 18, onPageBreak);
+    // Column 1 — commodity name.
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(20, 20, 20);
+    doc.text(prettifyCommodity(entry.commodity), MARGIN, y);
+    // Column 2 — risk level badge (colored text).
+    const [r, g, b] = riskLevelColor(entry.riskLevel);
+    doc.setTextColor(r, g, b);
+    doc.setFont('helvetica', 'bold');
+    doc.text(entry.riskLevel.toUpperCase(), MARGIN + col1W, y);
+    // Column 3 — top driver + trend arrow.
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60);
+    const driver = entry.primaryDrivers[0] ?? '—';
+    const arrow = formatShortageArrow(entry.trend);
+    const col3Text = `${driver} ${arrow}`;
+    const wrapped = doc.splitTextToSize(col3Text, col3W) as string[];
+    doc.text(wrapped[0] ?? '', MARGIN + col1W + col2W, y);
+    y += 16;
+  }
+  return y + 8;
+}
+
+function renderPersonalizedAlerts(
+  doc: jsPDF,
+  alerts: readonly PersonalizedAlertEntry[],
+  startY: number,
+  onPageBreak: () => number,
+): number {
+  let y = ensureRoomFor(doc, startY, 50, onPageBreak);
+  y = drawSectionHeader(doc, 'PERSONALIZED ALERTS — SAVED PLACES', y);
+  if (alerts.length === 0) {
+    return drawEmptyLine(doc, 'No saved places configured, or no nearby events detected.', y) + 14;
+  }
+  for (const alert of alerts) {
+    y = ensureRoomFor(doc, y, 14, onPageBreak);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(40, 40, 40);
+    const line = `• ${formatPersonalAlertLine(alert)}`;
+    const wrapped = doc.splitTextToSize(line, CONTENT_WIDTH) as string[];
+    for (const wline of wrapped) {
+      y = ensureRoomFor(doc, y, 13, onPageBreak);
+      doc.text(wline, MARGIN, y);
+      y += 13;
+    }
+    y += 2;
+  }
+  return y + 8;
 }
 
 // ── Layout primitives ────────────────────────────────────────────────

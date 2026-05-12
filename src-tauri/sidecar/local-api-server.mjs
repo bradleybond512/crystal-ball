@@ -4501,6 +4501,53 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Intelligence: correlation chains v2 (renderer → sidecar mirror) ────────
+  // Renderer POSTs CorrelationChain[] from correlator-v2.ts so MCP tools and
+  // the panel can read active causal chains without importing TypeScript.
+  if (requestUrl.pathname === '/api/intelligence/correlations/chains') {
+    if (!context._intelligenceChainsV2) context._intelligenceChainsV2 = { chains: [], pushedAt: 0 };
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || !Array.isArray(body.chains)) return json({ error: 'chains must be an array' }, 400);
+        const chains = body.chains.slice(0, 100).map(c => ({
+          id: typeof c.id === 'string' ? c.id.slice(0, 200) : '',
+          chainType: typeof c.chainType === 'string' ? c.chainType.slice(0, 80) : '',
+          title: typeof c.title === 'string' ? c.title.slice(0, 300) : '',
+          confidence: typeof c.confidence === 'number' ? Math.min(1, Math.max(0, c.confidence)) : 0.3,
+          detectedAt: typeof c.detectedAt === 'number' ? c.detectedAt : Date.now(),
+          events: Array.isArray(c.events) ? c.events.slice(0, 20).map(e => ({
+            id: typeof e.id === 'string' ? e.id.slice(0, 100) : '',
+            domain: typeof e.domain === 'string' ? e.domain.slice(0, 60) : '',
+            title: typeof e.title === 'string' ? e.title.slice(0, 200) : '',
+            severity: typeof e.severity === 'number' ? e.severity : 0,
+            occurredAt: typeof e.occurredAt === 'number' ? e.occurredAt : Date.now(),
+          })) : [],
+        }));
+        context._intelligenceChainsV2 = { chains, pushedAt: Date.now() };
+        return json({ ok: true, count: chains.length });
+      } catch (error) {
+        return json({ error: String(error?.message ?? error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const { chains, pushedAt } = context._intelligenceChainsV2;
+      return json({ available: pushedAt > 0, pushedAt, count: chains.length, chains });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Intelligence: correlations for a specific event (v2) ─────────────────
+  if (requestUrl.pathname.startsWith('/api/intelligence/correlations/event/')) {
+    if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+    const eventId = decodeURIComponent(requestUrl.pathname.slice('/api/intelligence/correlations/event/'.length));
+    if (!eventId) return json({ error: 'eventId required' }, 400);
+    const { chains } = context._intelligenceChainsV2 ?? { chains: [] };
+    const matched = chains.filter(c => c.events.some(e => e.id === eventId));
+    return json({ eventId, count: matched.length, chains: matched });
+  }
+
   // ── Intelligence: nearby-alert summaries (renderer → sidecar mirror) ────
   // Renderer POSTs per-saved-place event summaries from personal-impact.ts so
   // MCP tools and the PDF collector can read them without importing TypeScript.

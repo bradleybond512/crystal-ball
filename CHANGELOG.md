@@ -4,6 +4,15 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-05-12
+
+### Added
+
+- **Cross-domain correlation engine v2** (`src/services/intelligence/correlator-v2.ts`): Causal chain detection across 7 domain-transition rules (seismic cascade, wildfire cascade, hurricane cascade, cyber cascade, conflict cascade, maritime-economic, aviation-conflict). Configurable time windows per transition pair (15 min for seismic → tsunami, 6 hr for weather → supply chain, 24 hr for conflict → displacement). Confidence scoring blends spatial overlap, temporal proximity, and entity match; degrades 0.1 per domain hop with a 0.3 floor. Event-level de-duplication merges overlapping chains by keeping the stronger one. Exports `CorrelatorV2`, `startV2Cycle()`, `stopV2Cycle()`, `getActiveChains()`, `getCorrelationsForEvent()`.
+- **Correlation Map panel** (`correlation-map`, category: `intelligence`): Shows active correlation chains as a sortable list with chain-type badge, confidence bar, event count, and domain icons. Click to expand individual events in a chain. 30 s auto-refresh from sidecar.
+- **Sidecar endpoints**: `POST/GET /api/intelligence/correlations/chains` — renderer pushes v2 chain snapshots; `GET /api/intelligence/correlations/event/:id` — chains containing a specific event.
+- **34 unit tests** (`src/services/intelligence/__tests__/correlator-v2.test.mts`): chain detection, confidence math, time-window boundaries, de-duplication, cross-domain pairs, module-level singleton, and backward-compat `toCorrelations()`.
+
 ## [2.14.0] - 2026-05-11
 
 ### Added

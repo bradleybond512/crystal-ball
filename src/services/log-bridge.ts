@@ -4,6 +4,7 @@
 // instead of dying in WebInspector. Also maintains an in-memory breadcrumb
 // ring buffer that is dumped alongside crash reports and Cmd+Shift+D diagnostics.
 import { invokeTauri } from '@/services/tauri-bridge';
+import { isDesktopRuntime } from '@/services/runtime';
 
 let installed = false;
 
@@ -348,7 +349,6 @@ async function copyDiagnostics(): Promise<void> {
  const { composeFrontendDiagnosticsExport } = await import(
  '@/services/diagnostics/frontend-export-composer'
  );
- const { isDesktopRuntime } = await import('@/services/runtime');
 
  // Pull app metadata. Version + variant come from Vite's __APP_VERSION__
  // / __APP_VARIANT__ globals when available; otherwise fall back to

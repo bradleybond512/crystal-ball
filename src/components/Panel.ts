@@ -4,6 +4,11 @@ import { invokeTauri } from '../services/tauri-bridge';
 import { t } from '../services/i18n';
 import { h, replaceChildren, safeHtml } from '../utils/dom-utils';
 import { trackPanelResized } from '@/services/analytics';
+// `summarization` is statically imported by other panels (GoodThingsDigest,
+// Insights, etc.), so it always lands in the panels chunk regardless of
+// whether we use a dynamic-import call here. Importing statically silences
+// Vite's INEFFECTIVE_DYNAMIC_IMPORT warning without changing bundle behaviour.
+import { generateSummary } from '@/services/summarization';
 
 export interface PanelOptions {
   id: string;
@@ -1016,7 +1021,6 @@ export class Panel {
  }
 
  // ── Step 2: Non-streaming fallback (full provider chain) ──────────────
- const { generateSummary } = await import('@/services/summarization');
  const result = await generateSummary(lines, undefined, this.panelId);
  overlay.classList.remove('panel-ai-overlay--loading');
 

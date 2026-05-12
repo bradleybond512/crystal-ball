@@ -1,0 +1,114 @@
+/**
+ * Per-chunk bundle-size budgets. Acts as a regression gate so a future PR
+ * cannot quietly re-inflate the chunks we just split apart.
+ *
+ * Budgets are set at "current gzipped size + ~10% slack" — the slack lets
+ * unrelated PRs add small dependencies without tripping the gate, but a
+ * mistakenly-static-imported heavyweight module (the failure mode that
+ * brought panels.js to 629 KB) will blow through any of these.
+ *
+ * Skips automatically when `dist/assets/` is missing so the data tests can
+ * run on a fresh clone without first invoking `npm run build`. Builds in
+ * CI run `npm run build` before `npm run test:data`, so the check fires
+ * there.
+ *
+ * To tighten budgets after a successful trim: drop the relevant value here
+ * to the new current + 10%, never the other direction.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const projectRoot = path.resolve(fileURLToPath(import.meta.url), '..', '..');
+const distAssets = path.join(projectRoot, 'dist', 'assets');
+
+// Budgets in BYTES, gzipped. Comments record the size at the time the
+// budget was set (2026-05-12, PR for bundle optimisation).
+const BUDGETS = {
+  // Main entry — was 300 KB before this PR; now 259 KB. Budget 290 KB.
+  'main-': 290 * 1024,
+  // Catch-all panels chunk — was 629 KB; now 469 KB. Budget 520 KB.
+  panels: 520 * 1024,
+  // News / intel-feed panels — was 145 KB; now 132 KB. Budget 150 KB.
+  'panels-feeds': 150 * 1024,
+  // OSINT / cyber / sanctions — new chunk, 41 KB. Budget 60 KB.
+  'panels-security': 60 * 1024,
+  // Alert / notification / watchlist / situation — new chunk, 53 KB.
+  'panels-alerts': 70 * 1024,
+  // Quote / wisdom panels — new chunk, 42 KB. Budget 55 KB.
+  'panels-wisdom': 55 * 1024,
+  // Diagnostic / admin panels — was 36 KB. Budget 50 KB.
+  'panels-diagnostic': 50 * 1024,
+  // Markets / finance panels — was 19 KB. Budget 30 KB.
+  'panels-markets': 30 * 1024,
+  // Hazards / weather / disaster panels — was 24 KB. Budget 35 KB.
+  'panels-hazards': 35 * 1024,
+  // Military / strike / kill-chain panels — new chunk, 17 KB.
+  'panels-military': 30 * 1024,
+  // Aviation / maritime / vessel — new chunk, 15 KB.
+  'panels-transit': 30 * 1024,
+  // Webcam panels — new chunk, 11 KB.
+  'panels-webcams': 25 * 1024,
+  // DeckGLMap — split out of main, 41 KB. Budget 55 KB.
+  DeckGLMap: 55 * 1024,
+  // God's Vision globe view — Cesium-heavy, 1119 KB. Budget 1230 KB.
+  // Removing more requires either a strict-CSP Cesium build or a non-eval
+  // globe library; tracked in docs/CSP_AUDIT.md.
+  GodsVisionView: 1230 * 1024,
+};
+
+function findChunk(prefix) {
+  if (!existsSync(distAssets)) return null;
+  const files = readdirSync(distAssets);
+  // Use the longest matching prefix so `panels-` doesn't match `panels-feeds`.
+  for (const file of files) {
+    if (file.endsWith('.js') && file.startsWith(prefix)) {
+      return file;
+    }
+  }
+  return null;
+}
+
+function gzipBytes(filename) {
+  const raw = readFileSync(path.join(distAssets, filename));
+  return gzipSync(raw).length;
+}
+
+const haveBuild = existsSync(distAssets);
+
+for (const [prefix, budget] of Object.entries(BUDGETS)) {
+  test(`bundle-size: ${prefix} ≤ ${(budget / 1024).toFixed(0)} KB gz`, (t) => {
+    if (!haveBuild) {
+      t.skip('dist/assets missing — run `npm run build` first');
+      return;
+    }
+    const chunk = findChunk(prefix);
+    assert.ok(chunk, `no chunk in dist/assets/ starts with "${prefix}"`);
+    const gz = gzipBytes(chunk);
+    assert.ok(
+      gz <= budget,
+      `${chunk} is ${(gz / 1024).toFixed(1)} KB gz, over the ${(budget / 1024).toFixed(0)} KB budget. ` +
+      `Investigate whether a heavy module was statically imported. If the new size is justified, ` +
+      `bump the budget in tests/bundle-size.test.mjs.`,
+    );
+  });
+}
+
+test('bundle-size: total JS gz under 6 MB', (t) => {
+  if (!haveBuild) {
+    t.skip('dist/assets missing — run `npm run build` first');
+    return;
+  }
+  const files = readdirSync(distAssets).filter((f) => f.endsWith('.js'));
+  let total = 0;
+  for (const f of files) total += gzipBytes(f);
+  const limit = 6 * 1024 * 1024;
+  assert.ok(
+    total <= limit,
+    `total JS is ${(total / 1024 / 1024).toFixed(2)} MB gz (limit ${(limit / 1024 / 1024).toFixed(0)} MB). ` +
+    `Major regression — investigate before bumping.`,
+  );
+});

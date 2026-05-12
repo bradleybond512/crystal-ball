@@ -920,6 +920,107 @@ export default defineConfig({
  ) {
  return 'panels-diagnostic';
  }
+ // Security / cyber / OSINT panels — phishing, IOC, sanctions,
+ // threat intel. Checked BEFORE the panels-feeds rule so panels
+ // whose names include 'Intel' (PulsediveIntel, ThreatIntelHub,
+ // CyberThreatIntel, etc.) are routed here instead of panels-feeds.
+ // These panels are rarely the first thing a user opens at boot.
+ if (
+ file.startsWith('Hibp')
+ || file.startsWith('IpInfo')
+ || file.startsWith('Bitcoin')
+ || file.startsWith('RedditOsint')
+ || file.startsWith('Phishstats')
+ || file.startsWith('Urlscan')
+ || file.startsWith('Pulsedive')
+ || file.startsWith('Cyber')
+ || file.startsWith('Threat')
+ || file.startsWith('Sanctions')
+ || file.startsWith('OpenSanctions')
+ || file.startsWith('Sigint')
+ || file.startsWith('Stix')
+ || file.startsWith('Ioc')
+ || file.startsWith('DarkWeb')
+ || file.startsWith('DarkVessel')
+ || file.startsWith('CompoundThreat')
+ ) {
+ return 'panels-security';
+ }
+ // Aviation / maritime / vessel panels — heavy on transit-specific
+ // helpers and shared with the globe layer. Most users open at most
+ // one of the two surfaces; splitting reduces eager work.
+ if (
+ file.startsWith('Aviation')
+ || file.startsWith('Maritime')
+ || file.startsWith('Vessel')
+ || file.startsWith('AirTraffic')
+ || file.startsWith('Airstrikes')
+ ) {
+ return 'panels-transit';
+ }
+ // Webcam panels — pull image-loading and stream-discovery
+ // dependencies that aren't needed for the rest of the app.
+ if (
+ file.startsWith('LiveWebcams')
+ || file.startsWith('UnifiedWebcam')
+ || file.startsWith('PinnedWebcams')
+ || file.includes('Webcam')
+ ) {
+ return 'panels-webcams';
+ }
+ // Military / strike-package / kill-chain / order-of-battle panels.
+ // These open from the Intelligence drawer and bring scenario libraries
+ // + cascade simulators with them.
+ if (
+ file.startsWith('Strike')
+ || file.startsWith('Kill')
+ || file.startsWith('Orbat')
+ || file.startsWith('CourseOfAction')
+ || file.startsWith('AfterAction')
+ || file.startsWith('Combatant')
+ || file.startsWith('CongressDefense')
+ || file.startsWith('Dod')
+ || file.startsWith('Nato')
+ || file.startsWith('ForeignMil')
+ || file.startsWith('Dsca')
+ || file.startsWith('IswReports')
+ || file.startsWith('SurvivalAdvisor')
+ ) {
+ return 'panels-military';
+ }
+ // Alert / notification / watchlist / situation panels — the
+ // unified-inbox surface. Mounted everywhere but moves a lot of
+ // alert-rules + dedupe + correlation-bridge logic.
+ if (
+ file.startsWith('Alert')
+ || file.startsWith('Notification')
+ || file.startsWith('UnifiedAlert')
+ || file.startsWith('Watchlist')
+ || file.startsWith('Saved')
+ || file.startsWith('Situation')
+ || file.startsWith('Amtrak')
+ || file.startsWith('Disease')
+ || file.startsWith('Displacement')
+ || file.startsWith('Population')
+ || file.startsWith('FoodInsecurity')
+ || file.startsWith('Humanitarian')
+ || file.startsWith('ShakeAlert')
+ ) {
+ return 'panels-alerts';
+ }
+ // Quote / wisdom / inspirational panels — tiny on their own but
+ // share zero deps with the rest of the app. Bundle separately so
+ // they don't bloat the catch-all panels chunk.
+ if (
+ file.startsWith('Stoic')
+ || file.startsWith('Biblical')
+ || file.startsWith('AlanWatts')
+ || file.startsWith('McKenna')
+ || file.startsWith('DailyWisdom')
+ || file.startsWith('InspirationQuote')
+ ) {
+ return 'panels-wisdom';
+ }
  // News / intel-feed panels — share GenericIntelFeed base.
  if (
  file.startsWith('News')

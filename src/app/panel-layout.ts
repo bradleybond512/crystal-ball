@@ -253,6 +253,7 @@ import { IntelReportPanel } from '@/components/IntelReportPanel';
 import { SanctionsCrossRefPanel } from '@/components/SanctionsCrossRefPanel';
 import { CompoundThreatPanel } from '@/components/CompoundThreatPanel';
 import { CorrelationMatrixPanel } from '@/components/CorrelationMatrixPanel';
+import { CorrelationMapPanel } from '@/components/CorrelationMapPanel';
 import { StrikePackagesPanel } from '@/components/StrikePackagesPanel';
 import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
 import { FeedHealthPanel } from '@/components/FeedHealthPanel';
@@ -1256,6 +1257,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['sanctions-crossref'] = new SanctionsCrossRefPanel();
  this.ctx.panels['compound-threat'] = new CompoundThreatPanel();
  this.ctx.panels['correlation-matrix'] = new CorrelationMatrixPanel();
+ this.ctx.panels['correlation-map'] = new CorrelationMapPanel();
  this.ctx.panels['strike-packages'] = new StrikePackagesPanel();
  this.ctx.panels['api-diagnostic'] = new ApiDiagnosticPanel();
  this.ctx.panels['feed-health'] = new FeedHealthPanel();

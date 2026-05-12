@@ -206,6 +206,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'sanctions-crossref': { name: 'Sanctions Cross-Ref', enabled: true, priority: 2 },
   'compound-threat': { name: 'Compound Threats', enabled: true, priority: 2 },
   'correlation-matrix': { name: 'Correlation Matrix', enabled: true, priority: 2 },
+  'correlation-map': { name: 'Correlation Map', enabled: true, priority: 2 },
   'strike-packages': { name: 'Strike Packages', enabled: true, priority: 2 },
   'api-diagnostic': { name: 'API Diagnostic', enabled: true, priority: 3 },
   'feed-health': { name: 'Feed Health', enabled: true, priority: 2 },
@@ -1035,7 +1036,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   // Full (geopolitical) variant
   intelligence: {
  labelKey: 'header.panelCatIntelligence',
- panelKeys: ['threat-dashboard', 'command-center', 'system-diagnostic', 'intelligence-feed', 'algorithm-diagnostic', 'playbook', 'aviation-intel', 'shortage-radar', 'shortage-detail-wheat', 'shortage-detail-corn', 'shortage-detail-rice', 'shortage-detail-soybeans', 'shortage-detail-diesel', 'shortage-detail-gasoline', 'shortage-detail-natural-gas', 'shortage-detail-jet-fuel', 'maritime-intel', 'supply-chain-disruption', 'watchlist', 'saved-places', 'watchlist-locations', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'synthesis', 'cyber-geo', 'economic-intel', 'notification-digest', 'notification-settings', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'feed-health', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions', 'sanctions-intel', 'infra-risk-matrix', 'sms-command-interface'],
+ panelKeys: ['threat-dashboard', 'command-center', 'system-diagnostic', 'intelligence-feed', 'algorithm-diagnostic', 'playbook', 'aviation-intel', 'shortage-radar', 'shortage-detail-wheat', 'shortage-detail-corn', 'shortage-detail-rice', 'shortage-detail-soybeans', 'shortage-detail-diesel', 'shortage-detail-gasoline', 'shortage-detail-natural-gas', 'shortage-detail-jet-fuel', 'maritime-intel', 'supply-chain-disruption', 'watchlist', 'saved-places', 'watchlist-locations', 'local-logistics', 'comms-plan', 'unified-alert-inbox', 'alert-rules', 'situation-awareness', 'alert-center', 'strategic-risk', 'cii', 'geo-hubs', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'intelligence-briefing', 'ask-crystal-ball', 'survival-advisor', 'threat-synthesis', 'scenario-simulator', 'escalation-forecast', 'synthesis', 'cyber-geo', 'economic-intel', 'notification-digest', 'notification-settings', 'notification-history', 'pattern-of-life', 'course-of-action', 'kill-chain', 'orbat', 'after-action-review', 'entity-link-graph', 'timeline-scrubber', 'intel-report', 'compound-threat', 'correlation-matrix', 'correlation-map', 'mediastack-news', 'situations', 'observation-rules', 'what-changed', 'strike-package', 'strike-packages', 'api-diagnostic', 'cascade-simulator', 'feed-health', 'dod-news', 'nato-news', 'foreign-mil-news', 'isw-reports', 'reliefweb-crises', 'bellingcat-osint', 'acaps-crises', 'liveuamap', 'un-security-council', 'combatant-commands', 'congress-defense', 'gov-warning-convergence', 'dsca-arms-transfers', 'dod-contracts', 'wikidata-bases', 'opensanctions', 'sanctions-intel', 'infra-risk-matrix', 'sms-command-interface'],
  variants: ['full'],
   },
   regionalNews: {
@@ -1066,7 +1067,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   healthEnv: {
  labelKey: 'header.panelCatHealthEnv',
- panelKeys: ['hazard-alerts', 'infrastructure', 'giving', 'daily-wisdom', 'stoic-reflections', 'biblical-encouragement', 'alan-watts-reflections', 'mckenna-visions', 'disease-outbreaks', 'disease-intel', 'humanitarian-crisis', 'air-quality', 'food-insecurity', 'offline-maps', 'evacuation', 'family-tracker', 'radiation-decay', 'resource-inventory', 'water-quality', 'ecdc-surveillance'],
+ panelKeys: ['hazard-alerts', 'infrastructure', 'giving', 'daily-wisdom', 'stoic-reflections', 'biblical-encouragement', 'alan-watts-reflections', 'mckenna-visions', 'disease-outbreaks', 'disease-intel', 'humanitarian-crisis', 'air-quality', 'food-insecurity', 'offline-maps', 'evacuation', 'family-tracker', 'radiation-decay', 'resource-inventory', 'water-quality', 'ecdc-surveillance', 'openaq-monitor'],
  variants: ['full'],
   },
 

@@ -1497,21 +1497,67 @@ async function tryCloudFallback(requestUrl, req, context, reason) {
   }
 }
 
-const SIDECAR_ALLOWED_ORIGINS = [
+// Known crystalball.app subdomains. Enumerated rather than glob-matched so a
+// future DNS / certificate misconfig can't silently grant CORS access to an
+// unrelated subdomain (e.g. an attacker-controlled preview host).
+const SIDECAR_PROD_HOSTS = new Set([
+  'crystalball.app',
+  'tech.crystalball.app',
+  'finance.crystalball.app',
+  'happy.crystalball.app',
+  'api.crystalball.app',
+]);
+
+// Dev-server ports the sidecar may legitimately serve. Other localhost ports
+// must NOT receive Access-Control-Allow-Origin reflection — that would let a
+// random local app on a random port read sidecar responses cross-origin.
+const SIDECAR_DEV_PORTS = new Set([
+  '',         // bare http://localhost (port 80) — keep for browser preview tools
+  '3000',     // Vite dev server (full + tech + finance variants)
+  '1420',     // Tauri dev preview default
+  '5173',     // Vite alt default port
+  '46123',    // Sidecar self-origin (port set in DEFAULT_LOCAL_API_PORT)
+]);
+
+const SIDECAR_TAURI_PATTERNS = [
   /^tauri:\/\/localhost$/,
-  /^https?:\/\/localhost(:\d+)?$/,
-  /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+  /^asset:\/\/localhost$/,
   /^https?:\/\/tauri\.localhost(:\d+)?$/,
-  // Only allow exact domain or single-level subdomains (e.g. preview-xyz.crystalball.app).
-  // The previous (.*\.)? pattern was overly broad. Anchored to prevent spoofing
-  // via domains like crystalballEVIL.vercel.app.
-  /^https:\/\/([a-z0-9-]+\.)?crystalball\.app$/,
+  /^https:\/\/[a-z0-9-]+\.tauri\.localhost(:\d+)?$/i,
 ];
+
+// Local-host port extractor — split into match + capture so we can compare
+// the port against SIDECAR_DEV_PORTS rather than letting any port through.
+const SIDECAR_LOCALHOST_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::(\d+))?$/;
+
+export function isSidecarOriginAllowed(origin) {
+  if (!origin) return false;
+  for (const p of SIDECAR_TAURI_PATTERNS) {
+    if (p.test(origin)) return true;
+  }
+  // Match prod host suffix (handles https://crystalball.app and the four
+  // enumerated subdomains; anything else is denied).
+  if (origin.startsWith('https://')) {
+    const host = origin.slice('https://'.length);
+    if (SIDECAR_PROD_HOSTS.has(host)) return true;
+  }
+  const localMatch = SIDECAR_LOCALHOST_RE.test(origin)
+    ? (origin.match(SIDECAR_LOCALHOST_RE) || [])
+    : null;
+  if (localMatch) {
+    const port = localMatch[1] ?? '';
+    if (SIDECAR_DEV_PORTS.has(port)) return true;
+  }
+  return false;
+}
 
 function getSidecarCorsOrigin(req) {
   const origin = req.headers?.origin || req.headers?.get?.('origin') || '';
-  if (origin && SIDECAR_ALLOWED_ORIGINS.some(p => p.test(origin))) return origin;
-   
+  if (isSidecarOriginAllowed(origin)) return origin;
+  // Fail closed: a non-matching browser origin gets reflected back as
+  // `tauri://localhost`, which no real browser will ever send — so the
+  // browser's CORS check rejects the response. There is no CORS_ALLOW_ALL
+  // env override; this is the only fallback path.
   return 'tauri://localhost';
 }
 
@@ -4453,6 +4499,53 @@ async function dispatch(requestUrl, req, routes, context) {
       return json({ available: pushedAt > 0, pushedAt, count: result.length, correlations: result });
     }
     return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Intelligence: correlation chains v2 (renderer → sidecar mirror) ────────
+  // Renderer POSTs CorrelationChain[] from correlator-v2.ts so MCP tools and
+  // the panel can read active causal chains without importing TypeScript.
+  if (requestUrl.pathname === '/api/intelligence/correlations/chains') {
+    if (!context._intelligenceChainsV2) context._intelligenceChainsV2 = { chains: [], pushedAt: 0 };
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || !Array.isArray(body.chains)) return json({ error: 'chains must be an array' }, 400);
+        const chains = body.chains.slice(0, 100).map(c => ({
+          id: typeof c.id === 'string' ? c.id.slice(0, 200) : '',
+          chainType: typeof c.chainType === 'string' ? c.chainType.slice(0, 80) : '',
+          title: typeof c.title === 'string' ? c.title.slice(0, 300) : '',
+          confidence: typeof c.confidence === 'number' ? Math.min(1, Math.max(0, c.confidence)) : 0.3,
+          detectedAt: typeof c.detectedAt === 'number' ? c.detectedAt : Date.now(),
+          events: Array.isArray(c.events) ? c.events.slice(0, 20).map(e => ({
+            id: typeof e.id === 'string' ? e.id.slice(0, 100) : '',
+            domain: typeof e.domain === 'string' ? e.domain.slice(0, 60) : '',
+            title: typeof e.title === 'string' ? e.title.slice(0, 200) : '',
+            severity: typeof e.severity === 'number' ? e.severity : 0,
+            occurredAt: typeof e.occurredAt === 'number' ? e.occurredAt : Date.now(),
+          })) : [],
+        }));
+        context._intelligenceChainsV2 = { chains, pushedAt: Date.now() };
+        return json({ ok: true, count: chains.length });
+      } catch (error) {
+        return json({ error: String(error?.message ?? error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const { chains, pushedAt } = context._intelligenceChainsV2;
+      return json({ available: pushedAt > 0, pushedAt, count: chains.length, chains });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Intelligence: correlations for a specific event (v2) ─────────────────
+  if (requestUrl.pathname.startsWith('/api/intelligence/correlations/event/')) {
+    if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+    const eventId = decodeURIComponent(requestUrl.pathname.slice('/api/intelligence/correlations/event/'.length));
+    if (!eventId) return json({ error: 'eventId required' }, 400);
+    const { chains } = context._intelligenceChainsV2 ?? { chains: [] };
+    const matched = chains.filter(c => c.events.some(e => e.id === eventId));
+    return json({ eventId, count: matched.length, chains: matched });
   }
 
   // ── Intelligence: nearby-alert summaries (renderer → sidecar mirror) ────

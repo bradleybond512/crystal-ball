@@ -28,6 +28,10 @@ const SHAPES = new Map<RuntimeSecretKey, RegExp>([
   ['AVIATIONSTACK_API',    /^[a-f0-9]{32}$/],
   ['NEWSAPI_KEY',          /^[a-f0-9]{32}$/],
   ['NEWSDATA_API_KEY',     /^pub_[a-zA-Z0-9]{30,}$/],
+  ['CENSYS_API_ID',        /^[a-f0-9-]{16,}$/i],
+  ['CENSYS_API_SECRET',    /^[A-Za-z0-9_-]{20,}$/],
+  ['SECURITYTRAILS_API_KEY', /^[A-Za-z0-9]{20,}$/],
+  ['WHOISXML_API_KEY',     /^[A-Za-z0-9_-]{20,}$/],
 ]);
 
 export function hasShape(key: RuntimeSecretKey): boolean {

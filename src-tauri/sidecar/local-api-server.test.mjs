@@ -1289,6 +1289,146 @@ test('rejects unauthenticated requests to /api/local-traffic-log when token is s
   }
 });
 
+test('serves sanitized Little Snitch data from configured export file', async () => {
+  const localApi = await setupApiDir({});
+  const exportDir = await mkdtemp(path.join(os.tmpdir(), 'little-snitch-export-'));
+  const exportPath = path.join(exportDir, 'snapshot.json');
+  await writeFile(exportPath, JSON.stringify({
+    generatedAt: '2026-05-03T23:00:00.000Z',
+    entries: [
+      {
+        app: 'Safari',
+        processPath: '/Applications/Safari.app/Contents/MacOS/Safari',
+        remote: 'https://example.com/path?secret=value',
+        decision: 'allow',
+        direction: 'outbound',
+        protocol: 'tcp',
+        bytesIn: 100,
+        bytesOut: 25,
+        lastSeen: '2026-05-03T23:01:00.000Z',
+      },
+    ],
+  }));
+  const originalPath = process.env.LITTLE_SNITCH_EXPORT_PATH;
+  process.env.LITTLE_SNITCH_EXPORT_PATH = exportPath;
+
+  const app = await createLocalApiServer({
+    port: 0,
+    apiDir: localApi.apiDir,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+
+  try {
+    const response = await authFetch(`http://127.0.0.1:${port}/api/little-snitch`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.available, true);
+    assert.equal(body.entries.length, 1);
+    assert.equal(body.entries[0].remoteHost, 'example.com');
+    assert.equal(body.entries[0].remote, undefined);
+    assert.equal(body.entries[0].processPath, undefined);
+    assert.equal(body.summary.totalConnections, 1);
+  } finally {
+    if (originalPath === undefined) delete process.env.LITTLE_SNITCH_EXPORT_PATH;
+    else process.env.LITTLE_SNITCH_EXPORT_PATH = originalPath;
+    await app.close();
+    await localApi.cleanup();
+    await rm(exportDir, { recursive: true, force: true });
+  }
+});
+
+test('marks Little Snitch app/domain pairs first-seen only once via baseline file', async () => {
+  const localApi = await setupApiDir({});
+  const exportDir = await mkdtemp(path.join(os.tmpdir(), 'little-snitch-export-'));
+  const exportPath = path.join(exportDir, 'snapshot.json');
+  const baselinePath = path.join(exportDir, 'baseline.json');
+  await writeFile(exportPath, JSON.stringify({
+    generatedAt: '2026-05-04T12:00:00.000Z',
+    entries: [
+      { app: 'node', remoteHost: 'api.example.com', direction: 'outbound', decision: 'allow', bytesOut: 100 },
+    ],
+  }));
+  const originalExportPath = process.env.LITTLE_SNITCH_EXPORT_PATH;
+  const originalBaselinePath = process.env.LITTLE_SNITCH_BASELINE_PATH;
+  process.env.LITTLE_SNITCH_EXPORT_PATH = exportPath;
+  process.env.LITTLE_SNITCH_BASELINE_PATH = baselinePath;
+
+  const app = await createLocalApiServer({
+    port: 0,
+    apiDir: localApi.apiDir,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+
+  try {
+    const first = await authFetch(`http://127.0.0.1:${port}/api/little-snitch`).then(res => res.json());
+    const second = await authFetch(`http://127.0.0.1:${port}/api/little-snitch`).then(res => res.json());
+
+    assert.equal(first.entries[0].firstSeen, true);
+    assert.equal(second.entries[0].firstSeen, false);
+    assert.ok(first.entries[0].risk.reasons.includes('new destination for this app'));
+  } finally {
+    if (originalExportPath === undefined) delete process.env.LITTLE_SNITCH_EXPORT_PATH;
+    else process.env.LITTLE_SNITCH_EXPORT_PATH = originalExportPath;
+    if (originalBaselinePath === undefined) delete process.env.LITTLE_SNITCH_BASELINE_PATH;
+    else process.env.LITTLE_SNITCH_BASELINE_PATH = originalBaselinePath;
+    await app.close();
+    await localApi.cleanup();
+    await rm(exportDir, { recursive: true, force: true });
+  }
+});
+
+test('new enrichment endpoints degrade when keys are missing and reject invalid indicators', async () => {
+  const localApi = await setupApiDir({});
+  const app = await createLocalApiServer({
+    port: 0,
+    apiDir: localApi.apiDir,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+
+  try {
+    const censys = await authFetch(`http://127.0.0.1:${port}/api/censys-host?ip=8.8.8.8`);
+    assert.equal(censys.status, 503);
+    const badSecurityTrails = await authFetch(`http://127.0.0.1:${port}/api/securitytrails-domain?domain=https://example.com/path`);
+    assert.equal(badSecurityTrails.status, 400);
+    const badWhois = await authFetch(`http://127.0.0.1:${port}/api/whoisxml-domain?domain=not a host`);
+    assert.equal(badWhois.status, 400);
+    const aggregate = await authFetch(`http://127.0.0.1:${port}/api/little-snitch-enrich?value=example.com`);
+    assert.equal(aggregate.status, 200);
+    const aggregateBody = await aggregate.json();
+    assert.equal(aggregateBody.value, 'example.com');
+    assert.equal(aggregateBody.providers.some(provider => provider.name === 'MISP' && provider.status === 'missing'), true);
+  } finally {
+    await app.close();
+    await localApi.cleanup();
+  }
+});
+
+test('serves local security posture with health checks and quarantine commands', async () => {
+  const localApi = await setupApiDir({});
+  const app = await createLocalApiServer({
+    port: 0,
+    apiDir: localApi.apiDir,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+
+  try {
+    const response = await authFetch(`http://127.0.0.1:${port}/api/security-posture`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.available, true);
+    assert.equal(Array.isArray(body.checks), true);
+    assert.equal(body.checks.some(check => check.id === 'firewall'), true);
+    assert.equal(body.quarantineCommands.some(command => command.includes('security-quarantine-mode.sh')), true);
+  } finally {
+    await app.close();
+    await localApi.cleanup();
+  }
+});
+
 test('rejects unauthenticated requests to /api/local-debug-toggle when token is set', async () => {
   const localApi = await setupApiDir({});
   const originalToken = process.env.LOCAL_API_TOKEN;

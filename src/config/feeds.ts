@@ -493,7 +493,7 @@ const FULL_FEEDS: Record<string, Feed[]> = {
  { name: 'BBC Mundo', url: rss('https://www.bbc.com/mundo/index.xml'), lang: 'es' },
  // German (DE)
  { name: 'Tagesschau', url: rss('https://www.tagesschau.de/xml/rss2/'), lang: 'de' },
- { name: 'Bild', url: rss('https://www.bild.de/feed/alles.xml'), lang: 'de' },
+
  { name: 'Der Spiegel', url: rss('https://www.spiegel.de/schlagzeilen/tops/index.rss'), lang: 'de' },
  { name: 'Die Zeit', url: rss('https://newsfeed.zeit.de/index'), lang: 'de' },
  // Italian (IT)

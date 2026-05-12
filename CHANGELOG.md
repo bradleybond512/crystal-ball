@@ -4,6 +4,25 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-05-12
+
+### Added
+
+- **App mode system** (PRs #415–#420): four explicit operating modes — Monitoring (default radar / panel grid), Alert (severity-promoted view with audible cues), Investigation (drill-down with cross-referenced situations and entity graph), Briefing (read-only, presentation-ready). Mode persists across sessions and gates UI affordances (auto-refresh interval, notification rung, alert-overlay density).
+- **Intelligence fabric** (PRs #421–#430): Situation Store + detection engine + dedicated panel; prioritize stage with saved-places proximity filter; act stage with per-domain response playbooks; cross-domain correlator-v2 with causal chain detection across 7 domain-transition rules; evidence graph + driver-based severity scoring; custom alert rules engine with IF/THEN builder; supply chain disruption tracker (ports, canals, BDI); infrastructure risk matrix (power, BGP, CISA KEV, ACLED); briefing scheduler + Brief Settings UI; PDF brief export covering correlations, shortage, and personalized alerts.
+- **UX layer** (PRs #432–#435): unified visual semantics (design tokens, severity / domain badges), Intelligence Feed panel (live chronological stream), shortage radar UI (commodity overview panel + alert wiring).
+- **Reliability** (PR #436): feed resilience — circuit breaker + fallback source rotation + health tracker, surfaced in the Feed Health panel.
+
+### Changed
+
+- **Version bump to 2.16.0** (PR #441) — wires the new intelligence fabric, app modes, and security hardening into the desktop bundle.
+
+### Security
+
+- **CSP audit + sidecar CORS hardening** (PR #439): documented `unsafe-eval` constraint imposed by Cesium 1.140.0 with explicit removal criteria; tightened the sidecar `crystalball.app` glob to an enumerated five-host set; restricted `localhost` / `127.0.0.1` CORS reflection to known dev-server ports (3000, 1420, 5173, 46123, port-80 bare). New `docs/CSP_AUDIT.md` is the standing audit record.
+- **Tauri secret IPC scoped** (PR #438): replaced the `get_all_secrets` IPC with a per-key `get_secret(key)` call gated by an explicit allowlist; updater manifest verification now checks SHA-256 hashes before applying.
+- **Linux WebKit sandbox re-enabled + verify audit CI integration** (PR #437).
+
 ## [2.15.0] - 2026-05-12
 
 ### Added
@@ -23,6 +42,8 @@ All notable changes to Crystal Ball are documented here.
 - **Sidecar parity tests**: 41 new deterministic unit tests across three new `.test.mjs` suites covering all sidecar helper functions for the three panels.
 
 ## [2.10.22] - 2026-05-01
+
+## [2.10.21] - 2026-05-11
 
 ### Added
 

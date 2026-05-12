@@ -65,7 +65,11 @@ export type RuntimeSecretKey =
   | 'S2U_TAK_URL'
   | 'S2U_TAK_USERNAME'
   | 'S2U_TAK_SECRET'
-  | 'S2U_TLS_INSECURE_OPT_IN';
+  | 'S2U_TLS_INSECURE_OPT_IN'
+  | 'CENSYS_API_ID'
+  | 'CENSYS_API_SECRET'
+  | 'SECURITYTRAILS_API_KEY'
+  | 'WHOISXML_API_KEY';
 
 export type RuntimeFeatureId =
   | 'cloudApiFallbackAuth'

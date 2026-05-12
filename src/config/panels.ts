@@ -183,6 +183,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'notification-history': { name: 'Notification History', enabled: true, priority: 2 },
   'notification-settings': { name: 'Notification Settings', enabled: true, priority: 1 },
   'situations': { name: 'Situations', enabled: true, priority: 1 },
+  'observation-rules': { name: 'Observation Rules', enabled: true, priority: 1 },
   // Worldview / Palantir / Dragos-inspired panels
   'pattern-of-life': { name: 'Pattern of Life', enabled: true, priority: 2 },
   'sigint-panel': { name: 'SIGINT Monitor', enabled: true, priority: 2 },

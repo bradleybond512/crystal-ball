@@ -16,6 +16,21 @@ const buffer: (ObservationEvent | undefined)[] = Array.from({ length: CAPACITY }
 let head = 0;
 let count = 0;
 
+/** Subscriber that runs synchronously after each event lands in the
+ *  buffer. Subscribers must be defensive — exceptions are caught and
+ *  logged so a bad listener can't break the ingest loop. */
+type IngestListener = (event: ObservationEvent) => void;
+
+const listeners: IngestListener[] = [];
+
+export function onIngest(listener: IngestListener): () => void {
+  listeners.push(listener);
+  return () => {
+    const i = listeners.indexOf(listener);
+    if (i !== -1) listeners.splice(i, 1);
+  };
+}
+
 /** Append one or more events. Overwrites oldest when buffer is full. */
 export function ingest(events: ObservationEvent | ObservationEvent[]): void {
   const evts = Array.isArray(events) ? events : [events];
@@ -23,6 +38,12 @@ export function ingest(events: ObservationEvent | ObservationEvent[]): void {
     buffer[head] = evt;
     head = (head + 1) % CAPACITY;
     if (count < CAPACITY) count++;
+    for (const fn of listeners) {
+      try { fn(evt); } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn('[observation-store] ingest listener threw', error);
+      }
+    }
   }
 }
 

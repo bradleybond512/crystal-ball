@@ -72,6 +72,7 @@ import { installShortcuts } from '@/services/keyboard/shortcut-bootstrap';
 import { startDockBadge } from '@/services/native/dock-badge';
 import { startMenubarStatus } from '@/services/native/menubar-status';
 import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
+import { startRulesEngineBootstrap } from '@/services/intelligence/rules-bootstrap';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
 import { startCorrelationFeedback } from '@/services/correlation-feedback';
@@ -233,6 +234,7 @@ import { NotificationDigestPanel } from '@/components/NotificationDigestPanel';
 import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel';
 import { NotificationSettingsPanel } from '@/components/NotificationSettingsPanel';
 import { SituationStorePanel } from '@/components/SituationStorePanel';
+import { ObservationRulesPanel } from '@/components/ObservationRulesPanel';
 import { PatternOfLifePanel } from '@/components/PatternOfLifePanel';
 import { SigintPanel } from '@/components/SigintPanel';
 import { DarkVesselPanel } from '@/components/DarkVesselPanel';
@@ -592,6 +594,7 @@ export class PanelLayoutManager implements AppModule {
  startSidebarHeat();
  startAlertCorrelator();
  startSituationAlertBridge();
+ startRulesEngineBootstrap();
  startSilenceDetector();
  startSourceFeedback();
  startCorrelationFeedback();
@@ -1231,6 +1234,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['notification-history'] = new NotificationHistoryPanel();
  this.ctx.panels['notification-settings'] = new NotificationSettingsPanel();
  this.ctx.panels['situations'] = new SituationStorePanel();
+ this.ctx.panels['observation-rules'] = new ObservationRulesPanel();
  // Worldview / Palantir / Dragos-inspired panels
  this.ctx.panels['pattern-of-life'] = new PatternOfLifePanel();
  this.ctx.panels['sigint-panel'] = new SigintPanel();

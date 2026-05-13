@@ -186,7 +186,7 @@ export class SystemDiagnosticPanel extends Panel {
         <span class="syd-mission-badge" title="Feed-staleness mission state" style="font-size:9px;padding:2px 5px;background:${msBadgeColor};color:#fff;border-radius:3px;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(ms)}</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center;">
-        <button class="syd-export" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;">Export JSON</button>
+        <button class="syd-export" title="Download the full diagnostic bundle (panel health, situations, correlations, algorithm trace, self-test, mission state) as JSON" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;">Export Full Bundle</button>
         <button class="syd-refresh" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;">Refresh</button>
       </div>
     </div>`;

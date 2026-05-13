@@ -129,6 +129,78 @@ export interface SystemInfo {
   memoryUsedBytes?: number;
 }
 
+// ── Phase 2 enhancements: situation / correlation / panel-health / trace ──
+
+/** Compact PanelHealth row shipped in the export. Mirrors the registry
+ *  shape but keeps only fields that survive redaction + paste-cap. */
+export interface PanelHealthEntry {
+  panelId: string;
+  label?: string;
+  status: string;
+  lastRenderAt?: number;
+  lastErrorAt?: number;
+  reason?: string;
+}
+
+/** Panel health rollup — counts plus a capped list of entries.
+ *  Lets a triager answer "which panels are actually rendering?" in one
+ *  glance without joining the full SystemHealthReport panel list. */
+export interface PanelHealthSummary {
+  total: number;
+  rendered: number;
+  degraded: number;
+  errored: number;
+  entries: readonly PanelHealthEntry[];
+}
+
+/** Active situation snapshot — id, name, severity, confidence + the
+ *  IDs of the evidence the situation was built from. Cross-references
+ *  with `correlations` and `recentEvents` so a triager can reconstruct
+ *  the cascade without joining other tables. */
+export interface SituationSummary {
+  id: string;
+  name: string;
+  status: string;
+  severity: string;
+  domain: string;
+  startedAt: number;
+  updatedAt: number;
+  observationIds: readonly string[];
+  correlationIds: readonly string[];
+  confidence: number;
+  tags: readonly string[];
+  summary?: string;
+}
+
+/** Correlation chain summary from correlator-v2. Confidence + chainType
+ *  let a triager see "is the engine actually finding cross-domain
+ *  links?" at a glance. */
+export interface CorrelationSummary {
+  id: string;
+  chainType: string;
+  title: string;
+  confidence: number;
+  detectedAt: number;
+  eventIds: readonly string[];
+}
+
+/** Per-situation algorithm trace — answers "which algorithm produced
+ *  this and on what evidence?". Confidence is the algorithm's reported
+ *  confidence; evidenceChain is the ordered list of observations and
+ *  correlations the algorithm consumed. */
+export interface AlgorithmTraceEvidence {
+  kind: 'observation' | 'correlation';
+  id: string;
+  summary?: string;
+}
+
+export interface AlgorithmTraceEntry {
+  situationId: string;
+  algorithmId: string;
+  confidence: number;
+  evidenceChain: readonly AlgorithmTraceEvidence[];
+}
+
 // ── Public API ──────────────────────────────────────────────────────────
 
 export interface ExportBundleAppMeta {
@@ -192,6 +264,14 @@ export interface DiagnosticsExportBundle {
   missionMapping?: MissionMappingSummary;
   /** System runtime info: version, uptime, memory. */
   systemInfo?: SystemInfo;
+  /** Phase 2: panel rendered/degraded/errored rollup + capped entries. */
+  panelHealthSummary?: PanelHealthSummary;
+  /** Phase 2: active situations with evidence cross-references. */
+  situations?: readonly SituationSummary[];
+  /** Phase 2: active correlation chains from correlator-v2. */
+  correlations?: readonly CorrelationSummary[];
+  /** Phase 2: per-situation algorithm trace + evidence chain. */
+  algorithmTrace?: readonly AlgorithmTraceEntry[];
   /** Anything truncated for size, recorded so the consumer knows what
    *  was dropped. */
   truncations: ExportTruncationNote[];
@@ -234,12 +314,20 @@ export interface BuildExportBundleInput {
   algorithmParameters?: readonly AlgorithmParameterSummary[];
   missionMapping?: MissionMappingSummary;
   systemInfo?: SystemInfo;
+  panelHealthSummary?: PanelHealthSummary;
+  situations?: readonly SituationSummary[];
+  correlations?: readonly CorrelationSummary[];
+  algorithmTrace?: readonly AlgorithmTraceEntry[];
   /** Caps; see DEFAULTS below. */
   caps?: Partial<{
     maxNotificationTraces: number;
     maxRecentEvents: number;
     maxBundleBytes: number;
     maxQualityDebt: number;
+    maxSituations: number;
+    maxCorrelations: number;
+    maxAlgorithmTrace: number;
+    maxPanelHealthEntries: number;
   }>;
 }
 
@@ -247,6 +335,10 @@ const DEFAULT_MAX_NOTIFICATION_TRACES = 50;
 const DEFAULT_MAX_RECENT_EVENTS = 200;
 const DEFAULT_MAX_BUNDLE_BYTES = 256 * 1024; // 256 KB
 const DEFAULT_MAX_QUALITY_DEBT = 25;
+const DEFAULT_MAX_SITUATIONS = 50;
+const DEFAULT_MAX_CORRELATIONS = 50;
+const DEFAULT_MAX_ALGORITHM_TRACE = 100;
+const DEFAULT_MAX_PANEL_HEALTH_ENTRIES = 100;
 
 export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExportBundle {
   const now = input.now ?? (() => Date.now());
@@ -256,6 +348,10 @@ export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExp
     maxRecentEvents: input.caps?.maxRecentEvents ?? DEFAULT_MAX_RECENT_EVENTS,
     maxBundleBytes: input.caps?.maxBundleBytes ?? DEFAULT_MAX_BUNDLE_BYTES,
     maxQualityDebt: input.caps?.maxQualityDebt ?? DEFAULT_MAX_QUALITY_DEBT,
+    maxSituations: input.caps?.maxSituations ?? DEFAULT_MAX_SITUATIONS,
+    maxCorrelations: input.caps?.maxCorrelations ?? DEFAULT_MAX_CORRELATIONS,
+    maxAlgorithmTrace: input.caps?.maxAlgorithmTrace ?? DEFAULT_MAX_ALGORITHM_TRACE,
+    maxPanelHealthEntries: input.caps?.maxPanelHealthEntries ?? DEFAULT_MAX_PANEL_HEALTH_ENTRIES,
   };
 
   const { summary: notificationSummary, entries: notificationTracesRaw, totalCount } =
@@ -310,6 +406,33 @@ export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExp
     }
   }
 
+  const panelHealthSummary = redactPanelHealthSummary(
+    input.panelHealthSummary,
+    caps.maxPanelHealthEntries,
+    truncations,
+  );
+  const situations = capAndRedact(
+    input.situations,
+    caps.maxSituations,
+    'situations',
+    truncations,
+    redactSituation,
+  );
+  const correlations = capAndRedact(
+    input.correlations,
+    caps.maxCorrelations,
+    'correlations',
+    truncations,
+    redactCorrelation,
+  );
+  const algorithmTrace = capAndRedact(
+    input.algorithmTrace,
+    caps.maxAlgorithmTrace,
+    'algorithmTrace',
+    truncations,
+    redactAlgorithmTrace,
+  );
+
   const bundle: DiagnosticsExportBundle = {
     schemaVersion: 2,
     generatedAt: now(),
@@ -342,10 +465,94 @@ export function buildExportBundle(input: BuildExportBundleInput): DiagnosticsExp
         }
       : undefined,
     systemInfo: input.systemInfo ? { ...input.systemInfo } : undefined,
+    panelHealthSummary,
+    situations,
+    correlations,
+    algorithmTrace,
     truncations,
   };
 
   return enforceByteCap(bundle, caps.maxBundleBytes);
+}
+
+function capAndRedact<T>(
+  source: readonly T[] | undefined,
+  cap: number,
+  field: string,
+  truncations: ExportTruncationNote[],
+  redactor: (item: T) => T,
+): readonly T[] | undefined {
+  if (source === undefined) return undefined;
+  const kept = source.length > cap ? source.slice(0, cap) : source;
+  if (source.length > cap) {
+    truncations.push({
+      field,
+      originalCount: source.length,
+      keptCount: kept.length,
+      reason: 'paste-friendly cap',
+    });
+  }
+  return kept.map((item) => redactor(item));
+}
+
+function redactPanelHealthSummary(
+  summary: PanelHealthSummary | undefined,
+  cap: number,
+  truncations: ExportTruncationNote[],
+): PanelHealthSummary | undefined {
+  if (summary === undefined) return undefined;
+  const entries = summary.entries.length > cap ? summary.entries.slice(0, cap) : summary.entries;
+  if (summary.entries.length > cap) {
+    truncations.push({
+      field: 'panelHealthSummary.entries',
+      originalCount: summary.entries.length,
+      keptCount: entries.length,
+      reason: 'paste-friendly cap',
+    });
+  }
+  return {
+    total: summary.total,
+    rendered: summary.rendered,
+    degraded: summary.degraded,
+    errored: summary.errored,
+    entries: entries.map((e) => ({
+      panelId: e.panelId,
+      label: e.label,
+      status: e.status,
+      lastRenderAt: e.lastRenderAt,
+      lastErrorAt: e.lastErrorAt,
+      reason: e.reason ? redactString(e.reason) : e.reason,
+    })),
+  };
+}
+
+function redactSituation(s: SituationSummary): SituationSummary {
+  return {
+    ...s,
+    observationIds: [...s.observationIds],
+    correlationIds: [...s.correlationIds],
+    tags: [...s.tags],
+    summary: s.summary ? redactString(s.summary) : s.summary,
+  };
+}
+
+function redactCorrelation(c: CorrelationSummary): CorrelationSummary {
+  return {
+    ...c,
+    title: redactString(c.title),
+    eventIds: [...c.eventIds],
+  };
+}
+
+function redactAlgorithmTrace(t: AlgorithmTraceEntry): AlgorithmTraceEntry {
+  return {
+    ...t,
+    evidenceChain: t.evidenceChain.map((e) => ({
+      kind: e.kind,
+      id: e.id,
+      summary: e.summary ? redactString(e.summary) : e.summary,
+    })),
+  };
 }
 
 /** Structural-clone redactor for strategic-self-improvement export
@@ -368,7 +575,52 @@ export function exportBundleToJson(bundle: DiagnosticsExportBundle): string {
  *  pasting into a GitHub issue. */
 export function exportBundleToMarkdown(bundle: DiagnosticsExportBundle): string {
   const json = exportBundleToJson(bundle);
-  return `### Crystal Ball diagnostics bundle\n\nGenerated: ${new Date(bundle.generatedAt).toISOString()}  \nApp: ${bundle.app.variant} v${bundle.app.version} (${bundle.app.runtime})\n\n\`\`\`json\n${json}\n\`\`\`\n`;
+  const sections: string[] = [
+    `### Crystal Ball diagnostics bundle`,
+    ``,
+    `Generated: ${new Date(bundle.generatedAt).toISOString()}  `,
+    `App: ${bundle.app.variant} v${bundle.app.version} (${bundle.app.runtime})`,
+  ];
+
+  if (bundle.panelHealthSummary) {
+    const p = bundle.panelHealthSummary;
+    sections.push(
+      ``,
+      `#### Panel health`,
+      ``,
+      `${p.total} total · ${p.rendered} rendered · ${p.degraded} degraded · ${p.errored} errored`,
+    );
+  }
+
+  if (bundle.situations && bundle.situations.length > 0) {
+    sections.push(``, `#### Active situations`, ``);
+    for (const s of bundle.situations) {
+      sections.push(
+        `- **${s.name}** (\`${s.id}\`) — ${s.severity} · ${s.domain} · confidence ${s.confidence.toFixed(2)}`,
+      );
+    }
+  }
+
+  if (bundle.correlations && bundle.correlations.length > 0) {
+    sections.push(``, `#### Correlation chains`, ``);
+    for (const c of bundle.correlations) {
+      sections.push(
+        `- \`${c.chainType}\` — ${c.title} (confidence ${c.confidence.toFixed(2)}, ${c.eventIds.length} events)`,
+      );
+    }
+  }
+
+  if (bundle.algorithmTrace && bundle.algorithmTrace.length > 0) {
+    sections.push(``, `#### Algorithm trace`, ``);
+    for (const t of bundle.algorithmTrace) {
+      sections.push(
+        `- \`${t.algorithmId}\` → situation \`${t.situationId}\` (confidence ${t.confidence.toFixed(2)}, ${t.evidenceChain.length} evidence)`,
+      );
+    }
+  }
+
+  sections.push(``, `\`\`\`json`, json, `\`\`\``, ``);
+  return sections.join('\n');
 }
 
 // ── Resolution helpers ─────────────────────────────────────────────────

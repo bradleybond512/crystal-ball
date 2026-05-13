@@ -20,17 +20,24 @@ import {
   buildExportBundle,
   exportBundleToMarkdown,
   type AlgorithmCalibrationSummary,
+  type AlgorithmTraceEntry,
+  type CorrelationSummary,
   type DiagnosticsExportBundle,
   type ExportBundleAppMeta,
   type ExportBundleEnvHints,
   type FeedHealthEntry,
+  type PanelHealthSummary,
+  type SituationSummary,
   type SystemInfo,
 } from './export-bundle';
 import { getLiveDiagnosticsSnapshot } from './live-diagnostics-snapshot';
 import {
   getFeatureHealthRegistry,
   getNotificationTraceRegistry,
+  getPanelHealthRegistry,
 } from './diagnostics-state';
+import { getAll as getAllSituations } from '@/services/intelligence/situation-store';
+import { getActiveChains } from '@/services/intelligence/correlator-v2';
 import { summarizeScenarioCoverage } from '@/services/scenarios/scenario-library';
 import { getActiveQualityDebt } from '@/services/quality/quality-debt-state';
 import { getMissionStateDetail } from './mission-state-service';
@@ -133,6 +140,75 @@ export function composeFrontendDiagnosticsExport(
     };
   });
 
+  const panelHealthSummary = safe((): PanelHealthSummary => {
+    const all = getPanelHealthRegistry().all();
+    let rendered = 0;
+    let degraded = 0;
+    let errored = 0;
+    for (const p of all) {
+      if (p.status === 'healthy') rendered++;
+      else if (p.status === 'degraded' || p.status === 'stale') degraded++;
+      else if (p.status === 'failing' || p.status === 'blind' || p.status === 'unsafe') errored++;
+    }
+    return {
+      total: all.length,
+      rendered,
+      degraded,
+      errored,
+      entries: all.map((p) => ({
+        panelId: p.panelId,
+        label: p.label,
+        status: p.status,
+        lastRenderAt: p.lastRenderAt,
+        lastErrorAt: p.lastErrorAt,
+        reason: p.lastError,
+      })),
+    };
+  });
+
+  const situations = safe((): SituationSummary[] =>
+    getAllSituations()
+      .filter((s) => s.status !== 'resolved')
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        status: s.status,
+        severity: s.severity,
+        domain: s.domain,
+        startedAt: s.startedAt,
+        updatedAt: s.updatedAt,
+        observationIds: s.observationIds,
+        correlationIds: s.correlationIds,
+        confidence: s.confidence,
+        tags: s.tags,
+        summary: s.summary,
+      })),
+  );
+
+  const correlations = safe((): CorrelationSummary[] =>
+    getActiveChains().map((c) => ({
+      id: c.id,
+      chainType: c.chainType,
+      title: c.title,
+      confidence: c.confidence,
+      detectedAt: c.detectedAt,
+      eventIds: c.events.map((e) => e.id),
+    })),
+  );
+
+  const algorithmTrace = safe((): AlgorithmTraceEntry[] => {
+    if (!situations) return [];
+    return situations.map((s) => ({
+      situationId: s.id,
+      algorithmId: 'situation-clustering',
+      confidence: s.confidence,
+      evidenceChain: [
+        ...s.observationIds.map((id) => ({ kind: 'observation' as const, id })),
+        ...s.correlationIds.map((id) => ({ kind: 'correlation' as const, id })),
+      ],
+    }));
+  });
+
   const bundle = buildExportBundle({
     now,
     app: input.app,
@@ -148,6 +224,10 @@ export function composeFrontendDiagnosticsExport(
     feedHealth,
     algorithmState,
     systemInfo,
+    panelHealthSummary,
+    situations,
+    correlations,
+    algorithmTrace,
   });
 
   let markdown = exportBundleToMarkdown(bundle);

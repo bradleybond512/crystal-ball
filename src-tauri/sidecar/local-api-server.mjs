@@ -39,6 +39,8 @@ import { explain as explainEvent } from './explainer.mjs';
 let _smsConfig = loadSmsConfig();
 const _smsRateLimitMap = new Map();
 const _smsCommandLog = [];
+const _smsWatchRegistry = [];
+const _smsAlertRegistry = [];
 
 // Keychain-loss fallback: a 2026-05-08 incident wiped the macOS Keychain
 // vault, taking 29 API credentials with it. If the keychain is empty
@@ -4576,8 +4578,10 @@ async function dispatch(requestUrl, req, routes, context) {
       allowlist: _smsConfig.allowlist ?? [],
       rateLimitMap: _smsRateLimitMap,
       commandLog: _smsCommandLog,
+      watchRegistry: _smsWatchRegistry,
+      alertRegistry: _smsAlertRegistry,
     });
-    return json({ text: result.text }, result.status);
+    return json({ response: result.text, segments: result.segments ?? 1 }, result.status);
   }
 
   if (requestUrl.pathname === '/api/sms/status' && req.method === 'GET') {
@@ -4585,6 +4589,13 @@ async function dispatch(requestUrl, req, routes, context) {
       enabled: _smsConfig.enabled,
       allowlistSize: (_smsConfig.allowlist ?? []).length,
       recentCommands: _smsCommandLog.slice(0, 20),
+      watches: _smsWatchRegistry.slice(-20),
+      alerts: _smsAlertRegistry.slice(-20),
+      rateLimit: [..._smsRateLimitMap.entries()].map(([phone, entry]) => ({
+        phone,
+        count: entry.count,
+        windowStart: entry.windowStart,
+      })),
       uptimeMs: Date.now() - SIDECAR_START_MS,
     });
   }

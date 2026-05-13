@@ -22,15 +22,36 @@ import {
   getActiveActionBrief,
   getPersonalImpactReport,
   getProviderRedundancyReport,
+  getRecentEvents,
 } from '@/services/insights/insights-state';
 import type { ActionBrief } from '@/services/insights/action-briefs';
 import type { PersonalImpact } from '@/services/personal/personal-impact';
 import type { FeatureHealth, HealthStatus } from '@/services/diagnostics/system-health-types';
 import { escapeHtml } from '@/utils/sanitize';
 import { getSavedPlaces, type SavedPlace } from '@/services/saved-places';
-import { getApiBaseUrl } from '@/services/runtime';
 import type { ImpactSeverity } from '@/services/personal/personal-impact';
 import { getActive as getActiveSituations } from '@/services/intelligence/situation-store';
+import {
+  defaultLayout,
+  loadLayout,
+  reconcileLayout,
+  reorderLayout,
+  saveLayout,
+  clearLayout,
+  type TileConfig,
+} from '@/services/command-center/layout-persistence';
+import {
+  formatDelta,
+  getWhatChanged,
+  recordSnapshot,
+  type AlertSeverityLike,
+  type AlertState,
+  type ChangeDomain,
+  type FeedHealthLike,
+  type FeedState,
+  type SituationState,
+  type WhatChangedEvent,
+} from '@/services/command-center/what-changed';
 import { loadRules } from '@/services/intelligence/rules-engine';
 import {
   buildCommandCenterSummary,
@@ -78,21 +99,20 @@ const RISK_LABEL: Record<HealthStatus, string> = {
   unsafe: 'CRITICAL',
 };
 
-interface TapeItem {
-  type: string;
-  label: string;
-  ageMs: number;
-}
-
-const TILE_ORDER_KEY = 'wm-command-center-tile-order';
+const WHAT_CHANGED_WINDOW_MS = 60 * 60 * 1000;
+const TAPE_REFRESH_MS = 60 * 1000;
 
 export class CommandCenterPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private tapeTimer: ReturnType<typeof setInterval> | null = null;
-  private tapeItems: TapeItem[] = [];
+  private tapeEvents: WhatChangedEvent[] = [];
+  private expandedTapeEventId: string | null = null;
   private isDragging = false;
   private draggingId: string | null = null;
   private dragOverId: string | null = null;
+  private boundPointerMove: ((e: MouseEvent) => void) | null = null;
+  private boundPointerUp: ((e: MouseEvent) => void) | null = null;
+  private boundEscape: ((e: KeyboardEvent) => void) | null = null;
 
   constructor() {
     super({
@@ -107,11 +127,11 @@ export class CommandCenterPanel extends Panel {
   }
 
   private start(): void {
+    this.refreshChangeTape();
     this.render();
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
-    void this.fetchTapeItems();
-    this.tapeTimer = setInterval(() => { void this.fetchTapeItems(); }, 5 * 60 * 1000);
-    this.attachDragListeners();
+    this.tapeTimer = setInterval(() => this.refreshChangeTape(), TAPE_REFRESH_MS);
+    this.attachInteractionListeners();
   }
 
   public override destroy(): void {
@@ -123,6 +143,7 @@ export class CommandCenterPanel extends Panel {
       clearInterval(this.tapeTimer);
       this.tapeTimer = null;
     }
+    this.detachPointerListeners();
     super.destroy();
   }
 
@@ -170,6 +191,7 @@ export class CommandCenterPanel extends Panel {
     return `
       <div style="padding:14px;display:flex;flex-direction:column;gap:14px;">
         ${this.renderGlobeNav()}
+        ${this.renderChangeTape()}
         ${this.renderFiveQuestionSpine(spineSummary)}
         ${this.renderSavedPlacesTiles()}
         ${this.renderRiskHeadline(report.status, report.summary)}
@@ -179,7 +201,6 @@ export class CommandCenterPanel extends Panel {
         ${this.renderProviderRedundancy(redundancy)}
         ${this.renderWatchNext(feedAudit.entries.length, feedAudit.entries.filter((e) => e.level !== 'fresh' && e.level !== 'unknown').length)}
         ${this.renderRecommendations(report.recommendations)}
-        ${this.renderChangeTape()}
       </div>
     `;
   }
@@ -430,29 +451,32 @@ export class CommandCenterPanel extends Panel {
 
   // ── Saved-places tiles ──────────────────────────────────────────────────
 
-  private loadTileOrder(): string[] {
-    try {
-      const stored = localStorage.getItem(TILE_ORDER_KEY);
-      return stored ? (JSON.parse(stored) as string[]) : [];
-    } catch {
-      return [];
+  /**
+   * Read the persisted layout and reconcile it against the current set
+   * of saved places so removed places drop out and new ones append.
+   */
+  private currentLayout(places: readonly SavedPlace[]): TileConfig[] {
+    const stored = loadLayout();
+    if (stored.length === 0) {
+      const fresh = defaultLayout(places);
+      saveLayout(fresh);
+      return fresh;
     }
+    const reconciled = reconcileLayout(stored, places);
+    if (reconciled.length !== stored.length) saveLayout(reconciled);
+    return reconciled;
   }
 
-  private saveTileOrder(ids: string[]): void {
-    localStorage.setItem(TILE_ORDER_KEY, JSON.stringify(ids));
-  }
-
-  private sortedTiles(places: SavedPlace[]): SavedPlace[] {
-    const order = this.loadTileOrder();
-    return [...places].sort((a, b) => {
-      const ai = order.indexOf(a.id);
-      const bi = order.indexOf(b.id);
-      if (ai === -1 && bi === -1) return 0;
-      if (ai === -1) return 1;
-      if (bi === -1) return -1;
-      return ai - bi;
-    });
+  private orderedPlaces(places: readonly SavedPlace[]): SavedPlace[] {
+    const layout = this.currentLayout(places);
+    const placeMap = new Map(places.map((p) => [p.id, p]));
+    const ordered: SavedPlace[] = [];
+    for (const tile of layout) {
+      if (tile.type !== 'saved-place' || !tile.visible || !tile.placeId) continue;
+      const place = placeMap.get(tile.placeId);
+      if (place) ordered.push(place);
+    }
+    return ordered;
   }
 
   private placeSeverity(place: SavedPlace, impacts: readonly PersonalImpact[]): ImpactSeverity {
@@ -461,22 +485,38 @@ export class CommandCenterPanel extends Panel {
     )?.severity ?? 'none';
   }
 
+  private topAlertSummary(place: SavedPlace, impacts: readonly PersonalImpact[]): string | null {
+    const match = impacts.find((imp) =>
+      imp.exposures.some((e) => e.exposureId === place.id || e.label === place.name),
+    );
+    return match ? match.description : null;
+  }
+
   private placeAlertCount(place: SavedPlace, impacts: readonly PersonalImpact[]): number {
     return impacts.filter((imp) =>
       imp.exposures.some((e) => e.exposureId === place.id || e.label === place.name),
     ).length;
   }
 
-  private renderTile(place: SavedPlace, severity: ImpactSeverity, alertCount: number): string {
+  private renderTile(place: SavedPlace, severity: ImpactSeverity, alertCount: number, topAlert: string | null): string {
+    const tileId = `saved-place:${place.id}`;
     const color = IMPACT_SEVERITY_COLOR[severity];
     const plural = alertCount === 1 ? '' : 's';
+    const isDragging = this.draggingId === tileId;
+    const isDragOver = this.dragOverId === tileId && this.draggingId !== tileId;
+    const ring = isDragOver ? 'box-shadow:0 0 0 2px var(--accent,#4a9eff) inset;' : '';
+    const dragging = isDragging ? 'opacity:0.55;' : '';
+    const topAlertHtml = topAlert
+      ? `<div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(topAlert)}">${escapeHtml(topAlert)}</div>`
+      : '';
     const countHtml = alertCount > 0
       ? `<div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:2px;">${alertCount} alert${plural}</div>`
       : '';
-    return `<div class="ccp-tile" data-tile-id="${escapeHtml(place.id)}" draggable="true"
-      style="flex:0 0 auto;width:100px;padding:8px 10px;border:1px solid var(--border-subtle,#333);border-top:3px solid ${color};border-radius:4px;cursor:grab;background:rgba(255,255,255,0.02);user-select:none;">
+    return `<div class="ccp-tile" data-tile-id="${escapeHtml(tileId)}"
+      style="flex:0 0 auto;width:120px;padding:8px 10px;border:1px solid var(--border-subtle,#333);border-top:3px solid ${color};border-radius:4px;cursor:grab;background:rgba(255,255,255,0.02);user-select:none;${ring}${dragging}">
       <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(place.name)}">${escapeHtml(place.name)}</div>
       <div style="font-size:10px;color:${color};text-transform:uppercase;margin-top:2px;">${escapeHtml(severity)}</div>
+      ${topAlertHtml}
       ${countHtml}
     </div>`;
   }
@@ -484,104 +524,207 @@ export class CommandCenterPanel extends Panel {
   private renderSavedPlacesTiles(): string {
     const places = getSavedPlaces().slice(0, 6);
     const impacts = getPersonalImpactReport().impacts;
-    const sorted = this.sortedTiles(places);
-    const tileHtml = sorted.map((p) =>
-      this.renderTile(p, this.placeSeverity(p, impacts), this.placeAlertCount(p, impacts)),
+    const ordered = this.orderedPlaces(places);
+    const tileHtml = ordered.map((p) =>
+      this.renderTile(
+        p,
+        this.placeSeverity(p, impacts),
+        this.placeAlertCount(p, impacts),
+        this.topAlertSummary(p, impacts),
+      ),
     ).join('');
     const addBtn = `<button data-action="add-place" style="font-size:11px;color:var(--accent,#4a9eff);background:none;border:1px dashed var(--border-subtle,#333);border-radius:4px;padding:6px 10px;cursor:pointer;align-self:flex-start;" title="Add a saved place">+</button>`;
+    const resetBtn = `<button data-action="reset-layout" style="font-size:10px;color:var(--text-secondary,#aaa);background:none;border:none;cursor:pointer;text-decoration:underline;" title="Restore default tile order">Reset layout</button>`;
     return `<div style="padding-bottom:2px;">
-      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Your places</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;">Your places</div>
+        ${resetBtn}
+      </div>
       <div class="ccp-tiles-row" style="display:flex;flex-wrap:wrap;gap:8px;">${tileHtml}${addBtn}</div>
     </div>`;
   }
 
-  // ── Drag-to-reorder tiles (event delegation — listeners survive re-render) ──
+  // ── Drag-to-reorder + click handlers ────────────────────────────────────
 
-  private attachDragListeners(): void {
-    this.content.addEventListener('dragstart', (e) => this.onDragStart(e));
-    this.content.addEventListener('dragover', (e) => this.onDragOver(e));
-    this.content.addEventListener('drop', (e) => this.onDrop(e));
-    this.content.addEventListener('dragend', () => this.onDragEnd());
+  private attachInteractionListeners(): void {
+    this.content.addEventListener('mousedown', (e) => this.onMouseDown(e));
     this.content.addEventListener('click', (e) => this.onContentClick(e));
   }
 
-  private onDragStart(e: DragEvent): void {
+  private onMouseDown(e: MouseEvent): void {
+    if (e.button !== 0) return;
     const tile = (e.target as HTMLElement).closest<HTMLElement>('[data-tile-id]');
     if (!tile) return;
+    e.preventDefault();
     this.isDragging = true;
     this.draggingId = tile.dataset.tileId ?? null;
-    e.dataTransfer?.setData('text/plain', this.draggingId ?? '');
+    this.dragOverId = this.draggingId;
+    this.boundPointerMove = (ev) => this.onPointerMove(ev);
+    this.boundPointerUp = () => this.onPointerUp();
+    this.boundEscape = (ev) => { if (ev.key === 'Escape') this.cancelDrag(); };
+    window.addEventListener('mousemove', this.boundPointerMove);
+    window.addEventListener('mouseup', this.boundPointerUp);
+    window.addEventListener('keydown', this.boundEscape);
+    this.applyDragVisualState();
   }
 
-  private onDragOver(e: DragEvent): void {
-    const tile = (e.target as HTMLElement).closest<HTMLElement>('[data-tile-id]');
-    if (!tile) return;
-    e.preventDefault();
-    this.dragOverId = tile.dataset.tileId ?? null;
+  private onPointerMove(e: MouseEvent): void {
+    if (!this.isDragging) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const tile = el?.closest<HTMLElement>('[data-tile-id]');
+    const overId = tile?.dataset.tileId ?? null;
+    if (overId !== this.dragOverId) {
+      this.dragOverId = overId;
+      this.applyDragVisualState();
+    }
   }
 
-  private onDrop(e: DragEvent): void {
-    e.preventDefault();
+  private onPointerUp(): void {
     const from = this.draggingId;
     const to = this.dragOverId;
+    this.detachPointerListeners();
     this.isDragging = false;
     this.draggingId = null;
     this.dragOverId = null;
-    if (!from || !to || from === to) { this.render(); return; }
-    const ids = this.sortedTiles(getSavedPlaces().slice(0, 6)).map((p) => p.id);
-    const fromIdx = ids.indexOf(from);
-    const toIdx = ids.indexOf(to);
-    if (fromIdx !== -1 && toIdx !== -1) {
-      ids.splice(fromIdx, 1);
-      ids.splice(toIdx, 0, from);
+    if (from && to && from !== to) {
+      const layout = loadLayout();
+      const next = reorderLayout(layout, from, to);
+      saveLayout(next);
     }
-    this.saveTileOrder(ids);
     this.render();
   }
 
-  private onDragEnd(): void {
+  private cancelDrag(): void {
+    this.detachPointerListeners();
     this.isDragging = false;
     this.draggingId = null;
     this.dragOverId = null;
     this.render();
+  }
+
+  private detachPointerListeners(): void {
+    if (this.boundPointerMove) window.removeEventListener('mousemove', this.boundPointerMove);
+    if (this.boundPointerUp) window.removeEventListener('mouseup', this.boundPointerUp);
+    if (this.boundEscape) window.removeEventListener('keydown', this.boundEscape);
+    this.boundPointerMove = null;
+    this.boundPointerUp = null;
+    this.boundEscape = null;
+  }
+
+  /**
+   * Apply transient drag visuals (the dragged tile dims, the hovered
+   * tile gets an accent inset) without re-rendering the whole panel —
+   * full re-render would interrupt the in-flight drag.
+   */
+  private applyDragVisualState(): void {
+    const tiles = this.content.querySelectorAll<HTMLElement>('[data-tile-id]');
+    tiles.forEach((tile) => {
+      const id = tile.dataset.tileId ?? '';
+      tile.style.opacity = id === this.draggingId ? '0.55' : '';
+      tile.style.boxShadow = (id === this.dragOverId && id !== this.draggingId)
+        ? '0 0 0 2px var(--accent,#4a9eff) inset'
+        : '';
+    });
   }
 
   private onContentClick(e: MouseEvent): void {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action="add-place"]');
-    if (!btn) return;
-    document.querySelector<HTMLElement>('[data-panel-id="saved-places"]')?.click();
-  }
-
-  // ── Live change tape ────────────────────────────────────────────────────
-
-  private async fetchTapeItems(): Promise<void> {
-    try {
-      const url = `${getApiBaseUrl()}/api/command-center/recent-changes`;
-      const resp = await fetch(url);
-      if (!resp.ok) return;
-      const data = await resp.json() as { items?: TapeItem[] };
-      this.tapeItems = data.items ?? [];
-      if (!this.isDragging) this.render();
-    } catch {
-      // fail silently — tape stays empty
+    const target = e.target as HTMLElement;
+    if (target.closest<HTMLElement>('[data-action="add-place"]')) {
+      document.querySelector<HTMLElement>('[data-panel-id="saved-places"]')?.click();
+      return;
+    }
+    if (target.closest<HTMLElement>('[data-action="reset-layout"]')) {
+      this.handleResetLayout();
+      return;
+    }
+    const tapeChip = target.closest<HTMLElement>('[data-tape-event-id]');
+    if (tapeChip) {
+      const id = tapeChip.dataset.tapeEventId ?? '';
+      this.expandedTapeEventId = this.expandedTapeEventId === id ? null : id;
+      this.render();
     }
   }
 
-  private formatAge(ms: number): string {
-    const min = Math.floor(ms / 60_000);
-    if (min < 60) return `${min}m`;
-    return `${Math.floor(min / 60)}h`;
+  private handleResetLayout(): void {
+    clearLayout();
+    const fresh = defaultLayout(getSavedPlaces().slice(0, 6));
+    saveLayout(fresh);
+    this.render();
+  }
+
+  // ── Live change tape (deterministic what-changed engine) ────────────────
+
+  private refreshChangeTape(): void {
+    recordSnapshot({
+      takenAt: Date.now(),
+      alerts: this.snapshotAlerts(),
+      situations: this.snapshotSituations(),
+      feeds: this.snapshotFeeds(),
+    });
+    this.tapeEvents = getWhatChanged(Date.now() - WHAT_CHANGED_WINDOW_MS);
+    if (!this.isDragging) this.render();
+  }
+
+  private snapshotAlerts(): AlertState[] {
+    return getRecentEvents().map((event) => ({
+      id: event.eventId,
+      domain: toChangeDomain(event.domain),
+      severity: severityFromScore(event.severity),
+      summary: event.description,
+    }));
+  }
+
+  private snapshotSituations(): SituationState[] {
+    return getActiveSituations().map((s) => ({
+      id: s.id,
+      domain: toChangeDomain(s.domain),
+      title: s.name,
+    }));
+  }
+
+  private snapshotFeeds(): FeedState[] {
+    const snapshot = getLiveDiagnosticsSnapshot();
+    return snapshot.sources.map((src) => ({
+      id: src.sourceId,
+      status: feedStatusFromHealth(src.status),
+      label: src.label ?? src.sourceId,
+    }));
   }
 
   private renderChangeTape(): string {
-    if (this.tapeItems.length === 0) return '';
-    const items = this.tapeItems.slice(0, 10).map((item) => {
-      const age = this.formatAge(item.ageMs);
-      return `<span style="display:inline-block;padding:0 10px;border-right:1px solid var(--border-subtle,#444);font-size:11px;white-space:nowrap;">${escapeHtml(item.label)}<span style="color:var(--text-secondary,#aaa);margin-left:4px;">${escapeHtml(age)} ago</span></span>`;
+    if (this.tapeEvents.length === 0) {
+      return `<div style="padding:6px 10px;border:1px solid var(--border-subtle,#333);border-radius:4px;font-size:11px;color:var(--text-secondary,#aaa);">
+        What changed (last hour) · nothing yet — Crystal Ball is gathering baseline.
+      </div>`;
+    }
+    const chips = this.tapeEvents.map((event) => {
+      const expanded = this.expandedTapeEventId === event.id;
+      const ringBg = expanded ? 'rgba(74,158,255,0.16)' : 'rgba(255,255,255,0.04)';
+      return `<button type="button" data-tape-event-id="${escapeHtml(event.id)}"
+        style="flex:0 0 auto;padding:4px 10px;border:1px solid var(--border-subtle,#444);border-radius:999px;background:${ringBg};color:inherit;font-size:11px;white-space:nowrap;cursor:pointer;">
+        ${escapeHtml(formatDelta(event))}
+        <span style="color:var(--text-secondary,#aaa);margin-left:6px;">${escapeHtml(formatAge(event.timestamp))}</span>
+      </button>`;
     }).join('');
-    return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:10px;">
-      <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:4px;">What changed (last hour)</div>
-      <div style="overflow-x:auto;display:flex;padding-bottom:4px;">${items}</div>
+    const detail = this.renderExpandedTapeDetail();
+    return `<div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;">What changed (last hour)</div>
+        <div style="font-size:10px;color:var(--text-secondary,#aaa);">${this.tapeEvents.length} ${this.tapeEvents.length === 1 ? 'event' : 'events'}</div>
+      </div>
+      <div style="overflow-x:auto;display:flex;gap:6px;padding-bottom:4px;">${chips}</div>
+      ${detail}
+    </div>`;
+  }
+
+  private renderExpandedTapeDetail(): string {
+    if (!this.expandedTapeEventId) return '';
+    const event = this.tapeEvents.find((e) => e.id === this.expandedTapeEventId);
+    if (!event) return '';
+    const time = new Date(event.timestamp).toLocaleString();
+    return `<div style="margin-top:6px;padding:8px 10px;border:1px solid var(--border-subtle,#333);border-left:3px solid var(--accent,#4a9eff);border-radius:4px;background:rgba(74,158,255,0.06);">
+      <div style="font-size:11px;font-weight:700;">${escapeHtml(formatDelta(event))}</div>
+      <div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:3px;">${escapeHtml(event.domain.toUpperCase())} · ${escapeHtml(event.type)} · ${escapeHtml(time)}</div>
     </div>`;
   }
 }
@@ -641,4 +784,42 @@ function timeAgo(epoch: number): string {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86_400)}d ago`;
+}
+
+// ── what-changed adapters ────────────────────────────────────────────────
+
+const KNOWN_DOMAINS: readonly ChangeDomain[] = [
+  'weather', 'cyber', 'finance', 'conflict', 'seismic', 'energy', 'system', 'other',
+];
+
+function toChangeDomain(raw: string): ChangeDomain {
+  const lower = raw.toLowerCase();
+  for (const d of KNOWN_DOMAINS) {
+    if (lower === d) return d;
+  }
+  if (lower === 'market' || lower === 'crypto') return 'finance';
+  if (lower === 'earthquake' || lower === 'natural') return 'seismic';
+  if (lower === 'war' || lower === 'geopolitics') return 'conflict';
+  return 'other';
+}
+
+function severityFromScore(score: number): AlertSeverityLike {
+  if (score >= 80) return 'CRITICAL';
+  if (score >= 60) return 'HIGH';
+  if (score >= 40) return 'MODERATE';
+  if (score >= 20) return 'LOW';
+  return 'INFO';
+}
+
+function feedStatusFromHealth(status: HealthStatus): FeedHealthLike {
+  if (status === 'healthy') return 'healthy';
+  if (status === 'failing' || status === 'unsafe' || status === 'blind') return 'down';
+  return 'degraded';
+}
+
+function formatAge(epoch: number): string {
+  const min = Math.floor(Math.max(0, Date.now() - epoch) / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  return `${Math.floor(min / 60)}h ago`;
 }

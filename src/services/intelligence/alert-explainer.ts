@@ -232,9 +232,12 @@ function whyItMatters(
 
 function whatHappened(alert: UnifiedAlert): string {
   const domain = explainDomain(alert.source);
-  const loc = alert.location?.label
-    ? ` near ${alert.location.label}`
-    : (alert.location ? ` (${alert.location.lat.toFixed(2)}, ${alert.location.lon.toFixed(2)})` : '');
+  let loc = '';
+  if (alert.location?.label) {
+    loc = ` near ${alert.location.label}`;
+  } else if (alert.location) {
+    loc = ` (${alert.location.lat.toFixed(2)}, ${alert.location.lon.toFixed(2)})`;
+  }
   switch (domain) {
     case 'earthquake': {
       return `${alert.title}${loc}. ${alert.body || 'Seismic event recorded; tsunami / aftershock follow-up pending.'}`;

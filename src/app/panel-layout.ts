@@ -1271,6 +1271,32 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['shortage-detail-gasoline'] = new ShortageDetailPanel('gasoline');
  this.ctx.panels['shortage-detail-natural-gas'] = new ShortageDetailPanel('natural-gas');
  this.ctx.panels['shortage-detail-jet-fuel'] = new ShortageDetailPanel('jet-fuel');
+ // Periodic feed of live signals (US Drought Monitor + maritime
+ // chokepoint statuses + power-grid alerts) into the shortage models.
+ // Without this loop the panel renders 8 empty "NO DATA" cards.
+ // 5-minute cadence: USDM publishes weekly, grid alerts every ~15 min,
+ // chokepoints every ~20 min, so polling faster than ~5 min just burns
+ // network for unchanged data.
+ void Promise.all([
+ import('@/services/shortage/shortage-input-bridge'),
+ import('@/services/diagnostics/recurring-loops'),
+ ]).then(([{ loadShortageInputs }, { registerRecurringLoop }]) => {
+ const radarPanel = this.ctx.panels['shortage-radar'] as ShortageRadarPanel | undefined;
+ if (!radarPanel) return;
+ registerRecurringLoop(
+ 'shortage-input-bridge',
+ () => {
+ void loadShortageInputs().then((bag) => {
+ try { radarPanel.setInputs(bag); }
+ catch (error) { console.warn('[shortage-bridge] setInputs failed:', error); }
+ }).catch((error) => {
+ console.warn('[shortage-bridge] load failed:', error);
+ });
+ },
+ 5 * 60_000,
+ { priority: 'low', runImmediately: true },
+ );
+ });
  this.ctx.panels['weather-hazard'] = new WeatherHazardPanel();
  this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
  // Wire saved-places into the insights state singleton so the new

@@ -28,6 +28,13 @@ import { routeBigEventToLadder } from '@/services/insights/notification-ladder';
 import { getNotificationTraceRegistry } from '@/services/diagnostics/diagnostics-state';
 import { getApiBaseUrl } from '@/services/runtime';
 import { escapeHtml } from '@/utils/sanitize';
+import {
+  isUnwired,
+  shouldFireCritical,
+  loadPrevRiskLevels,
+  savePrevRiskLevels,
+  PREV_LEVELS_LS_KEY,
+} from './shortage-radar-helpers';
 
 const REFRESH_MS = 30_000;
 const SIDECAR_PUSH_TTL_MS = 30 * 60 * 1000; // 30-minute cache
@@ -75,17 +82,28 @@ const DISPLAY_NAME: Record<FullSetCommodity, string> = {
   'jet-fuel':    'Jet Fuel',
 };
 
-// ── Notification ladder guard ─────────────────────────────────────────────
-// Track previous risk levels to fire only on HIGH → CRITICAL transitions.
+// ── Persisted notification ladder guard ───────────────────────────────────
+// In-memory mirror of the localStorage map, lazily loaded at module init
+// so renderer reloads don't re-fire alerts for commodities already
+// CRITICAL on the previous run.
 
-const _prevRiskLevels = new Map<FullSetCommodity, RiskLevel>();
+const _storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefined =
+  typeof localStorage === 'undefined' ? undefined : localStorage;
+const _prevRiskLevels = loadPrevRiskLevels(_storage);
+
+export function _resetPrevRiskLevelsForTests(): void {
+  _prevRiskLevels.clear();
+  if (_storage) {
+    try { _storage.removeItem(PREV_LEVELS_LS_KEY); } catch { /* noop */ }
+  }
+}
 
 function checkAndNotify(entry: ShortageSummaryEntry): void {
   const prev = _prevRiskLevels.get(entry.commodity);
   _prevRiskLevels.set(entry.commodity, entry.riskLevel);
+  savePrevRiskLevels(_storage, _prevRiskLevels);
 
-  const justCritical = entry.riskLevel === 'CRITICAL' && prev !== 'CRITICAL';
-  if (!justCritical) return;
+  if (!shouldFireCritical(prev, entry.riskLevel)) return;
 
   try {
     const input = {
@@ -176,6 +194,8 @@ async function pushToSidecar(entries: ShortageSummaryEntry[]): Promise<void> {
 export class ShortageRadarPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private inputs: Partial<Record<FullSetCommodity, ShortageInputBag>> = {};
+  private readonly clickHandler: (ev: Event) => void;
+  private readonly keydownHandler: (ev: KeyboardEvent) => void;
 
   constructor() {
     super({
@@ -186,6 +206,13 @@ export class ShortageRadarPanel extends Panel {
       infoTooltip:
         'Shortage risk across 8 commodities: wheat, corn, rice, soybeans, diesel, gasoline, natural gas, jet fuel. Sorted by risk. Click a card for the full drill-down.',
     });
+    this.clickHandler = (ev) => dispatchDrillDown(ev);
+    this.keydownHandler = (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') dispatchDrillDown(ev);
+    };
+    const root = this.getElement();
+    root.addEventListener('click', this.clickHandler);
+    root.addEventListener('keydown', this.keydownHandler);
     this.start();
   }
 
@@ -207,6 +234,9 @@ export class ShortageRadarPanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    const root = this.getElement();
+    root.removeEventListener('click', this.clickHandler);
+    root.removeEventListener('keydown', this.keydownHandler);
   }
 
   private start(): void {
@@ -246,29 +276,40 @@ export class ShortageRadarPanel extends Panel {
 
     const cards = ordered.map((e) => this.buildCard(e)).join('');
 
-    return `${bannerHtml}
+    // CSS-based hover effect (the previous inline onmouseenter/onmouseleave
+    // attributes were blocked by the production CSP, so the brightness-on-
+    // hover never fired in the desktop build).
+    const styleBlock = `<style>
+      [data-shortage-commodity] { transition: filter 0.15s; }
+      [data-shortage-commodity]:hover, [data-shortage-commodity]:focus-visible { filter: brightness(1.1); outline: none; }
+    </style>`;
+
+    return `${styleBlock}${bannerHtml}
       <div style="padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         ${cards}
       </div>`;
   }
 
   private buildCard(e: ShortageSummaryEntry): string {
-    const color = RISK_COLOR[e.riskLevel];
-    const bg = RISK_BG[e.riskLevel];
+    const unwired = isUnwired(e);
+    const color = unwired ? '#777' : RISK_COLOR[e.riskLevel];
+    const bg = unwired ? 'rgba(150,150,150,0.06)' : RISK_BG[e.riskLevel];
     const arrow = TREND_ARROW[e.trend];
     const arrowColor = TREND_COLOR[e.trend];
-    const topDriver = e.primaryDrivers[0] ? escapeHtml(e.primaryDrivers[0]) : 'No drivers';
+    const topDriver = unwired
+      ? 'No live data wired'
+      : e.primaryDrivers[0] ? escapeHtml(e.primaryDrivers[0]) : 'No active drivers';
     const gapDot = e.forecast.dataGaps.length > 0
       ? `<span title="${escapeHtml(e.forecast.dataGaps[0] ?? '')}" style="color:#ff9800;font-size:10px;" aria-label="data gaps">⚠</span>`
       : '';
+    const scoreText = unwired ? '—' : e.riskScore.toFixed(0);
+    const levelLabel = unwired ? 'NO DATA' : e.riskLevel;
 
     return `<div
       data-shortage-commodity="${escapeHtml(e.commodity)}"
       role="button"
       tabindex="0"
-      style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:4px;padding:9px 10px;cursor:pointer;background:${bg};transition:filter 0.15s;"
-      onmouseenter="this.style.filter='brightness(1.1)'"
-      onmouseleave="this.style.filter=''"
+      style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:4px;padding:9px 10px;cursor:pointer;background:${bg};"
     >
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
         <span style="font-weight:700;font-size:12px;">${escapeHtml(DISPLAY_NAME[e.commodity])}</span>
@@ -278,8 +319,8 @@ export class ShortageRadarPanel extends Panel {
         </span>
       </div>
       <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px;">
-        <span style="font-size:18px;font-weight:700;color:${color};font-family:ui-monospace,monospace;">${e.riskScore.toFixed(0)}</span>
-        <span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.06em;padding:1px 4px;border:1px solid ${color};border-radius:2px;">${e.riskLevel}</span>
+        <span style="font-size:18px;font-weight:700;color:${color};font-family:ui-monospace,monospace;">${scoreText}</span>
+        <span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.06em;padding:1px 4px;border:1px solid ${color};border-radius:2px;">${levelLabel}</span>
       </div>
       <div style="font-size:10px;color:var(--text-secondary,#aaa);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(e.primaryDrivers.join(' · '))}">${topDriver}</div>
       <div style="font-size:10px;color:var(--text-secondary,#777);margin-top:2px;">${escapeHtml(e.timeToImpact)}</div>
@@ -287,31 +328,18 @@ export class ShortageRadarPanel extends Panel {
   }
 }
 
-// ── Click delegation ───────────────────────────────────────────────────────
-// Attached once at module load so all card clicks dispatch the drill-down
-// event regardless of how many times the panel re-renders.
+// ── Drill-down delegation ─────────────────────────────────────────────────
+// Per-panel listeners now; module-level handlers were removed because they
+// could not be torn down with the panel and were duplicated on HMR.
 
-if (typeof document !== 'undefined') {
-  document.addEventListener('click', (ev) => {
-    const target = (ev.target as Element)?.closest('[data-shortage-commodity]');
-    if (!target) return;
-    const commodity = target.getAttribute('data-shortage-commodity');
-    if (!commodity) return;
-    document.dispatchEvent(
-      new CustomEvent('wm:shortage-drill-down', { detail: { commodity }, bubbles: true }),
-    );
-  });
-
-  document.addEventListener('keydown', (ev) => {
-    if (ev.key !== 'Enter' && ev.key !== ' ') return;
-    const target = (ev.target as Element)?.closest('[data-shortage-commodity]');
-    if (!target) return;
-    const commodity = target.getAttribute('data-shortage-commodity');
-    if (!commodity) return;
-    document.dispatchEvent(
-      new CustomEvent('wm:shortage-drill-down', { detail: { commodity }, bubbles: true }),
-    );
-  });
+function dispatchDrillDown(ev: Event): void {
+  const target = (ev.target as Element | null)?.closest('[data-shortage-commodity]');
+  if (!target) return;
+  const commodity = target.getAttribute('data-shortage-commodity');
+  if (!commodity) return;
+  document.dispatchEvent(
+    new CustomEvent('wm:shortage-drill-down', { detail: { commodity }, bubbles: true }),
+  );
 }
 
 // Re-export type for external callers.

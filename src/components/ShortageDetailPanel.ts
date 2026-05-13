@@ -104,6 +104,7 @@ function freshnessLabel(lastUpdated: string): string {
 export class ShortageDetailPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private readonly commodity: FullSetCommodity;
+  private readonly drillDownHandler: (ev: Event) => void;
 
   constructor(commodity: FullSetCommodity) {
     const name = commodity.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -115,6 +116,12 @@ export class ShortageDetailPanel extends Panel {
       infoTooltip: `Full shortage risk model for ${name}. Drivers, confidence, data gaps, and score history.`,
     });
     this.commodity = commodity;
+    this.drillDownHandler = (ev) => {
+      const detail = (ev as CustomEvent<{ commodity: string }>).detail;
+      if (detail?.commodity === this.commodity) {
+        this.getElement().scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
     this.start();
   }
 
@@ -123,19 +130,13 @@ export class ShortageDetailPanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    document.removeEventListener('wm:shortage-drill-down', this.drillDownHandler);
   }
 
   private start(): void {
     void this.refresh();
     this.refreshTimer = setInterval(() => void this.refresh(), REFRESH_MS);
-
-    // Listen for drill-down event so the panel can scroll into view.
-    document.addEventListener('wm:shortage-drill-down', (ev) => {
-      const detail = (ev as CustomEvent<{ commodity: string }>).detail;
-      if (detail?.commodity === this.commodity) {
-        this.getElement().scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
+    document.addEventListener('wm:shortage-drill-down', this.drillDownHandler);
   }
 
   private async refresh(): Promise<void> {

@@ -16,6 +16,10 @@ export interface OverviewRow {
   topDriver: string;
   trend: Trend;
   trendArrow: '↑' | '↓' | '→';
+  /** True when the model ran with no useful inputs (score 0, no drivers,
+   *  3+ data gaps). The panel surfaces these rows as "NO DATA" instead of
+   *  the misleading green LOW that the raw model would suggest. */
+  unwired: boolean;
 }
 
 const DISPLAY_NAMES: Record<FullSetCommodity, string> = {
@@ -66,7 +70,19 @@ function toRow(e: ShortageSummaryEntry): OverviewRow {
     topDriver: e.primaryDrivers[0] ?? '—',
     trend: e.trend,
     trendArrow: TREND_ARROW[e.trend],
+    unwired: isUnwired(e),
   };
+}
+
+/** A row is "unwired" when the model produced an entry with no signal of
+ *  any kind — zero risk, no drivers, and a long-enough gap list to indicate
+ *  the bag was empty rather than just calm. Rendered as "NO DATA". */
+export function isUnwired(e: ShortageSummaryEntry): boolean {
+  return (
+    e.riskScore === 0 &&
+    e.primaryDrivers.length === 0 &&
+    e.forecast.dataGaps.length >= 3
+  );
 }
 
 /** Count entries by risk band — used by the panel header summary. */

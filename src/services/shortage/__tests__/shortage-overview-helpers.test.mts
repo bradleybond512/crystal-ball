@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   buildOverviewRows,
   countByRiskLevel,
+  isUnwired,
 } from '../shortage-overview-helpers.ts';
 import type { ShortageSummaryEntry, FullSetCommodity, RiskLevel, Trend } from '../shortage-fullset.ts';
 
@@ -13,6 +14,7 @@ function entry(
   riskLevel: RiskLevel,
   drivers: string[] = [],
   trend: Trend = 'stable',
+  dataGaps: string[] = [],
 ): ShortageSummaryEntry {
   return {
     commodity,
@@ -21,8 +23,19 @@ function entry(
     primaryDrivers: drivers,
     timeToImpact: '30d',
     trend,
-    // The full forecast isn't read by the helpers; cast through unknown.
-    forecast: {} as unknown as ShortageSummaryEntry['forecast'],
+    forecast: {
+      commodity,
+      domain: 'food',
+      region: 'global',
+      horizonDays: 60,
+      riskScore,
+      confidence: 'medium',
+      drivers: [],
+      confirmingIndicators: [],
+      invalidatingIndicators: [],
+      dataGaps,
+      lastUpdated: '2026-05-12T00:00:00Z',
+    },
   };
 }
 
@@ -97,4 +110,33 @@ test('buildOverviewRows produces a fresh array (does not mutate input order)', (
   ];
   buildOverviewRows(input);
   assert.equal(input[0]?.commodity, 'wheat'); // original order preserved
+});
+
+// ── unwired (NO DATA) detection ───────────────────────────────────────────
+
+test('isUnwired: score 0 + zero drivers + 3+ data gaps → true', () => {
+  assert.equal(isUnwired(entry('wheat', 0, 'LOW', [], 'stable', ['a', 'b', 'c'])), true);
+});
+
+test('isUnwired: 0 drivers + 0 score but only 2 gaps → false (partial signal)', () => {
+  assert.equal(isUnwired(entry('wheat', 0, 'LOW', [], 'stable', ['a', 'b'])), false);
+});
+
+test('isUnwired: nonzero riskScore → false even when many gaps', () => {
+  assert.equal(isUnwired(entry('wheat', 10, 'LOW', [], 'stable', ['a', 'b', 'c', 'd'])), false);
+});
+
+test('isUnwired: drivers present → false', () => {
+  assert.equal(isUnwired(entry('wheat', 0, 'LOW', ['some driver'], 'stable', ['a', 'b', 'c'])), false);
+});
+
+test('buildOverviewRows flags unwired entries', () => {
+  const rows = buildOverviewRows([
+    entry('wheat', 0, 'LOW', [], 'stable', ['rainfall', 'soil', 'price', 'corridor']),
+    entry('corn', 60, 'HIGH', ['drought']),
+  ]);
+  const wheatRow = rows.find((r) => r.commodity === 'wheat');
+  const cornRow  = rows.find((r) => r.commodity === 'corn');
+  assert.equal(wheatRow?.unwired, true);
+  assert.equal(cornRow?.unwired, false);
 });

@@ -218,7 +218,12 @@ export class ShortageRadarPanel extends Panel {
   private buildRow(r: OverviewRow, entries: readonly ShortageSummaryEntry[]): string {
     const isOpen = this.expanded.has(r.commodity);
     const drillHtml = isOpen ? this.buildDrillDown(r, entries) : '';
-    const color = RISK_COLOR[r.riskLevel];
+    // When the model ran with empty inputs, render NO DATA in grey instead
+    // of the misleading green LOW that the raw model would suggest.
+    const color = r.unwired ? '#777' : RISK_COLOR[r.riskLevel];
+    const levelText = r.unwired ? 'NO DATA' : r.riskLevel;
+    const scoreText = r.unwired ? '—' : String(r.riskScore);
+    const topDriverText = r.unwired ? 'No live data wired' : r.topDriver;
     const arrowColor = TREND_COLOR[r.trendArrow];
     return `<tr
       data-shortage-row="${escapeHtml(r.commodity)}"
@@ -228,11 +233,11 @@ export class ShortageRadarPanel extends Panel {
       style="border-bottom:1px solid var(--border-subtle,#222);cursor:pointer;"
     >
       <td style="padding:7px 10px;font-weight:600;">${escapeHtml(r.displayName)}</td>
-      <td style="padding:7px 10px;text-align:right;font-family:ui-monospace,monospace;font-weight:700;color:${color};">${String(r.riskScore)}</td>
+      <td style="padding:7px 10px;text-align:right;font-family:ui-monospace,monospace;font-weight:700;color:${color};">${scoreText}</td>
       <td style="padding:7px 10px;">
-        <span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.06em;padding:1px 5px;border:1px solid ${color};border-radius:2px;">${escapeHtml(r.riskLevel)}</span>
+        <span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.06em;padding:1px 5px;border:1px solid ${color};border-radius:2px;">${escapeHtml(levelText)}</span>
       </td>
-      <td style="padding:7px 10px;color:var(--text-secondary,#aaa);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r.topDriver)}">${escapeHtml(r.topDriver)}</td>
+      <td style="padding:7px 10px;color:var(--text-secondary,#aaa);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(topDriverText)}">${escapeHtml(topDriverText)}</td>
       <td style="padding:7px 10px;text-align:center;color:${arrowColor};font-weight:700;" aria-label="${escapeHtml(r.trend)}">${r.trendArrow}</td>
     </tr>${drillHtml}`;
   }

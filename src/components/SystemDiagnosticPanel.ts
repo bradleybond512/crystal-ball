@@ -13,6 +13,11 @@
 
 import { Panel } from './Panel';
 import {
+  attachDisclosureClickDelegation,
+  renderDisclosureSwitcherHtml,
+} from './DisclosureContainer';
+import { disclosureService } from '@/services/ui/progressive-disclosure';
+import {
   getDiagnosticEventBus,
   getFeatureHealthRegistry,
   getFeedSentinels,
@@ -79,6 +84,8 @@ const STATUS_ICON: Record<HealthStatus, string> = {
 
 export class SystemDiagnosticPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private detachDisclosure: (() => void) | null = null;
+  private unsubscribeDisclosure: (() => void) | null = null;
   private activeTab: Tab = 'overview';
   private selfTestRunning = false;
   private selfTestReport: SelfTestReport | undefined;
@@ -105,6 +112,8 @@ export class SystemDiagnosticPanel extends Panel {
   private start(): void {
     this.render();
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'system-diagnostic');
+    this.unsubscribeDisclosure = disclosureService.subscribe('system-diagnostic', () => this.render());
   }
 
   public override destroy(): void {
@@ -112,6 +121,10 @@ export class SystemDiagnosticPanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    this.detachDisclosure?.();
+    this.detachDisclosure = null;
+    this.unsubscribeDisclosure?.();
+    this.unsubscribeDisclosure = null;
     super.destroy();
   }
 
@@ -129,7 +142,38 @@ export class SystemDiagnosticPanel extends Panel {
   private buildHtml(): string {
     const ctx = this.collect();
     this.setCount(ctx.unhealthyCount);
-    return `${this.renderHeader(ctx)}${this.renderTabs()}${this.renderActiveTab(ctx)}`;
+    const switcher = renderDisclosureSwitcherHtml('system-diagnostic', { showRaw: true });
+    const switcherRow = `<div style="display:flex;justify-content:flex-end;padding:6px 12px 0;">${switcher}</div>`;
+    const level = disclosureService.getLevel('system-diagnostic');
+
+    if (level === 'raw') {
+      const bundle = {
+        status: ctx.report.status,
+        summary: ctx.report.summary,
+        recommendations: ctx.report.recommendations,
+        unhealthyCount: ctx.unhealthyCount,
+        features: ctx.features.map((f) => ({ featureId: f.featureId, label: f.label, status: f.status, reason: f.reason })),
+        panels: ctx.panels.map((p) => ({ panelId: p.panelId, status: p.status, label: p.label })),
+        feedAudit: ctx.feedAudit.entries,
+        recentEvents: ctx.recentEvents,
+      };
+      return `${switcherRow}<pre style="margin:0 12px 12px;padding:8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border-subtle,#333);border-radius:4px;overflow:auto;max-height:520px;">${escapeHtml(JSON.stringify(bundle, null, 2))}</pre>`;
+    }
+
+    if (level === 'summary') {
+      const status = ctx.report.status;
+      const color = STATUS_COLOR[status];
+      return `${switcherRow}<div style="padding:18px 14px;display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${color};"></span>
+          <span style="font-weight:700;color:${color};text-transform:uppercase;font-size:14px;">${escapeHtml(status)}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary,#aaa);">${escapeHtml(ctx.report.summary)}</div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);">${ctx.unhealthyCount} feature${ctx.unhealthyCount === 1 ? '' : 's'} unhealthy · switch to Detail for the full report</div>
+      </div>`;
+    }
+
+    return `${switcherRow}${this.renderHeader(ctx)}${this.renderTabs()}${this.renderActiveTab(ctx)}`;
   }
 
   private collect(): DiagnosticContext {

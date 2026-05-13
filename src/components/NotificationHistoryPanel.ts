@@ -12,6 +12,11 @@
 
 import { Panel } from './Panel';
 import {
+  attachDisclosureClickDelegation,
+  renderDisclosureSwitcherHtml,
+} from './DisclosureContainer';
+import { disclosureService } from '@/services/ui/progressive-disclosure';
+import {
   ACTION_BADGE,
   DOMAIN_ICON,
   SEVERITY_BADGE,
@@ -75,6 +80,8 @@ const ACTION_OPTIONS: { id: HistoryAction | 'all'; label: string }[] = [
 
 export class NotificationHistoryPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private detachDisclosure: (() => void) | null = null;
+  private unsubscribeDisclosure: (() => void) | null = null;
   private state: PanelState = {
     domain: 'all',
     severity: 'all',
@@ -97,6 +104,8 @@ export class NotificationHistoryPanel extends Panel {
       void hydrateFromIdb().finally(() => this.render());
     });
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'notification-history');
+    this.unsubscribeDisclosure = disclosureService.subscribe('notification-history', () => this.render());
   }
 
   override destroy(): void {
@@ -104,6 +113,10 @@ export class NotificationHistoryPanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    this.detachDisclosure?.();
+    this.detachDisclosure = null;
+    this.unsubscribeDisclosure?.();
+    this.unsubscribeDisclosure = null;
     super.destroy();
   }
 
@@ -124,10 +137,43 @@ export class NotificationHistoryPanel extends Panel {
   }
 
   private buildHtml(rows: NotificationHistoryEntry[]): string {
+    const switcher = renderDisclosureSwitcherHtml('notification-history', { showRaw: true });
+    const switcherRow = `<div style="display:flex;justify-content:flex-end;margin:0 0 6px;">${switcher}</div>`;
+    const level = disclosureService.getLevel('notification-history');
+
+    if (level === 'raw') {
+      let raw = '[]';
+      try { raw = JSON.stringify(rows.slice(0, 50), null, 2); } catch { raw = '[]'; }
+      return `<div class="nh-panel">${switcherRow}<pre style="margin:0;padding:8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border-subtle,#333);border-radius:4px;overflow:auto;max-height:520px;">${escapeHtml(raw)}</pre></div>`;
+    }
+
+    if (level === 'summary') {
+      return `<div class="nh-panel">${switcherRow}${this.renderSummary(rows)}</div>`;
+    }
+
     return `<div class="nh-panel">
+      ${switcherRow}
       ${this.renderFilterBar()}
       ${this.renderRows(rows)}
       ${this.renderFooter(rows.length)}
+    </div>`;
+  }
+
+  private renderSummary(rows: NotificationHistoryEntry[]): string {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const today = rows.filter((r) => r.recordedAt >= cutoff);
+    const byDomain = new Map<string, number>();
+    for (const r of today) {
+      byDomain.set(r.domain, (byDomain.get(r.domain) ?? 0) + 1);
+    }
+    const top = [...byDomain.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const chips = top.length === 0
+      ? '<span style="opacity:0.6;font-size:11px;">none in the last 24h</span>'
+      : top.map(([d, n]) => `<span style="padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.06);font-size:11px;">${escapeHtml(DOMAIN_ICON[d as HistoryDomain] ?? '·')} ${escapeHtml(d)} · ${n}</span>`).join('');
+    return `<div style="padding:8px;">
+      <div style="font-size:24px;font-weight:700;">${today.length}</div>
+      <div style="opacity:0.7;font-size:11px;margin-bottom:8px;">notifications in last 24h</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">${chips}</div>
     </div>`;
   }
 

@@ -1,4 +1,9 @@
 import { Panel } from './Panel';
+import {
+  attachDisclosureClickDelegation,
+  renderDisclosureSwitcherHtml,
+} from './DisclosureContainer';
+import { disclosureService } from '@/services/ui/progressive-disclosure';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { unifiedAlertStore } from '@/services/unified-alerts';
 import { getActive as getActiveSituations } from '@/services/intelligence/situation-store';
@@ -47,6 +52,8 @@ export class IntelligenceTimelinePanel extends Panel {
   private domainFilter: string | null = null;
   private range: RangeKey = '24h';
   private expandedIds = new Set<string>();
+  private detachDisclosure: (() => void) | null = null;
+  private unsubscribeDisclosure: (() => void) | null = null;
 
   constructor() {
     super({
@@ -59,6 +66,8 @@ export class IntelligenceTimelinePanel extends Panel {
     this.loadState();
     this.render();
     this.timer = setInterval(() => this.render(), REFRESH_MS);
+    this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'intelligence-timeline');
+    this.unsubscribeDisclosure = disclosureService.subscribe('intelligence-timeline', () => this.render());
   }
 
   public destroy(): void {
@@ -66,6 +75,10 @@ export class IntelligenceTimelinePanel extends Panel {
       clearInterval(this.timer);
       this.timer = null;
     }
+    this.detachDisclosure?.();
+    this.detachDisclosure = null;
+    this.unsubscribeDisclosure?.();
+    this.unsubscribeDisclosure = null;
   }
 
   // ─── State persistence ────────────────────────────────────────────
@@ -182,10 +195,32 @@ export class IntelligenceTimelinePanel extends Panel {
       limit: 500,
     });
     const domains = uniqueDomains(all);
+    const switcher = renderDisclosureSwitcherHtml('intelligence-timeline', { showRaw: true });
+    const switcherRow = `<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">${switcher}</div>`;
+    const level = disclosureService.getLevel('intelligence-timeline');
+
+    if (level === 'raw') {
+      let raw = '[]';
+      try { raw = JSON.stringify(events.slice(0, 50), null, 2); } catch { raw = '[]'; }
+      this.setContent(`<div style="padding:8px;">${switcherRow}<pre style="margin:0;padding:8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border-subtle,#333);border-radius:4px;overflow:auto;max-height:520px;">${escapeHtml(raw)}</pre></div>`);
+      this.wireHandlers();
+      return;
+    }
+
+    if (level === 'summary') {
+      const recent = events.slice(0, 5);
+      const list = recent.length === 0
+        ? '<div class="panel-empty" style="padding:16px 0;text-align:center;opacity:0.7;">No events.</div>'
+        : `<div style="display:flex;flex-direction:column;gap:4px;">${recent.map((e) => this.renderEventRow(e)).join('')}</div>`;
+      this.setContent(`<div style="padding:8px;">${switcherRow}${list}<div style="opacity:0.5;font-size:11px;margin-top:6px;">5 most recent of ${events.length} · switch to Detail for filters</div></div>`);
+      this.wireHandlers();
+      return;
+    }
+
     const list = events.length === 0
       ? '<div class="panel-empty" style="padding:16px 0;text-align:center;opacity:0.7;">No events in this time range. Adjust filters or wait for new data.</div>'
       : `<div style="display:flex;flex-direction:column;gap:4px;max-height:520px;overflow-y:auto;">${events.map((e) => this.renderEventRow(e)).join('')}</div>`;
-    this.setContent(`<div style="padding:8px;">${this.renderFilterBar(domains)}${list}</div>`);
+    this.setContent(`<div style="padding:8px;">${switcherRow}${this.renderFilterBar(domains)}${list}</div>`);
     this.wireHandlers();
   }
 

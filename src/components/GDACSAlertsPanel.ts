@@ -1,4 +1,9 @@
 import { Panel } from './Panel';
+import {
+  attachDisclosureClickDelegation,
+  renderDisclosureSwitcherHtml,
+} from './DisclosureContainer';
+import { disclosureService } from '@/services/ui/progressive-disclosure';
 import type { GDACSEvent } from '@/services/gdacs';
 import { getEventTypeIcon } from '@/services/gdacs';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -38,6 +43,8 @@ export class GDACSAlertsPanel extends Panel {
   private activeTab: Tab = 'rss';
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private onEventClick: ((lat: number, lon: number) => void) | null = null;
+  private detachDisclosure: (() => void) | null = null;
+  private unsubscribeDisclosure: (() => void) | null = null;
 
   constructor() {
     super({
@@ -50,6 +57,8 @@ export class GDACSAlertsPanel extends Panel {
     this.showLoading('Fetching GDACS alerts...');
     queueMicrotask(() => { void this.refreshRss(); });
     this.refreshTimer = setInterval(() => void this.refreshRss(), REFRESH_MS);
+    this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'gdacs-alerts');
+    this.unsubscribeDisclosure = disclosureService.subscribe('gdacs-alerts', () => this.render());
   }
 
   public setEventClickHandler(fn: (lat: number, lon: number) => void): void {
@@ -61,6 +70,10 @@ export class GDACSAlertsPanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    this.detachDisclosure?.();
+    this.detachDisclosure = null;
+    this.unsubscribeDisclosure?.();
+    this.unsubscribeDisclosure = null;
   }
 
   // Legacy: fed from data-loader via JSON API
@@ -88,6 +101,24 @@ export class GDACSAlertsPanel extends Panel {
     const jsonCount = this.events.length;
     this.setCount(Math.max(rssCount, jsonCount));
 
+    const switcher = renderDisclosureSwitcherHtml('gdacs-alerts', { showRaw: true });
+    const switcherRow = `<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">${switcher}</div>`;
+    const level = disclosureService.getLevel('gdacs-alerts');
+
+    if (level === 'raw') {
+      const raw = this.rssData ?? { events: [], degraded: false };
+      this.setContent(`<div style="padding:8px;font-size:12px;">${switcherRow}<pre style="margin:0;padding:8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border-subtle,#333);border-radius:4px;overflow:auto;max-height:520px;">${escapeHtml(JSON.stringify(raw, null, 2))}</pre></div>`);
+      this.wireHandlers();
+      return;
+    }
+
+    if (level === 'summary') {
+      const summary = this.renderSummary();
+      this.setContent(`<div style="padding:8px;font-size:12px;">${switcherRow}${summary}</div>`);
+      this.wireHandlers();
+      return;
+    }
+
     const tabBar = `
       <div style="display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:6px;padding:0 4px;">
         ${(['rss', 'json'] as Tab[]).map((t) => `
@@ -100,8 +131,26 @@ export class GDACSAlertsPanel extends Panel {
 
     const content = this.activeTab === 'rss' ? this.renderRss() : this.renderJson();
 
-    this.setContent(`<div style="padding:8px;font-size:12px;">${tabBar}${content}</div>`);
+    this.setContent(`<div style="padding:8px;font-size:12px;">${switcherRow}${tabBar}${content}</div>`);
     this.wireHandlers();
+  }
+
+  private renderSummary(): string {
+    const events = this.rssData?.events ?? [];
+    if (events.length === 0) return '<div style="opacity:0.6;">No active GDACS events.</div>';
+    const top = [...events].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 3);
+    const rows = top.map((e) => {
+      const alertColor = ALERT_COLOR[e.alertLevel] ?? '#9e9e9e';
+      return `<div style="padding:5px 6px;margin:3px 0;border-left:3px solid ${alertColor};background:rgba(255,255,255,0.03);">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:600;color:${alertColor};">${escapeHtml(e.alertLevel)}</span>
+          <span style="opacity:0.7;font-size:11px;">Score: ${e.score.toFixed(1)}</span>
+        </div>
+        <div>${escapeHtml(e.name.slice(0, 60))}</div>
+        <div style="opacity:0.8;font-size:11px;">${escapeHtml(e.country)}</div>
+      </div>`;
+    }).join('');
+    return `<div>${rows}<div style="opacity:0.5;font-size:11px;margin-top:6px;">Top 3 of ${events.length} active alerts · switch to Detail for full list</div></div>`;
   }
 
   private renderRss(): string {

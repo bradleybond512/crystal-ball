@@ -269,6 +269,7 @@ import { AlertTracePanel } from '@/components/AlertTracePanel';
 import { PersonalRelevancePanel } from '@/components/PersonalRelevancePanel';
 import { ScenarioReplayPanel } from '@/components/ScenarioReplayPanel';
 import { EvidenceGraphPanel } from '@/components/EvidenceGraphPanel';
+import { EntityRegistryPanel } from '@/components/EntityRegistryPanel';
 import { PlaybookPanel } from '@/components/PlaybookPanel';
 import { SmsSettingsPanel } from '@/components/SmsSettingsPanel';
 import { ThreatDashboard } from '@/components/ThreatDashboard';
@@ -1284,6 +1285,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();
  this.ctx.panels['scenario-replay'] = new ScenarioReplayPanel();
  this.ctx.panels['evidence-graph'] = new EvidenceGraphPanel();
+ this.ctx.panels['entity-registry'] = new EntityRegistryPanel();
  this.ctx.panels['playbook'] = new PlaybookPanel();
  this.ctx.panels['sms-command-interface'] = new SmsSettingsPanel();
  this.ctx.panels['threat-dashboard'] = new ThreatDashboard();

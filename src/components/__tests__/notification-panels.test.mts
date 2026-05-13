@@ -69,14 +69,14 @@ import {
 
 // ── Settings service round-trip ────────────────────────────────────────
 
-test('settings: defaults expose all 10 domains and master-mute off', () => {
+test('settings: defaults expose all 11 domains and master-mute off', () => {
   resetSettings();
   const s = getSettings();
   assert.equal(s.global.masterMute, false);
-  assert.equal(Object.keys(s.domains).length, 10);
+  assert.equal(Object.keys(s.domains).length, 11);
   for (const d of ['earthquakes', 'wildfire', 'aviation', 'maritime',
     'biosurveillance', 'space_weather', 'infrastructure', 'geopolitical',
-    'weather', 'cyber'] as const) {
+    'weather', 'cyber', 'supply'] as const) {
     assert.equal(s.domains[d].enabled, true);
     assert.equal(s.domains[d].threshold, 'medium');
     assert.equal(s.domains[d].channel, 'both');
@@ -329,7 +329,7 @@ test('panel: HISTORY_DOMAIN_FOR_SETTINGS covers every settings domain', () => {
   }
 });
 
-test('panel: SETTINGS_DOMAIN_LABELS labels all 10 domains', () => {
+test('panel: SETTINGS_DOMAIN_LABELS labels all 11 domains', () => {
   for (const d of SETTINGS_DOMAINS) {
     assert.equal(typeof SETTINGS_DOMAIN_LABELS[d], 'string');
     assert.ok((SETTINGS_DOMAIN_LABELS[d] ?? '').length > 0);

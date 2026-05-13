@@ -4865,6 +4865,64 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  // ── Alert explanations mirror (renderer → sidecar → MCP) ─────────────
+  // Renderer computes AlertExplanations via explainAlert() and POSTs the
+  // last N (≤100) here. GET /api/intelligence/explain/<alertId> returns
+  // the matching explanation. Loopback-only.
+  if (requestUrl.pathname === '/api/intelligence/explain-alerts') {
+    if (!context._alertExplanations) context._alertExplanations = { explanations: [], pushedAt: 0 };
+    if (req.method === 'POST') {
+      try {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw.toString()) : null;
+        if (!body || !Array.isArray(body.explanations)) {
+          return json({ error: 'explanations must be an array' }, 400);
+        }
+        const VALID_CONFIDENCE = new Set(['low', 'medium', 'high']);
+        const explanations = body.explanations.slice(0, 100).map(e => ({
+          alertId: typeof e.alertId === 'string' ? e.alertId.slice(0, 200) : '',
+          headline: typeof e.headline === 'string' ? e.headline.slice(0, 300) : '',
+          whyItMatters: typeof e.whyItMatters === 'string' ? e.whyItMatters.slice(0, 500) : '',
+          whatHappened: typeof e.whatHappened === 'string' ? e.whatHappened.slice(0, 800) : '',
+          confidence: VALID_CONFIDENCE.has(e.confidence) ? e.confidence : 'low',
+          confidenceReason: typeof e.confidenceReason === 'string' ? e.confidenceReason.slice(0, 400) : '',
+          whatToWatch: Array.isArray(e.whatToWatch)
+            ? e.whatToWatch.slice(0, 6).map(s => String(s).slice(0, 200))
+            : [],
+          sources: Array.isArray(e.sources)
+            ? e.sources.slice(0, 10).map(s => ({
+              title: typeof s?.title === 'string' ? s.title.slice(0, 200) : '',
+              domain: typeof s?.domain === 'string' ? s.domain.slice(0, 60) : '',
+              timestamp: typeof s?.timestamp === 'number' ? s.timestamp : 0,
+            }))
+            : [],
+          relatedAlerts: Array.isArray(e.relatedAlerts)
+            ? e.relatedAlerts.slice(0, 20).map(s => String(s).slice(0, 200))
+            : [],
+        })).filter(e => e.alertId);
+        context._alertExplanations = { explanations, pushedAt: Date.now() };
+        return json({ ok: true, count: explanations.length });
+      } catch (error) {
+        return json({ error: String(error?.message ?? error) }, 400);
+      }
+    }
+    if (req.method === 'GET') {
+      const { explanations, pushedAt } = context._alertExplanations;
+      return json({ available: pushedAt > 0, pushedAt, count: explanations.length, explanations });
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+  // Per-alert lookup: GET /api/intelligence/explain/<alertId>
+  // Distinct from the v1 POST route at /api/intelligence/explain.
+  if (requestUrl.pathname.startsWith('/api/intelligence/explain/') && req.method === 'GET') {
+    const alertId = requestUrl.pathname.slice('/api/intelligence/explain/'.length);
+    if (!alertId) return json({ error: 'alertId required' }, 400);
+    const store = context._alertExplanations || { explanations: [], pushedAt: 0 };
+    const explanation = store.explanations.find(e => e.alertId === alertId);
+    if (!explanation) return json({ available: false, alertId }, 404);
+    return json({ available: true, pushedAt: store.pushedAt, explanation });
+  }
+
   // ── Personal profile (renderer mirror; backs Personal Relevance panel) ──
   if (requestUrl.pathname === '/api/personal/profile') {
     if (req.method === 'GET') {

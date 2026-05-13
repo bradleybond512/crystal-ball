@@ -66,7 +66,9 @@ import { JustInRail } from '@/components/JustInRail';
 import { startPanelNarrator } from '@/services/panel-narrator';
 import { TodayView } from '@/components/TodayView';
 import { WatchlistEditor } from '@/components/WatchlistEditor';
-import { CommandPalette } from '@/components/CommandPalette';
+import { CommandPalettePanel } from '@/components/CommandPalettePanel';
+import { getCommandRegistry } from '@/services/command-palette/command-registry';
+import { registerBuiltinCommands } from '@/services/command-palette/built-in-commands';
 import { HelpOverlay } from '@/components/HelpOverlay';
 import { installShortcuts } from '@/services/keyboard/shortcut-bootstrap';
 import { startDockBadge } from '@/services/native/dock-badge';
@@ -109,7 +111,7 @@ import { StatusOverlay } from '@/components/StatusOverlay';
 import { startBlackoutSignature } from '@/services/blackout-signature';
 import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
-import { startAlertReactions } from '@/services/alert-reactions';
+import { startAlertReactions, flashPanel, jumpToPanel } from '@/services/alert-reactions';
 import { startAnalystLoop } from '@/services/analyst-loop';
 import { startModeForecast } from '@/services/mode-forecast';
 import { startRelevanceLearner } from '@/services/relevance-learner';
@@ -723,10 +725,22 @@ export class PanelLayoutManager implements AppModule {
  watchlistEditor.mount(document.body);
  document.addEventListener('cb:toggle-watchlist', () => watchlistEditor.toggle());
 
- // Mount Cmd+K command palette
- const cmdk = new CommandPalette();
+ // Mount Cmd+K command palette — Phase 2 keyboard-first navigation.
+ registerBuiltinCommands(getCommandRegistry(), {
+   dispatch: (name, detail) => {
+     document.dispatchEvent(new CustomEvent(name, detail === undefined ? undefined : { detail }));
+   },
+ });
+ const cmdk = new CommandPalettePanel();
  cmdk.mount(document.body);
  document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
+ document.addEventListener('cb:navigate-panel', (e) => {
+   const detail = (e as CustomEvent<{ panelKey?: string }>).detail;
+   const key = detail?.panelKey;
+   if (!key) return;
+   jumpToPanel(key);
+   flashPanel(key);
+ });
 
  // Install the centralized shortcut registry (⌘K, ⌘/, ⌘1–9 + sidebar badges)
  // and mount the keyboard help overlay backed by the same registry.

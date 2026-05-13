@@ -121,6 +121,10 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   CENSYS_API_SECRET: 'censys_secret',
   SECURITYTRAILS_API_KEY: 'securitytrails',
   WHOISXML_API_KEY: 'whoisxml',
+  MISP_URL: 'misp_url',
+  MISP_API_KEY: 'misp',
+  OPENCTI_URL: 'opencti_url',
+  OPENCTI_API_KEY: 'opencti',
 };
 
 // ── Typed event schemas (allowlisted properties per event) ──

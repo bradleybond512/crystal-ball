@@ -11,6 +11,8 @@
  */
 
 import type { ObservationEvent, ObservationSeverity } from '@/types/intelligence';
+
+export type { ObservationEvent, ObservationSeverity } from '@/types/intelligence';
 import {
   earthquakeToObservation,
   earthquakesToObservations,

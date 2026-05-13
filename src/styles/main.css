@@ -6,6 +6,7 @@
 @import './alerts.css';
 @import './eew-status-bar.css';
 @import './correlation-banner.css';
+@import './disclosure.css';
 
 /* ============================================================
  Theme Colors — overridden by [data-theme="light"] below

@@ -9,6 +9,11 @@
 
 import { Panel } from './Panel';
 import {
+  attachDisclosureClickDelegation,
+  renderDisclosureSwitcherHtml,
+} from './DisclosureContainer';
+import { disclosureService } from '@/services/ui/progressive-disclosure';
+import {
   getFeatureHealthRegistry,
   getFeedSentinels,
 } from '@/services/diagnostics/diagnostics-state';
@@ -113,6 +118,8 @@ export class CommandCenterPanel extends Panel {
   private boundPointerMove: ((e: MouseEvent) => void) | null = null;
   private boundPointerUp: ((e: MouseEvent) => void) | null = null;
   private boundEscape: ((e: KeyboardEvent) => void) | null = null;
+  private detachDisclosure: (() => void) | null = null;
+  private unsubscribeDisclosure: (() => void) | null = null;
 
   constructor() {
     super({
@@ -132,6 +139,8 @@ export class CommandCenterPanel extends Panel {
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
     this.tapeTimer = setInterval(() => this.refreshChangeTape(), TAPE_REFRESH_MS);
     this.attachInteractionListeners();
+    this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'command-center');
+    this.unsubscribeDisclosure = disclosureService.subscribe('command-center', () => this.render());
   }
 
   public override destroy(): void {
@@ -144,6 +153,10 @@ export class CommandCenterPanel extends Panel {
       this.tapeTimer = null;
     }
     this.detachPointerListeners();
+    this.detachDisclosure?.();
+    this.detachDisclosure = null;
+    this.unsubscribeDisclosure?.();
+    this.unsubscribeDisclosure = null;
     super.destroy();
   }
 
@@ -187,9 +200,38 @@ export class CommandCenterPanel extends Panel {
     const redundancy = getProviderRedundancyReport();
 
     const spineSummary = this.buildSpineSummary(sentinels, snapshot);
+    const switcher = renderDisclosureSwitcherHtml('command-center', { showRaw: true });
+    const level = disclosureService.getLevel('command-center');
+
+    const switcherRow = `<div style="display:flex;justify-content:flex-end;">${switcher}</div>`;
+
+    if (level === 'raw') {
+      const rawBundle = {
+        status: report.status,
+        summary: report.summary,
+        recommendations: report.recommendations,
+        concerning: concerning.map((f) => ({ featureId: f.featureId, label: f.label, status: f.status, reason: f.reason })),
+        personalImpact: personalImpact.impacts,
+        providerRedundancy: redundancy.domains,
+        feedAudit: feedAudit.entries,
+      };
+      return `<div style="padding:14px;display:flex;flex-direction:column;gap:10px;">
+        ${switcherRow}
+        <pre style="margin:0;padding:10px;font-size:11px;font-family:ui-monospace,monospace;background:rgba(0,0,0,0.25);border:1px solid var(--border-subtle,#333);border-radius:4px;overflow:auto;max-height:520px;">${escapeHtml(JSON.stringify(rawBundle, null, 2))}</pre>
+      </div>`;
+    }
+
+    if (level === 'summary') {
+      return `<div style="padding:14px;display:flex;flex-direction:column;gap:14px;">
+        ${switcherRow}
+        ${this.renderRiskHeadline(report.status, report.summary)}
+        ${this.renderTopThings(concerning.slice(0, 3))}
+      </div>`;
+    }
 
     return `
       <div style="padding:14px;display:flex;flex-direction:column;gap:14px;">
+        ${switcherRow}
         ${this.renderGlobeNav()}
         ${this.renderChangeTape()}
         ${this.renderFiveQuestionSpine(spineSummary)}

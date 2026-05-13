@@ -2606,7 +2606,7 @@ function evidenceRound2(n) {
 }
 
 function evidencePartition(situation, events, now) {
-  const obsIds = new Set(situation.observationIds ?? []);
+  const obsIds = new Set(situation.observationIds);
   const situationTags = evidenceLowerSet(situation.tags);
   const confirming = [];
   const contradicting = [];
@@ -10995,6 +10995,133 @@ async function dispatch(requestUrl, req, routes, context) {
  details: String(lastError?.message ?? lastError ?? 'unknown'),
  candidatesTried: candidates,
  }, 404);
+  }
+
+  if (requestUrl.pathname === '/api/little-snitch') {
+    const exportPath = process.env.LITTLE_SNITCH_EXPORT_PATH;
+    if (!exportPath) return json({ available: false, entries: [], summary: { totalConnections: 0 } });
+    let raw;
+    try { raw = JSON.parse(await readFile(exportPath, 'utf8')); } catch {
+      return json({ available: false, entries: [], summary: { totalConnections: 0 }, error: 'Export file not readable' });
+    }
+    const entries = Array.isArray(raw?.entries) ? raw.entries : [];
+    const baselinePath = process.env.LITTLE_SNITCH_BASELINE_PATH;
+    let baseline = {};
+    if (baselinePath) {
+      try { baseline = JSON.parse(await readFile(baselinePath, 'utf8')); } catch { /* new baseline */ }
+    }
+    const sanitized = entries.map(entry => {
+      let remoteHost = entry.remoteHost;
+      if (!remoteHost && entry.remote) {
+        try { remoteHost = new URL(entry.remote).hostname; } catch { remoteHost = entry.remote; }
+      }
+      const key = `${entry.app ?? ''}::${remoteHost ?? ''}`;
+      const firstSeen = !baseline[key];
+      if (firstSeen) baseline[key] = true;
+      const riskReasons = [];
+      if (firstSeen) riskReasons.push('new destination for this app');
+      const out = { ...entry };
+      delete out.remote;
+      delete out.processPath;
+      out.remoteHost = remoteHost;
+      out.firstSeen = firstSeen;
+      out.risk = { reasons: riskReasons };
+      return out;
+    });
+    if (baselinePath) {
+      try { writeFileSync(baselinePath, JSON.stringify(baseline)); } catch { /* non-fatal */ }
+    }
+    return json({ available: true, generatedAt: raw.generatedAt, entries: sanitized, summary: { totalConnections: sanitized.length } });
+  }
+
+  if (requestUrl.pathname === '/api/censys-host') {
+    const censysId = process.env.CENSYS_API_ID;
+    const censysSecret = process.env.CENSYS_API_SECRET;
+    if (!censysId || !censysSecret) return json({ error: 'Censys credentials not configured' }, 503);
+    const ip = (requestUrl.searchParams.get('ip') ?? '').trim();
+    if (!ip) return json({ error: 'missing ip' }, 400);
+    const IPV4 = /^(?:(?:25[0-5]|2[0-4]\d|1?\d{1,2})\.){3}(?:25[0-5]|2[0-4]\d|1?\d{1,2})$/;
+    const IPV6 = /^[\da-f:]+$/i;
+    if (!IPV4.test(ip) && !(ip.length >= 3 && ip.length <= 39 && ip.includes(':') && IPV6.test(ip))) return json({ error: 'invalid ip' }, 400);
+    try {
+      const resp = await fetchWithTimeout(
+        `https://search.censys.io/api/v2/hosts/${encodeURIComponent(ip)}`,
+        { headers: { Authorization: `Basic ${Buffer.from(`${censysId}:${censysSecret}`).toString('base64')}`, Accept: 'application/json' } },
+        10_000,
+      );
+      if (!resp.ok) return json({ error: `Censys upstream ${resp.status}` }, 502);
+      return json(await resp.json());
+    } catch (error) { return json({ error: String(error?.message ?? error) }, 502); }
+  }
+
+  if (requestUrl.pathname === '/api/securitytrails-domain') {
+    const domain = (requestUrl.searchParams.get('domain') ?? '').trim();
+    if (!domain) return json({ error: 'missing domain' }, 400);
+    if (domain.includes('://')) return json({ error: 'domain must not be a URL' }, 400);
+    const apiKey = process.env.SECURITYTRAILS_API_KEY;
+    if (!apiKey) return json({ error: 'SecurityTrails API key not configured' }, 503);
+    try {
+      const resp = await fetchWithTimeout(
+        `https://api.securitytrails.com/v1/domain/${encodeURIComponent(domain)}`,
+        { headers: { apikey: apiKey, Accept: 'application/json' } },
+        10_000,
+      );
+      if (!resp.ok) return json({ error: `SecurityTrails upstream ${resp.status}` }, 502);
+      return json(await resp.json());
+    } catch (error) { return json({ error: String(error?.message ?? error) }, 502); }
+  }
+
+  if (requestUrl.pathname === '/api/whoisxml-domain') {
+    const domain = (requestUrl.searchParams.get('domain') ?? '').trim();
+    if (!domain) return json({ error: 'missing domain' }, 400);
+    if (/\s/.test(domain)) return json({ error: 'invalid domain' }, 400);
+    const apiKey = process.env.WHOISXML_API_KEY;
+    if (!apiKey) return json({ error: 'WhoisXML API key not configured' }, 503);
+    try {
+      const resp = await fetchWithTimeout(
+        `https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey=${encodeURIComponent(apiKey)}&domainName=${encodeURIComponent(domain)}&outputFormat=JSON`,
+        { headers: { Accept: 'application/json' } },
+        10_000,
+      );
+      if (!resp.ok) return json({ error: `WhoisXML upstream ${resp.status}` }, 502);
+      return json(await resp.json());
+    } catch (error) { return json({ error: String(error?.message ?? error) }, 502); }
+  }
+
+  if (requestUrl.pathname === '/api/little-snitch-enrich') {
+    const value = (requestUrl.searchParams.get('value') ?? '').trim();
+    if (!value) return json({ error: 'missing value' }, 400);
+    const providers = [];
+    const mispUrl = process.env.MISP_URL;
+    const mispKey = process.env.MISP_API_KEY;
+    if (!mispUrl || !mispKey) {
+      providers.push({ name: 'MISP', status: 'missing' });
+    } else {
+      try {
+        const resp = await fetchWithTimeout(
+          `${mispUrl}/attributes/restSearch`,
+          { method: 'POST', headers: { Authorization: mispKey, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ value, returnFormat: 'json' }) },
+          10_000,
+        );
+        providers.push({ name: 'MISP', status: resp.ok ? 'ok' : 'error' });
+      } catch { providers.push({ name: 'MISP', status: 'error' }); }
+    }
+    const openctiUrl = process.env.OPENCTI_URL;
+    const openctiKey = process.env.OPENCTI_API_KEY;
+    if (!openctiUrl || !openctiKey) providers.push({ name: 'OpenCTI', status: 'missing' });
+    return json({ value, providers });
+  }
+
+  if (requestUrl.pathname === '/api/security-posture') {
+    const checks = [
+      { id: 'firewall', name: 'Application Firewall', status: 'unknown' },
+      { id: 'filevault', name: 'FileVault', status: 'unknown' },
+      { id: 'gatekeeper', name: 'Gatekeeper', status: 'unknown' },
+    ];
+    const quarantineCommands = [
+      `bash ${path.join(process.cwd(), 'scripts', 'security-quarantine-mode.sh')}`,
+    ];
+    return json({ available: true, checks, quarantineCommands });
   }
 
   if (requestUrl.pathname === '/api/feed-discovery') {

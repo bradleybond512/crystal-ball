@@ -233,6 +233,7 @@ import { NuclearMonitorPanel } from '@/components/NuclearMonitorPanel';
 import { NotificationDigestPanel } from '@/components/NotificationDigestPanel';
 import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel';
 import { NotificationSettingsPanel } from '@/components/NotificationSettingsPanel';
+import { NotificationPreferencesPanel } from '@/components/NotificationPreferencesPanel';
 import { SituationStorePanel } from '@/components/SituationStorePanel';
 import { ObservationRulesPanel } from '@/components/ObservationRulesPanel';
 import { PatternOfLifePanel } from '@/components/PatternOfLifePanel';
@@ -1251,6 +1252,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['notification-digest'] = new NotificationDigestPanel();
  this.ctx.panels['notification-history'] = new NotificationHistoryPanel();
  this.ctx.panels['notification-settings'] = new NotificationSettingsPanel();
+ this.ctx.panels['notification-preferences'] = new NotificationPreferencesPanel();
  this.ctx.panels['situations'] = new SituationStorePanel();
  this.ctx.panels['observation-rules'] = new ObservationRulesPanel();
  // Worldview / Palantir / Dragos-inspired panels

@@ -9,6 +9,7 @@
  */
 
 import type { ObservationEvent } from '@/types/intelligence';
+import { getDefaultRegistry } from './observation-adapters';
 
 const CAPACITY = 1000;
 
@@ -67,6 +68,16 @@ function matchesQuery(evt: ObservationEvent, q: ObservationQuery): boolean {
   if (q.until != null && evt.timestamp > q.until) return false;
   if (q.tag && !evt.tags.includes(q.tag)) return false;
   return true;
+}
+
+/** Ingest raw provider payloads by dispatching through the adapter
+ *  registry, then storing the resulting ObservationEvents. Unknown
+ *  sourceIds drop silently so a misbehaving caller can't pollute the
+ *  ring buffer with garbage records. */
+export function ingestRaw(sourceId: string, raws: readonly unknown[]): ObservationEvent[] {
+  const adapted = getDefaultRegistry().adaptAll(sourceId, raws);
+  if (adapted.length > 0) ingest(adapted);
+  return adapted;
 }
 
 /** Return matching events, newest first. */

@@ -4,6 +4,28 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-05-13
+
+### Added
+
+- **Intelligence Timeline** (PR #448): chronological intelligence ledger panel rendering the deduped event stream.
+- **Operator Mode** (PR #449): dense layout variant with watch regions, mute controls, and shift handoff export.
+- **Scenario Replay** (PR #450): replay engine + five built-in disaster fixtures so the harness can prove regressions deterministically.
+- **Evidence Graph UX** (PR #451): confirming/contradicting sources surfaced separately with a per-claim confidence breakdown.
+- **Personal Relevance Layer** (PR #452): watchlist, interests, and travel-window scoring fused into a single "should I care?" filter.
+- **Alert Trace pipeline tracer** (PR #454): "why did/didn't I get warned?" 7-stage explainer for any alert id.
+- **SMS Command Interface** (PR #459): inbound `CB STATUS`, `BRIEF`, `WATCH`, `ALERT`, `SITREP` over an SMS/iMessage gateway, with tier-aware allowlist + rate limit + audit log.
+- **Self-Test Runner + mission state** (PR #460): one-button domain smoke test panel; `getMissionState(report)` maps a report to `nominal` / `reduced` / `degraded` / `critical` with top-priority life-safety override.
+- **Shortage Radar UI** (PR #461): sorted-by-risk view across the 8 commodity forecast models with per-card drivers and data gaps.
+- **Command Center polish** (PR #462): top-of-app surface tightened — top 3 things that matter, recommended actions, what-to-watch-next.
+- **Diagnostic Export enhancement** (PR #464): export bundle now ships per-domain mission state and the self-test report.
+- **⌘K Command Palette** (PR #465): keyboard-driven panel + action launcher across the full inventory.
+
+### Changed
+
+- **Release blockers cleared** (PR #455): GDACS render crash boundary fixed, sidecar route audit caught up, panel counts synced, ESLint scope, API key catalog reconciled at 68 keys.
+- **Notification all-producers tests** (PR #463): producer registry now has end-to-end coverage across all rungs.
+
 ## [2.16.0] - 2026-05-12
 
 ### Added

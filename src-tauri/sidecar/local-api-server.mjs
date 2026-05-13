@@ -2467,6 +2467,94 @@ export function getSituationSidecar(id) {
   return found ? { ...found } : null;
 }
 
+// ── Entity Registry (sidecar mirror) ──────────────────────────────────────
+// Mirrors src/services/intelligence/entity-registry.ts. The renderer is
+// canonical; this in-process mirror lets sidecar routes answer
+// GET /api/intelligence/entities without an IPC round-trip. Entities are
+// pushed via POST; the renderer is expected to re-push on change.
+const ENTITIES_LIMIT = 5000;
+const VALID_ENTITY_TYPES = new Set(['ship', 'aircraft', 'person', 'organization', 'facility', 'location']);
+const _entities = new Map();
+
+function entityNormalize(s) {
+  return String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function validateEntityInputSidecar(input) {
+  if (!input || typeof input !== 'object') return { ok: false, error: 'input must be an object' };
+  const id = typeof input.id === 'string' ? input.id.trim() : '';
+  if (!id) return { ok: false, error: 'id is required' };
+  if (id.length > 200) return { ok: false, error: 'id exceeds 200 chars' };
+  const type = String(input.type ?? '');
+  if (!VALID_ENTITY_TYPES.has(type)) return { ok: false, error: 'invalid type' };
+  const canonicalName = typeof input.canonicalName === 'string' ? input.canonicalName.trim() : '';
+  if (!canonicalName) return { ok: false, error: 'canonicalName is required' };
+  const aliases = Array.isArray(input.aliases)
+    ? input.aliases.filter((a) => typeof a === 'string').slice(0, 50)
+    : [];
+  const identifiers = (input.identifiers && typeof input.identifiers === 'object')
+    ? Object.fromEntries(
+        Object.entries(input.identifiers)
+          .filter(([k, v]) => typeof k === 'string' && typeof v === 'string')
+          .slice(0, 20),
+      )
+    : {};
+  const domains = Array.isArray(input.domains)
+    ? input.domains.filter((d) => typeof d === 'string').slice(0, 20)
+    : [];
+  const riskScoreRaw = Number(input.riskScore);
+  const riskScore = Number.isFinite(riskScoreRaw)
+    ? Math.max(0, Math.min(1, riskScoreRaw)) : 0;
+  const lastSeenRaw = Number(input.lastSeen);
+  const lastSeen = Number.isFinite(lastSeenRaw) ? lastSeenRaw : Date.now();
+  const attributes = (input.attributes && typeof input.attributes === 'object')
+    ? { ...input.attributes } : {};
+  return {
+    ok: true,
+    clean: { id, type, canonicalName, aliases, identifiers, domains, riskScore, lastSeen, attributes },
+  };
+}
+
+export function upsertEntitySidecar(input) {
+  const validated = validateEntityInputSidecar(input);
+  if (!validated.ok) return validated;
+  const c = validated.clean;
+  _entities.set(c.id, c);
+  if (_entities.size > ENTITIES_LIMIT) {
+    const overflow = _entities.size - ENTITIES_LIMIT;
+    const keys = [..._entities.keys()].slice(0, overflow);
+    for (const k of keys) _entities.delete(k);
+  }
+  return { ok: true, entity: c };
+}
+
+export function queryEntitiesSidecar({ type, domain, q } = {}) {
+  const results = [];
+  const lower = q ? String(q).toLowerCase() : '';
+  const norm = q ? entityNormalize(q) : '';
+  for (const e of _entities.values()) {
+    if (type && e.type !== type) continue;
+    if (domain && !e.domains.includes(domain)) continue;
+    if (q) {
+      const idMatch = e.id === q;
+      const idValMatch = Object.values(e.identifiers).includes(q);
+      const nameMatch = e.canonicalName.toLowerCase().includes(lower);
+      const aliasMatch = e.aliases.some((a) => a.toLowerCase().includes(lower));
+      const normMatch = norm.length >= 3
+        && (entityNormalize(e.canonicalName).includes(norm)
+          || e.aliases.some((a) => entityNormalize(a).includes(norm)));
+      if (!idMatch && !idValMatch && !nameMatch && !aliasMatch && !normMatch) continue;
+    }
+    results.push({ ...e });
+  }
+  results.sort((a, b) => b.lastSeen - a.lastSeen);
+  return results;
+}
+
+export function _resetEntityRegistrySidecar() {
+  _entities.clear();
+}
+
 // ── Evidence Graph UX (sidecar port) ──────────────────────────────────────
 // Mirrors src/services/intelligence/evidence-graph-ux.ts so the sidecar
 // route can answer GET /api/intelligence/evidence/:situationId without
@@ -14766,6 +14854,40 @@ export async function createLocalApiServer(options = {}) {
    }
    res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
    res.end(JSON.stringify({ report: result.report, asOf: new Date().toISOString() }));
+   return;
+ }
+
+ // ── /api/intelligence/entities — entity registry sidecar mirror ────
+ // GET ?type=&domain=&q=  — query the in-process mirror
+ // POST                    — upsert a single entity (renderer pushes on change)
+ if (requestUrl.pathname === '/api/intelligence/entities') {
+   if (req.method === 'GET') {
+     const type = requestUrl.searchParams.get('type') ?? undefined;
+     const domain = requestUrl.searchParams.get('domain') ?? undefined;
+     const q = requestUrl.searchParams.get('q') ?? undefined;
+     const entities = queryEntitiesSidecar({ type, domain, q });
+     res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ entities, asOf: new Date().toISOString() }));
+     return;
+   }
+   if (req.method === 'POST') {
+     let bodyText = '';
+     try { for await (const chunk of req) bodyText += chunk; } catch { bodyText = ''; }
+     let parsed = null;
+     try { parsed = bodyText ? JSON.parse(bodyText) : null; } catch { parsed = null; }
+     const result = upsertEntitySidecar(parsed);
+     if (!result.ok) {
+       res.writeHead(400, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: result.error }));
+       return;
+     }
+     res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ entity: result.entity }));
+     return;
+   }
+   res.writeHead(405, { 'content-type': 'application/json', ...makeCorsHeaders(req),
+     allow: 'GET, POST' });
+   res.end(JSON.stringify({ error: 'method not allowed' }));
    return;
  }
 

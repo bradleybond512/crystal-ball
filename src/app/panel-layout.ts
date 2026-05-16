@@ -262,6 +262,7 @@ import { FeedHealthPanel } from '@/components/FeedHealthPanel';
 import { CveTrackerPanel } from '@/components/CveTrackerPanel';
 import { VulnersCvePanel } from '@/components/VulnersCvePanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
+import { AssumptionPanel } from '@/components/AssumptionPanel';
 import { DiagnosticSelfTestPanel } from '@/components/DiagnosticSelfTestPanel';
 import { SelfTestRunnerPanel } from '@/components/SelfTestRunnerPanel';
 import { OperatorModePanel } from '@/components/OperatorModePanel';
@@ -1282,6 +1283,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['api-diagnostic'] = new ApiDiagnosticPanel();
  this.ctx.panels['feed-health'] = new FeedHealthPanel();
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
+ this.ctx.panels['assumption-tracker'] = new AssumptionPanel();
  this.ctx.panels['self-test'] = new DiagnosticSelfTestPanel();
  this.ctx.panels['self-test-runner'] = new SelfTestRunnerPanel();
  this.ctx.panels['operator-mode'] = new OperatorModePanel();

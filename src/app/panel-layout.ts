@@ -270,6 +270,7 @@ import { SelfTestRunnerPanel } from '@/components/SelfTestRunnerPanel';
 import { OperatorModePanel } from '@/components/OperatorModePanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { HypothesisPanel } from '@/components/HypothesisPanel';
+import { MetaConfidencePanel } from '@/components/MetaConfidencePanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
 import { BiasDetectionPanel } from '@/components/BiasDetectionPanel';
@@ -1298,6 +1299,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['operator-mode'] = new OperatorModePanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['competitive-hypothesis'] = new HypothesisPanel();
+ this.ctx.panels['meta-confidence'] = new MetaConfidencePanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
  this.ctx.panels['outcome-ledger'] = new OutcomeLedgerPanel();
  this.ctx.panels['bias-detection'] = new BiasDetectionPanel();

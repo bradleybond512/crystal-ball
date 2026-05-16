@@ -12,6 +12,8 @@
  * most-recent 2000 outcomes to `localStorage` under `wm-outcome-ledger`.
  */
 
+import { buildInputHash, getAlgoEvalLedger, type PredictionValue } from './algo-eval-ledger';
+
 export type OutcomeAction =
   | 'dismissed'
   | 'acted-on'
@@ -267,6 +269,7 @@ export class OutcomeLedger {
     this.enforceCapacity();
     this.persist();
     this.notify();
+    resolveDriverScorerPrediction(stamped);
     return cloneRecord(stamped);
   }
 
@@ -372,6 +375,36 @@ export class OutcomeLedger {
     if (store) {
       try { store.removeItem(STORAGE_KEY); } catch { /* best effort */ }
     }
+  }
+}
+
+/** Side-effect wiring from outcome → AlgoEvalLedger. Resolves the
+ *  most-recent unresolved `driver-scorer` prediction for this alert so
+ *  the algorithm-accuracy panel can compute MAE / accuracy / trend over
+ *  user feedback. No-op when the record has no alertId (no join key) or
+ *  no prediction is waiting on the join key. */
+/** Maps an outcome action to the value the AlgoEvalLedger should store
+ *  as the prediction's resolution. confirmed-real preserves the
+ *  predicted severity (a match); dismissed / marked-false-positive
+ *  collapse to the sentinel string; everything else preserves the
+ *  predicted severity so escalated / de-escalated don't pollute
+ *  accuracy as miscategorisations. */
+function resolvedValueFor(record: OutcomeRecord): PredictionValue {
+  if (FALSE_POSITIVE_ACTIONS.has(record.actualOutcome)) return 'false-positive';
+  return record.predictedSeverity;
+}
+
+function resolveDriverScorerPrediction(record: OutcomeRecord): void {
+  if (!record.alertId) return;
+  const resolvedValue: PredictionValue = resolvedValueFor(record);
+  try {
+    getAlgoEvalLedger().resolveByInputHash(
+      'driver-scorer',
+      buildInputHash(record.domain, record.alertId),
+      resolvedValue,
+    );
+  } catch {
+    // Singleton hydrate or storage hiccup — never block the outcome record.
   }
 }
 

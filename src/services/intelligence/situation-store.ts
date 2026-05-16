@@ -152,3 +152,28 @@ export function __reset(): void {
   _entries = [];
   _idCounter = 0;
 }
+
+// ── Situation Store v2 re-exports ─────────────────────────────────────────
+//
+// Newer code should import directly from `./situation-store-v2`. These
+// shims let existing panels and tests keep their `./situation-store`
+// imports while the migration finishes. Nothing here overrides the
+// legacy v1 API above.
+
+export type {
+  EvidenceEdge,
+  EvidenceEdgeType,
+  Situation as SituationV2,
+  SituationFilter,
+  SituationListener,
+  SituationLocation as SituationV2Location,
+  SituationSeverity as SituationV2Severity,
+  SituationStats,
+  SituationStatus as SituationV2Status,
+  SituationStoreV2Options,
+} from './situation-store-v2';
+export {
+  SituationStoreV2,
+  getSituationStoreV2,
+  __resetSituationStoreV2Singleton,
+} from './situation-store-v2';

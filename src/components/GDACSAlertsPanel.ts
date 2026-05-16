@@ -4,6 +4,8 @@ import {
   renderDisclosureSwitcherHtml,
 } from './DisclosureContainer';
 import { disclosureService } from '@/services/ui/progressive-disclosure';
+import { mountLensBanner } from '@/services/intelligence/panel-lens-adapter';
+import { getLensContextService } from '@/services/intelligence/lens-context';
 import type { GDACSEvent } from '@/services/gdacs';
 import { getEventTypeIcon } from '@/services/gdacs';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -37,6 +39,15 @@ const ALERT_COLOR: Record<string, string> = {
   Green: '#43a047',
 };
 
+const GDACS_DOMAIN_MAP: Record<string, string> = {
+  TC: 'weather',
+  EQ: 'earthquake',
+  FL: 'weather',
+  VO: 'volcano',
+  WF: 'wildfire',
+  DR: 'drought',
+};
+
 export class GDACSAlertsPanel extends Panel {
   private events: GDACSEvent[] = [];
   private rssData: RssEnvelope | null = null;
@@ -45,6 +56,8 @@ export class GDACSAlertsPanel extends Panel {
   private onEventClick: ((lat: number, lon: number) => void) | null = null;
   private detachDisclosure: (() => void) | null = null;
   private unsubscribeDisclosure: (() => void) | null = null;
+  private detachLensBanner: (() => void) | null = null;
+  private unsubscribeLens: (() => void) | null = null;
 
   constructor() {
     super({
@@ -59,6 +72,8 @@ export class GDACSAlertsPanel extends Panel {
     this.refreshTimer = setInterval(() => void this.refreshRss(), REFRESH_MS);
     this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'gdacs-alerts');
     this.unsubscribeDisclosure = disclosureService.subscribe('gdacs-alerts', () => this.render());
+    this.detachLensBanner = mountLensBanner(this.content, 'gdacs-alerts');
+    this.unsubscribeLens = getLensContextService().subscribe(() => this.render());
   }
 
   public setEventClickHandler(fn: (lat: number, lon: number) => void): void {
@@ -74,6 +89,10 @@ export class GDACSAlertsPanel extends Panel {
     this.detachDisclosure = null;
     this.unsubscribeDisclosure?.();
     this.unsubscribeDisclosure = null;
+    this.detachLensBanner?.();
+    this.detachLensBanner = null;
+    this.unsubscribeLens?.();
+    this.unsubscribeLens = null;
   }
 
   // Legacy: fed from data-loader via JSON API
@@ -153,9 +172,19 @@ export class GDACSAlertsPanel extends Panel {
     return `<div>${rows}<div style="opacity:0.5;font-size:11px;margin-top:6px;">Top 3 of ${events.length} active alerts · switch to Detail for full list</div></div>`;
   }
 
+  private lensFilter(events: readonly RssEvent[]): RssEvent[] {
+    const ctx = getLensContextService().getContext();
+    if (ctx.activeSituationId === null) return [...events];
+    return events.filter((e) => {
+      const domain = GDACS_DOMAIN_MAP[e.eventType];
+      if (!domain) return true;
+      return ctx.focusDomains.length === 0 || ctx.focusDomains.includes(domain);
+    });
+  }
+
   private renderRss(): string {
     if (!this.rssData) return '<div style="opacity:0.6;">Loading GDACS RSS…</div>';
-    const events = this.rssData.events ?? [];
+    const events = this.lensFilter(this.rssData.events ?? []);
     const degraded = this.rssData.degraded ?? false;
     const reason = this.rssData.reason;
 

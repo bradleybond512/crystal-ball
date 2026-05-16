@@ -1,0 +1,46 @@
+/* Native macOS window chrome — vibrancy showthrough + traffic-light safe zone.
+ *
+ * Paired with:
+ *   - `transparent: true` + `macOSPrivateApi: true` in src-tauri/tauri.conf.json
+ *   - `apply_vibrancy(NSVisualEffectMaterial::HudWindow, …)` in src-tauri/src/main.rs
+ *
+ * Only takes effect inside Tauri (body.is-desktop-macos). Web builds remain
+ * opaque so they don't render the translucent material against a blank canvas.
+ */
+
+/* Allow NSVisualEffectView to bleed through the webview when running in Tauri. */
+body.is-desktop-macos,
+body.is-desktop-macos #app {
+  background: transparent !important;
+}
+
+/* Root translucent surface. Falls back gracefully when the OS-level
+ * vibrancy material isn't available (older macOS, web preview, etc.). */
+body.is-desktop-macos .app-root {
+  background: rgba(20, 20, 30, 0.55);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+body.is-desktop-macos[data-theme="light"] .app-root {
+  background: rgba(242, 242, 247, 0.55);
+}
+
+/* Title-bar drag region — leaves an 80px safe zone for the macOS
+ * traffic-light buttons at the top-left. Tauri's `data-tauri-drag-region`
+ * attribute is the official drag mechanism in Tauri 2; the
+ * `-webkit-app-region: drag` rule is a belt-and-suspenders fallback for
+ * any future surface that forgets to set the attribute. */
+body.is-desktop-macos .app-titlebar {
+  -webkit-app-region: drag;
+  padding-left: 80px;
+}
+
+/* No-drag zones for interactive elements inside the titlebar. */
+body.is-desktop-macos .app-titlebar button,
+body.is-desktop-macos .app-titlebar input,
+body.is-desktop-macos .app-titlebar select,
+body.is-desktop-macos .app-titlebar a,
+body.is-desktop-macos .app-titlebar [role="button"] {
+  -webkit-app-region: no-drag;
+}

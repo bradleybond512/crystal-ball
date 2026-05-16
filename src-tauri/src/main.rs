@@ -2689,6 +2689,26 @@ fn main() {
  let cache_path = cache_file_path(&app.handle()).unwrap_or_default();
  app.manage(PersistentCache::load(&cache_path));
 
+ // Apply native macOS vibrancy (HudWindow material, 12pt rounded corners).
+ // Pairs with `transparent: true` + `macOSPrivateApi: true` in tauri.conf.json
+ // and the `app-root`/`app-titlebar` CSS in src/styles/window-chrome.css.
+ #[cfg(target_os = "macos")]
+ if let Some(window) = app.get_webview_window("main") {
+ use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+ if let Err(err) = apply_vibrancy(
+ &window,
+ NSVisualEffectMaterial::HudWindow,
+ Some(NSVisualEffectState::FollowsWindowActiveState),
+ Some(12.0),
+ ) {
+ append_desktop_log(
+ &app.handle(),
+ "WARN",
+ &format!("apply_vibrancy failed (continuing without vibrancy): {err}"),
+ );
+ }
+ }
+
  append_desktop_log(
  &app.handle(),
  "INFO",

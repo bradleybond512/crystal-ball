@@ -9,7 +9,7 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["macos-private-api"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native-sync-persistent", "crypto-rust"] }
@@ -18,6 +18,9 @@ sha2 = "0.11"
 getrandom = "0.4"
 tauri-plugin-biometry = "0.2.6"
 tauri-plugin-clipboard-manager = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+window-vibrancy = "0.6"
 
 [features]
 default = ["custom-protocol"]

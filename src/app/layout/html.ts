@@ -120,7 +120,7 @@ export function buildDesktopLayout(ctx: AppContext): string {
  </div>
 
  <!-- macOS native shell -->
- <div class="mac-shell">
+ <div class="mac-shell app-root">
 
  <!-- Sidebar -->
  <aside class="mac-sidebar">
@@ -171,7 +171,7 @@ export function buildDesktopLayout(ctx: AppContext): string {
  <!-- Main content: toolbar + map/panels -->
  <main class="mac-content">
  <!-- Draggable toolbar (title bar area) — drag via JS _setupToolbarDrag() -->
- <div class="mac-content-toolbar" data-tauri-drag-region>
+ <div class="mac-content-toolbar app-titlebar" data-tauri-drag-region>
  <button class="mac-sidebar-toggle-btn" id="sidebarCollapseBtn" title="Toggle sidebar (⌘\)" aria-label="Toggle sidebar">
  <svg width="14" height="12" viewBox="0 0 14 12" fill="none" xmlns="http://www.w3.org/2000/svg">
  <rect x="0" y="0" width="4" height="12" rx="1.5" fill="currentColor" opacity="0.5"/>

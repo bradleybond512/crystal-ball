@@ -268,6 +268,7 @@ import { DiagnosticSelfTestPanel } from '@/components/DiagnosticSelfTestPanel';
 import { SelfTestRunnerPanel } from '@/components/SelfTestRunnerPanel';
 import { OperatorModePanel } from '@/components/OperatorModePanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
+import { HypothesisPanel } from '@/components/HypothesisPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
 import { AlgoEvalPanel } from '@/components/AlgoEvalPanel';
@@ -1291,6 +1292,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['self-test-runner'] = new SelfTestRunnerPanel();
  this.ctx.panels['operator-mode'] = new OperatorModePanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
+ this.ctx.panels['competitive-hypothesis'] = new HypothesisPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
  this.ctx.panels['outcome-ledger'] = new OutcomeLedgerPanel();
  this.ctx.panels['algo-eval'] = new AlgoEvalPanel();

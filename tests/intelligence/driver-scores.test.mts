@@ -1,6 +1,21 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
+// Module-level localStorage stub. Installed before the singleton
+// imports below so their lazy hydrate paths see the same in-memory
+// Map across record/get/recompute calls in the attention-multiplier
+// suite at the bottom of this file. The shape-equality tests above
+// don't depend on it but tolerate its presence.
+const __dsStorage = new Map<string, string>();
+(globalThis as unknown as { localStorage: Storage }).localStorage = {
+  getItem: (k: string) => __dsStorage.get(k) ?? null,
+  setItem: (k: string, v: string) => { __dsStorage.set(k, v); },
+  removeItem: (k: string) => { __dsStorage.delete(k); },
+  clear: () => { __dsStorage.clear(); },
+  get length() { return __dsStorage.size; },
+  key: (i: number) => [...__dsStorage.keys()][i] ?? null,
+} as Storage;
+
 import {
   DriverScoringEngine,
   resetForTests,
@@ -13,6 +28,17 @@ import {
 } from '../../src/services/intelligence/built-in-drivers.ts';
 import type { ObservationEvent } from '../../src/services/intelligence/observation-adapters.ts';
 import type { EvidenceEdge, Situation } from '../../src/services/intelligence/situation-store-v2.ts';
+import {
+  __resetOutcomeLedgerSingleton,
+  getOutcomeLedger,
+} from '../../src/services/intelligence/outcome-ledger.ts';
+import {
+  __resetAttentionAllocatorSingleton,
+  getAttentionAllocator,
+} from '../../src/services/intelligence/attention-allocator.ts';
+import {
+  __resetAlgoEvalLedgerSingleton,
+} from '../../src/services/intelligence/algo-eval-ledger.ts';
 
 const NOW = 1_745_000_000_000;
 
@@ -358,5 +384,77 @@ describe('built-in drivers', () => {
     assert.ok(earthquakeMagnitudeDriver.normalizeValue(15) <= 1);
     assert.ok(spaceWeatherKpDriver.normalizeValue(-5) >= 0);
     assert.ok(spaceWeatherKpDriver.normalizeValue(15) <= 1);
+  });
+});
+
+// ── Attention multiplier wiring ──────────────────────────────────────
+
+describe('DriverScoringEngine attention multiplier wiring', () => {
+  beforeEach(() => {
+    resetForTests();
+    __dsStorage.clear();
+    __resetOutcomeLedgerSingleton();
+    __resetAttentionAllocatorSingleton();
+    __resetAlgoEvalLedgerSingleton();
+  });
+
+  it('attentionMultiplier defaults to 1.0 when the domain has no calibration', () => {
+    const eng = new DriverScoringEngine();
+    eng.registerDriver(fixedDriver({ id: 'a', normalizedScore: 0.5, weight: 1 }));
+    const result = eng.scoreObservation(makeEvent({ domain: 'weather' }));
+    assert.equal(result.attentionMultiplier, 1);
+    // finalScore unchanged from base when multiplier is neutral.
+    assert.equal(result.finalScore, result.baseScore + result.edgeBonus);
+  });
+
+  it('attentionMultiplier > 1 amplifies finalScore (and can push severity up)', () => {
+    // Populate the OutcomeLedger so the AttentionAllocator pushes the
+    // 'hot' domain above 1.0 after recompute().
+    const led = getOutcomeLedger();
+    for (let i = 0; i < 8; i++) {
+      led.record({ domain: 'hot', predictedSeverity: 'medium', actualOutcome: 'escalated' });
+    }
+    for (let i = 0; i < 2; i++) {
+      led.record({ domain: 'hot', predictedSeverity: 'medium', actualOutcome: 'acted-on' });
+    }
+    getAttentionAllocator().recompute();
+
+    const eng = new DriverScoringEngine();
+    eng.registerDriver(fixedDriver({ id: 'a', domain: 'hot', normalizedScore: 0.5, weight: 1 }));
+    const result = eng.scoreObservation(makeEvent({ domain: 'hot' }));
+    assert.ok(result.attentionMultiplier > 1, `expected >1, got ${result.attentionMultiplier}`);
+    assert.ok(result.finalScore > result.baseScore + result.edgeBonus);
+  });
+
+  it('attentionMultiplier < 1 dampens finalScore for high-false-positive domains', () => {
+    const led = getOutcomeLedger();
+    for (let i = 0; i < 8; i++) {
+      led.record({ domain: 'spam', predictedSeverity: 'medium', actualOutcome: 'dismissed' });
+    }
+    for (let i = 0; i < 2; i++) {
+      led.record({ domain: 'spam', predictedSeverity: 'medium', actualOutcome: 'acted-on' });
+    }
+    getAttentionAllocator().recompute();
+
+    const eng = new DriverScoringEngine();
+    eng.registerDriver(fixedDriver({ id: 'a', domain: 'spam', normalizedScore: 0.5, weight: 1 }));
+    const result = eng.scoreObservation(makeEvent({ domain: 'spam' }));
+    assert.ok(result.attentionMultiplier < 1, `expected <1, got ${result.attentionMultiplier}`);
+    assert.ok(result.finalScore < result.baseScore + result.edgeBonus);
+  });
+
+  it('finalScore stays clamped at 1.0 even when the multiplier would push above', () => {
+    // Push attention multiplier to the cap (2.0).
+    const led = getOutcomeLedger();
+    for (let i = 0; i < 20; i++) {
+      led.record({ domain: 'capped', predictedSeverity: 'critical', actualOutcome: 'escalated' });
+    }
+    getAttentionAllocator().recompute();
+
+    const eng = new DriverScoringEngine();
+    eng.registerDriver(fixedDriver({ id: 'a', domain: 'capped', normalizedScore: 0.9, weight: 1 }));
+    const result = eng.scoreObservation(makeEvent({ domain: 'capped' }));
+    assert.equal(result.attentionMultiplier, 2);
+    assert.equal(result.finalScore, 1);
   });
 });

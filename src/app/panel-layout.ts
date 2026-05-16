@@ -269,6 +269,7 @@ import { OperatorModePanel } from '@/components/OperatorModePanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
+import { AlgoEvalPanel } from '@/components/AlgoEvalPanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
 import { AlertExplanationPanel } from '@/components/AlertExplanationPanel';
 import { PersonalRelevancePanel } from '@/components/PersonalRelevancePanel';
@@ -1290,6 +1291,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
  this.ctx.panels['outcome-ledger'] = new OutcomeLedgerPanel();
+ this.ctx.panels['algo-eval'] = new AlgoEvalPanel();
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();

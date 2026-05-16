@@ -12,6 +12,8 @@
 
 import type { ObservationEvent } from './observation-adapters';
 import type { EvidenceEdge, Situation } from './situation-store-v2';
+import { getAttentionAllocator } from './attention-allocator';
+import { buildInputHash, getAlgoEvalLedger } from './algo-eval-ledger';
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -52,6 +54,10 @@ export interface EvidenceScore {
   driverScores: DriverScore[];
   baseScore: number;
   edgeBonus: number;
+  /** Per-domain attention multiplier from AttentionAllocator, applied
+   *  to `(baseScore + edgeBonus)` before severity-band lookup. 1.0 when
+   *  the domain has no learned calibration yet. */
+  attentionMultiplier: number;
   finalScore: number;
   derivedSeverity: DerivedSeverity;
   explanation: string;
@@ -109,17 +115,35 @@ export class DriverScoringEngine {
     const driverScores = scoreDrivers(domainDrivers, obs);
     const baseScore = driverScores.reduce((s, d) => s + d.weightedContribution, 0);
     const edgeBonus = computeEdgeBonus(obs.id, edges);
-    const finalScore = Math.min(1, baseScore + edgeBonus);
-    return {
+    // Pull the per-domain attention multiplier learned from previous
+    // user feedback. Unknown domains return the neutral 1.0, so this
+    // is a no-op for early-history scoring.
+    const attentionMultiplier = safe(() => getAttentionAllocator().getMultiplier(obs.domain)) ?? 1;
+    const finalScore = Math.min(1, (baseScore + edgeBonus) * attentionMultiplier);
+    const score: EvidenceScore = {
       observationId: obs.id,
       domain: obs.domain,
       driverScores,
       baseScore,
       edgeBonus,
+      attentionMultiplier,
       finalScore,
       derivedSeverity: severityFor(finalScore),
-      explanation: explainEvidence(obs, driverScores, baseScore, edgeBonus, finalScore),
+      explanation: explainEvidence(obs, driverScores, baseScore, edgeBonus, attentionMultiplier, finalScore),
     };
+    // Side-effect: hand the prediction to the eval ledger so the
+    // OutcomeLedger can resolve it later via `resolveByInputHash`. The
+    // join key matches what outcome-ledger emits on resolution.
+    safe(() => {
+      getAlgoEvalLedger().record({
+        algorithmId: 'driver-scorer',
+        domain: obs.domain,
+        inputHash: buildInputHash(obs.domain, obs.id),
+        predictedValue: score.derivedSeverity,
+        predictedAt: new Date(),
+      });
+    });
+    return score;
   }
 
   scoreSituation(situation: Situation): SituationScore {
@@ -227,6 +251,7 @@ function explainEvidence(
   driverScores: readonly DriverScore[],
   baseScore: number,
   edgeBonus: number,
+  attentionMultiplier: number,
   finalScore: number,
 ): string {
   if (driverScores.length === 0) {
@@ -238,7 +263,10 @@ function explainEvidence(
   const head = obs.title || obs.id;
   const driverPart = top.length > 0 ? top.join(' + ') : 'no contributing drivers';
   const bonusPart = edgeBonus > 0 ? ` + edge bonus ${edgeBonus.toFixed(2)}` : '';
-  return `${head}: ${driverPart}${bonusPart} → ${severityFor(finalScore)} (${finalScore.toFixed(2)} from base ${baseScore.toFixed(2)}).`;
+  const attentionPart = attentionMultiplier === 1
+    ? ''
+    : ` × attention ${attentionMultiplier.toFixed(2)}`;
+  return `${head}: ${driverPart}${bonusPart}${attentionPart} → ${severityFor(finalScore)} (${finalScore.toFixed(2)} from base ${baseScore.toFixed(2)}).`;
 }
 
 function explainSituation(

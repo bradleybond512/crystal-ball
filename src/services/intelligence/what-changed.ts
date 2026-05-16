@@ -92,3 +92,10 @@ export function diff(prev: WorldStateSnapshot, curr: WorldStateSnapshot): WhatCh
     totalResolved: resolvedEventIds.length,
   };
 }
+
+// ── Backward-compat re-export ────────────────────────────────────────
+// PR #X — what-changed v2 is the new world-state diff engine. Existing
+// panels imported `WhatChangedService` from this module; expose the v2
+// class under that legacy name so callers don't break during the
+// migration.
+export { WhatChangedV2 as WhatChangedService } from './what-changed-v2.ts';

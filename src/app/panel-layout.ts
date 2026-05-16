@@ -271,6 +271,9 @@ import { OperatorModePanel } from '@/components/OperatorModePanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { HypothesisPanel } from '@/components/HypothesisPanel';
 import { MetaConfidencePanel } from '@/components/MetaConfidencePanel';
+import { ShadowModePanel } from '@/components/ShadowModePanel';
+import { getShadowRunner } from '@/services/intelligence/shadow-runner';
+import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow-algorithms';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
 import { BiasDetectionPanel } from '@/components/BiasDetectionPanel';
@@ -1308,6 +1311,11 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['improvement-scheduler'] = new SchedulerPanel();
  this.ctx.panels['algo-eval'] = new AlgoEvalPanel();
  this.ctx.panels['backtest'] = new BacktestPanel();
+ this.ctx.panels['shadow-mode'] = new ShadowModePanel();
+ try {
+  const runner = getShadowRunner();
+  for (const algo of builtInShadowAlgorithms()) runner.registerAlgorithm(algo);
+ } catch { /* boot-time issue — non-critical */ }
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();

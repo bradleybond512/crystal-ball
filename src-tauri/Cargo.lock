@@ -704,6 +704,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-biometry",
  "tauri-plugin-clipboard-manager",
+ "window-vibrancy",
 ]
 
 [[package]]

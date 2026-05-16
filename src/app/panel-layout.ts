@@ -272,6 +272,7 @@ import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { HypothesisPanel } from '@/components/HypothesisPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
+import { BiasDetectionPanel } from '@/components/BiasDetectionPanel';
 import { AlgoEvalPanel } from '@/components/AlgoEvalPanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
 import { AlertExplanationPanel } from '@/components/AlertExplanationPanel';
@@ -1297,6 +1298,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['competitive-hypothesis'] = new HypothesisPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
  this.ctx.panels['outcome-ledger'] = new OutcomeLedgerPanel();
+ this.ctx.panels['bias-detection'] = new BiasDetectionPanel();
  this.ctx.panels['algo-eval'] = new AlgoEvalPanel();
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();

@@ -66,6 +66,8 @@ import {
   type FeedHealth,
   type SuggestedAction,
 } from '@/services/intelligence/command-center-summary';
+import { mountLensBanner } from '@/services/intelligence/panel-lens-adapter';
+import { getLensContextService } from '@/services/intelligence/lens-context';
 
 const REFRESH_MS = 10_000;
 
@@ -120,6 +122,8 @@ export class CommandCenterPanel extends Panel {
   private boundEscape: ((e: KeyboardEvent) => void) | null = null;
   private detachDisclosure: (() => void) | null = null;
   private unsubscribeDisclosure: (() => void) | null = null;
+  private detachLensBanner: (() => void) | null = null;
+  private unsubscribeLens: (() => void) | null = null;
 
   constructor() {
     super({
@@ -141,6 +145,8 @@ export class CommandCenterPanel extends Panel {
     this.attachInteractionListeners();
     this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'command-center');
     this.unsubscribeDisclosure = disclosureService.subscribe('command-center', () => this.render());
+    this.detachLensBanner = mountLensBanner(this.content, 'command-center');
+    this.unsubscribeLens = getLensContextService().subscribe(() => this.render());
   }
 
   public override destroy(): void {
@@ -157,6 +163,10 @@ export class CommandCenterPanel extends Panel {
     this.detachDisclosure = null;
     this.unsubscribeDisclosure?.();
     this.unsubscribeDisclosure = null;
+    this.detachLensBanner?.();
+    this.detachLensBanner = null;
+    this.unsubscribeLens?.();
+    this.unsubscribeLens = null;
     super.destroy();
   }
 

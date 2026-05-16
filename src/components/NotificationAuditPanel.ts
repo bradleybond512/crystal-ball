@@ -18,6 +18,8 @@ import {
   type Severity,
 } from '@/services/notifications/notification-audit';
 import { escapeHtml } from '@/utils/sanitize';
+import { mountLensBanner } from '@/services/intelligence/panel-lens-adapter';
+import { getLensContextService } from '@/services/intelligence/lens-context';
 
 const DOMAINS: { value: string; label: string }[] = [
   { value: 'all', label: 'All domains' },
@@ -53,6 +55,8 @@ interface PanelState {
 
 export class NotificationAuditPanel extends Panel {
   private unsubscribe: (() => void) | null = null;
+  private detachLensBanner: (() => void) | null = null;
+  private unsubscribeLens: (() => void) | null = null;
   private state: PanelState = {
     domain: 'all',
     severity: 'all',
@@ -71,17 +75,27 @@ export class NotificationAuditPanel extends Panel {
         'Provenance-tracked timeline of every notification sent or suppressed. Filter by domain, severity, or time range; click a row to see alert / situation / rule linkage.',
     });
     this.unsubscribe = getNotificationAuditService().subscribe(() => this.render());
+    this.detachLensBanner = mountLensBanner(this.content, 'notification-audit');
+    this.unsubscribeLens = getLensContextService().subscribe(() => this.render());
     this.render();
   }
 
   public override destroy(): void {
     if (this.unsubscribe) { this.unsubscribe(); this.unsubscribe = null; }
+    this.detachLensBanner?.();
+    this.detachLensBanner = null;
+    this.unsubscribeLens?.();
+    this.unsubscribeLens = null;
     super.destroy();
   }
 
   private filteredRecords(): NotificationRecord[] {
     const svc = getNotificationAuditService();
     let recs = svc.getRecent(this.state.rangeMs);
+    const lensCtx = getLensContextService().getContext();
+    if (lensCtx.activeSituationId !== null && lensCtx.focusDomains.length > 0) {
+      recs = recs.filter((r) => lensCtx.focusDomains.includes(r.domain));
+    }
     if (this.state.domain !== 'all') {
       recs = recs.filter((r) => r.domain === this.state.domain);
     }

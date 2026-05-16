@@ -4,6 +4,8 @@ import {
   renderDisclosureSwitcherHtml,
 } from './DisclosureContainer';
 import { disclosureService } from '@/services/ui/progressive-disclosure';
+import { mountLensBanner, filterForLens } from '@/services/intelligence/panel-lens-adapter';
+import { getLensContextService } from '@/services/intelligence/lens-context';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { unifiedAlertStore } from '@/services/unified-alerts';
 import { getActive as getActiveSituations } from '@/services/intelligence/situation-store';
@@ -54,6 +56,8 @@ export class IntelligenceTimelinePanel extends Panel {
   private expandedIds = new Set<string>();
   private detachDisclosure: (() => void) | null = null;
   private unsubscribeDisclosure: (() => void) | null = null;
+  private detachLensBanner: (() => void) | null = null;
+  private unsubscribeLens: (() => void) | null = null;
 
   constructor() {
     super({
@@ -68,6 +72,8 @@ export class IntelligenceTimelinePanel extends Panel {
     this.timer = setInterval(() => this.render(), REFRESH_MS);
     this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'intelligence-timeline');
     this.unsubscribeDisclosure = disclosureService.subscribe('intelligence-timeline', () => this.render());
+    this.detachLensBanner = mountLensBanner(this.content, 'intelligence-timeline');
+    this.unsubscribeLens = getLensContextService().subscribe(() => this.render());
   }
 
   public destroy(): void {
@@ -79,6 +85,10 @@ export class IntelligenceTimelinePanel extends Panel {
     this.detachDisclosure = null;
     this.unsubscribeDisclosure?.();
     this.unsubscribeDisclosure = null;
+    this.detachLensBanner?.();
+    this.detachLensBanner = null;
+    this.unsubscribeLens?.();
+    this.unsubscribeLens = null;
   }
 
   // ─── State persistence ────────────────────────────────────────────
@@ -119,11 +129,13 @@ export class IntelligenceTimelinePanel extends Panel {
       now,
       limit: 500,
     });
-    return filterTimeline(all, {
+    const filtered = filterTimeline(all, {
       type: this.typeFilter === 'all' ? undefined : this.typeFilter,
       domain: this.domainFilter ?? undefined,
       since: now - RANGE_MS[this.range],
     });
+    const lensCtx = getLensContextService().getContext();
+    return filterForLens(filtered, lensCtx, now);
   }
 
   // ─── Rendering ─────────────────────────────────────────────────────

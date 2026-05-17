@@ -299,6 +299,7 @@ import { AlgoEvalPanel } from '@/components/AlgoEvalPanel';
 import { BacktestPanel } from '@/components/BacktestPanel';
 import { SafetyCaseDashboard } from '@/components/SafetyCaseDashboard';
 import { DomainDependencyPanel } from '@/components/DomainDependencyPanel';
+import { SituationTimelinePanel } from '@/components/SituationTimelinePanel';
 import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
 import { CounterfactualReplayPanel } from '@/components/CounterfactualReplayPanel';
 import { BacktestGatePanel } from '@/components/BacktestGatePanel';
@@ -1355,6 +1356,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['collection-gap'] = new CollectionGapPanel();
  this.ctx.panels['safety-case'] = new SafetyCaseDashboard();
  this.ctx.panels['domain-dependency'] = new DomainDependencyPanel();
+ this.ctx.panels['situation-timeline'] = new SituationTimelinePanel();
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();
  this.ctx.panels['repair-recommendations'] = new RepairRecommendationsPanel();
  this.ctx.panels['mission-ledger-bridge'] = new MissionLedgerBridgePanel();

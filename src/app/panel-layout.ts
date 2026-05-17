@@ -282,6 +282,7 @@ import { HypothesisPanel } from '@/components/HypothesisPanel';
 import { MetaConfidencePanel } from '@/components/MetaConfidencePanel';
 import { ShadowModePanel } from '@/components/ShadowModePanel';
 import { CrisisSignaturePanel } from '@/components/CrisisSignaturePanel';
+import { CollectionGapPanel } from '@/components/CollectionGapPanel';
 import { getShadowRunner } from '@/services/intelligence/shadow-runner';
 import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow-algorithms';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
@@ -1349,6 +1350,7 @@ export class PanelLayoutManager implements AppModule {
   const runner = getShadowRunner();
   for (const algo of builtInShadowAlgorithms()) runner.registerAlgorithm(algo);
  } catch { /* boot-time issue — non-critical */ }
+ this.ctx.panels['collection-gap'] = new CollectionGapPanel();
  this.ctx.panels['safety-case'] = new SafetyCaseDashboard();
  this.ctx.panels['domain-dependency'] = new DomainDependencyPanel();
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();

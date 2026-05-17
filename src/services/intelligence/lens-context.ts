@@ -15,6 +15,7 @@
 import type { Situation } from './situation-store-v2';
 import type { ObservationEvent } from '@/types/intelligence';
 import { getSituationStoreV2 } from './situation-store-v2';
+import { getSavedPlacesFilterService } from './saved-places-filter';
 
 // ── Public types ─────────────────────────────────────────────────────────
 
@@ -272,8 +273,12 @@ export function createLensContextService(options: LensContextOptions = {}): Lens
     },
 
     filterObservations<T extends ObservationEvent>(obs: T[]): T[] {
-      if (state.activeSituationId === null) return obs;
-      return obs.filter((o) => isRelevantObservation(o));
+      // Saved-places filter stacks on top of the situation lens —
+      // when a saved place is active, geographic proximity is
+      // enforced regardless of whether a situation is selected.
+      const proximityFiltered = applySavedPlacesProximityFilter(obs);
+      if (state.activeSituationId === null) return proximityFiltered;
+      return proximityFiltered.filter((o) => isRelevantObservation(o));
     },
 
     getSituationSummaryHtml(): string {
@@ -301,4 +306,15 @@ export function getLensContextService(): LensContextService {
 
 export function _resetLensContextSingletonForTests(): void {
   _singleton = null;
+}
+
+// Module-scope helper so the lens stays robust when the saved-places
+// filter singleton is in an unusual state — falling back to the
+// unfiltered input preserves the original lens semantics.
+function applySavedPlacesProximityFilter<T extends ObservationEvent>(observations: T[]): T[] {
+  try {
+    return getSavedPlacesFilterService().filterObservations(observations);
+  } catch {
+    return observations;
+  }
 }

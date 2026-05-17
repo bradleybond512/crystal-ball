@@ -281,6 +281,7 @@ import { ActiveLearningPanel } from '@/components/ActiveLearningPanel';
 import { SchedulerPanel } from '@/components/SchedulerPanel';
 import { AlgoEvalPanel } from '@/components/AlgoEvalPanel';
 import { BacktestPanel } from '@/components/BacktestPanel';
+import { BacktestGatePanel } from '@/components/BacktestGatePanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
 import { AlertExplanationPanel } from '@/components/AlertExplanationPanel';
 import { PersonalRelevancePanel } from '@/components/PersonalRelevancePanel';
@@ -1311,6 +1312,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['improvement-scheduler'] = new SchedulerPanel();
  this.ctx.panels['algo-eval'] = new AlgoEvalPanel();
  this.ctx.panels['backtest'] = new BacktestPanel();
+ this.ctx.panels['backtest-gate'] = new BacktestGatePanel();
  this.ctx.panels['shadow-mode'] = new ShadowModePanel();
  try {
   const runner = getShadowRunner();

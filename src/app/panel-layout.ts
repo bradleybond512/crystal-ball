@@ -280,6 +280,7 @@ import { getMissionLedgerBridge } from '@/services/intelligence/mission-ledger-b
 import { HypothesisPanel } from '@/components/HypothesisPanel';
 import { MetaConfidencePanel } from '@/components/MetaConfidencePanel';
 import { ShadowModePanel } from '@/components/ShadowModePanel';
+import { SavedPlacesFilterPanel } from '@/components/SavedPlacesFilterPanel';
 import { CrisisSignaturePanel } from '@/components/CrisisSignaturePanel';
 import { getShadowRunner } from '@/services/intelligence/shadow-runner';
 import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow-algorithms';
@@ -1051,6 +1052,7 @@ export class PanelLayoutManager implements AppModule {
  editPlace: openEdit,
  });
  this.ctx.panels['saved-places'] = savedPlacesPanel;
+ this.ctx.panels['saved-places-filter'] = new SavedPlacesFilterPanel();
 
  const watchlistLocationsPanel = new WatchlistLocationsPanel();
  this.ctx.panels['watchlist-locations'] = watchlistLocationsPanel;

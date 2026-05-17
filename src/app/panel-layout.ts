@@ -280,6 +280,7 @@ import { getMissionLedgerBridge } from '@/services/intelligence/mission-ledger-b
 import { HypothesisPanel } from '@/components/HypothesisPanel';
 import { MetaConfidencePanel } from '@/components/MetaConfidencePanel';
 import { ShadowModePanel } from '@/components/ShadowModePanel';
+import { CrisisSignaturePanel } from '@/components/CrisisSignaturePanel';
 import { getShadowRunner } from '@/services/intelligence/shadow-runner';
 import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow-algorithms';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
@@ -1334,6 +1335,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['backtest'] = new BacktestPanel();
  this.ctx.panels['backtest-gate'] = new BacktestGatePanel();
  this.ctx.panels['shadow-mode'] = new ShadowModePanel();
+ this.ctx.panels['crisis-signature'] = new CrisisSignaturePanel();
  try {
   const runner = getShadowRunner();
   for (const algo of builtInShadowAlgorithms()) runner.registerAlgorithm(algo);

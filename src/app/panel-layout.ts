@@ -271,6 +271,8 @@ import { SelfTestRunnerPanel } from '@/components/SelfTestRunnerPanel';
 import { OperatorModePanel } from '@/components/OperatorModePanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { RepairRecommendationsPanel } from '@/components/RepairRecommendationsPanel';
+import { MissionLedgerBridgePanel } from '@/components/MissionLedgerBridgePanel';
+import { getMissionLedgerBridge } from '@/services/intelligence/mission-ledger-bridge';
 import { HypothesisPanel } from '@/components/HypothesisPanel';
 import { MetaConfidencePanel } from '@/components/MetaConfidencePanel';
 import { ShadowModePanel } from '@/components/ShadowModePanel';
@@ -1326,6 +1328,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['safety-case'] = new SafetyCaseDashboard();
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();
  this.ctx.panels['repair-recommendations'] = new RepairRecommendationsPanel();
+ this.ctx.panels['mission-ledger-bridge'] = new MissionLedgerBridgePanel();
+ try { getMissionLedgerBridge().connect(); } catch { /* non-critical */ }
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();

@@ -302,6 +302,7 @@ import { RecoveryModelingPanel } from '@/components/RecoveryModelingPanel';
 import { AlgoEvalPanel } from '@/components/AlgoEvalPanel';
 import { BacktestPanel } from '@/components/BacktestPanel';
 import { SafetyCaseDashboard } from '@/components/SafetyCaseDashboard';
+import { SafetyCaseDashboardPanel } from '@/components/SafetyCaseDashboardPanel';
 import { DomainDependencyPanel } from '@/components/DomainDependencyPanel';
 import { SituationTimelinePanel } from '@/components/SituationTimelinePanel';
 import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
@@ -1365,6 +1366,7 @@ export class PanelLayoutManager implements AppModule {
  } catch { /* boot-time issue — non-critical */ }
  this.ctx.panels['collection-gap'] = new CollectionGapPanel();
  this.ctx.panels['safety-case'] = new SafetyCaseDashboard();
+ this.ctx.panels['safety-case-dashboard'] = new SafetyCaseDashboardPanel();
  this.ctx.panels['domain-dependency'] = new DomainDependencyPanel();
  this.ctx.panels['situation-timeline'] = new SituationTimelinePanel();
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();

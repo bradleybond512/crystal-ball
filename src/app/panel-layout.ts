@@ -281,6 +281,7 @@ import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
 import { BiasDetectionPanel } from '@/components/BiasDetectionPanel';
 import { ActiveLearningPanel } from '@/components/ActiveLearningPanel';
 import { SchedulerPanel } from '@/components/SchedulerPanel';
+import { ModelGovernancePanel } from '@/components/ModelGovernancePanel';
 import { AlgoEvalPanel } from '@/components/AlgoEvalPanel';
 import { BacktestPanel } from '@/components/BacktestPanel';
 import { SafetyCaseDashboard } from '@/components/SafetyCaseDashboard';
@@ -1314,6 +1315,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['bias-detection'] = new BiasDetectionPanel();
  this.ctx.panels['active-learning'] = new ActiveLearningPanel();
  this.ctx.panels['improvement-scheduler'] = new SchedulerPanel();
+ this.ctx.panels['model-governance'] = new ModelGovernancePanel();
  this.ctx.panels['algo-eval'] = new AlgoEvalPanel();
  this.ctx.panels['backtest'] = new BacktestPanel();
  this.ctx.panels['shadow-mode'] = new ShadowModePanel();

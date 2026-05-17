@@ -267,6 +267,7 @@ import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { AssumptionPanel } from '@/components/AssumptionPanel';
 import { DomainScorecardPanel } from '@/components/DomainScorecardPanel';
 import { BehavioralResponsePanel } from '@/components/BehavioralResponsePanel';
+import { CausalChainPanel } from '@/components/CausalChainPanel';
 import { CivilizationPulsePanel } from '@/components/CivilizationPulsePanel';
 import { WorldNarrativePanel } from '@/components/WorldNarrativePanel';
 import { QualityDebtPanel } from '@/components/QualityDebtPanel';
@@ -1326,6 +1327,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['assumption-tracker'] = new AssumptionPanel();
  this.ctx.panels['domain-scorecard'] = new DomainScorecardPanel();
  this.ctx.panels['behavioral-response'] = new BehavioralResponsePanel();
+ this.ctx.panels['causal-chain'] = new CausalChainPanel();
  this.ctx.panels['civilization-pulse'] = new CivilizationPulsePanel();
  this.ctx.panels['world-narrative'] = new WorldNarrativePanel();
  this.ctx.panels['quality-debt'] = new QualityDebtPanel();

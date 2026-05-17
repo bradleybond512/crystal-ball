@@ -288,6 +288,7 @@ import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
 import { BiasDetectionPanel } from '@/components/BiasDetectionPanel';
 import { ContradictionDetectorPanel } from '@/components/ContradictionDetectorPanel';
 import { CrisisTrajectoryPanel } from '@/components/CrisisTrajectoryPanel';
+import { RegionalResiliencePanel } from '@/components/RegionalResiliencePanel';
 import { ActiveLearningPanel } from '@/components/ActiveLearningPanel';
 import { SchedulerPanel } from '@/components/SchedulerPanel';
 import { ModelGovernancePanel } from '@/components/ModelGovernancePanel';
@@ -1331,6 +1332,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['bias-detection'] = new BiasDetectionPanel();
  this.ctx.panels['contradiction-detector'] = new ContradictionDetectorPanel();
  this.ctx.panels['crisis-trajectory'] = new CrisisTrajectoryPanel();
+ this.ctx.panels['regional-resilience'] = new RegionalResiliencePanel();
  this.ctx.panels['active-learning'] = new ActiveLearningPanel();
  this.ctx.panels['improvement-scheduler'] = new SchedulerPanel();
  this.ctx.panels['model-governance'] = new ModelGovernancePanel();

@@ -132,15 +132,15 @@ interface DomainSeed {
 function flatSeed(domain: string, baseline: number, stddev: number): DomainSeed {
   return {
     domain,
-    hourly: Array.from({length: 24}).fill(baseline),
-    daily: Array.from({length: 7}).fill(baseline),
-    monthly: Array.from({length: 12}).fill(baseline),
+    hourly: Array.from<number>({length: 24}).fill(baseline),
+    daily: Array.from<number>({length: 7}).fill(baseline),
+    monthly: Array.from<number>({length: 12}).fill(baseline),
     seedStddev: stddev,
   };
 }
 
 function shapedHourly(peakHours: readonly number[], baseline: number, peak: number): number[] {
-  const out: number[] = Array.from({length: 24}).fill(baseline);
+  const out: number[] = Array.from<number>({length: 24}).fill(baseline);
   for (const h of peakHours) {
     if (h >= 0 && h < 24) out[h] = peak;
   }
@@ -148,7 +148,7 @@ function shapedHourly(peakHours: readonly number[], baseline: number, peak: numb
 }
 
 function shapedMonthly(peakMonths: readonly number[], baseline: number, peak: number): number[] {
-  const out: number[] = Array.from({length: 12}).fill(baseline);
+  const out: number[] = Array.from<number>({length: 12}).fill(baseline);
   for (const m of peakMonths) {
     if (m >= 0 && m < 12) out[m] = peak;
   }
@@ -177,7 +177,7 @@ export const BUILT_IN_SEEDS: readonly DomainSeed[] = [
   {
     domain: 'weather',
     hourly: shapedHourly([14, 15, 16, 17, 18, 19, 20], 0.25, 0.45),
-    daily: Array.from({length: 7}).fill(0.3),
+    daily: Array.from<number>({length: 7}).fill(0.3),
     monthly: shapedMonthly([5, 6, 7, 8], 0.25, 0.45),
     seedStddev: 0.14,
   },
@@ -187,7 +187,7 @@ export const BUILT_IN_SEEDS: readonly DomainSeed[] = [
     domain: 'maritime',
     hourly: shapedHourly([6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], 0.2, 0.3),
     daily: [0.18, 0.28, 0.28, 0.28, 0.28, 0.26, 0.2],
-    monthly: Array.from({length: 12}).fill(0.25),
+    monthly: Array.from<number>({length: 12}).fill(0.25),
     seedStddev: 0.1,
   },
   // Aviation: peak operational hours; weekends slightly lighter.
@@ -195,14 +195,14 @@ export const BUILT_IN_SEEDS: readonly DomainSeed[] = [
     domain: 'aviation',
     hourly: shapedHourly([6, 7, 8, 9, 16, 17, 18, 19, 20], 0.2, 0.35),
     daily: [0.2, 0.3, 0.32, 0.32, 0.32, 0.3, 0.22],
-    monthly: Array.from({length: 12}).fill(0.27),
+    monthly: Array.from<number>({length: 12}).fill(0.27),
     seedStddev: 0.11,
   },
   // Wildfire: hot, dry afternoons in fire-season months.
   {
     domain: 'wildfire',
     hourly: shapedHourly([12, 13, 14, 15, 16, 17, 18], 0.2, 0.5),
-    daily: Array.from({length: 7}).fill(0.28),
+    daily: Array.from<number>({length: 7}).fill(0.28),
     monthly: shapedMonthly([5, 6, 7, 8, 9], 0.25, 0.55),
     seedStddev: 0.15,
   },
@@ -213,7 +213,7 @@ export const BUILT_IN_SEEDS: readonly DomainSeed[] = [
     domain: 'geopolitical',
     hourly: shapedHourly([8, 9, 10, 11, 12, 13, 14, 15, 16, 17], 0.25, 0.4),
     daily: [0.22, 0.36, 0.38, 0.38, 0.38, 0.34, 0.24],
-    monthly: Array.from({length: 12}).fill(0.32),
+    monthly: Array.from<number>({length: 12}).fill(0.32),
     seedStddev: 0.12,
   },
 ];

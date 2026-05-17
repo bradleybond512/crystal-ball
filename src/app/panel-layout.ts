@@ -265,6 +265,7 @@ import { VulnersCvePanel } from '@/components/VulnersCvePanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { AssumptionPanel } from '@/components/AssumptionPanel';
 import { DomainScorecardPanel } from '@/components/DomainScorecardPanel';
+import { WorldNarrativePanel } from '@/components/WorldNarrativePanel';
 import { QualityDebtPanel } from '@/components/QualityDebtPanel';
 import { FailurePredictionPanel } from '@/components/FailurePredictionPanel';
 import { OperationalPlaybookPanel } from '@/components/OperationalPlaybookPanel';
@@ -1309,6 +1310,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
  this.ctx.panels['assumption-tracker'] = new AssumptionPanel();
  this.ctx.panels['domain-scorecard'] = new DomainScorecardPanel();
+ this.ctx.panels['world-narrative'] = new WorldNarrativePanel();
  this.ctx.panels['quality-debt'] = new QualityDebtPanel();
  this.ctx.panels['failure-prediction'] = new FailurePredictionPanel();
  this.ctx.panels['operational-playbook'] = new OperationalPlaybookPanel();

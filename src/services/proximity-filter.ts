@@ -15,7 +15,7 @@
  * Storage key: 'wm_proximity_config'
  */
 
-import { invokeTauri, hasTauriInvokeBridge } from '@/services/tauri-bridge';
+import { locationService } from '@/services/location';
 
 export interface UserLocation {
   lat: number;
@@ -101,54 +101,20 @@ export function distanceToAlert(
 
 /**
  * Attempt to get current GPS location.
- * On desktop (Tauri), uses native CoreLocation via IPC to bypass WKWebView's
- * geolocation block. Falls back to navigator.geolocation on web.
+ * Routes through {@link locationService}, which caches a single native
+ * CoreLocation lookup (or browser fallback) for the lifetime of the
+ * renderer — so calling this from multiple panels at startup costs one
+ * permission prompt total instead of one per panel.
  */
 export async function getCurrentGpsLocation(): Promise<UserLocation> {
-  // Try native CoreLocation first (desktop only — WKWebView blocks navigator.geolocation)
-  if (hasTauriInvokeBridge()) {
- try {
- const [lat, lon] = await invokeTauri<[number, number]>('get_native_location');
- return {
- lat,
- lon,
- label: `${lat.toFixed(3)}, ${lon.toFixed(3)}`,
+  const fix = await locationService.getLocation();
+  return {
+ lat: fix.lat,
+ lon: fix.lon,
+ label: `${fix.lat.toFixed(3)}, ${fix.lon.toFixed(3)}`,
  source: 'gps',
- setAt: Date.now(),
- };
- } catch (error) {
- throw new Error(error instanceof Error ? error.message : String(error));
- }
-  }
-
-  // Web fallback
-  return new Promise((resolve, reject) => {
- if (!('geolocation' in navigator)) {
- reject(new Error('Geolocation not supported'));
- return;
- }
- navigator.geolocation.getCurrentPosition( // eslint-disable-line sonarjs/no-intrusive-permissions
- pos => {
- resolve({
- lat: pos.coords.latitude,
- lon: pos.coords.longitude,
- label: `${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`,
- source: 'gps',
- setAt: Date.now(),
- });
- },
- err => {
- if (err.code === err.PERMISSION_DENIED) {
- reject(new Error('Location permission denied. Enable in System Settings → Privacy & Security → Location Services.'));
- } else if (err.code === err.POSITION_UNAVAILABLE) {
- reject(new Error('Location unavailable. Check that Wi-Fi or GPS is enabled.'));
- } else {
- reject(new Error('Location timed out. ' + err.message));
- }
- },
- { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 }
- );
-  });
+ setAt: fix.timestamp,
+  };
 }
 
 /**

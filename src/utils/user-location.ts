@@ -1,3 +1,5 @@
+import { locationService } from '@/services/location';
+
 type MapView = 'global' | 'america' | 'mena' | 'eu' | 'asia' | 'latam' | 'africa' | 'oceania';
 
 const ASIA_EAST_TIMEZONES = new Set([
@@ -44,15 +46,6 @@ function coordsToRegion(lat: number, lon: number): MapView {
   return 'global';
 }
 
-function getGeolocationPosition(timeout: number): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
- navigator.geolocation.getCurrentPosition(resolve, reject, { // eslint-disable-line sonarjs/no-intrusive-permissions
- timeout,
- maximumAge: 300_000,
- });
-  });
-}
-
 export async function resolveUserRegion(): Promise<MapView> {
   let tzRegion: MapView = 'global';
   try {
@@ -63,10 +56,8 @@ export async function resolveUserRegion(): Promise<MapView> {
   }
 
   try {
- if (typeof navigator !== 'undefined' && navigator.geolocation) {
- const pos = await getGeolocationPosition(5000);
- return coordsToRegion(pos.coords.latitude, pos.coords.longitude);
- }
+ const fix = await locationService.getLocation({ timeoutMs: 5000, maxAgeMs: 300_000 });
+ return coordsToRegion(fix.lat, fix.lon);
   } catch {
  // geolocation denied, timed out, or unavailable — fall through to timezone
   }

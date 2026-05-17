@@ -292,6 +292,7 @@ import { CrisisTrajectoryPanel } from '@/components/CrisisTrajectoryPanel';
 import { ActiveLearningPanel } from '@/components/ActiveLearningPanel';
 import { SchedulerPanel } from '@/components/SchedulerPanel';
 import { ModelGovernancePanel } from '@/components/ModelGovernancePanel';
+import { RecoveryModelingPanel } from '@/components/RecoveryModelingPanel';
 import { AlgoEvalPanel } from '@/components/AlgoEvalPanel';
 import { BacktestPanel } from '@/components/BacktestPanel';
 import { SafetyCaseDashboard } from '@/components/SafetyCaseDashboard';
@@ -1336,6 +1337,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['active-learning'] = new ActiveLearningPanel();
  this.ctx.panels['improvement-scheduler'] = new SchedulerPanel();
  this.ctx.panels['model-governance'] = new ModelGovernancePanel();
+ this.ctx.panels['recovery-modeling'] = new RecoveryModelingPanel();
  this.ctx.panels['algo-eval'] = new AlgoEvalPanel();
  this.ctx.panels['backtest'] = new BacktestPanel();
  this.ctx.panels['backtest-gate'] = new BacktestGatePanel();

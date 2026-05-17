@@ -289,6 +289,7 @@ import { AlgoEvalPanel } from '@/components/AlgoEvalPanel';
 import { BacktestPanel } from '@/components/BacktestPanel';
 import { SafetyCaseDashboard } from '@/components/SafetyCaseDashboard';
 import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
+import { CounterfactualReplayPanel } from '@/components/CounterfactualReplayPanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
 import { AlertExplanationPanel } from '@/components/AlertExplanationPanel';
 import { PersonalRelevancePanel } from '@/components/PersonalRelevancePanel';
@@ -1332,6 +1333,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['repair-recommendations'] = new RepairRecommendationsPanel();
  this.ctx.panels['mission-ledger-bridge'] = new MissionLedgerBridgePanel();
  try { getMissionLedgerBridge().connect(); } catch { /* non-critical */ }
+ this.ctx.panels['counterfactual-replay'] = new CounterfactualReplayPanel();
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();

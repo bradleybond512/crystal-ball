@@ -1,5 +1,5 @@
 import { animateIn, prefersReducedMotion } from '@/services/motion';
-import { hasTauriInvokeBridge, invokeTauri } from '@/services/tauri-bridge';
+import { locationService } from '@/services/location';
 
 const ONBOARDING_KEY = 'cb:onboarding-complete';
 
@@ -177,35 +177,15 @@ export class WelcomeFlow {
     btn.textContent = 'Locating...';
     btn.disabled = true;
 
-    if (hasTauriInvokeBridge()) {
-      void invokeTauri<[number, number]>('get_native_location')
-        .then(([lat, lon]) => {
-          this.options.onLocationSet?.(lat, lon);
-          this.advance();
-        })
-        .catch(() => {
-          btn.textContent = originalText;
-          btn.disabled = false;
-        });
-      return;
-    }
-
-    if (!navigator.geolocation) {
-      this.advance();
-      return;
-    }
-    // eslint-disable-next-line sonarjs/no-intrusive-permissions
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        this.options.onLocationSet?.(pos.coords.latitude, pos.coords.longitude);
+    void locationService.getLocation({ timeoutMs: 8000 })
+      .then((fix) => {
+        this.options.onLocationSet?.(fix.lat, fix.lon);
         this.advance();
-      },
-      () => {
+      })
+      .catch(() => {
         btn.textContent = originalText;
         btn.disabled = false;
-      },
-      { timeout: 8000 },
-    );
+      });
   }
 
   private renderInterests(): void {

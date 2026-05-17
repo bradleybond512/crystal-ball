@@ -7,6 +7,8 @@
  * All data persists in localStorage under `wm-family-members-v1`.
  */
 
+import { locationService } from '@/services/location';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -121,27 +123,18 @@ export function updateStatus(id: string, status: string): void {
 }
 
 /**
- * Gets the current device position via the Geolocation API.
- * Returns a promise that resolves with lat, lon, accuracy.
+ * Gets the current device position via {@link locationService}.
+ * User-triggered share — pass `force: true` so the cached fix doesn't pin
+ * the family share to a hour-old position when the user explicitly taps
+ * "Share my location".
  */
-export function shareMyLocation(): Promise<{ lat: number; lon: number; accuracy: number }> {
-  return new Promise((resolve, reject) => {
- if (!navigator.geolocation) {
- reject(new Error('Geolocation API not available'));
- return;
- }
- navigator.geolocation.getCurrentPosition(
- (pos) => {
- resolve({
- lat: pos.coords.latitude,
- lon: pos.coords.longitude,
- accuracy: pos.coords.accuracy,
- });
- },
- (err) => reject(new Error(`Geolocation error: ${err.message}`)),
- { enableHighAccuracy: true, timeout: 15_000, maximumAge: 30_000 },
- );
-  });
+export async function shareMyLocation(): Promise<{ lat: number; lon: number; accuracy: number }> {
+  const fix = await locationService.getLocation({ force: true, timeoutMs: 15_000 });
+  return {
+ lat: fix.lat,
+ lon: fix.lon,
+ accuracy: fix.accuracy ?? 0,
+  };
 }
 
 /**

@@ -1,5 +1,6 @@
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
 import { invokeTauri } from './tauri-bridge';
+import { keychainService } from './keychain';
 import {
   isVaultUnlocked as isWebVaultUnlocked,
   listSecrets as listWebVaultSecrets,
@@ -1024,6 +1025,8 @@ if (!isDesktopRuntime()) {
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
  if (e.key === 'wm-secrets-updated') {
+ // Another window updated the keychain — local cache is stale.
+ keychainService.invalidateAll();
  void loadDesktopSecrets();
  } else if (e.key === TOGGLES_STORAGE_KEY && e.newValue) {
  try {
@@ -1117,10 +1120,10 @@ export async function setSecretValue(key: RuntimeSecretKey, value: string): Prom
 
   const sanitized = value.trim();
   if (sanitized) {
- await invokeTauri<void>('set_secret', { key, value: sanitized });
+ await keychainService.set(key, sanitized);
  runtimeConfig.secrets[key] = { value: sanitized, source: 'vault' };
   } else {
- await invokeTauri<void>('delete_secret', { key });
+ await keychainService.remove(key);
  delete runtimeConfig.secrets[key];
   }
 
@@ -1309,11 +1312,11 @@ export async function loadDesktopSecrets(): Promise<void> {
   if (!isDesktopRuntime()) return;
 
   try {
- const keys = await invokeTauri<string[]>('list_supported_secret_keys');
+ const keys = await keychainService.listSupportedKeys();
 
  const keyResults = await Promise.allSettled(
  keys.map(async (key) => {
- const value = await invokeTauri<string | null>('get_secret', { key });
+ const value = await keychainService.get(key);
  return { key, value };
  })
  );

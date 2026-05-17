@@ -269,6 +269,8 @@ import { DiagnosticSelfTestPanel } from '@/components/DiagnosticSelfTestPanel';
 import { SelfTestRunnerPanel } from '@/components/SelfTestRunnerPanel';
 import { OperatorModePanel } from '@/components/OperatorModePanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
+import { MissionLedgerBridgePanel } from '@/components/MissionLedgerBridgePanel';
+import { getMissionLedgerBridge } from '@/services/intelligence/mission-ledger-bridge';
 import { HypothesisPanel } from '@/components/HypothesisPanel';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
@@ -1304,6 +1306,10 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['active-learning'] = new ActiveLearningPanel();
  this.ctx.panels['algo-eval'] = new AlgoEvalPanel();
  this.ctx.panels['backtest'] = new BacktestPanel();
+ this.ctx.panels['mission-ledger-bridge'] = new MissionLedgerBridgePanel();
+ // Start the closed-loop bridge. Idempotent — safe to call again if
+ // panel-layout reboots.
+ try { getMissionLedgerBridge().connect(); } catch { /* non-critical */ }
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();

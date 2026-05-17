@@ -233,6 +233,7 @@ import { NuclearMonitorPanel } from '@/components/NuclearMonitorPanel';
 import { NotificationDigestPanel } from '@/components/NotificationDigestPanel';
 import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel';
 import { NotificationAuditPanel } from '@/components/NotificationAuditPanel';
+import { NotificationProvenancePanel } from '@/components/NotificationProvenancePanel';
 import { TrustBudgetPanel } from '@/components/TrustBudgetPanel';
 import { NotificationSettingsPanel } from '@/components/NotificationSettingsPanel';
 import { NotificationPreferencesPanel } from '@/components/NotificationPreferencesPanel';
@@ -1272,6 +1273,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['notification-digest'] = new NotificationDigestPanel();
  this.ctx.panels['notification-history'] = new NotificationHistoryPanel();
  this.ctx.panels['notification-audit'] = new NotificationAuditPanel();
+ this.ctx.panels['notification-provenance'] = new NotificationProvenancePanel();
  this.ctx.panels['trust-budget'] = new TrustBudgetPanel();
  this.ctx.panels['notification-settings'] = new NotificationSettingsPanel();
  this.ctx.panels['notification-preferences'] = new NotificationPreferencesPanel();

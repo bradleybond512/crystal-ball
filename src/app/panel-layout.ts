@@ -282,6 +282,7 @@ import { SchedulerPanel } from '@/components/SchedulerPanel';
 import { AlgoEvalPanel } from '@/components/AlgoEvalPanel';
 import { BacktestPanel } from '@/components/BacktestPanel';
 import { SafetyCaseDashboard } from '@/components/SafetyCaseDashboard';
+import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
 import { AlertExplanationPanel } from '@/components/AlertExplanationPanel';
 import { PersonalRelevancePanel } from '@/components/PersonalRelevancePanel';
@@ -1318,6 +1319,7 @@ export class PanelLayoutManager implements AppModule {
   for (const algo of builtInShadowAlgorithms()) runner.registerAlgorithm(algo);
  } catch { /* boot-time issue — non-critical */ }
  this.ctx.panels['safety-case'] = new SafetyCaseDashboard();
+ this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();

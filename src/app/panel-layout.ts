@@ -282,6 +282,7 @@ import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
 import { BiasDetectionPanel } from '@/components/BiasDetectionPanel';
+import { ContradictionDetectorPanel } from '@/components/ContradictionDetectorPanel';
 import { ActiveLearningPanel } from '@/components/ActiveLearningPanel';
 import { SchedulerPanel } from '@/components/SchedulerPanel';
 import { ModelGovernancePanel } from '@/components/ModelGovernancePanel';
@@ -1318,6 +1319,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
  this.ctx.panels['outcome-ledger'] = new OutcomeLedgerPanel();
  this.ctx.panels['bias-detection'] = new BiasDetectionPanel();
+ this.ctx.panels['contradiction-detector'] = new ContradictionDetectorPanel();
  this.ctx.panels['active-learning'] = new ActiveLearningPanel();
  this.ctx.panels['improvement-scheduler'] = new SchedulerPanel();
  this.ctx.panels['model-governance'] = new ModelGovernancePanel();

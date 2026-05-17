@@ -266,6 +266,7 @@ import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { AssumptionPanel } from '@/components/AssumptionPanel';
 import { DomainScorecardPanel } from '@/components/DomainScorecardPanel';
 import { QualityDebtPanel } from '@/components/QualityDebtPanel';
+import { FailurePredictionPanel } from '@/components/FailurePredictionPanel';
 import { DiagnosticSelfTestPanel } from '@/components/DiagnosticSelfTestPanel';
 import { SelfTestRunnerPanel } from '@/components/SelfTestRunnerPanel';
 import { OperatorModePanel } from '@/components/OperatorModePanel';
@@ -1306,6 +1307,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['assumption-tracker'] = new AssumptionPanel();
  this.ctx.panels['domain-scorecard'] = new DomainScorecardPanel();
  this.ctx.panels['quality-debt'] = new QualityDebtPanel();
+ this.ctx.panels['failure-prediction'] = new FailurePredictionPanel();
  this.ctx.panels['self-test'] = new DiagnosticSelfTestPanel();
  this.ctx.panels['self-test-runner'] = new SelfTestRunnerPanel();
  this.ctx.panels['operator-mode'] = new OperatorModePanel();

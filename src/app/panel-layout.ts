@@ -308,6 +308,7 @@ import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
 import { CounterfactualReplayPanel } from '@/components/CounterfactualReplayPanel';
 import { BacktestGatePanel } from '@/components/BacktestGatePanel';
 import { GlobalRhythmPanel } from '@/components/GlobalRhythmPanel';
+import { ThreatHorizonPanel } from '@/components/ThreatHorizonPanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
 import { AlertExplanationPanel } from '@/components/AlertExplanationPanel';
 import { PersonalRelevancePanel } from '@/components/PersonalRelevancePanel';
@@ -1355,6 +1356,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['backtest'] = new BacktestPanel();
  this.ctx.panels['backtest-gate'] = new BacktestGatePanel();
  this.ctx.panels['global-rhythm'] = new GlobalRhythmPanel();
+ this.ctx.panels['threat-horizon'] = new ThreatHorizonPanel();
  this.ctx.panels['shadow-mode'] = new ShadowModePanel();
  this.ctx.panels['crisis-signature'] = new CrisisSignaturePanel();
  try {

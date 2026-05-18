@@ -347,6 +347,7 @@ import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
 import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
+import { TradeRouteRiskScorerPanel } from '@/components/TradeRouteRiskScorerPanel';
 import { SupplyChainDisruptionPanel } from '@/components/SupplyChainDisruptionPanel';
 import { InfraRiskMatrixPanel } from '@/components/InfraRiskMatrixPanel';
 import { EarthquakeSuperPanel } from '@/components/EarthquakeSuperPanel';
@@ -1467,6 +1468,7 @@ export class PanelLayoutManager implements AppModule {
  });
  this.ctx.panels['weather-hazard'] = new WeatherHazardPanel();
  this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
+ this.ctx.panels['trade-route-risk-scorer'] = new TradeRouteRiskScorerPanel();
  this.ctx.panels['supply-chain-disruption'] = new SupplyChainDisruptionPanel();
  this.ctx.panels['infra-risk-matrix'] = new InfraRiskMatrixPanel();
  this.ctx.panels['earthquake-super'] = new EarthquakeSuperPanel();

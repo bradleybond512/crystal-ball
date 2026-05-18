@@ -61,6 +61,18 @@ export interface NotificationLike {
 
 export type ProvenanceListener = (records: ProvenanceRecord[]) => void;
 
+export interface NotificationProvenanceStats {
+  total: number;
+  /** Records that were neither suppressed by quiet hours nor by the
+   *  trust budget — i.e. would have surfaced to the user. */
+  delivered: number;
+  /** Records where at least one suppression flag was set. */
+  suppressed: number;
+  /** Count of records per domain (every domain that appears at least
+   *  once is present, including those with only suppressed entries). */
+  byDomain: Record<string, number>;
+}
+
 // ── Constants ─────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'wm-notification-provenance';
@@ -252,6 +264,35 @@ export class NotificationProvenanceService {
     const start = Math.max(0, this.records.length - limit);
     // eslint-disable-next-line unicorn/no-array-reverse
     return this.records.slice(start).map((r) => cloneRecord(r)).reverse();
+  }
+
+  /** Every persisted record, newest-first. Defensive copies. */
+  getAll(): ProvenanceRecord[] {
+    this.ensureHydrated();
+    // eslint-disable-next-line unicorn/no-array-reverse
+    return this.records.map((r) => cloneRecord(r)).reverse();
+  }
+
+  /** Records for a single domain, newest-first. */
+  getByDomain(domain: string): ProvenanceRecord[] {
+    this.ensureHydrated();
+    // eslint-disable-next-line unicorn/no-array-reverse
+    return this.records.filter((r) => r.domain === domain).map((r) => cloneRecord(r)).reverse();
+  }
+
+  /** Aggregate counts for the panel header: total / delivered /
+   *  suppressed (by quiet hours or trust budget) / per-domain breakdown. */
+  getStats(): NotificationProvenanceStats {
+    this.ensureHydrated();
+    const byDomain: Record<string, number> = {};
+    let delivered = 0;
+    let suppressed = 0;
+    for (const r of this.records) {
+      byDomain[r.domain] = (byDomain[r.domain] ?? 0) + 1;
+      if (r.suppressedByQuietHours || r.suppressedByTrustBudget) suppressed += 1;
+      else delivered += 1;
+    }
+    return { total: this.records.length, delivered, suppressed, byDomain };
   }
 
   /** Case-insensitive substring search across title / domain / explanation. */

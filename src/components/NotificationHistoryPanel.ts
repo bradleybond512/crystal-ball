@@ -1,92 +1,45 @@
+/* eslint-disable sonarjs/no-nested-template-literals */
 /**
- * Notification History Panel — shows the last 200 notifications the
- * producer pipeline made a decision about. Filter bar (domain / severity
- * / time range), expandable rows for the raw payload, and a Clear button.
- *
- * Reads from the in-memory ring exposed by
- * `src/services/notifications/notification-history-service.ts`; the
- * service handles its own IndexedDB persistence so this panel only
- * worries about rendering.
+ * Notification History Panel — full-featured view backed by the
+ * NotificationProvenanceService (the canonical 500-record provenance
+ * store). Header row shows total / delivered / suppressed counts;
+ * filter bar narrows by domain and "suppressed only"; the sortable
+ * table renders relative timestamp, domain + severity badges, status
+ * icon, and the trigger observation's domain as the provenance source.
+ * Clicking a row expands the full title + trigger id + suppression
+ * reason + absolute timestamp inline.
  */
-/* eslint-disable sonarjs/no-nested-template-literals -- short row markup */
 
 import { Panel } from './Panel';
 import {
-  attachDisclosureClickDelegation,
-  renderDisclosureSwitcherHtml,
-} from './DisclosureContainer';
-import { disclosureService } from '@/services/ui/progressive-disclosure';
-import {
-  ACTION_BADGE,
-  DOMAIN_ICON,
-  SEVERITY_BADGE,
-  clear as clearHistory,
-  getHistory,
-  hydrateFromIdb,
-  type HistoryAction,
-  type HistoryDomain,
-  type HistorySeverity,
-  type NotificationHistoryEntry,
-} from '@/services/notifications/notification-history-service';
-import {
-  TIME_RANGES,
-  formatPayload,
-  formatTimestamp,
-  sinceMsForRange,
-  type TimeRangePreset,
-} from './notification-history-helpers';
+  getNotificationProvenanceService,
+  type NotificationProvenanceStats,
+  type ProvenanceRecord,
+} from '@/services/notifications/notification-provenance';
 import { escapeHtml } from '@/utils/sanitize';
 
-// Spec calls for 30s auto-refresh — the history ring is appended to by
-// the producer pipeline and persisted to IDB, so we don't need to poll
-// faster than the user's expected glance cadence.
 const REFRESH_MS = 30_000;
+const TITLE_TRUNCATE = 60;
 
 interface PanelState {
-  domain: HistoryDomain | 'all';
-  severity: HistorySeverity | 'all';
-  action: HistoryAction | 'all';
-  range: TimeRangePreset['id'];
+  domainFilter: string;
+  suppressedOnly: boolean;
   expandedId: string | null;
 }
 
-const DOMAIN_OPTIONS: { id: HistoryDomain | 'all'; label: string }[] = [
-  { id: 'all', label: 'All domains' },
-  { id: 'seismic', label: 'Seismic' },
-  { id: 'geomagnetic', label: 'Geomagnetic' },
-  { id: 'solar_flare', label: 'Solar Flare' },
-  { id: 'cap', label: 'CAP' },
-  { id: 'hurricane', label: 'Hurricane' },
-  { id: 'wildfire', label: 'Wildfire' },
-  { id: 'air_quality', label: 'Air Quality' },
-  { id: 'market', label: 'Market' },
-  { id: 'cyber', label: 'Cyber' },
-];
-
-const SEVERITY_OPTIONS: { id: HistorySeverity | 'all'; label: string }[] = [
-  { id: 'all', label: 'All severities' },
-  { id: 'critical', label: 'Critical' },
-  { id: 'high', label: 'High' },
-  { id: 'medium', label: 'Medium' },
-  { id: 'low', label: 'Low' },
-];
-
-const ACTION_OPTIONS: { id: HistoryAction | 'all'; label: string }[] = [
-  { id: 'all', label: 'All actions' },
-  { id: 'fired', label: 'Fired' },
-  { id: 'suppressed', label: 'Suppressed' },
-  { id: 'escalated', label: 'Escalated' },
+const SEVERITY_FROM_SCORE: { min: number; label: string; color: string }[] = [
+  { min: 0.8, label: 'critical', color: '#f44336' },
+  { min: 0.6, label: 'high', color: '#ffb74d' },
+  { min: 0.35, label: 'medium', color: '#4a9eff' },
+  { min: 0, label: 'low', color: '#9e9e9e' },
 ];
 
 export class NotificationHistoryPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
-  private detachDisclosure: (() => void) | null = null;
-  private unsubscribeDisclosure: (() => void) | null = null;
+  private unsub: (() => void) | null = null;
   private state: PanelState = {
-    domain: 'all',
-    severity: 'all',
-    action: 'all',
-    range: 'h24',
+    domainFilter: 'all',
+    suppressedOnly: false,
     expandedId: null,
   };
 
@@ -97,182 +50,180 @@ export class NotificationHistoryPanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Last 200 notifications the producer pipeline made a decision about. Filter by domain / severity / time range, click any row to expand the raw payload.',
+        'Full-featured history backed by the NotificationProvenanceService (last 500 notifications with provenance). Filter by domain or "suppressed only"; click a row to expand the trigger observation, suppression reason, and full timestamp.',
     });
-    this.showLoading('Loading notification history…');
-    queueMicrotask(() => {
-      void hydrateFromIdb().finally(() => this.render());
-    });
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
-    this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'notification-history');
-    this.unsubscribeDisclosure = disclosureService.subscribe('notification-history', () => this.render());
+    this.start();
   }
 
-  override destroy(): void {
-    if (this.refreshTimer) {
+  private start(): void {
+    this.render();
+    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.unsub = getNotificationProvenanceService().subscribe(() => this.render());
+  }
+
+  public dispose(): void {
+    if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    this.detachDisclosure?.();
-    this.detachDisclosure = null;
-    this.unsubscribeDisclosure?.();
-    this.unsubscribeDisclosure = null;
-    super.destroy();
+    if (this.unsub) {
+      this.unsub();
+      this.unsub = null;
+    }
+  }
+
+  private filteredRecords(): ProvenanceRecord[] {
+    const svc = getNotificationProvenanceService();
+    const base = this.state.domainFilter === 'all'
+      ? svc.getAll()
+      : svc.getByDomain(this.state.domainFilter);
+    if (!this.state.suppressedOnly) return base;
+    return base.filter((r) => r.suppressedByQuietHours || r.suppressedByTrustBudget);
   }
 
   private render(): void {
-    const rows = this.queryRows();
-    this.setCount(rows.length);
-    this.setContent(this.buildHtml(rows));
-    this.attachHandlers();
+    const svc = getNotificationProvenanceService();
+    const stats = svc.getStats();
+    const records = this.filteredRecords();
+    this.setCount(records.length);
+
+    const html = `<div style="padding:12px;display:flex;flex-direction:column;gap:12px;">
+      ${renderHeaderStats(stats)}
+      ${this.renderFilterBar(stats)}
+      ${renderTable(records, this.state.expandedId)}
+    </div>`;
+    this.setContent(html);
+    this.wireHandlers();
   }
 
-  private queryRows(): NotificationHistoryEntry[] {
-    return getHistory({
-      domain: this.state.domain,
-      severity: this.state.severity,
-      action: this.state.action,
-      sinceMs: sinceMsForRange(this.state.range),
-    });
-  }
-
-  private buildHtml(rows: NotificationHistoryEntry[]): string {
-    const switcher = renderDisclosureSwitcherHtml('notification-history', { showRaw: true });
-    const switcherRow = `<div style="display:flex;justify-content:flex-end;margin:0 0 6px;">${switcher}</div>`;
-    const level = disclosureService.getLevel('notification-history');
-
-    if (level === 'raw') {
-      let raw = '[]';
-      try { raw = JSON.stringify(rows.slice(0, 50), null, 2); } catch { raw = '[]'; }
-      return `<div class="nh-panel">${switcherRow}<pre style="margin:0;padding:8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border-subtle,#333);border-radius:4px;overflow:auto;max-height:520px;">${escapeHtml(raw)}</pre></div>`;
-    }
-
-    if (level === 'summary') {
-      return `<div class="nh-panel">${switcherRow}${this.renderSummary(rows)}</div>`;
-    }
-
-    return `<div class="nh-panel">
-      ${switcherRow}
-      ${this.renderFilterBar()}
-      ${this.renderRows(rows)}
-      ${this.renderFooter(rows.length)}
+  private renderFilterBar(stats: NotificationProvenanceStats): string {
+    const domains = ['all', ...Object.keys(stats.byDomain).sort((a, b) => a.localeCompare(b))];
+    const options = domains.map((d) =>
+      `<option value="${escapeHtml(d)}"${d === this.state.domainFilter ? ' selected' : ''}>${escapeHtml(d === 'all' ? 'All domains' : d)}</option>`,
+    ).join('');
+    const checked = this.state.suppressedOnly ? ' checked' : '';
+    return `<div style="display:flex;align-items:center;gap:12px;font-size:11px;">
+      <label style="display:flex;align-items:center;gap:6px;color:var(--text-secondary,#aaa);">
+        Domain
+        <select id="historyDomainFilter" style="padding:4px 8px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:12px;">${options}</select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input id="historySuppressedOnly" type="checkbox"${checked} style="cursor:pointer;">
+        Suppressed only
+      </label>
     </div>`;
   }
 
-  private renderSummary(rows: NotificationHistoryEntry[]): string {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    const today = rows.filter((r) => r.recordedAt >= cutoff);
-    const byDomain = new Map<string, number>();
-    for (const r of today) {
-      byDomain.set(r.domain, (byDomain.get(r.domain) ?? 0) + 1);
-    }
-    const top = [...byDomain.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
-    const chips = top.length === 0
-      ? '<span style="opacity:0.6;font-size:11px;">none in the last 24h</span>'
-      : top.map(([d, n]) => `<span style="padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.06);font-size:11px;">${escapeHtml(DOMAIN_ICON[d as HistoryDomain] ?? '·')} ${escapeHtml(d)} · ${n}</span>`).join('');
-    return `<div style="padding:8px;">
-      <div style="font-size:24px;font-weight:700;">${today.length}</div>
-      <div style="opacity:0.7;font-size:11px;margin-bottom:8px;">notifications in last 24h</div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;">${chips}</div>
-    </div>`;
+  private wireHandlers(): void {
+    setTimeout(() => {
+      const root = this.content;
+      const domainSel = root.querySelector<HTMLSelectElement>('#historyDomainFilter');
+      domainSel?.addEventListener('change', () => {
+        this.state.domainFilter = domainSel.value;
+        this.render();
+      });
+      const suppToggle = root.querySelector<HTMLInputElement>('#historySuppressedOnly');
+      suppToggle?.addEventListener('change', () => {
+        this.state.suppressedOnly = suppToggle.checked;
+        this.render();
+      });
+      root.querySelectorAll<HTMLElement>('[data-history-row]').forEach((el) => {
+        el.addEventListener('click', () => {
+          const id = el.dataset.historyRow;
+          if (!id) return;
+          this.state.expandedId = this.state.expandedId === id ? null : id;
+          this.render();
+        });
+      });
+    }, 0);
   }
+}
 
-  private renderFilterBar(): string {
-    const rangeOptions = TIME_RANGES.map((r) => ({ id: r.id, label: r.label }));
-    return `<div class="nh-filter-bar">
-      ${this.renderFilterSelect('domain', DOMAIN_OPTIONS)}
-      ${this.renderFilterSelect('severity', SEVERITY_OPTIONS)}
-      ${this.renderFilterSelect('action', ACTION_OPTIONS)}
-      ${this.renderFilterSelect('range', rangeOptions)}
-      <button class="nh-clear-btn" type="button">Clear history</button>
-    </div>`;
+// ── Rendering helpers ───────────────────────────────────────────────
+
+function renderHeaderStats(stats: NotificationProvenanceStats): string {
+  return `<div style="display:flex;gap:18px;font-size:12px;font-family:ui-monospace,monospace;">
+    <span><strong>${stats.total}</strong> total</span>
+    <span><strong style="color:#4caf50;">${stats.delivered}</strong> delivered</span>
+    <span><strong style="color:#ffb74d;">${stats.suppressed}</strong> suppressed</span>
+  </div>`;
+}
+
+function severityFromScore(score: number): { label: string; color: string } {
+  for (const band of SEVERITY_FROM_SCORE) {
+    if (score >= band.min) return { label: band.label, color: band.color };
   }
+  return { label: 'low', color: '#9e9e9e' };
+}
 
-  private renderFilterSelect(name: keyof PanelState, options: { id: string; label: string }[]): string {
-    const current = this.state[name];
-    return `<select class="nh-select" data-nh-filter="${escapeHtml(String(name))}">
-      ${options.map((o) => `<option value="${escapeHtml(o.id)}"${o.id === current ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
-    </select>`;
+function renderTable(records: readonly ProvenanceRecord[], expandedId: string | null): string {
+  if (records.length === 0) {
+    return `<div style="font-size:12px;color:var(--text-secondary,#aaa);padding:16px;text-align:center;border:1px dashed var(--border-subtle,#333);border-radius:4px;">No notification history yet.</div>`;
   }
+  const rows = records.map((r) => renderRow(r, r.notificationId === expandedId)).join('');
+  return `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <thead>
+      <tr style="text-align:left;color:var(--text-secondary,#aaa);font-size:10px;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid var(--border-subtle,#333);">
+        <th style="padding:6px 8px;font-weight:600;width:80px;">Time</th>
+        <th style="padding:6px 8px;font-weight:600;">Domain</th>
+        <th style="padding:6px 8px;font-weight:600;">Severity</th>
+        <th style="padding:6px 8px;font-weight:600;">Title</th>
+        <th style="padding:6px 8px;font-weight:600;width:60px;text-align:center;">Status</th>
+        <th style="padding:6px 8px;font-weight:600;">Source</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
 
-  private renderRows(rows: NotificationHistoryEntry[]): string {
-    if (rows.length === 0) {
-      return '<div class="panel-empty">No notifications match the current filter.</div>';
-    }
-    const items = rows.map((r) => this.renderRow(r)).join('');
-    return `<div class="nh-rows">${items}</div>`;
-  }
+function renderRow(r: ProvenanceRecord, expanded: boolean): string {
+  const sev = severityFromScore(r.finalScore);
+  const isSuppressed = r.suppressedByQuietHours || r.suppressedByTrustBudget;
+  const statusIcon = isSuppressed ? '⊘' : '✓';
+  const statusColor = isSuppressed ? '#ffb74d' : '#4caf50';
+  const statusTitle = isSuppressed ? 'Suppressed' : 'Delivered';
+  const truncated = r.title.length > TITLE_TRUNCATE ? `${r.title.slice(0, TITLE_TRUNCATE - 1)}…` : r.title;
+  const source = r.triggerObservation?.domain ?? 'unknown';
+  const ago = formatAgo(Date.now() - r.sentAt);
+  const baseRow = `<tr data-history-row="${escapeHtml(r.notificationId)}" style="cursor:pointer;border-bottom:1px solid var(--border-subtle,rgba(255,255,255,0.05));">
+    <td style="padding:6px 8px;font-family:ui-monospace,monospace;color:var(--text-secondary,#aaa);">${escapeHtml(ago)}</td>
+    <td style="padding:6px 8px;"><span style="font-size:10px;padding:1px 6px;border-radius:3px;background:var(--surface-3,#222);color:var(--text-secondary,#aaa);font-family:ui-monospace,monospace;">${escapeHtml(r.domain)}</span></td>
+    <td style="padding:6px 8px;"><span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${sev.color}26;color:${sev.color};text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(sev.label)}</span></td>
+    <td style="padding:6px 8px;" title="${escapeHtml(r.title)}">${escapeHtml(truncated)}</td>
+    <td style="padding:6px 8px;text-align:center;color:${statusColor};" title="${escapeHtml(statusTitle)}">${statusIcon}</td>
+    <td style="padding:6px 8px;font-family:ui-monospace,monospace;color:var(--text-secondary,#aaa);">${escapeHtml(source)}</td>
+  </tr>`;
+  if (!expanded) return baseRow;
+  return baseRow + renderExpansion(r);
+}
 
-  private renderRow(r: NotificationHistoryEntry): string {
-    const expanded = this.state.expandedId === r.id;
-    const sev = SEVERITY_BADGE[r.severity];
-    const action = ACTION_BADGE[r.action];
-    return `<div class="nh-row${expanded ? ' nh-row-expanded' : ''}" data-nh-id="${escapeHtml(r.id)}">
-      <div class="nh-row-summary">
-        <span class="nh-row-icon" aria-hidden="true">${DOMAIN_ICON[r.domain]}</span>
-        <span class="nh-row-title">${escapeHtml(r.title)}</span>
-        <span class="nh-row-source">${escapeHtml(r.source)}</span>
-        <span class="nh-row-badges">
-          <span class="nh-badge" style="color:${sev.color};">${escapeHtml(sev.label)}</span>
-          <span class="nh-badge" style="color:${action.color};">${escapeHtml(action.label)}</span>
-        </span>
-        <span class="nh-row-time">${escapeHtml(formatTimestamp(r.recordedAt))}</span>
+function renderExpansion(r: ProvenanceRecord): string {
+  const isSuppressed = r.suppressedByQuietHours || r.suppressedByTrustBudget;
+  const reasons: string[] = [];
+  if (r.suppressedByQuietHours) reasons.push('quiet hours');
+  if (r.suppressedByTrustBudget) reasons.push('trust budget');
+  const reason = isSuppressed ? reasons.join(' + ') : 'not suppressed';
+  const absTime = new Date(r.sentAt).toISOString();
+  return `<tr style="border-bottom:1px solid var(--border-subtle,rgba(255,255,255,0.05));">
+    <td colspan="6" style="padding:8px 12px;background:var(--surface-2,#1a1a1a);font-size:11px;">
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <div><span style="color:var(--text-secondary,#aaa);">Full title:</span> ${escapeHtml(r.title)}</div>
+        <div><span style="color:var(--text-secondary,#aaa);">Trigger observation:</span> <span style="font-family:ui-monospace,monospace;">${escapeHtml(r.triggerObservation?.id ?? 'unknown')}</span></div>
+        <div><span style="color:var(--text-secondary,#aaa);">Suppression:</span> ${escapeHtml(reason)}</div>
+        <div><span style="color:var(--text-secondary,#aaa);">Sent at:</span> <span style="font-family:ui-monospace,monospace;">${escapeHtml(absTime)}</span></div>
       </div>
-      ${expanded ? this.renderRowDetail(r) : ''}
-    </div>`;
-  }
+    </td>
+  </tr>`;
+}
 
-  private renderRowDetail(r: NotificationHistoryEntry): string {
-    const ruleLine = r.ruleId
-      ? `<div class="nh-detail-line"><strong>Rule:</strong> ${escapeHtml(r.ruleId)}</div>`
-      : '';
-    const reasonLine = r.suppressedReason
-      ? `<div class="nh-detail-line"><strong>Suppressed because:</strong> ${escapeHtml(r.suppressedReason)}</div>`
-      : `<div class="nh-detail-line"><strong>Fired:</strong> all preconditions met (no suppression).</div>`;
-    return `<div class="nh-row-detail">
-      <div class="nh-detail-line"><strong>Body:</strong> ${escapeHtml(r.body)}</div>
-      ${ruleLine}
-      ${reasonLine}
-      <div class="nh-detail-line"><strong>Payload</strong></div>
-      <pre class="nh-detail-payload">${escapeHtml(formatPayload(r.payload))}</pre>
-    </div>`;
-  }
-
-  private renderFooter(count: number): string {
-    return `<div class="nh-footer">${count} notification${count === 1 ? '' : 's'} · last 200 retained</div>`;
-  }
-
-  private attachHandlers(): void {
-    const root = this.getContentElement();
-
-    for (const select of root.querySelectorAll<HTMLSelectElement>('[data-nh-filter]')) {
-      select.addEventListener('change', () => {
-        const key = select.dataset.nhFilter as keyof PanelState | undefined;
-        if (!key) return;
-        // Type-narrow per filter — each filter has its own union.
-        (this.state as unknown as Record<string, unknown>)[key] = select.value;
-        this.state.expandedId = null;
-        this.render();
-      });
-    }
-
-    const clearBtn = root.querySelector<HTMLButtonElement>('.nh-clear-btn');
-    if (clearBtn) {
-      clearBtn.addEventListener('click', () => {
-        if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm('Clear all notification history? This cannot be undone.')) return;
-        clearHistory();
-        this.state.expandedId = null;
-        this.render();
-      });
-    }
-
-    for (const row of root.querySelectorAll<HTMLElement>('[data-nh-id]')) {
-      row.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).closest('select, button')) return;
-        const id = row.dataset.nhId ?? null;
-        this.state.expandedId = this.state.expandedId === id ? null : id;
-        this.render();
-      });
-    }
-  }
+function formatAgo(ms: number): string {
+  if (ms < 0) return 'just now';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
 }

@@ -4,6 +4,39 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-05-15
+
+### Added
+
+- **Driver-based scoring** (PR #475): evidence-weighted severity engine that replaces the legacy threshold math — every score now carries a per-driver breakdown the panel can render.
+- **Learn stage — outcome feedback loop** (PR #481): user actions (dismiss / acted-on / escalated / confirmed-real / false-positive) feed a per-domain calibration that recommends attention multipliers.
+- **Evidence graph traversal** (PR #483): typed-edge BFS / DFS, shortest path, and confidence propagation over the situation evidence graph.
+- **Panel lens** (PR #484): context-sensitive panels focus on the currently-active Situation when one is set.
+- **Assumption tracking** (PR #485): every model output is annotated with the assumptions + confidence it depended on.
+
+## [2.19.0] - 2026-05-14
+
+### Added
+
+- **Notification history panel** (PR #477): full provenance + suppression audit trail for delivered notifications.
+- **What Changed v2** (PR #478): world-state diff engine with typed deltas, replacing the v1 string-diff approach.
+- **Situation Store v2** (PR #480): named Situations aggregated from correlated cross-domain signals, with a stable evidence graph.
+
+### Changed
+
+- **Native macOS chrome** (PR #476): window-vibrancy `HudWindow`, transparent titlebar overlay, traffic-light safe-zone CSS. Preserves existing decorations to keep traffic lights visible.
+
+## [2.18.0] - 2026-05-13
+
+### Added
+
+- **Entity registry** (PR #468): canonical identity layer across ships, aircraft, people, and organizations so cross-domain signals can resolve to a single actor.
+- **Explain stage** (PR #467): "why this alert" explanations attached to every notification.
+- **Observation adapters** (PR #469): all feeds normalize to a single `ObservationEvent` schema at the boundary.
+- **Correlate stage** (PR #470): cross-domain signal joining with 8 built-in correlation rules.
+- **Progressive disclosure** (PR #471): summary → detail → raw layering at every panel level.
+- **Notification settings UI** (PR #472): per-domain mute / threshold / channel controls.
+
 ## [2.17.0] - 2026-05-13
 
 ### Added

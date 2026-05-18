@@ -29,6 +29,7 @@
     "/api/intelligence/brief/generate",
     "/api/intelligence/correlations/event",
     "/api/intelligence/evidence-graph",
+    "/api/intelligence/entities",
     "/api/intelligence/explain",
     "/api/intelligence/explain-alerts",
     "/api/command-center/recent-changes",

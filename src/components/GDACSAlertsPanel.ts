@@ -95,9 +95,13 @@ export class GDACSAlertsPanel extends Panel {
     this.unsubscribeLens = null;
   }
 
-  // Legacy: fed from data-loader via JSON API
-  public update(events: GDACSEvent[]): void {
-    this.events = events;
+  // Legacy: fed from data-loader via JSON API.
+  // Guard against a malformed envelope (missing / non-array `events`)
+  // so the renderer doesn't blow up on `this.events.length` /
+  // `this.events.slice(...)` downstream. Mirrors the RSS path's
+  // normalizeGdacsRssEnvelope safety net.
+  public update(events: GDACSEvent[] | null | undefined): void {
+    this.events = Array.isArray(events) ? events : [];
     this.render();
   }
 

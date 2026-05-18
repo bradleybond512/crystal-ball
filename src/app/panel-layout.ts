@@ -264,6 +264,7 @@ import { StrikePackagesPanel } from '@/components/StrikePackagesPanel';
 import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
 import { FeedHealthPanel } from '@/components/FeedHealthPanel';
 import { FeedWatchdogPanel } from '@/components/FeedWatchdogPanel';
+import { SourceCredibilityTrackerPanel } from '@/components/SourceCredibilityTrackerPanel';
 import { CveTrackerPanel } from '@/components/CveTrackerPanel';
 import { VulnersCvePanel } from '@/components/VulnersCvePanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
@@ -1360,6 +1361,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['api-diagnostic'] = new ApiDiagnosticPanel();
  this.ctx.panels['feed-health'] = new FeedHealthPanel();
  this.ctx.panels['feed-watchdog'] = new FeedWatchdogPanel();
+ this.ctx.panels['source-credibility-tracker'] = new SourceCredibilityTrackerPanel();
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
  this.ctx.panels['assumption-tracker'] = new AssumptionPanel();
  this.ctx.panels['assumption-tracker-v2'] = new AssumptionTrackerPanel();

@@ -235,6 +235,7 @@ import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel'
 import { NotificationAuditPanel } from '@/components/NotificationAuditPanel';
 import { NotificationProvenancePanel } from '@/components/NotificationProvenancePanel';
 import { TrustBudgetPanel } from '@/components/TrustBudgetPanel';
+import { IntelligenceTrustBudgetPanel } from '@/components/IntelligenceTrustBudgetPanel';
 import { NotificationSettingsPanel } from '@/components/NotificationSettingsPanel';
 import { NotificationPreferencesPanel } from '@/components/NotificationPreferencesPanel';
 import { SituationStorePanel } from '@/components/SituationStorePanel';
@@ -1319,6 +1320,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['notification-audit'] = new NotificationAuditPanel();
  this.ctx.panels['notification-provenance'] = new NotificationProvenancePanel();
  this.ctx.panels['trust-budget'] = new TrustBudgetPanel();
+ this.ctx.panels['intelligence-trust-budget'] = new IntelligenceTrustBudgetPanel();
  this.ctx.panels['notification-settings'] = new NotificationSettingsPanel();
  this.ctx.panels['notification-preferences'] = new NotificationPreferencesPanel();
  this.ctx.panels['situations'] = new SituationStorePanel();

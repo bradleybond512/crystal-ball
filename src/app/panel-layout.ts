@@ -265,6 +265,7 @@ import { CveTrackerPanel } from '@/components/CveTrackerPanel';
 import { VulnersCvePanel } from '@/components/VulnersCvePanel';
 import { SystemDiagnosticPanel } from '@/components/SystemDiagnosticPanel';
 import { AssumptionPanel } from '@/components/AssumptionPanel';
+import { AssumptionTrackerPanel } from '@/components/AssumptionTrackerPanel';
 import { DomainScorecardPanel } from '@/components/DomainScorecardPanel';
 import { BehavioralResponsePanel } from '@/components/BehavioralResponsePanel';
 import { CausalChainPanel } from '@/components/CausalChainPanel';
@@ -1331,6 +1332,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['feed-health'] = new FeedHealthPanel();
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();
  this.ctx.panels['assumption-tracker'] = new AssumptionPanel();
+ this.ctx.panels['assumption-tracker-v2'] = new AssumptionTrackerPanel();
  this.ctx.panels['domain-scorecard'] = new DomainScorecardPanel();
  this.ctx.panels['behavioral-response'] = new BehavioralResponsePanel();
  this.ctx.panels['causal-chain'] = new CausalChainPanel();

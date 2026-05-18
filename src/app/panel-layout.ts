@@ -320,6 +320,7 @@ import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
 import { CounterfactualReplayPanel } from '@/components/CounterfactualReplayPanel';
 import { CounterfactualReasoningPanel } from '@/components/CounterfactualReasoningPanel';
 import { SituationPriorityQueuePanel } from '@/components/SituationPriorityQueuePanel';
+import { IntelligenceHealthMonitorPanel } from '@/components/IntelligenceHealthMonitorPanel';
 import { BacktestGatePanel } from '@/components/BacktestGatePanel';
 import { GlobalRhythmPanel } from '@/components/GlobalRhythmPanel';
 import { TemporalAnomalyDetectorPanel } from '@/components/TemporalAnomalyDetectorPanel';
@@ -1404,6 +1405,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['counterfactual-replay'] = new CounterfactualReplayPanel();
  this.ctx.panels['counterfactual-reasoning'] = new CounterfactualReasoningPanel();
  this.ctx.panels['situation-priority-queue'] = new SituationPriorityQueuePanel();
+ this.ctx.panels['intelligence-health-monitor'] = new IntelligenceHealthMonitorPanel();
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();

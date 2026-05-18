@@ -276,6 +276,7 @@ import { CausalChainPanel } from '@/components/CausalChainPanel';
 import { CivilizationPulsePanel } from '@/components/CivilizationPulsePanel';
 import { AlertEscalationPanel } from '@/components/AlertEscalationPanel';
 import { MissionControlDashboardPanel } from '@/components/MissionControlDashboardPanel';
+import { CompoundEventDetectorPanel } from '@/components/CompoundEventDetectorPanel';
 import { WorldNarrativePanel } from '@/components/WorldNarrativePanel';
 import { QualityDebtPanel } from '@/components/QualityDebtPanel';
 import { FailurePredictionPanel } from '@/components/FailurePredictionPanel';
@@ -1371,6 +1372,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['civilization-pulse'] = new CivilizationPulsePanel();
  this.ctx.panels['alert-escalation'] = new AlertEscalationPanel();
  this.ctx.panels['mission-control-dashboard'] = new MissionControlDashboardPanel();
+ this.ctx.panels['compound-event-detector'] = new CompoundEventDetectorPanel();
  this.ctx.panels['world-narrative'] = new WorldNarrativePanel();
  this.ctx.panels['quality-debt'] = new QualityDebtPanel();
  this.ctx.panels['failure-prediction'] = new FailurePredictionPanel();

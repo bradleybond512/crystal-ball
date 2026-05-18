@@ -318,6 +318,7 @@ import { CounterfactualReplayPanel } from '@/components/CounterfactualReplayPane
 import { CounterfactualReasoningPanel } from '@/components/CounterfactualReasoningPanel';
 import { BacktestGatePanel } from '@/components/BacktestGatePanel';
 import { GlobalRhythmPanel } from '@/components/GlobalRhythmPanel';
+import { TemporalAnomalyDetectorPanel } from '@/components/TemporalAnomalyDetectorPanel';
 import { ThreatHorizonPanel } from '@/components/ThreatHorizonPanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
 import { AlertExplanationPanel } from '@/components/AlertExplanationPanel';
@@ -1371,6 +1372,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['backtest'] = new BacktestPanel();
  this.ctx.panels['backtest-gate'] = new BacktestGatePanel();
  this.ctx.panels['global-rhythm'] = new GlobalRhythmPanel();
+ this.ctx.panels['temporal-anomaly-detector'] = new TemporalAnomalyDetectorPanel();
  this.ctx.panels['threat-horizon'] = new ThreatHorizonPanel();
  this.ctx.panels['shadow-mode'] = new ShadowModePanel();
  this.ctx.panels['shadow-comparison'] = new ShadowComparisonPanel();

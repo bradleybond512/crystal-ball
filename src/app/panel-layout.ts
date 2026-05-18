@@ -270,6 +270,7 @@ import { DomainScorecardPanel } from '@/components/DomainScorecardPanel';
 import { BehavioralResponsePanel } from '@/components/BehavioralResponsePanel';
 import { CausalChainPanel } from '@/components/CausalChainPanel';
 import { CivilizationPulsePanel } from '@/components/CivilizationPulsePanel';
+import { SituationLifecycleTrackerPanel } from '@/components/SituationLifecycleTrackerPanel';
 import { WorldNarrativePanel } from '@/components/WorldNarrativePanel';
 import { QualityDebtPanel } from '@/components/QualityDebtPanel';
 import { FailurePredictionPanel } from '@/components/FailurePredictionPanel';
@@ -1350,6 +1351,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['behavioral-response'] = new BehavioralResponsePanel();
  this.ctx.panels['causal-chain'] = new CausalChainPanel();
  this.ctx.panels['civilization-pulse'] = new CivilizationPulsePanel();
+ this.ctx.panels['situation-lifecycle-tracker'] = new SituationLifecycleTrackerPanel();
  this.ctx.panels['world-narrative'] = new WorldNarrativePanel();
  this.ctx.panels['quality-debt'] = new QualityDebtPanel();
  this.ctx.panels['failure-prediction'] = new FailurePredictionPanel();

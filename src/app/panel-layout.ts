@@ -314,6 +314,7 @@ import { ExperimentManagerPanel } from '@/components/ExperimentManagerPanel';
 import { DomainScorecardsPanel } from '@/components/DomainScorecardsPanel';
 import { GeopoliticalEventCalendarPanel } from '@/components/GeopoliticalEventCalendarPanel';
 import { SignalEnrichmentPanel } from '@/components/SignalEnrichmentPanel';
+import { ThreatCorrelationMatrixPanel } from '@/components/ThreatCorrelationMatrixPanel';
 import { DomainDependencyPanel } from '@/components/DomainDependencyPanel';
 import { SituationTimelinePanel } from '@/components/SituationTimelinePanel';
 import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
@@ -1396,6 +1397,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['domain-scorecards'] = new DomainScorecardsPanel();
  this.ctx.panels['geopolitical-event-calendar'] = new GeopoliticalEventCalendarPanel();
  this.ctx.panels['signal-enrichment'] = new SignalEnrichmentPanel();
+ this.ctx.panels['threat-correlation-matrix'] = new ThreatCorrelationMatrixPanel();
  this.ctx.panels['domain-dependency'] = new DomainDependencyPanel();
  this.ctx.panels['situation-timeline'] = new SituationTimelinePanel();
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();

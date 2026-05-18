@@ -478,3 +478,244 @@ export const __internals = {
   RELIABILITY_THRESHOLDS,
   MAX_ESTIMATES,
 };
+
+// ════════════════════════════════════════════════════════════════════════
+// MetaConfidenceCalibrationService — calibration-history surface that
+// answers "when we say X% confident, how often are we actually right?".
+// Separate from MetaConfidenceService above (which estimates from
+// observations + assumptions); this service builds binned reliability
+// summaries from observed prediction outcomes.
+// ════════════════════════════════════════════════════════════════════════
+
+export interface CalibrationBin {
+  binMin: number;
+  binMax: number;
+  predictedCount: number;
+  correctCount: number;
+  calibrationError: number;
+}
+
+export interface MetaConfidenceRecord {
+  id: string;
+  domain: string;
+  algorithmId: string;
+  predictedConfidence: number;
+  wasCorrect: boolean;
+  recordedAt: number;
+}
+
+export type CalibrationReliability = 'high' | 'medium' | 'low' | 'insufficient-data';
+
+export interface MetaConfidenceSummary {
+  domain: string;
+  algorithmId: string;
+  sampleCount: number;
+  meanCalibrationError: number;
+  reliability: CalibrationReliability;
+  bins: CalibrationBin[];
+}
+
+export type CalibrationListener = (record: MetaConfidenceRecord) => void;
+
+export interface CalibrationStorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+export interface MetaConfidenceCalibrationOptions {
+  capacity?: number;
+  storage?: CalibrationStorageLike | null;
+  now?: () => number;
+}
+
+const CALIBRATION_STORAGE_KEY = 'wm-meta-confidence';
+const CALIBRATION_MAX_RECORDS = 2000;
+const CALIBRATION_INSUFFICIENT_DATA_THRESHOLD = 10;
+const CALIBRATION_HIGH_THRESHOLD = 0.1;
+const CALIBRATION_LOW_THRESHOLD = 0.2;
+const CALIBRATION_BIN_COUNT = 5;
+
+interface PersistedCalibrationState {
+  records: MetaConfidenceRecord[];
+}
+
+export class MetaConfidenceCalibrationService {
+  private readonly capacity: number;
+  private readonly storage: CalibrationStorageLike | null;
+  private readonly clock: () => number;
+  private readonly records: MetaConfidenceRecord[] = [];
+  private readonly subscribers = new Set<CalibrationListener>();
+  private idCounter = 0;
+
+  constructor(opts: MetaConfidenceCalibrationOptions = {}) {
+    this.capacity = opts.capacity ?? CALIBRATION_MAX_RECORDS;
+    this.storage = opts.storage === undefined ? defaultCalibrationStorage() : opts.storage;
+    this.clock = opts.now ?? Date.now;
+    this.hydrate();
+  }
+
+  record(input: Omit<MetaConfidenceRecord, 'id' | 'recordedAt'>): MetaConfidenceRecord {
+    const recordedAt = this.clock();
+    this.idCounter++;
+    const persisted: MetaConfidenceRecord = {
+      ...input,
+      id: `mcc-${recordedAt}-${this.idCounter}`,
+      recordedAt,
+    };
+    this.records.push(persisted);
+    while (this.records.length > this.capacity) this.records.shift();
+    this.persist();
+    for (const cb of this.subscribers) cb(persisted);
+    return persisted;
+  }
+
+  getSummary(domain: string, algorithmId: string): MetaConfidenceSummary {
+    const matching = this.records.filter((r) => r.domain === domain && r.algorithmId === algorithmId);
+    const bins = buildBins(matching);
+    const populatedBins = bins.filter((b) => b.predictedCount > 0);
+    const meanCalibrationError = populatedBins.length === 0
+      ? 0
+      : Number(
+          (populatedBins.reduce((sum, b) => sum + b.calibrationError, 0) / populatedBins.length).toFixed(4),
+        );
+    return {
+      domain,
+      algorithmId,
+      sampleCount: matching.length,
+      meanCalibrationError,
+      reliability: reliabilityFor(matching.length, meanCalibrationError),
+      bins,
+    };
+  }
+
+  getMetaConfidenceScore(domain: string, algorithmId: string): number {
+    const summary = this.getSummary(domain, algorithmId);
+    if (summary.reliability === 'insufficient-data') return 0.5;
+    return Number((1 - summary.meanCalibrationError).toFixed(4));
+  }
+
+  getAllSummaries(): MetaConfidenceSummary[] {
+    const pairs = new Map<string, { domain: string; algorithmId: string }>();
+    for (const r of this.records) {
+      pairs.set(`${r.domain}|${r.algorithmId}`, { domain: r.domain, algorithmId: r.algorithmId });
+    }
+    return [...pairs.values()].map((p) => this.getSummary(p.domain, p.algorithmId));
+  }
+
+  getRecords(domain?: string, algorithmId?: string, limit?: number): MetaConfidenceRecord[] {
+    const filtered: MetaConfidenceRecord[] = [];
+    for (let i = this.records.length - 1; i >= 0; i--) {
+      const r = this.records[i]!;
+      if (domain && r.domain !== domain) continue;
+      if (algorithmId && r.algorithmId !== algorithmId) continue;
+      filtered.push(r);
+      if (limit && filtered.length >= limit) break;
+    }
+    return filtered;
+  }
+
+  subscribeCalibration(cb: CalibrationListener): () => void {
+    this.subscribers.add(cb);
+    return () => { this.subscribers.delete(cb); };
+  }
+
+  unsubscribeCalibration(cb: CalibrationListener): void {
+    this.subscribers.delete(cb);
+  }
+
+  clear(): void {
+    this.records.length = 0;
+    this.persist();
+  }
+
+  // ── Internals ─────────────────────────────────────────────────────
+
+  private hydrate(): void {
+    if (!this.storage) return;
+    try {
+      const raw = this.storage.getItem(CALIBRATION_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as PersistedCalibrationState;
+      if (!parsed || !Array.isArray(parsed.records)) return;
+      for (const r of parsed.records) this.records.push(r);
+      while (this.records.length > this.capacity) this.records.shift();
+    } catch {
+      this.records.length = 0;
+    }
+  }
+
+  private persist(): void {
+    if (!this.storage) return;
+    try {
+      const serial: PersistedCalibrationState = { records: this.records };
+      this.storage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(serial));
+    } catch {
+      // Storage failures are non-fatal.
+    }
+  }
+}
+
+// ── Lazy singleton for the calibration service ──────────────────────
+
+let _calibrationSingleton: MetaConfidenceCalibrationService | undefined;
+
+export function getMetaConfidenceCalibrationService(): MetaConfidenceCalibrationService {
+  _calibrationSingleton ??= new MetaConfidenceCalibrationService();
+  return _calibrationSingleton;
+}
+
+export function resetCalibrationServiceForTests(): void {
+  _calibrationSingleton = undefined;
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────
+
+function buildBins(records: readonly MetaConfidenceRecord[]): CalibrationBin[] {
+  const bins: CalibrationBin[] = [];
+  for (let i = 0; i < CALIBRATION_BIN_COUNT; i++) {
+    bins.push({
+      binMin: i / CALIBRATION_BIN_COUNT,
+      binMax: (i + 1) / CALIBRATION_BIN_COUNT,
+      predictedCount: 0,
+      correctCount: 0,
+      calibrationError: 0,
+    });
+  }
+  for (const r of records) {
+    const idx = binIndex(r.predictedConfidence);
+    const bin = bins[idx]!;
+    bin.predictedCount++;
+    if (r.wasCorrect) bin.correctCount++;
+  }
+  for (const bin of bins) {
+    if (bin.predictedCount === 0) {
+      bin.calibrationError = 0;
+      continue;
+    }
+    const midpoint = (bin.binMin + bin.binMax) / 2;
+    const actual = bin.correctCount / bin.predictedCount;
+    bin.calibrationError = Number(Math.abs(midpoint - actual).toFixed(4));
+  }
+  return bins;
+}
+
+function binIndex(predictedConfidence: number): number {
+  // Bins are half-open [0-0.2), [0.2-0.4), [0.4-0.6), [0.6-0.8) and
+  // the LAST bin [0.8-1.0] is closed on both ends so 1.0 lands inside.
+  if (predictedConfidence >= 1) return CALIBRATION_BIN_COUNT - 1;
+  if (predictedConfidence < 0) return 0;
+  return Math.floor(predictedConfidence * CALIBRATION_BIN_COUNT);
+}
+
+function reliabilityFor(sampleCount: number, meanCalibrationError: number): CalibrationReliability {
+  if (sampleCount < CALIBRATION_INSUFFICIENT_DATA_THRESHOLD) return 'insufficient-data';
+  if (meanCalibrationError < CALIBRATION_HIGH_THRESHOLD) return 'high';
+  if (meanCalibrationError < CALIBRATION_LOW_THRESHOLD) return 'medium';
+  return 'low';
+}
+
+function defaultCalibrationStorage(): CalibrationStorageLike | null {
+  if (typeof globalThis === 'undefined') return null;
+  const ls = (globalThis as { localStorage?: CalibrationStorageLike }).localStorage;
+  return ls ?? null;
+}

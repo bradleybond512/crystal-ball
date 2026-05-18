@@ -58,6 +58,7 @@ import {
   DailyWisdomPanel,
 } from '@/components';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
+import { WatchAreaAlertingPanel } from '@/components/WatchAreaAlertingPanel';
 import { TriageBar } from '@/components/TriageBar';
 import { EEWStatusBar } from '@/components/EEWStatusBar';
 import { CorrelationAlertBanner } from '@/components/CorrelationAlertBanner';
@@ -1086,6 +1087,7 @@ export class PanelLayoutManager implements AppModule {
 
  const watchlistLocationsPanel = new WatchlistLocationsPanel();
  this.ctx.panels['watchlist-locations'] = watchlistLocationsPanel;
+ this.ctx.panels['watch-area-alerting'] = new WatchAreaAlertingPanel();
 
  this.ctx.unifiedSettings?.setPlaceCallbacks(openCreate, openEdit);
 

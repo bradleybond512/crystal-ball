@@ -439,3 +439,291 @@ export function getActiveLearningQueue(): ActiveLearningQueue {
 export function _resetActiveLearningQueueSingletonForTests(): void {
   _singleton = null;
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// ActiveLearningQueueService — class-based 5-state priority queue.
+// Separate API from createActiveLearningQueue() above. The legacy queue
+// models human-in-the-loop review with 3 statuses; this service models a
+// claim-able priority queue with explicit claim/resolve/skip/expire
+// transitions and feeds resolved items back to the AlgoEvalLedger.
+// ════════════════════════════════════════════════════════════════════════
+
+export type LearningItemPriority = 'critical' | 'high' | 'medium' | 'low';
+export type LearningItemStatus = 'pending' | 'claimed' | 'resolved' | 'skipped' | 'expired';
+export type LearningItemReason =
+  | 'low-confidence'
+  | 'prediction-miss'
+  | 'model-disagreement'
+  | 'anomaly'
+  | 'operator-flagged';
+
+export interface ActiveLearningItem {
+  id: string;
+  observationId: string;
+  domain: string;
+  reason: LearningItemReason;
+  priority: LearningItemPriority;
+  status: LearningItemStatus;
+  queuedAt: number;
+  claimedAt?: number;
+  resolvedAt?: number;
+  expiresAt: number;
+  operatorLabel?: string;
+  notes?: string;
+  modelOutput?: unknown;
+}
+
+export interface ActiveLearningQueueFilter {
+  status?: LearningItemStatus;
+  domain?: string;
+  priority?: LearningItemPriority;
+}
+
+export interface ActiveLearningQueueStats {
+  total: number;
+  pending: number;
+  claimed: number;
+  resolved: number;
+  skipped: number;
+  expired: number;
+  avgResolutionMinutes: number;
+}
+
+export interface ActiveLearningQueueServiceOptions {
+  capacity?: number;
+  storage?: StorageLike | null;
+  now?: () => number;
+  /** Optional sink for resolved items. Production wires the live
+   *  AlgoEvalLedger via `wireDefaultAlgoEvalLedger()` below; tests
+   *  pass a stub or leave undefined. */
+  recordToAlgoEvalLedger?: (item: ActiveLearningItem) => void;
+}
+
+const SERVICE_STORAGE_KEY = 'wm-active-learning-queue';
+const SERVICE_MAX_ITEMS = 1000;
+
+const PRIORITY_RANK: Record<LearningItemPriority, number> = {
+  critical: 4, high: 3, medium: 2, low: 1,
+};
+
+interface PersistedServiceState {
+  items: ActiveLearningItem[];
+}
+
+export class ActiveLearningQueueService {
+  private readonly capacity: number;
+  private readonly storage: StorageLike | null;
+  private readonly clock: () => number;
+  private readonly recordToLedger?: (item: ActiveLearningItem) => void;
+  private readonly byId = new Map<string, ActiveLearningItem>();
+  private readonly order: string[] = [];
+  private readonly subscribers = new Set<(item: ActiveLearningItem) => void>();
+  private idCounter = 0;
+
+  constructor(opts: ActiveLearningQueueServiceOptions = {}) {
+    this.capacity = opts.capacity ?? SERVICE_MAX_ITEMS;
+    this.storage = opts.storage === undefined ? defaultStorage() : opts.storage;
+    this.clock = opts.now ?? Date.now;
+    this.recordToLedger = opts.recordToAlgoEvalLedger;
+    this.hydrate();
+  }
+
+  enqueue(input: Omit<ActiveLearningItem, 'id' | 'status' | 'queuedAt'>): ActiveLearningItem {
+    const existing = this.findActiveByObservation(input.observationId);
+    if (existing) return existing;
+    const queuedAt = this.clock();
+    this.idCounter++;
+    const item: ActiveLearningItem = {
+      ...input,
+      id: `alq-${queuedAt}-${this.idCounter}`,
+      status: 'pending',
+      queuedAt,
+    };
+    this.byId.set(item.id, item);
+    this.order.push(item.id);
+    while (this.order.length > this.capacity) {
+      const evict = this.order.shift();
+      if (evict !== undefined) this.byId.delete(evict);
+    }
+    this.persist();
+    this.notify(item);
+    return item;
+  }
+
+  claim(itemId: string): void {
+    const item = this.byId.get(itemId);
+    if (item?.status !== 'pending') return;
+    const updated: ActiveLearningItem = { ...item, status: 'claimed', claimedAt: this.clock() };
+    this.byId.set(itemId, updated);
+    this.persist();
+    this.notify(updated);
+  }
+
+  resolve(itemId: string, label: string, notes?: string): void {
+    const item = this.byId.get(itemId);
+    if (!item || (item.status !== 'pending' && item.status !== 'claimed')) return;
+    const updated: ActiveLearningItem = {
+      ...item,
+      status: 'resolved',
+      resolvedAt: this.clock(),
+      operatorLabel: label,
+      notes: notes ?? item.notes,
+    };
+    this.byId.set(itemId, updated);
+    this.persist();
+    this.notify(updated);
+    this.recordToLedger?.(updated);
+  }
+
+  skip(itemId: string): void {
+    const item = this.byId.get(itemId);
+    if (!item || (item.status !== 'pending' && item.status !== 'claimed')) return;
+    const updated: ActiveLearningItem = { ...item, status: 'skipped' };
+    this.byId.set(itemId, updated);
+    this.persist();
+    this.notify(updated);
+  }
+
+  expire(before: number): number {
+    let count = 0;
+    for (const item of this.byId.values()) {
+      if (item.status !== 'pending') continue;
+      if (item.expiresAt >= before) continue;
+      const updated: ActiveLearningItem = { ...item, status: 'expired' };
+      this.byId.set(item.id, updated);
+      count++;
+      this.notify(updated);
+    }
+    if (count > 0) this.persist();
+    return count;
+  }
+
+  getQueue(filter: ActiveLearningQueueFilter = {}): ActiveLearningItem[] {
+    const items: ActiveLearningItem[] = [];
+    for (const item of this.byId.values()) {
+      if (filter.status && item.status !== filter.status) continue;
+      if (filter.domain && item.domain !== filter.domain) continue;
+      if (filter.priority && item.priority !== filter.priority) continue;
+      items.push(item);
+    }
+    items.sort((a, b) => {
+      const priorityDelta = PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority];
+      if (priorityDelta !== 0) return priorityDelta;
+      return a.queuedAt - b.queuedAt;
+    });
+    return items;
+  }
+
+  getItem(itemId: string): ActiveLearningItem | undefined {
+    return this.byId.get(itemId);
+  }
+
+  getStats(): ActiveLearningQueueStats {
+    let pending = 0, claimed = 0, resolved = 0, skipped = 0, expired = 0;
+    let resolutionSumMs = 0;
+    let resolutionCount = 0;
+    for (const item of this.byId.values()) {
+      switch (item.status) {
+        case 'pending': {  pending++;  break;
+        }
+        case 'claimed': {  claimed++;  break;
+        }
+        case 'skipped': {  skipped++;  break;
+        }
+        case 'expired': {  expired++;  break;
+        }
+        case 'resolved': {
+          resolved++;
+          if (item.resolvedAt) {
+            resolutionSumMs += Math.max(0, item.resolvedAt - item.queuedAt);
+            resolutionCount++;
+          }
+          break;
+        }
+      }
+    }
+    const avgResolutionMinutes = resolutionCount === 0
+      ? 0
+      : Number(((resolutionSumMs / resolutionCount) / 60_000).toFixed(2));
+    return {
+      total: this.byId.size,
+      pending, claimed, resolved, skipped, expired,
+      avgResolutionMinutes,
+    };
+  }
+
+  subscribe(cb: (item: ActiveLearningItem) => void): () => void {
+    this.subscribers.add(cb);
+    return () => { this.subscribers.delete(cb); };
+  }
+
+  unsubscribe(cb: (item: ActiveLearningItem) => void): void {
+    this.subscribers.delete(cb);
+  }
+
+  clear(): void {
+    this.byId.clear();
+    this.order.length = 0;
+    this.persist();
+  }
+
+  // ── Internals ─────────────────────────────────────────────────────
+
+  private findActiveByObservation(observationId: string): ActiveLearningItem | undefined {
+    for (const item of this.byId.values()) {
+      if (item.observationId !== observationId) continue;
+      if (item.status === 'pending' || item.status === 'claimed') return item;
+    }
+    return undefined;
+  }
+
+  private notify(item: ActiveLearningItem): void {
+    for (const cb of this.subscribers) cb(item);
+  }
+
+  private hydrate(): void {
+    if (!this.storage) return;
+    try {
+      const raw = this.storage.getItem(SERVICE_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as PersistedServiceState;
+      if (!parsed || !Array.isArray(parsed.items)) return;
+      for (const item of parsed.items) {
+        if (!this.byId.has(item.id)) this.order.push(item.id);
+        this.byId.set(item.id, item);
+      }
+    } catch {
+      this.byId.clear();
+      this.order.length = 0;
+    }
+  }
+
+  private persist(): void {
+    if (!this.storage) return;
+    try {
+      const serial: PersistedServiceState = { items: [...this.byId.values()] };
+      this.storage.setItem(SERVICE_STORAGE_KEY, JSON.stringify(serial));
+    } catch {
+      // Storage failures are non-fatal.
+    }
+  }
+}
+
+// ── Lazy singleton for the new service ──────────────────────────────
+
+let _serviceSingleton: ActiveLearningQueueService | undefined;
+
+export function getActiveLearningQueueService(): ActiveLearningQueueService {
+  _serviceSingleton ??= new ActiveLearningQueueService();
+  return _serviceSingleton;
+}
+
+export function resetServiceForTests(): void {
+  _serviceSingleton = undefined;
+}
+
+function defaultStorage(): StorageLike | null {
+  if (typeof globalThis === 'undefined') return null;
+  const ls = (globalThis as { localStorage?: StorageLike }).localStorage;
+  return ls ?? null;
+}

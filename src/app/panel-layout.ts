@@ -295,6 +295,7 @@ import { ContradictionDetectorPanel } from '@/components/ContradictionDetectorPa
 import { CrisisTrajectoryPanel } from '@/components/CrisisTrajectoryPanel';
 import { RegionalResiliencePanel } from '@/components/RegionalResiliencePanel';
 import { ActiveLearningPanel } from '@/components/ActiveLearningPanel';
+import { ActiveLearningQueuePanel } from '@/components/ActiveLearningQueuePanel';
 import { SchedulerPanel } from '@/components/SchedulerPanel';
 import { ModelGovernancePanel } from '@/components/ModelGovernancePanel';
 import { RecoveryModelingPanel } from '@/components/RecoveryModelingPanel';
@@ -1346,6 +1347,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['crisis-trajectory'] = new CrisisTrajectoryPanel();
  this.ctx.panels['regional-resilience'] = new RegionalResiliencePanel();
  this.ctx.panels['active-learning'] = new ActiveLearningPanel();
+ this.ctx.panels['active-learning-queue'] = new ActiveLearningQueuePanel();
  this.ctx.panels['improvement-scheduler'] = new SchedulerPanel();
  this.ctx.panels['model-governance'] = new ModelGovernancePanel();
  this.ctx.panels['recovery-modeling'] = new RecoveryModelingPanel();

@@ -308,6 +308,7 @@ import { BacktestPanel } from '@/components/BacktestPanel';
 import { SafetyCaseDashboard } from '@/components/SafetyCaseDashboard';
 import { SafetyCaseDashboardPanel } from '@/components/SafetyCaseDashboardPanel';
 import { ExperimentManagerPanel } from '@/components/ExperimentManagerPanel';
+import { DomainScorecardsPanel } from '@/components/DomainScorecardsPanel';
 import { DomainDependencyPanel } from '@/components/DomainDependencyPanel';
 import { SituationTimelinePanel } from '@/components/SituationTimelinePanel';
 import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
@@ -1377,6 +1378,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['safety-case'] = new SafetyCaseDashboard();
  this.ctx.panels['safety-case-dashboard'] = new SafetyCaseDashboardPanel();
  this.ctx.panels['experiment-manager'] = new ExperimentManagerPanel();
+ this.ctx.panels['domain-scorecards'] = new DomainScorecardsPanel();
  this.ctx.panels['domain-dependency'] = new DomainDependencyPanel();
  this.ctx.panels['situation-timeline'] = new SituationTimelinePanel();
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();

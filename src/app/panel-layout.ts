@@ -285,6 +285,7 @@ import { MetaConfidencePanel } from '@/components/MetaConfidencePanel';
 import { ShadowModePanel } from '@/components/ShadowModePanel';
 import { SavedPlacesFilterPanel } from '@/components/SavedPlacesFilterPanel';
 import { ShadowComparisonPanel } from '@/components/ShadowComparisonPanel';
+import { CognitiveBiasDetectorPanel } from '@/components/CognitiveBiasDetectorPanel';
 import { CrisisSignaturePanel } from '@/components/CrisisSignaturePanel';
 import { CollectionGapPanel } from '@/components/CollectionGapPanel';
 import { getShadowRunner } from '@/services/intelligence/shadow-runner';
@@ -1363,6 +1364,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['threat-horizon'] = new ThreatHorizonPanel();
  this.ctx.panels['shadow-mode'] = new ShadowModePanel();
  this.ctx.panels['shadow-comparison'] = new ShadowComparisonPanel();
+ this.ctx.panels['cognitive-bias-detector'] = new CognitiveBiasDetectorPanel();
  this.ctx.panels['crisis-signature'] = new CrisisSignaturePanel();
  try {
   const runner = getShadowRunner();

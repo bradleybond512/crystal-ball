@@ -317,6 +317,7 @@ import { GeopoliticalEventCalendarPanel } from '@/components/GeopoliticalEventCa
 import { SignalEnrichmentPanel } from '@/components/SignalEnrichmentPanel';
 import { ThreatCorrelationMatrixPanel } from '@/components/ThreatCorrelationMatrixPanel';
 import { GeospatialClusteringPanel } from '@/components/GeospatialClusteringPanel';
+import { IntelligenceBriefingExportPanel } from '@/components/IntelligenceBriefingExportPanel';
 import { DomainDependencyPanel } from '@/components/DomainDependencyPanel';
 import { SituationTimelinePanel } from '@/components/SituationTimelinePanel';
 import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
@@ -1404,6 +1405,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['signal-enrichment'] = new SignalEnrichmentPanel();
  this.ctx.panels['threat-correlation-matrix'] = new ThreatCorrelationMatrixPanel();
  this.ctx.panels['geospatial-clustering'] = new GeospatialClusteringPanel();
+ this.ctx.panels['intelligence-briefing-export'] = new IntelligenceBriefingExportPanel();
  this.ctx.panels['domain-dependency'] = new DomainDependencyPanel();
  this.ctx.panels['situation-timeline'] = new SituationTimelinePanel();
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();

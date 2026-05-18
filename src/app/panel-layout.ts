@@ -281,6 +281,7 @@ import { RepairRecommendationsPanel } from '@/components/RepairRecommendationsPa
 import { MissionLedgerBridgePanel } from '@/components/MissionLedgerBridgePanel';
 import { getMissionLedgerBridge } from '@/services/intelligence/mission-ledger-bridge';
 import { HypothesisPanel } from '@/components/HypothesisPanel';
+import { CompetitiveHypothesisEnginePanel } from '@/components/CompetitiveHypothesisEnginePanel';
 import { MetaConfidencePanel } from '@/components/MetaConfidencePanel';
 import { MetaConfidenceCalibrationPanel } from '@/components/MetaConfidenceCalibrationPanel';
 import { ShadowModePanel } from '@/components/ShadowModePanel';
@@ -1347,6 +1348,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['operator-mode'] = new OperatorModePanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['competitive-hypothesis'] = new HypothesisPanel();
+ this.ctx.panels['competitive-hypothesis-engine'] = new CompetitiveHypothesisEnginePanel();
  this.ctx.panels['meta-confidence'] = new MetaConfidencePanel();
  this.ctx.panels['meta-confidence-calibration'] = new MetaConfidenceCalibrationPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();

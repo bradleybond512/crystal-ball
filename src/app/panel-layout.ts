@@ -276,6 +276,7 @@ import { OperationalPlaybookPanel } from '@/components/OperationalPlaybookPanel'
 import { DiagnosticSelfTestPanel } from '@/components/DiagnosticSelfTestPanel';
 import { SelfTestRunnerPanel } from '@/components/SelfTestRunnerPanel';
 import { OperatorModePanel } from '@/components/OperatorModePanel';
+import { OperatorShiftReportPanel } from '@/components/OperatorShiftReportPanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { RepairRecommendationsPanel } from '@/components/RepairRecommendationsPanel';
 import { MissionLedgerBridgePanel } from '@/components/MissionLedgerBridgePanel';
@@ -1351,6 +1352,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['self-test'] = new DiagnosticSelfTestPanel();
  this.ctx.panels['self-test-runner'] = new SelfTestRunnerPanel();
  this.ctx.panels['operator-mode'] = new OperatorModePanel();
+ this.ctx.panels['operator-shift-report'] = new OperatorShiftReportPanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['competitive-hypothesis'] = new HypothesisPanel();
  this.ctx.panels['competitive-hypothesis-engine'] = new CompetitiveHypothesisEnginePanel();

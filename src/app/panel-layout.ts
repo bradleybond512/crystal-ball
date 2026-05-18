@@ -325,6 +325,7 @@ import { CounterfactualReasoningPanel } from '@/components/CounterfactualReasoni
 import { SituationPriorityQueuePanel } from '@/components/SituationPriorityQueuePanel';
 import { IntelligenceHealthMonitorPanel } from '@/components/IntelligenceHealthMonitorPanel';
 import { IntelligenceLoopOrchestratorPanel } from '@/components/IntelligenceLoopOrchestratorPanel';
+import { AnalystNotebookPanel } from '@/components/AnalystNotebookPanel';
 import { BacktestGatePanel } from '@/components/BacktestGatePanel';
 import { GlobalRhythmPanel } from '@/components/GlobalRhythmPanel';
 import { TemporalAnomalyDetectorPanel } from '@/components/TemporalAnomalyDetectorPanel';
@@ -1414,6 +1415,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['situation-priority-queue'] = new SituationPriorityQueuePanel();
  this.ctx.panels['intelligence-health-monitor'] = new IntelligenceHealthMonitorPanel();
  this.ctx.panels['intelligence-loop-orchestrator'] = new IntelligenceLoopOrchestratorPanel();
+ this.ctx.panels['analyst-notebook'] = new AnalystNotebookPanel();
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();

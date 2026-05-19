@@ -165,6 +165,7 @@ export const PANEL_SMOKE_REGISTRY: Record<string, SmokeFactory> = {
   'situation-awareness': wrap(async () => { const m = await import('@/components/SituationPanel'); return new m.SituationPanel(); }),
   'space-launches': wrap(async () => { const m = await import('@/components/SpaceLaunchesPanel'); return new m.SpaceLaunchesPanel(); }),
   'space-weather': wrap(async () => { const m = await import('@/components/SpaceWeatherPanel'); return new m.SpaceWeatherPanel(); }),
+  'space-superpower': wrap(async () => { const m = await import('@/components/SpaceSuperpowerPanel'); return new m.SpaceSuperpowerPanel(); }),
   'spaceflight-news': wrap(async () => { const m = await import('@/components/SpaceflightNewsPanel'); return new m.SpaceflightNewsPanel(); }),
   'species': wrap(async () => { const m = await import('@/components/SpeciesComebackPanel'); return new m.SpeciesComebackPanel(); }),
   'stablecoins': wrap(async () => { const m = await import('@/components/StablecoinPanel'); return new m.StablecoinPanel(); }),

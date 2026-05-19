@@ -242,6 +242,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'cross-domain-contradiction-detector': { name: 'Cross-Domain Conflicts', enabled: true, priority: 2 },
   'aviation-intel': { name: 'Aviation Intel', enabled: true, priority: 2 },
   'aviation-superpower': { name: 'Aviation Superpower', enabled: true, priority: 2 },
+  'financial-superpower': { name: 'Financial Superpower', enabled: true, priority: 1 },
   'shortage-radar': { name: 'Shortage Radar', enabled: true, priority: 1 },
   'shortage-detail-wheat': { name: 'Wheat Shortage', enabled: true, priority: 2 },
   'shortage-detail-corn': { name: 'Corn Shortage', enabled: true, priority: 2 },
@@ -1073,7 +1074,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   marketsFinance: {
  labelKey: 'header.panelCatMarketsFinance',
- panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar'],
+ panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower'],
  variants: ['full'],
   },
   topical: {

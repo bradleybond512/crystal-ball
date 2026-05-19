@@ -5394,6 +5394,36 @@ async function dispatch(requestUrl, req, routes, context) {
     return json({ risk: s.risk, ageMs, available: true });
   }
 
+  // ── Predictive Crisis Index — renderer POSTs, MCP reads back ─────────────
+  // POST /api/intelligence/pci — panel pushes latest PCIScore snapshot.
+  if (requestUrl.pathname === '/api/intelligence/pci' && req.method === 'POST') {
+    try {
+      const body = await req.json();
+      context._pciState = {
+        index: body.index ?? 0,
+        level: body.level ?? 'low',
+        trend: body.trend ?? 'stable',
+        trendDelta: body.trendDelta ?? 0,
+        domainBreakdown: body.domainBreakdown ?? [],
+        topThreats: body.topThreats ?? [],
+        computedAt: body.computedAt ?? Date.now(),
+        ttlMs: body.ttlMs ?? 5 * 60 * 1000,
+      };
+      return json({ ok: true });
+    } catch {
+      return json({ error: 'invalid body' }, 400);
+    }
+  }
+  // GET /api/intelligence/pci — current Predictive Crisis Index snapshot.
+  if (requestUrl.pathname === '/api/intelligence/pci' && req.method === 'GET') {
+    const s = context._pciState;
+    if (!s) return json({ available: false });
+    const ageMs = Date.now() - s.computedAt;
+    if (ageMs > s.ttlMs) return json({ available: false, stale: true });
+    const { ttlMs: _ttl, ...rest } = s;
+    return json({ ...rest, ageMs, available: true });
+  }
+
   // Spec aliases — friendlier URLs for the documented per-PR endpoints.
   if (requestUrl.pathname === '/api/ensemble-decision' && req.method === 'GET') {
     const domain = requestUrl.searchParams.get('domain') || '';

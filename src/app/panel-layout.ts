@@ -300,6 +300,7 @@ import { SavedPlacesFilterPanel } from '@/components/SavedPlacesFilterPanel';
 import { ShadowComparisonPanel } from '@/components/ShadowComparisonPanel';
 import { CognitiveBiasDetectorPanel } from '@/components/CognitiveBiasDetectorPanel';
 import { CrisisSignaturePanel } from '@/components/CrisisSignaturePanel';
+import { PredictiveCrisisIndexPanel } from '@/components/PredictiveCrisisIndexPanel';
 import { CollectionGapPanel } from '@/components/CollectionGapPanel';
 import { getShadowRunner } from '@/services/intelligence/shadow-runner';
 import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow-algorithms';
@@ -1416,6 +1417,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['shadow-comparison'] = new ShadowComparisonPanel();
  this.ctx.panels['cognitive-bias-detector'] = new CognitiveBiasDetectorPanel();
  this.ctx.panels['crisis-signature'] = new CrisisSignaturePanel();
+ this.ctx.panels['predictive-crisis-index'] = new PredictiveCrisisIndexPanel();
  try {
   const runner = getShadowRunner();
   for (const algo of builtInShadowAlgorithms()) runner.registerAlgorithm(algo);

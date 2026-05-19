@@ -117,6 +117,7 @@
     "test:crisis-signature-library": "tsx --test src/services/intelligence/__tests__/crisis-signature-library.test.mts",
     "test:cross-domain-contradictions": "tsx --test src/services/intelligence/__tests__/cross-domain-contradiction-detector.test.mts",
     "test:alert-deduplication": "tsx --test src/services/intelligence/__tests__/alert-deduplication.test.mts",
+    "test:collection-gap-discovery": "tsx --test tests/intelligence/collection-gap-discovery.test.mts",
     "test:sidecar": "node --test src-tauri/sidecar/local-api-server.test.mjs src-tauri/sidecar/s2u-xmpp.test.mjs src-tauri/sidecar/s2u-tak-client.test.mjs src-tauri/sidecar/wastewater-aggregate.test.mjs src-tauri/sidecar/promed-classify.test.mjs src-tauri/sidecar/who-promed-cross-reference.test.mjs src-tauri/sidecar/ipaws-aggregate.test.mjs src-tauri/sidecar/__tests__/seismic-globe-overlays.test.mjs src-tauri/sidecar/__tests__/eew-status.test.mjs src-tauri/sidecar/__tests__/synthesis-correlations.test.mjs src-tauri/sidecar/__tests__/env-local-loader.test.mjs src-tauri/sidecar/__tests__/intelligence-feed.test.mjs api/_cors.test.mjs api/_api-key.test.mjs api/youtube/embed.test.mjs api/cyber-threats.test.mjs api/usni-fleet.test.mjs scripts/ais-relay-rss.test.cjs scripts/ais-relay-cors.test.cjs api/loaders-xml-wms-regression.test.mjs",
     "test:api": "node --test api/__tests__/*.test.mjs",
     "test:e2e:visual:full": "cross-env VITE_VARIANT=full playwright test -g \"matches golden screenshots per layer and zoom\"",

@@ -1,509 +1,538 @@
 /**
- * Tests for CollectionGapDiscoveryService — the six-detector
- * observability audit.
+ * CollectionGapDiscoveryService — deterministic unit tests (spec-aligned).
  *
- * Pure service tests. Stubs localStorage at module load and uses
- * the injectable clock so detector thresholds (stale 30m/2h/6h,
- * sparse 24h, blind-spot 12h, temporal 4h) stay deterministic.
+ * Tests the auditDomain() / getGaps() / resolveGap() / getStats() API,
+ * severity mapping, deduplication, ring-buffer eviction, storage
+ * persist/rehydrate, initial 8-domain seed, and singleton lifecycle.
+ *
+ * No DOM, no live localStorage — injectable storage throughout.
  */
 
 import assert from 'node:assert/strict';
-import test from 'node:test';
-
-const __storage = new Map<string, string>();
-(globalThis as unknown as { localStorage: Storage }).localStorage = {
-  getItem: (k: string) => __storage.get(k) ?? null,
-  setItem: (k: string, v: string) => { __storage.set(k, v); },
-  removeItem: (k: string) => { __storage.delete(k); },
-  clear: () => { __storage.clear(); },
-  get length() { return __storage.size; },
-  key: (i: number) => [...__storage.keys()][i] ?? null,
-} as Storage;
+import { describe, it, beforeEach } from 'node:test';
 
 import {
   CollectionGapDiscoveryService,
-  __internals,
-  __resetCollectionGapDiscoverySingleton,
   getCollectionGapDiscoveryService,
-  type GapType,
-  type ObservabilityGap,
+  __internals,
+  STORAGE_KEY,
+  MAX_GAPS,
+  STALE_THRESHOLD_MS,
+  MIN_FEEDS,
+  MIN_REGIONS,
 } from '../../src/services/intelligence/collection-gap-discovery.ts';
-import type { ObservationEvent, ObservationSeverity } from '../../src/services/intelligence/observation-adapters.ts';
+import type { StorageLike, CollectionGap } from '../../src/services/intelligence/collection-gap-discovery.ts';
 
-// ── Helpers ───────────────────────────────────────────────────────────
+// ── Fixtures ──────────────────────────────────────────────────────────────
 
-const NOW = 1_745_000_000_000;
-const HOUR = 60 * 60 * 1000;
+const NOW = 1_700_000_000_000;
 
-function makeObs(overrides: Partial<ObservationEvent> = {}): ObservationEvent {
+function makeStorage(initial: Record<string, string> = {}): StorageLike & {
+  store: Map<string, string>;
+} {
+  const store = new Map<string, string>(Object.entries(initial));
   return {
-    id: `obs-${Math.random().toString(36).slice(2, 8)}`,
-    sourceId: 'src-a',
-    domain: 'weather',
-    timestamp: NOW,
-    severity: 'MEDIUM' as ObservationSeverity,
-    title: 'fixture',
-    raw: null,
-    entityIds: [],
-    tags: [],
-    ...overrides,
+    store,
+    getItem(key: string) { return store.get(key) ?? null; },
+    setItem(key: string, value: string) { store.set(key, value); },
+    removeItem(key: string) { store.delete(key); },
   };
 }
 
-function freshService(
-  opts: ConstructorParameters<typeof CollectionGapDiscoveryService>[0] = {},
-): CollectionGapDiscoveryService {
-  __storage.clear();
-  return new CollectionGapDiscoveryService({ clock: () => NOW, ...opts });
+/** Fresh service with no seed and frozen clock — clean slate for most tests. */
+function makeService(storage: StorageLike | null = null): CollectionGapDiscoveryService {
+  return new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
 }
 
-function gapsOfType(gaps: readonly ObservabilityGap[], type: GapType): ObservabilityGap[] {
-  return gaps.filter((g) => g.gapType === type);
-}
+// ── Constants ─────────────────────────────────────────────────────────────
 
-// Fully-covered cluster: 5 sources, recent timestamps, every domain,
-// every high-risk region. Used as a "no gaps expected" baseline.
-function buildFullCoverage(): ObservationEvent[] {
-  const events: ObservationEvent[] = [];
-  const domains = __internals.TRACKED_DOMAINS;
-  const sources = ['s1', 's2', 's3', 's4', 's5'];
-  const regions = [
-    { lat: 30, lon: 100, name: 'Asia-Pacific' },
-    { lat: 50, lon: 10, name: 'Europe' },
-    { lat: 0, lon: -60, name: 'Americas' },
-    { lat: 0, lon: 20, name: 'Africa' },
-    { lat: 30, lon: 40, name: 'Middle-East' },
-  ];
-  // 5 observations per domain, recent + within multi-source threshold
-  for (const domain of domains) {
-    for (let i = 0; i < 5; i += 1) {
-      events.push(makeObs({
-        id: `${domain}-${i}`,
-        domain,
-        sourceId: sources[i]!,
-        severity: 'HIGH' as ObservationSeverity,
-        timestamp: NOW - i * 5 * 60 * 1000,
-        location: regions[i % regions.length]!,
-      }));
+describe('constants', () => {
+  it('STORAGE_KEY is wm-collection-gaps', () => {
+    assert.equal(STORAGE_KEY, 'wm-collection-gaps');
+  });
+
+  it('MAX_GAPS is 500', () => {
+    assert.equal(MAX_GAPS, 500);
+  });
+
+  it('STALE_THRESHOLD_MS is 3_600_000 (1 hour)', () => {
+    assert.equal(STALE_THRESHOLD_MS, 3_600_000);
+  });
+});
+
+// ── auditDomain — individual conditions ───────────────────────────────────
+
+describe('auditDomain — individual conditions', () => {
+  it('feedCount < 2 → single-source gap', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 5);
+    assert.equal(gaps.length, 1);
+    assert.equal(gaps[0]!.gapType, 'single-source');
+  });
+
+  it('lastObservationAge > STALE_THRESHOLD_MS → stale-data gap', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 3, ['US', 'EU', 'AS'], STALE_THRESHOLD_MS + 1, 5);
+    assert.equal(gaps.length, 1);
+    assert.equal(gaps[0]!.gapType, 'stale-data');
+  });
+
+  it('regionsCovered.length < 3 → low-coverage gap', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 3, ['US', 'EU'], 0, 5);
+    assert.equal(gaps.length, 1);
+    assert.equal(gaps[0]!.gapType, 'low-coverage');
+  });
+
+  it('alertCount === 0 → no-alerts gap', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 3, ['US', 'EU', 'AS'], 0, 0);
+    assert.equal(gaps.length, 1);
+    assert.equal(gaps[0]!.gapType, 'no-alerts');
+  });
+
+  it('all conditions met → no gaps', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', MIN_FEEDS, ['US', 'EU', 'AS'], 0, 3);
+    assert.equal(gaps.length, 0);
+  });
+
+  it('all conditions violated → 4 gaps returned', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('health', 1, ['NA'], STALE_THRESHOLD_MS + 1, 0);
+    assert.equal(gaps.length, 4);
+    const types = gaps.map((g) => g.gapType).sort();
+    assert.deepEqual(types, ['low-coverage', 'no-alerts', 'single-source', 'stale-data']);
+  });
+});
+
+// ── auditDomain — threshold boundaries ───────────────────────────────────
+
+describe('auditDomain — threshold boundaries', () => {
+  it('feedCount === MIN_FEEDS (2) → no single-source gap', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', MIN_FEEDS, ['US', 'EU', 'AS'], 0, 3);
+    assert.equal(gaps.filter((g) => g.gapType === 'single-source').length, 0);
+  });
+
+  it('feedCount === 1 (< MIN_FEEDS) → single-source gap', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    assert.equal(gaps.filter((g) => g.gapType === 'single-source').length, 1);
+  });
+
+  it('lastObservationAge === STALE_THRESHOLD_MS (not strictly greater) → no stale-data gap', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 3, ['US', 'EU', 'AS'], STALE_THRESHOLD_MS, 3);
+    assert.equal(gaps.filter((g) => g.gapType === 'stale-data').length, 0);
+  });
+
+  it('regionsCovered.length === MIN_REGIONS (3) → no low-coverage gap', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 3, ['US', 'EU', 'AS'], 0, 3);
+    assert.equal(gaps.filter((g) => g.gapType === 'low-coverage').length, 0);
+  });
+
+  it('regionsCovered.length === 2 (< MIN_REGIONS) → low-coverage gap', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 3, ['US', 'EU'], 0, 3);
+    assert.equal(gaps.filter((g) => g.gapType === 'low-coverage').length, 1);
+  });
+
+  it('alertCount === 1 (not zero) → no no-alerts gap', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 3, ['US', 'EU', 'AS'], 0, 1);
+    assert.equal(gaps.filter((g) => g.gapType === 'no-alerts').length, 0);
+  });
+});
+
+// ── auditDomain — deduplication ───────────────────────────────────────────
+
+describe('auditDomain — deduplication', () => {
+  it('re-auditing with same failing condition does not create duplicate open gap', () => {
+    const svc = makeService();
+    svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    const second = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    assert.equal(second.length, 0);
+    assert.equal(svc.getGaps('cyber').length, 1);
+  });
+
+  it('re-auditing after resolving gap creates a fresh gap', () => {
+    const svc = makeService();
+    const first = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    svc.resolveGap(first[0]!.id);
+    const second = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    assert.equal(second.length, 1);
+    assert.notEqual(second[0]!.id, first[0]!.id);
+  });
+
+  it('same gap type on different domains each creates a gap', () => {
+    const svc = makeService();
+    svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    svc.auditDomain('maritime', 1, ['US', 'EU', 'AS'], 0, 3);
+    assert.equal(svc.getGaps().filter((g) => g.gapType === 'single-source').length, 2);
+  });
+});
+
+// ── Severity mapping ──────────────────────────────────────────────────────
+
+describe('severity mapping', () => {
+  it('single-source → medium', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    assert.equal(gaps.find((g) => g.gapType === 'single-source')?.severity, 'medium');
+  });
+
+  it('stale-data → high', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 3, ['US', 'EU', 'AS'], STALE_THRESHOLD_MS + 1, 3);
+    assert.equal(gaps.find((g) => g.gapType === 'stale-data')?.severity, 'high');
+  });
+
+  it('low-coverage → low', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 3, ['US'], 0, 3);
+    assert.equal(gaps.find((g) => g.gapType === 'low-coverage')?.severity, 'low');
+  });
+
+  it('no-alerts → high', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 3, ['US', 'EU', 'AS'], 0, 0);
+    assert.equal(gaps.find((g) => g.gapType === 'no-alerts')?.severity, 'high');
+  });
+});
+
+// ── getGaps ───────────────────────────────────────────────────────────────
+
+describe('getGaps', () => {
+  it('returns only open gaps (resolved excluded)', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 1, ['US'], STALE_THRESHOLD_MS + 1, 0);
+    svc.resolveGap(gaps[0]!.id);
+    const open = svc.getGaps();
+    assert.ok(open.every((g) => g.resolvedAt === undefined));
+    assert.ok(open.length < gaps.length);
+  });
+
+  it('returns empty array when no open gaps', () => {
+    const svc = makeService();
+    assert.deepEqual(svc.getGaps(), []);
+  });
+
+  it('sorted by severity descending: high → medium → low', () => {
+    const svc = makeService();
+    svc.auditDomain('cyber', 1, ['US'], STALE_THRESHOLD_MS + 1, 0);
+    const gaps = svc.getGaps();
+    const severities = gaps.map((g) => g.severity);
+    for (let i = 1; i < severities.length; i += 1) {
+      const prev = severities[i - 1]!;
+      const curr = severities[i]!;
+      const order: Record<string, number> = { low: 0, medium: 1, high: 2 };
+      assert.ok(order[prev]! >= order[curr]!, `${prev} < ${curr} at index ${i}`);
     }
-  }
-  return events;
-}
+  });
 
-// ── Stale-feed detector ──────────────────────────────────────────────
+  it('domain filter returns only that domain', () => {
+    const svc = makeService();
+    svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    svc.auditDomain('maritime', 1, ['Atlantic'], 0, 3);
+    const cyberGaps = svc.getGaps('cyber');
+    assert.ok(cyberGaps.every((g) => g.domain === 'cyber'));
+    assert.equal(cyberGaps.length, 1);
+  });
 
-test('stale-feed: critical when last observation is > 6h old', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  const stale = gapsOfType(report.gaps, 'stale-feed').find((g) => g.domain === 'weather');
-  assert.ok(stale);
-  assert.equal(stale!.severity, 'critical');
+  it('returns clones — mutating result does not affect service state', () => {
+    const svc = makeService();
+    svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    const gaps = svc.getGaps();
+    gaps[0]!.severity = 'low'; // mutation
+    const gaps2 = svc.getGaps();
+    assert.equal(gaps2[0]!.severity, 'medium'); // unchanged
+  });
 });
 
-test('stale-feed: moderate when last observation is between 2h and 6h', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'cyber', timestamp: NOW - 4 * HOUR })]);
-  const stale = gapsOfType(report.gaps, 'stale-feed').find((g) => g.domain === 'cyber');
-  assert.ok(stale);
-  assert.equal(stale!.severity, 'moderate');
+// ── resolveGap ────────────────────────────────────────────────────────────
+
+describe('resolveGap', () => {
+  it('returns true and sets resolvedAt', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    const ok = svc.resolveGap(gaps[0]!.id);
+    assert.equal(ok, true);
+    assert.equal(svc.getGaps('cyber').length, 0);
+  });
+
+  it('returns false for unknown id', () => {
+    const svc = makeService();
+    assert.equal(svc.resolveGap('does-not-exist'), false);
+  });
+
+  it('returns false when gap is already resolved', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    svc.resolveGap(gaps[0]!.id);
+    assert.equal(svc.resolveGap(gaps[0]!.id), false);
+  });
 });
 
-test('stale-feed: minor when last observation is between 30m and 2h', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'finance', timestamp: NOW - 60 * 60 * 1000 })]);
-  const stale = gapsOfType(report.gaps, 'stale-feed').find((g) => g.domain === 'finance');
-  assert.ok(stale);
-  assert.equal(stale!.severity, 'minor');
+// ── getStats ──────────────────────────────────────────────────────────────
+
+describe('getStats', () => {
+  it('zeros for empty service (seed: false)', () => {
+    const svc = makeService();
+    const stats = svc.getStats();
+    assert.equal(stats.totalGaps, 0);
+    assert.equal(stats.bySeverity.high, 0);
+    assert.equal(stats.bySeverity.medium, 0);
+    assert.equal(stats.bySeverity.low, 0);
+    assert.equal(stats.resolutionRate, 0);
+  });
+
+  it('totalGaps counts all gaps including resolved', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 1, ['US'], STALE_THRESHOLD_MS + 1, 0);
+    svc.resolveGap(gaps[0]!.id);
+    const stats = svc.getStats();
+    assert.equal(stats.totalGaps, gaps.length); // all, not just open
+  });
+
+  it('byDomain counts only open gaps', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);           // 1 gap: single-source
+    svc.auditDomain('maritime', 1, ['Atlantic', 'Pacific', 'Indian'], 0, 3);       // 1 gap: single-source
+    svc.resolveGap(gaps[0]!.id);                                                   // resolve cyber
+    const stats = svc.getStats();
+    assert.equal(stats.byDomain['cyber'], undefined);    // resolved → not counted
+    assert.equal(stats.byDomain['maritime'], 1);
+  });
+
+  it('bySeverity counts open gaps by level', () => {
+    const svc = makeService();
+    svc.auditDomain('cyber', 1, ['US'], STALE_THRESHOLD_MS + 1, 0); // medium + high + high + low
+    const stats = svc.getStats();
+    assert.equal(stats.bySeverity.high, 2);    // stale-data + no-alerts
+    assert.equal(stats.bySeverity.medium, 1);  // single-source
+    assert.equal(stats.bySeverity.low, 1);     // low-coverage
+  });
+
+  it('resolutionRate = resolved / total (4dp)', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3); // 1 gap
+    svc.auditDomain('maritime', 1, ['Atlantic', 'Pacific', 'Indian'], 0, 3); // 1 gap
+    svc.resolveGap(gaps[0]!.id);
+    const stats = svc.getStats();
+    assert.equal(stats.resolutionRate, Number((1 / 2).toFixed(4)));
+  });
+
+  it('resolutionRate is 0 when no gaps at all', () => {
+    const svc = makeService();
+    assert.equal(svc.getStats().resolutionRate, 0);
+  });
 });
 
-test('stale-feed: no gap when last observation is fresher than 30m', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 5 * 60 * 1000 })]);
-  assert.equal(gapsOfType(report.gaps, 'stale-feed').length, 0);
+// ── Initial seed ──────────────────────────────────────────────────────────
+
+describe('initial seed', () => {
+  it('seeded service (default) has open gaps from 8 domains', () => {
+    CollectionGapDiscoveryService._resetForTests();
+    const svc = new CollectionGapDiscoveryService({ storage: null, clock: () => NOW });
+    const allDomains = new Set(svc.getGaps().map((g) => g.domain));
+    // weather and aviation are well-covered in seed params, others have gaps
+    assert.ok(allDomains.size >= 4, `expected ≥ 4 domains with gaps, got ${allDomains.size}`);
+  });
+
+  it('health domain gets 4 gaps (all 4 conditions triggered)', () => {
+    CollectionGapDiscoveryService._resetForTests();
+    const svc = new CollectionGapDiscoveryService({ storage: null, clock: () => NOW });
+    const health = svc.getGaps('health');
+    assert.equal(health.length, 4, `expected 4 health gaps, got ${health.length}`);
+    const types = health.map((g) => g.gapType).sort();
+    assert.deepEqual(types, ['low-coverage', 'no-alerts', 'single-source', 'stale-data']);
+  });
+
+  it('weather domain gets 0 gaps (all conditions satisfied)', () => {
+    CollectionGapDiscoveryService._resetForTests();
+    const svc = new CollectionGapDiscoveryService({ storage: null, clock: () => NOW });
+    assert.equal(svc.getGaps('weather').length, 0);
+  });
+
+  it('cyber domain gets single-source + low-coverage (feedCount=1, regions=1)', () => {
+    CollectionGapDiscoveryService._resetForTests();
+    const svc = new CollectionGapDiscoveryService({ storage: null, clock: () => NOW });
+    const cyber = svc.getGaps('cyber');
+    const types = cyber.map((g) => g.gapType).sort();
+    assert.deepEqual(types, ['low-coverage', 'single-source']);
+  });
+
+  it('maritime domain gets stale-data + low-coverage (age > 1h, 2 regions)', () => {
+    CollectionGapDiscoveryService._resetForTests();
+    const svc = new CollectionGapDiscoveryService({ storage: null, clock: () => NOW });
+    const maritime = svc.getGaps('maritime');
+    const types = maritime.map((g) => g.gapType).sort();
+    assert.deepEqual(types, ['low-coverage', 'stale-data']);
+  });
+
+  it('aviation domain gets no gaps (3 feeds, 3 regions, fresh, alerts > 0)', () => {
+    CollectionGapDiscoveryService._resetForTests();
+    const svc = new CollectionGapDiscoveryService({ storage: null, clock: () => NOW });
+    assert.equal(svc.getGaps('aviation').length, 0);
+  });
+
+  it('seed: false skips initial audit — service starts empty', () => {
+    const svc = makeService(); // already uses seed: false
+    assert.equal(svc.getGaps().length, 0);
+  });
 });
 
-// ── Sparse-coverage detector ─────────────────────────────────────────
+// ── Storage persist / rehydrate ───────────────────────────────────────────
 
-test('sparse-coverage: critical when a tracked domain has zero observations in the last 24h', () => {
-  const svc = freshService();
-  // Only weather present; the other 9 domains should each be flagged sparse.
-  const report = svc.scan([makeObs({ id: 'w', domain: 'weather' })]);
-  const sparse = gapsOfType(report.gaps, 'sparse-coverage');
-  assert.ok(sparse.some((g) => g.domain === 'cyber' && g.severity === 'critical'));
+describe('storage persist / rehydrate', () => {
+  it('gaps are written to storage on auditDomain', () => {
+    const storage = makeStorage();
+    const svc = new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
+    svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    assert.ok(storage.store.has(STORAGE_KEY));
+    const parsed = JSON.parse(storage.store.get(STORAGE_KEY)!) as CollectionGap[];
+    assert.equal(parsed.length, 1);
+  });
+
+  it('new instance rehydrates gaps from storage', () => {
+    const storage = makeStorage();
+    const svc1 = new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
+    svc1.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+
+    const svc2 = new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
+    assert.equal(svc2.getGaps('cyber').length, 1);
+  });
+
+  it('rehydrated gaps prevent duplicates when re-auditing', () => {
+    const storage = makeStorage();
+    const svc1 = new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
+    svc1.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+
+    const svc2 = new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
+    const result = svc2.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    assert.equal(result.length, 0); // dedup against rehydrated gap
+  });
+
+  it('corrupt JSON in storage is silently ignored', () => {
+    const storage = makeStorage({ [STORAGE_KEY]: 'not-json{{{' });
+    assert.doesNotThrow(() => {
+      const svc = new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
+      svc.getGaps();
+    });
+  });
+
+  it('non-array JSON in storage is silently ignored', () => {
+    const storage = makeStorage({ [STORAGE_KEY]: JSON.stringify({ id: 'oops' }) });
+    const svc = new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
+    assert.equal(svc.getGaps().length, 0);
+  });
+
+  it('entries without id/domain are skipped during rehydration', () => {
+    const bad: unknown[] = [
+      { id: 'valid', domain: 'cyber', gapType: 'single-source', severity: 'medium', description: 'x', discoveredAt: NOW },
+      { domain: 'no-id' },
+      null,
+      42,
+    ];
+    const storage = makeStorage({ [STORAGE_KEY]: JSON.stringify(bad) });
+    const svc = new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
+    assert.equal(svc.getGaps().length, 1);
+  });
+
+  it('resolveGap persists to storage', () => {
+    const storage = makeStorage();
+    const svc = new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
+    const gaps = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    svc.resolveGap(gaps[0]!.id);
+    const parsed = JSON.parse(storage.store.get(STORAGE_KEY)!) as CollectionGap[];
+    assert.ok(parsed[0]!.resolvedAt !== undefined);
+  });
 });
 
-test('sparse-coverage: moderate when a tracked domain has 1 or 2 observations in 24h', () => {
-  const svc = freshService();
-  // 2 cyber obs satisfies sparse-moderate but stays below the 3-obs floor.
-  const report = svc.scan([
-    makeObs({ id: 'c1', domain: 'cyber' }),
-    makeObs({ id: 'c2', domain: 'cyber' }),
-  ]);
-  const cyber = gapsOfType(report.gaps, 'sparse-coverage').find((g) => g.domain === 'cyber');
-  assert.ok(cyber);
-  assert.equal(cyber!.severity, 'moderate');
+// ── Ring-buffer capacity ──────────────────────────────────────────────────
+
+describe('ring-buffer capacity', () => {
+  it('gap list never exceeds MAX_GAPS', () => {
+    const svc = makeService();
+    for (let i = 0; i < MAX_GAPS + 10; i += 1) {
+      // Each unique domain creates a fresh gap without dedup
+      svc.auditDomain(`domain-${i}`, 1, ['US', 'EU', 'AS'], 0, 3);
+    }
+    // Only open gaps returned, but internal total is capped
+    const stats = svc.getStats();
+    assert.ok(stats.totalGaps <= MAX_GAPS, `totalGaps ${stats.totalGaps} > MAX_GAPS ${MAX_GAPS}`);
+  });
 });
 
-test('sparse-coverage: no gap when a domain has ≥ 3 observations', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 60_000 }),
-    makeObs({ id: 'b', domain: 'weather', timestamp: NOW - 120_000 }),
-    makeObs({ id: 'c', domain: 'weather', timestamp: NOW - 180_000 }),
-  ];
-  const report = svc.scan(obs);
-  const weatherSparse = gapsOfType(report.gaps, 'sparse-coverage').find((g) => g.domain === 'weather');
-  assert.equal(weatherSparse, undefined);
+// ── resetForTesting() instance method ────────────────────────────────────
+
+describe('resetForTesting()', () => {
+  it('clears all gaps', () => {
+    const svc = makeService();
+    svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    svc.resetForTesting();
+    assert.equal(svc.getGaps().length, 0);
+    assert.equal(svc.getStats().totalGaps, 0);
+  });
+
+  it('clears storage key', () => {
+    const storage = makeStorage();
+    const svc = new CollectionGapDiscoveryService({ storage, clock: () => NOW, seed: false });
+    svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    svc.resetForTesting();
+    assert.equal(storage.store.has(STORAGE_KEY), false);
+  });
 });
 
-// ── Low-confidence detector ──────────────────────────────────────────
+// ── Singleton lifecycle ───────────────────────────────────────────────────
 
-test('low-confidence: critical when domain average severity-confidence is < 0.4', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'cyber', severity: 'INFO' as ObservationSeverity }),
-    makeObs({ id: 'b', domain: 'cyber', severity: 'INFO' as ObservationSeverity }),
-  ];
-  const report = svc.scan(obs);
-  const low = gapsOfType(report.gaps, 'low-confidence').find((g) => g.domain === 'cyber');
-  assert.ok(low);
-  assert.equal(low!.severity, 'critical');
+describe('singleton', () => {
+  beforeEach(() => {
+    CollectionGapDiscoveryService._resetForTests();
+  });
+
+  it('getInstance() returns the same instance on repeated calls', () => {
+    const a = CollectionGapDiscoveryService.getInstance();
+    const b = CollectionGapDiscoveryService.getInstance();
+    assert.strictEqual(a, b);
+  });
+
+  it('_resetForTests() creates a fresh instance on next call', () => {
+    const a = CollectionGapDiscoveryService.getInstance();
+    CollectionGapDiscoveryService._resetForTests();
+    const b = CollectionGapDiscoveryService.getInstance();
+    assert.notStrictEqual(a, b);
+  });
+
+  it('getCollectionGapDiscoveryService() returns singleton', () => {
+    const inst = CollectionGapDiscoveryService.getInstance();
+    assert.strictEqual(getCollectionGapDiscoveryService(), inst);
+  });
 });
 
-test('low-confidence: moderate when average lands in [0.4, 0.6)', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'cyber', severity: 'LOW' as ObservationSeverity }),
-    makeObs({ id: 'b', domain: 'cyber', severity: 'LOW' as ObservationSeverity }),
-  ];
-  const report = svc.scan(obs);
-  const low = gapsOfType(report.gaps, 'low-confidence').find((g) => g.domain === 'cyber');
-  assert.ok(low);
-  assert.equal(low!.severity, 'moderate');
-});
+// ── Gap fields ────────────────────────────────────────────────────────────
 
-test('low-confidence: no gap when average is ≥ 0.6', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'cyber', severity: 'HIGH' as ObservationSeverity }),
-    makeObs({ id: 'b', domain: 'cyber', severity: 'HIGH' as ObservationSeverity }),
-  ];
-  const report = svc.scan(obs);
-  assert.equal(gapsOfType(report.gaps, 'low-confidence').filter((g) => g.domain === 'cyber').length, 0);
-});
+describe('gap fields', () => {
+  it('gap has id, domain, gapType, severity, description, discoveredAt', () => {
+    const svc = makeService();
+    const gaps = svc.auditDomain('cyber', 1, ['US', 'EU', 'AS'], 0, 3);
+    const g = gaps[0]!;
+    assert.ok(typeof g.id === 'string' && g.id.length > 0);
+    assert.equal(g.domain, 'cyber');
+    assert.equal(g.gapType, 'single-source');
+    assert.equal(g.severity, 'medium');
+    assert.ok(typeof g.description === 'string' && g.description.includes('cyber'));
+    assert.equal(g.discoveredAt, NOW);
+    assert.equal(g.resolvedAt, undefined);
+  });
 
-// ── Geographic-blind-spot detector ───────────────────────────────────
-
-test('geographic-blind-spot: every uncovered region produces a critical gap', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'weather', location: { lat: 30, lon: 100 } }),
-  ];
-  const report = svc.scan(obs);
-  const blind = gapsOfType(report.gaps, 'geographic-blind-spot');
-  // Asia-Pacific is covered; the remaining 4 regions should be flagged.
-  assert.equal(blind.length, 4);
-  for (const gap of blind) {
-    assert.equal(gap.severity, 'critical');
-    assert.equal(gap.affectedRegions.length, 1);
-  }
-});
-
-test('geographic-blind-spot: high-risk-only — non-risk domains are ignored', () => {
-  const svc = freshService();
-  // 'travel' is not a high-risk domain — should NOT cover Europe.
-  const report = svc.scan([
-    makeObs({ id: 'a', domain: 'travel', location: { lat: 50, lon: 10 } }),
-  ]);
-  const blind = gapsOfType(report.gaps, 'geographic-blind-spot').map((g) => g.affectedRegions[0]);
-  assert.ok(blind.includes('Europe'));
-});
-
-test('geographic-blind-spot: stale (> 12h) observations do not count as coverage', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 13 * HOUR, location: { lat: 50, lon: 10 } }),
-  ];
-  const report = svc.scan(obs);
-  const blind = gapsOfType(report.gaps, 'geographic-blind-spot').map((g) => g.affectedRegions[0]);
-  assert.ok(blind.includes('Europe'));
-});
-
-test('inRegion: handles Asia-Pacific antimeridian split (lon=170 + lon=-150)', () => {
-  const region = __internals.MAJOR_REGIONS.find((r) => r.name === 'Asia-Pacific')!;
-  assert.equal(__internals.inRegion(20, 170, region), true);
-  assert.equal(__internals.inRegion(20, -150, region), true);
-});
-
-// ── Temporal-gap detector ───────────────────────────────────────────
-
-test('temporal-gap: only applies to continuous-coverage domains', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'finance', timestamp: NOW - 10 * HOUR }),
-    makeObs({ id: 'b', domain: 'finance', timestamp: NOW }),
-  ];
-  const report = svc.scan(obs);
-  // Finance isn't in CONTINUOUS_COVERAGE_DOMAINS — no temporal gap.
-  assert.equal(gapsOfType(report.gaps, 'temporal-gap').length, 0);
-});
-
-test('temporal-gap: 5h gap in a continuous-coverage domain flags moderate', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 6 * HOUR }),
-    makeObs({ id: 'b', domain: 'weather', timestamp: NOW - 60_000 }),
-  ];
-  const report = svc.scan(obs);
-  const tg = gapsOfType(report.gaps, 'temporal-gap').find((g) => g.domain === 'weather');
-  assert.ok(tg);
-  assert.equal(tg!.severity, 'moderate');
-});
-
-test('temporal-gap: < 4h gap produces nothing', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 3 * HOUR }),
-    makeObs({ id: 'b', domain: 'weather', timestamp: NOW - 60_000 }),
-  ];
-  const report = svc.scan(obs);
-  assert.equal(gapsOfType(report.gaps, 'temporal-gap').length, 0);
-});
-
-// ── Missing-source detector ──────────────────────────────────────────
-
-test('missing-source: domain with a single source flagged moderate', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'cyber', sourceId: 'only-one' }),
-    makeObs({ id: 'b', domain: 'cyber', sourceId: 'only-one' }),
-  ];
-  const report = svc.scan(obs);
-  const single = gapsOfType(report.gaps, 'missing-source').find((g) => g.domain === 'cyber');
-  assert.ok(single);
-  assert.equal(single!.severity, 'moderate');
-  assert.match(single!.description, /only-one/);
-});
-
-test('missing-source: not flagged when the domain has ≥ 2 sources', () => {
-  const svc = freshService();
-  const obs = [
-    makeObs({ id: 'a', domain: 'cyber', sourceId: 's1' }),
-    makeObs({ id: 'b', domain: 'cyber', sourceId: 's2' }),
-  ];
-  const report = svc.scan(obs);
-  assert.equal(gapsOfType(report.gaps, 'missing-source').filter((g) => g.domain === 'cyber').length, 0);
-});
-
-// ── Report shape + overall coverage ─────────────────────────────────
-
-test('report: totalGaps equals gaps.length', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  assert.equal(report.totalGaps, report.gaps.length);
-});
-
-test('report: criticalCount counts only critical-severity gaps', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  const critical = report.gaps.filter((g) => g.severity === 'critical').length;
-  assert.equal(report.criticalCount, critical);
-});
-
-test('report: byDomain count matches per-domain occurrence', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  // weather should appear at least once in byDomain
-  assert.ok(report.byDomain.weather && report.byDomain.weather >= 1);
-});
-
-test('report: overallCoverage = 100 when full coverage and no critical gaps', () => {
-  const svc = freshService();
-  const report = svc.scan(buildFullCoverage());
-  assert.equal(report.overallCoverage, 100);
-});
-
-test('report: overallCoverage drops when domains have critical gaps', () => {
-  const svc = freshService();
-  // Empty input → every tracked domain has critical sparse-coverage
-  // → coverage should fall to 0.
-  const report = svc.scan([makeObs({ id: 'a', domain: 'unrelated' })]);
-  assert.equal(report.overallCoverage, 0);
-});
-
-test('report: worstDomain points at the domain with the most gaps', () => {
-  const svc = freshService();
-  // Cover all 5 regions with high-risk observations so blind-spot
-  // gaps don't dominate the byDomain tally with the synthetic
-  // 'global' domain; then push cyber into stale + low-conf +
-  // single-source so it wins.
-  const regions = [
-    { lat: 30, lon: 100, name: 'Asia-Pacific' },
-    { lat: 50, lon: 10, name: 'Europe' },
-    { lat: 0, lon: -60, name: 'Americas' },
-    { lat: 0, lon: 20, name: 'Africa' },
-    { lat: 30, lon: 40, name: 'Middle-East' },
-  ];
-  const obs: ObservationEvent[] = regions.map((r, i) => makeObs({
-    id: `cover-${i}`, domain: 'weather', timestamp: NOW - 60_000,
-    severity: 'HIGH' as ObservationSeverity, sourceId: `wx-${i}`,
-    location: { lat: r.lat, lon: r.lon },
-  }));
-  obs.push(makeObs({
-    id: 'cy', domain: 'cyber', timestamp: NOW - 7 * HOUR,
-    severity: 'INFO' as ObservationSeverity, sourceId: 'only-cyber',
-  }));
-  const report = svc.scan(obs);
-  // cyber hits stale + low-confidence + missing-source + sparse → worst
-  assert.equal(report.worstDomain, 'cyber');
-});
-
-test('report: empty observation list yields no temporal-gap or missing-source noise', () => {
-  const svc = freshService();
-  const report = svc.scan([]);
-  assert.equal(gapsOfType(report.gaps, 'temporal-gap').length, 0);
-  assert.equal(gapsOfType(report.gaps, 'missing-source').length, 0);
-});
-
-// ── Lifecycle: acknowledge + resolve ────────────────────────────────
-
-test('acknowledge: moves status to acknowledged', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  const id = report.gaps[0]!.id;
-  const updated = svc.acknowledge(id);
-  assert.equal(updated!.status, 'acknowledged');
-});
-
-test('resolve: moves status to resolved and excludes from getOpen', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  const id = report.gaps[0]!.id;
-  svc.resolve(id);
-  assert.equal(svc.getOpen().find((g) => g.id === id), undefined);
-});
-
-test('acknowledge / resolve on unknown id returns undefined', () => {
-  const svc = freshService();
-  assert.equal(svc.acknowledge('does-not-exist'), undefined);
-  assert.equal(svc.resolve('does-not-exist'), undefined);
-});
-
-test('cannot acknowledge a resolved gap (terminal state)', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  const id = report.gaps[0]!.id;
-  svc.resolve(id);
-  const ack = svc.acknowledge(id);
-  assert.equal(ack!.status, 'resolved');
-});
-
-// ── Reads + persistence ────────────────────────────────────────────
-
-test('getOpen returns acknowledged + open, excludes resolved', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  assert.ok(report.gaps.length > 0);
-  const first = report.gaps[0]!.id;
-  svc.acknowledge(first);
-  assert.ok(svc.getOpen().some((g) => g.id === first));
-});
-
-test('getLatestReport returns the most-recent scan output', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  const latest = svc.getLatestReport()!;
-  assert.equal(latest.scannedAt, report.scannedAt);
-});
-
-test('persistence: gaps + latestReport survive across instances', () => {
-  __storage.clear();
-  const a = new CollectionGapDiscoveryService({ clock: () => NOW });
-  a.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  const b = new CollectionGapDiscoveryService({ clock: () => NOW });
-  assert.ok(b.getOpen().length > 0);
-  assert.ok(b.getLatestReport());
-});
-
-test('corrupt persisted payload is ignored without throwing', () => {
-  __storage.clear();
-  __storage.set('wm-collection-gaps', 'not-json');
-  const svc = new CollectionGapDiscoveryService({ clock: () => NOW });
-  assert.doesNotThrow(() => svc.getOpen());
-  assert.equal(svc.getOpen().length, 0);
-});
-
-test('gap ring buffer caps at MAX_GAPS', () => {
-  const svc = freshService();
-  const cap = __internals.MAX_GAPS;
-  // Each scan produces 4 blind-spot gaps + sparse-coverage gaps for
-  // every tracked domain (~14 per scan); over-fill the buffer.
-  const scansNeeded = Math.ceil((cap + 30) / 14);
-  for (let i = 0; i < scansNeeded; i += 1) {
-    svc.scan([makeObs({ id: `obs-${i}`, domain: 'weather' })]);
-  }
-  assert.ok(svc.getAll().length <= cap);
-});
-
-// ── Subscribe ───────────────────────────────────────────────────────
-
-test('subscribe fires on every scan', () => {
-  const svc = freshService();
-  let calls = 0;
-  svc.subscribe(() => { calls += 1; });
-  svc.scan([makeObs({ id: 'a', domain: 'weather' })]);
-  svc.scan([makeObs({ id: 'b', domain: 'cyber' })]);
-  assert.equal(calls, 2);
-});
-
-test('subscribe also fires on lifecycle transitions (acknowledge/resolve)', () => {
-  const svc = freshService();
-  const report = svc.scan([makeObs({ id: 'a', domain: 'weather', timestamp: NOW - 7 * HOUR })]);
-  let calls = 0;
-  svc.subscribe(() => { calls += 1; });
-  svc.acknowledge(report.gaps[0]!.id);
-  svc.resolve(report.gaps[0]!.id);
-  assert.ok(calls >= 1);
-});
-
-test('subscribe returns an unsubscribe fn', () => {
-  const svc = freshService();
-  let calls = 0;
-  const off = svc.subscribe(() => { calls += 1; });
-  svc.scan([]);
-  off();
-  svc.scan([]);
-  assert.equal(calls, 1);
-});
-
-test('listener exception isolation', () => {
-  const svc = freshService();
-  let second = false;
-  svc.subscribe(() => { throw new Error('boom'); });
-  svc.subscribe(() => { second = true; });
-  svc.scan([]);
-  assert.equal(second, true);
-});
-
-// ── Singleton + helpers ─────────────────────────────────────────────
-
-test('getCollectionGapDiscoveryService returns a stable singleton', () => {
-  __resetCollectionGapDiscoverySingleton();
-  const a = getCollectionGapDiscoveryService();
-  const b = getCollectionGapDiscoveryService();
-  assert.equal(a, b);
-});
-
-test('severityToConfidence maps every severity tier', () => {
-  assert.equal(__internals.severityToConfidence('CRITICAL'), 1);
-  assert.equal(__internals.severityToConfidence('HIGH'), 0.8);
-  assert.equal(__internals.severityToConfidence('MEDIUM'), 0.6);
-  assert.equal(__internals.severityToConfidence('LOW'), 0.4);
-  assert.equal(__internals.severityToConfidence('INFO'), 0.2);
-});
-
-test('teardown', () => {
-  __resetCollectionGapDiscoverySingleton();
-  __storage.clear();
-  assert.ok(true);
+  it('ids are unique across consecutive auditDomain calls', () => {
+    const svc = makeService();
+    svc.auditDomain('cyber', 1, ['US'], STALE_THRESHOLD_MS + 1, 0);
+    const gaps = svc.getGaps();
+    const ids = gaps.map((g) => g.id);
+    assert.equal(new Set(ids).size, ids.length);
+  });
 });

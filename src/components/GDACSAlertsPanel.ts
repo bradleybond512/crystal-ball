@@ -95,7 +95,7 @@ export class GDACSAlertsPanel extends Panel {
 
   private render(): void {
     // Count source with most events for badge
-    const rssCount = this.rssData?.events.length ?? 0;
+    const rssCount = this.rssData?.events?.length ?? 0;
     const jsonCount = this.events.length;
     this.setCount(Math.max(rssCount, jsonCount));
 
@@ -117,7 +117,8 @@ export class GDACSAlertsPanel extends Panel {
 
   private renderRss(): string {
     if (!this.rssData) return '<div style="opacity:0.6;">Loading GDACS RSS…</div>';
-    const { events, degraded, reason } = this.rssData;
+    const { events: rawEvents, degraded, reason } = this.rssData;
+    const events = rawEvents ?? [];
 
     const banner = degraded
       ? `<div style="padding:4px 6px;background:rgba(244,67,54,0.10);border-left:3px solid #f44336;margin-bottom:6px;font-size:11px;">Degraded: ${escapeHtml(reason ?? 'upstream')}</div>`

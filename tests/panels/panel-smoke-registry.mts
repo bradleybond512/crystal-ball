@@ -309,6 +309,25 @@ export const PANEL_SMOKE_REGISTRY: Record<string, SmokeFactory> = {
     const m = await import('@/components/NuclearRiskPanel');
     return new m.NuclearRiskPanel('nuclear-risk', 'Nuclear Risk Tracker');
   }),
+
+  // ── No-factory gap reduction (panels confirmed present, no-arg constructor) ──
+  'aviation-intel': wrap(async () => { const m = await import('@/components/AviationIntelPanel'); return new m.AviationIntelPanel(); }),
+  'cyber-geo': wrap(async () => { const m = await import('@/components/CyberGeoPanel'); return new m.CyberGeoPanel(); }),
+  'economic-intel': wrap(async () => { const m = await import('@/components/EconomicIntelPanel'); return new m.EconomicIntelPanel(); }),
+  'faa-tfrs': wrap(async () => { const m = await import('@/components/FaaTfrsPanel'); return new m.FaaTfrsPanel(); }),
+  'feed-health': wrap(async () => { const m = await import('@/components/FeedHealthPanel'); return new m.FeedHealthPanel(); }),
+  'flood-monitor': wrap(async () => { const m = await import('@/components/FloodMonitorPanel'); return new m.FloodMonitorPanel(); }),
+  'goes-satellite': wrap(async () => { const m = await import('@/components/GoesSatellitePanel'); return new m.GoesSatellitePanel(); }),
+  'grid-intelligence': wrap(async () => { const m = await import('@/components/GridIntelligencePanel'); return new m.GridIntelligencePanel(); }),
+  'maritime-intel': wrap(async () => { const m = await import('@/components/MaritimeIntelPanel'); return new m.MaritimeIntelPanel(); }),
+  'network-rules': wrap(async () => { const m = await import('@/components/NetworkRulesPanel'); return new m.NetworkRulesPanel(); }),
+  'notification-history': wrap(async () => { const m = await import('@/components/NotificationHistoryPanel'); return new m.NotificationHistoryPanel(); }),
+  'notification-settings': wrap(async () => { const m = await import('@/components/NotificationSettingsPanel'); return new m.NotificationSettingsPanel(); }),
+  'playbook': wrap(async () => { const m = await import('@/components/PlaybookPanel'); return new m.PlaybookPanel(); }),
+  's2u-intel': wrap(async () => { const m = await import('@/components/S2UIntelPanel'); return new m.S2UIntelPanel(); }),
+  'sanctions-intel': wrap(async () => { const m = await import('@/components/SanctionsPanel'); return new m.SanctionsPanel(); }),
+  'severe-weather': wrap(async () => { const m = await import('@/components/SevereWeatherPanel'); return new m.SevereWeatherPanel(); }),
+  'shakealert': wrap(async () => { const m = await import('@/components/ShakeAlertPanel'); return new m.ShakeAlertPanel(); }),
 };
 
 export function getRegisteredPanelIds(): string[] {

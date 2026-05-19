@@ -122,10 +122,10 @@ export class PlaybookPanel extends Panel {
   }
 
   private render(): void {
+    this.setContent(this.buildHtml());
+
     const el = this.element;
     if (!el) return;
-    el.innerHTML = this.buildHtml();
-
     el.querySelectorAll<HTMLElement>('[data-step]').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-playbook-id') ?? '';

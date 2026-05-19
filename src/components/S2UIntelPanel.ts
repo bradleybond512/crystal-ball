@@ -146,7 +146,7 @@ export class S2UIntelPanel extends Panel {
  return;
  }
  const total = ['wire', 'eventtracking', 'emergency'].reduce((sum, key) => {
- return sum + (this.xmpp?.channels[key]?.length ?? 0);
+ return sum + (this.xmpp?.channels?.[key]?.length ?? 0);
  }, 0);
  this.setCount(total);
   }
@@ -185,11 +185,11 @@ export class S2UIntelPanel extends Panel {
  const takFeedSuffix = this.tak?.feeds ? ` (${this.tak.feeds.length})` : '';
  const takLabel = `TAK Feeds${takFeedSuffix}`;
  const tabs: { id: TabId; label: string; count?: number; emphasis?: boolean }[] = [
- { id: 'wire', label: 'Wire', count: this.xmpp?.channels.wire?.length, emphasis: true },
- { id: 'eventtracking', label: 'Event Tracking', count: this.xmpp?.channels.eventtracking?.length, emphasis: true },
- { id: 'emergency', label: 'Emergency', count: this.xmpp?.channels.emergency?.length, emphasis: true },
- { id: 'main', label: 'Main', count: this.xmpp?.channels.main?.length },
- { id: 'offtopic', label: 'Off-Topic', count: this.xmpp?.channels.offtopic?.length },
+ { id: 'wire', label: 'Wire', count: this.xmpp?.channels?.wire?.length, emphasis: true },
+ { id: 'eventtracking', label: 'Event Tracking', count: this.xmpp?.channels?.eventtracking?.length, emphasis: true },
+ { id: 'emergency', label: 'Emergency', count: this.xmpp?.channels?.emergency?.length, emphasis: true },
+ { id: 'main', label: 'Main', count: this.xmpp?.channels?.main?.length },
+ { id: 'offtopic', label: 'Off-Topic', count: this.xmpp?.channels?.offtopic?.length },
  { id: 'tak', label: takLabel },
  ];
  const items = tabs.map(t => {

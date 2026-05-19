@@ -90,7 +90,8 @@ export class FaaTfrsPanel extends Panel {
 
   private render(): void {
     if (!this.data) return;
-    const { tfrs, degraded, reason } = this.data;
+    const { tfrs: rawTfrs, degraded, reason } = this.data;
+    const tfrs = rawTfrs ?? [];
     this.setCount(tfrs.length);
 
     const degradedBanner = degraded

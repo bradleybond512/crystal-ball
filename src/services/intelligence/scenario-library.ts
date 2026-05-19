@@ -1,16 +1,3 @@
-/**
- * Scenario Library — curated historical crisis scenarios for replaying
- * ObservationEvent sequences through the intelligence pipeline.
- *
- * Each built-in scenario captures a real-world event (Fukushima, COVID,
- * Suez blockage, Ukraine invasion, Morocco earthquake) as a deterministic
- * sequence of ObservationEvents. Custom scenarios can be added at runtime
- * and are persisted to storage (key: `wm-scenario-library`). The library
- * caps at 50 total entries, dropping oldest custom scenarios first.
- *
- * Pure module — no DOM, no fetch, no globals at import time.
- */
-
 import type { ObservationEvent } from '@/types/intelligence';
 
 // ── Public types ──────────────────────────────────────────────────────
@@ -481,6 +468,12 @@ export class ScenarioLibrary {
     return event;
   }
 
+  getReplay(replayId: string): ScenarioReplay | null {
+    const r = this.replays.get(replayId);
+    if (!r) return null;
+    return { ...r, emittedObservations: [...r.emittedObservations] };
+  }
+
   pauseReplay(replayId: string): void {
     const replay = this.replays.get(replayId);
     if (replay?.status === 'running') {
@@ -529,7 +522,16 @@ export class ScenarioLibrary {
     try { parsed = JSON.parse(raw) as Scenario[] | null; } catch { return; }
     if (!Array.isArray(parsed)) return;
     for (const entry of parsed) {
-      if (entry && typeof entry.id === 'string' && Array.isArray(entry.observations)) {
+      if (
+        entry &&
+        typeof entry.id === 'string' &&
+        typeof entry.name === 'string' &&
+        typeof entry.domain === 'string' &&
+        typeof entry.durationHours === 'number' &&
+        Array.isArray(entry.tags) &&
+        Array.isArray(entry.observations) &&
+        Array.isArray(entry.expectedSituations)
+      ) {
         this.custom.push(entry as Scenario);
       }
     }

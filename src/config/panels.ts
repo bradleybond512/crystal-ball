@@ -24,6 +24,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'strategic-posture': { name: 'AI Strategic Posture', enabled: true, priority: 1 },
   insights: { name: 'AI Insights', enabled: true, priority: 1 },
   'maritime-intel': { name: 'Maritime Intel', enabled: true, priority: 1 },
+  'maritime-superpower': { name: 'Maritime Intelligence', enabled: true, priority: 1 },
   'supply-chain-disruption': { name: 'Supply Chain Disruption', enabled: true, priority: 1 },
   cii: { name: 'Country Instability', enabled: true, priority: 1 },
   'geo-hubs': { name: 'Geopolitical Hubs', enabled: true, priority: 1 },

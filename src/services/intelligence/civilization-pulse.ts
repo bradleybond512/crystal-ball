@@ -249,3 +249,312 @@ function defaultStorage(): StorageLike | null {
   const ls = (globalThis as { localStorage?: StorageLike }).localStorage;
   return ls ?? null;
 }
+
+// ── CivilizationPulseService ────────────────────────────────────────
+//
+// Sibling of CivilizationPulseEngine above. The Engine consumes
+// `ObservationEvent[]` snapshots and outputs `PulseReading`. The
+// Service consumes severity-level updates per domain and outputs a
+// `CivilizationPulse` rolled across an internal 10-sample window per
+// domain, with a weighted composite + status band + delta vs the last
+// persisted pulse.
+//
+// Persisted at SERVICE_STORAGE_KEY (`wm-civilization-pulse-service`)
+// so the two co-exist without trampling each other.
+
+export type PulseStatus = 'nominal' | 'elevated' | 'stressed' | 'critical';
+export type PulseDomainTrend = 'improving' | 'stable' | 'degrading';
+
+export interface PulseDomain {
+  domain: string;
+  weight: number;
+  currentScore: number;
+  trend: PulseDomainTrend;
+  lastUpdated: number;
+}
+
+export interface CivilizationPulse {
+  compositeScore: number;
+  status: PulseStatus;
+  domains: PulseDomain[];
+  deltaFromPrevious: number;
+  timestamp: number;
+}
+
+export interface CivilizationPulseServiceOptions {
+  storage?: StorageLike | null;
+  now?: () => number;
+  maxHistory?: number;
+}
+
+export const SERVICE_STORAGE_KEY = 'wm-civilization-pulse-service';
+export const SERVICE_MAX_HISTORY = 200;
+export const DOMAIN_SAMPLE_WINDOW = 10;
+export const TREND_LOOKBACK = 5;
+export const TREND_DELTA_THRESHOLD = 0.05;
+const DEFAULT_NEW_DOMAIN_WEIGHT = 0.05;
+
+export const SEVERITY_TO_SCORE: Record<number, number> = {
+  0: 1, 1: 0.8, 2: 0.6, 3: 0.3, 4: 0,
+};
+
+export const PULSE_DOMAIN_WEIGHTS: Record<string, number> = {
+  geopolitical: 0.2,
+  economic: 0.18,
+  health: 0.15,
+  cyber: 0.15,
+  climate: 0.12,
+  social: 0.1,
+  infrastructure: 0.05,
+  space: 0.05,
+};
+
+export const PULSE_STATUS_THRESHOLDS: Record<Exclude<PulseStatus, 'critical'>, number> = {
+  nominal: 0.7,
+  elevated: 0.5,
+  stressed: 0.3,
+};
+
+interface DomainState {
+  domain: string;
+  weight: number;
+  samples: number[];
+  scoreHistory: number[];
+  currentScore: number;
+  lastUpdated: number;
+}
+
+interface ServicePersistedState {
+  domains: DomainState[];
+  history: CivilizationPulse[];
+}
+
+export class CivilizationPulseService {
+  private readonly storage: StorageLike | null;
+  private readonly clock: () => number;
+  private readonly maxHistory: number;
+  private readonly domains = new Map<string, DomainState>();
+  private readonly history: CivilizationPulse[] = [];
+
+  constructor(opts: CivilizationPulseServiceOptions = {}) {
+    this.storage = opts.storage === undefined ? defaultStorage() : opts.storage;
+    this.clock = opts.now ?? Date.now;
+    this.maxHistory = opts.maxHistory ?? SERVICE_MAX_HISTORY;
+    this.hydrate();
+    this.seedMissing();
+  }
+
+  static getInstance(): CivilizationPulseService {
+    serviceSingleton ??= new CivilizationPulseService();
+    return serviceSingleton;
+  }
+
+  update(domain: string, severityLevel: number): void {
+    const clamped = clampSeverity(severityLevel);
+    const score = SEVERITY_TO_SCORE[clamped] ?? 0;
+    const state = this.getOrCreateDomain(domain);
+    state.samples.push(score);
+    while (state.samples.length > DOMAIN_SAMPLE_WINDOW) state.samples.shift();
+    state.currentScore = mean(state.samples);
+    state.scoreHistory.push(state.currentScore);
+    while (state.scoreHistory.length > DOMAIN_SAMPLE_WINDOW + TREND_LOOKBACK) state.scoreHistory.shift();
+    state.lastUpdated = this.clock();
+    this.persist();
+  }
+
+  getPulse(): CivilizationPulse {
+    const timestamp = this.clock();
+    const domains = this.buildDomainsView();
+    const compositeScore = weightedComposite(domains);
+    const status = statusFor(compositeScore);
+    const previous = this.history[this.history.length - 1];
+    const deltaFromPrevious = previous ? compositeScore - previous.compositeScore : 0;
+    const pulse: CivilizationPulse = {
+      compositeScore,
+      status,
+      domains,
+      deltaFromPrevious,
+      timestamp,
+    };
+    this.history.push(pulse);
+    while (this.history.length > this.maxHistory) this.history.shift();
+    this.persist();
+    return clonePulse(pulse);
+  }
+
+  getDomains(): PulseDomain[] {
+    return this.buildDomainsView().sort((a, b) => a.currentScore - b.currentScore);
+  }
+
+  getHistory(limit?: number): CivilizationPulse[] {
+    const reversed: CivilizationPulse[] = [];
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      reversed.push(clonePulse(this.history[i]!));
+      if (limit && reversed.length >= limit) break;
+    }
+    return reversed;
+  }
+
+  clear(): void {
+    this.domains.clear();
+    this.history.length = 0;
+    this.seedMissing();
+    this.persist();
+  }
+
+  // ── Internals ─────────────────────────────────────────────────────
+
+  private getOrCreateDomain(domain: string): DomainState {
+    const existing = this.domains.get(domain);
+    if (existing) return existing;
+    const created: DomainState = {
+      domain,
+      weight: PULSE_DOMAIN_WEIGHTS[domain] ?? DEFAULT_NEW_DOMAIN_WEIGHT,
+      samples: [],
+      scoreHistory: [],
+      currentScore: 1,
+      lastUpdated: this.clock(),
+    };
+    this.domains.set(domain, created);
+    return created;
+  }
+
+  private seedMissing(): void {
+    const now = this.clock();
+    for (const [domain, weight] of Object.entries(PULSE_DOMAIN_WEIGHTS)) {
+      if (this.domains.has(domain)) continue;
+      this.domains.set(domain, {
+        domain,
+        weight,
+        samples: [],
+        scoreHistory: [],
+        currentScore: 1,
+        lastUpdated: now,
+      });
+    }
+  }
+
+  private buildDomainsView(): PulseDomain[] {
+    const out: PulseDomain[] = [];
+    for (const state of this.domains.values()) {
+      out.push({
+        domain: state.domain,
+        weight: state.weight,
+        currentScore: state.currentScore,
+        trend: domainTrendFor(state),
+        lastUpdated: state.lastUpdated,
+      });
+    }
+    return out;
+  }
+
+  private hydrate(): void {
+    if (!this.storage) return;
+    try {
+      const raw = this.storage.getItem(SERVICE_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as ServicePersistedState;
+      if (!parsed || !Array.isArray(parsed.domains) || !Array.isArray(parsed.history)) return;
+      for (const d of parsed.domains) {
+        const restored = restoreDomainState(d, this.clock());
+        if (restored) this.domains.set(restored.domain, restored);
+      }
+      for (const h of parsed.history) this.history.push(h);
+      while (this.history.length > this.maxHistory) this.history.shift();
+    } catch {
+      this.domains.clear();
+      this.history.length = 0;
+    }
+  }
+
+  private persist(): void {
+    if (!this.storage) return;
+    try {
+      const serial: ServicePersistedState = {
+        domains: [...this.domains.values()],
+        history: this.history,
+      };
+      this.storage.setItem(SERVICE_STORAGE_KEY, JSON.stringify(serial));
+    } catch {
+      // non-fatal
+    }
+  }
+}
+
+let serviceSingleton: CivilizationPulseService | undefined;
+
+export function resetServiceForTests(): void {
+  serviceSingleton = undefined;
+}
+
+// ── Service helpers ──────────────────────────────────────────────────
+
+function clampSeverity(severity: number): number {
+  if (!Number.isFinite(severity)) return 0;
+  if (severity < 0) return 0;
+  if (severity > 4) return 4;
+  return Math.round(severity);
+}
+
+function mean(values: readonly number[]): number {
+  if (values.length === 0) return 1;
+  let total = 0;
+  for (const v of values) total += v;
+  return total / values.length;
+}
+
+function weightedComposite(domains: readonly PulseDomain[]): number {
+  let weightTotal = 0;
+  let scoreTotal = 0;
+  for (const d of domains) {
+    weightTotal += d.weight;
+    scoreTotal += d.weight * d.currentScore;
+  }
+  if (weightTotal <= 0) return 0;
+  const score = scoreTotal / weightTotal;
+  if (score < 0) return 0;
+  if (score > 1) return 1;
+  return score;
+}
+
+function statusFor(score: number): PulseStatus {
+  if (score >= PULSE_STATUS_THRESHOLDS.nominal) return 'nominal';
+  if (score >= PULSE_STATUS_THRESHOLDS.elevated) return 'elevated';
+  if (score >= PULSE_STATUS_THRESHOLDS.stressed) return 'stressed';
+  return 'critical';
+}
+
+function domainTrendFor(state: DomainState): PulseDomainTrend {
+  if (state.scoreHistory.length <= TREND_LOOKBACK) return 'stable';
+  const lookback = state.scoreHistory.slice(-TREND_LOOKBACK - 1, -1);
+  if (lookback.length === 0) return 'stable';
+  const baseline = mean(lookback);
+  const delta = state.currentScore - baseline;
+  if (delta > TREND_DELTA_THRESHOLD) return 'improving';
+  if (delta < -TREND_DELTA_THRESHOLD) return 'degrading';
+  return 'stable';
+}
+
+function restoreDomainState(d: unknown, fallbackTimestamp: number): DomainState | null {
+  if (typeof d !== 'object' || d === null) return null;
+  const raw = d as Partial<DomainState>;
+  if (typeof raw.domain !== 'string') return null;
+  return {
+    domain: raw.domain,
+    weight: typeof raw.weight === 'number' ? raw.weight : DEFAULT_NEW_DOMAIN_WEIGHT,
+    samples: Array.isArray(raw.samples) ? raw.samples : [],
+    scoreHistory: Array.isArray(raw.scoreHistory) ? raw.scoreHistory : [],
+    currentScore: typeof raw.currentScore === 'number' ? raw.currentScore : 1,
+    lastUpdated: typeof raw.lastUpdated === 'number' ? raw.lastUpdated : fallbackTimestamp,
+  };
+}
+
+function clonePulse(p: CivilizationPulse): CivilizationPulse {
+  return {
+    compositeScore: p.compositeScore,
+    status: p.status,
+    domains: p.domains.map((d) => ({ ...d })),
+    deltaFromPrevious: p.deltaFromPrevious,
+    timestamp: p.timestamp,
+  };
+}

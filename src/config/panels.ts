@@ -241,6 +241,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'playbook': { name: 'Response Playbooks', enabled: true, priority: 2 },
   'cross-domain-contradiction-detector': { name: 'Cross-Domain Conflicts', enabled: true, priority: 2 },
   'aviation-intel': { name: 'Aviation Intel', enabled: true, priority: 2 },
+  'aviation-superpower': { name: 'Aviation Superpower', enabled: true, priority: 2 },
   'shortage-radar': { name: 'Shortage Radar', enabled: true, priority: 1 },
   'shortage-detail-wheat': { name: 'Wheat Shortage', enabled: true, priority: 2 },
   'shortage-detail-corn': { name: 'Corn Shortage', enabled: true, priority: 2 },

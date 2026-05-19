@@ -182,20 +182,18 @@ describe('tick', () => {
     for (let i = 0; i < morocco.observations.length; i++) {
       lib.tick(replay.replayId);
     }
-    // After exhausting, tick again to check status
-    lib.tick(replay.replayId);
-    // Verify via tick returning null (completed)
-    assert.equal(lib.tick(replay.replayId), null);
+    assert.equal(lib.getReplay(replay.replayId)!.status, 'completed');
   });
 
   it('emittedObservations grows with each tick', () => {
     const lib = ScenarioLibrary.createForTesting(makeStorage());
     const replay = lib.startReplay('suez-2021');
     lib.tick(replay.replayId);
+    assert.equal(lib.getReplay(replay.replayId)!.emittedObservations.length, 1);
     lib.tick(replay.replayId);
-    // We can verify by ticking and checking that subsequent null appears only when exhausted
-    const third = lib.tick(replay.replayId);
-    assert.ok(third !== null);
+    assert.equal(lib.getReplay(replay.replayId)!.emittedObservations.length, 2);
+    lib.tick(replay.replayId);
+    assert.equal(lib.getReplay(replay.replayId)!.emittedObservations.length, 3);
   });
 
   it('returns null for unknown replayId', () => {

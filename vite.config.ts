@@ -508,7 +508,17 @@ function rssProxyPlugin(): Plugin {
 
  try {
  const parsed = new URL(feedUrl);
- if (!RSS_PROXY_ALLOWED_DOMAINS.has(parsed.hostname)) {
+ if (parsed.protocol !== 'https:') {
+ res.statusCode = 403;
+ res.setHeader('Content-Type', 'application/json');
+ res.end(JSON.stringify({ error: 'Feed URL must use HTTPS' }));
+ return;
+ }
+ const isAllowedDevDomain = (h: string) => {
+ const bare = h.replace(/^www\./, '');
+ return RSS_PROXY_ALLOWED_DOMAINS.has(h) || RSS_PROXY_ALLOWED_DOMAINS.has(bare) || RSS_PROXY_ALLOWED_DOMAINS.has(`www.${bare}`);
+ };
+ if (!isAllowedDevDomain(parsed.hostname)) {
  res.statusCode = 403;
  res.setHeader('Content-Type', 'application/json');
  res.end(JSON.stringify({ error: `Domain not allowed: ${parsed.hostname}` }));
@@ -518,16 +528,29 @@ function rssProxyPlugin(): Plugin {
  const controller = new AbortController();
  const timeout = feedUrl.includes('news.google.com') ? 20000 : 12000;
  const timer = setTimeout(() => controller.abort(), timeout);
-
- const response = await fetch(feedUrl, {
- signal: controller.signal,
- headers: {
+ const RSS_DEV_HEADERS = {
  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
  'Accept': 'application/rss+xml, application/xml, text/xml, */*',
- },
- redirect: 'follow',
- });
+ };
+
+ // Manual redirect following — mirrors production proxy: HTTPS + allowlist on every hop.
+ let currentUrl = feedUrl;
+ let redirectCount = 0;
+ const MAX_DEV_REDIRECTS = 5;
+ let response: Response | null = null;
+ while (redirectCount <= MAX_DEV_REDIRECTS) {
+ response = await fetch(currentUrl, { signal: controller.signal, headers: RSS_DEV_HEADERS, redirect: 'manual' });
+ if (response.status < 300 || response.status >= 400) break;
+ const location = response.headers.get('location');
+ if (!location) break;
+ const redirectUrl = new URL(location, currentUrl);
+ if (redirectUrl.protocol !== 'https:') throw new Error('Redirect to non-HTTPS URL');
+ if (!isAllowedDevDomain(redirectUrl.hostname)) throw new Error('Redirect to disallowed domain');
+ currentUrl = redirectUrl.href;
+ redirectCount++;
+ }
  clearTimeout(timer);
+ if (!response) throw new Error('No response');
 
  const data = await response.text();
  res.statusCode = response.status;

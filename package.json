@@ -72,6 +72,7 @@
     "test:ops": "tsx --test src/services/ops/__tests__/mission-ledger.test.mts src/services/ops/__tests__/mission-ledger-persistence.test.mts src/services/ops/__tests__/time-to-warn.test.mts src/services/ops/__tests__/closed-loop-batch.test.mts src/services/ops/__tests__/replay-fixtures-catalog.test.mts src/services/ops/__tests__/replay-harness.test.mts",
     "test:algorithms": "tsx --test src/services/algorithms/__tests__/algorithm-evaluation-ledger.test.mts src/services/algorithms/__tests__/algorithm-health.test.mts src/services/algorithms/__tests__/safe-adjustment.test.mts src/services/algorithms/__tests__/algorithm-registry.test.mts src/services/algorithms/__tests__/algorithm-ledger-persistence.test.mts",
     "test:insights6": "tsx --test src/services/insights/__tests__/presentation-export.test.mts",
+    "test:civilization-physics": "tsx --test tests/intelligence/civilization-physics-engine.test.mts",
     "test:contradiction": "tsx --test tests/intelligence/cross-domain-contradiction-detector.test.mts",
     "test:causal-attribution": "tsx --test tests/intelligence/causal-attribution.test.mts",
     "test:belief-state": "tsx --test tests/intelligence/belief-state-manager.test.mts",

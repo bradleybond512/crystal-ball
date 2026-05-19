@@ -309,3 +309,210 @@ function defaultStorage(): StorageLike | null {
   const ls = (globalThis as { localStorage?: StorageLike }).localStorage;
   return ls ?? null;
 }
+
+// ── Feed-health failure prediction ───────────────────────────────────
+//
+// FailurePredictionService tracks rolling health signals per feed/domain
+// and predicts infrastructure degradation before it becomes a full outage.
+// Distinct from FailurePredictionEngine (which scores event escalation).
+
+const FPS_STORAGE_KEY = 'wm-failure-prediction';
+const FPS_MAX_WINDOW = 20;
+const FPS_MAX_PREDICTIONS = 300;
+const FPS_DEFAULT_LEAD_MS = 30 * 60_000;
+const FPS_ERROR_RATE_TRIGGER = 0.4;
+const FPS_CONSECUTIVE_TRIGGER = 3;
+const FPS_P95_LATENCY_TRIGGER_MS = 10_000;
+
+export interface FailurePrediction {
+  id: string;
+  domain: string;
+  feedId?: string;
+  predictedFailureAt: number;
+  confidence: number;
+  reason: string;
+  riskFactors: string[];
+  status: 'active' | 'confirmed' | 'avoided';
+  createdAt: number;
+}
+
+interface FpsSample {
+  isHealthy: boolean;
+  latencyMs: number;
+  recordedAt: number;
+}
+
+interface FpsWindow {
+  domain: string;
+  feedId: string;
+  samples: FpsSample[];
+  consecutiveFailures: number;
+  failureTimes: number[];
+}
+
+function fpsP95(samples: FpsSample[]): number {
+  if (samples.length === 0) return 0;
+  const sorted = samples.map((s) => s.latencyMs).sort((a, b) => a - b);
+  const idx = Math.ceil(sorted.length * 0.95) - 1;
+  return sorted[Math.max(0, idx)] ?? 0;
+}
+
+function fpsMtbf(times: number[]): number {
+  if (times.length < 2) return 0;
+  let sum = 0;
+  for (let i = 1; i < times.length; i++) {
+    sum += (times[i] ?? 0) - (times[i - 1] ?? 0);
+  }
+  return sum / (times.length - 1);
+}
+
+let _fpsCounter = 0;
+function fpsMakeId(): string {
+  return `fp-${Date.now()}-${(++_fpsCounter).toString(36)}`;
+}
+
+export class FailurePredictionService {
+  private static instance: FailurePredictionService | null = null;
+
+  private predictions: FailurePrediction[] = [];
+  private readonly windows = new Map<string, FpsWindow>();
+
+  private constructor() {
+    this.fpsLoad();
+  }
+
+  static getInstance(): FailurePredictionService {
+    FailurePredictionService.instance ??= new FailurePredictionService();
+    return FailurePredictionService.instance;
+  }
+
+  static reset(): void {
+    FailurePredictionService.instance = null;
+  }
+
+  private fpsLoad(): void {
+    try {
+      const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(FPS_STORAGE_KEY);
+      if (raw) this.predictions = JSON.parse(raw) as FailurePrediction[];
+    } catch {
+      this.predictions = [];
+    }
+  }
+
+  private fpsPersist(): void {
+    try {
+      if (this.predictions.length > FPS_MAX_PREDICTIONS) {
+        this.predictions.splice(0, this.predictions.length - FPS_MAX_PREDICTIONS);
+      }
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(FPS_STORAGE_KEY, JSON.stringify(this.predictions));
+      }
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  recordHealthSignal(domain: string, feedId: string, isHealthy: boolean, latencyMs: number): void {
+    const key = `${domain}::${feedId}`;
+    let win = this.windows.get(key);
+    if (!win) {
+      win = { domain, feedId, samples: [], consecutiveFailures: 0, failureTimes: [] };
+      this.windows.set(key, win);
+    }
+
+    const now = Date.now();
+    win.samples.push({ isHealthy, latencyMs, recordedAt: now });
+    if (win.samples.length > FPS_MAX_WINDOW) win.samples.shift();
+
+    if (isHealthy) {
+      win.consecutiveFailures = 0;
+    } else {
+      win.consecutiveFailures++;
+      win.failureTimes.push(now);
+    }
+
+    this.fpsCheck(win, now);
+  }
+
+  private fpsCheck(win: FpsWindow, now: number): void {
+    const errorCount = win.samples.filter((s) => !s.isHealthy).length;
+    const errorRate = errorCount / win.samples.length;
+    const p95 = fpsP95(win.samples);
+
+    const triggered =
+      win.consecutiveFailures >= FPS_CONSECUTIVE_TRIGGER ||
+      errorRate > FPS_ERROR_RATE_TRIGGER ||
+      p95 > FPS_P95_LATENCY_TRIGGER_MS;
+
+    if (!triggered) return;
+
+    const alreadyActive = this.predictions.some(
+      (p) => p.domain === win.domain && p.feedId === win.feedId && p.status === 'active',
+    );
+    if (alreadyActive) return;
+
+    const confidence = Math.min(errorRate * 1.5, 0.95);
+    const mtbf = fpsMtbf(win.failureTimes);
+    const leadMs = mtbf > 0 ? mtbf * 0.5 : FPS_DEFAULT_LEAD_MS;
+
+    const riskFactors: string[] = [];
+    if (win.consecutiveFailures >= FPS_CONSECUTIVE_TRIGGER) {
+      riskFactors.push(`${win.consecutiveFailures} consecutive failures`);
+    }
+    if (errorRate > FPS_ERROR_RATE_TRIGGER) {
+      riskFactors.push(`error rate ${(errorRate * 100).toFixed(0)}%`);
+    }
+    if (p95 > FPS_P95_LATENCY_TRIGGER_MS) {
+      riskFactors.push(`p95 latency ${p95}ms`);
+    }
+
+    this.predictions.push({
+      id: fpsMakeId(),
+      domain: win.domain,
+      feedId: win.feedId,
+      predictedFailureAt: now + leadMs,
+      confidence,
+      reason: riskFactors.join('; '),
+      riskFactors,
+      status: 'active',
+      createdAt: now,
+    });
+
+    this.fpsPersist();
+  }
+
+  getPredictions(): FailurePrediction[] {
+    return [...this.predictions];
+  }
+
+  confirmFailure(id: string): void {
+    const pred = this.predictions.find((p) => p.id === id);
+    if (pred) {
+      pred.status = 'confirmed';
+      this.fpsPersist();
+    }
+  }
+
+  markAvoided(id: string): void {
+    const pred = this.predictions.find((p) => p.id === id);
+    if (pred) {
+      pred.status = 'avoided';
+      this.fpsPersist();
+    }
+  }
+
+  getStats(): { totalPredictions: number; accuracy: number; avgLeadTimeMinutes: number } {
+    const total = this.predictions.length;
+    const confirmed = this.predictions.filter((p) => p.status === 'confirmed').length;
+    const expired = this.predictions.filter((p) => p.status !== 'active').length;
+    const accuracy = expired > 0 ? confirmed / expired : 0;
+
+    const leadTimes = this.predictions
+      .filter((p) => p.status === 'confirmed')
+      .map((p) => (p.predictedFailureAt - p.createdAt) / 60_000);
+    const avgLeadTimeMinutes =
+      leadTimes.length > 0 ? leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length : 0;
+
+    return { totalPredictions: total, accuracy, avgLeadTimeMinutes };
+  }
+}

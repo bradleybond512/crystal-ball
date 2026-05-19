@@ -11,9 +11,13 @@ function sanitizeVideoId(value) {
 }
 
 const ALLOWED_ORIGINS = [
-  /^https:\/\/(.*\.)?crystalball\.app$/,
-  /^https:\/\/crystalball-[a-z0-9-]+-bradleybond-projects\.vercel\.app$/,
-  /^https:\/\/crystalball-[a-z0-9-]+\.vercel\.app$/,
+  /^https:\/\/crystalball\.app$/,
+  /^https:\/\/(tech|finance|happy|api)\.crystalball\.app$/,
+  // Vercel preview URLs anchored to known owner accounts (mirrors _cors.ts)
+  /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
+  /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
+  /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
+  /^https:\/\/crystal-ball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
   /^https?:\/\/localhost(:\d+)?$/,
   /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
   /^tauri:\/\/localhost$/,
@@ -21,8 +25,9 @@ const ALLOWED_ORIGINS = [
 
 const ALLOWED_PARENT_ORIGINS = [
   ...ALLOWED_ORIGINS,
-  /^https?:\/\/tauri\.localhost$/,
-  /^https?:\/\/[a-z0-9-]+\.tauri\.localhost$/,
+  /^https?:\/\/tauri\.localhost(:\d+)?$/,
+  /^https?:\/\/[a-z0-9-]+\.tauri\.localhost(:\d+)?$/i,
+  /^asset:\/\/localhost$/,
 ];
 
 function sanitizeAllowedOrigin(raw, fallback, allowList = ALLOWED_ORIGINS) {

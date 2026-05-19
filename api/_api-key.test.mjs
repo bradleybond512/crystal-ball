@@ -41,6 +41,82 @@ test('allows trusted browser origin when fetch metadata is present', () => {
   assert.equal(result.required, false);
 });
 
+test('allows enumerated crystalball.app subdomains', () => {
+  for (const subdomain of ['tech', 'finance', 'happy', 'api']) {
+ const result = validateApiKey(makeRequest({
+ Origin: `https://${subdomain}.crystalball.app`,
+ 'Sec-Fetch-Site': 'same-site',
+ 'Sec-Fetch-Mode': 'cors',
+ }));
+ assert.equal(result.valid, true, `should allow ${subdomain}.crystalball.app`);
+  }
+});
+
+test('allows bare crystalball.app origin', () => {
+  const result = validateApiKey(makeRequest({
+ Origin: 'https://crystalball.app',
+ 'Sec-Fetch-Site': 'same-origin',
+ 'Sec-Fetch-Mode': 'cors',
+  }));
+  assert.equal(result.valid, true);
+});
+
+test('rejects non-enumerated crystalball.app subdomains', () => {
+  const result = validateApiKey(makeRequest({
+ Origin: 'https://evil.crystalball.app',
+ 'Sec-Fetch-Site': 'same-site',
+ 'Sec-Fetch-Mode': 'cors',
+  }));
+  assert.equal(result.valid, false);
+});
+
+test('allows Vercel preview deploy origins', () => {
+  const validPreviews = [
+ 'https://crystalball-my-branch-bradleybond512.vercel.app',
+ 'https://crystal-ball-fix-123-bradleybond512.vercel.app',
+ 'https://crystalball-pr-42-elie-abc123.vercel.app',
+  ];
+  for (const origin of validPreviews) {
+ const result = validateApiKey(makeRequest({
+ Origin: origin,
+ 'Sec-Fetch-Site': 'same-site',
+ 'Sec-Fetch-Mode': 'cors',
+ }));
+ assert.equal(result.valid, true, `should allow ${origin}`);
+  }
+});
+
+test('rejects unrelated third-party Vercel projects that share the crystal-ball prefix', () => {
+  const invalidPreviews = [
+ 'https://crystalball-anyproject.vercel.app',
+ 'https://crystalball-evilorg.vercel.app',
+ 'https://crystal-ball-foo.vercel.app',
+  ];
+  for (const origin of invalidPreviews) {
+ const result = validateApiKey(makeRequest({
+ Origin: origin,
+ 'Sec-Fetch-Site': 'same-site',
+ 'Sec-Fetch-Mode': 'cors',
+ }));
+ assert.equal(result.valid, false, `should reject ${origin}`);
+  }
+});
+
+test('rejects origins with wrong protocol or port tricks', () => {
+  const invalid = [
+ 'http://crystalball.app',
+ 'https://crystalball.app.evil.com',
+  ];
+  for (const origin of invalid) {
+ const result = validateApiKey(makeRequest({
+ Origin: origin,
+ 'Sec-Fetch-Site': 'same-site',
+ 'Sec-Fetch-Mode': 'cors',
+ }));
+ assert.equal(result.valid, false, `should reject ${origin}`);
+  }
+});
+
 test('requires API key for trusted browser non-read requests', () => {
   const request = new Request('https://crystalball.app/api/news/v1/summarize-article', {
  method: 'POST',

@@ -4,6 +4,104 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.24.0] - 2026-05-18
+
+### Changed
+
+- Version bump for release packaging.
+
+## [2.23.0] - 2026-05-18
+
+### Changed
+
+- Version bump for release packaging.
+
+## [2.22.0] - 2026-05-17
+
+### Added
+
+- **Situation Lifecycle Tracker**: state-machine lifecycle management for tracked situations (open → confirmed → resolved → archived).
+- **Global Rhythm Engine (panel)**: circadian/weekly/seasonal baseline visualization showing anomalies against expected patterns.
+- **Compound Event Detector**: detects when simultaneous events in separate domains cross a combined severity threshold.
+- **Source Credibility Tracker**: per-source reliability score derived from outcome calibration and cross-source disagreement history.
+- **Mission Control Dashboard**: unified operator surface — live source health, active situations, alert rung, and action queue in one view.
+- **Evidence Chain Builder**: directed evidence-to-claim graph builder with transitivity inference and contradicting-evidence surfacing.
+- **Trade Route Risk Scorer**: per-chokepoint shipping disruption risk (12 routes including Suez, Hormuz, Bosphorus, Malacca, Panama, Black Sea).
+- **AssumptionTracker v2**: full register / confirm / violate / expire lifecycle replacing the static v1 annotation approach.
+- **Intelligence Index**: full-text in-memory index over active intelligence items with field-weighted scoring.
+- **Persistent Query Engine**: saved query definitions that re-run on every data cycle and push delta results to subscribers.
+- **Alert Escalation Service**: automatic severity-rung escalation when an alert exceeds its acknowledgment window.
+- **Watch Area Alerting**: polygon-based watch regions that generate proximity alerts as tracked entities enter or exit.
+- **Intelligence Briefing Export**: structured multi-format briefing export (Markdown, clipboard, share-sheet, Claude debug packet) from any situation set.
+- **Analyst Notebook**: persistent freeform note layer attached to hypotheses and situations; survives across sessions via IDB.
+- **Trust Budget Service (v2 panel)**: per-domain alert-quota self-throttle panel backed by the trust-budget service.
+- **Geospatial Clustering**: DBSCAN-style geographic clustering of active events with live cluster centroid and severity rollup.
+- **Intelligence Loop Orchestrator**: master scheduling loop that sequences observe → correlate → explain → learn stages with backpressure.
+- **Threat Correlation Matrix**: n×n domain correlation heat-map showing which domain pairs are co-activating above baseline.
+- **Intelligence Health Monitor**: aggregate health score across all intelligence pipeline stages with per-stage pass/warn/fail verdict.
+- **Operator Shift Report**: end-of-shift structured summary: top events, open situations, notable correlations, recommended handoffs.
+- **Feed Watchdog**: per-feed staleness monitor with configurable max-age and alert-rung escalation on timeout.
+- **Situation Priority Queue**: priority-sorted queue of active situations based on compound severity, confidence, and personal relevance.
+- **Signal Enrichment Service**: contextual enrichment layer that appends geolocation, entity resolution, and historical precedent to raw signals.
+- **Temporal Anomaly Detector**: statistical detection of events that deviate from domain-specific time-of-day and day-of-week baselines.
+- **Geopolitical Event Calendar**: structured feed of known scheduled geopolitical events (elections, OPEC meetings, summits) used as forward context for anomaly detection.
+- **Alert Deduplication Service**: suppresses near-duplicate alerts within a configurable time window using signature hashing.
+- **Counterfactual Reasoning Service (panel)**: user-facing panel for the counterfactual engine — "what would have to be true for this to be wrong?"
+- **Competitive Hypothesis Engine (panel)**: renders 2–3 competing explanations per active situation with confidence bars.
+- **Domain Scorecards (panel)**: per-domain A–F grade panel consolidating outcome quality, accuracy, and feed health.
+
+## [2.21.0] - 2026-05-16
+
+### Added
+
+- **Trust Budget**: per-domain alert-quota self-throttle driven by outcome calibration; domains that over-fire are automatically rate-limited.
+- **Competitive Hypothesis Engine**: generates 2–3 competing explanations per Situation so operators surface alternative hypotheses before anchoring.
+- **Counterfactual Reasoning**: "what would have to be true for this to be wrong?" structured adversarial framing for every active situation.
+- **Domain Scorecards**: per-domain A–F grade consolidating outcome quality, accuracy, and feed health into a single actionable metric.
+- **Cognitive Bias Detection**: anchoring, availability, confirmation, and overconfidence bias flags applied to hypothesis ranking.
+- **Active Learning Queue**: surfaces highest-uncertainty claims for human review using a claim/resolve/skip/expire state machine.
+- **Backtest-Before-Apply Gate**: validates algorithm parameter changes against historical outcomes before allowing them to take effect.
+- **Meta-Confidence Layer**: confidence-in-the-confidence estimate; flags cases where the scoring inputs are themselves uncertain.
+- **Improvement Scheduler**: 8-task-type scheduler (60s loop) that queues algorithm tuning, data-gap fills, and recalibration jobs.
+- **Multi-Agent Review Service**: 6-perspective panel (analyst / skeptic / pragmatist / devil's advocate / optimist / historian) reviewing each situation.
+- **Quality Debt Tracker**: 6-category weighted quality-debt score tracking deferred calibration, stale baselines, and coverage gaps.
+- **Autonomous Repair Engine**: detects known failure signatures and proposes or applies pre-approved parameter corrections automatically.
+- **Model Governance Service**: model cards for 14 intelligence algorithms with approval status, version, and risk tier.
+- **Mission Ledger Bridge**: closes the learning loop by writing confirmed outcomes back to the algorithm evaluation ledger.
+- **Failure Prediction Engine**: predicts which pipeline stages are at elevated failure risk based on recent error rates and upstream health.
+- **Counterfactual Replay Engine**: 4 built-in replay templates (missed tornado, late flood, silent cyber, ignored satellite) for regression proofing.
+- **Contradiction Detector**: 5 conflict types (source disagreement, temporal reversal, geographic mismatch, severity inversion, polarity flip) surfaced per situation.
+- **Operational Playbook Engine**: 6 domain-specific playbook templates with step-tracking, completion state, and shift-handoff export.
+- **BacktestGate**: pre-apply safety gate that blocks algorithm changes failing a minimum historical-accuracy threshold.
+- **CivilizationPulse Engine**: composite real-time global health score aggregating domain pressures, active situations, and baseline deviations.
+- **Notification Provenance Service**: full causal chain for every delivered alert — source → correlation → urgency rung → quiet-hours check → delivery.
+- **Crisis Signature Library**: pattern fingerprinting for 8 recurring crisis types (Gulf closure, pandemic surge, grid cascade, etc.) enabling early pattern matches.
+- **Crisis Trajectory Projector**: 6/24/72h situation evolution projections using momentum, domain dependencies, and historical trajectories.
+- **GlobalRhythmEngine (service)**: circadian/weekly/seasonal baselines per domain derived from rolling historical windows.
+- **World Narrative Engine**: template-based global situation synthesis producing a human-readable paragraph summarizing the current world state.
+- **Recovery Modeling Engine**: post-event recovery curve tracking per region/domain using exponential-recovery fit against baseline.
+- **Domain Dependency Graph**: cross-domain cascade risk mapping across 26 directed edges and 11 domains.
+- **Collection Gap Discovery**: systematic observability audit identifying 6 gap types (no source, stale source, single source, low confidence, no baseline, no correlation rule).
+- **Regional Resilience Index**: per-region crisis recovery scoring derived from recovery curves and historical crisis frequency.
+- **Situation Timeline**: chronological view of all tracked situations with type filter, domain filter, and duration/severity stats.
+- **Behavioral Response Model**: population stress-response curve tracking — maps domain severity to expected public-behavior pressure.
+- **Saved places proximity filter**: saved places used as a first-class 500 km proximity filter across all intelligence scoring.
+- **CausalChainBuilder**: directed cause→effect graph built from correlation edges, enabling multi-hop impact tracing.
+- **Intelligence Digest Service**: structured 1h/6h/24h intelligence compilation summarizing top events, open situations, and notable anomalies.
+- **ThreatHorizonScanner**: 24/48/72h emerging threat detection using trajectory projections and domain-dependency cascade modeling.
+- **Safety Case Dashboard**: 8 safety properties (single trustworthiness screen) with live coverage and pass-rate monitoring.
+- **Shadow Mode Algorithm Service**: runs experimental algorithm variants in parallel with production, promoting when accuracy exceeds threshold.
+- **ExperimentManager**: A/B framework for algorithm variants with assignment, exposure tracking, and outcome comparison.
+- **MetaConfidenceCalibrationService**: binned reliability tracking — groups confidence estimates into deciles and measures per-decile accuracy.
+- **CognitiveBiasDetector (panel)**: renders bias flags per hypothesis with explanations and correction suggestions.
+- **NotificationHistoryPanel (backed by provenance)**: full provenance + suppression audit trail rendered in a scrollable panel.
+- **ActiveLearningQueue (panel)**: operator-facing queue of highest-uncertainty claims awaiting confirmation or dismissal.
+
+### Fixed
+
+- Deduplicate keychain and location permission requests to exactly one each at startup.
+- Phase 0 release blockers: GDACS crash guard, sidecar route audit sync, CHANGELOG sync.
+
 ## [2.20.0] - 2026-05-15
 
 ### Added

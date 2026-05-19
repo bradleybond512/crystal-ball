@@ -1,9 +1,8 @@
 /**
  * Collection Gap Panel — operator view of the observability audit.
  *
- * Renders the overall-coverage score, critical gap counts, and a
- * domain-grouped table of open gaps with acknowledge / resolve
- * actions and a re-scan button.
+ * Renders open gap count by severity, domain breakdown, and a
+ * gap table with per-gap resolve actions and a refresh button.
  */
 
 import { Panel } from './Panel';
@@ -12,36 +11,33 @@ import {
   getCollectionGapDiscoveryService,
   type GapSeverity,
   type GapType,
-  type ObservabilityGap,
-  type ObservabilityReport,
+  type CollectionGap,
 } from '@/services/intelligence/collection-gap-discovery';
 
 const SEVERITY_COLOR: Record<GapSeverity, string> = {
-  critical: 'var(--severity-critical,#dc2626)',
-  moderate: 'var(--severity-medium,#facc15)',
-  minor: '#60a5fa',
+  high:   'var(--severity-critical,#dc2626)',
+  medium: 'var(--severity-medium,#facc15)',
+  low:    '#60a5fa',
 };
 
 const SEVERITY_LABEL: Record<GapSeverity, string> = {
-  critical: 'CRITICAL',
-  moderate: 'MODERATE',
-  minor: 'MINOR',
+  high:   'HIGH',
+  medium: 'MEDIUM',
+  low:    'LOW',
 };
 
 const GAP_TYPE_LABEL: Record<GapType, string> = {
-  'stale-feed': 'Stale feed',
-  'sparse-coverage': 'Sparse coverage',
-  'missing-source': 'Single source',
-  'low-confidence': 'Low confidence',
-  'geographic-blind-spot': 'Blind spot',
-  'temporal-gap': 'Temporal gap',
+  'missing-feed':   'Missing feed',
+  'low-coverage':   'Low coverage',
+  'stale-data':     'Stale data',
+  'no-alerts':      'No alerts',
+  'single-source':  'Single source',
 };
 
 const REFRESH_MS = 15_000;
 
 export class CollectionGapPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
-  private unsubscribe: (() => void) | null = null;
 
   constructor() {
     super({
@@ -50,11 +46,10 @@ export class CollectionGapPanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Systematic observability audit. Surfaces stale feeds, sparse coverage, low confidence, single-source brittleness, geographic blind spots, and temporal gaps.',
+        'Systematic observability audit. Surfaces stale data, missing feeds, low coverage regions, absent alerts, and single-source brittleness.',
     });
     this.render();
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
-    this.unsubscribe = getCollectionGapDiscoveryService().subscribe(() => this.render());
     this.attachHandlers();
   }
 
@@ -63,8 +58,6 @@ export class CollectionGapPanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    this.unsubscribe?.();
-    this.unsubscribe = null;
     super.destroy();
   }
 
@@ -73,10 +66,10 @@ export class CollectionGapPanel extends Panel {
   private render(): void {
     try {
       const service = getCollectionGapDiscoveryService();
-      const open = service.getOpen();
-      const report = service.getLatestReport();
+      const open = service.getGaps();
+      const stats = service.getStats();
       this.setCount(open.length);
-      this.setContent(this.buildHtml(open, report));
+      this.setContent(this.buildHtml(open, stats));
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical,#dc2626);font-size:12px;">Collection-gap render error: ${escapeHtml(String(error))}</div>`,
@@ -84,42 +77,47 @@ export class CollectionGapPanel extends Panel {
     }
   }
 
-  private buildHtml(open: readonly ObservabilityGap[], report: ObservabilityReport | undefined): string {
+  private buildHtml(
+    open: readonly CollectionGap[],
+    stats: ReturnType<ReturnType<typeof getCollectionGapDiscoveryService>['getStats']>,
+  ): string {
     return `<div style="padding:12px;display:flex;flex-direction:column;gap:14px;font-size:12px;">
-      ${this.renderHeader(report, open)}
+      ${this.renderHeader(open, stats)}
       ${this.renderGaps(open)}
     </div>`;
   }
 
-  private renderHeader(report: ObservabilityReport | undefined, open: readonly ObservabilityGap[]): string {
-    const coverage = report?.overallCoverage ?? 0;
-    const coverageColor = coverageBandColor(coverage);
-    const criticalCount = open.filter((g) => g.severity === 'critical').length;
+  private renderHeader(
+    open: readonly CollectionGap[],
+    stats: ReturnType<ReturnType<typeof getCollectionGapDiscoveryService>['getStats']>,
+  ): string {
+    const resolutionPct = Math.round(stats.resolutionRate * 100);
     return `<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;">
       <div>
-        <div style="font-size:32px;font-weight:700;color:${coverageColor};">${coverage}%</div>
-        <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">overall coverage</div>
+        <div style="font-size:32px;font-weight:700;color:${open.length === 0 ? 'var(--severity-ok,#22c55e)' : 'var(--severity-critical,#dc2626)'};">${stats.bySeverity.high}</div>
+        <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">high severity</div>
       </div>
       <div>
-        <div style="font-size:24px;font-weight:700;color:var(--severity-critical,#dc2626);">${criticalCount}</div>
-        <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">critical gaps</div>
+        <div style="font-size:24px;font-weight:700;color:var(--severity-medium,#facc15);">${stats.bySeverity.medium}</div>
+        <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">medium</div>
       </div>
       <div>
-        <div style="font-size:24px;font-weight:700;">${open.length}</div>
-        <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">open total</div>
+        <div style="font-size:24px;font-weight:700;color:#60a5fa;">${stats.bySeverity.low}</div>
+        <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">low</div>
       </div>
-      <div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-        <button class="cg-action" data-action="rescan" style="padding:4px 10px;font-size:11px;border:1px solid var(--border-subtle,#333);background:rgba(96,165,250,0.10);color:#60a5fa;border-radius:3px;cursor:pointer;">Re-scan</button>
-        <span style="font-size:10px;color:var(--text-secondary,#aaa);">
-          ${report ? 'last scan ' + new Date(report.scannedAt).toLocaleString() : 'never scanned'}
-        </span>
+      <div>
+        <div style="font-size:24px;font-weight:700;">${resolutionPct}%</div>
+        <div style="font-size:10px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">resolved</div>
+      </div>
+      <div style="margin-left:auto;">
+        <button class="cg-action" data-action="refresh" style="padding:4px 10px;font-size:11px;border:1px solid var(--border-subtle,#333);background:rgba(96,165,250,0.10);color:#60a5fa;border-radius:3px;cursor:pointer;">Refresh</button>
       </div>
     </div>`;
   }
 
-  private renderGaps(open: readonly ObservabilityGap[]): string {
+  private renderGaps(open: readonly CollectionGap[]): string {
     if (open.length === 0) {
-      return '<div style="font-size:11px;color:var(--text-secondary,#aaa);">No open gaps. Click <em>Re-scan</em> to run a fresh audit.</div>';
+      return '<div style="font-size:11px;color:var(--text-secondary,#aaa);">No open gaps detected.</div>';
     }
     const grouped = groupByDomain(open);
     const sections = [...grouped.entries()]
@@ -129,7 +127,7 @@ export class CollectionGapPanel extends Panel {
     return `<div style="display:flex;flex-direction:column;gap:10px;">${sections}</div>`;
   }
 
-  private renderDomainSection(domain: string, rows: readonly ObservabilityGap[]): string {
+  private renderDomainSection(domain: string, rows: readonly CollectionGap[]): string {
     const items = rows.map((g) => this.renderGapRow(g)).join('');
     return `<div>
       <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px;">
@@ -140,21 +138,18 @@ export class CollectionGapPanel extends Panel {
     </div>`;
   }
 
-  private renderGapRow(g: ObservabilityGap): string {
+  private renderGapRow(g: CollectionGap): string {
     const color = SEVERITY_COLOR[g.severity];
-    const acknowledged = g.status === 'acknowledged';
+    const label = SEVERITY_LABEL[g.severity];
+    const typeLabel = GAP_TYPE_LABEL[g.gapType] ?? g.gapType;
     return `<div style="padding:8px 10px;border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:4px;background:rgba(255,255,255,0.02);">
       <div style="display:flex;align-items:center;gap:8px;font-size:11px;flex-wrap:wrap;">
-        <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${color}22;color:${color};font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(SEVERITY_LABEL[g.severity])}</span>
-        <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(96,165,250,0.10);color:#60a5fa;">${escapeHtml(GAP_TYPE_LABEL[g.gapType])}</span>
-        ${acknowledged ? '<span style="font-size:10px;color:#60a5fa;font-weight:700;text-transform:uppercase;">ACKED</span>' : ''}
+        <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${color}22;color:${color};font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(label)}</span>
+        <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(96,165,250,0.10);color:#60a5fa;">${escapeHtml(typeLabel)}</span>
         <span style="margin-left:auto;font-size:10px;color:var(--text-secondary,#aaa);">${escapeHtml(g.id)}</span>
       </div>
       <div style="font-size:11px;margin-top:4px;">${escapeHtml(g.description)}</div>
-      <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:4px;">${escapeHtml(g.recommendedAction)}</div>
-      ${g.affectedRegions.length > 0 ? `<div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:2px;">Regions: ${g.affectedRegions.map((r) => escapeHtml(r)).join(', ')}</div>` : ''}
       <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">
-        ${acknowledged ? '' : `<button class="cg-action" data-action="acknowledge" data-id="${escapeHtml(g.id)}" style="padding:3px 8px;font-size:11px;border:1px solid var(--border-subtle,#333);background:rgba(96,165,250,0.10);color:#60a5fa;border-radius:3px;cursor:pointer;">Acknowledge</button>`}
         <button class="cg-action" data-action="resolve" data-id="${escapeHtml(g.id)}" style="padding:3px 8px;font-size:11px;border:1px solid var(--border-subtle,#333);background:rgba(34,197,94,0.10);color:var(--severity-ok,#22c55e);border-radius:3px;cursor:pointer;">Resolve</button>
       </div>
     </div>`;
@@ -172,31 +167,19 @@ export class CollectionGapPanel extends Panel {
     if (!btn) return;
     event.stopPropagation();
     const action = btn.dataset.action;
-    const service = getCollectionGapDiscoveryService();
-    if (action === 'rescan') {
-      // Host doesn't pass observations; trigger a no-op scan that
-      // refreshes the latestReport timestamp + clears the panel
-      // through the listener path.
-      service.scan([]);
+    if (action === 'refresh') {
       this.render();
       return;
     }
     const id = btn.dataset.id;
     if (!id) return;
-    if (action === 'acknowledge') service.acknowledge(id);
-    else if (action === 'resolve') service.resolve(id);
+    if (action === 'resolve') getCollectionGapDiscoveryService().resolveGap(id);
     this.render();
   }
 }
 
-function coverageBandColor(coverage: number): string {
-  if (coverage >= 75) return 'var(--severity-ok,#22c55e)';
-  if (coverage >= 50) return 'var(--severity-medium,#facc15)';
-  return 'var(--severity-critical,#dc2626)';
-}
-
-function groupByDomain(gaps: readonly ObservabilityGap[]): Map<string, ObservabilityGap[]> {
-  const out = new Map<string, ObservabilityGap[]>();
+function groupByDomain(gaps: readonly CollectionGap[]): Map<string, CollectionGap[]> {
+  const out = new Map<string, CollectionGap[]>();
   for (const g of gaps) {
     const bucket = out.get(g.domain);
     if (bucket) bucket.push(g);

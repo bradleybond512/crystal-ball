@@ -1,15 +1,3 @@
-/**
- * Hidden System Modeling — infers the operational state of systems
- * that cannot be observed directly (e.g. interbank clearing, undersea
- * cable capacity, sovereign debt rollover) by triangulating across
- * observable proxy signals.
- *
- * Weighted mean of proxy values drives the state classification;
- * population std dev of raw values drives confidence (high agreement
- * among proxies → high confidence). Pure deterministic service with
- * injectable storage. Max 200 states (drop oldest by lastInferredAt).
- */
-
 // ── Public types ─────────────────────────────────────────────────────────
 
 export interface ProxySignal {
@@ -93,12 +81,10 @@ function toId(systemName: string): string {
 
 // ── Seed data ─────────────────────────────────────────────────────────────
 
-const BASE_TS = Date.now() - 3_600_000;
-
 interface SeedSystem {
   systemName: string;
   domain: string;
-  proxies: ProxySignal[];
+  proxies: (Omit<ProxySignal, 'observedAt'> & { offsetMs: number })[];
 }
 
 const SEED_SYSTEMS: readonly SeedSystem[] = [
@@ -106,60 +92,60 @@ const SEED_SYSTEMS: readonly SeedSystem[] = [
     systemName: 'Global Financial Clearing',
     domain: 'finance',
     proxies: [
-      { signalType: 'interbank-spread',       domain: 'finance', value: 0.18, weight: 2.5, observedAt: BASE_TS },
-      { signalType: 'cls-settlement-rate',    domain: 'finance', value: 0.25, weight: 3, observedAt: BASE_TS - 900_000 },
-      { signalType: 'target2-queue-depth',    domain: 'finance', value: 0.35, weight: 2, observedAt: BASE_TS - 1_800_000 },
-      { signalType: 'chips-throughput',       domain: 'finance', value: 0.22, weight: 2.5, observedAt: BASE_TS - 2_700_000 },
+      { signalType: 'interbank-spread',       domain: 'finance', value: 0.18, weight: 2.5, offsetMs: 0 },
+      { signalType: 'cls-settlement-rate',    domain: 'finance', value: 0.25, weight: 3,   offsetMs: 900_000 },
+      { signalType: 'target2-queue-depth',    domain: 'finance', value: 0.35, weight: 2,   offsetMs: 1_800_000 },
+      { signalType: 'chips-throughput',       domain: 'finance', value: 0.22, weight: 2.5, offsetMs: 2_700_000 },
     ],
   },
   {
     systemName: 'Undersea Cable Network',
     domain: 'telecommunications',
     proxies: [
-      { signalType: 'latency-anomaly-index',    domain: 'telecommunications', value: 0.12, weight: 2, observedAt: BASE_TS },
-      { signalType: 'rerouting-frequency',      domain: 'telecommunications', value: 0.2, weight: 1.5, observedAt: BASE_TS - 600_000 },
-      { signalType: 'capacity-utilization',     domain: 'telecommunications', value: 0.28, weight: 2.5, observedAt: BASE_TS - 1_200_000 },
-      { signalType: 'packet-loss-rate',         domain: 'telecommunications', value: 0.15, weight: 3, observedAt: BASE_TS - 1_800_000 },
+      { signalType: 'latency-anomaly-index',    domain: 'telecommunications', value: 0.12, weight: 2,   offsetMs: 0 },
+      { signalType: 'rerouting-frequency',      domain: 'telecommunications', value: 0.2,  weight: 1.5, offsetMs: 600_000 },
+      { signalType: 'capacity-utilization',     domain: 'telecommunications', value: 0.28, weight: 2.5, offsetMs: 1_200_000 },
+      { signalType: 'packet-loss-rate',         domain: 'telecommunications', value: 0.15, weight: 3,   offsetMs: 1_800_000 },
     ],
   },
   {
     systemName: 'Sovereign Debt Rollover',
     domain: 'finance',
     proxies: [
-      { signalType: 'auction-cover-ratio',   domain: 'finance', value: 0.4, weight: 3, observedAt: BASE_TS },
-      { signalType: 'bid-ask-spread',        domain: 'finance', value: 0.5, weight: 2, observedAt: BASE_TS - 900_000 },
-      { signalType: 'cds-spread-index',      domain: 'finance', value: 0.42, weight: 2.5, observedAt: BASE_TS - 1_800_000 },
-      { signalType: 'maturity-cliff-ratio',  domain: 'finance', value: 0.48, weight: 2, observedAt: BASE_TS - 2_700_000 },
+      { signalType: 'auction-cover-ratio',   domain: 'finance', value: 0.4,  weight: 3,   offsetMs: 0 },
+      { signalType: 'bid-ask-spread',        domain: 'finance', value: 0.5,  weight: 2,   offsetMs: 900_000 },
+      { signalType: 'cds-spread-index',      domain: 'finance', value: 0.42, weight: 2.5, offsetMs: 1_800_000 },
+      { signalType: 'maturity-cliff-ratio',  domain: 'finance', value: 0.48, weight: 2,   offsetMs: 2_700_000 },
     ],
   },
   {
     systemName: 'Supply Chain Credit Availability',
     domain: 'trade',
     proxies: [
-      { signalType: 'trade-finance-rejection-rate', domain: 'trade', value: 0.38, weight: 2.5, observedAt: BASE_TS },
-      { signalType: 'loc-utilization',              domain: 'trade', value: 0.42, weight: 2, observedAt: BASE_TS - 900_000 },
-      { signalType: 'credit-insurance-claims',      domain: 'trade', value: 0.35, weight: 1.5, observedAt: BASE_TS - 1_800_000 },
-      { signalType: 'invoice-discounting-spread',   domain: 'trade', value: 0.45, weight: 2, observedAt: BASE_TS - 2_700_000 },
+      { signalType: 'trade-finance-rejection-rate', domain: 'trade', value: 0.38, weight: 2.5, offsetMs: 0 },
+      { signalType: 'loc-utilization',              domain: 'trade', value: 0.42, weight: 2,   offsetMs: 900_000 },
+      { signalType: 'credit-insurance-claims',      domain: 'trade', value: 0.35, weight: 1.5, offsetMs: 1_800_000 },
+      { signalType: 'invoice-discounting-spread',   domain: 'trade', value: 0.45, weight: 2,   offsetMs: 2_700_000 },
     ],
   },
   {
     systemName: 'Dark Fiber Capacity',
     domain: 'telecommunications',
     proxies: [
-      { signalType: 'lit-to-dark-ratio',            domain: 'telecommunications', value: 0.1, weight: 2, observedAt: BASE_TS },
-      { signalType: 'new-route-provisioning-lag',   domain: 'telecommunications', value: 0.18, weight: 1.5, observedAt: BASE_TS - 600_000 },
-      { signalType: 'iru-demand-index',             domain: 'telecommunications', value: 0.15, weight: 2.5, observedAt: BASE_TS - 1_200_000 },
-      { signalType: 'wavelength-utilization',       domain: 'telecommunications', value: 0.14, weight: 2, observedAt: BASE_TS - 1_800_000 },
+      { signalType: 'lit-to-dark-ratio',            domain: 'telecommunications', value: 0.1,  weight: 2,   offsetMs: 0 },
+      { signalType: 'new-route-provisioning-lag',   domain: 'telecommunications', value: 0.18, weight: 1.5, offsetMs: 600_000 },
+      { signalType: 'iru-demand-index',             domain: 'telecommunications', value: 0.15, weight: 2.5, offsetMs: 1_200_000 },
+      { signalType: 'wavelength-utilization',       domain: 'telecommunications', value: 0.14, weight: 2,   offsetMs: 1_800_000 },
     ],
   },
   {
     systemName: 'Global Shipping Insurance Pool',
     domain: 'maritime',
     proxies: [
-      { signalType: 'claims-frequency-index',    domain: 'maritime', value: 0.52, weight: 3, observedAt: BASE_TS },
-      { signalType: 'premium-deviation',         domain: 'maritime', value: 0.58, weight: 2.5, observedAt: BASE_TS - 900_000 },
-      { signalType: 'war-risk-uplift',           domain: 'maritime', value: 0.6, weight: 2, observedAt: BASE_TS - 1_800_000 },
-      { signalType: 'reinsurance-capacity-ratio',domain: 'maritime', value: 0.5, weight: 2, observedAt: BASE_TS - 2_700_000 },
+      { signalType: 'claims-frequency-index',     domain: 'maritime', value: 0.52, weight: 3,   offsetMs: 0 },
+      { signalType: 'premium-deviation',          domain: 'maritime', value: 0.58, weight: 2.5, offsetMs: 900_000 },
+      { signalType: 'war-risk-uplift',            domain: 'maritime', value: 0.6,  weight: 2,   offsetMs: 1_800_000 },
+      { signalType: 'reinsurance-capacity-ratio', domain: 'maritime', value: 0.5,  weight: 2,   offsetMs: 2_700_000 },
     ],
   },
 ];
@@ -292,8 +278,16 @@ export class HiddenSystemModelingService {
 
   private seedIfEmpty(): void {
     if (this.stateMap.size > 0) return;
+    const baseTs = Date.now() - 3_600_000;
     for (const seed of SEED_SYSTEMS) {
-      this.infer(seed.systemName, seed.domain, seed.proxies);
+      const proxies: ProxySignal[] = seed.proxies.map((p) => ({
+        signalType: p.signalType,
+        domain: p.domain,
+        value: p.value,
+        weight: p.weight,
+        observedAt: baseTs - p.offsetMs,
+      }));
+      this.infer(seed.systemName, seed.domain, proxies);
     }
   }
 }

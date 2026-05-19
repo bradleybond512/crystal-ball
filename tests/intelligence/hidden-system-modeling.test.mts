@@ -233,7 +233,7 @@ describe('getStats', () => {
     assert.ok(stats.avgConfidence <= 1);
   });
 
-  it('empty service returns total 0 and avgConfidence 0', () => {
+  it('service with one pre-loaded state returns total 1 and avgConfidence in [0, 1]', () => {
     // Use a service with pre-loaded storage that is empty (no seeds, forced)
     const storage = makeStorage();
     // Pre-populate with empty states array so hydrate loads it and seed is skipped

@@ -354,6 +354,7 @@ import { SmsSettingsPanel } from '@/components/SmsSettingsPanel';
 import { ThreatDashboard } from '@/components/ThreatDashboard';
 import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
 import { AviationIntelPanel } from '@/components/AviationIntelPanel';
+import { AviationSuperpowerPanel } from '@/components/AviationSuperpowerPanel';
 import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
@@ -1455,6 +1456,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['threat-dashboard'] = new ThreatDashboard();
  startThreatAggregator();
  this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
+ this.ctx.panels['aviation-superpower'] = new AviationSuperpowerPanel();
  this.ctx.panels['intelligence-feed'] = new IntelligenceFeedPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');

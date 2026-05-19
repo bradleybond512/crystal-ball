@@ -1,0 +1,44 @@
+/* Visual Semantics System — unified design tokens for severity, domain, status, typography, spacing.
+ * Numeric severity levels (0–4) complement the named severity tokens in tokens.css.
+ * Use --severity-N for data-driven rendering; use --severity-critical etc. for labelled UI.
+ */
+:root {
+  /* ── Severity (numeric, 0 = minimal, 4 = critical) ───────────────────── */
+  --severity-0: #16a34a;
+  --severity-1: #ca8a04;
+  --severity-2: #ea580c;
+  --severity-3: #dc2626;
+  --severity-4: #7f1d1d;
+
+  /* ── Domain colors (supplementing tokens.css) ────────────────────────── */
+  /* Inherited from tokens.css (listed for reference, not re-declared):
+   *   --domain-cyber, --domain-weather, --domain-maritime, --domain-aviation,
+   *   --domain-space, --domain-geopolitical
+   */
+  --domain-health:     #0e7490;
+  --domain-financial:  #15803d;
+  --domain-seismic:    #92400e;
+
+  /* ── Status colors ───────────────────────────────────────────────────── */
+  --status-nominal:   #16a34a;
+  --status-elevated:  #ca8a04;
+  --status-stressed:  #ea580c;
+  --status-critical:  #dc2626;
+
+  /* ── Typography scale (px) ───────────────────────────────────────────── */
+  --text-xs:  10px;
+  --text-sm:  12px;
+  --text-md:  14px;
+  --text-lg:  16px;
+  --text-xl:  18px;
+
+  /* ── Spacing scale (px) ──────────────────────────────────────────────── */
+  --space-1:  2px;
+  --space-2:  4px;
+  --space-3:  8px;
+  --space-4:  12px;
+  --space-5:  16px;
+  --space-6:  20px;
+  --space-7:  24px;
+  --space-8:  32px;
+}

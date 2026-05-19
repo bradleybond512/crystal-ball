@@ -458,3 +458,487 @@ test('teardown clears singleton + storage', () => {
   void _v;
   assert.ok(true);
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// Proposal API — `BacktestProposal` / `BacktestResult` (precision-recall
+// gate against historical observation fixtures).
+// ═══════════════════════════════════════════════════════════════════════
+
+import type {
+  BacktestProposal,
+  BacktestResult as ProposalBacktestResult,
+} from '../../src/services/intelligence/backtest-gate.ts';
+import type { ObservationEvent, ObservationSeverity } from '../../src/types/intelligence';
+
+function freshProposalGate(): BacktestGate {
+  __storage.clear();
+  __resetBacktestGateSingleton();
+  const gate = new BacktestGate({ clock: () => 1_780_000_000_000 });
+  gate.resetForTesting();
+  return gate;
+}
+
+function obs(id: string, severity: ObservationSeverity, tags: string[] = [], domain = 'maritime'): ObservationEvent {
+  return {
+    id,
+    sourceId: 'fixture',
+    domain,
+    timestamp: 0,
+    severity,
+    title: id,
+    raw: {},
+    entityIds: [],
+    tags,
+  };
+}
+
+function balancedFixture(): ObservationEvent[] {
+  return [
+    obs('h1', 'HIGH', ['storm']),
+    obs('h2', 'CRITICAL', ['storm']),
+    obs('h3', 'HIGH', ['storm']),
+    obs('h4', 'HIGH', ['storm']),
+    obs('l1', 'LOW', ['noise']),
+    obs('l2', 'MEDIUM', ['noise']),
+    obs('l3', 'INFO', ['noise']),
+    obs('l4', 'LOW', ['noise']),
+  ];
+}
+
+// ── submitProposal ────────────────────────────────────────────────────
+
+test('submitProposal: stores a pending proposal with defaults', () => {
+  const gate = freshProposalGate();
+  const p = gate.submitProposal({
+    description: 'Tighten threshold',
+    changeType: 'threshold',
+    proposedChange: { threshold: 4 },
+    currentValue: { threshold: 3 },
+  });
+  assert.equal(p.status, 'pending');
+  assert.equal(p.description, 'Tighten threshold');
+  assert.equal(p.changeType, 'threshold');
+  assert.ok(p.id.startsWith('prop-'));
+  assert.equal(p.createdAt, 1_780_000_000_000);
+  assert.equal(p.completedAt, undefined);
+  assert.equal(p.result, undefined);
+});
+
+test('submitProposal: preserves caller-supplied id', () => {
+  const gate = freshProposalGate();
+  const p = gate.submitProposal({
+    id: 'manual-1',
+    description: 'd',
+    changeType: 'weight',
+    proposedChange: { weight: 1.5 },
+    currentValue: { weight: 1 },
+  });
+  assert.equal(p.id, 'manual-1');
+});
+
+test('submitProposal: returns a defensive copy (mutating proposedChange has no effect)', () => {
+  const gate = freshProposalGate();
+  const p = gate.submitProposal({
+    description: '',
+    changeType: 'config',
+    proposedChange: { threshold: 3 },
+    currentValue: { threshold: 2 },
+  });
+  (p.proposedChange as Record<string, unknown>).threshold = 99;
+  const stored = gate.getProposal(p.id)!;
+  assert.equal(stored.proposedChange.threshold, 3);
+});
+
+test('submitProposal: shows up in getProposals() in insertion order', () => {
+  const gate = freshProposalGate();
+  const a = gate.submitProposal({ description: 'a', changeType: 'rule', proposedChange: { tag: 'x' }, currentValue: { tag: 'y' } });
+  const b = gate.submitProposal({ description: 'b', changeType: 'rule', proposedChange: { tag: 'x' }, currentValue: { tag: 'y' } });
+  const list = gate.getProposals();
+  assert.equal(list.length, 2);
+  assert.equal(list[0]!.id, a.id);
+  assert.equal(list[1]!.id, b.id);
+});
+
+test('submitProposal: re-submitting with the same id updates in place (no duplicate row)', () => {
+  const gate = freshProposalGate();
+  const a = gate.submitProposal({ id: 'dupe', description: 'first', changeType: 'config', proposedChange: { threshold: 1 }, currentValue: { threshold: 1 } });
+  const b = gate.submitProposal({ id: 'dupe', description: 'second', changeType: 'config', proposedChange: { threshold: 2 }, currentValue: { threshold: 1 } });
+  assert.equal(a.id, b.id);
+  assert.equal(gate.getProposals().length, 1);
+  assert.equal(gate.getProposals()[0]!.description, 'second');
+});
+
+// ── runBacktest: math ─────────────────────────────────────────────────
+
+test('runBacktest: threshold change with no precision/recall regression is approved', () => {
+  const gate = freshProposalGate();
+  // proposedChange threshold = currentValue threshold = baseline.
+  // identical params ⇒ delta = 0 ⇒ approved.
+  const proposal = gate.submitProposal({
+    description: 'no-op',
+    changeType: 'threshold',
+    proposedChange: { threshold: 3 },
+    currentValue: { threshold: 3 },
+  });
+  const result = gate.runBacktest(proposal.id, balancedFixture());
+  assert.equal(result.precisionDelta, 0);
+  assert.equal(result.recallDelta, 0);
+  assert.equal(result.approved, true);
+  assert.match(result.reason, /Approved/);
+});
+
+test('runBacktest: raising threshold past every positive label tanks recall → rejected', () => {
+  const gate = freshProposalGate();
+  const proposal = gate.submitProposal({
+    description: 'too tight',
+    changeType: 'threshold',
+    proposedChange: { threshold: 9 },
+    currentValue: { threshold: 3 },
+  });
+  const result = gate.runBacktest(proposal.id, balancedFixture());
+  // proposed picks 0 positives → recall=0; baseline at 3 picks all HIGH/CRIT → recall=1
+  assert.equal(result.historicalRecall, 0);
+  assert.equal(result.baselineRecall, 1);
+  assert.equal(result.recallDelta, -1);
+  assert.equal(result.approved, false);
+  assert.match(result.reason, /recall/);
+});
+
+test('runBacktest: lowering threshold to floor picks every event → precision crashes → rejected', () => {
+  const gate = freshProposalGate();
+  const proposal = gate.submitProposal({
+    description: 'too loose',
+    changeType: 'threshold',
+    proposedChange: { threshold: 0 },
+    currentValue: { threshold: 3 },
+  });
+  const result = gate.runBacktest(proposal.id, balancedFixture());
+  // proposed picks all 8 → 4 TP + 4 FP → precision=0.5
+  // baseline picks 4 HIGH/CRIT → 4 TP + 0 FP → precision=1
+  assert.equal(result.historicalPrecision, 0.5);
+  assert.equal(result.baselinePrecision, 1);
+  assert.equal(result.precisionDelta, -0.5);
+  assert.equal(result.approved, false);
+  assert.match(result.reason, /precision/);
+});
+
+test('runBacktest: weight change uses weight*severity vs cutoff', () => {
+  const gate = freshProposalGate();
+  const proposal = gate.submitProposal({
+    description: 'weight tweak',
+    changeType: 'weight',
+    proposedChange: { weight: 2, cutoff: 5 },
+    currentValue: { weight: 1, cutoff: 3 },
+  });
+  const result = gate.runBacktest(proposal.id, balancedFixture());
+  // baseline picks rank ≥ 3 (HIGH/CRIT) → 4 TP, precision=1, recall=1
+  // proposed picks rank*2 ≥ 5 → CRIT(8), HIGH(6), MEDIUM(4 < 5 skip), LOW(2 skip)
+  //   ⇒ 4 TP (3 HIGH + 1 CRIT), precision=1, recall=1
+  assert.equal(result.historicalPrecision, 1);
+  assert.equal(result.historicalRecall, 1);
+  assert.equal(result.approved, true);
+});
+
+test('runBacktest: rule change predicts positive when tag matches', () => {
+  const gate = freshProposalGate();
+  const proposal = gate.submitProposal({
+    description: 'storm rule',
+    changeType: 'rule',
+    proposedChange: { tag: 'storm' },
+    currentValue: { tag: 'storm' },
+  });
+  const result = gate.runBacktest(proposal.id, balancedFixture());
+  // tag='storm' is exactly on the positive examples ⇒ precision=recall=1.
+  assert.equal(result.historicalPrecision, 1);
+  assert.equal(result.historicalRecall, 1);
+  assert.equal(result.approved, true);
+});
+
+test('runBacktest: rule change with empty tag predicts nothing → recall 0', () => {
+  const gate = freshProposalGate();
+  const proposal = gate.submitProposal({
+    description: 'empty rule',
+    changeType: 'rule',
+    proposedChange: { tag: '' },
+    currentValue: { tag: 'storm' },
+  });
+  const result = gate.runBacktest(proposal.id, balancedFixture());
+  assert.equal(result.historicalPrecision, 0);
+  assert.equal(result.historicalRecall, 0);
+  assert.equal(result.approved, false);
+});
+
+test('runBacktest: config change behaves like threshold', () => {
+  const gate = freshProposalGate();
+  const proposal = gate.submitProposal({
+    description: 'config tweak',
+    changeType: 'config',
+    proposedChange: { threshold: 3 },
+    currentValue: { threshold: 3 },
+  });
+  const result = gate.runBacktest(proposal.id, balancedFixture());
+  assert.equal(result.precisionDelta, 0);
+  assert.equal(result.recallDelta, 0);
+  assert.equal(result.approved, true);
+});
+
+test('runBacktest: empty observation set yields zeroed precision/recall, still approved (no regression)', () => {
+  const gate = freshProposalGate();
+  const proposal = gate.submitProposal({
+    description: 'empty',
+    changeType: 'threshold',
+    proposedChange: { threshold: 4 },
+    currentValue: { threshold: 3 },
+  });
+  const result = gate.runBacktest(proposal.id, []);
+  assert.equal(result.historicalPrecision, 0);
+  assert.equal(result.baselinePrecision, 0);
+  assert.equal(result.precisionDelta, 0);
+  assert.equal(result.recallDelta, 0);
+  assert.equal(result.approved, true);
+});
+
+test('runBacktest: precision drop within −0.05 floor is approved', () => {
+  const gate = freshProposalGate();
+  // 4 positives, 16 negatives. proposed adds 1 FP → precision = 4/5 = 0.8.
+  // baseline picks only positives → precision = 1. Delta = −0.2 ⇒ rejected.
+  // Use a milder shape: 1 added FP among 20 baseline-correct cases.
+  const events: ObservationEvent[] = [
+    ...Array.from({ length: 20 }, (_, i) => obs(`h${i}`, 'CRITICAL', ['p'])),
+    obs('edge', 'MEDIUM', ['p']), // proposed catches this when threshold drops to 2
+  ];
+  const proposal = gate.submitProposal({
+    description: 'mild',
+    changeType: 'threshold',
+    proposedChange: { threshold: 2 },
+    currentValue: { threshold: 3 },
+  });
+  const result = gate.runBacktest(proposal.id, events);
+  // proposed: 20 TP + 1 FP = 21 predicted, precision 20/21 ≈ 0.9524, recall 1
+  // baseline: 20 TP + 0 FP = 20 predicted, precision 1, recall 1
+  // precisionDelta ≈ −0.0476  → above −0.05 floor → approved
+  assert.ok(Math.abs(result.precisionDelta + 0.0476) < 0.0005);
+  assert.equal(result.recallDelta, 0);
+  assert.equal(result.approved, true);
+});
+
+test('runBacktest: precision drop beyond −0.05 floor is rejected', () => {
+  const gate = freshProposalGate();
+  const events: ObservationEvent[] = [
+    ...Array.from({ length: 10 }, (_, i) => obs(`h${i}`, 'CRITICAL', [])),
+    ...Array.from({ length: 2 }, (_, i) => obs(`m${i}`, 'MEDIUM', [])),
+  ];
+  const proposal = gate.submitProposal({
+    description: 'too lossy',
+    changeType: 'threshold',
+    proposedChange: { threshold: 2 },
+    currentValue: { threshold: 3 },
+  });
+  const result = gate.runBacktest(proposal.id, events);
+  // proposed: 10 TP + 2 FP = 12 predictions, precision = 10/12 ≈ 0.833
+  // baseline: 10 TP + 0 FP, precision = 1; delta ≈ −0.167 < −0.05 → rejected
+  assert.ok(result.precisionDelta < -0.05);
+  assert.equal(result.approved, false);
+});
+
+test('runBacktest: result.proposalId matches the proposal id', () => {
+  const gate = freshProposalGate();
+  const proposal = gate.submitProposal({
+    description: '',
+    changeType: 'threshold',
+    proposedChange: { threshold: 3 },
+    currentValue: { threshold: 3 },
+  });
+  const result = gate.runBacktest(proposal.id, balancedFixture());
+  assert.equal(result.proposalId, proposal.id);
+});
+
+test('runBacktest: result is attached to the proposal record', () => {
+  const gate = freshProposalGate();
+  const proposal = gate.submitProposal({
+    description: '',
+    changeType: 'threshold',
+    proposedChange: { threshold: 3 },
+    currentValue: { threshold: 3 },
+  });
+  gate.runBacktest(proposal.id, balancedFixture());
+  const stored = gate.getProposal(proposal.id)!;
+  assert.ok(stored.result);
+  assert.equal(stored.result!.proposalId, proposal.id);
+  assert.ok(stored.completedAt !== undefined);
+});
+
+test('runBacktest: status transitions to approved on success', () => {
+  const gate = freshProposalGate();
+  const p = gate.submitProposal({
+    description: '',
+    changeType: 'threshold',
+    proposedChange: { threshold: 3 },
+    currentValue: { threshold: 3 },
+  });
+  gate.runBacktest(p.id, balancedFixture());
+  assert.equal(gate.getProposal(p.id)!.status, 'approved');
+});
+
+test('runBacktest: status transitions to rejected on regression', () => {
+  const gate = freshProposalGate();
+  const p = gate.submitProposal({
+    description: '',
+    changeType: 'threshold',
+    proposedChange: { threshold: 9 },
+    currentValue: { threshold: 3 },
+  });
+  gate.runBacktest(p.id, balancedFixture());
+  assert.equal(gate.getProposal(p.id)!.status, 'rejected');
+});
+
+test('runBacktest: throws on unknown proposal id', () => {
+  const gate = freshProposalGate();
+  assert.throws(() => gate.runBacktest('nope', balancedFixture()), /not found/);
+});
+
+// ── approve / reject ─────────────────────────────────────────────────
+
+test('approve: flips status to approved + stamps completedAt', () => {
+  const gate = freshProposalGate();
+  const p = gate.submitProposal({
+    description: '',
+    changeType: 'threshold',
+    proposedChange: { threshold: 3 },
+    currentValue: { threshold: 3 },
+  });
+  const updated = gate.approve(p.id);
+  assert.equal(updated?.status, 'approved');
+  assert.ok(updated?.completedAt !== undefined);
+});
+
+test('approve: returns undefined for unknown id', () => {
+  const gate = freshProposalGate();
+  assert.equal(gate.approve('ghost'), undefined);
+});
+
+test('reject: stores the reason on the proposal result', () => {
+  const gate = freshProposalGate();
+  const p = gate.submitProposal({
+    description: '',
+    changeType: 'threshold',
+    proposedChange: { threshold: 3 },
+    currentValue: { threshold: 3 },
+  });
+  const updated = gate.reject(p.id, 'manual operator veto');
+  assert.equal(updated?.status, 'rejected');
+  assert.equal(updated?.result?.approved, false);
+  assert.match(updated!.result!.reason, /operator veto/);
+});
+
+test('reject: preserves a prior result snapshot when overriding', () => {
+  const gate = freshProposalGate();
+  const p = gate.submitProposal({
+    description: '',
+    changeType: 'threshold',
+    proposedChange: { threshold: 3 },
+    currentValue: { threshold: 3 },
+  });
+  gate.runBacktest(p.id, balancedFixture());
+  const before = gate.getProposal(p.id)!.result!;
+  const updated = gate.reject(p.id, 'overruled');
+  // Numeric precision/recall numbers carry over from the prior backtest.
+  assert.equal(updated?.result?.historicalPrecision, before.historicalPrecision);
+  assert.equal(updated?.result?.approved, false);
+});
+
+test('reject: returns undefined for unknown id', () => {
+  const gate = freshProposalGate();
+  assert.equal(gate.reject('ghost', 'whatever'), undefined);
+});
+
+// ── getProposals / getProposal ───────────────────────────────────────
+
+test('getProposals: empty registry returns []', () => {
+  const gate = freshProposalGate();
+  assert.deepEqual(gate.getProposals(), []);
+});
+
+test('getProposal: returns undefined when id is unknown', () => {
+  const gate = freshProposalGate();
+  assert.equal(gate.getProposal('nope'), undefined);
+});
+
+test('getProposal: returns a defensive copy (mutation does not bleed)', () => {
+  const gate = freshProposalGate();
+  const p = gate.submitProposal({
+    description: 'mut',
+    changeType: 'config',
+    proposedChange: { threshold: 1 },
+    currentValue: { threshold: 1 },
+  });
+  const snap = gate.getProposal(p.id)!;
+  snap.description = 'mutated';
+  assert.equal(gate.getProposal(p.id)!.description, 'mut');
+});
+
+// ── Persistence ──────────────────────────────────────────────────────
+
+test('proposals survive across BacktestGate instances via localStorage', () => {
+  __storage.clear();
+  __resetBacktestGateSingleton();
+  const a = new BacktestGate({ clock: () => 1 });
+  a.resetForTesting();
+  a.submitProposal({
+    description: 'across',
+    changeType: 'rule',
+    proposedChange: { tag: 't' },
+    currentValue: { tag: 'u' },
+  });
+  const b = new BacktestGate({ clock: () => 2 });
+  assert.equal(b.getProposals().length, 1);
+  assert.equal(b.getProposals()[0]!.description, 'across');
+});
+
+test('cap: proposal history evicts oldest beyond 200', () => {
+  const gate = freshProposalGate();
+  for (let i = 0; i < 205; i += 1) {
+    gate.submitProposal({
+      id: `p-${i}`,
+      description: '',
+      changeType: 'config',
+      proposedChange: {},
+      currentValue: {},
+    });
+  }
+  const list = gate.getProposals();
+  assert.equal(list.length, 200);
+  assert.equal(list[0]!.id, 'p-5');
+  assert.equal(list[199]!.id, 'p-204');
+});
+
+test('corrupted proposal blob is dropped without throwing', () => {
+  __storage.clear();
+  __resetBacktestGateSingleton();
+  __storage.set('wm-backtest-gate', JSON.stringify({ proposals: [{ id: '', changeType: 'bogus' }] }));
+  const gate = new BacktestGate();
+  assert.deepEqual(gate.getProposals(), []);
+});
+
+// ── Singleton ────────────────────────────────────────────────────────
+
+test('BacktestGate.getInstance() returns the same singleton as getBacktestGate()', () => {
+  __resetBacktestGateSingleton();
+  const a = BacktestGate.getInstance();
+  const b = getBacktestGate();
+  assert.equal(a, b);
+});
+
+test('typed BacktestResult mirrors the proposal id', () => {
+  const gate = freshProposalGate();
+  const p = gate.submitProposal({
+    description: 'shape',
+    changeType: 'threshold',
+    proposedChange: { threshold: 3 },
+    currentValue: { threshold: 3 },
+  });
+  const r: ProposalBacktestResult = gate.runBacktest(p.id, balancedFixture());
+  assert.equal(r.proposalId, p.id);
+  const stored: BacktestProposal | undefined = gate.getProposal(p.id);
+  assert.ok(stored !== undefined);
+});

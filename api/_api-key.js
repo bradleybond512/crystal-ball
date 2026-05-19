@@ -8,7 +8,11 @@ const DESKTOP_ORIGIN_PATTERNS = [
 const BROWSER_ORIGIN_PATTERNS = [
   /^https:\/\/crystalball\.app$/,
   /^https:\/\/(tech|finance|happy|api)\.crystalball\.app$/,
-  /^https:\/\/crystalball-[a-z0-9-]+\.vercel\.app$/,
+  // Vercel preview URLs anchored to known owner accounts (mirrors _cors.ts)
+  /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
+  /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
+  /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
+  /^https:\/\/crystal-ball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
   ...(process.env.NODE_ENV === 'production' ? [] : [
 	/^https?:\/\/localhost(:\d+)?$/,
 	/^https?:\/\/127\.0\.0\.1(:\d+)?$/,

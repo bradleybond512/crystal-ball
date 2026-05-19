@@ -168,6 +168,24 @@ describe('buildChokepointRows', () => {
     assert.equal(malacca!.risk, 'elevated');
     assert.equal(malacca!.waitTime, '8–24h');
   });
+
+  it('maps Bab-el-Mandeb Strait (spaced variant) risk correctly', () => {
+    const routes = [makeRoute({ name: 'Bab el Mandeb Strait', riskLevel: 'high' })];
+    const rows = buildChokepointRows(routes);
+    const bab = rows.find((r) => r.name === 'Bab-el-Mandeb');
+    assert.ok(bab, 'Bab-el-Mandeb row should exist');
+    assert.equal(bab!.risk, 'high');
+    assert.equal(bab!.waitTime, '24–48h');
+  });
+
+  it('maps Panama Canal route risk correctly', () => {
+    const routes = [makeRoute({ name: 'Panama Canal', riskLevel: 'critical' })];
+    const rows = buildChokepointRows(routes);
+    const panama = rows.find((r) => r.name === 'Panama Canal');
+    assert.ok(panama, 'Panama Canal row should exist');
+    assert.equal(panama!.risk, 'critical');
+    assert.equal(panama!.waitTime, '48h+');
+  });
 });
 
 // ── deriveSanctionsVessels ───────────────────────────────────────────────────

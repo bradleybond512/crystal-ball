@@ -1,16 +1,4 @@
 /* eslint-disable sonarjs/no-nested-template-literals, sonarjs/no-nested-conditional */
-/**
- * Maritime Superpower Panel — deep intelligence view for the maritime domain.
- *
- * Surfaces five intelligence layers:
- *   1. Vessel Anomaly Tracker  — AIS gaps, spoofing, sanctioned waters
- *   2. Chokepoint Status       — 5 strategic straits + risk + wait time
- *   3. Piracy & Incident Map   — active maritime piracy situations
- *   4. Sanctions Evasion Watch — OFAC matches + flags of convenience
- *   5. Port Disruption Index   — port congestion situations
- *
- * Pure deterministic helpers are exported for unit tests.
- */
 
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
@@ -48,15 +36,15 @@ interface SituationLike {
 
 // ── Chokepoint catalogue ──────────────────────────────────────────────────────
 
-const CHOKEPOINT_NAMES = [
-  'Suez Canal',
-  'Strait of Hormuz',
-  'Strait of Malacca',
-  'Bab-el-Mandeb',
-  'Panama Canal',
-] as const;
+const CHOKEPOINTS: { name: string; keywords: string[] }[] = [
+  { name: 'Suez Canal',        keywords: ['suez'] },
+  { name: 'Strait of Hormuz',  keywords: ['hormuz'] },
+  { name: 'Strait of Malacca', keywords: ['malacca'] },
+  { name: 'Bab-el-Mandeb',     keywords: ['bab', 'mandeb', 'mandab'] },
+  { name: 'Panama Canal',      keywords: ['panama'] },
+];
 
-type ChokepointName = typeof CHOKEPOINT_NAMES[number];
+type ChokepointName = 'Suez Canal' | 'Strait of Hormuz' | 'Strait of Malacca' | 'Bab-el-Mandeb' | 'Panama Canal';
 
 // ── Exported pure helpers (tested without DOM) ────────────────────────────────
 
@@ -88,13 +76,12 @@ export function classifyVesselAnomalies(vessels: LegacyEntity[]): { name: string
 }
 
 export function buildChokepointRows(routes: TradeRoute[]): { name: ChokepointName; risk: RiskLevel; waitTime: string }[] {
-  return CHOKEPOINT_NAMES.map((cpName) => {
+  return CHOKEPOINTS.map(({ name: cpName, keywords }) => {
     const match = routes.find((r) =>
-      r.name.toLowerCase().includes(cpName.toLowerCase().split(' ')[0]!) ||
-      cpName.toLowerCase().includes(r.name.toLowerCase())
+      keywords.some((kw) => r.name.toLowerCase().includes(kw))
     );
-    if (!match) return { name: cpName, risk: 'minimal' as RiskLevel, waitTime: 'N/A' };
-    return { name: cpName, risk: match.riskLevel, waitTime: waitTimeForRisk(match.riskLevel) };
+    if (!match) return { name: cpName as ChokepointName, risk: 'minimal' as RiskLevel, waitTime: 'N/A' };
+    return { name: cpName as ChokepointName, risk: match.riskLevel, waitTime: waitTimeForRisk(match.riskLevel) };
   });
 }
 
@@ -207,7 +194,4 @@ export class MaritimeSuperpowerPanel extends Panel {
 </div>`;
   }
 
-  override destroy(): void {
-    super.destroy();
-  }
 }

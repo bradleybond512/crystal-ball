@@ -9,20 +9,18 @@
 /* eslint-disable sonarjs/no-nested-template-literals */
 
 import { Panel } from './Panel';
-import {
-  getModelGovernanceService,
-  type ModelCard,
-  type ModelStatus,
-} from '@/services/intelligence/model-governance';
+import { ModelGovernanceService, type ModelCard } from '@/services/intelligence/model-governance';
 import { escapeHtml } from '@/utils/sanitize';
 
-const STATUS_COLOR: Record<ModelStatus, string> = {
+type Status = ModelCard['status'];
+
+const STATUS_COLOR: Record<Status, string> = {
   active: '#2ec27e',
   experimental: '#f5a524',
   deprecated: '#9ca3af',
 };
 
-type StatusFilter = 'all' | ModelStatus;
+type StatusFilter = 'all' | Status;
 
 interface PanelState {
   query: string;
@@ -31,8 +29,6 @@ interface PanelState {
 }
 
 export class ModelGovernancePanel extends Panel {
-  private unsubscribe: ((cb: (cards: ModelCard[]) => void) => void) | null = null;
-  private listener: ((cards: ModelCard[]) => void) | null = null;
   private state: PanelState = { query: '', filter: 'all', expandedId: null };
 
   constructor() {
@@ -42,27 +38,14 @@ export class ModelGovernancePanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Versioned model cards for every Crystal Ball intelligence algorithm: purpose, inputs, outputs, limitations, known failure modes, last audit date, status.',
+        'Versioned model cards for every Crystal Ball intelligence algorithm: purpose, inputs, outputs, known biases, performance metrics, last audit date, status.',
     });
-    const svc = getModelGovernanceService();
-    this.listener = () => this.render();
-    svc.subscribe(this.listener);
-    this.unsubscribe = (cb) => svc.unsubscribe(cb);
     this.render();
   }
 
-  public override destroy(): void {
-    if (this.listener && this.unsubscribe) {
-      this.unsubscribe(this.listener);
-      this.listener = null;
-      this.unsubscribe = null;
-    }
-    super.destroy();
-  }
-
   private render(): void {
-    const svc = getModelGovernanceService();
-    const all = svc.getAllCards();
+    const svc = ModelGovernanceService.getInstance();
+    const all = svc.getAll();
     this.setCount(all.length);
     const visible = this.applyFilters(all);
     this.setContent(this.buildHtml(visible, all));
@@ -70,8 +53,16 @@ export class ModelGovernancePanel extends Panel {
   }
 
   private applyFilters(cards: ModelCard[]): ModelCard[] {
-    const svc = getModelGovernanceService();
-    let working = this.state.query ? svc.searchCards(this.state.query) : cards;
+    let working = cards;
+    if (this.state.query) {
+      const q = this.state.query.toLowerCase();
+      working = working.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          c.purpose.toLowerCase().includes(q) ||
+          c.description.toLowerCase().includes(q),
+      );
+    }
     if (this.state.filter !== 'all') {
       working = working.filter((c) => c.status === this.state.filter);
     }
@@ -89,9 +80,9 @@ export class ModelGovernancePanel extends Panel {
   }
 
   private renderSearch(): string {
-    return `<input type="search" class="mg-search" placeholder="Search by name, purpose, or tag…"
+    return `<input type="search" class="mg-search" placeholder="Search by name, purpose, or description…"
       value="${escapeHtml(this.state.query)}"
-      style="background:rgba(255,255,255,0.04);color:#ddd;border:1px solid rgba(255,255,255,0.15);border-radius:3px;padding:5px 8px;font-size:12px;font-family:inherit;">`;
+      style="background:rgba(255,255,255,0.04);color:#ddd;border:1px solid rgba(255,255,255,0.15);border-radius:3px;padding:5px 8px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box;">`;
   }
 
   private renderFilters(all: ModelCard[]): string {
@@ -118,36 +109,42 @@ export class ModelGovernancePanel extends Panel {
     const expanded = this.state.expandedId === card.id;
     const color = STATUS_COLOR[card.status];
     const purposeTrim = card.purpose.length > 110 ? `${card.purpose.slice(0, 110)}…` : card.purpose;
-    const tags = card.tags.slice(0, 4).map((t) =>
-      `<span style="background:rgba(155,89,182,0.18);color:#9b59b6;font-size:9px;padding:1px 5px;border-radius:2px;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(t)}</span>`,
-    ).join(' ');
     const detail = expanded ? this.renderCardDetail(card) : '';
     return `<div class="mg-card" data-id="${escapeHtml(card.id)}" style="border-left:3px solid ${color};background:rgba(255,255,255,0.02);border-radius:0 3px 3px 0;padding:8px 10px;cursor:pointer;display:flex;flex-direction:column;gap:4px;${expanded ? 'grid-column:1 / -1;' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:6px;">
         <span style="font-weight:600;color:#ddd;">${escapeHtml(card.name)}</span>
-        <span style="background:${color};color:#fff;font-size:9px;padding:1px 5px;border-radius:2px;text-transform:uppercase;letter-spacing:0.04em;font-weight:700;">${card.status}</span>
+        <span style="background:${color};color:#fff;font-size:9px;padding:1px 5px;border-radius:2px;text-transform:uppercase;letter-spacing:0.04em;font-weight:700;">${escapeHtml(card.status)}</span>
       </div>
       <div style="font-size:10px;opacity:0.55;font-family:ui-monospace,monospace;">v${escapeHtml(card.version)}</div>
       <div style="font-size:11px;opacity:0.85;">${escapeHtml(purposeTrim)}</div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap;">${tags}</div>
       ${detail}
     </div>`;
   }
 
   private renderCardDetail(card: ModelCard): string {
-    const auditDate = new Date(card.lastAuditDate).toISOString().slice(0, 10);
-    const section = (label: string, items: readonly string[]): string =>
-      `<div>
+    const auditDate = new Date(card.lastAuditedAt).toISOString().slice(0, 10);
+    const section = (label: string, items: readonly string[]): string => {
+      if (items.length === 0) return '';
+      return `<div>
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:#aaa;margin-bottom:2px;">${escapeHtml(label)}</div>
         <ul style="margin:0;padding-left:16px;font-size:11px;color:#ddd;">${items.map((i) =>
           `<li>${escapeHtml(i)}</li>`).join('')}</ul>
       </div>`;
+    };
+    const metricsEntries = Object.entries(card.performanceMetrics);
+    const metricsHtml = metricsEntries.length > 0
+      ? `<div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:#aaa;margin-bottom:2px;">Performance</div>
+          <div style="font-size:11px;color:#ddd;">${metricsEntries.map(([k, v]) =>
+            `<span style="margin-right:8px;">${escapeHtml(k)}: <strong>${v}</strong></span>`).join('')}</div>
+        </div>`
+      : '';
     return `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:6px;">
-      <div style="font-size:11px;color:#ddd;">${escapeHtml(card.purpose)}</div>
-      ${section('Inputs', card.inputs)}
-      ${section('Outputs', card.outputs)}
-      ${section('Limitations', card.limitations)}
-      ${section('Known failure modes', card.knownFailureModes)}
+      <div style="font-size:11px;color:#ddd;">${escapeHtml(card.description)}</div>
+      ${section('Inputs', card.inputTypes)}
+      ${section('Outputs', card.outputTypes)}
+      ${section('Known biases', card.knownBiases)}
+      ${metricsHtml}
       <div style="font-size:10px;opacity:0.55;">Last audited: ${escapeHtml(auditDate)}</div>
     </div>`;
   }

@@ -1,6 +1,6 @@
 {
   "_comment": "Allowlist for sidecar-only routes — routes the sidecar serves that no renderer file calls. Each entry must be classified as one of:\n  - intentionalInternal: server-to-server / admin / health probe; never called from the renderer.\n  - futureUi: route exists for an unbuilt panel; expected to gain a renderer caller soon.\n  - deprecated: legacy route slated for removal.\nThe sidecar-routes-allowlist test fails when a NEW sidecar-only route appears that's not in any list. To clear, classify it here.",
-  "_updated": "2026-05-11 — PR198 bug-smash: classify 26 new routes added since the initial classification",
+  "_updated": "2026-05-18 — classify 7 new routes: sms/command + intelligence mirrors + diagnostics/mission-state",
 
   "intentionalInternal": [
     "/api",
@@ -11,12 +11,19 @@
     "/api/version",
     "/gps/nmea",
     "/api/algorithm-state",
-    "/api/aviation/_aviation-helpers"
+    "/api/aviation/_aviation-helpers",
+    "/api/sms/command",
+    "/api/intelligence/correlations",
+    "/api/intelligence/situations"
   ],
 
   "futureUi": [
     "/api/acled/events",
     "/api/acled/refresh",
+    "/api/diagnostics/mission-state",
+    "/api/intelligence/explain",
+    "/api/intelligence/nearby",
+    "/api/intelligence/playbook",
     "/api/adsb-aggregate",
     "/api/aftershock-forecast",
     "/api/algorithm-correlations",

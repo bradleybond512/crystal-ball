@@ -11,6 +11,7 @@ export default tseslint.config(
  'dist/**',
  'src-tauri/target/**',
  '.agent/**',
+ '.claude/**',
  'src/workers/ml.worker.ts',
  'src/generated/**',
  'convex/**',

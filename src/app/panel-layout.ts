@@ -348,6 +348,7 @@ import { EvidenceGraphPanel } from '@/components/EvidenceGraphPanel';
 import { EvidenceChainBuilderPanel } from '@/components/EvidenceChainBuilderPanel';
 import { EntityRegistryPanel } from '@/components/EntityRegistryPanel';
 import { PlaybookPanel } from '@/components/PlaybookPanel';
+import { CrossDomainContradictionDetectorPanel } from '@/components/CrossDomainContradictionDetectorPanel';
 import { SmsSettingsPanel } from '@/components/SmsSettingsPanel';
 import { ThreatDashboard } from '@/components/ThreatDashboard';
 import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
@@ -1446,6 +1447,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['evidence-chain-builder'] = new EvidenceChainBuilderPanel();
  this.ctx.panels['entity-registry'] = new EntityRegistryPanel();
  this.ctx.panels['playbook'] = new PlaybookPanel();
+ this.ctx.panels['cross-domain-contradiction-detector'] = new CrossDomainContradictionDetectorPanel();
  this.ctx.panels['sms-command-interface'] = new SmsSettingsPanel();
  this.ctx.panels['threat-dashboard'] = new ThreatDashboard();
  startThreatAggregator();

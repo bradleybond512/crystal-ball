@@ -4,6 +4,18 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.25.11] - 2026-05-19
+
+### Added
+
+- Cyber mission bridges: CVE/KEV, threat-intel, breach-intel, infra-attacks (59 tests)
+- Geopolitical mission bridges: ACLED, OFAC SDN, GDELT (PR #625)
+- Health mission bridges: CDC wastewater, WHO surveillance, biosurveillance (PR #623)
+- Weather mission bridges: NWS alerts, NHC cyclones, NIFC wildfire incidents
+- Maritime superpower panel: deep-intelligence view for maritime domain
+- Seismic superpower panel: deep-intelligence view for seismic/disaster domain
+- Fixed `cross-domain-contradiction-detector` and `aviation-superpower` category registration
+
 ## [2.24.0] - 2026-05-18
 
 ### Changed

@@ -75,10 +75,30 @@ export interface ChangeTemplate {
   build(input: { algoId: string; rationale?: string; proposedValue: unknown }): ProposedChange;
 }
 
+// ── BacktestRun — rule-centric historical replay ──────────────────────
+
+export interface BacktestRun {
+  id: string;
+  ruleId: string;
+  ruleSnapshot: object;
+  ranAt: number;
+  windowDays: number;
+  triggeredCount: number;
+  falsePositiveRate: number;
+  precision: number;
+  passed: boolean;
+  failReason?: string;
+}
+
 // ── Constants ─────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'wm-backtest-gate';
 const MAX_HISTORY = 100;
+const MAX_RUNS = 500;
+const DEFAULT_WINDOW_DAYS = 30;
+const FP_RATE_THRESHOLD = 0.3;
+const PRECISION_THRESHOLD = 0.7;
+const APPROVAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const APPROVAL_DELTA_FLOOR = -0.05;
 const APPROVAL_ACCURACY_FLOOR = 0.5;
 const MIN_PREDICTIONS_FOR_HIGH = 30;
@@ -147,6 +167,7 @@ export interface BacktestGateOptions {
 interface GateSnapshot {
   pending: ProposedChange[];
   verdicts: GateVerdict[];
+  runs?: BacktestRun[];
 }
 
 export class BacktestGate {
@@ -158,6 +179,7 @@ export class BacktestGate {
   private listeners = new Set<GateListener>();
   private idSeq = 0;
   private hydrated = false;
+  private allRuns: BacktestRun[] = [];
   private backtestEngine?: BacktestEngine;
   private evalLedger?: AlgoEvalLedger;
   private scenarios?: readonly BacktestScenario[];
@@ -168,6 +190,10 @@ export class BacktestGate {
     this.evalLedger = options.evalLedger;
     this.scenarios = options.scenarios;
     this.clock = options.clock ?? (() => Date.now());
+  }
+
+  static getInstance(): BacktestGate {
+    return getBacktestGate();
   }
 
   // ── Public API ──────────────────────────────────────────────────
@@ -232,6 +258,7 @@ export class BacktestGate {
     this.verdicts.clear();
     this.pendingOrder = [];
     this.verdictOrder = [];
+    this.allRuns = [];
     this.listeners.clear();
     this.idSeq = 0;
     this.hydrated = true;
@@ -239,6 +266,70 @@ export class BacktestGate {
     if (store) {
       try { store.removeItem(STORAGE_KEY); } catch { /* ignore */ }
     }
+  }
+
+  // ── Rule-centric backtest API ────────────────────────────────────
+
+  runBacktest(
+    ruleId: string,
+    ruleSnapshot: object,
+    historicalEvents: object[],
+    windowDays = DEFAULT_WINDOW_DAYS,
+  ): BacktestRun {
+    this.ensureHydrated();
+    const now = this.clock();
+    const windowMs = windowDays * 24 * 60 * 60 * 1000;
+    const cutoff = now - windowMs;
+
+    const inWindow = historicalEvents.filter((ev) => {
+      const ts = (ev as Record<string, unknown>).timestamp;
+      return typeof ts !== 'number' || ts >= cutoff;
+    });
+
+    const triggered = inWindow.filter((ev) => triggersRule(ev, ruleSnapshot));
+    const triggeredCount = triggered.length;
+    const fpCount = triggered.filter((ev) => isFalsePositive(ev, ruleSnapshot)).length;
+
+    const falsePositiveRate = triggeredCount === 0 ? 0 : round4(fpCount / triggeredCount);
+    const precision = triggeredCount === 0 ? 0 : round4((triggeredCount - fpCount) / triggeredCount);
+
+    const failReason = resolveFailReason(triggeredCount, falsePositiveRate, precision);
+    const run: BacktestRun = {
+      id: this.nextId('btr'),
+      ruleId,
+      ruleSnapshot,
+      ranAt: now,
+      windowDays,
+      triggeredCount,
+      falsePositiveRate,
+      precision,
+      passed: failReason === undefined,
+      failReason,
+    };
+
+    this.storeRun(run);
+    this.persist();
+    return { ...run };
+  }
+
+  getLastRun(ruleId: string): BacktestRun | undefined {
+    this.ensureHydrated();
+    let last: BacktestRun | undefined;
+    for (const r of this.allRuns) {
+      if (r.ruleId === ruleId) last = r;
+    }
+    return last ? { ...last } : undefined;
+  }
+
+  getHistory(ruleId: string): BacktestRun[] {
+    this.ensureHydrated();
+    return this.allRuns.filter((r) => r.ruleId === ruleId).map((r) => ({ ...r }));
+  }
+
+  isApproved(ruleId: string): boolean {
+    const last = this.getLastRun(ruleId);
+    if (last === undefined) return false;
+    return last.passed && (this.clock() - last.ranAt) < APPROVAL_WINDOW_MS;
   }
 
   // ── Verdict construction ────────────────────────────────────────
@@ -284,6 +375,13 @@ export class BacktestGate {
     if (!existing) {
       this.verdictOrder.push(verdict.changeId);
       this.enforceCapacity();
+    }
+  }
+
+  private storeRun(run: BacktestRun): void {
+    this.allRuns.push(run);
+    while (this.allRuns.length > MAX_RUNS) {
+      this.allRuns.shift();
     }
   }
 
@@ -342,6 +440,10 @@ export class BacktestGate {
         this.verdicts.set(v.changeId, normalizeVerdict(v));
         this.verdictOrder.push(v.changeId);
       }
+      for (const r of parsed.runs ?? []) {
+        if (!r || typeof (r as unknown as Record<string, unknown>).ruleId !== 'string') continue;
+        this.allRuns.push(normalizeRun(r));
+      }
     } catch {
       // corrupt — leave empty
     }
@@ -357,6 +459,7 @@ export class BacktestGate {
       verdicts: this.verdictOrder
         .map((id) => this.verdicts.get(id))
         .filter((v): v is GateVerdict => v !== undefined),
+      runs: this.allRuns,
     };
     try {
       store.setItem(STORAGE_KEY, JSON.stringify(snapshot));
@@ -488,6 +591,76 @@ function signedPct(n: number): string {
   return `${sign}${(n * 100).toFixed(1)}%`;
 }
 
+// ── Rule-replay helpers ──────────────────────────────────────────────
+
+const SEVERITY_RANK: Record<string, number> = {
+  INFO: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4,
+};
+
+function eventSeverityRank(ev: object): number {
+  const e = ev as Record<string, unknown>;
+  const s = typeof e.severity === 'string' ? e.severity.toUpperCase() : 'INFO';
+  return SEVERITY_RANK[s] ?? 0;
+}
+
+function ruleSeverityThreshold(ruleSnapshot: object): number {
+  const r = ruleSnapshot as Record<string, unknown>;
+  const ts = Array.isArray(r.triggerSeverity) ? (r.triggerSeverity as string[]) : [];
+  if (ts.length === 0) return 0;
+  const ranks = ts.map((s) => SEVERITY_RANK[String(s).toUpperCase()] ?? 0);
+  return Math.min(...ranks);
+}
+
+function triggersRule(ev: object, ruleSnapshot: object): boolean {
+  const e = ev as Record<string, unknown>;
+  const r = ruleSnapshot as Record<string, unknown>;
+  if (typeof r.domain === 'string' && typeof e.domain === 'string' && r.domain !== e.domain) {
+    return false;
+  }
+  const ruleTags = Array.isArray(r.triggerTags) ? (r.triggerTags as string[]) : [];
+  if (ruleTags.length > 0) {
+    const evtTags = Array.isArray(e.tags) ? (e.tags as string[]) : [];
+    const matched = ruleTags.find((t) => evtTags.includes(t));
+    if (matched === undefined) return false;
+  }
+  return true;
+}
+
+function isFalsePositive(ev: object, ruleSnapshot: object): boolean {
+  return eventSeverityRank(ev) < ruleSeverityThreshold(ruleSnapshot);
+}
+
+function resolveFailReason(
+  triggeredCount: number,
+  falsePositiveRate: number,
+  precision: number,
+): string | undefined {
+  if (triggeredCount === 0) return 'no events triggered the rule in the historical window';
+  if (falsePositiveRate >= FP_RATE_THRESHOLD) {
+    return `false-positive rate ${pct(falsePositiveRate)} exceeds ${pct(FP_RATE_THRESHOLD)} threshold`;
+  }
+  if (precision <= PRECISION_THRESHOLD) {
+    return `precision ${pct(precision)} did not clear ${pct(PRECISION_THRESHOLD)} threshold`;
+  }
+  return undefined;
+}
+
+function normalizeRun(raw: unknown): BacktestRun {
+  const r = raw as BacktestRun;
+  return {
+    id: typeof r.id === 'string' ? r.id : '',
+    ruleId: typeof r.ruleId === 'string' ? r.ruleId : '',
+    ruleSnapshot: (typeof r.ruleSnapshot === 'object' && r.ruleSnapshot != null) ? r.ruleSnapshot : {},
+    ranAt: typeof r.ranAt === 'number' ? r.ranAt : 0,
+    windowDays: typeof r.windowDays === 'number' ? r.windowDays : DEFAULT_WINDOW_DAYS,
+    triggeredCount: typeof r.triggeredCount === 'number' ? r.triggeredCount : 0,
+    falsePositiveRate: typeof r.falsePositiveRate === 'number' ? r.falsePositiveRate : 0,
+    precision: typeof r.precision === 'number' ? r.precision : 0,
+    passed: r.passed === true,
+    failReason: typeof r.failReason === 'string' ? r.failReason : undefined,
+  };
+}
+
 // ── Singleton ────────────────────────────────────────────────────────
 
 let _singleton: BacktestGate | null = null;
@@ -508,8 +681,17 @@ export const __internals = {
   MAX_HISTORY,
   MIN_PREDICTIONS_FOR_HIGH,
   MIN_PREDICTIONS_FOR_MEDIUM,
+  MAX_RUNS,
+  DEFAULT_WINDOW_DAYS,
+  FP_RATE_THRESHOLD,
+  PRECISION_THRESHOLD,
+  APPROVAL_WINDOW_MS,
   mapChangeToParameters,
   shiftSeverityBands,
   deriveConfidence,
   buildVerdict,
+  triggersRule,
+  isFalsePositive,
+  resolveFailReason,
+  normalizeRun,
 };

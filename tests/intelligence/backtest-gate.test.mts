@@ -27,6 +27,7 @@ import {
   getBacktestGate,
   type GateVerdict,
   type ProposedChange,
+  type BacktestRun,
 } from '../../src/services/intelligence/backtest-gate.ts';
 import type {
   BacktestConfig,
@@ -457,4 +458,399 @@ test('teardown clears singleton + storage', () => {
   const _v: GateVerdict | undefined = undefined;
   void _v;
   assert.ok(true);
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// Rule-centric BacktestRun API
+// ══════════════════════════════════════════════════════════════════════
+
+import { describe, it, beforeEach } from 'node:test';
+
+// ── Helpers ────────────────────────────────────────────────────────────
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function freshRuleGate(clockMs = NOW): BacktestGate {
+  const gate = new BacktestGate({ clock: () => clockMs });
+  gate.resetForTesting();
+  return gate;
+}
+
+function makeEvent(overrides: Record<string, unknown> = {}): object {
+  return {
+    domain: 'weather',
+    severity: 'HIGH',
+    tags: ['tornado'],
+    timestamp: NOW - DAY_MS,
+    ...overrides,
+  };
+}
+
+function passRule(): object {
+  return { domain: 'weather', triggerTags: ['tornado'], triggerSeverity: ['MEDIUM', 'HIGH', 'CRITICAL'] };
+}
+
+function eventsForPass(): object[] {
+  return [
+    makeEvent({ severity: 'HIGH' }),
+    makeEvent({ severity: 'CRITICAL' }),
+    makeEvent({ severity: 'HIGH' }),
+    makeEvent({ severity: 'HIGH' }),
+  ];
+}
+
+// ── getInstance ────────────────────────────────────────────────────────
+
+describe('BacktestGate.getInstance()', () => {
+  it('returns the same singleton as getBacktestGate()', () => {
+    assert.equal(BacktestGate.getInstance(), getBacktestGate());
+  });
+});
+
+// ── runBacktest — basic shape ──────────────────────────────────────────
+
+describe('runBacktest — result shape', () => {
+  it('returns a BacktestRun with the given ruleId', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), eventsForPass());
+    assert.equal(run.ruleId, 'rule-1');
+  });
+
+  it('result has a non-empty id', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), eventsForPass());
+    assert.ok(run.id.length > 0);
+  });
+
+  it('ranAt equals the gate clock', () => {
+    const gate = freshRuleGate(NOW);
+    const run = gate.runBacktest('rule-1', passRule(), eventsForPass());
+    assert.equal(run.ranAt, NOW);
+  });
+
+  it('windowDays defaults to 30', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), eventsForPass());
+    assert.equal(run.windowDays, __internals.DEFAULT_WINDOW_DAYS);
+  });
+
+  it('windowDays accepts an explicit override', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), eventsForPass(), 14);
+    assert.equal(run.windowDays, 14);
+  });
+
+  it('ruleSnapshot is preserved in the result', () => {
+    const gate = freshRuleGate();
+    const snap = passRule();
+    const run = gate.runBacktest('rule-1', snap, eventsForPass());
+    assert.deepEqual(run.ruleSnapshot, snap);
+  });
+});
+
+// ── runBacktest — trigger counting ─────────────────────────────────────
+
+describe('runBacktest — triggeredCount', () => {
+  it('triggeredCount is 0 when no events match domain', () => {
+    const gate = freshRuleGate();
+    const events = [makeEvent({ domain: 'cyber' }), makeEvent({ domain: 'aviation' })];
+    const run = gate.runBacktest('rule-1', passRule(), events);
+    assert.equal(run.triggeredCount, 0);
+  });
+
+  it('triggeredCount is 0 when no events match tags', () => {
+    const gate = freshRuleGate();
+    const events = [makeEvent({ tags: ['rain'] }), makeEvent({ tags: ['wind'] })];
+    const run = gate.runBacktest('rule-1', passRule(), events);
+    assert.equal(run.triggeredCount, 0);
+  });
+
+  it('triggeredCount counts matching events', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), eventsForPass());
+    assert.equal(run.triggeredCount, 4);
+  });
+
+  it('events outside the window are excluded', () => {
+    const gate = freshRuleGate(NOW);
+    const old = makeEvent({ timestamp: NOW - 31 * DAY_MS });
+    const run = gate.runBacktest('rule-1', passRule(), [old]);
+    assert.equal(run.triggeredCount, 0);
+  });
+
+  it('events without a timestamp are included', () => {
+    const gate = freshRuleGate(NOW);
+    const noTs = { domain: 'weather', severity: 'HIGH', tags: ['tornado'] };
+    const run = gate.runBacktest('rule-1', passRule(), [noTs]);
+    assert.equal(run.triggeredCount, 1);
+  });
+});
+
+// ── runBacktest — false-positive rate ──────────────────────────────────
+
+describe('runBacktest — falsePositiveRate', () => {
+  it('falsePositiveRate is 0 when no triggers', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), []);
+    assert.equal(run.falsePositiveRate, 0);
+  });
+
+  it('falsePositiveRate is 0 when all triggers meet severity threshold', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), eventsForPass());
+    assert.equal(run.falsePositiveRate, 0);
+  });
+
+  it('falsePositiveRate is 0.5 when half triggers are below threshold', () => {
+    const gate = freshRuleGate();
+    const events = [
+      makeEvent({ severity: 'HIGH' }),
+      makeEvent({ severity: 'LOW' }),   // below MEDIUM threshold
+    ];
+    const run = gate.runBacktest('rule-1', passRule(), events);
+    assert.equal(run.falsePositiveRate, 0.5);
+  });
+
+  it('falsePositiveRate is 1 when all triggers are below threshold', () => {
+    const gate = freshRuleGate();
+    const events = [makeEvent({ severity: 'INFO' }), makeEvent({ severity: 'LOW' })];
+    const run = gate.runBacktest('rule-1', passRule(), events);
+    assert.equal(run.falsePositiveRate, 1);
+  });
+});
+
+// ── runBacktest — precision ────────────────────────────────────────────
+
+describe('runBacktest — precision', () => {
+  it('precision is 0 when no triggers', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), []);
+    assert.equal(run.precision, 0);
+  });
+
+  it('precision is 1 when all triggers are true positives', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), eventsForPass());
+    assert.equal(run.precision, 1);
+  });
+
+  it('precision is 0.5 when half triggers are true positives', () => {
+    const gate = freshRuleGate();
+    const events = [makeEvent({ severity: 'HIGH' }), makeEvent({ severity: 'LOW' })];
+    const run = gate.runBacktest('rule-1', passRule(), events);
+    assert.equal(run.precision, 0.5);
+  });
+});
+
+// ── runBacktest — pass/fail logic ──────────────────────────────────────
+
+describe('runBacktest — passed + failReason', () => {
+  it('passes when triggeredCount > 0, falsePositiveRate < 0.3, precision > 0.7', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), eventsForPass());
+    assert.equal(run.passed, true);
+    assert.equal(run.failReason, undefined);
+  });
+
+  it('fails when triggeredCount is 0', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), []);
+    assert.equal(run.passed, false);
+    assert.ok(run.failReason?.includes('no events triggered'));
+  });
+
+  it('fails when falsePositiveRate is exactly 0.3', () => {
+    const gate = freshRuleGate();
+    // 3 triggered, 1 TP (HIGH), 2 FP (LOW) → FPR = 2/3 ≈ 0.6667
+    // Need FPR exactly 0.3: 10 triggered, 3 FP, 7 TP
+    const events: object[] = [
+      ...Array.from({ length: 7 }, () => makeEvent({ severity: 'HIGH' })),
+      ...Array.from({ length: 3 }, () => makeEvent({ severity: 'LOW' })),
+    ];
+    const run = gate.runBacktest('rule-1', passRule(), events);
+    assert.equal(run.passed, false);
+    assert.ok(run.failReason?.includes('false-positive rate'));
+  });
+
+  it('precision field equals 0.7 when 7 TP and 3 FP of 10 triggered', () => {
+    const gate = freshRuleGate();
+    // 10 triggered: 7 TP (HIGH), 3 FP (LOW) → precision = 0.7, FPR = 0.3
+    // Both metrics are at threshold; run fails (FP rate check fires first)
+    const events: object[] = [
+      ...Array.from({ length: 7 }, () => makeEvent({ severity: 'HIGH' })),
+      ...Array.from({ length: 3 }, () => makeEvent({ severity: 'LOW' })),
+    ];
+    const run = gate.runBacktest('rule-1', passRule(), events);
+    assert.equal(run.precision, 0.7);
+    assert.equal(run.passed, false);
+  });
+
+  it('failReason is undefined when passed', () => {
+    const gate = freshRuleGate();
+    const run = gate.runBacktest('rule-1', passRule(), eventsForPass());
+    assert.equal(run.failReason, undefined);
+  });
+});
+
+// ── getLastRun ─────────────────────────────────────────────────────────
+
+describe('getLastRun', () => {
+  it('returns undefined for an unknown ruleId', () => {
+    const gate = freshRuleGate();
+    assert.equal(gate.getLastRun('unknown'), undefined);
+  });
+
+  it('returns the run after one runBacktest call', () => {
+    const gate = freshRuleGate();
+    gate.runBacktest('rule-a', passRule(), eventsForPass());
+    const last = gate.getLastRun('rule-a');
+    assert.ok(last !== undefined);
+    assert.equal(last.ruleId, 'rule-a');
+  });
+
+  it('returns the most recent run when multiple runs exist', () => {
+    const gate = freshRuleGate();
+    gate.runBacktest('rule-a', passRule(), eventsForPass());
+    gate.runBacktest('rule-a', passRule(), []);
+    const last = gate.getLastRun('rule-a');
+    assert.equal(last?.passed, false); // second run had no events
+  });
+
+  it('is independent per ruleId', () => {
+    const gate = freshRuleGate();
+    gate.runBacktest('rule-a', passRule(), eventsForPass());
+    gate.runBacktest('rule-b', passRule(), []);
+    assert.equal(gate.getLastRun('rule-a')?.passed, true);
+    assert.equal(gate.getLastRun('rule-b')?.passed, false);
+  });
+});
+
+// ── getHistory ─────────────────────────────────────────────────────────
+
+describe('getHistory', () => {
+  it('returns empty array for unknown ruleId', () => {
+    const gate = freshRuleGate();
+    assert.deepEqual(gate.getHistory('unknown'), []);
+  });
+
+  it('returns all runs for a ruleId in insertion order', () => {
+    const gate = freshRuleGate();
+    gate.runBacktest('rule-a', passRule(), eventsForPass());
+    gate.runBacktest('rule-a', passRule(), []);
+    const history = gate.getHistory('rule-a');
+    assert.equal(history.length, 2);
+    assert.equal(history[0]?.passed, true);
+    assert.equal(history[1]?.passed, false);
+  });
+
+  it('does not include runs from other ruleIds', () => {
+    const gate = freshRuleGate();
+    gate.runBacktest('rule-a', passRule(), eventsForPass());
+    gate.runBacktest('rule-b', passRule(), eventsForPass());
+    assert.equal(gate.getHistory('rule-a').length, 1);
+    assert.equal(gate.getHistory('rule-b').length, 1);
+  });
+});
+
+// ── isApproved ─────────────────────────────────────────────────────────
+
+describe('isApproved', () => {
+  it('returns false for unknown ruleId', () => {
+    const gate = freshRuleGate();
+    assert.equal(gate.isApproved('unknown'), false);
+  });
+
+  it('returns false when last run failed', () => {
+    const gate = freshRuleGate(NOW);
+    gate.runBacktest('rule-a', passRule(), []);
+    assert.equal(gate.isApproved('rule-a'), false);
+  });
+
+  it('returns true when last run passed and is within 7 days', () => {
+    const gate = freshRuleGate(NOW);
+    gate.runBacktest('rule-a', passRule(), eventsForPass());
+    assert.equal(gate.isApproved('rule-a'), true);
+  });
+
+  it('returns false when last run passed but is older than 7 days', () => {
+    const runAt = NOW - 8 * DAY_MS;
+    const gate1 = new BacktestGate({ clock: () => runAt });
+    gate1.resetForTesting();
+    gate1.runBacktest('rule-a', passRule(), eventsForPass());
+
+    // gate2 clock is 8 days later — run is outside the 7-day approval window
+    const gate2 = new BacktestGate({ clock: () => NOW });
+    assert.equal(gate2.isApproved('rule-a'), false);
+  });
+});
+
+// ── Storage / cap enforcement ──────────────────────────────────────────
+
+describe('BacktestRun storage', () => {
+  beforeEach(() => { __storage.clear(); });
+
+  it('persists runs and rehydrates them', () => {
+    const gate1 = new BacktestGate({ clock: () => NOW });
+    gate1.resetForTesting();
+    gate1.runBacktest('rule-persist', passRule(), eventsForPass());
+
+    const gate2 = new BacktestGate({ clock: () => NOW });
+    const last = gate2.getLastRun('rule-persist');
+    assert.ok(last !== undefined);
+    assert.equal(last.ruleId, 'rule-persist');
+  });
+
+  it('rehydrated run has correct passed flag', () => {
+    const gate1 = new BacktestGate({ clock: () => NOW });
+    gate1.resetForTesting();
+    gate1.runBacktest('rule-p', passRule(), eventsForPass());
+
+    const gate2 = new BacktestGate({ clock: () => NOW });
+    assert.equal(gate2.getLastRun('rule-p')?.passed, true);
+  });
+
+  it('enforces MAX_RUNS cap by evicting oldest', () => {
+    const gate = freshRuleGate();
+    const cap = __internals.MAX_RUNS;
+    for (let i = 0; i < cap + 5; i++) {
+      gate.runBacktest(`rule-${i}`, {}, eventsForPass());
+    }
+    // Total stored runs should not exceed cap
+    let total = 0;
+    for (let i = 0; i < cap + 5; i++) {
+      total += gate.getHistory(`rule-${i}`).length;
+    }
+    assert.ok(total <= cap);
+  });
+
+  it('handles corrupt storage gracefully', () => {
+    __storage.set('wm-backtest-gate', '{corrupt json}}');
+    const gate = new BacktestGate({ clock: () => NOW });
+    assert.equal(gate.getLastRun('any'), undefined);
+    assert.deepEqual(gate.getHistory('any'), []);
+  });
+});
+
+// ── __internals constants ──────────────────────────────────────────────
+
+describe('__internals — rule-backtest constants', () => {
+  it('MAX_RUNS is 500', () => {
+    assert.equal(__internals.MAX_RUNS, 500);
+  });
+
+  it('DEFAULT_WINDOW_DAYS is 30', () => {
+    assert.equal(__internals.DEFAULT_WINDOW_DAYS, 30);
+  });
+
+  it('FP_RATE_THRESHOLD is 0.3', () => {
+    assert.equal(__internals.FP_RATE_THRESHOLD, 0.3);
+  });
+
+  it('PRECISION_THRESHOLD is 0.7', () => {
+    assert.equal(__internals.PRECISION_THRESHOLD, 0.7);
+  });
+
+  it('APPROVAL_WINDOW_MS is 7 days', () => {
+    assert.equal(__internals.APPROVAL_WINDOW_MS, 7 * 24 * 60 * 60 * 1000);
+  });
 });

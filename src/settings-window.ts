@@ -42,7 +42,7 @@ export function initSettingsWindow(): void {
  ([key, panel]) => `
  <div class="panel-toggle-item ${panel.enabled ? 'active' : ''}" data-panel="${key}">
  <div class="panel-toggle-checkbox">${panel.enabled ? '✓' : ''}</div>
- <span class="panel-toggle-label">${getLocalizedPanelName(key, panel.name)}</span>
+ <span class="panel-toggle-label">${escapeHtml(getLocalizedPanelName(key, panel.name))}</span>
  </div>
  `
  )

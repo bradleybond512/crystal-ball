@@ -1,0 +1,68 @@
+/**
+ * Mode system visual states.
+ * Keyed off html[data-mode="normal|elevated|crisis|blackout"].
+ * Set by ModeManager (src/utils/mode-manager.ts) via
+ * document.documentElement.dataset.mode.
+ */
+
+/* ── Default (normal) vars — always present on :root ─────────────────── */
+:root {
+  --mode-bg:           #0f172a;
+  --mode-border:       rgba(59, 130, 246, 0.2);
+  --mode-text-primary: #e2e8f0;
+  --mode-accent:       #3b82f6;
+  --mode-pulse-color:  rgba(59, 130, 246, 0.4);
+}
+
+/* ── Normal — calm operational, blue/gray tones ───────────────────────── */
+[data-mode="normal"] {
+  --mode-bg:           #0f172a;
+  --mode-border:       rgba(59, 130, 246, 0.2);
+  --mode-text-primary: #e2e8f0;
+  --mode-accent:       #3b82f6;
+  --mode-pulse-color:  rgba(59, 130, 246, 0.4);
+}
+
+/* ── Elevated — heightened awareness, amber tones ─────────────────────── */
+[data-mode="elevated"] {
+  --mode-bg:           #1c1407;
+  --mode-border:       rgba(245, 158, 11, 0.3);
+  --mode-text-primary: #fef3c7;
+  --mode-accent:       #f59e0b;
+  --mode-pulse-color:  rgba(245, 158, 11, 0.45);
+}
+
+/* ── Crisis — active emergency, red tones with pulse animation ────────── */
+[data-mode="crisis"] {
+  --mode-bg:           #1a0505;
+  --mode-border:       rgba(239, 68, 68, 0.5);
+  --mode-text-primary: #fee2e2;
+  --mode-accent:       #ef4444;
+  --mode-pulse-color:  rgba(239, 68, 68, 0.65);
+}
+
+/* Elements that carry the pulsing border glow in crisis mode */
+[data-mode="crisis"] .mode-pulse-target {
+  animation: mode-pulse 2s ease-in-out infinite;
+}
+
+/* ── Blackout — operational silence, near-black, minimal color ────────── */
+[data-mode="blackout"] {
+  --mode-bg:           #050505;
+  --mode-border:       rgba(255, 255, 255, 0.06);
+  --mode-text-primary: #9ca3af;
+  --mode-accent:       #374151;
+  --mode-pulse-color:  rgba(255, 255, 255, 0.05);
+}
+
+/* ── Keyframes ────────────────────────────────────────────────────────── */
+@keyframes mode-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--mode-pulse-color);
+    border-color: var(--mode-border);
+  }
+  50% {
+    box-shadow: 0 0 12px 3px var(--mode-pulse-color);
+    border-color: var(--mode-accent);
+  }
+}

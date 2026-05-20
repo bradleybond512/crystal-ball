@@ -264,6 +264,7 @@ import { CorrelationMapPanel } from '@/components/CorrelationMapPanel';
 import { StrikePackagesPanel } from '@/components/StrikePackagesPanel';
 import { ApiDiagnosticPanel } from '@/components/ApiDiagnosticPanel';
 import { FeedHealthPanel } from '@/components/FeedHealthPanel';
+import { FeedHealthDashboardPanel } from '@/components/FeedHealthDashboardPanel';
 import { FeedWatchdogPanel } from '@/components/FeedWatchdogPanel';
 import { SourceCredibilityTrackerPanel } from '@/components/SourceCredibilityTrackerPanel';
 import { CveTrackerPanel } from '@/components/CveTrackerPanel';
@@ -1371,6 +1372,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['strike-packages'] = new StrikePackagesPanel();
  this.ctx.panels['api-diagnostic'] = new ApiDiagnosticPanel();
  this.ctx.panels['feed-health'] = new FeedHealthPanel();
+ this.ctx.panels['feed-health-dashboard'] = new FeedHealthDashboardPanel();
  this.ctx.panels['feed-watchdog'] = new FeedWatchdogPanel();
  this.ctx.panels['source-credibility-tracker'] = new SourceCredibilityTrackerPanel();
  this.ctx.panels['system-diagnostic'] = new SystemDiagnosticPanel();

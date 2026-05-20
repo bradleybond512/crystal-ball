@@ -83,6 +83,7 @@ export default tseslint.config(
  '@typescript-eslint/non-nullable-type-assertion-style': 'off', // converts `as T` to `!`, losing type narrowing
  'unicorn/no-null': 'off', // codebase convention: null used for nullable DOM/library values
  'unicorn/no-array-sort': 'off', // Array#toSorted requires ES2022; tsconfig targets ES2020
+ 'unicorn/no-array-reverse': 'off', // Array#toReversed() requires ES2023; tsconfig targets ES2020
  },
   },
 

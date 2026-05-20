@@ -1567,13 +1567,27 @@ async fn open_youtube_logout(app: AppHandle) -> Result<(), String> {
 fn set_dock_badge(count: u32) -> Result<(), String> {
  #[cfg(target_os = "macos")]
  {
-  use std::ffi::{c_void, CString};
+  use std::ffi::{c_char, c_void, CString};
   extern "C" {
    fn objc_getClass(name: *const u8) -> *mut c_void;
    fn sel_registerName(name: *const u8) -> *mut c_void;
    fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
   }
   unsafe {
+   // Apple Silicon ABI: variadic args are always passed on the stack, but
+   // `objc_msgSend` itself is non-variadic and reads its args from
+   // registers (x2+). Calling the variadic-typed `objc_msgSend` with any
+   // trailing argument therefore reads garbage from x2 — which is what
+   // caused `+[NSString stringWithUTF8String:]` to segfault inside
+   // `strlen` on every launch. Cast to concrete non-variadic signatures
+   // for the two calls that actually pass an argument; the zero-arg
+   // calls (`sharedApplication`, `dockTile`) are safe via the variadic
+   // declaration because no varargs means no ABI mismatch.
+   let msgsend_cstr: unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_char) -> *mut c_void =
+    std::mem::transmute(objc_msgSend as *const ());
+   let msgsend_obj: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void =
+    std::mem::transmute(objc_msgSend as *const ());
+
    let nsapp_cls = objc_getClass(b"NSApplication\0".as_ptr());
    if nsapp_cls.is_null() { return Ok(()); }
    let shared_sel = sel_registerName(b"sharedApplication\0".as_ptr());
@@ -1587,10 +1601,10 @@ fn set_dock_badge(count: u32) -> Result<(), String> {
    let cstr = if count == 0 { CString::new("").unwrap() } else { CString::new(count.to_string()).unwrap() };
    let nsstring_cls = objc_getClass(b"NSString\0".as_ptr());
    let from_utf8_sel = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
-   let label = objc_msgSend(nsstring_cls, from_utf8_sel, cstr.as_ptr());
+   let label = msgsend_cstr(nsstring_cls, from_utf8_sel, cstr.as_ptr());
 
    let set_label_sel = sel_registerName(b"setBadgeLabel:\0".as_ptr());
-   objc_msgSend(tile, set_label_sel, label);
+   msgsend_obj(tile, set_label_sel, label);
   }
  }
  let _ = count;

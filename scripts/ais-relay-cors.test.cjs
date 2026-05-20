@@ -24,12 +24,18 @@ const ALLOWED_ORIGINS = [
   'tauri://localhost',
 ];
 
-// Matches the pattern in ais-relay.cjs getCorsOrigin
-const VERCEL_PREVIEW_RE = /^https:\/\/[a-z0-9-]+-bradleybond512\.vercel\.app$/;
+// Owner-anchored patterns — kept in sync with ais-relay.cjs ALLOWED_PREVIEW_PATTERNS.
+// Requires crystalball-/crystal-ball- prefix AND a known owner slug.
+const ALLOWED_PREVIEW_PATTERNS = [
+  /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
+  /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
+  /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
+  /^https:\/\/crystal-ball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
+];
 
 function getCorsOrigin(origin, allowVercelPreview) {
   if (ALLOWED_ORIGINS.includes(origin)) return origin;
-  if (allowVercelPreview && VERCEL_PREVIEW_RE.test(origin)) return origin;
+  if (allowVercelPreview && ALLOWED_PREVIEW_PATTERNS.some(p => p.test(origin))) return origin;
   return '';
 }
 
@@ -49,26 +55,37 @@ test('relay CORS: rejects unknown origin when preview flag off', () => {
   assert.equal(getCorsOrigin('https://evil.example.com', false), '');
 });
 
-test('relay CORS: accepts owner-anchored preview origin when flag enabled', () => {
-  assert.equal(
-    getCorsOrigin('https://abc123-bradleybond512.vercel.app', true),
-    'https://abc123-bradleybond512.vercel.app',
-  );
-  assert.equal(
-    getCorsOrigin('https://deploy-hash-abc123-bradleybond512.vercel.app', true),
-    'https://deploy-hash-abc123-bradleybond512.vercel.app',
-  );
+test('relay CORS: accepts owner-anchored preview origins when flag enabled', () => {
+  const valid = [
+    'https://crystalball-my-branch-bradleybond512.vercel.app',
+    'https://crystal-ball-fix-123-bradleybond512.vercel.app',
+    'https://crystalball-pr-42-elie-abc123.vercel.app',
+    'https://crystal-ball-feature-elie-xyz.vercel.app',
+  ];
+  for (const origin of valid) {
+    assert.equal(getCorsOrigin(origin, true), origin, `should accept ${origin}`);
+  }
 });
 
 test('relay CORS: rejects lookalike vercel origins even when flag enabled (R2-SEC-006)', () => {
-  // Any .vercel.app that is NOT pinned to bradleybond512 must be rejected
-  assert.equal(getCorsOrigin('https://crystalball-attacker.vercel.app', true), '');
-  assert.equal(getCorsOrigin('https://abc123-otherperson.vercel.app', true), '');
-  assert.equal(getCorsOrigin('https://evil.vercel.app', true), '');
-  // Must not allow bradleybond512-suffix trickery from another account
-  assert.equal(getCorsOrigin('https://attack-bradleybond512x.vercel.app', true), '');
-  // Must require https:
-  assert.equal(getCorsOrigin('http://abc-bradleybond512.vercel.app', true), '');
+  const invalid = [
+    // Missing crystalball-/crystal-ball- prefix
+    'https://abc123-bradleybond512.vercel.app',
+    'https://deploy-hash-bradleybond512.vercel.app',
+    // Wrong owner slug
+    'https://crystalball-my-branch-otherperson.vercel.app',
+    'https://crystalball-evilorg.vercel.app',
+    'https://evil.vercel.app',
+    // Protocol tricks
+    'http://crystalball-branch-bradleybond512.vercel.app',
+    // Suffix forgery
+    'https://crystalball-attack-bradleybond512x.vercel.app',
+    // Lookalike domain
+    'https://crystalball-bradleybond512.evil.com',
+  ];
+  for (const origin of invalid) {
+    assert.equal(getCorsOrigin(origin, true), '', `should reject ${origin}`);
+  }
 });
 
 test('relay CORS: rejects empty or missing origin', () => {

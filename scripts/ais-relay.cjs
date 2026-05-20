@@ -88,6 +88,10 @@ if (IS_PRODUCTION_RELAY && !RELAY_SHARED_SECRET && !ALLOW_UNAUTHENTICATED_RELAY)
   console.error('[Relay] To bypass temporarily, set ALLOW_UNAUTHENTICATED_RELAY=true (non-production only)');
   process.exit(1);
 }
+if (ALLOW_UNAUTHENTICATED_RELAY) {
+  console.warn('[Relay] WARNING: ALLOW_UNAUTHENTICATED_RELAY is enabled — all auth checks are bypassed');
+  console.warn('[Relay] This flag is blocked in production (IS_PRODUCTION_RELAY=false required)');
+}
 
 let upstreamSocket = null;
 let upstreamPaused = false;
@@ -2647,13 +2651,20 @@ const ALLOWED_ORIGINS = [
   'tauri://localhost', // Tauri iOS/macOS
 ];
 
+// Owner-anchored preview patterns — mirrors api/_api-key.js and api/youtube/embed.js.
+// Requires the crystalball-/crystal-ball- project prefix AND a known owner slug so
+// unrelated third-party Vercel projects sharing the "crystalball" name cannot match.
+const ALLOWED_PREVIEW_PATTERNS = [
+  /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
+  /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
+  /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
+  /^https:\/\/crystal-ball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,
+];
+
 function getCorsOrigin(req) {
   const origin = req.headers.origin || '';
   if (ALLOWED_ORIGINS.includes(origin)) return origin;
-  // Optional: allow Crystal Ball's own Vercel preview deployments when explicitly enabled.
-  // Pinned to the bradleybond512 team slug so lookalike third-party projects cannot
-  // match. Vercel preview URL format: {deployment-hash}-{team-slug}.vercel.app
-  if (ALLOW_VERCEL_PREVIEW_ORIGINS && /^https:\/\/[a-z0-9-]+-bradleybond512\.vercel\.app$/.test(origin)) return origin;
+  if (ALLOW_VERCEL_PREVIEW_ORIGINS && ALLOWED_PREVIEW_PATTERNS.some(p => p.test(origin))) return origin;
   return '';
 }
 
@@ -2741,6 +2752,7 @@ const server = http.createServer(async (req, res) => {
  auth: {
  sharedSecretEnabled: !!RELAY_SHARED_SECRET,
  authHeader: RELAY_AUTH_HEADER,
+ allowUnauthenticated: ALLOW_UNAUTHENTICATED_RELAY,
  allowVercelPreviewOrigins: ALLOW_VERCEL_PREVIEW_ORIGINS,
  },
  rateLimit: {

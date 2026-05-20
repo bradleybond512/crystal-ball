@@ -4,6 +4,18 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.25.16] - 2026-05-20
+
+### Added
+
+- Financial superpower panel: deepest intelligence view for economic threats
+  — Market Stress Gauge (0–100 composite: equity vol, credit spreads, FX pressure)
+  — Crash Signal Tracker (drawdown events by index/region with phase labels)
+  — Credit Contagion Map (sovereign/corporate CDS leaders, regional risk tiers)
+  — Currency Crisis Watch (devaluations >5%, trajectory, capital controls badge)
+  — Systemic Risk Indicators (interbank stress boosted by live channel data, CB decisions)
+- 49 new pure-logic tests added to financial-superpower-panel.test.mts (91 total)
+
 ## [2.25.13] - 2026-05-19
 
 ### Added

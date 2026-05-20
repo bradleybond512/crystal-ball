@@ -17,7 +17,7 @@ The pipeline has four layers:
                │ stdio (JSON-RPC)
 ┌──────────────▼──────────────────────────────────────────┐
 │  MCP Server (tools/mcp-server/)                         │
-│  19 registered tools — aggregate + granular             │
+│  41 registered tools across 8 categories                │
 │  Discovers sidecar port & token from disk               │
 └──────────────┬──────────────────────────────────────────┘
                │ HTTP GET/POST to 127.0.0.1:{port}
@@ -70,6 +70,8 @@ The sidecar requires a bearer token on every request. The token is generated per
 
 ## MCP Tools
 
+The server registers `41` tools across aggregate, granular, foundation, intelligence, stateful, analyst, diagnostic, and help categories.
+
 ### Aggregate Tools (broad awareness)
 
 These call multiple sidecar endpoints in parallel and return a combined picture.
@@ -101,6 +103,27 @@ These call multiple sidecar endpoints in parallel and return a combined picture.
 | `get_disease_outbreaks` | region | WHO, ReliefWeb |
 | `get_region_brief` | place_name, lat, lon | Multi-source regional synthesis |
 
+### Foundation and Intelligence Tools
+
+| Tool | What it does |
+|------|--------------|
+| `query_raw` | Reads a specific sidecar endpoint with explicit parameters |
+| `chain_query` | Runs a sequence of endpoint queries for a multi-step investigation |
+| `compare_snapshots` | Compares two structured results for drift or meaningful changes |
+| `correlate` | Looks for shared entities, regions, or timing across datasets |
+| `trend` | Summarizes directional movement in repeated observations |
+| `anomaly_scan` | Highlights outliers or unexpected values in current feed data |
+
+### Stateful, Analyst, and Diagnostic Tools
+
+| Tool | What it does |
+|------|--------------|
+| `watchlist_manage`, `watchlist_check` | Manage and evaluate local intelligence watchlists |
+| `alert_rules_manage`, `alert_check` | Manage alert rules and run them against current feed state |
+| `get_analyst_hypotheses`, `get_mode_forecast`, `get_analyst_accuracy` | Inspect analyst-layer predictions, mode forecasts, and measured accuracy |
+| `get_hot_entities`, `submit_hypothesis_feedback`, `dismiss_hypothesis`, `run_skeptic_now` | Review important entities, tune hypothesis feedback, and trigger skeptic review |
+| `check_feed_health`, `sitrep_bundle`, `get_reasoning_debug_log`, `get_reasoning_metrics`, `help` | Health checks, bundled intelligence, reasoning diagnostics, metrics, and tool help |
+
 ### Response Format
 
 Every tool returns the same envelope:
@@ -120,7 +143,7 @@ Partial failures are non-blocking: if one endpoint times out, the remaining data
 
 ## Slash Commands
 
-Four slash commands compose MCP tool calls into intelligence products. These are defined in `.claude/commands/` and show up as `/sitrep`, `/watch`, `/threat-brief`, `/market-pulse` in Claude Code.
+Slash commands compose MCP tool calls into intelligence products. These are defined in `.claude/commands/` and include `/sitrep`, `/watch`, `/threat-brief`, `/market-pulse`, `/alerts`, `/correlate`, `/cross-check`, `/sentinel`, and `/watchlist` in Claude Code.
 
 ### `/sitrep` -- Daily Intelligence Brief
 
@@ -187,10 +210,15 @@ User types `/sitrep` in Claude Code:
 | File | Role |
 |------|------|
 | `.mcp.json` | Registers the MCP server with Claude Code |
-| `tools/mcp-server/index.mjs` | Server entry point, 19 tool registrations |
+| `tools/mcp-server/index.mjs` | Server entry point, 41 tool registrations |
 | `tools/mcp-server/sidecar-client.mjs` | Port/token discovery, HTTP client |
 | `tools/mcp-server/tools/aggregate.mjs` | 7 aggregate tool implementations |
 | `tools/mcp-server/tools/granular.mjs` | 12 granular tool implementations |
+| `tools/mcp-server/tools/foundation.mjs` | Raw querying, chaining, and snapshot comparison |
+| `tools/mcp-server/tools/intelligence.mjs` | Correlation, trend, and anomaly helpers |
+| `tools/mcp-server/tools/stateful.mjs` | Watchlist and alert-rule tools |
+| `tools/mcp-server/tools/analyst.mjs` | Analyst hypothesis, forecast, and feedback tools |
+| `tools/mcp-server/tools/help.mjs` | Tool help and usage guidance |
 | `src-tauri/sidecar/local-api-server.mjs` | Node.js sidecar, API proxy |
 | `src-tauri/src/main.rs` | Token generation, sidecar launch |
 | `.claude/commands/sitrep.md` | `/sitrep` slash command definition |

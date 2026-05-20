@@ -21,11 +21,12 @@ Crystal Ball currently ships:
 
 - `4` web variants
 - `3` desktop build targets (`full`, `tech`, `finance`)
-- `185` panels in the full variant (see [src/config/panels.ts](../src/config/panels.ts))
-- `70` map layers on the 3D globe (see [src/types/index.ts](../src/types/index.ts) `MapLayers`)
+- `264` panels in the full variant (see [src/config/panels.ts](../src/config/panels.ts))
+- `75` map layers on the 3D globe, with `31` enabled by default (see [src/config/panels.ts](../src/config/panels.ts) `FULL_MAP_LAYERS`)
 - `21` generated OpenAPI specs
 - `19` locale bundles
-- `49` desktop secret slots backed by the OS keychain
+- `68` desktop secret slots backed by the OS keychain
+- `41` MCP tools for local intelligence workflows
 
 Those numbers come from the current codebase, not aspirational copy.
 
@@ -54,6 +55,8 @@ Those numbers come from the current codebase, not aspirational copy.
 | --- | --- |
 | [MCP_PIPELINE.md](MCP_PIPELINE.md) | How Claude Code gathers intelligence from Crystal Ball via MCP -- full pipeline, auth, tools, slash commands |
 | [ALERTS_ENHANCEMENT_ROADMAP.md](ALERTS_ENHANCEMENT_ROADMAP.md) | Alert system architecture, unified inbox, correlation, and enhancement roadmap |
+| [reasoning-layer.md](reasoning-layer.md) | Analyst hypothesis generation, feedback, skepticism, metrics, and explainability |
+| [CSP_AUDIT.md](CSP_AUDIT.md) | Current content security posture, browser allowances, and hardening notes |
 
 ## API and Extension Docs
 

@@ -1,6 +1,6 @@
 # Crystal Ball
 
-Real-time global intelligence platform. Desktop app and web dashboard that aggregates 50+ live data feeds into 258 interactive panels, a 3D Cesium globe with 70 geospatial layers, an explainable algorithm intelligence layer (truth scoring + evidence graph + situation clustering + compound risk + forecast calibration + watchlist relevance), domain-aware shortage / weather / insight engines, AI-powered analysis, and an MCP server that lets Claude Code query it all from the terminal.
+Real-time global intelligence platform. Desktop app and web dashboard that aggregates 50+ live data feeds into 264 interactive panels, a 3D Cesium globe with 75 geospatial layers, an explainable algorithm intelligence layer (truth scoring + evidence graph + situation clustering + compound risk + forecast calibration + watchlist relevance), domain-aware shortage / weather / seismic / aviation / space / cyber engines, AI-powered analysis, SMS and desktop notification workflows, and an MCP server that lets Claude Code query it all from the terminal.
 
 [![Version](https://img.shields.io/github/v/release/bradleybond512/crystal-ball?label=version)](https://github.com/bradleybond512/crystal-ball/releases/latest)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
@@ -15,13 +15,13 @@ Real-time global intelligence platform. Desktop app and web dashboard that aggre
 
 ## What It Does
 
-Crystal Ball pulls data from ACLED, GDACS, NWS, USGS, CISA, ThreatFox, FRED, ADS-B, AIS, CelesTrak, and dozens of other sources, then presents it across a 2D MapLibre map, a 3D Cesium globe, 258 live panels, a unified alert inbox, and a correlation engine that connects events across domains. You can ask Claude Code `/sitrep` and get a synthesized intelligence brief from all active feeds without opening the app.
+Crystal Ball pulls data from ACLED, GDACS, NWS, USGS, CISA, ThreatFox, FRED, ADS-B, AIS, CelesTrak, NOAA, NASA, OpenSanctions, RIPE, SEC EDGAR, and dozens of other sources, then presents it across a 2D MapLibre map, a 3D Cesium globe, 264 live panels, a unified alert inbox, and a correlation engine that connects events across domains. You can ask Claude Code `/sitrep` and get a synthesized intelligence brief from all active feeds without opening the app.
 
 Four product variants share one codebase:
 
 | Variant | Panels | Focus |
 |---------|--------|-------|
-| `full` | 258 | Geopolitics, conflict, cyber, infrastructure, disasters, markets |
+| `full` | 264 | Geopolitics, conflict, cyber, infrastructure, disasters, markets |
 | `tech` | 35 | AI, startups, cloud, service health, developer ecosystems |
 | `finance` | 31 | Markets, forex, bonds, commodities, crypto, central banks |
 | `happy` | 10 | Positive news, progress, science, conservation |
@@ -32,7 +32,7 @@ Four product variants share one codebase:
 
 Full-viewport Cesium.js 3D globe. Press `G` or click the sidebar to enter.
 
-**70 data layers** -- military bases, nuclear facilities, earthquakes, active conflicts, airstrikes, cyclones, fires, vessels, flights, cyber threats, submarine cables, ports, satellites, ISS, weather radar, lightning, GPS jamming, trade routes, day/night terminator, and more. 26 enabled by default; toggle the rest from the layer bar.
+**75 data layers** -- military bases, nuclear facilities, earthquakes, active conflicts, airstrikes, cyclones, fires, vessels, flights, cyber threats, submarine cables, ports, satellites, ISS, weather radar, lightning, GPS jamming, trade routes, day/night terminator, and more. 31 enabled by default; toggle the rest from the layer bar.
 
 **HUD overlay** -- real-time UTC clock, threat level assessment (NOMINAL through CRITICAL), camera altitude and coordinates, sun phase (DAY/GOLDEN/CIVIL/NAUTICAL/ASTRO/NIGHT), local time at camera longitude, nearest hotspot with haversine distance, scrolling alert ticker, top-5 active alerts, and layer toggle controls.
 
@@ -67,8 +67,24 @@ A single inbox that ingests from every alert source -- NWS, GDACS, OREF (Israel 
 - **Correlation** -- the engine detects patterns across domains: market-news divergence, prediction-leads-news, keyword velocity spikes, compound threats, temporal chains, and silence anomalies.
 - **History** -- alerts persist in IndexedDB for 30 days. Search, filter, export. Activity log tracks every action for shift handoff.
 - **Custom rules** -- define your own alert triggers with condition/action pairs, or use built-in presets (earthquake watcher, storm chaser, conflict monitor).
+- **Traceability** -- the Alert Trace panel answers "why did I, or didn't I, get warned?" across receipt, normalization, geofence, quiet-hours, relevance, and notification routing.
+- **Delivery channels** -- native desktop notifications, voice alerts, iMessage / SMS command workflows, notification history, digest views, and operator mute / handoff controls.
 
 **Keyboard shortcuts:** `J/K` navigate, `A` acknowledge, `P` pin, `1`-`5` filter by severity.
+
+---
+
+## Mission Workflows
+
+Crystal Ball is organized around repeatable operator loops, not just feeds:
+
+- **Command Center** -- current posture, recent changes, mission ledger, closed-loop batches, replay fixtures, and time-to-warn tracking.
+- **Operator Mode** -- watch regions, mute controls, shift report export, alert trace, and dense layouts for repeated monitoring.
+- **Domain Superpowers** -- deep panels for maritime, aviation, seismic, space, and financial domains, each with domain-specific indicators, gaps, and actions.
+- **Local resilience** -- saved places, watched locations, local logistics, evacuation routing, family tracker, resource inventory, offline maps, and survival advisor.
+- **Cyber and infrastructure** -- ICS/OT dashboard, IOC manager, STIX/TAXII, Little Snitch enrichment, security posture, infrastructure risk matrix, grid and internet intelligence.
+- **Algorithm governance** -- safety cases, multi-agent review, model governance, backtest gates, shadow algorithms, outcome ledger, active learning, and repair recommendations.
+- **Briefing and export** -- intelligence briefing, what-changed digest, presentation export, copy/share packets, and MCP-readable diagnostics.
 
 ---
 
@@ -181,7 +197,7 @@ The HUD footer (`Cmd+Shift+A`) shows a live error counter (turns red when > 0). 
 
 ## MCP Server -- Claude Code Integration
 
-Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds and the in-app reasoning state. 30+ tools across 7 categories registered automatically when you open a session in this repo. Call `help()` for full documentation.
+Crystal Ball ships an MCP server that gives Claude Code direct access to all intelligence feeds and the in-app reasoning state. 41 tools across 8 categories registered automatically when you open a session in this repo. Call `help()` for full documentation.
 
 **Aggregate tools** (broad awareness):
 
@@ -205,13 +221,13 @@ Crystal Ball ships an MCP server that gives Claude Code direct access to all int
 
 **Analyst tools** (reasoning-layer read + write): `get_analyst_hypotheses` (top ranked hypotheses with thread enrichment), `get_mode_forecast` (per-domain pressure + advisories), `get_analyst_accuracy` (hit/miss ratio per kind), `get_hot_entities` (cross-cutting entities). Write-back via `submit_hypothesis_feedback`, `dismiss_hypothesis`, `run_skeptic_now` — these post to a sidecar queue the renderer drains every ~10s.
 
-**Diagnostic tools**: `get_reasoning_debug_log` (filterable ring buffer), `get_reasoning_metrics` (latency histograms + counters).
+**Diagnostic tools**: `check_feed_health` (sidecar + key feed preflight), `sitrep_bundle` (pre-filtered multi-domain bundle), `get_reasoning_debug_log` (filterable ring buffer), `get_reasoning_metrics` (latency histograms + counters).
 
 **Help**: `help()` returns full tool index; `help({ tool: "correlate" })` returns man page; `help({ topic: "getting-started" })` for guides; `help({ examples: "cross-domain" })` for cookbooks.
 
 **Slash commands** built on top of MCP tools:
 
-- `/sitrep` -- full-spectrum presidential-style daily intelligence brief. 3-phase intelligence cycle: parallel collection across all 30 tools, triage & enrichment on elevated signals, analyst-voice synthesis. Personalized to your home location, platforms, and watchlist tickers.
+- `/sitrep` -- full-spectrum presidential-style daily intelligence brief. 3-phase intelligence cycle: parallel collection across the MCP tool surface, triage & enrichment on elevated signals, analyst-voice synthesis. Personalized to your home location, platforms, and watchlist tickers.
 - `/sentinel` -- autonomous intelligence sweep: gathers sitrep, diffs against previous snapshot, checks watchlists and alert rules, writes alerts. Designed for scheduled runs every 30 minutes.
 - `/correlate` -- interactive cross-domain correlation analysis with trend context and follow-up suggestions
 - `/watchlist` -- manage watchlists and alert rules from the CLI
@@ -323,7 +339,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | Algorithm intelligence | Pure-deterministic scoring foundation — `intelligence/` (evidence graph, truth scoring, situation clustering, negative evidence, baseline deviation, compound risk, forecast calibration, watchlist relevance) |
 | Domain engines | `weather/` (NWS polygon matching, urgency ladder, Storm Mode, miss diagnostics), `shortage/` (8 commodity forecast models with seasonal multipliers), `insights/` (Big Event Detector, Confidence × Urgency Matrix, What Changed Digest, Action Briefs, Presentation Export) |
 | Reasoning  | Analyst HUD, hypothesis-threads / accuracy / dedupe / entities / skeptic / projection / ensemble, IDB reasoning_memory, local-first LLM adapter with daily budget |
-| MCP server | @modelcontextprotocol/sdk, 30+ tools (aggregate / granular / foundation / intelligence / stateful / analyst / diagnostic), sidecar port/token discovery |
+| MCP server | @modelcontextprotocol/sdk, 41 tools (aggregate / granular / foundation / intelligence / stateful / analyst / diagnostic / help), sidecar port/token discovery |
 | Correlation | Unified event schema, directional rules, temporal chains, situation clustering |
 | Alerts | Unified inbox, composite relevance scoring, IndexedDB persistence, custom rules |
 | Audio | Procedural Web Audio synthesis, per-layer spatial mixing |
@@ -336,12 +352,12 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Panels (full variant) | 258 | `src/config/panels.ts` |
-| Default panel inventory | `258 full / 35 tech / 31 finance / 10 happy` | `src/config/panels.ts` |
-| God's Vision map layers | 70 (26 on by default) | `src/types/index.ts` MapLayers |
+| Panels (full variant) | 264 | `src/config/panels.ts` |
+| Default panel inventory | `264 full / 35 tech / 31 finance / 10 happy` | `src/config/panels.ts` |
+| God's Vision map layers | 75 (31 on by default) | `src/config/panels.ts` FULL_MAP_LAYERS |
 | Panel categories | 19 | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
-| MCP tools | 30 | `tools/mcp-server/index.mjs` |
+| MCP tools | 41 | `tools/mcp-server/index.mjs` |
 | Supported secret keys | 68 | `src-tauri/src/main.rs` |
 | Foundation intelligence modules | 24 | `src/services/{intelligence,weather,insights,shortage}/` |
 | Foundation deterministic tests | 600+ | `npm run test:intelligence` + `test:weather` + `test:insights*` + `test:shortage` |
@@ -393,8 +409,8 @@ API keys are optional -- most panels degrade gracefully without them. Configure 
 | [docs/WEATHER_WARNING_REMEDIATION_PLAN.md](docs/WEATHER_WARNING_REMEDIATION_PLAN.md) | Storm-miss remediation — saved-place polygon matching, urgency ladder, Personal Storm Mode, weather miss diagnostics |
 | [docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md](docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md) | Big Event Detector, Confidence × Urgency Matrix, What Changed Digest, Action Briefs + Reaction Playbooks, Presentation Export |
 | [docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md](docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md) | Food + energy shortage forecast framework — 8 commodity models with seasonal multipliers and provenance-aware inputs |
-| [docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md](docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md) | Enhanced `/sitrep` design -- 3-phase intelligence cycle, personalization, all 30 MCP tools |
-| [docs/API_KEYS.md](docs/API_KEYS.md) | All 48 API keys -- categories, signup URLs, free/paid, plain-language descriptions |
+| [docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md](docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md) | Enhanced `/sitrep` design -- 3-phase intelligence cycle, personalization, full MCP tool surface |
+| [docs/API_KEYS.md](docs/API_KEYS.md) | All 68 API keys -- categories, signup URLs, free/paid, plain-language descriptions |
 | [docs/DESKTOP_CONFIGURATION.md](docs/DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, fallback behavior |
 | [docs/RELEASE_PACKAGING.md](docs/RELEASE_PACKAGING.md) | Desktop packaging and signing workflow |
 | [docs/MCP_PIPELINE.md](docs/MCP_PIPELINE.md) | How Claude Code gathers intelligence via MCP -- pipeline, auth, tools |

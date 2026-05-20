@@ -10,8 +10,19 @@ interface StoryMeta {
   type: 'ciianalysis' | 'crisisalert' | 'dailybrief' | 'marketfocus';
 }
 
-const BASE_URL = 'https://crystalball.app';
-const DEFAULT_IMAGE = 'https://crystalball.app/favico/og-image.png';
+const FALLBACK_BASE_URL = 'https://bradleybond512.github.io/crystal-ball';
+
+function getBaseUrl(): string {
+  if (typeof window === 'undefined') return FALLBACK_BASE_URL;
+
+  const { origin, pathname } = window.location;
+  const basePath = pathname.startsWith('/crystal-ball') ? '/crystal-ball' : '';
+  return `${origin}${basePath}`.replace(/\/$/, '');
+}
+
+function getDefaultImage(): string {
+  return `${getBaseUrl()}/favico/og-image.png`;
+}
 
 export function updateMetaTagsForStory(meta: StoryMeta): void {
   const { countryCode, countryName, ciiScore, ciiLevel, trend, type } = meta;
@@ -19,8 +30,9 @@ export function updateMetaTagsForStory(meta: StoryMeta): void {
   // Generate dynamic content
   const title = `${countryName} Intelligence Brief | Crystal Ball`;
   const description = generateDescription(ciiScore, ciiLevel, trend, type, countryName);
-  const storyUrl = `${BASE_URL}/api/story?c=${countryCode}&t=${type}`;
-  let imageUrl = `${BASE_URL}/api/og-story?c=${countryCode}&t=${type}`;
+  const baseUrl = getBaseUrl();
+  const storyUrl = `${baseUrl}/api/story?c=${countryCode}&t=${type}`;
+  let imageUrl = `${baseUrl}/api/og-story?c=${countryCode}&t=${type}`;
   if (ciiScore !== undefined) imageUrl += `&s=${ciiScore}`;
   if (ciiLevel) imageUrl += `&l=${ciiLevel}`;
 
@@ -47,20 +59,22 @@ export function updateMetaTagsForStory(meta: StoryMeta): void {
 }
 
 export function resetMetaTags(): void {
-  const defaultTitle = 'Crystal Ball - Global Situation with AI Insights';
-  const defaultDesc = 'AI-powered real-time global intelligence dashboard with live news, markets, military tracking, and geopolitical data.';
+  const baseUrl = getBaseUrl();
+  const defaultImage = getDefaultImage();
+  const defaultTitle = 'Crystal Ball - Global Intelligence Dashboard';
+  const defaultDesc = 'Real-time global intelligence dashboard with 264 panels, 75 geospatial layers, AI analysis, unified alerts, and cross-domain monitoring.';
 
   setMetaTag('title', defaultTitle);
   setMetaTag('description', defaultDesc);
-  setCanonicalLink(BASE_URL);
+  setCanonicalLink(`${baseUrl}/`);
   setMetaTag('og:title', defaultTitle);
   setMetaTag('og:description', defaultDesc);
-  setMetaTag('og:url', BASE_URL);
-  setMetaTag('og:image', DEFAULT_IMAGE);
+  setMetaTag('og:url', `${baseUrl}/`);
+  setMetaTag('og:image', defaultImage);
   setMetaTag('twitter:title', defaultTitle);
   setMetaTag('twitter:description', defaultDesc);
-  setMetaTag('twitter:url', BASE_URL);
-  setMetaTag('twitter:image', DEFAULT_IMAGE);
+  setMetaTag('twitter:url', `${baseUrl}/`);
+  setMetaTag('twitter:image', defaultImage);
 
   sessionStorage.removeItem('storyMeta');
 }
@@ -79,7 +93,9 @@ function generateDescription(
   }
 
   if (trend) {
- const trendText = trend === 'rising' ? 'trending upward' : (trend === 'falling' ? 'trending downward' : 'stable');
+ let trendText = 'stable';
+ if (trend === 'rising') trendText = 'trending upward';
+ if (trend === 'falling') trendText = 'trending downward';
  parts.push(`Risk is ${trendText}`);
   }
 
@@ -126,7 +142,7 @@ function setCanonicalLink(href: string): void {
 // Parse URL params for story pages
 export function parseStoryParams(url: URL): StoryMeta | null {
   const countryCode = url.searchParams.get('c');
-  const type = url.searchParams.get('t') || 'ciianalysis';
+  const type = url.searchParams.get('t') ?? 'ciianalysis';
 
   if (!countryCode || !/^[A-Z]{2,3}$/i.test(countryCode)) return null;
 
@@ -146,7 +162,7 @@ export function parseStoryParams(url: URL): StoryMeta | null {
 
   return {
  countryCode: countryCode.toUpperCase(),
- countryName: countryNames[countryCode.toUpperCase()] || countryCode.toUpperCase(),
+ countryName: countryNames[countryCode.toUpperCase()] ?? countryCode.toUpperCase(),
  type: safeType,
   };
 }

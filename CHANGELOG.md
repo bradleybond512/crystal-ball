@@ -4,6 +4,21 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.25.13] - 2026-05-19
+
+### Added
+
+- Energy/infrastructure mission bridges: power outages (NERC/EIA tiers), pipeline disruptions, refinery incidents (62 tests)
+- Conflict domain mission bridges: ACLED fatalities (with event-type floor), armed group movements, ceasefire violations (68 tests)
+
+## [2.25.12] - 2026-05-19
+
+### Added
+
+- Counterfactual replay engine rewrite: spec-compliant domain-override engine
+- Mode system visual states: Normal/Elevated/Crisis/Blackout CSS tokens + ModeManager
+- Relay CORS security tightening: owner-anchored patterns + bypass flag (R2-SEC-006/007)
+
 ## [2.25.11] - 2026-05-19
 
 ### Added

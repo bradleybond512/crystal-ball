@@ -1,33 +1,33 @@
 /* eslint-disable sonarjs/no-nested-template-literals */
 /**
- * Counterfactual Replay Panel — Phase 4 "what if?" UI.
+ * Counterfactual Replay Panel — "what if?" scenario UI.
  *
  * Two-column layout: scenario list on the left, result view on the
- * right. New Scenario button opens an inline form that picks a built-in
- * template + a Situation observation as the baseline. Re-running an
- * existing scenario produces a fresh ReplayResult and updates the
- * right-hand pane.
+ * right. New Scenario button opens an inline form that picks a
+ * Situation as the base snapshot and one domain override. Running a
+ * scenario applies the overrides to the snapshot and computes a
+ * cascade score with narrative summary.
  */
 
 import { Panel } from './Panel';
 import {
-  BUILT_IN_REPLAY_TEMPLATES,
-  getCounterfactualReplayEngine,
-  type ReplayModification,
+  CounterfactualReplayEngine,
+  type CounterfactualScenario,
+  type DomainOverride,
   type ReplayResult,
-  type ReplayScenario,
 } from '@/services/intelligence/counterfactual-replay';
-import { getSituationStoreV2, type Situation } from '@/services/intelligence/situation-store-v2';
+import { getSituationStoreV2 } from '@/services/intelligence/situation-store-v2';
 import { escapeHtml } from '@/utils/sanitize';
 
 const REFRESH_MS = 30_000;
 
 interface FormState {
   open: boolean;
-  observationId: string | null;
-  templateId: string;
   name: string;
-  description: string;
+  baseSnapshotId: string;
+  domain: string;
+  severityDelta: number;
+  eventCountDelta: number;
   error: string | null;
 }
 
@@ -38,15 +38,15 @@ interface PanelState {
 
 export class CounterfactualReplayPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
-  private unsub: (() => void) | null = null;
   private state: PanelState = {
     selectedScenarioId: null,
     form: {
       open: false,
-      observationId: null,
-      templateId: BUILT_IN_REPLAY_TEMPLATES[0]!.id,
       name: '',
-      description: '',
+      baseSnapshotId: '',
+      domain: '',
+      severityDelta: 0.5,
+      eventCountDelta: 0,
       error: null,
     },
   };
@@ -58,7 +58,7 @@ export class CounterfactualReplayPanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Phase 4 "what if?" replay. Modify the severity, domain, location, magnitude, or confidence on a past observation and re-score it through a deterministic local scorer to see how brittle the original conclusion was. Built-in templates: severity downgrade, source reduction, ~1000 km location shift, -6 h timing shift.',
+        '"What if?" scenario engine. Pick a historical snapshot, apply domain overrides (severity delta, event count delta), and run to compute a cascade score and narrative summary.',
     });
     this.start();
   }
@@ -66,7 +66,6 @@ export class CounterfactualReplayPanel extends Panel {
   private start(): void {
     this.render();
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
-    this.unsub = getCounterfactualReplayEngine().subscribe(() => this.render());
   }
 
   public dispose(): void {
@@ -74,40 +73,31 @@ export class CounterfactualReplayPanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    if (this.unsub) {
-      this.unsub();
-      this.unsub = null;
-    }
   }
 
-  private collectObservations(): { situation: Situation; observationId: string; title: string }[] {
-    const out: { situation: Situation; observationId: string; title: string }[] = [];
-    for (const s of getSituationStoreV2().list()) {
-      for (const o of s.observations) {
-        out.push({ situation: s, observationId: o.id, title: o.title || o.id });
-      }
-    }
-    return out;
+  private snapshotOptions(): { id: string; label: string }[] {
+    return getSituationStoreV2().list().map((s) => ({
+      id: s.id,
+      label: `${s.domain} — ${s.id.slice(0, 8)}`,
+    }));
   }
 
   private render(): void {
-    const engine = getCounterfactualReplayEngine();
-    const scenarios = engine.getAllScenarios();
+    const engine = CounterfactualReplayEngine.getInstance();
+    const scenarios = engine.listScenarios();
     this.setCount(scenarios.length);
 
     const selected = this.state.selectedScenarioId
       ? scenarios.find((s) => s.id === this.state.selectedScenarioId)
       : scenarios[scenarios.length - 1];
     const selectedId = selected?.id ?? null;
-    const results = selectedId ? engine.getResults(selectedId) : [];
-    const latestResult = results[results.length - 1];
 
     const html = `<div style="padding:12px;display:flex;flex-direction:column;gap:12px;">
       ${this.renderToolbar()}
       ${this.state.form.open ? this.renderNewScenarioForm() : ''}
       <div style="display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:12px;align-items:flex-start;">
         ${renderScenarioList(scenarios, selectedId)}
-        ${renderResultPane(selected, latestResult, results.length)}
+        ${renderResultPane(selected)}
       </div>
     </div>`;
     this.setContent(html);
@@ -118,38 +108,39 @@ export class CounterfactualReplayPanel extends Panel {
     const label = this.state.form.open ? 'Cancel' : '+ New Scenario';
     return `<div style="display:flex;align-items:center;gap:8px;">
       <button id="cfReplayNewBtn" style="padding:6px 12px;background:var(--accent,#4a9eff);color:#fff;border:0;border-radius:3px;cursor:pointer;font-weight:600;font-size:12px;">${label}</button>
-      <span style="font-size:11px;color:var(--text-secondary,#aaa);">${BUILT_IN_REPLAY_TEMPLATES.length} built-in templates · scoring is self-contained (no live-pipeline side effects)</span>
+      <span style="font-size:11px;color:var(--text-secondary,#aaa);">cascade score = mean |severityDelta| across overrides</span>
     </div>`;
   }
 
   private renderNewScenarioForm(): string {
-    const observations = this.collectObservations();
-    const obsOptions = observations.length === 0
-      ? `<option value="">No observations available — ingest a Situation first</option>`
-      : observations.map((o) => `<option value="${escapeHtml(o.observationId)}"${o.observationId === this.state.form.observationId ? ' selected' : ''}>${escapeHtml(o.title)} · ${escapeHtml(o.situation.domain)}</option>`).join('');
-    const templateOptions = BUILT_IN_REPLAY_TEMPLATES.map((t) =>
-      `<option value="${escapeHtml(t.id)}"${t.id === this.state.form.templateId ? ' selected' : ''}>${escapeHtml(t.label)} — ${escapeHtml(t.description)}</option>`,
-    ).join('');
+    const snapshots = this.snapshotOptions();
+    const snapOptions = snapshots.length === 0
+      ? `<option value="">No situations available yet</option>`
+      : snapshots.map((s) => `<option value="${escapeHtml(s.id)}"${s.id === this.state.form.baseSnapshotId ? ' selected' : ''}>${escapeHtml(s.label)}</option>`).join('');
     const errorBlock = this.state.form.error
       ? `<div style="color:#f44336;font-size:11px;margin-top:6px;">${escapeHtml(this.state.form.error)}</div>`
       : '';
     return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:10px;display:flex;flex-direction:column;gap:8px;">
       <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">New scenario</div>
       <label style="display:flex;flex-direction:column;gap:4px;font-size:11px;">
-        <span style="color:var(--text-secondary,#aaa);">Baseline observation</span>
-        <select id="cfReplayObsSelect" style="padding:4px 6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">${obsOptions}</select>
+        <span style="color:var(--text-secondary,#aaa);">Name</span>
+        <input id="cfReplayName" type="text" value="${escapeHtml(this.state.form.name)}" placeholder="e.g. No cyber threat" style="padding:4px 6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">
       </label>
       <label style="display:flex;flex-direction:column;gap:4px;font-size:11px;">
-        <span style="color:var(--text-secondary,#aaa);">Template</span>
-        <select id="cfReplayTemplateSelect" style="padding:4px 6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">${templateOptions}</select>
+        <span style="color:var(--text-secondary,#aaa);">Base snapshot (situation)</span>
+        <select id="cfReplaySnapSelect" style="padding:4px 6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">${snapOptions}</select>
       </label>
       <label style="display:flex;flex-direction:column;gap:4px;font-size:11px;">
-        <span style="color:var(--text-secondary,#aaa);">Name (optional)</span>
-        <input id="cfReplayName" type="text" value="${escapeHtml(this.state.form.name)}" placeholder="defaults to template label" style="padding:4px 6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">
+        <span style="color:var(--text-secondary,#aaa);">Domain override</span>
+        <input id="cfReplayDomain" type="text" value="${escapeHtml(this.state.form.domain)}" placeholder="e.g. cyber, weather" style="padding:4px 6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">
       </label>
       <label style="display:flex;flex-direction:column;gap:4px;font-size:11px;">
-        <span style="color:var(--text-secondary,#aaa);">Description (optional)</span>
-        <input id="cfReplayDesc" type="text" value="${escapeHtml(this.state.form.description)}" placeholder="defaults to template description" style="padding:4px 6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">
+        <span style="color:var(--text-secondary,#aaa);">Severity delta (-1 to 1)</span>
+        <input id="cfReplaySevDelta" type="number" min="-1" max="1" step="0.1" value="${this.state.form.severityDelta}" style="padding:4px 6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:11px;">
+        <span style="color:var(--text-secondary,#aaa);">Event count delta</span>
+        <input id="cfReplayEvtDelta" type="number" step="1" value="${this.state.form.eventCountDelta}" style="padding:4px 6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:11px;">
       </label>
       <div>
         <button id="cfReplayCreateBtn" style="padding:6px 12px;background:#4caf50;color:#fff;border:0;border-radius:3px;cursor:pointer;font-weight:600;font-size:12px;">Create & Run</button>
@@ -166,17 +157,20 @@ export class CounterfactualReplayPanel extends Panel {
         this.state.form.error = null;
         this.render();
       });
-      root.querySelector<HTMLSelectElement>('#cfReplayObsSelect')?.addEventListener('change', (e) => {
-        this.state.form.observationId = (e.target as HTMLSelectElement).value;
-      });
-      root.querySelector<HTMLSelectElement>('#cfReplayTemplateSelect')?.addEventListener('change', (e) => {
-        this.state.form.templateId = (e.target as HTMLSelectElement).value;
+      root.querySelector<HTMLSelectElement>('#cfReplaySnapSelect')?.addEventListener('change', (e) => {
+        this.state.form.baseSnapshotId = (e.target as HTMLSelectElement).value;
       });
       root.querySelector<HTMLInputElement>('#cfReplayName')?.addEventListener('input', (e) => {
         this.state.form.name = (e.target as HTMLInputElement).value;
       });
-      root.querySelector<HTMLInputElement>('#cfReplayDesc')?.addEventListener('input', (e) => {
-        this.state.form.description = (e.target as HTMLInputElement).value;
+      root.querySelector<HTMLInputElement>('#cfReplayDomain')?.addEventListener('input', (e) => {
+        this.state.form.domain = (e.target as HTMLInputElement).value;
+      });
+      root.querySelector<HTMLInputElement>('#cfReplaySevDelta')?.addEventListener('input', (e) => {
+        this.state.form.severityDelta = Number((e.target as HTMLInputElement).value);
+      });
+      root.querySelector<HTMLInputElement>('#cfReplayEvtDelta')?.addEventListener('input', (e) => {
+        this.state.form.eventCountDelta = Number((e.target as HTMLInputElement).value);
       });
       root.querySelector<HTMLButtonElement>('#cfReplayCreateBtn')?.addEventListener('click', () => this.handleCreate());
 
@@ -194,40 +188,30 @@ export class CounterfactualReplayPanel extends Panel {
   }
 
   private handleCreate(): void {
-    const obsId = this.state.form.observationId;
-    if (!obsId) {
-      this.state.form.error = 'Pick a baseline observation first.';
-      this.render();
-      return;
-    }
-    const observations = this.collectObservations();
-    const target = observations.find((o) => o.observationId === obsId);
-    if (!target) {
-      this.state.form.error = 'Selected observation no longer available.';
-      this.render();
-      return;
-    }
-    const observation = target.situation.observations.find((o) => o.id === obsId);
-    if (!observation) {
-      this.state.form.error = 'Observation lookup failed.';
-      this.render();
-      return;
-    }
-    const engine = getCounterfactualReplayEngine();
     const name = this.state.form.name.trim();
-    const description = this.state.form.description.trim();
-    const scenario = engine.createFromTemplate(
-      this.state.form.templateId,
-      observation,
-      name === '' ? undefined : name,
-      description === '' ? undefined : description,
-    );
-    if (!scenario) {
-      this.state.form.error = 'Unknown template id.';
+    if (!name) {
+      this.state.form.error = 'Enter a scenario name.';
       this.render();
       return;
     }
-    engine.runReplay(scenario.id);
+    const domain = this.state.form.domain.trim();
+    if (!domain) {
+      this.state.form.error = 'Enter a domain for the override.';
+      this.render();
+      return;
+    }
+    const snapshots = this.snapshotOptions();
+    const baseSnapshotId = this.state.form.baseSnapshotId || (snapshots[0]?.id ?? 'manual');
+    const overrides: DomainOverride[] = [
+      {
+        domain,
+        severityDelta: this.state.form.severityDelta,
+        eventCountDelta: this.state.form.eventCountDelta,
+      },
+    ];
+    const engine = CounterfactualReplayEngine.getInstance();
+    const scenario = engine.createScenario(name, baseSnapshotId, overrides);
+    engine.runScenario(scenario.id);
     this.state.selectedScenarioId = scenario.id;
     this.state.form.open = false;
     this.state.form.error = null;
@@ -237,22 +221,23 @@ export class CounterfactualReplayPanel extends Panel {
   private handleRerun(): void {
     const id = this.state.selectedScenarioId;
     if (!id) return;
-    getCounterfactualReplayEngine().runReplay(id);
+    CounterfactualReplayEngine.getInstance().runScenario(id);
     this.render();
   }
 }
 
-function renderScenarioList(scenarios: readonly ReplayScenario[], selectedId: string | null): string {
+function renderScenarioList(scenarios: readonly CounterfactualScenario[], selectedId: string | null): string {
   if (scenarios.length === 0) {
-    return `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No scenarios yet. Create one with a baseline observation and a built-in template.</div>`;
+    return `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No scenarios yet. Create one above.</div>`;
   }
   const items = [...scenarios].sort((a, b) => b.createdAt - a.createdAt).map((s) => {
     const isSelected = s.id === selectedId;
     const bg = isSelected ? 'var(--accent,#4a9eff)26' : 'transparent';
     const borderColor = isSelected ? 'var(--accent,#4a9eff)' : 'var(--border-subtle,#333)';
+    const score = s.result ? ` · ${s.result.cascadeScore.toFixed(2)}` : '';
     return `<li data-cf-scenario-id="${escapeHtml(s.id)}" style="cursor:pointer;padding:6px 8px;border:1px solid ${borderColor};border-radius:3px;background:${bg};display:flex;flex-direction:column;gap:2px;">
       <span style="font-size:12px;font-weight:600;">${escapeHtml(s.name)}</span>
-      <span style="font-size:10px;color:var(--text-secondary,#aaa);">${escapeHtml(s.baselineObservation.domain)} · ${s.modifications.length} mod${s.modifications.length === 1 ? '' : 's'}</span>
+      <span style="font-size:10px;color:var(--text-secondary,#aaa);">${s.overrides.length} override${s.overrides.length === 1 ? '' : 's'}${score}</span>
     </li>`;
   }).join('');
   return `<div>
@@ -261,38 +246,33 @@ function renderScenarioList(scenarios: readonly ReplayScenario[], selectedId: st
   </div>`;
 }
 
-function deltaColor(delta: number): string {
-  if (delta > 0.05) return '#f44336';
-  if (delta < -0.05) return '#4caf50';
-  return '#9e9e9e';
+function cascadeColor(score: number): string {
+  if (score > 0.7) return '#f44336';
+  if (score > 0.4) return '#ff9800';
+  if (score > 0.1) return '#ffeb3b';
+  return '#4caf50';
 }
 
-function renderResultPane(
-  scenario: ReplayScenario | undefined,
-  latestResult: ReplayResult | undefined,
-  resultCount: number,
-): string {
+function renderResultPane(scenario: CounterfactualScenario | undefined): string {
   if (!scenario) {
-    return `<div style="font-size:12px;color:var(--text-secondary,#aaa);">Select a scenario to see the replay outcome.</div>`;
+    return `<div style="font-size:12px;color:var(--text-secondary,#aaa);">Select a scenario to see the outcome.</div>`;
   }
-  const baselineSummary = `${scenario.baselineObservation.domain} · ${scenario.baselineObservation.severity}`;
-  const modBlock = scenario.modifications.map((m) => renderModification(m)).join('');
-  const resultBlock = latestResult
-    ? renderResult(latestResult, resultCount)
-    : `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No replay results yet — click Re-run.</div>`;
+  const overrideBlock = scenario.overrides.map((o) => renderOverride(o)).join('');
+  const resultBlock = scenario.result
+    ? renderResult(scenario.result)
+    : `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No result yet — click Re-run.</div>`;
   return `<div style="display:flex;flex-direction:column;gap:10px;">
     <div>
       <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">${escapeHtml(scenario.name)}</div>
-      <div style="font-size:11px;color:var(--text-primary,#fff);">${escapeHtml(scenario.description)}</div>
-      <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:4px;">Baseline · ${escapeHtml(baselineSummary)}</div>
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);">Snapshot: ${escapeHtml(scenario.baseSnapshotId)}</div>
     </div>
     <div>
-      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Modifications</div>
-      <div style="display:flex;flex-direction:column;gap:4px;">${modBlock}</div>
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Overrides</div>
+      <div style="display:flex;flex-direction:column;gap:4px;">${overrideBlock}</div>
     </div>
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">Latest result</div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">Result</div>
         <button id="cfReplayRunBtn" style="padding:4px 10px;background:transparent;color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;font-size:11px;">Re-run</button>
       </div>
       ${resultBlock}
@@ -300,35 +280,21 @@ function renderResultPane(
   </div>`;
 }
 
-function renderModification(m: ReplayModification): string {
+function renderOverride(o: DomainOverride): string {
+  const sign = o.severityDelta >= 0 ? '+' : '';
   return `<div style="font-size:11px;border-left:2px solid var(--border-subtle,#333);padding:4px 8px;background:var(--surface-2,#1a1a1a);border-radius:0 3px 3px 0;">
-    <span style="font-family:ui-monospace,monospace;color:var(--text-primary,#fff);">${escapeHtml(m.field)}</span>
-    <span style="color:var(--text-secondary,#aaa);"> · ${escapeHtml(String(m.originalValue))} → <span style="color:var(--text-primary,#fff);">${escapeHtml(String(m.modifiedValue))}</span></span>
-    <div style="font-size:10px;color:var(--text-secondary,#aaa);margin-top:2px;font-style:italic;">${escapeHtml(m.rationale)}</div>
+    <span style="font-family:ui-monospace,monospace;color:var(--text-primary,#fff);">${escapeHtml(o.domain)}</span>
+    <span style="color:var(--text-secondary,#aaa);"> severity ${sign}${o.severityDelta.toFixed(2)} · events ${o.eventCountDelta >= 0 ? '+' : ''}${o.eventCountDelta}</span>
   </div>`;
 }
 
-function renderResult(r: ReplayResult, runCount: number): string {
-  const color = deltaColor(r.deltaScore);
-  const deltaStr = (r.deltaScore >= 0 ? '+' : '') + r.deltaScore.toFixed(3);
+function renderResult(r: ReplayResult): string {
+  const color = cascadeColor(r.cascadeScore);
   return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px;display:flex;flex-direction:column;gap:8px;">
-    <div style="display:flex;align-items:center;gap:12px;font-size:12px;font-family:ui-monospace,monospace;">
-      <div style="flex:1;">
-        <span style="color:var(--text-secondary,#aaa);">Original</span>
-        <div style="font-weight:600;">${escapeHtml(r.originalOutcome)}</div>
-      </div>
-      <div style="font-size:18px;color:${color};">→</div>
-      <div style="flex:1;text-align:right;">
-        <span style="color:var(--text-secondary,#aaa);">Replayed</span>
-        <div style="font-weight:600;">${escapeHtml(r.replayedOutcome)}</div>
-      </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+      <span style="font-weight:700;color:${color};padding:2px 8px;border-radius:3px;background:${color}26;">cascade ${r.cascadeScore.toFixed(2)}</span>
+      <span style="font-size:10px;color:var(--text-secondary,#aaa);">${r.affectedDomains.map((d) => escapeHtml(d)).join(' · ')}</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;font-size:11px;">
-      <span style="font-weight:700;color:${color};padding:2px 6px;border-radius:3px;background:${color}26;">Δ ${deltaStr}</span>
-      <span style="color:var(--text-secondary,#aaa);">across ${runCount} run${runCount === 1 ? '' : 's'}</span>
-    </div>
-    <ul style="margin:0;padding-left:18px;font-size:11px;line-height:1.5;color:var(--text-primary,#fff);">
-      ${r.insights.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}
-    </ul>
+    <div style="font-size:11px;color:var(--text-primary,#fff);line-height:1.5;">${escapeHtml(r.narrativeSummary)}</div>
   </div>`;
 }

@@ -1,18 +1,19 @@
 # Crystal Ball
 
-> Real-time global intelligence dashboard — AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface.
+> Real-time global intelligence dashboard — AI-powered news aggregation, geopolitical monitoring, unified alerts, and infrastructure tracking in a single situational awareness interface.
 
-Crystal Ball is an open-source (AGPL-3.0) intelligence platform that aggregates 150+ news feeds, 35+ interactive map layers, and multiple AI models into a single dashboard. It runs as a web app, installable PWA, and native desktop application (Tauri) for macOS, Windows, and Linux.
+Crystal Ball is an open-source (AGPL-3.0) intelligence platform that aggregates 50+ live data feeds, 264 interactive panels, 75 geospatial layers, and multiple AI models into a single dashboard. It runs as a web app, installable PWA, and native desktop application (Tauri) for macOS, Windows, and Linux.
 
-A single codebase produces three specialized variants — geopolitical, technology, and finance — each with distinct feeds, panels, map layers, and branding. The tri-variant architecture uses build-time selection via the VITE_VARIANT environment variable, with runtime switching available via the header bar. Each variant tree-shakes unused data files — the finance build excludes military base coordinates and APT group data, while the geopolitical build excludes stock exchange listings.
+A single codebase produces four specialized variants — full, technology, finance, and happy — each with distinct feeds, panels, map layers, and branding. The variant architecture uses build-time selection via the VITE_VARIANT environment variable, with runtime switching available via the header bar. Each variant tree-shakes unused data files — the finance build excludes military base coordinates and APT group data, while the full build excludes finance-only UI chrome.
 
 The project is built with TypeScript, Vite, MapLibre GL JS, deck.gl, D3.js, and Tauri. All intelligence analysis (clustering, instability scoring, surge detection) runs client-side in the browser — no backend compute dependency for core intelligence. A browser-side ML pipeline (Transformers.js) provides NER and sentiment analysis without server dependency.
 
 ## Live Instances
 
-- [Crystal Ball](https://crystalball.app): Geopolitics, military, conflicts, infrastructure — ~25 RSS categories, 44 panels, military bases, nuclear facilities, hotspots
-- [Tech Monitor](https://tech.crystalball.app): Startups, AI/ML, cloud, cybersecurity — ~20 RSS categories, 31 panels, tech HQs, cloud regions, startup hubs
-- [Finance Monitor](https://finance.crystalball.app): Global markets, trading, central banks, Gulf FDI — ~18 RSS categories, 30 panels, stock exchanges, central banks, Gulf investments
+- [GitHub Pages Web App](https://bradleybond512.github.io/crystal-ball/): Full web build
+- [Crystal Ball](https://crystalball.app): Geopolitics, military, conflicts, infrastructure — 264 panels, military bases, nuclear facilities, hotspots
+- [Tech Monitor](https://tech.crystalball.app): Startups, AI/ML, cloud, cybersecurity — 35 panels, tech HQs, cloud regions, startup hubs
+- [Finance Monitor](https://finance.crystalball.app): Global markets, trading, central banks, Gulf FDI — 31 panels, stock exchanges, central banks, Gulf investments
 
 ## Documentation
 
@@ -154,13 +155,14 @@ The project is built with TypeScript, Vite, MapLibre GL JS, deck.gl, D3.js, and 
 
 English (en), French (fr), Spanish (es), German (de), Italian (it), Polish (pl), Portuguese (pt), Dutch (nl), Swedish (sv), Russian (ru), Arabic (ar) with RTL support, Chinese (zh), Japanese (ja), Turkish (tr). Language bundles are lazy-loaded on demand. Localized news feeds load region-specific RSS sources based on language preference. AI translation available for cross-language intelligence gathering.
 
-## Tri-Variant Build System
+## Variant Build System
 
-A single codebase produces three specialized dashboards controlled by the VITE_VARIANT environment variable:
+A single codebase produces four specialized dashboards controlled by the VITE_VARIANT environment variable:
 
-- **Crystal Ball** (crystalball.app): ~25 RSS categories, 44 panels. Focus: geopolitics, military, conflicts, infrastructure security. Unique layers: military bases, nuclear facilities, hotspots, APT groups, spaceports, critical minerals
-- **Tech Monitor** (tech.crystalball.app): ~20 RSS categories, 31 panels. Focus: AI/ML, startups, cybersecurity, cloud. Unique layers: tech HQs, cloud regions, startup hubs, accelerators, tech events
-- **Finance Monitor** (finance.crystalball.app): ~18 RSS categories, 30 panels. Focus: global markets, trading, central banks, Gulf FDI. Unique layers: 92 stock exchanges, 19 financial centers, 13 central banks, 10 commodity hubs, 64 Gulf FDI investments
+- **Crystal Ball** (crystalball.app): 264 panels. Focus: geopolitics, military, conflicts, infrastructure security, cyber, weather, seismic, aviation, space, alerts, and AI reasoning. Unique layers: military bases, nuclear facilities, hotspots, APT groups, spaceports, critical minerals
+- **Tech Monitor** (tech.crystalball.app): 35 panels. Focus: AI/ML, startups, cybersecurity, cloud. Unique layers: tech HQs, cloud regions, startup hubs, accelerators, tech events
+- **Finance Monitor** (finance.crystalball.app): 31 panels. Focus: global markets, trading, central banks, Gulf FDI. Unique layers: 92 stock exchanges, 19 financial centers, 13 central banks, 10 commodity hubs, 64 Gulf FDI investments
+- **Happy Monitor** (happy.crystalball.app): 10 panels. Focus: positive news, progress, science, conservation, and constructive global signals
 
 Build-time: Vite HTML plugin transforms meta tags, Open Graph data, PWA manifest, and JSON-LD structured data. Each variant tree-shakes unused data files. Runtime: variant selector in header navigates between deployed domains (web) or sets localStorage preference (desktop).
 
@@ -202,7 +204,7 @@ Native desktop app built with Tauri (Rust + Node.js sidecar). The sidecar mirror
 
 ## Key Features Summary
 
-- Interactive 3D WebGL globe with 35+ toggleable data layers and smart clustering
+- Interactive 3D WebGL globe with 75 toggleable data layers and smart clustering
 - AI-synthesized world briefs with hybrid threat classification
 - Country Instability Index for 22 nations with real-time scoring
 - 9-theater strategic posture assessment
@@ -211,7 +213,7 @@ Native desktop app built with Tauri (Rust + Node.js sidecar). The sidecar mirror
 - 8 live news streams and 19 live webcams from geopolitical hotspots
 - 7-signal macro market radar with BUY/CASH verdict
 - Country brief pages with exportable intelligence dossiers (JSON, CSV, PNG)
-- Multilingual UI in 14 languages with RTL support
+- Multilingual UI with 19 locale bundles and RTL support
 - Prediction market integration (Polymarket) with 3-tier JA3 bypass
 - Temporal baseline anomaly detection using Welford's algorithm
 - Dual-source protest tracking (ACLED + GDELT) with regime-aware scoring
@@ -221,6 +223,7 @@ Native desktop app built with Tauri (Rust + Node.js sidecar). The sidecar mirror
 - Historical playback via IndexedDB snapshots with time slider
 - Dark/light theme, panel reordering, ultra-wide layout (2000px+)
 - Feature toggles for 14 runtime data source controls
+- MCP server with 41 tools for Claude Code intelligence workflows
 
 ## Optional
 

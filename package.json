@@ -1,7 +1,7 @@
 {
   "name": "crystal-ball",
   "private": true,
-  "version": "2.25.4",
+  "version": "2.25.5",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
@@ -229,7 +229,7 @@
     "node": ">=22.0.0 <23.0.0"
   },
   "author": "Bradley Bond (https://github.com/bradleybond512)",
-  "homepage": "https://github.com/bradleybond512/crystal-ball#readme",
+  "homepage": "https://bradleybond512.github.io/crystal-ball/",
   "repository": {
     "type": "git",
     "url": "https://github.com/bradleybond512/crystal-ball"

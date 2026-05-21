@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Crystal Ball — global intelligence">
+  <title>Crystal Ball</title>
+
+  <!-- ── Palette ──────────────────────────────────────────────────────
+       deep navy   #0a1628 — background
+       cyan accent #00d4ff — radar rings + sphere highlight
+       amber glow  #f59e0b — early-warning marker
+       Designed to read at 16px → 512px. Stroke weights are ≥ 2 % of the
+       canvas so they survive aggressive downsampling. -->
+
+  <defs>
+    <!-- Background radial: subtle vignette around the orb so the bg
+         pushes the sphere forward without competing with the cyan ring. -->
+    <radialGradient id="bg" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#0e2240"/>
+      <stop offset="100%" stop-color="#0a1628"/>
+    </radialGradient>
+
+    <!-- Sphere body: cool navy core with a cyan highlight on the upper
+         left so the orb reads as 3-D without losing contrast at 16px. -->
+    <radialGradient id="orb" cx="40%" cy="38%" r="62%">
+      <stop offset="0%"  stop-color="#1a3a6b"/>
+      <stop offset="60%" stop-color="#0d2447"/>
+      <stop offset="100%" stop-color="#091a35"/>
+    </radialGradient>
+
+    <!-- Specular highlight blob (top-left of sphere). -->
+    <radialGradient id="specular" cx="35%" cy="32%" r="22%">
+      <stop offset="0%"  stop-color="#7ee7ff" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#7ee7ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Soft glow around the active radar dot. -->
+    <radialGradient id="amberGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"  stop-color="#f59e0b" stop-opacity="0.95"/>
+      <stop offset="70%" stop-color="#f59e0b" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Rounded-square background. radius=92 matches macOS Big Sur+ icon
+       corner curvature (≈18% of side) so the icon sits comfortably in
+       the Dock alongside system icons. -->
+  <rect width="512" height="512" rx="92" ry="92" fill="url(#bg)"/>
+
+  <!-- Radar rings — three concentric circles, each 4 % stroke. Pure
+       strokes (no fills) so the orb shows through cleanly. -->
+  <g fill="none" stroke="#00d4ff" stroke-linecap="round">
+    <circle cx="256" cy="256" r="208" stroke-width="6"  stroke-opacity="0.18"/>
+    <circle cx="256" cy="256" r="170" stroke-width="8"  stroke-opacity="0.28"/>
+    <circle cx="256" cy="256" r="132" stroke-width="10" stroke-opacity="0.42"/>
+  </g>
+
+  <!-- Radar sweep wedge (cyan triangle), implies motion / scanning. -->
+  <path d="M256 256 L256 88 A168 168 0 0 1 405 187 Z"
+        fill="#00d4ff" fill-opacity="0.18"/>
+
+  <!-- Crystal sphere — the centerpiece. -->
+  <circle cx="256" cy="256" r="108" fill="url(#orb)"/>
+
+  <!-- Latitude / longitude wires on the sphere — the "globe" cue.
+       Drawn as elliptical paths so they fit the orb's perspective. -->
+  <g fill="none" stroke="#00d4ff" stroke-width="3" stroke-opacity="0.55">
+    <!-- Equator -->
+    <ellipse cx="256" cy="256" rx="108" ry="28"/>
+    <!-- Mid-latitude -->
+    <ellipse cx="256" cy="256" rx="100" ry="60" stroke-opacity="0.40"/>
+    <!-- Primary meridian -->
+    <line x1="256" y1="148" x2="256" y2="364"/>
+    <!-- Off-meridian tilt -->
+    <ellipse cx="256" cy="256" rx="40" ry="108" stroke-opacity="0.40"/>
+  </g>
+
+  <!-- Sphere highlight (lit from upper left). -->
+  <circle cx="256" cy="256" r="108" fill="url(#specular)"/>
+
+  <!-- Amber early-warning marker on the equator — the "intelligence
+       signal" that's currently flagged. Glow + solid pip. -->
+  <circle cx="346" cy="256" r="22" fill="url(#amberGlow)"/>
+  <circle cx="346" cy="256" r="9"  fill="#f59e0b"/>
+
+  <!-- Crisp outer ring around the sphere so the silhouette reads at
+       16px even when internal gradients collapse. -->
+  <circle cx="256" cy="256" r="108" fill="none" stroke="#00d4ff" stroke-width="4" stroke-opacity="0.85"/>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Crystal Ball">
+  <title>Crystal Ball</title>
+
+  <!-- Favicon variant of src-tauri/icons/icon.svg.
+       Same palette + same silhouette, but:
+       - no rounded-square frame (browsers don't mask favicons, so a
+         full-bleed sphere reads as more "icon" at 16px than a
+         shrunken square would)
+       - one radar ring instead of three (the inner two collapse into
+         noise at 16px)
+       - no latitude/longitude wires (same reason)
+       - bigger sphere + bigger amber pip so the brand colors still
+         read from a browser tab. -->
+
+  <defs>
+    <radialGradient id="orb" cx="40%" cy="38%" r="62%">
+      <stop offset="0%"  stop-color="#1a3a6b"/>
+      <stop offset="60%" stop-color="#0d2447"/>
+      <stop offset="100%" stop-color="#091a35"/>
+    </radialGradient>
+    <radialGradient id="specular" cx="35%" cy="32%" r="22%">
+      <stop offset="0%"  stop-color="#7ee7ff" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#7ee7ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="amberGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"  stop-color="#f59e0b" stop-opacity="0.95"/>
+      <stop offset="70%" stop-color="#f59e0b" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Transparent canvas — light + dark theme browsers handle it. -->
+  <circle cx="256" cy="256" r="244" fill="#0a1628"/>
+
+  <!-- Single radar ring — bold enough to survive downsampling. -->
+  <circle cx="256" cy="256" r="220" fill="none"
+          stroke="#00d4ff" stroke-opacity="0.55" stroke-width="14"/>
+
+  <!-- Crystal sphere. -->
+  <circle cx="256" cy="256" r="140" fill="url(#orb)"/>
+
+  <!-- Single equator wire — strongest "globe" cue per pixel. -->
+  <ellipse cx="256" cy="256" rx="140" ry="36"
+           fill="none" stroke="#00d4ff" stroke-width="6" stroke-opacity="0.65"/>
+
+  <!-- Specular highlight (upper-left of sphere). -->
+  <circle cx="256" cy="256" r="140" fill="url(#specular)"/>
+
+  <!-- Outer ring around the sphere so the silhouette survives at 16px. -->
+  <circle cx="256" cy="256" r="140" fill="none"
+          stroke="#00d4ff" stroke-width="6" stroke-opacity="0.9"/>
+
+  <!-- Amber early-warning marker — oversized vs. the icon-set version
+       so it's still visible in a browser tab. -->
+  <circle cx="370" cy="256" r="36" fill="url(#amberGlow)"/>
+  <circle cx="370" cy="256" r="16" fill="#f59e0b"/>
+</svg>

@@ -1,38 +1,39 @@
-/* eslint-disable sonarjs/no-nested-template-literals */
 /**
  * Situation Timeline Panel — Phase 4 chronological view.
  *
- * Filter bar (domain chips + status toggle + date range) drives a
- * sorted timeline list. Click any row to expand the peak-severity +
- * correlation details. Stats row at top summarises active count,
- * average duration, and the most-active domain.
+ * Filter bar (domain chips + status toggle + quick-range chips + date
+ * pickers) drives a sorted timeline list. Click any row to expand the
+ * peak-severity + correlation details. Stats row at top summarises
+ * active count, average duration, and the most-active domain.
  */
 
 import { Panel } from './Panel';
 import {
   getSituationTimelineService,
   type DomainBreakdownRow,
-  type TimelineEntry,
   type TimelineFilter,
-  type TimelineStats,
 } from '@/services/intelligence/situation-timeline';
-import type { SituationSeverity } from '@/services/intelligence/situation-store-v2';
 import { escapeHtml } from '@/utils/sanitize';
+import {
+  QUICK_RANGES,
+  isQuickRangeActive,
+  parseDate,
+  renderStatsRow,
+  renderTimeline,
+} from './situation-timeline-render';
 
 const REFRESH_MS = 30_000;
 const DOMAIN_CHIP_LIMIT = 8;
 
-const SEVERITY_COLOR: Record<SituationSeverity, string> = {
-  low: '#9e9e9e',
-  medium: '#4a9eff',
-  high: '#ffb74d',
-  critical: '#f44336',
-};
-
-const STATUS_COLOR: Record<TimelineEntry['status'], string> = {
-  active: '#f44336',
-  resolved: '#4caf50',
-};
+// Re-export the pure helpers so call sites + tests can keep importing
+// from the panel module path.
+export {
+  QUICK_RANGES,
+  isQuickRangeActive,
+  parseDate,
+  renderStatsRow,
+  renderTimeline,
+} from './situation-timeline-render';
 
 interface PanelState {
   filter: TimelineFilter;
@@ -54,7 +55,7 @@ export class SituationTimelinePanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Phase 4 chronological view of all Situations. Filter by domain / status / date / minimum severity; click any row to expand peak-severity and correlation detail. Stats row reflects the full cache, not the filtered slice.',
+        'Phase 4 chronological view of all Situations. Filter by domain / status / quick-range / date / minimum severity; click any row to expand peak-severity and correlation detail. Stats row reflects the full cache, not the filtered slice.',
     });
     this.start();
   }
@@ -107,6 +108,12 @@ export class SituationTimelinePanel extends Panel {
       const border = active ? 'var(--accent,#4a9eff)' : 'var(--border-subtle,#333)';
       return `<button data-timeline-status="${s}" style="font-size:11px;padding:3px 8px;border:1px solid ${border};border-radius:3px;background:${bg};color:inherit;cursor:pointer;">${s}</button>`;
     }).join('');
+    const quickChips = QUICK_RANGES.map((r) => {
+      const active = isQuickRangeActive(this.state.filter, r.windowMs, Date.now());
+      const bg = active ? 'var(--accent,#4a9eff)26' : 'transparent';
+      const border = active ? 'var(--accent,#4a9eff)' : 'var(--border-subtle,#333)';
+      return `<button data-timeline-quick="${r.windowMs}" style="font-size:11px;padding:3px 8px;border:1px solid ${border};border-radius:3px;background:${bg};color:inherit;cursor:pointer;">${r.label}</button>`;
+    }).join('');
     const fromValue = this.state.filter.fromDate ? new Date(this.state.filter.fromDate).toISOString().slice(0, 10) : '';
     const toValue = this.state.filter.toDate ? new Date(this.state.filter.toDate).toISOString().slice(0, 10) : '';
     return `<div style="display:flex;flex-direction:column;gap:8px;">
@@ -118,7 +125,9 @@ export class SituationTimelinePanel extends Panel {
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <span style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.05em;">Status</span>
         ${statusToggles}
-        <span style="font-size:11px;color:var(--text-secondary,#aaa);margin-left:12px;">From</span>
+        <span style="font-size:11px;color:var(--text-secondary,#aaa);margin-left:12px;text-transform:uppercase;letter-spacing:0.05em;">Range</span>
+        ${quickChips}
+        <span style="font-size:11px;color:var(--text-secondary,#aaa);margin-left:8px;">From</span>
         <input id="timelineFromDate" type="date" value="${escapeHtml(fromValue)}" style="font-size:11px;padding:2px 4px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;">
         <span style="font-size:11px;color:var(--text-secondary,#aaa);">To</span>
         <input id="timelineToDate" type="date" value="${escapeHtml(toValue)}" style="font-size:11px;padding:2px 4px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;">
@@ -158,6 +167,15 @@ export class SituationTimelinePanel extends Panel {
         this.state.filter = { status: 'all' };
         this.render();
       });
+      root.querySelectorAll<HTMLButtonElement>('[data-timeline-quick]').forEach((el) => {
+        el.addEventListener('click', () => {
+          const windowMs = Number.parseInt(el.dataset.timelineQuick ?? '', 10);
+          if (!Number.isFinite(windowMs) || windowMs <= 0) return;
+          this.state.filter.fromDate = Date.now() - windowMs;
+          this.state.filter.toDate = undefined;
+          this.render();
+        });
+      });
       root.querySelectorAll<HTMLElement>('[data-timeline-row]').forEach((el) => {
         el.addEventListener('click', () => {
           const id = el.dataset.timelineRow;
@@ -168,91 +186,4 @@ export class SituationTimelinePanel extends Panel {
       });
     }, 0);
   }
-}
-
-function parseDate(value: string): number | undefined {
-  if (!value) return undefined;
-  const ts = Date.parse(value);
-  return Number.isFinite(ts) ? ts : undefined;
-}
-
-function renderStatsRow(stats: TimelineStats): string {
-  const longest = stats.longestActiveSituation;
-  const longestText = longest
-    ? `${escapeHtml(longest.title)} (${formatHours(longest.duration ?? 0)})`
-    : '—';
-  return `<div style="display:flex;gap:18px;font-size:12px;font-family:ui-monospace,monospace;flex-wrap:wrap;">
-    <span><strong>${stats.totalSituations}</strong> total</span>
-    <span><strong style="color:#f44336;">${stats.activeCount}</strong> active</span>
-    <span>avg <strong>${stats.avgDurationHours.toFixed(1)} h</strong></span>
-    <span>most active: <strong>${escapeHtml(stats.mostActiveDomain ?? '—')}</strong></span>
-    <span style="color:var(--text-secondary,#aaa);">longest active: ${longestText}</span>
-  </div>`;
-}
-
-function renderTimeline(entries: readonly TimelineEntry[], expandedId: string | null): string {
-  if (entries.length === 0) {
-    return `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No situations match the current filter.</div>`;
-  }
-  const items = entries.map((e) => renderRow(e, e.situationId === expandedId)).join('');
-  return `<ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;">${items}</ul>`;
-}
-
-function renderRow(e: TimelineEntry, expanded: boolean): string {
-  const sevColor = SEVERITY_COLOR[e.currentSeverity];
-  const statusColor = STATUS_COLOR[e.status];
-  const arrow = expanded ? '▾' : '▸';
-  const durText = formatDurationText(e);
-  const startRel = formatAgo(Date.now() - e.startedAt);
-  return `<li data-timeline-row="${escapeHtml(e.situationId)}" style="cursor:pointer;border:1px solid var(--border-subtle,#333);border-left:3px solid ${sevColor};border-radius:3px;background:var(--surface-2,#1a1a1a);padding:6px 10px;display:flex;flex-direction:column;gap:4px;">
-    <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
-      <span style="color:var(--text-secondary,#aaa);width:12px;">${arrow}</span>
-      <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${statusColor}26;color:${statusColor};text-transform:uppercase;letter-spacing:0.04em;">${e.status}</span>
-      <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:var(--surface-3,#222);color:var(--text-secondary,#aaa);font-family:ui-monospace,monospace;">${escapeHtml(e.domain)}</span>
-      <span style="font-weight:600;flex:1;">${escapeHtml(e.title)}</span>
-      <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${sevColor}26;color:${sevColor};text-transform:uppercase;">${escapeHtml(e.currentSeverity)}</span>
-      <span style="font-size:11px;color:var(--text-secondary,#aaa);font-family:ui-monospace,monospace;">${escapeHtml(startRel)} · ${escapeHtml(durText)}</span>
-    </div>
-    ${expanded ? renderExpansion(e) : ''}
-  </li>`;
-}
-
-function renderExpansion(e: TimelineEntry): string {
-  const peakColor = SEVERITY_COLOR[e.peakSeverity];
-  const peakLabel = e.peakAt === null
-    ? `${e.peakSeverity} (current)`
-    : `${e.peakSeverity} at ${new Date(e.peakAt).toISOString().slice(0, 16)}Z`;
-  const resolvedText = e.resolvedAt === null
-    ? 'ongoing'
-    : `resolved ${new Date(e.resolvedAt).toISOString().slice(0, 16)}Z`;
-  return `<div style="display:flex;flex-direction:column;gap:4px;padding-top:4px;border-top:1px solid var(--border-subtle,#333);font-size:11px;">
-    <div>peak <span style="color:${peakColor};font-weight:600;">${escapeHtml(peakLabel)}</span></div>
-    <div style="color:var(--text-secondary,#aaa);">started ${new Date(e.startedAt).toISOString().slice(0, 16)}Z · ${escapeHtml(resolvedText)}</div>
-    <div style="color:var(--text-secondary,#aaa);">${e.correlationCount} correlation edge${e.correlationCount === 1 ? '' : 's'}</div>
-  </div>`;
-}
-
-function formatDurationText(e: TimelineEntry): string {
-  if (e.duration === null) return '—';
-  if (e.status === 'active') return `${formatHours(e.duration)} so far`;
-  return formatHours(e.duration);
-}
-
-function formatHours(ms: number): string {
-  const hours = ms / 3_600_000;
-  if (hours < 1) return `${Math.round(ms / 60_000)}m`;
-  if (hours < 24) return `${hours.toFixed(1)}h`;
-  return `${(hours / 24).toFixed(1)}d`;
-}
-
-function formatAgo(ms: number): string {
-  if (ms < 0) return 'just now';
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
 }

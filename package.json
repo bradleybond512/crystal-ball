@@ -77,6 +77,8 @@
     "test:algorithms": "tsx --test src/services/algorithms/__tests__/algorithm-evaluation-ledger.test.mts src/services/algorithms/__tests__/algorithm-health.test.mts src/services/algorithms/__tests__/safe-adjustment.test.mts src/services/algorithms/__tests__/algorithm-registry.test.mts src/services/algorithms/__tests__/algorithm-ledger-persistence.test.mts",
     "test:insights6": "tsx --test src/services/insights/__tests__/presentation-export.test.mts",
     "test:self-improvement": "tsx --test tests/intelligence/self-improvement-scheduler.test.mts",
+    "test:signal-noise-filter": "tsx --test tests/intelligence/signal-noise-filter.test.mts",
+    "test:signal-noise-filter": "tsx --test tests/intelligence/signal-noise-filter.test.mts",
     "test:contradiction": "tsx --test tests/intelligence/cross-domain-contradiction-detector.test.mts",
     "test:causal-attribution": "tsx --test tests/intelligence/causal-attribution.test.mts",
     "test:belief-state": "tsx --test tests/intelligence/belief-state-manager.test.mts",

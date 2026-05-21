@@ -287,6 +287,7 @@ import { OperationalPlaybookPanel } from '@/components/OperationalPlaybookPanel'
 import { DiagnosticSelfTestPanel } from '@/components/DiagnosticSelfTestPanel';
 import { SelfTestRunnerPanel } from '@/components/SelfTestRunnerPanel';
 import { OperatorModePanel } from '@/components/OperatorModePanel';
+import { GlobalRiskHeatmapPanel } from '@/components/GlobalRiskHeatmapPanel';
 import { OperatorShiftReportPanel } from '@/components/OperatorShiftReportPanel';
 import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { RepairRecommendationsPanel } from '@/components/RepairRecommendationsPanel';
@@ -1394,6 +1395,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['self-test-runner'] = new SelfTestRunnerPanel();
  this.ctx.panels['operator-mode'] = new OperatorModePanel();
  this.ctx.panels['operator-shift-report'] = new OperatorShiftReportPanel();
+ this.ctx.panels['global-risk-heatmap'] = new GlobalRiskHeatmapPanel();
  this.ctx.panels['command-center'] = new CommandCenterPanel();
  this.ctx.panels['competitive-hypothesis'] = new HypothesisPanel();
  this.ctx.panels['competitive-hypothesis-engine'] = new CompetitiveHypothesisEnginePanel();

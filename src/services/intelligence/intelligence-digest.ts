@@ -133,7 +133,7 @@ export interface IntelligenceDigestServiceOptions {
   narrativeProvider?: NarrativeProvider | null;
 }
 
-export interface IntelligenceDigestService {
+export interface IntelligenceDigestServiceAPI {
   generate(period: DigestPeriod): IntelligenceDigest;
   getLatestDigest(): IntelligenceDigest | undefined;
   getHistory(limit?: number): IntelligenceDigest[];
@@ -144,7 +144,7 @@ export interface IntelligenceDigestService {
 // ── Constants ────────────────────────────────────────────────────────────
 
 export const STORAGE_KEY = 'wm-intelligence-digest';
-export const MAX_DIGESTS = 90;
+export const MAX_DIGESTS = 100;
 
 const PERIOD_MS: Record<DigestPeriod, number> = {
   '1h': 60 * 60_000,
@@ -350,7 +350,7 @@ function composeHeadline(
 
 export function createIntelligenceDigestService(
   options: IntelligenceDigestServiceOptions = {},
-): IntelligenceDigestService {
+): IntelligenceDigestServiceAPI {
   const storage = resolveLocalStorage(options.storage);
   const clock = options.now ?? (() => Date.now());
   const situations = options.situationsProvider ?? null;
@@ -454,13 +454,343 @@ export function createIntelligenceDigestService(
 
 // ── Lazy singleton ───────────────────────────────────────────────────────
 
-let _singleton: IntelligenceDigestService | null = null;
+let _singleton: IntelligenceDigestServiceAPI | null = null;
 
-export function getIntelligenceDigestService(): IntelligenceDigestService {
+export function getIntelligenceDigestService(): IntelligenceDigestServiceAPI {
   _singleton ??= createIntelligenceDigestService();
   return _singleton;
 }
 
 export function _resetIntelligenceDigestSingletonForTests(): void {
   _singleton = null;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// IntelligenceDigestService — class-based API (v2)
+//
+// Aggregates the past N hours of raw domain observations into a structured
+// DigestEntry: top threats, per-domain highlights, trend changes, and focus
+// recommendations. All logic is pure and injectable for deterministic tests.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── v2 public types ──────────────────────────────────────────────────────────
+
+export interface ThreatSummary {
+  domain: string;
+  /** Max severity (0–10) within the digest window. */
+  severity: number;
+  headline: string;
+  eventCount: number;
+  regionCount: number;
+}
+
+export interface DomainHighlight {
+  domain: string;
+  /** Derived from the delta between 6h severity and prior-period severity. */
+  status: 'escalating' | 'stable' | 'de-escalating';
+  keySignal: string;
+}
+
+export interface TrendChange {
+  domain: string;
+  previousSeverity: number;
+  currentSeverity: number;
+  changeDirection: 'up' | 'down' | 'flat';
+}
+
+export interface DigestEntry {
+  id: string;
+  generatedAt: number;
+  windowHours: number;
+  topThreats: ThreatSummary[];
+  domainHighlights: DomainHighlight[];
+  trendChanges: TrendChange[];
+  recommendedFocus: string[];
+}
+
+// ── v2 injectable provider ───────────────────────────────────────────────────
+
+/** Single raw observation fed into the digest aggregation. */
+export interface DigestObservation {
+  domain: string;
+  /** 0–10 severity scale (matches ObservationEvent.severity). */
+  severity: number;
+  /** Epoch milliseconds when this observation occurred. */
+  timestamp: number;
+  /** Number of underlying events represented (defaults to 1). */
+  eventCount?: number;
+  /** Number of distinct regions affected (defaults to 1). */
+  regionCount?: number;
+  headline?: string;
+  keySignal?: string;
+}
+
+export interface DigestObservationProvider {
+  getAll(): DigestObservation[];
+}
+
+export interface IntelligenceDigestServiceOptions {
+  observationProvider?: DigestObservationProvider | null;
+  storage?: StorageLike | null;
+  now?: () => number;
+}
+
+// ── v2 constants ─────────────────────────────────────────────────────────────
+
+export const DIGEST_ENTRY_KEY = 'wm-intelligence-digest';
+export const MAX_ENTRIES = 100;
+
+/** Min severity delta (0–10 scale) that shifts a domain to 'escalating'/'de-escalating'. */
+const ESCALATION_THRESHOLD = 0.5;
+
+/** Min severity change (0–10 scale) required to record a TrendChange. */
+const TREND_CHANGE_THRESHOLD = 1;
+
+/** How many hours define the "recent" sub-window for trend/highlight comparisons. */
+const RECENT_HOURS = 6;
+
+// ── v2 internal helpers ──────────────────────────────────────────────────────
+
+let _entryIdCounter = 0;
+function nextEntryId(nowMs: number): string {
+  _entryIdCounter += 1;
+  return `de-${nowMs.toString(36)}-${_entryIdCounter.toString(36)}`;
+}
+
+function cloneEntry(e: DigestEntry): DigestEntry {
+  return {
+    ...e,
+    topThreats: e.topThreats.map((t) => ({ ...t })),
+    domainHighlights: e.domainHighlights.map((h) => ({ ...h })),
+    trendChanges: e.trendChanges.map((c) => ({ ...c })),
+    recommendedFocus: [...e.recommendedFocus],
+  };
+}
+
+function rehydrateEntries(storage: StorageLike | null): DigestEntry[] {
+  if (!storage) return [];
+  let raw: string | null;
+  try { raw = storage.getItem(DIGEST_ENTRY_KEY); } catch { return []; }
+  if (!raw) return [];
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { return []; }
+  if (!Array.isArray(parsed)) return [];
+  const out: DigestEntry[] = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') continue;
+    const e = item as DigestEntry;
+    if (typeof e.id !== 'string' || typeof e.generatedAt !== 'number') continue;
+    out.push(e);
+  }
+  return out;
+}
+
+/** Aggregate observations for a single domain. */
+function aggregateDomain(obs: DigestObservation[]): {
+  maxSeverity: number;
+  eventCount: number;
+  regionCount: number;
+  headline: string;
+  keySignal: string;
+} {
+  let maxSeverity = 0;
+  let topObs: DigestObservation = obs[0]!;
+  let eventCount = 0;
+  let regionCount = 0;
+
+  for (const o of obs) {
+    eventCount += o.eventCount ?? 1;
+    regionCount += o.regionCount ?? 1;
+    if (o.severity > maxSeverity) {
+      maxSeverity = o.severity;
+      topObs = o;
+    }
+  }
+  const { domain } = topObs;
+  const headline = topObs.headline ?? `${eventCount} event${eventCount === 1 ? '' : 's'} in ${domain}`;
+  const keySignal = topObs.keySignal ?? topObs.headline ?? `Severity ${maxSeverity.toFixed(1)} in ${domain}`;
+  return { maxSeverity, eventCount, regionCount, headline, keySignal };
+}
+
+/** Build changeDirection from a severity delta. */
+function toChangeDirection(delta: number): 'up' | 'down' | 'flat' {
+  if (delta > 0) return 'up';
+  if (delta < 0) return 'down';
+  return 'flat';
+}
+
+// ── IntelligenceDigestService class ─────────────────────────────────────────
+
+export class IntelligenceDigestService {
+  private static _instance: IntelligenceDigestService | null = null;
+
+  private readonly provider: DigestObservationProvider | null;
+  private readonly storage: StorageLike | null;
+  private readonly clock: () => number;
+  private readonly entries: DigestEntry[];
+
+  constructor(options: IntelligenceDigestServiceOptions = {}) {
+    this.provider = options.observationProvider ?? null;
+    this.storage  = resolveLocalStorage(options.storage);
+    this.clock    = options.now ?? (() => Date.now());
+    this.entries  = rehydrateEntries(this.storage);
+  }
+
+  /** Global singleton — uses live localStorage and no provider (caller injects). */
+  static getInstance(): IntelligenceDigestService {
+    IntelligenceDigestService._instance ??= new IntelligenceDigestService();
+    return IntelligenceDigestService._instance;
+  }
+
+  static resetForTests(): void {
+    IntelligenceDigestService._instance = null;
+  }
+
+  /**
+   * Build and store a DigestEntry covering the past `windowHours` hours.
+   * All computation is performed against observations returned by the
+   * injected provider (or empty if none is set).
+   */
+  generateDigest(windowHours = 24): DigestEntry {
+    const now      = this.clock();
+    const windowMs = windowHours * 60 * 60_000;
+    const recentMs = RECENT_HOURS * 60 * 60_000;
+
+    const all    = this.provider?.getAll() ?? [];
+    const cutoff = now - windowMs;
+    const recent = now - recentMs;
+
+    // Partition into current-window, recent (6h), and prior (older 6h) buckets.
+    const inWindow = all.filter((o) => o.timestamp >= cutoff);
+    const inRecent = inWindow.filter((o) => o.timestamp >= recent);
+    const inPrior  = inWindow.filter((o) => o.timestamp < recent);
+
+    // Gather unique domains from the full window.
+    const domains = [...new Set(inWindow.map((o) => o.domain))];
+
+    // Per-domain stats.
+    interface DomainStats {
+      maxSev: number;
+      recentMaxSev: number;
+      priorMaxSev: number;
+      eventCount: number;
+      regionCount: number;
+      headline: string;
+      keySignal: string;
+    }
+    const statsMap = new Map<string, DomainStats>();
+
+    for (const domain of domains) {
+      const win = inWindow.filter((o) => o.domain === domain);
+      const rec = inRecent.filter((o) => o.domain === domain);
+      const pri = inPrior.filter((o) => o.domain === domain);
+
+      const full = aggregateDomain(win);
+
+      const recentMaxSev = rec.length > 0
+        ? rec.reduce((m, o) => Math.max(m, o.severity), 0) : 0;
+      const recentKeySignal = rec.length > 0
+        ? (rec.reduce((top, o) => o.severity > top.severity ? o : top, rec[0]!).keySignal
+          ?? rec.reduce((top, o) => o.severity > top.severity ? o : top, rec[0]!).headline
+          ?? full.keySignal) : full.keySignal;
+
+      const priorMaxSev = pri.length > 0
+        ? pri.reduce((m, o) => Math.max(m, o.severity), 0) : 0;
+
+      statsMap.set(domain, {
+        maxSev: full.maxSeverity,
+        recentMaxSev,
+        priorMaxSev,
+        eventCount: full.eventCount,
+        regionCount: full.regionCount,
+        headline: full.headline,
+        keySignal: recentKeySignal,
+      });
+    }
+
+    // ── topThreats: top 5 domains by window max severity ────────────────
+
+    const topThreats: ThreatSummary[] = [...statsMap.entries()]
+      .sort((a, b) => b[1].maxSev - a[1].maxSev)
+      .slice(0, 5)
+      .map(([domain, s]) => ({
+        domain,
+        severity: s.maxSev,
+        headline: s.headline,
+        eventCount: s.eventCount,
+        regionCount: s.regionCount,
+      }));
+
+    // ── domainHighlights: all domains with escalation status ─────────────
+
+    const domainHighlights: DomainHighlight[] = [...statsMap.entries()].map(([domain, s]) => {
+      const delta = s.recentMaxSev - s.priorMaxSev;
+      let status: DomainHighlight['status'];
+      if (delta >= ESCALATION_THRESHOLD) status = 'escalating';
+      else if (delta <= -ESCALATION_THRESHOLD) status = 'de-escalating';
+      else status = 'stable';
+      return { domain, status, keySignal: s.keySignal };
+    });
+
+    // ── trendChanges: domains with severity shift >= threshold in last 6h ─
+
+    const trendChanges: TrendChange[] = [];
+    for (const [domain, s] of statsMap.entries()) {
+      const delta = s.recentMaxSev - s.priorMaxSev;
+      if (Math.abs(delta) >= TREND_CHANGE_THRESHOLD) {
+        trendChanges.push({
+          domain,
+          previousSeverity: s.priorMaxSev,
+          currentSeverity: s.recentMaxSev,
+          changeDirection: toChangeDirection(delta),
+        });
+      }
+    }
+
+    // ── recommendedFocus: top 3 domains from topThreats ─────────────────
+
+    const recommendedFocus = topThreats.slice(0, 3).map((t) => t.domain);
+
+    const entry: DigestEntry = {
+      id: nextEntryId(now),
+      generatedAt: now,
+      windowHours,
+      topThreats,
+      domainHighlights,
+      trendChanges,
+      recommendedFocus,
+    };
+
+    this.entries.push(entry);
+    if (this.entries.length > MAX_ENTRIES) {
+      this.entries.splice(0, this.entries.length - MAX_ENTRIES);
+    }
+    this.persist();
+
+    return cloneEntry(entry);
+  }
+
+  /** Returns the most recently generated digest, or undefined if none. */
+  getLatest(): DigestEntry | undefined {
+    if (this.entries.length === 0) return undefined;
+    return cloneEntry(this.entries[this.entries.length - 1]!);
+  }
+
+  /**
+   * Returns the last `limit` digests in reverse-chronological order
+   * (most recent first).
+   */
+  getHistory(limit = 20): DigestEntry[] {
+    const out: DigestEntry[] = [];
+    for (let i = this.entries.length - 1; i >= 0 && out.length < limit; i--) {
+      out.push(cloneEntry(this.entries[i]!));
+    }
+    return out;
+  }
+
+  private persist(): void {
+    if (!this.storage) return;
+    try { this.storage.setItem(DIGEST_ENTRY_KEY, JSON.stringify(this.entries)); }
+    catch { /* non-critical */ }
+  }
 }

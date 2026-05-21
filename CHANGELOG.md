@@ -4,6 +4,19 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.25.18] - 2026-05-20
+
+### Added
+
+- `IntelligenceDigestService` class (v2): aggregates raw domain observations into
+  structured `DigestEntry` objects with top threats, per-domain highlights, trend
+  changes, and recommended focus. Injectable providers, clock, and storage for
+  deterministic tests. Singleton via `getInstance()` / `resetForTests()`.
+- New exported types: `ThreatSummary`, `DomainHighlight`, `TrendChange`, `DigestEntry`,
+  `DigestObservation`, `DigestObservationProvider`, `IntelligenceDigestServiceOptions` (v2)
+- Constants: `DIGEST_ENTRY_KEY = 'wm-intelligence-digest'`, `MAX_ENTRIES = 100`
+- 40 new pure-logic tests for `IntelligenceDigestService` (73 total in suite)
+
 ## [2.25.16] - 2026-05-20
 
 ### Added

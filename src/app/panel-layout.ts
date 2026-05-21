@@ -239,6 +239,7 @@ import { NotificationProvenancePanel } from '@/components/NotificationProvenance
 import { TrustBudgetPanel } from '@/components/TrustBudgetPanel';
 import { IntelligenceTrustBudgetPanel } from '@/components/IntelligenceTrustBudgetPanel';
 import { NotificationSettingsPanel } from '@/components/NotificationSettingsPanel';
+import { WorldStateComparatorPanel } from '@/components/WorldStateComparatorPanel';
 import { NotificationPreferencesPanel } from '@/components/NotificationPreferencesPanel';
 import { SituationStorePanel } from '@/components/SituationStorePanel';
 import { ObservationRulesPanel } from '@/components/ObservationRulesPanel';
@@ -1346,6 +1347,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['trust-budget'] = new TrustBudgetPanel();
  this.ctx.panels['intelligence-trust-budget'] = new IntelligenceTrustBudgetPanel();
  this.ctx.panels['notification-settings'] = new NotificationSettingsPanel();
+ this.ctx.panels['world-state-comparator'] = new WorldStateComparatorPanel();
  this.ctx.panels['notification-preferences'] = new NotificationPreferencesPanel();
  this.ctx.panels['situations'] = new SituationStorePanel();
  this.ctx.panels['observation-rules'] = new ObservationRulesPanel();

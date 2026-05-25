@@ -4,6 +4,24 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.25.24] - 2026-05-25
+
+### Added
+
+- GlobalMigrationCrisisPanel with five sections: Active Displacement Crises,
+  Border Pressure Monitor, Camp & Settlement Status, Repatriation & Resettlement,
+  and Regional Displacement Index. Badge count reflects critical camps (>=120%
+  capacity) + high-tension borders (level >= 3) + live HIGH/CRITICAL observations.
+  Refreshes every 5 minutes. Built with h()/replaceChildren() DOM builders.
+- global-migration-crisis-helpers.ts: pure helper functions (migrationSeverityColor,
+  causeLabel, causeIcon, trendArrow, trendColor, tensionColor, tensionTierLabel,
+  capacityStatusLabel, capacityStatusColor, campCapacityColor, programStatusLabel,
+  programStatusColor, formatDisplacedCount, formatBeneficiaries, criticalCampCount,
+  activeBorderCrisisCount, totalDisplacedMillions) and static data (DISPLACEMENT_CRISES,
+  BORDER_PRESSURE_POINTS, CAMP_STATUSES, REPATRIATION_PROGRAMS,
+  REGIONAL_DISPLACEMENT_INDEX) — all side-effect-free and unit-tested.
+- 87 pure-logic tests, ESLint clean, typecheck clean.
+
 ## [2.25.23] - 2026-05-25
 
 ### Added

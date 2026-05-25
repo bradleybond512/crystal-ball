@@ -397,6 +397,7 @@ import { GivingPanel } from '@/components';
 import { UnifiedAlertInboxPanel } from '@/components/UnifiedAlertInboxPanel';
 import { AlertRulesPanel } from '@/components/AlertRulesPanel';
 import { AlertDeduplicationPanel } from '@/components/AlertDeduplicationPanel';
+import { AlertFatigueDashboardPanel } from '@/components/AlertFatigueDashboardPanel';
 import { StalenessBanner } from '@/components/StalenessBanner';
 import { focusInvestmentOnMap } from '@/services/investments-focus';
 import { debounce, rafSchedule, saveToStorage } from '@/utils';
@@ -1275,6 +1276,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['unified-alert-inbox'] = new UnifiedAlertInboxPanel();
  this.ctx.panels['alert-rules'] = new AlertRulesPanel();
  this.ctx.panels['alert-deduplication'] = new AlertDeduplicationPanel();
+ this.ctx.panels['alert-fatigue-dashboard'] = new AlertFatigueDashboardPanel();
 
  const volcanoAlertsPanel = new VolcanoAlertsPanel();
  volcanoAlertsPanel.setEventClickHandler((lat, lon) => {

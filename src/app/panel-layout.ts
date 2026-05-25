@@ -323,6 +323,7 @@ import { SafetyCaseDashboardPanel } from '@/components/SafetyCaseDashboardPanel'
 import { ExperimentManagerPanel } from '@/components/ExperimentManagerPanel';
 import { DomainScorecardsPanel } from '@/components/DomainScorecardsPanel';
 import { GeopoliticalEventCalendarPanel } from '@/components/GeopoliticalEventCalendarPanel';
+import { GeopoliticalSuperpowerPanel } from '@/components/GeopoliticalSuperpowerPanel';
 import { SignalEnrichmentPanel } from '@/components/SignalEnrichmentPanel';
 import { ThreatCorrelationMatrixPanel } from '@/components/ThreatCorrelationMatrixPanel';
 import { GeospatialClusteringPanel } from '@/components/GeospatialClusteringPanel';
@@ -1430,6 +1431,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['experiment-manager'] = new ExperimentManagerPanel();
  this.ctx.panels['domain-scorecards'] = new DomainScorecardsPanel();
  this.ctx.panels['geopolitical-event-calendar'] = new GeopoliticalEventCalendarPanel();
+ this.ctx.panels['geopolitical-superpower'] = new GeopoliticalSuperpowerPanel();
  this.ctx.panels['signal-enrichment'] = new SignalEnrichmentPanel();
  this.ctx.panels['threat-correlation-matrix'] = new ThreatCorrelationMatrixPanel();
  this.ctx.panels['geospatial-clustering'] = new GeospatialClusteringPanel();

@@ -4,6 +4,21 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.25.23] - 2026-05-25
+
+### Added
+
+- PoliticalRiskSuperpowerPanel with five sections: Coup & Regime Change Watch,
+  Election Risk Tracker, Protest & Civil Unrest, Sanctions & Diplomatic Crisis,
+  and Governance Stability Index. Badge count reflects high/critical instability
+  events. Refreshes every 3 minutes.
+- political-risk-superpower-helpers.ts: pure helper functions (politicalSeverityColor,
+  eventTypeLabel, riskScoreTier, riskScoreColor, responseLabel, responseColor,
+  crisisTypeLabel, governanceColor, governanceTier, formatTimeAgo, instabilityCount)
+  and static data (COUP_WATCH, ELECTION_RISKS, PROTEST_EVENTS, DIPLOMATIC_CRISES,
+  GOVERNANCE_INDEX) — all side-effect-free and unit-tested.
+- 73 pure-logic tests, ESLint clean, typecheck clean.
+
 ## [2.25.22] - 2026-05-21
 
 ### Added

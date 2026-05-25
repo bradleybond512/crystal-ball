@@ -345,6 +345,7 @@ import { GlobalRhythmPanel } from '@/components/GlobalRhythmPanel';
 import { TemporalAnomalyDetectorPanel } from '@/components/TemporalAnomalyDetectorPanel';
 import { ThreatHorizonPanel } from '@/components/ThreatHorizonPanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
+import { AlertRulesTuningPanel } from '@/components/AlertRulesTuningPanel';
 import { AlertExplanationPanel } from '@/components/AlertExplanationPanel';
 import { PersonalRelevancePanel } from '@/components/PersonalRelevancePanel';
 import { ScenarioReplayPanel } from '@/components/ScenarioReplayPanel';
@@ -1454,6 +1455,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['analyst-notebook'] = new AnalystNotebookPanel();
  this.ctx.panels['persistent-query-engine'] = new PersistentQueryEnginePanel();
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
+ this.ctx.panels['alert-rules-tuning'] = new AlertRulesTuningPanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();
  this.ctx.panels['scenario-replay'] = new ScenarioReplayPanel();

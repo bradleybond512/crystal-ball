@@ -367,6 +367,7 @@ import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { FinancialSuperpowerPanel } from '@/components/FinancialSuperpowerPanel';
 import { PoliticalRiskSuperpowerPanel } from '@/components/PoliticalRiskSuperpowerPanel';
 import { GlobalMigrationCrisisPanel } from '@/components/GlobalMigrationCrisisPanel';
+import { OrganizedCrimeSuperpowerPanel } from '@/components/OrganizedCrimeSuperpowerPanel';
 import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
 import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
@@ -1484,6 +1485,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['financial-superpower'] = new FinancialSuperpowerPanel();
  this.ctx.panels['political-risk-superpower'] = new PoliticalRiskSuperpowerPanel();
  this.ctx.panels['global-migration-crisis'] = new GlobalMigrationCrisisPanel();
+ this.ctx.panels['organized-crime-superpower'] = new OrganizedCrimeSuperpowerPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
  this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');

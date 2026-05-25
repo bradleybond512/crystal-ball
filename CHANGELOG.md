@@ -4,6 +4,17 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.25.22] - 2026-05-21
+
+### Added
+
+- Nuclear/radiological mission bridges: INES-graded facility incidents
+  (NuclearIncidentBridge), radiation releases by dual dose-rate + area axes
+  (RadiationReleaseBridge), and nuclear/radiological threat intelligence with
+  [NUCLEAR]/[RADIOLOGICAL] prefix (NuclearThreatBridge). All self-register at
+  module load. INES 7→4/5-6→3/3-4→2/1-2→1 via Math.max with event type tier.
+- 72 pure-logic tests, ESLint clean, typecheck clean.
+
 ## [2.25.18] - 2026-05-20
 
 ### Added

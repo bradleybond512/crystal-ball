@@ -358,6 +358,7 @@ import { ThreatDashboard } from '@/components/ThreatDashboard';
 import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
 import { AviationIntelPanel } from '@/components/AviationIntelPanel';
 import { AviationSuperpowerPanel } from '@/components/AviationSuperpowerPanel';
+import { EnergySuperpowerPanel } from '@/components/EnergySuperpowerPanel';
 import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { FinancialSuperpowerPanel } from '@/components/FinancialSuperpowerPanel';
@@ -1466,6 +1467,7 @@ export class PanelLayoutManager implements AppModule {
  startThreatAggregator();
  this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
  this.ctx.panels['aviation-superpower'] = new AviationSuperpowerPanel();
+ this.ctx.panels['energy-superpower'] = new EnergySuperpowerPanel();
  this.ctx.panels['intelligence-feed'] = new IntelligenceFeedPanel();
  this.ctx.panels['financial-superpower'] = new FinancialSuperpowerPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();

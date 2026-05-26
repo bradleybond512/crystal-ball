@@ -188,10 +188,10 @@
     "happy-dom": "^20.9.0",
     "lint-staged": "^16.4.0",
     "markdownlint-cli2": "^0.22.1",
-    "tsx": "^4.21.0",
+    "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.58.0",
-    "vite": "^8.0.12",
+    "vite": "^8.0.14",
     "vite-plugin-pwa": "^1.3.0",
     "vite-plugin-static-copy": "^4.1.0"
   },

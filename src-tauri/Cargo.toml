@@ -1,6 +1,6 @@
 [package]
 name = "crystalball"
-version = "2.25.33"
+version = "2.25.34"
 description = "Crystal Ball cross-platform desktop application "
 authors = ["Bradley Bond", ""]
 edition = "2021"

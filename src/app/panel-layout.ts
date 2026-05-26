@@ -391,7 +391,8 @@ import { EarthquakeSuperPanel } from '@/components/EarthquakeSuperPanel';
 import { SeismicSuperpowerPanel } from '@/components/SeismicSuperpowerPanel';
 import { CyberSuperpowerPanel } from '@/components/CyberSuperpowerPanel';
 import { CyberIncidentResponsePanel } from '@/components/CyberIncidentResponsePanel';
-import { IntelligenceTimelinePanel } from '@/components/IntelligenceTimelinePanel';
+
+import { ClimateSuperpowerPanel } from '@/components/ClimateSuperpowerPanel';import { IntelligenceTimelinePanel } from '@/components/IntelligenceTimelinePanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
 import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
 import { SatelliteChangePanel } from '@/components/SatelliteChangePanel';
@@ -1557,7 +1558,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['seismic-superpower'] = new SeismicSuperpowerPanel();
  this.ctx.panels['cyber-superpower'] = new CyberSuperpowerPanel();
  this.ctx.panels['cyber-incident-response'] = new CyberIncidentResponsePanel();
- this.ctx.panels['intelligence-timeline'] = new IntelligenceTimelinePanel();
+
+ this.ctx.panels['climate-superpower'] = new ClimateSuperpowerPanel(); this.ctx.panels['intelligence-timeline'] = new IntelligenceTimelinePanel();
  // Wire saved-places into the insights state singleton so the new
  // panels see the user's home/family/travel places out of the box.
  // Re-runs whenever saved places change.

@@ -354,6 +354,7 @@ import { ThreatHorizonPanel } from '@/components/ThreatHorizonPanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
 import { AlertRulesTuningPanel } from '@/components/AlertRulesTuningPanel';
 import { IntelligenceQualityDebtPanel } from '@/components/IntelligenceQualityDebtPanel';
+import { SupplyChainResiliencePanel } from '@/components/SupplyChainResiliencePanel';
 import { AlertExplanationPanel } from '@/components/AlertExplanationPanel';
 import { PersonalRelevancePanel } from '@/components/PersonalRelevancePanel';
 import { ScenarioReplayPanel } from '@/components/ScenarioReplayPanel';
@@ -1493,6 +1494,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
  this.ctx.panels['alert-rules-tuning'] = new AlertRulesTuningPanel();
  this.ctx.panels['intelligence-quality-debt'] = new IntelligenceQualityDebtPanel();
+ this.ctx.panels['supply-chain-resilience'] = new SupplyChainResiliencePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();
  this.ctx.panels['scenario-replay'] = new ScenarioReplayPanel();

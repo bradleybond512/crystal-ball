@@ -128,7 +128,8 @@ export const PANEL_SMOKE_REGISTRY: Record<string, SmokeFactory> = {
   'macro-signals': wrap(async () => { const m = await import('@/components/MacroSignalsPanel'); return new m.MacroSignalsPanel(); }),
   'maritime-superpower': wrap(async () => { const m = await import('@/components/MaritimeSuperpowerPanel'); return new m.MaritimeSuperpowerPanel(); }),
   'health-superpower': wrap(async () => { const m = await import('@/components/HealthSuperpowerPanel'); return new m.HealthSuperpowerPanel(); }),
-  'markets': wrap(async () => { const m = await import('@/components/MarketPanel'); return new m.MarketPanel(); }),
+
+  'personal-resilience': wrap(async () => { const m = await import('@/components/PersonalResiliencePanel'); return new m.PersonalResiliencePanel(); }),  'markets': wrap(async () => { const m = await import('@/components/MarketPanel'); return new m.MarketPanel(); }),
   'heatmap': wrap(async () => { const m = await import('@/components/MarketPanel'); return new m.HeatmapPanel(); }),
   'commodities': wrap(async () => { const m = await import('@/components/MarketPanel'); return new m.CommoditiesPanel(); }),
   'crypto': wrap(async () => { const m = await import('@/components/MarketPanel'); return new m.CryptoPanel(); }),

@@ -692,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "crystalball"
-version = "2.25.137"
+version = "2.25.138"
 dependencies = [
  "getrandom 0.4.2",
  "keyring",

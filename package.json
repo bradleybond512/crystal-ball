@@ -1,7 +1,7 @@
 {
   "name": "crystal-ball",
   "private": true,
-  "version": "2.25.75",
+  "version": "2.25.76",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {

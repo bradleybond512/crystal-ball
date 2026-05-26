@@ -369,6 +369,7 @@ import { AviationIntelPanel } from '@/components/AviationIntelPanel';
 import { AviationSuperpowerPanel } from '@/components/AviationSuperpowerPanel';
 import { NuclearSuperpowerPanel } from '@/components/NuclearSuperpowerPanel';
 import { EnergySuperpowerPanel } from '@/components/EnergySuperpowerPanel';
+import { SignalNoiseFilterPanel } from '@/components/SignalNoiseFilterPanel';
 import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { FinancialSuperpowerPanel } from '@/components/FinancialSuperpowerPanel';
@@ -1507,6 +1508,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['aviation-superpower'] = new AviationSuperpowerPanel();
  this.ctx.panels['nuclear-superpower'] = new NuclearSuperpowerPanel();
  this.ctx.panels['energy-superpower'] = new EnergySuperpowerPanel();
+ this.ctx.panels['signal-noise-filter'] = new SignalNoiseFilterPanel();
  this.ctx.panels['intelligence-feed'] = new IntelligenceFeedPanel();
  this.ctx.panels['financial-superpower'] = new FinancialSuperpowerPanel();
  this.ctx.panels['political-risk-superpower'] = new PoliticalRiskSuperpowerPanel();

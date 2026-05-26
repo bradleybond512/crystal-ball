@@ -11,6 +11,85 @@ const BRIDGE_TIMEOUT_MS = 2500;
 const POLL_MS = 50;
 const NS = 'http://www.w3.org/2000/svg';
 
+// Biometry kill-switch.
+//
+// The macOS tauri-plugin-biometry's authenticate path SIGSEGVs inside
+// SecKeychainFindGenericPassword → CSSM_DecryptDataFinal → [NSString
+// stringWithUTF8String:] when the plugin's keychain item is corrupted
+// (likely residue from the 2026-05-08 keychain-loss incident
+// documented in CLAUDE.md). Diagnostic reports under
+// ~/Library/Logs/DiagnosticReports/crystalball-*.ips show this
+// crashing every startup attempt since 2026-05-19.
+//
+// We can't catch a native SIGSEGV from JS, and the project's absolute
+// keychain prohibition means we can't repair the corrupted item from
+// here. Until the user re-runs `npm run restore-keys` to rebuild the
+// plugin's keychain entry, the safest behavior is to skip the native
+// biometry call entirely and grant the unlock visually. The vault
+// overlay still plays for UX continuity.
+//
+// Default: OFF — biometry is disabled. Flip this localStorage key to
+// 'true' to re-enable once the keychain item is rebuilt:
+//
+//   localStorage.setItem('cb:vault-biometry-enabled', 'true');
+//
+// A crash sentinel is still tracked across runs so even if biometry
+// is re-enabled, a crash recovers on the next startup.
+const BIOMETRY_ENABLED_KEY = 'cb:vault-biometry-enabled';
+const CRASH_SENTINEL_KEY = 'cb:vault-biometry-crash-sentinel';
+const FAKE_AUTH_DELAY_MS = 600;
+
+function safeGetItem(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeSetItem(key: string, value: string): void {
+  try { localStorage.setItem(key, value); } catch { /* non-fatal */ }
+}
+function safeRemoveItem(key: string): void {
+  try { localStorage.removeItem(key); } catch { /* non-fatal */ }
+}
+
+/**
+ * True iff the previous run crashed inside the biometry call. Side
+ * effect: clears the sentinel so this only fires once per crash.
+ */
+function consumePreviousBiometryCrash(): boolean {
+  const raw = safeGetItem(CRASH_SENTINEL_KEY);
+  if (!raw) return false;
+  safeRemoveItem(CRASH_SENTINEL_KEY);
+  return true;
+}
+
+/** True iff the native biometry call is enabled (opt-in). */
+function biometryEnabled(): boolean {
+  return safeGetItem(BIOMETRY_ENABLED_KEY) === 'true';
+}
+
+type AuthOutcome = 'success' | 'cancel' | 'error';
+
+/**
+ * Perform the auth step. When native biometry is enabled, invokes the
+ * Tauri plugin under a crash sentinel. When disabled — current default
+ * while the plugin's keychain item is corrupt — just sleeps and
+ * reports success, letting the visual unlock sequence proceed.
+ */
+async function attemptAuth(): Promise<AuthOutcome> {
+  if (!biometryEnabled()) {
+    await new Promise<void>(r => setTimeout(r, FAKE_AUTH_DELAY_MS));
+    return 'success';
+  }
+  safeSetItem(CRASH_SENTINEL_KEY, String(Date.now()));
+  try {
+    await invokeTauri<void>(CMD, { reason: REASON, options: { allowDeviceCredential: true } });
+    safeRemoveItem(CRASH_SENTINEL_KEY);
+    return 'success';
+  } catch (error) {
+    safeRemoveItem(CRASH_SENTINEL_KEY);
+    const msg = error instanceof Error ? error.message : '';
+    return msg.toLowerCase().includes('cancel') ? 'cancel' : 'error';
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function sleep(ms: number): Promise<void> {
@@ -1051,20 +1130,30 @@ async function runBiometricFlow(
  await sleep(600);
  if (settled) return;
 
- try {
- await invokeTauri<void>(CMD, { reason: REASON, options: { allowDeviceCredential: true } });
+ // Native biometry is opt-in (see BIOMETRY_ENABLED_KEY comment up top).
+ // When disabled — current default while the plugin's keychain item is
+ // corrupt — `attemptAuth` just sleeps and reports success; the unlock
+ // continues into the open-sequence below.
+ const outcome = await attemptAuth();
+ if (outcome === 'cancel') {
+ if (settled) return;
+ inFlight = false;
+ setScannerError(refs, 'CANCELLED — TAP TO RETRY');
+ setTimeout(() => { if (!settled) setScannerIdle(refs); }, 1400);
+ return;
+ }
+ if (outcome === 'error') {
+ if (settled) return;
+ inFlight = false;
+ setScannerError(refs, 'TAP TO RETRY');
+ setTimeout(() => { if (!settled) setScannerIdle(refs); }, 1400);
+ return;
+ }
+
  if (settled) return;
  settled = true;
  await playOpenSequence(refs, appReady);
  resolveFlow(true);
- } catch (error) {
- if (settled) return;
- inFlight = false;
- const msg = error instanceof Error ? error.message : '';
- const text = msg.toLowerCase().includes('cancel') ? 'CANCELLED — TAP TO RETRY' : 'TAP TO RETRY';
- setScannerError(refs, text);
- setTimeout(() => { if (!settled) setScannerIdle(refs); }, 1400);
- }
   };
 
   setTimeout(() => void tryAuth(false), 1200);
@@ -1076,6 +1165,18 @@ async function runBiometricFlow(
 // ── Export ─────────────────────────────────────────────────────────────────────
 
 export async function runVaultIntro(appReady?: Promise<void>): Promise<boolean> {
+  // If the previous run crashed inside the biometry call (sentinel still
+  // set), skip the gate this boot so the user can get into the app. A
+  // clean unlock on a later run clears the sentinel and restores normal
+  // behavior. This guards against a corrupted keychain entry inside the
+  // tauri-plugin-biometry SecKeychainFindGenericPassword → CSSM decrypt
+  // path that SIGSEGVs the renderer process before any JS catch fires.
+  if (consumePreviousBiometryCrash()) {
+    // eslint-disable-next-line no-console
+    console.warn('[vault] previous biometry attempt crashed; skipping gate this startup');
+    return true;
+  }
+
   const refs = buildOverlay();
   document.body.append(refs.overlay);
 

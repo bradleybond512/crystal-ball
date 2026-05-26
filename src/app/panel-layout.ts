@@ -380,8 +380,9 @@ import { OrganizedCrimeSuperpowerPanel } from '@/components/OrganizedCrimeSuperp
 import { WaterSecurityPanel } from '@/components/WaterSecurityPanel';
 import { ArcticMonitoringPanel } from '@/components/ArcticMonitoringPanel';
 import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
-
-import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
+import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';
+import { AllianceCohesionPanel } from '@/components/AllianceCohesionPanel';
+import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
 import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { MaritimeSuperpowerPanel } from '@/components/MaritimeSuperpowerPanel';
@@ -1519,8 +1520,9 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['water-security'] = new WaterSecurityPanel();
  this.ctx.panels['arctic-monitoring'] = new ArcticMonitoringPanel();
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
-
- this.ctx.panels['urban-security'] = new UrbanSecurityPanel(); this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ this.ctx.panels['urban-security'] = new UrbanSecurityPanel();
+ this.ctx.panels['alliance-cohesion'] = new AllianceCohesionPanel();
+ this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
  this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
  this.ctx.panels['shortage-detail-rice'] = new ShortageDetailPanel('rice');

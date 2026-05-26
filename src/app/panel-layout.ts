@@ -338,6 +338,7 @@ import { IntelligenceBriefingExportPanel } from '@/components/IntelligenceBriefi
 import { IntelligenceIndexPanel } from '@/components/IntelligenceIndexPanel';
 import { DomainDependencyPanel } from '@/components/DomainDependencyPanel';
 import { SituationTimelinePanel } from '@/components/SituationTimelinePanel';
+import { DisasterResponsePanel } from '@/components/DisasterResponsePanel';
 import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
 import { CounterfactualReplayPanel } from '@/components/CounterfactualReplayPanel';
 import { CounterfactualReasoningPanel } from '@/components/CounterfactualReasoningPanel';
@@ -1473,6 +1474,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['intelligence-index'] = new IntelligenceIndexPanel();
  this.ctx.panels['domain-dependency'] = new DomainDependencyPanel();
  this.ctx.panels['situation-timeline'] = new SituationTimelinePanel();
+ this.ctx.panels['disaster-response'] = new DisasterResponsePanel();
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();
  this.ctx.panels['repair-recommendations'] = new RepairRecommendationsPanel();
  this.ctx.panels['mission-ledger-bridge'] = new MissionLedgerBridgePanel();

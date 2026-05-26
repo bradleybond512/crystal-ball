@@ -146,6 +146,7 @@ import { SituationPanel } from '@/components/SituationPanel';
 import { SpaceWeatherPanel } from '@/components/SpaceWeatherPanel';
 import { SpaceSecurityPanel } from '@/components/SpaceSecurityPanel';
 import { SpaceSuperpowerPanel } from '@/components/SpaceSuperpowerPanel';
+import { WeatherSuperpowerPanel } from '@/components/WeatherSuperpowerPanel';
 import { SpaceflightNewsPanel } from '@/components/SpaceflightNewsPanel';
 import { SpaceLaunchesPanel } from '@/components/SpaceLaunchesPanel';
 import { DiseaseOutbreakPanel } from '@/components/DiseaseOutbreakPanel';
@@ -1206,6 +1207,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['space-security'] = new SpaceSecurityPanel();
 
  this.ctx.panels['space-superpower'] = new SpaceSuperpowerPanel();
+ this.ctx.panels['weather-superpower'] = new WeatherSuperpowerPanel();
 
  const spaceflightNewsPanel = new SpaceflightNewsPanel();
  this.ctx.panels['spaceflight-news'] = spaceflightNewsPanel;

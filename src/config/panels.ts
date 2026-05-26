@@ -100,6 +100,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'space-weather': { name: 'Space Weather', enabled: true, priority: 1 },
   'space-security': { name: 'Space Security', enabled: true, priority: 1 },
   'space-superpower': { name: 'Space Superpower', enabled: true, priority: 1 },
+  'weather-superpower': { name: 'Weather Intelligence', enabled: true, priority: 1 },
   'spaceflight-news': { name: 'Spaceflight News', enabled: true, priority: 2 },
   'space-launches': { name: 'Space Launches', enabled: true, priority: 2 },
   'disease-outbreaks': { name: 'Disease Outbreaks', enabled: true, priority: 2 },
@@ -1134,7 +1135,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   hazards: {
  labelKey: 'header.panelCatHazards',
 
- panelKeys: ['wildfire-intel', 'satellite-fires', 'earthquakes', 'emsc-seismic', 'gdacs-alerts', 'volcano-alerts', 'volcano-monitor', 'severe-weather', 'shakealert', 'weather-hazard', 'nws-alerts', 'faa-weather-cams', 'faa-tfrs', 'tsunami-alerts', 'tropical-cyclones', 'climate', 'wildfire-incidents', 'hazmat-incidents', 'oil-spill', 'fcdo-warnings', 'dfat-warnings', 'gac-warnings', 'avalanche-hazard', 'wildfire-smoke', 'spc-mesoscale', 'amtrak-alerts', 'habsos', 'global-weather', 'extended-forecast', 'tide-predictions', 'pollen', 'weather-radar', 'goes-satellite', 'flood-monitor'],
+ panelKeys: ['wildfire-intel', 'satellite-fires', 'earthquakes', 'emsc-seismic', 'gdacs-alerts', 'volcano-alerts', 'volcano-monitor', 'severe-weather', 'shakealert', 'weather-hazard', 'nws-alerts', 'faa-weather-cams', 'faa-tfrs', 'tsunami-alerts', 'tropical-cyclones', 'climate', 'wildfire-incidents', 'hazmat-incidents', 'oil-spill', 'fcdo-warnings', 'dfat-warnings', 'gac-warnings', 'avalanche-hazard', 'wildfire-smoke', 'spc-mesoscale', 'amtrak-alerts', 'habsos', 'global-weather', 'extended-forecast', 'tide-predictions', 'pollen', 'weather-radar', 'goes-satellite', 'flood-monitor', 'weather-superpower'],
  variants: ['full'],
   },
   healthEnv: {

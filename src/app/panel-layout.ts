@@ -458,6 +458,7 @@ import { ThreatConvergencePanel } from '@/components/ThreatConvergencePanel';
 import { GeopoliticalRiskPanel } from '@/components/GeopoliticalRiskPanel';
 import { SanctionsTrackerPanel } from '@/components/SanctionsTrackerPanel';
 import { CurrencyWarfarePanel } from '@/components/CurrencyWarfarePanel';
+import { ResourceCompetitionPanel } from '@/components/ResourceCompetitionPanel';
 import { StalenessBanner } from '@/components/StalenessBanner';
 import { focusInvestmentOnMap } from '@/services/investments-focus';
 import { debounce, rafSchedule, saveToStorage } from '@/utils';
@@ -1342,6 +1343,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['threat-convergence'] = new ThreatConvergencePanel();
  this.ctx.panels['geopolitical-risk'] = new GeopoliticalRiskPanel();
  this.ctx.panels['currency-warfare'] = new CurrencyWarfarePanel();
+ this.ctx.panels['resource-competition'] = new ResourceCompetitionPanel();
 
  this.ctx.panels['sanctions-tracker'] = new SanctionsTrackerPanel();
  const volcanoAlertsPanel = new VolcanoAlertsPanel();

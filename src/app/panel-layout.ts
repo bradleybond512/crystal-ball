@@ -409,7 +409,8 @@ import { CyberSuperpowerPanel } from '@/components/CyberSuperpowerPanel';
 import { CyberIncidentResponsePanel } from '@/components/CyberIncidentResponsePanel';
 
 import { ClimateSuperpowerPanel } from '@/components/ClimateSuperpowerPanel';import { IntelligenceTimelinePanel } from '@/components/IntelligenceTimelinePanel';
-import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
+
+import { FoodSecuritySuperpowerPanel } from '@/components/FoodSecuritySuperpowerPanel';import { IntelligenceTimelinePanel } from '@/components/IntelligenceTimelinePanel';import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
 import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
 import { SatelliteChangePanel } from '@/components/SatelliteChangePanel';
 import { SatelliteIntelPanel } from '@/components/SatelliteIntelPanel';
@@ -1596,7 +1597,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['cyber-incident-response'] = new CyberIncidentResponsePanel();
 
  this.ctx.panels['climate-superpower'] = new ClimateSuperpowerPanel(); this.ctx.panels['intelligence-timeline'] = new IntelligenceTimelinePanel();
- // Wire saved-places into the insights state singleton so the new
+
+ this.ctx.panels['food-security-superpower'] = new FoodSecuritySuperpowerPanel(); this.ctx.panels['intelligence-timeline'] = new IntelligenceTimelinePanel(); // Wire saved-places into the insights state singleton so the new
  // panels see the user's home/family/travel places out of the box.
  // Re-runs whenever saved places change.
  void import('@/services/insights/data-bridge').then(({ bridgeSavedPlacesToProfile, adaptExistingSavedPlace, bridgeSourcesToProviderRedundancy }) => {

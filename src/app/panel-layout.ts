@@ -456,8 +456,9 @@ import { AlertDeduplicationPanel } from '@/components/AlertDeduplicationPanel';
 import { AlertFatigueDashboardPanel } from '@/components/AlertFatigueDashboardPanel';
 import { ThreatConvergencePanel } from '@/components/ThreatConvergencePanel';
 import { GeopoliticalRiskPanel } from '@/components/GeopoliticalRiskPanel';
-
-import { SanctionsTrackerPanel } from '@/components/SanctionsTrackerPanel';import { StalenessBanner } from '@/components/StalenessBanner';
+import { SanctionsTrackerPanel } from '@/components/SanctionsTrackerPanel';
+import { CurrencyWarfarePanel } from '@/components/CurrencyWarfarePanel';
+import { StalenessBanner } from '@/components/StalenessBanner';
 import { focusInvestmentOnMap } from '@/services/investments-focus';
 import { debounce, rafSchedule, saveToStorage } from '@/utils';
 import { escapeHtml } from '@/utils/sanitize';
@@ -1340,6 +1341,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['alert-fatigue-dashboard'] = new AlertFatigueDashboardPanel();
  this.ctx.panels['threat-convergence'] = new ThreatConvergencePanel();
  this.ctx.panels['geopolitical-risk'] = new GeopoliticalRiskPanel();
+ this.ctx.panels['currency-warfare'] = new CurrencyWarfarePanel();
 
  this.ctx.panels['sanctions-tracker'] = new SanctionsTrackerPanel();
  const volcanoAlertsPanel = new VolcanoAlertsPanel();

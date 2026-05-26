@@ -136,6 +136,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'fear-greed': { name: 'Fear & Greed Index', enabled: true, priority: 2 },
   'internet-disruptions': { name: 'Internet Disruptions', enabled: true, priority: 2 },
   'national-debt': { name: 'National Debt', enabled: true, priority: 2 },
+  'sovereign-debt': { name: 'Sovereign Debt', enabled: true, priority: 2 },
   'fuel-prices': { name: 'Fuel Prices', enabled: true, priority: 2 },
   'faa-tfrs': { name: 'FAA TFRs', enabled: true, priority: 2 },
   'air-traffic': { name: 'Air Traffic', enabled: true, priority: 2 },
@@ -1100,7 +1101,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   marketsFinance: {
  labelKey: 'header.panelCatMarketsFinance',
- panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower'],
+ panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower'],
  variants: ['full'],
   },
   topical: {

@@ -395,7 +395,9 @@ import { InformationOperationsPanel } from '@/components/InformationOperationsPa
 import { MaritimeBoundaryPanel } from '@/components/MaritimeBoundaryPanel';
 import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
-import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
+
+import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
+import { GlobalHealthSecurityPanel } from '@/components/GlobalHealthSecurityPanel';import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { MaritimeSuperpowerPanel } from '@/components/MaritimeSuperpowerPanel';
 import { HealthSuperpowerPanel } from '@/components/HealthSuperpowerPanel';
 
@@ -1548,7 +1550,9 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['maritime-boundary'] = new MaritimeBoundaryPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
- this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
+
+ this.ctx.panels['urban-security'] = new UrbanSecurityPanel(); this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ this.ctx.panels['global-health-security'] = new GlobalHealthSecurityPanel(); this.ctx.panels['shortage-radar'] = new ShortageRadarPanel(); this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat'); this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
  this.ctx.panels['shortage-detail-rice'] = new ShortageDetailPanel('rice');
  this.ctx.panels['shortage-detail-soybeans'] = new ShortageDetailPanel('soybeans');
  this.ctx.panels['shortage-detail-diesel'] = new ShortageDetailPanel('diesel');

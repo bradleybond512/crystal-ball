@@ -374,6 +374,7 @@ import { EnergySuperpowerPanel } from '@/components/EnergySuperpowerPanel';
 import { SignalNoiseFilterPanel } from '@/components/SignalNoiseFilterPanel';
 import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
+import { CriticalInfrastructureAttackPanel } from '@/components/CriticalInfrastructureAttackPanel';
 import { FinancialSuperpowerPanel } from '@/components/FinancialSuperpowerPanel';
 import { PoliticalRiskSuperpowerPanel } from '@/components/PoliticalRiskSuperpowerPanel';
 import { StateFragilityPanel } from '@/components/StateFragilityPanel';
@@ -387,7 +388,6 @@ import { EnergySecurityPanel } from '@/components/EnergySecurityPanel';
 import { ArmsProliferationPanel } from '@/components/ArmsProliferationPanel';
 import { SpaceMilitarizationPanel } from '@/components/SpaceMilitarizationPanel';
 import { ArcticMonitoringPanel } from '@/components/ArcticMonitoringPanel';
-import { ClimateSecurityNexusPanel } from '@/components/ClimateSecurityNexusPanel';
 import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
 import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';
 import { AllianceCohesionPanel } from '@/components/AllianceCohesionPanel';
@@ -1541,7 +1541,6 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['arms-proliferation'] = new ArmsProliferationPanel();
  this.ctx.panels['space-militarization'] = new SpaceMilitarizationPanel();
  this.ctx.panels['arctic-monitoring'] = new ArcticMonitoringPanel();
- this.ctx.panels['climate-security-nexus'] = new ClimateSecurityNexusPanel();
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
  this.ctx.panels['urban-security'] = new UrbanSecurityPanel();
  this.ctx.panels['alliance-cohesion'] = new AllianceCohesionPanel();
@@ -1549,6 +1548,7 @@ export class PanelLayoutManager implements AppModule {
 
  this.ctx.panels['maritime-boundary'] = new MaritimeBoundaryPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ this.ctx.panels['critical-infra-attack'] = new CriticalInfrastructureAttackPanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
  this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
  this.ctx.panels['shortage-detail-rice'] = new ShortageDetailPanel('rice');

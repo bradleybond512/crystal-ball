@@ -103,6 +103,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'weather-superpower': { name: 'Weather Intelligence', enabled: true, priority: 1 },
   'spaceflight-news': { name: 'Spaceflight News', enabled: true, priority: 2 },
   'space-launches': { name: 'Space Launches', enabled: true, priority: 2 },
+  'pandemic-preparedness': { name: 'Pandemic Preparedness', enabled: true, priority: 2 },
   'disease-outbreaks': { name: 'Disease Outbreaks', enabled: true, priority: 2 },
   'disease-intel': { name: 'Disease Intelligence', enabled: true, priority: 2 },
   'humanitarian-crisis': { name: 'Humanitarian Crises', enabled: true, priority: 2 },
@@ -1144,7 +1145,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   healthEnv: {
  labelKey: 'header.panelCatHealthEnv',
- panelKeys: ['hazard-alerts', 'infrastructure', 'giving', 'daily-wisdom', 'stoic-reflections', 'biblical-encouragement', 'alan-watts-reflections', 'mckenna-visions', 'disease-outbreaks', 'disease-intel', 'humanitarian-crisis', 'air-quality', 'food-insecurity', 'offline-maps', 'evacuation', 'family-tracker', 'radiation-decay', 'resource-inventory', 'water-quality', 'ecdc-surveillance', 'openaq-monitor'],
+ panelKeys: ['hazard-alerts', 'infrastructure', 'giving', 'daily-wisdom', 'stoic-reflections', 'biblical-encouragement', 'alan-watts-reflections', 'mckenna-visions', 'pandemic-preparedness', 'disease-outbreaks', 'disease-intel', 'humanitarian-crisis', 'air-quality', 'food-insecurity', 'offline-maps', 'evacuation', 'family-tracker', 'radiation-decay', 'resource-inventory', 'water-quality', 'ecdc-surveillance', 'openaq-monitor'],
  variants: ['full'],
   },
 

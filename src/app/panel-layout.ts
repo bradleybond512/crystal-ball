@@ -219,6 +219,7 @@ import { FearGreedPanel } from '@/components/FearGreedPanel';
 import { InternetDisruptionsPanel } from '@/components/InternetDisruptionsPanel';
 import { NationalDebtPanel } from '@/components/NationalDebtPanel';
 import { SovereignDebtPanel } from '@/components/SovereignDebtPanel';
+import { SovereignDebtCrisisPanel } from '@/components/SovereignDebtCrisisPanel';
 import { FuelPricesPanel } from '@/components/FuelPricesPanel';
 import { AirTrafficPanel } from '@/components/AirTrafficPanel';
 import { ThreatIntelHubPanel } from '@/components/ThreatIntelHubPanel';
@@ -1369,6 +1370,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['internet-disruptions'] = new InternetDisruptionsPanel();
  this.ctx.panels['national-debt'] = new NationalDebtPanel();
  this.ctx.panels['sovereign-debt'] = new SovereignDebtPanel();
+ this.ctx.panels['sovereign-debt-crisis'] = new SovereignDebtCrisisPanel();
  this.ctx.panels['fuel-prices'] = new FuelPricesPanel();
  this.ctx.panels['air-traffic'] = new AirTrafficPanel();
  this.ctx.panels['threat-intel-hub'] = new ThreatIntelHubPanel();

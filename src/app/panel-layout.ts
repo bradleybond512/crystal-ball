@@ -389,6 +389,7 @@ import { SpaceMilitarizationPanel } from '@/components/SpaceMilitarizationPanel'
 import { ArcticMonitoringPanel } from '@/components/ArcticMonitoringPanel';
 import { ClimateSecurityNexusPanel } from '@/components/ClimateSecurityNexusPanel';
 import { ArcticCompetitionPanel } from '@/components/ArcticCompetitionPanel';
+import { PoliticalEconomyPanel } from '@/components/PoliticalEconomyPanel';
 import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
 import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';
 import { AllianceCohesionPanel } from '@/components/AllianceCohesionPanel';
@@ -1544,6 +1545,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['arctic-monitoring'] = new ArcticMonitoringPanel();
  this.ctx.panels['climate-security-nexus'] = new ClimateSecurityNexusPanel();
  this.ctx.panels['arctic-competition'] = new ArcticCompetitionPanel();
+    this.ctx.panels['political-economy'] = new PoliticalEconomyPanel();
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
  this.ctx.panels['urban-security'] = new UrbanSecurityPanel();
  this.ctx.panels['alliance-cohesion'] = new AllianceCohesionPanel();

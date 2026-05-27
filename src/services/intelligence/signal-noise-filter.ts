@@ -194,19 +194,6 @@ export class SignalNoiseFilter {
     return this.scores.get(observationId);
   }
 
-  /** Newest-first list of all scored observations, capped at `limit`. */
-  getRecent(limit = 20): SignalScore[] {
-    const all = [...this.scores.values()];
-    // Map preserves insertion order; newest entries are at the tail.
-    const start = Math.max(0, all.length - limit);
-    return all.slice(start).reverse();
-  }
-
-  /** Total scores currently held in memory. */
-  size(): number {
-    return this.scores.size;
-  }
-
   clear(): void {
     this.scores.clear();
     persist(this.storage, this.scores);

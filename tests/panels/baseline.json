@@ -1,9 +1,0 @@
-{
-  "_comment": "Known-broken panels that the smoke harness should NOT fail on. Each entry is a real bug that needs its own follow-up PR — the harness still reports them, but they don't gate merges. When you fix one, remove its id from this list.",
-  "_added": "2026-04-28 — initial baseline at harness introduction",
-  "_updated": "2026-04-28 (PR198 bug-smash) — breakthroughs now degrades cleanly via shape guards; baseline empty",
-  "silent": [],
-  "errored": [],
-  "asyncErrors": [],
-  "skipped": []
-}

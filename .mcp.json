@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "crystalball": {
-      "command": "node",
-      "args": ["tools/mcp-server/index.mjs"]
-    }
-  }
-}

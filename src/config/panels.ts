@@ -237,6 +237,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'threat-convergence': { name: 'Threat Convergence', enabled: true, priority: 1 },
   'geopolitical-risk': { name: 'Geopolitical Risk', enabled: true, priority: 1 },
   'sanctions-tracker': { name: 'Sanctions Tracker', enabled: true, priority: 1 },
+  'regulatory-arbitrage': { name: 'Regulatory Arbitrage', enabled: true, priority: 1 },
   'system-diagnostic': { name: 'System Diagnostic', enabled: true, priority: 1 },
   'self-test': { name: 'Self-Test', enabled: true, priority: 2 },
   'operator-mode': { name: 'Operator Mode', enabled: true, priority: 2 },
@@ -1123,7 +1124,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   marketsFinance: {
  labelKey: 'header.panelCatMarketsFinance',
- panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower'],
+ panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower', 'regulatory-arbitrage'],
  variants: ['full'],
   },
   topical: {

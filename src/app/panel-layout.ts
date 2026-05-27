@@ -374,6 +374,7 @@ import { EnergySuperpowerPanel } from '@/components/EnergySuperpowerPanel';
 import { SignalNoiseFilterPanel } from '@/components/SignalNoiseFilterPanel';
 import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
+import { DemocraticBackslidingPanel } from '@/components/DemocraticBackslidingPanel';
 import { FinancialSuperpowerPanel } from '@/components/FinancialSuperpowerPanel';
 import { PoliticalRiskSuperpowerPanel } from '@/components/PoliticalRiskSuperpowerPanel';
 import { StateFragilityPanel } from '@/components/StateFragilityPanel';
@@ -1547,6 +1548,7 @@ export class PanelLayoutManager implements AppModule {
 
  this.ctx.panels['maritime-boundary'] = new MaritimeBoundaryPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ this.ctx.panels['democratic-backsliding'] = new DemocraticBackslidingPanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
  this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
  this.ctx.panels['shortage-detail-rice'] = new ShortageDetailPanel('rice');

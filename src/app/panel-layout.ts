@@ -382,6 +382,7 @@ import { ArcticMonitoringPanel } from '@/components/ArcticMonitoringPanel';
 import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
 import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';
 import { AllianceCohesionPanel } from '@/components/AllianceCohesionPanel';
+import { FinancialCrimesPanel } from '@/components/FinancialCrimesPanel';
 import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
 import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
@@ -1522,6 +1523,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
  this.ctx.panels['urban-security'] = new UrbanSecurityPanel();
  this.ctx.panels['alliance-cohesion'] = new AllianceCohesionPanel();
+ this.ctx.panels['financial-crimes'] = new FinancialCrimesPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
  this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');

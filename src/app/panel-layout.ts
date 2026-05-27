@@ -459,6 +459,7 @@ import { ThreatConvergencePanel } from '@/components/ThreatConvergencePanel';
 import { GeopoliticalRiskPanel } from '@/components/GeopoliticalRiskPanel';
 import { SanctionsTrackerPanel } from '@/components/SanctionsTrackerPanel';
 import { CurrencyWarfarePanel } from '@/components/CurrencyWarfarePanel';
+import { EconomicCoercionPanel } from '@/components/EconomicCoercionPanel';
 import { StalenessBanner } from '@/components/StalenessBanner';
 import { focusInvestmentOnMap } from '@/services/investments-focus';
 import { debounce, rafSchedule, saveToStorage } from '@/utils';
@@ -1346,6 +1347,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['currency-warfare'] = new CurrencyWarfarePanel();
 
  this.ctx.panels['sanctions-tracker'] = new SanctionsTrackerPanel();
+ this.ctx.panels['economic-coercion'] = new EconomicCoercionPanel();
  const volcanoAlertsPanel = new VolcanoAlertsPanel();
  volcanoAlertsPanel.setEventClickHandler((lat, lon) => {
  this.ctx.map?.setCenter(lat, lon, 7);

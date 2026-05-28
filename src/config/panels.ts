@@ -290,6 +290,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'arctic-monitoring': { name: 'Arctic Intelligence', enabled: true, priority: 1 },
   'climate-security-nexus': { name: 'Climate-Security Nexus', enabled: true, priority: 1 },
   'arctic-competition': { name: 'Arctic Competition', enabled: true, priority: 1 },
+  'quantum-tech-race': { name: 'Quantum Technology Race', enabled: true, priority: 1 },
   'cyber-espionage': { name: 'Cyber Espionage Tracker', enabled: true, priority: 1 },
   'urban-instability': { name: 'Urban Instability Monitor', enabled: true, priority: 1 },
   'political-economy': { name: 'Political Economy Risk', enabled: true, priority: 1 },

@@ -1547,6 +1547,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['arctic-monitoring'] = new ArcticMonitoringPanel();
  this.ctx.panels['climate-security-nexus'] = new ClimateSecurityNexusPanel();
  this.ctx.panels['arctic-competition'] = new ArcticCompetitionPanel();
+  this.ctx.panels['quantum-tech-race'] = new QuantumTechRacePanel();
     this.ctx.panels['urban-instability'] = new UrbanInstabilityPanel();
     this.ctx.panels['cyber-espionage'] = new CyberEspionagePanel();
     this.ctx.panels['political-economy'] = new PoliticalEconomyPanel();

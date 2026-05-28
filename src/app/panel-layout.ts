@@ -393,6 +393,7 @@ import { UrbanInstabilityPanel } from '@/components/UrbanInstabilityPanel';
 import { CyberEspionagePanel } from '@/components/CyberEspionagePanel';
 import { PoliticalEconomyPanel } from '@/components/PoliticalEconomyPanel';
 import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
+import { ElectionInterferencePanel } from '@/components/ElectionInterferencePanel';
 import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';
 import { AllianceCohesionPanel } from '@/components/AllianceCohesionPanel';
 import { InformationOperationsPanel } from '@/components/InformationOperationsPanel';
@@ -1551,6 +1552,7 @@ export class PanelLayoutManager implements AppModule {
     this.ctx.panels['cyber-espionage'] = new CyberEspionagePanel();
     this.ctx.panels['political-economy'] = new PoliticalEconomyPanel();
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
+    this.ctx.panels['election-interference'] = new ElectionInterferencePanel();
  this.ctx.panels['urban-security'] = new UrbanSecurityPanel();
  this.ctx.panels['alliance-cohesion'] = new AllianceCohesionPanel();
  this.ctx.panels['information-operations'] = new InformationOperationsPanel();

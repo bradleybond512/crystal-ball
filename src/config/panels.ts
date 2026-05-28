@@ -294,6 +294,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'urban-instability': { name: 'Urban Instability Monitor', enabled: true, priority: 1 },
   'political-economy': { name: 'Political Economy Risk', enabled: true, priority: 1 },
   'election-monitoring': { name: 'Election Monitoring', enabled: true, priority: 1 },
+  'election-interference': { name: 'Election Interference Tracker', enabled: true, priority: 1 },
   'urban-security': { name: 'Urban Security', enabled: true, priority: 1 },
   'signal-noise-filter': { name: 'Signal Quality', enabled: true, priority: 1 },
   'alliance-cohesion': { name: 'Alliance Cohesion', enabled: true, priority: 1 },

@@ -235,6 +235,7 @@ import { FinancialContagionPanel } from '@/components/FinancialContagionPanel';
 import { SupplyChainImpactPanel } from '@/components/SupplyChainImpactPanel';
 import { WaterQualityPanel } from '@/components/WaterQualityPanel';
 import { NuclearMonitorPanel } from '@/components/NuclearMonitorPanel';
+import { NuclearDeterrencePanel } from '@/components/NuclearDeterrencePanel';
 import { NotificationDigestPanel } from '@/components/NotificationDigestPanel';
 import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel';
 import { NotificationAuditPanel } from '@/components/NotificationAuditPanel';
@@ -1394,6 +1395,7 @@ export class PanelLayoutManager implements AppModule {
  queueMicrotask(() => { survivalAdvisor.init(); financialContagion.init(); supplyChainImpact.init(); });
  this.ctx.panels['water-quality'] = new WaterQualityPanel();
  this.ctx.panels['nuclear-monitor'] = new NuclearMonitorPanel();
+    this.ctx.panels['nuclear-deterrence'] = new NuclearDeterrencePanel();
  this.ctx.panels['notification-digest'] = new NotificationDigestPanel();
  this.ctx.panels['notification-history'] = new NotificationHistoryPanel();
  this.ctx.panels['notification-audit'] = new NotificationAuditPanel();

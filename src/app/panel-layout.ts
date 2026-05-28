@@ -443,6 +443,7 @@ import { AlertDeduplicationPanel } from '@/components/AlertDeduplicationPanel';
 import { AlertFatigueDashboardPanel } from '@/components/AlertFatigueDashboardPanel';
 import { ThreatConvergencePanel } from '@/components/ThreatConvergencePanel';
 import { GeopoliticalRiskPanel } from '@/components/GeopoliticalRiskPanel';
+import { TravelSafetyPanel } from '@/components/TravelSafetyPanel';
 
 import { SanctionsTrackerPanel } from '@/components/SanctionsTrackerPanel';import { StalenessBanner } from '@/components/StalenessBanner';
 import { focusInvestmentOnMap } from '@/services/investments-focus';
@@ -1327,6 +1328,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['alert-fatigue-dashboard'] = new AlertFatigueDashboardPanel();
  this.ctx.panels['threat-convergence'] = new ThreatConvergencePanel();
  this.ctx.panels['geopolitical-risk'] = new GeopoliticalRiskPanel();
+    this.ctx.panels['travel-safety'] = new TravelSafetyPanel();
 
  this.ctx.panels['sanctions-tracker'] = new SanctionsTrackerPanel();
  const volcanoAlertsPanel = new VolcanoAlertsPanel();

@@ -391,6 +391,7 @@ import { ClimateSecurityNexusPanel } from '@/components/ClimateSecurityNexusPane
 import { ArcticCompetitionPanel } from '@/components/ArcticCompetitionPanel';
 import { UrbanInstabilityPanel } from '@/components/UrbanInstabilityPanel';
 import { CyberEspionagePanel } from '@/components/CyberEspionagePanel';
+import { StrategicDeceptionPanel } from '@/components/StrategicDeceptionPanel';
 import { PoliticalEconomyPanel } from '@/components/PoliticalEconomyPanel';
 import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
 import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';
@@ -1549,6 +1550,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['arctic-competition'] = new ArcticCompetitionPanel();
     this.ctx.panels['urban-instability'] = new UrbanInstabilityPanel();
     this.ctx.panels['cyber-espionage'] = new CyberEspionagePanel();
+    this.ctx.panels['strategic-deception'] = new StrategicDeceptionPanel();
     this.ctx.panels['political-economy'] = new PoliticalEconomyPanel();
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
  this.ctx.panels['urban-security'] = new UrbanSecurityPanel();

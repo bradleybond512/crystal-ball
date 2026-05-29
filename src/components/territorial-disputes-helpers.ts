@@ -1,108 +1,229 @@
-// territorial-disputes-helpers.ts — active territorial claim and conflict zone tracking
+// territorial-disputes-helpers.ts
+// Pure logic for TerritorialDisputesPanel — no DOM, no Panel imports
 
-export type DisputeRegion = 'Asia-Pacific' | 'Europe' | 'Middle East' | 'Africa' | 'Arctic' | 'Americas' | 'South Asia';
-export type DisputePhase = 'armed-conflict' | 'militarized' | 'contested' | 'frozen-conflict' | 'diplomatic';
-export type ClaimantBlock = 'NATO' | 'China' | 'Russia' | 'Regional' | 'Non-state';
+export type DisputePhase = 'Active War' | 'Frozen Conflict' | 'Escalating' | 'Standoff' | 'Negotiation' | 'Latent';
+export type DiplomaticTrend = 'escalating' | 'stable' | 'de-escalating';
 
 export interface TerritorialDispute {
   id: string;
   name: string;
-  region: DisputeRegion;
-  claimants: string[];
-  primaryAggressor: string;
+  parties: string[];
+  region: string;
   phase: DisputePhase;
-  escalationTrend: 'escalating' | 'stable' | 'de-escalating';
-  militaryPresenceScore: number; // 0-100
-  economicStakes: number; // 0-100 (resource value, trade routes)
-  resolutionProspect: number; // 0-100 (100 = near-term resolution likely)
-  affectedAreaKm2: number;
-  keyIssue: string;
-  lastIncident: string;
-}
-
-export interface DisputeIncident {
-  id: string;
-  disputeId: string;
-  date: string;
-  type: 'military-clash' | 'naval-incident' | 'aerial-intrusion' | 'diplomatic-protest' | 'legal-filing' | 'civilian-harm';
-  severity: number; // 1-10
+  trend: DiplomaticTrend;
+  severityScore: number;
+  nuclearRisk: boolean;
+  activeViolence: boolean;
+  disputedArea: string;
   description: string;
+  keyDevelopment: string;
 }
 
-const MOCK_DISPUTES: TerritorialDispute[] = [
-  { id: 'ukraine-russia', name: 'Russia-Ukraine War', region: 'Europe', claimants: ['Russia','Ukraine'], primaryAggressor: 'Russia', phase: 'armed-conflict', escalationTrend: 'stable', militaryPresenceScore: 100, economicStakes: 82, resolutionProspect: 15, affectedAreaKm2: 118000, keyIssue: 'Full-scale invasion + annexed territories (Donetsk, Luhansk, Zaporizhzhia, Kherson, Crimea)', lastIncident: '2024-11-01' },
-  { id: 'taiwan-strait', name: 'Taiwan Strait', region: 'Asia-Pacific', claimants: ['China','Taiwan','USA'], primaryAggressor: 'China', phase: 'militarized', escalationTrend: 'escalating', militaryPresenceScore: 88, economicStakes: 95, resolutionProspect: 20, affectedAreaKm2: 180000, keyIssue: 'PRC claims sovereignty; Taiwan de facto independent; US One China policy ambiguity', lastIncident: '2024-10-15' },
-  { id: 'scs-spratly', name: 'South China Sea (Spratlys/SCS)', region: 'Asia-Pacific', claimants: ['China','Philippines','Vietnam','Malaysia','Brunei','Taiwan'], primaryAggressor: 'China', phase: 'militarized', escalationTrend: 'escalating', militaryPresenceScore: 82, economicStakes: 88, resolutionProspect: 12, affectedAreaKm2: 3500000, keyIssue: 'Nine-dash line overlapping EEZs; artificial island militarization', lastIncident: '2024-10-22' },
-  { id: 'kashmir', name: 'Kashmir (India-Pakistan)', region: 'South Asia', claimants: ['India','Pakistan','China'], primaryAggressor: 'Pakistan', phase: 'frozen-conflict', escalationTrend: 'stable', militaryPresenceScore: 75, economicStakes: 55, resolutionProspect: 10, affectedAreaKm2: 222236, keyIssue: 'LOC de facto border; Azad Kashmir vs Jammu & Kashmir; nuclear-armed rivalry', lastIncident: '2024-08-10' },
-  { id: 'senkaku-diaoyu', name: 'Senkaku/Diaoyu Islands', region: 'Asia-Pacific', claimants: ['Japan','China','Taiwan'], primaryAggressor: 'China', phase: 'contested', escalationTrend: 'escalating', militaryPresenceScore: 65, economicStakes: 60, resolutionProspect: 18, affectedAreaKm2: 7, keyIssue: 'Uninhabited islands; US-Japan security treaty trigger risk', lastIncident: '2024-09-20' },
-  { id: 'arctic-shelf', name: 'Arctic Continental Shelf', region: 'Arctic', claimants: ['Russia','Canada','Denmark','Norway','USA'], primaryAggressor: 'Russia', phase: 'diplomatic', escalationTrend: 'escalating', militaryPresenceScore: 45, economicStakes: 92, resolutionProspect: 30, affectedAreaKm2: 1200000, keyIssue: 'Lomonosov Ridge oil/gas; Northern Sea Route; militarization', lastIncident: '2024-07-05' },
-  { id: 'nagorno-karabakh', name: 'Nagorno-Karabakh', region: 'Europe', claimants: ['Azerbaijan','Armenia'], primaryAggressor: 'Azerbaijan', phase: 'frozen-conflict', escalationTrend: 'de-escalating', militaryPresenceScore: 60, economicStakes: 35, resolutionProspect: 40, affectedAreaKm2: 4400, keyIssue: 'Azerbaijan recaptured region 2023; Armenian population displacement', lastIncident: '2023-09-19' },
-  { id: 'sudan-ethiopia', name: 'Ethiopia-Sudan Border (Fashoda)', region: 'Africa', claimants: ['Ethiopia','Sudan'], primaryAggressor: 'Sudan', phase: 'militarized', escalationTrend: 'escalating', militaryPresenceScore: 55, economicStakes: 40, resolutionProspect: 25, affectedAreaKm2: 1800, keyIssue: 'al-Fashaga fertile land; Nile water rights; ethnic militia clashes', lastIncident: '2024-05-18' },
+export interface DisputeRenderData {
+  disputes: TerritorialDispute[];
+  globalTensionIndex: number;
+  activeWarCount: number;
+  frozenConflictCount: number;
+  escalatingCount: number;
+  nuclearRiskCount: number;
+  mostSevere: TerritorialDispute[];
+}
+
+const DISPUTES: TerritorialDispute[] = [
+  {
+    id: 'D001',
+    name: 'Ukraine-Russia War',
+    parties: ['Ukraine', 'Russia'],
+    region: 'Eastern Europe',
+    phase: 'Active War',
+    trend: 'stable',
+    severityScore: 10,
+    nuclearRisk: true,
+    activeViolence: true,
+    disputedArea: 'Donbas, Crimea, Zaporizhzhia, Kherson, Kharkiv',
+    description: 'Full-scale Russian invasion of Ukraine; largest European land war since 1945.',
+    keyDevelopment: 'Front lines largely stabilized; ongoing drone/missile exchanges; diplomatic deadlock.',
+  },
+  {
+    id: 'D002',
+    name: 'Taiwan Strait',
+    parties: ['China (PRC)', 'Taiwan (ROC)', 'USA'],
+    region: 'East Asia',
+    phase: 'Standoff',
+    trend: 'escalating',
+    severityScore: 9,
+    nuclearRisk: true,
+    activeViolence: false,
+    disputedArea: 'Taiwan, Taiwan Strait, Kinmen, Matsu',
+    description: 'PRC claims sovereignty over Taiwan; US maintains strategic ambiguity and arms sales.',
+    keyDevelopment: 'PLA air and naval incursions into Taiwan ADIZ at record frequency.',
+  },
+  {
+    id: 'D003',
+    name: 'South China Sea',
+    parties: ['China', 'Philippines', 'Vietnam', 'Malaysia', 'Brunei', 'Taiwan'],
+    region: 'Southeast Asia',
+    phase: 'Escalating',
+    trend: 'escalating',
+    severityScore: 7,
+    nuclearRisk: false,
+    activeViolence: true,
+    disputedArea: 'Spratly Islands, Paracel Islands, Scarborough Shoal',
+    description: 'China claims ~90% of SCS via nine-dash line; Philippines resisting at Second Thomas Shoal.',
+    keyDevelopment: 'China coast guard water-cannon attacks on Philippine resupply missions.',
+  },
+  {
+    id: 'D004',
+    name: 'Kashmir',
+    parties: ['India', 'Pakistan', 'China'],
+    region: 'South Asia',
+    phase: 'Standoff',
+    trend: 'stable',
+    severityScore: 8,
+    nuclearRisk: true,
+    activeViolence: true,
+    disputedArea: 'Jammu & Kashmir, Aksai Chin, Siachen Glacier',
+    description: 'Disputed since 1947 partition; India revoked Article 370 in 2019.',
+    keyDevelopment: 'Pahalgam attack 2025 — India-Pakistan tensions at decade high; LoC exchanges.',
+  },
+  {
+    id: 'D005',
+    name: 'Senkaku / Diaoyu Islands',
+    parties: ['Japan', 'China', 'Taiwan'],
+    region: 'East Asia',
+    phase: 'Escalating',
+    trend: 'escalating',
+    severityScore: 6,
+    nuclearRisk: false,
+    activeViolence: false,
+    disputedArea: 'Senkaku Islands (Diaoyu in Chinese)',
+    description: 'Uninhabited islands administered by Japan; claimed by China and Taiwan.',
+    keyDevelopment: 'Chinese coast guard vessels in contiguous zone at record frequency in 2025.',
+  },
+  {
+    id: 'D006',
+    name: 'Arctic Sovereignty',
+    parties: ['Russia', 'USA', 'Canada', 'Norway', 'Denmark'],
+    region: 'Arctic',
+    phase: 'Latent',
+    trend: 'escalating',
+    severityScore: 4,
+    nuclearRisk: false,
+    activeViolence: false,
+    disputedArea: 'Northwest Passage, Lomonosov Ridge, Arctic continental shelf',
+    description: 'Competing claims over Arctic seabed and shipping routes as ice recedes.',
+    keyDevelopment: 'Russia expanded Northern Sea Route militarization; Canada increasing Arctic patrols.',
+  },
+  {
+    id: 'D007',
+    name: 'Nagorno-Karabakh',
+    parties: ['Azerbaijan', 'Armenia'],
+    region: 'South Caucasus',
+    phase: 'Frozen Conflict',
+    trend: 'de-escalating',
+    severityScore: 5,
+    nuclearRisk: false,
+    activeViolence: false,
+    disputedArea: 'Former Nagorno-Karabakh Autonomous Oblast',
+    description: 'Azerbaijan seized full control in September 2023; ethnic Armenian exodus complete.',
+    keyDevelopment: 'Armenia-Azerbaijan peace treaty negotiations ongoing; border demarcation active.',
+  },
+  {
+    id: 'D008',
+    name: 'Sudan-Ethiopia Border',
+    parties: ['Sudan', 'Ethiopia'],
+    region: 'East Africa',
+    phase: 'Active War',
+    trend: 'escalating',
+    severityScore: 6,
+    nuclearRisk: false,
+    activeViolence: true,
+    disputedArea: 'Al-Fashaga triangle; Blue Nile dam dispute',
+    description: 'Disputed fertile borderland; compounded by GERD dam water-rights conflict.',
+    keyDevelopment: 'Sudan civil war creates power vacuum; Ethiopian militia control contested zones.',
+  },
 ];
-
-const MOCK_INCIDENTS: DisputeIncident[] = [
-  { id: 'di1', disputeId: 'scs-spratly', date: '2024-10-22', type: 'naval-incident', severity: 7, description: 'PLAN water cannon and laser attack on Philippine Coast Guard at Second Thomas Shoal' },
-  { id: 'di2', disputeId: 'taiwan-strait', date: '2024-10-15', type: 'aerial-intrusion', severity: 6, description: 'PLA aircraft crossed median line — 24 fighters in one sortie' },
-  { id: 'di3', disputeId: 'ukraine-russia', date: '2024-11-01', type: 'military-clash', severity: 10, description: 'Drone strikes on Kyiv; Russian advance in Donetsk sector' },
-  { id: 'di4', disputeId: 'senkaku-diaoyu', date: '2024-09-20', type: 'naval-incident', severity: 5, description: 'CCG vessels entered territorial waters — 4-day contiguous zone transit' },
-  { id: 'di5', disputeId: 'kashmir', date: '2024-08-10', type: 'military-clash', severity: 4, description: 'LOC ceasefire violation — small arms exchange, 2 soldiers injured' },
-];
-
-export function scoreDisputeSeverity(d: TerritorialDispute): number {
-  const phaseScore = { 'armed-conflict': 50, 'militarized': 35, 'contested': 20, 'frozen-conflict': 15, 'diplomatic': 5 }[d.phase];
-  const trendMult = d.escalationTrend === 'escalating' ? 1.2 : d.escalationTrend === 'de-escalating' ? 0.8 : 1.0;
-  return Math.min(100, Math.round((phaseScore + d.militaryPresenceScore * 0.3 + d.economicStakes * 0.2) * trendMult));
-}
-
-export function filterByPhase(disputes: TerritorialDispute[], phase: DisputePhase): TerritorialDispute[] {
-  return disputes.filter(d => d.phase === phase);
-}
-
-export function filterByRegion(disputes: TerritorialDispute[], region: DisputeRegion): TerritorialDispute[] {
-  return disputes.filter(d => d.region === region);
-}
-
-export function filterByTrend(disputes: TerritorialDispute[], trend: 'escalating' | 'stable' | 'de-escalating'): TerritorialDispute[] {
-  return disputes.filter(d => d.escalationTrend === trend);
-}
-
-export function rankByseverity(disputes: TerritorialDispute[]): TerritorialDispute[] {
-  return [...disputes].sort((a, b) => scoreDisputeSeverity(b) - scoreDisputeSeverity(a));
-}
 
 export function computeGlobalTensionIndex(disputes: TerritorialDispute[]): number {
   if (!disputes.length) return 0;
-  return Math.round(disputes.reduce((s, d) => s + scoreDisputeSeverity(d), 0) / disputes.length);
+  const weights: Record<DisputePhase, number> = {
+    'Active War': 1.0,
+    'Escalating': 0.7,
+    'Standoff': 0.5,
+    'Frozen Conflict': 0.3,
+    'Negotiation': 0.15,
+    'Latent': 0.1,
+  };
+  const trendMod: Record<DiplomaticTrend, number> = {
+    escalating: 1.1,
+    stable: 1.0,
+    'de-escalating': 0.9,
+  };
+  const sum = disputes.reduce((acc, d) => {
+    const w = weights[d.phase] ?? 0.3;
+    const tm = trendMod[d.trend] ?? 1.0;
+    return acc + d.severityScore * w * tm;
+  }, 0);
+  const max = disputes.length * 10;
+  return Math.min(100, Math.round((sum / max) * 100));
 }
 
-export function getPhaseDistribution(disputes: TerritorialDispute[]): Record<DisputePhase, number> {
-  const dist: Record<DisputePhase, number> = { 'armed-conflict': 0, 'militarized': 0, 'contested': 0, 'frozen-conflict': 0, 'diplomatic': 0 };
-  for (const d of disputes) dist[d.phase]++;
-  return dist;
+export function getActiveWars(disputes: TerritorialDispute[]): TerritorialDispute[] {
+  return disputes.filter(d => d.phase === 'Active War');
 }
 
-export function getIncidentsForDispute(incidents: DisputeIncident[], disputeId: string): DisputeIncident[] {
-  return incidents.filter(i => i.disputeId === disputeId).sort((a, b) => b.date.localeCompare(a.date));
+export function getFrozenConflicts(disputes: TerritorialDispute[]): TerritorialDispute[] {
+  return disputes.filter(d => d.phase === 'Frozen Conflict');
 }
 
-export function getRecentHighSeverityIncidents(incidents: DisputeIncident[], minSeverity = 5): DisputeIncident[] {
-  return incidents.filter(i => i.severity >= minSeverity).sort((a, b) => b.severity - a.severity || b.date.localeCompare(a.date));
+export function getEscalatingDisputes(disputes: TerritorialDispute[]): TerritorialDispute[] {
+  return disputes.filter(d => d.phase === 'Escalating' || d.trend === 'escalating');
 }
 
-export function buildRenderData(): {
-  disputes: TerritorialDispute[];
-  recentIncidents: DisputeIncident[];
-  globalTensionIndex: number;
-  escalatingCount: number;
-  armedConflictCount: number;
-  phaseDistribution: Record<DisputePhase, number>;
-} {
+export function getNuclearRiskDisputes(disputes: TerritorialDispute[]): TerritorialDispute[] {
+  return disputes.filter(d => d.nuclearRisk);
+}
+
+export function getMostSevere(disputes: TerritorialDispute[], n = 3): TerritorialDispute[] {
+  return [...disputes].sort((a, b) => b.severityScore - a.severityScore).slice(0, n);
+}
+
+export function phaseBadgeClass(phase: DisputePhase): string {
+  const map: Record<DisputePhase, string> = {
+    'Active War': 'phase-war',
+    'Escalating': 'phase-escalating',
+    'Standoff': 'phase-standoff',
+    'Frozen Conflict': 'phase-frozen',
+    'Negotiation': 'phase-negotiation',
+    'Latent': 'phase-latent',
+  };
+  return map[phase] ?? 'phase-latent';
+}
+
+export function trendArrow(trend: DiplomaticTrend): string {
+  const map: Record<DiplomaticTrend, string> = {
+    escalating: '\u2191',
+    stable: '\u2192',
+    'de-escalating': '\u2193',
+  };
+  return map[trend] ?? '\u2192';
+}
+
+export function severityClass(score: number): string {
+  if (score >= 9) return 'sev-critical';
+  if (score >= 7) return 'sev-high';
+  if (score >= 5) return 'sev-medium';
+  return 'sev-low';
+}
+
+export function buildRenderData(): DisputeRenderData {
   return {
-    disputes: rankByseverity(MOCK_DISPUTES),
-    recentIncidents: getRecentHighSeverityIncidents(MOCK_INCIDENTS),
-    globalTensionIndex: computeGlobalTensionIndex(MOCK_DISPUTES),
-    escalatingCount: filterByTrend(MOCK_DISPUTES, 'escalating').length,
-    armedConflictCount: filterByPhase(MOCK_DISPUTES, 'armed-conflict').length,
-    phaseDistribution: getPhaseDistribution(MOCK_DISPUTES),
+    disputes: DISPUTES,
+    globalTensionIndex: computeGlobalTensionIndex(DISPUTES),
+    activeWarCount: getActiveWars(DISPUTES).length,
+    frozenConflictCount: getFrozenConflicts(DISPUTES).length,
+    escalatingCount: DISPUTES.filter(d => d.trend === 'escalating').length,
+    nuclearRiskCount: getNuclearRiskDisputes(DISPUTES).length,
+    mostSevere: getMostSevere(DISPUTES, 3),
   };
 }

@@ -386,6 +386,7 @@ import { WaterSecurityPanel } from '@/components/WaterSecurityPanel';
 import { EnergySecurityPanel } from '@/components/EnergySecurityPanel';
 import { ArmsProliferationPanel } from '@/components/ArmsProliferationPanel';
 import { TerritorialDisputesPanel } from '@/components/TerritorialDisputesPanel';
+import { InternationalLawViolationsPanel } from '@/components/InternationalLawViolationsPanel';
 import { SpaceMilitarizationPanel } from '@/components/SpaceMilitarizationPanel';
 import { ArcticMonitoringPanel } from '@/components/ArcticMonitoringPanel';
 import { ClimateSecurityNexusPanel } from '@/components/ClimateSecurityNexusPanel';
@@ -1544,7 +1545,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['water-security'] = new WaterSecurityPanel();
  this.ctx.panels['energy-security'] = new EnergySecurityPanel();
  this.ctx.panels['arms-proliferation'] = new ArmsProliferationPanel();
- this.ctx.panels['territorial-disputes'] = new TerritorialDisputesPanel();
+ this.ctx.panels['territorial-disputes'] = new TerritorialDisputesPanel(); this.ctx.panels['intl-law-violations'] = new InternationalLawViolationsPanel();
  this.ctx.panels['space-militarization'] = new SpaceMilitarizationPanel();
  this.ctx.panels['arctic-monitoring'] = new ArcticMonitoringPanel();
  this.ctx.panels['climate-security-nexus'] = new ClimateSecurityNexusPanel();

@@ -326,7 +326,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'what-changed': { name: 'What Changed', enabled: true, priority: 2 },
   'counterterrorism': { name: 'Counterterrorism Monitor', enabled: true, priority: 1 },
   'territorial-disputes': { name: 'Territorial Disputes Tracker', enabled: true, priority: 1 },
-  'regime-stability': { name: 'Regime Stability', enabled: true, priority: 1 },
+  'regime-stability': { name: 'Regime Stability', enabled: true, priority: 1 },  'escalation-ladder': { name: 'Escalation Ladder', enabled: true, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {

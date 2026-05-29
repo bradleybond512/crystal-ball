@@ -106,7 +106,7 @@ export { AskCrystalBallPanel } from './AskCrystalBallPanel';
 export { SurvivalAdvisorPanel } from './SurvivalAdvisorPanel';
 export { ThreatSynthesisPanel } from './ThreatSynthesisPanel';
 export { ScenarioSimulatorPanel } from './ScenarioSimulatorPanel';
-export { EscalationForecastPanel } from './EscalationForecastPanel';
+export { EscalationForecastPanel } from './EscalationForecastPanel';export { EscalationLadderPanel } from './EscalationLadderPanel';
 export { AnomalyDetectionPanel } from './AnomalyDetectionPanel';
 export { FinancialContagionPanel } from './FinancialContagionPanel';
 export { SupplyChainImpactPanel } from './SupplyChainImpactPanel';

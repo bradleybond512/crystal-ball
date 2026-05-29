@@ -327,6 +327,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'counterterrorism': { name: 'Counterterrorism Monitor', enabled: true, priority: 1 },
   'territorial-disputes': { name: 'Territorial Disputes Tracker', enabled: true, priority: 1 },
   'regime-stability': { name: 'Regime Stability', enabled: true, priority: 1 },
+  'resource-nationalism': { name: 'Resource Nationalism', enabled: true, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {
@@ -1131,7 +1132,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   marketsFinance: {
  labelKey: 'header.panelCatMarketsFinance',
- panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower', 'political-economy'],
+ panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower', 'political-economy', 'resource-nationalism'],
  variants: ['full'],
   },
   topical: {

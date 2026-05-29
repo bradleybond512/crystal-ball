@@ -384,6 +384,7 @@ import { NarcoticsTraffickingPanel } from '@/components/NarcoticsTraffickingPane
 import { TerrorismSuperpowerPanel } from '@/components/TerrorismSuperpowerPanel';
 import { WaterSecurityPanel } from '@/components/WaterSecurityPanel';
 import { EnergySecurityPanel } from '@/components/EnergySecurityPanel';
+import { EnergyWeaponizationPanel } from '@/components/EnergyWeaponizationPanel';
 import { ArmsProliferationPanel } from '@/components/ArmsProliferationPanel';
 import { SpaceMilitarizationPanel } from '@/components/SpaceMilitarizationPanel';
 import { ArcticMonitoringPanel } from '@/components/ArcticMonitoringPanel';
@@ -1541,7 +1542,7 @@ export class PanelLayoutManager implements AppModule {
 
  this.ctx.panels['terrorism-superpower'] = new TerrorismSuperpowerPanel();
  this.ctx.panels['water-security'] = new WaterSecurityPanel();
- this.ctx.panels['energy-security'] = new EnergySecurityPanel();
+ this.ctx.panels['energy-security'] = new EnergySecurityPanel(); this.ctx.panels['energy-weaponization'] = new EnergyWeaponizationPanel();
  this.ctx.panels['arms-proliferation'] = new ArmsProliferationPanel();
  this.ctx.panels['space-militarization'] = new SpaceMilitarizationPanel();
  this.ctx.panels['arctic-monitoring'] = new ArcticMonitoringPanel();

@@ -63,6 +63,7 @@ export * from './TelegramIntelPanel';
 export * from './BreakingNewsBanner';
 export * from './SpaceWeatherPanel';
 export * from './DiseaseOutbreakPanel';
+export * from './PandemicPreparednessPanel';
 export * from './AirQualityPanel';
 export * from './CommsHealthPanel';
 export * from './PowerGridPanel';

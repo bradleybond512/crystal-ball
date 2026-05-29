@@ -1,86 +1,111 @@
 import { Panel } from './Panel';
-import { replaceChildren, h } from '@/utils/dom-utils';
-import { buildRenderData, classifyRiskLevel } from './foreign-investment-risk-helpers';
+import {
+  buildRenderData,
+  statusBadgeClass,
+  riskClass,
+  getCriticalSectors,
+  rankSectorsByExposure,
+  type FDITransaction,
+  type SectorExposure,
+} from './foreign-investment-risk-helpers';
 
-const REFRESH_MS = 60 * 60 * 1000; // 1 hour
+const REFRESH_MS = 15 * 60 * 1000; // 15 minutes
+
+function h(tag: string, attrs: Record<string, string>, ...children: (string | Node)[]): HTMLElement {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  for (const c of children) {
+    el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return el;
+}
+
+function safeHtml(t: string): string {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 function safe<T>(fn: () => T): T | null {
   try { return fn(); } catch { return null; }
 }
 
-function safeText(t: string): string {
-  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 export class ForeignInvestmentRiskPanel extends Panel {
-  static readonly panelId = 'foreign-investment-risk';
-  static readonly title = 'Foreign Investment Risk Monitor';
-
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  static panelId = 'foreign-investment-risk';
+  static title = 'Foreign Investment Risk';
 
   constructor() {
-    super({
-      id: ForeignInvestmentRiskPanel.panelId,
-      title: ForeignInvestmentRiskPanel.title,
-      trackActivity: true,
-      infoTooltip: 'CFIUS-style strategic FDI screening: tracks foreign acquisitions of critical sectors, block rates, and national security review outcomes.',
-    });
-    this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    super(ForeignInvestmentRiskPanel.panelId, ForeignInvestmentRiskPanel.title, REFRESH_MS);
   }
 
-  public override destroy(): void {
-    if (this.refreshTimer !== null) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-    super.destroy();
-  }
-
-  private render(): void {
+  protected async refresh(): Promise<void> {
     const data = safe(() => buildRenderData());
     if (!data) {
-      replaceChildren(this.content, h('div', { className: 'fir-error' }, 'Data unavailable'));
-      this.invalidateContentCache();
+      this.replaceChildren(h('div', { class: 'error' }, 'Data unavailable'));
       return;
     }
 
-    const header = h('div', { className: 'fir-header' });
-    const blockSpan = h('span', {});
-    blockSpan.textContent = ;
-    const pendingSpan = h('span', {});
-    pendingSpan.textContent = ;
-    const valueSpan = h('span', {});
-    valueSpan.textContent = ;
-    header.append(blockSpan, pendingSpan, valueSpan);
+    const { transactions, sectorExposures, blockRate, approvalRate, pendingCount, highRiskCount, totalValueBn, totalValueBlockedBn } = data;
 
-    const rows = data.transactions.slice(0, 8).map((t) => {
-      const row = h('div', { className:  });
+    // Header metrics
+    const header = h('div', { class: 'fdi-header' },
+      h('div', { class: 'fdi-metric' },
+        h('span', { class: 'fdi-metric-label' }, 'Block Rate'),
+        h('span', { class: 'fdi-metric-value risk-high' }, `${blockRate}%`),
+      ),
+      h('div', { class: 'fdi-metric' },
+        h('span', { class: 'fdi-metric-label' }, 'Approval Rate'),
+        h('span', { class: 'fdi-metric-value status-ok' }, `${approvalRate}%`),
+      ),
+      h('div', { class: 'fdi-metric' },
+        h('span', { class: 'fdi-metric-label' }, 'Pending Review'),
+        h('span', { class: 'fdi-metric-value status-warn' }, String(pendingCount)),
+      ),
+      h('div', { class: 'fdi-metric' },
+        h('span', { class: 'fdi-metric-label' }, 'High Risk'),
+        h('span', { class: 'fdi-metric-value risk-critical' }, String(highRiskCount)),
+      ),
+      h('div', { class: 'fdi-metric' },
+        h('span', { class: 'fdi-metric-label' }, 'Blocked Value'),
+        h('span', { class: 'fdi-metric-value risk-high' }, `$${totalValueBlockedBn.toFixed(0)}B`),
+      ),
+    );
 
-      const acq = h('span', { className: 'acquirer' });
-      acq.textContent = t.acquirer.length > 20 ? t.acquirer.slice(0, 20) + '…' : t.acquirer;
+    // Transaction table
+    const txSection = h('div', { class: 'fdi-section' },
+      h('h3', { class: 'fdi-section-title' }, 'Notable FDI Reviews'),
+    );
+    for (const tx of transactions) {
+      const row = h('div', { class: `fdi-tx-row ${riskClass(tx.riskLevel)}` },
+        h('div', { class: 'fdi-tx-main' },
+          h('span', { class: 'fdi-tx-acquirer' }, safeHtml(tx.acquirer)),
+          h('span', { class: 'fdi-tx-arrow' }, ' -> '),
+          h('span', { class: 'fdi-tx-target' }, safeHtml(tx.target)),
+          h('span', { class: `fdi-tx-status ${statusBadgeClass(tx.status)}` }, safeHtml(tx.status)),
+        ),
+        h('div', { class: 'fdi-tx-meta' },
+          h('span', { class: 'fdi-tx-sector' }, safeHtml(tx.targetSector)),
+          h('span', { class: 'fdi-tx-body' }, safeHtml(tx.reviewBody)),
+          h('span', { class: 'fdi-tx-year' }, String(tx.year)),
+          tx.dealValueBn > 0 ? h('span', { class: 'fdi-tx-value' }, `$${tx.dealValueBn}B`) : h('span', {}),
+        ),
+        h('div', { class: 'fdi-tx-notes' }, safeHtml(tx.notes)),
+      );
+      txSection.appendChild(row);
+    }
 
-      const nat = h('span', { className: 'nation' });
-      nat.textContent = t.acquirerNation;
+    // Sector exposure
+    const sectorSection = h('div', { class: 'fdi-section' },
+      h('h3', { class: 'fdi-section-title' }, 'Sector Exposure'),
+    );
+    for (const sec of rankSectorsByExposure(sectorExposures)) {
+      const row = h('div', { class: `fdi-sector-row ${riskClass(sec.sensitivityLevel)}` },
+        h('span', { class: 'fdi-sector-name' }, safeHtml(sec.sector)),
+        h('span', { class: 'fdi-sector-pct' }, `${sec.foreignOwnershipPct}% foreign`),
+        h('span', { class: `fdi-sector-sens ${riskClass(sec.sensitivityLevel)}` }, safeHtml(sec.sensitivityLevel)),
+        h('span', { class: 'fdi-sector-actors' }, safeHtml(sec.topForeignActors.join(', '))),
+      );
+      sectorSection.appendChild(row);
+    }
 
-      const sec = h('span', { className: 'sector' });
-      sec.textContent = t.targetSector;
-
-      const val = h('span', { className: 'value' });
-      val.textContent = ;
-
-      const out = h('span', { className: 'outcome' });
-      out.textContent = t.outcome;
-
-      const risk = h('span', { className: 'risk' });
-      risk.textContent = String(t.riskScore);
-
-      row.append(acq, nat, sec, val, out, risk);
-      return row;
-    });
-
-    replaceChildren(this.content, header, ...rows);
-    this.invalidateContentCache();
-    this.markFresh();
+    this.replaceChildren(header, txSection, sectorSection);
   }
 }

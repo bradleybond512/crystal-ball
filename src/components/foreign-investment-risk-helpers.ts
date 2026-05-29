@@ -1,120 +1,116 @@
-// foreign-investment-risk-helpers.ts — CFIUS-style FDI screening and strategic acquisition tracking
-
-export type InvestorNation = 'China' | 'Russia' | 'Saudi Arabia' | 'UAE' | 'Qatar' | 'Iran' | 'DPRK' | 'Venezuela';
-export type TargetSector = 'semiconductors' | 'telecom' | 'defense' | 'biotech' | 'AI' | 'energy' | 'ports' | 'media' | 'mining' | 'finance';
-export type ReviewOutcome = 'approved' | 'blocked' | 'withdrawn' | 'pending' | 'approved-with-mitigation';
-export type RiskLevel = 'critical' | 'high' | 'moderate' | 'low';
+// foreign-investment-risk-helpers.ts
+// Pure logic for ForeignInvestmentRiskPanel — no DOM, no Panel imports
 
 export interface FDITransaction {
   id: string;
   acquirer: string;
-  acquirerNation: InvestorNation;
-  targetCompany: string;
-  targetNation: string;
-  targetSector: TargetSector;
+  acquirerCountry: string;
+  target: string;
+  targetSector: string;
   dealValueBn: number;
+  status: 'Approved' | 'Blocked' | 'Pending' | 'Withdrawn' | 'Conditioned';
   reviewBody: string;
-  outcome: ReviewOutcome;
+  riskLevel: 'Low' | 'Medium' | 'High' | 'Critical';
   year: number;
-  strategicConcern: string;
-  riskScore: number;
+  notes: string;
 }
 
 export interface SectorExposure {
-  sector: TargetSector;
-  foreignControlledPct: number;
-  criticalInfraFlag: boolean;
-  dominantInvestorNation: InvestorNation;
-  pendingReviewCount: number;
+  sector: string;
+  foreignOwnershipPct: number;
+  sensitivityLevel: 'Low' | 'Medium' | 'High' | 'Critical';
+  topForeignActors: string[];
+  recentDeals: number;
 }
 
-const MOCK_TRANSACTIONS: FDITransaction[] = [
-  { id: 'broadcom-qualcomm', acquirer: 'Broadcom (Singapore)', acquirerNation: 'China', targetCompany: 'Qualcomm', targetNation: 'USA', targetSector: 'semiconductors', dealValueBn: 117, reviewBody: 'CFIUS', outcome: 'blocked', year: 2018, strategicConcern: 'US 5G semiconductor leadership at risk', riskScore: 95 },
-  { id: 'bytedance-tiktok', acquirer: 'ByteDance', acquirerNation: 'China', targetCompany: 'TikTok US Operations', targetNation: 'USA', targetSector: 'media', dealValueBn: 12, reviewBody: 'CFIUS', outcome: 'pending', year: 2020, strategicConcern: 'Mass data collection + influence operations vector', riskScore: 90 },
-  { id: 'smic-asml', acquirer: 'SMIC', acquirerNation: 'China', targetCompany: 'ASML Technology licenses', targetNation: 'Netherlands', targetSector: 'semiconductors', dealValueBn: 2, reviewBody: 'Dutch NCTV', outcome: 'blocked', year: 2019, strategicConcern: 'EUV lithography critical to military chip production', riskScore: 92 },
-  { id: 'saudi-aramco-petronas', acquirer: 'Saudi Aramco', acquirerNation: 'Saudi Arabia', targetCompany: 'Petronas Downstream', targetNation: 'Malaysia', targetSector: 'energy', dealValueBn: 4.5, reviewBody: 'Malaysian MITI', outcome: 'approved', year: 2023, strategicConcern: 'GCC energy supply chain integration', riskScore: 38 },
-  { id: 'china-norsk-hydro', acquirer: 'Chinalco', acquirerNation: 'China', targetCompany: 'Norsk Hydro rare earth assets', targetNation: 'Norway', targetSector: 'mining', dealValueBn: 1.8, reviewBody: 'Norwegian MoD', outcome: 'blocked', year: 2022, strategicConcern: 'Rare earth strategic supply chain control', riskScore: 85 },
-  { id: 'huawei-bt', acquirer: 'Huawei', acquirerNation: 'China', targetCompany: 'BT Group 5G contract', targetNation: 'UK', targetSector: 'telecom', dealValueBn: 0.5, reviewBody: 'NCSC/DCMS', outcome: 'blocked', year: 2020, strategicConcern: 'Core network access for intelligence collection', riskScore: 88 },
-  { id: 'uae-mclaren', acquirer: 'Mubadala', acquirerNation: 'UAE', targetCompany: 'McLaren Applied', targetNation: 'UK', targetSector: 'AI', dealValueBn: 0.35, reviewBody: 'BEIS', outcome: 'approved-with-mitigation', year: 2023, strategicConcern: 'Advanced telemetry and AI algorithms', riskScore: 45 },
-  { id: 'cn-ports-piraeus', acquirer: 'COSCO Shipping', acquirerNation: 'China', targetCompany: 'Piraeus Port Authority', targetNation: 'Greece', targetSector: 'ports', dealValueBn: 1.5, reviewBody: 'EC DG GROW', outcome: 'approved', year: 2016, strategicConcern: 'EU entry port strategic control + dual military use', riskScore: 78 },
-  { id: 'cn-globalwafers', acquirer: 'Sino-American Silicon', acquirerNation: 'China', targetCompany: 'GlobalWafers', targetNation: 'USA', targetSector: 'semiconductors', dealValueBn: 5, reviewBody: 'CFIUS', outcome: 'withdrawn', year: 2022, strategicConcern: 'Silicon wafer supply for defense semiconductors', riskScore: 87 },
-  { id: 'qatar-heathrow', acquirer: 'Qatar Investment Authority', acquirerNation: 'Qatar', targetCompany: 'Heathrow Airport Holdings', targetNation: 'UK', targetSector: 'ports', dealValueBn: 3.2, reviewBody: 'UK NSI Act', outcome: 'approved-with-mitigation', year: 2023, strategicConcern: 'Critical national infrastructure with dual-use potential', riskScore: 42 },
-];
-
-const MOCK_SECTOR_EXPOSURE: SectorExposure[] = [
-  { sector: 'semiconductors', foreignControlledPct: 35, criticalInfraFlag: true, dominantInvestorNation: 'China', pendingReviewCount: 4 },
-  { sector: 'telecom', foreignControlledPct: 28, criticalInfraFlag: true, dominantInvestorNation: 'China', pendingReviewCount: 2 },
-  { sector: 'ports', foreignControlledPct: 42, criticalInfraFlag: true, dominantInvestorNation: 'China', pendingReviewCount: 1 },
-  { sector: 'AI', foreignControlledPct: 22, criticalInfraFlag: false, dominantInvestorNation: 'UAE', pendingReviewCount: 3 },
-  { sector: 'energy', foreignControlledPct: 18, criticalInfraFlag: true, dominantInvestorNation: 'Saudi Arabia', pendingReviewCount: 2 },
-  { sector: 'mining', foreignControlledPct: 31, criticalInfraFlag: true, dominantInvestorNation: 'China', pendingReviewCount: 3 },
-  { sector: 'biotech', foreignControlledPct: 15, criticalInfraFlag: false, dominantInvestorNation: 'China', pendingReviewCount: 5 },
-  { sector: 'media', foreignControlledPct: 12, criticalInfraFlag: false, dominantInvestorNation: 'China', pendingReviewCount: 1 },
-];
-
-export function classifyRiskLevel(score: number): RiskLevel {
-  if (score >= 80) return 'critical';
-  if (score >= 60) return 'high';
-  if (score >= 35) return 'moderate';
-  return 'low';
-}
-
-export function filterByOutcome(transactions: FDITransaction[], outcome: ReviewOutcome): FDITransaction[] {
-  return transactions.filter(t => t.outcome === outcome);
-}
-
-export function filterByAcquirerNation(transactions: FDITransaction[], nation: InvestorNation): FDITransaction[] {
-  return transactions.filter(t => t.acquirerNation === nation);
-}
-
-export function filterBySector(transactions: FDITransaction[], sector: TargetSector): FDITransaction[] {
-  return transactions.filter(t => t.targetSector === sector);
-}
-
-export function rankByRisk(transactions: FDITransaction[]): FDITransaction[] {
-  return [...transactions].sort((a, b) => b.riskScore - a.riskScore);
-}
-
-export function computeBlockRate(transactions: FDITransaction[]): number {
-  if (!transactions.length) return 0;
-  const blocked = transactions.filter(t => t.outcome === 'blocked' || t.outcome === 'withdrawn').length;
-  return Math.round((blocked / transactions.length) * 100);
-}
-
-export function getTotalDealValue(transactions: FDITransaction[]): number {
-  return Math.round(transactions.reduce((s, t) => s + t.dealValueBn, 0) * 10) / 10;
-}
-
-export function getAcquirerNationDistribution(transactions: FDITransaction[]): Record<InvestorNation, number> {
-  const dist: Partial<Record<InvestorNation, number>> = {};
-  for (const t of transactions) dist[t.acquirerNation] = (dist[t.acquirerNation] || 0) + 1;
-  return dist as Record<InvestorNation, number>;
-}
-
-export function getCriticalSectors(exposures: SectorExposure[]): SectorExposure[] {
-  return exposures.filter(e => e.criticalInfraFlag).sort((a, b) => b.foreignControlledPct - a.foreignControlledPct);
-}
-
-export function getTotalPendingReviews(exposures: SectorExposure[]): number {
-  return exposures.reduce((s, e) => s + e.pendingReviewCount, 0);
-}
-
-export function buildRenderData(): {
+export interface FDIRenderData {
   transactions: FDITransaction[];
   sectorExposures: SectorExposure[];
   blockRate: number;
-  totalDealValueBn: number;
-  totalPendingReviews: number;
-  criticalSectors: SectorExposure[];
-  nationDistribution: Record<InvestorNation, number>;
-} {
+  approvalRate: number;
+  pendingCount: number;
+  highRiskCount: number;
+  totalValueBn: number;
+  totalValueBlockedBn: number;
+}
+
+const TRANSACTIONS: FDITransaction[] = [
+  { id: 'T001', acquirer: 'Broadcom', acquirerCountry: 'Singapore/US', target: 'Qualcomm', targetSector: 'Semiconductors', dealValueBn: 117, status: 'Blocked', reviewBody: 'CFIUS', riskLevel: 'Critical', year: 2018, notes: 'National security — chip supply chain dominance' },
+  { id: 'T002', acquirer: 'ByteDance', acquirerCountry: 'China', target: 'TikTok US', targetSector: 'Social Media', dealValueBn: 0, status: 'Pending', reviewBody: 'CFIUS', riskLevel: 'High', year: 2020, notes: 'Data access to 170M US users; divestiture ordered' },
+  { id: 'T003', acquirer: 'Nvidia', acquirerCountry: 'USA', target: 'ARM Holdings', targetSector: 'Semiconductors', dealValueBn: 66, status: 'Withdrawn', reviewBody: 'FTC / EC', riskLevel: 'High', year: 2022, notes: 'Antitrust — would control foundational chip IP' },
+  { id: 'T004', acquirer: 'G42 (Abu Dhabi)', acquirerCountry: 'UAE', target: 'US AI startups', targetSector: 'Artificial Intelligence', dealValueBn: 1.5, status: 'Conditioned', reviewBody: 'CFIUS', riskLevel: 'High', year: 2024, notes: 'Microsoft partnership approved; Huawei ties required divestiture' },
+  { id: 'T005', acquirer: 'ChemChina', acquirerCountry: 'China', target: 'Syngenta', targetSector: 'Agriculture', dealValueBn: 43, status: 'Conditioned', reviewBody: 'CFIUS', riskLevel: 'Medium', year: 2016, notes: 'Approved; required US ag-data firewall' },
+  { id: 'T006', acquirer: 'Mubadala (UAE)', acquirerCountry: 'UAE', target: 'GlobalFoundries', targetSector: 'Semiconductors', dealValueBn: 4.5, status: 'Approved', reviewBody: 'CFIUS', riskLevel: 'Medium', year: 2020, notes: 'Approved with security agreement' },
+  { id: 'T007', acquirer: 'HKEX', acquirerCountry: 'Hong Kong', target: 'London Metal Exchange', targetSector: 'Finance', dealValueBn: 2.2, status: 'Blocked', reviewBody: 'UK NSIA', riskLevel: 'High', year: 2012, notes: 'Foreign control of global commodities pricing' },
+  { id: 'T008', acquirer: 'Huawei', acquirerCountry: 'China', target: '5G Infrastructure', targetSector: 'Telecom', dealValueBn: 8.0, status: 'Blocked', reviewBody: 'FCC / Five Eyes', riskLevel: 'Critical', year: 2019, notes: 'Banned from core network across Five Eyes nations' },
+  { id: 'T009', acquirer: 'SoftBank', acquirerCountry: 'Japan', target: 'T-Mobile US', targetSector: 'Telecom', dealValueBn: 26, status: 'Approved', reviewBody: 'DOJ / FCC', riskLevel: 'Low', year: 2018, notes: 'Approved after spectrum divestiture commitments' },
+  { id: 'T010', acquirer: 'State Grid China', acquirerCountry: 'China', target: 'Ausgrid (Australia)', targetSector: 'Energy', dealValueBn: 7.7, status: 'Blocked', reviewBody: 'FIRB', riskLevel: 'Critical', year: 2016, notes: 'Blocked — critical infrastructure supplying Sydney metro' },
+];
+
+const SECTOR_EXPOSURES: SectorExposure[] = [
+  { sector: 'Defense / Aerospace', foreignOwnershipPct: 3, sensitivityLevel: 'Critical', topForeignActors: ['UK', 'Australia', 'France'], recentDeals: 2 },
+  { sector: 'Semiconductors', foreignOwnershipPct: 28, sensitivityLevel: 'Critical', topForeignActors: ['Taiwan', 'South Korea', 'Japan'], recentDeals: 14 },
+  { sector: 'Artificial Intelligence', foreignOwnershipPct: 22, sensitivityLevel: 'High', topForeignActors: ['UAE', 'Saudi Arabia', 'UK'], recentDeals: 31 },
+  { sector: 'Telecom / 5G', foreignOwnershipPct: 19, sensitivityLevel: 'High', topForeignActors: ['Japan', 'Sweden', 'Finland'], recentDeals: 9 },
+  { sector: 'Biotech / Pharma', foreignOwnershipPct: 38, sensitivityLevel: 'Medium', topForeignActors: ['Switzerland', 'UK', 'Germany'], recentDeals: 22 },
+  { sector: 'Agriculture', foreignOwnershipPct: 14, sensitivityLevel: 'Medium', topForeignActors: ['Canada', 'Netherlands', 'China'], recentDeals: 7 },
+  { sector: 'Finance / Banking', foreignOwnershipPct: 21, sensitivityLevel: 'Medium', topForeignActors: ['Canada', 'UK', 'Japan'], recentDeals: 18 },
+  { sector: 'Energy Infrastructure', foreignOwnershipPct: 11, sensitivityLevel: 'High', topForeignActors: ['Canada', 'Norway', 'Saudi Arabia'], recentDeals: 5 },
+];
+
+export function computeBlockRate(txs: FDITransaction[]): number {
+  if (!txs.length) return 0;
+  return Math.round((txs.filter(t => t.status === 'Blocked').length / txs.length) * 100);
+}
+
+export function computeApprovalRate(txs: FDITransaction[]): number {
+  if (!txs.length) return 0;
+  return Math.round((txs.filter(t => t.status === 'Approved' || t.status === 'Conditioned').length / txs.length) * 100);
+}
+
+export function getPendingTransactions(txs: FDITransaction[]): FDITransaction[] {
+  return txs.filter(t => t.status === 'Pending');
+}
+
+export function getHighRiskTransactions(txs: FDITransaction[]): FDITransaction[] {
+  return txs.filter(t => t.riskLevel === 'High' || t.riskLevel === 'Critical');
+}
+
+export function getTotalValueBn(txs: FDITransaction[]): number {
+  return txs.reduce((s, t) => s + t.dealValueBn, 0);
+}
+
+export function getBlockedValueBn(txs: FDITransaction[]): number {
+  return txs.filter(t => t.status === 'Blocked').reduce((s, t) => s + t.dealValueBn, 0);
+}
+
+export function getCriticalSectors(sectors: SectorExposure[]): SectorExposure[] {
+  return sectors.filter(s => s.sensitivityLevel === 'Critical' || s.sensitivityLevel === 'High');
+}
+
+export function rankSectorsByExposure(sectors: SectorExposure[]): SectorExposure[] {
+  return [...sectors].sort((a, b) => b.foreignOwnershipPct - a.foreignOwnershipPct);
+}
+
+export function statusBadgeClass(status: FDITransaction['status']): string {
+  const map: Record<string, string> = { Blocked: 'status-critical', Pending: 'status-warn', Conditioned: 'status-medium', Withdrawn: 'status-low', Approved: 'status-ok' };
+  return map[status] ?? 'status-low';
+}
+
+export function riskClass(level: string): string {
+  const map: Record<string, string> = { Critical: 'risk-critical', High: 'risk-high', Medium: 'risk-medium', Low: 'risk-low' };
+  return map[level] ?? 'risk-low';
+}
+
+export function buildRenderData(): FDIRenderData {
   return {
-    transactions: rankByRisk(MOCK_TRANSACTIONS),
-    sectorExposures: MOCK_SECTOR_EXPOSURE,
-    blockRate: computeBlockRate(MOCK_TRANSACTIONS),
-    totalDealValueBn: getTotalDealValue(MOCK_TRANSACTIONS),
-    totalPendingReviews: getTotalPendingReviews(MOCK_SECTOR_EXPOSURE),
-    criticalSectors: getCriticalSectors(MOCK_SECTOR_EXPOSURE),
-    nationDistribution: getAcquirerNationDistribution(MOCK_TRANSACTIONS),
+    transactions: TRANSACTIONS,
+    sectorExposures: SECTOR_EXPOSURES,
+    blockRate: computeBlockRate(TRANSACTIONS),
+    approvalRate: computeApprovalRate(TRANSACTIONS),
+    pendingCount: getPendingTransactions(TRANSACTIONS).length,
+    highRiskCount: getHighRiskTransactions(TRANSACTIONS).length,
+    totalValueBn: getTotalValueBn(TRANSACTIONS),
+    totalValueBlockedBn: getBlockedValueBn(TRANSACTIONS),
   };
 }

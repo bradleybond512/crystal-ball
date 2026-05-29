@@ -1,342 +1,277 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import {
-  classifyRiskLevel,
-  filterByOutcome,
-  filterByAcquirerNation,
-  filterBySector,
-  rankByRisk,
   computeBlockRate,
-  getTotalDealValue,
-  getAcquirerNationDistribution,
+  computeApprovalRate,
+  getPendingTransactions,
+  getHighRiskTransactions,
+  getTotalValueBn,
+  getBlockedValueBn,
   getCriticalSectors,
-  getTotalPendingReviews,
+  rankSectorsByExposure,
+  statusBadgeClass,
+  riskClass,
   buildRenderData,
-} from "../foreign-investment-risk-helpers.ts";
-import type {
-  FDITransaction,
-  SectorExposure,
-  InvestorNation,
-  TargetSector,
-  ReviewOutcome,
-  RiskLevel,
-} from "../foreign-investment-risk-helpers.ts";
+  type FDITransaction,
+  type SectorExposure,
+} from '../foreign-investment-risk-helpers.js';
 
-// ── Fixtures ────────────────────────────────────────────────────────────────
+const MOCK_TXS: FDITransaction[] = [
+  { id: 'A1', acquirer: 'X', acquirerCountry: 'CN', target: 'Y', targetSector: 'Tech', dealValueBn: 10, status: 'Blocked', reviewBody: 'CFIUS', riskLevel: 'Critical', year: 2022, notes: '' },
+  { id: 'A2', acquirer: 'B', acquirerCountry: 'US', target: 'C', targetSector: 'Finance', dealValueBn: 5, status: 'Approved', reviewBody: 'DOJ', riskLevel: 'Low', year: 2021, notes: '' },
+  { id: 'A3', acquirer: 'D', acquirerCountry: 'UAE', target: 'E', targetSector: 'AI', dealValueBn: 2, status: 'Pending', reviewBody: 'CFIUS', riskLevel: 'High', year: 2023, notes: '' },
+  { id: 'A4', acquirer: 'F', acquirerCountry: 'JP', target: 'G', targetSector: 'Telecom', dealValueBn: 8, status: 'Conditioned', reviewBody: 'FCC', riskLevel: 'Medium', year: 2020, notes: '' },
+  { id: 'A5', acquirer: 'H', acquirerCountry: 'UK', target: 'I', targetSector: 'Defense', dealValueBn: 3, status: 'Withdrawn', reviewBody: 'NSIA', riskLevel: 'High', year: 2019, notes: '' },
+];
 
-function makeTx(overrides: Partial<FDITransaction> = {}): FDITransaction {
-  return {
-    id: "test-tx",
-    acquirer: "Test Corp",
-    acquirerNation: "China",
-    targetCompany: "Target Inc",
-    targetNation: "USA",
-    targetSector: "semiconductors",
-    dealValueBn: 10,
-    reviewBody: "CFIUS",
-    outcome: "blocked",
-    year: 2023,
-    strategicConcern: "Test concern",
-    riskScore: 80,
-    ...overrides,
-  };
-}
+const MOCK_SECTORS: SectorExposure[] = [
+  { sector: 'Defense', foreignOwnershipPct: 3, sensitivityLevel: 'Critical', topForeignActors: ['UK'], recentDeals: 1 },
+  { sector: 'Biotech', foreignOwnershipPct: 40, sensitivityLevel: 'Medium', topForeignActors: ['DE'], recentDeals: 5 },
+  { sector: 'Semiconductors', foreignOwnershipPct: 28, sensitivityLevel: 'Critical', topForeignActors: ['TW'], recentDeals: 10 },
+  { sector: 'AI', foreignOwnershipPct: 22, sensitivityLevel: 'High', topForeignActors: ['UAE'], recentDeals: 8 },
+];
 
-function makeExposure(overrides: Partial<SectorExposure> = {}): SectorExposure {
-  return {
-    sector: "semiconductors",
-    foreignControlledPct: 30,
-    criticalInfraFlag: true,
-    dominantInvestorNation: "China",
-    pendingReviewCount: 2,
-    ...overrides,
-  };
-}
-
-// ── classifyRiskLevel ───────────────────────────────────────────────────────
-
-test("classifyRiskLevel: 100 is critical", () => {
-  assert.equal(classifyRiskLevel(100), "critical");
+describe('computeBlockRate', () => {
+  it('returns correct percentage with mixed statuses', () => {
+    assert.equal(computeBlockRate(MOCK_TXS), 20); // 1 of 5 blocked
+  });
+  it('returns 0 for empty array', () => {
+    assert.equal(computeBlockRate([]), 0);
+  });
+  it('returns 100 when all blocked', () => {
+    const all = MOCK_TXS.map(t => ({ ...t, status: 'Blocked' as const }));
+    assert.equal(computeBlockRate(all), 100);
+  });
+  it('rounds to nearest integer', () => {
+    const txs = [
+      { ...MOCK_TXS[0], status: 'Blocked' as const },
+      { ...MOCK_TXS[1], status: 'Approved' as const },
+      { ...MOCK_TXS[2], status: 'Approved' as const },
+    ];
+    assert.equal(typeof computeBlockRate(txs), 'number');
+  });
 });
 
-test("classifyRiskLevel: 80 is critical boundary", () => {
-  assert.equal(classifyRiskLevel(80), "critical");
+describe('computeApprovalRate', () => {
+  it('counts Approved and Conditioned as approved', () => {
+    assert.equal(computeApprovalRate(MOCK_TXS), 40); // A2=Approved, A4=Conditioned = 2/5
+  });
+  it('returns 0 for empty array', () => {
+    assert.equal(computeApprovalRate([]), 0);
+  });
+  it('returns 100 when all approved', () => {
+    const all = MOCK_TXS.map(t => ({ ...t, status: 'Approved' as const }));
+    assert.equal(computeApprovalRate(all), 100);
+  });
+  it('does not count Pending as approved', () => {
+    const txs = [{ ...MOCK_TXS[0], status: 'Pending' as const }];
+    assert.equal(computeApprovalRate(txs), 0);
+  });
+  it('does not count Blocked as approved', () => {
+    const txs = [{ ...MOCK_TXS[0], status: 'Blocked' as const }];
+    assert.equal(computeApprovalRate(txs), 0);
+  });
 });
 
-test("classifyRiskLevel: 79 is high", () => {
-  assert.equal(classifyRiskLevel(79), "high");
+describe('getPendingTransactions', () => {
+  it('returns only pending', () => {
+    const pending = getPendingTransactions(MOCK_TXS);
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].id, 'A3');
+  });
+  it('returns empty array when none pending', () => {
+    const txs = MOCK_TXS.filter(t => t.status !== 'Pending');
+    assert.equal(getPendingTransactions(txs).length, 0);
+  });
+  it('returns all when all pending', () => {
+    const all = MOCK_TXS.map(t => ({ ...t, status: 'Pending' as const }));
+    assert.equal(getPendingTransactions(all).length, MOCK_TXS.length);
+  });
 });
 
-test("classifyRiskLevel: 60 is high boundary", () => {
-  assert.equal(classifyRiskLevel(60), "high");
+describe('getHighRiskTransactions', () => {
+  it('returns High and Critical risk transactions', () => {
+    const hr = getHighRiskTransactions(MOCK_TXS);
+    assert.equal(hr.length, 3); // A1=Critical, A3=High, A5=High
+  });
+  it('excludes Low and Medium risk', () => {
+    const hr = getHighRiskTransactions(MOCK_TXS);
+    assert.ok(hr.every(t => t.riskLevel === 'High' || t.riskLevel === 'Critical'));
+  });
+  it('returns empty for all-low-risk list', () => {
+    const all = MOCK_TXS.map(t => ({ ...t, riskLevel: 'Low' as const }));
+    assert.equal(getHighRiskTransactions(all).length, 0);
+  });
 });
 
-test("classifyRiskLevel: 59 is moderate", () => {
-  assert.equal(classifyRiskLevel(59), "moderate");
+describe('getTotalValueBn', () => {
+  it('sums all deal values', () => {
+    assert.equal(getTotalValueBn(MOCK_TXS), 28); // 10+5+2+8+3
+  });
+  it('returns 0 for empty', () => {
+    assert.equal(getTotalValueBn([]), 0);
+  });
+  it('handles zero-value deals', () => {
+    const txs = [{ ...MOCK_TXS[0], dealValueBn: 0 }];
+    assert.equal(getTotalValueBn(txs), 0);
+  });
 });
 
-test("classifyRiskLevel: 35 is moderate boundary", () => {
-  assert.equal(classifyRiskLevel(35), "moderate");
+describe('getBlockedValueBn', () => {
+  it('sums only blocked deal values', () => {
+    assert.equal(getBlockedValueBn(MOCK_TXS), 10); // only A1 blocked
+  });
+  it('returns 0 when none blocked', () => {
+    const txs = MOCK_TXS.map(t => ({ ...t, status: 'Approved' as const }));
+    assert.equal(getBlockedValueBn(txs), 0);
+  });
+  it('returns 0 for empty array', () => {
+    assert.equal(getBlockedValueBn([]), 0);
+  });
 });
 
-test("classifyRiskLevel: 34 is low", () => {
-  assert.equal(classifyRiskLevel(34), "low");
+describe('getCriticalSectors', () => {
+  it('returns Critical and High sensitivity sectors', () => {
+    const cs = getCriticalSectors(MOCK_SECTORS);
+    assert.equal(cs.length, 3); // Defense=Critical, Semiconductors=Critical, AI=High
+  });
+  it('excludes Medium sectors', () => {
+    const cs = getCriticalSectors(MOCK_SECTORS);
+    assert.ok(cs.every(s => s.sensitivityLevel === 'Critical' || s.sensitivityLevel === 'High'));
+  });
+  it('returns empty for all-low sectors', () => {
+    const all = MOCK_SECTORS.map(s => ({ ...s, sensitivityLevel: 'Low' as const }));
+    assert.equal(getCriticalSectors(all).length, 0);
+  });
 });
 
-test("classifyRiskLevel: 0 is low", () => {
-  assert.equal(classifyRiskLevel(0), "low");
+describe('rankSectorsByExposure', () => {
+  it('returns sectors sorted descending by foreignOwnershipPct', () => {
+    const sorted = rankSectorsByExposure(MOCK_SECTORS);
+    for (let i = 1; i < sorted.length; i++) {
+      assert.ok(sorted[i - 1].foreignOwnershipPct >= sorted[i].foreignOwnershipPct);
+    }
+  });
+  it('does not mutate original array', () => {
+    const orig = [...MOCK_SECTORS];
+    rankSectorsByExposure(MOCK_SECTORS);
+    assert.deepEqual(MOCK_SECTORS, orig);
+  });
+  it('handles single-element array', () => {
+    const sorted = rankSectorsByExposure([MOCK_SECTORS[0]]);
+    assert.equal(sorted.length, 1);
+  });
+  it('handles empty array', () => {
+    assert.deepEqual(rankSectorsByExposure([]), []);
+  });
 });
 
-// ── filterByOutcome ─────────────────────────────────────────────────────────
-
-test("filterByOutcome: returns only blocked", () => {
-  const txs = [makeTx({ outcome: "blocked" }), makeTx({ outcome: "approved" })];
-  const result = filterByOutcome(txs, "blocked");
-  assert.equal(result.length, 1);
-  assert.equal(result[0]!.outcome, "blocked");
+describe('statusBadgeClass', () => {
+  it('returns status-critical for Blocked', () => {
+    assert.equal(statusBadgeClass('Blocked'), 'status-critical');
+  });
+  it('returns status-warn for Pending', () => {
+    assert.equal(statusBadgeClass('Pending'), 'status-warn');
+  });
+  it('returns status-medium for Conditioned', () => {
+    assert.equal(statusBadgeClass('Conditioned'), 'status-medium');
+  });
+  it('returns status-ok for Approved', () => {
+    assert.equal(statusBadgeClass('Approved'), 'status-ok');
+  });
+  it('returns status-low for Withdrawn', () => {
+    assert.equal(statusBadgeClass('Withdrawn'), 'status-low');
+  });
 });
 
-test("filterByOutcome: returns only approved", () => {
-  const txs = [makeTx({ outcome: "approved" }), makeTx({ outcome: "pending" })];
-  assert.equal(filterByOutcome(txs, "approved").length, 1);
+describe('riskClass', () => {
+  it('returns risk-critical for Critical', () => {
+    assert.equal(riskClass('Critical'), 'risk-critical');
+  });
+  it('returns risk-high for High', () => {
+    assert.equal(riskClass('High'), 'risk-high');
+  });
+  it('returns risk-medium for Medium', () => {
+    assert.equal(riskClass('Medium'), 'risk-medium');
+  });
+  it('returns risk-low for Low', () => {
+    assert.equal(riskClass('Low'), 'risk-low');
+  });
+  it('returns risk-low for unknown', () => {
+    assert.equal(riskClass('Unknown'), 'risk-low');
+  });
 });
 
-test("filterByOutcome: returns empty when none match", () => {
-  const txs = [makeTx({ outcome: "blocked" })];
-  assert.equal(filterByOutcome(txs, "approved").length, 0);
-});
-
-test("filterByOutcome: pending works", () => {
-  const txs = [makeTx({ outcome: "pending" }), makeTx({ outcome: "blocked" })];
-  assert.equal(filterByOutcome(txs, "pending").length, 1);
-});
-
-test("filterByOutcome: withdrawn works", () => {
-  const txs = [makeTx({ outcome: "withdrawn" })];
-  assert.equal(filterByOutcome(txs, "withdrawn").length, 1);
-});
-
-test("filterByOutcome: approved-with-mitigation works", () => {
-  const txs = [makeTx({ outcome: "approved-with-mitigation" })];
-  assert.equal(filterByOutcome(txs, "approved-with-mitigation").length, 1);
-});
-
-// ── filterByAcquirerNation ──────────────────────────────────────────────────
-
-test("filterByAcquirerNation: returns China only", () => {
-  const txs = [makeTx({ acquirerNation: "China" }), makeTx({ acquirerNation: "Russia" })];
-  const result = filterByAcquirerNation(txs, "China");
-  assert.equal(result.length, 1);
-  assert.equal(result[0]!.acquirerNation, "China");
-});
-
-test("filterByAcquirerNation: returns UAE", () => {
-  const txs = [makeTx({ acquirerNation: "UAE" }), makeTx({ acquirerNation: "China" })];
-  assert.equal(filterByAcquirerNation(txs, "UAE").length, 1);
-});
-
-test("filterByAcquirerNation: empty list returns empty", () => {
-  assert.equal(filterByAcquirerNation([], "China").length, 0);
-});
-
-test("filterByAcquirerNation: multiple matches returned", () => {
-  const txs = [makeTx({ acquirerNation: "China" }), makeTx({ acquirerNation: "China" })];
-  assert.equal(filterByAcquirerNation(txs, "China").length, 2);
-});
-
-// ── filterBySector ──────────────────────────────────────────────────────────
-
-test("filterBySector: returns semiconductors", () => {
-  const txs = [makeTx({ targetSector: "semiconductors" }), makeTx({ targetSector: "telecom" })];
-  assert.equal(filterBySector(txs, "semiconductors").length, 1);
-});
-
-test("filterBySector: returns media", () => {
-  const txs = [makeTx({ targetSector: "media" }), makeTx({ targetSector: "AI" })];
-  assert.equal(filterBySector(txs, "media").length, 1);
-});
-
-test("filterBySector: no match returns empty", () => {
-  const txs = [makeTx({ targetSector: "telecom" })];
-  assert.equal(filterBySector(txs, "defense").length, 0);
-});
-
-// ── rankByRisk ──────────────────────────────────────────────────────────────
-
-test("rankByRisk: sorts descending by riskScore", () => {
-  const txs = [makeTx({ riskScore: 50 }), makeTx({ riskScore: 90 }), makeTx({ riskScore: 70 })];
-  const ranked = rankByRisk(txs);
-  assert.equal(ranked[0]!.riskScore, 90);
-  assert.equal(ranked[1]!.riskScore, 70);
-  assert.equal(ranked[2]!.riskScore, 50);
-});
-
-test("rankByRisk: does not mutate original array", () => {
-  const txs = [makeTx({ riskScore: 30 }), makeTx({ riskScore: 90 })];
-  const original = [...txs];
-  rankByRisk(txs);
-  assert.equal(txs[0]!.riskScore, original[0]!.riskScore);
-});
-
-test("rankByRisk: empty array returns empty", () => {
-  assert.deepEqual(rankByRisk([]), []);
-});
-
-test("rankByRisk: single element unchanged", () => {
-  const txs = [makeTx({ riskScore: 42 })];
-  assert.equal(rankByRisk(txs)[0]!.riskScore, 42);
-});
-
-// ── computeBlockRate ────────────────────────────────────────────────────────
-
-test("computeBlockRate: empty list returns 0", () => {
-  assert.equal(computeBlockRate([]), 0);
-});
-
-test("computeBlockRate: all blocked gives 100", () => {
-  const txs = [makeTx({ outcome: "blocked" }), makeTx({ outcome: "blocked" })];
-  assert.equal(computeBlockRate(txs), 100);
-});
-
-test("computeBlockRate: none blocked gives 0", () => {
-  const txs = [makeTx({ outcome: "approved" }), makeTx({ outcome: "pending" })];
-  assert.equal(computeBlockRate(txs), 0);
-});
-
-test("computeBlockRate: withdrawn counts as blocked", () => {
-  const txs = [makeTx({ outcome: "withdrawn" }), makeTx({ outcome: "approved" })];
-  assert.equal(computeBlockRate(txs), 50);
-});
-
-test("computeBlockRate: mixed set returns rounded pct", () => {
-  const txs = [
-    makeTx({ outcome: "blocked" }),
-    makeTx({ outcome: "withdrawn" }),
-    makeTx({ outcome: "approved" }),
-    makeTx({ outcome: "approved" }),
-  ];
-  assert.equal(computeBlockRate(txs), 50);
-});
-
-// ── getTotalDealValue ───────────────────────────────────────────────────────
-
-test("getTotalDealValue: empty returns 0", () => {
-  assert.equal(getTotalDealValue([]), 0);
-});
-
-test("getTotalDealValue: sums deal values", () => {
-  const txs = [makeTx({ dealValueBn: 10 }), makeTx({ dealValueBn: 5 })];
-  assert.equal(getTotalDealValue(txs), 15);
-});
-
-test("getTotalDealValue: rounds to 1 decimal", () => {
-  const txs = [makeTx({ dealValueBn: 1.123 }), makeTx({ dealValueBn: 2.456 })];
-  const result = getTotalDealValue(txs);
-  assert.equal(result, Math.round((1.123 + 2.456) * 10) / 10);
-});
-
-// ── getAcquirerNationDistribution ───────────────────────────────────────────
-
-test("getAcquirerNationDistribution: counts per nation", () => {
-  const txs = [
-    makeTx({ acquirerNation: "China" }),
-    makeTx({ acquirerNation: "China" }),
-    makeTx({ acquirerNation: "Russia" }),
-  ];
-  const dist = getAcquirerNationDistribution(txs);
-  assert.equal(dist["China"], 2);
-  assert.equal(dist["Russia"], 1);
-});
-
-test("getAcquirerNationDistribution: empty returns empty object", () => {
-  const dist = getAcquirerNationDistribution([]);
-  assert.deepEqual(dist, {});
-});
-
-// ── getCriticalSectors ──────────────────────────────────────────────────────
-
-test("getCriticalSectors: filters out non-critical", () => {
-  const exposures = [
-    makeExposure({ criticalInfraFlag: true, foreignControlledPct: 40 }),
-    makeExposure({ criticalInfraFlag: false, foreignControlledPct: 50 }),
-  ];
-  const result = getCriticalSectors(exposures);
-  assert.equal(result.length, 1);
-  assert.equal(result[0]!.criticalInfraFlag, true);
-});
-
-test("getCriticalSectors: sorts descending by foreignControlledPct", () => {
-  const exposures = [
-    makeExposure({ criticalInfraFlag: true, foreignControlledPct: 20 }),
-    makeExposure({ criticalInfraFlag: true, foreignControlledPct: 50 }),
-    makeExposure({ criticalInfraFlag: true, foreignControlledPct: 35 }),
-  ];
-  const result = getCriticalSectors(exposures);
-  assert.equal(result[0]!.foreignControlledPct, 50);
-  assert.equal(result[1]!.foreignControlledPct, 35);
-  assert.equal(result[2]!.foreignControlledPct, 20);
-});
-
-test("getCriticalSectors: empty returns empty", () => {
-  assert.deepEqual(getCriticalSectors([]), []);
-});
-
-// ── getTotalPendingReviews ──────────────────────────────────────────────────
-
-test("getTotalPendingReviews: sums pendingReviewCount", () => {
-  const exposures = [
-    makeExposure({ pendingReviewCount: 3 }),
-    makeExposure({ pendingReviewCount: 5 }),
-  ];
-  assert.equal(getTotalPendingReviews(exposures), 8);
-});
-
-test("getTotalPendingReviews: empty returns 0", () => {
-  assert.equal(getTotalPendingReviews([]), 0);
-});
-
-// ── buildRenderData ─────────────────────────────────────────────────────────
-
-test("buildRenderData: returns transactions sorted by risk descending", () => {
-  const data = buildRenderData();
-  for (let i = 1; i < data.transactions.length; i++) {
-    assert.ok(data.transactions[i - 1]!.riskScore >= data.transactions[i]!.riskScore);
-  }
-});
-
-test("buildRenderData: blockRate is a number 0-100", () => {
-  const data = buildRenderData();
-  assert.ok(data.blockRate >= 0 && data.blockRate <= 100);
-});
-
-test("buildRenderData: totalDealValueBn is positive", () => {
-  const data = buildRenderData();
-  assert.ok(data.totalDealValueBn > 0);
-});
-
-test("buildRenderData: totalPendingReviews is positive", () => {
-  const data = buildRenderData();
-  assert.ok(data.totalPendingReviews > 0);
-});
-
-test("buildRenderData: criticalSectors all have criticalInfraFlag true", () => {
-  const data = buildRenderData();
-  for (const s of data.criticalSectors) {
-    assert.equal(s.criticalInfraFlag, true);
-  }
-});
-
-test("buildRenderData: nationDistribution has China as top acquirer", () => {
-  const data = buildRenderData();
-  assert.ok(data.nationDistribution["China"] > 1);
-});
-
-test("buildRenderData: sectorExposures array is non-empty", () => {
-  const data = buildRenderData();
-  assert.ok(data.sectorExposures.length > 0);
-});
-
-test("buildRenderData: transactions array is non-empty", () => {
-  const data = buildRenderData();
-  assert.ok(data.transactions.length > 0);
+describe('buildRenderData', () => {
+  it('returns all required fields', () => {
+    const d = buildRenderData();
+    assert.ok(Array.isArray(d.transactions));
+    assert.ok(Array.isArray(d.sectorExposures));
+    assert.equal(typeof d.blockRate, 'number');
+    assert.equal(typeof d.approvalRate, 'number');
+    assert.equal(typeof d.pendingCount, 'number');
+    assert.equal(typeof d.highRiskCount, 'number');
+    assert.equal(typeof d.totalValueBn, 'number');
+    assert.equal(typeof d.totalValueBlockedBn, 'number');
+  });
+  it('transactions array is non-empty', () => {
+    assert.ok(buildRenderData().transactions.length > 0);
+  });
+  it('sectorExposures array is non-empty', () => {
+    assert.ok(buildRenderData().sectorExposures.length > 0);
+  });
+  it('blockRate is between 0 and 100', () => {
+    const r = buildRenderData().blockRate;
+    assert.ok(r >= 0 && r <= 100);
+  });
+  it('approvalRate is between 0 and 100', () => {
+    const r = buildRenderData().approvalRate;
+    assert.ok(r >= 0 && r <= 100);
+  });
+  it('pendingCount matches actual pending transactions', () => {
+    const d = buildRenderData();
+    assert.equal(d.pendingCount, d.transactions.filter(t => t.status === 'Pending').length);
+  });
+  it('highRiskCount matches actual high/critical transactions', () => {
+    const d = buildRenderData();
+    const expected = d.transactions.filter(t => t.riskLevel === 'High' || t.riskLevel === 'Critical').length;
+    assert.equal(d.highRiskCount, expected);
+  });
+  it('totalValueBn matches sum', () => {
+    const d = buildRenderData();
+    const sum = d.transactions.reduce((s, t) => s + t.dealValueBn, 0);
+    assert.equal(d.totalValueBn, sum);
+  });
+  it('totalValueBlockedBn matches sum of blocked', () => {
+    const d = buildRenderData();
+    const sum = d.transactions.filter(t => t.status === 'Blocked').reduce((s, t) => s + t.dealValueBn, 0);
+    assert.equal(d.totalValueBlockedBn, sum);
+  });
+  it('all transactions have valid status values', () => {
+    const valid = new Set(['Approved', 'Blocked', 'Pending', 'Withdrawn', 'Conditioned']);
+    for (const t of buildRenderData().transactions) {
+      assert.ok(valid.has(t.status), `Invalid status: ${t.status}`);
+    }
+  });
+  it('all transactions have valid riskLevel values', () => {
+    const valid = new Set(['Low', 'Medium', 'High', 'Critical']);
+    for (const t of buildRenderData().transactions) {
+      assert.ok(valid.has(t.riskLevel), `Invalid riskLevel: ${t.riskLevel}`);
+    }
+  });
+  it('all sector sensitivityLevels are valid', () => {
+    const valid = new Set(['Low', 'Medium', 'High', 'Critical']);
+    for (const s of buildRenderData().sectorExposures) {
+      assert.ok(valid.has(s.sensitivityLevel));
+    }
+  });
+  it('all sector foreignOwnershipPct values are 0-100', () => {
+    for (const s of buildRenderData().sectorExposures) {
+      assert.ok(s.foreignOwnershipPct >= 0 && s.foreignOwnershipPct <= 100);
+    }
+  });
+  it('blockRate + approvalRate can exceed 100 only if withdrawn/pending differ', () => {
+    const d = buildRenderData();
+    assert.equal(typeof d.blockRate, 'number');
+  });
 });

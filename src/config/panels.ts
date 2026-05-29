@@ -327,6 +327,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'counterterrorism': { name: 'Counterterrorism Monitor', enabled: true, priority: 1 },
   'territorial-disputes': { name: 'Territorial Disputes Tracker', enabled: true, priority: 1 },
   'regime-stability': { name: 'Regime Stability', enabled: true, priority: 1 },
+  'seabed-warfare': { name: 'Seabed Warfare', enabled: true, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {

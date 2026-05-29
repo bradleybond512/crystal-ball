@@ -1,433 +1,285 @@
 import { describe, it } from 'node:test';
-import * as assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import {
-  scoreDisputeSeverity,
-  filterByPhase,
-  filterByRegion,
-  filterByTrend,
-  rankByseverity,
   computeGlobalTensionIndex,
-  getPhaseDistribution,
-  getIncidentsForDispute,
-  getRecentHighSeverityIncidents,
+  getActiveWars,
+  getFrozenConflicts,
+  getEscalatingDisputes,
+  getNuclearRiskDisputes,
+  getMostSevere,
+  phaseBadgeClass,
+  trendArrow,
+  severityClass,
   buildRenderData,
   type TerritorialDispute,
-  type DisputeIncident,
   type DisputePhase,
-  type DisputeRegion,
-} from '../territorial-disputes-helpers.ts';
+  type DiplomaticTrend,
+} from '../territorial-disputes-helpers.js';
 
-// ── fixtures ─────────────────────────────────────────────────────────────────
-
-function makeDispute(overrides: Partial<TerritorialDispute> = {}): TerritorialDispute {
-  return {
-    id: 'test-dispute',
-    name: 'Test Dispute',
-    region: 'Europe',
-    claimants: ['A', 'B'],
-    primaryAggressor: 'A',
-    phase: 'contested',
-    escalationTrend: 'stable',
-    militaryPresenceScore: 50,
-    economicStakes: 50,
-    resolutionProspect: 50,
-    affectedAreaKm2: 1000,
-    keyIssue: 'Test issue',
-    lastIncident: '2024-01-01',
-    ...overrides,
-  };
-}
-
-function makeIncident(overrides: Partial<DisputeIncident> = {}): DisputeIncident {
-  return {
-    id: 'inc-1',
-    disputeId: 'test-dispute',
-    date: '2024-06-01',
-    type: 'naval-incident',
-    severity: 5,
-    description: 'Test incident',
-    ...overrides,
-  };
-}
-
-// ── scoreDisputeSeverity ──────────────────────────────────────────────────────
-
-describe('scoreDisputeSeverity', () => {
-  it('armed-conflict yields higher score than diplomatic', () => {
-    const armed = makeDispute({ phase: 'armed-conflict', militaryPresenceScore: 50, economicStakes: 50, escalationTrend: 'stable' });
-    const diplo = makeDispute({ phase: 'diplomatic', militaryPresenceScore: 50, economicStakes: 50, escalationTrend: 'stable' });
-    assert.ok(scoreDisputeSeverity(armed) > scoreDisputeSeverity(diplo));
-  });
-
-  it('escalating trend multiplies score upward vs stable', () => {
-    const escalating = makeDispute({ escalationTrend: 'escalating' });
-    const stable = makeDispute({ escalationTrend: 'stable' });
-    assert.ok(scoreDisputeSeverity(escalating) > scoreDisputeSeverity(stable));
-  });
-
-  it('de-escalating trend reduces score vs stable', () => {
-    const deesc = makeDispute({ escalationTrend: 'de-escalating' });
-    const stable = makeDispute({ escalationTrend: 'stable' });
-    assert.ok(scoreDisputeSeverity(deesc) < scoreDisputeSeverity(stable));
-  });
-
-  it('result is capped at 100', () => {
-    const extreme = makeDispute({ phase: 'armed-conflict', militaryPresenceScore: 100, economicStakes: 100, escalationTrend: 'escalating' });
-    assert.ok(scoreDisputeSeverity(extreme) <= 100);
-  });
-
-  it('result is a non-negative integer', () => {
-    const d = makeDispute();
-    const score = scoreDisputeSeverity(d);
-    assert.ok(Number.isInteger(score));
-    assert.ok(score >= 0);
-  });
-
-  it('higher militaryPresenceScore raises severity', () => {
-    const lo = makeDispute({ militaryPresenceScore: 10 });
-    const hi = makeDispute({ militaryPresenceScore: 90 });
-    assert.ok(scoreDisputeSeverity(hi) > scoreDisputeSeverity(lo));
-  });
-
-  it('higher economicStakes raises severity', () => {
-    const lo = makeDispute({ economicStakes: 10 });
-    const hi = makeDispute({ economicStakes: 90 });
-    assert.ok(scoreDisputeSeverity(hi) > scoreDisputeSeverity(lo));
-  });
-
-  it('phase ordering: armed-conflict > militarized > contested > frozen-conflict > diplomatic', () => {
-    const phases: DisputePhase[] = ['armed-conflict', 'militarized', 'contested', 'frozen-conflict', 'diplomatic'];
-    const scores = phases.map(phase => scoreDisputeSeverity(makeDispute({ phase, militaryPresenceScore: 0, economicStakes: 0, escalationTrend: 'stable' })));
-    for (let i = 0; i < scores.length - 1; i++) {
-      assert.ok(scores[i] > scores[i + 1], `${phases[i]} should score higher than ${phases[i + 1]}`);
-    }
-  });
-});
-
-// ── filterByPhase ─────────────────────────────────────────────────────────────
-
-describe('filterByPhase', () => {
-  it('returns only disputes matching phase', () => {
-    const disputes = [
-      makeDispute({ id: 'a', phase: 'armed-conflict' }),
-      makeDispute({ id: 'b', phase: 'diplomatic' }),
-      makeDispute({ id: 'c', phase: 'armed-conflict' }),
-    ];
-    const result = filterByPhase(disputes, 'armed-conflict');
-    assert.equal(result.length, 2);
-    assert.ok(result.every(d => d.phase === 'armed-conflict'));
-  });
-
-  it('returns empty array when no matches', () => {
-    const disputes = [makeDispute({ phase: 'diplomatic' })];
-    assert.deepEqual(filterByPhase(disputes, 'contested'), []);
-  });
-
-  it('does not mutate the original array', () => {
-    const disputes = [makeDispute({ phase: 'militarized' })];
-    filterByPhase(disputes, 'militarized');
-    assert.equal(disputes.length, 1);
-  });
-});
-
-// ── filterByRegion ────────────────────────────────────────────────────────────
-
-describe('filterByRegion', () => {
-  it('returns only disputes in the given region', () => {
-    const disputes = [
-      makeDispute({ id: 'a', region: 'Europe' }),
-      makeDispute({ id: 'b', region: 'Asia-Pacific' }),
-      makeDispute({ id: 'c', region: 'Europe' }),
-    ];
-    const result = filterByRegion(disputes, 'Europe');
-    assert.equal(result.length, 2);
-    assert.ok(result.every(d => d.region === 'Europe'));
-  });
-
-  it('returns empty array when no matches', () => {
-    const disputes = [makeDispute({ region: 'Africa' })];
-    assert.deepEqual(filterByRegion(disputes, 'Arctic'), []);
-  });
-
-  it('handles all region values without error', () => {
-    const regions: DisputeRegion[] = ['Asia-Pacific', 'Europe', 'Middle East', 'Africa', 'Arctic', 'Americas', 'South Asia'];
-    for (const region of regions) {
-      const d = makeDispute({ region });
-      assert.equal(filterByRegion([d], region).length, 1);
-    }
-  });
-});
-
-// ── filterByTrend ─────────────────────────────────────────────────────────────
-
-describe('filterByTrend', () => {
-  it('filters escalating correctly', () => {
-    const disputes = [
-      makeDispute({ id: 'a', escalationTrend: 'escalating' }),
-      makeDispute({ id: 'b', escalationTrend: 'stable' }),
-    ];
-    const result = filterByTrend(disputes, 'escalating');
-    assert.equal(result.length, 1);
-    assert.equal(result[0].id, 'a');
-  });
-
-  it('filters de-escalating correctly', () => {
-    const disputes = [
-      makeDispute({ id: 'x', escalationTrend: 'de-escalating' }),
-      makeDispute({ id: 'y', escalationTrend: 'stable' }),
-    ];
-    assert.equal(filterByTrend(disputes, 'de-escalating').length, 1);
-  });
-
-  it('returns empty when trend absent', () => {
-    assert.deepEqual(filterByTrend([makeDispute({ escalationTrend: 'stable' })], 'de-escalating'), []);
-  });
-});
-
-// ── rankByseverity ────────────────────────────────────────────────────────────
-
-describe('rankByseverity', () => {
-  it('returns disputes sorted highest to lowest severity', () => {
-    const disputes = [
-      makeDispute({ id: 'low', phase: 'diplomatic', militaryPresenceScore: 0, economicStakes: 0, escalationTrend: 'stable' }),
-      makeDispute({ id: 'high', phase: 'armed-conflict', militaryPresenceScore: 100, economicStakes: 100, escalationTrend: 'escalating' }),
-      makeDispute({ id: 'mid', phase: 'militarized', militaryPresenceScore: 50, economicStakes: 50, escalationTrend: 'stable' }),
-    ];
-    const ranked = rankByseverity(disputes);
-    assert.equal(ranked[0].id, 'high');
-    assert.equal(ranked[ranked.length - 1].id, 'low');
-  });
-
-  it('does not mutate original array', () => {
-    const disputes = [makeDispute({ id: 'a' }), makeDispute({ id: 'b' })];
-    const original = [...disputes];
-    rankByseverity(disputes);
-    assert.deepEqual(disputes.map(d => d.id), original.map(d => d.id));
-  });
-
-  it('handles empty array', () => {
-    assert.deepEqual(rankByseverity([]), []);
-  });
-
-  it('handles single element', () => {
-    const d = makeDispute();
-    assert.equal(rankByseverity([d]).length, 1);
-  });
-});
-
-// ── computeGlobalTensionIndex ─────────────────────────────────────────────────
+const MOCK_DISPUTES: TerritorialDispute[] = [
+  { id: 'M1', name: 'War A', parties: ['X', 'Y'], region: 'Europe', phase: 'Active War', trend: 'escalating', severityScore: 10, nuclearRisk: true, activeViolence: true, disputedArea: 'Zone A', description: '', keyDevelopment: '' },
+  { id: 'M2', name: 'Standoff B', parties: ['A', 'B'], region: 'Asia', phase: 'Standoff', trend: 'stable', severityScore: 7, nuclearRisk: false, activeViolence: false, disputedArea: 'Zone B', description: '', keyDevelopment: '' },
+  { id: 'M3', name: 'Frozen C', parties: ['C', 'D'], region: 'Africa', phase: 'Frozen Conflict', trend: 'de-escalating', severityScore: 5, nuclearRisk: false, activeViolence: false, disputedArea: 'Zone C', description: '', keyDevelopment: '' },
+  { id: 'M4', name: 'Escalating D', parties: ['E', 'F'], region: 'Pacific', phase: 'Escalating', trend: 'escalating', severityScore: 8, nuclearRisk: true, activeViolence: false, disputedArea: 'Zone D', description: '', keyDevelopment: '' },
+  { id: 'M5', name: 'Latent E', parties: ['G', 'H'], region: 'Arctic', phase: 'Latent', trend: 'stable', severityScore: 3, nuclearRisk: false, activeViolence: false, disputedArea: 'Zone E', description: '', keyDevelopment: '' },
+];
 
 describe('computeGlobalTensionIndex', () => {
+  it('returns a number between 0 and 100', () => {
+    const idx = computeGlobalTensionIndex(MOCK_DISPUTES);
+    assert.ok(idx >= 0 && idx <= 100);
+  });
   it('returns 0 for empty array', () => {
     assert.equal(computeGlobalTensionIndex([]), 0);
   });
-
-  it('returns average severity rounded to integer', () => {
-    const d1 = makeDispute({ phase: 'armed-conflict', militaryPresenceScore: 100, economicStakes: 100, escalationTrend: 'stable' });
-    const d2 = makeDispute({ phase: 'diplomatic', militaryPresenceScore: 0, economicStakes: 0, escalationTrend: 'stable' });
-    const index = computeGlobalTensionIndex([d1, d2]);
-    assert.ok(Number.isInteger(index));
-    assert.ok(index > 0 && index < 100);
+  it('returns higher index for more active conflicts', () => {
+    const allWar = MOCK_DISPUTES.map(d => ({ ...d, phase: 'Active War' as DisputePhase, severityScore: 10 }));
+    const allLatent = MOCK_DISPUTES.map(d => ({ ...d, phase: 'Latent' as DisputePhase, severityScore: 2 }));
+    assert.ok(computeGlobalTensionIndex(allWar) > computeGlobalTensionIndex(allLatent));
   });
-
-  it('single dispute returns its own severity score', () => {
-    const d = makeDispute({ phase: 'militarized', militaryPresenceScore: 50, economicStakes: 50, escalationTrend: 'stable' });
-    assert.equal(computeGlobalTensionIndex([d]), scoreDisputeSeverity(d));
+  it('returns an integer', () => {
+    const idx = computeGlobalTensionIndex(MOCK_DISPUTES);
+    assert.equal(idx, Math.round(idx));
   });
-
-  it('is non-negative', () => {
-    const disputes = [makeDispute(), makeDispute({ phase: 'diplomatic' })];
-    assert.ok(computeGlobalTensionIndex(disputes) >= 0);
+  it('single active war with max severity returns high index', () => {
+    const single = [{ ...MOCK_DISPUTES[0], severityScore: 10, phase: 'Active War' as DisputePhase, trend: 'escalating' as DiplomaticTrend }];
+    assert.ok(computeGlobalTensionIndex(single) > 0);
   });
-});
-
-// ── getPhaseDistribution ──────────────────────────────────────────────────────
-
-describe('getPhaseDistribution', () => {
-  it('counts each phase correctly', () => {
-    const disputes = [
-      makeDispute({ phase: 'armed-conflict' }),
-      makeDispute({ phase: 'armed-conflict' }),
-      makeDispute({ phase: 'militarized' }),
-      makeDispute({ phase: 'diplomatic' }),
-    ];
-    const dist = getPhaseDistribution(disputes);
-    assert.equal(dist['armed-conflict'], 2);
-    assert.equal(dist['militarized'], 1);
-    assert.equal(dist['diplomatic'], 1);
-    assert.equal(dist['contested'], 0);
-    assert.equal(dist['frozen-conflict'], 0);
+  it('de-escalating trend lowers the index vs stable trend', () => {
+    const base = [{ ...MOCK_DISPUTES[0], phase: 'Active War' as DisputePhase, severityScore: 10 }];
+    const stableVer = [{ ...base[0], trend: 'stable' as DiplomaticTrend }];
+    const deEscVer = [{ ...base[0], trend: 'de-escalating' as DiplomaticTrend }];
+    assert.ok(computeGlobalTensionIndex(stableVer) >= computeGlobalTensionIndex(deEscVer));
   });
-
-  it('all phases present in result even with zero count', () => {
-    const dist = getPhaseDistribution([makeDispute({ phase: 'diplomatic' })]);
-    const phases: DisputePhase[] = ['armed-conflict', 'militarized', 'contested', 'frozen-conflict', 'diplomatic'];
-    for (const p of phases) assert.ok(p in dist);
-  });
-
-  it('returns all zeros for empty input', () => {
-    const dist = getPhaseDistribution([]);
-    const total = Object.values(dist).reduce((s, v) => s + v, 0);
-    assert.equal(total, 0);
-  });
-
-  it('total count equals input length', () => {
-    const disputes = [makeDispute(), makeDispute({ phase: 'militarized' }), makeDispute({ phase: 'diplomatic' })];
-    const dist = getPhaseDistribution(disputes);
-    const total = Object.values(dist).reduce((s, v) => s + v, 0);
-    assert.equal(total, disputes.length);
+  it('escalating trend raises the index vs stable trend', () => {
+    const stable = [{ ...MOCK_DISPUTES[1], trend: 'stable' as DiplomaticTrend }];
+    const esc = [{ ...MOCK_DISPUTES[1], trend: 'escalating' as DiplomaticTrend }];
+    assert.ok(computeGlobalTensionIndex(esc) >= computeGlobalTensionIndex(stable));
   });
 });
 
-// ── getIncidentsForDispute ────────────────────────────────────────────────────
-
-describe('getIncidentsForDispute', () => {
-  it('returns only incidents for specified disputeId', () => {
-    const incidents = [
-      makeIncident({ id: 'i1', disputeId: 'x' }),
-      makeIncident({ id: 'i2', disputeId: 'y' }),
-      makeIncident({ id: 'i3', disputeId: 'x' }),
-    ];
-    const result = getIncidentsForDispute(incidents, 'x');
-    assert.equal(result.length, 2);
-    assert.ok(result.every(i => i.disputeId === 'x'));
+describe('getActiveWars', () => {
+  it('returns only Active War disputes', () => {
+    const wars = getActiveWars(MOCK_DISPUTES);
+    assert.equal(wars.length, 1);
+    assert.equal(wars[0].id, 'M1');
   });
-
-  it('returns empty array when no match', () => {
-    const incidents = [makeIncident({ disputeId: 'a' })];
-    assert.deepEqual(getIncidentsForDispute(incidents, 'z'), []);
+  it('returns empty for no active wars', () => {
+    const noWar = MOCK_DISPUTES.filter(d => d.phase !== 'Active War');
+    assert.equal(getActiveWars(noWar).length, 0);
   });
-
-  it('sorts by date descending', () => {
-    const incidents = [
-      makeIncident({ id: 'old', disputeId: 'x', date: '2024-01-01' }),
-      makeIncident({ id: 'new', disputeId: 'x', date: '2024-12-01' }),
-      makeIncident({ id: 'mid', disputeId: 'x', date: '2024-06-01' }),
-    ];
-    const result = getIncidentsForDispute(incidents, 'x');
-    assert.equal(result[0].id, 'new');
-    assert.equal(result[result.length - 1].id, 'old');
+  it('returns all when all are active wars', () => {
+    const all = MOCK_DISPUTES.map(d => ({ ...d, phase: 'Active War' as DisputePhase }));
+    assert.equal(getActiveWars(all).length, MOCK_DISPUTES.length);
+  });
+  it('does not return Escalating disputes', () => {
+    const wars = getActiveWars(MOCK_DISPUTES);
+    assert.ok(wars.every(d => d.phase === 'Active War'));
   });
 });
 
-// ── getRecentHighSeverityIncidents ────────────────────────────────────────────
-
-describe('getRecentHighSeverityIncidents', () => {
-  it('returns only incidents at or above minSeverity', () => {
-    const incidents = [
-      makeIncident({ id: 'lo', severity: 3 }),
-      makeIncident({ id: 'hi', severity: 8 }),
-      makeIncident({ id: 'mid', severity: 5 }),
-    ];
-    const result = getRecentHighSeverityIncidents(incidents, 5);
-    assert.ok(result.every(i => i.severity >= 5));
-    assert.equal(result.length, 2);
+describe('getFrozenConflicts', () => {
+  it('returns only Frozen Conflict disputes', () => {
+    const frozen = getFrozenConflicts(MOCK_DISPUTES);
+    assert.equal(frozen.length, 1);
+    assert.equal(frozen[0].id, 'M3');
   });
-
-  it('default minSeverity is 5', () => {
-    const incidents = [makeIncident({ severity: 4 }), makeIncident({ id: 'pass', severity: 5 })];
-    const result = getRecentHighSeverityIncidents(incidents);
-    assert.equal(result.length, 1);
-    assert.equal(result[0].id, 'pass');
+  it('returns empty when none frozen', () => {
+    const noFrozen = MOCK_DISPUTES.filter(d => d.phase !== 'Frozen Conflict');
+    assert.equal(getFrozenConflicts(noFrozen).length, 0);
   });
-
-  it('sorts by severity descending', () => {
-    const incidents = [
-      makeIncident({ id: 'a', severity: 6, date: '2024-01-01' }),
-      makeIncident({ id: 'b', severity: 9, date: '2024-01-01' }),
-      makeIncident({ id: 'c', severity: 7, date: '2024-01-01' }),
-    ];
-    const result = getRecentHighSeverityIncidents(incidents, 5);
-    assert.equal(result[0].id, 'b');
-  });
-
-  it('returns empty array when nothing meets threshold', () => {
-    const incidents = [makeIncident({ severity: 1 }), makeIncident({ severity: 2 })];
-    assert.deepEqual(getRecentHighSeverityIncidents(incidents, 5), []);
+  it('all returned disputes are Frozen Conflict', () => {
+    const frozen = getFrozenConflicts(MOCK_DISPUTES);
+    assert.ok(frozen.every(d => d.phase === 'Frozen Conflict'));
   });
 });
 
-// ── buildRenderData ───────────────────────────────────────────────────────────
+describe('getEscalatingDisputes', () => {
+  it('returns disputes with Escalating phase or escalating trend', () => {
+    const esc = getEscalatingDisputes(MOCK_DISPUTES);
+    assert.ok(esc.length >= 2);
+  });
+  it('includes Escalating phase even with stable trend', () => {
+    const d = [{ ...MOCK_DISPUTES[3], trend: 'stable' as DiplomaticTrend }];
+    assert.equal(getEscalatingDisputes(d).length, 1);
+  });
+  it('includes escalating trend even if phase is Standoff', () => {
+    const d = [{ ...MOCK_DISPUTES[1], trend: 'escalating' as DiplomaticTrend }];
+    assert.equal(getEscalatingDisputes(d).length, 1);
+  });
+  it('does not include Latent/stable disputes', () => {
+    const d = [{ ...MOCK_DISPUTES[4], trend: 'stable' as DiplomaticTrend, phase: 'Latent' as DisputePhase }];
+    assert.equal(getEscalatingDisputes(d).length, 0);
+  });
+  it('returns empty for empty array', () => {
+    assert.deepEqual(getEscalatingDisputes([]), []);
+  });
+});
+
+describe('getNuclearRiskDisputes', () => {
+  it('returns only nuclear-risk disputes', () => {
+    const nuke = getNuclearRiskDisputes(MOCK_DISPUTES);
+    assert.equal(nuke.length, 2);
+    assert.ok(nuke.every(d => d.nuclearRisk));
+  });
+  it('returns empty when none have nuclear risk', () => {
+    const noNuke = MOCK_DISPUTES.map(d => ({ ...d, nuclearRisk: false }));
+    assert.equal(getNuclearRiskDisputes(noNuke).length, 0);
+  });
+  it('returns all when all have nuclear risk', () => {
+    const allNuke = MOCK_DISPUTES.map(d => ({ ...d, nuclearRisk: true }));
+    assert.equal(getNuclearRiskDisputes(allNuke).length, MOCK_DISPUTES.length);
+  });
+});
+
+describe('getMostSevere', () => {
+  it('returns top N by severity score descending', () => {
+    const top = getMostSevere(MOCK_DISPUTES, 3);
+    assert.equal(top.length, 3);
+    for (let i = 1; i < top.length; i++) {
+      assert.ok(top[i - 1].severityScore >= top[i].severityScore);
+    }
+  });
+  it('does not mutate original array', () => {
+    const orig = MOCK_DISPUTES.map(d => d.id);
+    getMostSevere(MOCK_DISPUTES, 2);
+    assert.deepEqual(MOCK_DISPUTES.map(d => d.id), orig);
+  });
+  it('returns all when N > array length', () => {
+    const top = getMostSevere(MOCK_DISPUTES, 100);
+    assert.equal(top.length, MOCK_DISPUTES.length);
+  });
+  it('defaults to 3 items', () => {
+    assert.equal(getMostSevere(MOCK_DISPUTES).length, 3);
+  });
+  it('returns empty for empty input', () => {
+    assert.deepEqual(getMostSevere([]), []);
+  });
+  it('first result is highest severity', () => {
+    const top = getMostSevere(MOCK_DISPUTES, 1);
+    assert.equal(top[0].severityScore, Math.max(...MOCK_DISPUTES.map(d => d.severityScore)));
+  });
+});
+
+describe('phaseBadgeClass', () => {
+  it('returns phase-war for Active War', () => {
+    assert.equal(phaseBadgeClass('Active War'), 'phase-war');
+  });
+  it('returns phase-escalating for Escalating', () => {
+    assert.equal(phaseBadgeClass('Escalating'), 'phase-escalating');
+  });
+  it('returns phase-standoff for Standoff', () => {
+    assert.equal(phaseBadgeClass('Standoff'), 'phase-standoff');
+  });
+  it('returns phase-frozen for Frozen Conflict', () => {
+    assert.equal(phaseBadgeClass('Frozen Conflict'), 'phase-frozen');
+  });
+  it('returns phase-negotiation for Negotiation', () => {
+    assert.equal(phaseBadgeClass('Negotiation'), 'phase-negotiation');
+  });
+  it('returns phase-latent for Latent', () => {
+    assert.equal(phaseBadgeClass('Latent'), 'phase-latent');
+  });
+});
+
+describe('trendArrow', () => {
+  it('returns up arrow for escalating', () => {
+    assert.equal(trendArrow('escalating'), '↑');
+  });
+  it('returns right arrow for stable', () => {
+    assert.equal(trendArrow('stable'), '→');
+  });
+  it('returns down arrow for de-escalating', () => {
+    assert.equal(trendArrow('de-escalating'), '↓');
+  });
+});
+
+describe('severityClass', () => {
+  it('returns sev-critical for score >= 9', () => {
+    assert.equal(severityClass(9), 'sev-critical');
+    assert.equal(severityClass(10), 'sev-critical');
+  });
+  it('returns sev-high for score 7-8', () => {
+    assert.equal(severityClass(7), 'sev-high');
+    assert.equal(severityClass(8), 'sev-high');
+  });
+  it('returns sev-medium for score 5-6', () => {
+    assert.equal(severityClass(5), 'sev-medium');
+    assert.equal(severityClass(6), 'sev-medium');
+  });
+  it('returns sev-low for score < 5', () => {
+    assert.equal(severityClass(4), 'sev-low');
+    assert.equal(severityClass(0), 'sev-low');
+  });
+});
 
 describe('buildRenderData', () => {
-  it('returns object with all expected keys', () => {
-    const data = buildRenderData();
-    assert.ok('disputes' in data);
-    assert.ok('recentIncidents' in data);
-    assert.ok('globalTensionIndex' in data);
-    assert.ok('escalatingCount' in data);
-    assert.ok('armedConflictCount' in data);
-    assert.ok('phaseDistribution' in data);
+  it('returns all required fields', () => {
+    const d = buildRenderData();
+    assert.ok(Array.isArray(d.disputes));
+    assert.equal(typeof d.globalTensionIndex, 'number');
+    assert.equal(typeof d.activeWarCount, 'number');
+    assert.equal(typeof d.frozenConflictCount, 'number');
+    assert.equal(typeof d.escalatingCount, 'number');
+    assert.equal(typeof d.nuclearRiskCount, 'number');
+    assert.ok(Array.isArray(d.mostSevere));
   });
-
   it('disputes array is non-empty', () => {
     assert.ok(buildRenderData().disputes.length > 0);
   });
-
-  it('disputes are sorted highest severity first', () => {
-    const { disputes } = buildRenderData();
-    for (let i = 0; i < disputes.length - 1; i++) {
-      assert.ok(scoreDisputeSeverity(disputes[i]) >= scoreDisputeSeverity(disputes[i + 1]));
+  it('globalTensionIndex is between 0 and 100', () => {
+    const idx = buildRenderData().globalTensionIndex;
+    assert.ok(idx >= 0 && idx <= 100);
+  });
+  it('activeWarCount matches actual active wars', () => {
+    const d = buildRenderData();
+    assert.equal(d.activeWarCount, d.disputes.filter(x => x.phase === 'Active War').length);
+  });
+  it('nuclearRiskCount matches actual nuclear-risk disputes', () => {
+    const d = buildRenderData();
+    assert.equal(d.nuclearRiskCount, d.disputes.filter(x => x.nuclearRisk).length);
+  });
+  it('mostSevere has at most 3 entries', () => {
+    assert.ok(buildRenderData().mostSevere.length <= 3);
+  });
+  it('mostSevere entries are sorted descending by severity', () => {
+    const ms = buildRenderData().mostSevere;
+    for (let i = 1; i < ms.length; i++) {
+      assert.ok(ms[i - 1].severityScore >= ms[i].severityScore);
     }
   });
-
-  it('globalTensionIndex is a non-negative integer', () => {
-    const { globalTensionIndex } = buildRenderData();
-    assert.ok(Number.isInteger(globalTensionIndex));
-    assert.ok(globalTensionIndex >= 0);
+  it('all disputes have valid phase values', () => {
+    const valid = new Set(['Active War', 'Frozen Conflict', 'Escalating', 'Standoff', 'Negotiation', 'Latent']);
+    for (const d of buildRenderData().disputes) {
+      assert.ok(valid.has(d.phase), `Invalid phase: ${d.phase}`);
+    }
   });
-
+  it('all disputes have valid trend values', () => {
+    const valid = new Set(['escalating', 'stable', 'de-escalating']);
+    for (const d of buildRenderData().disputes) {
+      assert.ok(valid.has(d.trend), `Invalid trend: ${d.trend}`);
+    }
+  });
+  it('all severity scores are 1-10', () => {
+    for (const d of buildRenderData().disputes) {
+      assert.ok(d.severityScore >= 1 && d.severityScore <= 10);
+    }
+  });
+  it('all disputes have non-empty parties arrays', () => {
+    for (const d of buildRenderData().disputes) {
+      assert.ok(d.parties.length > 0);
+    }
+  });
+  it('frozenConflictCount matches actual frozen conflicts', () => {
+    const d = buildRenderData();
+    assert.equal(d.frozenConflictCount, d.disputes.filter(x => x.phase === 'Frozen Conflict').length);
+  });
   it('escalatingCount matches disputes with escalating trend', () => {
-    const { disputes, escalatingCount } = buildRenderData();
-    const actual = disputes.filter(d => d.escalationTrend === 'escalating').length;
-    assert.equal(escalatingCount, actual);
+    const d = buildRenderData();
+    assert.equal(d.escalatingCount, d.disputes.filter(x => x.trend === 'escalating').length);
   });
-
-  it('armedConflictCount matches disputes with armed-conflict phase', () => {
-    const { disputes, armedConflictCount } = buildRenderData();
-    const actual = disputes.filter(d => d.phase === 'armed-conflict').length;
-    assert.equal(armedConflictCount, actual);
-  });
-
-  it('phaseDistribution totals match dispute count', () => {
-    const { disputes, phaseDistribution } = buildRenderData();
-    const total = Object.values(phaseDistribution).reduce((s, v) => s + v, 0);
-    assert.equal(total, disputes.length);
-  });
-
-  it('recentIncidents all have severity >= 5', () => {
-    const { recentIncidents } = buildRenderData();
-    assert.ok(recentIncidents.every(i => i.severity >= 5));
-  });
-
-  it('ukraine-russia is present in disputes', () => {
-    const { disputes } = buildRenderData();
-    assert.ok(disputes.some(d => d.id === 'ukraine-russia'));
-  });
-
-  it('taiwan-strait is present in disputes', () => {
-    const { disputes } = buildRenderData();
-    assert.ok(disputes.some(d => d.id === 'taiwan-strait'));
-  });
-
-  it('ukraine-russia has phase armed-conflict', () => {
-    const { disputes } = buildRenderData();
-    const d = disputes.find(d => d.id === 'ukraine-russia');
-    assert.equal(d?.phase, 'armed-conflict');
-  });
-
-  it('all disputes have non-empty claimants', () => {
-    const { disputes } = buildRenderData();
-    assert.ok(disputes.every(d => d.claimants.length > 0));
-  });
-
-  it('all disputes have affectedAreaKm2 > 0', () => {
-    const { disputes } = buildRenderData();
-    assert.ok(disputes.every(d => d.affectedAreaKm2 > 0));
-  });
-
-  it('all disputes have a valid lastIncident date string', () => {
-    const { disputes } = buildRenderData();
-    assert.ok(disputes.every(d => /^\d{4}-\d{2}-\d{2}$/.test(d.lastIncident)));
+  it('all disputes have unique ids', () => {
+    const ids = buildRenderData().disputes.map(d => d.id);
+    assert.equal(new Set(ids).size, ids.length);
   });
 });

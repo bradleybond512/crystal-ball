@@ -406,6 +406,7 @@ import { HealthSuperpowerPanel } from '@/components/HealthSuperpowerPanel';
 
 import { PersonalResiliencePanel } from '@/components/PersonalResiliencePanel';import { TradeRouteRiskScorerPanel } from '@/components/TradeRouteRiskScorerPanel';
 import { TradeDisruptionPanel } from '@/components/TradeDisruptionPanel';
+import { ForeignInvestmentRiskPanel } from '@/components/ForeignInvestmentRiskPanel';
 import { SupplyChainDisruptionPanel } from '@/components/SupplyChainDisruptionPanel';
 import { InfraRiskMatrixPanel } from '@/components/InfraRiskMatrixPanel';
 import { EarthquakeSuperPanel } from '@/components/EarthquakeSuperPanel';
@@ -1598,6 +1599,7 @@ export class PanelLayoutManager implements AppModule {
 
  this.ctx.panels['personal-resilience'] = new PersonalResiliencePanel(); this.ctx.panels['trade-route-risk-scorer'] = new TradeRouteRiskScorerPanel();
  this.ctx.panels['trade-disruption'] = new TradeDisruptionPanel();
+    this.ctx.panels['foreign-investment-risk'] = new ForeignInvestmentRiskPanel();
  this.ctx.panels['supply-chain-disruption'] = new SupplyChainDisruptionPanel();
  this.ctx.panels['infra-risk-matrix'] = new InfraRiskMatrixPanel();
  this.ctx.panels['earthquake-super'] = new EarthquakeSuperPanel();

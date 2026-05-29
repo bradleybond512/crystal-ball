@@ -53,6 +53,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'federal-register': { name: 'Federal Register', enabled: true, priority: 2 },
   'trade-policy': { name: 'Trade Policy', enabled: true, priority: 1 },
   'trade-disruption': { name: 'Trade Disruption Intelligence', enabled: true, priority: 1 },
+  'foreign-investment-risk': { name: 'Foreign Investment Risk Monitor', enabled: true, priority: 1 },
   'supply-chain': { name: 'Supply Chain', enabled: true, priority: 1 },
   finance: { name: 'Financial', enabled: true, priority: 1 },
   tech: { name: 'Technology', enabled: true, priority: 2 },

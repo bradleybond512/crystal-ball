@@ -218,8 +218,12 @@ export function computeGlobalDisruptionIndex(chokepoints: LogisticsChokepoint[])
   const totalWeight = chokepoints.reduce((s, c) => s + c.criticalityScore, 0);
   if (totalWeight === 0) return 0;
   const weightedDisruption = chokepoints.reduce((s, c) => {
-    const statusWeight =
-      c.currentStatus === 'Disrupted' ? 1.0 : c.currentStatus === 'Contested' ? 0.5 : 0;
+    let statusWeight = 0;
+    if (c.currentStatus === 'Disrupted') {
+      statusWeight = 1;
+    } else if (c.currentStatus === 'Contested') {
+      statusWeight = 0.5;
+    }
     return s + c.criticalityScore * statusWeight;
   }, 0);
   return Math.round((weightedDisruption / totalWeight) * 100);
@@ -245,7 +249,7 @@ export function getMostThreatenedRegion(chokepoints: LogisticsChokepoint[]): str
   }
   let topRegion = 'Unknown';
   let topScore = -1;
-  for (const [region, score] of Object.entries(regionScores)) {
+  for (const [region, score] of Object.entries(regionScores) as [string, number][]) {
     if (score > topScore) {
       topScore = score;
       topRegion = region;

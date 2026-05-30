@@ -389,6 +389,7 @@ import { TerritorialDisputesPanel } from '@/components/TerritorialDisputesPanel'
 import { RegimeStabilityPanel } from '@/components/RegimeStabilityPanel';
 import { ArmsSalesPanel } from '@/components/ArmsSalesPanel';
 import { StateCapitalismPanel } from '@/components/StateCapitalismPanel';
+import { GlobalLogisticsChokepointsPanel } from '@/components/GlobalLogisticsChokepointsPanel';
 import { CoalitionDynamicsPanel } from '@/components/CoalitionDynamicsPanel';
 import { TransnationalRepressionPanel } from '@/components/TransnationalRepressionPanel';
 import { CorruptionIndexPanel } from '@/components/CorruptionIndexPanel';
@@ -1552,6 +1553,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['energy-security'] = new EnergySecurityPanel();
  this.ctx.panels['arms-proliferation'] = new ArmsProliferationPanel();
  this.ctx.panels['territorial-disputes'] = new TerritorialDisputesPanel(); this.ctx.panels['regime-stability'] = new RegimeStabilityPanel(); this.ctx.panels['arms-sales'] = new ArmsSalesPanel(); this.ctx.panels['coalition-dynamics'] = new CoalitionDynamicsPanel(); this.ctx.panels['transnational-repression'] = new TransnationalRepressionPanel();
+ this.ctx.panels['territorial-disputes'] = new TerritorialDisputesPanel(); this.ctx.panels['regime-stability'] = new RegimeStabilityPanel(); this.ctx.panels['global-logistics-chokepoints'] = new GlobalLogisticsChokepointsPanel(); this.ctx.panels['coalition-dynamics'] = new CoalitionDynamicsPanel(); this.ctx.panels['transnational-repression'] = new TransnationalRepressionPanel();
         this.ctx.panels['corruption-index'] = new CorruptionIndexPanel();
  this.ctx.panels['space-militarization'] = new SpaceMilitarizationPanel();
  this.ctx.panels['arctic-monitoring'] = new ArcticMonitoringPanel();

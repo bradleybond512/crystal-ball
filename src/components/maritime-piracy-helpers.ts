@@ -1,21 +1,21 @@
 // maritime-piracy-helpers.ts
-// Pure logic for MaritimePiracyPanel — no DOM, no Panel imports
+// Pure logic for MaritimePiracyPanel -- no DOM, no Panel imports
 
-export type PiracyTrend = "increasing" | "stable" | "decreasing";
-export type SeverityLevel = "Low" | "Medium" | "High" | "Critical";
+export type PiracyTrend = 'increasing' | 'stable' | 'decreasing';
+export type SeverityLevel = 'Low' | 'Medium' | 'High' | 'Critical';
 export type AttackType =
-  | "Boarding"
-  | "Hijacking"
-  | "Attempted Boarding"
-  | "Fired Upon"
-  | "Kidnapping"
-  | "Armed Robbery";
+  | 'Boarding'
+  | 'Hijacking'
+  | 'Attempted Boarding'
+  | 'Fired Upon'
+  | 'Kidnapping'
+  | 'Armed Robbery';
 export type IncidentOutcome =
-  | "Hijacked"
-  | "Repelled"
-  | "Crew Kidnapped"
-  | "Escaped"
-  | "Fired Upon";
+  | 'Hijacked'
+  | 'Repelled'
+  | 'Crew Kidnapped'
+  | 'Escaped'
+  | 'Fired Upon';
 
 export interface PiracyHotspot {
   id: string;
@@ -36,7 +36,6 @@ export interface PiracyIncident {
   shipType: string;
   attackType: AttackType;
   outcome: IncidentOutcome;
-  crewImpact: string;
   description: string;
   significance: number; // 1-10
 }
@@ -50,286 +49,266 @@ export interface PiracyData {
   crewsAtRisk: number;
 }
 
+// -- Static data --
+
 const HOTSPOTS: PiracyHotspot[] = [
   {
-    id: "H001",
-    region: "Gulf of Guinea",
+    id: 'H001',
+    region: 'Red Sea / Gulf of Aden',
+    annualIncidents: 60,
+    trend: 'increasing',
+    primaryTactics: ['Missile attacks', 'Drone strikes', 'Vessel seizure', 'Crew detention'],
+    severityLevel: 'Critical',
+    primaryGroups: ['Houthi Movement (Ansar Allah)'],
+    description: 'Houthi forces escalated attacks from Nov 2023 targeting commercial shipping linked to Israel and Western nations. Hundreds of vessels rerouted around Africa adding $1M+ per voyage.',
+    economicImpactBn: 10,
+  },
+  {
+    id: 'H002',
+    region: 'Gulf of Guinea',
     annualIncidents: 80,
-    trend: "stable",
-    primaryTactics: ["Boarding", "Kidnapping", "Armed Robbery"],
-    severityLevel: "High",
-    primaryGroups: ["MEND remnants", "Nigerian criminal gangs"],
-    description:
-      "West Africa posquos Gulf of Guinea remains the most dangerous maritime zone globally for crew kidnappings. Criminal networks operate from river deltas targeting tankers and cargo vessels.",
+    trend: 'stable',
+    primaryTactics: ['Boarding', 'Crew kidnapping for ransom', 'Cargo theft'],
+    severityLevel: 'High',
+    primaryGroups: ['Nigerian piracy networks', 'MEND splinter groups'],
+    description: 'Global epicenter of maritime kidnapping. Pirates use mother ships to reach tankers and supply vessels far offshore for crew ransom operations.',
     economicImpactBn: 1.2,
   },
   {
-    id: "H002",
-    region: "Strait of Malacca / Singapore",
+    id: 'H003',
+    region: 'Malacca Strait',
     annualIncidents: 40,
-    trend: "decreasing",
-    primaryTactics: ["Boarding", "Armed Robbery"],
-    severityLevel: "Medium",
-    primaryGroups: ["Indonesian criminal gangs", "Malaysian criminal gangs"],
-    description:
-      "Effective ReCAAP coordination has reduced incidents significantly. Most attacks are opportunistic boarding and petty theft targeting anchored vessels in one of the world posquos busiest sea lanes.",
+    trend: 'decreasing',
+    primaryTactics: ['Boarding', 'Petty theft', 'Armed robbery at anchor'],
+    severityLevel: 'Medium',
+    primaryGroups: ['Opportunistic criminal gangs'],
+    description: 'Predominantly low-level opportunistic theft targeting anchored or slow-moving vessels. Regional coast guard cooperation has reduced serious incidents.',
     economicImpactBn: 0.4,
   },
   {
-    id: "H003",
-    region: "Somali Basin / Indian Ocean",
+    id: 'H004',
+    region: 'Somali Basin / Indian Ocean',
     annualIncidents: 15,
-    trend: "stable",
-    primaryTactics: ["Hijacking", "Hostage-taking"],
-    severityLevel: "Medium",
-    primaryGroups: ["Al-Shabaab-linked pirates", "Somali clan militias"],
-    description:
-      "Incidents remain far below the 2010 peak of 150+ but Somali piracy has not been eliminated. International naval patrols continue to deter. Economic recovery from peak cost of $7B annually.",
+    trend: 'stable',
+    primaryTactics: ['Vessel hijacking', 'Crew ransom', 'Long-range skiff attacks'],
+    severityLevel: 'Medium',
+    primaryGroups: ['Somali piracy networks', 'Al-Shabaab affiliated groups'],
+    description: 'Classic Somali piracy suppressed by naval patrols but capability remains. Sporadic hijacking attempts target bulk carriers and dhows.',
     economicImpactBn: 0.3,
   },
   {
-    id: "H004",
-    region: "Red Sea / Gulf of Aden (Houthi)",
-    annualIncidents: 60,
-    trend: "increasing",
-    primaryTactics: ["Missile attacks", "Drone strikes", "Vessel seizure"],
-    severityLevel: "Critical",
-    primaryGroups: ["Houthi movement (state-backed)"],
-    description:
-      "Houthi attacks on commercial shipping since November 2023 represent state-backed maritime terrorism. Major routes rerouted around Cape of Good Hope adding 10+ days and $10B+ in costs.",
-    economicImpactBn: 10.0,
-  },
-  {
-    id: "H005",
-    region: "Bangladesh / India Coastline",
+    id: 'H005',
+    region: 'Bangladesh / India East Coast',
     annualIncidents: 25,
-    trend: "stable",
-    primaryTactics: ["Armed Robbery", "Theft"],
-    severityLevel: "Low",
-    primaryGroups: ["Local criminal groups", "Coastal gangs"],
-    description:
-      "Coastal and anchorage robberies targeting vessels at anchor. Predominantly low-level theft with limited violence. Port authority patrols partially effective at deterrence.",
+    trend: 'stable',
+    primaryTactics: ['Armed robbery at anchor', 'Cargo theft', 'Crew assault'],
+    severityLevel: 'Low',
+    primaryGroups: ['Local criminal gangs'],
+    description: 'Low-level opportunistic incidents targeting anchored vessels in port approaches and river mouths. Violence rare but cargo losses persistent.',
     economicImpactBn: 0.2,
   },
   {
-    id: "H006",
-    region: "West Africa Offshore (Nigeria)",
+    id: 'H006',
+    region: 'West Africa Offshore Oil Sector',
     annualIncidents: 30,
-    trend: "stable",
-    primaryTactics: ["Oil theft", "Bunkering", "Armed Robbery"],
-    severityLevel: "High",
-    primaryGroups: ["Criminal bunkering networks", "Oil theft syndicates"],
-    description:
-      "Sophisticated oil theft and illegal bunkering operations costing Nigeria $1.5B annually. Criminal networks operate with offshore vessels and inland pipeline tap infrastructure.",
+    trend: 'stable',
+    primaryTactics: ['Oil bunkering', 'Product tanker hijacking', 'Crew robbery'],
+    severityLevel: 'High',
+    primaryGroups: ['Niger Delta militants', 'Organized bunkering syndicates'],
+    description: 'Sophisticated oil bunkering operations targeting product tankers. Single operations steal $50M+ in crude. Linked to onshore militant financing.',
     economicImpactBn: 1.5,
   },
   {
-    id: "H007",
-    region: "Philippines / Sulu Sea",
+    id: 'H007',
+    region: 'Philippines / Sulu-Celebes Sea',
     annualIncidents: 20,
-    trend: "decreasing",
-    primaryTactics: ["Kidnapping", "Ransom"],
-    severityLevel: "Medium",
-    primaryGroups: ["Abu Sayyaf remnants", "Criminal kidnapping groups"],
-    description:
-      "Abu Sayyaf kidnapping operations have declined due to Philippine military pressure, but residual capability remains. Fishing vessels and small cargo ships most at risk.",
+    trend: 'decreasing',
+    primaryTactics: ['Crew kidnapping', 'Ransom negotiation', 'Cross-border raids'],
+    severityLevel: 'Medium',
+    primaryGroups: ['Abu Sayyaf Group', 'Tausug criminal networks'],
+    description: 'Abu Sayyaf kidnapping operations target tug boats, fishing vessels, and supply ships. Trilateral Philippine-Malaysian-Indonesian patrols have reduced incidents.',
     economicImpactBn: 0.3,
   },
 ];
 
 const INCIDENTS: PiracyIncident[] = [
   {
-    id: "I001",
-    date: "2023-11-19",
-    region: "Red Sea",
-    shipType: "Car carrier",
-    attackType: "Hijacking",
-    outcome: "Hijacked",
-    crewImpact: "25 crew members held at Hodeidah",
-    description:
-      "Houthi commandos seized Galaxy Leader, a vehicle carrier with Israeli ownership links. Crew held at Hodeidah port in Yemen as political leverage; became symbol of Houthi maritime campaign.",
+    id: 'I001',
+    date: '2023-11-19',
+    region: 'Red Sea / Gulf of Aden',
+    shipType: 'Car Carrier',
+    attackType: 'Hijacking',
+    outcome: 'Hijacked',
+    description: 'Houthi commandos seized MV Galaxy Leader (Bahamian-flagged, Israeli-linked ownership). 25 crew held; ship became a Houthi propaganda symbol.',
     significance: 9,
   },
   {
-    id: "I002",
-    date: "2024-02-26",
-    region: "Red Sea",
-    shipType: "Container ship",
-    attackType: "Fired Upon",
-    outcome: "Fired Upon",
-    crewImpact: "No casualties reported",
-    description:
-      "Houthi attack on MSC Palatium III using anti-ship missile. Vessel diverted. Part of sustained Houthi campaign targeting vessels with alleged Israel connections or transiting Red Sea.",
-    significance: 8,
+    id: 'I002',
+    date: '2024-03-06',
+    region: 'Red Sea / Gulf of Aden',
+    shipType: 'Bulk Carrier',
+    attackType: 'Fired Upon',
+    outcome: 'Fired Upon',
+    description: 'MV True Confidence struck by Houthi missile killing 3 crew -- first confirmed seafarer deaths from Houthi campaign. Vessel abandoned and sank.',
+    significance: 9,
   },
   {
-    id: "I003",
-    date: "2023-06-14",
-    region: "Gulf of Guinea",
-    shipType: "Oil tanker",
-    attackType: "Kidnapping",
-    outcome: "Crew Kidnapped",
-    crewImpact: "7 crew kidnapped, later released",
-    description:
-      "MT Agisilaos boarded by armed pirates in Gulf of Guinea. Seven crew taken ashore for ransom. Typical Gulf of Guinea criminal network pattern; crew released after ransom payment.",
+    id: 'I003',
+    date: '2023-08-14',
+    region: 'Gulf of Guinea',
+    shipType: 'Supply Vessel',
+    attackType: 'Kidnapping',
+    outcome: 'Crew Kidnapped',
+    description: 'Armed pirates boarded an offshore supply vessel 60nm off Nigeria. Six crew kidnapped and held 28 days before release after ransom payment.',
     significance: 7,
   },
   {
-    id: "I004",
-    date: "2024-03-06",
-    region: "Red Sea",
-    shipType: "Bulk carrier",
-    attackType: "Fired Upon",
-    outcome: "Fired Upon",
-    crewImpact: "3 crew members killed",
-    description:
-      "Houthi attack on True Confidence killed three crew — first confirmed fatalities from Houthi maritime strikes. Bangladesh, Philippines, and Vietnam nationals killed. Escalation threshold crossed.",
-    significance: 9,
-  },
-  {
-    id: "I005",
-    date: "2024-03-12",
-    region: "Strait of Malacca",
-    shipType: "Chemical tanker",
-    attackType: "Boarding",
-    outcome: "Repelled",
-    crewImpact: "No casualties",
-    description:
-      "Small craft approached tanker at anchor in Singapore Strait. Pirates boarded briefly before being driven off by crew. Cargo theft attempted but foiled; illustrates ongoing Malacca opportunism.",
+    id: 'I004',
+    date: '2024-02-03',
+    region: 'Malacca Strait',
+    shipType: 'Product Tanker',
+    attackType: 'Boarding',
+    outcome: 'Repelled',
+    description: 'Armed gang of four boarded a product tanker at anchor near Port Klang. Crew activated alarms; pirates fled with minor cargo before coast guard arrived.',
     significance: 5,
   },
   {
-    id: "I006",
-    date: "2023-08-20",
-    region: "Somali Basin",
-    shipType: "Fishing vessel",
-    attackType: "Attempted Boarding",
-    outcome: "Repelled",
-    crewImpact: "No casualties",
-    description:
-      "Skiffs approached fishing vessel 180nm off Somali coast. Vessel activated SSAS and increased speed. Naval patrol responded; pirates withdrew. Demonstrates ongoing Somali threat at lower intensity.",
+    id: 'I005',
+    date: '2023-09-21',
+    region: 'Somali Basin / Indian Ocean',
+    shipType: 'Bulk Carrier',
+    attackType: 'Attempted Boarding',
+    outcome: 'Repelled',
+    description: 'Skiffs attempted boarding 180nm off Bosaso. Vessel deployed LRAD and fire hoses; EU NAVFOR asset responded and pirates fled.',
     significance: 4,
   },
   {
-    id: "I007",
-    date: "2024-01-15",
-    region: "Bangladesh coast",
-    shipType: "Cargo vessel",
-    attackType: "Armed Robbery",
-    outcome: "Repelled",
-    crewImpact: "No casualties",
-    description:
-      "Armed robbers boarded anchored cargo vessel at Chittagong roads. Crew raised alarm; robbers fled with minor stores. Typical low-level anchorage robbery pattern for South Asian coastlines.",
-    significance: 4,
-  },
-  {
-    id: "I008",
-    date: "2023-04-02",
-    region: "Philippines / Sulu Sea",
-    shipType: "Fishing vessel",
-    attackType: "Kidnapping",
-    outcome: "Crew Kidnapped",
-    crewImpact: "3 crew kidnapped, released after ransom",
-    description:
-      "Abu Sayyaf remnants kidnapped crew from fishing vessel in Sulu Sea. Ransom paid after two weeks. Demonstrates continued capability despite Philippine military pressure on the group.",
+    id: 'I006',
+    date: '2023-06-05',
+    region: 'Philippines / Sulu-Celebes Sea',
+    shipType: 'Fishing Vessel',
+    attackType: 'Kidnapping',
+    outcome: 'Crew Kidnapped',
+    description: 'Abu Sayyaf militants abducted 7 crew from a Malaysian fishing vessel near Tawi-Tawi. Crew held 3 months; released after undisclosed ransom.',
     significance: 7,
   },
   {
-    id: "I009",
-    date: "2024-02-08",
-    region: "West Africa offshore",
-    shipType: "Bunkering vessel",
-    attackType: "Armed Robbery",
-    outcome: "Hijacked",
-    crewImpact: "No crew harm; $50M cargo loss",
-    description:
-      "Large-scale oil theft off Nigeria. Criminal syndicate offloaded ~200,000 barrels of crude worth $50M in sophisticated offshore transfer. Highlights scale of Nigerian bunkering networks.",
+    id: 'I007',
+    date: '2024-01-15',
+    region: 'West Africa Offshore Oil Sector',
+    shipType: 'Product Tanker',
+    attackType: 'Armed Robbery',
+    outcome: 'Hijacked',
+    description: 'Bunkering operation hijacked a product tanker 40nm off Port Harcourt. Over $50M in crude cargo transferred to unmarked vessels over 72 hours.',
     significance: 8,
   },
   {
-    id: "I010",
-    date: "2023-12-14",
-    region: "Gulf of Guinea",
-    shipType: "Product tanker",
-    attackType: "Hijacking",
-    outcome: "Escaped",
-    crewImpact: "All crew freed after 5 days",
-    description:
-      "MV Monjasa Reformer hijacked by armed pirates in Gulf of Guinea. Vessel held five days while pirates offloaded cargo. Crew released unharmed following naval intervention.",
+    id: 'I008',
+    date: '2024-02-18',
+    region: 'Red Sea / Gulf of Aden',
+    shipType: 'Container Ship',
+    attackType: 'Fired Upon',
+    outcome: 'Fired Upon',
+    description: 'MV MSC Palatium III struck by Houthi missile while transiting under escort. Ship sustained damage but continued under own power; no crew fatalities.',
+    significance: 8,
+  },
+  {
+    id: 'I009',
+    date: '2023-07-11',
+    region: 'Gulf of Guinea',
+    shipType: 'Tanker',
+    attackType: 'Hijacking',
+    outcome: 'Escaped',
+    description: 'MV Monjasa Reformer hijacked 200nm southwest of Sao Tome. Danish frigate intervention forced pirates to release vessel; crew unharmed.',
     significance: 7,
+  },
+  {
+    id: 'I010',
+    date: '2024-04-22',
+    region: 'Bangladesh / India East Coast',
+    shipType: 'General Cargo Vessel',
+    attackType: 'Armed Robbery',
+    outcome: 'Repelled',
+    description: 'Armed gang boarded cargo vessel at anchor in Chittagong outer anchorage. Crew mustered in citadel; pirates stole stores and fled before authorities arrived.',
+    significance: 4,
   },
 ];
 
-const SEVERITY_ORDER: Record<SeverityLevel, number> = { Low: 0, Medium: 1, High: 2, Critical: 3 };
+// -- Helper functions --
 
-export function getHighSeverity(
-  hotspots: PiracyHotspot[],
-  threshold: SeverityLevel = "High",
-): PiracyHotspot[] {
-  return hotspots.filter(h => SEVERITY_ORDER[h.severityLevel] >= SEVERITY_ORDER[threshold]);
+export function computeGlobalPiracyIndex(hotspots: PiracyHotspot[]): number {
+  if (!hotspots.length) return 0;
+  const severityWeight: Record<SeverityLevel, number> = {
+    Critical: 100,
+    High: 70,
+    Medium: 40,
+    Low: 15,
+  };
+  const trendBonus: Record<PiracyTrend, number> = {
+    increasing: 10,
+    stable: 0,
+    decreasing: -5,
+  };
+  const total = hotspots.reduce(
+    (sum, h) => sum + (severityWeight[h.severityLevel] ?? 0) + (trendBonus[h.trend] ?? 0),
+    0,
+  );
+  return Math.min(100, Math.round(total / hotspots.length));
+}
+
+export function getHighSeverity(hotspots: PiracyHotspot[]): PiracyHotspot[] {
+  return hotspots.filter(h => h.severityLevel === 'Critical' || h.severityLevel === 'High');
 }
 
 export function getIncreasingRegions(hotspots: PiracyHotspot[]): PiracyHotspot[] {
-  return hotspots.filter(h => h.trend === "increasing");
+  return hotspots.filter(h => h.trend === 'increasing');
 }
 
 export function getByAttackType(incidents: PiracyIncident[], type: AttackType): PiracyIncident[] {
   return incidents.filter(i => i.attackType === type);
 }
 
-export function computeGlobalPiracyIndex(hotspots: PiracyHotspot[]): number {
-  if (!hotspots.length) return 0;
-  const severityWeight: Record<SeverityLevel, number> = { Low: 1, Medium: 2, High: 3, Critical: 5 };
-  const trendMult: Record<PiracyTrend, number> = { increasing: 1.3, stable: 1.0, decreasing: 0.7 };
-  const totalWeighted = hotspots.reduce((sum, h) => {
-    return sum + h.annualIncidents * severityWeight[h.severityLevel] * trendMult[h.trend];
-  }, 0);
-  // Normalize to 0-100: 1000 weighted incident-points ≈ index 100
-  return Math.min(100, Math.round(totalWeighted / 10));
-}
-
 export function severityClass(level: SeverityLevel): string {
   const map: Record<SeverityLevel, string> = {
-    Low: "piracy-low",
-    Medium: "piracy-medium",
-    High: "piracy-high",
-    Critical: "piracy-critical",
+    Low: 'sev-low',
+    Medium: 'sev-medium',
+    High: 'sev-high',
+    Critical: 'sev-critical',
   };
-  return map[level] ?? "piracy-low";
+  return map[level] ?? 'sev-medium';
 }
 
 export function trendClass(trend: PiracyTrend): string {
   const map: Record<PiracyTrend, string> = {
-    increasing: "trend-up",
-    stable: "trend-flat",
-    decreasing: "trend-down",
+    increasing: 'trend-up',
+    stable: 'trend-flat',
+    decreasing: 'trend-down',
   };
-  return map[trend] ?? "trend-flat";
+  return map[trend] ?? 'trend-flat';
 }
 
 export function attackTypeClass(type: AttackType): string {
   const map: Record<AttackType, string> = {
-    Boarding: "attack-boarding",
-    Hijacking: "attack-hijacking",
-    "Attempted Boarding": "attack-attempted",
-    "Fired Upon": "attack-fired",
-    Kidnapping: "attack-kidnapping",
-    "Armed Robbery": "attack-robbery",
+    Boarding: 'attack-boarding',
+    Hijacking: 'attack-hijacking',
+    'Attempted Boarding': 'attack-attempted',
+    'Fired Upon': 'attack-fired',
+    Kidnapping: 'attack-kidnapping',
+    'Armed Robbery': 'attack-robbery',
   };
-  return map[type] ?? "attack-boarding";
+  return map[type] ?? 'attack-boarding';
 }
 
 export function buildRenderData(): PiracyData {
-  const totalIncidentsYTD = HOTSPOTS.reduce((s, h) => s + h.annualIncidents, 0);
-  const highRiskRegions = HOTSPOTS.filter(
-    h => h.severityLevel === "High" || h.severityLevel === "Critical",
-  ).map(h => h.region);
-  // Estimate crews at risk: significant incidents * avg crew size of 20
-  const crewsAtRisk = INCIDENTS.filter(i => i.significance >= 7).length * 20;
+  const globalPiracyIndex = computeGlobalPiracyIndex(HOTSPOTS);
+  const totalIncidentsYTD = HOTSPOTS.reduce((sum, h) => sum + h.annualIncidents, 0);
+  const highRiskRegions = getHighSeverity(HOTSPOTS).map(h => h.region);
+  const crewsAtRisk =
+    INCIDENTS.filter(i => i.outcome === 'Crew Kidnapped' || i.outcome === 'Hijacked').length * 15;
   return {
     hotspots: HOTSPOTS,
     incidents: INCIDENTS,
-    globalPiracyIndex: computeGlobalPiracyIndex(HOTSPOTS),
+    globalPiracyIndex,
     totalIncidentsYTD,
     highRiskRegions,
     crewsAtRisk,

@@ -236,6 +236,7 @@ const INCIDENTS: PiracyIncident[] = [
 
 // -- Helper functions --
 
+/** Weighted 0-100 piracy index. Critical=100, High=70, Medium=40, Low=15; trend: increasing+10, decreasing-5. */
 export function computeGlobalPiracyIndex(hotspots: PiracyHotspot[]): number {
   if (!hotspots.length) return 0;
   const severityWeight: Record<SeverityLevel, number> = {

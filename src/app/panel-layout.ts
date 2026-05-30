@@ -429,7 +429,7 @@ import { SatelliteChangePanel } from '@/components/SatelliteChangePanel';
 import { SatelliteIntelPanel } from '@/components/SatelliteIntelPanel';
 import { EconomicStressPanel } from '@/components/EconomicStressPanel';
 import { FederalRegisterPanel } from '@/components/FederalRegisterPanel';
-import { NuclearRiskPanel } from '@/components/NuclearRiskPanel';
+import { NuclearRiskPanel } from '@/components/NuclearRiskPanel';import { NuclearNearMissPanel } from '@/components/NuclearNearMissPanel';
 import { RadiationDecayPanel } from '@/components/RadiationDecayPanel';
 import { ResourceInventoryPanel } from '@/components/ResourceInventoryPanel';
 import { WorldClockPanel } from '@/components/WorldClockPanel';
@@ -1310,7 +1310,7 @@ export class PanelLayoutManager implements AppModule {
  });
  this.ctx.panels['ucdp-events'] = ucdpEventsPanel;
 
- this.ctx.panels['nuclear-risk'] = new NuclearRiskPanel('nuclear-risk', 'Nuclear Risk Tracker');
+ this.ctx.panels['nuclear-risk'] = new NuclearRiskPanel('nuclear-risk', 'Nuclear Risk Tracker'); this.ctx.panels['nuclear-near-miss'] = new NuclearNearMissPanel();
 
  const airstrikesPanel = new AirstrikesPanel();
  airstrikesPanel.setEventClickHandler((lat, lon) => {

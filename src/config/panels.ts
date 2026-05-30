@@ -286,6 +286,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'water-security': { name: 'Water Security Intelligence', enabled: true, priority: 1 },
   'energy-security': { name: 'Energy Security Intelligence', enabled: true, priority: 1 },
   'arms-proliferation': { name: 'Arms Proliferation Monitor', enabled: true, priority: 1 },
+  'drone-warfare': { name: 'Drone Warfare Monitor', enabled: true, priority: 1 },
   'space-militarization': { name: 'Space Militarization Monitor', enabled: true, priority: 1 },
   'arctic-monitoring': { name: 'Arctic Intelligence', enabled: true, priority: 1 },
   'climate-security-nexus': { name: 'Climate-Security Nexus', enabled: true, priority: 1 },

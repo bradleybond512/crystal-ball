@@ -72,6 +72,7 @@ export * from './FamilyTrackerPanel';
 export * from './StalenessBanner';
 export * from './EconomicStressPanel';
 export * from './FoodInsecurityPanel';
+export * from './FoodSystemsGeopoliticsPanel';
 export * from './TropicalCyclonesPanel';
 export * from './TsunamiAlertsPanel';
 export * from './WorldClockPanel';

@@ -132,6 +132,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'tsunami-alerts': { name: 'Tsunami Alerts', enabled: true, priority: 2 },
   'tropical-cyclones': { name: 'Tropical Cyclones', enabled: true, priority: 2 },
   'food-insecurity': { name: 'Food Insecurity', enabled: true, priority: 2 },
+  'food-systems-geopolitics': { name: 'Food Systems & Geopolitics', enabled: true, priority: 1 },
   'offline-maps': { name: 'Offline Maps', enabled: true, priority: 2 },
   'evacuation': { name: 'Evacuation Routes', enabled: true, priority: 2 },
   'family-tracker': { name: 'Family Tracker', enabled: true, priority: 2 },
@@ -1140,7 +1141,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   marketsFinance: {
  labelKey: 'header.panelCatMarketsFinance',
- panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower', 'political-economy', 'global-logistics-chokepoints'],
+ panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower', 'political-economy', 'global-logistics-chokepoints', 'food-systems-geopolitics'],
  variants: ['full'],
   },
   topical: {
@@ -1150,7 +1151,9 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   dataTracking: {
  labelKey: 'header.panelCatDataTracking',
- panelKeys: ['counterterrorism', 'monitors', 'cyber-threats', 'threat-inbox', 'local-ids', 'little-snitch', 'comms-health', 'power-grid', 'grid-intelligence', 'electric-grid-vulnerability', 'cve-tracker', 'vulners-cve', 'hibp-breaches', 'ipinfo-lookup', 'ucdp-events', 'nuclear-risk', 'nuclear-near-miss', 'airstrikes', 'displacement', 'security-advisories', 'bitcoin-abuse', 'reddit-osint', 'network-rules', 's2u-intel', 'oref-sirens', 'space-weather', 'space-security', 'space-superpower', 'spaceflight-news', 'space-launches', 'population-exposure', 'internet-disruptions', 'air-traffic', 'threat-intel-hub', 'phishstats-feed', 'urlscan-threats', 'pulsedive-intel', 'geo-intel', 'dark-web', 'anomaly-detection', 'financial-contagion', 'supply-chain-impact', 'nuclear-monitor', 'sigint-panel', 'dark-vessel', 'ics-ot-dashboard', 'ioc-manager', 'network-topology', 'stix-taxii', 'custom-geofence', 'sanctions-crossref', 'emergency-broadcast', 'satellite-change', 'ripe-ncc', 'ripe-atlas', 'aerospace-reentry', 'satellite-intel', 'cyber-espionage', 'political-violence'], variants: ['full'],  },
+
+ panelKeys: ['counterterrorism', 'monitors', 'cyber-threats', 'threat-inbox', 'local-ids', 'little-snitch', 'comms-health', 'power-grid', 'grid-intelligence', 'electric-grid-vulnerability', 'cve-tracker', 'vulners-cve', 'hibp-breaches', 'ipinfo-lookup', 'ucdp-events', 'nuclear-risk', 'nuclear-near-miss', 'airstrikes', 'displacement', 'security-advisories', 'bitcoin-abuse', 'reddit-osint', 'network-rules', 's2u-intel', 'oref-sirens', 'space-weather', 'space-security', 'space-superpower', 'spaceflight-news', 'space-launches', 'population-exposure', 'internet-disruptions', 'air-traffic', 'threat-intel-hub', 'phishstats-feed', 'urlscan-threats', 'pulsedive-intel', 'geo-intel', 'dark-web', 'anomaly-detection', 'financial-contagion', 'supply-chain-impact', 'nuclear-monitor', 'sigint-panel', 'dark-vessel', 'ics-ot-dashboard', 'ioc-manager', 'network-topology', 'stix-taxii', 'custom-geofence', 'sanctions-crossref', 'emergency-broadcast', 'satellite-change', 'ripe-ncc', 'ripe-atlas', 'aerospace-reentry', 'satellite-intel', 'cyber-espionage', 'political-violence', 'food-systems-geopolitics'], variants: ['full'],  },
+
   hazards: {
  labelKey: 'header.panelCatHazards',
 

@@ -387,6 +387,7 @@ import { EnergySecurityPanel } from '@/components/EnergySecurityPanel';
 import { ArmsProliferationPanel } from '@/components/ArmsProliferationPanel';
 import { TerritorialDisputesPanel } from '@/components/TerritorialDisputesPanel';
 import { RegimeStabilityPanel } from '@/components/RegimeStabilityPanel';
+import { FoodSystemsGeopoliticsPanel } from '@/components/FoodSystemsGeopoliticsPanel';
 import { ArmsSalesPanel } from '@/components/ArmsSalesPanel';
 import { StateCapitalismPanel } from '@/components/StateCapitalismPanel';
 import { GlobalLogisticsChokepointsPanel } from '@/components/GlobalLogisticsChokepointsPanel';
@@ -405,6 +406,7 @@ import { PoliticalEconomyPanel } from '@/components/PoliticalEconomyPanel';
 import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
 import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';
 import { AllianceCohesionPanel } from '@/components/AllianceCohesionPanel';
+import { FoodSystemsGeopoliticsPanel } from '@/components/FoodSystemsGeopoliticsPanel';
 import { InformationOperationsPanel } from '@/components/InformationOperationsPanel';
 
 import { MaritimeBoundaryPanel } from '@/components/MaritimeBoundaryPanel';
@@ -1553,7 +1555,7 @@ export class PanelLayoutManager implements AppModule {
 
  this.ctx.panels['terrorism-superpower'] = new TerrorismSuperpowerPanel();
  this.ctx.panels['water-security'] = new WaterSecurityPanel();
- this.ctx.panels['energy-security'] = new EnergySecurityPanel();
+ this.ctx.panels['energy-security'] = new EnergySecurityPanel(); this.ctx.panels['food-systems-geopolitics'] = new FoodSystemsGeopoliticsPanel();
  this.ctx.panels['arms-proliferation'] = new ArmsProliferationPanel();
  this.ctx.panels['territorial-disputes'] = new TerritorialDisputesPanel(); this.ctx.panels['regime-stability'] = new RegimeStabilityPanel(); this.ctx.panels['arms-sales'] = new ArmsSalesPanel(); this.ctx.panels['global-logistics-chokepoints'] = new GlobalLogisticsChokepointsPanel(); this.ctx.panels['coalition-dynamics'] = new CoalitionDynamicsPanel(); this.ctx.panels['transnational-repression'] = new TransnationalRepressionPanel();
         this.ctx.panels['corruption-index'] = new CorruptionIndexPanel();
@@ -1569,6 +1571,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
  this.ctx.panels['urban-security'] = new UrbanSecurityPanel();
  this.ctx.panels['alliance-cohesion'] = new AllianceCohesionPanel();
+    this.ctx.panels['food-systems-geopolitics'] = new FoodSystemsGeopoliticsPanel();
  this.ctx.panels['information-operations'] = new InformationOperationsPanel();
 
  this.ctx.panels['maritime-boundary'] = new MaritimeBoundaryPanel(); this.ctx.panels['maritime-piracy'] = new MaritimePiracyPanel();

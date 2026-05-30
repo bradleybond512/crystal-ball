@@ -391,6 +391,7 @@ import { RegimeStabilityPanel } from '@/components/RegimeStabilityPanel';
 import { ArmsSalesPanel } from '@/components/ArmsSalesPanel';
 import { StateCapitalismPanel } from '@/components/StateCapitalismPanel';
 import { GlobalLogisticsChokepointsPanel } from '@/components/GlobalLogisticsChokepointsPanel';
+import { PoliticalViolencePanel } from '@/components/PoliticalViolencePanel';
 import { CoalitionDynamicsPanel } from '@/components/CoalitionDynamicsPanel';
 import { TransnationalRepressionPanel } from '@/components/TransnationalRepressionPanel';
 import { CorruptionIndexPanel } from '@/components/CorruptionIndexPanel';
@@ -1565,6 +1566,7 @@ export class PanelLayoutManager implements AppModule {
     this.ctx.panels['urban-instability'] = new UrbanInstabilityPanel();
     this.ctx.panels['cyber-espionage'] = new CyberEspionagePanel();
     this.ctx.panels['political-economy'] = new PoliticalEconomyPanel(); this.ctx.panels['state-capitalism'] = new StateCapitalismPanel();
+    this.ctx.panels['political-violence'] = new PoliticalViolencePanel();
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
  this.ctx.panels['urban-security'] = new UrbanSecurityPanel();
  this.ctx.panels['alliance-cohesion'] = new AllianceCohesionPanel();

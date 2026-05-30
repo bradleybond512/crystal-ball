@@ -299,6 +299,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'signal-noise-filter': { name: 'Signal Quality', enabled: true, priority: 1 },
   'alliance-cohesion': { name: 'Alliance Cohesion', enabled: true, priority: 1 },
   'information-operations': { name: 'Information Operations', enabled: true, priority: 1 },
+  'disinformation-networks': { name: 'Disinformation Networks', enabled: true, priority: 1 },
   'maritime-boundary': { name: 'Maritime Boundary', enabled: true, priority: 1 },
   'shortage-radar': { name: 'Shortage Radar', enabled: true, priority: 1 },
   'shortage-detail-wheat': { name: 'Wheat Shortage', enabled: true, priority: 2 },

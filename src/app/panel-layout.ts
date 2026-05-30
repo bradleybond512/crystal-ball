@@ -391,6 +391,7 @@ import { CoalitionDynamicsPanel } from '@/components/CoalitionDynamicsPanel';
 import { TransnationalRepressionPanel } from '@/components/TransnationalRepressionPanel';
 import { CorruptionIndexPanel } from '@/components/CorruptionIndexPanel';
 import { SpaceMilitarizationPanel } from '@/components/SpaceMilitarizationPanel';
+import { SpaceDebrisPanel } from '@/components/SpaceDebrisPanel';
 import { ArcticMonitoringPanel } from '@/components/ArcticMonitoringPanel';
 import { ClimateSecurityNexusPanel } from '@/components/ClimateSecurityNexusPanel';
 import { ArcticCompetitionPanel } from '@/components/ArcticCompetitionPanel';
@@ -1552,6 +1553,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['territorial-disputes'] = new TerritorialDisputesPanel(); this.ctx.panels['regime-stability'] = new RegimeStabilityPanel(); this.ctx.panels['coalition-dynamics'] = new CoalitionDynamicsPanel(); this.ctx.panels['transnational-repression'] = new TransnationalRepressionPanel();
         this.ctx.panels['corruption-index'] = new CorruptionIndexPanel();
  this.ctx.panels['space-militarization'] = new SpaceMilitarizationPanel();
+        this.ctx.panels['space-debris'] = new SpaceDebrisPanel();
  this.ctx.panels['arctic-monitoring'] = new ArcticMonitoringPanel();
  this.ctx.panels['climate-security-nexus'] = new ClimateSecurityNexusPanel();
  this.ctx.panels['arctic-competition'] = new ArcticCompetitionPanel();

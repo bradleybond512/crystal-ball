@@ -329,6 +329,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'regime-stability': { name: 'Regime Stability', enabled: true, priority: 1 },
   'coalition-dynamics': { name: 'Coalition Dynamics', enabled: true, priority: 1 },
   'transnational-repression': { name: 'Transnational Repression', enabled: true, priority: 1 },
+  'foreign-aid-weaponization': { name: 'Foreign Aid Weaponization', enabled: true, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {

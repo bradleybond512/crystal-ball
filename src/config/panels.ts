@@ -328,6 +328,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'territorial-disputes': { name: 'Territorial Disputes Tracker', enabled: true, priority: 1 },
   'regime-stability': { name: 'Regime Stability', enabled: true, priority: 1 },
   'coalition-dynamics': { name: 'Coalition Dynamics', enabled: true, priority: 1 },
+  'media-freedom': { name: 'Media Freedom', enabled: true, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {

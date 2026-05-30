@@ -244,12 +244,13 @@ export function getMostThreatenedRegion(chokepoints: LogisticsChokepoint[]): str
   };
   const regionScores: Record<string, number> = {};
   for (const c of chokepoints) {
-    const key = c.region.split(' / ')[0];
+    const key = c.region.split(' / ')[0] ?? c.region;
     regionScores[key] = (regionScores[key] ?? 0) + threatWeights[c.threatLevel];
   }
   let topRegion = 'Unknown';
   let topScore = -1;
-  for (const [region, score] of Object.entries(regionScores) as [string, number][]) {
+  for (const region of Object.keys(regionScores)) {
+    const score: number = regionScores[region] ?? 0;
     if (score > topScore) {
       topScore = score;
       topRegion = region;

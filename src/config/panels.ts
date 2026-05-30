@@ -294,6 +294,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'cyber-espionage': { name: 'Cyber Espionage Tracker', enabled: true, priority: 1 },
   'urban-instability': { name: 'Urban Instability Monitor', enabled: true, priority: 1 },
   'political-economy': { name: 'Political Economy Risk', enabled: true, priority: 1 },
+  'digital-currency-geopolitics': { name: 'Digital Currency Geopolitics', enabled: true, priority: 1 },
   'election-monitoring': { name: 'Election Monitoring', enabled: true, priority: 1 },
   'urban-security': { name: 'Urban Security', enabled: true, priority: 1 },
   'signal-noise-filter': { name: 'Signal Quality', enabled: true, priority: 1 },
@@ -1133,7 +1134,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   marketsFinance: {
  labelKey: 'header.panelCatMarketsFinance',
- panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower', 'political-economy'],
+ panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower', 'political-economy', 'digital-currency-geopolitics'],
  variants: ['full'],
   },
   topical: {

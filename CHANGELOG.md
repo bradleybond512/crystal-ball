@@ -4,6 +4,50 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.25.24] - 2026-05-25
+
+### Added
+
+- GlobalMigrationCrisisPanel with five sections: Active Displacement Crises,
+  Border Pressure Monitor, Camp & Settlement Status, Repatriation & Resettlement,
+  and Regional Displacement Index. Badge count reflects critical camps (>=120%
+  capacity) + high-tension borders (level >= 3) + live HIGH/CRITICAL observations.
+  Refreshes every 5 minutes. Built with h()/replaceChildren() DOM builders.
+- global-migration-crisis-helpers.ts: pure helper functions (migrationSeverityColor,
+  causeLabel, causeIcon, trendArrow, trendColor, tensionColor, tensionTierLabel,
+  capacityStatusLabel, capacityStatusColor, campCapacityColor, programStatusLabel,
+  programStatusColor, formatDisplacedCount, formatBeneficiaries, criticalCampCount,
+  activeBorderCrisisCount, totalDisplacedMillions) and static data (DISPLACEMENT_CRISES,
+  BORDER_PRESSURE_POINTS, CAMP_STATUSES, REPATRIATION_PROGRAMS,
+  REGIONAL_DISPLACEMENT_INDEX) — all side-effect-free and unit-tested.
+- 87 pure-logic tests, ESLint clean, typecheck clean.
+
+## [2.25.23] - 2026-05-25
+
+### Added
+
+- PoliticalRiskSuperpowerPanel with five sections: Coup & Regime Change Watch,
+  Election Risk Tracker, Protest & Civil Unrest, Sanctions & Diplomatic Crisis,
+  and Governance Stability Index. Badge count reflects high/critical instability
+  events. Refreshes every 3 minutes.
+- political-risk-superpower-helpers.ts: pure helper functions (politicalSeverityColor,
+  eventTypeLabel, riskScoreTier, riskScoreColor, responseLabel, responseColor,
+  crisisTypeLabel, governanceColor, governanceTier, formatTimeAgo, instabilityCount)
+  and static data (COUP_WATCH, ELECTION_RISKS, PROTEST_EVENTS, DIPLOMATIC_CRISES,
+  GOVERNANCE_INDEX) — all side-effect-free and unit-tested.
+- 73 pure-logic tests, ESLint clean, typecheck clean.
+
+## [2.25.22] - 2026-05-21
+
+### Added
+
+- Nuclear/radiological mission bridges: INES-graded facility incidents
+  (NuclearIncidentBridge), radiation releases by dual dose-rate + area axes
+  (RadiationReleaseBridge), and nuclear/radiological threat intelligence with
+  [NUCLEAR]/[RADIOLOGICAL] prefix (NuclearThreatBridge). All self-register at
+  module load. INES 7→4/5-6→3/3-4→2/1-2→1 via Math.max with event type tier.
+- 72 pure-logic tests, ESLint clean, typecheck clean.
+
 ## [2.25.18] - 2026-05-20
 
 ### Added

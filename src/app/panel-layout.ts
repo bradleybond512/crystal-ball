@@ -144,7 +144,9 @@ import { LittleSnitchPanel } from '@/components/LittleSnitchPanel';
 import { AlertCenterPanel } from '@/components/AlertCenterPanel';
 import { SituationPanel } from '@/components/SituationPanel';
 import { SpaceWeatherPanel } from '@/components/SpaceWeatherPanel';
+import { SpaceSecurityPanel } from '@/components/SpaceSecurityPanel';
 import { SpaceSuperpowerPanel } from '@/components/SpaceSuperpowerPanel';
+import { WeatherSuperpowerPanel } from '@/components/WeatherSuperpowerPanel';
 import { SpaceflightNewsPanel } from '@/components/SpaceflightNewsPanel';
 import { SpaceLaunchesPanel } from '@/components/SpaceLaunchesPanel';
 import { DiseaseOutbreakPanel } from '@/components/DiseaseOutbreakPanel';
@@ -216,6 +218,7 @@ import { PowerGridPanel } from '@/components/PowerGridPanel';
 import { FearGreedPanel } from '@/components/FearGreedPanel';
 import { InternetDisruptionsPanel } from '@/components/InternetDisruptionsPanel';
 import { NationalDebtPanel } from '@/components/NationalDebtPanel';
+import { SovereignDebtPanel } from '@/components/SovereignDebtPanel';
 import { FuelPricesPanel } from '@/components/FuelPricesPanel';
 import { AirTrafficPanel } from '@/components/AirTrafficPanel';
 import { ThreatIntelHubPanel } from '@/components/ThreatIntelHubPanel';
@@ -239,6 +242,8 @@ import { NotificationProvenancePanel } from '@/components/NotificationProvenance
 import { TrustBudgetPanel } from '@/components/TrustBudgetPanel';
 import { IntelligenceTrustBudgetPanel } from '@/components/IntelligenceTrustBudgetPanel';
 import { NotificationSettingsPanel } from '@/components/NotificationSettingsPanel';
+import { WorldStateComparatorPanel } from '@/components/WorldStateComparatorPanel';
+import { HistoricalPlaybackPanel } from '@/components/HistoricalPlaybackPanel';
 import { NotificationPreferencesPanel } from '@/components/NotificationPreferencesPanel';
 import { SituationStorePanel } from '@/components/SituationStorePanel';
 import { ObservationRulesPanel } from '@/components/ObservationRulesPanel';
@@ -325,6 +330,8 @@ import { SafetyCaseDashboardPanel } from '@/components/SafetyCaseDashboardPanel'
 import { ExperimentManagerPanel } from '@/components/ExperimentManagerPanel';
 import { DomainScorecardsPanel } from '@/components/DomainScorecardsPanel';
 import { GeopoliticalEventCalendarPanel } from '@/components/GeopoliticalEventCalendarPanel';
+import { GeopoliticalSuperpowerPanel } from '@/components/GeopoliticalSuperpowerPanel';
+import { CriticalMineralsPanel } from '@/components/CriticalMineralsPanel';
 import { SignalEnrichmentPanel } from '@/components/SignalEnrichmentPanel';
 import { ThreatCorrelationMatrixPanel } from '@/components/ThreatCorrelationMatrixPanel';
 import { GeospatialClusteringPanel } from '@/components/GeospatialClusteringPanel';
@@ -332,6 +339,7 @@ import { IntelligenceBriefingExportPanel } from '@/components/IntelligenceBriefi
 import { IntelligenceIndexPanel } from '@/components/IntelligenceIndexPanel';
 import { DomainDependencyPanel } from '@/components/DomainDependencyPanel';
 import { SituationTimelinePanel } from '@/components/SituationTimelinePanel';
+import { DisasterResponsePanel } from '@/components/DisasterResponsePanel';
 import { MultiAgentReviewPanel } from '@/components/MultiAgentReviewPanel';
 import { CounterfactualReplayPanel } from '@/components/CounterfactualReplayPanel';
 import { CounterfactualReasoningPanel } from '@/components/CounterfactualReasoningPanel';
@@ -345,6 +353,9 @@ import { GlobalRhythmPanel } from '@/components/GlobalRhythmPanel';
 import { TemporalAnomalyDetectorPanel } from '@/components/TemporalAnomalyDetectorPanel';
 import { ThreatHorizonPanel } from '@/components/ThreatHorizonPanel';
 import { AlertTracePanel } from '@/components/AlertTracePanel';
+import { AlertRulesTuningPanel } from '@/components/AlertRulesTuningPanel';
+import { IntelligenceQualityDebtPanel } from '@/components/IntelligenceQualityDebtPanel';
+import { SupplyChainResiliencePanel } from '@/components/SupplyChainResiliencePanel';
 import { AlertExplanationPanel } from '@/components/AlertExplanationPanel';
 import { PersonalRelevancePanel } from '@/components/PersonalRelevancePanel';
 import { ScenarioReplayPanel } from '@/components/ScenarioReplayPanel';
@@ -358,26 +369,71 @@ import { ThreatDashboard } from '@/components/ThreatDashboard';
 import { startThreatAggregator } from '@/services/synthesis/threat-aggregator';
 import { AviationIntelPanel } from '@/components/AviationIntelPanel';
 import { AviationSuperpowerPanel } from '@/components/AviationSuperpowerPanel';
+import { NuclearSuperpowerPanel } from '@/components/NuclearSuperpowerPanel';
+import { EnergySuperpowerPanel } from '@/components/EnergySuperpowerPanel';
+import { SignalNoiseFilterPanel } from '@/components/SignalNoiseFilterPanel';
 import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { FinancialSuperpowerPanel } from '@/components/FinancialSuperpowerPanel';
+import { PoliticalRiskSuperpowerPanel } from '@/components/PoliticalRiskSuperpowerPanel';
+import { StateFragilityPanel } from '@/components/StateFragilityPanel';
+import { GlobalMigrationCrisisPanel } from '@/components/GlobalMigrationCrisisPanel';
+import { OrganizedCrimeSuperpowerPanel } from '@/components/OrganizedCrimeSuperpowerPanel';
+import { NarcoticsTraffickingPanel } from '@/components/NarcoticsTraffickingPanel';
+
+import { TerrorismSuperpowerPanel } from '@/components/TerrorismSuperpowerPanel';
+import { WaterSecurityPanel } from '@/components/WaterSecurityPanel';
+import { EnergySecurityPanel } from '@/components/EnergySecurityPanel';
+import { ArmsProliferationPanel } from '@/components/ArmsProliferationPanel';
+import { TerritorialDisputesPanel } from '@/components/TerritorialDisputesPanel';
+import { RegimeStabilityPanel } from '@/components/RegimeStabilityPanel';
+import { ArmsSalesPanel } from '@/components/ArmsSalesPanel';
+import { StateCapitalismPanel } from '@/components/StateCapitalismPanel';
+import { GlobalLogisticsChokepointsPanel } from '@/components/GlobalLogisticsChokepointsPanel';
+import { PoliticalViolencePanel } from '@/components/PoliticalViolencePanel';
+import { CoalitionDynamicsPanel } from '@/components/CoalitionDynamicsPanel';
+import { TransnationalRepressionPanel } from '@/components/TransnationalRepressionPanel';
+import { CorruptionIndexPanel } from '@/components/CorruptionIndexPanel';
+import { SpaceMilitarizationPanel } from '@/components/SpaceMilitarizationPanel';
+import { ArcticMonitoringPanel } from '@/components/ArcticMonitoringPanel';
+import { ClimateSecurityNexusPanel } from '@/components/ClimateSecurityNexusPanel';
+import { ArcticCompetitionPanel } from '@/components/ArcticCompetitionPanel';
+import { GreatPowerCompetitionPanel } from '@/components/GreatPowerCompetitionPanel';
+import { UrbanInstabilityPanel } from '@/components/UrbanInstabilityPanel';
+import { CyberEspionagePanel } from '@/components/CyberEspionagePanel';
+import { PoliticalEconomyPanel } from '@/components/PoliticalEconomyPanel';
+import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
+import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';
+import { AllianceCohesionPanel } from '@/components/AllianceCohesionPanel';
+import { InformationOperationsPanel } from '@/components/InformationOperationsPanel';
+
+import { MaritimeBoundaryPanel } from '@/components/MaritimeBoundaryPanel';
+import { MaritimePiracyPanel } from '@/components/MaritimePiracyPanel';
+import { TechCompetitionPanel } from '@/components/TechCompetitionPanel';
 import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
 import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { MaritimeSuperpowerPanel } from '@/components/MaritimeSuperpowerPanel';
-import { TradeRouteRiskScorerPanel } from '@/components/TradeRouteRiskScorerPanel';
+import { HealthSuperpowerPanel } from '@/components/HealthSuperpowerPanel';
+
+import { PersonalResiliencePanel } from '@/components/PersonalResiliencePanel';import { TradeRouteRiskScorerPanel } from '@/components/TradeRouteRiskScorerPanel';
+import { TradeDisruptionPanel } from '@/components/TradeDisruptionPanel';
 import { SupplyChainDisruptionPanel } from '@/components/SupplyChainDisruptionPanel';
 import { InfraRiskMatrixPanel } from '@/components/InfraRiskMatrixPanel';
 import { EarthquakeSuperPanel } from '@/components/EarthquakeSuperPanel';
 import { SeismicSuperpowerPanel } from '@/components/SeismicSuperpowerPanel';
-import { IntelligenceTimelinePanel } from '@/components/IntelligenceTimelinePanel';
+import { CyberSuperpowerPanel } from '@/components/CyberSuperpowerPanel';
+import { ElectricGridVulnerabilityPanel } from '@/components/ElectricGridVulnerabilityPanel';
+import { CyberIncidentResponsePanel } from '@/components/CyberIncidentResponsePanel';
+
+import { ClimateSuperpowerPanel } from '@/components/ClimateSuperpowerPanel';import { IntelligenceTimelinePanel } from '@/components/IntelligenceTimelinePanel';
 import { CascadeSimulatorPanel } from '@/components/CascadeSimulatorPanel';
 import { EmergencyBroadcastPanel } from '@/components/EmergencyBroadcastPanel';
 import { SatelliteChangePanel } from '@/components/SatelliteChangePanel';
 import { SatelliteIntelPanel } from '@/components/SatelliteIntelPanel';
 import { EconomicStressPanel } from '@/components/EconomicStressPanel';
 import { FederalRegisterPanel } from '@/components/FederalRegisterPanel';
-import { NuclearRiskPanel } from '@/components/NuclearRiskPanel';
+import { NuclearRiskPanel } from '@/components/NuclearRiskPanel';import { NuclearNearMissPanel } from '@/components/NuclearNearMissPanel';
 import { RadiationDecayPanel } from '@/components/RadiationDecayPanel';
 import { ResourceInventoryPanel } from '@/components/ResourceInventoryPanel';
 import { WorldClockPanel } from '@/components/WorldClockPanel';
@@ -397,6 +453,11 @@ import { GivingPanel } from '@/components';
 import { UnifiedAlertInboxPanel } from '@/components/UnifiedAlertInboxPanel';
 import { AlertRulesPanel } from '@/components/AlertRulesPanel';
 import { AlertDeduplicationPanel } from '@/components/AlertDeduplicationPanel';
+import { AlertFatigueDashboardPanel } from '@/components/AlertFatigueDashboardPanel';
+import { ThreatConvergencePanel } from '@/components/ThreatConvergencePanel';
+import { GeopoliticalRiskPanel } from '@/components/GeopoliticalRiskPanel';
+import { SanctionsTrackerPanel } from '@/components/SanctionsTrackerPanel';
+import { CurrencyWarfarePanel } from '@/components/CurrencyWarfarePanel';
 import { StalenessBanner } from '@/components/StalenessBanner';
 import { focusInvestmentOnMap } from '@/services/investments-focus';
 import { debounce, rafSchedule, saveToStorage } from '@/utils';
@@ -1166,8 +1227,10 @@ export class PanelLayoutManager implements AppModule {
 
  const spaceWeatherPanel = new SpaceWeatherPanel();
  this.ctx.panels['space-weather'] = spaceWeatherPanel;
+ this.ctx.panels['space-security'] = new SpaceSecurityPanel();
 
  this.ctx.panels['space-superpower'] = new SpaceSuperpowerPanel();
+ this.ctx.panels['weather-superpower'] = new WeatherSuperpowerPanel();
 
  const spaceflightNewsPanel = new SpaceflightNewsPanel();
  this.ctx.panels['spaceflight-news'] = spaceflightNewsPanel;
@@ -1252,7 +1315,7 @@ export class PanelLayoutManager implements AppModule {
  });
  this.ctx.panels['ucdp-events'] = ucdpEventsPanel;
 
- this.ctx.panels['nuclear-risk'] = new NuclearRiskPanel('nuclear-risk', 'Nuclear Risk Tracker');
+ this.ctx.panels['nuclear-risk'] = new NuclearRiskPanel('nuclear-risk', 'Nuclear Risk Tracker'); this.ctx.panels['nuclear-near-miss'] = new NuclearNearMissPanel();
 
  const airstrikesPanel = new AirstrikesPanel();
  airstrikesPanel.setEventClickHandler((lat, lon) => {
@@ -1275,7 +1338,12 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['unified-alert-inbox'] = new UnifiedAlertInboxPanel();
  this.ctx.panels['alert-rules'] = new AlertRulesPanel();
  this.ctx.panels['alert-deduplication'] = new AlertDeduplicationPanel();
+ this.ctx.panels['alert-fatigue-dashboard'] = new AlertFatigueDashboardPanel();
+ this.ctx.panels['threat-convergence'] = new ThreatConvergencePanel();
+ this.ctx.panels['geopolitical-risk'] = new GeopoliticalRiskPanel();
+ this.ctx.panels['currency-warfare'] = new CurrencyWarfarePanel();
 
+ this.ctx.panels['sanctions-tracker'] = new SanctionsTrackerPanel();
  const volcanoAlertsPanel = new VolcanoAlertsPanel();
  volcanoAlertsPanel.setEventClickHandler((lat, lon) => {
  this.ctx.map?.setCenter(lat, lon, 7);
@@ -1319,6 +1387,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['fear-greed'] = new FearGreedPanel();
  this.ctx.panels['internet-disruptions'] = new InternetDisruptionsPanel();
  this.ctx.panels['national-debt'] = new NationalDebtPanel();
+ this.ctx.panels['sovereign-debt'] = new SovereignDebtPanel();
  this.ctx.panels['fuel-prices'] = new FuelPricesPanel();
  this.ctx.panels['air-traffic'] = new AirTrafficPanel();
  this.ctx.panels['threat-intel-hub'] = new ThreatIntelHubPanel();
@@ -1347,6 +1416,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['trust-budget'] = new TrustBudgetPanel();
  this.ctx.panels['intelligence-trust-budget'] = new IntelligenceTrustBudgetPanel();
  this.ctx.panels['notification-settings'] = new NotificationSettingsPanel();
+ this.ctx.panels['world-state-comparator'] = new WorldStateComparatorPanel();
+ this.ctx.panels['historical-playback'] = new HistoricalPlaybackPanel();
  this.ctx.panels['notification-preferences'] = new NotificationPreferencesPanel();
  this.ctx.panels['situations'] = new SituationStorePanel();
  this.ctx.panels['observation-rules'] = new ObservationRulesPanel();
@@ -1434,6 +1505,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['experiment-manager'] = new ExperimentManagerPanel();
  this.ctx.panels['domain-scorecards'] = new DomainScorecardsPanel();
  this.ctx.panels['geopolitical-event-calendar'] = new GeopoliticalEventCalendarPanel();
+ this.ctx.panels['geopolitical-superpower'] = new GeopoliticalSuperpowerPanel();
+ this.ctx.panels['critical-minerals'] = new CriticalMineralsPanel();
  this.ctx.panels['signal-enrichment'] = new SignalEnrichmentPanel();
  this.ctx.panels['threat-correlation-matrix'] = new ThreatCorrelationMatrixPanel();
  this.ctx.panels['geospatial-clustering'] = new GeospatialClusteringPanel();
@@ -1441,6 +1514,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['intelligence-index'] = new IntelligenceIndexPanel();
  this.ctx.panels['domain-dependency'] = new DomainDependencyPanel();
  this.ctx.panels['situation-timeline'] = new SituationTimelinePanel();
+ this.ctx.panels['disaster-response'] = new DisasterResponsePanel();
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();
  this.ctx.panels['repair-recommendations'] = new RepairRecommendationsPanel();
  this.ctx.panels['mission-ledger-bridge'] = new MissionLedgerBridgePanel();
@@ -1453,6 +1527,9 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['analyst-notebook'] = new AnalystNotebookPanel();
  this.ctx.panels['persistent-query-engine'] = new PersistentQueryEnginePanel();
  this.ctx.panels['alert-trace'] = new AlertTracePanel();
+ this.ctx.panels['alert-rules-tuning'] = new AlertRulesTuningPanel();
+ this.ctx.panels['intelligence-quality-debt'] = new IntelligenceQualityDebtPanel();
+ this.ctx.panels['supply-chain-resilience'] = new SupplyChainResiliencePanel();
  this.ctx.panels['alert-explanation'] = new AlertExplanationPanel();
  this.ctx.panels['personal-relevance'] = new PersonalRelevancePanel();
  this.ctx.panels['scenario-replay'] = new ScenarioReplayPanel();
@@ -1466,8 +1543,39 @@ export class PanelLayoutManager implements AppModule {
  startThreatAggregator();
  this.ctx.panels['aviation-intel'] = new AviationIntelPanel();
  this.ctx.panels['aviation-superpower'] = new AviationSuperpowerPanel();
+ this.ctx.panels['nuclear-superpower'] = new NuclearSuperpowerPanel();
+ this.ctx.panels['energy-superpower'] = new EnergySuperpowerPanel();
+ this.ctx.panels['signal-noise-filter'] = new SignalNoiseFilterPanel();
  this.ctx.panels['intelligence-feed'] = new IntelligenceFeedPanel();
  this.ctx.panels['financial-superpower'] = new FinancialSuperpowerPanel();
+ this.ctx.panels['political-risk-superpower'] = new PoliticalRiskSuperpowerPanel();
+ this.ctx.panels['state-fragility'] = new StateFragilityPanel();
+ this.ctx.panels['global-migration-crisis'] = new GlobalMigrationCrisisPanel();
+ this.ctx.panels['organized-crime-superpower'] = new OrganizedCrimeSuperpowerPanel();
+ this.ctx.panels['narcotics-trafficking'] = new NarcoticsTraffickingPanel();
+
+ this.ctx.panels['terrorism-superpower'] = new TerrorismSuperpowerPanel();
+ this.ctx.panels['water-security'] = new WaterSecurityPanel();
+ this.ctx.panels['energy-security'] = new EnergySecurityPanel();
+ this.ctx.panels['arms-proliferation'] = new ArmsProliferationPanel();
+ this.ctx.panels['territorial-disputes'] = new TerritorialDisputesPanel(); this.ctx.panels['regime-stability'] = new RegimeStabilityPanel(); this.ctx.panels['arms-sales'] = new ArmsSalesPanel(); this.ctx.panels['global-logistics-chokepoints'] = new GlobalLogisticsChokepointsPanel(); this.ctx.panels['coalition-dynamics'] = new CoalitionDynamicsPanel(); this.ctx.panels['transnational-repression'] = new TransnationalRepressionPanel();
+        this.ctx.panels['corruption-index'] = new CorruptionIndexPanel();
+ this.ctx.panels['space-militarization'] = new SpaceMilitarizationPanel();
+ this.ctx.panels['arctic-monitoring'] = new ArcticMonitoringPanel();
+ this.ctx.panels['climate-security-nexus'] = new ClimateSecurityNexusPanel();
+ this.ctx.panels['arctic-competition'] = new ArcticCompetitionPanel();
+        this.ctx.panels['great-power-competition'] = new GreatPowerCompetitionPanel();
+    this.ctx.panels['urban-instability'] = new UrbanInstabilityPanel();
+    this.ctx.panels['cyber-espionage'] = new CyberEspionagePanel();
+    this.ctx.panels['political-economy'] = new PoliticalEconomyPanel(); this.ctx.panels['state-capitalism'] = new StateCapitalismPanel();
+    this.ctx.panels['political-violence'] = new PoliticalViolencePanel();
+ this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
+ this.ctx.panels['urban-security'] = new UrbanSecurityPanel();
+ this.ctx.panels['alliance-cohesion'] = new AllianceCohesionPanel();
+ this.ctx.panels['information-operations'] = new InformationOperationsPanel();
+
+ this.ctx.panels['maritime-boundary'] = new MaritimeBoundaryPanel(); this.ctx.panels['maritime-piracy'] = new MaritimePiracyPanel();
+ this.ctx.panels['tech-competition'] = new TechCompetitionPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
  this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
@@ -1506,12 +1614,19 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['weather-hazard'] = new WeatherHazardPanel();
  this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
  this.ctx.panels['maritime-superpower'] = new MaritimeSuperpowerPanel();
- this.ctx.panels['trade-route-risk-scorer'] = new TradeRouteRiskScorerPanel();
+ this.ctx.panels['health-superpower'] = new HealthSuperpowerPanel();
+
+ this.ctx.panels['personal-resilience'] = new PersonalResiliencePanel(); this.ctx.panels['trade-route-risk-scorer'] = new TradeRouteRiskScorerPanel();
+ this.ctx.panels['trade-disruption'] = new TradeDisruptionPanel();
  this.ctx.panels['supply-chain-disruption'] = new SupplyChainDisruptionPanel();
  this.ctx.panels['infra-risk-matrix'] = new InfraRiskMatrixPanel();
  this.ctx.panels['earthquake-super'] = new EarthquakeSuperPanel();
  this.ctx.panels['seismic-superpower'] = new SeismicSuperpowerPanel();
- this.ctx.panels['intelligence-timeline'] = new IntelligenceTimelinePanel();
+ this.ctx.panels['cyber-superpower'] = new CyberSuperpowerPanel();
+ this.ctx.panels['cyber-incident-response'] = new CyberIncidentResponsePanel();
+  this.ctx.panels['electric-grid-vulnerability'] = new ElectricGridVulnerabilityPanel();
+
+ this.ctx.panels['climate-superpower'] = new ClimateSuperpowerPanel(); this.ctx.panels['intelligence-timeline'] = new IntelligenceTimelinePanel();
  // Wire saved-places into the insights state singleton so the new
  // panels see the user's home/family/travel places out of the box.
  // Re-runs whenever saved places change.

@@ -1,7 +1,7 @@
 {
   "name": "crystal-ball",
   "private": true,
-  "version": "2.25.22",
+  "version": "2.25.143",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
@@ -120,6 +120,12 @@
     "test:component-lib": "tsx --test tests/components/lib/panel-components.test.mts",
     "test:space-superpower": "tsx --import ./tests/panels/register-hook.mjs --test tests/components/space-superpower-panel.test.mts",
     "test:aviation-superpower": "tsx --import ./tests/panels/register-hook.mjs --test tests/components/aviation-superpower-panel.test.mts",
+    "test:energy-superpower": "tsx --import ./tests/panels/register-hook.mjs --test tests/components/energy-superpower-panel.test.mts",
+    "test:health-superpower": "tsx --import ./tests/panels/register-hook.mjs --test tests/components/health-superpower-panel.test.mts",
+    "test:alert-fatigue-dashboard": "tsx --test tests/components/alert-fatigue-dashboard-helpers.test.mts",
+    "test:organized-crime-superpower": "tsx --test tests/components/organized-crime-superpower-panel.test.mts",
+    "test:water-security": "tsx --test tests/components/water-security-panel.test.mts",
+    "test:personal-resilience-panel": "tsx --test tests/components/personal-resilience-panel.test.mts",
     "test:strategic-self-improvement": "tsx --test src/services/diagnostics/__tests__/failure-prediction.test.mts src/services/governance/__tests__/policy-engine.test.mts src/services/governance/__tests__/model-governance.test.mts src/services/experiments/__tests__/experiment-manager.test.mts src/services/ops/__tests__/causal-attribution.test.mts src/services/ops/__tests__/trust-budget.test.mts src/services/ops/__tests__/playbook-engine.test.mts src/services/scenarios/__tests__/scenario-library.test.mts src/services/personal/__tests__/resilience-model.test.mts src/services/quality/__tests__/quality-debt.test.mts src/services/quality/__tests__/self-improvement-scheduler.test.mts",
     "test:feeds": "node scripts/validate-rss-feeds.mjs",
     "test:sms": "node --test src-tauri/sidecar/sms-command-parser.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/sms-response-formatter.test.mjs",
@@ -165,7 +171,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.52.0",
-    "@tauri-apps/cli": "^2.11.0",
+    "@tauri-apps/cli": "^2.11.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/d3": "^7.4.3",
     "@types/maplibre-gl": "^1.14.0",
@@ -183,15 +189,15 @@
     "happy-dom": "^20.9.0",
     "lint-staged": "^16.4.0",
     "markdownlint-cli2": "^0.22.1",
-    "tsx": "^4.21.0",
+    "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.58.0",
-    "vite": "^8.0.12",
+    "vite": "^8.0.14",
     "vite-plugin-pwa": "^1.3.0",
     "vite-plugin-static-copy": "^4.1.0"
   },
   "dependencies": {
-    "@deck.gl/aggregation-layers": "^9.3.1",
+    "@deck.gl/aggregation-layers": "^9.3.2",
     "@deck.gl/core": "^9.3.2",
     "@deck.gl/geo-layers": "^9.3.2",
     "@deck.gl/layers": "^9.3.2",
@@ -205,7 +211,7 @@
     "@xenova/transformers": "^2.17.2",
     "canvas-confetti": "^1.9.4",
     "cesium": "^1.140.0",
-    "convex": "^1.34.1",
+    "convex": "^1.39.1",
     "d3": "^7.9.0",
     "deck.gl": "^9.2.6",
     "fast-xml-parser": "^5.5.9",
@@ -221,7 +227,7 @@
     "telegram": "^2.26.22",
     "three": "^0.184.0",
     "topojson-client": "^3.1.0",
-    "ws": "^8.19.0",
+    "ws": "^8.20.1",
     "youtubei.js": "^16.0.1"
   },
   "overrides": {

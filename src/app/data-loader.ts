@@ -3604,14 +3604,9 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadGoesSatellite(): Promise<void> {
- try {
- const r = await fetch('/api/satellite/goes');
- if (!r.ok) return;
- const data = await r.json();
- (this.ctx.panels['goes-satellite'] as GoesSatellitePanel | undefined)?.update(data);
- } catch (error) {
- console.warn('[goes-satellite] fetch failed', error);
- }
+ // The panel owns its own fetch (it refetches on band/sector switch via
+ // /api/satellite/goes-imagery). The loader tick just asks it to refresh.
+ (this.ctx.panels['goes-satellite'] as GoesSatellitePanel | undefined)?.update();
   }
 
   async loadFloodMonitor(): Promise<void> {

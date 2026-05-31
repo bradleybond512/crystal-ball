@@ -1,369 +1,543 @@
 /**
- * Pure helpers for SpaceDebrisPanel.
+ * Space Debris helpers — pure logic, no DOM, no fetch.
+ * Safe for Node.js tests.
  *
- * Tracks the orbital debris crisis as a geopolitical / space-security issue.
- * No DOM, no fetch — safe to import in Node.js tests.
+ * Covers the orbital debris crisis as a geopolitical security issue:
+ * ASAT test events, Kessler syndrome risk index, mega-constellation
+ * conjunctions, debris removal missions, and space governance gaps.
  */
 
-// ── Types ─────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
-export type OrbitRegimeId = 'LEO' | 'MEO' | 'GEO';
-
-export type EventType = 'ASAT Test' | 'Collision' | 'Explosion' | 'Reentry';
-
-export type DebrisDensity = 'Low' | 'Moderate' | 'High' | 'Critical';
-
-export type CollisionRisk = 'Low' | 'Medium' | 'High' | 'Critical';
+export type OrbitRegime = 'LEO' | 'MEO' | 'GEO' | 'HEO';
+export type DebrisSeverity = 0 | 1 | 2 | 3 | 4;
+export type ASATStatus = 'demonstrated' | 'suspected' | 'developing' | 'none';
+export type KesslerRisk = 'low' | 'moderate' | 'elevated' | 'critical';
+export type MissionStatus = 'operational' | 'planned' | 'development' | 'cancelled';
+export type ConstellationStatus = 'deployed' | 'deploying' | 'planned' | 'approved';
 
 export interface DebrisEvent {
   id: string;
+  year: number;
   name: string;
-  date: string;           // ISO date string or year
   actor: string;
-  orbitRegime: OrbitRegimeId;
-  fragmentCount: number;
+  orbit: OrbitRegime;
+  trackedFragments: number;
   stillInOrbit: boolean;
-  eventType: EventType;
-  severity: number;       // 1-10
-  description: string;
+  forcedISSManeuver: boolean;
+  geopoliticalNotes: string;
+  severity: DebrisSeverity;
 }
 
-export interface OrbitRegimeStatus {
-  regime: string;
+export interface OrbitStats {
+  regime: OrbitRegime;
+  altitudeKmRange: string;
   trackedObjects: number;
-  debrisDensity: DebrisDensity;
-  collisionRisk: CollisionRisk;
-  keyThreat: string;
+  activeSatellites: number;
+  debrisFragments: number;
+  kesslerRisk: KesslerRisk;
+  notes: string;
 }
 
-export interface ASATCapability {
+export interface ASATNation {
+  code: string;
+  name: string;
+  status: ASATStatus;
+  testsPerformed: number;
+  latestTestYear: number | null;
+  totalDebrisGenerated: number;
+  notes: string;
+}
+
+export interface DebrisRemovalMission {
+  name: string;
+  agency: string;
+  targetYear: number;
+  status: MissionStatus;
+  objective: string;
+}
+
+export interface MegaConstellation {
+  operator: string;
   country: string;
-  confirmed: boolean;
-  testYear: number | null;
-  fragmentsCreated: number | null;
-  status: string;
+  plannedCount: number;
+  deployedCount: number;
+  status: ConstellationStatus;
+  percentOfTraffic: string;
+  geopoliticalNote: string;
+}
+
+export interface GovernanceGap {
+  title: string;
+  description: string;
+  severity: DebrisSeverity;
+}
+
+export interface GlobalDebrisStats {
+  trackedObjectsAbove10cm: number;
+  estimatedObjects1to10cm: number;
+  estimatedObjectsBelow1cm: number;
+  activeSatellites: number;
+  debrisGrowthRateYoY: string;
 }
 
 export interface DebrisRenderData {
+  globalStats: GlobalDebrisStats;
   events: DebrisEvent[];
-  orbitRegimes: OrbitRegimeStatus[];
-  asatCapabilities: ASATCapability[];
-  kesslerRiskIndex: number;         // 0-100
-  totalTrackedObjects: number;
-  activeRemovalMissions: number;
+  orbitStats: OrbitStats[];
+  asatNations: ASATNation[];
+  removalMissions: DebrisRemovalMission[];
+  megaConstellations: MegaConstellation[];
+  governanceGaps: GovernanceGap[];
+  kesslerRiskIndex: number;
 }
 
-// ── Static seed data ──────────────────────────────────────────────────────
+// ── Data constants ─────────────────────────────────────────────────────────────
 
 export const DEBRIS_EVENTS: DebrisEvent[] = [
   {
     id: 'fengyun-1c-2007',
-    name: 'Fengyun-1C ASAT Intercept',
-    date: '2007-01-11',
+    year: 2007,
+    name: 'China ASAT — Fengyun-1C',
     actor: 'China',
-    orbitRegime: 'LEO',
-    fragmentCount: 3500,
+    orbit: 'LEO',
+    trackedFragments: 3537,
     stillInOrbit: true,
-    eventType: 'ASAT Test',
-    severity: 10,
-    description:
-      'China destroyed its own aging weather satellite at 865 km. Created the largest single debris cloud in history; most fragments will persist for decades.',
+    forcedISSManeuver: false,
+    severity: 4,
+    geopoliticalNotes:
+      'Most destructive single debris event on record. DN-1 KE-ASAT struck FY-1C at 865 km. No advance warning; cloud still traverses ISS orbital band every 90 min. US, Russia, Japan formally protested.',
   },
   {
-    id: 'cosmos-iridium-2009',
-    name: 'Cosmos 2251 / Iridium 33 Collision',
-    date: '2009-02-10',
-    actor: 'Russia / USA',
-    orbitRegime: 'LEO',
-    fragmentCount: 2000,
+    id: 'iridium-cosmos-2009',
+    year: 2009,
+    name: 'Iridium 33 / Cosmos 2251 collision',
+    actor: 'Commercial / Russia',
+    orbit: 'LEO',
+    trackedFragments: 2296,
     stillInOrbit: true,
-    eventType: 'Collision',
-    severity: 9,
-    description:
-      'First accidental hypervelocity collision between two intact satellites at ~789 km. Destroyed both spacecraft and generated approximately 2,000 tracked fragments.',
-  },
-  {
-    id: 'cosmos-1408-2021',
-    name: 'Cosmos 1408 ASAT Test (NUDOL)',
-    date: '2021-11-15',
-    actor: 'Russia',
-    orbitRegime: 'LEO',
-    fragmentCount: 1500,
-    stillInOrbit: true,
-    eventType: 'ASAT Test',
-    severity: 9,
-    description:
-      'Russia used its direct-ascent NUDOL missile to destroy the defunct Soviet-era ELINT satellite. ISS crew sheltered in Soyuz capsules. Generated 1,500+ trackable fragments at ISS altitude.',
-  },
-  {
-    id: 'mission-shakti-2019',
-    name: 'Mission Shakti ASAT Test',
-    date: '2019-03-27',
-    actor: 'India',
-    orbitRegime: 'LEO',
-    fragmentCount: 400,
-    stillInOrbit: false,
-    eventType: 'ASAT Test',
-    severity: 7,
-    description:
-      'India intercepted Microsat-R at ~283 km using modified Prithvi Defence Vehicle. Low-altitude choice expedited atmospheric decay; most fragments re-entered within months.',
+    forcedISSManeuver: false,
+    severity: 4,
+    geopoliticalNotes:
+      'First hypervelocity collision between two intact satellites. ~2,000 pieces from Iridium 33 and ~2,000 from Cosmos 2251 at 789 km. Demonstrated abandoned military satellites pose active collision risk.',
   },
   {
     id: 'burnt-frost-2008',
-    name: 'Operation Burnt Frost',
-    date: '2008-02-21',
+    year: 2008,
+    name: 'USA Operation Burnt Frost (USA-193)',
     actor: 'USA',
-    orbitRegime: 'LEO',
-    fragmentCount: 174,
+    orbit: 'LEO',
+    trackedFragments: 174,
     stillInOrbit: false,
-    eventType: 'ASAT Test',
-    severity: 5,
-    description:
-      'US Navy SM-3 intercepted failing spy satellite USA-193 at ~247 km. Framed as hazardous-fuel (hydrazine) removal. Very low orbit ensured rapid debris re-entry.',
+    forcedISSManeuver: false,
+    severity: 2,
+    geopoliticalNotes:
+      'SM-3 missile destroyed NRO sat USA-193 at 247 km (humanitarian framing: hydrazine hazard). Demonstrated low-orbit ASAT capability. Debris decayed within months due to low altitude.',
   },
   {
-    id: 'beidou2-explosion-2016',
-    name: 'BeiDou-2 G2 Satellite Explosion',
-    date: '2016-03-29',
-    actor: 'China',
-    orbitRegime: 'MEO',
-    fragmentCount: 200,
+    id: 'cosmos-1408-2021',
+    year: 2021,
+    name: 'Russia ASAT — Cosmos 1408',
+    actor: 'Russia',
+    orbit: 'LEO',
+    trackedFragments: 1500,
     stillInOrbit: true,
-    eventType: 'Explosion',
-    severity: 6,
-    description:
-      'An aged BeiDou-2 navigation satellite fragmented in MEO, generating 200+ tracked objects in a regime with extremely long orbital lifetimes. Cause attributed to residual propellant.',
+    forcedISSManeuver: true,
+    severity: 4,
+    geopoliticalNotes:
+      'Nudol DA-ASAT struck Cosmos 1408 at 480 km. ISS crew sheltered in Soyuz/Dragon for 6+ hours; station performed emergency maneuver. US, UK, NATO condemned as reckless. Russia called test routine.',
   },
   {
-    id: 'sj12-debris-2010',
-    name: 'SJ-12 Proximity / Debris Cloud',
-    date: '2010-08-19',
-    actor: 'China',
-    orbitRegime: 'LEO',
-    fragmentCount: 50,
+    id: 'mission-shakti-2019',
+    year: 2019,
+    name: 'India ASAT — Mission Shakti',
+    actor: 'India',
+    orbit: 'LEO',
+    trackedFragments: 400,
     stillInOrbit: false,
-    eventType: 'Collision',
-    severity: 5,
-    description:
-      'Chinese SJ-12 maneuvering satellite performed an apparent rendezvous with SJ-06F, generating a small debris cloud. Demonstrated co-orbital maneuvering capability.',
+    forcedISSManeuver: false,
+    severity: 3,
+    geopoliticalNotes:
+      'PDV Mk-II interceptor struck Microsat-R at ~283 km. Test announced publicly; altitude chosen to minimize debris lifetime. ~400 fragments decayed within months. India now chairs UN COPUOS debris subgroup.',
   },
   {
-    id: 'fengyun-reentry',
-    name: 'Fengyun-1C Cloud Ongoing Reentry',
-    date: '2007-01-11',
-    actor: 'China',
-    orbitRegime: 'LEO',
-    fragmentCount: 3500,
+    id: 'starlink-megaconstellation',
+    year: 2019,
+    name: 'SpaceX Starlink Mega-Constellation',
+    actor: 'SpaceX / USA',
+    orbit: 'LEO',
+    trackedFragments: 0,
     stillInOrbit: true,
-    eventType: 'Reentry',
-    severity: 8,
-    description:
-      'The Fengyun-1C debris cloud continues to pose conjunction threats. Higher-altitude fragments (>700 km) will persist for 30-50+ years, forcing regular ISS and satellite avoidance maneuvers.',
+    forcedISSManeuver: false,
+    severity: 3,
+    geopoliticalNotes:
+      '~5,800 operational satellites — 57% of all tracked active satellites. Conjunction rate with other operators rising sharply. Starlink executed >50,000 avoidance maneuvers. Russia designated Starlink a military target in 2022.',
   },
   {
-    id: 'starlink-constellation-2024',
-    name: 'Starlink Mega-Constellation Growth',
-    date: '2024-01-01',
-    actor: 'USA (SpaceX)',
-    orbitRegime: 'LEO',
-    fragmentCount: 5800,
-    stillInOrbit: true,
-    eventType: 'Collision',
-    severity: 6,
-    description:
-      'Starlink constitutes ~57% of all active satellites. Conjunction rates are rising sharply. Despite atmospheric disposal design, end-of-life failures and near-misses are increasing systemic risk.',
+    id: 'kuiper-oneweb-guowang',
+    year: 2023,
+    name: 'Kuiper / OneWeb / Guowang mega-constellations',
+    actor: 'US / UK / China',
+    orbit: 'LEO',
+    trackedFragments: 0,
+    stillInOrbit: false,
+    forcedISSManeuver: false,
+    severity: 3,
+    geopoliticalNotes:
+      'Amazon Kuiper: 3,236 authorized; OneWeb: 648 (expanding); Guowang: 12,992 approved. Combined could push LEO active count past 25,000 by 2030. ITU filing disputes between US and China ongoing.',
   },
   {
-    id: 'kuiper-oneweb-2024',
-    name: 'Amazon Kuiper + OneWeb Deployment',
-    date: '2024-06-01',
-    actor: 'USA / UK',
-    orbitRegime: 'LEO',
-    fragmentCount: 648,
-    stillInOrbit: true,
-    eventType: 'Collision',
-    severity: 5,
-    description:
-      'Parallel mega-constellation deployments are increasing LEO population density. Without binding coordination frameworks, conjunction frequencies are projected to rise 400% by 2030.',
+    id: 'russia-starlink-target-2022',
+    year: 2022,
+    name: 'Russia Declares Starlink a Military Target',
+    actor: 'Russia',
+    orbit: 'LEO',
+    trackedFragments: 0,
+    stillInOrbit: false,
+    forcedISSManeuver: false,
+    severity: 4,
+    geopoliticalNotes:
+      'Russian Deputy FM declared Starlink satellites legitimate military targets after Ukraine used Starlink for artillery coordination. An ASAT strike on ~5,800 Starlink sats would be the worst Kessler trigger in history.',
   },
 ];
 
-export const ORBIT_REGIME_STATUSES: OrbitRegimeStatus[] = [
+export const ORBIT_STATS: OrbitStats[] = [
   {
-    regime: 'LEO (200–2,000 km)',
-    trackedObjects: 20_000,
-    debrisDensity: 'Critical',
-    collisionRisk: 'Critical',
-    keyThreat: 'ASAT test clouds + mega-constellations driving Kessler cascade risk',
+    regime: 'LEO',
+    altitudeKmRange: '160-2,000 km',
+    trackedObjects: 27_000,
+    activeSatellites: 9_200,
+    debrisFragments: 17_800,
+    kesslerRisk: 'critical',
+    notes:
+      'ISS at ~408 km sits within the most congested band. Orbital decay takes years to decades. All known kinetic ASAT tests targeted this regime.',
   },
   {
-    regime: 'MEO (2,000–35,786 km)',
-    trackedObjects: 1_500,
-    debrisDensity: 'Moderate',
-    collisionRisk: 'Medium',
-    keyThreat: 'GNSS satellite explosions; very long debris lifetimes (centuries)',
+    regime: 'MEO',
+    altitudeKmRange: '2,000-35,786 km',
+    trackedObjects: 3_400,
+    activeSatellites: 600,
+    debrisFragments: 2_800,
+    kesslerRisk: 'moderate',
+    notes:
+      'GPS/GNSS constellations (US GPS, GLONASS, Galileo, BeiDou). Debris persists for centuries. GNSS disruption would paralyze global navigation, logistics, and precision-guided munitions.',
   },
   {
-    regime: 'GEO (35,786 km)',
-    trackedObjects: 2_200,
-    debrisDensity: 'Moderate',
-    collisionRisk: 'Medium',
-    keyThreat: 'Zombie satellites and rocket bodies; limited disposal compliance',
+    regime: 'GEO',
+    altitudeKmRange: '35,786 km (geostationary)',
+    trackedObjects: 1_200,
+    activeSatellites: 570,
+    debrisFragments: 630,
+    kesslerRisk: 'elevated',
+    notes:
+      'Premium orbital slots are finite; retired sats moved to graveyard orbit 300 km above GEO. Debris lifetime effectively infinite. High-value comms, weather, and early-warning satellites reside here.',
   },
   {
-    regime: 'GEO Graveyard (>36,000 km)',
-    trackedObjects: 300,
-    debrisDensity: 'Moderate',
-    collisionRisk: 'Low',
-    keyThreat: 'Accumulated retired GEO satellites; fragmentation risk from aging hardware',
-  },
-  {
-    regime: 'HEO (Highly Elliptical)',
-    trackedObjects: 400,
-    debrisDensity: 'Low',
-    collisionRisk: 'Low',
-    keyThreat: 'Russian Molniya-type debris; crossing multiple altitude bands',
+    regime: 'HEO',
+    altitudeKmRange: 'Highly elliptical (variable)',
+    trackedObjects: 900,
+    activeSatellites: 120,
+    debrisFragments: 780,
+    kesslerRisk: 'low',
+    notes:
+      'Molniya orbits favored by Russia for Arctic coverage. HEO debris traverses LEO and MEO bands, raising cross-regime conjunction risk.',
   },
 ];
 
-export const ASAT_CAPABILITIES: ASATCapability[] = [
+export const ASAT_NATIONS: ASATNation[] = [
   {
+    code: 'US',
+    name: 'United States',
+    status: 'demonstrated',
+    testsPerformed: 4,
+    latestTestYear: 2008,
+    totalDebrisGenerated: 174,
+    notes:
+      'Burnt Frost 2008; legacy F-15 ASAT (1985). Developing DRACO co-orbital and Rapid Dragon air-launched systems. Pledged no further destructive ASAT tests Nov 2021.',
+  },
+  {
+    code: 'RU',
+    name: 'Russia',
+    status: 'demonstrated',
+    testsPerformed: 7,
+    latestTestYear: 2021,
+    totalDebrisGenerated: 1500,
+    notes:
+      'Cosmos 1408 2021 generated the most recent major debris cloud. Nudol PL-19 declared operational. Tested Cosmos 2543 co-orbital inspector (2020) and EW-ASAT systems.',
+  },
+  {
+    code: 'CN',
+    name: 'China',
+    status: 'demonstrated',
+    testsPerformed: 5,
+    latestTestYear: 2015,
+    totalDebrisGenerated: 3537,
+    notes:
+      'FY-1C 2007 created worst debris cloud in history. DN-2 test 2013 reached GEO altitude — first nation to demonstrate GEO-range ASAT. SC-19 system operational.',
+  },
+  {
+    code: 'IN',
+    name: 'India',
+    status: 'demonstrated',
+    testsPerformed: 1,
+    latestTestYear: 2019,
+    totalDebrisGenerated: 400,
+    notes:
+      'Mission Shakti 2019 used PDV Mk-II exo-atmospheric interceptor. Low-altitude test minimized debris longevity. DRDO developing follow-on systems.',
+  },
+  {
+    code: 'KP',
+    name: 'North Korea',
+    status: 'suspected',
+    testsPerformed: 0,
+    latestTestYear: null,
+    totalDebrisGenerated: 0,
+    notes:
+      'Intelligence assessments suggest DPRK developing co-orbital ASAT using modified Kwangmyongsong bus. Malligyong-1 and -2 in LEO provide targeting infrastructure.',
+  },
+];
+
+export const REMOVAL_MISSIONS: DebrisRemovalMission[] = [
+  {
+    name: 'ClearSpace-1',
+    agency: 'ESA / ClearSpace SA',
+    targetYear: 2026,
+    status: 'development',
+    objective:
+      'Capture and deorbit VESPA rocket adapter (112 kg) at 800 km using 4-arm robotic gripper. First ever active debris removal mission. ESA contract 86M EUR.',
+  },
+  {
+    name: 'ELSA-d',
+    agency: 'Astroscale (Japan)',
+    targetYear: 2024,
+    status: 'operational',
+    objective:
+      'Demonstrated magnetic docking and release with cooperative target Feb-Sep 2022. ELSA-M next targets uncooperative debris. First commercial debris-removal service validated.',
+  },
+  {
+    name: 'ADRAS-J',
+    agency: 'Astroscale / JAXA',
+    targetYear: 2025,
+    status: 'operational',
+    objective:
+      'Approached H-IIA upper stage (~3 tonnes) at 650 km for proximity inspection. First uncooperative debris rendezvous by a commercial vehicle. Deorbit phase planned.',
+  },
+  {
+    name: 'D-Orbit Ion',
+    agency: 'D-Orbit (Italy/US)',
+    targetYear: 2025,
+    status: 'planned',
+    objective:
+      'Precision deployment and last-mile logistics vehicle for deorbiting satellite clusters at end of life. Multiple launches flown; debris-removal contract pipeline building.',
+  },
+];
+
+export const MEGA_CONSTELLATIONS: MegaConstellation[] = [
+  {
+    operator: 'SpaceX Starlink',
     country: 'USA',
-    confirmed: true,
-    testYear: 2008,
-    fragmentsCreated: 174,
-    status: 'Active DA-ASAT + co-orbital + directed-energy programs',
+    plannedCount: 42_000,
+    deployedCount: 5_800,
+    status: 'deploying',
+    percentOfTraffic: '57%',
+    geopoliticalNote:
+      'Dominant operator. Ukraine conflict showed military utility; Russia and China protested at UN COPUOS. ITU filings for 42,000 sats.',
   },
   {
-    country: 'Russia',
-    confirmed: true,
-    testYear: 2021,
-    fragmentsCreated: 1500,
-    status: 'NUDOL direct-ascent operational; Burevestnik co-orbital tests ongoing',
+    operator: 'Amazon Kuiper',
+    country: 'USA',
+    plannedCount: 3_236,
+    deployedCount: 27,
+    status: 'deploying',
+    percentOfTraffic: '<1%',
+    geopoliticalNote:
+      'FCC authorized; first batch launched 2024. Deployment ramp begins 2025-2026. ITU filing disputes with Telesat and OneWeb ongoing.',
   },
   {
+    operator: 'OneWeb (Eutelsat)',
+    country: 'UK / France',
+    plannedCount: 648,
+    deployedCount: 648,
+    status: 'deployed',
+    percentOfTraffic: '3%',
+    geopoliticalNote:
+      'Post-Russia-invasion ownership shift: SoftBank to UK Govt + Bharti Airtel. Eutelsat merger 2023. Serving NATO military terminals in Ukraine.',
+  },
+  {
+    operator: 'Guowang (SatNet)',
     country: 'China',
-    confirmed: true,
-    testYear: 2007,
-    fragmentsCreated: 3500,
-    status: 'SC-19/DN-1/DN-3 systems; most prolific ASAT debris producer',
-  },
-  {
-    country: 'India',
-    confirmed: true,
-    testYear: 2019,
-    fragmentsCreated: 400,
-    status: 'PDV Mk-II operational; pursuing next-generation interceptors',
-  },
-  {
-    country: 'North Korea',
-    confirmed: false,
-    testYear: null,
-    fragmentsCreated: null,
-    status: 'Suspected developmental program; SLV technology applicable to DA-ASAT',
-  },
-  {
-    country: 'Israel',
-    confirmed: false,
-    testYear: null,
-    fragmentsCreated: null,
-    status: 'Suspected capabilities via Arrow-3 BMD system; not publicly acknowledged',
+    plannedCount: 12_992,
+    deployedCount: 18,
+    status: 'deploying',
+    percentOfTraffic: '<1%',
+    geopoliticalNote:
+      'State-backed Starlink rival. ITU filings lodged to preempt Western operators in key orbital slots. Military dual-use architecture assessed by US Space Command.',
   },
 ];
 
-// ── Helper functions ──────────────────────────────────────────────────────
+export const GOVERNANCE_GAPS: GovernanceGap[] = [
+  {
+    title: 'No binding ASAT test ban',
+    severity: 4,
+    description:
+      'Outer Space Treaty (1967) prohibits WMDs in space but does not ban kinetic ASAT tests. US unilateral moratorium (2021) not mirrored by Russia or China. UN 2022 vote: Russia and China voted against — result not binding.',
+  },
+  {
+    title: 'Voluntary-only debris mitigation',
+    severity: 3,
+    description:
+      'IADC and ITU guidelines (25-year deorbit rule) are voluntary. Compliance: ESA ~90%, commercial ~60%, some national programs <30%. No enforcement mechanism exists.',
+  },
+  {
+    title: 'Liability Convention gaps',
+    severity: 3,
+    description:
+      'Liability Convention (1972) covers damage on Earth or to aircraft. Orbital debris damage to third-party satellites is legally grey; no successful inter-state orbital liability claim has ever been adjudicated.',
+  },
+  {
+    title: 'ITU spectrum and slot disputes',
+    severity: 3,
+    description:
+      'ITU allocates orbital slots first-come, first-served. US and Chinese mega-constellations filing for overlapping LEO altitudes. No multilateral agreement on constellation size limits exists.',
+  },
+  {
+    title: 'RPO technology proliferation unregulated',
+    severity: 4,
+    description:
+      'Rendezvous-and-proximity operations (RPO) tech used for debris removal (Astroscale, ClearSpace) is physically identical to co-orbital ASAT systems. No treaty restricts RPO technology transfer or deployment.',
+  },
+];
 
-/** Return events filtered to a specific orbit regime. */
-export function getByOrbitRegime(
-  events: DebrisEvent[],
-  regime: OrbitRegimeId,
-): DebrisEvent[] {
-  return events.filter((e) => e.orbitRegime === regime);
+// ── Helper functions ───────────────────────────────────────────────────────────
+
+export function getByOrbitRegime(events: DebrisEvent[], regime: OrbitRegime): DebrisEvent[] {
+  return events.filter((e) => e.orbit === regime);
 }
 
-/** Return events with severity >= 7. */
 export function getHighRiskEvents(events: DebrisEvent[]): DebrisEvent[] {
-  return events.filter((e) => e.severity >= 7);
+  return events.filter((e) => e.severity >= 3);
 }
 
-/** Return ASAT-capable nations (confirmed only by default). */
-export function getASATCapableNations(
-  capabilities: ASATCapability[],
-  confirmedOnly = true,
-): ASATCapability[] {
-  return confirmedOnly
-    ? capabilities.filter((c) => c.confirmed)
-    : capabilities;
+export function getASATCapableNations(nations: ASATNation[]): ASATNation[] {
+  return nations.filter((n) => n.status === 'demonstrated' || n.status === 'suspected');
 }
 
 /**
- * Compute a Kessler risk index (0–100) from LEO density, active ASAT
- * programs, and recent test history (last 5 years from reference year).
+ * Composite Kessler risk index 0-100.
+ *
+ * Weights:
+ *   40 pts — LEO object density  (trackedObjects / 30_000 x 40)
+ *   30 pts — high-severity events still in orbit  (count x 7.5, capped)
+ *   20 pts — total fragments still in orbit  (fragments / 7_000 x 20, capped)
+ *   10 pts — recent destructive ASAT (year >= 2019, fragments > 100, stillInOrbit)
  */
 export function computeKesslerRiskIndex(
-  orbitRegimes: OrbitRegimeStatus[],
-  capabilities: ASATCapability[],
-  referenceYear = 2025,
+  orbitStats: OrbitStats[],
+  events: DebrisEvent[],
 ): number {
-  const leo = orbitRegimes.find((r) => r.regime.startsWith('LEO'));
-  let score = 0;
+  const leo = orbitStats.find((o) => o.regime === 'LEO');
+  const leoDensity = leo ? Math.min(40, (leo.trackedObjects / 30_000) * 40) : 0;
 
-  // Density component (0-40)
-  const densityWeight: Record<DebrisDensity, number> = {
-    Low: 5,
-    Moderate: 15,
-    High: 30,
-    Critical: 40,
-  };
-  if (leo) score += densityWeight[leo.debrisDensity] ?? 0;
+  const highSeverityInOrbit = events.filter((e) => e.severity >= 3 && e.stillInOrbit).length;
+  const eventScore = Math.min(30, highSeverityInOrbit * 7.5);
 
-  // Active ASAT programs component (0-30): 5 per confirmed nation, 2 per suspected
-  for (const cap of capabilities) {
-    score += cap.confirmed ? 5 : 2;
+  const totalFragments = events
+    .filter((e) => e.stillInOrbit)
+    .reduce((sum, e) => sum + e.trackedFragments, 0);
+  const fragScore = Math.min(20, (totalFragments / 7_000) * 20);
+
+  const recentASAT = events.some(
+    (e) => e.year >= 2019 && e.trackedFragments > 100 && e.stillInOrbit,
+  );
+  const asatScore = recentASAT ? 10 : 0;
+
+  return Math.round(leoDensity + eventScore + fragScore + asatScore);
+}
+
+export function kesslerRiskLabel(index: number): KesslerRisk {
+  if (index >= 80) return 'critical';
+  if (index >= 55) return 'elevated';
+  if (index >= 30) return 'moderate';
+  return 'low';
+}
+
+export function debrisSeverityClass(severity: DebrisSeverity): string {
+  switch (severity) {
+    case 0:  return 'debris-sev-minimal';
+    case 1:  return 'debris-sev-low';
+    case 2:  return 'debris-sev-moderate';
+    case 3:  return 'debris-sev-high';
+    case 4:  return 'debris-sev-critical';
   }
+}
 
-  // Recent test history component (0-30): 10 per confirmed test within 5 years
-  for (const cap of capabilities) {
-    if (cap.confirmed && cap.testYear != null && referenceYear - cap.testYear <= 5) {
-      score += 10;
-    }
+export function riskClass(risk: KesslerRisk): string {
+  switch (risk) {
+    case 'low':      return 'risk-low';
+    case 'moderate': return 'risk-moderate';
+    case 'elevated': return 'risk-elevated';
+    case 'critical': return 'risk-critical';
   }
-
-  return Math.min(100, Math.max(0, score));
 }
 
-/** CSS colour token for a severity score 1-10. */
-export function debrisSeverityClass(severity: number): string {
-  if (severity >= 9) return 'var(--severity-critical, #ef4444)';
-  if (severity >= 7) return 'var(--severity-high,     #fb923c)';
-  if (severity >= 5) return 'var(--severity-medium,   #facc15)';
-  return 'var(--severity-low,      #4caf50)';
+export function severityColor(severity: DebrisSeverity): string {
+  switch (severity) {
+    case 0: return '#9e9e9e';
+    case 1: return '#4caf50';
+    case 2: return '#ffeb3b';
+    case 3: return '#ff9800';
+    case 4: return '#d50000';
+  }
 }
 
-/** CSS colour token for an orbit regime debris density. */
-export function regimeDensityClass(density: DebrisDensity): string {
-  const map: Record<DebrisDensity, string> = {
-    Critical: 'var(--severity-critical, #ef4444)',
-    High:     'var(--severity-high,     #fb923c)',
-    Moderate: 'var(--severity-medium,   #facc15)',
-    Low:      'var(--severity-low,      #4caf50)',
-  };
-  return map[density];
+export function formatFragments(n: number): string {
+  if (n === 0) return '—';
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
 }
 
-/** Assemble the full render payload used by SpaceDebrisPanel. */
-export function buildRenderData(
-  events = DEBRIS_EVENTS,
-  orbitRegimes = ORBIT_REGIME_STATUSES,
-  asatCapabilities = ASAT_CAPABILITIES,
-  referenceYear = 2025,
-): DebrisRenderData {
+export function asatStatusLabel(status: ASATStatus): string {
+  switch (status) {
+    case 'demonstrated': return 'Demonstrated';
+    case 'suspected':    return 'Suspected';
+    case 'developing':   return 'Developing';
+    case 'none':         return 'None';
+  }
+}
+
+export function missionStatusLabel(status: MissionStatus): string {
+  switch (status) {
+    case 'operational': return 'Operational';
+    case 'planned':     return 'Planned';
+    case 'development': return 'In Development';
+    case 'cancelled':   return 'Cancelled';
+  }
+}
+
+export function constellationStatusLabel(status: ConstellationStatus): string {
+  switch (status) {
+    case 'deployed':  return 'Deployed';
+    case 'deploying': return 'Deploying';
+    case 'planned':   return 'Planned';
+    case 'approved':  return 'Approved';
+  }
+}
+
+export function buildRenderData(): DebrisRenderData {
   return {
-    events,
-    orbitRegimes,
-    asatCapabilities,
-    kesslerRiskIndex: computeKesslerRiskIndex(orbitRegimes, asatCapabilities, referenceYear),
-    totalTrackedObjects: orbitRegimes.reduce((s, r) => s + r.trackedObjects, 0),
-    activeRemovalMissions: 3, // ClearSpace-1, ADRAS-J, D-Orbit / Astroscale
+    globalStats: {
+      trackedObjectsAbove10cm: 36_500,
+      estimatedObjects1to10cm: 1_000_000,
+      estimatedObjectsBelow1cm: 130_000_000,
+      activeSatellites: 9_200,
+      debrisGrowthRateYoY: '+3.7%',
+    },
+    events: DEBRIS_EVENTS,
+    orbitStats: ORBIT_STATS,
+    asatNations: ASAT_NATIONS,
+    removalMissions: REMOVAL_MISSIONS,
+    megaConstellations: MEGA_CONSTELLATIONS,
+    governanceGaps: GOVERNANCE_GAPS,
+    kesslerRiskIndex: computeKesslerRiskIndex(ORBIT_STATS, DEBRIS_EVENTS),
   };
 }

@@ -794,3 +794,15 @@
 .goes-play-btn:disabled { opacity: 0.4; cursor: default; }
 .goes-frame-count { margin-left: auto; }
 .goes-degraded { padding: 4px 8px; font-size: 10px; color: #ffb74d; }
+
+/* Near-Earth Objects panel */
+.neo-panel-content { display: flex; flex-direction: column; gap: 8px; padding: 6px 0; }
+.neo-section { padding: 0 8px; }
+.neo-section-title { font-size: 11px; font-weight: 600; color: var(--text-faint, #aaa); margin: 4px 0; text-transform: uppercase; letter-spacing: 0.04em; }
+.neo-row { padding: 4px 6px; margin-bottom: 3px; border-radius: 4px; background: var(--surface-2, rgba(255,255,255,0.03)); }
+.neo-row-main { display: flex; justify-content: space-between; align-items: baseline; }
+.neo-des { font-size: 12px; font-weight: 600; }
+.neo-dist, .neo-prob { font-size: 11px; font-weight: 600; }
+.neo-prob { color: #f97316; }
+.neo-row-sub { font-size: 10px; color: var(--text-faint, #888); margin-top: 1px; }
+.neo-degraded { padding: 4px 8px; font-size: 10px; color: #ffb74d; }

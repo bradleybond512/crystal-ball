@@ -281,6 +281,7 @@ import type { WeatherRadarPanel } from '@/components/WeatherRadarPanel';
 import type { TidePredictionsPanel } from '@/components/TidePredictionsPanel';
 import type { PollenPanel } from '@/components/PollenPanel';
 import type { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
+import type { NeoTrackerPanel } from '@/components/NeoTrackerPanel';
 import type { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
 import type { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ingest } from '@/services/intelligence/observation-store';
@@ -620,6 +621,7 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'tidePredictions', task: () => runGuarded('tidePredictions', () => this.loadTidePredictions()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'pollenData', task: () => runGuarded('pollenData', () => this.loadPollenData()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'goesSatellite', task: () => runGuarded('goesSatellite', () => this.loadGoesSatellite()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'neoTracker', task: () => runGuarded('neoTracker', () => this.loadNeoTracker()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'floodMonitor', task: () => runGuarded('floodMonitor', () => this.loadFloodMonitor()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'intelligenceFeed', task: () => runGuarded('intelligenceFeed', () => this.loadIntelligenceFeed()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'lightning', task: () => runGuarded('lightning', () => this.loadLightning()) });
@@ -3601,6 +3603,11 @@ export class DataLoaderManager implements AppModule {
  } catch (error) {
  console.warn('[pollen] fetch failed', error);
  }
+  }
+
+  async loadNeoTracker(): Promise<void> {
+ // The panel owns its own fetch (/api/space/neo); the tick just refreshes it.
+ await (this.ctx.panels['neo-tracker'] as NeoTrackerPanel | undefined)?.update();
   }
 
   async loadGoesSatellite(): Promise<void> {

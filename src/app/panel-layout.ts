@@ -453,6 +453,7 @@ import { UnifiedAlertInboxPanel } from '@/components/UnifiedAlertInboxPanel';
 import { AlertRulesPanel } from '@/components/AlertRulesPanel';
 import { AlertDeduplicationPanel } from '@/components/AlertDeduplicationPanel';
 import { AlertFatigueDashboardPanel } from '@/components/AlertFatigueDashboardPanel';
+import { NuclearNonproliferationPanel } from '@/components/NuclearNonproliferationPanel';
 import { ThreatConvergencePanel } from '@/components/ThreatConvergencePanel';
 import { GeopoliticalRiskPanel } from '@/components/GeopoliticalRiskPanel';
 
@@ -1337,6 +1338,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['alert-rules'] = new AlertRulesPanel();
  this.ctx.panels['alert-deduplication'] = new AlertDeduplicationPanel();
  this.ctx.panels['alert-fatigue-dashboard'] = new AlertFatigueDashboardPanel();
+ this.ctx.panels['nuclear-nonproliferation'] = new NuclearNonproliferationPanel();
  this.ctx.panels['threat-convergence'] = new ThreatConvergencePanel();
  this.ctx.panels['geopolitical-risk'] = new GeopoliticalRiskPanel();
 

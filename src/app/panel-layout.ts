@@ -144,6 +144,7 @@ import { LittleSnitchPanel } from '@/components/LittleSnitchPanel';
 import { AlertCenterPanel } from '@/components/AlertCenterPanel';
 import { SituationPanel } from '@/components/SituationPanel';
 import { SpaceWeatherPanel } from '@/components/SpaceWeatherPanel';
+import { NeoTrackerPanel } from '@/components/NeoTrackerPanel';
 import { SpaceSecurityPanel } from '@/components/SpaceSecurityPanel';
 import { SpaceSuperpowerPanel } from '@/components/SpaceSuperpowerPanel';
 import { WeatherSuperpowerPanel } from '@/components/WeatherSuperpowerPanel';
@@ -1227,6 +1228,7 @@ export class PanelLayoutManager implements AppModule {
 
  const spaceWeatherPanel = new SpaceWeatherPanel();
  this.ctx.panels['space-weather'] = spaceWeatherPanel;
+ this.ctx.panels['neo-tracker'] = new NeoTrackerPanel();
  this.ctx.panels['space-security'] = new SpaceSecurityPanel();
 
  this.ctx.panels['space-superpower'] = new SpaceSuperpowerPanel();

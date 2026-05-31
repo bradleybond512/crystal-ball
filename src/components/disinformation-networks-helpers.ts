@@ -1,437 +1,583 @@
 /**
- * disinformation-networks-helpers.ts
+ * Pure helpers for DisinformationNetworksPanel.
  *
- * Pure functions and reference data for DisinformationNetworksPanel.
- * No DOM dependencies — safe to import in unit tests.
+ * Tracks coordinated inauthentic behaviour (CIB), state-linked bot farms,
+ * and platform takedowns.  Distinct from PropagandaTracking (which covers
+ * overt state media); this module focuses on covert platform manipulation.
  *
- * Covers:
- *   - CIBTakedown / ActiveNetwork / CIBRenderData interfaces
- *   - 10 documented platform takedowns (2022-2024)
- *   - 5 known active coordinated-inauthentic-behaviour networks
- *   - Helper functions: filtering, aggregation, classification, rendering
+ * No DOM, no fetch — safe to import in Node.js tests.
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-export type CIBSignificance = 'Low' | 'Medium' | 'High' | 'Critical';
-export type NetworkStatus   = 'Active' | 'Disrupted' | 'Dismantled';
+export type ActorOrigin =
+  | 'Russia'
+  | 'China'
+  | 'Iran'
+  | 'Bangladesh'
+  | 'Myanmar'
+  | 'EU-enforcement'
+  | 'unattributed';
 
-export interface CIBTakedown {
-  id:               string;
-  date:             string;          // ISO date string (YYYY-MM-DD)
-  platform:         string;
-  actor:            string;
-  accountsRemoved:  number;
-  targetNarrative:  string;
-  significance:     CIBSignificance;
-  description:      string;
-  ongoing:          boolean;
+export type NetworkScale = 'small' | 'medium' | 'large' | 'massive';
+
+export type TakedownPlatform =
+  | 'Meta'
+  | 'Twitter/X'
+  | 'Google/YouTube'
+  | 'TikTok'
+  | 'EU-DSA';
+
+export type NetworkStatus = 'disrupted' | 'active' | 'restricted' | 'monitoring';
+
+export type NarrativeTrend = 'escalating' | 'steady' | 'declining';
+
+export type ActiveThreatLevel = 'low' | 'moderate' | 'high' | 'critical';
+
+export interface CibTakedown {
+  id: string;
+  name: string;
+  platform: TakedownPlatform;
+  actor: string;
+  actorOrigin: ActorOrigin;
+  /** Primary accounts removed or actioned. */
+  accountCount: number;
+  /** Number of distinct platforms affected (for cross-platform ops). */
+  platformsAffected: number;
+  targetRegion: string;
+  objective: string;
+  /** ISO date string: YYYY-MM-DD */
+  date: string;
+  status: NetworkStatus;
+  notableDetail: string;
 }
 
-export interface ActiveNetwork {
-  id:                string;
-  name:              string;
-  actor:             string;
-  platforms:         string[];
+export interface ActiveNetworkProfile {
+  id: string;
+  name: string;
+  actorOrigin: ActorOrigin;
   estimatedAccounts: number;
-  primaryNarratives: string[];
-  status:            NetworkStatus;
+  platforms: string[];
+  primaryObjective: string;
+  active: boolean;
+  lastObserved: string;
+  threat: ActiveThreatLevel;
 }
 
-export interface CIBRenderData {
-  takedowns:          CIBTakedown[];
-  activeNetworks:     ActiveNetwork[];
-  globalCIBIndex:     number;    // composite 0–100
-  totalAccountsRemoved: number;
-  mostActiveActor:    string;
+export interface QuarterlyCibData {
+  quarter: string;
+  year: number;
+  accountsRemoved: number;
+  takedownCount: number;
 }
 
-// ── Reference data: 10 documented CIB takedowns 2022–2024 ─────────────────
+export interface NarrativeHotspot {
+  id: string;
+  topic: string;
+  regions: string[];
+  intensity: number;
+  primaryActors: ActorOrigin[];
+  trend: NarrativeTrend;
+}
 
-export const CIB_TAKEDOWNS: CIBTakedown[] = [
+// ── Static seed data ────────────────────────────────────────────────────────
+
+export const CIB_TAKEDOWNS: CibTakedown[] = [
   {
-    id: 'td-001',
-    date: '2024-08-16',
-    platform: 'Meta (Facebook/Instagram)',
-    actor: 'China (state-linked)',
-    accountsRemoved: 7700,
-    targetNarrative: 'Pro-China geopolitics, anti-US narratives across 50+ topics',
-    significance: 'Critical',
-    description:
-      'Meta took down the largest ever single Chinese-origin CIB operation — ' +
-      'Dragonbridge — spanning 7,700+ accounts across Facebook, Instagram, and ' +
-      '15 other platforms. The network pushed pro-Beijing narratives and anti-US ' +
-      'content in English and Chinese, targeting audiences globally.',
-    ongoing: false,
+    id: 'meta-ira-2024',
+    name: 'Russian IRA Successor Network',
+    platform: 'Meta',
+    actor: 'IRA Successors (GRU-linked)',
+    actorOrigin: 'Russia',
+    accountCount: 60_000,
+    platformsAffected: 4,
+    targetRegion: 'US, EU elections',
+    objective: 'Electoral interference, anti-Western sentiment',
+    date: '2024-03-15',
+    status: 'disrupted',
+    notableDetail: 'Largest Russian CIB operation removed by Meta in a single action',
   },
   {
-    id: 'td-002',
-    date: '2024-09-04',
-    platform: 'Meta (Facebook/Instagram)',
-    actor: 'Russia (IRA successor)',
-    accountsRemoved: 60000,
-    targetNarrative: '2024 US elections, anti-Ukraine sentiment, Western divisions',
-    significance: 'Critical',
-    description:
-      'Meta disrupted a Russian network — successor to the Internet Research Agency ' +
-      '— of 60,000+ fake accounts. Operating as Doppelganger, the network impersonated ' +
-      'Western media outlets, ran paid ads, and targeted US and European voters ahead ' +
-      'of the 2024 US presidential election.',
-    ongoing: false,
+    id: 'meta-dragonbridge-2024',
+    name: 'Dragonbridge (2024)',
+    platform: 'Meta',
+    actor: 'Dragonbridge (PRC-linked)',
+    actorOrigin: 'China',
+    accountCount: 7_704,
+    platformsAffected: 15,
+    targetRegion: 'Global — Taiwan, US, Tibetan communities',
+    objective: 'Pro-PRC narratives, suppress dissent, Taiwan messaging',
+    date: '2024-01-22',
+    status: 'disrupted',
+    notableDetail: 'Largest-ever single CIB takedown across 15 platforms',
   },
   {
-    id: 'td-003',
-    date: '2023-05-22',
-    platform: 'Meta (Facebook/Instagram)',
-    actor: 'Iran (MOIS-linked)',
-    accountsRemoved: 1400,
-    targetNarrative: 'Israeli government criticism, US foreign policy, Gaza conflict framing',
-    significance: 'High',
-    description:
-      'Meta removed 1,400 accounts linked to the Iranian Ministry of Intelligence ' +
-      'and Security running coordinated influence operations targeting Israeli and US ' +
-      'audiences. Networks shared anti-Israel content, amplified protests, and ' +
-      'attempted to manipulate discourse around the Israel-Gaza conflict.',
-    ongoing: false,
+    id: 'meta-iran-2023',
+    name: 'Iranian CIB Network (Israel/US)',
+    platform: 'Meta',
+    actor: 'MOIS-linked operators',
+    actorOrigin: 'Iran',
+    accountCount: 1_400,
+    platformsAffected: 2,
+    targetRegion: 'Israel, United States',
+    objective: 'Anti-Israel messaging, exploit Gaza conflict narrative',
+    date: '2023-11-08',
+    status: 'disrupted',
+    notableDetail: 'Operated fake personas across Facebook and Instagram',
   },
   {
-    id: 'td-004',
-    date: '2023-12-11',
-    platform: 'Meta (Facebook/Instagram)',
-    actor: 'Russia',
-    accountsRemoved: 4000,
-    targetNarrative: 'Anti-Ukraine sentiment, weakening European support for Ukraine',
-    significance: 'High',
-    description:
-      'Meta removed 4,000 Russian-origin accounts running coordinated inauthentic ' +
-      'behaviour across Europe. The operation amplified anti-Ukraine narratives, ' +
-      'impersonated local activists in Germany, France, and Italy, and attempted ' +
-      'to erode public support for continued military aid to Ukraine.',
-    ongoing: false,
+    id: 'meta-russia-europe-2023',
+    name: 'Russian Anti-Ukraine Europe Network',
+    platform: 'Meta',
+    actor: 'Russian state-linked operators',
+    actorOrigin: 'Russia',
+    accountCount: 4_800,
+    platformsAffected: 3,
+    targetRegion: 'Germany, France, Italy, Poland',
+    objective: 'Erode European support for Ukraine, amplify war fatigue',
+    date: '2023-05-31',
+    status: 'disrupted',
+    notableDetail: 'Used fake news sites and translated RT content as cover',
   },
   {
-    id: 'td-005',
-    date: '2023-07-31',
-    platform: 'Twitter / X',
-    actor: 'China (state-linked)',
-    accountsRemoved: 900,
-    targetNarrative: 'Tibet, Xinjiang human-rights deflection, Taiwan sovereignty',
-    significance: 'Medium',
-    description:
-      'Twitter (now X) suspended 900+ accounts linked to Chinese state actors ' +
-      'pushing pro-Beijing narratives on Tibet and Xinjiang. The network used ' +
-      'coordinated hashtag amplification to drown out independent reporting ' +
-      'and deflect human-rights criticism toward Western countries.',
-    ongoing: false,
+    id: 'twitter-china-2023',
+    name: 'Chinese State-Linked Twitter Network',
+    platform: 'Twitter/X',
+    actor: '50-cent army operators',
+    actorOrigin: 'China',
+    accountCount: 900,
+    platformsAffected: 1,
+    targetRegion: 'Tibet, Xinjiang, Hong Kong diaspora',
+    objective: 'Suppress Uyghur and Tibetan rights narratives',
+    date: '2023-06-01',
+    status: 'disrupted',
+    notableDetail: 'Accounts used coordinated replies to drown out activists',
   },
   {
-    id: 'td-006',
-    date: '2022-03-29',
-    platform: 'Google / YouTube',
-    actor: 'Russia',
-    accountsRemoved: 1000,
-    targetNarrative: 'Pro-Kremlin Ukraine war narratives, anti-NATO framing',
-    significance: 'High',
-    description:
-      'Google terminated 1,000+ YouTube channels in the largest single Russian ' +
-      'takedown at the time, following the February 2022 invasion of Ukraine. ' +
-      'Channels pushed Kremlin-approved justifications for the invasion and ' +
-      'spread anti-NATO disinformation to Russian-speaking audiences worldwide.',
-    ongoing: false,
+    id: 'google-russia-youtube-2022',
+    name: 'Russian YouTube Channel Network',
+    platform: 'Google/YouTube',
+    actor: 'Russian state media proxies',
+    actorOrigin: 'Russia',
+    accountCount: 1_080,
+    platformsAffected: 1,
+    targetRegion: 'Europe, North America',
+    objective: 'Pro-Russia Ukraine war propaganda, anti-NATO messaging',
+    date: '2022-07-14',
+    status: 'disrupted',
+    notableDetail: 'Over 1,000 channels removed; content justified Ukraine invasion',
   },
   {
-    id: 'td-007',
-    date: '2022-06-09',
-    platform: 'Meta (Facebook/Instagram)',
-    actor: 'Myanmar military (Tatmadaw)',
-    accountsRemoved: 0,
-    targetNarrative: 'Rohingya community targeting, military propaganda, anti-opposition framing',
-    significance: 'High',
-    description:
-      'Meta imposed ongoing restrictions and coordinated monitoring of Myanmar ' +
-      'military-linked networks following the 2021 coup. Thousands of accounts ' +
-      'previously removed; residual network detected in 2022 continued pushing ' +
-      'ethnic-nationalist framing and discrediting the National Unity Government.',
-    ongoing: true,
+    id: 'meta-bangladesh-2024',
+    name: 'Bangladeshi Domestic Influence Network',
+    platform: 'Meta',
+    actor: 'Domestic political operators',
+    actorOrigin: 'Bangladesh',
+    accountCount: 2_900,
+    platformsAffected: 1,
+    targetRegion: 'Bangladesh',
+    objective: 'Manufacture domestic political consensus, suppress opposition',
+    date: '2024-02-07',
+    status: 'disrupted',
+    notableDetail: 'Operated fake local news pages and celebrity accounts',
   },
   {
-    id: 'td-008',
-    date: '2024-04-05',
+    id: 'meta-myanmar-ongoing',
+    name: 'Myanmar Military Network',
+    platform: 'Meta',
+    actor: 'Tatmadaw / SAC-linked operators',
+    actorOrigin: 'Myanmar',
+    accountCount: 425,
+    platformsAffected: 1,
+    targetRegion: 'Myanmar domestic population',
+    objective: 'Legitimise military rule, demonise ethnic minorities',
+    date: '2022-09-30',
+    status: 'restricted',
+    notableDetail: 'Meta maintains ongoing restrictions; network rebuilt multiple times',
+  },
+  {
+    id: 'eu-dsa-x-2024',
+    name: 'EU DSA Enforcement vs. X/Twitter',
+    platform: 'EU-DSA',
+    actor: 'X Corp (platform liability)',
+    actorOrigin: 'EU-enforcement',
+    accountCount: 0,
+    platformsAffected: 1,
+    targetRegion: 'European Union',
+    objective: 'Regulatory action for failure to remove Russian disinformation',
+    date: '2024-07-12',
+    status: 'monitoring',
+    notableDetail: 'First major DSA enforcement action; formal proceedings against X',
+  },
+  {
+    id: 'tiktok-china-taiwan-2024',
+    name: 'China-Linked Taiwan Influence Network',
     platform: 'TikTok',
-    actor: 'China (state-linked)',
-    accountsRemoved: 1900,
-    targetNarrative: 'Taiwan independence opposition, cross-strait reunification, anti-DPP sentiment',
-    significance: 'High',
-    description:
-      'TikTok removed 1,900+ accounts in a coordinated network targeting Taiwanese ' +
-      'users ahead of the January 2024 Taiwan presidential election. The network ' +
-      'amplified pro-unification content, discredited the Democratic Progressive ' +
-      'Party, and pushed narratives favourable to cross-strait reunification.',
-    ongoing: false,
-  },
-  {
-    id: 'td-009',
-    date: '2024-02-19',
-    platform: 'Meta (Facebook/Instagram)',
-    actor: 'Bangladesh (domestic actors)',
-    accountsRemoved: 1300,
-    targetNarrative: 'Domestic political opposition discrediting, pro-Awami League amplification',
-    significance: 'Medium',
-    description:
-      'Meta removed a Bangladesh-origin influence network of 1,300 accounts ' +
-      'running coordinated domestic political operations. The network impersonated ' +
-      'journalists, created fake news sites, and amplified pro-government narratives ' +
-      'while attacking opposition politicians ahead of January 2024 elections.',
-    ongoing: false,
-  },
-  {
-    id: 'td-010',
-    date: '2024-07-22',
-    platform: 'X (Twitter) — EU DSA Enforcement',
-    actor: 'Russia',
-    accountsRemoved: 2800,
-    targetNarrative: 'Russia-Ukraine war framing, EU unity erosion, anti-sanctions messaging',
-    significance: 'High',
-    description:
-      'EU Digital Services Act enforcement action compelled X to address 2,800+ ' +
-      'Russian-state-linked accounts spreading disinformation about the Ukraine ' +
-      'conflict. Separate from voluntary takedowns, this marked the first binding ' +
-      'DSA enforcement related to state-actor influence operations.',
-    ongoing: false,
+    actor: 'PRC-aligned operators',
+    actorOrigin: 'China',
+    accountCount: 640,
+    platformsAffected: 1,
+    targetRegion: 'Taiwan, Taiwanese diaspora',
+    objective: 'Undermine Taiwan election confidence, promote unification',
+    date: '2024-01-05',
+    status: 'disrupted',
+    notableDetail: 'Removed before 2024 Taiwan presidential election',
   },
 ];
 
-// ── Reference data: 5 known active CIB networks ───────────────────────────
-
-export const ACTIVE_NETWORKS: ActiveNetwork[] = [
+export const ACTIVE_NETWORK_PROFILES: ActiveNetworkProfile[] = [
   {
-    id: 'net-001',
-    name: 'Doppelganger / IRA Successor Network',
-    actor: 'Russia',
-    platforms: ['Facebook', 'Instagram', 'X', 'Telegram', 'YouTube'],
-    estimatedAccounts: 50000,
-    primaryNarratives: [
-      'Western policy failure narratives',
-      'NATO dissolution advocacy',
-      'Ukraine-fatigue amplification',
-      'US electoral interference claims',
-    ],
-    status: 'Active',
+    id: 'ira-successors',
+    name: 'IRA Successor Networks',
+    actorOrigin: 'Russia',
+    estimatedAccounts: 15_000,
+    platforms: ['Telegram', 'X', 'Truth Social', 'local news sites'],
+    primaryObjective: 'Election interference, EU fracture, pro-Russia sentiment',
+    active: true,
+    lastObserved: '2024-10-01',
+    threat: 'critical',
   },
   {
-    id: 'net-002',
-    name: 'Dragonbridge (SpamouflageNetwork)',
-    actor: 'China (state-linked)',
-    platforms: ['Facebook', 'Instagram', 'YouTube', 'TikTok', 'X', 'Reddit', 'Medium'],
-    estimatedAccounts: 9000,
-    primaryNarratives: [
-      'Pro-CCP global governance framing',
-      'Anti-US foreign policy content',
-      'Taiwan re-unification narratives',
-      'Xinjiang / Tibet deflection',
-    ],
-    status: 'Disrupted',
+    id: 'dragonbridge',
+    name: 'Dragonbridge',
+    actorOrigin: 'China',
+    estimatedAccounts: 3_500,
+    platforms: ['YouTube', 'Facebook', 'X', 'Reddit', 'Medium'],
+    primaryObjective: 'Pro-PRC global narrative, Taiwan messaging, anti-US',
+    active: true,
+    lastObserved: '2024-09-15',
+    threat: 'high',
   },
   {
-    id: 'net-003',
-    name: 'Iranian MOIS Influence Network',
-    actor: 'Iran (MOIS-linked)',
-    platforms: ['Facebook', 'Instagram', 'X', 'Telegram'],
-    estimatedAccounts: 3500,
-    primaryNarratives: [
-      'Anti-Israel content amplification',
-      'US foreign policy criticism',
-      'Pro-resistance axis framing',
-      'Gaza conflict disinformation',
-    ],
-    status: 'Active',
+    id: 'mois-network',
+    name: 'Iranian MOIS Network',
+    actorOrigin: 'Iran',
+    estimatedAccounts: 800,
+    platforms: ['Instagram', 'Facebook', 'X'],
+    primaryObjective: 'Anti-Israel, pro-Hamas, exploit US domestic divisions',
+    active: true,
+    lastObserved: '2024-08-20',
+    threat: 'high',
   },
   {
-    id: 'net-004',
-    name: '50-Cent Army (Wumao) Digital Operations',
-    actor: 'China (state-linked)',
-    platforms: ['Weibo', 'WeChat', 'X', 'Facebook', 'YouTube'],
-    estimatedAccounts: 2000000,
-    primaryNarratives: [
-      'Domestic dissent suppression',
-      'CCP legitimacy reinforcement',
-      'International image management',
-      'COVID-19 origin deflection',
-    ],
-    status: 'Active',
-  },
-  {
-    id: 'net-005',
-    name: 'North Korean Narrative Operations',
-    actor: 'DPRK (state-linked)',
-    platforms: ['X', 'Facebook', 'YouTube', 'LinkedIn'],
-    estimatedAccounts: 1200,
-    primaryNarratives: [
-      'Kim regime legitimacy',
-      'US-Korea military exercise opposition',
-      'Cryptocurrency / sanctions evasion framing',
-      'DPRK economic success narratives',
-    ],
-    status: 'Active',
+    id: '50-cent-army',
+    name: 'Chinese 50-Cent Army (Wumao)',
+    actorOrigin: 'China',
+    estimatedAccounts: 50_000,
+    platforms: ['Weibo', 'WeChat', 'X', 'YouTube'],
+    primaryObjective: 'Domestic opinion management, international pro-PRC spam',
+    active: true,
+    lastObserved: '2024-10-05',
+    threat: 'moderate',
   },
 ];
 
-// ── Pure helpers ──────────────────────────────────────────────────────────
+export const QUARTERLY_CIB_DATA: QuarterlyCibData[] = [
+  { quarter: 'Q1 2022', year: 2022, accountsRemoved: 18_500, takedownCount: 4 },
+  { quarter: 'Q2 2022', year: 2022, accountsRemoved: 22_300, takedownCount: 5 },
+  { quarter: 'Q3 2022', year: 2022, accountsRemoved: 31_000, takedownCount: 7 },
+  { quarter: 'Q4 2022', year: 2022, accountsRemoved: 28_700, takedownCount: 6 },
+  { quarter: 'Q1 2023', year: 2023, accountsRemoved: 35_400, takedownCount: 8 },
+  { quarter: 'Q2 2023', year: 2023, accountsRemoved: 41_200, takedownCount: 9 },
+  { quarter: 'Q3 2023', year: 2023, accountsRemoved: 38_800, takedownCount: 8 },
+  { quarter: 'Q4 2023', year: 2023, accountsRemoved: 52_100, takedownCount: 11 },
+  { quarter: 'Q1 2024', year: 2024, accountsRemoved: 78_900, takedownCount: 14 },
+  { quarter: 'Q2 2024', year: 2024, accountsRemoved: 63_500, takedownCount: 12 },
+];
 
-/** Numeric rank for sorting by significance (higher = more significant). */
-export function significanceRank(sig: CIBSignificance): number {
-  switch (sig) {
-    case 'Critical': return 4;
-    case 'High':     return 3;
-    case 'Medium':   return 2;
-    case 'Low':      return 1;
-  }
+export const NARRATIVE_HOTSPOTS: NarrativeHotspot[] = [
+  {
+    id: 'elections-2024',
+    topic: 'Election Integrity',
+    regions: ['US', 'EU', 'Taiwan', 'India'],
+    intensity: 92,
+    primaryActors: ['Russia', 'China', 'Iran'],
+    trend: 'escalating',
+  },
+  {
+    id: 'ukraine-war',
+    topic: 'Ukraine War Narrative',
+    regions: ['Europe', 'US', 'Global South'],
+    intensity: 88,
+    primaryActors: ['Russia'],
+    trend: 'steady',
+  },
+  {
+    id: 'gaza-conflict',
+    topic: 'Gaza / Israel-Palestine',
+    regions: ['MENA', 'US', 'EU', 'Southeast Asia'],
+    intensity: 84,
+    primaryActors: ['Iran', 'Russia'],
+    trend: 'steady',
+  },
+  {
+    id: 'taiwan-strait',
+    topic: 'Taiwan Strait',
+    regions: ['Taiwan', 'APAC', 'US'],
+    intensity: 79,
+    primaryActors: ['China'],
+    trend: 'escalating',
+  },
+  {
+    id: 'climate-denial',
+    topic: 'Climate / Energy Policy',
+    regions: ['US', 'EU', 'Australia'],
+    intensity: 61,
+    primaryActors: ['Russia', 'unattributed'],
+    trend: 'declining',
+  },
+];
+
+// ── Helper functions ────────────────────────────────────────────────────────
+
+/** Filter takedowns by actor origin. */
+export function getByActor(
+  takedowns: CibTakedown[],
+  actor: ActorOrigin,
+): CibTakedown[] {
+  return takedowns.filter((t) => t.actorOrigin === actor);
 }
 
-/** CSS colour for significance level. */
-export function significanceColor(sig: CIBSignificance): string {
-  switch (sig) {
-    case 'Critical': return '#ef4444';
-    case 'High':     return '#f97316';
-    case 'Medium':   return '#eab308';
-    case 'Low':      return '#4caf50';
-  }
+/**
+ * Filter takedowns whose account count is at or above `threshold`.
+ * Defaults to 1 000 — "large" by typical platform transparency standards.
+ */
+export function getLargeNetworks(
+  takedowns: CibTakedown[],
+  threshold = 1_000,
+): CibTakedown[] {
+  return takedowns.filter((t) => t.accountCount >= threshold);
 }
 
-/** CSS colour for network operational status. */
-export function statusColor(status: NetworkStatus): string {
-  switch (status) {
-    case 'Active':     return '#ef4444';
-    case 'Disrupted':  return '#f97316';
-    case 'Dismantled': return '#4caf50';
-  }
+/** Return only active network profiles. */
+export function getActiveNetworks(
+  profiles: ActiveNetworkProfile[],
+): ActiveNetworkProfile[] {
+  return profiles.filter((p) => p.active);
 }
 
-/** Format an account count for display (e.g. 7000 → 7,000). */
-export function formatAccountCount(n: number): string {
-  if (n <= 0) return 'N/A';
-  return n.toLocaleString('en-US');
+/**
+ * Find a narrative hotspot whose topic matches `topic` (case-insensitive
+ * substring search).  Returns the first match or undefined.
+ */
+export function getByTargetNarrative(
+  hotspots: NarrativeHotspot[],
+  topic: string,
+): NarrativeHotspot | undefined {
+  const needle = topic.toLowerCase();
+  return hotspots.find((h) => h.topic.toLowerCase().includes(needle));
 }
 
-/** Scale classification for a network by estimated account count. */
-export function networkScaleClass(
-  estimatedAccounts: number,
-): 'small' | 'medium' | 'large' | 'massive' {
-  if (estimatedAccounts >= 100_000) return 'massive';
-  if (estimatedAccounts >= 10_000)  return 'large';
-  if (estimatedAccounts >= 1_000)   return 'medium';
+/**
+ * Classify an account count into a semantic scale bucket.
+ *   < 500         => small
+ *   500-4 999     => medium
+ *   5 000-49 999  => large
+ *   >= 50 000     => massive
+ */
+export function networkScaleClass(accountCount: number): NetworkScale {
+  if (accountCount >= 50_000) return 'massive';
+  if (accountCount >= 5_000) return 'large';
+  if (accountCount >= 500) return 'medium';
   return 'small';
 }
 
-/** Classify the actor type from actor string. */
-export function actorClass(actor: string): 'state' | 'unknown' {
-  const statePhrases = [
-    'russia', 'china', 'iran', 'dprk', 'north korea',
-    'myanmar', 'bangladesh', 'state-linked', 'mois', 'tatmadaw',
-  ];
-  const lower = actor.toLowerCase();
-  return statePhrases.some((p) => lower.includes(p)) ? 'state' : 'unknown';
+/**
+ * Return a CSS colour variable string for the given actor origin.
+ */
+export function actorClass(origin: ActorOrigin): string {
+  const map: Record<ActorOrigin, string> = {
+    Russia: 'var(--actor-russia, #ef4444)',
+    China: 'var(--actor-china, #f97316)',
+    Iran: 'var(--actor-iran, #a855f7)',
+    Bangladesh: 'var(--actor-regional, #3b82f6)',
+    Myanmar: 'var(--actor-regional, #3b82f6)',
+    'EU-enforcement': 'var(--actor-eu, #22c55e)',
+    unattributed: 'var(--actor-unknown, #9e9e9e)',
+  };
+  return map[origin] ?? map['unattributed'];
 }
 
-/** Filter takedowns to those from a specific actor (case-insensitive substring). */
-export function getByActor(
-  takedowns: CIBTakedown[],
-  actor: string,
-): CIBTakedown[] {
-  const lower = actor.toLowerCase();
-  return takedowns.filter((t) => t.actor.toLowerCase().includes(lower));
+/** Colour for a network status badge. */
+export function statusColor(status: NetworkStatus): string {
+  const map: Record<NetworkStatus, string> = {
+    disrupted:  'var(--severity-low,      #4caf50)',
+    active:     'var(--severity-critical, #ef4444)',
+    restricted: 'var(--severity-medium,   #facc15)',
+    monitoring: 'var(--severity-high,     #fb923c)',
+  };
+  return map[status];
 }
 
-/** Filter networks with estimated account count above threshold (default 1 000). */
-export function getLargeNetworks(
-  networks: ActiveNetwork[],
-  threshold = 1_000,
-): ActiveNetwork[] {
-  return networks.filter((n) => n.estimatedAccounts > threshold);
+/** Human-readable label for a NetworkScale. */
+export function networkScaleLabel(scale: NetworkScale): string {
+  const map: Record<NetworkScale, string> = {
+    small:   'Small',
+    medium:  'Medium',
+    large:   'Large',
+    massive: 'Massive',
+  };
+  return map[scale];
 }
 
-/** Filter networks that are currently Active. */
-export function getActiveNetworks(networks: ActiveNetwork[]): ActiveNetwork[] {
-  return networks.filter((n) => n.status === 'Active');
+/** Colour for a narrative trend. */
+export function trendColor(trend: NarrativeTrend): string {
+  const map: Record<NarrativeTrend, string> = {
+    escalating: 'var(--severity-critical, #ef4444)',
+    steady:     'var(--severity-medium,   #facc15)',
+    declining:  'var(--severity-low,      #4caf50)',
+  };
+  return map[trend];
+}
+
+/** Arrow + label for a narrative trend. */
+export function trendLabel(trend: NarrativeTrend): string {
+  const map: Record<NarrativeTrend, string> = {
+    escalating: 'up Escalating',
+    steady:     'right Steady',
+    declining:  'down Declining',
+  };
+  return map[trend];
+}
+
+/** Colour for an active-threat-level badge. */
+export function threatLevelColor(threat: ActiveThreatLevel): string {
+  const map: Record<ActiveThreatLevel, string> = {
+    critical: 'var(--severity-critical, #ef4444)',
+    high:     'var(--severity-high,     #fb923c)',
+    moderate: 'var(--severity-medium,   #facc15)',
+    low:      'var(--severity-low,      #4caf50)',
+  };
+  return map[threat];
+}
+
+/** Formats a large number compactly (e.g. 60_000 => "60 k"). */
+export function formatAccountCount(n: number): string {
+  if (n === 0) return 'N/A';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)} k`;
+  return String(n);
+}
+
+// ── RenderData types ────────────────────────────────────────────────────────
+
+export interface TakedownRow {
+  id: string;
+  name: string;
+  platform: TakedownPlatform;
+  actorLabel: string;
+  actorColor: string;
+  scaleLabel: string;
+  scaleClass: NetworkScale;
+  accountLabel: string;
+  targetRegion: string;
+  objective: string;
+  date: string;
+  statusLabel: string;
+  statusColor: string;
+  notableDetail: string;
+}
+
+export interface ProfileRow {
+  id: string;
+  name: string;
+  actorColor: string;
+  accountLabel: string;
+  platformList: string;
+  objective: string;
+  threatLabel: string;
+  threatColor: string;
+  lastObserved: string;
+  active: boolean;
+}
+
+export interface HotspotRow {
+  id: string;
+  topic: string;
+  regionList: string;
+  intensity: number;
+  actorList: string;
+  trendLabel: string;
+  trendColor: string;
+}
+
+export interface CibRenderData {
+  takedownRows: TakedownRow[];
+  profileRows: ProfileRow[];
+  quarterlyData: QuarterlyCibData[];
+  hotspotRows: HotspotRow[];
+  totalAccountsRemoved: number;
+  totalTakedowns: number;
+  activeNetworkCount: number;
+  criticalHotspotCount: number;
 }
 
 /**
- * Filter takedowns whose targetNarrative contains the given keyword
- * (case-insensitive).
+ * Assemble all render-ready data in one call.  Keeps the Panel class free
+ * of business logic.
  */
-export function getByTargetNarrative(
-  takedowns: CIBTakedown[],
-  keyword: string,
-): CIBTakedown[] {
-  const lower = keyword.toLowerCase();
-  return takedowns.filter((t) => t.targetNarrative.toLowerCase().includes(lower));
-}
-
-/** Return the actor with the most takedowns in the dataset. */
-export function mostActiveActor(takedowns: CIBTakedown[]): string {
-  if (takedowns.length === 0) return 'Unknown';
-  const counts = new Map<string, number>();
-  for (const t of takedowns) {
-    counts.set(t.actor, (counts.get(t.actor) ?? 0) + 1);
-  }
-  let topActor = '';
-  let topCount = 0;
-  for (const [actor, count] of counts) {
-    if (count > topCount) { topCount = count; topActor = actor; }
-  }
-  return topActor;
-}
-
-/** Sum all accountsRemoved across takedowns. */
-export function totalAccountsRemoved(takedowns: CIBTakedown[]): number {
-  return takedowns.reduce((sum, t) => sum + t.accountsRemoved, 0);
-}
-
-/**
- * Compute a composite Global CIB Index (0–100).
- *
- * Formula weighs:
- *   - Fraction of Critical/High takedowns (50 pts)
- *   - Number of Active networks / total networks (30 pts)
- *   - Normalised total accounts removed (20 pts, cap at 100k)
- */
-export function computeGlobalCIBIndex(
-  takedowns: CIBTakedown[],
-  activeNets: ActiveNetwork[],
-): number {
-  if (takedowns.length === 0) return 0;
-
-  // Severity score (0–50)
-  const highPlusCrit = takedowns.filter(
-    (t) => t.significance === 'High' || t.significance === 'Critical',
-  ).length;
-  const severityScore = (highPlusCrit / takedowns.length) * 50;
-
-  // Active network score (0–30)
-  const activeCount = getActiveNetworks(activeNets).length;
-  const networkScore = activeNets.length > 0
-    ? (activeCount / activeNets.length) * 30
-    : 0;
-
-  // Volume score (0–20), capped at 100k accounts
-  const total = totalAccountsRemoved(takedowns);
-  const volumeScore = Math.min(total / 100_000, 1) * 20;
-
-  return Math.min(100, Math.round(severityScore + networkScore + volumeScore));
-}
-
-/** Assemble a CIBRenderData snapshot from the canonical datasets. */
 export function buildRenderData(
-  takedowns: CIBTakedown[],
-  activeNetworks: ActiveNetwork[],
-): CIBRenderData {
+  takedowns: CibTakedown[],
+  profiles: ActiveNetworkProfile[],
+  quarterly: QuarterlyCibData[],
+  hotspots: NarrativeHotspot[],
+): CibRenderData {
+  const takedownRows: TakedownRow[] = takedowns.map((t) => ({
+    id: t.id,
+    name: t.name,
+    platform: t.platform,
+    actorLabel: t.actor,
+    actorColor: actorClass(t.actorOrigin),
+    scaleLabel: networkScaleLabel(networkScaleClass(t.accountCount)),
+    scaleClass: networkScaleClass(t.accountCount),
+    accountLabel: formatAccountCount(t.accountCount),
+    targetRegion: t.targetRegion,
+    objective: t.objective,
+    date: t.date,
+    statusLabel: t.status.toUpperCase(),
+    statusColor: statusColor(t.status),
+    notableDetail: t.notableDetail,
+  }));
+
+  const profileRows: ProfileRow[] = profiles.map((p) => ({
+    id: p.id,
+    name: p.name,
+    actorColor: actorClass(p.actorOrigin),
+    accountLabel: formatAccountCount(p.estimatedAccounts),
+    platformList: p.platforms.join(', '),
+    objective: p.primaryObjective,
+    threatLabel: p.threat.toUpperCase(),
+    threatColor: threatLevelColor(p.threat),
+    lastObserved: p.lastObserved,
+    active: p.active,
+  }));
+
+  const hotspotRows: HotspotRow[] = hotspots
+    .slice()
+    .sort((a, b) => b.intensity - a.intensity)
+    .map((h) => ({
+      id: h.id,
+      topic: h.topic,
+      regionList: h.regions.join(', '),
+      intensity: h.intensity,
+      actorList: h.primaryActors.join(', '),
+      trendLabel: trendLabel(h.trend),
+      trendColor: trendColor(h.trend),
+    }));
+
+  const totalAccountsRemoved = quarterly.reduce((s, q) => s + q.accountsRemoved, 0);
+  const totalTakedowns = quarterly.reduce((s, q) => s + q.takedownCount, 0);
+  const activeNetworkCount = getActiveNetworks(profiles).length;
+  const criticalHotspotCount = hotspots.filter((h) => h.intensity >= 80).length;
+
   return {
-    takedowns: [...takedowns].sort(
-      (a, b) => significanceRank(b.significance) - significanceRank(a.significance),
-    ),
-    activeNetworks,
-    globalCIBIndex:     computeGlobalCIBIndex(takedowns, activeNetworks),
-    totalAccountsRemoved: totalAccountsRemoved(takedowns),
-    mostActiveActor:    mostActiveActor(takedowns),
+    takedownRows,
+    profileRows,
+    quarterlyData: quarterly,
+    hotspotRows,
+    totalAccountsRemoved,
+    totalTakedowns,
+    activeNetworkCount,
+    criticalHotspotCount,
   };
 }

@@ -1563,8 +1563,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
  this.ctx.panels['urban-security'] = new UrbanSecurityPanel();
  this.ctx.panels['alliance-cohesion'] = new AllianceCohesionPanel();
- this.ctx.panels['information-operations'] = new InformationOperationsPanel();
-    this.ctx.panels['disinformation-networks'] = new DisinformationNetworksPanel();
+ this.ctx.panels['information-operations'] = new InformationOperationsPanel(); this.ctx.panels['disinformation-networks'] = new DisinformationNetworksPanel();
+
 
  this.ctx.panels['maritime-boundary'] = new MaritimeBoundaryPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();

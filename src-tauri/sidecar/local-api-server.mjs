@@ -5356,7 +5356,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // POST /api/supplychain/state — panel pushes current ports/canals/risk snapshot.
   if (requestUrl.pathname === '/api/supplychain/state' && req.method === 'POST') {
     try {
-      const body = await req.json();
+      const body = JSON.parse(await readBody(req));
       context._supplychainState = {
         ports: body.ports ?? [],
         canals: body.canals ?? [],
@@ -5398,7 +5398,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // POST /api/intelligence/pci — panel pushes latest PCIScore snapshot.
   if (requestUrl.pathname === '/api/intelligence/pci' && req.method === 'POST') {
     try {
-      const body = await req.json();
+      const body = JSON.parse(await readBody(req));
       context._pciState = {
         index: body.index ?? 0,
         level: body.level ?? 'low',
@@ -13271,7 +13271,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // Validates URL host to block SSRF (private IPs / file:// etc.).
   if (requestUrl.pathname === '/api/security/urlscan/submit' && req.method === 'POST') {
  try {
- const body = await req.json();
+ const body = JSON.parse(await readBody(req));
  const target = typeof body?.url === 'string' ? body.url.trim() : '';
  if (!target) return json({ error: 'url required' }, 400);
  let parsed;

@@ -151,6 +151,9 @@
   "panels": {
  "liveNews": "Live News",
  "markets": "Markets",
+ "marketsNews": "Markets News",
+ "commoditiesNews": "Commodities News",
+ "cryptoNews": "Crypto News",
  "map": "Global Situation",
  "techMap": "Global Tech",
  "techHubs": "Hot Tech Hubs",

@@ -1854,6 +1854,27 @@ export class PanelLayoutManager implements AppModule {
  focusInvestmentOnMap(this.ctx.map, this.ctx.mapLayers, inv.lat, inv.lon);
  });
  this.ctx.panels['gcc-investments'] = investmentsPanel;
+
+ // Finance-only news panels. The markets/commodities/crypto feed
+ // categories live in FINANCE_FEEDS, so loadNews() already fetches
+ // them every cycle — they just lacked a render target. Registering
+ // under ctx.newsPanels[<feed category>] routes the fetched clusters;
+ // ctx.panels[<panel id>] wires the sidebar registry (ids from
+ // FINANCE_PANELS in config/panels.ts).
+ const marketsNewsPanel = new NewsPanel('markets', t('panels.marketsNews'));
+ this.attachRelatedAssetHandlers(marketsNewsPanel);
+ this.ctx.newsPanels.markets = marketsNewsPanel;
+ this.ctx.panels['markets-news'] = marketsNewsPanel;
+
+ const commoditiesNewsPanel = new NewsPanel('commodities', t('panels.commoditiesNews'));
+ this.attachRelatedAssetHandlers(commoditiesNewsPanel);
+ this.ctx.newsPanels.commodities = commoditiesNewsPanel;
+ this.ctx.panels['commodities-news'] = commoditiesNewsPanel;
+
+ const cryptoNewsPanel = new NewsPanel('crypto', t('panels.cryptoNews'));
+ this.attachRelatedAssetHandlers(cryptoNewsPanel);
+ this.ctx.newsPanels.crypto = cryptoNewsPanel;
+ this.ctx.panels['crypto-news'] = cryptoNewsPanel;
  }
 
  if (SITE_VARIANT !== 'happy') {

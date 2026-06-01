@@ -26,6 +26,9 @@ jobs:
       - name: Check package lock integrity
         run: node scripts/check-package-lock.mjs
 
+      - name: Check sidecar bundle completeness
+        run: node scripts/check-sidecar-bundle.mjs
+
   scenario-coverage:
     # Plan: docs/CLAUDE_POST_PR197_INTEGRATION_HANDOFF_2026-04-28.md item 6.
     # Fails when scenario fixtures lose a mission domain or drop below floor.

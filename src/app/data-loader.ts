@@ -162,6 +162,8 @@ import { fetchAdsbSnapshot } from '@/services/adsb';
 import type { AirTrafficPanel } from '@/components/AirTrafficPanel';
 import { fetchRipeAtlasStatus } from '@/services/ripe-atlas';
 import type { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
+import { fetchRipeNccStatus } from '@/services/ripe-ncc';
+import type { RipeNccPanel } from '@/components/RipeNccPanel';
 import { updateRegionCount, getHighRiskRegions } from '@/services/ema-forecast';
 import { GDACSAlertsPanel } from '@/components/GDACSAlertsPanel';
 import { NWSAlertsPanel } from '@/components/NWSAlertsPanel';
@@ -3709,6 +3711,15 @@ export class DataLoaderManager implements AppModule {
  (this.ctx.panels['ripe-atlas'] as RipeAtlasPanel | undefined)?.update(data);
  } catch (error) {
  console.error('[App] RIPE Atlas fetch failed:', error);
+ }
+  }
+
+  async loadRipeNcc(): Promise<void> {
+ try {
+ const data = await fetchRipeNccStatus();
+ (this.ctx.panels['ripe-ncc'] as RipeNccPanel | undefined)?.update(data);
+ } catch (error) {
+ console.error('[App] RIPE NCC fetch failed:', error);
  }
   }
 

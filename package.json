@@ -22,6 +22,7 @@
     "lint:ci": "node scripts/lint-changed.mjs",
     "lint:fix": "eslint . --fix",
     "lockfile:check": "node scripts/check-package-lock.mjs",
+    "sidecar:bundle-check": "node scripts/check-sidecar-bundle.mjs",
     "bundle:check": "node scripts/check-bundle-size.mjs",
     "scenarios:check": "tsx scripts/check-scenario-coverage.mts",
     "version:sync": "node scripts/sync-desktop-version.mjs",

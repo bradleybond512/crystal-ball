@@ -31,6 +31,12 @@
   min-height: 28px;
 }
 
+/* macOS desktop: the bar is pinned to top:0, so its label would render under
+   the window traffic-light buttons (x≈8–72). Inset the content past them. */
+body.is-desktop-macos .eew-bar-main {
+  padding-left: 80px;
+}
+
 .eew-bar-label {
   font-weight: 700;
   text-transform: uppercase;

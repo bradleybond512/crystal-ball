@@ -490,6 +490,7 @@ import { SavedPlaceModal } from '@/components/SavedPlaceModal';
 import type { GeoHubActivity } from '@/services/geo-activity';
 import type { TechHubActivity } from '@/services/tech-activity';
 import { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
+import { RipeNccPanel } from '@/components/RipeNccPanel';
 import { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
 import { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
 // HTML builders (app shell + map + sidebar) live in a sibling module.
@@ -1849,6 +1850,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['foreign-mil-news'] = new ForeignMilNewsPanel();
  this.ctx.panels['spc-mesoscale'] = new SpcMesoscalePanel();
  this.ctx.panels['ripe-atlas'] = new RipeAtlasPanel();
+ this.ctx.panels['ripe-ncc'] = new RipeNccPanel();
  }
 
  if (SITE_VARIANT === 'finance') {

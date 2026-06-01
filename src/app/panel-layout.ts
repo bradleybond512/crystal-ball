@@ -378,6 +378,7 @@ import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
 import { FinancialSuperpowerPanel } from '@/components/FinancialSuperpowerPanel';
 import { PoliticalRiskSuperpowerPanel } from '@/components/PoliticalRiskSuperpowerPanel';
 import { StateFragilityPanel } from '@/components/StateFragilityPanel';
+import { StateCapacityPanel } from '@/components/StateCapacityPanel';
 import { GlobalMigrationCrisisPanel } from '@/components/GlobalMigrationCrisisPanel';
 import { OrganizedCrimeSuperpowerPanel } from '@/components/OrganizedCrimeSuperpowerPanel';
 import { NarcoticsTraffickingPanel } from '@/components/NarcoticsTraffickingPanel';
@@ -1557,6 +1558,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['regulatory-arbitrage'] = new RegulatoryArbitragePanel();
  this.ctx.panels['political-risk-superpower'] = new PoliticalRiskSuperpowerPanel();
  this.ctx.panels['state-fragility'] = new StateFragilityPanel();
+ this.ctx.panels['state-capacity'] = new StateCapacityPanel();
  this.ctx.panels['global-migration-crisis'] = new GlobalMigrationCrisisPanel();
  this.ctx.panels['organized-crime-superpower'] = new OrganizedCrimeSuperpowerPanel();
  this.ctx.panels['narcotics-trafficking'] = new NarcoticsTraffickingPanel();

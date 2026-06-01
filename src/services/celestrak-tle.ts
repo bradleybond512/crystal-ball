@@ -1,4 +1,5 @@
 import * as satellite from 'satellite.js';
+import { getApiBaseUrl } from '@/services/runtime';
 
 export interface OrbitalSatellite {
   id: string;
@@ -9,10 +10,16 @@ export interface OrbitalSatellite {
   group: string;
 }
 
-const TLE_GROUPS: Record<string, string> = {
-  stations: 'https://celestrak.org/SOCRATES/query.php?catalog=stations&FORMAT=tle',
-  visual: 'https://celestrak.org/SOCRATES/query.php?catalog=visual&FORMAT=tle',
-};
+// SOCRATES query.php endpoints are now 404. Route through the sidecar /api/tle
+// proxy (which fetches the working /NORAD/elements/gp.php endpoint without
+// sending an Origin header). Only stations are served; visual is inferred by
+// propagating the same set and filtering by altitude + radar cross-section.
+function getTleGroups(): Record<string, string> {
+  const base = getApiBaseUrl();
+  return {
+    stations: `${base}/api/tle`,
+  };
+}
 
 function parseTleText(text: string): { name: string; line1: string; line2: string }[] {
   const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
@@ -47,7 +54,7 @@ function propagateSat(name: string, line1: string, line2: string, group: string)
 export async function fetchOrbitalSatellites(): Promise<OrbitalSatellite[]> {
   const results: OrbitalSatellite[] = [];
 
-  for (const [group, url] of Object.entries(TLE_GROUPS)) {
+  for (const [group, url] of Object.entries(getTleGroups())) {
  try {
  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
  if (!res.ok) continue;

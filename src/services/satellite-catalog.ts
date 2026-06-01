@@ -1,12 +1,16 @@
 /**
  * Satellite Catalog — TLE data from CelesTrak + intelligence annotations
  *
- * Fetches active satellite TLEs from CelesTrak GP API (free, no key).
+ * Fetches satellite TLEs via the sidecar /api/celestrak-gp route (which
+ * combines multiple targeted groups server-side to avoid the Origin-header
+ * 403 that WKWebView triggers on direct CelesTrak fetches, and because
+ * GROUP=active is now rate-limited by CelesTrak).
  * Annotates notable objects (ISS, spy sats, GPS, Starlink, military).
  * Refresh interval: 4 hours. Circuit breaker with persistent cache.
  */
 
 import { createCircuitBreaker } from '@/utils';
+import { getApiBaseUrl } from '@/services/runtime';
 
 export interface SatelliteTLE {
   noradId: number;
@@ -30,7 +34,9 @@ export interface SatelliteAnnotation {
   priority: number; // Lower = more important, rendered on top
 }
 
-const CELESTRAK_URL = 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json';
+function celestrakGpUrl(): string {
+  return `${getApiBaseUrl()}/api/celestrak-gp`;
+}
 
 interface CelesTrakGP {
   OBJECT_NAME: string;
@@ -47,7 +53,7 @@ const breaker = createCircuitBreaker<SatelliteTLE[]>({
 
 export async function fetchSatelliteCatalog(): Promise<SatelliteTLE[]> {
   return breaker.execute(async () => {
- const res = await fetch(CELESTRAK_URL, {
+ const res = await fetch(celestrakGpUrl(), {
  signal: AbortSignal.timeout(30_000),
  });
  if (!res.ok) throw new Error(`CelesTrak HTTP ${String(res.status)}`);

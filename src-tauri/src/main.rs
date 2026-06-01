@@ -883,9 +883,8 @@ fn get_native_location_impl() -> Result<(f64, f64), String> {
  let mgr = objc_msgSend(objc_msgSend(cls, alloc), init);
  if mgr.is_null() { return Err("Could not create CLLocationManager".into()); }
 
- let req_auth = sel_registerName(b"requestWhenInUseAuthorization\0".as_ptr());
- objc_msgSend(mgr, req_auth);
-
+ // Authorization is requested once by the app-retained manager in setup();
+ // re-requesting here spawns a second prompt on first run.
  let start = sel_registerName(b"startUpdatingLocation\0".as_ptr());
  objc_msgSend(mgr, start);
 
@@ -1637,13 +1636,28 @@ static MENUBAR_STATUS_ITEM: std::sync::OnceLock<usize> = std::sync::OnceLock::ne
 
 #[cfg(target_os = "macos")]
 unsafe fn ensure_menubar_status_item(title: &str) {
- use std::ffi::{c_void, CString};
+ use std::ffi::{c_char, c_void, CString};
  extern "C" {
   fn objc_getClass(name: *const u8) -> *mut c_void;
   fn sel_registerName(name: *const u8) -> *mut c_void;
   fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
   fn objc_retain(obj: *mut c_void) -> *mut c_void;
  }
+
+ // Apple Silicon ABI: the variadic-typed `objc_msgSend` passes trailing
+ // arguments on the stack, but the real (non-variadic) `objc_msgSend` reads
+ // them from registers (x2+) — so any call that passes an argument through
+ // the variadic declaration reads garbage. That crashed
+ // `+[NSString stringWithUTF8String:]` inside `strlen` on every launch (the
+ // same bug already fixed in `set_dock_badge`). Cast to concrete signatures
+ // for the calls that pass an argument; the zero-arg calls
+ // (`systemStatusBar`, `button`) stay safe via the variadic declaration.
+ let msgsend_f64: unsafe extern "C" fn(*mut c_void, *mut c_void, f64) -> *mut c_void =
+  std::mem::transmute(objc_msgSend as *const ());
+ let msgsend_cstr: unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_char) -> *mut c_void =
+  std::mem::transmute(objc_msgSend as *const ());
+ let msgsend_obj: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void =
+  std::mem::transmute(objc_msgSend as *const ());
 
  // Lazily create the NSStatusItem once.
  let item_ptr = MENUBAR_STATUS_ITEM.get_or_init(|| {
@@ -1654,7 +1668,7 @@ unsafe fn ensure_menubar_status_item(title: &str) {
   if bar.is_null() { return 0; }
   // -1 == NSVariableStatusItemLength so the title sizes the item.
   let new_item_sel = sel_registerName(b"statusItemWithLength:\0".as_ptr());
-  let item = objc_msgSend(bar, new_item_sel, -1.0f64);
+  let item = msgsend_f64(bar, new_item_sel, -1.0f64);
   if item.is_null() { return 0; }
   // Retain so the system status bar can't drop it after our scope.
   let _ = objc_retain(item);
@@ -1670,9 +1684,9 @@ unsafe fn ensure_menubar_status_item(title: &str) {
  let cstr = CString::new(title).unwrap_or_else(|_| CString::new("Crystal Ball").unwrap());
  let nsstring_cls = objc_getClass(b"NSString\0".as_ptr());
  let from_utf8_sel = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
- let ns_title = objc_msgSend(nsstring_cls, from_utf8_sel, cstr.as_ptr());
+ let ns_title = msgsend_cstr(nsstring_cls, from_utf8_sel, cstr.as_ptr());
  let set_title_sel = sel_registerName(b"setTitle:\0".as_ptr());
- objc_msgSend(btn, set_title_sel, ns_title);
+ msgsend_obj(btn, set_title_sel, ns_title);
 }
 
 #[tauri::command]

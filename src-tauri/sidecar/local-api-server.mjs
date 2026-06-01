@@ -5897,13 +5897,16 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   if (requestUrl.pathname === '/api/tle') {
+ const cacheKey = 'celestrak-stations-tle';
+ const cached = getCached(cacheKey);
+ if (cached) return new Response(cached, { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600', ...makeCorsHeaders(req) } });
  try {
- const tleRes = await fetch('https://celestrak.org/SOCRATES/stations-tle.txt', {
+ const tleRes = await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', {
  signal: AbortSignal.timeout(8000),
- headers: { 'User-Agent': 'CrystalBall/2.x (educational use)' },
  });
  if (!tleRes.ok) return json({ error: `CelesTrak ${tleRes.status}` }, 502, makeCorsHeaders(req));
  const text = await tleRes.text();
+ setCached(cacheKey, text, 60 * 60 * 1000);
  return new Response(text, {
  status: 200,
  headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600', ...makeCorsHeaders(req) },
@@ -5911,6 +5914,34 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch (error) {
  return json({ error: String(error) }, 503, makeCorsHeaders(req));
  }
+  }
+
+  // CelesTrak GP satellite catalog — fetched server-side to avoid the
+  // Origin-header 403 that WKWebView triggers on direct browser fetches.
+  // Combines multiple targeted groups since GROUP=active is now blocked.
+  // Cached 4 hours to match the frontend circuit-breaker TTL.
+  if (requestUrl.pathname === '/api/celestrak-gp') {
+ const cacheKey = 'celestrak-gp-combined';
+ const cached = getCached(cacheKey);
+ if (cached) return json(cached, 200, makeCorsHeaders(req));
+ const GROUPS = ['stations', 'military', 'analyst', 'gps-ops', 'starlink',
+ 'iridium-NEXT', 'visual', 'geo', 'glonass-ops', 'beidou', 'galileo'];
+ const BASE = 'https://celestrak.org/NORAD/elements/gp.php?FORMAT=json&GROUP=';
+ const results = await Promise.allSettled(
+ GROUPS.map(g => fetch(BASE + g, { signal: AbortSignal.timeout(15_000) })
+ .then(r => r.ok ? r.json() : []))
+ );
+ const seen = new Set();
+ const combined = [];
+ for (const r of results) {
+ if (r.status !== 'fulfilled' || !Array.isArray(r.value)) continue;
+ for (const sat of r.value) {
+ const id = sat.NORAD_CAT_ID;
+ if (id != null && !seen.has(id)) { seen.add(id); combined.push(sat); }
+ }
+ }
+ setCached(cacheKey, combined, 4 * 60 * 60 * 1000);
+ return json(combined, 200, makeCorsHeaders(req));
   }
 
   if (requestUrl.pathname === '/api/local-youtube-recent-videos') {

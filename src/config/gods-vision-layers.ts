@@ -209,18 +209,6 @@ export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
  enabled: false,
  description: 'Detailed glTF aircraft models at real altitude with heading',
   },
-  rfCoverage: {
- name: 'RF/SIGINT',
- category: 'intelligence',
- enabled: false,
- description: 'GPS jamming domes, radar cones, EW hotspots',
-  },
-  entityGraph: {
- name: 'Entity Graph',
- category: 'analytical',
- enabled: false,
- description: '3D force-directed entity link analysis',
-  },
   timeline: {
  name: 'Timeline',
  category: 'analytical',

@@ -404,6 +404,7 @@ import { GreatPowerCompetitionPanel } from '@/components/GreatPowerCompetitionPa
 import { UrbanInstabilityPanel } from '@/components/UrbanInstabilityPanel';
 import { CyberEspionagePanel } from '@/components/CyberEspionagePanel';
 import { PoliticalEconomyPanel } from '@/components/PoliticalEconomyPanel';
+import { RegulatoryArbitragePanel } from '@/components/RegulatoryArbitragePanel';
 import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
 import { UrbanSecurityPanel } from '@/components/UrbanSecurityPanel';
 import { AllianceCohesionPanel } from '@/components/AllianceCohesionPanel';
@@ -1554,6 +1555,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['signal-noise-filter'] = new SignalNoiseFilterPanel();
  this.ctx.panels['intelligence-feed'] = new IntelligenceFeedPanel();
  this.ctx.panels['financial-superpower'] = new FinancialSuperpowerPanel();
+ this.ctx.panels['regulatory-arbitrage'] = new RegulatoryArbitragePanel();
  this.ctx.panels['political-risk-superpower'] = new PoliticalRiskSuperpowerPanel();
  this.ctx.panels['state-fragility'] = new StateFragilityPanel();
  this.ctx.panels['state-capacity'] = new StateCapacityPanel();

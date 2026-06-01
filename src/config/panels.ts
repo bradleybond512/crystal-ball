@@ -280,6 +280,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'geopolitical-superpower': { name: 'Geopolitical Superpower', enabled: true, priority: 1 },
   'critical-minerals': { name: 'Critical Minerals', enabled: true, priority: 2 },
   'financial-superpower': { name: 'Financial Superpower', enabled: true, priority: 1 },
+  'regulatory-arbitrage': { name: 'Regulatory Arbitrage', enabled: true, priority: 1 },
   'political-risk-superpower': { name: 'Political Risk Intelligence', enabled: true, priority: 1 },
   'state-fragility': { name: 'State Fragility', enabled: true, priority: 1 },
   'global-migration-crisis': { name: 'Migration Crisis Intelligence', enabled: true, priority: 1 },
@@ -1145,7 +1146,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   marketsFinance: {
  labelKey: 'header.panelCatMarketsFinance',
- panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower', 'political-economy', 'global-logistics-chokepoints'],
+ panelKeys: ['commodities', 'markets', 'economic', 'economic-stress', 'federal-register', 'trade-policy', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'fear-greed', 'national-debt', 'sovereign-debt', 'fuel-prices', 'fdic-failures', 'edgar-filings', 'central-bank-calendar', 'financial-superpower', 'regulatory-arbitrage', 'political-economy', 'global-logistics-chokepoints'],
  variants: ['full'],
   },
   topical: {

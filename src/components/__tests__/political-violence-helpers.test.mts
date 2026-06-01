@@ -205,7 +205,7 @@ describe('computeGlobalViolenceIndex', () => {
     assert.equal(computeGlobalViolenceIndex(massive), 100);
   });
 
-  it('is deterministic Ñ same input gives same output', () => {
+  it('is deterministic â€” same input gives same output', () => {
     const a = computeGlobalViolenceIndex(HOTSPOTS);
     const b = computeGlobalViolenceIndex(HOTSPOTS);
     assert.equal(a, b);
@@ -342,7 +342,7 @@ describe('buildRenderData', () => {
 
   it('mostViolentRegion is the region with highest total monthly events', () => {
     const data = buildRenderData(MOCK_HOTSPOTS, MOCK_EVENTS);
-    // Africa: H1(1000) + H2(500) + H6(400) = 1900 Ñ should win
+    // Africa: H1(1000) + H2(500) + H6(400) = 1900 â€” should win
     assert.equal(data.mostViolentRegion, 'Africa');
   });
 

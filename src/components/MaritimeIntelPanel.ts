@@ -417,9 +417,9 @@ export class MaritimeIntelPanel extends Panel {
     const overallScore = fs.overallScore ?? 0;
     const componentRows = fs.components.map((c) => {
       const trendArrow = c.trend === 'rising' ? '↑' : (c.trend === 'falling' ? '↓' : '→');
-      const dev = c.deviationPct === null ? '—' : `${c.deviationPct >= 0 ? '+' : ''}${c.deviationPct.toFixed(1)}%`;
-      const z = c.zScore === null ? '—' : c.zScore.toFixed(2);
-      const cur = c.current === null ? '—' : c.current.toFixed(1);
+      const dev = c.deviationPct == null ? '—' : `${c.deviationPct >= 0 ? '+' : ''}${c.deviationPct.toFixed(1)}%`;
+      const z = c.zScore == null ? '—' : c.zScore.toFixed(2);
+      const cur = c.current == null ? '—' : c.current.toFixed(1);
       const lvlColor = STRESS_COLOR[c.stressLevel];
       const errLine = c.error
         ? `<div style="font-size:10px;color:#ff9800;">⚠ ${escapeHtml(c.error)}</div>`

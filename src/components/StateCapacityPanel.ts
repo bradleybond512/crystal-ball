@@ -13,11 +13,13 @@ import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
 import {
   buildAllCountriesRenderData,
+  sortCountriesByIndicator,
   getCapacityTierColor,
   getCapacityTierLabel,
   getTopFragileStates,
   type CountryRenderData,
   type CapacityTier,
+  type CapacitySortKey,
 } from './state-capacity-helpers';
 
 const REFRESH_MS = 60 * 60 * 1000; // 1 hour
@@ -34,7 +36,7 @@ const TREND_COLOR: Record<CountryRenderData['trend'], string> = {
   improving:     '#22c55e',
 };
 
-type SortKey = 'fragility' | 'governance' | 'ruleOfLaw' | 'serviceDelivery' | 'resilience';
+type SortKey = CapacitySortKey;
 
 export class StateCapacityPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -57,6 +59,9 @@ export class StateCapacityPanel extends Panel {
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('click', this.onSortClick);
     }
     super.destroy();
   }
@@ -85,33 +90,7 @@ export class StateCapacityPanel extends Panel {
   };
 
   private getSortedRows(): CountryRenderData[] {
-    const rows = buildAllCountriesRenderData();
-    const sign = this.sortAsc ? 1 : -1;
-
-    rows.sort((a, b) => {
-      let va: number;
-      let vb: number;
-      switch (this.sortKey) {
-        case 'governance': {
-          va = a.governanceScore; vb = b.governanceScore; break;
-        }
-        case 'ruleOfLaw': {
-          va = a.ruleOfLawScore; vb = b.ruleOfLawScore; break;
-        }
-        case 'serviceDelivery': {
-          va = a.serviceDeliveryScore; vb = b.serviceDeliveryScore; break;
-        }
-        case 'resilience': {
-          va = a.institutionalResilienceScore; vb = b.institutionalResilienceScore; break;
-        }
-        default: {
-          va = a.fragility; vb = b.fragility; break;
-        }
-      }
-      return (vb - va) * sign;
-    });
-
-    return rows;
+    return sortCountriesByIndicator(buildAllCountriesRenderData(), this.sortKey, this.sortAsc);
   }
 
   private render(): void {

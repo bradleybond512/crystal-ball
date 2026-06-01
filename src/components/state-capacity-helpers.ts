@@ -434,6 +434,45 @@ export function getTopFragileStates(count: number): CountryRenderData[] {
   return buildAllCountriesRenderData().slice(0, count);
 }
 
+export type CapacitySortKey =
+  | 'fragility'
+  | 'governance'
+  | 'ruleOfLaw'
+  | 'serviceDelivery'
+  | 'resilience';
+
+function indicatorValue(row: CountryRenderData, key: CapacitySortKey): number {
+  switch (key) {
+    case 'governance': { return row.governanceScore;
+    }
+    case 'ruleOfLaw': { return row.ruleOfLawScore;
+    }
+    case 'serviceDelivery': { return row.serviceDeliveryScore;
+    }
+    case 'resilience': { return row.institutionalResilienceScore;
+    }
+    default: { return row.fragility;
+    }
+  }
+}
+
+/**
+ * Returns a new array of rows sorted by the given indicator. `ascending=false`
+ * (the panel default for fragility) puts the highest value first — i.e. the
+ * most fragile / most at-risk states at the top.
+ */
+export function sortCountriesByIndicator(
+  rows: CountryRenderData[],
+  key: CapacitySortKey,
+  ascending: boolean,
+): CountryRenderData[] {
+  return [...rows].sort((a, b) =>
+    ascending
+      ? indicatorValue(a, key) - indicatorValue(b, key)
+      : indicatorValue(b, key) - indicatorValue(a, key),
+  );
+}
+
 // ── Regional risk aggregation ─────────────────────────────────────────────
 
 /**

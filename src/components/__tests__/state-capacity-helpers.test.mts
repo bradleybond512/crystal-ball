@@ -12,6 +12,7 @@ import {
   getCapacityTierLabel,
   buildCountryRenderData,
   buildAllCountriesRenderData,
+  sortCountriesByIndicator,
   getTopFragileStates,
   computeRegionalRisk,
   assessInstabilityTrend,
@@ -250,6 +251,39 @@ test('buildAllCountriesRenderData: every country has a non-empty region', () => 
   for (const rd of buildAllCountriesRenderData()) {
     assert.ok(rd.region.length > 0, `${rd.countryCode}: missing region`);
   }
+});
+
+// ── sortCountriesByIndicator ──────────────────────────────────────────────
+
+test('sortCountriesByIndicator: panel default (fragility, ascending=false) = most fragile first', () => {
+  const sorted = sortCountriesByIndicator(buildAllCountriesRenderData(), 'fragility', false);
+  for (let i = 1; i < sorted.length; i++) {
+    assert.ok(
+      sorted[i - 1]!.fragility >= sorted[i]!.fragility,
+      `most-fragile-first violated at row ${i}`,
+    );
+  }
+});
+
+test('sortCountriesByIndicator: ascending=true reverses to least-fragile first', () => {
+  const sorted = sortCountriesByIndicator(buildAllCountriesRenderData(), 'fragility', true);
+  for (let i = 1; i < sorted.length; i++) {
+    assert.ok(sorted[i - 1]!.fragility <= sorted[i]!.fragility);
+  }
+});
+
+test('sortCountriesByIndicator: governance ascending orders by governanceScore', () => {
+  const sorted = sortCountriesByIndicator(buildAllCountriesRenderData(), 'governance', true);
+  for (let i = 1; i < sorted.length; i++) {
+    assert.ok(sorted[i - 1]!.governanceScore <= sorted[i]!.governanceScore);
+  }
+});
+
+test('sortCountriesByIndicator: does not mutate its input array', () => {
+  const rows = buildAllCountriesRenderData();
+  const snapshot = rows.map((r) => r.countryCode);
+  sortCountriesByIndicator(rows, 'governance', true);
+  assert.deepEqual(rows.map((r) => r.countryCode), snapshot);
 });
 
 // ── getTopFragileStates ───────────────────────────────────────────────────

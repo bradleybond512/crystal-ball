@@ -25,7 +25,14 @@ export class FinancialContagionPanel extends Panel {
  this.model = await getContagionModel();
  this.render();
  } catch (error) {
+ const msg = error instanceof Error ? error.message : String(error);
+ if (/unavailable/i.test(msg)) {
+ // Expected when the upstream economic-stress feed is down — a data
+ // condition, not an app error. Tag [FEED] so it doesn't read as a bug.
+ console.warn(`[FEED] [FinancialContagionPanel] ${msg}`);
+ } else {
  console.error('[FinancialContagionPanel] load error:', error);
+ }
  this.showError('Contagion data unavailable');
  }
   }

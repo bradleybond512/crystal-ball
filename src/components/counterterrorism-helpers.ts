@@ -369,7 +369,7 @@ export function topCasualtyEvent(incidents: IncidentRecord[]): CasualtySeverity 
       return inc;
     }
     return best;
-  }, incidents[0]);
+  }, incidents[0]!);
   return assessCasualtySeverity(worst.killed, worst.wounded);
 }
 
@@ -491,13 +491,25 @@ export function buildRenderData(
   };
 }
 
+function trendArrowFor(trend: TrendDirection): string {
+  if (trend === 'increasing') return '↑';
+  if (trend === 'decreasing') return '↓';
+  return '→';
+}
+
+function trendColorFor(trend: TrendDirection): string {
+  if (trend === 'increasing') return '#f44336';
+  if (trend === 'decreasing') return '#4caf50';
+  return '#9e9e9e';
+}
+
 /**
  * Build an HTML snippet for a single region row.
  */
 export function buildRegionRowHtml(r: RegionRisk): string {
   const color = TIER_COLORS[r.tier];
-  const trendArrow = r.trend === 'increasing' ? '↑' : (r.trend === 'decreasing' ? '↓' : '→');
-  const trendColor = r.trend === 'increasing' ? '#f44336' : (r.trend === 'decreasing' ? '#4caf50' : '#9e9e9e');
+  const trendArrow = trendArrowFor(r.trend);
+  const trendColor = trendColorFor(r.trend);
   const ctPct = Math.round(r.ctSuccessRate * 100);
   return `<tr style="border-bottom:1px solid var(--border-subtle,#222);">
     <td style="padding:6px 10px;font-size:12px;color:#e5e5e5;">${escapeHtmlSimple(r.region)}</td>
@@ -536,6 +548,7 @@ export function buildGroupCardHtml(g: GroupActivity): string {
  * Return the most frequently occurring value in an array.
  * Returns the first element when all are tied, or '' on empty input.
  */
+// eslint-disable-next-line sonarjs/function-return-type -- intentional '' sentinel on empty input, pinned by tests
 export function mostFrequent<T>(arr: T[]): T | string {
   if (arr.length === 0) return '';
   const counts = new Map<string, number>();

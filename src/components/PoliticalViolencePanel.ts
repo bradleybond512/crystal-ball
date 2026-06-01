@@ -1,8 +1,8 @@
 /**
- * PoliticalViolencePanel � ACLED-inspired global political violence tracker.
+ * PoliticalViolencePanel — ACLED-inspired global political violence tracker.
  *
- * Displays: Global Violence Index header � Hotspot table sorted by monthly
- * events � Recent event log sorted by significance. Clicking a hotspot row
+ * Displays: Global Violence Index header — Hotspot table sorted by monthly
+ * events — Recent event log sorted by significance. Clicking a hotspot row
  * expands an inline drill-down with description and trend data.
  *
  * Data: static fixtures from political-violence-helpers. Designed to accept
@@ -47,6 +47,19 @@ const EVENT_COLOR: Record<string, string> = {
   Riots: '#facc15',
   'Strategic Developments': '#60a5fa',
 };
+
+function violenceIndexColor(index: number): string {
+  if (index >= 80) return '#ef4444';
+  if (index >= 60) return '#f97316';
+  if (index >= 40) return '#facc15';
+  return '#4ade80';
+}
+
+function trendSymbol(trend: ViolenceHotspot['trend']): string {
+  if (trend === 'escalating') return '↑';
+  if (trend === 'declining') return '↓';
+  return '→';
+}
 
 export class PoliticalViolencePanel extends Panel {
   private hotspots: ViolenceHotspot[] = HOTSPOTS;
@@ -120,14 +133,7 @@ export class PoliticalViolencePanel extends Panel {
   }
 
   private renderHeader(data: PoliticalViolenceData): string {
-    const viColor =
-      data.globalViolenceIndex >= 80
-        ? '#ef4444'
-        : data.globalViolenceIndex >= 60
-          ? '#f97316'
-          : data.globalViolenceIndex >= 40
-            ? '#facc15'
-            : '#4ade80';
+    const viColor = violenceIndexColor(data.globalViolenceIndex);
     const escalatingCount = getEscalating(data.hotspots).length;
     const extremeCount = getHighImpact(data.hotspots, 'Extreme').length;
 
@@ -161,8 +167,7 @@ export class PoliticalViolencePanel extends Panel {
     const trendColor = TREND_COLOR[h.trend] ?? '#888';
     const impactColor = IMPACT_COLOR[h.civilianImpact] ?? '#888';
     const isExpanded = this.expandedHotspotId === h.id;
-    const trendArrow =
-      h.trend === 'escalating' ? '?' : h.trend === 'declining' ? '?' : '?';
+    const trendArrow = trendSymbol(h.trend);
 
     const drill = isExpanded
       ? `<div class="pv-drill" style="
@@ -249,10 +254,10 @@ export class PoliticalViolencePanel extends Panel {
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
           <span style="font-size:var(--text-2xs);color:#888;">
-            ${e.fatalities > 0 ? `${e.fatalities.toLocaleString()} fatalities �` : ''} Actor: ${escapeHtml(e.actor)}
+            ${e.fatalities > 0 ? `${e.fatalities.toLocaleString()} fatalities —` : ''} Actor: ${escapeHtml(e.actor)}
           </span>
           <div style="margin-left:auto;display:flex;gap:2px;" title="Significance: ${e.significance}/10">
-            ${"?".repeat(sigBars)}${"?".repeat(5 - sigBars)}
+            ${"█".repeat(sigBars)}${"░".repeat(5 - sigBars)}
           </div>
         </div>
       </div>
@@ -261,22 +266,23 @@ export class PoliticalViolencePanel extends Panel {
 
   private bindHotspotClicks(): void {
     const rows = this.content.querySelectorAll<HTMLElement>('.pv-hotspot-row');
+    const toggle = (e: Event): void => {
+      e.stopPropagation();
+      const id = (e.currentTarget as HTMLElement).dataset.hotspotId;
+      if (!id) return;
+      this.expandedHotspotId = this.expandedHotspotId === id ? null : id;
+      this.render();
+    };
+    const onKeydown = (e: Event): void => {
+      const ke = e as KeyboardEvent;
+      if (ke.key === 'Enter' || ke.key === ' ') {
+        e.preventDefault();
+        toggle(e);
+      }
+    };
     for (const row of rows) {
-      const hotspotId = row.dataset.hotspotId;
-      if (!hotspotId) continue;
-      const handler = (e: Event) => {
-        e.stopPropagation();
-        this.expandedHotspotId =
-          this.expandedHotspotId === hotspotId ? null : hotspotId;
-        this.render();
-      };
-      row.addEventListener('click', handler);
-      row.addEventListener('keydown', (e: KeyboardEvent) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          handler(e);
-        }
-      });
+      row.addEventListener('click', toggle);
+      row.addEventListener('keydown', onKeydown);
     }
   }
 

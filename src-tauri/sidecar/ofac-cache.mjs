@@ -3,8 +3,8 @@
  *
  * - Reads the parsed cache from `${dataDir}/data/ofac-cache.json` on
  *   first call.
- * - Refreshes from https://www.treasury.gov/ofac/downloads/sdn.xml when
- *   the cache is missing or older than 7 days.
+ * - Refreshes from https://sanctionslistservice.ofac.treas.gov/api/publicationpreview/exports/sdn.xml
+ *   when the cache is missing or older than 7 days.
  * - Parses the XML in-process (no DOM dependency, just a tag-extraction
  *   walk that mirrors the renderer-side TS in src/services/sanctions/
  *   ofac-parser.ts — kept lean here so the sidecar boot doesn't have to
@@ -21,7 +21,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-const SDN_XML_URL = 'https://www.treasury.gov/ofac/downloads/sdn.xml';
+const SDN_XML_URL = 'https://sanctionslistservice.ofac.treas.gov/api/publicationpreview/exports/sdn.xml';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const CACHE_VERSION = 1;
 

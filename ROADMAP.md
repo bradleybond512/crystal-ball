@@ -1,68 +1,72 @@
 # Crystal Ball — Enhancement Roadmap
 
-> Last updated: 2026-05-09 | Current version: v2.13.1
+> Last updated: 2026-06-01 | Current version: v2.25.x
 
 This file is the canonical to-do list across all build sessions. Update status markers as work completes.
 
 ## Status
 
-🔲 Pending · 🔄 In progress · ✅ Done · ❌ Blocked
+🔲 Pending · 🔄 In progress / partial · ✅ Done · ❌ Blocked
+
+> Reconciled against the codebase on 2026-06-01 via a full audit. Tiers 0–2 are
+> fully shipped; remaining open work is concentrated in Tier 3 (partial) and
+> Tier 4 (moonshots).
 
 ---
 
-## Tier 0 — In progress (completing now)
+## Tier 0 — Threat-intel panels (shipped ✅)
 
 | Status | Feature | Notes |
 |--------|---------|-------|
-| 🔄 | `cve-tracker` panel | NVD API + CVSS scoring |
-| 🔄 | `vulners-cve` panel | NVD + EPSS exploit probability |
-| 🔄 | `hibp-breaches` panel | Have I Been Pwned breach feed |
-| 🔄 | `ipinfo-lookup` panel | ipinfo.io IP geolocation/ASN |
-| 🔄 | `phishstats-feed` panel | PhishStats phishing URL feed |
-| 🔄 | `urlscan-threats` panel | urlscan.io malicious URL feed |
-| 🔄 | `pulsedive-intel` panel | Pulsedive threat indicators |
-| 🔄 | `bitcoin-abuse` panel | CryptoScamDB scam addresses |
-| 🔄 | `reddit-osint` panel | Multi-subreddit threat feed |
-| 🔄 | `openaq-monitor` panel | OpenAQ v3 global air quality |
-| 🔄 | `mediastack-news` panel | News aggregator on GDELT |
+| ✅ | `cve-tracker` panel | NVD API + CVSS scoring — `CveTrackerPanel.ts` |
+| ✅ | `vulners-cve` panel | NVD + EPSS exploit probability — `VulnersCvePanel.ts` |
+| ✅ | `hibp-breaches` panel | Have I Been Pwned — `HibpBreachesPanel.ts`, `api/hibp-breaches.js` |
+| ✅ | `ipinfo-lookup` panel | ipinfo.io geolocation/ASN — `IpInfoPanel.ts`, `api/ipinfo-lookup.js` |
+| ✅ | `phishstats-feed` panel | PhishStats — `PhishstatsFeedPanel.ts` |
+| ✅ | `urlscan-threats` panel | urlscan.io — `UrlscanThreatsPanel.ts` |
+| ✅ | `pulsedive-intel` panel | Pulsedive indicators — `PulsediveIntelPanel.ts` |
+| ✅ | `bitcoin-abuse` panel | scam addresses — `BitcoinAbusePanel.ts` + `crypto/bitcoin-abuse-service.ts` |
+| ✅ | `reddit-osint` panel | multi-subreddit — `RedditOsintPanel.ts` + `osint/reddit-service.ts` |
+| ✅ | `openaq-monitor` panel | OpenAQ air quality — `OpenaqMonitorPanel.ts`, `api/openaq-readings.js` |
+| ✅ | `mediastack-news` panel | news aggregator — `MediastackNewsPanel.ts`, `api/mediastack-news.js` |
 
 ---
 
-## Tier 1 — Quick wins (free APIs, days each)
+## Tier 1 — Quick wins (shipped ✅)
 
-| Status | Feature | Data Source | Impact |
-|--------|---------|-------------|--------|
-| 🔲 | NOAA GOES satellite imagery | cdn.star.nesdis.noaa.gov (free) | ★★★★★ |
-| 🔲 | Flood monitoring | USGS Water Services + NWS CAP | ★★★★★ |
-| 🔲 | Volcano monitoring | USGS VHP API + Smithsonian GVP | ★★★★☆ |
-| 🔲 | Tornado / SPC severe weather | NWS SPC outlooks + warnings | ★★★★★ |
-| 🔲 | FAA TFRs on 3D globe | FAA TFR GeoJSON (free) | ★★★★☆ |
-| 🔲 | USGS ShakeAlert + shake maps | USGS ShakeMap per-event API | ★★★★☆ |
-| 🔲 | GDACS / Copernicus alerts | gdacs.org/xml/rss.xml (free) | ★★★★☆ |
-| 🔲 | Feed latency audit | Internal — tighten cache TTLs | ★★★☆☆ |
+| Status | Feature | Data Source | Notes |
+|--------|---------|-------------|-------|
+| ✅ | NOAA GOES satellite imagery | cdn.star.nesdis.noaa.gov | `GoesSatellitePanel.ts`, `imagery/goes-catalog.ts`, `api/satellite/goes*.js` |
+| ✅ | Flood monitoring | USGS Water Services + NWS CAP | `FloodMonitorPanel.ts`, `api/floods/{gauges,warnings}.js` |
+| ✅ | Volcano monitoring | USGS VHP + Smithsonian GVP | `VolcanoMonitorPanel.ts` + `VolcanoAlertsPanel.ts`, `/api/volcano-alerts` |
+| ✅ | Tornado / SPC severe weather | NWS SPC | `SevereWeatherPanel.ts`, `spc-outlook.ts`, `spc-mesoscale.ts` |
+| ✅ | FAA TFRs on 3D globe | FAA TFR GeoJSON | `FaaTfrsPanel.ts`, `sidecar/faa-tfrs.mjs` |
+| ✅ | USGS ShakeAlert + shake maps | USGS ShakeMap | `ShakeAlertPanel.ts`, `shakealert.ts`, `seismic/shaking-estimator.ts` |
+| ✅ | GDACS / Copernicus alerts | gdacs.org RSS | `GDACSAlertsPanel.ts`, `api/gdacs.js`, `sidecar/gdacs-rss.mjs`, `copernicus-cems.ts` |
+| ✅ | Feed latency audit | Internal | `sidecar/feed-latency-config.mjs`, surfaced in `FeedHealthDashboardPanel.ts` |
 
 ---
 
-## Tier 2 — Medium builds (1–2 weeks each)
+## Tier 2 — Medium builds (shipped ✅)
 
 | Status | Feature | Notes |
 |--------|---------|-------|
-| 🔲 | Custom alert rules engine | IF/THEN cross-domain conditional alerts |
-| 🔲 | Saved places as first-class filter | Filter every panel by proximity to saved locations |
-| 🔲 | Supply chain disruption tracker | AIS + port congestion + Baltic Dry Index |
-| 🔲 | Infrastructure risk matrix | Power + BGP + CISA KEV + ACLED infrastructure attacks |
-| 🔲 | Feed resilience / fallback sources | Auto-failover when primary feed returns 5xx |
-| 🔲 | Cross-domain correlation engine | Earthquake→tsunami, CME→power grid, wildfire→AQI alerts |
+| ✅ | Custom alert rules engine | `alert-rules-engine.ts`, `intelligence/rules-engine.ts`, `alert-rules.ts` |
+| ✅ | Saved places as first-class filter | `personal/personal-impact.ts`, `threat-aggregator.ts`, `resilience-model.ts` |
+| ✅ | Supply chain disruption tracker | `SupplyChainDisruptionPanel.ts` — AIS + canal queue + Baltic Dry Index |
+| ✅ | Infrastructure risk matrix | `InfraRiskMatrixPanel.ts`, `infrarisks/infra-risk-service.ts` |
+| ✅ | Feed resilience / fallback sources | `sidecar/feed-resilience.mjs` |
+| ✅ | Cross-domain correlation engine | `synthesis/correlation-engine.ts` + `alert-correlator.ts` — quake→tsunami, CME→grid, wildfire→AQI |
 
 ---
 
-## Tier 3 — Large builds (months)
+## Tier 3 — Large builds
 
 | Status | Feature | Notes |
 |--------|---------|-------|
-| 🔲 | Historical playback / timeline | SQLite snapshots, globe scrubber |
-| 🔲 | Mobile / PWA companion | Sidecar-served PWA, responsive UI |
-| 🔲 | Dark web / paste OSINT monitoring | Pastebin, Telegram, breach forum monitoring |
+| ✅ | Mobile / PWA companion | VitePWA + workbox in `vite.config.ts` (manifest, runtime caching, autoUpdate) |
+| 🔄 | Historical playback / timeline | UI + logic shipped (`HistoricalPlaybackPanel.ts`, `TimelineScrubberPanel.ts`, `timeline-scrubber.ts`). **Open:** persistence is in-memory snapshot rings + IDB, not the spec'd SQLite store |
+| 🔄 | Dark web / paste OSINT monitoring | Telegram feed + `DarkWebPanel.ts` + `osint/dark-web.ts` (HIBP + Tor relay metrics) shipped. **Open:** Pastebin + breach-forum monitoring |
 
 ---
 
@@ -70,14 +74,23 @@ This file is the canonical to-do list across all build sessions. Update status m
 
 | Status | Feature | Notes |
 |--------|---------|-------|
-| 🔲 | AI predictive threat modeling | Ollama local inference, probability forecasts |
-| 🔲 | Team collaboration mode | Shared watchlists, annotations, sync |
-| 🔲 | Voice command interface | Whisper STT + TTS, hands-free monitoring |
-| 🔲 | Satellite imagery on demand | Sentinel-2 / Planet Labs optical imagery |
+| 🔄 | AI predictive threat modeling | Substantial infra exists (`prediction/index.ts`, `forecast-engine.ts`, `financial-contagion.ts`, analyst-loop / llm-adapter Ollama routing). No single completion criterion — refine probability forecasts |
+| 🔲 | Satellite imagery on demand | Sentinel-2 / Planet Labs optical imagery. Zero implementation (only a "not done" note in `satellite-change.ts`) |
+| 🔲 | Voice command interface | Whisper STT + TTS, hands-free. Zero implementation |
+| 🔲 | Team collaboration mode | Shared watchlists, annotations, sync. Local annotation primitives exist (`alert-annotations.ts`); no shared/sync layer |
 
 ---
 
 ## Completed
+
+### v2.14–v2.25 (2026-05 → 2026-06)
+
+- ✅ Tier 0 threat-intel panels — all 11 shipped (CVE, Vulners, HIBP, IPinfo, PhishStats, urlscan, Pulsedive, BitcoinAbuse, Reddit, OpenAQ, MediaStack)
+- ✅ Tier 1 hazard suite — GOES imagery, floods, volcano, SPC/tornado, FAA TFRs, ShakeAlert, GDACS/Copernicus, feed-latency audit
+- ✅ Tier 2 — alert-rules engine, saved-places filter, supply-chain tracker, infra risk matrix, feed resilience, cross-domain correlation
+- ✅ Markets/Commodities/Crypto news panels wired (finance variant) (PR #958)
+- ✅ Sidecar correctness: bundle SMS modules (prod-boot crash) + `req.json()`→`readBody()` on 3 POST routes (PR #961)
+- ✅ Dead-UI cleanup: wired RIPE NCC BGP panel, removed dead `rfCoverage`/`entityGraph` globe toggles (PR #962)
 
 ### v2.13.x (2026-05-09)
 

@@ -2851,7 +2851,7 @@ fn main() {
  &app.handle(),
  "INFO",
  &format!(
- "app launched pid={} version={} bundle={}",
+ "════════ SESSION START pid={} version={} bundle={} ════════",
  std::process::id(),
  env!("CARGO_PKG_VERSION"),
  env::current_exe()

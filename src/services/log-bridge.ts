@@ -48,6 +48,25 @@ function fmtArg(a: unknown): string {
   return String(a as string | number | boolean | bigint | null | undefined);
 }
 
+// Expected upstream/data-fetch failures: rate limits, 4xx/5xx, DNS, refused
+// connections — network conditions, not app bugs. The console.error bridge logs
+// these as a distinct [FEED] WARN instead of ERROR so genuine errors stay
+// scannable in the desktop log. Patterns are deliberately network-specific to
+// avoid masking real logic errors.
+const FEED_FAILURE_PATTERNS: RegExp[] = [
+  /failed to fetch/i,
+  /fetch failed/i,
+  /\bHTTP\s+[45]\d\d\b/i,
+  /\breturned\s+[45]\d\d\b/i,
+  /\bstatus\s+[45]\d\d\b/i,
+  /\b(?:ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN)\b/i,
+  /networkerror|failed to load resource/i,
+];
+
+export function isExpectedFeedFailure(message: string): boolean {
+  return FEED_FAILURE_PATTERNS.some((re) => re.test(message));
+}
+
 export function logToDesktop(
   level: 'ERROR' | 'WARN' | 'INFO' | 'DEBUG',
   message: string,
@@ -307,7 +326,9 @@ export function installLogBridge(): void {
   console.error = (...args: unknown[]) => {
  origError(...args);
  try {
- logToDesktop('ERROR', `console.error: ${args.map(a => fmtArg(a)).join(' ').slice(0, 1000)}`);
+ const feedMsg = args.map(a => fmtArg(a)).join(' ').slice(0, 1000);
+   if (isExpectedFeedFailure(feedMsg)) logToDesktop('WARN', `[FEED] ${feedMsg}`);
+   else logToDesktop('ERROR', `console.error: ${feedMsg}`);
  } catch { /* safe */ }
   };
   // eslint-disable-next-line no-console

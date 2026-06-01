@@ -126,11 +126,16 @@ const REGION_COORDS: Record<string, { lat: number; lon: number }> = {
   Bangor: { lat: 47.73, lon: -122.71 },
   // Alternate spelling of Rota
   'Rota Spain': { lat: 36.63, lon: -6.35 },
+  // Ports that appear in USNI articles but were previously unmapped
+  'New Orleans': { lat: 29.95, lon: -90.07 },
+  'Kingston, Jamaica': { lat: 17.99, lon: -76.79 },
+  'Portsmouth, England': { lat: 50.80, lon: -1.09 },
 };
 
 function getRegionCoords(regionText: string): { lat: number; lon: number } | null {
   const normalized = regionText
  .replace(/^(In the|In|The)\s+/i, '')
+ .replace(/\s+,/g, ',')
  .replace(/\s+/g, ' ')
  .trim();
   if (REGION_COORDS[normalized]) return REGION_COORDS[normalized];

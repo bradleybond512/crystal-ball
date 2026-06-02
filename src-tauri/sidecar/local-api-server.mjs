@@ -4606,20 +4606,27 @@ async function handleIntelGenerate(req, res, context) {
 
   const messages = [{ role: 'system', content: system }, { role: 'user', content: prompt }];
 
-  // Try local Ollama first, fall back to Groq
-  const baseUrl = process.env.OLLAMA_API_URL || 'http://localhost:1234';
+  // Try local LLM first, fall back to Groq. When OLLAMA_API_URL is configured we
+  // honor it; otherwise auto-probe the two common local backends — Ollama
+  // (11434) first per the analyst layer's "prefers Ollama" default, then LM
+  // Studio (1234). Both expose an OpenAI-compatible /v1/chat/completions.
   const rawModel = process.env.OLLAMA_MODEL || 'local-model';
   const localModel = /^[a-zA-Z0-9._:/-]{1,80}$/.test(rawModel) ? rawModel : 'local-model';
-  let localUrl;
-  try { localUrl = new URL('/v1/chat/completions', baseUrl).toString(); } catch { /* invalid URL */ }
+  const localBases = process.env.OLLAMA_API_URL
+    ? [process.env.OLLAMA_API_URL]
+    : ['http://127.0.0.1:11434', 'http://127.0.0.1:1234'];
+  const localUrls = localBases
+    .map((base) => { try { return new URL('/v1/chat/completions', base).toString(); } catch { return null; } })
+    .filter(Boolean);
 
   let response, model;
-  if (localUrl) {
+  for (const localUrl of localUrls) {
     try {
       response = await callChatCompletion(localUrl, localModel, messages, maxTokens, temperature, null, 60_000);
       model = localModel;
+      break;
     } catch (localError) {
-      context.logger.warn('[intel-generate] local failed:', localError.message);
+      context.logger.warn(`[intel-generate] local failed (${localUrl}):`, localError.message);
     }
   }
 

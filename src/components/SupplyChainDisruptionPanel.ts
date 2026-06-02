@@ -1,7 +1,6 @@
 /* eslint-disable sonarjs/no-nested-template-literals */
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
-import { getApiBaseUrl } from '@/services/runtime';
 import {
   computePortCongestion, computeCanalStatus, computeChokepointRisk,
   CANAL_CONFIGS,
@@ -78,7 +77,8 @@ export class SupplyChainDisruptionPanel extends Panel {
     this._compute();
     this.render();
     this.refreshTimer = setInterval(() => {
-      void this._fetchAndRefresh();
+      this._compute();
+      this.render();
     }, REFRESH_MS);
   }
 
@@ -104,22 +104,6 @@ export class SupplyChainDisruptionPanel extends Panel {
       const waitStress = Math.min(100, Math.round((cs.estimatedWaitHours / 48) * 100));
       return computeChokepointRisk(cs.name, waitStress, waitStress);
     }).sort((a, b) => b.score - a.score);
-  }
-
-  private async _fetchAndRefresh(): Promise<void> {
-    const base = getApiBaseUrl();
-    if (!base) { this._compute(); this.render(); return; }
-    try {
-      const res = await fetch(`${base}/api/supplychain/vessels`, {
-        signal: AbortSignal.timeout(5000),
-      });
-      if (res.ok) {
-        const data = await res.json() as { vessels?: VesselPosition[] };
-        if (Array.isArray(data.vessels)) this.vessels = data.vessels;
-      }
-    } catch { /* best-effort */ }
-    this._compute();
-    this.render();
   }
 
   private render(): void {

@@ -31,6 +31,22 @@ try {
  // @xmpp/client uses dynamic import for transport selection; mark
  // the legacy ws-only browser transport as external so esbuild
  // doesn't choke when Node 22 has WebSocket builtin.
+ // @xmpp/client (and its deps) call require('events') etc. In an ESM
+ // bundle esbuild rewrites those to a __require shim that throws
+ // "Dynamic require of \"events\" is not supported" at runtime. Inject a
+ // real createRequire so node-builtin requires resolve, otherwise the
+ // bundle imports but throws on first use and the S2U XMPP feed silently
+ // stays disabled in the packaged app.
+ banner: {
+   js: [
+     "import { createRequire as __xmppCreateRequire } from 'node:module';",
+     "import { fileURLToPath as __xmppFileURLToPath } from 'node:url';",
+     "import { dirname as __xmppDirname } from 'node:path';",
+     'const require = __xmppCreateRequire(import.meta.url);',
+     'const __filename = __xmppFileURLToPath(import.meta.url);',
+     'const __dirname = __xmppDirname(__filename);',
+   ].join('\n'),
+ },
  external: [],
  logLevel: 'warning',
   });

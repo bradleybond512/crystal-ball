@@ -517,22 +517,35 @@ import { TechTransferRiskPanel } from '@/components/TechTransferRiskPanel';
 import { GlobalMilitarySpendingPanel } from '@/components/GlobalMilitarySpendingPanel';
 import { ForeignFightersPanel } from '@/components/ForeignFightersPanel';
 import { EscalationLadderPanel } from '@/components/EscalationLadderPanel';
-// ResourceNationalismPanel dropped (syntax errors in source branch)
+import { ResourceNationalismPanel } from '@/components/ResourceNationalismPanel';
 import { CoerciveDiplomacyPanel } from '@/components/CoerciveDiplomacyPanel';
 import { TreatySurveillancePanel } from '@/components/TreatySurveillancePanel';
 import { SeabedWarfarePanel } from '@/components/SeabedWarfarePanel';
-// Dropped (Panel base class incompatibility: wrong import path or replaceChildren):
-// InternationalLawViolationsPanel, IntelligenceCooperationPanel, EnergyWeaponizationPanel,
-// PropagandaTrackingPanel, DigitalAutocracyPanel, ForeignInvestmentRiskPanel, GrayZoneConflictPanel,
-// StrategicDeceptionPanel, SpaceWeaponizationPanel, PsychologicalOperationsPanel, MercenaryEcosystemPanel,
-// ElectionInterferencePanel, MigrationCrisisPanel, OrganizedCrimePanel, HumanRightsAbusesPanel,
-// DemocraticBackslidingPanel, HybridWarfarePanel
-// Dropped (syntax errors in source): NuclearDeterrencePanel, TravelSafetyPanel, GlobalConflictPanel
+import { InternationalLawViolationsPanel } from '@/components/InternationalLawViolationsPanel';
+import { IntelligenceCooperationPanel } from '@/components/IntelligenceCooperationPanel';
+import { EnergyWeaponizationPanel } from '@/components/EnergyWeaponizationPanel';
+import { PropagandaTrackingPanel } from '@/components/PropagandaTrackingPanel';
+import { DigitalAutocracyPanel } from '@/components/DigitalAutocracyPanel';
+import { ForeignInvestmentRiskPanel } from '@/components/ForeignInvestmentRiskPanel';
+import { GrayZoneConflictPanel } from '@/components/GrayZoneConflictPanel';
+import { StrategicDeceptionPanel } from '@/components/StrategicDeceptionPanel';
+import { SpaceWeaponizationPanel } from '@/components/SpaceWeaponizationPanel';
+import { PsychologicalOperationsPanel } from '@/components/PsychologicalOperationsPanel';
+import { MercenaryEcosystemPanel } from '@/components/MercenaryEcosystemPanel';
+import { ElectionInterferencePanel } from '@/components/ElectionInterferencePanel';
+import { MigrationCrisisPanel } from '@/components/MigrationCrisisPanel';
+import { OrganizedCrimePanel } from '@/components/OrganizedCrimePanel';
+import { HumanRightsAbusesPanel } from '@/components/HumanRightsAbusesPanel';
+import { DemocraticBackslidingPanel } from '@/components/DemocraticBackslidingPanel';
+import { HybridWarfarePanel } from '@/components/HybridWarfarePanel';
+import { NuclearDeterrencePanel } from '@/components/NuclearDeterrencePanel';
+import { TravelSafetyPanel } from '@/components/TravelSafetyPanel';
+import { GlobalConflictPanel } from '@/components/GlobalConflictPanel';
 import { EconomicEspionagePanel } from '@/components/EconomicEspionagePanel';
 import { QuantumTechRacePanel } from '@/components/QuantumTechRacePanel';
 import { EnergyGeopoliticsPanel } from '@/components/EnergyGeopoliticsPanel';
-// SovereignDebtCrisisPanel dropped (eslint cognitive complexity in helpers)
-// PandemicPreparednessPanel dropped (eslint cognitive complexity in helpers)
+import { SovereignDebtCrisisPanel } from '@/components/SovereignDebtCrisisPanel';
+import { PandemicPreparednessPanel } from '@/components/PandemicPreparednessPanel';
 import { CriticalInfrastructureAttackPanel } from '@/components/CriticalInfrastructureAttackPanel';
 import { FinancialCrimesPanel } from '@/components/FinancialCrimesPanel';
 import { PrivateMilitaryPanel } from '@/components/PrivateMilitaryPanel';
@@ -1704,20 +1717,35 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['global-military-spending'] = new GlobalMilitarySpendingPanel();
  this.ctx.panels['foreign-fighters'] = new ForeignFightersPanel();
  this.ctx.panels['escalation-ladder'] = new EscalationLadderPanel();
- // resource-nationalism dropped (syntax errors in source branch)
+ this.ctx.panels['resource-nationalism'] = new ResourceNationalismPanel();
  this.ctx.panels['coercive-diplomacy'] = new CoerciveDiplomacyPanel();
  this.ctx.panels['treaty-surveillance'] = new TreatySurveillancePanel();
  this.ctx.panels['seabed-warfare'] = new SeabedWarfarePanel();
- // intl-law-violations, intelligence-cooperation, energy-weaponization, propaganda-tracking,
- // digital-autocracy, foreign-investment-risk, gray-zone-conflict, strategic-deception,
- // space-weaponization, psychological-operations, mercenary-ecosystem, election-interference,
- // migration-crisis, organized-crime, human-rights-abuses, democratic-backsliding, hybrid-warfare
- // — dropped (Panel base class incompatibility)
- // nuclear-deterrence, travel-safety, global-conflict — dropped (syntax errors)
+ this.ctx.panels['intl-law-violations'] = new InternationalLawViolationsPanel();
+ this.ctx.panels['intelligence-cooperation'] = new IntelligenceCooperationPanel();
+ this.ctx.panels['energy-weaponization'] = new EnergyWeaponizationPanel();
+ this.ctx.panels['propaganda-tracking'] = new PropagandaTrackingPanel();
+ this.ctx.panels['digital-autocracy'] = new DigitalAutocracyPanel();
+ this.ctx.panels['foreign-investment-risk'] = new ForeignInvestmentRiskPanel();
+ this.ctx.panels['gray-zone-conflict'] = new GrayZoneConflictPanel();
+ this.ctx.panels['strategic-deception'] = new StrategicDeceptionPanel();
+ this.ctx.panels['space-weaponization'] = new SpaceWeaponizationPanel();
+ this.ctx.panels['psychological-operations'] = new PsychologicalOperationsPanel();
+ this.ctx.panels['mercenary-ecosystem'] = new MercenaryEcosystemPanel();
+ this.ctx.panels['election-interference'] = new ElectionInterferencePanel();
+ this.ctx.panels['migration-crisis'] = new MigrationCrisisPanel();
+ this.ctx.panels['organized-crime'] = new OrganizedCrimePanel();
+ this.ctx.panels['human-rights-abuses'] = new HumanRightsAbusesPanel();
+ this.ctx.panels['democratic-backsliding'] = new DemocraticBackslidingPanel();
+ this.ctx.panels['hybrid-warfare'] = new HybridWarfarePanel();
+ this.ctx.panels['nuclear-deterrence'] = new NuclearDeterrencePanel();
+ this.ctx.panels['travel-safety'] = new TravelSafetyPanel();
+ this.ctx.panels['global-conflict'] = new GlobalConflictPanel();
  this.ctx.panels['economic-espionage'] = new EconomicEspionagePanel();
  this.ctx.panels['quantum-tech-race'] = new QuantumTechRacePanel();
  this.ctx.panels['energy-geopolitics'] = new EnergyGeopoliticsPanel();
- // sovereign-debt-crisis, pandemic-preparedness — dropped (eslint cognitive complexity)
+ this.ctx.panels['sovereign-debt-crisis'] = new SovereignDebtCrisisPanel();
+ this.ctx.panels['pandemic-preparedness'] = new PandemicPreparednessPanel();
  this.ctx.panels['critical-infra-attack'] = new CriticalInfrastructureAttackPanel();
  this.ctx.panels['financial-crimes'] = new FinancialCrimesPanel();
  this.ctx.panels['private-military'] = new PrivateMilitaryPanel();

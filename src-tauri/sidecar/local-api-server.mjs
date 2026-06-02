@@ -9992,34 +9992,28 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── ISW (Institute for the Study of War) daily situation reports ─────────
+  // RSS feed (understandingwar.org/feed) 301s to homepage as of 2026-06.
+  // Use the WordPress REST API instead — same data, no redirect.
   if (requestUrl.pathname === '/api/isw-reports') {
  const cached = getCached('isw-reports');
  if (cached) return json(cached);
  try {
  const r = await fetchWithTimeout(
- 'https://www.understandingwar.org/feed',
+ 'https://understandingwar.org/wp-json/wp/v2/posts?per_page=10&_fields=id,date,title,link,excerpt,categories',
  { headers: { 'User-Agent': 'CrystalBall/1.0 (conflict intelligence aggregation)' } },
  12000,
  );
- if (!r.ok) throw new Error(`ISW RSS ${r.status}`);
- const xml = await r.text();
- function parseRssField(block, tag) {
- const cdataMatch = block.match(new RegExp(String.raw`<${tag}><\!\[CDATA\[([\s\S]*?)\]\]><\/${tag}>`));
- if (cdataMatch) return cdataMatch[1].trim();
- const plainMatch = block.match(new RegExp(String.raw`<${tag}>([\s\S]*?)<\/${tag}>`));
- return plainMatch?.[1]?.trim() ?? null;
- }
- const items = [];
- for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
- const block = m[1];
- const title = parseRssField(block, 'title');
- const link = block.match(/<link>(.*?)<\/link>/)?.[1]?.trim() ?? null;
- const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1]?.trim() ?? null;
- const rawDesc = parseRssField(block, 'description');
- const description = rawDesc ? rawDesc.replace(RE_HTML_TAGS, '').trim().slice(0, 500) : null;
- const category = parseRssField(block, 'category');
- if (title) items.push({ title, link, pubDate, description, category });
- }
+ if (!r.ok) throw new Error(`ISW API ${r.status}`);
+ const posts = await r.json();
+ const items = Array.isArray(posts) ? posts.map(p => ({
+ title: p.title?.rendered ? p.title.rendered.replace(RE_HTML_TAGS, '').trim() : null,
+ link: p.link ?? null,
+ pubDate: p.date ?? null,
+ description: p.excerpt?.rendered
+ ? p.excerpt.rendered.replace(RE_HTML_TAGS, '').trim().slice(0, 500)
+ : null,
+ category: null,
+ })).filter(i => i.title) : [];
  setCached('isw-reports', items, 30 * 60 * 1000);
  return json(items);
  } catch (error) {

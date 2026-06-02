@@ -25,6 +25,14 @@ const SEVERITY_WEIGHT: Record<AlertSeverity, number> = {
  * Per-source severity multiplier. Lets us calibrate noisy sources without
  * changing their raw classification (e.g. dial down IDS chatter, boost OREF).
  * 1.0 = neutral.
+ *
+ * Tuning notes (2026-06-02):
+ *   air-quality 0.7→0.5: highest false-positive rate in burst detection;
+ *     NWS/EPA air quality fires constantly in many regions without escalation.
+ *   fire 0.8→0.9: satellite fire detections (FIRMS) are more reliable than
+ *     the old text-advisory approach; slight boost warranted.
+ *   RECENCY_HALFLIFE_MIN 20→30: 20m was too aggressive — a genuine event
+ *     that started 35m ago was at <30% score and couldn't contribute to bursts.
  */
 const SOURCE_MULT: Record<UnifiedAlert['source'], number> = {
   'breaking-news': 1,
@@ -39,7 +47,7 @@ const SOURCE_MULT: Record<UnifiedAlert['source'], number> = {
   'resource': 0.8,
   'local-ids': 0.5,
   'earthquake': 1,
-  'fire': 0.8,
+  'fire': 0.9,
   'cyclone': 1.1,
   'power-grid': 1.2,
   'comms-health': 1.1,
@@ -49,12 +57,12 @@ const SOURCE_MULT: Record<UnifiedAlert['source'], number> = {
   'maritime': 0.9,
   'travel-advisory': 0.8,
   'radiation': 1.3,
-  'air-quality': 0.7,
+  'air-quality': 0.5,
   'aviation-hazard': 0.9,
 };
 
 /** Half-life for recency decay, in minutes. After this many minutes, score halves. */
-const RECENCY_HALFLIFE_MIN = 20;
+const RECENCY_HALFLIFE_MIN = 30;
 
 /** Multiplier when alert is within PROXIMITY_KM of the user. */
 const PROXIMITY_MULT = 1.5;

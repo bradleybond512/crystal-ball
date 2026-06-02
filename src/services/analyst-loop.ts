@@ -79,9 +79,9 @@ export interface AnalystSnapshot {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const BASE_INTERVAL_MS = 5 * 60 * 1000;   // 5 minutes
-const HOT_ALERT_SCORE = 50;
+const HOT_ALERT_SCORE = 55;               // raised 50→55; tighter entry to burst pool
 const BURST_WINDOW_MS = 15 * 60 * 1000;    // 15 minutes
-const BURST_THRESHOLD = 6;                 // alerts in window to count as a burst
+const BURST_THRESHOLD = 10;                // raised 6→10; reduces false-positive hypotheses
 const STORAGE_KEY = 'crystalball-analyst-snapshot-v1';
 const EVENT_NAME = 'cb:analyst-hypotheses';
 const MAX_HYPOTHESES = 12;
@@ -178,6 +178,25 @@ function fromAnomalies(anomalies: Anomaly[]): Hypothesis[] {
   return out;
 }
 
+/**
+ * Deduplicate burst alerts by title prefix so that 20 NWS "Flood Warning"
+ * alerts for the same watershed don't each count as a separate burst signal.
+ * Groups whose prefix (first 30 chars, lowercased) collide keep only the
+ * highest-severity representative. Returns deduplicated list.
+ */
+function dedupeByTitlePrefix(alerts: UnifiedAlert[]): UnifiedAlert[] {
+  const SEVERITY_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+  const best = new Map<string, UnifiedAlert>();
+  for (const a of alerts) {
+    const key = a.title.toLowerCase().slice(0, 30);
+    const prev = best.get(key);
+    if (!prev || (SEVERITY_RANK[a.severity] ?? 0) > (SEVERITY_RANK[prev.severity] ?? 0)) {
+      best.set(key, a);
+    }
+  }
+  return [...best.values()];
+}
+
 /** Detect geographic bursts: many hot alerts in a short window sharing a panel. */
 function fromAlertBurst(alerts: UnifiedAlert[]): Hypothesis[] {
   const now = Date.now();
@@ -199,17 +218,36 @@ function fromAlertBurst(alerts: UnifiedAlert[]): Hypothesis[] {
   const out: Hypothesis[] = [];
   for (const [panelId, group] of byPanel) {
     if (group.length < BURST_THRESHOLD) continue;
-    const confidence = Math.min(0.9, 0.5 + group.length * 0.04);
-    const title = group[0]?.title ?? 'alerts';
+
+    // Deduplicate same-type alerts (e.g. 20 "Flood Warning" zones → 1 representative)
+    const unique = dedupeByTitlePrefix(group);
+    if (unique.length < BURST_THRESHOLD) continue;
+
+    // Severity-weighted confidence: a burst of critical/high alerts earns more
+    // confidence than the same count of low/info alerts.
+    const SWEIGHT: Record<string, number> = { critical: 4, high: 2.5, medium: 1.5, low: 0.5, info: 0.1 };
+    const severitySum = unique.reduce((s, a) => s + (SWEIGHT[a.severity] ?? 1), 0);
+    const rawConf = Math.min(0.85, 0.35 + severitySum / (unique.length * 4));
+
+    // Source quality floor: cap confidence if the burst is dominated by
+    // low-signal sources (e.g. air-quality or travel-advisory noise).
+    const SOURCE_CAP: Partial<Record<UnifiedAlert['source'], number>> = {
+      'air-quality': 0.6, 'travel-advisory': 0.65, 'local-ids': 0.55,
+    };
+    const dominantSource = unique[0]?.source;
+    const cap = (dominantSource && SOURCE_CAP[dominantSource]) ?? 0.85;
+    const confidence = Math.min(rawConf, cap);
+
+    const title = unique[0]?.title ?? 'alerts';
     out.push({
       id: genId(),
       kind: 'alert-burst',
       statement:
-        `Alert burst in ${panelId}: ${group.length} hot alerts within ${Math.round(BURST_WINDOW_MS / 60_000)}m, led by "${title.slice(0, 80)}".`,
+        `Alert burst in ${panelId}: ${unique.length} distinct hot alerts within ${Math.round(BURST_WINDOW_MS / 60_000)}m, led by "${title.slice(0, 80)}".`,
       confidence,
       risk: confidenceToRisk(confidence),
       timestamp: now,
-      evidence: group.slice(0, 8).map((a): HypothesisEvidence => ({
+      evidence: unique.slice(0, 8).map((a): HypothesisEvidence => ({
         source: 'unified-alerts',
         id: a.id,
         label: a.title.slice(0, 80),

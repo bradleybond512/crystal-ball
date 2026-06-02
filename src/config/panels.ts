@@ -365,7 +365,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'global-military-spending': { name: 'Global Military Spending', enabled: true, priority: 1 },
   'foreign-fighters': { name: 'Foreign Fighters Monitor', enabled: true, priority: 1 },
   'escalation-ladder': { name: 'Escalation Ladder', enabled: true, priority: 1 },
-  // resource-nationalism dropped (syntax errors in source branch)
+  'resource-nationalism': { name: 'Resource Nationalism', enabled: true, priority: 1 },
   'coercive-diplomacy': { name: 'Coercive Diplomacy', enabled: true, priority: 1 },
   'treaty-surveillance': { name: 'Treaty Surveillance', enabled: true, priority: 1 },
   'seabed-warfare': { name: 'Seabed Warfare', enabled: true, priority: 1 },
@@ -376,7 +376,9 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'digital-autocracy': { name: 'Digital Autocracy', enabled: true, priority: 1 },
   'foreign-investment-risk': { name: 'Foreign Investment Risk Monitor', enabled: true, priority: 1 },
   'gray-zone-conflict': { name: 'Gray Zone Conflict Tracker', enabled: true, priority: 1 },
-  // nuclear-deterrence, travel-safety, global-conflict dropped (syntax errors)
+  'nuclear-deterrence': { name: 'Nuclear Deterrence Monitor', enabled: true, priority: 1 },
+  'travel-safety': { name: 'Travel Safety Monitor', enabled: true, priority: 1 },
+  'global-conflict': { name: 'Global Conflicts', enabled: true, priority: 1 },
   'strategic-deception': { name: 'Strategic Deception Tracker', enabled: true, priority: 1 },
   'economic-espionage': { name: 'Economic Espionage Tracker', enabled: true, priority: 1 },
   'space-weaponization': { name: 'Space Weaponization Tracker', enabled: true, priority: 1 },
@@ -388,7 +390,8 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'organized-crime': { name: 'Organized Crime Networks', enabled: true, priority: 1 },
   'human-rights-abuses': { name: 'Human Rights Abuses', enabled: true, priority: 1 },
   'energy-geopolitics': { name: 'Energy Geopolitics', enabled: true, priority: 1 },
-  // sovereign-debt-crisis, pandemic-preparedness dropped (eslint cognitive complexity)
+  'sovereign-debt-crisis': { name: 'Sovereign Debt Crisis Monitor', enabled: true, priority: 1 },
+  'pandemic-preparedness': { name: 'Pandemic Preparedness', enabled: true, priority: 2 },
   'critical-infra-attack': { name: 'Critical Infrastructure Attacks', enabled: true, priority: 2 },
   'democratic-backsliding': { name: 'Democratic Backsliding', enabled: true, priority: 1 },
   'financial-crimes': { name: 'Financial Crimes', enabled: true, priority: 1 },

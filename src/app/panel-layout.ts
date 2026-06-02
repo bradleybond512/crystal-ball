@@ -492,6 +492,7 @@ import type { GeoHubActivity } from '@/services/geo-activity';
 import type { TechHubActivity } from '@/services/tech-activity';
 import { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
 import { RipeNccPanel } from '@/components/RipeNccPanel';
+import { S2UndergroundPanel } from '@/components/S2UndergroundPanel';
 import { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
 import { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
 // Consolidated intelligence panels from PRs 789–950
@@ -1877,6 +1878,7 @@ export class PanelLayoutManager implements AppModule {
  // in Settings" empty state.
  const s2uIntelPanel = new S2UIntelPanel();
  this.ctx.panels['s2u-intel'] = s2uIntelPanel;
+ this.ctx.panels['s2-underground-media'] = new S2UndergroundPanel();
 
  // SynthesisPanel — historical precedent matcher (TF-IDF + cosine)
  // and cross-domain leading-indicator engine (Granger F-test). Reads

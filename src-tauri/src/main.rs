@@ -39,7 +39,7 @@ const MENU_VIEW_MODE_ID: &str = "view.mode_status";
 #[cfg(feature = "devtools")]
 const MENU_HELP_DEVTOOLS_ID: &str = "help.devtools";
 const TRUSTED_WINDOWS: [&str; 3] = ["main", "settings", "live-channels"];
-const SUPPORTED_SECRET_KEYS: [&str; 68] = [
+const SUPPORTED_SECRET_KEYS: [&str; 73] = [
  "CRYSTALBALL_API_KEY",
  "ANTHROPIC_API_KEY",
  "GROQ_API_KEY",
@@ -108,6 +108,11 @@ const SUPPORTED_SECRET_KEYS: [&str; 68] = [
  "MISP_API_KEY",
  "OPENCTI_URL",
  "OPENCTI_API_KEY",
+ "PATREON_OAUTH_CLIENT_ID",
+ "PATREON_OAUTH_CLIENT_SECRET",
+ "PATREON_ACCESS_TOKEN",
+ "PATREON_REFRESH_TOKEN",
+ "PATREON_AUDIO_RSS_URL",
 ];
 
 // Rate-limit native notifications: no more than 1 per 30 seconds across all threads.

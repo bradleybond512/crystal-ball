@@ -74,7 +74,12 @@ export type RuntimeSecretKey =
   | 'MISP_URL'
   | 'MISP_API_KEY'
   | 'OPENCTI_URL'
-  | 'OPENCTI_API_KEY';
+  | 'OPENCTI_API_KEY'
+  | 'PATREON_OAUTH_CLIENT_ID'
+  | 'PATREON_OAUTH_CLIENT_SECRET'
+  | 'PATREON_ACCESS_TOKEN'
+  | 'PATREON_REFRESH_TOKEN'
+  | 'PATREON_AUDIO_RSS_URL';
 
 export type RuntimeFeatureId =
   | 'cloudApiFallbackAuth'
@@ -154,7 +159,8 @@ export type RuntimeFeatureId =
   | 'navigationMaptiler'
   | 'navigationRouting'
   | 's2uXmppFeed'
-  | 's2uTakFeeds';
+  | 's2uTakFeeds'
+  | 's2Patreon';
 
 export interface RuntimeFeatureDefinition {
   id: RuntimeFeatureId;
@@ -262,6 +268,7 @@ const defaultToggles: Record<RuntimeFeatureId, boolean> = {
   navigationRouting: true,
   s2uXmppFeed: true,
   s2uTakFeeds: true,
+  s2Patreon: true,
 };
 
 export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
@@ -303,6 +310,14 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
  requiredSecrets: ['FRED_API_KEY'],
  desktopRequiredSecrets: [],
  fallback: 'Economic panel remains available with non-FRED metrics.',
+  },
+  {
+ id: 's2Patreon',
+ name: 'S2 Underground Patreon supporter',
+ description: 'Connects your Patreon account to unlock supporter-only S2 Underground audio briefings.',
+ requiredSecrets: [],
+ desktopRequiredSecrets: ['PATREON_OAUTH_CLIENT_ID', 'PATREON_OAUTH_CLIENT_SECRET'],
+ fallback: 'S2 Underground panel shows public content only until a Patreon account is connected.',
   },
   {
  id: 'energyEia',

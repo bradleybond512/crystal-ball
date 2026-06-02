@@ -4610,20 +4610,36 @@ async function handleIntelGenerate(req, res, context) {
   // honor it; otherwise auto-probe the two common local backends — Ollama
   // (11434) first per the analyst layer's "prefers Ollama" default, then LM
   // Studio (1234). Both expose an OpenAI-compatible /v1/chat/completions.
-  const rawModel = process.env.OLLAMA_MODEL || 'local-model';
-  const localModel = /^[a-zA-Z0-9._:/-]{1,80}$/.test(rawModel) ? rawModel : 'local-model';
+  const rawModel = process.env.OLLAMA_MODEL || '';
+  const configuredModel = /^[a-zA-Z0-9._:/-]{1,80}$/.test(rawModel) ? rawModel : '';
   const localBases = process.env.OLLAMA_API_URL
     ? [process.env.OLLAMA_API_URL]
     : ['http://127.0.0.1:11434', 'http://127.0.0.1:1234'];
-  const localUrls = localBases
-    .map((base) => { try { return new URL('/v1/chat/completions', base).toString(); } catch { return null; } })
-    .filter(Boolean);
+
+  // Resolve a usable model id for a backend. Ollama rejects unknown names
+  // (e.g. the LM Studio placeholder), so when OLLAMA_MODEL is unset we ask the
+  // backend which models it actually has via the OpenAI-compatible /v1/models.
+  const resolveLocalModel = async (base) => {
+    if (configuredModel) return configuredModel;
+    try {
+      const r = await fetch(new URL('/v1/models', base).toString(), { signal: AbortSignal.timeout(5000) });
+      if (r.ok) {
+        const j = await r.json();
+        const id = Array.isArray(j?.data) && j.data[0] && typeof j.data[0].id === 'string' ? j.data[0].id : '';
+        if (id) return id;
+      }
+    } catch { /* fall through */ }
+    return 'local-model';
+  };
 
   let response, model;
-  for (const localUrl of localUrls) {
+  for (const base of localBases) {
+    let localUrl;
+    try { localUrl = new URL('/v1/chat/completions', base).toString(); } catch { continue; }
     try {
-      response = await callChatCompletion(localUrl, localModel, messages, maxTokens, temperature, null, 60_000);
-      model = localModel;
+      const m = await resolveLocalModel(base);
+      response = await callChatCompletion(localUrl, m, messages, maxTokens, temperature, null, 60_000);
+      model = m;
       break;
     } catch (localError) {
       context.logger.warn(`[intel-generate] local failed (${localUrl}):`, localError.message);

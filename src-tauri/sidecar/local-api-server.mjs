@@ -738,45 +738,98 @@ function isTransientVerificationError(error) {
   return /timed out|timeout|network|fetch failed|failed to fetch|socket hang up/i.test(error.message);
 }
 
-globalThis.fetch = async function ipv4Fetch(input, init) {
+// 3xx statuses that trigger a redirect when the response carries a Location.
+const IPV4_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const IPV4_MAX_REDIRECTS = 20;
+
+function deleteHeaderCI(headers, name) {
+  const lower = name.toLowerCase();
+  for (const k of Object.keys(headers)) {
+    if (k.toLowerCase() === lower) delete headers[k];
+  }
+}
+
+// IPv4-pinned fetch that ALSO follows 3xx redirects, re-resolving each hop to
+// IPv4. The previous implementation issued a single request and returned the
+// raw 3xx, so any upstream that began redirecting (e.g. OFAC's sdn.xml, which
+// now 302s to a presigned S3 URL) silently failed with "upstream HTTP 302".
+// Honors init.redirect ('follow' default, 'manual', 'error') per the fetch contract.
+export const ipv4Fetch = async function ipv4Fetch(input, init) {
   const isRequest = input && typeof input === 'object' && 'url' in input;
-  let url;
-  try { url = new URL(typeof input === 'string' ? input : input.url); } catch { return _originalFetch(input, init); }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return _originalFetch(input, init);
-  const mod = url.protocol === 'https:' ? https : http;
-  const method = init?.method || (isRequest ? input.method : 'GET');
-  const body = await resolveRequestBody(input, init, method, isRequest);
+  let startUrl;
+  try { startUrl = new URL(typeof input === 'string' ? input : input.url); } catch { return _originalFetch(input, init); }
+  if (startUrl.protocol !== 'https:' && startUrl.protocol !== 'http:') return _originalFetch(input, init);
+
+  let method = init?.method || (isRequest ? input.method : 'GET');
+  let body = await resolveRequestBody(input, init, method, isRequest);
   const headers = {};
   const rawHeaders = init?.headers || (isRequest ? input.headers : null);
   if (rawHeaders) {
- const h = rawHeaders instanceof Headers ? Object.fromEntries(rawHeaders.entries())
- : (Array.isArray(rawHeaders) ? Object.fromEntries(rawHeaders) : rawHeaders);
- Object.assign(headers, h);
+    const h = rawHeaders instanceof Headers ? Object.fromEntries(rawHeaders.entries())
+      : (Array.isArray(rawHeaders) ? Object.fromEntries(rawHeaders) : rawHeaders);
+    Object.assign(headers, h);
   }
-  return new Promise((resolve, reject) => {
- const req = mod.request({ hostname: url.hostname, port: url.port || (url.protocol === 'https:' ? 443 : 80), path: url.pathname + url.search, method, headers, family: 4, agent: mod === https ? httpsAgent : httpAgent }, (res) => {
- const chunks = [];
- res.on('data', (c) => chunks.push(c));
- res.on('end', () => {
- const buf = Buffer.concat(chunks);
- const responseHeaders = new Headers();
- for (const [k, v] of Object.entries(res.headers)) {
- if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(', ') : v);
- }
- try {
- resolve(buildSafeResponse(res.statusCode, res.statusMessage, responseHeaders, buf));
- } catch (error) {
- reject(error);
- }
- });
- });
- req.on('error', reject);
- if (init?.signal) { init.signal.addEventListener('abort', () => req.destroy()); }
- if (body != undefined) req.write(body);
- req.end();
-  });
-};
+  const redirectMode = init?.redirect || (isRequest ? input.redirect : null) || 'follow';
+  const signal = init?.signal || (isRequest && input.signal) || null;
 
+  const sendOnce = (target) => new Promise((resolve, reject) => {
+    const mod = target.protocol === 'https:' ? https : http;
+    const req = mod.request({
+      hostname: target.hostname,
+      port: target.port || (target.protocol === 'https:' ? 443 : 80),
+      path: target.pathname + target.search,
+      method, headers, family: 4,
+      agent: mod === https ? httpsAgent : httpAgent,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, headers: res.headers, buf: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    if (signal) { signal.addEventListener('abort', () => req.destroy(), { once: true }); }
+    if (body != undefined) req.write(body);
+    req.end();
+  });
+
+  let current = startUrl;
+  for (let hop = 0; ; hop++) {
+    const res = await sendOnce(current);
+    const location = res.headers.location;
+    const isRedirect = IPV4_REDIRECT_STATUSES.has(res.statusCode) && Boolean(location);
+
+    if (!isRedirect || redirectMode !== 'follow') {
+      if (isRedirect && redirectMode === 'error') {
+        throw new TypeError(`Redirect not followed (redirect: "error"): ${res.statusCode}`);
+      }
+      const responseHeaders = new Headers();
+      for (const [k, v] of Object.entries(res.headers)) {
+        if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(', ') : v);
+      }
+      return buildSafeResponse(res.statusCode, res.statusMessage, responseHeaders, res.buf);
+    }
+
+    if (hop >= IPV4_MAX_REDIRECTS) throw new TypeError('Too many redirects');
+
+    const next = new URL(location, current);
+    // Per the fetch spec: 303 (and 301/302 on a non-GET/HEAD method) downgrade
+    // to GET and drop the request body.
+    if (res.statusCode === 303 || ((res.statusCode === 301 || res.statusCode === 302) && method !== 'GET' && method !== 'HEAD')) {
+      method = 'GET';
+      body = null;
+      deleteHeaderCI(headers, 'content-length');
+      deleteHeaderCI(headers, 'content-type');
+    }
+    // Drop credentials + Host when the origin changes (browser behavior). The
+    // OFAC -> presigned-S3 hop is cross-origin and self-authenticates via query.
+    if (next.origin !== current.origin) {
+      deleteHeaderCI(headers, 'authorization');
+      deleteHeaderCI(headers, 'cookie');
+      deleteHeaderCI(headers, 'host');
+    }
+    current = next;
+  }
+};
+globalThis.fetch = ipv4Fetch;
 // Wrap fetch AFTER the ipv4Fetch patch so we instrument its entry point.
 // Skips loopback (sidecar-internal) calls since those would drown the real signal.
 const wmUpstreamFetch = globalThis.fetch;

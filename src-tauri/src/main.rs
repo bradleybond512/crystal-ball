@@ -576,6 +576,98 @@ fn get_local_api_token(webview: Webview, state: tauri::State<'_, LocalApiState>)
  .ok_or_else(|| "Token not generated".to_string())
 }
 
+/// Holds the retained NSProcessInfo activity token (as a pointer-sized int so the
+/// state is Send+Sync). None when no activity is held.
+struct AlwaysOnGuard(std::sync::Mutex<Option<usize>>);
+
+#[cfg(target_os = "macos")]
+fn begin_activity_macos() -> Option<usize> {
+    use std::ffi::c_void;
+    extern "C" {
+        fn objc_getClass(name: *const u8) -> *mut c_void;
+        fn sel_registerName(name: *const u8) -> *mut c_void;
+        fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
+    }
+    // NSActivityUserInitiated prevents App Nap; clear IdleSystemSleepDisabled so the
+    // Mac may still sleep normally (lid close). bit14=SuddenTermination, bit20=IdleSystemSleep.
+    const NS_SUDDEN_TERM_DISABLED: u64 = 1 << 14;
+    const NS_IDLE_SYSTEM_SLEEP_DISABLED: u64 = 1 << 20;
+    const NS_USER_INITIATED: u64 = 0x00FF_FFFF | NS_SUDDEN_TERM_DISABLED;
+    let options: u64 = NS_USER_INITIATED & !NS_IDLE_SYSTEM_SLEEP_DISABLED;
+    unsafe {
+        let pi_cls = objc_getClass(b"NSProcessInfo\0".as_ptr());
+        let str_cls = objc_getClass(b"NSString\0".as_ptr());
+        if pi_cls.is_null() || str_cls.is_null() {
+            return None;
+        }
+        let process_info = objc_msgSend(pi_cls, sel_registerName(b"processInfo\0".as_ptr()));
+        if process_info.is_null() {
+            return None;
+        }
+        let with_utf8 = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
+        let reason_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, *const u8) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const ());
+        let reason = reason_fn(str_cls, with_utf8, b"Crystal Ball 24/7 monitoring\0".as_ptr());
+        let begin_sel = sel_registerName(b"beginActivityWithOptions:reason:\0".as_ptr());
+        let begin_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, u64, *mut c_void) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const ());
+        let token = begin_fn(process_info, begin_sel, options, reason);
+        if token.is_null() {
+            return None;
+        }
+        // retain so it survives past this scope
+        objc_msgSend(token, sel_registerName(b"retain\0".as_ptr()));
+        Some(token as usize)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn end_activity_macos(token: usize) {
+    use std::ffi::c_void;
+    extern "C" {
+        fn objc_getClass(name: *const u8) -> *mut c_void;
+        fn sel_registerName(name: *const u8) -> *mut c_void;
+        fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
+    }
+    unsafe {
+        let pi_cls = objc_getClass(b"NSProcessInfo\0".as_ptr());
+        if pi_cls.is_null() {
+            return;
+        }
+        let process_info = objc_msgSend(pi_cls, sel_registerName(b"processInfo\0".as_ptr()));
+        let end_sel = sel_registerName(b"endActivity:\0".as_ptr());
+        let end_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const ());
+        end_fn(process_info, end_sel, token as *mut c_void);
+        objc_msgSend(token as *mut c_void, sel_registerName(b"release\0".as_ptr()));
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn begin_activity_macos() -> Option<usize> {
+    None
+}
+#[cfg(not(target_os = "macos"))]
+fn end_activity_macos(_token: usize) {}
+
+#[tauri::command]
+fn set_always_on(state: tauri::State<AlwaysOnGuard>, enabled: bool) -> bool {
+    let mut held = state.0.lock().unwrap();
+    if enabled && held.is_none() {
+        *held = begin_activity_macos();
+    } else if !enabled {
+        if let Some(token) = held.take() {
+            end_activity_macos(token);
+        }
+    }
+    held.is_some()
+}
+
+#[tauri::command]
+fn get_always_on(state: tauri::State<AlwaysOnGuard>) -> bool {
+    state.0.lock().unwrap().is_some()
+}
+
 #[tauri::command]
 fn get_desktop_runtime_info(webview: Webview, state: tauri::State<'_, LocalApiState>) -> Result<DesktopRuntimeInfo, String> {
  require_trusted_window(webview.label())?;
@@ -2800,12 +2892,15 @@ fn main() {
  // Keeps the macOS Keychain off the main thread so the UI window
  // can render immediately on launch.
  .manage(SecretsCache::empty())
+ .manage(AlwaysOnGuard(std::sync::Mutex::new(None)))
  .plugin(tauri_plugin_biometry::init())
  .plugin(tauri_plugin_clipboard_manager::init())
  .plugin(corelocation::init())
  .invoke_handler(tauri::generate_handler![
  list_supported_secret_keys,
  get_secret,
+ set_always_on,
+ get_always_on,
  set_secret,
  delete_secret,
  get_local_api_token,

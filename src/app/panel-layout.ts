@@ -404,6 +404,10 @@ import { GreatPowerCompetitionPanel } from '@/components/GreatPowerCompetitionPa
 import { UrbanInstabilityPanel } from '@/components/UrbanInstabilityPanel';
 import { CyberEspionagePanel } from '@/components/CyberEspionagePanel';
 import { CounterterrorismPanel } from '@/components/CounterterrorismPanel';
+import { ThreatInboxPanel } from '@/components/ThreatInboxPanel';
+import { FaaTfrsPanel } from '@/components/FaaTfrsPanel';
+import { InfrastructureSuperpowerPanel } from '@/components/InfrastructureSuperpowerPanel';
+import { DiseaseIntelPanel } from '@/components/DiseaseIntelPanel';
 import { PoliticalEconomyPanel } from '@/components/PoliticalEconomyPanel';
 import { RegulatoryArbitragePanel } from '@/components/RegulatoryArbitragePanel';
 import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
@@ -1638,6 +1642,10 @@ export class PanelLayoutManager implements AppModule {
     this.ctx.panels['urban-instability'] = new UrbanInstabilityPanel();
     this.ctx.panels['cyber-espionage'] = new CyberEspionagePanel();
     this.ctx.panels['counterterrorism'] = new CounterterrorismPanel();
+    this.ctx.panels['threat-inbox'] = new ThreatInboxPanel();
+    this.ctx.panels['faa-tfrs'] = new FaaTfrsPanel();
+    this.ctx.panels['infrastructure-superpower'] = new InfrastructureSuperpowerPanel();
+    this.ctx.panels['disease-intel'] = new DiseaseIntelPanel();
     this.ctx.panels['political-economy'] = new PoliticalEconomyPanel(); this.ctx.panels['state-capitalism'] = new StateCapitalismPanel();
     this.ctx.panels['political-violence'] = new PoliticalViolencePanel();
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();

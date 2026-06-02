@@ -22,6 +22,18 @@ import {
 
 const REFRESH_MS = 30 * 60 * 1000; // 30 minutes
 
+function ctTrendArrow(trend: RegionRisk['trend']): string {
+  if (trend === 'increasing') return '&#8593;';
+  if (trend === 'decreasing') return '&#8595;';
+  return '&#8594;';
+}
+
+function ctTrendColor(trend: RegionRisk['trend']): string {
+  if (trend === 'increasing') return '#f44336';
+  if (trend === 'decreasing') return '#4caf50';
+  return '#9e9e9e';
+}
+
 export class CounterterrorismPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -60,9 +72,8 @@ export class CounterterrorismPanel extends Panel {
       const highCount = data.regions.filter((r) => r.tier === 'high').length;
       this.setCount(criticalCount + highCount);
       this.setContent(this.buildHtml(data));
-    } catch (error) {
+    } catch {
       this.showError('Failed to load counterterrorism data');
-      void error;
     }
   }
 
@@ -133,8 +144,8 @@ export class CounterterrorismPanel extends Panel {
   private buildRegionTable(regions: RegionRisk[]): string {
     const rows = regions.map((r) => {
       const color = TIER_COLORS[r.tier];
-      const trendArrow = r.trend === 'increasing' ? '&#8593;' : (r.trend === 'decreasing' ? '&#8595;' : '&#8594;');
-      const trendColor = r.trend === 'increasing' ? '#f44336' : (r.trend === 'decreasing' ? '#4caf50' : '#9e9e9e');
+      const trendArrow = ctTrendArrow(r.trend);
+      const trendColor = ctTrendColor(r.trend);
       const ctPct = Math.round(r.ctSuccessRate * 100);
       return `<tr style="border-bottom:1px solid var(--border-subtle,#1a1a1a);">
         <td style="padding:5px 10px;font-size:12px;color:#e5e5e5;">${escapeHtmlSimple(r.region)}</td>

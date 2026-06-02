@@ -273,7 +273,7 @@ impl SecretsCache {
  // No vault entry yet — fall through to migration.
  }
  Err(()) => {
- log_keychain_timeout(app, "secrets-vault");
+ log_keychain_timeout(app, "secrets-vault", KEYCHAIN_VAULT_TIMEOUT);
  // Vault unreachable → still try migration; if every per-key
  // read also times out, we end up with an empty map and the
  // sidecar boots without secrets. Caller logs the count.
@@ -297,7 +297,7 @@ impl SecretsCache {
  }
  Ok(None) => { /* not present; skip silently */ }
  Err(()) => {
- log_keychain_timeout(app, key);
+ log_keychain_timeout(app, key, KEYCHAIN_PER_CALL_TIMEOUT);
  // continue — other keys may still respond
  }
  }
@@ -343,8 +343,8 @@ impl SecretsCache {
 /// Standalone helper so callers can log keychain timeouts without
 /// needing access to `SecretsCache` internals (the desktop-log
 /// helper requires an `AppHandle`, which tests don't have).
-fn log_keychain_timeout(app: Option<&AppHandle>, key: &str) {
- let secs = KEYCHAIN_PER_CALL_TIMEOUT.as_secs();
+fn log_keychain_timeout(app: Option<&AppHandle>, key: &str, timeout: Duration) {
+ let secs = timeout.as_secs();
  let msg = format!("Keychain entry '{key}' timed out after {secs}s — skipping");
  match app {
  Some(handle) => append_desktop_log(handle, "WARN", &msg),

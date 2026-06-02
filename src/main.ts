@@ -270,6 +270,9 @@ loadDesktopSecrets().then(async () => {
   trackApiKeysSnapshot();
 }).catch(() => {});
 
+// Honor the 24/7 always-on setting once the bridge is ready (no-op off-desktop).
+void import('@/services/always-on').then(({ applyAlwaysOn }) => applyAlwaysOn()).catch(() => {});
+
 // Apply stored theme preference before app initialization (safety net for inline script)
 applyStoredTheme();
 

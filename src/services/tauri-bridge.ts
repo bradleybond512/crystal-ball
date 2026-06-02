@@ -33,11 +33,20 @@ export async function invokeTauri<T>(
   return invoke<T>(command, payload);
 }
 
-// Commands that legitimately fail for the first few seconds of boot while the
-// Rust side spawns the sidecar and assigns its port/token. Callers poll these
-// and handle a null result, so logging each failure as an error is misleading
-// noise — a stalled sidecar is caught separately by the heartbeat watchdog.
+// During the first seconds of boot the renderer polls get_local_api_port /
+// get_local_api_token before the Rust side has spawned the sidecar and assigned
+// them. Those specific "not ready yet" failures are expected — callers poll and
+// handle the null result, and a genuinely stalled sidecar is caught by the
+// heartbeat watchdog. Match the message narrowly so a real failure of these
+// commands (anything other than the handshake-not-ready states) still logs.
 const TRANSIENT_BOOT_COMMANDS = new Set(['get_local_api_port', 'get_local_api_token']);
+const TRANSIENT_BOOT_REASONS = /not yet assigned|not generated|bridge unavailable/i;
+
+function isExpectedBootFailure(command: string, error: unknown): boolean {
+  if (!TRANSIENT_BOOT_COMMANDS.has(command)) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return TRANSIENT_BOOT_REASONS.test(message);
+}
 
 export async function tryInvokeTauri<T>(
   command: string,
@@ -46,9 +55,9 @@ export async function tryInvokeTauri<T>(
   try {
  return await invokeTauri<T>(command, payload);
   } catch (error) {
- if (!TRANSIENT_BOOT_COMMANDS.has(command)) {
- 	// eslint-disable-next-line no-console -- bridged to the desktop log
- 	console.warn(`[tauri-bridge] Command failed: ${command}`, error);
+ if (!isExpectedBootFailure(command, error)) {
+   // eslint-disable-next-line no-console -- bridged to the desktop log
+   console.warn(`[tauri-bridge] Command failed: ${command}`, error);
  }
  return null;
   }

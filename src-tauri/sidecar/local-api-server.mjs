@@ -791,8 +791,17 @@ export const ipv4Fetch = async function ipv4Fetch(input, init) {
     req.end();
   });
 
+  // SSRF policy: an internal/loopback origin may redirect freely, but a public
+  // origin must not be redirected to a private/internal target (cloud metadata,
+  // loopback, RFC-1918) — that escalation is the SSRF vector.
+  const startHost = startUrl.hostname.replace(/^\[|\]$/g, '');
+  const startIsInternal = startUrl.hostname === 'localhost' || isPrivateIP(startHost);
+
   let current = startUrl;
   for (let hop = 0; ; hop++) {
+    if (signal?.aborted) {
+      throw signal.reason ?? Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+    }
     const res = await sendOnce(current);
     const location = res.headers.location;
     const isRedirect = IPV4_REDIRECT_STATUSES.has(res.statusCode) && Boolean(location);
@@ -825,6 +834,15 @@ export const ipv4Fetch = async function ipv4Fetch(input, init) {
       deleteHeaderCI(headers, 'authorization');
       deleteHeaderCI(headers, 'cookie');
       deleteHeaderCI(headers, 'host');
+    }
+    // Block a public->private redirect escalation (DNS-rebinding aware via
+    // isSafeUrl). Skipped when the request started internal so loopback and
+    // sidecar-internal redirects still work. Only runs on an actual redirect.
+    if (!startIsInternal) {
+      const verdict = await isSafeUrl(next.href);
+      if (!verdict.safe) {
+        throw new TypeError(`Refusing unsafe redirect target: ${verdict.reason}`);
+      }
     }
     current = next;
   }

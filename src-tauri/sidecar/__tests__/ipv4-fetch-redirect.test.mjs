@@ -82,6 +82,26 @@ test('follows a relative Location and downgrades POST->GET on 303', async () => 
   }
 });
 
+test('rejects without sending a request when the signal is already aborted', async () => {
+  const ac = new AbortController();
+  ac.abort();
+  let hits = 0;
+  const srv = await startServer((req, res) => {
+    hits += 1;
+    res.writeHead(200);
+    res.end('x');
+  });
+  try {
+    await assert.rejects(
+      () => ipv4Fetch(`${addr(srv)}/`, { signal: ac.signal }),
+      (e) => e.name === 'AbortError' || /abort/i.test(e.message),
+    );
+    assert.equal(hits, 0, 'no request should be sent when pre-aborted');
+  } finally {
+    srv.close();
+  }
+});
+
 test('throws on a redirect loop exceeding the hop cap', async () => {
   const srv = await startServer((req, res) => {
     // Relative Location resolves against the current origin -> same server -> loops.

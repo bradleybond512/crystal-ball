@@ -1630,6 +1630,62 @@ export function computeSignalWatchSidecar(keyword, listing) {
   };
 }
 
+// ── S2 Underground media parsers (mirror src/services/s2-underground-media.ts) ──
+export function sidecarParseYoutubeChannelFeed(xml) {
+  if (typeof xml !== 'string' || !xml.includes('<entry')) return [];
+  const entries = xml.match(/<entry[\s\S]*?<\/entry>/g) || [];
+  return entries.map((e) => ({
+    videoId: ((e.match(/<yt:videoId>([\s\S]*?)<\/yt:videoId>/) || [])[1] || '').trim(),
+    title: ((e.match(/<title[^>]*>([\s\S]*?)<\/title>/) || [])[1] || '').trim(),
+    published: ((e.match(/<published>([\s\S]*?)<\/published>/) || [])[1] || '').trim(),
+    thumbnail: (e.match(/<media:thumbnail[^>]*url="([^"]+)"/) || [])[1] || '',
+  })).filter((v) => /^[A-Za-z0-9_-]{11}$/.test(v.videoId));
+}
+
+export function sidecarParsePatreonAudioRss(xml) {
+  if (typeof xml !== 'string' || !xml.includes('<item')) return [];
+  const items = xml.match(/<item[\s\S]*?<\/item>/g) || [];
+  const out = [];
+  for (const it of items) {
+    const audioUrl =
+      (it.match(/<enclosure[^>]*url="([^"]+)"[^>]*type="audio\/[^"]*"/) || [])[1]
+      || (it.match(/<enclosure[^>]*type="audio\/[^"]*"[^>]*url="([^"]+)"/) || [])[1];
+    if (!audioUrl) continue;
+    const title = (((it.match(/<title[^>]*>([\s\S]*?)<\/title>/) || [])[1]) || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+    const published = (((it.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1]) || '').trim();
+    const durRaw = ((((it.match(/<itunes:duration>([\s\S]*?)<\/itunes:duration>/) || [])[1]) || '0')).trim();
+    const durationSec = /^\d+$/.test(durRaw) ? Number(durRaw) : 0;
+    out.push({ title, published, durationSec, audioUrl });
+  }
+  return out;
+}
+
+export const patreonStateStore = (() => {
+  const live = new Map();
+  return {
+    issue() {
+      const s = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/-/g, '');
+      live.set(s, Date.now() + 10 * 60 * 1000);
+      return s;
+    },
+    consume(s) {
+      const exp = live.get(s);
+      live.delete(s);
+      return typeof exp === 'number' && exp > Date.now();
+    },
+  };
+})();
+
+async function patreonTokenExchange(params) {
+  const res = await fetch('https://www.patreon.com/api/oauth2/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(params).toString(),
+  });
+  if (!res.ok) throw new Error(`token HTTP ${res.status}`);
+  return res.json();
+}
+
 // ── Macro-stress helpers (mirror src/services/economic/macro-stress.ts) ────
 function vixGaugeForSidecar(value) {
   if (value === null || !Number.isFinite(value)) return null;
@@ -4652,6 +4708,49 @@ async function dispatch(requestUrl, req, routes, context) {
  return new Response(html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'permissions-policy': 'autoplay=*, encrypted-media=*', ...makeCorsHeaders(req) } });
   }
 
+  // ── S2 Underground / Patreon OAuth (pre-auth) ──────────────────────────
+  // authorize-url builds the Patreon consent URL server-side (client_id lives
+  // only in the sidecar env) and issues a single-use CSRF state. The callback is
+  // hit by the browser redirect and cannot carry a LOCAL_API_TOKEN, so both sit
+  // before the auth gate.
+  if (requestUrl.pathname === '/api/patreon/authorize-url') {
+    const clientId = process.env.PATREON_OAUTH_CLIENT_ID || '';
+    if (!clientId) return json({ configured: false }, 200, makeCorsHeaders(req));
+    const state = patreonStateStore.issue();
+    const redirect = `http://127.0.0.1:${context.port}/oauth/patreon/callback`;
+    const url = 'https://www.patreon.com/oauth2/authorize?response_type=code'
+      + `&client_id=${encodeURIComponent(clientId)}`
+      + `&redirect_uri=${encodeURIComponent(redirect)}`
+      + `&scope=${encodeURIComponent('identity identity[memberships]')}`
+      + `&state=${encodeURIComponent(state)}`;
+    return json({ url, configured: true }, 200, makeCorsHeaders(req));
+  }
+  if (requestUrl.pathname === '/oauth/patreon/callback') {
+    const code = requestUrl.searchParams.get('code') || '';
+    const state = requestUrl.searchParams.get('state') || '';
+    const ok = code && patreonStateStore.consume(state);
+    const page = (msg, payload) => new Response(
+      `<!doctype html><meta charset=utf-8><body style="font:14px system-ui;background:#111;color:#eee;padding:24px">${msg}` +
+      `<script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)},'*')}catch(e){}setTimeout(function(){window.close()},1500)</script>`,
+      { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+    if (!ok) return page('Patreon connect failed (bad state).', { type: 'patreon-oauth', ok: false });
+    try {
+      const tok = await patreonTokenExchange({
+        code,
+        grant_type: 'authorization_code',
+        client_id: process.env.PATREON_OAUTH_CLIENT_ID || '',
+        client_secret: process.env.PATREON_OAUTH_CLIENT_SECRET || '',
+        redirect_uri: `http://127.0.0.1:${context.port}/oauth/patreon/callback`,
+      });
+      return page('Patreon connected. You can close this window.', {
+        type: 'patreon-oauth', ok: true,
+        access_token: tok.access_token, refresh_token: tok.refresh_token,
+      });
+    } catch (error) {
+      return page('Patreon connect failed.', { type: 'patreon-oauth', ok: false, error: String(error?.message || error) });
+    }
+  }
+
   // ── SMS command interface (pre-auth) ───────────────────────────────────
   // These routes are intentionally placed before the auth gate so SMS
   // gateway webhooks (Twilio, etc.) can POST without a LOCAL_API_TOKEN.
@@ -4716,6 +4815,72 @@ async function dispatch(requestUrl, req, routes, context) {
  context.logger.warn(`[local-api] unauthorized request to ${requestUrl.pathname}`);
  return json({ error: 'Unauthorized' }, 401);
  }
+  }
+
+  // ── S2 Underground media + Patreon (authed) ────────────────────────────
+  if (requestUrl.pathname === '/api/youtube/channel-feed') {
+    const channelId = requestUrl.searchParams.get('channelId') || '';
+    if (!/^UC[A-Za-z0-9_-]{20,}$/.test(channelId)) {
+      return json({ error: 'Invalid channelId' }, 400, makeCorsHeaders(req));
+    }
+    try {
+      const up = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
+        headers: { 'User-Agent': 'CrystalBall/1.0' },
+      });
+      if (!up.ok) throw new Error(`HTTP ${up.status}`);
+      const items = sidecarParseYoutubeChannelFeed(await up.text());
+      recordFeedSuccess('s2-youtube');
+      return json({ items }, 200, makeCorsHeaders(req));
+    } catch (error) {
+      recordFeedFailure('s2-youtube', error);
+      return json({ error: String(error?.message || error) }, 502, makeCorsHeaders(req));
+    }
+  }
+
+  if (requestUrl.pathname === '/api/patreon/audio-rss') {
+    const rssUrl = process.env.PATREON_AUDIO_RSS_URL || '';
+    if (!rssUrl) return json({ episodes: [], configured: false }, 200, makeCorsHeaders(req));
+    try {
+      const up = await fetch(rssUrl, { headers: { 'User-Agent': 'CrystalBall/1.0' } });
+      if (!up.ok) throw new Error(`HTTP ${up.status}`);
+      const episodes = sidecarParsePatreonAudioRss(await up.text());
+      recordFeedSuccess('s2-patreon-audio');
+      return json({ episodes, configured: true }, 200, makeCorsHeaders(req));
+    } catch (error) {
+      recordFeedFailure('s2-patreon-audio', error);
+      return json({ error: String(error?.message || error), configured: true }, 502, makeCorsHeaders(req));
+    }
+  }
+
+  if (requestUrl.pathname === '/api/patreon/verify') {
+    const token = requestUrl.searchParams.get('accessToken') || process.env.PATREON_ACCESS_TOKEN || '';
+    const campaignId = requestUrl.searchParams.get('campaignId') || '';
+    if (!token) return json({ active: false, configured: false }, 200, makeCorsHeaders(req));
+    try {
+      const url = 'https://www.patreon.com/api/oauth2/v2/identity?include=memberships'
+        + '&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents';
+      const up = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (up.status === 401) return json({ active: false, expired: true }, 200, makeCorsHeaders(req));
+      if (!up.ok) throw new Error(`HTTP ${up.status}`);
+      return json({ identity: await up.json(), campaignId, configured: true }, 200, makeCorsHeaders(req));
+    } catch (error) {
+      return json({ error: String(error?.message || error) }, 502, makeCorsHeaders(req));
+    }
+  }
+
+  if (requestUrl.pathname === '/api/patreon/refresh') {
+    const refresh = requestUrl.searchParams.get('refreshToken') || process.env.PATREON_REFRESH_TOKEN || '';
+    if (!refresh) return json({ error: 'no refresh token' }, 400, makeCorsHeaders(req));
+    try {
+      const tok = await patreonTokenExchange({
+        grant_type: 'refresh_token', refresh_token: refresh,
+        client_id: process.env.PATREON_OAUTH_CLIENT_ID || '',
+        client_secret: process.env.PATREON_OAUTH_CLIENT_SECRET || '',
+      });
+      return json({ access_token: tok.access_token, refresh_token: tok.refresh_token }, 200, makeCorsHeaders(req));
+    } catch (error) {
+      return json({ error: String(error?.message || error) }, 502, makeCorsHeaders(req));
+    }
   }
 
   // ── Analyst commands (MCP → sidecar → renderer queue) ──

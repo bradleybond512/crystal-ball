@@ -125,6 +125,11 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   MISP_API_KEY: 'misp',
   OPENCTI_URL: 'opencti_url',
   OPENCTI_API_KEY: 'opencti',
+  PATREON_OAUTH_CLIENT_ID: 'patreon_client_id',
+  PATREON_OAUTH_CLIENT_SECRET: 'patreon_client_secret',
+  PATREON_ACCESS_TOKEN: 'patreon_access',
+  PATREON_REFRESH_TOKEN: 'patreon_refresh',
+  PATREON_AUDIO_RSS_URL: 'patreon_audio_rss',
 };
 
 // ── Typed event schemas (allowlisted properties per event) ──

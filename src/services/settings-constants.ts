@@ -59,6 +59,8 @@ export const SIGNUP_URLS: Partial<Record<RuntimeSecretKey, string>> = {
   S2U_TAK_URL: 'https://s2underground.com/',
   S2U_TAK_USERNAME: 'https://s2underground.com/',
   S2U_TAK_SECRET: 'https://s2underground.com/',
+  PATREON_OAUTH_CLIENT_ID: 'https://www.patreon.com/portal/registration/register-clients',
+  PATREON_OAUTH_CLIENT_SECRET: 'https://www.patreon.com/portal/registration/register-clients',
 };
 
 export const PLAINTEXT_KEYS = new Set<RuntimeSecretKey>([
@@ -72,6 +74,7 @@ export const PLAINTEXT_KEYS = new Set<RuntimeSecretKey>([
   'S2U_TAK_URL',
   'S2U_TAK_USERNAME',
   'S2U_TLS_INSECURE_OPT_IN',
+  'PATREON_AUDIO_RSS_URL',
 ]);
 
 /**
@@ -193,6 +196,11 @@ export const HUMAN_LABELS: Record<RuntimeSecretKey, string> = {
   MISP_API_KEY: 'MISP API Key',
   OPENCTI_URL: 'OpenCTI Instance URL',
   OPENCTI_API_KEY: 'OpenCTI API Key',
+  PATREON_OAUTH_CLIENT_ID: 'Patreon OAuth Client ID',
+  PATREON_OAUTH_CLIENT_SECRET: 'Patreon OAuth Client Secret',
+  PATREON_ACCESS_TOKEN: 'Patreon Access Token (managed)',
+  PATREON_REFRESH_TOKEN: 'Patreon Refresh Token (managed)',
+  PATREON_AUDIO_RSS_URL: 'Patreon Audio RSS URL',
 };
 
 /**
@@ -275,6 +283,12 @@ export const KEY_DESCRIPTIONS: Record<RuntimeSecretKey, string> = {
   MISP_API_KEY: 'MISP API key paired with MISP_URL. Used to query events and indicators.',
   OPENCTI_URL: 'OpenCTI instance base URL — your self-hosted threat-intel platform endpoint.',
   OPENCTI_API_KEY: 'OpenCTI API key paired with OPENCTI_URL. Used for GraphQL queries over STIX 2.1 objects.',
+  // ── S2 Underground Patreon ─────────────────────────────────────────────
+  PATREON_OAUTH_CLIENT_ID: 'Patreon OAuth client ID — registers Crystal Ball as a Patreon app so you can connect your supporter account.',
+  PATREON_OAUTH_CLIENT_SECRET: 'Patreon OAuth client secret paired with PATREON_OAUTH_CLIENT_ID. Used during the connect exchange.',
+  PATREON_ACCESS_TOKEN: 'Short-lived Patreon access token. Saved automatically after you connect your Patreon account.',
+  PATREON_REFRESH_TOKEN: 'Patreon refresh token used to renew the access token. Saved automatically when you connect Patreon.',
+  PATREON_AUDIO_RSS_URL: 'Your personal Patreon audio RSS URL for supporter-only S2 Underground briefings.',
 };
 
 export interface KeyCategory {
@@ -293,7 +307,7 @@ export const KEY_CATEGORIES: readonly KeyCategory[] = [
   { id: 'aviation', label: 'Aviation & Maritime',    tier: 6, keys: ['WINGBITS_API_KEY', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'AISSTREAM_API_KEY', 'AVIATIONSTACK_API', 'ICAO_API_KEY'] },
   { id: 'geo',      label: 'Geo & Maps',             tier: 7, keys: ['GOOGLE_MAPS_API_KEY', 'MAPBOX_API_KEY', 'MAPTILER_API_KEY', 'GEONAMES_USERNAME', 'IPINFO_TOKEN', 'CESIUM_ION_TOKEN'] },
   { id: 'weather',  label: 'Weather & NASA',         tier: 8, keys: ['OWM_API_KEY', 'NASA_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY', 'PURPLEAIR_API_KEY'] },
-  { id: 'tactical', label: 'Tactical (TAK / S2U)',   tier: 9, keys: ['S2U_XMPP_JID', 'S2U_XMPP_SECRET', 'S2U_TAK_URL', 'S2U_TAK_USERNAME', 'S2U_TAK_SECRET', 'S2U_TLS_INSECURE_OPT_IN'] },
+  { id: 'tactical', label: 'Tactical (TAK / S2U)',   tier: 9, keys: ['S2U_XMPP_JID', 'S2U_XMPP_SECRET', 'S2U_TAK_URL', 'S2U_TAK_USERNAME', 'S2U_TAK_SECRET', 'S2U_TLS_INSECURE_OPT_IN', 'PATREON_OAUTH_CLIENT_ID', 'PATREON_OAUTH_CLIENT_SECRET', 'PATREON_AUDIO_RSS_URL'] },
 ];
 
 const KEY_TO_CATEGORY = new Map<RuntimeSecretKey, KeyCategory>();

@@ -4626,7 +4626,8 @@ async function handleIntelGenerate(req, res, context) {
       if (r.ok) {
         const j = await r.json();
         const id = Array.isArray(j?.data) && j.data[0] && typeof j.data[0].id === 'string' ? j.data[0].id : '';
-        if (id) return id;
+        // Apply the same sanitizer as OLLAMA_MODEL before trusting a backend-supplied id.
+        if (id && /^[a-zA-Z0-9._:/-]{1,80}$/.test(id)) return id;
       }
     } catch { /* fall through */ }
     return 'local-model';

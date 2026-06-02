@@ -114,6 +114,19 @@ const AisWebSocket = WebSocket;
 // when anything happened or which stream produced it.
 const SIDECAR_TRACE = process.env.WM_TRACE === '1';
 const SIDECAR_BUILD_TAG = process.env.WM_BUILD_TAG || `node-${process.versions.node}`;
+
+// Token races at startup and after the sidecar rotates its token (e.g. a rebuild
+// relaunch) produce expected unauthorized bursts: the long-lived renderer sends
+// one request with a stale/absent token, gets 401, then retries with a fresh
+// token. The 401 response is the enforcement; logging every racing request at
+// WARN floods the log and buries real signals. Log each pathname once so a
+// genuinely new unauthorized path still surfaces, then suppress repeats.
+const _seenUnauthPaths = new Set();
+function warnUnauthorizedOnce(context, pathname) {
+  if (_seenUnauthPaths.has(pathname)) return;
+  _seenUnauthPaths.add(pathname);
+  context.logger.warn(`[local-api] unauthorized request to ${pathname} (token race at startup/rotation; repeats for this path suppressed)`);
+}
 const SIDECAR_START_MS = Date.now();
 const wmHostStats = new Map(); // host → { ok, fail, lastStatus, lastOkAt, lastFailAt, lastError }
 const WM_HOST_STATS_CAP = 100;
@@ -4923,7 +4936,7 @@ async function dispatch(requestUrl, req, routes, context) {
   {
  const authHeader = req.headers.authorization || '';
  if (!isValidToken(authHeader)) {
- context.logger.warn(`[local-api] unauthorized request to ${requestUrl.pathname}`);
+ warnUnauthorizedOnce(context, requestUrl.pathname);
  return json({ error: 'Unauthorized' }, 401);
  }
   }
@@ -15461,7 +15474,7 @@ export async function createLocalApiServer(options = {}) {
  {
  const authHeader = req.headers['authorization'] || '';
  if (!isValidToken(authHeader)) {
- context.logger.warn(`[local-api] unauthorized request to ${requestUrl.pathname}`);
+ warnUnauthorizedOnce(context, requestUrl.pathname);
  res.writeHead(401, { 'content-type': 'application/json' });
  res.end(JSON.stringify({ error: 'Unauthorized' }));
  return;

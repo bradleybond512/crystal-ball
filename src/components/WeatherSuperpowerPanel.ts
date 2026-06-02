@@ -15,7 +15,6 @@
 
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
-import { getApiBaseUrl } from '@/services/runtime';
 import {
   NWSAlertsBridge,
   NHCHurricaneBridge,
@@ -24,7 +23,6 @@ import {
 import {
   compositeNowRisk,
   defaultWeatherSuperState,
-  parseApiResponse,
   renderAtmospheric,
   renderExtremeIndex,
   renderFloodMonitor,
@@ -67,11 +65,8 @@ export {
   severityFromWindChill,
 } from '@/services/weather/weather-superpower-helpers';
 
-const REFRESH_MS = 5 * 60_000;
-
 export class WeatherSuperpowerPanel extends Panel {
   private state: WeatherSuperState = defaultWeatherSuperState();
-  private loading = false;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -84,8 +79,6 @@ export class WeatherSuperpowerPanel extends Panel {
         'Deep weather intelligence: severe storm tracker, flash-flood monitor, extreme heat/cold index, atmospheric hazards (smoke / ash / dust), 7-day composite risk outlook. 5-min refresh.',
     });
     this.render();
-    queueMicrotask(() => { void this.load(); });
-    this.refreshTimer = setInterval(() => { void this.load(); }, REFRESH_MS);
   }
 
   public override destroy(): void {
@@ -104,26 +97,6 @@ export class WeatherSuperpowerPanel extends Panel {
 
   public getState(): WeatherSuperState {
     return this.state;
-  }
-
-  private async load(): Promise<void> {
-    if (this.loading) return;
-    this.loading = true;
-    try {
-      const base = getApiBaseUrl();
-      const res = await fetch(`${base}/api/weather-super`, { signal: this.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const raw = await res.json() as Record<string, unknown>;
-      this.state = parseApiResponse(raw);
-      this.updateCount();
-      this.render();
-    } catch (error) {
-      if (!this.isAbortError(error)) {
-        this.setDataBadge('unavailable', 'Fetch error');
-      }
-    } finally {
-      this.loading = false;
-    }
   }
 
   private updateCount(): void {

@@ -772,15 +772,24 @@ export const ipv4Fetch = async function ipv4Fetch(input, init) {
   const redirectMode = init?.redirect || (isRequest ? input.redirect : null) || 'follow';
   const signal = init?.signal || (isRequest && input.signal) || null;
 
-  const sendOnce = (target) => new Promise((resolve, reject) => {
-    const mod = target.protocol === 'https:' ? https : http;
-    const req = mod.request({
-      hostname: target.hostname,
-      port: target.port || (target.protocol === 'https:' ? 443 : 80),
+  const sendOnce = (target, pinnedIp = null) => new Promise((resolve, reject) => {
+    const isHttps = target.protocol === 'https:';
+    const mod = isHttps ? https : http;
+    // When a redirect target was validated by isSafeUrl, connect to the exact
+    // IP it resolved (closing the DNS-rebinding TOCTOU) while preserving SNI +
+    // Host so TLS and virtual-hosting still target the real hostname.
+    const reqHeaders = pinnedIp ? { ...headers, host: target.host } : headers;
+    const options = {
+      hostname: pinnedIp || target.hostname,
+      port: target.port || (isHttps ? 443 : 80),
       path: target.pathname + target.search,
-      method, headers, family: 4,
-      agent: mod === https ? httpsAgent : httpAgent,
-    }, (res) => {
+      method,
+      headers: reqHeaders,
+      family: pinnedIp ? (pinnedIp.includes(':') ? 6 : 4) : 4,
+      agent: isHttps ? httpsAgent : httpAgent,
+    };
+    if (pinnedIp && isHttps) options.servername = target.hostname;
+    const req = mod.request(options, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, headers: res.headers, buf: Buffer.concat(chunks) }));
@@ -798,11 +807,12 @@ export const ipv4Fetch = async function ipv4Fetch(input, init) {
   const startIsInternal = startUrl.hostname === 'localhost' || isPrivateIP(startHost);
 
   let current = startUrl;
+  let pinnedIp = null;
   for (let hop = 0; ; hop++) {
     if (signal?.aborted) {
       throw signal.reason ?? Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
     }
-    const res = await sendOnce(current);
+    const res = await sendOnce(current, pinnedIp);
     const location = res.headers.location;
     const isRedirect = IPV4_REDIRECT_STATUSES.has(res.statusCode) && Boolean(location);
 
@@ -838,11 +848,17 @@ export const ipv4Fetch = async function ipv4Fetch(input, init) {
     // Block a public->private redirect escalation (DNS-rebinding aware via
     // isSafeUrl). Skipped when the request started internal so loopback and
     // sidecar-internal redirects still work. Only runs on an actual redirect.
-    if (!startIsInternal) {
+    if (startIsInternal) {
+      pinnedIp = null;
+    } else {
       const verdict = await isSafeUrl(next.href);
       if (!verdict.safe) {
         throw new TypeError(`Refusing unsafe redirect target: ${verdict.reason}`);
       }
+      // Pin the validated IP for the next hop (prefer IPv4 to keep the
+      // IPv4-forcing contract). All returned addresses already passed isPrivateIP.
+      const addrs = verdict.resolvedAddresses ?? [];
+      pinnedIp = addrs.find((a) => !a.includes(':')) ?? addrs[0] ?? null;
     }
     current = next;
   }

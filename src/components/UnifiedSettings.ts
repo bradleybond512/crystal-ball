@@ -3,6 +3,7 @@ import { PANEL_CATEGORY_MAP } from '@/config/panels';
 import { SITE_VARIANT } from '@/config/variant';
 import { LANGUAGES, changeLanguage, getCurrentLanguage, t } from '@/services/i18n';
 import { getAiFlowSettings, setAiFlowSetting, getStreamQuality, setStreamQuality, STREAM_QUALITY_OPTIONS } from '@/services/ai-flow-settings';
+import { isAlwaysOn, setAlwaysOn } from '@/services/always-on';
 import type { StreamQuality } from '@/services/ai-flow-settings';
 import { escapeHtml } from '@/utils/sanitize';
 import { trackLanguageChange } from '@/services/analytics';
@@ -400,6 +401,8 @@ export class UnifiedSettings {
  this.updateAiStatus();
  } else if (target.id === 'us-map-flash') {
  setAiFlowSetting('mapNewsFlash', target.checked);
+ } else if (target.id === 'us-always-on') {
+ void setAlwaysOn(target.checked);
  } else if (target.id === 'us-verbose-log') {
  void this._toggleVerboseLog(target.checked);
  } else if (target.id === 'us-fetch-debug') {
@@ -612,6 +615,10 @@ export class UnifiedSettings {
  // Map section
  html += `<div class="ai-flow-section-label">${t('components.insights.sectionMap')}</div>`;
  html += this.toggleRowHtml('us-map-flash', t('components.insights.mapFlashLabel'), t('components.insights.mapFlashDesc'), settings.mapNewsFlash);
+
+ // 24/7 operation section
+ html += `<div class="ai-flow-section-label">24/7 Operation</div>`;
+ html += this.toggleRowHtml('us-always-on', '24/7 background operation', 'Keep the algorithms running at full speed when the window is hidden (macOS; uses more battery).', isAlwaysOn());
 
  // AI Analysis section (web-only)
  if (!this.config.isDesktopApp) {

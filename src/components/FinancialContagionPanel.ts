@@ -17,7 +17,32 @@ export class FinancialContagionPanel extends Panel {
 
   /** Call after panel is mounted to begin data fetch. */
   public init(): void {
- void this.load();
+ void this.loadWithRetry();
+  }
+
+  /**
+   * Retry load with exponential backoff. The sidecar port is assigned
+   * asynchronously after app boot — queueMicrotask() fires before it's
+   * ready, so the first attempt always fails. Retrying at 2s / 6s / 14s
+   * catches the sidecar once it's listening without blocking the UI.
+   */
+  private async loadWithRetry(): Promise<void> {
+ const DELAYS = [2000, 4000, 8000];
+ for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
+ try {
+ this.model = await getContagionModel();
+ this.render();
+ return;
+ } catch (error) {
+ const delay = DELAYS[attempt];
+ if (delay === undefined) {
+ console.error('[FinancialContagionPanel] load error:', error);
+ this.showError('Contagion data unavailable');
+ return;
+ }
+ await new Promise(resolve => setTimeout(resolve, delay));
+ }
+ }
   }
 
   async load(): Promise<void> {

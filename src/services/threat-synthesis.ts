@@ -116,14 +116,31 @@ function confidenceToSeverity(confidence: number): HazardSignal['severity'] {
 
 // ── Region Grouping ──────────────────────────────────────────────────────────
 
-/** Group situations into region buckets by country overlap */
+/**
+ * Group situations into region buckets by country overlap.
+ *
+ * When a situation carries ISO country codes, those are the bucket key so
+ * mergeOverlappingRegions can join buckets that share a code.
+ *
+ * When geo.countries is empty (happens for many NWS / air-quality / local
+ * situations that come in without ISO codes), fall back to a 5° spatial
+ * grid key (≈ 550 km cells). This lets nearby situations without ISO codes
+ * land in the same bucket and form cross-domain clusters — previously they
+ * each got their own unique geo.label key and could never cluster together.
+ */
 function groupByRegion(situations: Situation[]): Map<string, Situation[]> {
   const regionMap = new Map<string, Situation[]>();
   for (const sit of situations) {
  if (sit.phase === 'resolved') continue;
- const key = sit.geo.countries.length > 0
- ? [...sit.geo.countries].sort((a, b) => a.localeCompare(b)).join(',')
- : sit.geo.label ?? 'global';
+ let key: string;
+ if (sit.geo.countries.length > 0) {
+ key = [...sit.geo.countries].sort((a, b) => a.localeCompare(b)).join(',');
+ } else {
+ // Snap to 5° grid so nearby country-codeless situations share a bucket
+ const gridLat = Math.round(sit.geo.lat / 5) * 5;
+ const gridLon = Math.round(sit.geo.lon / 5) * 5;
+ key = `grid:${gridLat},${gridLon}`;
+ }
  const bucket = regionMap.get(key);
  if (bucket) {
  bucket.push(sit);

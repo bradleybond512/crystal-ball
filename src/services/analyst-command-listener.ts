@@ -169,7 +169,9 @@ async function poll(): Promise<void> {
   if (!isDesktopRuntime()) return;
   const t0 = performance.now();
   try {
-    const res = await fetch(`${ENDPOINT}?since=${lastSeenAt}`);
+    const res = await fetch(`${ENDPOINT}?since=${lastSeenAt}`, {
+      signal: AbortSignal.timeout(7000),
+    });
     if (!res.ok) {
       recordLatency('cmd-poll', performance.now() - t0);
       incrementCounter('cmd-poll.non-ok');

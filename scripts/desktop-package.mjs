@@ -230,9 +230,33 @@ if (targetOs === 'macos') {
   const dmgPath = path.join(dmgDir, `${variantProductName}_${bundleVersion}_${archSuffix}.dmg`);
   ensureModernMacLaunchServicesPlist(appPath, !sign);
 
-  try {
+  // A stable local signing identity (a self-signed code-signing cert the
+  // developer creates once) keeps the app's designated requirement constant
+  // across rebuilds. macOS keys keychain ACLs and Location Services (TCC) grants
+  // off that requirement, so signing every local build with the same identity
+  // means "Always Allow" / location are granted ONCE and persist — instead of
+  // re-prompting after every rebuild like an ad-hoc signature does (each ad-hoc
+  // build gets a new cdhash, which resets both). Applied to ALL local builds
+  // (not just when tauri's signature fails verification) so the identity is
+  // never silently skipped.
+  const stableIdentity = (process.env.CRYSTALBALL_SIGN_IDENTITY || '').trim();
+  if (stableIdentity && !sign) {
+ const entitlementsPath = path.join('src-tauri', 'Entitlements.plist');
+ const hasEntitlements = existsSync(entitlementsPath);
+ console.log(`[desktop-package] Re-signing macOS app bundle with stable identity "${stableIdentity}" (CRYSTALBALL_SIGN_IDENTITY) — keychain/location grants persist across rebuilds`);
+ run('codesign', [
+ '--force',
+ '--deep',
+ '--sign',
+ stableIdentity,
+ ...(hasEntitlements ? ['--entitlements', entitlementsPath] : []),
+ appPath,
+ ]);
  verifyMacCodeSignature(appPath, 'App bundle');
-  } catch (error) {
+  } else {
+ try {
+ verifyMacCodeSignature(appPath, 'App bundle');
+ } catch (error) {
  if (sign) {
  console.error(`[desktop-package] Signed app bundle failed verification: ${error.message}`);
  process.exit(1);
@@ -254,6 +278,7 @@ if (targetOs === 'macos') {
  appPath,
  ]);
  verifyMacCodeSignature(appPath, 'App bundle');
+ }
   }
 
   if (appOnly) {

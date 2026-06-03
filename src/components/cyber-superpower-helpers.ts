@@ -169,13 +169,13 @@ export function buildInfrastructureExposure(
       title: event.title,
       severity: event.severity,
       timestamp: event.timestamp,
-      entityIds: [...event.entityIds],
+      entityIds: [...(event.entityIds ?? [])],
     }));
 
   const targetCount = new Map<string, number>();
   for (const { event, kind } of matched) {
     if (kind !== 'target-hit') continue;
-    for (const ent of event.entityIds) {
+    for (const ent of (event.entityIds ?? [])) {
       targetCount.set(ent, (targetCount.get(ent) ?? 0) + 1);
     }
   }
@@ -208,7 +208,7 @@ function looksLikeCve(ev: ObservationEvent): boolean {
   const tagsLc = ev.tags.map((t) => t.toLowerCase());
   if (tagsLc.some((t) => ZERO_DAY_TAG_HINTS.has(t))) return true;
   if (tagsLc.some((t) => KEV_TAG_HINTS.has(t))) return true;
-  if (ev.entityIds.some((x) => CVE_ID_PATTERN.test(x))) return true;
+  if (((ev.entityIds ?? [])).some((x) => CVE_ID_PATTERN.test(x))) return true;
   return CVE_ID_PATTERN.test(ev.title);
 }
 
@@ -225,7 +225,7 @@ export function buildZeroDayWatch(
     )
     .slice(0, limit)
     .map((e): ZeroDayEntry => {
-      const fromEntity = e.entityIds.find((x) => CVE_ID_PATTERN.test(x));
+      const fromEntity = ((e.entityIds ?? [])).find((x) => CVE_ID_PATTERN.test(x));
       const titleMatch = CVE_ID_PATTERN.exec(e.title);
       const cveMatch = fromEntity ?? titleMatch?.[0];
       const tagsLc = e.tags.map((t) => t.toLowerCase());
@@ -285,7 +285,7 @@ export function buildAttributionSignals(
   const eventsByEntity = new Map<string, ObservationEvent[]>();
   for (const ev of events) {
     if (ev.domain !== 'cyber') continue;
-    for (const ent of ev.entityIds) {
+    for (const ent of (ev.entityIds ?? [])) {
       const key = ent.toLowerCase();
       const arr = eventsByEntity.get(key);
       if (arr) arr.push(ev);

@@ -127,13 +127,13 @@ function gridCell(obs: ObservationEvent): string {
 /** Group key: shared entityId is the primary grouping signal. When no
  *  entityId is present, fall back to `domain@grid`. */
 function groupKey(obs: ObservationEvent): string {
-  if (obs.entityIds.length > 0) return `ent:${obs.entityIds[0]}`;
+  if ((obs.entityIds ?? []).length > 0) return `ent:${obs.entityIds[0]}`;
   return `dom:${obs.domain}@${gridCell(obs)}`;
 }
 
 function regionFor(group: readonly ObservationEvent[]): string {
   for (const o of group) {
-    if (o.entityIds.length > 0) return o.entityIds[0]!;
+    if ((o.entityIds ?? []).length > 0) return o.entityIds[0]!;
     if (o.location) return `${o.location.lat.toFixed(1)},${o.location.lon.toFixed(1)}`;
   }
   return 'global';
@@ -141,7 +141,7 @@ function regionFor(group: readonly ObservationEvent[]): string {
 
 function entityIdFor(group: readonly ObservationEvent[]): string {
   for (const o of group) {
-    if (o.entityIds.length > 0) return o.entityIds[0]!;
+    if ((o.entityIds ?? []).length > 0) return o.entityIds[0]!;
   }
   return '';
 }

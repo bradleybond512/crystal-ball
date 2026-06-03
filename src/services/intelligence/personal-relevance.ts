@@ -70,7 +70,7 @@ function watchlistScore(
 ): { score: number; matchedWatchlist: string[] } {
   const matched: string[] = [];
   const title = event.title.toLowerCase();
-  const entitySet = new Set(event.entityIds.map((e) => e.toLowerCase()));
+  const entitySet = new Set((event.entityIds ?? []).map((e) => e.toLowerCase()));
   for (const term of watchlist) {
     const trimmed = term.trim();
     if (trimmed.length === 0) continue;

@@ -53,7 +53,7 @@ const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 const Z_SCORE_THRESHOLD = 2.5;
 const BURST_MULTIPLIER = 10;
 const SILENCE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours without update = silence
-const MIN_OBSERVATIONS = 5; // need at least this many for meaningful stats
+const MIN_OBSERVATIONS = 3; // lowered 5→3: reduces cold-start gap from ~25min to ~15min
 const REVERSAL_Z_THRESHOLD = 1.5; // Lower threshold for reversals — inherently notable
 const COMPOUND_WINDOW_MS = 30 * 60 * 1000; // 30 minutes — temporal convergence window
 const MIN_COMPOUND_DOMAINS = 2; // need anomalies from at least 2 different domains

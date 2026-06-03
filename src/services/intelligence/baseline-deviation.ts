@@ -86,6 +86,15 @@ export interface BaselineStoreOptions {
   maxAgeMs?: number;
   /** Minimum samples needed before z-scores are computed. Default 12. */
   minSamplesForZ?: number;
+  /**
+   * Warmup mode: when `true`, the store computes z-scores with as few as 3
+   * samples but applies a confidence penalty that scales linearly from 0 at
+   * 3 samples to the full value at `minSamplesForZ`. This prevents the
+   * "0 anomalies forever" cold-start problem on fresh launches — the first
+   * few hours of data are usable for coarse anomaly detection even before a
+   * full baseline window has accumulated. Default `false`.
+   */
+  warmupMode?: boolean;
 }
 
 export interface BaselineStore {
@@ -106,7 +115,10 @@ export interface BaselineStore {
   loadJson: (state: Readonly<Record<MetricKey, readonly BaselineSample[]>>) => void;
 }
 
+const WARMUP_MIN_SAMPLES = 3;
+
 const DEFAULTS = {
+  warmupMode: false,
   maxSamplesPerMetric: 168,
   maxAgeMs: 90 * 24 * 60 * 60 * 1000,
   minSamplesForZ: 12,
@@ -148,7 +160,8 @@ export function createBaselineStore(options: BaselineStoreOptions = {}): Baselin
 
   function deviation(metric: MetricKey, value: number): DeviationResult {
     const samples = data.get(metric) ?? [];
-    if (samples.length < opts.minSamplesForZ) {
+    const effectiveMin = opts.warmupMode ? WARMUP_MIN_SAMPLES : opts.minSamplesForZ;
+    if (samples.length < effectiveMin) {
       return {
         metric,
         value,
@@ -162,7 +175,14 @@ export function createBaselineStore(options: BaselineStoreOptions = {}): Baselin
     const stats = computeStats(samples);
     const z = stats.stdDev > 0 ? (value - stats.mean) / stats.stdDev : 0;
     const percentile = computePercentile(samples, value);
-    const confidence = computeConfidence(samples.length, stats.stdDev, opts.minSamplesForZ);
+    // In warmup mode, scale confidence linearly from 0 at WARMUP_MIN_SAMPLES
+    // to the normal value at minSamplesForZ so early deviations are usable
+    // but clearly discounted.
+    let confidence = computeConfidence(samples.length, stats.stdDev, opts.minSamplesForZ);
+    if (opts.warmupMode && samples.length < opts.minSamplesForZ) {
+      const warmupScale = (samples.length - WARMUP_MIN_SAMPLES) / Math.max(1, opts.minSamplesForZ - WARMUP_MIN_SAMPLES);
+      confidence = confidence * warmupScale * 0.5; // cap at 50% during warmup
+    }
     const label = labelFor(z);
     const summary = buildSummary(z, stats, samples.length);
     return { metric, value, zScore: round3(z), percentile: round3(percentile), confidence: round3(confidence), label, summary };

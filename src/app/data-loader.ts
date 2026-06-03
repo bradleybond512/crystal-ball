@@ -156,6 +156,8 @@ import { fetchHazmatIncidents } from '@/services/hazmat-incidents';
 import { classifyNewsItem } from '@/services/positive-classifier';
 import { fetchGivingSummary } from '@/services/giving';
 import { fetchNWSAlerts } from '@/services/nws-alerts';
+import { routeWeatherAlert } from '@/services/weather/weather-warning-router';
+import type { NwsAlertMinimal } from '@/services/weather/weather-threat-types';
 import { fetchFAACameras, scoreCamerasAgainstAlerts, getDisasterProximateCameras } from '@/services/faa-cameras';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
 import { fetchAdsbSnapshot } from '@/services/adsb';
@@ -2228,6 +2230,36 @@ export class DataLoaderManager implements AppModule {
  : stormContext.winterWeatherOutlooks;
  (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update(alerts);
  unifiedAlertStore.ingest(alerts.map(normalizeNWSAlert));
+
+ // Route alerts through Personal Storm Mode — find the highest-priority
+ // decision across all alerts × saved places and broadcast it so the
+ // PersonalStormMode component can show/hide the storm banner.
+ // NWSAlert doesn't carry polygon data so matches fall back to UGC zones.
+ try {
+ const { getSavedPlaces } = await import('@/services/saved-places');
+ const places = getSavedPlaces();
+ if (places.length > 0) {
+ // Adapt saved-places.SavedPlace to weather-threat-types.SavedPlace
+ const weatherPlaces = places.map(p => ({ id: p.id, label: p.name, lat: p.lat, lon: p.lon }));
+ let bestDecision = undefined;
+ for (const raw of alerts) {
+ const minimal: NwsAlertMinimal = {
+ id: raw.id,
+ event: raw.event,
+ sent: raw.onset ?? raw.expires,
+ expires: raw.expires,
+ severity: (raw.severity?.toLowerCase() ?? 'unknown') as NwsAlertMinimal['severity'],
+ };
+ const decision = routeWeatherAlert(minimal, weatherPlaces);
+ if (decision.payload?.activation !== 'inactive' && (!bestDecision ||
+ (decision.urgency?.priority ?? 0) > (bestDecision.urgency?.priority ?? 0))) {
+ bestDecision = decision;
+ }
+ }
+ document.dispatchEvent(new CustomEvent('cb:storm-decision', { detail: bestDecision }));
+ }
+ } catch { /* saved-places unavailable — non-fatal */ }
+
  updateStormPreparednessContext({
  nwsAlerts: alerts,
  spcSummary,

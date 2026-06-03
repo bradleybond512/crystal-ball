@@ -31,6 +31,10 @@ const DISPLAY_NAMES: Record<FullSetCommodity, string> = {
   'gasoline':    'Gasoline',
   'natural-gas': 'Natural Gas',
   'jet-fuel':    'Jet Fuel',
+  'fertilizer':  'Fertilizer',
+  'crude':       'Crude Oil',
+  'propane':     'Propane',
+  'electricity': 'Electricity',
 };
 
 const TREND_ARROW: Record<Trend, OverviewRow['trendArrow']> = {

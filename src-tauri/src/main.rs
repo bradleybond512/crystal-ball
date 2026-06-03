@@ -270,7 +270,11 @@ impl SecretsCache {
  }
  }
  Ok(None) => {
- // No vault entry yet — fall through to migration.
+     // No vault entry. If migration was already attempted, there is nothing to
+     // migrate — skip the 73-key scan to avoid one macOS ACL prompt per key.
+     if app.is_some_and(|a| migration_done(a)) {
+         return HashMap::new();
+     }
  }
  Err(()) => {
  log_keychain_timeout(app, "secrets-vault", KEYCHAIN_VAULT_TIMEOUT);
@@ -285,6 +289,7 @@ impl SecretsCache {
  // halt the whole loop.
  let mut secrets = HashMap::new();
  let mut migration_attempted = false;
+ let mut migration_had_timeout = false;
  for key in SUPPORTED_SECRET_KEYS.iter() {
  migration_attempted = true;
  match read_keychain_entry_with_timeout(
@@ -298,31 +303,47 @@ impl SecretsCache {
  Ok(None) => { /* not present; skip silently */ }
  Err(()) => {
  log_keychain_timeout(app, key, KEYCHAIN_PER_CALL_TIMEOUT);
+ migration_had_timeout = true;
  // continue — other keys may still respond
  }
  }
  }
- // (`migration_attempted` is true once we've entered the loop.
- // Keeping the flag for symmetry with the prior write-vault gate
- // below: we only persist the consolidated vault if at least one
- // per-key read produced something.)
  let _ = migration_attempted;
 
  // Write consolidated vault and clean up individual entries —
  // only if we actually loaded something. Vault writes are also
  // best-effort: if Keychain refuses, the next launch will retry.
- if !secrets.is_empty() {
+ let mut vault_written = false;
+ // Don't write a partial vault if any per-key reads timed out: the timed-out
+ // keys would become unreachable once a vault entry exists (the next launch
+ // returns the vault directly and never re-runs migration). Wait for a clean
+ // scan before committing.
+ if !secrets.is_empty() && !migration_had_timeout {
  if let Ok(json) = serde_json::to_string(&secrets) {
  if let Ok(vault_entry) = Entry::new(KEYRING_SERVICE, "secrets-vault") {
  if vault_entry.set_password(&json).is_ok() {
- for key in SUPPORTED_SECRET_KEYS.iter() {
- if let Ok(entry) = Entry::new(KEYRING_SERVICE, key) {
+ vault_written = true;
+ // Only delete keys we successfully read — not the full set.
+ // Non-timeout errors collapse to Ok(None) so those entries
+ // stay untouched and can be retried next launch.
+ for key in secrets.keys() {
+ if let Ok(entry) = Entry::new(KEYRING_SERVICE, key.as_str()) {
  let _ = entry.delete_credential();
  }
  }
  }
  }
  }
+ }
+
+ // Mark migration done ONLY when the scan was clean (no per-key timeouts)
+ // AND either (a) nothing was found — nothing to migrate, or (b) secrets
+ // were found AND the consolidated vault write succeeded. If the vault
+ // write failed, leave the marker unset so the next launch retries.
+ let migration_complete = !migration_had_timeout
+ && (secrets.is_empty() || vault_written);
+ if migration_complete {
+ if let Some(app) = app { mark_migration_done(app); }
  }
 
  secrets
@@ -759,6 +780,25 @@ fn delete_secret(webview: Webview, key: String, cache: tauri::State<'_, SecretsC
  save_vault(&proposed)?;
  *secrets = proposed;
  Ok(())
+}
+
+/// Sentinel that marks "migration from individual keys has been attempted".
+/// Prevents 73 per-key keychain lookups (and their ACL prompts) on every
+/// launch once migration has run at least once. Only gates the migration
+/// loop — the main secrets-vault read still runs unconditionally.
+fn migration_marker_path(app: &AppHandle) -> Option<PathBuf> {
+    cache_file_path(app).ok().map(|p| p.with_file_name("secrets-migration-done"))
+}
+
+fn migration_done(app: &AppHandle) -> bool {
+    migration_marker_path(app).is_some_and(|p| p.exists())
+}
+
+fn mark_migration_done(app: &AppHandle) {
+    if let Some(path) = migration_marker_path(app) {
+        if let Some(parent) = path.parent() { let _ = std::fs::create_dir_all(parent); }
+        let _ = std::fs::write(path, b"1");
+    }
 }
 
 fn cache_file_path(app: &AppHandle) -> Result<PathBuf, String> {

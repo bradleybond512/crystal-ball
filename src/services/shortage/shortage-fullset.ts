@@ -16,6 +16,12 @@ import { computeDieselShortageRisk } from './diesel-shortage-risk';
 import { computeGasolineShortageRisk } from './gasoline-shortage-risk';
 import { computeNaturalGasShortageRisk } from './natural-gas-shortage-risk';
 import { computeJetFuelShortageRisk } from './jet-fuel-shortage-risk';
+import {
+  computeFertilizerShortageRisk,
+  computeCrudeShortageRisk,
+  computePropaneShortageRisk,
+  computeElectricityShortageRisk,
+} from './energy-fertilizer-models';
 import type { ShortageForecast, ShortageInputBag } from './shortage-types';
 
 // ── Public types ───────────────────────────────────────────────────────────
@@ -28,7 +34,11 @@ export type FullSetCommodity =
   | 'diesel'
   | 'gasoline'
   | 'natural-gas'
-  | 'jet-fuel';
+  | 'jet-fuel'
+  | 'fertilizer'
+  | 'crude'
+  | 'propane'
+  | 'electricity';
 
 export type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
 export type Trend = 'improving' | 'stable' | 'deteriorating';
@@ -42,6 +52,10 @@ export const ALL_FULLSET_COMMODITIES: readonly FullSetCommodity[] = [
   'gasoline',
   'natural-gas',
   'jet-fuel',
+  'fertilizer',
+  'crude',
+  'propane',
+  'electricity',
 ];
 
 export interface ShortageSummaryEntry {
@@ -119,6 +133,14 @@ function runCommodity(
     case 'natural-gas': { return computeNaturalGasShortageRisk(inputs, opts);
     }
     case 'jet-fuel': {    return computeJetFuelShortageRisk(inputs, opts);
+    }
+    case 'fertilizer': {  return computeFertilizerShortageRisk(inputs, opts);
+    }
+    case 'crude': {       return computeCrudeShortageRisk(inputs, opts);
+    }
+    case 'propane': {     return computePropaneShortageRisk(inputs, opts);
+    }
+    case 'electricity': { return computeElectricityShortageRisk(inputs, opts);
     }
   }
 }

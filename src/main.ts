@@ -270,6 +270,9 @@ loadDesktopSecrets().then(async () => {
   trackApiKeysSnapshot();
 }).catch(() => {});
 
+// Honor the 24/7 always-on setting once the bridge is ready (no-op off-desktop).
+void import('@/services/always-on').then(({ applyAlwaysOn }) => applyAlwaysOn()).catch(() => {});
+
 // Apply stored theme preference before app initialization (safety net for inline script)
 applyStoredTheme();
 
@@ -395,4 +398,25 @@ if (!('__TAURI_INTERNALS__' in window) && !('__TAURI__' in window)) {
   }).catch((error: unknown) => {
  console.warn('[PWA] Service worker registration failed', error);
   });
+} else if (!sessionStorage.getItem('cb:sw-purged')) {
+  // Desktop (Tauri): the frontend is served from the embedded app bundle, so a
+  // service worker only risks serving a STALE precache from an older build —
+  // which makes a freshly-installed build still render the previous UI until a
+  // manual "Reset cache". Reinstalling can't clear it (WKWebView's data store
+  // persists by bundle id), so actively unregister any lingering SW + purge its
+  // caches once, then reload to pick up the current bundle.
+  void (async () => {
+ try {
+ const regs = (await navigator.serviceWorker?.getRegistrations?.()) ?? [];
+ sessionStorage.setItem('cb:sw-purged', '1');
+ if (regs.length === 0) return;
+ await Promise.all(regs.map((r) => r.unregister()));
+ if ('caches' in window) {
+ const keys = await caches.keys();
+ await Promise.all(keys.map((k) => caches.delete(k)));
+ }
+ console.warn('[PWA] Removed stale desktop service worker; reloading');
+ location.reload();
+ } catch { /* non-fatal */ }
+  })();
 }

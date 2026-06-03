@@ -114,6 +114,32 @@ const AisWebSocket = WebSocket;
 // when anything happened or which stream produced it.
 const SIDECAR_TRACE = process.env.WM_TRACE === '1';
 const SIDECAR_BUILD_TAG = process.env.WM_BUILD_TAG || `node-${process.versions.node}`;
+
+// Token races at startup and after the sidecar rotates its token (e.g. a rebuild
+// relaunch) produce expected unauthorized bursts: the long-lived renderer sends
+// one request with a stale/absent token, gets 401, then retries with a fresh
+// token. The 401 response is the enforcement; logging every racing request at
+// WARN floods the log and buries real signals.
+//
+// Throttle on a fixed time window (not per-pathname): the pathname is
+// client-controlled, so keying suppression on it would let an unauthenticated
+// caller grow unbounded state and bypass the throttle with unique paths. A
+// single global window keeps bounded state and collapses bursts; the
+// suppressed-count preserves visibility into volume.
+const UNAUTH_WARN_WINDOW_MS = 60_000;
+let _lastUnauthWarnAt = 0;
+let _suppressedUnauthCount = 0;
+function warnUnauthorizedOnce(context, pathname) {
+  const now = Date.now();
+  if (now - _lastUnauthWarnAt < UNAUTH_WARN_WINDOW_MS) {
+    _suppressedUnauthCount++;
+    return;
+  }
+  const extra = _suppressedUnauthCount > 0 ? ` (+${_suppressedUnauthCount} more suppressed in last window)` : '';
+  _suppressedUnauthCount = 0;
+  _lastUnauthWarnAt = now;
+  context.logger.warn(`[local-api] unauthorized request to ${pathname} (token race at startup/rotation)${extra}`);
+}
 const SIDECAR_START_MS = Date.now();
 const wmHostStats = new Map(); // host → { ok, fail, lastStatus, lastOkAt, lastFailAt, lastError }
 const WM_HOST_STATS_CAP = 100;
@@ -738,45 +764,132 @@ function isTransientVerificationError(error) {
   return /timed out|timeout|network|fetch failed|failed to fetch|socket hang up/i.test(error.message);
 }
 
-globalThis.fetch = async function ipv4Fetch(input, init) {
+// 3xx statuses that trigger a redirect when the response carries a Location.
+const IPV4_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const IPV4_MAX_REDIRECTS = 20;
+
+function deleteHeaderCI(headers, name) {
+  const lower = name.toLowerCase();
+  for (const k of Object.keys(headers)) {
+    if (k.toLowerCase() === lower) delete headers[k];
+  }
+}
+
+// IPv4-pinned fetch that ALSO follows 3xx redirects, re-resolving each hop to
+// IPv4. The previous implementation issued a single request and returned the
+// raw 3xx, so any upstream that began redirecting (e.g. OFAC's sdn.xml, which
+// now 302s to a presigned S3 URL) silently failed with "upstream HTTP 302".
+// Honors init.redirect ('follow' default, 'manual', 'error') per the fetch contract.
+export const ipv4Fetch = async function ipv4Fetch(input, init) {
   const isRequest = input && typeof input === 'object' && 'url' in input;
-  let url;
-  try { url = new URL(typeof input === 'string' ? input : input.url); } catch { return _originalFetch(input, init); }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return _originalFetch(input, init);
-  const mod = url.protocol === 'https:' ? https : http;
-  const method = init?.method || (isRequest ? input.method : 'GET');
-  const body = await resolveRequestBody(input, init, method, isRequest);
+  let startUrl;
+  try { startUrl = new URL(typeof input === 'string' ? input : input.url); } catch { return _originalFetch(input, init); }
+  if (startUrl.protocol !== 'https:' && startUrl.protocol !== 'http:') return _originalFetch(input, init);
+
+  let method = init?.method || (isRequest ? input.method : 'GET');
+  let body = await resolveRequestBody(input, init, method, isRequest);
   const headers = {};
   const rawHeaders = init?.headers || (isRequest ? input.headers : null);
   if (rawHeaders) {
- const h = rawHeaders instanceof Headers ? Object.fromEntries(rawHeaders.entries())
- : (Array.isArray(rawHeaders) ? Object.fromEntries(rawHeaders) : rawHeaders);
- Object.assign(headers, h);
+    const h = rawHeaders instanceof Headers ? Object.fromEntries(rawHeaders.entries())
+      : (Array.isArray(rawHeaders) ? Object.fromEntries(rawHeaders) : rawHeaders);
+    Object.assign(headers, h);
   }
-  return new Promise((resolve, reject) => {
- const req = mod.request({ hostname: url.hostname, port: url.port || (url.protocol === 'https:' ? 443 : 80), path: url.pathname + url.search, method, headers, family: 4, agent: mod === https ? httpsAgent : httpAgent }, (res) => {
- const chunks = [];
- res.on('data', (c) => chunks.push(c));
- res.on('end', () => {
- const buf = Buffer.concat(chunks);
- const responseHeaders = new Headers();
- for (const [k, v] of Object.entries(res.headers)) {
- if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(', ') : v);
- }
- try {
- resolve(buildSafeResponse(res.statusCode, res.statusMessage, responseHeaders, buf));
- } catch (error) {
- reject(error);
- }
- });
- });
- req.on('error', reject);
- if (init?.signal) { init.signal.addEventListener('abort', () => req.destroy()); }
- if (body != undefined) req.write(body);
- req.end();
-  });
-};
+  const redirectMode = init?.redirect || (isRequest ? input.redirect : null) || 'follow';
+  const signal = init?.signal || (isRequest && input.signal) || null;
 
+  const sendOnce = (target, pinnedIp = null) => new Promise((resolve, reject) => {
+    const isHttps = target.protocol === 'https:';
+    const mod = isHttps ? https : http;
+    // When a redirect target was validated by isSafeUrl, connect to the exact
+    // IP it resolved (closing the DNS-rebinding TOCTOU) while preserving SNI +
+    // Host so TLS and virtual-hosting still target the real hostname.
+    const reqHeaders = pinnedIp ? { ...headers, host: target.host } : headers;
+    const options = {
+      hostname: pinnedIp || target.hostname,
+      port: target.port || (isHttps ? 443 : 80),
+      path: target.pathname + target.search,
+      method,
+      headers: reqHeaders,
+      family: pinnedIp ? (pinnedIp.includes(':') ? 6 : 4) : 4,
+      agent: isHttps ? httpsAgent : httpAgent,
+    };
+    if (pinnedIp && isHttps) options.servername = target.hostname;
+    const req = mod.request(options, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, headers: res.headers, buf: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    if (signal) { signal.addEventListener('abort', () => req.destroy(), { once: true }); }
+    if (body != undefined) req.write(body);
+    req.end();
+  });
+
+  // SSRF policy: an internal/loopback origin may redirect freely, but a public
+  // origin must not be redirected to a private/internal target (cloud metadata,
+  // loopback, RFC-1918) — that escalation is the SSRF vector.
+  const startHost = startUrl.hostname.replace(/^\[|\]$/g, '');
+  const startIsInternal = startUrl.hostname === 'localhost' || isPrivateIP(startHost);
+
+  let current = startUrl;
+  let pinnedIp = null;
+  for (let hop = 0; ; hop++) {
+    if (signal?.aborted) {
+      throw signal.reason ?? Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+    }
+    const res = await sendOnce(current, pinnedIp);
+    const location = res.headers.location;
+    const isRedirect = IPV4_REDIRECT_STATUSES.has(res.statusCode) && Boolean(location);
+
+    if (!isRedirect || redirectMode !== 'follow') {
+      if (isRedirect && redirectMode === 'error') {
+        throw new TypeError(`Redirect not followed (redirect: "error"): ${res.statusCode}`);
+      }
+      const responseHeaders = new Headers();
+      for (const [k, v] of Object.entries(res.headers)) {
+        if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(', ') : v);
+      }
+      return buildSafeResponse(res.statusCode, res.statusMessage, responseHeaders, res.buf);
+    }
+
+    if (hop >= IPV4_MAX_REDIRECTS) throw new TypeError('Too many redirects');
+
+    const next = new URL(location, current);
+    // Per the fetch spec: 303 (and 301/302 on a non-GET/HEAD method) downgrade
+    // to GET and drop the request body.
+    if (res.statusCode === 303 || ((res.statusCode === 301 || res.statusCode === 302) && method !== 'GET' && method !== 'HEAD')) {
+      method = 'GET';
+      body = null;
+      deleteHeaderCI(headers, 'content-length');
+      deleteHeaderCI(headers, 'content-type');
+    }
+    // Drop credentials + Host when the origin changes (browser behavior). The
+    // OFAC -> presigned-S3 hop is cross-origin and self-authenticates via query.
+    if (next.origin !== current.origin) {
+      deleteHeaderCI(headers, 'authorization');
+      deleteHeaderCI(headers, 'cookie');
+      deleteHeaderCI(headers, 'host');
+    }
+    // Block a public->private redirect escalation (DNS-rebinding aware via
+    // isSafeUrl). Skipped when the request started internal so loopback and
+    // sidecar-internal redirects still work. Only runs on an actual redirect.
+    if (startIsInternal) {
+      pinnedIp = null;
+    } else {
+      const verdict = await isSafeUrl(next.href);
+      if (!verdict.safe) {
+        throw new TypeError(`Refusing unsafe redirect target: ${verdict.reason}`);
+      }
+      // Pin the validated IP for the next hop (prefer IPv4 to keep the
+      // IPv4-forcing contract). All returned addresses already passed isPrivateIP.
+      const addrs = verdict.resolvedAddresses ?? [];
+      pinnedIp = addrs.find((a) => !a.includes(':')) ?? addrs[0] ?? null;
+    }
+    current = next;
+  }
+};
+globalThis.fetch = ipv4Fetch;
 // Wrap fetch AFTER the ipv4Fetch patch so we instrument its entry point.
 // Skips loopback (sidecar-internal) calls since those would drown the real signal.
 const wmUpstreamFetch = globalThis.fetch;
@@ -1628,6 +1741,62 @@ export function computeSignalWatchSidecar(keyword, listing) {
     totalSeen: posts.length,
     recent: posts.slice(0, 10),
   };
+}
+
+// ── S2 Underground media parsers (mirror src/services/s2-underground-media.ts) ──
+export function sidecarParseYoutubeChannelFeed(xml) {
+  if (typeof xml !== 'string' || !xml.includes('<entry')) return [];
+  const entries = xml.match(/<entry[\s\S]*?<\/entry>/g) || [];
+  return entries.map((e) => ({
+    videoId: ((e.match(/<yt:videoId>([\s\S]*?)<\/yt:videoId>/) || [])[1] || '').trim(),
+    title: ((e.match(/<title[^>]*>([\s\S]*?)<\/title>/) || [])[1] || '').trim(),
+    published: ((e.match(/<published>([\s\S]*?)<\/published>/) || [])[1] || '').trim(),
+    thumbnail: (e.match(/<media:thumbnail[^>]*url="([^"]+)"/) || [])[1] || '',
+  })).filter((v) => /^[A-Za-z0-9_-]{11}$/.test(v.videoId));
+}
+
+export function sidecarParsePatreonAudioRss(xml) {
+  if (typeof xml !== 'string' || !xml.includes('<item')) return [];
+  const items = xml.match(/<item[\s\S]*?<\/item>/g) || [];
+  const out = [];
+  for (const it of items) {
+    const audioUrl =
+      (it.match(/<enclosure[^>]*url="([^"]+)"[^>]*type="audio\/[^"]*"/) || [])[1]
+      || (it.match(/<enclosure[^>]*type="audio\/[^"]*"[^>]*url="([^"]+)"/) || [])[1];
+    if (!audioUrl) continue;
+    const title = (((it.match(/<title[^>]*>([\s\S]*?)<\/title>/) || [])[1]) || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+    const published = (((it.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1]) || '').trim();
+    const durRaw = ((((it.match(/<itunes:duration>([\s\S]*?)<\/itunes:duration>/) || [])[1]) || '0')).trim();
+    const durationSec = /^\d+$/.test(durRaw) ? Number(durRaw) : 0;
+    out.push({ title, published, durationSec, audioUrl });
+  }
+  return out;
+}
+
+export const patreonStateStore = (() => {
+  const live = new Map();
+  return {
+    issue() {
+      const s = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/-/g, '');
+      live.set(s, Date.now() + 10 * 60 * 1000);
+      return s;
+    },
+    consume(s) {
+      const exp = live.get(s);
+      live.delete(s);
+      return typeof exp === 'number' && exp > Date.now();
+    },
+  };
+})();
+
+async function patreonTokenExchange(params) {
+  const res = await fetch('https://www.patreon.com/api/oauth2/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(params).toString(),
+  });
+  if (!res.ok) throw new Error(`token HTTP ${res.status}`);
+  return res.json();
 }
 
 // ── Macro-stress helpers (mirror src/services/economic/macro-stress.ts) ────
@@ -4463,20 +4632,44 @@ async function handleIntelGenerate(req, res, context) {
 
   const messages = [{ role: 'system', content: system }, { role: 'user', content: prompt }];
 
-  // Try local Ollama first, fall back to Groq
-  const baseUrl = process.env.OLLAMA_API_URL || 'http://localhost:1234';
-  const rawModel = process.env.OLLAMA_MODEL || 'local-model';
-  const localModel = /^[a-zA-Z0-9._:/-]{1,80}$/.test(rawModel) ? rawModel : 'local-model';
-  let localUrl;
-  try { localUrl = new URL('/v1/chat/completions', baseUrl).toString(); } catch { /* invalid URL */ }
+  // Try local LLM first, fall back to Groq. When OLLAMA_API_URL is configured we
+  // honor it; otherwise auto-probe the two common local backends — Ollama
+  // (11434) first per the analyst layer's "prefers Ollama" default, then LM
+  // Studio (1234). Both expose an OpenAI-compatible /v1/chat/completions.
+  const rawModel = process.env.OLLAMA_MODEL || '';
+  const configuredModel = /^[a-zA-Z0-9._:/-]{1,80}$/.test(rawModel) ? rawModel : '';
+  const localBases = process.env.OLLAMA_API_URL
+    ? [process.env.OLLAMA_API_URL]
+    : ['http://127.0.0.1:11434', 'http://127.0.0.1:1234'];
+
+  // Resolve a usable model id for a backend. Ollama rejects unknown names
+  // (e.g. the LM Studio placeholder), so when OLLAMA_MODEL is unset we ask the
+  // backend which models it actually has via the OpenAI-compatible /v1/models.
+  const resolveLocalModel = async (base) => {
+    if (configuredModel) return configuredModel;
+    try {
+      const r = await fetch(new URL('/v1/models', base).toString(), { signal: AbortSignal.timeout(5000) });
+      if (r.ok) {
+        const j = await r.json();
+        const id = Array.isArray(j?.data) && j.data[0] && typeof j.data[0].id === 'string' ? j.data[0].id : '';
+        // Apply the same sanitizer as OLLAMA_MODEL before trusting a backend-supplied id.
+        if (id && /^[a-zA-Z0-9._:/-]{1,80}$/.test(id)) return id;
+      }
+    } catch { /* fall through */ }
+    return 'local-model';
+  };
 
   let response, model;
-  if (localUrl) {
+  for (const base of localBases) {
+    let localUrl;
+    try { localUrl = new URL('/v1/chat/completions', base).toString(); } catch { continue; }
     try {
-      response = await callChatCompletion(localUrl, localModel, messages, maxTokens, temperature, null, 60_000);
-      model = localModel;
+      const m = await resolveLocalModel(base);
+      response = await callChatCompletion(localUrl, m, messages, maxTokens, temperature, null, 60_000);
+      model = m;
+      break;
     } catch (localError) {
-      context.logger.warn('[intel-generate] local failed:', localError.message);
+      context.logger.warn(`[intel-generate] local failed (${localUrl}):`, localError.message);
     }
   }
 
@@ -4652,6 +4845,49 @@ async function dispatch(requestUrl, req, routes, context) {
  return new Response(html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'permissions-policy': 'autoplay=*, encrypted-media=*', ...makeCorsHeaders(req) } });
   }
 
+  // ── S2 Underground / Patreon OAuth (pre-auth) ──────────────────────────
+  // authorize-url builds the Patreon consent URL server-side (client_id lives
+  // only in the sidecar env) and issues a single-use CSRF state. The callback is
+  // hit by the browser redirect and cannot carry a LOCAL_API_TOKEN, so both sit
+  // before the auth gate.
+  if (requestUrl.pathname === '/api/patreon/authorize-url') {
+    const clientId = process.env.PATREON_OAUTH_CLIENT_ID || '';
+    if (!clientId) return json({ configured: false }, 200, makeCorsHeaders(req));
+    const state = patreonStateStore.issue();
+    const redirect = `http://127.0.0.1:${context.port}/oauth/patreon/callback`;
+    const url = 'https://www.patreon.com/oauth2/authorize?response_type=code'
+      + `&client_id=${encodeURIComponent(clientId)}`
+      + `&redirect_uri=${encodeURIComponent(redirect)}`
+      + `&scope=${encodeURIComponent('identity identity[memberships]')}`
+      + `&state=${encodeURIComponent(state)}`;
+    return json({ url, configured: true }, 200, makeCorsHeaders(req));
+  }
+  if (requestUrl.pathname === '/oauth/patreon/callback') {
+    const code = requestUrl.searchParams.get('code') || '';
+    const state = requestUrl.searchParams.get('state') || '';
+    const ok = code && patreonStateStore.consume(state);
+    const page = (msg, payload) => new Response(
+      `<!doctype html><meta charset=utf-8><body style="font:14px system-ui;background:#111;color:#eee;padding:24px">${msg}` +
+      `<script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)},'*')}catch(e){}setTimeout(function(){window.close()},1500)</script>`,
+      { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+    if (!ok) return page('Patreon connect failed (bad state).', { type: 'patreon-oauth', ok: false });
+    try {
+      const tok = await patreonTokenExchange({
+        code,
+        grant_type: 'authorization_code',
+        client_id: process.env.PATREON_OAUTH_CLIENT_ID || '',
+        client_secret: process.env.PATREON_OAUTH_CLIENT_SECRET || '',
+        redirect_uri: `http://127.0.0.1:${context.port}/oauth/patreon/callback`,
+      });
+      return page('Patreon connected. You can close this window.', {
+        type: 'patreon-oauth', ok: true,
+        access_token: tok.access_token, refresh_token: tok.refresh_token,
+      });
+    } catch (error) {
+      return page('Patreon connect failed.', { type: 'patreon-oauth', ok: false, error: String(error?.message || error) });
+    }
+  }
+
   // ── SMS command interface (pre-auth) ───────────────────────────────────
   // These routes are intentionally placed before the auth gate so SMS
   // gateway webhooks (Twilio, etc.) can POST without a LOCAL_API_TOKEN.
@@ -4713,9 +4949,75 @@ async function dispatch(requestUrl, req, routes, context) {
   {
  const authHeader = req.headers.authorization || '';
  if (!isValidToken(authHeader)) {
- context.logger.warn(`[local-api] unauthorized request to ${requestUrl.pathname}`);
+ warnUnauthorizedOnce(context, requestUrl.pathname);
  return json({ error: 'Unauthorized' }, 401);
  }
+  }
+
+  // ── S2 Underground media + Patreon (authed) ────────────────────────────
+  if (requestUrl.pathname === '/api/youtube/channel-feed') {
+    const channelId = requestUrl.searchParams.get('channelId') || '';
+    if (!/^UC[A-Za-z0-9_-]{20,}$/.test(channelId)) {
+      return json({ error: 'Invalid channelId' }, 400, makeCorsHeaders(req));
+    }
+    try {
+      const up = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
+        headers: { 'User-Agent': 'CrystalBall/1.0' },
+      });
+      if (!up.ok) throw new Error(`HTTP ${up.status}`);
+      const items = sidecarParseYoutubeChannelFeed(await up.text());
+      recordFeedSuccess('s2-youtube');
+      return json({ items }, 200, makeCorsHeaders(req));
+    } catch (error) {
+      recordFeedFailure('s2-youtube', error);
+      return json({ error: String(error?.message || error) }, 502, makeCorsHeaders(req));
+    }
+  }
+
+  if (requestUrl.pathname === '/api/patreon/audio-rss') {
+    const rssUrl = process.env.PATREON_AUDIO_RSS_URL || '';
+    if (!rssUrl) return json({ episodes: [], configured: false }, 200, makeCorsHeaders(req));
+    try {
+      const up = await fetch(rssUrl, { headers: { 'User-Agent': 'CrystalBall/1.0' } });
+      if (!up.ok) throw new Error(`HTTP ${up.status}`);
+      const episodes = sidecarParsePatreonAudioRss(await up.text());
+      recordFeedSuccess('s2-patreon-audio');
+      return json({ episodes, configured: true }, 200, makeCorsHeaders(req));
+    } catch (error) {
+      recordFeedFailure('s2-patreon-audio', error);
+      return json({ error: String(error?.message || error), configured: true }, 502, makeCorsHeaders(req));
+    }
+  }
+
+  if (requestUrl.pathname === '/api/patreon/verify') {
+    const token = requestUrl.searchParams.get('accessToken') || process.env.PATREON_ACCESS_TOKEN || '';
+    const campaignId = requestUrl.searchParams.get('campaignId') || '';
+    if (!token) return json({ active: false, configured: false }, 200, makeCorsHeaders(req));
+    try {
+      const url = 'https://www.patreon.com/api/oauth2/v2/identity?include=memberships'
+        + '&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents';
+      const up = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (up.status === 401) return json({ active: false, expired: true }, 200, makeCorsHeaders(req));
+      if (!up.ok) throw new Error(`HTTP ${up.status}`);
+      return json({ identity: await up.json(), campaignId, configured: true }, 200, makeCorsHeaders(req));
+    } catch (error) {
+      return json({ error: String(error?.message || error) }, 502, makeCorsHeaders(req));
+    }
+  }
+
+  if (requestUrl.pathname === '/api/patreon/refresh') {
+    const refresh = requestUrl.searchParams.get('refreshToken') || process.env.PATREON_REFRESH_TOKEN || '';
+    if (!refresh) return json({ error: 'no refresh token' }, 400, makeCorsHeaders(req));
+    try {
+      const tok = await patreonTokenExchange({
+        grant_type: 'refresh_token', refresh_token: refresh,
+        client_id: process.env.PATREON_OAUTH_CLIENT_ID || '',
+        client_secret: process.env.PATREON_OAUTH_CLIENT_SECRET || '',
+      });
+      return json({ access_token: tok.access_token, refresh_token: tok.refresh_token }, 200, makeCorsHeaders(req));
+    } catch (error) {
+      return json({ error: String(error?.message || error) }, 502, makeCorsHeaders(req));
+    }
   }
 
   // ── Analyst commands (MCP → sidecar → renderer queue) ──
@@ -15185,7 +15487,7 @@ export async function createLocalApiServer(options = {}) {
  {
  const authHeader = req.headers['authorization'] || '';
  if (!isValidToken(authHeader)) {
- context.logger.warn(`[local-api] unauthorized request to ${requestUrl.pathname}`);
+ warnUnauthorizedOnce(context, requestUrl.pathname);
  res.writeHead(401, { 'content-type': 'application/json' });
  res.end(JSON.stringify({ error: 'Unauthorized' }));
  return;

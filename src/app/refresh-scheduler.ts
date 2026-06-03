@@ -1,5 +1,12 @@
 import type { AppContext, AppModule } from '@/app/app-context';
 import { getGhostRefreshMultiplier } from '@/services/mode-manager';
+import { isAlwaysOn } from '@/services/always-on';
+
+/** Hidden-window slowdown factor. Always-on disables the slowdown entirely. */
+export function hiddenMultiplier(isHidden: boolean, alwaysOn: boolean): number {
+  if (!isHidden || alwaysOn) return 1;
+  return 10;
+}
 
 export interface RefreshRegistration {
   name: string;
@@ -50,7 +57,6 @@ export class RefreshScheduler implements AppModule {
  intervalMs: number,
  condition?: () => boolean
   ): void {
- const HIDDEN_REFRESH_MULTIPLIER = 10;
  const JITTER_FRACTION = 0.1;
  const MIN_REFRESH_MS = 1000;
  // Max effective interval: intervalMs * 4 (backoff) * 10 (hidden) = 40x base
@@ -60,7 +66,7 @@ export class RefreshScheduler implements AppModule {
 
  const computeDelay = (baseMs: number, isHidden: boolean) => {
  const ghostMultiplier = getGhostRefreshMultiplier();
- const adjusted = baseMs * ghostMultiplier * (isHidden ? HIDDEN_REFRESH_MULTIPLIER : 1);
+ const adjusted = baseMs * ghostMultiplier * hiddenMultiplier(isHidden, isAlwaysOn());
  const jitterRange = adjusted * JITTER_FRACTION;
  // eslint-disable-next-line sonarjs/pseudo-random
  const jittered = adjusted + (Math.random() * 2 - 1) * jitterRange;
@@ -68,7 +74,7 @@ export class RefreshScheduler implements AppModule {
  };
  const scheduleNext = (delay: number) => {
  if (this.ctx.isDestroyed) return;
- const timeoutId = setTimeout(run, delay);
+ const timeoutId = setTimeout(() => { void run(); }, delay);
  this.refreshTimeoutIds.set(name, timeoutId);
  };
  const run = async () => {

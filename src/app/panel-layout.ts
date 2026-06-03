@@ -44,6 +44,7 @@ import {
   SynthesisPanel,
   CyberGeoPanel,
   EconomicIntelPanel,
+  EconomicNewsPanel,
   OrefSirensPanel,
   TelegramIntelPanel,
   WatchlistPanel,
@@ -177,6 +178,8 @@ import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { GridIntelligencePanel } from '@/components/GridIntelligencePanel';
 import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-intelligence-loader';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
+import { PersonalStormMode } from '@/components/PersonalStormMode';
+import type { WeatherDispatchDecision } from '@/services/weather/weather-warning-router';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
@@ -403,6 +406,11 @@ import { ArcticCompetitionPanel } from '@/components/ArcticCompetitionPanel';
 import { GreatPowerCompetitionPanel } from '@/components/GreatPowerCompetitionPanel';
 import { UrbanInstabilityPanel } from '@/components/UrbanInstabilityPanel';
 import { CyberEspionagePanel } from '@/components/CyberEspionagePanel';
+import { CounterterrorismPanel } from '@/components/CounterterrorismPanel';
+import { ThreatInboxPanel } from '@/components/ThreatInboxPanel';
+import { FaaTfrsPanel } from '@/components/FaaTfrsPanel';
+import { InfrastructureSuperpowerPanel } from '@/components/InfrastructureSuperpowerPanel';
+import { DiseaseIntelPanel } from '@/components/DiseaseIntelPanel';
 import { PoliticalEconomyPanel } from '@/components/PoliticalEconomyPanel';
 import { RegulatoryArbitragePanel } from '@/components/RegulatoryArbitragePanel';
 import { ElectionMonitoringPanel } from '@/components/ElectionMonitoringPanel';
@@ -492,8 +500,68 @@ import type { GeoHubActivity } from '@/services/geo-activity';
 import type { TechHubActivity } from '@/services/tech-activity';
 import { RipeAtlasPanel } from '@/components/RipeAtlasPanel';
 import { RipeNccPanel } from '@/components/RipeNccPanel';
+import { S2UndergroundPanel } from '@/components/S2UndergroundPanel';
 import { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
 import { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
+// Consolidated intelligence panels from PRs 789–950
+import { ConflictEscalationPanel } from '@/components/ConflictEscalationPanel';
+import { NuclearNonproliferationPanel } from '@/components/NuclearNonproliferationPanel';
+import { FoodSystemsGeopoliticsPanel } from '@/components/FoodSystemsGeopoliticsPanel';
+import { DroneWarfarePanel } from '@/components/DroneWarfarePanel';
+import { SpaceDebrisPanel } from '@/components/SpaceDebrisPanel';
+import { BorderIncidentsPanel } from '@/components/BorderIncidentsPanel';
+import { DisinformationNetworksPanel } from '@/components/DisinformationNetworksPanel';
+import { WarlordEconomicsPanel } from '@/components/WarlordEconomicsPanel';
+import { AIGovernancePanel } from '@/components/AIGovernancePanel';
+import { CyberNormsPanel } from '@/components/CyberNormsPanel';
+import { DigitalCurrencyGeopoliticsPanel } from '@/components/DigitalCurrencyGeopoliticsPanel';
+import { ForeignAidWeaponizationPanel } from '@/components/ForeignAidWeaponizationPanel';
+import { DebtTrapDiplomacyPanel } from '@/components/DebtTrapDiplomacyPanel';
+import { MediaFreedomPanel } from '@/components/MediaFreedomPanel';
+import { MilitaryExercisesPanel } from '@/components/MilitaryExercisesPanel';
+import { HostageDiplomacyPanel } from '@/components/HostageDiplomacyPanel';
+import { SovereignWealthFundsPanel } from '@/components/SovereignWealthFundsPanel';
+import { TechTransferRiskPanel } from '@/components/TechTransferRiskPanel';
+import { GlobalMilitarySpendingPanel } from '@/components/GlobalMilitarySpendingPanel';
+import { ForeignFightersPanel } from '@/components/ForeignFightersPanel';
+import { EscalationLadderPanel } from '@/components/EscalationLadderPanel';
+import { ResourceNationalismPanel } from '@/components/ResourceNationalismPanel';
+import { CoerciveDiplomacyPanel } from '@/components/CoerciveDiplomacyPanel';
+import { TreatySurveillancePanel } from '@/components/TreatySurveillancePanel';
+import { SeabedWarfarePanel } from '@/components/SeabedWarfarePanel';
+import { InternationalLawViolationsPanel } from '@/components/InternationalLawViolationsPanel';
+import { IntelligenceCooperationPanel } from '@/components/IntelligenceCooperationPanel';
+import { EnergyWeaponizationPanel } from '@/components/EnergyWeaponizationPanel';
+import { PropagandaTrackingPanel } from '@/components/PropagandaTrackingPanel';
+import { DigitalAutocracyPanel } from '@/components/DigitalAutocracyPanel';
+import { ForeignInvestmentRiskPanel } from '@/components/ForeignInvestmentRiskPanel';
+import { GrayZoneConflictPanel } from '@/components/GrayZoneConflictPanel';
+import { StrategicDeceptionPanel } from '@/components/StrategicDeceptionPanel';
+import { SpaceWeaponizationPanel } from '@/components/SpaceWeaponizationPanel';
+import { PsychologicalOperationsPanel } from '@/components/PsychologicalOperationsPanel';
+import { MercenaryEcosystemPanel } from '@/components/MercenaryEcosystemPanel';
+import { ElectionInterferencePanel } from '@/components/ElectionInterferencePanel';
+import { MigrationCrisisPanel } from '@/components/MigrationCrisisPanel';
+import { OrganizedCrimePanel } from '@/components/OrganizedCrimePanel';
+import { HumanRightsAbusesPanel } from '@/components/HumanRightsAbusesPanel';
+import { DemocraticBackslidingPanel } from '@/components/DemocraticBackslidingPanel';
+import { HybridWarfarePanel } from '@/components/HybridWarfarePanel';
+import { NuclearDeterrencePanel } from '@/components/NuclearDeterrencePanel';
+import { TravelSafetyPanel } from '@/components/TravelSafetyPanel';
+import { GlobalConflictPanel } from '@/components/GlobalConflictPanel';
+import { EconomicEspionagePanel } from '@/components/EconomicEspionagePanel';
+import { QuantumTechRacePanel } from '@/components/QuantumTechRacePanel';
+import { EnergyGeopoliticsPanel } from '@/components/EnergyGeopoliticsPanel';
+import { SovereignDebtCrisisPanel } from '@/components/SovereignDebtCrisisPanel';
+import { PandemicPreparednessPanel } from '@/components/PandemicPreparednessPanel';
+import { CriticalInfrastructureAttackPanel } from '@/components/CriticalInfrastructureAttackPanel';
+import { FinancialCrimesPanel } from '@/components/FinancialCrimesPanel';
+import { PrivateMilitaryPanel } from '@/components/PrivateMilitaryPanel';
+import { ResourceCompetitionPanel } from '@/components/ResourceCompetitionPanel';
+import { DiplomaticCrisisPanel } from '@/components/DiplomaticCrisisPanel';
+import { DigitalInfrastructurePanel } from '@/components/DigitalInfrastructurePanel';
+import { GlobalHealthSecurityPanel } from '@/components/GlobalHealthSecurityPanel';
+import { FoodSecuritySuperpowerPanel } from '@/components/FoodSecuritySuperpowerPanel';
 // HTML builders (app shell + map + sidebar) live in a sibling module.
 import * as htmlBuilders from '@/app/layout/html';
 
@@ -743,6 +811,18 @@ export class PanelLayoutManager implements AppModule {
  const eewStatusBar = new EEWStatusBar();
  eewStatusBar.mount(document.body);
  startSpaceWeatherStatusBarPoller(eewStatusBar);
+
+ // Mount Personal Storm Mode banner — shows when a severe NWS alert
+ // matches a saved place. The data-loader dispatches 'cb:storm-decision'
+ // on each NWS alert refresh cycle; this component renders the result.
+ const stormMount = document.createElement('div');
+ stormMount.id = 'cb-storm-mode-mount';
+ document.body.appendChild(stormMount);
+ const stormModeComponent = new PersonalStormMode({ mount: stormMount });
+ document.addEventListener('cb:storm-decision', (e: Event) => {
+ const decision = (e as CustomEvent<WeatherDispatchDecision | undefined>).detail;
+ stormModeComponent.update(decision);
+ });
 
  // Mount the cross-domain correlation banner. Self-fetches from
  // /api/synthesis/correlations every 15s; hidden when no events.
@@ -1576,6 +1656,11 @@ export class PanelLayoutManager implements AppModule {
         this.ctx.panels['great-power-competition'] = new GreatPowerCompetitionPanel();
     this.ctx.panels['urban-instability'] = new UrbanInstabilityPanel();
     this.ctx.panels['cyber-espionage'] = new CyberEspionagePanel();
+    this.ctx.panels['counterterrorism'] = new CounterterrorismPanel();
+    this.ctx.panels['threat-inbox'] = new ThreatInboxPanel();
+    this.ctx.panels['faa-tfrs'] = new FaaTfrsPanel();
+    this.ctx.panels['infrastructure-superpower'] = new InfrastructureSuperpowerPanel();
+    this.ctx.panels['disease-intel'] = new DiseaseIntelPanel();
     this.ctx.panels['political-economy'] = new PoliticalEconomyPanel(); this.ctx.panels['state-capitalism'] = new StateCapitalismPanel();
     this.ctx.panels['political-violence'] = new PoliticalViolencePanel();
  this.ctx.panels['election-monitoring'] = new ElectionMonitoringPanel();
@@ -1634,6 +1719,66 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['cyber-superpower'] = new CyberSuperpowerPanel();
  this.ctx.panels['cyber-incident-response'] = new CyberIncidentResponsePanel();
   this.ctx.panels['electric-grid-vulnerability'] = new ElectricGridVulnerabilityPanel();
+
+ // Consolidated intelligence panels (PRs 789–950)
+ this.ctx.panels['conflict-escalation'] = new ConflictEscalationPanel();
+ this.ctx.panels['nuclear-nonproliferation'] = new NuclearNonproliferationPanel();
+ this.ctx.panels['food-systems-geopolitics'] = new FoodSystemsGeopoliticsPanel();
+ this.ctx.panels['drone-warfare'] = new DroneWarfarePanel();
+ this.ctx.panels['space-debris'] = new SpaceDebrisPanel();
+ this.ctx.panels['border-incidents'] = new BorderIncidentsPanel();
+ this.ctx.panels['disinformation-networks'] = new DisinformationNetworksPanel();
+ this.ctx.panels['warlord-economics'] = new WarlordEconomicsPanel();
+ this.ctx.panels['ai-governance'] = new AIGovernancePanel();
+ this.ctx.panels['cyber-norms'] = new CyberNormsPanel();
+ this.ctx.panels['digital-currency-geopolitics'] = new DigitalCurrencyGeopoliticsPanel();
+ this.ctx.panels['foreign-aid-weaponization'] = new ForeignAidWeaponizationPanel();
+ this.ctx.panels['debt-trap-diplomacy'] = new DebtTrapDiplomacyPanel();
+ this.ctx.panels['media-freedom'] = new MediaFreedomPanel();
+ this.ctx.panels['military-exercises'] = new MilitaryExercisesPanel();
+ this.ctx.panels['hostage-diplomacy'] = new HostageDiplomacyPanel();
+ this.ctx.panels['sovereign-wealth-funds'] = new SovereignWealthFundsPanel();
+ this.ctx.panels['tech-transfer-risk'] = new TechTransferRiskPanel();
+ this.ctx.panels['global-military-spending'] = new GlobalMilitarySpendingPanel();
+ this.ctx.panels['foreign-fighters'] = new ForeignFightersPanel();
+ this.ctx.panels['escalation-ladder'] = new EscalationLadderPanel();
+ this.ctx.panels['resource-nationalism'] = new ResourceNationalismPanel();
+ this.ctx.panels['coercive-diplomacy'] = new CoerciveDiplomacyPanel();
+ this.ctx.panels['treaty-surveillance'] = new TreatySurveillancePanel();
+ this.ctx.panels['seabed-warfare'] = new SeabedWarfarePanel();
+ this.ctx.panels['intl-law-violations'] = new InternationalLawViolationsPanel();
+ this.ctx.panels['intelligence-cooperation'] = new IntelligenceCooperationPanel();
+ this.ctx.panels['energy-weaponization'] = new EnergyWeaponizationPanel();
+ this.ctx.panels['propaganda-tracking'] = new PropagandaTrackingPanel();
+ this.ctx.panels['digital-autocracy'] = new DigitalAutocracyPanel();
+ this.ctx.panels['foreign-investment-risk'] = new ForeignInvestmentRiskPanel();
+ this.ctx.panels['gray-zone-conflict'] = new GrayZoneConflictPanel();
+ this.ctx.panels['strategic-deception'] = new StrategicDeceptionPanel();
+ this.ctx.panels['space-weaponization'] = new SpaceWeaponizationPanel();
+ this.ctx.panels['psychological-operations'] = new PsychologicalOperationsPanel();
+ this.ctx.panels['mercenary-ecosystem'] = new MercenaryEcosystemPanel();
+ this.ctx.panels['election-interference'] = new ElectionInterferencePanel();
+ this.ctx.panels['migration-crisis'] = new MigrationCrisisPanel();
+ this.ctx.panels['organized-crime'] = new OrganizedCrimePanel();
+ this.ctx.panels['human-rights-abuses'] = new HumanRightsAbusesPanel();
+ this.ctx.panels['democratic-backsliding'] = new DemocraticBackslidingPanel();
+ this.ctx.panels['hybrid-warfare'] = new HybridWarfarePanel();
+ this.ctx.panels['nuclear-deterrence'] = new NuclearDeterrencePanel();
+ this.ctx.panels['travel-safety'] = new TravelSafetyPanel();
+ this.ctx.panels['global-conflict'] = new GlobalConflictPanel();
+ this.ctx.panels['economic-espionage'] = new EconomicEspionagePanel();
+ this.ctx.panels['quantum-tech-race'] = new QuantumTechRacePanel();
+ this.ctx.panels['energy-geopolitics'] = new EnergyGeopoliticsPanel();
+ this.ctx.panels['sovereign-debt-crisis'] = new SovereignDebtCrisisPanel();
+ this.ctx.panels['pandemic-preparedness'] = new PandemicPreparednessPanel();
+ this.ctx.panels['critical-infra-attack'] = new CriticalInfrastructureAttackPanel();
+ this.ctx.panels['financial-crimes'] = new FinancialCrimesPanel();
+ this.ctx.panels['private-military'] = new PrivateMilitaryPanel();
+ this.ctx.panels['resource-competition'] = new ResourceCompetitionPanel();
+ this.ctx.panels['diplomatic-crisis'] = new DiplomaticCrisisPanel();
+ this.ctx.panels['digital-infrastructure'] = new DigitalInfrastructurePanel();
+ this.ctx.panels['global-health-security'] = new GlobalHealthSecurityPanel();
+ this.ctx.panels['food-security-superpower'] = new FoodSecuritySuperpowerPanel();
 
  this.ctx.panels['climate-superpower'] = new ClimateSuperpowerPanel(); this.ctx.panels['intelligence-timeline'] = new IntelligenceTimelinePanel();
  // Wire saved-places into the insights state singleton so the new
@@ -1786,6 +1931,7 @@ export class PanelLayoutManager implements AppModule {
  // in Settings" empty state.
  const s2uIntelPanel = new S2UIntelPanel();
  this.ctx.panels['s2u-intel'] = s2uIntelPanel;
+ this.ctx.panels['s2-underground-media'] = new S2UndergroundPanel();
 
  // SynthesisPanel — historical precedent matcher (TF-IDF + cosine)
  // and cross-domain leading-indicator engine (Granger F-test). Reads
@@ -1809,6 +1955,7 @@ export class PanelLayoutManager implements AppModule {
  // (#295) + PR 2 (#297); sidecar fetcher follows.
  const economicIntelPanel = new EconomicIntelPanel();
  this.ctx.panels['economic-intel'] = economicIntelPanel;
+ this.ctx.panels['economic-news'] = new EconomicNewsPanel();
 
  const orefSirensPanel = new OrefSirensPanel();
  this.ctx.panels['oref-sirens'] = orefSirensPanel;

@@ -39,7 +39,7 @@ const MENU_VIEW_MODE_ID: &str = "view.mode_status";
 #[cfg(feature = "devtools")]
 const MENU_HELP_DEVTOOLS_ID: &str = "help.devtools";
 const TRUSTED_WINDOWS: [&str; 3] = ["main", "settings", "live-channels"];
-const SUPPORTED_SECRET_KEYS: [&str; 68] = [
+const SUPPORTED_SECRET_KEYS: [&str; 73] = [
  "CRYSTALBALL_API_KEY",
  "ANTHROPIC_API_KEY",
  "GROQ_API_KEY",
@@ -108,6 +108,11 @@ const SUPPORTED_SECRET_KEYS: [&str; 68] = [
  "MISP_API_KEY",
  "OPENCTI_URL",
  "OPENCTI_API_KEY",
+ "PATREON_OAUTH_CLIENT_ID",
+ "PATREON_OAUTH_CLIENT_SECRET",
+ "PATREON_ACCESS_TOKEN",
+ "PATREON_REFRESH_TOKEN",
+ "PATREON_AUDIO_RSS_URL",
 ];
 
 // Rate-limit native notifications: no more than 1 per 30 seconds across all threads.
@@ -170,6 +175,15 @@ struct PersistentCache {
 /// dialog pending or Keychain Access is unlocked mid-fetch — this
 /// timeout lets the sidecar boot anyway.
 const KEYCHAIN_PER_CALL_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// The consolidated `secrets-vault` read can surface a one-time macOS "Always
+/// Allow" ACL dialog after a re-signed build (the signature changes, so the
+/// keychain no longer trusts the app). 3s is too short for a human to answer
+/// that dialog — the read times out, every API key is dropped, and the app
+/// boots with no data. This load runs async on a worker thread (the UI window
+/// is already up), so a longer wait is safe. The per-key fallback below keeps
+/// the short timeout so a genuinely-failed vault doesn't stack 40+ prompts.
+const KEYCHAIN_VAULT_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Run a single keychain `get_password()` call on a worker thread
 /// and wait at most `timeout` for the answer. Returns:
@@ -241,7 +255,7 @@ impl SecretsCache {
  match read_keychain_entry_with_timeout(
  KEYRING_SERVICE,
  "secrets-vault".to_string(),
- KEYCHAIN_PER_CALL_TIMEOUT,
+ KEYCHAIN_VAULT_TIMEOUT,
  ) {
  Ok(Some(json)) => {
  if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&json) {
@@ -259,7 +273,7 @@ impl SecretsCache {
  // No vault entry yet — fall through to migration.
  }
  Err(()) => {
- log_keychain_timeout(app, "secrets-vault");
+ log_keychain_timeout(app, "secrets-vault", KEYCHAIN_VAULT_TIMEOUT);
  // Vault unreachable → still try migration; if every per-key
  // read also times out, we end up with an empty map and the
  // sidecar boots without secrets. Caller logs the count.
@@ -283,7 +297,7 @@ impl SecretsCache {
  }
  Ok(None) => { /* not present; skip silently */ }
  Err(()) => {
- log_keychain_timeout(app, key);
+ log_keychain_timeout(app, key, KEYCHAIN_PER_CALL_TIMEOUT);
  // continue — other keys may still respond
  }
  }
@@ -329,8 +343,8 @@ impl SecretsCache {
 /// Standalone helper so callers can log keychain timeouts without
 /// needing access to `SecretsCache` internals (the desktop-log
 /// helper requires an `AppHandle`, which tests don't have).
-fn log_keychain_timeout(app: Option<&AppHandle>, key: &str) {
- let secs = KEYCHAIN_PER_CALL_TIMEOUT.as_secs();
+fn log_keychain_timeout(app: Option<&AppHandle>, key: &str, timeout: Duration) {
+ let secs = timeout.as_secs();
  let msg = format!("Keychain entry '{key}' timed out after {secs}s — skipping");
  match app {
  Some(handle) => append_desktop_log(handle, "WARN", &msg),
@@ -560,6 +574,98 @@ fn get_local_api_token(webview: Webview, state: tauri::State<'_, LocalApiState>)
  token
  .clone()
  .ok_or_else(|| "Token not generated".to_string())
+}
+
+/// Holds the retained NSProcessInfo activity token (as a pointer-sized int so the
+/// state is Send+Sync). None when no activity is held.
+struct AlwaysOnGuard(std::sync::Mutex<Option<usize>>);
+
+#[cfg(target_os = "macos")]
+fn begin_activity_macos() -> Option<usize> {
+    use std::ffi::c_void;
+    extern "C" {
+        fn objc_getClass(name: *const u8) -> *mut c_void;
+        fn sel_registerName(name: *const u8) -> *mut c_void;
+        fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
+    }
+    // NSActivityUserInitiated prevents App Nap; clear IdleSystemSleepDisabled so the
+    // Mac may still sleep normally (lid close). bit14=SuddenTermination, bit20=IdleSystemSleep.
+    const NS_SUDDEN_TERM_DISABLED: u64 = 1 << 14;
+    const NS_IDLE_SYSTEM_SLEEP_DISABLED: u64 = 1 << 20;
+    const NS_USER_INITIATED: u64 = 0x00FF_FFFF | NS_SUDDEN_TERM_DISABLED;
+    let options: u64 = NS_USER_INITIATED & !NS_IDLE_SYSTEM_SLEEP_DISABLED;
+    unsafe {
+        let pi_cls = objc_getClass(b"NSProcessInfo\0".as_ptr());
+        let str_cls = objc_getClass(b"NSString\0".as_ptr());
+        if pi_cls.is_null() || str_cls.is_null() {
+            return None;
+        }
+        let process_info = objc_msgSend(pi_cls, sel_registerName(b"processInfo\0".as_ptr()));
+        if process_info.is_null() {
+            return None;
+        }
+        let with_utf8 = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
+        let reason_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, *const u8) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const ());
+        let reason = reason_fn(str_cls, with_utf8, b"Crystal Ball 24/7 monitoring\0".as_ptr());
+        let begin_sel = sel_registerName(b"beginActivityWithOptions:reason:\0".as_ptr());
+        let begin_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, u64, *mut c_void) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const ());
+        let token = begin_fn(process_info, begin_sel, options, reason);
+        if token.is_null() {
+            return None;
+        }
+        // retain so it survives past this scope
+        objc_msgSend(token, sel_registerName(b"retain\0".as_ptr()));
+        Some(token as usize)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn end_activity_macos(token: usize) {
+    use std::ffi::c_void;
+    extern "C" {
+        fn objc_getClass(name: *const u8) -> *mut c_void;
+        fn sel_registerName(name: *const u8) -> *mut c_void;
+        fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
+    }
+    unsafe {
+        let pi_cls = objc_getClass(b"NSProcessInfo\0".as_ptr());
+        if pi_cls.is_null() {
+            return;
+        }
+        let process_info = objc_msgSend(pi_cls, sel_registerName(b"processInfo\0".as_ptr()));
+        let end_sel = sel_registerName(b"endActivity:\0".as_ptr());
+        let end_fn: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const ());
+        end_fn(process_info, end_sel, token as *mut c_void);
+        objc_msgSend(token as *mut c_void, sel_registerName(b"release\0".as_ptr()));
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn begin_activity_macos() -> Option<usize> {
+    None
+}
+#[cfg(not(target_os = "macos"))]
+fn end_activity_macos(_token: usize) {}
+
+#[tauri::command]
+fn set_always_on(state: tauri::State<AlwaysOnGuard>, enabled: bool) -> bool {
+    let mut held = state.0.lock().unwrap();
+    if enabled && held.is_none() {
+        *held = begin_activity_macos();
+    } else if !enabled {
+        if let Some(token) = held.take() {
+            end_activity_macos(token);
+        }
+    }
+    held.is_some()
+}
+
+#[tauri::command]
+fn get_always_on(state: tauri::State<AlwaysOnGuard>) -> bool {
+    state.0.lock().unwrap().is_some()
 }
 
 #[tauri::command]
@@ -883,9 +989,8 @@ fn get_native_location_impl() -> Result<(f64, f64), String> {
  let mgr = objc_msgSend(objc_msgSend(cls, alloc), init);
  if mgr.is_null() { return Err("Could not create CLLocationManager".into()); }
 
- let req_auth = sel_registerName(b"requestWhenInUseAuthorization\0".as_ptr());
- objc_msgSend(mgr, req_auth);
-
+ // Authorization is requested once by the app-retained manager in setup();
+ // re-requesting here spawns a second prompt on first run.
  let start = sel_registerName(b"startUpdatingLocation\0".as_ptr());
  objc_msgSend(mgr, start);
 
@@ -1637,13 +1742,28 @@ static MENUBAR_STATUS_ITEM: std::sync::OnceLock<usize> = std::sync::OnceLock::ne
 
 #[cfg(target_os = "macos")]
 unsafe fn ensure_menubar_status_item(title: &str) {
- use std::ffi::{c_void, CString};
+ use std::ffi::{c_char, c_void, CString};
  extern "C" {
   fn objc_getClass(name: *const u8) -> *mut c_void;
   fn sel_registerName(name: *const u8) -> *mut c_void;
   fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
   fn objc_retain(obj: *mut c_void) -> *mut c_void;
  }
+
+ // Apple Silicon ABI: the variadic-typed `objc_msgSend` passes trailing
+ // arguments on the stack, but the real (non-variadic) `objc_msgSend` reads
+ // them from registers (x2+) — so any call that passes an argument through
+ // the variadic declaration reads garbage. That crashed
+ // `+[NSString stringWithUTF8String:]` inside `strlen` on every launch (the
+ // same bug already fixed in `set_dock_badge`). Cast to concrete signatures
+ // for the calls that pass an argument; the zero-arg calls
+ // (`systemStatusBar`, `button`) stay safe via the variadic declaration.
+ let msgsend_f64: unsafe extern "C" fn(*mut c_void, *mut c_void, f64) -> *mut c_void =
+  std::mem::transmute(objc_msgSend as *const ());
+ let msgsend_cstr: unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_char) -> *mut c_void =
+  std::mem::transmute(objc_msgSend as *const ());
+ let msgsend_obj: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void =
+  std::mem::transmute(objc_msgSend as *const ());
 
  // Lazily create the NSStatusItem once.
  let item_ptr = MENUBAR_STATUS_ITEM.get_or_init(|| {
@@ -1654,7 +1774,7 @@ unsafe fn ensure_menubar_status_item(title: &str) {
   if bar.is_null() { return 0; }
   // -1 == NSVariableStatusItemLength so the title sizes the item.
   let new_item_sel = sel_registerName(b"statusItemWithLength:\0".as_ptr());
-  let item = objc_msgSend(bar, new_item_sel, -1.0f64);
+  let item = msgsend_f64(bar, new_item_sel, -1.0f64);
   if item.is_null() { return 0; }
   // Retain so the system status bar can't drop it after our scope.
   let _ = objc_retain(item);
@@ -1670,9 +1790,9 @@ unsafe fn ensure_menubar_status_item(title: &str) {
  let cstr = CString::new(title).unwrap_or_else(|_| CString::new("Crystal Ball").unwrap());
  let nsstring_cls = objc_getClass(b"NSString\0".as_ptr());
  let from_utf8_sel = sel_registerName(b"stringWithUTF8String:\0".as_ptr());
- let ns_title = objc_msgSend(nsstring_cls, from_utf8_sel, cstr.as_ptr());
+ let ns_title = msgsend_cstr(nsstring_cls, from_utf8_sel, cstr.as_ptr());
  let set_title_sel = sel_registerName(b"setTitle:\0".as_ptr());
- objc_msgSend(btn, set_title_sel, ns_title);
+ msgsend_obj(btn, set_title_sel, ns_title);
 }
 
 #[tauri::command]
@@ -2772,12 +2892,15 @@ fn main() {
  // Keeps the macOS Keychain off the main thread so the UI window
  // can render immediately on launch.
  .manage(SecretsCache::empty())
+ .manage(AlwaysOnGuard(std::sync::Mutex::new(None)))
  .plugin(tauri_plugin_biometry::init())
  .plugin(tauri_plugin_clipboard_manager::init())
  .plugin(corelocation::init())
  .invoke_handler(tauri::generate_handler![
  list_supported_secret_keys,
  get_secret,
+ set_always_on,
+ get_always_on,
  set_secret,
  delete_secret,
  get_local_api_token,
@@ -2837,7 +2960,7 @@ fn main() {
  &app.handle(),
  "INFO",
  &format!(
- "app launched pid={} version={} bundle={}",
+ "════════ SESSION START pid={} version={} bundle={} ════════",
  std::process::id(),
  env!("CARGO_PKG_VERSION"),
  env::current_exe()

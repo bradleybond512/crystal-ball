@@ -4478,9 +4478,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-biometry"
-version = "0.2.6"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8058e85ed21976445c6757b5c0ed04a92082d681e81a682767a138e51be60c0e"
+checksum = "d1d70628154316603585a1e82e41edac5f8a3946c045fb365c38c9ccc2255122"
 dependencies = [
  "block2",
  "log",

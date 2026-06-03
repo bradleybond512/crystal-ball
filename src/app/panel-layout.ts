@@ -44,6 +44,7 @@ import {
   SynthesisPanel,
   CyberGeoPanel,
   EconomicIntelPanel,
+  EconomicNewsPanel,
   OrefSirensPanel,
   TelegramIntelPanel,
   WatchlistPanel,
@@ -177,6 +178,8 @@ import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { GridIntelligencePanel } from '@/components/GridIntelligencePanel';
 import { startGridIntelligenceLoader } from '@/services/infrastructure/grid-intelligence-loader';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
+import { PersonalStormMode } from '@/components/PersonalStormMode';
+import type { WeatherDispatchDecision } from '@/services/weather/weather-warning-router';
 import { StrikePackagePanel } from '@/components/StrikePackagePanel';
 import { DodContractsPanel } from '@/components/DodContractsPanel';
 import { WikidataBasesPanel } from '@/components/WikidataBasesPanel';
@@ -808,6 +811,18 @@ export class PanelLayoutManager implements AppModule {
  const eewStatusBar = new EEWStatusBar();
  eewStatusBar.mount(document.body);
  startSpaceWeatherStatusBarPoller(eewStatusBar);
+
+ // Mount Personal Storm Mode banner — shows when a severe NWS alert
+ // matches a saved place. The data-loader dispatches 'cb:storm-decision'
+ // on each NWS alert refresh cycle; this component renders the result.
+ const stormMount = document.createElement('div');
+ stormMount.id = 'cb-storm-mode-mount';
+ document.body.appendChild(stormMount);
+ const stormModeComponent = new PersonalStormMode({ mount: stormMount });
+ document.addEventListener('cb:storm-decision', (e: Event) => {
+ const decision = (e as CustomEvent<WeatherDispatchDecision | undefined>).detail;
+ stormModeComponent.update(decision);
+ });
 
  // Mount the cross-domain correlation banner. Self-fetches from
  // /api/synthesis/correlations every 15s; hidden when no events.
@@ -1940,6 +1955,7 @@ export class PanelLayoutManager implements AppModule {
  // (#295) + PR 2 (#297); sidecar fetcher follows.
  const economicIntelPanel = new EconomicIntelPanel();
  this.ctx.panels['economic-intel'] = economicIntelPanel;
+ this.ctx.panels['economic-news'] = new EconomicNewsPanel();
 
  const orefSirensPanel = new OrefSirensPanel();
  this.ctx.panels['oref-sirens'] = orefSirensPanel;

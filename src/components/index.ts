@@ -58,6 +58,7 @@ export { S2UIntelPanel } from './S2UIntelPanel';
 export { SynthesisPanel } from './SynthesisPanel';
 export { CyberGeoPanel } from './CyberGeoPanel';
 export { EconomicIntelPanel } from './EconomicIntelPanel';
+export { EconomicNewsPanel } from './EconomicNewsPanel';
 export * from './OrefSirensPanel';
 export * from './TelegramIntelPanel';
 export * from './BreakingNewsBanner';

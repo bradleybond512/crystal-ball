@@ -3671,7 +3671,12 @@ export class DataLoaderManager implements AppModule {
  const data = await r.json() as { events?: ObservationEvent[] };
  const events = data?.events;
  if (Array.isArray(events) && events.length > 0) {
- ingest(events);
+ // Normalize entityIds: external API responses may omit it if the sidecar
+ // returns data from an older schema. All downstream callers (personal-
+ // relevance, observation-graph, correlation-rules) call .map/.some/.filter
+ // on entityIds without null-guarding, so ensure it's always an array here.
+ const normalized = events.map((e) => Array.isArray(e.entityIds) ? e : { ...e, entityIds: [] });
+ ingest(normalized);
  void (this.ctx.panels['intelligence-feed'] as IntelligenceFeedPanel | undefined)?.fetchFeed();
  }
  } catch (error) {

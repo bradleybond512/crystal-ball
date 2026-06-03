@@ -119,13 +119,26 @@ const SIDECAR_BUILD_TAG = process.env.WM_BUILD_TAG || `node-${process.versions.n
 // relaunch) produce expected unauthorized bursts: the long-lived renderer sends
 // one request with a stale/absent token, gets 401, then retries with a fresh
 // token. The 401 response is the enforcement; logging every racing request at
-// WARN floods the log and buries real signals. Log each pathname once so a
-// genuinely new unauthorized path still surfaces, then suppress repeats.
-const _seenUnauthPaths = new Set();
+// WARN floods the log and buries real signals.
+//
+// Throttle on a fixed time window (not per-pathname): the pathname is
+// client-controlled, so keying suppression on it would let an unauthenticated
+// caller grow unbounded state and bypass the throttle with unique paths. A
+// single global window keeps bounded state and collapses bursts; the
+// suppressed-count preserves visibility into volume.
+const UNAUTH_WARN_WINDOW_MS = 60_000;
+let _lastUnauthWarnAt = 0;
+let _suppressedUnauthCount = 0;
 function warnUnauthorizedOnce(context, pathname) {
-  if (_seenUnauthPaths.has(pathname)) return;
-  _seenUnauthPaths.add(pathname);
-  context.logger.warn(`[local-api] unauthorized request to ${pathname} (token race at startup/rotation; repeats for this path suppressed)`);
+  const now = Date.now();
+  if (now - _lastUnauthWarnAt < UNAUTH_WARN_WINDOW_MS) {
+    _suppressedUnauthCount++;
+    return;
+  }
+  const extra = _suppressedUnauthCount > 0 ? ` (+${_suppressedUnauthCount} more suppressed in last window)` : '';
+  _suppressedUnauthCount = 0;
+  _lastUnauthWarnAt = now;
+  context.logger.warn(`[local-api] unauthorized request to ${pathname} (token race at startup/rotation)${extra}`);
 }
 const SIDECAR_START_MS = Date.now();
 const wmHostStats = new Map(); // host → { ok, fail, lastStatus, lastOkAt, lastFailAt, lastError }

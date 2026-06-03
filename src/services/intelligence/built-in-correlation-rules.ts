@@ -22,9 +22,11 @@ function withinDistance(a: ObservationEvent, b: ObservationEvent, km: number): b
 }
 
 function shareEntity(a: ObservationEvent, b: ObservationEvent): boolean {
-  if (a.entityIds.length === 0 || b.entityIds.length === 0) return false;
-  const setB = new Set(b.entityIds);
-  return a.entityIds.some((id) => setB.has(id));
+  const aIds = a.entityIds ?? [];
+  const bIds = b.entityIds ?? [];
+  if (aIds.length === 0 || bIds.length === 0) return false;
+  const setB = new Set(bIds);
+  return aIds.some((id) => setB.has(id));
 }
 
 function hasTag(event: ObservationEvent, tag: string): boolean {

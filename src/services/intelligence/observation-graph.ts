@@ -105,7 +105,7 @@ export function createObservationGraph(): ObservationGraph {
   }
 
   function tryEntityShared(a: ObservationEvent, b: ObservationEvent): void {
-    const shared = a.entityIds.find((id) => b.entityIds.includes(id));
+    const shared = (a.entityIds ?? []).find((id) => (b.entityIds ?? []).includes(id));
     if (!shared) return;
     addEdge(a.id, b.id, 'entity_shared', 0.8);
     addEdge(b.id, a.id, 'entity_shared', 0.8);

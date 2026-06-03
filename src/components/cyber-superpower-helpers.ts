@@ -62,8 +62,11 @@ export function computeThreatLevel(events: readonly ObservationEvent[]): ThreatL
   }
   const mean = sum / events.length;
   const score = clamp(Math.round((maxScore * 0.6 + mean * 0.4) * 10), 0, 100);
-  const level: ThreatLevel =
-    score >= 80 ? 'critical' : score >= 60 ? 'high' : score >= 35 ? 'elevated' : 'low';
+  let level: ThreatLevel;
+  if (score >= 80) level = 'critical';
+  else if (score >= 60) level = 'high';
+  else if (score >= 35) level = 'elevated';
+  else level = 'low';
   return {
     level,
     score,
@@ -155,8 +158,7 @@ export function buildInfrastructureExposure(
   const dnsAnomalyCount = matched.filter((m) => m.kind === 'dns-anomaly').length;
   const targetedAssetCount = matched.filter((m) => m.kind === 'target-hit').length;
 
-  const signals: InfrastructureSignal[] = matched
-    .slice()
+  const signals: InfrastructureSignal[] = [...matched]
     .sort((a, b) =>
       obsSeverityScore(b.event.severity) - obsSeverityScore(a.event.severity)
       || b.event.timestamp - a.event.timestamp,
@@ -199,13 +201,13 @@ export interface ZeroDayEntry {
 }
 
 const CVE_ID_PATTERN = /CVE-\d{4}-\d{4,}/i;
-const KEV_TAG_HINTS = ['kev', 'cisa-kev', 'known-exploited', 'itw'];
-const ZERO_DAY_TAG_HINTS = ['cve', 'vulnerability', 'zero-day', 'zeroday'];
+const KEV_TAG_HINTS = new Set(['kev', 'cisa-kev', 'known-exploited', 'itw']);
+const ZERO_DAY_TAG_HINTS = new Set(['cve', 'vulnerability', 'zero-day', 'zeroday']);
 
 function looksLikeCve(ev: ObservationEvent): boolean {
   const tagsLc = ev.tags.map((t) => t.toLowerCase());
-  if (tagsLc.some((t) => ZERO_DAY_TAG_HINTS.includes(t))) return true;
-  if (tagsLc.some((t) => KEV_TAG_HINTS.includes(t))) return true;
+  if (tagsLc.some((t) => ZERO_DAY_TAG_HINTS.has(t))) return true;
+  if (tagsLc.some((t) => KEV_TAG_HINTS.has(t))) return true;
   if (ev.entityIds.some((x) => CVE_ID_PATTERN.test(x))) return true;
   return CVE_ID_PATTERN.test(ev.title);
 }
@@ -216,8 +218,7 @@ export function buildZeroDayWatch(
 ): ZeroDayEntry[] {
   const cveLike = events.filter((e) => looksLikeCve(e));
 
-  return cveLike
-    .slice()
+  return [...cveLike]
     .sort((a, b) =>
       obsSeverityScore(b.severity) - obsSeverityScore(a.severity)
       || b.timestamp - a.timestamp,
@@ -225,12 +226,12 @@ export function buildZeroDayWatch(
     .slice(0, limit)
     .map((e): ZeroDayEntry => {
       const fromEntity = e.entityIds.find((x) => CVE_ID_PATTERN.test(x));
-      const titleMatch = e.title.match(CVE_ID_PATTERN);
+      const titleMatch = CVE_ID_PATTERN.exec(e.title);
       const cveMatch = fromEntity ?? titleMatch?.[0];
       const tagsLc = e.tags.map((t) => t.toLowerCase());
-      const inKev = tagsLc.some((t) => KEV_TAG_HINTS.includes(t))
-        || e.entityIds.some((x) => x.toLowerCase().startsWith('cisa-kev'));
-      const affectedProducts = e.entityIds.filter((x) =>
+      const inKev = tagsLc.some((t) => KEV_TAG_HINTS.has(t))
+        || (e.entityIds ?? []).some((x) => x.toLowerCase().startsWith('cisa-kev'));
+      const affectedProducts = (e.entityIds ?? []).filter((x) =>
         !CVE_ID_PATTERN.test(x) && !/^cisa-kev/i.test(x),
       );
       const score = obsSeverityScore(e.severity);
@@ -353,7 +354,7 @@ function collectSectors(actor: Entity, events: readonly ObservationEvent[]): str
       if (t.startsWith('sector:')) fromEvents.push(t.slice('sector:'.length));
     }
   }
-  return [...new Set([...seed, ...fromEvents])].sort();
+  return [...new Set([...seed, ...fromEvents])].sort((a, b) => a.localeCompare(b));
 }
 
 function deriveRegion(lat?: number, lon?: number): string | undefined {
@@ -454,7 +455,7 @@ function renderZeroDays(items: ZeroDayEntry[]): string {
     ${z.inKev ? '<strong style="color:#ef4444">KEV</strong> ' : ''}
     ${z.cveId ? `<code>${escapeHtml(z.cveId)}</code> ` : ''}
     ${escapeHtml(z.title)}
-    ${z.cvss !== undefined ? `<span style="opacity:0.6">· CVSS ${z.cvss}</span>` : ''}
+    ${z.cvss === undefined ? '' : `<span style="opacity:0.6">· CVSS ${z.cvss}</span>`}
   </li>`).join('');
   return `<section class="cyber-sp-section" data-section="zero-days">
     <h3 style="margin:8px 0 6px 0;font-size:13px">Zero-Day Watch</h3>
@@ -483,11 +484,14 @@ function renderAttribution(a: AttributionSummary): string {
 
 function levelBg(level: ThreatLevel): string {
   switch (level) {
-    case 'critical': return 'rgba(239, 68, 68, 0.18)';
-    case 'high': return 'rgba(249, 115, 22, 0.16)';
-    case 'elevated': return 'rgba(234, 179, 8, 0.14)';
-    case 'low':
-    default: return 'rgba(34, 197, 94, 0.12)';
+    case 'critical': { return 'rgba(239, 68, 68, 0.18)';
+    }
+    case 'high': { return 'rgba(249, 115, 22, 0.16)';
+    }
+    case 'elevated': { return 'rgba(234, 179, 8, 0.14)';
+    }
+    default: { return 'rgba(34, 197, 94, 0.12)';
+    }
   }
 }
 

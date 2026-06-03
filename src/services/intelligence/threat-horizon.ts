@@ -141,7 +141,7 @@ interface SignalDraft {
 
 function regionForObservation(obs: ObservationEvent | undefined): string {
   if (!obs) return DEFAULT_REGION;
-  if (obs.entityIds.length > 0) {
+  if ((obs.entityIds ?? []).length > 0) {
     const head = obs.entityIds[0]!;
     if (/^[A-Z0-9-]{2,8}$/.test(head)) return head;
   }

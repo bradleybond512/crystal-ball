@@ -342,7 +342,7 @@ export function resetForTests(): void {
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function regionOf(obs: ObservationEvent): string {
-  if (obs.entityIds.length === 0) return 'global';
+  if ((obs.entityIds ?? []).length === 0) return 'global';
   const first = obs.entityIds[0]!;
   const prefix = first.split('-')[0] ?? first;
   if (prefix.length === 0) return 'global';

@@ -176,14 +176,14 @@ struct PersistentCache {
 /// timeout lets the sidecar boot anyway.
 const KEYCHAIN_PER_CALL_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// The consolidated `secrets-vault` read can surface a one-time macOS "Always
-/// Allow" ACL dialog after a re-signed build (the signature changes, so the
-/// keychain no longer trusts the app). 3s is too short for a human to answer
-/// that dialog — the read times out, every API key is dropped, and the app
-/// boots with no data. This load runs async on a worker thread (the UI window
-/// is already up), so a longer wait is safe. The per-key fallback below keeps
-/// the short timeout so a genuinely-failed vault doesn't stack 40+ prompts.
-const KEYCHAIN_VAULT_TIMEOUT: Duration = Duration::from_secs(15);
+/// The consolidated `secrets-vault` read surfaces a macOS "Always Allow" ACL
+/// dialog after every re-signed build. macOS Keychain ACL tracks applications
+/// by CDHash (per-binary), so each new build requires one "Always Allow" click.
+/// The previous 15s window was too narrow — the user often missed it, timing
+/// out every API key. 120s gives a full 2-minute window to click the prompt.
+/// The per-key fallback keeps its short timeout so a failed vault doesn't
+/// stack 40+ prompts. The load runs on a worker thread (UI is already up).
+const KEYCHAIN_VAULT_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Run a single keychain `get_password()` call on a worker thread
 /// and wait at most `timeout` for the answer. Returns:

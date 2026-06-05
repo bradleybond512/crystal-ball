@@ -949,6 +949,7 @@ const ROUTE_ALIASES = {
   '/api/firms': '/api/nasa-firms',
   '/api/wildfire/hotspots': '/api/nasa-firms',
   '/api/opensanctions': '/api/opensanctions-recent',
+  '/api/gdacs-alerts': '/api/disasters/gdacs',
 };
 
 // ── IP geolocation helpers ────────────────────────────────────────────────

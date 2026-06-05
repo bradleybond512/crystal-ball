@@ -36,7 +36,12 @@ export class FinancialContagionPanel extends Panel {
  } catch (error) {
  const delay = DELAYS[attempt];
  if (delay === undefined) {
- console.error('[FinancialContagionPanel] load error:', error);
+ const msg = error instanceof Error ? error.message : String(error);
+ if (/unavailable/i.test(msg)) {
+  console.warn(`[FEED] [FinancialContagionPanel] ${msg}`);
+ } else {
+  console.error('[FinancialContagionPanel] load error:', error);
+ }
  this.showError('Contagion data unavailable');
  return;
  }

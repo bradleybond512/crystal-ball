@@ -69,11 +69,16 @@ const GDACS_TO_CATEGORY: Record<string, NaturalEventCategory> = {
 };
 
 function convertGDACSToNaturalEvent(gdacs: GDACSEvent): NaturalEvent {
-  const category = GDACS_TO_CATEGORY[gdacs.eventType] || 'manmade';
+  const category = GDACS_TO_CATEGORY[gdacs.eventType] ?? 'manmade';
   return {
  id: gdacs.id,
- title: `${gdacs.alertLevel === 'Red' ? '🔴 ' : (gdacs.alertLevel === 'Orange' ? '🟠 ' : '')}${gdacs.name}`,
- description: `${gdacs.description}${gdacs.severity ? ` - ${gdacs.severity}` : ''}`,
+ title: (() => {
+  let prefix = '';
+  if (gdacs.alertLevel === 'Red') prefix = '🔴 ';
+  else if (gdacs.alertLevel === 'Orange') prefix = '🟠 ';
+  return `${prefix}${gdacs.name}`;
+ })(),
+ description: gdacs.severity ? `${gdacs.description} - ${gdacs.severity}` : gdacs.description,
  category,
  categoryTitle: gdacs.description,
  lat: gdacs.coordinates[1],
@@ -91,7 +96,7 @@ export async function fetchNaturalEvents(days = 30): Promise<NaturalEvent[]> {
  fetchGDACSEvents(),
   ]);
 
-  const gdacsConverted = gdacsEvents.map(convertGDACSToNaturalEvent);
+  const gdacsConverted = gdacsEvents.map((e) => convertGDACSToNaturalEvent(e));
   const seenLocations = new Set<string>();
   const merged: NaturalEvent[] = [];
 
@@ -123,11 +128,11 @@ async function fetchEonetEvents(days: number): Promise<NaturalEvent[]> {
  throw new Error(`EONET API error: ${response.status}`);
  }
 
- const data: EonetResponse = await response.json();
+ const data = await response.json() as EonetResponse;
  const events: NaturalEvent[] = [];
  const now = Date.now();
 
- for (const event of data.events) {
+ for (const event of (Array.isArray(data.events) ? data.events : [])) {
  const category = event.categories[0];
  if (!category) continue;
 
@@ -150,7 +155,7 @@ async function fetchEonetEvents(days: number): Promise<NaturalEvent[]> {
  events.push({
  id: event.id,
  title: event.title,
- description: event.description || undefined,
+ description: event.description ?? undefined,
  category: category.id as NaturalEventCategory,
  categoryTitle: category.title,
  lat,
@@ -166,6 +171,7 @@ async function fetchEonetEvents(days: number): Promise<NaturalEvent[]> {
 
  return events;
   } catch (error) {
+ // eslint-disable-next-line no-console -- fetch failure is expected in offline mode
  console.error('[EONET] Failed to fetch natural events:', error);
  return [];
   }

@@ -54,13 +54,14 @@ test('riskLevelFor: score 100 → CRITICAL', () => {
 
 // ── ALL_FULLSET_COMMODITIES ───────────────────────────────────────────────
 
-test('ALL_FULLSET_COMMODITIES has exactly 8 entries', () => {
-  assert.equal(ALL_FULLSET_COMMODITIES.length, 8);
+test('ALL_FULLSET_COMMODITIES has exactly 12 entries', () => {
+  assert.equal(ALL_FULLSET_COMMODITIES.length, 12);
 });
 
-test('ALL_FULLSET_COMMODITIES includes all 8 required commodities', () => {
+test('ALL_FULLSET_COMMODITIES includes all 12 required commodities', () => {
   const required: FullSetCommodity[] = [
     'wheat', 'corn', 'rice', 'soybeans', 'diesel', 'gasoline', 'natural-gas', 'jet-fuel',
+    'fertilizer', 'crude', 'propane', 'electricity',
   ];
   for (const c of required) {
     assert.ok(ALL_FULLSET_COMMODITIES.includes(c), `missing: ${c}`);
@@ -69,10 +70,10 @@ test('ALL_FULLSET_COMMODITIES includes all 8 required commodities', () => {
 
 // ── computeShortageFullSet — basic contract ───────────────────────────────
 
-test('computeShortageFullSet returns 8 entries with empty inputs', () => {
+test('computeShortageFullSet returns one entry per commodity with empty inputs', () => {
   _resetTrendMemory();
   const entries = computeShortageFullSet({}, { now: NOW });
-  assert.equal(entries.length, 8);
+  assert.equal(entries.length, ALL_FULLSET_COMMODITIES.length);
 });
 
 test('each entry has commodity, riskScore, riskLevel, primaryDrivers, timeToImpact, trend', () => {

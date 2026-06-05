@@ -2387,6 +2387,13 @@ export class PanelLayoutManager implements AppModule {
  // Content toolbar — skip interactive children (region select, search btn)
  attachDrag(document.querySelector('.mac-content-toolbar'));
 
+ // EEW Status Bar — position:fixed; top:0; z-index:9000 sits on top of the
+ // content toolbar and intercepts all mousedown events, blocking drag when a
+ // flare/seismic alert is active. Add the same handler so dragging from the
+ // bar still works (interactive children like expand/dismiss are still excluded
+ // via NO_DRAG_SELECTOR).
+ attachDrag(document.querySelector('.eew-status-bar'));
+
  // Sidebar drag zone — empty div, all clicks are drag
  attachDrag(document.querySelector('.mac-sidebar-drag'), true);
   }

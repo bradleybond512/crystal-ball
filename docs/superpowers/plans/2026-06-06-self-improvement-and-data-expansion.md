@@ -6,13 +6,18 @@
 
 ## CURRENT STATE / NEXT STEP  *(update this every session)*
 
-- **Status:** Workstream B — **B1 + B1b done.** Loop links 1 (record evals) and 2 (grade into fixtures) are live. Next is **B2** (run the tuner).
-- **B1 (done):** 15/21 algos record into the evaluation ledger on every live run (#999, #1001). 6 orphaned (no live call site): baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest.
-- **B1b (done):** `outcome-grading-runner.ts` grades pending records (>48h old) via the LLM grader + local-first `llm-adapter`, writes outcomes back, on an hourly cadence wired at bootstrap (#1003). Skips on LLM-unavailable; re-entrancy guarded; 4 tests in `test:algorithms`.
-- **Next step — B2:** wire `self-improvement-scheduler` into bootstrap. Its `tick(now)` is pure and returns DUE `ImprovementTask[]` (daily-audit/weekly-backtest/monthly-review) — it does NOT execute. So B2 = (1) tick on a cadence, (2) execute returned tasks: run `drift-detector` + `adaptive-tuner` against the now-graded ledger, gate proposals through `safe-adjustment` + `policy-gate`, and AUTO-APPLY safe ones (decision locked) with before/after logging + revert path.
-- **Then B3:** `npm run tune` CLI + surface applied adjustments in the wired AlgorithmDiagnosticPanel.
-- **Blocked on:** nothing. Tuner now has graded fixtures flowing (once records age past 48h in a keyed/LLM-available session).
+- **Status:** Workstream B — **B1 + B1b + B2 slice done.** The self-improvement loop is wired end-to-end for one algorithm; auto-apply is intentionally gated OFF pending replay/backtest evidence.
+- **B1 (done):** 15/21 algos record into the evaluation ledger (#999, #1001).
+- **B1b (done):** pending records graded into fixtures via LLM grader on a cadence (#1003).
+- **B2 slice (done, #1006):** `tunable-params-store` (bound-clamped) + `big-event-detector.threshold` declared tunable + data-loader reads it + panel surfaces proposals + `tuning-apply-runner` proposes → policy-gates → auto-applies only `allow_auto` (6h cadence). Currently NOTHING auto-applies: the runner passes `replayPassed/backtestPassed=false`, and the threshold is flagged `affectsNotifications` so the gate forces approval regardless.
 
+- **Next steps (pick one):**
+  - **B2-enable:** wire `replay-harness` + `backtest-engine` results into `runTuningApply({ replayPassed, backtestPassed })` so non-notification, low/medium knobs with enough graded samples actually auto-apply. This is the switch that makes the loop *act*.
+  - **B2-replicate:** declare more tunables (other instrumented algos) in `tunable-params-store` + make their call sites read from the store (pattern: big-event-detector threshold).
+  - **B3:** surface applied adjustments + history in `AlgorithmDiagnosticPanel` (proposals already render).
+  - **B1 cleanup:** decide the 6 orphaned algos (baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest) — wire into a live path or drop from registry.
+
+- **Blocked on:** nothing. Loop runs + grades + proposes live; only the final apply is gated pending evidence wiring.
 ---
 
 ## Why this exists
@@ -85,3 +90,4 @@ The tuner auto-applies any parameter adjustment that clears all safety gates, an
 - 2026-06-06 — B1 pattern landed: big-event-detector instrumented (data-loader.ts:1468 → evaluation ledger), guarded, typecheck 0. Discovered the outcome path (resolvePendingViaLlm + llm-grader) exists but is unwired — folded into B1b. Remaining B1 work is mechanical replication across 20 more registered algos.
 - 2026-06-06 — B1 done: 15/21 algos instrumented into the evaluation ledger (Sonnet sub-agent did the bulk; Codex review caught + we fixed a source-feedback double-count and two durationMs:0 timers). Found 6 registered algos with no live call site. Next: B1b (wire outcome-resolver/llm-grader onto a cadence).
 - 2026-06-06 — B1b done (#1003): outcome-grading-runner wires the LLM grader to the ledger on a cadence. Codex review caught two real issues (generateText returns {provider:none} not a throw → would falsely mark records inconclusive on LLM outage; missing re-entrancy guard) — both fixed. Next: B2 (execute scheduler tick → drift-detector + adaptive-tuner → auto-apply safe).
+- 2026-06-06 — B2 vertical slice (#1006): tunable-params store + big-event-detector threshold tunable + gated auto-apply runner. Codex caught that the threshold is notification-gating → added affectsNotifications so the gate forces approval. Loop now wired end-to-end; auto-apply held pending replay/backtest evidence (B2-enable).

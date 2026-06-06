@@ -32,6 +32,10 @@ interface TunableDeclaration {
   /** Direction the tuner nudges this param when the algorithm is unhealthy. */
   fixDirection: ParameterDirection;
   description: string;
+  /** True when changing this param alters what the user is notified about.
+   *  The policy gate applies a stricter notification-specific approval rule,
+   *  so a tuning here can never silently change notification behavior. */
+  affectsNotifications: boolean;
 }
 
 /** The declared knobs the tuner is allowed to turn. */
@@ -47,6 +51,9 @@ const DECLARATIONS: readonly TunableDeclaration[] = [
     // bar so fewer borderline events qualify.
     fixDirection: 'increase',
     description: 'Total-score threshold above which an event is "big".',
+    // This threshold gates whether weather alerts enter the notification
+    // ladder, so tuning it is a notification-affecting change.
+    affectsNotifications: true,
   },
 ];
 
@@ -126,6 +133,12 @@ export function getTunings(): AlgorithmAdjustmentTuning[] {
     byAlgorithm.set(d.algorithmId, list);
   }
   return [...byAlgorithm.entries()].map(([algorithmId, parameters]) => ({ algorithmId, parameters }));
+}
+
+/** Whether tuning this parameter alters notification behavior (drives the
+ *  policy gate's notification-specific approval rule). */
+export function tunableAffectsNotifications(algorithmId: string, parameterId: string): boolean {
+  return declarationFor(algorithmId, parameterId)?.affectsNotifications ?? false;
 }
 
 /** Test/diagnostic helper: clear all stored overrides. */

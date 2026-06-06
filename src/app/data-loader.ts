@@ -102,6 +102,7 @@ import { t, getCurrentLanguage } from '@/services/i18n';
 import { getHydratedData } from '@/services/bootstrap';
 import { canQueueAiClassification, AI_CLASSIFY_MAX_PER_FEED } from '@/services/ai-classify-queue';
 import { classifyWithAI } from '@/services/threat-classifier';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 import { ingestHeadlines } from '@/services/trending-keywords';
 import type { ListFeedDigestResponse } from '@/generated/client/crystalball/news/v1/service_client';
 import type { GetSectorSummaryResponse } from '@/generated/client/crystalball/market/v1/service_client';
@@ -1468,7 +1469,11 @@ export class DataLoaderManager implements AppModule {
  potentialImpact: severityScore,
  };
  const _bedStart = performance.now();
- const bigEventResult = detectBigEvent(ladderInput);
+ // Threshold is a tunable param (B2): reads the auto-tuned value from the
+ // store, falling back to the detector's built-in default (40) when unset.
+ const bigEventResult = detectBigEvent(ladderInput, {
+ threshold: getTunedParam('big-event-detector', 'threshold', 40),
+ });
  // B1 (self-improvement gameplan): feed the evaluation ledger so the
  // adaptive-tuner has data. Guarded — instrumentation must never break
  // the notification data path.

@@ -78,6 +78,7 @@ import { startMenubarStatus } from '@/services/native/menubar-status';
 import { startSituationAlertBridge } from '@/services/situation-alert-bridge';
 import { startRulesEngineBootstrap } from '@/services/intelligence/rules-bootstrap';
 import { startOutcomeGradingCadence } from '@/services/algorithms/outcome-grading-runner';
+import { startTuningApplyCadence } from '@/services/algorithms/tuning-apply-runner';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
 import { startCorrelationFeedback } from '@/services/correlation-feedback';
@@ -844,6 +845,7 @@ export class PanelLayoutManager implements AppModule {
  startSituationAlertBridge();
  startRulesEngineBootstrap();
  startOutcomeGradingCadence();
+ startTuningApplyCadence();
  startSilenceDetector();
  startSourceFeedback();
  startCorrelationFeedback();

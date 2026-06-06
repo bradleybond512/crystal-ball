@@ -19,6 +19,7 @@ import {
 } from '@/services/algorithms/algorithm-health';
 import { summarizeCalibration } from '@/services/algorithms/algorithm-evaluation-ledger';
 import { proposeAdjustments } from '@/services/algorithms/safe-adjustment';
+import { getTunings } from '@/services/algorithms/tunable-params-store';
 import {
   gateAdjustmentProposal,
   type GatedProposal,
@@ -103,7 +104,7 @@ export class AlgorithmDiagnosticPanel extends Panel {
     const definitions = getAlgorithmDefinitions();
     const calibrations = summarizeCalibration(ledger.all());
     const report = aggregateAlgorithmHealth({ definitions, calibrations });
-    const proposals = proposeAdjustments({ reports: [...report.algorithms], tunings: [] });
+    const proposals = proposeAdjustments({ reports: [...report.algorithms], tunings: getTunings() });
     const definitionsById = new Map<string, HealthAlgorithmDefinition>();
     for (const d of definitions) definitionsById.set(d.algorithmId, d);
     // Gate every proposal through the policy engine so the UI never

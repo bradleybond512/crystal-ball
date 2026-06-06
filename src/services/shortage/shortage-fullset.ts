@@ -23,6 +23,7 @@ import {
   computeElectricityShortageRisk,
 } from './energy-fertilizer-models';
 import type { ShortageForecast, ShortageInputBag } from './shortage-types';
+import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
 
 // ── Public types ───────────────────────────────────────────────────────────
 
@@ -118,7 +119,20 @@ function runCommodity(
 ): ShortageForecast | undefined {
   const opts = { region, now };
   switch (commodity) {
-    case 'wheat': {       return computeWheatShortageRisk(inputs, opts);
+    case 'wheat': {
+      const _t0 = performance.now();
+      const r = computeWheatShortageRisk(inputs, opts);
+      if (r) {
+        try {
+          recordAlgorithmEvaluation('shortage-wheat', {
+            durationMs: performance.now() - _t0,
+            score: r.riskScore / 100,
+            label: r.confidence,
+            detail: { region, drivers: r.drivers.length, dataGaps: r.dataGaps.length },
+          });
+        } catch { /* ledger unavailable */ }
+      }
+      return r;
     }
     case 'corn': {        return computeCornShortageRisk(inputs, opts);
     }
@@ -126,7 +140,20 @@ function runCommodity(
     }
     case 'soybeans': {    return computeSoybeansShortageRisk(inputs, opts);
     }
-    case 'diesel': {      return computeDieselShortageRisk(inputs, opts);
+    case 'diesel': {
+      const _t0 = performance.now();
+      const r = computeDieselShortageRisk(inputs, opts);
+      if (r) {
+        try {
+          recordAlgorithmEvaluation('shortage-diesel', {
+            durationMs: performance.now() - _t0,
+            score: r.riskScore / 100,
+            label: r.confidence,
+            detail: { region, drivers: r.drivers.length, dataGaps: r.dataGaps.length },
+          });
+        } catch { /* ledger unavailable */ }
+      }
+      return r;
     }
     case 'gasoline': {    return computeGasolineShortageRisk(inputs, opts);
     }

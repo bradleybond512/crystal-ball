@@ -20,6 +20,7 @@
 import { unifiedAlertStore, type UnifiedAlert } from './unified-alerts';
 import { isGhostMode } from './mode-manager';
 import { getMemory, putMemory } from './reasoning-memory';
+import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -133,13 +134,24 @@ function prune(): void {
 
 function learn(alert: UnifiedAlert, polarity: 'positive' | 'negative'): void {
   if (isGhostMode()) return;
+  const _t0 = Date.now();
   const step = polarity === 'positive' ? POSITIVE_STEP : -NEGATIVE_STEP;
-  for (const term of extractTerms(alert)) bump(term, step);
+  const terms = extractTerms(alert);
+  for (const term of terms) bump(term, step);
 
   state.writeCount += 1;
   if (state.writeCount % 20 === 0) decayAll();
   prune();
   save();
+
+  try {
+    recordAlgorithmEvaluation('relevance-learner', {
+      durationMs: Date.now() - _t0,
+      score: polarity === 'positive' ? 1 : 0,
+      label: polarity,
+      detail: { terms: terms.length, totalWeights: Object.keys(state.weights).length },
+    });
+  } catch { /* ledger unavailable */ }
 }
 
 // ── Boost computation ────────────────────────────────────────────────────────

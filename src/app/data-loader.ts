@@ -1480,6 +1480,16 @@ export class DataLoaderManager implements AppModule {
  detail: { domain: 'weather', triggers: bigEventResult.triggers.length, tier: bigEventResult.tier },
  });
  } catch { /* ledger unavailable — skip silently */ }
+ // confidence-urgency-matrix: the tier + deliveryPriority come directly from the matrix
+ // computation inside detectBigEvent — record them as a separate matrix evaluation.
+ try {
+ recordAlgorithmEvaluation('confidence-urgency-matrix', {
+ durationMs: performance.now() - _bedStart, // shares the detectBigEvent bracket (matrix runs inside it)
+ score: bigEventResult.totalScore / 100,
+ label: bigEventResult.tier,
+ detail: { priority: bigEventResult.deliveryPriority, urgency: bigEventResult.urgency },
+ });
+ } catch { /* ledger unavailable — skip silently */ }
  if (!bigEventResult.isBigEvent) continue;
  const decision = routeBigEventToLadder(registry, bigEventResult, ladderInput, {
  domain: 'weather',

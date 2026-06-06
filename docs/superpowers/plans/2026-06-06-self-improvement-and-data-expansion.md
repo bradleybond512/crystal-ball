@@ -6,12 +6,12 @@
 
 ## CURRENT STATE / NEXT STEP  *(update this every session)*
 
-- **Status:** Workstream B in progress — B1 pattern proven.
-- **Last landed:** B1 canonical wiring — `big-event-detector` instrumented at `data-loader.ts:1468` with `recordAlgorithmEvaluation` (guarded; records score/label/latency to the ledger). typecheck 0.
-- **Next step:** **B1 (continue)** — replicate the same guarded `recordAlgorithmEvaluation(<id>, {durationMs, score, label, detail})` pattern at the live call sites of the other registered algorithms to reach ≥3 (target: all 21). Then **B1b**.
-- **Recipe (mechanical — fine on Sonnet):** for each registered algo id (see `algorithm-registry.ts`, 21 ids), find its live call site, time it, and call `recordAlgorithmEvaluation(id, {...})` in a `try/catch`. Pattern reference: `data-loader.ts` big-event-detector block.
-- **B1b (outcome path):** the outcome side already exists — `outcome-resolver.ts` exports `resolvePendingViaLlm(...)` + `pickEligibleForLlmGrading(...)`, and `llm-grader.ts` is real. They are NOT invoked anywhere. Wire `resolvePendingViaLlm` into the scheduler (B2) using `llm-adapter.generateText` as the injected LLM fn so pending evals get graded into fixtures.
-- **Blocked on:** nothing. B2 (run tuner) requires B1 + B1b first (tuner needs *graded* fixtures, not just evals).
+- **Status:** Workstream B — **B1 done** (15/21 algos feed the ledger). Next is **B1b**.
+- **Last landed:** B1 — 15 of 21 registered algos now record into the evaluation ledger (big-event-detector, confidence-urgency-matrix, correlation-feedback, hypothesis-accuracy, nws-polygon-match, personal-storm-mode, relevance-learner, shortage-wheat, shortage-diesel, source-feedback + pre-existing weather-urgency, compound-risk, truth-score, negative-evidence, threat-classifier). All guarded, Codex-reviewed, tsc/eslint 0. Merged (#999, #1001).
+- **Orphaned algos (no live call site — can't be tuned until invoked):** baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest. These 6 are registered + pure-tested but never called in the live app. Decide later: wire them into a live path, or drop from the registry.
+- **Next step:** **B1b — wire the outcome path.** `outcome-resolver.ts` (`resolvePendingViaLlm`, `pickEligibleForLlmGrading`) + `llm-grader.ts` are real but invoked nowhere. Wire `resolvePendingViaLlm` on a cadence using `llm-adapter.generateText` as the injected LLM fn, so pending evals get graded into fixtures. (This is the prerequisite for B2 — the tuner needs *graded* fixtures.)
+- **Then B2:** wire `self-improvement-scheduler` into bootstrap → runs drift-detector → adaptive-tuner → safe-adjustment → auto-apply (gated), on DAILY/WEEKLY/MONTHLY cadences.
+- **Blocked on:** nothing.
 
 ---
 
@@ -36,7 +36,7 @@ The tuner auto-applies any parameter adjustment that clears all safety gates, an
 
 **Goal:** a self-improving loop that runs in production: grade outcomes → fill ledger → detect drift → tune params → auto-apply safe changes → log.
 
-- [ ] **B1 — Fill the ledger.** Call `recordAlgorithmEvaluation` / `recordAlgorithmOutcome` from the existing grading paths so the evaluation ledger accumulates real data.
+- [x] **B1 — Fill the ledger.** DONE: 15/21 registered algos record into the ledger (guarded). 6 are orphaned (no live call site) — see Current State.
   - Call sites: `src/services/analyst-loop.ts`, `src/services/hypothesis-accuracy.ts`, `src/services/alert-correlator.ts`, `src/services/severity-recalibration.ts`
   - Recorders: `src/services/algorithms/record-evaluation.ts` (`recordAlgorithmEvaluation`, `recordAlgorithmOutcome`, `timeAndRecord`)
   - Persistence: `algorithm-ledger-persistence.ts` (verify it flushes to IDB so the ledger survives restarts)
@@ -83,3 +83,4 @@ The tuner auto-applies any parameter adjustment that clears all safety gates, an
 
 - 2026-06-06 — Gameplan created and committed. Discovered the tuning loop is fully built but unwired; locked auto-apply-safe autonomy.
 - 2026-06-06 — B1 pattern landed: big-event-detector instrumented (data-loader.ts:1468 → evaluation ledger), guarded, typecheck 0. Discovered the outcome path (resolvePendingViaLlm + llm-grader) exists but is unwired — folded into B1b. Remaining B1 work is mechanical replication across 20 more registered algos.
+- 2026-06-06 — B1 done: 15/21 algos instrumented into the evaluation ledger (Sonnet sub-agent did the bulk; Codex review caught + we fixed a source-feedback double-count and two durationMs:0 timers). Found 6 registered algos with no live call site. Next: B1b (wire outcome-resolver/llm-grader onto a cadence).

@@ -19,7 +19,7 @@ import { summarizeCalibration, type AlgorithmEvaluationLedger } from './algorith
 import { aggregateAlgorithmHealth, type AlgorithmDefinition } from './algorithm-health';
 import { proposeAdjustments } from './safe-adjustment';
 import { gateAdjustmentProposal } from '@/services/governance/policy-gate';
-import { getTunings, setTunedParam } from './tunable-params-store';
+import { getTunings, setTunedParam, tunableAffectsNotifications } from './tunable-params-store';
 
 export interface TuningApplyResult {
   /** Proposals whose verdict was 'apply' (a concrete value change). */
@@ -74,6 +74,9 @@ export function runTuningApply(deps: TuningApplyDeps = {}): TuningApplyResult {
       evidenceCount: cal?.graded ?? 0,
       replayPassed,
       backtestPassed,
+      // Notification-affecting knobs get the gate's stricter approval rule so
+      // auto-tuning can never silently change what the user is alerted about.
+      affectsNotifications: tunableAffectsNotifications(p.algorithmId, p.parameterId),
     });
 
     if (gated.verdict.decision === 'allow_auto') {

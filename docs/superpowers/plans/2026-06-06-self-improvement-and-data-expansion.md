@@ -12,6 +12,7 @@
 - **Next step — B2:** wire `self-improvement-scheduler` into bootstrap. Its `tick(now)` is pure and returns DUE `ImprovementTask[]` (daily-audit/weekly-backtest/monthly-review) — it does NOT execute. So B2 = (1) tick on a cadence, (2) execute returned tasks: run `drift-detector` + `adaptive-tuner` against the now-graded ledger, gate proposals through `safe-adjustment` + `policy-gate`, and AUTO-APPLY safe ones (decision locked) with before/after logging + revert path.
 - **Then B3:** `npm run tune` CLI + surface applied adjustments in the wired AlgorithmDiagnosticPanel.
 - **Blocked on:** nothing. Tuner now has graded fixtures flowing (once records age past 48h in a keyed/LLM-available session).
+
 ---
 
 ## Why this exists

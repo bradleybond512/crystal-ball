@@ -10,6 +10,7 @@
  */
 
 import { unifiedAlertStore, type AlertSource } from './unified-alerts';
+import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
 
 const STORAGE_KEY = 'crystalball-source-feedback-v1';
 const FAST_ACK_MS = 10_000;
@@ -43,6 +44,20 @@ function bump(source: AlertSource, field: keyof SourceStats): void {
   cur[field] += 1;
   stats.set(source, cur);
   save();
+  // Record once per user action. A fast-ack bumps both 'ackCount' and
+  // 'fastAckCount'; skip the sub-classification so it isn't double-counted.
+  if (field !== 'fastAckCount') {
+    try {
+      const _t0 = performance.now();
+      const mult = getSourceFeedbackMult(source);
+      recordAlgorithmEvaluation('source-feedback', {
+        durationMs: performance.now() - _t0,
+        score: mult,
+        label: field,
+        detail: { source, ackCount: cur.ackCount, snoozeCount: cur.snoozeCount },
+      });
+    } catch { /* ledger unavailable */ }
+  }
 }
 
 /** 0.5–1.0 multiplier — closer to 0.5 means user treats this source as noise. */

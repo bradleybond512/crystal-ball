@@ -6,13 +6,12 @@
 
 ## CURRENT STATE / NEXT STEP  *(update this every session)*
 
-- **Status:** Workstream B — **B1 done** (15/21 algos feed the ledger). Next is **B1b**.
-- **Last landed:** B1 — 15 of 21 registered algos now record into the evaluation ledger (big-event-detector, confidence-urgency-matrix, correlation-feedback, hypothesis-accuracy, nws-polygon-match, personal-storm-mode, relevance-learner, shortage-wheat, shortage-diesel, source-feedback + pre-existing weather-urgency, compound-risk, truth-score, negative-evidence, threat-classifier). All guarded, Codex-reviewed, tsc/eslint 0. Merged (#999, #1001).
-- **Orphaned algos (no live call site — can't be tuned until invoked):** baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest. These 6 are registered + pure-tested but never called in the live app. Decide later: wire them into a live path, or drop from the registry.
-- **Next step:** **B1b — wire the outcome path.** `outcome-resolver.ts` (`resolvePendingViaLlm`, `pickEligibleForLlmGrading`) + `llm-grader.ts` are real but invoked nowhere. Wire `resolvePendingViaLlm` on a cadence using `llm-adapter.generateText` as the injected LLM fn, so pending evals get graded into fixtures. (This is the prerequisite for B2 — the tuner needs *graded* fixtures.)
-- **Then B2:** wire `self-improvement-scheduler` into bootstrap → runs drift-detector → adaptive-tuner → safe-adjustment → auto-apply (gated), on DAILY/WEEKLY/MONTHLY cadences.
-- **Blocked on:** nothing.
-
+- **Status:** Workstream B — **B1 + B1b done.** Loop links 1 (record evals) and 2 (grade into fixtures) are live. Next is **B2** (run the tuner).
+- **B1 (done):** 15/21 algos record into the evaluation ledger on every live run (#999, #1001). 6 orphaned (no live call site): baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest.
+- **B1b (done):** `outcome-grading-runner.ts` grades pending records (>48h old) via the LLM grader + local-first `llm-adapter`, writes outcomes back, on an hourly cadence wired at bootstrap (#1003). Skips on LLM-unavailable; re-entrancy guarded; 4 tests in `test:algorithms`.
+- **Next step — B2:** wire `self-improvement-scheduler` into bootstrap. Its `tick(now)` is pure and returns DUE `ImprovementTask[]` (daily-audit/weekly-backtest/monthly-review) — it does NOT execute. So B2 = (1) tick on a cadence, (2) execute returned tasks: run `drift-detector` + `adaptive-tuner` against the now-graded ledger, gate proposals through `safe-adjustment` + `policy-gate`, and AUTO-APPLY safe ones (decision locked) with before/after logging + revert path.
+- **Then B3:** `npm run tune` CLI + surface applied adjustments in the wired AlgorithmDiagnosticPanel.
+- **Blocked on:** nothing. Tuner now has graded fixtures flowing (once records age past 48h in a keyed/LLM-available session).
 ---
 
 ## Why this exists
@@ -84,3 +83,4 @@ The tuner auto-applies any parameter adjustment that clears all safety gates, an
 - 2026-06-06 — Gameplan created and committed. Discovered the tuning loop is fully built but unwired; locked auto-apply-safe autonomy.
 - 2026-06-06 — B1 pattern landed: big-event-detector instrumented (data-loader.ts:1468 → evaluation ledger), guarded, typecheck 0. Discovered the outcome path (resolvePendingViaLlm + llm-grader) exists but is unwired — folded into B1b. Remaining B1 work is mechanical replication across 20 more registered algos.
 - 2026-06-06 — B1 done: 15/21 algos instrumented into the evaluation ledger (Sonnet sub-agent did the bulk; Codex review caught + we fixed a source-feedback double-count and two durationMs:0 timers). Found 6 registered algos with no live call site. Next: B1b (wire outcome-resolver/llm-grader onto a cadence).
+- 2026-06-06 — B1b done (#1003): outcome-grading-runner wires the LLM grader to the ledger on a cadence. Codex review caught two real issues (generateText returns {provider:none} not a throw → would falsely mark records inconclusive on LLM outage; missing re-entrancy guard) — both fixed. Next: B2 (execute scheduler tick → drift-detector + adaptive-tuner → auto-apply safe).

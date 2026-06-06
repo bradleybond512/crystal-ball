@@ -20,9 +20,16 @@ import type { LlmFn } from './llm-grader';
 import type { AlgorithmEvaluationLedger } from './algorithm-evaluation-ledger';
 import { generateText } from '@/services/llm-adapter';
 
-/** Adapt the app's local-first LLM to the grader's `(prompt) => text` shape. */
+/** Adapt the app's local-first LLM to the grader's `(prompt) => text` shape.
+ *  `generateText` returns `{ provider: 'none', text: '' }` (no throw) when no
+ *  LLM is available or the cloud budget is exhausted — throw in that case so
+ *  the grader marks the result `llmUnavailable` and the runner leaves the
+ *  record pending instead of falsely grading it inconclusive. */
 const defaultLlmFn: LlmFn = async (prompt: string): Promise<string> => {
   const result = await generateText(prompt);
+  if (result.provider === 'none' || result.text.trim() === '') {
+    throw new Error('llm unavailable: no provider or empty response');
+  }
   return result.text;
 };
 
@@ -84,12 +91,20 @@ export async function runOutcomeGrading(deps: OutcomeGradingDeps = {}): Promise<
 const DEFAULT_CADENCE_MS = 60 * 60 * 1000; // hourly
 
 let _timer: ReturnType<typeof setInterval> | null = null;
+let _running = false;
 
 /** Start the periodic grading cadence (idempotent). Returns a stop fn. */
 export function startOutcomeGradingCadence(intervalMs: number = DEFAULT_CADENCE_MS): () => void {
   if (_timer !== null) return stopOutcomeGradingCadence;
   _timer = setInterval(() => {
-    void runOutcomeGrading().catch(() => { /* never let the cadence throw */ });
+    // Re-entrancy guard: a grading batch can take longer than the interval
+    // (LLM latency); skip ticks while one is in flight so the same pending
+    // records aren't re-sent and cloud budget isn't burned twice.
+    if (_running) return;
+    _running = true;
+    void runOutcomeGrading()
+      .catch(() => { /* never let the cadence throw */ })
+      .finally(() => { _running = false; });
   }, intervalMs);
   // Don't keep the process alive on this timer (no-op in browsers).
   (_timer as unknown as { unref?: () => void }).unref?.();

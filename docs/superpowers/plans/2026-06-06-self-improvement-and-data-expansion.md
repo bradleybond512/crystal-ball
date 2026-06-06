@@ -18,6 +18,7 @@
   - **B1 cleanup:** decide the 6 orphaned algos (baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest) — wire into a live path or drop from registry.
 
 - **Blocked on:** nothing. Loop runs + grades + proposes live; only the final apply is gated pending evidence wiring.
+
 ---
 
 ## Why this exists

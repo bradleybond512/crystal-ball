@@ -6,10 +6,12 @@
 
 ## CURRENT STATE / NEXT STEP  *(update this every session)*
 
-- **Status:** Workstream B started.
-- **Last landed:** Gameplan committed (2026-06-06).
-- **Next step:** **B1** — wire `recordAlgorithmEvaluation` / `recordAlgorithmOutcome` into the existing grading paths so the evaluation ledger starts filling.
-- **Blocked on:** nothing.
+- **Status:** Workstream B in progress — B1 pattern proven.
+- **Last landed:** B1 canonical wiring — `big-event-detector` instrumented at `data-loader.ts:1468` with `recordAlgorithmEvaluation` (guarded; records score/label/latency to the ledger). typecheck 0.
+- **Next step:** **B1 (continue)** — replicate the same guarded `recordAlgorithmEvaluation(<id>, {durationMs, score, label, detail})` pattern at the live call sites of the other registered algorithms to reach ≥3 (target: all 21). Then **B1b**.
+- **Recipe (mechanical — fine on Sonnet):** for each registered algo id (see `algorithm-registry.ts`, 21 ids), find its live call site, time it, and call `recordAlgorithmEvaluation(id, {...})` in a `try/catch`. Pattern reference: `data-loader.ts` big-event-detector block.
+- **B1b (outcome path):** the outcome side already exists — `outcome-resolver.ts` exports `resolvePendingViaLlm(...)` + `pickEligibleForLlmGrading(...)`, and `llm-grader.ts` is real. They are NOT invoked anywhere. Wire `resolvePendingViaLlm` into the scheduler (B2) using `llm-adapter.generateText` as the injected LLM fn so pending evals get graded into fixtures.
+- **Blocked on:** nothing. B2 (run tuner) requires B1 + B1b first (tuner needs *graded* fixtures, not just evals).
 
 ---
 
@@ -78,4 +80,5 @@ The tuner auto-applies any parameter adjustment that clears all safety gates, an
 
 ## Progress log
 
-- 2026-06-06 — Gameplan created and committed. Discovered the tuning loop is fully built but unwired; locked auto-apply-safe autonomy. Starting B1.
+- 2026-06-06 — Gameplan created and committed. Discovered the tuning loop is fully built but unwired; locked auto-apply-safe autonomy.
+- 2026-06-06 — B1 pattern landed: big-event-detector instrumented (data-loader.ts:1468 → evaluation ledger), guarded, typecheck 0. Discovered the outcome path (resolvePendingViaLlm + llm-grader) exists but is unwired — folded into B1b. Remaining B1 work is mechanical replication across 20 more registered algos.

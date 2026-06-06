@@ -1434,10 +1434,12 @@ export class DataLoaderManager implements AppModule {
  { detectBigEvent },
  { routeBigEventToLadder },
  { getNotificationTraceRegistry },
+ { recordAlgorithmEvaluation },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
  import('@/services/diagnostics/diagnostics-state'),
+ import('@/services/algorithms/record-evaluation'),
  ]);
  const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
  const RUNG_ACTION: Record<string, 'sound+banner' | 'banner' | null> = {
@@ -1465,7 +1467,19 @@ export class DataLoaderManager implements AppModule {
  userExposure: 50, // conservative default; polygon match refines this
  potentialImpact: severityScore,
  };
+ const _bedStart = performance.now();
  const bigEventResult = detectBigEvent(ladderInput);
+ // B1 (self-improvement gameplan): feed the evaluation ledger so the
+ // adaptive-tuner has data. Guarded — instrumentation must never break
+ // the notification data path.
+ try {
+ recordAlgorithmEvaluation('big-event-detector', {
+ durationMs: performance.now() - _bedStart,
+ score: bigEventResult.totalScore / 100,
+ label: bigEventResult.isBigEvent ? 'big-event' : 'quiet',
+ detail: { domain: 'weather', triggers: bigEventResult.triggers.length, tier: bigEventResult.tier },
+ });
+ } catch { /* ledger unavailable — skip silently */ }
  if (!bigEventResult.isBigEvent) continue;
  const decision = routeBigEventToLadder(registry, bigEventResult, ladderInput, {
  domain: 'weather',

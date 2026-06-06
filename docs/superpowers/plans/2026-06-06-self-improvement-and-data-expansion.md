@@ -23,6 +23,7 @@ Crystal Ball already contains a complete, well-tested **closed-loop algorithm se
 
 **Tuner autonomy: AUTO-APPLY SAFE + LOG EVERYTHING.**
 The tuner auto-applies any parameter adjustment that clears all safety gates, and records every change with rollback metadata. Gates (already implemented in `adaptive-tuner.ts` / `safe-adjustment.ts`):
+
 - ≥5% F1 improvement on the last 100 graded fixtures before accepting a config
 - ≤20% change to any single parameter per cycle
 - minimum new-grade count before acting

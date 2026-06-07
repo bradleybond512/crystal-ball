@@ -16,6 +16,10 @@ import { loadProximityConfig } from './proximity-filter';
 import { runIntel } from './intel-provider';
 import { getActivity } from './alert-activity-log';
 import { rankAlerts } from './alert-routing';
+import { buildAnalystContext } from './analyst-context-builder';
+import { getLatestPCI } from './intelligence/predictive-crisis-index';
+import { getAnalystSnapshot } from './analyst-loop';
+import { getForecastSnapshot } from './mode-forecast';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -128,6 +132,16 @@ function buildSystemContext(): string {
  buildActivityContext(),
  buildLocationContext(),
   ].filter(Boolean);
+
+  const analystCtx = buildAnalystContext({
+    hypotheses: getAnalystSnapshot()?.hypotheses ?? [],
+    advisories: getForecastSnapshot()?.advisories ?? [],
+    pci: getLatestPCI(),
+  });
+  if (analystCtx.systemPromptAddendum) {
+    parts.push(analystCtx.systemPromptAddendum);
+  }
+
   return parts.join('\n\n');
 }
 

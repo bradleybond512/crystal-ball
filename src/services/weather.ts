@@ -11,6 +11,9 @@ export interface WeatherAlert {
   expires: Date;
   coordinates: [number, number][];
   centroid?: [number, number];
+  /** UGC zone/county codes the alert applies to (from properties.geocode.UGC).
+   *  Used as the geometry-free fallback when an alert has no polygon. */
+  ugcZones: string[];
 }
 
 interface NWSAlert {
@@ -23,6 +26,7 @@ interface NWSAlert {
  areaDesc: string;
  onset: string;
  expires: string;
+ geocode?: { UGC?: string[]; SAME?: string[] };
   };
   geometry?: {
  type: string;
@@ -45,7 +49,7 @@ export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
 
  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
- const data: NWSResponse = await response.json();
+ const data = await response.json() as NWSResponse;
 
  return data.features
  .filter(alert => alert.properties.severity !== 'Unknown')
@@ -57,12 +61,13 @@ export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
  event: alert.properties.event,
  severity: alert.properties.severity as WeatherAlert['severity'],
  headline: alert.properties.headline,
- description: alert.properties.description?.slice(0, 500) || '',
+ description: alert.properties.description?.slice(0, 500) ?? '',
  areaDesc: alert.properties.areaDesc,
  onset: new Date(alert.properties.onset),
  expires: new Date(alert.properties.expires),
  coordinates: coords,
  centroid: calculateCentroid(coords),
+ ugcZones: alert.properties.geocode?.UGC ?? [],
  };
  });
   }, []);
@@ -72,17 +77,42 @@ export function getWeatherStatus(): string {
   return breaker.getStatus();
 }
 
+interface NWSPointZones {
+  properties?: { forecastZone?: string; county?: string };
+}
+
+/** Derive a location's own UGC codes (forecast zone + county) from NWS
+ *  `/points/{lat},{lon}`. Best-effort: returns `[]` on any failure so
+ *  callers can degrade to polygon-only matching. The codes are the last
+ *  path segment of the `forecastZone` / `county` URLs (e.g. `INZ001`). */
+export async function fetchUgcZonesForPoint(lat: number, lon: number): Promise<string[]> {
+  try {
+    const res = await fetch(`https://api.weather.gov/points/${lat},${lon}`, {
+      headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/geo+json' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+    const payload = await res.json() as NWSPointZones;
+    const zones = [payload.properties?.forecastZone, payload.properties?.county]
+      .map((url) => url?.split('/').pop() ?? '')
+      .filter((code) => /^[A-Z]{2}[CZ]\d{3}$/.test(code));
+    return [...new Set(zones)];
+  } catch {
+    return [];
+  }
+}
+
 function extractCoordinates(geometry?: NWSAlert['geometry']): [number, number][] {
   if (!geometry) return [];
 
   try {
  if (geometry.type === 'Polygon') {
  const coords = geometry.coordinates as unknown as number[][][];
- return coords[0]?.map(c => [c[0], c[1]] as [number, number]) || [];
+ return coords[0]?.map(c => [c[0], c[1]] as [number, number]) ?? [];
  }
  if (geometry.type === 'MultiPolygon') {
  const coords = geometry.coordinates as unknown as number[][][][];
- return coords[0]?.[0]?.map(c => [c[0], c[1]] as [number, number]) || [];
+ return coords[0]?.[0]?.map(c => [c[0], c[1]] as [number, number]) ?? [];
  }
   } catch {
  return [];

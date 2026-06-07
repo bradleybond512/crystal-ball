@@ -906,6 +906,7 @@ const seedAllDynamicData = (): void => {
  expires: new Date('2026-02-01T18:00:00.000Z'),
  coordinates: [[-80.1, 25.7], [-80.2, 25.8], [-80.3, 25.6]],
  centroid: [-80.2, 25.7],
+ ugcZones: [],
  },
   ];
 

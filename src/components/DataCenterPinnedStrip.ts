@@ -40,7 +40,8 @@ export class DataCenterPinnedStrip {
     }
 
     const elevated = dcLevelRank(posture.overall) >= dcLevelRank('warning');
-    this.el.className = `dc-strip dc-strip--${posture.overall}${elevated ? ' dc-strip--pulse' : ''}`;
+    const degraded = posture.staleInputs.length > 0 ? ' dc-strip--degraded' : '';
+    this.el.className = `dc-strip dc-strip--${posture.overall}${elevated ? ' dc-strip--pulse' : ''}${degraded}`;
 
     const dot = h('span', { className: 'dc-strip-dot' });
     dot.style.background = levelColor(posture.overall);

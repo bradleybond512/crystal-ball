@@ -1446,6 +1446,9 @@ export class DataLoaderManager implements AppModule {
  // under `coordinates`; map it into polygon.rings so matchAlertToPlace can
  // do point-in-polygon against the site — without it weather posture could
  // never match an alert.
+ // v1 gap: WeatherAlert has no UGC zone codes, so zone-only NWS products
+ // (common for ice/heat/flood) can't match the site and read as clear here.
+ // Threading ugcZones through WeatherAlert is the follow-up.
  const nwsAlerts = alerts.map((a) => ({
  id: a.id,
  event: a.event,

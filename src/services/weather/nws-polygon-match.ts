@@ -77,7 +77,7 @@ export function matchAlertToPlace(
   // does the deterministic part (matched? yes/no by membership);
   // distance is undefined for zone matches.
   if (!alert.polygon || alert.polygon.rings.length === 0) {
-    const placeZones = (place as { ugcZones?: string[] }).ugcZones ?? [];
+    const placeZones = place.ugcZones ?? [];
     const placeZoneSet = new Set(placeZones);
     const matchedZone = (alert.ugcZones ?? []).find((z) => placeZoneSet.has(z));
     if (matchedZone) {

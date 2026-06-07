@@ -15,7 +15,7 @@ export function computeWeatherPosture(
   options: WeatherPostureOptions = {},
 ): WeatherPosture {
   const now = options.now ?? Date.now();
-  const place: WeatherPlace = { id: site.id, label: site.name, lat: site.lat, lon: site.lon, radiusKm: site.radiusKm };
+  const place: WeatherPlace = { id: site.id, label: site.name, lat: site.lat, lon: site.lon, radiusKm: site.radiusKm, ugcZones: site.ugcZones };
 
   let level: DcLevel = 'normal';
   const hazards = new Set<WeatherHazardKind>();

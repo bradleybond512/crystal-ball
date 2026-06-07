@@ -41,3 +41,33 @@ test('an alert far away does not match', () => {
   const p = computeWeatherPosture(SITE, [alert('Tornado Warning', around(10, 10))], { now: NOW });
   assert.equal(p.level, 'normal');
 });
+
+test('zone-only alert (no polygon) matches site via UGC zone -> not normal', () => {
+  const siteWithZones: SiteConfig = { ...SITE, ugcZones: ['INZ001', 'INC091'] };
+  const zoneAlert: NwsAlertMinimal = {
+    id: 'al-ice',
+    event: 'Ice Storm Warning',
+    polygon: undefined,
+    ugcZones: ['INZ001'],
+    sent: new Date(NOW - 60_000).toISOString(),
+    expires: new Date(NOW + 3_600_000).toISOString(),
+  };
+  const p = computeWeatherPosture(siteWithZones, [zoneAlert], { now: NOW });
+  assert.notEqual(p.level, 'normal');
+  assert.ok(p.activeHazards.includes('ice_storm'));
+  assert.ok(p.drivers.some((d) => d.includes('Matched UGC zone INZ001')));
+});
+
+test('zone-only alert does not match a site without that zone', () => {
+  const siteWithZones: SiteConfig = { ...SITE, ugcZones: ['INZ001'] };
+  const zoneAlert: NwsAlertMinimal = {
+    id: 'al-ice-2',
+    event: 'Ice Storm Warning',
+    polygon: undefined,
+    ugcZones: ['OHZ050'],
+    sent: new Date(NOW - 60_000).toISOString(),
+    expires: new Date(NOW + 3_600_000).toISOString(),
+  };
+  const p = computeWeatherPosture(siteWithZones, [zoneAlert], { now: NOW });
+  assert.equal(p.level, 'normal');
+});

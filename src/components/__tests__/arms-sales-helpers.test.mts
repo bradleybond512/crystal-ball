@@ -1,403 +1,350 @@
+/**
+ * Unit tests for arms-sales-helpers.ts
+ * Run: npx tsx --test src/components/__tests__/arms-sales-helpers.test.mts
+ */
 import { describe, it } from 'node:test';
-import * as assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import {
-  computeGlobalArmsIndex,
-  exporterShareClass,
-  dealStatusClass,
   getTopExporters,
   getMajorDeals,
   getByRecipient,
   getByExporter,
+  computeGlobalArmsIndex,
+  exporterShareClass,
+  dealTypeClass,
+  dealTypeLabel,
+  dealCategoryLabel,
+  dealStatusColor,
+  trendLabel,
+  trendColor,
+  globalIndexColor,
+  dominanceRiskColor,
+  countByStatus,
+  totalDealValueUsdB,
+  formatUsdB,
+  formatShare,
   buildRenderData,
+  TOP_EXPORTERS,
+  MAJOR_DEALS,
+  MAJOR_IMPORTERS,
   type ArmsExporter,
   type ArmsDeal,
   type DealStatus,
 } from '../arms-sales-helpers.ts';
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-const MOCK_EXPORTERS: ArmsExporter[] = [
-  { country: 'Alpha', globalSharePct: 42.0, trend: 'rising',   topRecipients: ['X', 'Y', 'Z'] },
-  { country: 'Beta',  globalSharePct: 11.0, trend: 'stable',   topRecipients: ['A', 'B'] },
-  { country: 'Gamma', globalSharePct:  5.8, trend: 'declining', topRecipients: ['C'] },
-  { country: 'Delta', globalSharePct:  3.1, trend: 'stable',   topRecipients: ['D', 'E'] },
-  { country: 'Epsilon',globalSharePct: 2.3, trend: 'rising',   topRecipients: ['F'] },
-];
-
-const MOCK_DEALS: ArmsDeal[] = [
-  { id: 'T1', exporter: 'Alpha', recipient: 'X', systemType: 'Mixed/Aid',       valueB: 61.0, year: 2022, status: 'In Progress', significance: 10, description: 'Big deal A' },
-  { id: 'T2', exporter: 'Alpha', recipient: 'Y', systemType: 'Fighter Aircraft',valueB: 19.0, year: 2023, status: 'In Progress', significance: 9,  description: 'Big deal B' },
-  { id: 'T3', exporter: 'Beta',  recipient: 'A', systemType: 'Tanks',           valueB:  5.0, year: 2022, status: 'Delivered',   significance: 8,  description: 'Medium deal' },
-  { id: 'T4', exporter: 'Gamma', recipient: 'C', systemType: 'Fighter Aircraft',valueB:  1.4, year: 2022, status: 'Delivered',   significance: 7,  description: 'Smaller deal' },
-  { id: 'T5', exporter: 'Delta', recipient: 'D', systemType: 'Air Defense',     valueB:  3.8, year: 2023, status: 'Contracted',  significance: 6,  description: 'Air def deal' },
-  { id: 'T6', exporter: 'Alpha', recipient: 'Z', systemType: 'Submarines',      valueB: 368.0,year: 2023, status: 'Contracted',  significance: 10, description: 'AUKUS-like' },
-  { id: 'T7', exporter: 'Beta',  recipient: 'B', systemType: 'Mixed/Aid',       valueB:  1.2, year: 2024, status: 'Suspended',   significance: 5,  description: 'Suspended deal' },
-];
-
-// ── computeGlobalArmsIndex ────────────────────────────────────────────────────
-describe('computeGlobalArmsIndex', () => {
-  it('returns 0 for empty deals array', () => {
-    assert.equal(computeGlobalArmsIndex([]), 0);
-  });
-
-  it('returns a number between 0 and 100', () => {
-    const idx = computeGlobalArmsIndex(MOCK_DEALS);
-    assert.ok(idx >= 0 && idx <= 100);
-  });
-
-  it('returns an integer', () => {
-    const idx = computeGlobalArmsIndex(MOCK_DEALS);
-    assert.equal(idx, Math.round(idx));
-  });
-
-  it('higher total value yields higher index (same exporters)', () => {
-    const low  = MOCK_DEALS.map(d => ({ ...d, valueB: 1 }));
-    const high = MOCK_DEALS.map(d => ({ ...d, valueB: 100 }));
-    assert.ok(computeGlobalArmsIndex(high) >= computeGlobalArmsIndex(low));
-  });
-
-  it('single deal returns a positive number', () => {
-    assert.ok(computeGlobalArmsIndex([MOCK_DEALS[0]]) > 0);
-  });
-
-  it('caps at 100 for very large values', () => {
-    const huge = MOCK_DEALS.map(d => ({ ...d, valueB: 1e6 }));
-    assert.equal(computeGlobalArmsIndex(huge), 100);
-  });
-});
-
-// ── exporterShareClass ────────────────────────────────────────────────────────
-describe('exporterShareClass', () => {
-  it('returns share-dominant for 42%', () => {
-    assert.equal(exporterShareClass(42), 'share-dominant');
-  });
-
-  it('returns share-dominant for exactly 30%', () => {
-    assert.equal(exporterShareClass(30), 'share-dominant');
-  });
-
-  it('returns share-major for 11%', () => {
-    assert.equal(exporterShareClass(11), 'share-major');
-  });
-
-  it('returns share-major for exactly 10%', () => {
-    assert.equal(exporterShareClass(10), 'share-major');
-  });
-
-  it('returns share-significant for 5.8%', () => {
-    assert.equal(exporterShareClass(5.8), 'share-significant');
-  });
-
-  it('returns share-significant for exactly 3%', () => {
-    assert.equal(exporterShareClass(3), 'share-significant');
-  });
-
-  it('returns share-minor for 2.3%', () => {
-    assert.equal(exporterShareClass(2.3), 'share-minor');
-  });
-
-  it('returns share-minor for 0%', () => {
-    assert.equal(exporterShareClass(0), 'share-minor');
-  });
-
-  it('boundary: 29.9% is share-major not dominant', () => {
-    assert.equal(exporterShareClass(29.9), 'share-major');
-  });
-
-  it('boundary: 9.9% is share-significant not major', () => {
-    assert.equal(exporterShareClass(9.9), 'share-significant');
-  });
-
-  it('boundary: 2.9% is share-minor not significant', () => {
-    assert.equal(exporterShareClass(2.9), 'share-minor');
-  });
-});
-
-// ── dealStatusClass ───────────────────────────────────────────────────────────
-describe('dealStatusClass', () => {
-  it('returns status-delivered for Delivered', () => {
-    assert.equal(dealStatusClass('Delivered'), 'status-delivered');
-  });
-
-  it('returns status-in-progress for In Progress', () => {
-    assert.equal(dealStatusClass('In Progress'), 'status-in-progress');
-  });
-
-  it('returns status-contracted for Contracted', () => {
-    assert.equal(dealStatusClass('Contracted'), 'status-contracted');
-  });
-
-  it('returns status-suspended for Suspended', () => {
-    assert.equal(dealStatusClass('Suspended'), 'status-suspended');
-  });
-});
-
 // ── getTopExporters ───────────────────────────────────────────────────────────
+
 describe('getTopExporters', () => {
-  it('returns top N exporters sorted by share descending', () => {
-    const top = getTopExporters(MOCK_EXPORTERS, 3);
-    assert.equal(top.length, 3);
-    for (let i = 1; i < top.length; i++) {
-      assert.ok(top[i - 1].globalSharePct >= top[i].globalSharePct);
+  it('returns 10 exporters', () => {
+    assert.equal(getTopExporters().length, 10);
+  });
+
+  it('returns a copy, not the original array', () => {
+    const a = getTopExporters();
+    const b = getTopExporters();
+    assert.notEqual(a, b);
+    assert.notEqual(a, TOP_EXPORTERS);
+  });
+
+  it('is sorted descending by share2019_2023', () => {
+    const exporters = getTopExporters();
+    for (let i = 1; i < exporters.length; i++) {
+      assert.ok(
+        (exporters[i - 1]?.share2019_2023 ?? 0) >= (exporters[i]?.share2019_2023 ?? 0),
+        `Index ${i - 1} share should be >= index ${i} share`,
+      );
     }
   });
 
-  it('defaults to top 5', () => {
-    assert.equal(getTopExporters(MOCK_EXPORTERS).length, 5);
+  it('USA is first with 42% share', () => {
+    const first = getTopExporters()[0];
+    assert.equal(first?.code, 'USA');
+    assert.equal(first?.share2019_2023, 42);
   });
 
-  it('first result is highest share exporter', () => {
-    const top = getTopExporters(MOCK_EXPORTERS, 1);
-    assert.equal(top[0].country, 'Alpha');
+  it('South Korea is last with 2.3% share', () => {
+    const last = getTopExporters().at(-1);
+    assert.equal(last?.code, 'KOR');
+    assert.equal(last?.share2019_2023, 2.3);
   });
 
-  it('does not mutate original array order', () => {
-    const origOrder = MOCK_EXPORTERS.map(e => e.country);
-    getTopExporters(MOCK_EXPORTERS, 3);
-    assert.deepEqual(MOCK_EXPORTERS.map(e => e.country), origOrder);
-  });
-
-  it('returns all when N > length', () => {
-    assert.equal(getTopExporters(MOCK_EXPORTERS, 100).length, MOCK_EXPORTERS.length);
-  });
-
-  it('returns empty for empty input', () => {
-    assert.equal(getTopExporters([]).length, 0);
+  it('all exporters have required fields', () => {
+    for (const e of getTopExporters()) {
+      assert.ok(e.country.length > 0, 'country required');
+      assert.ok(e.code.length > 0, 'code required');
+      assert.ok(e.share2019_2023 > 0, 'share must be positive');
+      assert.ok(['rising', 'stable', 'declining'].includes(e.trend), 'valid trend');
+      assert.ok(Array.isArray(e.primaryRecipients), 'recipients is array');
+    }
   });
 });
 
-// ── getMajorDeals ─────────────────────────────────────────────────────────────
 describe('getMajorDeals', () => {
-  it('returns deals at or above significance threshold', () => {
-    const major = getMajorDeals(MOCK_DEALS, 8);
-    assert.ok(major.every(d => d.significance >= 8));
+  it('returns 12 deals', () => {
+    assert.equal(getMajorDeals().length, 12);
   });
 
-  it('defaults to threshold of 7', () => {
-    const major = getMajorDeals(MOCK_DEALS);
-    assert.ok(major.every(d => d.significance >= 7));
+  it('returns a copy', () => {
+    assert.notEqual(getMajorDeals(), MAJOR_DEALS);
   });
 
-  it('threshold boundary: significance equal to threshold is included', () => {
-    const major = getMajorDeals(MOCK_DEALS, 7);
-    assert.ok(major.some(d => d.significance === 7));
-  });
-
-  it('threshold boundary: below threshold is excluded', () => {
-    const major = getMajorDeals(MOCK_DEALS, 7);
-    assert.ok(!major.some(d => d.significance < 7));
-  });
-
-  it('returns empty when no deals meet threshold', () => {
-    assert.equal(getMajorDeals(MOCK_DEALS, 11).length, 0);
-  });
-
-  it('returns all when threshold is 1', () => {
-    assert.equal(getMajorDeals(MOCK_DEALS, 1).length, MOCK_DEALS.length);
-  });
-
-  it('does not mutate input array', () => {
-    const before = MOCK_DEALS.length;
-    getMajorDeals(MOCK_DEALS, 8);
-    assert.equal(MOCK_DEALS.length, before);
-  });
-});
-
-// ── getByRecipient ────────────────────────────────────────────────────────────
-describe('getByRecipient', () => {
-  it('returns deals for the specified recipient', () => {
-    const deals = getByRecipient(MOCK_DEALS, 'X');
-    assert.ok(deals.every(d => d.recipient.toLowerCase() === 'x'));
-  });
-
-  it('is case-insensitive', () => {
-    const lower = getByRecipient(MOCK_DEALS, 'x');
-    const upper = getByRecipient(MOCK_DEALS, 'X');
-    assert.equal(lower.length, upper.length);
-  });
-
-  it('returns empty for unknown recipient', () => {
-    assert.equal(getByRecipient(MOCK_DEALS, 'Nonexistent Country').length, 0);
-  });
-
-  it('returns multiple deals for same recipient when applicable', () => {
-    // Z is recipient for T6
-    assert.equal(getByRecipient(MOCK_DEALS, 'Z').length, 1);
-  });
-
-  it('does not return deals from other recipients', () => {
-    const deals = getByRecipient(MOCK_DEALS, 'A');
-    assert.ok(!deals.some(d => d.recipient !== 'A'));
-  });
-});
-
-// ── getByExporter ─────────────────────────────────────────────────────────────
-describe('getByExporter', () => {
-  it('returns deals from the specified exporter', () => {
-    const deals = getByExporter(MOCK_DEALS, 'Alpha');
-    assert.ok(deals.every(d => d.exporter.toLowerCase() === 'alpha'));
-  });
-
-  it('is case-insensitive', () => {
-    const lower = getByExporter(MOCK_DEALS, 'alpha');
-    const upper = getByExporter(MOCK_DEALS, 'ALPHA');
-    assert.equal(lower.length, upper.length);
-  });
-
-  it('returns multiple deals for the same exporter', () => {
-    const alphaDeals = getByExporter(MOCK_DEALS, 'Alpha');
-    assert.ok(alphaDeals.length > 1); // T1, T2, T6
-  });
-
-  it('returns empty for unknown exporter', () => {
-    assert.equal(getByExporter(MOCK_DEALS, 'UnknownNation').length, 0);
-  });
-
-  it('does not return deals from other exporters', () => {
-    const deals = getByExporter(MOCK_DEALS, 'Beta');
-    assert.ok(!deals.some(d => d.exporter !== 'Beta'));
-  });
-});
-
-// ── buildRenderData (integration) ─────────────────────────────────────────────
-describe('buildRenderData', () => {
-  it('returns all required fields', () => {
-    const d = buildRenderData();
-    assert.ok(Array.isArray(d.exporters));
-    assert.ok(Array.isArray(d.deals));
-    assert.equal(typeof d.globalArmsIndex, 'number');
-    assert.equal(typeof d.usaDominanceScore, 'number');
-    assert.equal(typeof d.totalValueB, 'number');
-  });
-
-  it('exporters array is non-empty', () => {
-    assert.ok(buildRenderData().exporters.length > 0);
-  });
-
-  it('deals array is non-empty', () => {
-    assert.ok(buildRenderData().deals.length > 0);
-  });
-
-  it('globalArmsIndex is in range 0-100', () => {
-    const idx = buildRenderData().globalArmsIndex;
-    assert.ok(idx >= 0 && idx <= 100);
-  });
-
-  it('usaDominanceScore matches USA exporter share', () => {
-    const d = buildRenderData();
-    const usa = d.exporters.find(e => e.country === 'USA');
-    assert.ok(usa !== undefined);
-    assert.equal(d.usaDominanceScore, Math.round(usa!.globalSharePct));
-  });
-
-  it('usaDominanceScore is 42 (USA 42% share)', () => {
-    assert.equal(buildRenderData().usaDominanceScore, 42);
-  });
-
-  it('totalValueB equals sum of all deal values', () => {
-    const d = buildRenderData();
-    const sum = d.deals.reduce((acc, deal) => acc + deal.valueB, 0);
-    assert.ok(Math.abs(d.totalValueB - sum) < 0.001);
-  });
-
-  it('all exporter shares sum to approximately 100%', () => {
-    const total = buildRenderData().exporters.reduce((s, e) => s + e.globalSharePct, 0);
-    assert.ok(total > 80 && total < 120, `Total share ${total} outside expected range`);
-  });
-
-  it('all deal IDs are unique', () => {
-    const ids = buildRenderData().deals.map(d => d.id);
+  it('all deals have unique ids', () => {
+    const ids = getMajorDeals().map((d) => d.id);
     assert.equal(new Set(ids).size, ids.length);
   });
 
-  it('all exporter countries are unique', () => {
-    const countries = buildRenderData().exporters.map(e => e.country);
-    assert.equal(new Set(countries).size, countries.length);
-  });
-
-  it('all globalSharePct values are positive', () => {
-    for (const e of buildRenderData().exporters) {
-      assert.ok(e.globalSharePct > 0, `${e.country} has non-positive share`);
+  it('all deals have positive valueUsdB', () => {
+    for (const d of getMajorDeals()) {
+      assert.ok(d.valueUsdB > 0, `${d.id} must have positive value`);
     }
   });
 
-  it('all deal values are positive', () => {
-    for (const d of buildRenderData().deals) {
-      assert.ok(d.valueB > 0, `Deal ${d.id} has non-positive value`);
+  it('USA-Ukraine deal is $61B military-aid active', () => {
+    const d = getMajorDeals().find((x) => x.id === 'usa-ukr-2022');
+    assert.ok(d !== undefined);
+    assert.equal(d?.valueUsdB, 61);
+    assert.equal(d?.dealType, 'military-aid');
+    assert.equal(d?.status, 'active');
+    assert.equal(d?.exporterCode, 'USA');
+    assert.equal(d?.recipientCode, 'UKR');
+  });
+
+  it('South Korea-Poland deal is $15B direct-commercial', () => {
+    const d = getMajorDeals().find((x) => x.id === 'kor-pol-2022');
+    assert.ok(d !== undefined);
+    assert.equal(d?.valueUsdB, 15);
+    assert.equal(d?.dealType, 'direct-commercial');
+    assert.equal(d?.category, 'ground');
+  });
+});
+
+describe('getByRecipient', () => {
+  it('finds Ukraine deals by name', () => {
+    const results = getByRecipient('Ukraine');
+    assert.ok(results.length >= 2, 'USA and Germany both sent to Ukraine');
+  });
+
+  it('finds Ukraine deals by code UKR', () => {
+    const results = getByRecipient('UKR');
+    assert.ok(results.length >= 2);
+  });
+
+  it('is case-insensitive', () => {
+    const lower = getByRecipient('ukraine');
+    const upper = getByRecipient('UKRAINE');
+    assert.equal(lower.length, upper.length);
+  });
+
+  it('returns empty array for unknown recipient', () => {
+    assert.deepEqual(getByRecipient('Narnia'), []);
+  });
+
+  it('finds Taiwan deals', () => {
+    const results = getByRecipient('TWN');
+    assert.ok(results.length >= 1);
+  });
+});
+
+describe('getByExporter', () => {
+  it('finds all USA deals', () => {
+    const results = getByExporter('USA');
+    assert.ok(results.length >= 4);
+    for (const d of results) { assert.equal(d.exporterCode, 'USA'); }
+  });
+
+  it('finds by exporter name substring', () => {
+    const results = getByExporter('france');
+    assert.ok(results.length >= 1);
+  });
+
+  it('returns empty array for unknown exporter', () => {
+    assert.deepEqual(getByExporter('Freedonia'), []);
+  });
+
+  it('finds Russia deals', () => {
+    const results = getByExporter('RUS');
+    assert.ok(results.length >= 2);
+  });
+});
+
+describe('computeGlobalArmsIndex', () => {
+  it('returns score between 0 and 100', () => {
+    const idx = computeGlobalArmsIndex();
+    assert.ok(idx.score >= 0 && idx.score <= 100);
+  });
+
+  it('trend is rising', () => {
+    assert.equal(computeGlobalArmsIndex().trend, 'rising');
+  });
+
+  it('postUkraineUplift is 37', () => {
+    assert.equal(computeGlobalArmsIndex().postUkraineUplift, 37);
+  });
+
+  it('usaDominanceRisk is a valid level', () => {
+    const risk = computeGlobalArmsIndex().usaDominanceRisk;
+    assert.ok(['low', 'moderate', 'high', 'critical'].includes(risk));
+  });
+
+  it('score is deterministic', () => {
+    assert.equal(computeGlobalArmsIndex().score, computeGlobalArmsIndex().score);
+  });
+});
+
+describe('exporterShareClass', () => {
+  it('red for >= 30', () => { assert.ok(exporterShareClass(42).includes('#ef4444')); });
+  it('red boundary 30', () => { assert.ok(exporterShareClass(30).includes('#ef4444')); });
+  it('orange for 10-29', () => { assert.ok(exporterShareClass(11).includes('#f97316')); });
+  it('orange boundary 10', () => { assert.ok(exporterShareClass(10).includes('#f97316')); });
+  it('yellow for 5-9', () => { assert.ok(exporterShareClass(5.8).includes('#facc15')); });
+  it('yellow boundary 5', () => { assert.ok(exporterShareClass(5).includes('#facc15')); });
+  it('grey for < 5', () => { assert.ok(exporterShareClass(2.3).includes('#9e9e9e')); });
+  it('grey for 0', () => { assert.ok(exporterShareClass(0).includes('#9e9e9e')); });
+});
+
+describe('dealTypeClass', () => {
+  it('red for military-aid', () => { assert.ok(dealTypeClass('military-aid').includes('#ef4444')); });
+  it('orange for fms', () => { assert.ok(dealTypeClass('fms').includes('#f97316')); });
+  it('yellow for direct-commercial', () => { assert.ok(dealTypeClass('direct-commercial').includes('#facc15')); });
+  it('blue for g2g', () => { assert.ok(dealTypeClass('government-to-government').includes('#60a5fa')); });
+  it('green for grant', () => { assert.ok(dealTypeClass('grant').includes('#4ade80')); });
+});
+
+describe('dealTypeLabel', () => {
+  it('military-aid', () => { assert.equal(dealTypeLabel('military-aid'), 'Military Aid'); });
+  it('fms', () => { assert.equal(dealTypeLabel('fms'), 'FMS'); });
+  it('direct-commercial', () => { assert.equal(dealTypeLabel('direct-commercial'), 'Commercial'); });
+  it('g2g', () => { assert.equal(dealTypeLabel('government-to-government'), 'G2G'); });
+  it('grant', () => { assert.equal(dealTypeLabel('grant'), 'Grant'); });
+});
+
+describe('dealCategoryLabel', () => {
+  it('air', () => { assert.equal(dealCategoryLabel('air'), 'Air'); });
+  it('ground', () => { assert.equal(dealCategoryLabel('ground'), 'Ground'); });
+  it('air-defense', () => { assert.equal(dealCategoryLabel('air-defense'), 'Air Defense'); });
+  it('naval', () => { assert.equal(dealCategoryLabel('naval'), 'Naval'); });
+  it('mixed', () => { assert.equal(dealCategoryLabel('mixed'), 'Mixed'); });
+  it('intelligence', () => { assert.equal(dealCategoryLabel('intelligence'), 'Intel'); });
+});
+
+describe('dealStatusColor', () => {
+  it('green for active', () => { assert.ok(dealStatusColor('active').includes('4ade80')); });
+  it('blue for delivered', () => { assert.ok(dealStatusColor('delivered').includes('60a5fa')); });
+  it('yellow for paused', () => { assert.ok(dealStatusColor('paused').includes('fbbf24')); });
+  it('grey for pending', () => { assert.ok(dealStatusColor('pending').includes('9e9e9e')); });
+  it('red for controversial', () => { assert.ok(dealStatusColor('controversial').includes('ef4444')); });
+  it('orange for declining', () => { assert.ok(dealStatusColor('declining').includes('f97316')); });
+});
+
+describe('trendLabel', () => {
+  it('rising', () => { assert.equal(trendLabel('rising'), 'Rising'); });
+  it('declining', () => { assert.equal(trendLabel('declining'), 'Declining'); });
+  it('stable', () => { assert.equal(trendLabel('stable'), 'Stable'); });
+});
+
+describe('trendColor', () => {
+  it('green for rising', () => { assert.ok(trendColor('rising').includes('4ade80')); });
+  it('orange for declining', () => { assert.ok(trendColor('declining').includes('f97316')); });
+  it('grey for stable', () => { assert.ok(trendColor('stable').includes('9e9e9e')); });
+});
+
+describe('globalIndexColor', () => {
+  it('red for >= 75', () => { assert.ok(globalIndexColor(75).includes('ef4444')); });
+  it('orange for 50-74', () => { assert.ok(globalIndexColor(60).includes('f97316')); });
+  it('yellow for 25-49', () => { assert.ok(globalIndexColor(40).includes('facc15')); });
+  it('green for < 25', () => { assert.ok(globalIndexColor(10).includes('4ade80')); });
+  it('boundary 50 is orange', () => { assert.ok(globalIndexColor(50).includes('f97316')); });
+  it('boundary 25 is yellow', () => { assert.ok(globalIndexColor(25).includes('facc15')); });
+});
+
+describe('dominanceRiskColor', () => {
+  it('red for critical', () => { assert.ok(dominanceRiskColor('critical').includes('ef4444')); });
+  it('orange for high', () => { assert.ok(dominanceRiskColor('high').includes('f97316')); });
+  it('yellow for moderate', () => { assert.ok(dominanceRiskColor('moderate').includes('facc15')); });
+  it('green for low', () => { assert.ok(dominanceRiskColor('low').includes('4ade80')); });
+});
+
+describe('countByStatus', () => {
+  it('counts active correctly', () => {
+    assert.equal(countByStatus('active'), MAJOR_DEALS.filter((d) => d.status === 'active').length);
+  });
+  it('controversial >= 2', () => { assert.ok(countByStatus('controversial') >= 2); });
+  it('paused >= 1', () => { assert.ok(countByStatus('paused') >= 1); });
+  it('returns 0 for pending', () => { assert.equal(countByStatus('pending'), 0); });
+});
+
+describe('totalDealValueUsdB', () => {
+  it('zero for empty', () => { assert.equal(totalDealValueUsdB([]), 0); });
+  it('single deal', () => {
+    const d = MAJOR_DEALS[0];
+    assert.ok(d !== undefined);
+    assert.equal(totalDealValueUsdB([d]), d.valueUsdB);
+  });
+  it('all deals sum 130-160', () => {
+    const t = totalDealValueUsdB(MAJOR_DEALS);
+    assert.ok(t > 130 && t < 160);
+  });
+});
+
+describe('formatUsdB', () => {
+  it('< 100 with one decimal', () => {
+    assert.equal(formatUsdB(61), '$61.0B');
+    assert.equal(formatUsdB(14.1), '$14.1B');
+    assert.equal(formatUsdB(0.8), '$0.8B');
+  });
+  it('>= 100 as integer', () => {
+    assert.equal(formatUsdB(100), '$100B');
+  });
+});
+
+describe('formatShare', () => {
+  it('appends %', () => {
+    assert.equal(formatShare(42), '42%');
+    assert.equal(formatShare(5.8), '5.8%');
+    assert.equal(formatShare(0), '0%');
+  });
+});
+
+describe('buildRenderData', () => {
+  it('all required fields', () => {
+    const data = buildRenderData();
+    assert.ok(Array.isArray(data.exporters));
+    assert.ok(Array.isArray(data.deals));
+    assert.ok(Array.isArray(data.importers));
+    assert.ok(typeof data.globalIndex === 'object');
+    assert.ok(typeof data.totalDealValueUsdB === 'number');
+    assert.ok(typeof data.activeDeals === 'number');
+    assert.ok(typeof data.controversialDeals === 'number');
+  });
+  it('10 exporters', () => { assert.equal(buildRenderData().exporters.length, 10); });
+  it('12 deals', () => { assert.equal(buildRenderData().deals.length, 12); });
+  it('8 importers', () => { assert.equal(buildRenderData().importers.length, 8); });
+  it('activeDeals matches', () => {
+    assert.equal(buildRenderData().activeDeals, countByStatus('active'));
+  });
+  it('controversialDeals matches', () => {
+    assert.equal(buildRenderData().controversialDeals, countByStatus('controversial'));
+  });
+  it('total matches', () => {
+    assert.equal(buildRenderData().totalDealValueUsdB, totalDealValueUsdB(MAJOR_DEALS));
+  });
+  it('globalIndex deterministic', () => {
+    assert.equal(buildRenderData().globalIndex.score, buildRenderData().globalIndex.score);
+  });
+});
+
+describe('MAJOR_IMPORTERS', () => {
+  it('8 importers', () => { assert.equal(MAJOR_IMPORTERS.length, 8); });
+  it('all have required fields', () => {
+    for (const imp of MAJOR_IMPORTERS) {
+      assert.ok(imp.country.length > 0);
+      assert.ok(imp.code.length > 0);
+      assert.ok(imp.mainSuppliers.length > 0);
+      assert.ok(imp.keySystems.length > 0);
+      assert.ok(imp.strategicNote.length > 0);
     }
   });
-
-  it('all significance scores are 1-10', () => {
-    for (const d of buildRenderData().deals) {
-      assert.ok(d.significance >= 1 && d.significance <= 10, `Deal ${d.id} sig ${d.significance} out of range`);
-    }
-  });
-
-  it('all deal statuses are valid', () => {
-    const valid = new Set(['Delivered', 'In Progress', 'Contracted', 'Suspended']);
-    for (const d of buildRenderData().deals) {
-      assert.ok(valid.has(d.status), `Invalid status: ${d.status}`);
-    }
-  });
-
-  it('all deal years are in expected range', () => {
-    for (const d of buildRenderData().deals) {
-      assert.ok(d.year >= 2020 && d.year <= 2030, `Year ${d.year} unexpected`);
-    }
-  });
-
-  it('all exporter trends are valid', () => {
-    const valid = new Set(['rising', 'stable', 'declining']);
-    for (const e of buildRenderData().exporters) {
-      assert.ok(valid.has(e.trend), `Invalid trend: ${e.trend}`);
-    }
-  });
-
-  it('all exporters have at least one top recipient', () => {
-    for (const e of buildRenderData().exporters) {
-      assert.ok(e.topRecipients.length > 0, `${e.country} has no recipients`);
-    }
-  });
-
-  it('all deal descriptions are non-empty', () => {
-    for (const d of buildRenderData().deals) {
-      assert.ok(d.description.trim().length > 0, `Deal ${d.id} has empty description`);
-    }
-  });
-
-  it('contains exactly 10 exporters', () => {
-    assert.equal(buildRenderData().exporters.length, 10);
-  });
-
-  it('contains exactly 12 deals', () => {
-    assert.equal(buildRenderData().deals.length, 12);
-  });
-
-  it('USA is present as an exporter', () => {
-    const usa = buildRenderData().exporters.find(e => e.country === 'USA');
-    assert.ok(usa !== undefined);
-  });
-
-  it('AUKUS deal (AD011) has highest value', () => {
-    const d = buildRenderData();
-    const aukus = d.deals.find(deal => deal.id === 'AD011');
-    assert.ok(aukus !== undefined);
-    const maxVal = Math.max(...d.deals.map(deal => deal.valueB));
-    assert.equal(aukus!.valueB, maxVal);
-  });
-
-  it('at least one deal has status In Progress', () => {
-    assert.ok(buildRenderData().deals.some(d => d.status === 'In Progress'));
-  });
-
-  it('at least one deal has status Delivered', () => {
-    assert.ok(buildRenderData().deals.some(d => d.status === 'Delivered'));
-  });
-
-  it('at least one deal has status Contracted', () => {
-    assert.ok(buildRenderData().deals.some(d => d.status === 'Contracted'));
-  });
-
-  it('at least one deal has status Suspended', () => {
-    assert.ok(buildRenderData().deals.some(d => d.status === 'Suspended'));
-  });
+  it('Ukraine included', () => { assert.ok(MAJOR_IMPORTERS.some((i) => i.code === 'UKR')); });
+  it('UK code included', () => { assert.ok(MAJOR_IMPORTERS.some((i) => i.code === 'UKR')); });
+  it('Taiwan included', () => { assert.ok(MAJOR_IMPORTERS.some((i) => i.code === 'TWN')); });
 });

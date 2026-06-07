@@ -20,7 +20,8 @@
  */
 
 import type { ObservationEvent, ObservationSeverity } from '@/types/intelligence';
-import type { Situation } from './situation-store-v2';
+import type { Situation, SituationSeverity } from './situation-store-v2';
+import type { AnalystSnapshot, Hypothesis } from '@/services/analyst-loop';
 
 // ── Public types ─────────────────────────────────────────────────────────
 
@@ -393,4 +394,74 @@ export function getCrisisTrajectoryProjector(): CrisisTrajectoryProjector {
 
 export function _resetCrisisTrajectoryProjectorSingletonForTests(): void {
   _singleton = null;
+}
+
+// ── Boot wiring ──────────────────────────────────────────────────────────
+
+let _trajectoryStarted = false;
+let _latestTrajectory: CrisisTrajectory | null = null;
+
+function confidenceToSeverity(confidence: number): SituationSeverity {
+  if (confidence >= 0.8) return 'critical';
+  if (confidence >= 0.6) return 'high';
+  if (confidence >= 0.4) return 'medium';
+  return 'low';
+}
+
+function confidenceToObsSeverity(confidence: number): ObservationSeverity {
+  if (confidence >= 0.8) return 'CRITICAL';
+  if (confidence >= 0.6) return 'HIGH';
+  if (confidence >= 0.4) return 'MEDIUM';
+  return 'LOW';
+}
+
+function hypothesesToSituation(hypotheses: Hypothesis[]): Situation | null {
+  if (hypotheses.length === 0) return null;
+  const top = [...hypotheses].sort((a, b) => b.confidence - a.confidence)[0]!;
+  return {
+    id: top.id,
+    name: top.statement,
+    domain: top.kind,
+    relatedDomains: [],
+    severity: confidenceToSeverity(top.confidence),
+    status: 'active',
+    summary: top.statement,
+    observations: [],
+    edges: [],
+    entityIds: top.evidence.map((e) => e.id),
+    confidence: top.confidence,
+    startedAt: new Date(top.timestamp),
+    updatedAt: new Date(top.timestamp),
+    tags: [],
+  };
+}
+
+function hypothesesToObservations(hypotheses: Hypothesis[]): ObservationEvent[] {
+  return hypotheses.map((h) => ({
+    id: h.id,
+    sourceId: 'analyst-loop',
+    domain: h.kind,
+    title: h.statement,
+    severity: confidenceToObsSeverity(h.confidence),
+    timestamp: h.timestamp,
+    raw: h,
+    entityIds: h.evidence.map((e) => e.id),
+    tags: [],
+  }));
+}
+
+export function startCrisisTrajectory(): void {
+  if (_trajectoryStarted) return;
+  _trajectoryStarted = true;
+  document.addEventListener('cb:analyst-hypotheses', (e: Event) => {
+    const snapshot = (e as CustomEvent<AnalystSnapshot>).detail;
+    const situation = hypothesesToSituation(snapshot.hypotheses);
+    if (!situation) return;
+    const observations = hypothesesToObservations(snapshot.hypotheses);
+    _latestTrajectory = getCrisisTrajectoryProjector().project(situation, observations);
+  });
+}
+
+export function getLatestTrajectory(): CrisisTrajectory | null {
+  return _latestTrajectory;
 }

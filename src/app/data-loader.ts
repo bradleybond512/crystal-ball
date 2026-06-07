@@ -294,6 +294,8 @@ import { ingest } from '@/services/intelligence/observation-store';
 import type { ObservationEvent } from '@/types/intelligence';
 import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
+import { fetchGridStatus } from '@/services/power-grid';
+import { getDatacenterSite, recomputeDatacenterPosture } from '@/services/datacenter/datacenter-state';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
 import { fetchAcledEvents, fetchAdsbMilitary } from '@/services/osint';
 import { fetchHibpBreaches, fetchTorMetrics } from '@/services/osint';
@@ -1428,6 +1430,30 @@ export class DataLoaderManager implements AppModule {
  dataFreshness.recordUpdate('weather', alerts.length);
  void import('@/services/offline-staleness').then(({ recordSourceUpdate }) => { recordSourceUpdate('weather', Date.now()); });
  updateStormPreparednessContext({ weatherAlerts: alerts });
+
+ // Feed weather alerts + grid status into the datacenter posture engine.
+ // Only runs when the user has a saved place tagged data_center.
+ if (getDatacenterSite()) {
+ const site = getDatacenterSite()!;
+ const grid = await fetchGridStatus().catch(() => null);
+ const gridStatus = grid?.find((g) => g.region === site.eiaRegion) ?? null;
+ // Map WeatherAlert[] → NwsAlertMinimal[]. Shapes differ (severity casing,
+ // no polygon on WeatherAlert). Only fields consumed by
+ // computeDatacenterPosture are mapped; extras omitted intentionally.
+ const nwsAlerts = alerts.map((a) => ({
+ id: a.id,
+ event: a.event,
+ sent: a.onset instanceof Date ? a.onset.toISOString() : String(a.onset),
+ expires: a.expires instanceof Date ? a.expires.toISOString() : String(a.expires),
+ severity: (a.severity?.toLowerCase() as import('@/services/weather/weather-threat-types').WeatherSeverity | undefined),
+ headline: a.headline,
+ }));
+ recomputeDatacenterPosture({
+ gridStatus,
+ weatherAlerts: nwsAlerts,
+ nearbyOutageCount: null, // v1: county-radius outage rollup not yet wired
+ });
+ }
 
  // Wire weather alerts into the insights state singleton so Command
  // Center, Personal Impact, and Action Briefs all reflect the same

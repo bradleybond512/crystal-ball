@@ -496,7 +496,11 @@ import { isLowPowerMode, setLowPowerMode } from '@/services/low-power';
 import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import { initModeTransitionCards } from '@/services/mode-transition-card';
 import { initPanelCorrelation } from '@/services/panel-correlation';
-import { getPrimarySavedPlace, getSavedPlace } from '@/services/saved-places';
+import { getPrimarySavedPlace, getSavedPlace, getSavedPlaces, subscribeSavedPlaces } from '@/services/saved-places';
+import { DataCenterReadinessPanel } from '@/components/DataCenterReadinessPanel';
+import { DataCenterPinnedStrip } from '@/components/DataCenterPinnedStrip';
+import { setDatacenterSite } from '@/services/datacenter/datacenter-state';
+import { resolveSiteConfig } from '@/services/datacenter/site-resolver';
 import { SavedPlaceModal } from '@/components/SavedPlaceModal';
 import type { GeoHubActivity } from '@/services/geo-activity';
 import type { TechHubActivity } from '@/services/tech-activity';
@@ -1783,6 +1787,20 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['digital-infrastructure'] = new DigitalInfrastructurePanel();
  this.ctx.panels['global-health-security'] = new GlobalHealthSecurityPanel();
  this.ctx.panels['food-security-superpower'] = new FoodSecuritySuperpowerPanel();
+
+ // Data Center Readiness panel + pinned strip.
+ // Resolve site on boot; re-resolve whenever saved places change.
+ setDatacenterSite(resolveSiteConfig(getSavedPlaces()));
+ subscribeSavedPlaces((places) => setDatacenterSite(resolveSiteConfig(places)));
+ const datacenterPanel = new DataCenterReadinessPanel();
+ this.ctx.panels['datacenter-readiness'] = datacenterPanel;
+ // Mount the pinned strip above the panel grid so it floats outside
+ // the scroll region. The callback scrolls to the full panel.
+ const dcStrip = new DataCenterPinnedStrip(() => {
+   datacenterPanel.getElement().scrollIntoView({ behavior: 'smooth', block: 'start' });
+ });
+ const panelsGridForStrip = document.getElementById('panelsGrid');
+ panelsGridForStrip?.parentElement?.insertBefore(dcStrip.getElement(), panelsGridForStrip);
 
  this.ctx.panels['climate-superpower'] = new ClimateSuperpowerPanel(); this.ctx.panels['intelligence-timeline'] = new IntelligenceTimelinePanel();
  // Wire saved-places into the insights state singleton so the new

@@ -6,18 +6,24 @@
 
 ## CURRENT STATE / NEXT STEP  *(update this every session)*
 
-- **Status:** Workstream B — **B1 + B1b + B2 slice done.** The self-improvement loop is wired end-to-end for one algorithm; auto-apply is intentionally gated OFF pending replay/backtest evidence.
+- **Status:** Workstream B — **B1 + B1b + B2 slice + B3-data done.** The self-improvement loop is wired end-to-end for one algorithm; auto-apply is intentionally gated OFF pending an honest replay/backtest signal (see the B2-enable finding below).
 - **B1 (done):** 15/21 algos record into the evaluation ledger (#999, #1001).
 - **B1b (done):** pending records graded into fixtures via LLM grader on a cadence (#1003).
 - **B2 slice (done, #1006):** `tunable-params-store` (bound-clamped) + `big-event-detector.threshold` declared tunable + data-loader reads it + panel surfaces proposals + `tuning-apply-runner` proposes → policy-gates → auto-applies only `allow_auto` (6h cadence). Currently NOTHING auto-applies: the runner passes `replayPassed/backtestPassed=false`, and the threshold is flagged `affectsNotifications` so the gate forces approval regardless.
+- **B3-data (done, this branch):** `tuning-decision-log` — a persisted ring (newest-first, cap 100) the runner appends to every pass: `applied` vs `held_for_approval` with before→after value + the policy-gate `ruleId`/`reason`. `runTuningApply` now also takes an injectable `tunings` so the auto-apply act-path is proven end-to-end in a test (degraded low-criticality non-notification knob + `replayPassed:true` + ≥20 graded → applies). The decision log is the data layer for the B3-UI panel surfacing.
+
+- **B2-enable finding (2026-06-06) — DO NOT re-investigate:** the gameplan's original B2-enable ("wire `replay-harness` + `backtest-engine` into `runTuningApply`") is **not honestly implementable with the existing harnesses**, verified by reading + running them:
+  - The replay-fixtures **catalog** is a set of known-FAILING regression demos (late-warning / silent-polygon / etc.). `runReplay(buildCatalogReplayFixtures())` returns aggregate verdict **`fail`** by design (4 fail + 1 inapplicable). Feeding it to the gate builds a gate that can **never open**.
+  - The **backtest-engine** models `driverWeights` + `severityBands`, NOT algorithm-tuning knobs like `big-event-detector.threshold`. Running it for such a proposal applies no override → baseline == proposed → a meaningless trivial "pass" (false positive). Also: the gate only requires `backtestPassed` for `high` criticality / `algorithm_promote` — low/med tunings need only `replayPassed` + ≥20 graded.
+  - **Conclusion:** an honest auto-apply switch needs **purpose-built tuning-safety fixtures** — a small suite representing CORRECT behavior that a bad tuning would regress (re-run the affected algo with the proposed parameter against labeled cases, assert no hit-rate regression). That's real work, not a wiring task. Until it exists, the runner's `replayPassed` MUST stay caller-supplied (default false) — never auto-derived from the regression-demo catalog.
 
 - **Next steps (pick one):**
-  - **B2-enable:** wire `replay-harness` + `backtest-engine` results into `runTuningApply({ replayPassed, backtestPassed })` so non-notification, low/medium knobs with enough graded samples actually auto-apply. This is the switch that makes the loop *act*.
-  - **B2-replicate:** declare more tunables (other instrumented algos) in `tunable-params-store` + make their call sites read from the store (pattern: big-event-detector threshold).
-  - **B3:** surface applied adjustments + history in `AlgorithmDiagnosticPanel` (proposals already render).
+  - **B2-enable (redefined):** build the tuning-safety fixture suite described above + a `proposeTuningSafety(algorithmId, paramChange)` that returns an honest boolean, then pass it as `replayPassed`. This is the switch that makes the loop *act*.
+  - **B2-replicate:** declare more tunables (other instrumented algos) in `tunable-params-store` + make their call sites read from the store (pattern: big-event-detector threshold). Prefer a low/medium **non-notification** knob so the act-path can actually exercise once B2-enable lands.
+  - **B3-UI:** render `getTuningDecisions()` (applied/held history) in `AlgorithmDiagnosticPanel` (proposals already render; the data layer now exists).
   - **B1 cleanup:** decide the 6 orphaned algos (baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest) — wire into a live path or drop from registry.
 
-- **Blocked on:** nothing. Loop runs + grades + proposes live; only the final apply is gated pending evidence wiring.
+- **Blocked on:** an honest tuning-safety signal (B2-enable redefined). Loop runs + grades + proposes + logs decisions live; only the final apply is gated, and correctly so until a real safety fixture exists.
 
 ---
 

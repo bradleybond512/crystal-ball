@@ -13,6 +13,8 @@
 
 import type { SignatureMatch } from './crisis-signature-library';
 import type { UnifiedAlert } from '@/services/unified-alerts';
+import type { AnalystSnapshot, Hypothesis } from '@/services/analyst-loop';
+import { unifiedAlertStore } from '@/services/unified-alerts';
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -229,9 +231,6 @@ export function resetPCICooldowns(): void {
 }
 
 // ── Runtime wiring ────────────────────────────────────────────────────
-
-import type { AnalystSnapshot, Hypothesis } from '@/services/analyst-loop';
-import { unifiedAlertStore } from '@/services/unified-alerts';
 
 const EVENT_PCI_UPDATED = 'cb:pci-updated';
 let _latestPCI: PCIScore | null = null;

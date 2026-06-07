@@ -30,6 +30,8 @@ import { getBudgetStatus, subscribeBudget, setCloudCap, resetBudget } from '@/se
 import { getTotalErrorCount, subscribeDebug } from '@/services/reasoning-debug';
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
+import { forecastAll, type HypothesisForecast } from '@/services/intelligence/hypothesis-forecast';
+import { getLatestPCI } from '@/services/intelligence/predictive-crisis-index';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
 
@@ -596,8 +598,11 @@ export class AnalystHUD {
     // Note: recurrence is recorded once per snapshot in the subscribeAnalyst
     // handler, NOT here — render can fire many times per snapshot.
 
+    const forecasts = forecastAll([h], getLatestPCI());
+
     row.append(
       this.buildHypHead(h),
+      ...(forecasts[0] ? [this.buildForecastBar(forecasts[0])] : []),
       this.buildHypStatement(h),
       this.buildHypPlaybook(h),
       this.buildHypEntities(h),
@@ -784,6 +789,32 @@ export class AnalystHUD {
       head.append(badge);
     }
     return head;
+  }
+
+  private buildForecastBar(forecast: HypothesisForecast): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-forecast-bar';
+
+    const pct = Math.round(forecast.probability * 100);
+    const TREND_ARROW: Record<HypothesisForecast['trend'], string> = {
+      rising: '↑',
+      falling: '↓',
+      stable: '→',
+    };
+
+    const label = document.createElement('span');
+    label.className = 'analyst-hud-forecast-label';
+    label.textContent = `${pct}% ${TREND_ARROW[forecast.trend]} ${forecast.horizon}`;
+
+    const track = document.createElement('div');
+    track.className = 'analyst-hud-forecast-track';
+    const fill = document.createElement('div');
+    fill.className = 'analyst-hud-forecast-fill';
+    fill.style.width = `${pct}%`;
+    track.append(fill);
+
+    wrap.append(label, track);
+    return wrap;
   }
 
   private buildHypStatement(h: Hypothesis): HTMLElement {

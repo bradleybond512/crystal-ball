@@ -72,6 +72,24 @@ const DECLARATIONS: readonly TunableDeclaration[] = [
     // directly control any notification rung / suppression / bypass.
     affectsNotifications: false,
   },
+  {
+    algorithmId: 'correlation-feedback',
+    parameterId: 'feedbackThreshold',
+    default: 0.55,
+    min: 0.3,
+    max: 0.8,
+    step: 0.05,
+    // Correlation rules whose user-feedback multiplier drops below this
+    // threshold are disabled. A "miss" (predicted correlated pair that
+    // turned out to be noise) means the threshold is too permissive —
+    // raise it to require stronger feedback confirmation before enabling
+    // a correlation rule.
+    fixDirection: 'increase',
+    description: 'Minimum feedback multiplier for a correlation rule to stay enabled.',
+    // Outputs risk_score/ranking for the correlations panel only — does
+    // not gate any notification rung, suppression window, or bypass.
+    affectsNotifications: false,
+  },
 ];
 
 type Store = Record<string, number>; // `${algorithmId}:${parameterId}` -> value

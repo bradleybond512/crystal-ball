@@ -72,6 +72,7 @@ import { checkBatchForBreakingAlerts } from '@/services/breaking-news-alerts';
 import { evaluateWarThreat, evaluateFinanceTrigger, evaluateCommodityTrigger, evaluateDisasterTrigger, checkFinanceAutoTriggerTimeout } from '@/services/mode-manager';
 import { reportElevatedPanel } from '@/services/panel-correlation';
 import { fetchGDACSEvents } from '@/services/gdacs';
+import { normalizeNaturalEventToAlert } from '@/services/eonet';
 import { mlWorker } from '@/services/ml-worker';
 import { clusterNewsHybrid } from '@/services/clustering';
 import { ingestProtests, ingestFlights, ingestVessels, ingestEarthquakes, detectGeoConvergence, geoConvergenceToSignal } from '@/services/geo-convergence';
@@ -1323,6 +1324,11 @@ export class DataLoaderManager implements AppModule {
 
  if (eonetResult.status === 'fulfilled') {
  this.ctx.map?.setNaturalEvents(eonetResult.value);
+ // C3 — keyless resilience: ingest EONET events into the unified alert store
+ // so the intelligence layer (compound-risk, big-event-detector, etc.) sees
+ // natural events even when no API keys are loaded.
+ const eonetAlerts = eonetResult.value.map(normalizeNaturalEventToAlert);
+ unifiedAlertStore.ingest(eonetAlerts);
  this.ctx.statusPanel?.updateFeed('EONET', {
  status: 'ok',
  itemCount: eonetResult.value.length,

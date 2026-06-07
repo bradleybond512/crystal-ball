@@ -1442,14 +1442,17 @@ export class DataLoaderManager implements AppModule {
  const grid = await fetchGridStatus().catch(() => null);
  const gridStatus = grid?.find((g) => g.region === site.eiaRegion) ?? null;
  // Map WeatherAlert[] → NwsAlertMinimal[]. Shapes differ (severity casing,
- // no polygon on WeatherAlert). Only fields consumed by
- // computeDatacenterPosture are mapped; extras omitted intentionally.
+ // Date vs ISO). WeatherAlert carries its polygon as a flat [lon,lat] ring
+ // under `coordinates`; map it into polygon.rings so matchAlertToPlace can
+ // do point-in-polygon against the site — without it weather posture could
+ // never match an alert.
  const nwsAlerts = alerts.map((a) => ({
  id: a.id,
  event: a.event,
  sent: a.onset instanceof Date ? a.onset.toISOString() : String(a.onset),
  expires: a.expires instanceof Date ? a.expires.toISOString() : String(a.expires),
  severity: (a.severity?.toLowerCase() as import('@/services/weather/weather-threat-types').WeatherSeverity | undefined),
+ polygon: a.coordinates.length >= 3 ? { rings: [a.coordinates] } : undefined,
  headline: a.headline,
  }));
  recomputeDatacenterPosture({

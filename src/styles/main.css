@@ -20057,6 +20057,59 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
   color: #fff;
 }
 
+/* ── Forecast bar ─────────────────────────────────────────────────────── */
+.analyst-hud-forecast-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 4px;
+}
+.analyst-hud-forecast-label {
+  font-size: 11px;
+  color: var(--text-secondary, #aaa);
+  white-space: nowrap;
+  min-width: 80px;
+}
+.analyst-hud-forecast-track {
+  flex: 1;
+  height: 4px;
+  background: var(--border-subtle, #333);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.analyst-hud-forecast-fill {
+  height: 100%;
+  background: var(--accent, #4fc3f7);
+  border-radius: 2px;
+}
+.analyst-hud-outcome-confirmed {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid #4caf50;
+  border-radius: 3px;
+  background: transparent;
+  color: #4caf50;
+  cursor: pointer;
+}
+.analyst-hud-outcome-confirmed:disabled { opacity: 0.4; cursor: default; }
+.analyst-hud-outcome-wrong {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid #f44336;
+  border-radius: 3px;
+  background: transparent;
+  color: #f44336;
+  cursor: pointer;
+}
+.analyst-hud-outcome-wrong:disabled { opacity: 0.4; cursor: default; }
+.analyst-hud-hyp-accuracy {
+  font-size: 10px;
+  color: var(--text-secondary, #aaa);
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.06);
+}
+
 /* ── AI Situation Brief modal ─────────────────────────────────────────── */
 .ai-brief-modal-overlay {
   position: fixed;

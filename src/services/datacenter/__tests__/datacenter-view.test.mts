@@ -37,3 +37,9 @@ test('stripSummary is a single line with name, level, headline, and now-count', 
   assert.match(s, /Severe storm/);
   assert.match(s, /1 action/);
 });
+
+test('stripSummary surfaces stale feeds so the strip never implies a fake all-clear', () => {
+  assert.doesNotMatch(stripSummary(BASE), /stale/);
+  const degraded = stripSummary({ ...BASE, staleInputs: ['grid', 'outages'] });
+  assert.match(degraded, /grid, outages stale/);
+});

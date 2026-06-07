@@ -22,5 +22,11 @@ export function actionsNowCount(posture: DataCenterPosture): number {
 export function stripSummary(posture: DataCenterPosture): string {
   const n = actionsNowCount(posture);
   const actionPart = n === 1 ? '1 action now' : `${n} actions now`;
-  return `${posture.site.name} · ${levelLabel(posture.overall)} · ${posture.headline} · ${actionPart}`;
+  const base = `${posture.site.name} · ${levelLabel(posture.overall)} · ${posture.headline} · ${actionPart}`;
+  // Never imply "all clear" when a feed is down: a missing grid/weather input
+  // can read as `normal` purely because it's absent, so surface staleness on
+  // the always-visible strip, not just the expanded panel footer.
+  return posture.staleInputs.length > 0
+    ? `${base} · ⚠ ${posture.staleInputs.join(', ')} stale`
+    : base;
 }

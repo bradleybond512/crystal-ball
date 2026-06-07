@@ -55,6 +55,23 @@ const DECLARATIONS: readonly TunableDeclaration[] = [
     // ladder, so tuning it is a notification-affecting change.
     affectsNotifications: true,
   },
+  {
+    algorithmId: 'negative-evidence',
+    parameterId: 'maxPenalty',
+    default: 0.6,
+    min: 0.2,
+    max: 0.9,
+    step: 0.1,
+    // Graded on whether the missing signals truly never arrived: a "miss"
+    // means the absence penalty was wrong (the signal showed up after all),
+    // so when it mis-grades, reduce the max penalty — be less aggressive
+    // about penalizing absence.
+    fixDirection: 'decrease',
+    description: 'Maximum absence penalty applied when expected follow-on signals are missing.',
+    // Confidence-scoring knob in the intelligence layer — it does not
+    // directly control any notification rung / suppression / bypass.
+    affectsNotifications: false,
+  },
 ];
 
 type Store = Record<string, number>; // `${algorithmId}:${parameterId}` -> value

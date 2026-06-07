@@ -64,3 +64,31 @@ test('getTunings exposes declared knobs with current values from the store', () 
   assert.equal(threshold!.min, 20);
   assert.equal(threshold!.max, 60);
 });
+
+// ── negative-evidence.maxPenalty (B2-replicate: second declared knob) ──
+
+test('negative-evidence.maxPenalty defaults to 0.6 when unset', () => {
+  _resetTunedParamsForTests();
+  assert.equal(getTunedParam('negative-evidence', 'maxPenalty', 0.6), 0.6);
+});
+
+test('negative-evidence.maxPenalty round-trips and clamps to [0.2, 0.9]', () => {
+  _resetTunedParamsForTests();
+  setTunedParam('negative-evidence', 'maxPenalty', 0.4);
+  assert.equal(getTunedParam('negative-evidence', 'maxPenalty', 0.6), 0.4);
+  setTunedParam('negative-evidence', 'maxPenalty', 5); // above max
+  assert.equal(getTunedParam('negative-evidence', 'maxPenalty', 0.6), 0.9);
+  setTunedParam('negative-evidence', 'maxPenalty', 0); // below min
+  assert.equal(getTunedParam('negative-evidence', 'maxPenalty', 0.6), 0.2);
+});
+
+test('getTunings exposes both declared algorithms', () => {
+  _resetTunedParamsForTests();
+  const tunings = getTunings();
+  const ids = tunings.map((t) => t.algorithmId).sort();
+  assert.deepEqual(ids, ['big-event-detector', 'negative-evidence']);
+  const negEv = tunings.find((t) => t.algorithmId === 'negative-evidence');
+  const maxPenalty = negEv!.parameters.find((p) => p.parameterId === 'maxPenalty');
+  assert.equal(maxPenalty!.current, 0.6);
+  assert.equal(maxPenalty!.fixDirection, 'decrease');
+});

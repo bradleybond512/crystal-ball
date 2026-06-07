@@ -89,6 +89,7 @@ export class AnalystHUD {
   private loadingEnsemble = new Set<string>();
   private expandedEnsemble = new Set<string>();
   private exportedFlash: { id: string; at: number } | null = null;
+  private outcomeSubmitted = new Set<string>();
   // Anchor the replay position to a SNAPSHOT TIMESTAMP, not an index.
   // Index-based replay drifts silently when the archive evicts the oldest
   // snapshots (120-slot ring buffer): what the user had as index 5 before
@@ -772,6 +773,19 @@ export class AnalystHUD {
 
     const thread = getThreadFor(h);
     head.append(kind, risk, conf);
+
+    const accuracy = getKindAccuracy();
+    const kindStats = accuracy.get(h.kind);
+    if (kindStats) {
+      const total = kindStats.hits + kindStats.misses;
+      if (total >= 3) {
+        const acc = document.createElement('span');
+        acc.className = 'analyst-hud-hyp-accuracy';
+        acc.textContent = `${Math.round((kindStats.hits / total) * 100)}% acc`;
+        acc.title = `${h.kind} accuracy: ${kindStats.hits} hits / ${total} graded`;
+        head.append(acc);
+      }
+    }
     const fused = (h as Hypothesis & { fusedFrom?: string[] }).fusedFrom;
     if (fused && fused.length > 0) {
       const fuseBadge = document.createElement('span');
@@ -898,8 +912,40 @@ export class AnalystHUD {
     const perspectives = this.buildEnsembleButton(h);
     const copy = this.buildCopyButton(h);
 
-    actions.append(up, down, simulate, perspectives, copy);
+    const outcomeButtons = this.buildOutcomeButtons(h);
+    actions.append(up, down, ...outcomeButtons, simulate, perspectives, copy);
     return actions;
+  }
+
+  private buildOutcomeButtons(h: Hypothesis): HTMLElement[] {
+    if (isGhostMode()) return [];
+    const already = this.outcomeSubmitted.has(h.id);
+
+    const confirmed = document.createElement('button');
+    confirmed.className = 'analyst-hud-outcome analyst-hud-outcome-confirmed';
+    confirmed.textContent = '✓ Confirmed';
+    confirmed.title = 'Mark this hypothesis as correct';
+    confirmed.disabled = already;
+    confirmed.addEventListener('click', () => {
+      thumbsUp(h);
+      recordAction(h, 'thumbs-up');
+      this.outcomeSubmitted.add(h.id);
+      this.render();
+    });
+
+    const wrong = document.createElement('button');
+    wrong.className = 'analyst-hud-outcome analyst-hud-outcome-wrong';
+    wrong.textContent = '✗ Wrong';
+    wrong.title = 'Mark this hypothesis as incorrect';
+    wrong.disabled = already;
+    wrong.addEventListener('click', () => {
+      thumbsDown(h);
+      recordAction(h, 'thumbs-down');
+      this.outcomeSubmitted.add(h.id);
+      this.render();
+    });
+
+    return [confirmed, wrong];
   }
 
   private buildEnsembleButton(h: Hypothesis): HTMLElement {

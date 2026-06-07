@@ -21,6 +21,7 @@ import { computeCompoundRisk, type CompoundRiskResult, type CompoundRiskInput, t
 import { evaluateNegativeEvidence, type NegativeEvidenceResult, type ExpectedSignal, type NegativeEvidenceOptions } from '@/services/intelligence/negative-evidence';
 import type { NormalizedFact, TruthScore } from '@/services/intelligence/types';
 import { recordAlgorithmEvaluation } from './record-evaluation';
+import { getTunedParam } from './tunable-params-store';
 
 /**
  * Score a single fact and record the call in the ledger.
@@ -99,7 +100,11 @@ export function trackedEvaluateNegativeEvidence(
   options?: NegativeEvidenceOptions,
 ): NegativeEvidenceResult {
   const startedAt = Date.now();
-  const result = evaluateNegativeEvidence(parent, expected, candidates, baseConfidence, options);
+  // Read the tuned max-penalty from the store (falls back to the engine's
+  // 0.6 default when unset). An explicit caller-supplied maxPenalty still
+  // wins, so tests and special call sites can override.
+  const maxPenalty = options?.maxPenalty ?? getTunedParam('negative-evidence', 'maxPenalty', 0.6);
+  const result = evaluateNegativeEvidence(parent, expected, candidates, baseConfidence, { ...options, maxPenalty });
   recordAlgorithmEvaluation('negative-evidence', {
     durationMs: Date.now() - startedAt,
     score: result.totalAbsencePenalty,

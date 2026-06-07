@@ -48,6 +48,14 @@ test('a corrupted/out-of-range stored value is clamped on read', () => {
   assert.equal(getTunedParam('big-event-detector', 'threshold', 40), 60); // clamped to max
 });
 
+test('a stored "null" / non-object value does not throw and falls back to default', () => {
+  _resetTunedParamsForTests();
+  globalThis.localStorage.setItem('crystalball-tunable-params-v1', 'null');
+  assert.equal(getTunedParam('negative-evidence', 'maxPenalty', 0.6), 0.6);
+  globalThis.localStorage.setItem('crystalball-tunable-params-v1', '[1,2,3]');
+  assert.equal(getTunedParam('big-event-detector', 'threshold', 40), 40);
+});
+
 test('unknown param falls back to the caller default (no declaration to clamp to)', () => {
   _resetTunedParamsForTests();
   assert.equal(getTunedParam('no-such-algo', 'no-such-param', 7), 7);

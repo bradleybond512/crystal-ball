@@ -94,7 +94,14 @@ function load(): Store {
   try {
     if (typeof localStorage === 'undefined') return {};
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Store) : {};
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    // Guard against a stored `"null"` / array / primitive — JSON.parse
+    // succeeds but the value isn't an indexable record, which would make
+    // `load()[key]` throw downstream.
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Store)
+      : {};
   } catch {
     return {};
   }

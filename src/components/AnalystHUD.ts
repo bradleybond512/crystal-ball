@@ -11,6 +11,7 @@
  */
 
 import { replaceChildren } from '@/utils/dom-utils';
+import { isGhostMode } from '@/services/mode-manager';
 import { jumpToPanel, flashPanel } from '@/services/alert-reactions';
 import { subscribeAnalyst, getAnalystSnapshot, type Hypothesis, type HypothesisEvidence, type AnalystSnapshot } from '@/services/analyst-loop';
 import { subscribeModeAdvisory, getForecastSnapshot, type ForecastSnapshot, type ModeAdvisory } from '@/services/mode-forecast';
@@ -56,9 +57,9 @@ function ageLabel(ms: number): string {
 }
 
 function simButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {
-  if (loading) return 'simulating…';
-  if (!cached) return 'simulate ▸';
-  return expanded ? 'hide ▾' : 'show ▸';
+  if (loading) return 'Projecting…';
+  if (!cached) return '⟳ Project';
+  return expanded ? '⟳ hide ▾' : '⟳ Project ▸';
 }
 
 function ensembleButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {
@@ -933,6 +934,9 @@ export class AnalystHUD {
   private buildSimulateButton(h: Hypothesis): HTMLElement {
     const btn = document.createElement('button');
     btn.className = 'analyst-hud-sim-btn';
+    if (isGhostMode()) {
+      btn.style.display = 'none';
+    }
     const loading = this.loadingProjection.has(h.id);
     const cached = getCachedProjection(h);
     const expanded = this.expandedProjection.has(h.id);

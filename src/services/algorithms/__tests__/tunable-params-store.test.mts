@@ -90,13 +90,17 @@ test('negative-evidence.maxPenalty round-trips and clamps to [0.2, 0.9]', () => 
   assert.equal(getTunedParam('negative-evidence', 'maxPenalty', 0.6), 0.2);
 });
 
-test('getTunings exposes both declared algorithms', () => {
+test('getTunings exposes all declared algorithms', () => {
   _resetTunedParamsForTests();
   const tunings = getTunings();
   const ids = tunings.map((t) => t.algorithmId).sort();
-  assert.deepEqual(ids, ['big-event-detector', 'negative-evidence']);
+  assert.deepEqual(ids, ['big-event-detector', 'correlation-feedback', 'negative-evidence']);
   const negEv = tunings.find((t) => t.algorithmId === 'negative-evidence');
   const maxPenalty = negEv!.parameters.find((p) => p.parameterId === 'maxPenalty');
   assert.equal(maxPenalty!.current, 0.6);
   assert.equal(maxPenalty!.fixDirection, 'decrease');
+  const correl = tunings.find((t) => t.algorithmId === 'correlation-feedback');
+  const ft = correl!.parameters.find((p) => p.parameterId === 'feedbackThreshold');
+  assert.ok(Math.abs((ft!.current ?? 0) - 0.55) < 0.001);
+  assert.equal(ft!.fixDirection, 'increase');
 });

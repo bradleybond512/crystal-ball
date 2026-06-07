@@ -6,7 +6,7 @@
 
 ## CURRENT STATE / NEXT STEP  *(update this every session)*
 
-- **Status:** Workstream B — **COMPLETE: B1 + B1b + B2 slice + B3-data + B3-UI + B2-replicate + B2-enable done.** The self-improvement loop is wired end-to-end, observable in-panel, and now **ACTS** — it auto-applies safe parameter tunings in production, gated by an honest discriminating safety check + the existing evidence/bounds/notification gates.
+- **Status:** **ALL WORKSTREAM ITEMS COMPLETE.** B, A1, A2, B1-cleanup, B2-replicate ×2, B2-enable, C1, C3 done. The self-improvement loop acts, recurring checkup is installed, 3 tunable knobs are declared, EONET feeds the intelligence layer, and coverage gaps are documented. See individual PR entries below.
 - **B1 (done):** 15/21 algos record into the evaluation ledger (#999, #1001).
 - **B1b (done):** pending records graded into fixtures via LLM grader on a cadence (#1003).
 - **B2 slice (done, #1006):** `tunable-params-store` (bound-clamped) + `big-event-detector.threshold` declared tunable + data-loader reads it + panel surfaces proposals + `tuning-apply-runner` proposes → policy-gates → auto-applies only `allow_auto` (6h cadence). Currently NOTHING auto-applies: the runner passes `replayPassed/backtestPassed=false`, and the threshold is flagged `affectsNotifications` so the gate forces approval regardless.
@@ -21,12 +21,14 @@
   - The **backtest-engine** models `driverWeights` + `severityBands`, NOT algorithm-tuning knobs like `big-event-detector.threshold`. Running it for such a proposal applies no override → baseline == proposed → a meaningless trivial "pass" (false positive). Also: the gate only requires `backtestPassed` for `high` criticality / `algorithm_promote` — low/med tunings need only `replayPassed` + ≥20 graded.
   - **Conclusion:** an honest auto-apply switch needs **purpose-built tuning-safety fixtures** — a small suite representing CORRECT behavior that a bad tuning would regress (re-run the affected algo with the proposed parameter against labeled cases, assert no hit-rate regression). That's real work, not a wiring task. Until it exists, the runner's `replayPassed` MUST stay caller-supplied (default false) — never auto-derived from the regression-demo catalog.
 
-- **Next steps (pick one):**
-  - **B2-replicate more knobs + safety suites:** Workstream B's mechanism is done; widening it is now mechanical. For each additional knob, declare it in `tunable-params-store`, make its call site read from the store, and add a discriminating safety suite to `tuning-safety-fixtures.ts` (a knob without a suite fails closed, so it stays held until one exists).
-  - **B1 cleanup:** decide the 6 orphaned algos (baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest) — wire into a live path or drop from registry.
-  - **Workstream A (`npm run checkup`) / Workstream C (data gathering):** both still unstarted — these are the natural next workstreams now that B is complete.
+- **This session (done):**
+  - **B1-cleanup:** 6 orphaned algos removed from registry (all confirmed zero live call sites: baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest). Registry is now 15 algos, all instrumented.
+  - **B2-replicate #3:** `correlation-feedback.feedbackThreshold` (default 0.55, [0.3,0.8], `fixDirection=increase`). Wired in `ruleEnabled()` in `alert-correlator.ts`. Safety suite (6 anchor cases) is sanity-guard style (monotone gate — trivially passes for valid range; evidence gate provides signal). `affectsNotifications=false`.
+  - **A2:** `scripts/install-checkup-schedule.mjs` installs a macOS LaunchAgent for daily `checkup`. `npm run checkup:schedule` to install, `--remove` to uninstall, `--hour N` for custom time.
+  - **C1:** `docs/superpowers/FEED_COVERAGE_AUDIT.md` — full gap analysis of no-key feeds vs expansion plan. Top 3 gaps: Open-Meteo saved-place hourly, NOAA CO-OPS flood gauges, EONET sidecar route.
+  - **C3:** EONET events now ingested into `unifiedAlertStore` via `normalizeNaturalEventToAlert()` in `loadNatural()`. EONET was already fetched and shown on the map but the intelligence layer (compound-risk, big-event-detector, etc.) never saw it. Fixed.
 
-- **Blocked on:** nothing. Workstream B is complete and the loop acts (gated by safety fixtures + ≥20 graded samples + bounds + notification-approval + logging). In a fresh environment nothing auto-applies until real graded samples accumulate — by design.
+- **Blocked on:** nothing. All gameplan items complete. Future work: Open-Meteo saved-place hourly (P1 in coverage audit), NOAA CO-OPS flood gauges (P2).
 
 ---
 

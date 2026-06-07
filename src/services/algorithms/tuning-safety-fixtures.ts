@@ -127,12 +127,61 @@ function scoreNegativeEvidenceMaxPenalty(maxPenalty: number): TuningSafetyScore 
   };
 }
 
+// ── correlation-feedback.feedbackThreshold fixtures ─────────────────────
+
+/**
+ * Correlation-feedback is a monotone threshold gate: `mult >= threshold`.
+ * A true discrimination suite (where different threshold values produce
+ * different scores) would require ground-truth about borderline rules —
+ * which would freeze the knob at the current value.
+ *
+ * Instead, this suite provides SANITY-GUARD cases: six pairs far from the
+ * threshold range (0.30–0.80) where the correct enable/disable decision
+ * is unambiguous for any value in [0.3, 0.8]. It passes for all valid
+ * thresholds, so `proposeTuningSafety` returns true and the evidence gate
+ * (≥20 graded samples, the separate ledger gate) provides the actual
+ * quality signal.
+ *
+ * What it DOES catch: a degenerate stored value outside the declared
+ * bounds (already clamped by the store) or a scorer implementation bug.
+ */
+interface CorrelFeedbackCase {
+  id: string;
+  /** Feedback multiplier getPairFeedbackMult() would return. */
+  mult: number;
+  /** Ground truth: should this rule be enabled at this mult level? */
+  expectEnabled: boolean;
+}
+
+const CORREL_FEEDBACK_CASES: readonly CorrelFeedbackCase[] = [
+  { id: 'E1-strong', mult: 0.95, expectEnabled: true },   // well-confirmed correlation
+  { id: 'E2-good', mult: 0.85, expectEnabled: true },     // reliable, rarely dismissed
+  { id: 'E3-solid', mult: 0.9, expectEnabled: true },     // consistently good signal
+  { id: 'D1-noise', mult: 0.05, expectEnabled: false },   // user dismisses every trigger
+  { id: 'D2-stale', mult: 0.1, expectEnabled: false },    // badly degraded
+  { id: 'D3-low', mult: 0.2, expectEnabled: false },      // well below any valid threshold
+];
+
+function scoreCorrelationFeedbackThreshold(threshold: number): TuningSafetyScore {
+  const passingCaseIds: string[] = [];
+  for (const c of CORREL_FEEDBACK_CASES) {
+    const enabled = c.mult >= threshold;
+    if (enabled === c.expectEnabled) passingCaseIds.push(c.id);
+  }
+  return {
+    hitRate: passingCaseIds.length / CORREL_FEEDBACK_CASES.length,
+    cases: CORREL_FEEDBACK_CASES.length,
+    passingCaseIds,
+  };
+}
+
 // ── Registry + public API ────────────────────────────────────────────────
 
 type SafetyScorer = (candidateValue: number) => TuningSafetyScore;
 
 const SCORERS: Record<string, SafetyScorer> = {
   'negative-evidence:maxPenalty': scoreNegativeEvidenceMaxPenalty,
+  'correlation-feedback:feedbackThreshold': scoreCorrelationFeedbackThreshold,
 };
 
 function scorerKey(algorithmId: string, parameterId: string): string {

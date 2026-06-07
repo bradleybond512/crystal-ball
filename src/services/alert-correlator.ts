@@ -21,6 +21,7 @@ import { canonicalEntityKey } from './entity-key';
 import { recordCoOccurrence } from './pair-discovery';
 import { getPairFeedbackMult } from './correlation-feedback';
 import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 import { runIntel } from './intel-provider';
 import { getEnabledCustomRules } from './custom-correlation-rules';
 
@@ -347,7 +348,9 @@ function detectChains(leaders: UnifiedAlert[], now: number): UnifiedAlert[] {
 
 /** Auto-disable rules whose user-feedback multiplier has collapsed (sustained dismissals). */
 function ruleEnabled(r: CausalRule): boolean {
-  return getPairFeedbackMult(`${r.cause}|${r.effect}`) >= 0.55;
+  // Read the tuned threshold from the store (falls back to 0.55 when unset).
+  const threshold = getTunedParam('correlation-feedback', 'feedbackThreshold', 0.55);
+  return getPairFeedbackMult(`${r.cause}|${r.effect}`) >= threshold;
 }
 
 const distanceCache = new Map<string, number>();

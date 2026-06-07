@@ -176,3 +176,56 @@ async function fetchEonetEvents(days: number): Promise<NaturalEvent[]> {
  return [];
   }
 }
+
+// ── UnifiedAlert normalizer (C3 — keyless resilience) ────────────────────
+//
+// EONET events were previously only shown on the map layer; the intelligence
+// layer (compound-risk, big-event-detector, etc.) never saw them. This
+// normalizer bridges NaturalEvent → UnifiedAlert so EONET events flow into
+// unifiedAlertStore and raise compound risk scores during active disasters.
+
+import type { UnifiedAlert, AlertSeverity } from './unified-alerts';
+
+const EONET_ALERT_SEVERITY: Record<NaturalEventCategory, AlertSeverity> = {
+  severeStorms: 'high',
+  wildfires: 'high',
+  volcanoes: 'high',
+  earthquakes: 'medium',
+  floods: 'medium',
+  landslides: 'medium',
+  drought: 'low',
+  dustHaze: 'low',
+  snow: 'low',
+  tempExtremes: 'medium',
+  seaLakeIce: 'info',
+  waterColor: 'info',
+  manmade: 'medium',
+};
+
+// Map EONET category → existing AlertSource (no new union values needed)
+const EONET_ALERT_SOURCE: Partial<Record<NaturalEventCategory, UnifiedAlert['source']>> = {
+  wildfires: 'fire',
+  volcanoes: 'volcano',
+};
+
+/**
+ * Convert a NaturalEvent (from the EONET service) into a UnifiedAlert so the
+ * intelligence and correlation layers can reason about it.
+ */
+export function normalizeNaturalEventToAlert(event: NaturalEvent): UnifiedAlert {
+  const source: UnifiedAlert['source'] = EONET_ALERT_SOURCE[event.category] ?? 'hazard';
+  return {
+    id: `eonet-${event.id}`,
+    source,
+    severity: EONET_ALERT_SEVERITY[event.category] ?? 'info',
+    title: event.title,
+    body: [event.categoryTitle, event.description].filter(Boolean).join(' · '),
+    timestamp: event.date.getTime(),
+    location: { lat: event.lat, lon: event.lon },
+    relevanceScore: 0,
+    acknowledged: false,
+    pinned: false,
+    link: event.sourceUrl,
+    raw: event,
+  };
+}

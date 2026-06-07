@@ -106,6 +106,10 @@ export interface SavedPlace {
   /** Optional radius (km) defining a sensitivity buffer. Anything
    *  inside `radiusKm` of the polygon is treated as "near". */
   radiusKm?: number;
+  /** Optional UGC zone/county codes for this place (derived from NWS
+   *  `/points`). Lets the matcher fall back to zone matching when an
+   *  alert has no polygon. */
+  ugcZones?: string[];
 }
 
 // ── Match result ─────────────────────────────────────────────────────────

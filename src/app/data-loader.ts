@@ -22,6 +22,7 @@ import {
   fetchPredictions,
   fetchEarthquakes,
   fetchWeatherAlerts,
+  fetchUgcZonesForPoint,
   fetchFredData,
   fetchInternetOutages,
   isOutagesConfigured,
@@ -295,7 +296,7 @@ import type { ObservationEvent } from '@/types/intelligence';
 import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGridStatus } from '@/services/power-grid';
-import { getDatacenterSite, recomputeDatacenterPosture } from '@/services/datacenter/datacenter-state';
+import { getDatacenterSite, setDatacenterSite, recomputeDatacenterPosture } from '@/services/datacenter/datacenter-state';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
 import { fetchAcledEvents, fetchAdsbMilitary } from '@/services/osint';
 import { fetchHibpBreaches, fetchTorMetrics } from '@/services/osint';
@@ -347,6 +348,11 @@ function protoItemToNewsItem(p: ProtoNewsItem): NewsItem {
 }
 
 const CYBER_LAYER_ENABLED = import.meta.env.VITE_ENABLE_CYBER_LAYER === 'true';
+
+// Cache of derived UGC zones per `${lat},${lon}` so the datacenter posture
+// loop resolves a site's forecast/county zones once instead of hitting NWS
+// `/points` on every weather refresh.
+const _siteUgcZoneCache = new Map<string, string[]>();
 
 export interface DataLoaderCallbacks {
   renderCriticalBanner: (postures: TheaterPostureSummary[]) => void;
@@ -1434,17 +1440,30 @@ export class DataLoaderManager implements AppModule {
  // Feed weather alerts + grid status into the datacenter posture engine.
  // Only runs when the user has a saved place tagged data_center.
  if (getDatacenterSite()) {
- const site = getDatacenterSite()!;
+ let site = getDatacenterSite()!;
+ // Resolve the site's own UGC zones once (forecast zone + county) so
+ // zone-only NWS products (ice/heat/flood are often issued by UGC zone,
+ // not polygon) can match the site instead of reading as clear. Cached
+ // by lat,lon; best-effort — degrades to polygon-only matching on failure.
+ if (!site.ugcZones) {
+ const zoneKey = `${site.lat},${site.lon}`;
+ let zones = _siteUgcZoneCache.get(zoneKey);
+ if (!zones) {
+ zones = await fetchUgcZonesForPoint(site.lat, site.lon);
+ _siteUgcZoneCache.set(zoneKey, zones);
+ }
+ if (zones.length > 0) {
+ site = { ...site, ugcZones: zones };
+ setDatacenterSite(site);
+ }
+ }
  const grid = await fetchGridStatus().catch(() => null);
  const gridStatus = grid?.find((g) => g.region === site.eiaRegion) ?? null;
  // Map WeatherAlert[] → NwsAlertMinimal[]. Shapes differ (severity casing,
  // Date vs ISO). WeatherAlert carries its polygon as a flat [lon,lat] ring
  // under `coordinates`; map it into polygon.rings so matchAlertToPlace can
- // do point-in-polygon against the site — without it weather posture could
- // never match an alert.
- // v1 gap: WeatherAlert has no UGC zone codes, so zone-only NWS products
- // (common for ice/heat/flood) can't match the site and read as clear here.
- // Threading ugcZones through WeatherAlert is the follow-up.
+ // do point-in-polygon against the site. UGC zones thread through so the
+ // matcher's zone fallback fires for polygon-free alerts.
  const nwsAlerts = alerts.map((a) => ({
  id: a.id,
  event: a.event,
@@ -1452,6 +1471,7 @@ export class DataLoaderManager implements AppModule {
  expires: a.expires instanceof Date ? a.expires.toISOString() : String(a.expires),
  severity: (a.severity?.toLowerCase() as import('@/services/weather/weather-threat-types').WeatherSeverity | undefined),
  polygon: a.coordinates.length >= 3 ? { rings: [a.coordinates] } : undefined,
+ ugcZones: a.ugcZones,
  headline: a.headline,
  }));
  recomputeDatacenterPosture({

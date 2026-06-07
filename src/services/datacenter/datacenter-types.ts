@@ -57,6 +57,9 @@ export interface SiteConfig {
   lon: number;
   radiusKm: number;
   eiaRegion: EiaRegion;
+  /** UGC zone/county codes for the site, derived at runtime from NWS
+   *  `/points`. Enables zone-fallback matching for polygon-free alerts. */
+  ugcZones?: string[];
 }
 
 export interface PowerPosture {

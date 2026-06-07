@@ -9137,6 +9137,105 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Open-Meteo 7-day hourly local forecast (no key) ─────────────────────
+  // GET /api/weather/local-forecast?lat=&lon=
+  // Returns hourly precipitation, wind gusts, and WMO weather code for the
+  // next 3 days at the given coordinates. Used by saved-place weather
+  // watches and feeds the intelligence observation pipeline.
+  if (requestUrl.pathname === '/api/weather/local-forecast') {
+    const lat = requestUrl.searchParams.get('lat');
+    const lon = requestUrl.searchParams.get('lon');
+    if (!lat || !lon) return json({ error: 'lat and lon required' }, 400);
+    const cacheKey = `open-meteo-forecast-${parseFloat(lat).toFixed(2)}-${parseFloat(lon).toFixed(2)}`;
+    const cached = getCached(cacheKey, 10 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation,wind_gusts_10m,weather_code&forecast_days=3&timezone=auto`;
+      const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA } }, 10000);
+      if (!r.ok) throw new Error(`Open-Meteo HTTP ${r.status}`);
+      const data = await r.json();
+      const result = { ...data, fetchedAt: Date.now(), source: 'open-meteo.com' };
+      setCached(cacheKey, result);
+      return json(result);
+    } catch (error) {
+      return json({ error: `open-meteo forecast error: ${error.message ?? error}`, fetchedAt: Date.now() }, 502);
+    }
+  }
+
+  // ── NOAA CO-OPS flood gauges (no key) ────────────────────────────────────
+  // GET /api/flood-gauges/noaa-coops?lat=&lon=
+  // Finds the nearest active NOAA tide/water-level gauge to the given point
+  // (within 300 km) and returns the latest water level reading.
+  // Gauge station list cached 24 h; water-level data cached 30 min.
+  if (requestUrl.pathname === '/api/flood-gauges/noaa-coops') {
+    const lat = parseFloat(requestUrl.searchParams.get('lat') ?? 'NaN');
+    const lon = parseFloat(requestUrl.searchParams.get('lon') ?? 'NaN');
+    if (!isFinite(lat) || !isFinite(lon)) return json({ error: 'lat and lon required' }, 400);
+
+    // Step 1: load station list (cached 24 h)
+    let stations = getCached('coops-stations', 24 * 60 * 60 * 1000);
+    if (!stations) {
+      try {
+        const stUrl = 'https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels&units=english';
+        const sr = await fetchWithTimeout(stUrl, { headers: { 'User-Agent': CHROME_UA } }, 15000);
+        if (!sr.ok) throw new Error(`CO-OPS stations HTTP ${sr.status}`);
+        const sdata = await sr.json();
+        stations = Array.isArray(sdata.stations) ? sdata.stations : [];
+        setCached('coops-stations', stations, 24 * 60 * 60 * 1000);
+      } catch (error) {
+        return json({ error: `CO-OPS stations error: ${error.message ?? error}` }, 502);
+      }
+    }
+
+    // Step 2: find nearest station within 300 km
+    function haversineKm(la1, lo1, la2, lo2) {
+      const R = 6371;
+      const dLat = (la2 - la1) * Math.PI / 180;
+      const dLon = (lo2 - lo1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(la1 * Math.PI / 180) * Math.cos(la2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+    let nearest = null;
+    let minDist = Infinity;
+    for (const s of stations) {
+      const d = haversineKm(lat, lon, Number(s.lat), Number(s.lng ?? s.lon));
+      if (d < minDist) { minDist = d; nearest = s; }
+    }
+    if (!nearest || minDist > 300) return json({ gauges: [], distanceKm: minDist, source: 'tidesandcurrents.noaa.gov' });
+
+    // Step 3: fetch current water level for nearest station (cached 30 min)
+    const wlCacheKey = `coops-wl-${nearest.id}`;
+    let wlData = getCached(wlCacheKey, 30 * 60 * 1000);
+    if (!wlData) {
+      try {
+        const wlUrl = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=water_level&station=${nearest.id}&datum=NAVD&time_zone=LST&units=english&application=crystal_ball&format=json&date=latest`;
+        const wr = await fetchWithTimeout(wlUrl, { headers: { 'User-Agent': CHROME_UA } }, 12000);
+        if (!wr.ok) throw new Error(`CO-OPS water level HTTP ${wr.status}`);
+        wlData = await wr.json();
+        setCached(wlCacheKey, wlData, 30 * 60 * 1000);
+      } catch (error) {
+        return json({ gauges: [], error: `CO-OPS water level error: ${error.message ?? error}`, station: nearest.id }, 502);
+      }
+    }
+
+    const readings = wlData?.data ?? [];
+    const latest = readings.at(-1);
+    return json({
+      gauges: [{
+        stationId: nearest.id,
+        stationName: nearest.name,
+        distanceKm: Math.round(minDist),
+        lat: Number(nearest.lat),
+        lon: Number(nearest.lng ?? nearest.lon),
+        waterLevelFt: latest ? parseFloat(latest.v) : null,
+        timestamp: latest ? latest.t : null,
+        flags: latest ? latest.f : null,
+      }],
+      fetchedAt: Date.now(),
+      source: 'tidesandcurrents.noaa.gov',
+    });
+  }
+
   // ── Stablecoin markets via CoinGecko ─────────────────────────────────────
   if (requestUrl.pathname === '/api/stablecoin-markets') {
  const STABLECOINS = ['tether', 'usd-coin', 'dai', 'first-digital-usd', 'true-usd', 'frax'];

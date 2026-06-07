@@ -17,6 +17,7 @@ import { unifiedAlertStore } from './unified-alerts';
 import { scoreAlert } from './alert-routing';
 import { signatureFor } from './hypothesis-feedback';
 import { getMemory, putMemory } from './reasoning-memory';
+import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -170,6 +171,7 @@ function bumpStats(stats: AccuracyStats, hit: boolean): void {
 }
 
 function gradeOne(p: PendingHypothesis): void {
+  const _t0 = Date.now();
   const hit = didEvidenceEscalate(p);
   if (hit === null) return; // no evidence left to judge — skip, don't record a miss
 
@@ -180,6 +182,15 @@ function gradeOne(p: PendingHypothesis): void {
   const kindStats = byKind.get(p.kind) ?? { hits: 0, misses: 0, lastGraded: 0 };
   bumpStats(kindStats, hit);
   byKind.set(p.kind, kindStats);
+
+  try {
+    recordAlgorithmEvaluation('hypothesis-accuracy', {
+      durationMs: Date.now() - _t0,
+      score: hit ? 1 : 0,
+      label: hit ? 'hit' : 'miss',
+      detail: { kind: p.kind, situationIds: p.situationIds.length, alertIds: p.alertIds.length },
+    });
+  } catch { /* ledger unavailable */ }
 }
 
 function gradeDue(): void {

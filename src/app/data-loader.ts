@@ -72,6 +72,7 @@ import { checkBatchForBreakingAlerts } from '@/services/breaking-news-alerts';
 import { evaluateWarThreat, evaluateFinanceTrigger, evaluateCommodityTrigger, evaluateDisasterTrigger, checkFinanceAutoTriggerTimeout } from '@/services/mode-manager';
 import { reportElevatedPanel } from '@/services/panel-correlation';
 import { fetchGDACSEvents } from '@/services/gdacs';
+import { normalizeNaturalEventToAlert } from '@/services/eonet';
 import { mlWorker } from '@/services/ml-worker';
 import { clusterNewsHybrid } from '@/services/clustering';
 import { ingestProtests, ingestFlights, ingestVessels, ingestEarthquakes, detectGeoConvergence, geoConvergenceToSignal } from '@/services/geo-convergence';
@@ -102,6 +103,7 @@ import { t, getCurrentLanguage } from '@/services/i18n';
 import { getHydratedData } from '@/services/bootstrap';
 import { canQueueAiClassification, AI_CLASSIFY_MAX_PER_FEED } from '@/services/ai-classify-queue';
 import { classifyWithAI } from '@/services/threat-classifier';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 import { ingestHeadlines } from '@/services/trending-keywords';
 import type { ListFeedDigestResponse } from '@/generated/client/crystalball/news/v1/service_client';
 import type { GetSectorSummaryResponse } from '@/generated/client/crystalball/market/v1/service_client';
@@ -1322,6 +1324,15 @@ export class DataLoaderManager implements AppModule {
 
  if (eonetResult.status === 'fulfilled') {
  this.ctx.map?.setNaturalEvents(eonetResult.value);
+ // C3 — keyless resilience: ingest EONET events into the unified alert store
+ // so the intelligence layer (compound-risk, big-event-detector, etc.) sees
+ // natural events even when no API keys are loaded.
+ // fetchNaturalEvents() returns merged EONET + GDACS events; filter to
+ // EONET-only (sourceName !== 'GDACS') to avoid double-ingesting GDACS
+ // events that loadGDACSAlerts() already ingests as gdacs-${id} alerts.
+ const eonetOnly = eonetResult.value.filter((e) => e.sourceName !== 'GDACS');
+ const eonetAlerts = eonetOnly.map(normalizeNaturalEventToAlert);
+ unifiedAlertStore.ingest(eonetAlerts);
  this.ctx.statusPanel?.updateFeed('EONET', {
  status: 'ok',
  itemCount: eonetResult.value.length,
@@ -1434,10 +1445,12 @@ export class DataLoaderManager implements AppModule {
  { detectBigEvent },
  { routeBigEventToLadder },
  { getNotificationTraceRegistry },
+ { recordAlgorithmEvaluation },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
  import('@/services/diagnostics/diagnostics-state'),
+ import('@/services/algorithms/record-evaluation'),
  ]);
  const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
  const RUNG_ACTION: Record<string, 'sound+banner' | 'banner' | null> = {
@@ -1465,7 +1478,33 @@ export class DataLoaderManager implements AppModule {
  userExposure: 50, // conservative default; polygon match refines this
  potentialImpact: severityScore,
  };
- const bigEventResult = detectBigEvent(ladderInput);
+ const _bedStart = performance.now();
+ // Threshold is a tunable param (B2): reads the auto-tuned value from the
+ // store, falling back to the detector's built-in default (40) when unset.
+ const bigEventResult = detectBigEvent(ladderInput, {
+ threshold: getTunedParam('big-event-detector', 'threshold', 40),
+ });
+ // B1 (self-improvement gameplan): feed the evaluation ledger so the
+ // adaptive-tuner has data. Guarded — instrumentation must never break
+ // the notification data path.
+ try {
+ recordAlgorithmEvaluation('big-event-detector', {
+ durationMs: performance.now() - _bedStart,
+ score: bigEventResult.totalScore / 100,
+ label: bigEventResult.isBigEvent ? 'big-event' : 'quiet',
+ detail: { domain: 'weather', triggers: bigEventResult.triggers.length, tier: bigEventResult.tier },
+ });
+ } catch { /* ledger unavailable — skip silently */ }
+ // confidence-urgency-matrix: the tier + deliveryPriority come directly from the matrix
+ // computation inside detectBigEvent — record them as a separate matrix evaluation.
+ try {
+ recordAlgorithmEvaluation('confidence-urgency-matrix', {
+ durationMs: performance.now() - _bedStart, // shares the detectBigEvent bracket (matrix runs inside it)
+ score: bigEventResult.totalScore / 100,
+ label: bigEventResult.tier,
+ detail: { priority: bigEventResult.deliveryPriority, urgency: bigEventResult.urgency },
+ });
+ } catch { /* ledger unavailable — skip silently */ }
  if (!bigEventResult.isBigEvent) continue;
  const decision = routeBigEventToLadder(registry, bigEventResult, ladderInput, {
  domain: 'weather',

@@ -313,6 +313,8 @@ import * as diseaseLoaders from '@/app/loaders/disease';
 import * as cyberLoaders from '@/app/loaders/cyber';
 import { earthquakesToObservations } from '@/services/intelligence/adapters/earthquake-adapter';
 import { aisDisruptionsToObservations } from '@/services/intelligence/adapters/ais-adapter';
+import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
+import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
 import { ingest as ingestObservations, getRecent as getRecentObservations } from '@/services/intelligence/observation-store';
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
@@ -587,6 +589,7 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'hazmatIncidents', task: () => runGuarded('hazmatIncidents', () => this.loadHazmatIncidents()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'oilSpills', task: () => runGuarded('oilSpills', () => this.loadOilSpills()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'gdacsAlerts', task: () => runGuarded('gdacsAlerts', () => this.loadGDACSAlerts()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'floodGauges', task: () => runGuarded('floodGauges', () => this.loadFloodGauges()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoAlerts', task: () => runGuarded('volcanoAlerts', () => this.loadVolcanoAlerts()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoMonitor', task: () => runGuarded('volcanoMonitor', () => this.loadVolcanoMonitor()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'severeWeather', task: () => runGuarded('severeWeather', () => this.loadSevereWeather()) });
@@ -1597,6 +1600,28 @@ export class DataLoaderManager implements AppModule {
  this.ctx.intelligenceCache.earthquakes ?? [],
  getStormPreparednessSummary(),
  );
+
+ // Multi-source weather intelligence: fetch Open-Meteo hourly forecast
+ // for each saved place and ingest as observations alongside NWS alerts.
+ // When both sources flag the same area, truth-score corroboration applies.
+ void (async () => {
+ try {
+ const { getSavedPlaces } = await import('@/services/saved-places');
+ const places = getSavedPlaces().slice(0, 3); // cap to first 3 saved places
+ await Promise.allSettled(places.map(async (place) => {
+ if (!place.lat || !place.lon) return;
+ const url = `${getApiBaseUrl()}/api/weather/local-forecast?lat=${place.lat}&lon=${place.lon}`;
+ const r = await fetch(url);
+ if (!r.ok) return;
+ const forecast = await r.json() as OpenMeteoHourlyForecast;
+ const obs = forecastToObservations(forecast, place.lat, place.lon, place.name ?? 'Saved Place');
+ if (obs.length > 0) ingestObservations(obs);
+ }));
+ } catch {
+ /* local forecast failure is non-critical — NWS alerts are the primary source */
+ }
+ })();
+
  } catch (error) {
  this.ctx.map?.setLayerReady('weather', false);
  this.ctx.statusPanel?.updateFeed('Weather', { status: 'error' });
@@ -2241,6 +2266,27 @@ export class DataLoaderManager implements AppModule {
  console.warn('[gdacs-alerts] fetch failed', error);
  (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update([]);
  }
+  }
+
+  /** NOAA CO-OPS flood gauge observations — redundant source alongside USGS water data.
+   *  Feeds the intelligence layer so compound-risk and truth-score get multi-source
+   *  corroboration when both NOAA and USGS flag elevated water in the same area. */
+  async loadFloodGauges(): Promise<void> {
+    try {
+      const { getSavedPlaces } = await import('@/services/saved-places');
+      const places = getSavedPlaces().slice(0, 3);
+      await Promise.allSettled(places.map(async (place) => {
+        if (!place.lat || !place.lon) return;
+        const url = `${getApiBaseUrl()}/api/flood-gauges/noaa-coops?lat=${place.lat}&lon=${place.lon}`;
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const resp = await r.json() as NOAACoopsResponse;
+        const obs = floodGaugesToObservations(resp, place.name ?? 'Saved Place');
+        if (obs.length > 0) ingestObservations(obs);
+      }));
+    } catch {
+      /* flood gauge failure is non-critical — USGS is the primary water source */
+    }
   }
 
   async loadVolcanoAlerts(): Promise<void> { return cyberLoaders.loadVolcanoAlerts(this.ctx); }

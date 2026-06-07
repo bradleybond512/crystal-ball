@@ -60,76 +60,85 @@ function windSeverity(ms: number): ObservationSeverity | null {
  * @param lon Longitude
  * @param placeLabel Human-readable label (e.g. "Home — La Porte IN")
  */
+function makeLocation(lat: number, lon: number) {
+  return { lat, lon, radiusKm: 25 as const };
+}
+
+/** Build observations for a single forecast hour. Returns 0–1 observations. */
+function observationsForHour(
+  lat: number, lon: number, placeLabel: string,
+  timestamp: number, timeStr: string,
+  precipitation: number, windGusts: number, weatherCode: number,
+): ObservationEvent[] {
+  const out: ObservationEvent[] = [];
+  const loc = makeLocation(lat, lon);
+
+  const precipSev = precipitationSeverity(precipitation);
+  if (precipSev) {
+    out.push({
+      id: `open-meteo-precip-${lat.toFixed(3)}-${lon.toFixed(3)}-${timestamp}`,
+      sourceId: 'open-meteo-forecast', domain: 'weather', timestamp, location: loc,
+      severity: precipSev,
+      title: `${precipitation.toFixed(1)} mm/h precipitation forecast — ${placeLabel}`,
+      raw: { precipitation, weatherCode, timestamp: timeStr },
+      entityIds: [], tags: ['weather', 'precipitation', 'forecast'],
+    });
+    return out; // precipitation dominates — skip wind/wx for this hour
+  }
+
+  const windSev = windSeverity(windGusts);
+  if (windSev) {
+    out.push({
+      id: `open-meteo-wind-${lat.toFixed(3)}-${lon.toFixed(3)}-${timestamp}`,
+      sourceId: 'open-meteo-forecast', domain: 'weather', timestamp, location: loc,
+      severity: windSev,
+      title: `${windGusts.toFixed(0)} m/s wind gusts forecast — ${placeLabel}`,
+      raw: { windGusts, weatherCode, timestamp: timeStr },
+      entityIds: [], tags: ['weather', 'wind', 'forecast'],
+    });
+    return out;
+  }
+
+  const wmoLabel = WMO_SIGNIFICANT[weatherCode];
+  if (wmoLabel) {
+    out.push({
+      id: `open-meteo-wx-${lat.toFixed(3)}-${lon.toFixed(3)}-${timestamp}`,
+      sourceId: 'open-meteo-forecast', domain: 'weather', timestamp, location: loc,
+      severity: 'MEDIUM',
+      title: `${wmoLabel} forecast — ${placeLabel}`,
+      raw: { weatherCode, timestamp: timeStr },
+      entityIds: [], tags: ['weather', 'forecast', wmoLabel.toLowerCase().replace(/\s+/g, '-')],
+    });
+  }
+  return out;
+}
+
 export function forecastToObservations(
   forecast: OpenMeteoHourlyForecast,
   lat: number,
   lon: number,
   placeLabel: string,
 ): ObservationEvent[] {
+  // Defensive: malformed or null API responses must never throw
+  if (!forecast || typeof forecast !== 'object') return [];
   const hourly = forecast.hourly;
-  if (!hourly?.time?.length) return [];
+  if (!hourly?.time?.length || !Array.isArray(hourly.time)) return [];
 
   const observations: ObservationEvent[] = [];
   const now = Date.now();
 
   for (let i = 0; i < hourly.time.length; i++) {
-    const timestamp = new Date(hourly.time[i] ?? '').getTime();
-    if (!Number.isFinite(timestamp) || timestamp < now - 60 * 60 * 1000) continue; // skip past hours
+    const timeStr = hourly.time[i] ?? '';
+    const timestamp = new Date(timeStr).getTime();
+    if (!Number.isFinite(timestamp) || timestamp < now - 60 * 60 * 1000) continue;
 
-    const precipitation = hourly.precipitation[i] ?? 0;
-    const windGusts = hourly.wind_gusts_10m[i] ?? 0;
-    const weatherCode = hourly.weather_code[i] ?? 0;
+    // Coerce to number — guard against strings in unexpected responses
+    const precipitation = Number(Array.isArray(hourly.precipitation) ? (hourly.precipitation[i] ?? 0) : 0);
+    const windGusts = Number(Array.isArray(hourly.wind_gusts_10m) ? (hourly.wind_gusts_10m[i] ?? 0) : 0);
+    const weatherCode = Number(Array.isArray(hourly.weather_code) ? (hourly.weather_code[i] ?? 0) : 0);
+    if (!Number.isFinite(precipitation) || !Number.isFinite(windGusts)) continue;
 
-    // Precipitation observation
-    const precipSev = precipitationSeverity(precipitation);
-    if (precipSev) {
-      observations.push({
-        id: `open-meteo-precip-${lat.toFixed(3)}-${lon.toFixed(3)}-${timestamp}`,
-        sourceId: 'open-meteo-forecast',
-        domain: 'weather',
-        timestamp,
-        location: { lat, lon, radiusKm: 25 },
-        severity: precipSev,
-        title: `${precipitation.toFixed(1)} mm/h precipitation forecast — ${placeLabel}`,
-        raw: { precipitation, weatherCode, timestamp: hourly.time[i] },
-        entityIds: [],
-        tags: ['weather', 'precipitation', 'forecast'],
-      });
-    }
-
-    // Wind gust observation (deduped: only if not already covered by precipitation)
-    const windSev = windSeverity(windGusts);
-    if (windSev && !precipSev) {
-      observations.push({
-        id: `open-meteo-wind-${lat.toFixed(3)}-${lon.toFixed(3)}-${timestamp}`,
-        sourceId: 'open-meteo-forecast',
-        domain: 'weather',
-        timestamp,
-        location: { lat, lon, radiusKm: 25 },
-        severity: windSev,
-        title: `${windGusts.toFixed(0)} m/s wind gusts forecast — ${placeLabel}`,
-        raw: { windGusts, weatherCode, timestamp: hourly.time[i] },
-        entityIds: [],
-        tags: ['weather', 'wind', 'forecast'],
-      });
-    }
-
-    // Significant weather code (thunderstorms etc.) — at most one per 3h window
-    const wmoLabel = WMO_SIGNIFICANT[weatherCode];
-    if (wmoLabel && !precipSev && !windSev) {
-      observations.push({
-        id: `open-meteo-wx-${lat.toFixed(3)}-${lon.toFixed(3)}-${timestamp}`,
-        sourceId: 'open-meteo-forecast',
-        domain: 'weather',
-        timestamp,
-        location: { lat, lon, radiusKm: 25 },
-        severity: 'MEDIUM',
-        title: `${wmoLabel} forecast — ${placeLabel}`,
-        raw: { weatherCode, timestamp: hourly.time[i] },
-        entityIds: [],
-        tags: ['weather', 'forecast', wmoLabel.toLowerCase().replace(/\s+/g, '-')],
-      });
-    }
+    observations.push(...observationsForHour(lat, lon, placeLabel, timestamp, timeStr, precipitation, windGusts, weatherCode));
   }
 
   return observations;

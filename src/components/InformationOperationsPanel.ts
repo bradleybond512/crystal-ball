@@ -99,6 +99,14 @@ export class InformationOperationsPanel extends Panel {
     this.scheduleRefresh();
   }
 
+  public override destroy(): void {
+    if (this.refreshTimer !== null) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    super.destroy();
+  }
+
   private scheduleRefresh(): void {
     if (this.refreshTimer) return;
     this.refreshTimer = setInterval(() => {

@@ -22,16 +22,18 @@ test.beforeEach(() => resetAlgorithmRegistry());
 
 // ── Initial registry coverage ──────────────────────────────────────────
 
-test('initial: registers all 21 plan-listed algorithms', () => {
+test('initial: registers all live algorithms (orphaned algos with no call sites removed)', () => {
   const ids = listAlgorithms().map((a) => a.id).sort();
+  // 6 algos dropped (B1-cleanup): baseline-deviation, evidence-graph, forecast-calibration,
+  // situation-clustering, watchlist-relevance, what-changed-digest — all had zero live
+  // call sites (confirmed by audit 2026-06-07). No recordAlgorithmEvaluation would ever
+  // fire for them; keeping them would only pollute the ledger with fabricated entries.
   const expected = [
-    'baseline-deviation', 'big-event-detector', 'compound-risk',
-    'confidence-urgency-matrix', 'correlation-feedback', 'evidence-graph',
-    'forecast-calibration', 'hypothesis-accuracy', 'negative-evidence',
+    'big-event-detector', 'compound-risk', 'confidence-urgency-matrix',
+    'correlation-feedback', 'hypothesis-accuracy', 'negative-evidence',
     'nws-polygon-match', 'personal-storm-mode', 'relevance-learner',
-    'shortage-diesel', 'shortage-wheat', 'situation-clustering',
-    'source-feedback', 'threat-classifier', 'truth-score',
-    'watchlist-relevance', 'weather-urgency', 'what-changed-digest',
+    'shortage-diesel', 'shortage-wheat', 'source-feedback',
+    'threat-classifier', 'truth-score', 'weather-urgency',
   ];
   assert.deepEqual(ids, expected);
 });
@@ -89,7 +91,7 @@ test('listByOutput: ranking includes the expected algorithms', () => {
   const ids = rankers.map((a) => a.id);
   assert.ok(ids.includes('big-event-detector'));
   assert.ok(ids.includes('compound-risk'));
-  assert.ok(ids.includes('watchlist-relevance'));
+  // watchlist-relevance was dropped (B1-cleanup: no live call site)
 });
 
 test('listByOwnerFeature: weather_warning groups all weather algorithms', () => {

@@ -21,6 +21,7 @@ import { proposeAdjustments } from './safe-adjustment';
 import { gateAdjustmentProposal } from '@/services/governance/policy-gate';
 import { getTunings, setTunedParam, tunableAffectsNotifications } from './tunable-params-store';
 import { recordTuningDecision } from './tuning-decision-log';
+import { proposeTuningSafety } from './tuning-safety-fixtures';
 import type { AlgorithmAdjustmentTuning } from './safe-adjustment';
 
 export interface TuningApplyResult {
@@ -40,23 +41,21 @@ export interface TuningApplyDeps {
    *  test without mutating the production declaration set. */
   tunings?: readonly AlgorithmAdjustmentTuning[];
   /**
-   * Replay-fixture + backtest results fed to the policy gate. Default false
-   * (conservative): the gate then holds every tuning for approval.
+   * Explicit override for the gate's `replayPassed` signal. When UNSET
+   * (the production default), the runner computes it PER PROPOSAL from the
+   * tuning-safety fixtures via `safetyCheck` below — honestly: a candidate
+   * value passes only if it does not regress the knob's safety suite, and a
+   * knob with no suite fails closed. Set explicitly only in tests.
    *
-   * NOTE (B2-enable investigation, 2026-06-06): these are NOT auto-derived
-   * from the existing harnesses, and deliberately so. The replay-fixtures
-   * CATALOG is a set of known-FAILING regression demos (its aggregate
-   * verdict is permanently `fail`), so feeding it here would build a gate
-   * that can never open. The backtest-engine models driver-weights /
-   * severity-bands, not algorithm-tuning knobs like
-   * `big-event-detector.threshold`, so it would trivially "pass" without
-   * actually testing the change. An honest auto-apply switch needs
-   * purpose-built tuning-safety fixtures (a suite a BAD tuning would
-   * regress) — see the gameplan's revised B2-enable step. Until then the
-   * caller must pass an explicit, honestly-computed boolean.
+   * (B2-enable, 2026-06-06: this replaced the always-false default. The
+   * replay-fixtures CATALOG and the backtest-engine cannot supply an honest
+   * per-tuning boolean — see `tuning-safety-fixtures.ts` and the gameplan.)
    */
   replayPassed?: boolean;
   backtestPassed?: boolean;
+  /** Per-proposal safety signal (algorithmId, parameterId, current, next) →
+   *  safe?. Defaults to the tuning-safety fixtures. Injectable for tests. */
+  safetyCheck?: (algorithmId: string, parameterId: string, currentValue: number, nextValue: number) => boolean;
   /** Apply sink — defaults to the tunable-params store. */
   apply?: (algorithmId: string, parameterId: string, value: number) => void;
 }
@@ -66,12 +65,29 @@ export interface TuningApplyDeps {
  * tunable-params store and logs them. Safe to call repeatedly. Injectable for
  * tests.
  */
+/** Per-proposal safety evaluation that fails closed on a non-finite prior or
+ *  a throwing scorer — a bad proposal can never abort the whole pass. */
+function safetyPasses(
+  check: (algorithmId: string, parameterId: string, currentValue: number, nextValue: number) => boolean,
+  algorithmId: string,
+  parameterId: string,
+  prior: number,
+  next: number,
+): boolean {
+  if (!Number.isFinite(prior)) return false;
+  try {
+    return check(algorithmId, parameterId, prior, next);
+  } catch {
+    return false;
+  }
+}
+
 export function runTuningApply(deps: TuningApplyDeps = {}): TuningApplyResult {
   const ledger = deps.ledger ?? getAlgorithmEvaluationLedger();
   const definitions = deps.definitions ?? getAlgorithmDefinitions();
   const apply = deps.apply ?? setTunedParam;
   const tunings = deps.tunings ?? getTunings();
-  const replayPassed = deps.replayPassed ?? false;
+  const safetyCheck = deps.safetyCheck ?? proposeTuningSafety;
   const backtestPassed = deps.backtestPassed ?? false;
   const calibrations = summarizeCalibration(ledger.all());
   const report = aggregateAlgorithmHealth({ definitions, calibrations });
@@ -88,6 +104,12 @@ export function runTuningApply(deps: TuningApplyDeps = {}): TuningApplyResult {
 
     const def = defById.get(p.algorithmId);
     const cal = report.algorithms.find((a) => a.algorithmId === p.algorithmId)?.calibration;
+    const prior = p.priorValue ?? Number.NaN;
+    // Honest per-proposal safety signal: a candidate value passes only if it
+    // does not regress the knob's safety fixtures. Without a finite prior we
+    // can't assess the change; and a throwing scorer must fail closed for
+    // THIS proposal only (never abort the pass or leave partial applies).
+    const replayPassed = deps.replayPassed ?? safetyPasses(safetyCheck, p.algorithmId, p.parameterId, prior, p.nextValue);
     const gated = gateAdjustmentProposal({
       proposal: p,
       algorithm: def ? { id: def.algorithmId, criticality: def.criticality, domain: def.domain } : undefined,
@@ -99,7 +121,6 @@ export function runTuningApply(deps: TuningApplyDeps = {}): TuningApplyResult {
       affectsNotifications: tunableAffectsNotifications(p.algorithmId, p.parameterId),
     });
 
-    const prior = p.priorValue ?? Number.NaN;
     if (gated.verdict.decision === 'allow_auto') {
       apply(p.algorithmId, p.parameterId, p.nextValue);
       applied += 1;

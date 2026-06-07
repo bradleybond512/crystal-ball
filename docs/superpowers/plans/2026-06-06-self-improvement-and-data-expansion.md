@@ -6,12 +6,13 @@
 
 ## CURRENT STATE / NEXT STEP  *(update this every session)*
 
-- **Status:** Workstream B — **B1 + B1b + B2 slice + B3-data + B3-UI done.** The self-improvement loop is wired end-to-end for one algorithm and fully observable in-panel; auto-apply is intentionally gated OFF pending an honest replay/backtest signal (see the B2-enable finding below).
+- **Status:** Workstream B — **B1 + B1b + B2 slice + B3-data + B3-UI + B2-replicate done.** The loop is wired end-to-end, observable in-panel, and now has TWO tunable knobs (one a non-notification target that *can* auto-apply); auto-apply is intentionally gated OFF pending an honest replay/backtest signal (see the B2-enable finding below).
 - **B1 (done):** 15/21 algos record into the evaluation ledger (#999, #1001).
 - **B1b (done):** pending records graded into fixtures via LLM grader on a cadence (#1003).
 - **B2 slice (done, #1006):** `tunable-params-store` (bound-clamped) + `big-event-detector.threshold` declared tunable + data-loader reads it + panel surfaces proposals + `tuning-apply-runner` proposes → policy-gates → auto-applies only `allow_auto` (6h cadence). Currently NOTHING auto-applies: the runner passes `replayPassed/backtestPassed=false`, and the threshold is flagged `affectsNotifications` so the gate forces approval regardless.
 - **B3-data (done, #1008):** `tuning-decision-log` — a persisted ring (newest-first, cap 100) the runner appends to every pass: `applied` vs `held_for_approval` with before→after value + the policy-gate `ruleId`/`reason`. `runTuningApply` now also takes an injectable `tunings` so the auto-apply act-path is proven end-to-end in a test (degraded low-criticality non-notification knob + `replayPassed:true` + ≥20 graded → applies).
 - **B3-UI (done, #1009):** `AlgorithmDiagnosticPanel` renders `getTuningDecisions()` as a read-only "Tuning history" section (applied/held chips, before→after, gate reason, timestamp). The observe half of the loop is closed.
+- **B2-replicate (done, #1011):** second tunable knob `negative-evidence.maxPenalty` (default 0.6, bound [0.2,0.9], step 0.1, `fixDirection=decrease`, **`affectsNotifications=false`**). `trackedEvaluateNegativeEvidence` reads it from the store (explicit caller wins; unset → 0.6, so no behavior change until a tuning applies). This is the first knob that *can* auto-apply once B2-enable lands — it's the non-notification, medium-criticality target. Also hardened the store's `load()` against a corrupt `"null"`/array value (Codex catch).
 
 - **B2-enable finding (2026-06-06) — DO NOT re-investigate:** the gameplan's original B2-enable ("wire `replay-harness` + `backtest-engine` into `runTuningApply`") is **not honestly implementable with the existing harnesses**, verified by reading + running them:
   - The replay-fixtures **catalog** is a set of known-FAILING regression demos (late-warning / silent-polygon / etc.). `runReplay(buildCatalogReplayFixtures())` returns aggregate verdict **`fail`** by design (4 fail + 1 inapplicable). Feeding it to the gate builds a gate that can **never open**.
@@ -19,8 +20,7 @@
   - **Conclusion:** an honest auto-apply switch needs **purpose-built tuning-safety fixtures** — a small suite representing CORRECT behavior that a bad tuning would regress (re-run the affected algo with the proposed parameter against labeled cases, assert no hit-rate regression). That's real work, not a wiring task. Until it exists, the runner's `replayPassed` MUST stay caller-supplied (default false) — never auto-derived from the regression-demo catalog.
 
 - **Next steps (pick one):**
-  - **B2-enable (redefined):** build the tuning-safety fixture suite described above + a `proposeTuningSafety(algorithmId, paramChange)` that returns an honest boolean, then pass it as `replayPassed`. This is the switch that makes the loop *act*.
-  - **B2-replicate:** declare more tunables (other instrumented algos) in `tunable-params-store` + make their call sites read from the store (pattern: big-event-detector threshold). Prefer a low/medium **non-notification** knob so the act-path can actually exercise once B2-enable lands.
+  - **B2-enable (redefined) — now the highest-leverage step:** build the tuning-safety fixture suite described above + a `proposeTuningSafety(algorithmId, paramChange)` that returns an honest boolean, then pass it as `replayPassed`. With `negative-evidence.maxPenalty` already a non-notification target, this is the switch that finally makes the loop *act* in production. Use it as the first vertical-slice algorithm (it's a pure function with a clean param + gradeable outcome).
   - **B1 cleanup:** decide the 6 orphaned algos (baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest) — wire into a live path or drop from registry.
   - **Workstream A (`npm run checkup`) / Workstream C (data gathering):** both still unstarted.
 

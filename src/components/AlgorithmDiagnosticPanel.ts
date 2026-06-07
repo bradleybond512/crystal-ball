@@ -19,6 +19,12 @@ import {
 } from '@/services/algorithms/algorithm-health';
 import { summarizeCalibration } from '@/services/algorithms/algorithm-evaluation-ledger';
 import { proposeAdjustments } from '@/services/algorithms/safe-adjustment';
+import { getTunings } from '@/services/algorithms/tunable-params-store';
+import {
+  getTuningDecisions,
+  type TuningDecision,
+  type TuningDecisionKind,
+} from '@/services/algorithms/tuning-decision-log';
 import {
   gateAdjustmentProposal,
   type GatedProposal,
@@ -103,7 +109,7 @@ export class AlgorithmDiagnosticPanel extends Panel {
     const definitions = getAlgorithmDefinitions();
     const calibrations = summarizeCalibration(ledger.all());
     const report = aggregateAlgorithmHealth({ definitions, calibrations });
-    const proposals = proposeAdjustments({ reports: [...report.algorithms], tunings: [] });
+    const proposals = proposeAdjustments({ reports: [...report.algorithms], tunings: getTunings() });
     const definitionsById = new Map<string, HealthAlgorithmDefinition>();
     for (const d of definitions) definitionsById.set(d.algorithmId, d);
     // Gate every proposal through the policy engine so the UI never
@@ -153,6 +159,10 @@ export class AlgorithmDiagnosticPanel extends Panel {
         ${recHtml}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>
+      <div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Tuning history</div>
+        ${renderTuningHistory(getTuningDecisions())}
+      </div>
     </div>`;
     this.setContent(html);
   }
@@ -210,6 +220,46 @@ function renderProposalHtml(gated: GatedProposal | undefined): string {
     <div style="margin-top:4px;font-size:10px;color:var(--text-secondary,#aaa);font-style:italic;">${escapeHtml(display.helper)}</div>
     ${requiredHtml}
   </div>`;
+}
+
+const TUNING_KIND_DISPLAY: Record<TuningDecisionKind, { label: string; color: string; background: string }> = {
+  applied: { label: 'APPLIED', color: '#4caf50', background: 'rgba(76,175,80,0.10)' },
+  held_for_approval: { label: 'HELD', color: '#ffb74d', background: 'rgba(255,183,77,0.10)' },
+};
+
+function formatTuningWhen(at: number): string {
+  if (!Number.isFinite(at)) return '';
+  try {
+    return new Date(at).toLocaleString();
+  } catch {
+    return '';
+  }
+}
+
+/** Render the most-recent tuning decisions (applied / held) as an audit
+ *  trail. Read-only — the loop writes this log; the panel only displays it. */
+function renderTuningHistory(decisions: readonly TuningDecision[]): string {
+  if (decisions.length === 0) {
+    return `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No tuning decisions recorded yet.</div>`;
+  }
+  const rows = decisions.slice(0, 8).map((d) => {
+    const kind = TUNING_KIND_DISPLAY[d.kind];
+    const when = formatTuningWhen(d.at);
+    const change = `${d.algorithmId}.${d.parameterId}: ${formatTuningValue(d.priorValue)} → ${formatTuningValue(d.nextValue)}`;
+    return `<div style="font-size:11px;border-left:3px solid ${kind.color};background:${kind.background};border-radius:3px;padding:4px 8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+        <span style="font-family:ui-monospace,monospace;">${escapeHtml(change)}</span>
+        <span style="font-size:9px;color:${kind.color};font-weight:700;letter-spacing:0.05em;">${kind.label}</span>
+      </div>
+      <div style="margin-top:2px;color:var(--text-secondary,#aaa);">${escapeHtml(d.reason)}</div>
+      ${when ? `<div style="margin-top:2px;font-size:9px;color:var(--text-secondary,#777);">${escapeHtml(when)}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div style="display:flex;flex-direction:column;gap:4px;">${rows}</div>`;
+}
+
+function formatTuningValue(value: number): string {
+  return Number.isFinite(value) ? String(value) : '?';
 }
 
 function renderCriticalityBadge(criticality: string): string {

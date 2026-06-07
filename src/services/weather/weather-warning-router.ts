@@ -159,12 +159,23 @@ export function routeWeatherAlert(
     : undefined;
 
   // Step 3: when urgency is at banner+, build the Storm Mode payload.
-  const payload = urgency && shouldBuildPayload(urgency.priority)
-    ? buildStormModePayload(strongest!.match, strongest!.place.label, {
-        now,
-        ...options.stormMode,
-      })
-    : undefined;
+  let payload: StormModePayload | undefined;
+  if (urgency && shouldBuildPayload(urgency.priority)) {
+    const _smStart = Date.now();
+    payload = buildStormModePayload(strongest!.match, strongest!.place.label, {
+      now,
+      ...options.stormMode,
+    });
+    const _smScore = { high: 1, medium: 0.6, low: 0.3 }[payload.confidenceLabel] ?? 0.3;
+    try {
+      recordAlgorithmEvaluation('personal-storm-mode', {
+        durationMs: Date.now() - _smStart,
+        score: _smScore,
+        label: payload.activation,
+        detail: { threatLevel: payload.threatLevel, hazardKind: payload.primaryHazard },
+      });
+    } catch { /* ledger unavailable */ }
+  }
 
   // Step 4: dispatch actions derived from urgency + quiet-hours state.
   const { dispatchActions, suppressed } = deriveDispatchActions(
@@ -206,7 +217,16 @@ function pickStrongestMatch(
   if (places.length === 0) return undefined;
   let best: PlaceAndMatch | undefined;
   for (const place of places) {
+    const _t0 = performance.now();
     const match = matchAlertToPlace(alert, place, { now });
+    try {
+      recordAlgorithmEvaluation('nws-polygon-match', {
+        durationMs: performance.now() - _t0,
+        score: MATCH_KIND_RANK[match.matchKind] / 4, // 0..1 (inside_polygon=1)
+        label: match.matchKind,
+        detail: { threatLevel: match.threatLevel, hazardKind: match.hazardKind },
+      });
+    } catch { /* ledger unavailable */ }
     if (!best) { best = { place, match }; continue; }
     if (matchStrength(match) > matchStrength(best.match)) best = { place, match };
   }

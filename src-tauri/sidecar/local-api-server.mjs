@@ -15208,7 +15208,7 @@ export async function createLocalApiServer(options = {}) {
    if (req.method === 'POST') {
      let bodyText = '';
      try {
-       for await (const chunk of req) bodyText += chunk;
+       const _rb1 = await readBody(req); bodyText = _rb1 ? _rb1.toString('utf-8') : '';
      } catch {
        bodyText = '';
      }
@@ -15288,7 +15288,7 @@ export async function createLocalApiServer(options = {}) {
    }
    if (req.method === 'POST') {
      let bodyText = '';
-     try { for await (const chunk of req) bodyText += chunk; } catch { bodyText = ''; }
+     try { const _rb2 = await readBody(req); bodyText = _rb2 ? _rb2.toString('utf-8') : ''; } catch { bodyText = ''; }
      let parsed = null;
      try { parsed = bodyText ? JSON.parse(bodyText) : null; } catch { parsed = null; }
      const result = upsertEntitySidecar(parsed);
@@ -15317,7 +15317,7 @@ export async function createLocalApiServer(options = {}) {
    }
    if (req.method === 'POST') {
      let bodyText = '';
-     try { for await (const chunk of req) bodyText += chunk; } catch { bodyText = ''; }
+     try { const _rb2 = await readBody(req); bodyText = _rb2 ? _rb2.toString('utf-8') : ''; } catch { bodyText = ''; }
      let parsed = null;
      try { parsed = bodyText ? JSON.parse(bodyText) : null; } catch { parsed = null; }
      const result = upsertRuleSidecar(parsed);
@@ -15344,7 +15344,7 @@ export async function createLocalApiServer(options = {}) {
      return;
    }
    let bodyText = '';
-   try { for await (const chunk of req) bodyText += chunk; } catch { bodyText = ''; }
+   try { const _rb3 = await readBody(req); bodyText = _rb3 ? _rb3.toString('utf-8') : ''; } catch { bodyText = ''; }
    let parsed = null;
    try { parsed = bodyText ? JSON.parse(bodyText) : null; } catch { parsed = null; }
    const result = evaluateRulesAgainstEventSidecar(parsed);

@@ -315,6 +315,9 @@ import { earthquakesToObservations } from '@/services/intelligence/adapters/eart
 import { aisDisruptionsToObservations } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
 import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
+import { riverDischargeToObservations, type OpenMeteoFloodForecast } from '@/services/intelligence/adapters/river-discharge-adapter';
+import { marineForecastToObservations, type OpenMeteoMarineForecast } from '@/services/intelligence/adapters/marine-forecast-adapter';
+import { fewsNetToObservations, hdxHapiToObservations, type FEWSNETResponse, type HDXHAPIResponse } from '@/services/intelligence/adapters/food-security-adapter';
 import { ingest as ingestObservations, getRecent as getRecentObservations } from '@/services/intelligence/observation-store';
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
@@ -590,6 +593,7 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'oilSpills', task: () => runGuarded('oilSpills', () => this.loadOilSpills()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'gdacsAlerts', task: () => runGuarded('gdacsAlerts', () => this.loadGDACSAlerts()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'floodGauges', task: () => runGuarded('floodGauges', () => this.loadFloodGauges()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'expandedIntelligence', task: () => runGuarded('expandedIntelligence', () => this.loadExpandedIntelligence()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoAlerts', task: () => runGuarded('volcanoAlerts', () => this.loadVolcanoAlerts()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'volcanoMonitor', task: () => runGuarded('volcanoMonitor', () => this.loadVolcanoMonitor()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'severeWeather', task: () => runGuarded('severeWeather', () => this.loadSevereWeather()) });
@@ -2277,15 +2281,60 @@ export class DataLoaderManager implements AppModule {
       const places = getSavedPlaces().slice(0, 3);
       await Promise.allSettled(places.map(async (place) => {
         if (!place.lat || !place.lon) return;
-        const url = `${getApiBaseUrl()}/api/flood-gauges/noaa-coops?lat=${place.lat}&lon=${place.lon}`;
-        const r = await fetch(url);
-        if (!r.ok) return;
-        const resp = await r.json() as NOAACoopsResponse;
-        const obs = floodGaugesToObservations(resp, place.name ?? 'Saved Place');
-        if (obs.length > 0) ingestObservations(obs);
+        // Source 1: NOAA CO-OPS current water level
+        const coopsUrl = `${getApiBaseUrl()}/api/flood-gauges/noaa-coops?lat=${place.lat}&lon=${place.lon}`;
+        const cr = await fetch(coopsUrl);
+        if (cr.ok) {
+          const obs = floodGaugesToObservations(await cr.json() as NOAACoopsResponse, place.name ?? 'Saved Place');
+          if (obs.length > 0) ingestObservations(obs);
+        }
+        // Source 2: Open-Meteo GloFAS river discharge forecast (7-day predictive)
+        const dischargeUrl = `${getApiBaseUrl()}/api/river-discharge?lat=${place.lat}&lon=${place.lon}`;
+        const dr = await fetch(dischargeUrl);
+        if (dr.ok) {
+          const obs = riverDischargeToObservations(await dr.json() as OpenMeteoFloodForecast, place.lat, place.lon, place.name ?? 'Saved Place');
+          if (obs.length > 0) ingestObservations(obs);
+        }
       }));
     } catch {
       /* flood gauge failure is non-critical — USGS is the primary water source */
+    }
+  }
+
+  /** Marine sea-state + food-security intelligence: fills maritime domain
+   *  observation gap and feeds shortage models with genuine early-warning data. */
+  async loadExpandedIntelligence(): Promise<void> {
+    try {
+      const { getSavedPlaces } = await import('@/services/saved-places');
+      const places = getSavedPlaces().slice(0, 3);
+
+      // Open-Meteo Marine forecast for each saved place (wave/swell/current)
+      await Promise.allSettled(places.map(async (place) => {
+        if (!place.lat || !place.lon) return;
+        const url = `${getApiBaseUrl()}/api/marine-forecast?lat=${place.lat}&lon=${place.lon}`;
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const obs = marineForecastToObservations(await r.json() as OpenMeteoMarineForecast, place.lat, place.lon, place.name ?? 'Saved Place');
+        if (obs.length > 0) ingestObservations(obs);
+      }));
+
+      // FEWS NET IPC food-security packages (global)
+      const fewsUrl = `${getApiBaseUrl()}/api/fews-net/food-security?country_code=all`;
+      const fr = await fetch(fewsUrl);
+      if (fr.ok) {
+        const obs = fewsNetToObservations(await fr.json() as FEWSNETResponse);
+        if (obs.length > 0) ingestObservations(obs);
+      }
+
+      // HDX HAPI food-security rows (global IPC-coded)
+      const hdxUrl = `${getApiBaseUrl()}/api/hdx-food-security`;
+      const hr = await fetch(hdxUrl);
+      if (hr.ok) {
+        const obs = hdxHapiToObservations(await hr.json() as HDXHAPIResponse);
+        if (obs.length > 0) ingestObservations(obs);
+      }
+    } catch {
+      /* expanded intelligence is supplemental — failures are non-critical */
     }
   }
 

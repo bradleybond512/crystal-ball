@@ -21,6 +21,7 @@ const ALL_TAGS: { value: SavedPlaceTag; label: string }[] = [
   { value: 'travel', label: 'Travel' },
   { value: 'concern', label: 'Concern' },
   { value: 'critical', label: 'Critical' },
+  { value: 'data_center', label: 'Data Center' },
 ];
 
 const RADIUS_PRESETS = [
@@ -138,7 +139,6 @@ export class SavedPlaceModal {
 
   private render(): void {
  if (this.pickModeActive) {
- // eslint-disable-next-line no-unsanitized/property
  this.overlay.innerHTML = this.renderPickModeBanner();
  return;
  }
@@ -146,7 +146,6 @@ export class SavedPlaceModal {
  const isEdit = Boolean(this.editingPlace);
  // All user-controlled values are passed through escapeHtml() before insertion.
  // Static strings (labels, data-action attributes) are hardcoded literals.
- // eslint-disable-next-line no-unsanitized/property
  this.overlay.innerHTML = `
  <div class="modal spm-modal">
  <div class="modal-header">
@@ -318,8 +317,8 @@ export class SavedPlaceModal {
 
   private getValidationError(): string | null {
  if (!this.formState.name.trim() && !this.formState.lat && !this.formState.lon) return null;
- const lat = parseFloat(this.formState.lat);
- const lon = parseFloat(this.formState.lon);
+ const lat = Number.parseFloat(this.formState.lat);
+ const lon = Number.parseFloat(this.formState.lon);
  if (this.formState.lat && !Number.isFinite(lat)) return 'Latitude must be a number between -90 and 90';
  if (this.formState.lon && !Number.isFinite(lon)) return 'Longitude must be a number between -180 and 180';
  if (this.formState.lat && (lat < -90 || lat > 90)) return 'Latitude must be between -90 and 90';
@@ -329,8 +328,8 @@ export class SavedPlaceModal {
 
   private canSave(): boolean {
  const name = this.formState.name.trim();
- const lat = parseFloat(this.formState.lat);
- const lon = parseFloat(this.formState.lon);
+ const lat = Number.parseFloat(this.formState.lat);
+ const lon = Number.parseFloat(this.formState.lon);
  return (
  name.length > 0
  && Number.isFinite(lat) && lat >= -90 && lat <= 90
@@ -362,7 +361,7 @@ export class SavedPlaceModal {
   private handleChange(e: Event): void {
  const target = e.target as HTMLSelectElement;
  if (target.dataset.field === 'radius') {
- this.formState.radiusKm = parseInt(target.value, 10);
+ this.formState.radiusKm = Number.parseInt(target.value, 10);
  }
   }
 
@@ -379,12 +378,14 @@ export class SavedPlaceModal {
  if (!action) return;
 
  switch (action) {
- case 'close':
+ case 'close': {
  this.close();
  break;
- case 'save':
+ }
+ case 'save': {
  this.save();
  break;
+ }
  case 'toggle-tag': {
  const tagEl = target.closest<HTMLElement>('[data-tag]');
  const tag = tagEl?.dataset.tag as SavedPlaceTag | undefined;
@@ -398,34 +399,40 @@ export class SavedPlaceModal {
  }
  break;
  }
- case 'toggle-primary':
+ case 'toggle-primary': {
  this.formState.primary = !this.formState.primary;
  this.rerenderPrimaryButton();
  break;
- case 'pick-map':
+ }
+ case 'pick-map': {
  this.enterPickMode();
  break;
- case 'pick-cancel':
+ }
+ case 'pick-cancel': {
  this.exitPickMode();
  break;
+ }
  case 'pick-geocode': {
  const indexEl = target.closest<HTMLElement>('[data-index]');
- const index = parseInt(indexEl?.dataset.index ?? '', 10);
+ const index = Number.parseInt(indexEl?.dataset.index ?? '', 10);
  const result = this.geocodeResults[index];
  if (result) this.applyGeocodeResult(result);
  break;
  }
- case 'delete':
+ case 'delete': {
  this.confirmingDelete = true;
  this.refreshDeleteArea();
  break;
- case 'delete-cancel':
+ }
+ case 'delete-cancel': {
  this.confirmingDelete = false;
  this.refreshDeleteArea();
  break;
- case 'delete-confirm':
+ }
+ case 'delete-confirm': {
  this.deletePlace();
  break;
+ }
  }
   }
 
@@ -463,7 +470,6 @@ export class SavedPlaceModal {
  if (actionsEl) {
  const tmp = document.createElement('div');
  // renderDeleteButton returns only safe static strings
- // eslint-disable-next-line no-unsanitized/property
  tmp.innerHTML = this.renderDeleteButton();
  footer.insertBefore(tmp.firstElementChild!, actionsEl);
  }
@@ -495,7 +501,6 @@ export class SavedPlaceModal {
 
  const tmp = document.createElement('div');
  // renderGeocodeResults escapes all user-provided displayName values via escapeHtml
- // eslint-disable-next-line no-unsanitized/property
  tmp.innerHTML = this.renderGeocodeResults();
  searchRow.after(tmp.firstElementChild!);
   }
@@ -559,8 +564,8 @@ export class SavedPlaceModal {
  return;
  }
 
- const lat = parseFloat(this.formState.lat);
- const lon = parseFloat(this.formState.lon);
+ const lat = Number.parseFloat(this.formState.lat);
+ const lon = Number.parseFloat(this.formState.lon);
  const input = {
  name: this.formState.name.trim(),
  lat,

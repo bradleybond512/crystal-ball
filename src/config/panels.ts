@@ -402,6 +402,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'digital-infrastructure': { name: 'Digital Infrastructure', enabled: true, priority: 1 },
   'global-health-security': { name: 'Global Health Security', enabled: true, priority: 1 },
   'food-security-superpower': { name: 'Food Security Intelligence', enabled: true, priority: 1 },
+  'datacenter-readiness': { name: 'Data Center Readiness', enabled: true, priority: 1 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {

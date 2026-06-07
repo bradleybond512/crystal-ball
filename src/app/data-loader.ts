@@ -1327,7 +1327,11 @@ export class DataLoaderManager implements AppModule {
  // C3 — keyless resilience: ingest EONET events into the unified alert store
  // so the intelligence layer (compound-risk, big-event-detector, etc.) sees
  // natural events even when no API keys are loaded.
- const eonetAlerts = eonetResult.value.map(normalizeNaturalEventToAlert);
+ // fetchNaturalEvents() returns merged EONET + GDACS events; filter to
+ // EONET-only (sourceName !== 'GDACS') to avoid double-ingesting GDACS
+ // events that loadGDACSAlerts() already ingests as gdacs-${id} alerts.
+ const eonetOnly = eonetResult.value.filter((e) => e.sourceName !== 'GDACS');
+ const eonetAlerts = eonetOnly.map(normalizeNaturalEventToAlert);
  unifiedAlertStore.ingest(eonetAlerts);
  this.ctx.statusPanel?.updateFeed('EONET', {
  status: 'ok',

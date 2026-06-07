@@ -9236,6 +9236,139 @@ async function dispatch(requestUrl, req, routes, context) {
     });
   }
 
+  // ── Open-Meteo Flood: 7-day river discharge forecast (no key) ────────────
+  // GET /api/river-discharge?lat=&lon=
+  // GloFAS river discharge model — far better than point gauge readings for
+  // flood PREDICTION (7 days ahead vs. current conditions).
+  if (requestUrl.pathname === '/api/river-discharge') {
+    const lat = requestUrl.searchParams.get('lat');
+    const lon = requestUrl.searchParams.get('lon');
+    if (!lat || !lon) return json({ error: 'lat and lon required' }, 400);
+    const cacheKey = `river-discharge-${parseFloat(lat).toFixed(2)}-${parseFloat(lon).toFixed(2)}`;
+    const cached = getCached(cacheKey, 3 * 60 * 60 * 1000); // 3h — discharge changes slowly
+    if (cached) return json(cached);
+    try {
+      const url = `https://flood-api.open-meteo.com/v1/flood?latitude=${lat}&longitude=${lon}&daily=river_discharge&past_days=7&forecast_days=7&timezone=auto`;
+      const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA } }, 12000);
+      if (!r.ok) throw new Error(`Open-Meteo Flood HTTP ${r.status}`);
+      const data = await r.json();
+      const result = { ...data, fetchedAt: Date.now(), source: 'flood-api.open-meteo.com' };
+      setCached(cacheKey, result);
+      return json(result);
+    } catch (error) {
+      return json({ error: `river-discharge error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── Open-Meteo Marine: wave/swell/sea-surface forecast (no key) ──────────
+  // GET /api/marine-forecast?lat=&lon=
+  // Fills the maritime domain observation gap: AIS tracks vessels but has no
+  // sea-state data. Enables ship routing risk and offshore hazard scoring.
+  if (requestUrl.pathname === '/api/marine-forecast') {
+    const lat = requestUrl.searchParams.get('lat');
+    const lon = requestUrl.searchParams.get('lon');
+    if (!lat || !lon) return json({ error: 'lat and lon required' }, 400);
+    const cacheKey = `marine-forecast-${parseFloat(lat).toFixed(2)}-${parseFloat(lon).toFixed(2)}`;
+    const cached = getCached(cacheKey, 30 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=wave_height,wave_direction,swell_wave_height,ocean_current_velocity&forecast_days=3&timezone=auto`;
+      const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA } }, 12000);
+      if (!r.ok) throw new Error(`Open-Meteo Marine HTTP ${r.status}`);
+      const data = await r.json();
+      const result = { ...data, fetchedAt: Date.now(), source: 'marine-api.open-meteo.com' };
+      setCached(cacheKey, result);
+      return json(result);
+    } catch (error) {
+      return json({ error: `marine-forecast error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── FEWS NET: IPC food-security phase alerts (no key) ─────────────────────
+  // GET /api/fews-net/food-security?country_code=all
+  // Machine-readable IPC 1–5 food-security phases — the only structured
+  // famine-precursor feed. Directly feeds shortage models and compound risk.
+  if (requestUrl.pathname === '/api/fews-net/food-security') {
+    const country = requestUrl.searchParams.get('country_code') ?? 'all';
+    const cacheKey = `fews-net-${country}`;
+    const cached = getCached(cacheKey, 6 * 60 * 60 * 1000); // 6h — updated weekly
+    if (cached) return json(cached);
+    try {
+      const url = `https://fdw.fews.net/api/ipcpackage/?country_code=${encodeURIComponent(country)}&format=json&limit=50`;
+      const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 20000);
+      if (!r.ok) throw new Error(`FEWS NET HTTP ${r.status}`);
+      const data = await r.json();
+      const result = { ...data, fetchedAt: Date.now(), source: 'fdw.fews.net' };
+      setCached(cacheKey, result);
+      return json(result);
+    } catch (error) {
+      return json({ error: `fews-net error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── HDX HAPI: structured IPC food-security rows (no key) ─────────────────
+  // GET /api/hdx-food-security?location_code=
+  // Unlike the existing HDX package search (document metadata), HAPI returns
+  // IPC-coded, country-coded food-security rows directly usable for scoring.
+  if (requestUrl.pathname === '/api/hdx-food-security') {
+    const loc = requestUrl.searchParams.get('location_code') ?? '';
+    const cacheKey = `hdx-food-security-${loc}`;
+    const cached = getCached(cacheKey, 6 * 60 * 60 * 1000);
+    if (cached) return json(cached);
+    try {
+      const qs = loc ? `&location_code=${encodeURIComponent(loc)}` : '';
+      const url = `https://hapi.humdata.org/api/v2/food/food-security?output_format=json&limit=100${qs}`;
+      const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 20000);
+      if (!r.ok) throw new Error(`HDX HAPI HTTP ${r.status}`);
+      const data = await r.json();
+      const result = { ...data, fetchedAt: Date.now(), source: 'hapi.humdata.org' };
+      setCached(cacheKey, result);
+      return json(result);
+    } catch (error) {
+      return json({ error: `hdx-food-security error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── FAO GIEWS Food Price Index (no key) ──────────────────────────────────
+  // GET /api/fao-price-index
+  // Monthly composite index for cereals, oils, dairy, sugar, meat — the best
+  // free leading indicator for food shortage model confidence adjustments.
+  if (requestUrl.pathname === '/api/fao-price-index') {
+    const cached = getCached('fao-price-index', 24 * 60 * 60 * 1000); // daily
+    if (cached) return json(cached);
+    try {
+      const url = 'https://www.fao.org/giews/food-prices/tool/public/api/data/monthly-price-indices';
+      const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 20000);
+      if (!r.ok) throw new Error(`FAO GIEWS HTTP ${r.status}`);
+      const data = await r.json();
+      const result = { indices: Array.isArray(data) ? data.slice(-24) : data, fetchedAt: Date.now(), source: 'fao.org/giews' };
+      setCached('fao-price-index', result);
+      return json(result);
+    } catch (error) {
+      return json({ error: `fao-price-index error: ${error.message ?? error}` }, 502);
+    }
+  }
+
+  // ── IMF DataMapper: cross-country GDP growth forecasts (no key) ───────────
+  // GET /api/imf-gdp
+  // Cross-country GDP growth updated twice yearly. Feeds war/sanction-impact
+  // scoring and country-level shortage confidence adjustments.
+  if (requestUrl.pathname === '/api/imf-gdp') {
+    const cached = getCached('imf-gdp', 12 * 60 * 60 * 1000); // 12h
+    if (cached) return json(cached);
+    try {
+      const url = 'https://www.imf.org/external/datamapper/api/v1/NGDP_RPCH';
+      const r = await fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' } }, 20000);
+      if (!r.ok) throw new Error(`IMF DataMapper HTTP ${r.status}`);
+      const data = await r.json();
+      const result = { ...data, fetchedAt: Date.now(), source: 'imf.org/datamapper' };
+      setCached('imf-gdp', result);
+      return json(result);
+    } catch (error) {
+      return json({ error: `imf-gdp error: ${error.message ?? error}` }, 502);
+    }
+  }
+
   // ── Stablecoin markets via CoinGecko ─────────────────────────────────────
   if (requestUrl.pathname === '/api/stablecoin-markets') {
  const STABLECOINS = ['tether', 'usd-coin', 'dai', 'first-digital-usd', 'true-usd', 'frax'];

@@ -20,6 +20,8 @@ import { getSourceTrust } from './source-trust';
 import { canonicalEntityKey } from './entity-key';
 import { recordCoOccurrence } from './pair-discovery';
 import { getPairFeedbackMult } from './correlation-feedback';
+import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 import { runIntel } from './intel-provider';
 import { getEnabledCustomRules } from './custom-correlation-rules';
 
@@ -346,7 +348,9 @@ function detectChains(leaders: UnifiedAlert[], now: number): UnifiedAlert[] {
 
 /** Auto-disable rules whose user-feedback multiplier has collapsed (sustained dismissals). */
 function ruleEnabled(r: CausalRule): boolean {
-  return getPairFeedbackMult(`${r.cause}|${r.effect}`) >= 0.55;
+  // Read the tuned threshold from the store (falls back to 0.55 when unset).
+  const threshold = getTunedParam('correlation-feedback', 'feedbackThreshold', 0.55);
+  return getPairFeedbackMult(`${r.cause}|${r.effect}`) >= threshold;
 }
 
 const distanceCache = new Map<string, number>();
@@ -517,7 +521,17 @@ function scan(): void {
     }
     const baseConfidence = computeConfidence(members, rule, maxDist, maxLag);
     const pairKey = `${rule.cause}|${rule.effect}`;
-    const confidence = Math.max(0.1, Math.min(1, baseConfidence * getPairFeedbackMult(pairKey)));
+    const _t0 = Date.now();
+    const feedbackMult = getPairFeedbackMult(pairKey);
+    const confidence = Math.max(0.1, Math.min(1, baseConfidence * feedbackMult));
+    try {
+      recordAlgorithmEvaluation('correlation-feedback', {
+        durationMs: Date.now() - _t0,
+        score: confidence,
+        label: feedbackMult >= 1 ? 'boosted' : 'suppressed',
+        detail: { cause: rule.cause, effect: rule.effect, members: members.length },
+      });
+    } catch { /* ledger unavailable */ }
 
     const sources = [...new Set(members.map(m => m.source))];
     synthesized.set(id, { ts: now, alertId: id, memberIds: members.map(m => m.id) });

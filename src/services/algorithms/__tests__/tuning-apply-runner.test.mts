@@ -118,6 +118,79 @@ test('a proposal without replay evidence is held and logged', () => {
   assert.equal(log[0]?.ruleId, 'algo_tuning_gate_lowmed_pending');
 });
 
+/** B2-enable: the REAL safety check (no injected replayPassed) drives a
+ *  live auto-apply for negative-evidence.maxPenalty. Proves the loop now
+ *  acts in production when a change clears the honest safety fixtures. */
+const NEGEV_DEF: AlgorithmDefinition = {
+  algorithmId: 'negative-evidence',
+  label: 'Negative evidence engine',
+  domain: 'intelligence',
+  criticality: 'medium',
+  minWeightedHitRate: 0.9,
+  minGradedSamples: 20,
+};
+
+const NEGEV_TUNING: AlgorithmAdjustmentTuning = {
+  algorithmId: 'negative-evidence',
+  parameters: [{
+    parameterId: 'maxPenalty',
+    current: 0.6,
+    min: 0.2,
+    max: 0.9,
+    step: 0.1,
+    fixDirection: 'decrease',
+    description: 'max absence penalty',
+  }],
+};
+
+function degradedNegEvLedger() {
+  const ledger = createAlgorithmEvaluationLedger({ now: () => 1 });
+  for (let i = 0; i < 20; i += 1) {
+    const rec = ledger.recordEvaluation({
+      algorithmId: 'negative-evidence',
+      domain: 'intelligence',
+      at: i,
+      durationMs: 5,
+    });
+    ledger.recordOutcome(rec.id, i < 17 ? 'hit' : 'miss', 'test', i);
+  }
+  return ledger;
+}
+
+test('the real safety check auto-applies a non-regressing negative-evidence step', () => {
+  _resetTuningDecisionsForTests();
+  const captured: Array<[string, string, number]> = [];
+  const res = runTuningApply({
+    ledger: degradedNegEvLedger(),
+    definitions: [NEGEV_DEF],
+    tunings: [NEGEV_TUNING],
+    // NO replayPassed override — the runner computes it from the real
+    // tuning-safety fixtures. 0.6 → 0.5 is a non-regressing step → safe.
+    apply: (a, p, v) => captured.push([a, p, v]),
+  });
+  assert.equal(res.applied, 1, 'safe non-regressing step auto-applied');
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0]?.[0], 'negative-evidence');
+  assert.equal(captured[0]?.[1], 'maxPenalty');
+  assert.ok(Math.abs((captured[0]?.[2] ?? 0) - 0.5) < 1e-6, 'applied ~0.5');
+  assert.equal(getTuningDecisions()[0]?.kind, 'applied');
+});
+
+test('a throwing safetyCheck fails closed for that proposal (no abort, no apply)', () => {
+  _resetTuningDecisionsForTests();
+  const captured: Array<[string, string, number]> = [];
+  const res = runTuningApply({
+    ledger: degradedNegEvLedger(),
+    definitions: [NEGEV_DEF],
+    tunings: [NEGEV_TUNING],
+    safetyCheck: () => { throw new Error('scorer blew up'); },
+    apply: (a, p, v) => captured.push([a, p, v]),
+  });
+  // The pass completes; the proposal is held (replayPassed forced false).
+  assert.deepEqual(res, { proposed: 1, applied: 0, heldForApproval: 1 });
+  assert.equal(captured.length, 0);
+});
+
 /** Applied path: with an honest replay pass + ≥20 graded samples on a
  *  low-criticality, non-notification knob, the loop auto-applies and logs
  *  the change. Proves the act-path end-to-end. */

@@ -32,6 +32,7 @@ import {
 import type { AlgorithmDefinition as HealthAlgorithmDefinition } from '@/services/algorithms/algorithm-health';
 import type { PolicyDecision } from '@/services/governance/policy-engine';
 import { escapeHtml } from '@/utils/sanitize';
+import { getKindAccuracy } from '@/services/hypothesis-accuracy';
 
 const REFRESH_MS = 15_000;
 
@@ -155,6 +156,10 @@ export class AlgorithmDiagnosticPanel extends Panel {
         <div style="font-size:14px;font-weight:700;color:${STATUS_COLOR[report.status]};">${escapeHtml(report.status.toUpperCase())} — ${escapeHtml(report.summary)}</div>
       </div>
       <div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Prediction Accuracy</div>
+        ${renderPredictionAccuracy()}
+      </div>
+      <div>
         <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Recommendations</div>
         ${recHtml}
       </div>
@@ -189,6 +194,29 @@ export class AlgorithmDiagnosticPanel extends Panel {
       ${proposalHtml}
     </div>`;
   }
+}
+
+function renderPredictionAccuracy(): string {
+  const kindAccuracy = getKindAccuracy();
+  if (kindAccuracy.size === 0) {
+    return `<div style="font-size:12px;color:var(--text-secondary,#aaa);">No graded predictions yet.</div>`;
+  }
+  const rows = [...kindAccuracy.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([kind, stats]) => {
+      const total = stats.hits + stats.misses;
+      const hitRate = total > 0 ? stats.hits / total : 0;
+      const pct = (hitRate * 100).toFixed(0);
+      let color = '#f44336';
+      if (hitRate >= 0.7) color = '#4caf50';
+      else if (hitRate >= 0.4) color = '#ffb74d';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border-subtle,#333);">
+        <span style="font-family:ui-monospace,monospace;">${escapeHtml(kind)}</span>
+        <span style="color:var(--text-secondary,#aaa);">${escapeHtml(String(stats.hits))} hits / ${escapeHtml(String(stats.misses))} misses</span>
+        <span style="font-weight:700;color:${color};">${escapeHtml(pct)}%</span>
+      </div>`;
+    }).join('');
+  return `<div style="display:flex;flex-direction:column;">${rows}</div>`;
 }
 
 function renderProposalHtml(gated: GatedProposal | undefined): string {

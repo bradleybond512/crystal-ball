@@ -6,11 +6,12 @@
 
 ## CURRENT STATE / NEXT STEP  *(update this every session)*
 
-- **Status:** Workstream B — **B1 + B1b + B2 slice + B3-data done.** The self-improvement loop is wired end-to-end for one algorithm; auto-apply is intentionally gated OFF pending an honest replay/backtest signal (see the B2-enable finding below).
+- **Status:** Workstream B — **B1 + B1b + B2 slice + B3-data + B3-UI done.** The self-improvement loop is wired end-to-end for one algorithm and fully observable in-panel; auto-apply is intentionally gated OFF pending an honest replay/backtest signal (see the B2-enable finding below).
 - **B1 (done):** 15/21 algos record into the evaluation ledger (#999, #1001).
 - **B1b (done):** pending records graded into fixtures via LLM grader on a cadence (#1003).
 - **B2 slice (done, #1006):** `tunable-params-store` (bound-clamped) + `big-event-detector.threshold` declared tunable + data-loader reads it + panel surfaces proposals + `tuning-apply-runner` proposes → policy-gates → auto-applies only `allow_auto` (6h cadence). Currently NOTHING auto-applies: the runner passes `replayPassed/backtestPassed=false`, and the threshold is flagged `affectsNotifications` so the gate forces approval regardless.
-- **B3-data (done, this branch):** `tuning-decision-log` — a persisted ring (newest-first, cap 100) the runner appends to every pass: `applied` vs `held_for_approval` with before→after value + the policy-gate `ruleId`/`reason`. `runTuningApply` now also takes an injectable `tunings` so the auto-apply act-path is proven end-to-end in a test (degraded low-criticality non-notification knob + `replayPassed:true` + ≥20 graded → applies). The decision log is the data layer for the B3-UI panel surfacing.
+- **B3-data (done, #1008):** `tuning-decision-log` — a persisted ring (newest-first, cap 100) the runner appends to every pass: `applied` vs `held_for_approval` with before→after value + the policy-gate `ruleId`/`reason`. `runTuningApply` now also takes an injectable `tunings` so the auto-apply act-path is proven end-to-end in a test (degraded low-criticality non-notification knob + `replayPassed:true` + ≥20 graded → applies).
+- **B3-UI (done, #1009):** `AlgorithmDiagnosticPanel` renders `getTuningDecisions()` as a read-only "Tuning history" section (applied/held chips, before→after, gate reason, timestamp). The observe half of the loop is closed.
 
 - **B2-enable finding (2026-06-06) — DO NOT re-investigate:** the gameplan's original B2-enable ("wire `replay-harness` + `backtest-engine` into `runTuningApply`") is **not honestly implementable with the existing harnesses**, verified by reading + running them:
   - The replay-fixtures **catalog** is a set of known-FAILING regression demos (late-warning / silent-polygon / etc.). `runReplay(buildCatalogReplayFixtures())` returns aggregate verdict **`fail`** by design (4 fail + 1 inapplicable). Feeding it to the gate builds a gate that can **never open**.
@@ -20,8 +21,8 @@
 - **Next steps (pick one):**
   - **B2-enable (redefined):** build the tuning-safety fixture suite described above + a `proposeTuningSafety(algorithmId, paramChange)` that returns an honest boolean, then pass it as `replayPassed`. This is the switch that makes the loop *act*.
   - **B2-replicate:** declare more tunables (other instrumented algos) in `tunable-params-store` + make their call sites read from the store (pattern: big-event-detector threshold). Prefer a low/medium **non-notification** knob so the act-path can actually exercise once B2-enable lands.
-  - **B3-UI:** render `getTuningDecisions()` (applied/held history) in `AlgorithmDiagnosticPanel` (proposals already render; the data layer now exists).
   - **B1 cleanup:** decide the 6 orphaned algos (baseline-deviation, evidence-graph, forecast-calibration, situation-clustering, watchlist-relevance, what-changed-digest) — wire into a live path or drop from registry.
+  - **Workstream A (`npm run checkup`) / Workstream C (data gathering):** both still unstarted.
 
 - **Blocked on:** an honest tuning-safety signal (B2-enable redefined). Loop runs + grades + proposes + logs decisions live; only the final apply is gated, and correctly so until a real safety fixture exists.
 

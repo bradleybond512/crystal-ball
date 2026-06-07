@@ -69,7 +69,7 @@ The tuner auto-applies any parameter adjustment that clears all safety gates, an
 
 **Goal:** "run tests like this more often" as one command.
 
-- [ ] **A1 — `npm run checkup`.** A script that runs: typecheck:all, core test suites, log audit (latest desktop.log session + sidecar health), analyst-state freshness probe → prints a GREEN / YELLOW / RED report with the actionable items only.
+- [x] **A1 — `npm run checkup`.** A script that runs: typecheck:all, core test suites, log audit (latest desktop.log session + sidecar health), analyst-state freshness probe → prints a GREEN / YELLOW / RED report with the actionable items only.
   - Reuse: `src/services/diagnostics/self-test.ts`, the npm `test:*` scripts, the bash log-audit patterns from this session.
   - Done when: `npm run checkup` exits 0/1 with a one-screen summary.
 - [ ] **A2 — Optional schedule.** A `/checkup` skill or cron entry for a daily run.

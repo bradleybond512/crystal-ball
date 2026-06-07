@@ -106,8 +106,9 @@ Four pure-deterministic, fixture-tested service layers. **No DOM, no fetch, no g
 - **`src/services/weather/`** — saved-place-aware NWS pipeline. `matchAlertToPlace` does point-in-polygon + UGC zone fallback. `urgencyFor` produces the delivery rung + meaningful-change repeat-suppression interval. `buildStormModePayload` produces the Storm Mode card. `diagnoseAlert` walks the 7-stage pipeline trace for "why didn't I get warned?".
 - **`src/services/insights/`** — UX scaffolding. `detectBigEvent` runs the 8-trigger taxonomy. `computeDigest` produces the What Changed Digest. `buildActionBrief` reads from a 10-category playbook library. `toMarkdown` / `toClipboardSummary` / `toShareSheetText` / `toClaudeDebugPacket` format any briefing.
 - **`src/services/shortage/`** — 8 deterministic commodity forecast models. Each takes a `ShortageInputBag` (provenance-aware), runs through 7 driver buckets (production / inventory / transport / policy / demand / price / cross_domain), produces a `ShortageForecast` with drivers + confidence + data gaps. Seasonal multipliers honor the calendar.
+- **`src/services/datacenter/`** — single-site data-center readiness layer. Fuses EIA grid signals + NWS polygon alerts into a 5-rung `DcLevel` posture with a compound amplifier and people-first `ReadinessAction` playbook (onsite_safety → commute_staffing → facility_ops → escalation). Stale inputs are surfaced, not silently dropped.
 
-Test scripts: `npm run test:intelligence` / `test:weather` / `test:insights{,2,3,6}` / `test:shortage`.
+Test scripts: `npm run test:intelligence` / `test:weather` / `test:insights{,2,3,6}` / `test:shortage` / `test:datacenter`.
 
 Plan invariants honored across all four layers:
 - Every score includes an explanation
@@ -261,6 +262,15 @@ src/                        # TypeScript frontend (Vite)
     shortage/gasoline-shortage-risk.ts       # energy, 30d horizon, Colonial Pipeline + driving season
     shortage/natural-gas-shortage-risk.ts    # energy, 60d horizon, HDD/CDD + LNG export + cold-snap flag
     shortage/jet-fuel-shortage-risk.ts       # energy, 30d horizon, SAF constraint + airport shortage alert
+    # ── Data-center readiness ──
+    datacenter/datacenter-types.ts           # DcLevel ladder, mapThreatLevelToDc, ReadinessAction, SiteConfig, PowerPosture, WeatherPosture, DataCenterPosture
+    datacenter/power-posture.ts              # computePowerPosture: utilization % + grid alerts + nearby outages → PowerPosture
+    datacenter/weather-posture.ts            # computeWeatherPosture: NWS polygon match + Storm Mode → WeatherPosture with arrival window
+    datacenter/readiness-actions.ts          # buildReadinessActions: people-first playbook (onsite_safety/commute_staffing/facility_ops/escalation)
+    datacenter/datacenter-posture.ts         # computeDatacenterPosture: fuses power+weather, compound amplifier, stale-input honesty, headline
+    datacenter/site-resolver.ts              # resolveSiteConfig (highest-priority data_center place) + eiaRegionForLatLon
+    datacenter/datacenter-state.ts           # singleton: setDatacenterSite / getDatacenterSite / recomputeDatacenterPosture / subscribe
+    datacenter/datacenter-view.ts            # pure label/color/summary helpers for renderers
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes
                                 # /api/analyst-state + /api/analyst-commands

@@ -1,7 +1,7 @@
 import { Panel } from './Panel';
 import { h, replaceChildren } from '../utils/dom-utils';
 import {
-  getDatacenterPosture, subscribeDatacenterPosture,
+  getDatacenterPosture, getDatacenterSite, subscribeDatacenterPosture,
 } from '../services/datacenter/datacenter-state';
 import { levelLabel, levelColor } from '../services/datacenter/datacenter-view';
 import type { DataCenterPosture, DcLevel, ReadinessAction } from '../services/datacenter/datacenter-types';
@@ -25,9 +25,12 @@ export class DataCenterReadinessPanel extends Panel {
 
   private render(posture: DataCenterPosture | null): void {
     if (!posture) {
-      replaceChildren(this.content,
-        h('div', { className: 'dc-empty' }, 'Set your data center location (tag a saved place "data_center") to activate this panel.'),
-      );
+      // A configured site with no posture yet means the first refresh hasn't
+      // landed — don't tell a configured user to set a location they already set.
+      const message = getDatacenterSite()
+        ? 'Data center configured — awaiting the first grid + weather refresh.'
+        : 'Set your data center location (tag a saved place "data_center") to activate this panel.';
+      replaceChildren(this.content, h('div', { className: 'dc-empty' }, message));
       this.setCount(0);
       return;
     }

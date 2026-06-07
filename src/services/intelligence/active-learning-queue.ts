@@ -9,6 +9,9 @@
  * expires unreviewed items after 24h to keep the queue actionable.
  */
 
+import type { AnalystSnapshot, Hypothesis } from '@/services/analyst-loop';
+import { isGhostMode } from '@/services/mode-manager';
+
 // ── Public types ─────────────────────────────────────────────────────────
 
 export type UncertaintySource =
@@ -489,6 +492,8 @@ export interface ActiveLearningQueueStats {
   avgResolutionMinutes: number;
 }
 
+export type ActiveLearningItemInput = Omit<ActiveLearningItem, 'id' | 'status' | 'queuedAt'>;
+
 export interface ActiveLearningQueueServiceOptions {
   capacity?: number;
   storage?: StorageLike | null;
@@ -528,7 +533,7 @@ export class ActiveLearningQueueService {
     this.hydrate();
   }
 
-  enqueue(input: Omit<ActiveLearningItem, 'id' | 'status' | 'queuedAt'>): ActiveLearningItem {
+  enqueue(input: ActiveLearningItemInput): ActiveLearningItem {
     const existing = this.findActiveByObservation(input.observationId);
     if (existing) return existing;
     const queuedAt = this.clock();
@@ -726,4 +731,38 @@ function defaultStorage(): StorageLike | null {
   if (typeof globalThis === 'undefined') return null;
   const ls = (globalThis as { localStorage?: StorageLike }).localStorage;
   return ls ?? null;
+}
+
+// ── Active Learning Queue boot ───────────────────────────────────────────
+
+let _alqStarted = false;
+
+function hypothesesToLearningItems(
+  hypotheses: Hypothesis[],
+): ActiveLearningItemInput[] {
+  return hypotheses
+    .filter((h) => h.confidence < 0.6)
+    .map((h): ActiveLearningItemInput => ({
+      observationId: h.id,
+      domain: h.kind,
+      reason: 'low-confidence',
+      priority: h.confidence < 0.3 ? 'high' : 'medium',
+      expiresAt: h.timestamp + EXPIRY_MS,
+      modelOutput: { statement: h.statement, evidence: h.evidence },
+    }));
+}
+
+export function startActiveLearningQueue(): void {
+  if (_alqStarted) return;
+  _alqStarted = true;
+  document.addEventListener('cb:analyst-hypotheses', (e) => {
+    if (isGhostMode()) return;
+    const snapshot = (e as CustomEvent<AnalystSnapshot>).detail;
+    if (!snapshot?.hypotheses) return;
+    const items = hypothesesToLearningItems(snapshot.hypotheses);
+    const svc = getActiveLearningQueueService();
+    for (const item of items) {
+      svc.enqueue(item);
+    }
+  });
 }

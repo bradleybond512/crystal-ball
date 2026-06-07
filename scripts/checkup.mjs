@@ -97,8 +97,14 @@ for (const suite of CORE_SUITES) {
 // ── 3. Log audit ──────────────────────────────────────────────────────────
 process.stdout.write(dim('  log audit... '));
 if (existsSync(LOG_FILE)) {
-  const raw = readFileSync(LOG_FILE, 'utf8');
-  const lines = raw.split('\n');
+  let raw;
+  try {
+    raw = readFileSync(LOG_FILE, 'utf8');
+  } catch {
+    addWarn('log', `Could not read desktop log — ${LOG_FILE}`);
+    raw = null;
+  }
+  const lines = raw ? raw.split('\n') : [];
 
   // Key count from the most recent session start
   const keyLines = lines.filter((l) => l.includes('injected') && l.includes('keychain secrets'));

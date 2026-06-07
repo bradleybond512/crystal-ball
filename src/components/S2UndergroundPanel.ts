@@ -125,14 +125,20 @@ export class S2UndergroundPanel extends Panel {
   }
 
   private async startPatreonConnect(): Promise<void> {
-    const r = await fetch('/api/patreon/authorize-url');
-    const j = (await r.json()) as { url?: string; configured?: boolean };
-    if (!j.configured || !j.url) {
-      this.setContent('<div style="padding:12px;font-size:12px">Set <code>PATREON_OAUTH_CLIENT_ID</code> and <code>PATREON_OAUTH_CLIENT_SECRET</code> in Settings → API Keys first, then reconnect.</div>');
-      return;
+    try {
+      const r = await fetch('/api/patreon/authorize-url');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = (await r.json()) as { url?: string; configured?: boolean };
+      if (!j.configured || !j.url) {
+        this.setContent('<div style="padding:12px;font-size:12px">Set <code>PATREON_OAUTH_CLIENT_ID</code> and <code>PATREON_OAUTH_CLIENT_SECRET</code> in Settings → API Keys first, then reconnect.</div>');
+        return;
+      }
+      window.addEventListener('message', this.onOAuthMessage);
+      window.open(j.url, 'patreon-oauth', 'width=600,height=800');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.setContent(`<div style="padding:12px;font-size:12px;color:#f44336">Could not start Patreon connect: ${msg}</div>`);
     }
-    window.addEventListener('message', this.onOAuthMessage);
-    window.open(j.url, 'patreon-oauth', 'width=600,height=800');
   }
 
   private readonly onOAuthMessage = (ev: MessageEvent): void => {

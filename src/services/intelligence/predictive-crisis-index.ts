@@ -227,3 +227,62 @@ export function pciToAlert(score: PCIScore, now = Date.now()): UnifiedAlert | nu
 export function resetPCICooldowns(): void {
   _lastAlertTs.clear();
 }
+
+// ── Runtime wiring ────────────────────────────────────────────────────
+
+import type { AnalystSnapshot, Hypothesis } from '@/services/analyst-loop';
+import { unifiedAlertStore } from '@/services/unified-alerts';
+
+const EVENT_PCI_UPDATED = 'cb:pci-updated';
+let _latestPCI: PCIScore | null = null;
+let _pciStarted = false;
+
+export function getLatestPCI(): PCIScore | null {
+  return _latestPCI;
+}
+
+const RISK_CONF: Record<string, number> = {
+  critical: 0.95, high: 0.8, moderate: 0.6, low: 0.35,
+};
+const KIND_DOMAIN: Record<string, string> = {
+  'cross-domain-cluster': 'multi', 'anomaly-convergence': 'anomaly',
+  'alert-burst': 'alerts', 'situation-escalation': 'situation',
+  'watchlist-convergence': 'watchlist', 'social-velocity-spike': 'social',
+};
+function leadHours(risk: string): number {
+  if (risk === 'critical') return 6;
+  if (risk === 'high') return 24;
+  return 72;
+}
+
+function hypothesesToMatches(hypotheses: Hypothesis[]): SignatureMatch[] {
+  return hypotheses.map((h): SignatureMatch => ({
+    signature: {
+      id: h.id,
+      name: h.statement.slice(0, 60),
+      domain: KIND_DOMAIN[h.kind] ?? h.kind,
+      fingerprint: [],
+      historicalExamples: [],
+      avgLeadTimeHours: leadHours(h.risk),
+      confidence: RISK_CONF[h.risk] ?? 0.5,
+    },
+    score: h.confidence,
+    matchedFeatures: [],
+    leadTimeEstimateHours: leadHours(h.risk),
+  }));
+}
+
+export function startPredictiveCrisisIndex(): void {
+  if (_pciStarted) return;
+  _pciStarted = true;
+
+  document.addEventListener('cb:analyst-hypotheses', (e: Event) => {
+    const ce = e as CustomEvent<AnalystSnapshot>;
+    const matches = hypothesesToMatches(ce.detail.hypotheses);
+    const prev = _latestPCI?.index;
+    _latestPCI = computePCI(matches, prev);
+    document.dispatchEvent(new CustomEvent<PCIScore>(EVENT_PCI_UPDATED, { detail: _latestPCI }));
+    const alert = pciToAlert(_latestPCI);
+    if (alert) unifiedAlertStore.ingest([alert]);
+  });
+}

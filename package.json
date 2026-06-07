@@ -5,6 +5,7 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
+    "checkup": "node scripts/checkup.mjs",
     "postinstall": "node scripts/patch-satellite-js.mjs",
     "prepare": "node scripts/install-git-hooks.mjs",
     "lint:md": "markdownlint-cli2 '**/*.md' '!.agent/**' '!.agents/**' '!.claude/**' '!.claude.local.md' '!CLAUDE.md' '!.factory/**' '!.windsurf/**' '!skills/**' '!docs/internal/**' '!docs/Docs_To_Review/**' '!docs/superpowers/**' '!research/**' '!tests/panels/.last-*.md'",

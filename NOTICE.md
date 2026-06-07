@@ -1,4 +1,4 @@
-World Monitor macOS
+Crystal Ball
 Copyright (C) 2026 Bradley Bond
 
 This software is based on **World Monitor** by Elie Habib.
@@ -18,10 +18,10 @@ been retained in accordance with the AGPL-3.0 license requirements.
 
 ---
 
-## World Monitor macOS Modifications
+## Crystal Ball Modifications
 
 The following additions and modifications were made by Bradley Bond
-for the World Monitor macOS project (https://github.com/bradleybond512/worldmonitor-macos):
+for the Crystal Ball project (https://github.com/bradleybond512/crystal-ball):
 
 - macOS native Tauri desktop application shell
 - Air Strikes & Drone Monitoring panel (ACLED integration)

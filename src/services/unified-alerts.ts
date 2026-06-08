@@ -130,6 +130,16 @@ class UnifiedAlertStore {
 
   constructor() {
     this.loadFromStorage();
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      const flush = () => this.flushNow();
+      window.addEventListener('pagehide', flush);
+      window.addEventListener('beforeunload', flush);
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') this.flushNow();
+        });
+      }
+    }
   }
 
   /**
@@ -151,6 +161,17 @@ class UnifiedAlertStore {
     };
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
     else queueMicrotask(run);
+  }
+
+  /**
+   * Synchronously flush any pending persist+notify. Registered on page unload
+   * so a deferred frame never drops the last write (durability guard).
+   */
+  private flushNow(): void {
+    if (!this.flushDirty) return;
+    this.flushDirty = false;
+    this.persist();
+    this.notify();
   }
 
   /** Add or update alerts. Deduplicates by id. Stamps distance, dispatches notifications for new alerts. */

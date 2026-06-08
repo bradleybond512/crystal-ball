@@ -20310,4 +20310,15 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
 body.is-desktop-macos .main-content {
   padding-bottom: 84px;
 }
+
+/* Denser, scroll-contained sidebar nav so the footer controls stay visible. */
+body.is-desktop-macos .mac-sidebar-nav {
+  overflow-y: auto;
+  min-height: 0;
+}
+body.is-desktop-macos .mac-sidebar-panel-item {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  font-size: 12px;
+}
 .ai-brief-modal-btn:disabled { opacity: 0.4; cursor: default; }

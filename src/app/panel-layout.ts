@@ -61,6 +61,7 @@ import {
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { WatchAreaAlertingPanel } from '@/components/WatchAreaAlertingPanel';
 import { TriageBar } from '@/components/TriageBar';
+import { notificationStack } from '@/components/NotificationStack';
 import { EEWStatusBar } from '@/components/EEWStatusBar';
 import { CorrelationAlertBanner } from '@/components/CorrelationAlertBanner';
 import { startSpaceWeatherStatusBarPoller } from '@/services/spaceweather/status-bar-poller';
@@ -639,7 +640,8 @@ export class PanelLayoutManager implements AppModule {
   init(): void {
  this.renderLayout();
  document.addEventListener('wm:update-state', this._onUpdateState);
- this.stalenessBanner = StalenessBanner.mount();
+ // Mount staleness banner into the notification stack (first row).
+ this.stalenessBanner = StalenessBanner.mount(notificationStack.element);
   }
 
   destroy(): void {
@@ -820,12 +822,15 @@ export class PanelLayoutManager implements AppModule {
   private createPanels(): void {
  const panelsGrid = document.getElementById('panelsGrid')!;
 
- // Mount the EEW status bar at the top of the body — sits above
- // everything else (above the panel grid + triage bar). Layer 9
- // of the seismic intelligence stack.
+ // Mount the EEW status bar at top of body — the anchor (z:9000).
  const eewStatusBar = new EEWStatusBar();
  eewStatusBar.mount(document.body);
  startSpaceWeatherStatusBarPoller(eewStatusBar);
+
+ // Mount the notification stack directly below the EEW bar. All secondary
+ // banners mount into this container so they flow vertically without overlap.
+ // A ResizeObserver publishes --notification-stack-h so content shifts correctly.
+ notificationStack.mount(document.body);
 
  // Mount Personal Storm Mode banner — shows when a severe NWS alert
  // matches a saved place. The data-loader dispatches 'cb:storm-decision'
@@ -844,9 +849,9 @@ export class PanelLayoutManager implements AppModule {
  const correlationBanner = new CorrelationAlertBanner();
  correlationBanner.mount(document.body);
 
- // Mount the triage bar above the panel grid (auto-hides when nothing is hot).
+ // Mount the triage bar into the notification stack (last row — below staleness).
  const triageBar = new TriageBar();
- triageBar.mount(panelsGrid.parentElement ?? panelsGrid);
+ triageBar.mount(notificationStack.element);
  const justInRail = new JustInRail();
  justInRail.mount(document.body);
  startPanelNarrator();

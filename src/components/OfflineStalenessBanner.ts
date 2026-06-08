@@ -15,11 +15,9 @@ const STYLE_CSS = `
   50%, 100% { opacity: 0.55; }
 }
 .cb-offline-staleness-banner {
-  position: fixed;
-  top: var(--below-eew, 32px);
-  left: 0;
-  right: 0;
-  z-index: 100000;
+  /* Flow child of NotificationStack — no own position:fixed needed. */
+  position: relative;
+  width: 100%;
   height: 48px;
   display: flex;
   flex-direction: column;

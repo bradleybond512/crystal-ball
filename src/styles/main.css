@@ -70,9 +70,12 @@
      --eew-bar-h matches the min-height set on .eew-status-bar below. */
   --eew-bar-h: 32px;
   --staleness-banner-h: 32px;
+  /* Live height of the NotificationStack column — updated by ResizeObserver. */
+  --notification-stack-h: 0px;
   /* Derived: where things sit when both bars are visible */
   --below-eew: var(--eew-bar-h);
-  --below-banners: calc(var(--eew-bar-h) + var(--staleness-banner-h));
+  /* --below-banners tracks the full header height dynamically via ResizeObserver. */
+  --below-banners: calc(var(--eew-bar-h) + var(--notification-stack-h));
 
   /* Overlay stacking scale — single source of truth for layering. */
   --z-strip: 1040;
@@ -14934,20 +14937,21 @@ a.prediction-link:hover {
   to   { opacity: 1; }
 }
 
-/* Push content down when critical banner is visible */
+/* Push content down when critical banner is visible — kept for JS that only
+   adds this class without the has-staleness-banner class; ResizeObserver on
+   the NotificationStack handles the common case automatically. */
 body.has-critical-banner .panels-grid {
-  padding-top: var(--staleness-banner-h);
+  padding-top: var(--notification-stack-h);
 }
 
 /* ============ Data Staleness Banner ============ */
 
 .staleness-banner {
-  position: fixed;
-  top: var(--below-eew);
-  left: 0;
-  right: 0;
-  z-index: 998;
+  /* Flow child of NotificationStack — position is inherited from container. */
+  position: relative;
+  width: 100%;
   height: var(--staleness-banner-h);
+  pointer-events: auto;
   padding: 0 16px;
   display: flex;
   align-items: center;
@@ -15046,11 +15050,9 @@ body.has-critical-banner .panels-grid {
 }
 
 .staleness-details {
-  position: fixed;
-  top: 82px;
-  left: 0;
-  right: 0;
-  z-index: 997;
+  /* Flow child of NotificationStack — expands the stack height when visible. */
+  position: relative;
+  width: 100%;
   max-height: 300px;
   overflow-y: auto;
   background: var(--surface);
@@ -15089,11 +15091,12 @@ body.has-critical-banner .panels-grid {
 }
 
 body.has-staleness-banner .panels-grid {
+  /* --below-banners = eew-bar-h + notification-stack-h, updated by ResizeObserver. */
   padding-top: var(--below-banners);
 }
 
 body.has-staleness-banner.has-critical-banner .panels-grid {
-  padding-top: calc(var(--below-banners) + var(--staleness-banner-h));
+  padding-top: var(--below-banners);
 }
 
 /* ============ Breaking News Alert Banner ============ */
@@ -18968,7 +18971,7 @@ body.has-breaking-alert .panels-grid {
 /* ─── Entity heat rail ─── */
 .entity-heat-rail {
   position: fixed;
-  top: calc(var(--below-eew) + 6px);
+  top: calc(var(--below-banners) + 6px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -19014,9 +19017,6 @@ body.has-breaking-alert .panels-grid {
 .ehr-anomaly { background: rgba(255, 140, 40, 0.15); border-color: rgba(255, 140, 40, 0.4); }
 .ehr-anomaly .ehr-dot { background: #ff8c28; }
 .ehr-anomaly-burst { animation: pulse-orange 1.5s infinite; }
-body.has-staleness-banner .entity-heat-rail {
-  top: calc(var(--below-banners) + 6px);
-}
 /* TriageBar and EntityHeatRail occupy the same horizontal slot.
    When alerts are active the triage bar is the primary surface. */
 body.has-triage-bar .entity-heat-rail,
@@ -19392,7 +19392,7 @@ body.gods-vision-lock .replay-scrubber { display: none; }
 /* ── Related Strip ──────────────────────────────────────────────── */
 .related-strip {
   position: fixed;
-  top: calc(var(--below-eew) + 4px);
+  top: calc(var(--below-banners) + 4px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 1060;

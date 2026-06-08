@@ -37,7 +37,7 @@ export class StalenessBanner {
   private dismissedLevel: BannerLevel = 'hidden';
   private currentLevel: BannerLevel = 'hidden';
 
-  private constructor() {
+  private constructor(parent: HTMLElement = document.body) {
  this.el = document.createElement('div');
  this.el.className = 'staleness-banner staleness-banner-hidden';
  this.el.setAttribute('role', 'status');
@@ -57,8 +57,10 @@ export class StalenessBanner {
  this.toggleDetails();
  });
 
- document.body.prepend(this.detailsEl);
- document.body.prepend(this.el);
+ // Both banner and its collapsible details flow inside the same parent so
+ // the NotificationStack ResizeObserver picks up the expanded height.
+ parent.append(this.el);
+ parent.append(this.detailsEl);
 
  // Listen for online/offline
  window.addEventListener('online', () => this.evaluate());
@@ -74,8 +76,8 @@ export class StalenessBanner {
  this.evaluate();
   }
 
-  static mount(): StalenessBanner {
- instance ??= new StalenessBanner();
+  static mount(parent?: HTMLElement): StalenessBanner {
+ instance ??= new StalenessBanner(parent);
  return instance;
   }
 

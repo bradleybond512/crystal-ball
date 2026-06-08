@@ -117,7 +117,7 @@ body.is-desktop-macos .mac-sidebar {
 /* When a staleness banner is fixed at the top of content, push the sidebar
    nav down by the same amount so it isn't hidden under the banner. */
 body.has-staleness-banner .mac-sidebar-nav {
-  padding-top: var(--staleness-banner-h);
+  padding-top: var(--notification-stack-h);
 }
 
 /* Sidebar scrollable nav */

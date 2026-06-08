@@ -39,23 +39,28 @@ Four computation engines are built but never called at boot. Their panels exist 
 ### Architecture
 
 **`src/services/predictive-crisis-index.ts`:**
+
 - Add a `startPredictiveCrisisIndex()` export that subscribes to `cb:analyst-hypotheses`, calls `computePCI()` on each snapshot, and emits `cb:pci-updated` with the `PCIScore` result
 - Existing `pciToAlert()` already handles unified alert injection — call it inside the listener
 - Cadence: runs every analyst cycle (5 min), no independent timer needed
 
 **`src/services/crisis-trajectory.ts`:**
+
 - Add `startCrisisTrajectory()` export that subscribes to `cb:analyst-hypotheses`, instantiates `CrisisTrajectoryProjector` with the top-ranked hypothesis, and emits `cb:crisis-trajectory` with the projection
 - `CrisisTrajectoryPanel` already listens for this event — zero panel changes needed
 
 **`src/services/active-learning-queue.ts`:**
+
 - Add `startActiveLearningQueue()` export that subscribes to `cb:analyst-hypotheses` and routes low-confidence hypotheses (confidence < 0.5, risk ≥ moderate) into the queue
 - `ActiveLearningQueuePanel` already renders queue items
 
 **`src/services/historical-analogs/analog-monitor.ts`:**
+
 - `startAnalogMonitor()` already exported — just needs to be called in `panel-layout.ts`
 - Pass a getter wrapping `getAnalystSnapshot()?.hypotheses` mapped to `SituationForScoring`
 
 **`src/app/panel-layout.ts`:**
+
 - Import and call all four start functions after `startAnalystLoop()` in the boot sequence
 
 ### Files Changed
@@ -102,9 +107,11 @@ export type ForecastMap = Map<string, HypothesisForecast>;
 
 export function startHypothesisForecast(): void
 export function getLatestForecasts(): ForecastMap
+
 ```
 
 **Synthesis logic:**
+
 1. Base: hypothesis `confidence` (always available)
 2. PCI weight: if `cb:pci-updated` has fired, blend PCI index/100 as a 20% prior
 3. Analog weight: if `cb:analog-match` contains a match for this hypothesis's region/kind, blend the analog's top outcome confidence as a 15% prior
@@ -115,20 +122,25 @@ export function getLatestForecasts(): ForecastMap
 Emits `cb:hypothesis-forecasts` with a `ForecastMap` after every `cb:analyst-hypotheses` cycle.
 
 **`AnalystHUD.ts` integration:**
+
 - Subscribe to `cb:hypothesis-forecasts` in `mount()`
 - `buildHypForecastBar(forecast: HypothesisForecast): HTMLElement` — renders a small row:
+
   - Trend arrow: ▲ (rising) / ▼ (falling) / → (stable)
   - Probability: `68%` colored green ≤40%, amber 40–70%, red >70%
   - Horizon badge: `· 14d`
+
 - Appended below the hypothesis statement in `buildHypothesisRow()`
 - Suppressed when Ghost Mode is active
 
 ### Data Flow
 
 ```
+
 cb:analyst-hypotheses
 cb:pci-updated          →  hypothesis-forecast.ts  →  cb:hypothesis-forecasts  →  AnalystHUD
 cb:analog-match
+
 ```
 
 ### Files Changed
@@ -164,9 +176,11 @@ Two surfaces:
 
 ```typescript
 export function buildAnalystContext(): string
+
 ```
 
 Pure function. Assembles a ~500-token system context string from:
+
 - PCI level + index from `getLatestPCI()` (new export from `predictive-crisis-index.ts`)
 - Top 3 hypotheses from `getAnalystSnapshot()` with their forecast probabilities from `getLatestForecasts()`
 - Active analog match names from the analog monitor's last emission
@@ -176,21 +190,27 @@ Pure function. Assembles a ~500-token system context string from:
 Format: a concise bullet list the LLM can use as a factual prior.
 
 **`AskCrystalBallPanel.ts` changes:**
+
 - Before every `sendMessage()` call, prepend `buildAnalystContext()` as a system context block
 - Listen for `cb:project-hypothesis` — when received, open the panel (if not already open) and populate the input field with the projection prompt, then auto-send
 
 **Projection prompt builder:**
+
 ```typescript
 function buildProjectionPrompt(h: Hypothesis, forecast: HypothesisForecast, analogs: AnalogMatch[]): string
+
 ```
+
 Produces: *"Analyze this intelligence situation: [statement]. Current forecast: [probability]% probability of escalation in [horizon] days, trend [trend]. Closest historical analog: [analog name] ([score]% similarity). Provide: (1) your probability estimate with confidence interval, (2) the 3 primary drivers, (3) base/upside/downside scenario branches, (4) what signals would change this forecast."*
 
 **`AnalystHUD.ts` changes:**
+
 - Add `→` button to hypothesis card header (right of the `⚡` challenge button)
 - `onclick`: collect hypothesis + its forecast + analog matches, dispatch `cb:project-hypothesis`
 - Suppressed when Ghost Mode is active
 
 **`predictive-crisis-index.ts`:**
+
 - Add `getLatestPCI(): PCIScore | null` export (reads from module-level cache set by `startPredictiveCrisisIndex()`)
 
 ### Files Changed
@@ -226,6 +246,7 @@ The outcome grading loop (`startOutcomeGradingCadence`) and tuning loop (`startT
 **`AlgorithmDiagnosticPanel.ts` — new "Prediction Accuracy" tab:**
 
 Reads from `getAlgoEvalLedger()` (already exported from `algo-eval-ledger.ts`). For each hypothesis kind with ≥3 graded outcomes, renders:
+
 - Kind label + sample count
 - Hit rate bar (green/amber/red thresholds: >70% / 50–70% / <50%)
 - Weighted hit rate (recency-weighted)
@@ -275,6 +296,7 @@ PRs 1 → 2 → 3 are in dependency order (each builds on the previous). PR 4 ha
 ## Data Flow Summary
 
 ```
+
 Analyst Loop (5-min cadence)
     ↓ cb:analyst-hypotheses
     ├── predictive-crisis-index  →  cb:pci-updated
@@ -295,4 +317,5 @@ Hypothesis dismissed
             ↓
             AlgorithmDiagnosticPanel (Prediction Accuracy tab)
             AnalystHUD footer (accuracy sparkline)
+
 ```

@@ -16,6 +16,7 @@
  */
 
 import { generateText } from './llm-adapter';
+import { sanitizeForPrompt } from '@/utils/prompt-sanitize';
 import { isGhostMode } from './mode-manager';
 import { isFeatureAvailable } from './runtime-config';
 import { signatureFor } from './hypothesis-feedback';
@@ -92,17 +93,17 @@ export function getAllSkepticNotes(): SkepticNote[] {
 
 // ── Prompt ────────────────────────────────────────────────────────────────────
 
-function buildSkepticPrompt(h: Hypothesis): string {
+export function buildSkepticPrompt(h: Hypothesis): string {
   const evidenceLines = h.evidence
     .slice(0, 8)
-    .map(e => `- [${e.source}] ${e.label}`)
+    .map(e => `- [${sanitizeForPrompt(e.source, 40)}] ${sanitizeForPrompt(e.label, 200)}`)
     .join('\n');
   return (
     `You are a skeptical reviewer of an analyst hypothesis. Look for ` +
     `contradictions, stale evidence, or missing counter-signals that would ` +
     `weaken this claim.\n\n` +
     `Hypothesis (${h.kind}, ${h.risk} risk, ${(h.confidence * 100).toFixed(0)}% confidence):\n` +
-    `"${h.statement}"\n\n` +
+    `"${sanitizeForPrompt(h.statement, 280)}"\n\n` +
     `Supporting evidence:\n${evidenceLines || '- (none)'}\n\n` +
     `In 2–3 sentences: what might this hypothesis be missing or getting ` +
     `wrong? Name specific counter-signals if you can. If the hypothesis ` +

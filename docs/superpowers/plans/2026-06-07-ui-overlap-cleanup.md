@@ -48,6 +48,7 @@ No new files. CSS is appended to existing thematic sections of `main.css`.
 **Root cause (confirmed live):** `uaiRuleHits: {}` — no CSS rule targets any `.uai-toolbar*`, `.uai-title`, `.uai-body`, etc. `.uai-toolbar` computes to `display:block`, so filter pills cram onto baseline and title+body stack untruncated (the "doubled text"). Source markup: [`UnifiedAlertInboxPanel.ts:519-538`](../../../src/components/UnifiedAlertInboxPanel.ts) (toolbar) and `:579-593` (rows).
 
 **Files:**
+
 - Modify: `src/styles/main.css` — append near the existing Alert Inbox rules (search for `.uai-expanded .uai-body` ~line 19487; add the new block immediately after it).
 
 - [ ] **Step 1: Capture the "before" state**
@@ -178,6 +179,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 **Root cause (confirmed in source):** The persistent `theater-polygons-labels` `TextLayer` ([`DeckGLMap.ts:5997-6009`](../../../src/components/DeckGLMap.ts)) renders bold near-white text with **no `fontSettings.sdf` and no outline**. Non-SDF deck.gl text uses a bitmap atlas that blurs/ghosts at sub-pixel positions and fractional zoom — this is the "Global…" double-vision over the orange circle. Other persistent name labels (forecast overlay `:2397`, company labels `:3019`, satellite labels `:6389`) share the risk; the count-bubble layers are short and lower priority.
 
 **Files:**
+
 - Modify: `src/components/DeckGLMap.ts` — add a shared crisp-text constant and apply to persistent label layers.
 - Modify: `src/styles/main.css` — secondary contrast/smoothing pass on the hover tooltip (`.deckgl-tooltip`).
 
@@ -278,6 +280,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 **Root cause (confirmed in source):** [`Toast.ts:200-219`](../../../src/components/Toast.ts) pushes every toast with no content comparison, so identical correlation alerts (e.g. three `CORRELATION Red Flag Warning`) stack. Container is `top:16px` (overlaps the full-width status bar at z 9000). User decision: **cap + dedupe only** — suppress exact duplicates, keep distinct ones (max 3).
 
 **Files:**
+
 - Modify: `src/components/Toast.ts`
 
 - [ ] **Step 1: Store a dedupe key on each instance**
@@ -374,6 +377,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 **Root cause (confirmed):** ad-hoc z-index magic numbers collide — `eew-status-bar` and `cb-storm-mode` both `9000` (render-order roulette), toast inline `9999` sits awkwardly between status (9000) and modals (10000+). No shared scale. Full migration of every z-index in the repo is out of scope; this task introduces tokens and migrates the **confirmed-colliding** overlays only. Remaining magic numbers are swept opportunistically in Task 7.
 
 **Files:**
+
 - Modify: `src/styles/main.css` (`:root` token block + the colliding rules)
 - Modify: `src/components/Toast.ts` (use the toast token)
 
@@ -441,6 +445,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 **Root cause (confirmed live):** `.cbs-strip` (fixed, `bottom:44px`, z 1050) sits at y≈888 in a 1000px viewport and overlaps the bottom panel row; the panel scroll area has no bottom padding reserving space for the fixed strips.
 
 **Files:**
+
 - Modify: `src/styles/main.css` — add desktop bottom padding to the panel scroll container.
 
 - [ ] **Step 1: Identify the scroll container live**
@@ -483,6 +488,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 **Observation (live):** the left nav lists ~30 items with no internal scroll containment, making it long and cramped and risking the footer controls (theme/settings) being pushed off-screen on shorter windows.
 
 **Files:**
+
 - Modify: `src/styles/main.css` (or `macos-native.css` where `.mac-sidebar` lives — confirm which file actually styles it).
 
 - [ ] **Step 1: Inspect current sidebar metrics**

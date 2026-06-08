@@ -90,6 +90,21 @@ test('trend is stable when no boost', () => {
   assert.strictEqual(result.trend, 'stable');
 });
 
+test('providerMultiplier=0.5 halves the probability (clamped)', () => {
+  const h = makeHypothesis({ confidence: 0.6 });
+  const result = forecastHypothesis(h, null, null, 0.5);
+  assert.strictEqual(result.probability, 0.3);
+  assert.strictEqual(result.components.providerMultiplier, 0.5);
+});
+
+test('providerMultiplier defaults to 1.0 (no effect)', () => {
+  const h = makeHypothesis({ confidence: 0.6 });
+  const withDefault = forecastHypothesis(h, null, null);
+  const withExplicit = forecastHypothesis(h, null, null, 1.0);
+  assert.strictEqual(withDefault.probability, withExplicit.probability);
+  assert.strictEqual(withDefault.components.providerMultiplier, 1.0);
+});
+
 test('forecastAll returns one forecast per hypothesis with analogBoost=0', () => {
   const hypotheses = [
     makeHypothesis({ id: 'a', confidence: 0.4 }),

@@ -14854,7 +14854,7 @@ a.prediction-link:hover {
 
 .critical-posture-banner {
   position: fixed;
-  top: var(--below-eew);
+  top: var(--below-banners);
   left: 0;
   right: 0;
   z-index: 999;
@@ -15103,7 +15103,7 @@ body.has-staleness-banner.has-critical-banner .panels-grid {
 
 .breaking-news-container {
   position: fixed;
-  top: var(--below-eew);
+  top: var(--below-banners);
   left: 0;
   right: 0;
   z-index: 1001;

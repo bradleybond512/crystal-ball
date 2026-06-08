@@ -95,15 +95,16 @@ export class BreakingNewsBanner {
   }
 
   private updatePosition(): void {
- let top = 50;
- if (document.body.classList.contains('has-critical-banner')) {
- this.attachResizeObserverIfNeeded();
- const postureBanner = document.querySelector('.critical-posture-banner');
- if (postureBanner) {
- top += postureBanner.getBoundingClientRect().height;
- }
- }
- this.container.style.top = `${top}px`;
+    const stack = document.getElementById('cb-notification-stack');
+    let top = stack ? stack.getBoundingClientRect().bottom : 44;
+    if (document.body.classList.contains('has-critical-banner')) {
+      this.attachResizeObserverIfNeeded();
+      const postureBanner = document.querySelector('.critical-posture-banner');
+      if (postureBanner) {
+        top += postureBanner.getBoundingClientRect().height;
+      }
+    }
+    this.container.style.top = `${top}px`;
  this.updateOffset();
   }
 

@@ -18973,51 +18973,58 @@ body.has-breaking-alert .panels-grid {
 /* ─── Entity heat rail ─── */
 .entity-heat-rail {
   position: fixed;
-  top: calc(var(--below-banners) + 6px);
+  top: calc(var(--below-banners) + 8px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
-  padding: 6px 10px;
-  background: rgba(12, 16, 24, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  backdrop-filter: blur(12px);
+  padding: 5px 8px;
+  background: rgba(28, 28, 30, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   z-index: 45;
   max-width: 90vw;
   overflow-x: auto;
-  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  font-size: 12px;
 }
 .ehr-label {
-  font-weight: 700;
-  font-size: 9px;
-  letter-spacing: 0.8px;
-  color: rgba(100, 200, 255, 0.9);
-  padding-right: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: rgba(255, 255, 255, 0.35);
+  padding: 0 4px 0 2px;
+  text-transform: none;
 }
-.ehr-anomaly-label { color: rgba(255, 180, 80, 0.9); }
+.ehr-anomaly-label { color: rgba(255, 159, 10, 0.6); }
 .ehr-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  gap: 5px;
+  padding: 3px 9px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 14px;
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.12s;
 }
-.ehr-chip:hover { background: rgba(100, 200, 255, 0.15); }
+.ehr-chip:hover { background: rgba(255, 255, 255, 0.14); }
 .ehr-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: rgba(100, 200, 255, 0.8);
+  background: rgba(100, 200, 255, 0.85);
+  flex-shrink: 0;
 }
-.ehr-name { color: rgba(255, 255, 255, 0.9); font-weight: 500; }
-.ehr-count { color: rgba(255, 255, 255, 0.6); font-variant-numeric: tabular-nums; }
-.ehr-anomaly { background: rgba(255, 140, 40, 0.15); border-color: rgba(255, 140, 40, 0.4); }
-.ehr-anomaly .ehr-dot { background: #ff8c28; }
+.ehr-name { color: rgba(255, 255, 255, 0.88); font-weight: 500; font-size: 12px; }
+.ehr-count { color: rgba(255, 255, 255, 0.45); font-variant-numeric: tabular-nums; font-size: 11px; }
+.ehr-anomaly { background: rgba(255, 159, 10, 0.12); }
+.ehr-anomaly:hover { background: rgba(255, 159, 10, 0.2); }
+.ehr-anomaly .ehr-dot { background: #ff9f0a; }
+.ehr-anomaly .ehr-count { color: rgba(255, 159, 10, 0.7); }
 .ehr-anomaly-burst { animation: pulse-orange 1.5s infinite; }
 /* TriageBar and EntityHeatRail occupy the same horizontal slot.
    When alerts are active the triage bar is the primary surface. */

@@ -51,14 +51,14 @@ export class EntityHeatRail {
     if (ents.length > 0) {
       const label = document.createElement('span');
       label.className = 'ehr-label';
-      label.textContent = 'WHO';
+      label.textContent = 'Who';
       this.element.append(label);
       for (const e of ents) this.element.append(this.buildEntityChip(e));
     }
     if (anomalies.length > 0) {
       const label = document.createElement('span');
       label.className = 'ehr-label ehr-anomaly-label';
-      label.textContent = 'ANOMALY';
+      label.textContent = 'Anomaly';
       this.element.append(label);
       for (const a of anomalies) {
         const chip = document.createElement('span');

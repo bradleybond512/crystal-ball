@@ -32,7 +32,7 @@ function getContainer(): HTMLElement {
     el.id = 'cb-toast-container';
     Object.assign(el.style, {
       position: 'fixed',
-      top: '16px',
+      top: 'calc(env(safe-area-inset-top, 0px) + 52px)',
       right: '16px',
       zIndex: '9999',
       display: 'flex',
@@ -55,11 +55,13 @@ export class Toast {
   private remaining: number;
   private duration: number;
   private dismissed = false;
+  private readonly key: string;
 
   constructor(private options: ToastOptions) {
     const severity = options.severity ?? 'normal';
     this.duration = severity === 'critical' ? DURATION_CRITICAL : DURATION_NORMAL;
     this.remaining = this.duration;
+    this.key = `${options.title} ${options.message ?? ''}`;
 
     this.el = this.build(severity);
     this.progress = this.el.querySelector('.cb-toast-progress') as HTMLElement;
@@ -200,6 +202,14 @@ export class Toast {
   show(): void {
     if (isGhostMode()) return;
 
+    // Suppress exact duplicates already on screen — refresh the existing
+    // toast's countdown instead of stacking an identical one.
+    const dup = activeToasts.find((t) => t.key === this.key && !t.dismissed);
+    if (dup) {
+      dup.refresh();
+      return;
+    }
+
     // Evict oldest if at max
     while (activeToasts.length >= MAX_TOASTS) {
       activeToasts[0]?.dismiss();
@@ -240,6 +250,21 @@ export class Toast {
     // Resume progress bar
     this.progress.style.transition = `transform ${this.remaining}ms linear`;
     this.progress.style.transform = 'scaleX(0)';
+    this.startTimer();
+  }
+
+  /** Restart the auto-dismiss countdown — used when a duplicate is suppressed
+   *  so the still-relevant toast stays on screen instead of expiring. */
+  refresh(): void {
+    if (this.dismissed) return;
+    if (this.timerId !== null) clearTimeout(this.timerId);
+    this.remaining = this.duration;
+    this.progress.style.transition = 'none';
+    this.progress.style.transform = 'scaleX(1)';
+    requestAnimationFrame(() => {
+      this.progress.style.transition = `transform ${this.duration}ms linear`;
+      this.progress.style.transform = 'scaleX(0)';
+    });
     this.startTimer();
   }
 

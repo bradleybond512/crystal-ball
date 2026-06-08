@@ -2209,7 +2209,7 @@ export class DeckGLMap {
  return new IconLayer({
  id: 'earthquakes-layer',
  data: earthquakes,
- getPosition: (d) => [d.location?.longitude ?? 0, d.location?.latitude ?? 0],
+ getPosition: (d) => [d.lon, d.lat],
  getIcon: () => 'earthquake',
  iconAtlas: getIconAtlas(),
  iconMapping: getIconMapping(),

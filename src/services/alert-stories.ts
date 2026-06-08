@@ -94,14 +94,24 @@ export function groupIntoStories(alerts: UnifiedAlert[]): AlertStory[] {
     });
   }
 
-  // Phase 3: remaining alerts become single-item stories.
+  // Phase 3: same-title + same-source grouping for location-less alerts
+  // (e.g. NWS zone alerts: 3× "Red Flag Warning" → one story with count badge).
+  const titleGroups = new Map<string, UnifiedAlert[]>();
   for (const a of recent) {
     if (assigned.has(a.id)) continue;
+    const key = `${a.source}::${a.title}`;
+    const g = titleGroups.get(key);
+    if (g) g.push(a);
+    else titleGroups.set(key, [a]);
+  }
+  for (const [, group] of titleGroups) {
+    const lead = group.reduce((best, a) => a.timestamp > best.timestamp ? a : best);
+    for (const m of group) assigned.add(m.id);
     stories.push({
-      id: `story-single-${a.id}`,
-      label: a.title,
-      alerts: [a],
-      leadAlert: a,
+      id: `story-title-${lead.id}`,
+      label: lead.title,
+      alerts: group,
+      leadAlert: lead,
     });
   }
 

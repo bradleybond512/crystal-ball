@@ -10,11 +10,10 @@ let posture: DataCenterPosture | null = null;
 const listeners = new Set<Listener>();
 
 export function setDatacenterSite(next: SiteConfig | null): void {
+  if (site === next) return;
   site = next;
-  if (next === null) {
-    posture = null;
-    emit();
-  }
+  posture = null;
+  emit();
 }
 
 export function getDatacenterSite(): SiteConfig | null {

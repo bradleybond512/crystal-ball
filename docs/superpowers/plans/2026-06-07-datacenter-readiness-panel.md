@@ -30,6 +30,7 @@ Read these before starting — the plan reuses their exact signatures:
 ## Task 1: Core types + level ladder
 
 **Files:**
+
 - Create: `src/services/datacenter/datacenter-types.ts`
 - Test: `src/services/datacenter/__tests__/datacenter-types.test.mts`
 
@@ -175,6 +176,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 2: Power posture from external grid signals
 
 **Files:**
+
 - Create: `src/services/datacenter/power-posture.ts`
 - Test: `src/services/datacenter/__tests__/power-posture.test.mts`
 
@@ -330,6 +332,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 3: Weather posture from NWS polygon match + Storm Mode
 
 **Files:**
+
 - Create: `src/services/datacenter/weather-posture.ts`
 - Test: `src/services/datacenter/__tests__/weather-posture.test.mts`
 
@@ -469,6 +472,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 4: Readiness action playbook (pure, pre-sorted)
 
 **Files:**
+
 - Create: `src/services/datacenter/readiness-actions.ts`
 - Test: `src/services/datacenter/__tests__/readiness-actions.test.mts`
 
@@ -699,6 +703,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 5: Posture orchestrator (blend + headline + stale honesty)
 
 **Files:**
+
 - Create: `src/services/datacenter/datacenter-posture.ts`
 - Test: `src/services/datacenter/__tests__/datacenter-posture.test.mts`
 
@@ -853,6 +858,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 6: Site resolution + `data_center` saved-place tag
 
 **Files:**
+
 - Modify: `src/services/saved-places.ts:4` (add `data_center` to `SavedPlaceTag`) and `src/services/saved-places.ts:46` (add it to `VALID_TAGS`)
 - Create: `src/services/datacenter/site-resolver.ts`
 - Test: `src/services/datacenter/__tests__/site-resolver.test.mts`
@@ -981,6 +987,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 7: State singleton (recompute + subscribe)
 
 **Files:**
+
 - Create: `src/services/datacenter/datacenter-state.ts`
 - Test: `src/services/datacenter/__tests__/datacenter-state.test.mts`
 
@@ -1113,6 +1120,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 8: View helpers (pure formatting for both surfaces)
 
 **Files:**
+
 - Create: `src/services/datacenter/datacenter-view.ts`
 - Test: `src/services/datacenter/__tests__/datacenter-view.test.mts`
 
@@ -1219,6 +1227,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 9: Full panel (`DataCenterReadinessPanel`)
 
 **Files:**
+
 - Create: `src/components/DataCenterReadinessPanel.ts`
 - Test: `src/services/datacenter/__tests__/datacenter-view.test.mts` already covers the formatting logic; the panel itself is a thin renderer with no decision logic, so it is exercised by the smoke harness (Task 11). No new unit test — the renderer holds no branchable logic beyond delegating to view helpers.
 
@@ -1330,6 +1339,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 10: Pinned mini-strip (`DataCenterPinnedStrip`)
 
 **Files:**
+
 - Create: `src/components/DataCenterPinnedStrip.ts`
 
 - [ ] **Step 1: Write the strip**
@@ -1414,6 +1424,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 11: Wiring — register panel, mount strip, feed recompute
 
 **Files:**
+
 - Modify: `src/config/panels.ts` (register the panel)
 - Modify: `src/app/panel-layout.ts` (instantiate the panel + mount the strip + boot site resolution)
 - Modify: `src/app/data-loader.ts` (call `recomputeDatacenterPosture` after weather/grid refresh)
@@ -1486,10 +1497,12 @@ If `fetchWeatherAlerts()` returns a shape that isn't exactly `NwsAlertMinimal`, 
 - [ ] **Step 4: Type-check + run the new suite**
 
 Run:
+
 ```bash
 npm run typecheck:all
 npx tsx --test src/services/datacenter/__tests__/*.test.mts
 ```
+
 Expected: zero type errors; all datacenter tests pass.
 
 - [ ] **Step 5: Commit**
@@ -1506,6 +1519,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 12: Test script, docs freshness, and final verification
 
 **Files:**
+
 - Modify: `package.json` (add `test:datacenter`)
 - Modify: `CLAUDE.md` and/or `README` panel-count references as `npm run docs:check` requires
 - Modify: `docs/superpowers/specs/2026-06-07-datacenter-readiness-panel-design.md` only if an implementation detail diverged (keep spec and code consistent)
@@ -1530,10 +1544,12 @@ Add the `src/services/datacenter/` layer to the architecture section of `CLAUDE.
 - [ ] **Step 4: Run docs freshness + typecheck**
 
 Run:
+
 ```bash
 npm run docs:check
 npm run typecheck:all
 ```
+
 Expected: `docs:check` passes (bump any panel-count assertion it flags); zero type errors.
 
 - [ ] **Step 5: Commit**

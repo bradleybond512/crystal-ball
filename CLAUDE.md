@@ -39,6 +39,7 @@ list the contained KEY names (values are never printed) — confirms the backup
 is valid before committing to a keychain write.
 
 Integrity is verified BEFORE any keychain writes:
+
 - age + gpg fail decryption when the AEAD/MDC tag mismatches.
 - openssl recomputes the sidecar HMAC and aborts on mismatch.
 
@@ -111,6 +112,7 @@ Four pure-deterministic, fixture-tested service layers. **No DOM, no fetch, no g
 Test scripts: `npm run test:intelligence` / `test:weather` / `test:insights{,2,3,6}` / `test:shortage` / `test:datacenter`.
 
 Plan invariants honored across all four layers:
+
 - Every score includes an explanation
 - Every source-derived claim carries provenance
 - Stale data reduces confidence (never silently disappears)
@@ -308,6 +310,7 @@ The browser build can't reach the macOS keychain, so user-entered keys are persi
 ## Desktop Chrome Activation (`src/main.ts`)
 
 `body.is-desktop-macos` drives the entire sidebar + toolbar design system. Applied when:
+
 - `isDesktopRuntime()` is true (Tauri build), **OR**
 - `FORCE_DESKTOP_GATE` env override is on, **OR**
 - the browser has `(pointer: fine)` AND `window.innerWidth >= 768` (Windows / Linux / Mac web on a real monitor).
@@ -317,6 +320,7 @@ Touch phones and narrow tablets get the mobile layout. The class name is histori
 ## Basemap Switcher (`src/components/DeckGLMap.ts`)
 
 Four basemaps (`dark | light | satellite | terrain`) selected by the `wm-basemap` localStorage key. Style URLs:
+
 - Dark/Light → self-hosted `/map-styles/{dark,light}.json` referencing CARTO raster tiles. The vector gl-style URL (`basemaps.cartocdn.com/gl/...`) is **not** used because it's cross-origin and not covered by the existing workbox `[abc].basemaps.cartocdn.com` cache rule.
 - Satellite → self-hosted `/map-styles/satellite.json` (NASA GIBS Blue Marble).
 - Terrain → self-hosted `/map-styles/terrain.json` (OpenTopoMap).

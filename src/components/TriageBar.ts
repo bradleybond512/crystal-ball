@@ -117,9 +117,11 @@ export class TriageBar {
     ack.title = 'Acknowledge all visible';
     ack.textContent = 'Ack all';
     ack.addEventListener('click', () => {
+      const ids: string[] = [];
       for (const story of stories) {
-        for (const a of story.alerts) unifiedAlertStore.acknowledge(a.id);
+        for (const a of story.alerts) ids.push(a.id);
       }
+      unifiedAlertStore.acknowledgeMany(ids);
     });
     const presetBtn = document.createElement('button');
     presetBtn.className = 'triage-bar-preset';

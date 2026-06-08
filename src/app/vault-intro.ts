@@ -1135,17 +1135,11 @@ async function runBiometricFlow(
  // corrupt — `attemptAuth` just sleeps and reports success; the unlock
  // continues into the open-sequence below.
  const outcome = await attemptAuth();
- if (outcome === 'cancel') {
+ if (outcome === 'cancel' || outcome === 'error') {
  if (settled) return;
  inFlight = false;
- setScannerError(refs, 'CANCELLED — TAP TO RETRY');
- setTimeout(() => { if (!settled) setScannerIdle(refs); }, 1400);
- return;
- }
- if (outcome === 'error') {
- if (settled) return;
- inFlight = false;
- setScannerError(refs, 'TAP TO RETRY');
+ const text = outcome === 'cancel' ? 'CANCELLED — TAP TO RETRY' : 'TAP TO RETRY';
+ setScannerError(refs, text);
  setTimeout(() => { if (!settled) setScannerIdle(refs); }, 1400);
  return;
  }

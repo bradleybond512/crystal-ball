@@ -82,6 +82,7 @@ import { startCrisisTrajectory } from '@/services/intelligence/crisis-trajectory
 import { startActiveLearningQueue } from '@/services/intelligence/active-learning-queue';
 import { startOutcomeGradingCadence } from '@/services/algorithms/outcome-grading-runner';
 import { startTuningApplyCadence } from '@/services/algorithms/tuning-apply-runner';
+import { startNotificationRouter } from '@/services/notification-router';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
 import { startCorrelationFeedback } from '@/services/correlation-feedback';
@@ -588,6 +589,8 @@ export class PanelLayoutManager implements AppModule {
   private callbacks: PanelLayoutCallbacks;
   private panelDragCleanupHandlers: (() => void)[] = [];
   private criticalBannerEl: HTMLElement | null = null;
+  private dcStrip: DataCenterPinnedStrip | null = null;
+  private unsubDcPlaces: (() => void) | null = null;
   private readonly applyTimeRangeFilterDebounced: () => void;
   private readonly _onUpdateState = () => { this.renderSidebarUpdateBtn(); };
 
@@ -651,6 +654,9 @@ export class PanelLayoutManager implements AppModule {
  this.stalenessBanner.destroy();
  this.stalenessBanner = null;
  }
+ // Clean up datacenter strip + saved-places subscription
+ if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
+ if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
  // Clean up happy variant panels
  this.ctx.tvMode?.destroy();
  this.ctx.tvMode = null;
@@ -856,6 +862,7 @@ export class PanelLayoutManager implements AppModule {
  startActiveLearningQueue();
  startOutcomeGradingCadence();
  startTuningApplyCadence();
+ startNotificationRouter();
  startSilenceDetector();
  startSourceFeedback();
  startCorrelationFeedback();
@@ -1797,16 +1804,16 @@ export class PanelLayoutManager implements AppModule {
  // Data Center Readiness panel + pinned strip.
  // Resolve site on boot; re-resolve whenever saved places change.
  setDatacenterSite(resolveSiteConfig(getSavedPlaces()));
- subscribeSavedPlaces((places) => setDatacenterSite(resolveSiteConfig(places)));
+ this.unsubDcPlaces = subscribeSavedPlaces((places) => setDatacenterSite(resolveSiteConfig(places)));
  const datacenterPanel = new DataCenterReadinessPanel();
  this.ctx.panels['datacenter-readiness'] = datacenterPanel;
  // Mount the pinned strip above the panel grid so it floats outside
  // the scroll region. The callback scrolls to the full panel.
- const dcStrip = new DataCenterPinnedStrip(() => {
+ this.dcStrip = new DataCenterPinnedStrip(() => {
    datacenterPanel.getElement().scrollIntoView({ behavior: 'smooth', block: 'start' });
  });
  const panelsGridForStrip = document.getElementById('panelsGrid');
- panelsGridForStrip?.parentElement?.insertBefore(dcStrip.getElement(), panelsGridForStrip);
+ panelsGridForStrip?.parentElement?.insertBefore(this.dcStrip.getElement(), panelsGridForStrip);
 
  this.ctx.panels['climate-superpower'] = new ClimateSuperpowerPanel(); this.ctx.panels['intelligence-timeline'] = new IntelligenceTimelinePanel();
  // Wire saved-places into the insights state singleton so the new

@@ -273,4 +273,3 @@ Matches the pure-service convention (`npm run test:weather`, etc.). New
 - Multi-site fleet view (one configured site only).
 - A full comms/notification system (one escalation trigger only).
 - UI fine-tuning — visual polish deferred to a later pass.
-```

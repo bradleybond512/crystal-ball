@@ -14947,7 +14947,8 @@ body.has-critical-banner .panels-grid {
   left: 0;
   right: 0;
   z-index: 998;
-  padding: 6px 16px;
+  height: var(--staleness-banner-h);
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;

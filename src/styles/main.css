@@ -65,6 +65,18 @@
   /* Font stack */
   --font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', 'DejaVu Sans Mono', 'Liberation Mono', monospace;
   --font-body: var(--font-mono);
+
+  /* Overlay stacking scale — single source of truth for layering. */
+  --z-strip: 1040;
+  --z-strip-raised: 1050;
+  --z-shift-overlay: 1200;
+  --z-status-bar: 9000;
+  --z-toast: 9500;
+  --z-modal: 10000;
+  --z-modal-raised: 10001;
+  --z-modal-top: 10002;
+  --z-overlay-top: 10003;
+  --z-help: 10004;
 }
 
 [dir="rtl"] {
@@ -19284,7 +19296,7 @@ body.gods-vision-lock .replay-scrubber { display: none; }
   bottom: 44px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1050;
+  z-index: var(--z-strip-raised);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -19606,7 +19618,7 @@ tr.uai-expanded .uai-body { max-height: none; white-space: normal; overflow: vis
 
 /* ── Alert Replay Scrubber ─────────────────────────────────────── */
 .replay-scrubber {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 1040;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: var(--z-strip);
   display: flex; align-items: center; gap: 8px; padding: 8px 16px;
   background: rgba(26,26,46,0.95); border-top: 1px solid rgba(255,255,255,0.1);
 }

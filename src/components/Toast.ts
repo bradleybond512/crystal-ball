@@ -34,7 +34,7 @@ function getContainer(): HTMLElement {
       position: 'fixed',
       top: 'calc(env(safe-area-inset-top, 0px) + 52px)',
       right: '16px',
-      zIndex: '9999',
+      zIndex: '9500', // --z-toast
       display: 'flex',
       flexDirection: 'column',
       gap: '8px',

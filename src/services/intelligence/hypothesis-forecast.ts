@@ -34,9 +34,9 @@ export function forecastHypothesis(
 ): HypothesisForecast {
   const baseConfidence = hypothesis.confidence;
   const calibrationMultiplier = getBoostMultiplier();
-  const pciBoost = pci !== null && pci.index > 60 ? ((pci.index - 60) / 200) * calibrationMultiplier : 0;
-  const analogBoost = analogScore === null ? 0 : analogScore * 0.1 * calibrationMultiplier;
-  const probability = clamp((baseConfidence + pciBoost + analogBoost) * providerMultiplier, 0, 1);
+  const pciBoost = pci !== null && pci.index > 60 ? (pci.index - 60) / 200 : 0;
+  const analogBoost = analogScore === null ? 0 : analogScore * 0.1;
+  const probability = clamp((baseConfidence + pciBoost + analogBoost) * calibrationMultiplier * providerMultiplier, 0, 1);
 
   const diff = probability - baseConfidence;
   let trend: HypothesisForecast['trend'] = 'stable';

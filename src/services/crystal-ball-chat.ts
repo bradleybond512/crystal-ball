@@ -437,7 +437,12 @@ export async function* sendMessage(
     }
     yield fullResponse;
   } catch (claudeError) {
-    fullResponse = yield* handleClaudeFallback(text, claudeError, signal);
+    const raw = yield* handleClaudeFallback(text, claudeError, signal);
+    const { clean, actions } = parseActionCalls(raw);
+    fullResponse = clean;
+    if (!isGhostMode()) {
+      for (const action of actions) executeAction(action);
+    }
   }
 
   if (fullResponse) {

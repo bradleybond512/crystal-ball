@@ -17,6 +17,7 @@ import {
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { initCesium } from '@/config/cesium-init';
+import { isAppActive } from '@/services/app-activity';
 
 export interface CesiumGlobeOptions {
   container: HTMLElement;
@@ -29,6 +30,7 @@ export class CesiumGlobe {
   private resizeObserver: ResizeObserver | null = null;
   private renderHeartbeat: ReturnType<typeof setInterval> | null = null;
   private fallbackAdded = false;
+  private renderTickId: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly options: CesiumGlobeOptions) {
  this.container = options.container;
@@ -73,11 +75,13 @@ export class CesiumGlobe {
  // the globe while roughly halving the per-frame anti-aliasing cost.
  msaaSamples: 2,
  useBrowserRecommendedResolution: false,
- // On-demand rendering: only paint when the scene actually changes (camera
- // motion, imagery load, explicit requestRender) instead of a continuous
- // 60fps loop. Idle GPU/power drops dramatically. A low-frequency heartbeat
- // (see startRenderHeartbeat) covers data mutations that don't self-flag.
+ // On-demand rendering: only paint when the scene changes, not every
+ // frame. maximumRenderTimeChange: Infinity disables clock-driven
+ // re-renders; the throttled tick (startRenderTick) drives CallbackProperty
+ // pulses while a low-frequency heartbeat (startRenderHeartbeat) covers
+ // data mutations that don't self-flag a render.
  requestRenderMode: true,
+ maximumRenderTimeChange: Infinity,
  });
 
  const scene = this.viewer.scene;
@@ -268,9 +272,27 @@ export class CesiumGlobe {
  // log any polyline/point that sits above the ellipsoid. This catches
  // "floating cable" regressions at runtime instead of waiting for user reports.
  setTimeout(() => this.auditEntityHeights(), 10_000);
+
+ // ── On-demand render driver ──────────────────────────
+ // With requestRenderMode, Cesium only paints when something requests
+ // a render. Camera/scene changes auto-request, but the Date.now()-based
+ // CallbackProperty pulses (radnet/conflict/strike beacons) need a steady
+ // nudge. Tick at ~20fps while the app is active; when hidden/blurred we
+ // request nothing, so the globe stops painting entirely.
+ this.startRenderTick();
   }
 
-   
+  private startRenderTick(): void {
+ if (this.renderTickId !== null) return;
+ this.renderTickId = setInterval(() => {
+ if (!isAppActive()) return;
+ const viewer = this.viewer;
+ if (!viewer || viewer.isDestroyed()) return;
+ viewer.scene.requestRender();
+ }, 50);
+  }
+
+
   private auditEntityHeights(): void {
  const viewer = this.viewer;
  if (!viewer) return;
@@ -477,6 +499,7 @@ export class CesiumGlobe {
   private startRenderHeartbeat(): void {
  if (this.renderHeartbeat) return;
  this.renderHeartbeat = setInterval(() => {
+ if (!isAppActive()) return;
  const scene = this.viewer?.scene;
  if (scene && !this.viewer?.isDestroyed()) scene.requestRender();
  }, 1000);
@@ -486,6 +509,10 @@ export class CesiumGlobe {
  if (this.renderHeartbeat) {
  clearInterval(this.renderHeartbeat);
  this.renderHeartbeat = null;
+ }
+ if (this.renderTickId !== null) {
+ clearInterval(this.renderTickId);
+ this.renderTickId = null;
  }
  this.resizeObserver?.disconnect();
  this.resizeObserver = null;

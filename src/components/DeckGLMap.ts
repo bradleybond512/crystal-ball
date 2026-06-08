@@ -56,6 +56,7 @@ import { escapeHtml } from '@/utils/sanitize';
 import { tokenizeForMatch, matchKeyword, matchesAnyKeyword, findMatchingKeywords } from '@/utils/keyword-match';
 import { t } from '@/services/i18n';
 import { debounce, rafSchedule, getCurrentTheme } from '@/utils/index';
+import { isAppActive, onActivityChange } from '@/services/app-activity';
 import {
   INTEL_HOTSPOTS,
   CONFLICT_ZONES,
@@ -616,11 +617,18 @@ export class DeckGLMap {
   private moveTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private _themeChangedHandler: ((e: Event) => void) | null = null;
   private mapEventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
+  private _unsubActivity: (() => void) | null = null;
 
   constructor(container: HTMLElement, initialState: DeckMapState) {
  this.container = container;
  this.state = initialState;
  this.hotspots = [...INTEL_HOTSPOTS];
+
+ // Resume self-arming animation loops (alert pulses) when the window
+ // regains focus/visibility — they stop re-arming while inactive.
+ this._unsubActivity = onActivityChange((active) => {
+ if (active && this.alertPulses.length > 0) this.rafUpdateLayers();
+ });
 
  this.debouncedRebuildLayers = debounce(() => {
  if (this.renderPaused || this.webglLost || !this.maplibreMap) return;
@@ -1495,8 +1503,10 @@ export class DeckGLMap {
  },
  updateTriggers: { getRadius: t, getLineColor: t },
  }));
- // Throttled repaint — drives alert pulse at ~4fps instead of unbounded RAF loop
- if (!this.rafUpdateLayersPending) {
+ // Throttled repaint — drives alert pulse at ~4fps instead of unbounded RAF loop.
+ // Gated on render state + app activity so the self-arming loop stops when the
+ // map is paused or the window is hidden/blurred (resumed via onActivityChange).
+ if (!this.rafUpdateLayersPending && !this.renderPaused && isAppActive()) {
  setTimeout(() => this.rafUpdateLayers(), 250);
  }
  }
@@ -5943,6 +5953,11 @@ export class DeckGLMap {
  if (this._themeChangedHandler) {
  window.removeEventListener('theme-changed', this._themeChangedHandler);
  this._themeChangedHandler = null;
+ }
+
+ if (this._unsubActivity) {
+ this._unsubActivity();
+ this._unsubActivity = null;
  }
 
  // Remove all MapLibre event listeners to prevent leaks

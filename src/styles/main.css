@@ -20305,10 +20305,17 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
 }
 .ai-brief-modal-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.10); }
 
-/* Reserve space for the fixed bottom strips (cbs-strip / replay-scrubber)
-   so the last panel row is never hidden behind them on desktop chrome. */
-body.is-desktop-macos .main-content {
-  padding-bottom: 84px;
+/* Reserve scroll space for the fixed bottom strips (cbs-strip / replay-scrubber)
+   only while each is actually visible, so the last panel row can clear them
+   without leaving a permanent empty gap when both strips are hidden.
+   cbs-strip sits at bottom:44px (~68px tall → ~112px reach); the replay
+   scrubber sits at bottom:0 (~34px tall). The cbs rule's ID selector outranks
+   the scrubber's class selector, so it wins when both strips are visible. */
+body.is-desktop-macos:has(.replay-scrubber:not([hidden])) .main-content {
+  padding-bottom: 48px;
+}
+body.is-desktop-macos:has(#crystalBallSays:not([hidden])) .main-content {
+  padding-bottom: 116px;
 }
 
 /* Denser, scroll-contained sidebar nav so the footer controls stay visible. */

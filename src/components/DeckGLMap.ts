@@ -6222,9 +6222,11 @@ export class DeckGLMap {
  }, 0.6);
 
  // Satellite imagery (NOAA GOES geocolor)
+ // GoogleMapsCompatible_Level7 tiles only exist at zoom 0–7; pass maxzoom
+ // so MapLibre overzooms at z8+ instead of requesting out-of-bounds tiles.
  this.syncRasterTileLayer(map, 'wm-satellite', ml.weatherSatellite, () => {
  return [getGoesWmsTileUrl('geocolor')];
- }, 0.5);
+ }, 0.5, 7);
 
  // OWM tile layers (require API key)
  const owmLayers: [string, boolean, OwmTileLayer][] = [
@@ -6247,6 +6249,7 @@ export class DeckGLMap {
  enabled: boolean,
  getTiles: () => string[] | null,
  opacity: number,
+ maxzoom?: number,
   ): void {
  const layerId = `${id}-layer`;
  const sourceId = `${id}-src`;
@@ -6271,6 +6274,7 @@ export class DeckGLMap {
  type: 'raster',
  tiles,
  tileSize: 256,
+ ...(maxzoom !== undefined ? { maxzoom } : {}),
  });
  }
 

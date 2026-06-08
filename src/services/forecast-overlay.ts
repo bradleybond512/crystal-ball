@@ -182,6 +182,7 @@ export function buildForecastOverlay(): ForecastRegion[] {
   const situations = situationEngine.getActionableSituations();
   for (const sit of situations) {
  if (!sit.geo || sit.confidence < 0.3) continue;
+ if (sit.geo.label === 'Global') continue; // no meaningful map position
  const riskScore = Math.round(sit.confidence * 100);
  if (riskScore < 20) continue;
 

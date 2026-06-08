@@ -7,7 +7,9 @@ Real-time global intelligence platform. Desktop app and web dashboard that aggre
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)](tsconfig.json)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/bradleybond512/crystal-ball/releases/latest)
 
-<a href="https://github.com/bradleybond512/crystal-ball/releases/latest"><strong>Download Latest Release</strong></a> | <a href="https://bradleybond512.github.io/crystal-ball/"><strong>Try Web Version</strong></a>
+<a href="https://github.com/bradleybond512/crystal-ball/releases/latest"><strong>Download Latest Release</strong></a> | <a href="https://bradleybond512.github.io/crystal-ball/"><strong>Try Web Version</strong></a> | <a href="docs/USER_MANUAL.md"><strong>📖 Operator Manual</strong></a>
+
+> **New here?** The [Operator Manual](docs/USER_MANUAL.md) is the step-by-step, task-oriented guide to running every feature. This README is the feature catalog; the manual is the how-to.
 
 <!-- screenshot: full-app overview -- 2D map with active panels -->
 
@@ -404,6 +406,7 @@ API keys are optional -- most panels degrade gracefully without them. Configure 
 
 | Guide | Purpose |
 |-------|---------|
+| [docs/USER_MANUAL.md](docs/USER_MANUAL.md) | **Operator manual** — task-oriented, step-by-step how-to for every feature (start here) |
 | [docs/reasoning-layer.md](docs/reasoning-layer.md) | Analyst HUD service graph, event bus, IDB schema, MCP surface, invariants, keyboard shortcuts |
 | [docs/ALGORITHM_INTELLIGENCE_ENHANCEMENT_PLAN.md](docs/ALGORITHM_INTELLIGENCE_ENHANCEMENT_PLAN.md) | 7-PR algorithm intelligence layer plan — evidence graph, truth scoring, situation clustering, negative evidence, baseline deviation, compound risk, forecast calibration, watchlist relevance |
 | [docs/WEATHER_WARNING_REMEDIATION_PLAN.md](docs/WEATHER_WARNING_REMEDIATION_PLAN.md) | Storm-miss remediation — saved-place polygon matching, urgency ladder, Personal Storm Mode, weather miss diagnostics |

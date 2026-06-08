@@ -215,17 +215,33 @@ export function computeSituationConfidence(signals: SituationSignalSnapshot[]): 
 export function matchCausalChain(signals: SituationSignalSnapshot[]): CausalTemplate | null {
   const signalTypes = new Set(signals.map(s => s.type));
 
+  // Majority domain of the signal set — used to penalise cross-domain template matches.
+  const domainCounts: Partial<Record<SituationDomain, number>> = {};
+  for (const s of signals) {
+    const d = classifyDomain(s.type);
+    domainCounts[d] = (domainCounts[d] ?? 0) + 1;
+  }
+  let majorityDomain: SituationDomain = 'compound';
+  let maxCount = 0;
+  for (const [d, n] of Object.entries(domainCounts) as [SituationDomain, number][]) {
+    if (n > maxCount) { maxCount = n; majorityDomain = d; }
+  }
+
   let bestMatch: CausalTemplate | null = null;
   let bestScore = 0;
 
   for (const template of CAUSAL_TEMPLATES) {
- const chainTypes = template.links.map(l => l.triggerType);
- const matched = chainTypes.filter(t => signalTypes.has(t)).length;
- const coverage = matched / chainTypes.length;
- if (coverage > bestScore && coverage >= 0.4) {
- bestScore = coverage;
- bestMatch = template;
- }
+    const chainTypes = template.links.map(l => l.triggerType);
+    const matched = chainTypes.filter(t => signalTypes.has(t)).length;
+    let coverage = matched / chainTypes.length;
+    // Penalise templates whose domain conflicts with the signal majority
+    if (template.domain !== 'compound' && template.domain !== majorityDomain && majorityDomain !== 'compound') {
+      coverage *= 0.3;
+    }
+    if (coverage > bestScore && coverage >= 0.4) {
+      bestScore = coverage;
+      bestMatch = template;
+    }
   }
   return bestMatch;
 }

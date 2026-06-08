@@ -169,6 +169,18 @@ export class TriageBar {
       elements.push(escBadge);
     }
     elements.push(age);
+
+    // Dismiss button — acknowledges all alerts in the story
+    const dismissBtn = document.createElement('button');
+    dismissBtn.className = 'triage-dismiss-btn';
+    dismissBtn.textContent = '×';
+    dismissBtn.title = 'Dismiss';
+    dismissBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      unifiedAlertStore.acknowledgeMany(story.alerts.map(sa => sa.id));
+    });
+    elements.push(dismissBtn);
+
     el.append(...elements);
     el.addEventListener('click', () => {
       if (story.alerts.length > 1 && story.entityName) {

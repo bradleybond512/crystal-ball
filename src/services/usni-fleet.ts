@@ -58,7 +58,11 @@ export function fetchUSNIFleetReport(): Promise<USNIFleetReport | null> {
   }
 
   // Deduplicate concurrent callers (e.g. two data-loader code paths at startup)
-  if (inflight) return inflight;
+  if (inflight) {
+ // eslint-disable-next-line no-console
+ console.info('[USNIFleet] dedup — reusing inflight fetch');
+ return inflight;
+  }
 
   inflight = breaker.execute(async () => {
  const resp = await client.getUSNIFleetReport({ forceRefresh: false });
@@ -68,6 +72,8 @@ export function fetchUSNIFleetReport(): Promise<USNIFleetReport | null> {
  if (report) {
  lastReport = report;
  lastFetchTime = Date.now();
+ // eslint-disable-next-line no-console
+ console.info(`[USNIFleet] OK — ${report.vessels.length} vessels, ${report.strikeGroups.length} CSGs`);
  }
  return report;
   }).finally(() => {

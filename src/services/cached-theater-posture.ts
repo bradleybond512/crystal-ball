@@ -195,6 +195,9 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
 
   // Throttle retries after errors — prevents retry storms when the sidecar is down
   if (lastErrorAt && now - lastErrorAt < ERROR_BACKOFF_MS) {
+ const remainingSecs = Math.round((ERROR_BACKOFF_MS - (now - lastErrorAt)) / 1000);
+ // eslint-disable-next-line no-console
+ console.warn(`[CachedTheaterPosture] retry suppressed — backoff active (${remainingSecs}s remaining), returning ${cachedPosture ? 'stale cache' : 'null'}`);
  return cachedPosture;
   }
 
@@ -212,12 +215,16 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
  const data = toPostureData(resp);
  cachedPosture = data;
  lastFetchTime = Date.now();
+ lastErrorAt = 0; // Reset backoff on success
  saveToStorage(data);
+ // eslint-disable-next-line no-console
+ console.info(`[CachedTheaterPosture] OK — ${data.postures.length} theaters, ${data.totalFlights} active flights`);
  return cachedPosture;
  } catch (error) {
  if (error instanceof DOMException && error.name === 'AbortError') throw error;
+ const msg = error instanceof Error ? error.message : String(error);
  // eslint-disable-next-line no-console
- console.error('[CachedTheaterPosture] Fetch error:', error);
+ console.error(`[CachedTheaterPosture] Fetch error: ${msg}`);
  lastErrorAt = Date.now();
  return cachedPosture; // Return stale cache on error
  } finally {

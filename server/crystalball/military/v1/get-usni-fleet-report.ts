@@ -130,6 +130,12 @@ const REGION_COORDS: Record<string, { lat: number; lon: number }> = {
   'New Orleans': { lat: 29.95, lon: -90.07 },
   'Kingston, Jamaica': { lat: 17.99, lon: -76.79 },
   'Portsmouth, England': { lat: 50.80, lon: -1.09 },
+  'English Channel': { lat: 50.50, lon: -1.20 },
+  // Additional straits that appear in USNI articles
+  'Strait of Gibraltar': { lat: 35.97, lon: -5.45 },
+  'Denmark Strait': { lat: 66.00, lon: -24.00 },
+  'Norwegian Sea': { lat: 68.00, lon: 5.00 },
+  'North Sea': { lat: 56.00, lon: 3.00 },
 };
 
 function getRegionCoords(regionText: string): { lat: number; lon: number } | null {
@@ -147,6 +153,9 @@ function getRegionCoords(regionText: string): { lat: number; lon: number } | nul
   }
   return null;
 }
+
+// Suppress repeated unknown-region noise — warn once per region name per process lifetime
+const warnedUnknownRegions = new Set<string>();
 
 function parseLeadingInteger(text: string): number | undefined {
   const match = text.match(/\d{1,3}(?:,\d{3})*/);
@@ -245,7 +254,8 @@ function parseUSNIArticle(
  regionsSet.add(regionName);
 
  const coords = getRegionCoords(regionName);
- if (!coords) {
+ if (!coords && !warnedUnknownRegions.has(regionName)) {
+ warnedUnknownRegions.add(regionName);
  warnings.push(`Unknown region: "${regionName}"`);
  }
  const regionLat = coords?.lat ?? 0;

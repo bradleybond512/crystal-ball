@@ -205,7 +205,9 @@ Right-click-drag to look, scroll to change speed, `C` toggles cockpit view.
 
 - **Theater presets:** press `1`–`6` to fly to Middle East, Pacific, Europe, Arctic,
   Africa, or Americas.
-- **Camera bookmarks:** `Cmd+1`–`5` save/recall your own viewpoints.
+- **Camera bookmarks:** `Cmd+1`–`5` *save* the current viewpoint to a slot. Pressing the
+  unmodified `1`–`5` then *recalls* that saved bookmark; if a slot has no bookmark, the
+  key falls through to its theater preset.
 - **Waypoints:** `W` drops a waypoint; `Shift+W` starts a tour through them.
 - **Turn-by-turn navigation:** press `N`. A 4-tier routing engine
   (OSRM → GraphHopper → Valhalla → straight-line) draws a route with an ETA in the Nav HUD.
@@ -269,7 +271,6 @@ highest-relevance items rise to the top. Inbox shortcuts:
 | `J` / `K` | Move down / up |
 | `A` | Acknowledge |
 | `P` | Pin |
-| `1`–`5` | Filter by severity |
 
 You can also snooze, annotate, and bookmark. A snooze **re-escalates** if the situation
 worsens, so muting something low isn't a silent drop.
@@ -298,7 +299,7 @@ The **Alert Trace** view walks an alert through the full delivery pipeline so yo
 exactly where it was promoted or dropped:
 
 ```
-receipt → normalization → geofence → quiet-hours → relevance → notification routing
+source-receipt → normalization → relevance-scoring → quiet-hours → threshold-check → delivery
 ```
 
 For weather specifically, the diagnostics engine traces 7 stages
@@ -419,15 +420,15 @@ API Keys · Thresholds · Places · Status · Help** (plus a Debug tab).
   proxied over a bearer-authenticated localhost port. The first launch after a rebuild may
   re-prompt for Keychain access; grant **Always Allow** or feeds that need keys stay dark.
 - **Web:** there is no keychain, so keys go into a passphrase-encrypted IndexedDB vault
-  (AES-GCM-256 over PBKDF2-SHA-256, 600k iterations). The vault **auto-locks after 15
-  minutes** of the tab being hidden; unlock it again with your passphrase. **There is no
-  recovery** — a lost passphrase means Destroy and re-enter.
+  (AES-GCM-256 over PBKDF2-SHA-256, 600k iterations). If the tab has been hidden for 15+
+  minutes, the vault **locks itself when you return to it** — unlock again with your
+  passphrase. **There is no recovery** — a lost passphrase means Destroy and re-enter.
 
 ### Add a key
 
 1. Settings → **API Keys**.
-2. Paste the key next to the provider. Names are generic (`ANTHROPIC_API_KEY`,
-   `GROQ_API_KEY`, …) — none embed a brand.
+2. Paste the key next to the provider. Keys use the standard provider env-var names
+   (`ANTHROPIC_API_KEY`, `GROQ_API_KEY`, …).
 3. For supported providers (Anthropic, Groq, OpenRouter, Cesium Ion, Mapbox, MapTiler),
    the app runs a live verification probe and shows the result; others show "Saved."
 
@@ -455,8 +456,9 @@ feed and the in-app reasoning state. 41 tools register automatically when you op
 Claude Code session in this repo.
 
 **Prerequisites:** Crystal Ball (desktop) must be running — the MCP server discovers the
-sidecar's port and bearer token from `0o600` files on disk. Sentinel history and
-watchlists live in `~/.crystal-ball/`. (The web build has no sidecar, so no MCP.)
+sidecar's port and bearer token from local files on disk (the token file is written
+mode `0o600`). Sentinel history and watchlists live in `~/.crystal-ball/`. (The web build
+has no sidecar, so no MCP.)
 
 ### Discover what's available
 
@@ -510,7 +512,7 @@ Built on top of the MCP tools:
 | `Cmd+Shift+H` | Export current briefing to clipboard |
 | `Cmd+Shift+S` | Toggle Status overlay |
 | `Cmd+Shift+T` | Toggle Today view |
-| `Cmd+Shift+W` | Toggle Watchlist editor |
+| `Cmd+Shift+W` | Toggle Watchlist editor (desktop only — browsers reserve this chord) |
 | `Cmd+S` | Copy shareable URL |
 | `Cmd+,` | Settings (or Analyst HUD settings if the HUD is open) |
 | `` Cmd+\ `` | Toggle sidebar |
@@ -523,7 +525,6 @@ Built on top of the MCP tools:
 | `J` / `K` | Navigate down / up |
 | `A` | Acknowledge |
 | `P` | Pin |
-| `1`–`5` | Filter by severity |
 
 ### God's Vision
 
@@ -534,8 +535,8 @@ Built on top of the MCP tools:
 | `Space` | Play/pause Time Machine |
 | `C` | Toggle cockpit view (in Fly Mode) |
 | `L` | Toggle day/night terminator |
-| `1`–`6` | Fly to theater presets |
-| `Cmd+1`–`5` | Save/recall camera bookmarks |
+| `1`–`6` | Fly to theater preset (slots `1`–`5` recall a saved bookmark if one exists) |
+| `Cmd+1`–`5` | Save camera bookmark to a slot |
 | `W` / `Shift+W` | Drop waypoint / start tour |
 
 ### Analyst HUD

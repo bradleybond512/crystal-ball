@@ -61,7 +61,7 @@ export class Toast {
     const severity = options.severity ?? 'normal';
     this.duration = severity === 'critical' ? DURATION_CRITICAL : DURATION_NORMAL;
     this.remaining = this.duration;
-    this.key = `${options.title} ${options.message ?? ''}`;
+    this.key = `${options.title}\u0000${options.message ?? ''}`;
 
     this.el = this.build(severity);
     this.progress = this.el.querySelector('.cb-toast-progress') as HTMLElement;
@@ -257,8 +257,15 @@ export class Toast {
    *  so the still-relevant toast stays on screen instead of expiring. */
   refresh(): void {
     if (this.dismissed) return;
-    if (this.timerId !== null) clearTimeout(this.timerId);
     this.remaining = this.duration;
+    // Paused under hover (timerId cleared by pause()): refill the budget but stay
+    // frozen — resume() will restart the countdown with the fresh duration.
+    if (this.timerId === null) {
+      this.progress.style.transition = 'none';
+      this.progress.style.transform = 'scaleX(1)';
+      return;
+    }
+    clearTimeout(this.timerId);
     this.progress.style.transition = 'none';
     this.progress.style.transform = 'scaleX(1)';
     requestAnimationFrame(() => {

@@ -192,7 +192,7 @@ src/                        # TypeScript frontend (Vite)
   config/
     panels.ts               # FULL_PANELS, PANEL_CATEGORY_MAP, FULL_MAP_LAYERS
   services/
-    mode-manager.ts         # AppMode: peace/finance/war/disaster/ghost
+    mode-manager.ts         # AppMode: ghost | gods-vision (manual only; null = default)
     runtime-config.ts       # API key definitions, feature toggles, web verifySecret probes
     settings-constants.ts   # HUMAN_LABELS, KEY_DESCRIPTIONS, SIGNUP_URLS, SETTINGS_CATEGORIES
     web-secret-store.ts     # browser-only passphrase-encrypted vault (see "Web key vault" below)
@@ -329,15 +329,21 @@ Four basemaps (`dark | light | satellite | terrain`) selected by the `wm-basemap
 
 ## App Modes (`src/services/mode-manager.ts`)
 
+Mode is **manual only**. `AppMode` is `'ghost' | 'gods-vision'`; `null` is the
+default (no special mode) state. The former auto-triggered modes
+(peace/finance/war/disaster) have been removed — their behaviors are inlined
+into the default state. The old evaluators (`evaluateWarThreat`,
+`evaluateFinanceTrigger`, `evaluateDisasterTrigger`, etc.) remain as **no-ops**
+for call-site compatibility; data feeds still flow but no longer drive mode
+transitions.
+
 | Mode | Trigger |
 |------|---------|
-| Peace | default |
-| Finance | S&P500 ≥2.5% OR BTC ≥5% OR Oil ≥4% OR Gold ≥2% |
-| War | ≥2 war signals > confidence 0.6 (normalized by conflict baselines) |
-| Disaster | GDACS Red OR 3+ Orange OR M≥6.5 quake |
+| default (`null`) | no special mode |
 | Ghost | Manual only — ⌘⇧G / sidebar / File menu |
+| God's Vision | Manual — the God's Eye 3D globe view |
 
-Ghost Mode: polling ×5, analytics suppressed, notifications suppressed, dark crimson sidebar.
+Ghost Mode: polling ×5 (`getGhostRefreshMultiplier()`), analytics suppressed, notifications suppressed, dark crimson sidebar.
 
 ## CSP Posture
 
@@ -358,7 +364,7 @@ Ghost Mode: polling ×5, analytics suppressed, notifications suppressed, dark cr
 
 ## Settings / API Keys
 
-API keys entered via gear icon → API Keys tab. None embed the brand in their names; all 48 supported keys are generic API names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc).
+API keys entered via gear icon → API Keys tab. None embed the brand in their names; all 73 supported keys are generic API names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc). The authoritative list is `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`.
 
 ## Secret Scan Guardrail
 

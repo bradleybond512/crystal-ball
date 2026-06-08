@@ -171,7 +171,7 @@ Crystal Ball should notify or visibly warn when it becomes blind in a critical d
 Examples:
 
 - Weather feed failing while severe weather risk is active
-- ADS-B unavailable in war/disaster mode
+- ADS-B unavailable while tracking aircraft of interest
 - Provider keys missing for enabled panels
 - Sidecar heartbeat stale
 - Notification permission missing

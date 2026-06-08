@@ -8,7 +8,7 @@
  */
 
 import { getApiBaseUrl } from './runtime';
-import { getMode } from './mode-manager';
+import { getMode, isGhostMode } from './mode-manager';
 import { situationEngine } from './situation-engine';
 import { unifiedAlertStore } from './unified-alerts';
 import type { UnifiedAlert } from './unified-alerts';
@@ -20,6 +20,10 @@ import { buildAnalystContext } from './analyst-context-builder';
 import { getLatestPCI } from './intelligence/predictive-crisis-index';
 import { getAnalystSnapshot } from './analyst-loop';
 import { getForecastSnapshot } from './mode-forecast';
+import { markDismissed } from './analyst-command-listener';
+import { thumbsUp } from './hypothesis-feedback';
+import { getWatchlist, saveWatchlist } from './watchlist';
+import type { WatchlistEntry } from './watchlist';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -145,19 +149,157 @@ function buildSystemContext(): string {
   return parts.join('\n\n');
 }
 
+// ── Action tools ─────────────────────────────────────────────────────────────
+
+interface ActionToolDef {
+  name: string;
+  description: string;
+  input_schema: {
+    type: 'object';
+    properties: Record<string, { type: string; description: string }>;
+    required: string[];
+  };
+}
+
+const ACTION_TOOLS: ActionToolDef[] = [
+  {
+    name: 'dismiss_hypothesis',
+    description: 'Dismiss a hypothesis that is no longer relevant or has been resolved.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        hypothesis_id: { type: 'string', description: 'The ID of the hypothesis to dismiss' },
+      },
+      required: ['hypothesis_id'],
+    },
+  },
+  {
+    name: 'run_skeptic',
+    description: 'Trigger a skeptic review pass for a hypothesis to challenge its assumptions.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        hypothesis_id: { type: 'string', description: 'The ID of the hypothesis to review' },
+      },
+      required: ['hypothesis_id'],
+    },
+  },
+  {
+    name: 'confirm_hypothesis',
+    description: 'Mark a hypothesis as confirmed by the analyst (thumbs up).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        hypothesis_id: { type: 'string', description: 'The ID of the hypothesis to confirm' },
+      },
+      required: ['hypothesis_id'],
+    },
+  },
+  {
+    name: 'add_to_watchlist',
+    description: 'Add a term or entity to the Crystal Ball watchlist so it gets boosted relevance.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        term: { type: 'string', description: 'The keyword or entity name to watch' },
+      },
+      required: ['term'],
+    },
+  },
+];
+
+interface ActionCall {
+  tool: string;
+  input: Record<string, string>;
+}
+
+function buildToolsAddendum(): string {
+  return [
+    '',
+    'You have access to the following action tools. When appropriate, append one or more',
+    '[ACTION:{"tool":"<name>","input":{...}}] blocks at the very end of your response',
+    '(after all prose). Each block must be valid JSON on a single line. Only use them when',
+    'the user explicitly asks to dismiss, confirm, run skeptic on, or watch something.',
+    '',
+    'Available tools:',
+    JSON.stringify(ACTION_TOOLS, null, 0),
+  ].join('\n');
+}
+
+function parseActionCalls(text: string): { clean: string; actions: ActionCall[] } {
+  const actions: ActionCall[] = [];
+  const clean = text.replace(/\[ACTION:(\{[^[\]]*\})\]/g, (_match, json: string) => {
+    try {
+      const parsed = JSON.parse(json) as { tool?: string; input?: Record<string, string> };
+      if (parsed.tool && parsed.input) {
+        actions.push({ tool: parsed.tool, input: parsed.input });
+      }
+    } catch { /* malformed — skip */ }
+    return '';
+  }).trim();
+  return { clean, actions };
+}
+
+function executeAction(action: ActionCall): void {
+  const snapshot = getAnalystSnapshot();
+  switch (action.tool) {
+    case 'dismiss_hypothesis': {
+      const id = action.input['hypothesis_id'];
+      const h = snapshot?.hypotheses.find(x => x.id === id);
+      if (h) markDismissed(h);
+      break;
+    }
+    case 'run_skeptic': {
+      const id = action.input['hypothesis_id'];
+      const h = snapshot?.hypotheses.find(x => x.id === id);
+      if (h) {
+        document.dispatchEvent(new CustomEvent('cb:hypothesis-skeptic-requested', { detail: h }));
+      }
+      break;
+    }
+    case 'confirm_hypothesis': {
+      const id = action.input['hypothesis_id'];
+      const h = snapshot?.hypotheses.find(x => x.id === id);
+      if (h) thumbsUp(h);
+      break;
+    }
+    case 'add_to_watchlist': {
+      const term = (action.input['term'] ?? '').trim();
+      if (!term) break;
+      const list = getWatchlist();
+      const alreadyExists = list.some(e => e.keywords.some(k => k.toLowerCase() === term.toLowerCase()));
+      if (!alreadyExists) {
+        const entry: WatchlistEntry = {
+          id: `chat-${Date.now()}`,
+          label: term,
+          keywords: [term.toLowerCase()],
+        };
+        saveWatchlist([...list, entry]);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
 function buildFullPrompt(userMessage: string): string {
   const context = buildSystemContext();
+  const toolsAddendum = isGhostMode() ? '' : buildToolsAddendum();
 
-  const systemPreamble = [
- 'You are the Crystal Ball AI assistant — a senior intelligence analyst embedded in a real-time global situational awareness dashboard.',
- 'You have access to the following live context from the dashboard:',
- '',
- context,
- '',
- 'Answer the user\'s question based on this context. Be concise, factual, and actionable.',
- 'If the context doesn\'t contain enough information, say so honestly.',
- 'Use plain text — no markdown headers or bullet formatting beyond simple dashes.',
-  ].join('\n');
+  const preambleParts = [
+    'You are the Crystal Ball AI assistant — a senior intelligence analyst embedded in a real-time global situational awareness dashboard.',
+    'You have access to the following live context from the dashboard:',
+    '',
+    context,
+    '',
+    'Answer the user\'s question based on this context. Be concise, factual, and actionable.',
+    'If the context doesn\'t contain enough information, say so honestly.',
+    'Use plain text — no markdown headers or bullet formatting beyond simple dashes.',
+  ];
+  if (toolsAddendum) preambleParts.push(toolsAddendum);
+
+  const systemPreamble = preambleParts.join('\n');
 
   // Include recent conversation for continuity (last 6 messages)
   const recentHistory = history.slice(-6);
@@ -284,17 +426,23 @@ export async function* sendMessage(
   let fullResponse = '';
 
   try {
- const prompt = buildFullPrompt(text);
- const agentResult = await runIntel(prompt, { signal, maxTokens: 600 });
- fullResponse = agentResult.response;
- yield fullResponse;
+    const prompt = buildFullPrompt(text);
+    const agentResult = await runIntel(prompt, { signal, maxTokens: 700 });
+    if (!isGhostMode()) {
+      const { clean, actions } = parseActionCalls(agentResult.response);
+      fullResponse = clean;
+      for (const action of actions) executeAction(action);
+    } else {
+      fullResponse = agentResult.response;
+    }
+    yield fullResponse;
   } catch (claudeError) {
- fullResponse = yield* handleClaudeFallback(text, claudeError, signal);
+    fullResponse = yield* handleClaudeFallback(text, claudeError, signal);
   }
 
   if (fullResponse) {
- addToHistory('assistant', fullResponse);
- saveHistory();
+    addToHistory('assistant', fullResponse);
+    saveHistory();
   }
 }
 

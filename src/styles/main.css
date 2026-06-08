@@ -19477,6 +19477,87 @@ tr[data-alert-id] { cursor: pointer; }
 tr[data-alert-id]:hover { background: rgba(255,255,255,0.04); }
 tr.uai-expanded .uai-body { max-height: none; white-space: normal; overflow: visible; }
 
+/* ── Unified Alert Inbox: toolbar + row layout ──────────────────────── */
+.uai-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.uai-toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+.uai-toolbar-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  margin-right: 2px;
+}
+.uai-toolbar-btn {
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 2px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.uai-toolbar-btn:hover { background: var(--surface-hover); color: var(--text); }
+.uai-toolbar-btn.uai-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+.uai-clear-btn { color: var(--text-dim); }
+
+/* Row title/body: one line each, truncated, body dimmed as a subtitle */
+.uai-title-cell { min-width: 0; max-width: 0; width: 100%; }
+.uai-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uai-body {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uai-related-badge {
+  margin-left: 6px;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: rgba(120, 130, 255, 0.18);
+  color: #9aa6ff;
+  white-space: nowrap;
+}
+.uai-why-btn {
+  margin-left: 6px;
+  font-size: 9px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+/* Expanded row may show full body */
+.uai-expanded .uai-body { white-space: normal; overflow: visible; }
+
 /* ── Related badge in Inbox ─────────────────────────────────────── */
 .uai-related-badge {
   display: inline-block;

@@ -26,9 +26,9 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 14px;
+  padding: 0 14px;
   cursor: pointer;
-  min-height: 28px;
+  height: var(--eew-bar-h, 32px); /* locks bar to the CSS token so fixed-position children stay in sync */
 }
 
 /* macOS desktop: the bar is pinned to top:0, so its label would render under

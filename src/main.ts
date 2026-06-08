@@ -258,10 +258,11 @@ initMetaTags();
 // Offline staleness monitor + banner — mount early so cached-data warnings
 // are visible the moment the app boots (before any data loads complete).
 import('./services/offline-staleness').then(({ startOfflineMonitor }) => { startOfflineMonitor(); }).catch((error: unknown) => console.warn('[boot] offline-staleness failed to mount', error));
-import('./components/OfflineStalenessBanner').then(({ offlineStalenessBanner }) => {
-  // Mount into the notification stack if it's already in the DOM, else body.
-  const stack = document.getElementById('cb-notification-stack');
-  offlineStalenessBanner.mount(stack ?? document.body);
+Promise.all([
+  import('./components/OfflineStalenessBanner'),
+  import('./components/NotificationStack'),
+]).then(([{ offlineStalenessBanner }, { notificationStack }]) => {
+  offlineStalenessBanner.mount(notificationStack.element);
 }).catch((error: unknown) => console.warn('[boot] OfflineStalenessBanner failed to mount', error));
 import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { attachDiagnosticToWindow(); }).catch((error: unknown) => console.warn('[boot] api-diagnostic failed to mount', error));
 

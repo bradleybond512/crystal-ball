@@ -473,6 +473,14 @@ const CONFLICT_ZONES_GEOJSON: GeoJSON.FeatureCollection = {
   })),
 };
 
+/** deck.gl TextLayer renders blurry bitmap-atlas glyphs unless SDF is enabled.
+ *  These props give crisp, outlined text at any zoom / DPR. */
+const CRISP_LABEL_TEXT = {
+  fontSettings: { sdf: true, radius: 12, cutoff: 0.25 },
+  outlineWidth: 2,
+  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
+};
+
 export class DeckGLMap {
   private static readonly MAX_CLUSTER_LEAVES = 200;
 
@@ -5991,6 +5999,8 @@ export class DeckGLMap {
  getBackgroundColor: isLight ? [255, 255, 255, 140] : [20, 20, 30, 160],
  backgroundPadding: [4, 2, 4, 2],
  pickable: false,
+ ...CRISP_LABEL_TEXT,
+ outlineColor: (isLight ? [255, 255, 255, 220] : [0, 0, 0, 200]) as [number, number, number, number],
  });
 
  return [fill, labels];

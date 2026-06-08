@@ -74,6 +74,20 @@
 }
 .triage-title { font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .triage-age { font-size: 10px; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.triage-dismiss-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.triage-bar-item:hover .triage-dismiss-btn { opacity: 0.5; }
+.triage-dismiss-btn:hover { opacity: 1 !important; }
 
 .triage-bar-ack {
   background: rgba(255, 255, 255, 0.08);

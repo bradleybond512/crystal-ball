@@ -16,7 +16,7 @@ const STYLE_CSS = `
 }
 .cb-offline-staleness-banner {
   position: fixed;
-  top: var(--eew-bar-h, 32px);
+  top: var(--below-eew, 32px);
   left: 0;
   right: 0;
   z-index: 100000;

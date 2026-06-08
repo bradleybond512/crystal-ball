@@ -1457,8 +1457,13 @@ export class DataLoaderManager implements AppModule {
  _siteUgcZoneCache.set(zoneKey, zones);
  }
  if (zones.length > 0) {
- site = { ...site, ugcZones: zones };
- setDatacenterSite(site);
+ // Re-read current site after async gap — only write back if it's still
+ // the same site (prevents stale-site race if saved places changed).
+ const current = getDatacenterSite();
+ if (current && current.lat === site.lat && current.lon === site.lon) {
+ setDatacenterSite({ ...current, ugcZones: zones });
+ }
+ site = getDatacenterSite() ?? site;
  }
  }
  const grid = await fetchGridStatus().catch(() => null);

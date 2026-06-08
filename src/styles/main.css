@@ -66,6 +66,13 @@
   --font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', 'DejaVu Sans Mono', 'Liberation Mono', monospace;
   --font-body: var(--font-mono);
 
+  /* Header height tokens — single source of truth for the top-bar stack. */
+  --eew-bar-h: 40px;
+  --staleness-banner-h: 32px;
+  /* Derived: where things sit when both bars are visible */
+  --below-eew: var(--eew-bar-h);
+  --below-banners: calc(var(--eew-bar-h) + var(--staleness-banner-h));
+
   /* Overlay stacking scale — single source of truth for layering. */
   --z-strip: 1040;
   --z-strip-raised: 1050;
@@ -14843,7 +14850,7 @@ a.prediction-link:hover {
 
 .critical-posture-banner {
   position: fixed;
-  top: 50px;
+  top: var(--below-eew);
   left: 0;
   right: 0;
   z-index: 999;
@@ -14942,7 +14949,7 @@ body.has-critical-banner .panels-grid {
 
 .staleness-banner {
   position: fixed;
-  top: 50px;
+  top: var(--below-eew);
   left: 0;
   right: 0;
   z-index: 998;
@@ -15087,18 +15094,18 @@ body.has-critical-banner .panels-grid {
 }
 
 body.has-staleness-banner .panels-grid {
-  padding-top: 50px;
+  padding-top: var(--below-banners);
 }
 
 body.has-staleness-banner.has-critical-banner .panels-grid {
-  padding-top: 100px;
+  padding-top: calc(var(--below-banners) + var(--staleness-banner-h));
 }
 
 /* ============ Breaking News Alert Banner ============ */
 
 .breaking-news-container {
   position: fixed;
-  top: 50px;
+  top: var(--below-eew);
   left: 0;
   right: 0;
   z-index: 1001;
@@ -18966,7 +18973,7 @@ body.has-breaking-alert .panels-grid {
 /* ─── Entity heat rail ─── */
 .entity-heat-rail {
   position: fixed;
-  top: 88px;
+  top: calc(var(--below-eew) + 6px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -19012,6 +19019,9 @@ body.has-breaking-alert .panels-grid {
 .ehr-anomaly { background: rgba(255, 140, 40, 0.15); border-color: rgba(255, 140, 40, 0.4); }
 .ehr-anomaly .ehr-dot { background: #ff8c28; }
 .ehr-anomaly-burst { animation: pulse-orange 1.5s infinite; }
+body.has-staleness-banner .entity-heat-rail {
+  top: calc(var(--below-banners) + 6px);
+}
 @keyframes pulse-orange {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 140, 40, 0.6); }
   50% { box-shadow: 0 0 0 4px rgba(255, 140, 40, 0); }

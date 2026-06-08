@@ -20304,4 +20304,10 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
   cursor: pointer;
 }
 .ai-brief-modal-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.10); }
+
+/* Reserve space for the fixed bottom strips (cbs-strip / replay-scrubber)
+   so the last panel row is never hidden behind them on desktop chrome. */
+body.is-desktop-macos .main-content {
+  padding-bottom: 84px;
+}
 .ai-brief-modal-btn:disabled { opacity: 0.4; cursor: default; }

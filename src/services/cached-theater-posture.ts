@@ -122,7 +122,9 @@ const LS_MAX_AGE_MS = 30 * 60 * 1000; // 30 min max staleness for localStorage
 let cachedPosture: CachedTheaterPosture | null = null;
 let fetchPromise: Promise<CachedTheaterPosture | null> | null = null;
 let lastFetchTime = 0;
+let lastErrorAt = 0;
 const REFETCH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes - reduce upstream API pressure
+const ERROR_BACKOFF_MS = 60 * 1000; // 60 seconds between failure retries
 
 function createAbortError(): DOMException {
   return new DOMException('The operation was aborted.', 'AbortError');
@@ -191,6 +193,11 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
  return cachedPosture;
   }
 
+  // Throttle retries after errors — prevents retry storms when the sidecar is down
+  if (lastErrorAt && now - lastErrorAt < ERROR_BACKOFF_MS) {
+ return cachedPosture;
+  }
+
   // Deduplicate concurrent fetches
   if (fetchPromise) {
  return withCallerAbort(fetchPromise, signal);
@@ -211,6 +218,7 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
  if (error instanceof DOMException && error.name === 'AbortError') throw error;
  // eslint-disable-next-line no-console
  console.error('[CachedTheaterPosture] Fetch error:', error);
+ lastErrorAt = Date.now();
  return cachedPosture; // Return stale cache on error
  } finally {
  fetchPromise = null;

@@ -17,6 +17,7 @@ const breaker = createCircuitBreaker<USNIFleetReport | null>({
 
 let lastReport: USNIFleetReport | null = null;
 let lastFetchTime = 0;
+let inflight: Promise<USNIFleetReport | null> | null = null;
 const LOCAL_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 function mapProtoToReport(resp: GetUSNIFleetReportResponse): USNIFleetReport | null {
@@ -51,23 +52,29 @@ function mapProtoToReport(resp: GetUSNIFleetReportResponse): USNIFleetReport | n
   };
 }
 
-export async function fetchUSNIFleetReport(): Promise<USNIFleetReport | null> {
+export function fetchUSNIFleetReport(): Promise<USNIFleetReport | null> {
   if (lastReport && Date.now() - lastFetchTime < LOCAL_CACHE_TTL) {
- return lastReport;
+ return Promise.resolve(lastReport);
   }
 
-  const report = await breaker.execute(async () => {
+  // Deduplicate concurrent callers (e.g. two data-loader code paths at startup)
+  if (inflight) return inflight;
+
+  inflight = breaker.execute(async () => {
  const resp = await client.getUSNIFleetReport({ forceRefresh: false });
  if (resp.error && !resp.report) return null;
  return mapProtoToReport(resp);
-  }, null);
-
-  if (report) {
+  }, null).then((report) => {
+ if (report) {
  lastReport = report;
  lastFetchTime = Date.now();
-  }
+ }
+ return report;
+  }).finally(() => {
+ inflight = null;
+  });
 
-  return report;
+  return inflight;
 }
 
 function normalizeHull(hull: string | undefined): string {
@@ -79,7 +86,7 @@ function scatterOffset(hullNumber: string, index: number): { lat: number; lon: n
   let hash = 0;
   const str = hullNumber || String(index);
   for (let i = 0; i < str.length; i++) {
- hash = ((hash << 5) - hash) + str.charCodeAt(i);
+ hash = ((hash << 5) - hash) + (str.codePointAt(i) ?? 0);
  hash = Math.trunc(hash);
   }
   const angle = (hash % 360) * (Math.PI / 180);
@@ -87,71 +94,55 @@ function scatterOffset(hullNumber: string, index: number): { lat: number; lon: n
   return { lat: Math.sin(angle) * dist, lon: Math.cos(angle) * dist };
 }
 
-export function mergeUSNIWithAIS(
-  aisVessels: MilitaryVessel[],
-  usniReport: USNIFleetReport,
-  aisClusters: MilitaryVesselCluster[] = [],
-): { vessels: MilitaryVessel[]; clusters: MilitaryVesselCluster[] } {
-  // Keep merge pure so USNI enrichment does not mutate tracked AIS vessel objects.
-  const merged: MilitaryVessel[] = aisVessels.map((vessel) => ({ ...vessel }));
-  const matchedHulls = new Set<string>();
+function applyUsniEnrichment(vessel: MilitaryVessel, usniVessel: USNIVesselEntry, matchedHulls: Set<string>): void {
+  vessel.usniRegion = usniVessel.region;
+  vessel.usniDeploymentStatus = usniVessel.deploymentStatus;
+  vessel.usniStrikeGroup = usniVessel.strikeGroup;
+  vessel.usniActivityDescription = usniVessel.activityDescription;
+  vessel.usniArticleUrl = usniVessel.usniArticleUrl;
+  vessel.usniArticleDate = usniVessel.usniArticleDate;
+  matchedHulls.add(normalizeHull(usniVessel.hullNumber));
+}
 
-  // Pass 1: Enrich AIS vessels with USNI data
+function enrichByHull(merged: MilitaryVessel[], usniReport: USNIFleetReport, matchedHulls: Set<string>): void {
   for (const vessel of merged) {
  if (!vessel.hullNumber) continue;
  const aisHull = normalizeHull(vessel.hullNumber);
-
  for (const usniVessel of usniReport.vessels) {
  if (normalizeHull(usniVessel.hullNumber) === aisHull) {
- vessel.usniRegion = usniVessel.region;
- vessel.usniDeploymentStatus = usniVessel.deploymentStatus;
- vessel.usniStrikeGroup = usniVessel.strikeGroup;
- vessel.usniActivityDescription = usniVessel.activityDescription;
- vessel.usniArticleUrl = usniVessel.usniArticleUrl;
- vessel.usniArticleDate = usniVessel.usniArticleDate;
- matchedHulls.add(normalizeHull(usniVessel.hullNumber));
+ applyUsniEnrichment(vessel, usniVessel, matchedHulls);
  break;
  }
  }
   }
+}
 
-  // Also try name matching for vessels without hull numbers
+function enrichByName(merged: MilitaryVessel[], usniReport: USNIFleetReport, matchedHulls: Set<string>): void {
   for (const vessel of merged) {
- if (vessel.usniRegion) continue; // Already matched
+ if (vessel.usniRegion) continue;
  const aisName = vessel.name.replace(/^USS\s+/i, '').toUpperCase().trim();
  if (!aisName) continue;
-
  for (const usniVessel of usniReport.vessels) {
  if (matchedHulls.has(normalizeHull(usniVessel.hullNumber))) continue;
  const usniName = usniVessel.name.replace(/^USS\s+/i, '').replace(/^USNS\s+/i, '').toUpperCase().trim();
  if (aisName === usniName || aisName.includes(usniName) || usniName.includes(aisName)) {
- vessel.usniRegion = usniVessel.region;
- vessel.usniDeploymentStatus = usniVessel.deploymentStatus;
- vessel.usniStrikeGroup = usniVessel.strikeGroup;
- vessel.usniActivityDescription = usniVessel.activityDescription;
- vessel.usniArticleUrl = usniVessel.usniArticleUrl;
- vessel.usniArticleDate = usniVessel.usniArticleDate;
- matchedHulls.add(normalizeHull(usniVessel.hullNumber));
+ applyUsniEnrichment(vessel, usniVessel, matchedHulls);
  break;
  }
  }
   }
+}
 
-  // Pass 2: Create synthetic vessels for unmatched USNI entries
-  let syntheticIndex = 0;
-  for (const usniVessel of usniReport.vessels) {
- if (matchedHulls.has(normalizeHull(usniVessel.hullNumber))) continue;
-
- const coords = getUSNIRegionCoords(usniVessel.region);
- const hasParsedCoords = Number.isFinite(usniVessel.regionLat)
+function buildSyntheticVessel(usniVessel: USNIVesselEntry, syntheticIndex: number): MilitaryVessel {
+  const coords = getUSNIRegionCoords(usniVessel.region);
+  const hasParsedCoords = Number.isFinite(usniVessel.regionLat)
  && Number.isFinite(usniVessel.regionLon)
  && !(usniVessel.regionLat === 0 && usniVessel.regionLon === 0);
- const fallbackCoords = getUSNIRegionApproxCoords(usniVessel.region);
- const baseLat = coords?.lat ?? (hasParsedCoords ? usniVessel.regionLat : fallbackCoords.lat);
- const baseLon = coords?.lon ?? (hasParsedCoords ? usniVessel.regionLon : fallbackCoords.lon);
- const offset = scatterOffset(usniVessel.hullNumber, syntheticIndex++);
-
- merged.push({
+  const fallbackCoords = getUSNIRegionApproxCoords(usniVessel.region);
+  const baseLat = coords?.lat ?? (hasParsedCoords ? usniVessel.regionLat : fallbackCoords.lat);
+  const baseLon = coords?.lon ?? (hasParsedCoords ? usniVessel.regionLon : fallbackCoords.lon);
+  const offset = scatterOffset(usniVessel.hullNumber, syntheticIndex);
+  return {
  id: `usni-${usniVessel.hullNumber || usniVessel.name}`,
  mmsi: '',
  name: usniVessel.name,
@@ -174,21 +165,36 @@ export function mergeUSNIWithAIS(
  usniArticleUrl: usniVessel.usniArticleUrl,
  usniArticleDate: usniVessel.usniArticleDate,
  usniSource: true,
- });
+  };
+}
+
+export function mergeUSNIWithAIS(
+  aisVessels: MilitaryVessel[],
+  usniReport: USNIFleetReport,
+  aisClusters: MilitaryVesselCluster[] = [],
+): { vessels: MilitaryVessel[]; clusters: MilitaryVesselCluster[] } {
+  const merged: MilitaryVessel[] = aisVessels.map((vessel) => ({ ...vessel }));
+  const matchedHulls = new Set<string>();
+
+  enrichByHull(merged, usniReport, matchedHulls);
+  enrichByName(merged, usniReport, matchedHulls);
+
+  let syntheticIndex = 0;
+  for (const usniVessel of usniReport.vessels) {
+ if (!matchedHulls.has(normalizeHull(usniVessel.hullNumber))) {
+ merged.push(buildSyntheticVessel(usniVessel, syntheticIndex++));
+ }
   }
 
-  // Pass 3: Keep existing AIS clusters and append USNI-specific operational clusters.
   const usniClusters = buildUSNIClusters(merged);
-  const clusters = [...aisClusters, ...usniClusters];
-
-  return { vessels: merged, clusters };
+  return { vessels: merged, clusters: [...aisClusters, ...usniClusters] };
 }
 
 function buildUSNIClusters(vessels: MilitaryVessel[]): MilitaryVesselCluster[] {
   const regionGroups = new Map<string, MilitaryVessel[]>();
 
   for (const v of vessels) {
- const key = v.usniStrikeGroup || v.usniRegion;
+ const key = v.usniStrikeGroup ?? v.usniRegion;
  if (!key) continue;
  if (!regionGroups.has(key)) regionGroups.set(key, []);
  regionGroups.get(key)!.push(v);
@@ -209,7 +215,7 @@ function buildUSNIClusters(vessels: MilitaryVessel[]): MilitaryVesselCluster[] {
  lon: avgLon,
  vesselCount: groupVessels.length,
  vessels: groupVessels,
- region: groupVessels[0]?.usniRegion || name,
+ region: groupVessels[0]?.usniRegion ?? name,
  activityType: hasCarrier ? 'deployment' : 'transit',
  });
   }

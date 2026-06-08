@@ -14957,11 +14957,13 @@ body.has-critical-banner .panels-grid {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-family: var(--font-mono);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   font-size: 12px;
   cursor: pointer;
-  animation: banner-slide-in 0.3s ease-out;
+  animation: banner-slide-in 0.2s ease-out;
   user-select: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .staleness-banner-hidden {
@@ -14969,21 +14971,21 @@ body.has-critical-banner .panels-grid {
 }
 
 .staleness-banner-warn {
-  background: linear-gradient(90deg, #b8860b, #d4a017);
-  color: #1a1a00;
-  border-bottom: 1px solid #d4a017;
+  background: rgba(140, 86, 0, 0.70);
+  color: #ffe8b0;
+  border-bottom: 1px solid rgba(255, 170, 40, 0.25);
 }
 
 .staleness-banner-critical {
-  background: linear-gradient(90deg, #8B0000, #b91c1c);
-  color: #fff;
-  border-bottom: 1px solid var(--semantic-critical);
+  background: rgba(160, 20, 20, 0.80);
+  color: #ffe0e0;
+  border-bottom: 1px solid rgba(255, 80, 80, 0.3);
 }
 
 .staleness-banner-offline {
-  background: #1e1e1e;
-  color: #ccc;
-  border-bottom: 1px solid #444;
+  background: rgba(30, 30, 36, 0.80);
+  color: rgba(245, 245, 247, 0.7);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .staleness-message {

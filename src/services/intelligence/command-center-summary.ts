@@ -54,6 +54,38 @@ export interface SituationSummary {
   domainIcon: string;
 }
 
+/** One step in a situation's lifecycle chronology. */
+export interface SituationTimelineStep {
+  kind: 'detected' | 'latest';
+  /** ms-epoch of the step. */
+  at: number;
+  label: string;
+  detail: string;
+}
+
+/** Treat detected/latest as distinct steps only when at least this far apart. */
+const TIMELINE_DISTINCT_MS = 60_000;
+
+/**
+ * Derive an honest lifecycle chronology from the data a SituationSummary
+ * actually carries (startedAt / updatedAt / accumulated counts). It does not
+ * fabricate per-event rows the summary does not resolve — at most two steps:
+ * when the situation was first detected and its latest update.
+ */
+export function buildSituationTimeline(s: SituationSummary): SituationTimelineStep[] {
+  const signalDetail = `${s.observationCount} signal${s.observationCount === 1 ? '' : 's'} · ${s.correlationCount} correlation${s.correlationCount === 1 ? '' : 's'}`;
+  const detected: SituationTimelineStep = {
+    kind: 'detected',
+    at: s.startedAt,
+    label: 'Detected',
+    detail: `${s.severity} · ${s.domain}`,
+  };
+  if (s.updatedAt - s.startedAt >= TIMELINE_DISTINCT_MS) {
+    return [detected, { kind: 'latest', at: s.updatedAt, label: 'Last update', detail: signalDetail }];
+  }
+  return [{ ...detected, detail: `${detected.detail} · ${signalDetail}` }];
+}
+
 export interface WhatChangedItem {
   /** Stable id derived from the underlying change so consumers can
    *  dedupe across renders. */

@@ -60,6 +60,7 @@ import {
 import { loadRules } from '@/services/intelligence/rules-engine';
 import {
   buildCommandCenterSummary,
+  buildSituationTimeline,
   type CommandCenterSummary,
   type SituationSummary,
   type WhatChangedItem,
@@ -301,6 +302,7 @@ export class CommandCenterPanel extends Panel {
     return `<div style="display:flex;flex-direction:column;gap:10px;padding:10px;border:1px solid var(--border-subtle,#333);border-radius:6px;background:rgba(255,255,255,0.02);">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-secondary,#aaa);">Command Center · Five questions</div>
       ${this.renderSpineSituations(summary.topSituations)}
+      ${this.renderSpineTimeline(summary.topSituations)}
       ${this.renderSpineWhatChanged(summary.whatChanged)}
       ${this.renderSpineFeedHealth(summary.feedHealth)}
       ${this.renderSpineActions(summary.suggestedActions)}
@@ -333,6 +335,24 @@ export class CommandCenterPanel extends Panel {
       </div>`;
     }).join('');
     return spineSection('1. What matters right now? (with: why does it matter to me?)', `<div style="display:flex;flex-direction:column;gap:4px;">${rows}</div>`);
+  }
+
+  private renderSpineTimeline(situations: readonly SituationSummary[]): string {
+    const top = situations[0];
+    if (!top) {
+      return spineSection('2. How did this develop?', '<div style="font-size:12px;color:var(--text-secondary,#aaa);">No active situation to trace yet.</div>');
+    }
+    const steps = buildSituationTimeline(top);
+    const rows = steps.map((step, idx) => `<li style="font-size:12px;display:flex;gap:6px;align-items:baseline;">
+      <span style="color:var(--text-secondary,#aaa);">${idx === steps.length - 1 ? '└' : '├'}</span>
+      <strong style="font-size:11px;">${escapeHtml(step.label)}</strong>
+      <span style="color:var(--text-secondary,#aaa);font-size:10px;">${escapeHtml(step.detail)}</span>
+      <span style="color:var(--text-secondary,#aaa);margin-left:auto;font-size:10px;">${timeAgo(step.at)}</span>
+    </li>`).join('');
+    return spineSection(
+      `2. How did this develop? (${escapeHtml(top.name)})`,
+      `<ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:3px;">${rows}</ul>`,
+    );
   }
 
   private renderSpineWhatChanged(items: readonly WhatChangedItem[]): string {

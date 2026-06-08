@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildCommandCenterSummary,
+  buildSituationTimeline,
   rankSituations,
   buildSituationSummary,
   matchingRulesFor,
@@ -12,6 +13,7 @@ import {
   haversineKm,
   describePlaybookStep,
   type SavedPlaceLite,
+  type SituationSummary,
 } from '../command-center-summary.ts';
 import type { Situation, AlertRule, Playbook } from '@/types/intelligence';
 import type { WhatChangedReport } from '../what-changed.ts';
@@ -330,4 +332,50 @@ test('builder: never returns more than 3 top situations', () => {
     now: NOW,
   });
   assert.equal(out.topSituations.length, 3);
+});
+
+function summ(over: Partial<SituationSummary> = {}): SituationSummary {
+  return {
+    id: 'sit-1',
+    name: 'Test situation',
+    severity: 'moderate',
+    domain: 'earthquake',
+    summary: 'A test situation',
+    observationCount: 2,
+    correlationCount: 1,
+    startedAt: NOW - HOUR,
+    updatedAt: NOW - HOUR,
+    nearestPlace: null,
+    matchingRules: [],
+    domainIcon: '⚑',
+    ...over,
+  };
+}
+
+test('timeline: same start/update collapses to a single detected step', () => {
+  const steps = buildSituationTimeline(summ({ startedAt: NOW, updatedAt: NOW }));
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0]!.kind, 'detected');
+  assert.equal(steps[0]!.at, NOW);
+  assert.match(steps[0]!.detail, /2 signals · 1 correlation/);
+});
+
+test('timeline: distinct update produces detected + latest steps in order', () => {
+  const steps = buildSituationTimeline(summ({ startedAt: NOW - HOUR, updatedAt: NOW }));
+  assert.equal(steps.length, 2);
+  assert.equal(steps[0]!.kind, 'detected');
+  assert.equal(steps[0]!.at, NOW - HOUR);
+  assert.equal(steps[1]!.kind, 'latest');
+  assert.equal(steps[1]!.at, NOW);
+  assert.match(steps[1]!.detail, /2 signals · 1 correlation/);
+});
+
+test('timeline: sub-minute update stays a single step', () => {
+  const steps = buildSituationTimeline(summ({ startedAt: NOW, updatedAt: NOW + 30_000 }));
+  assert.equal(steps.length, 1);
+});
+
+test('timeline: singular signal/correlation labels', () => {
+  const steps = buildSituationTimeline(summ({ startedAt: NOW, updatedAt: NOW, observationCount: 1, correlationCount: 1 }));
+  assert.match(steps[0]!.detail, /1 signal · 1 correlation/);
 });

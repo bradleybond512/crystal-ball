@@ -66,8 +66,9 @@
   --font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', 'DejaVu Sans Mono', 'Liberation Mono', monospace;
   --font-body: var(--font-mono);
 
-  /* Header height tokens — single source of truth for the top-bar stack. */
-  --eew-bar-h: 40px;
+  /* Header height tokens — single source of truth for the top-bar stack.
+     --eew-bar-h matches the min-height set on .eew-status-bar below. */
+  --eew-bar-h: 32px;
   --staleness-banner-h: 32px;
   /* Derived: where things sit when both bars are visible */
   --below-eew: var(--eew-bar-h);
@@ -14929,15 +14930,8 @@ a.prediction-link:hover {
 }
 
 @keyframes banner-slide-in {
-  from {
- transform: translateY(-100%);
- opacity: 0;
-  }
-
-  to {
- transform: translateY(0);
- opacity: 1;
-  }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* Push content down when critical banner is visible */
@@ -19391,7 +19385,7 @@ body.gods-vision-lock .replay-scrubber { display: none; }
 /* ── Related Strip ──────────────────────────────────────────────── */
 .related-strip {
   position: fixed;
-  top: 36px;
+  top: calc(var(--below-eew) + 4px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 1060;

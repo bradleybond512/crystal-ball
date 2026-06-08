@@ -149,6 +149,14 @@ export class StalenessBanner {
  return;
  }
 
+ // OfflineStalenessBanner covers the same stale state with better UX —
+ // suppress this banner when it's already visible to avoid redundancy.
+ const osbActive = document.querySelector('.cb-offline-staleness-banner[data-status]');
+ if (osbActive) {
+ this.hide();
+ return;
+ }
+
  this.el.style.display = '';
  let levelClass: string;
  if (level === 'warn') levelClass = 'warn';

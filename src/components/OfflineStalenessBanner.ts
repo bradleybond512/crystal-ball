@@ -1,57 +1,107 @@
- 
+
 /**
- * Offline Staleness Banner — mounts a fixed-position banner at the top of
- * the viewport that is IMPOSSIBLE to dismiss while data is stale. Uses
- * aggressive styling (red background, bold text, blinking when very
- * stale) to prevent the user from mistaking cached data for live data.
+ * Offline Staleness Banner — single-line Apple-styled notification that sits
+ * inside NotificationStack. Uses amber for stale, red only for truly offline.
+ * Dismissible for stale states; persistent (non-dismissible) when offline.
  */
 
 import { subscribeOfflineState, type OfflineState } from '@/services/offline-staleness';
 
 const STYLE_ID = 'cb-offline-staleness-style';
 const STYLE_CSS = `
-@keyframes cb-offline-blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0.55; }
+@keyframes cb-osb-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .cb-offline-staleness-banner {
-  /* Flow child of NotificationStack — no own position:fixed needed. */
   position: relative;
   width: 100%;
-  height: 48px;
+  min-height: 36px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #ffffff;
-  pointer-events: none;
-  user-select: none;
-  text-align: center;
-  padding: 4px 12px;
+  gap: 8px;
+  padding: 0 14px;
   box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  pointer-events: auto;
+  user-select: none;
+  animation: cb-osb-in 0.2s ease-out;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
-.cb-offline-staleness-banner[data-status="stale"] { background: #b00000; }
-.cb-offline-staleness-banner[data-status="very-stale"] { background: #ff0000; }
+.cb-offline-staleness-banner[data-status="stale"] {
+  background: rgba(160, 100, 0, 0.72);
+  color: #fff3d6;
+  border-bottom: 1px solid rgba(255, 180, 60, 0.3);
+}
+.cb-offline-staleness-banner[data-status="very-stale"] {
+  background: rgba(180, 70, 0, 0.80);
+  color: #ffe5c0;
+  border-bottom: 1px solid rgba(255, 130, 40, 0.35);
+}
 .cb-offline-staleness-banner[data-status="offline"] {
-  background: #ff0000;
-  animation: cb-offline-blink 1s steps(1,end) infinite;
+  background: rgba(180, 20, 20, 0.88);
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 80, 80, 0.35);
 }
-.cb-offline-staleness-banner .cb-osb-label {
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  line-height: 1.1;
+.cb-osb-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+  line-height: 1;
 }
-.cb-offline-staleness-banner .cb-osb-subtext {
-  font-size: 11px;
+.cb-osb-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+}
+.cb-osb-label {
+  font-size: 13px;
   font-weight: 600;
-  opacity: 0.95;
-  letter-spacing: 0.4px;
-  line-height: 1.1;
-  margin-top: 2px;
+  white-space: nowrap;
 }
+.cb-osb-subtext {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cb-osb-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.cb-osb-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: inherit;
+  padding: 3px 10px;
+  border-radius: 5px;
+  font: 600 11px/1.4 -apple-system, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.cb-osb-btn:hover { background: rgba(255, 255, 255, 0.25); }
+.cb-osb-dismiss {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: opacity 0.12s;
+}
+.cb-osb-dismiss:hover { opacity: 1; }
 `;
 
 function ensureStyles(): void {
@@ -62,24 +112,68 @@ function ensureStyles(): void {
   document.head.append(style);
 }
 
+const STATUS_ICON: Record<string, string> = {
+  stale: '⏱',
+  'very-stale': '⚠',
+  offline: '📡',
+};
+
+function buildRow(label: string, subtext: string, icon: string, canDismiss: boolean): DocumentFragment {
+  const frag = document.createDocumentFragment();
+
+  const iconEl = document.createElement('span');
+  iconEl.className = 'cb-osb-icon';
+  iconEl.textContent = icon;
+
+  const textEl = document.createElement('span');
+  textEl.className = 'cb-osb-text';
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'cb-osb-label';
+  labelEl.textContent = label;
+
+  const subtextEl = document.createElement('span');
+  subtextEl.className = 'cb-osb-subtext';
+  subtextEl.textContent = subtext;
+
+  textEl.append(labelEl, subtextEl);
+
+  const actionsEl = document.createElement('span');
+  actionsEl.className = 'cb-osb-actions';
+
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'cb-osb-btn';
+  resetBtn.dataset.action = 'reset';
+  resetBtn.textContent = 'Reset cache';
+  actionsEl.append(resetBtn);
+
+  if (canDismiss) {
+    const dismissBtn = document.createElement('button');
+    dismissBtn.className = 'cb-osb-dismiss';
+    dismissBtn.dataset.action = 'dismiss';
+    dismissBtn.setAttribute('aria-label', 'Dismiss');
+    dismissBtn.textContent = '×';
+    actionsEl.append(dismissBtn);
+  }
+
+  frag.append(iconEl, textEl, actionsEl);
+  return frag;
+}
+
 export class OfflineStalenessBanner {
   private el: HTMLElement | null = null;
   private unsub: (() => void) | null = null;
+  private dismissed = false;
+  private lastStatus = '';
 
   mount(parent: HTMLElement = document.body): void {
     if (this.el) return;
     ensureStyles();
     const el = document.createElement('div');
     el.className = 'cb-offline-staleness-banner';
-    el.setAttribute('role', 'alert');
-    el.setAttribute('aria-live', 'assertive');
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
     el.style.display = 'none';
-    const label = document.createElement('div');
-    label.className = 'cb-osb-label';
-    const subtext = document.createElement('div');
-    subtext.className = 'cb-osb-subtext';
-    el.append(label);
-    el.append(subtext);
     parent.append(el);
     this.el = el;
     this.unsub = subscribeOfflineState((state) => { this.render(state); });
@@ -94,17 +188,45 @@ export class OfflineStalenessBanner {
   private render(state: OfflineState): void {
     const el = this.el;
     if (!el) return;
+
     if (state.status === 'fresh') {
       el.style.display = 'none';
       el.removeAttribute('data-status');
+      this.dismissed = false;
+      this.lastStatus = '';
       return;
     }
+
+    // Reset dismiss when status escalates
+    if (state.status !== this.lastStatus) {
+      this.dismissed = false;
+      this.lastStatus = state.status;
+    }
+
+    // Stale/very-stale can be dismissed; offline cannot
+    if (this.dismissed && state.status !== 'offline') {
+      el.style.display = 'none';
+      return;
+    }
+
     el.style.display = 'flex';
     el.setAttribute('data-status', state.status);
-    const label = el.querySelector<HTMLElement>('.cb-osb-label');
-    const subtext = el.querySelector<HTMLElement>('.cb-osb-subtext');
-    if (label) label.textContent = state.bannerLabel;
-    if (subtext) subtext.textContent = state.bannerSubtext;
+
+    const icon = STATUS_ICON[state.status] ?? '⚠';
+    const canDismiss = state.status !== 'offline';
+
+    el.replaceChildren(buildRow(state.bannerLabel, state.bannerSubtext, icon, canDismiss));
+
+    el.querySelector<HTMLButtonElement>('[data-action="reset"]')?.addEventListener('click', () => {
+      window.location.reload();
+    });
+
+    if (canDismiss) {
+      el.querySelector<HTMLButtonElement>('[data-action="dismiss"]')?.addEventListener('click', () => {
+        this.dismissed = true;
+        el.style.display = 'none';
+      });
+    }
   }
 }
 

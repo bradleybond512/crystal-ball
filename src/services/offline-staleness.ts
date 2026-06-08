@@ -112,14 +112,14 @@ export function getOfflineState(): OfflineState {
   let bannerLabel = '';
   let bannerSubtext = '';
   if (status === 'offline') {
-    bannerLabel = `\u26A0 OFFLINE \u2014 CACHED DATA ${ageLabel}`;
-    bannerSubtext = 'NO LIVE CONNECTION. DO NOT USE FOR OPERATIONAL DECISIONS.';
+    bannerLabel = 'No connection';
+    bannerSubtext = `Viewing cached data from ${ageLabel} ago`;
   } else if (status === 'very-stale') {
-    bannerLabel = `\u26A0 STALE DATA \u2014 LAST UPDATE ${ageLabel}`;
-    bannerSubtext = 'NOT CURRENT. VERIFY BEFORE OPERATIONAL USE.';
+    bannerLabel = 'Data is very old';
+    bannerSubtext = `Last updated ${ageLabel} ago \u2014 verify before use`;
   } else if (status === 'stale') {
-    bannerLabel = `\u26A0 CACHED DATA \u2014 LAST UPDATE ${ageLabel}`;
-    bannerSubtext = 'NOT CURRENT. VERIFY BEFORE OPERATIONAL USE.';
+    bannerLabel = 'Viewing cached data';
+    bannerSubtext = `Last updated ${ageLabel} ago`;
   }
 
   return {

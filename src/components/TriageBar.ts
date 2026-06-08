@@ -84,9 +84,11 @@ export class TriageBar {
     if (stories.length === 0 && this.facet === 'all') {
       this.element.hidden = true;
       this.element.replaceChildren();
+      document.body.classList.remove('has-triage-bar');
       return;
     }
     this.element.hidden = false;
+    document.body.classList.add('has-triage-bar');
     const label = document.createElement('div');
     label.className = 'triage-bar-label';
     label.textContent = '⚡ TRIAGE';

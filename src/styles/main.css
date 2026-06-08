@@ -14936,7 +14936,7 @@ a.prediction-link:hover {
 
 /* Push content down when critical banner is visible */
 body.has-critical-banner .panels-grid {
-  padding-top: 50px;
+  padding-top: var(--staleness-banner-h);
 }
 
 /* ============ Data Staleness Banner ============ */
@@ -19015,6 +19015,12 @@ body.has-breaking-alert .panels-grid {
 .ehr-anomaly-burst { animation: pulse-orange 1.5s infinite; }
 body.has-staleness-banner .entity-heat-rail {
   top: calc(var(--below-banners) + 6px);
+}
+/* TriageBar and EntityHeatRail occupy the same horizontal slot.
+   When alerts are active the triage bar is the primary surface. */
+body.has-triage-bar .entity-heat-rail,
+body.has-triage-bar .related-strip {
+  display: none;
 }
 @keyframes pulse-orange {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 140, 40, 0.6); }

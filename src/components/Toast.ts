@@ -61,7 +61,10 @@ export class Toast {
     const severity = options.severity ?? 'normal';
     this.duration = severity === 'critical' ? DURATION_CRITICAL : DURATION_NORMAL;
     this.remaining = this.duration;
-    this.key = `${options.title}\u0000${options.message ?? ''}`;
+    // Include severity and the "why" text in the dedupe key so an escalation
+    // (same text, higher severity) or a changed explanation surfaces as a new
+    // toast instead of being suppressed behind the stale lower-severity one.
+    this.key = `${options.title}\u0000${options.message ?? ''}\u0000${severity}\u0000${options.why ?? ''}`;
 
     this.el = this.build(severity);
     this.progress = this.el.querySelector('.cb-toast-progress') as HTMLElement;

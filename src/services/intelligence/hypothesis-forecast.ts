@@ -2,6 +2,7 @@ import type { Hypothesis } from '@/services/analyst-loop';
 import type { PCIScore } from './predictive-crisis-index';
 import { getProviderSnapshots } from '@/services/insights/insights-state';
 import { assessProviderRedundancy } from '@/services/diagnostics/provider-redundancy';
+import { getBoostMultiplier } from './forecast-calibration-adapter';
 
 export interface HypothesisForecast {
   hypothesisId: string;
@@ -13,6 +14,7 @@ export interface HypothesisForecast {
     pciBoost: number;
     analogBoost: number;
     providerMultiplier: number;
+    calibrationMultiplier: number;
   };
 }
 
@@ -31,8 +33,9 @@ export function forecastHypothesis(
   providerMultiplier = 1,
 ): HypothesisForecast {
   const baseConfidence = hypothesis.confidence;
-  const pciBoost = pci !== null && pci.index > 60 ? (pci.index - 60) / 200 : 0;
-  const analogBoost = analogScore === null ? 0 : analogScore * 0.1;
+  const calibrationMultiplier = getBoostMultiplier();
+  const pciBoost = pci !== null && pci.index > 60 ? ((pci.index - 60) / 200) * calibrationMultiplier : 0;
+  const analogBoost = analogScore === null ? 0 : analogScore * 0.1 * calibrationMultiplier;
   const probability = clamp((baseConfidence + pciBoost + analogBoost) * providerMultiplier, 0, 1);
 
   const diff = probability - baseConfidence;
@@ -49,7 +52,7 @@ export function forecastHypothesis(
     probability,
     trend,
     horizon,
-    components: { baseConfidence, pciBoost, analogBoost, providerMultiplier },
+    components: { baseConfidence, pciBoost, analogBoost, providerMultiplier, calibrationMultiplier },
   };
 }
 

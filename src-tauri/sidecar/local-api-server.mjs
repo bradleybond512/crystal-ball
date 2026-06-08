@@ -15858,6 +15858,23 @@ export async function createLocalApiServer(options = {}) {
  const heartbeatPath = path.join(context.dataDir, 'sidecar.health.json');
  let lastEventLoopCheck = Date.now();
  const heartbeatInterval = SIDECAR_TRACE ? 1000 : 10_000;
+ // Write immediately so the Rust watcher sees a fresh file from the first
+ // poll (1.5s) — prevents spurious "heartbeat stale" warnings at startup
+ // caused by the previous session's heartbeat file still being present.
+ const mem0 = process.memoryUsage();
+ try {
+  writeFileSync(heartbeatPath, JSON.stringify({
+   pid: process.pid,
+   port: boundPort,
+   uptime_ms: 0,
+   last_heartbeat: wmTimestamp(),
+   event_loop_lag_ms: 0,
+   rss_mb: Math.round(mem0.rss / 1024 / 1024),
+   heap_mb: Math.round(mem0.heapUsed / 1024 / 1024),
+   ais_connected: false,
+   ais_vessels: 0,
+  }));
+ } catch {}
  setInterval(() => {
  const now = Date.now();
  const eventLoopLagMs = Math.max(0, now - lastEventLoopCheck - heartbeatInterval);

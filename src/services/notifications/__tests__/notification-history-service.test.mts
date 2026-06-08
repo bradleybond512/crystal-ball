@@ -180,12 +180,14 @@ test('DOMAIN_ICON covers every HistoryDomain value', () => {
 });
 
 test('SEVERITY_BADGE + ACTION_BADGE have colour + label per value', () => {
+  // Colors are CSS custom properties (var(--*)) for theming — accept both forms.
+  const validColor = /^(#[0-9a-f]{6}|var\(--[a-z-]+\))$/i;
   for (const s of ['critical', 'high', 'medium', 'low'] as const) {
-    assert.match(SEVERITY_BADGE[s].color, /^#[0-9a-f]{6}$/i);
+    assert.match(SEVERITY_BADGE[s].color, validColor);
     assert.ok(SEVERITY_BADGE[s].label);
   }
   for (const a of ['fired', 'suppressed', 'escalated'] as const) {
-    assert.match(ACTION_BADGE[a].color, /^#[0-9a-f]{6}$/i);
+    assert.match(ACTION_BADGE[a].color, validColor);
     assert.ok(ACTION_BADGE[a].label);
   }
 });

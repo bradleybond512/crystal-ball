@@ -235,6 +235,11 @@ function installInteractionLatencyObserver(): void {
 // which the diagnostics bundle can include.
 interface FetchStat { ok: number; fail: number; lastErrorAt: number }
 const FETCH_WINDOW_MS = 5 * 60 * 1000;
+// Startup grace period — panels initialize simultaneously on launch and hit the
+// sidecar before it is ready, producing a burst of expected failures. Suppress
+// the burst alarm until the app has been running for this long.
+const BURST_ALARM_GRACE_MS = 20_000;
+let bridgeInstalledAt = 0;
 const fetchStats = new Map<string, FetchStat>();
 const fetchFailureTimes = new Map<string, number[]>();
 
@@ -251,8 +256,10 @@ function bumpFetchStat(host: string, ok: boolean): void {
  const cutoff = Date.now() - FETCH_WINDOW_MS;
  while (arr.length > 0 && arr[0]! < cutoff) arr.shift();
  fetchFailureTimes.set(host, arr);
- // Log an alarm if 5+ failures for the same host in the window.
- if (arr.length === 5) {
+ // Log an alarm if 5+ failures for the same host in the window, but skip
+ // the grace period after startup so panel-initialization races don't fire it.
+ const inGrace = bridgeInstalledAt > 0 && Date.now() - bridgeInstalledAt < BURST_ALARM_GRACE_MS;
+ if (arr.length === 5 && !inGrace) {
  recordBreadcrumb('WARN', 'fetch-burst', `${host}: ${arr.length} failures in <5m`);
  logToDesktop('WARN', `fetch failure burst: ${host} (${arr.length} in <5m)`);
  }
@@ -296,6 +303,7 @@ export function getFetchFailureSummary(): { host: string; ok: number; fail: numb
 export function installLogBridge(): void {
   if (installed) return;
   installed = true;
+  bridgeInstalledAt = Date.now();
 
   window.addEventListener('error', (e) => {
  const err = e.error as Error | undefined;

@@ -15,6 +15,11 @@ import { trackLLMUsage, trackLLMFailure } from './analytics';
 import { NewsServiceClient, type SummarizeArticleResponse } from '@/generated/client/crystalball/news/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
 
+// Suppress repeated T5/all-providers-failed warnings — WKWebView can't run ONNX
+// SIMD models, so these fire on every summarization attempt. Warn once per session.
+let t5WarnedThisSession = false;
+let allProvidersWarnedThisSession = false;
+
 export type SummarizationProvider = 'ollama' | 'groq' | 'openrouter' | 'browser' | 'cache';
 
 export interface SummarizationResult {
@@ -148,8 +153,11 @@ async function tryBrowserT5(headlines: string[], modelId?: string): Promise<Summ
  cached: false,
  };
   } catch (error) {
+ if (!t5WarnedThisSession) {
+ t5WarnedThisSession = true;
  // eslint-disable-next-line no-console
- console.warn('[Summarization] Browser T5 failed:', error);
+ console.warn('[Summarization] Browser T5 unavailable (suppressing further warnings):', error instanceof Error ? error.message : String(error));
+ }
  return null;
   }
 }
@@ -259,8 +267,11 @@ async function generateSummaryInternal(
  onProgress?.(totalSteps, totalSteps, 'No providers available');
  }
 
+ if (!allProvidersWarnedThisSession) {
+ allProvidersWarnedThisSession = true;
  // eslint-disable-next-line no-console
- console.warn('[BETA] All providers failed');
+ console.warn('[Summarization] All providers failed (suppressing further warnings)');
+ }
  return null;
   }
 
@@ -279,8 +290,11 @@ async function generateSummaryInternal(
  if (browserResult) return browserResult;
   }
 
-  // eslint-disable-next-line no-console
-  console.warn('[Summarization] All providers failed');
+  if (!allProvidersWarnedThisSession) {
+ allProvidersWarnedThisSession = true;
+ // eslint-disable-next-line no-console
+ console.warn('[Summarization] All providers failed (suppressing further warnings)');
+  }
   return null;
 }
 

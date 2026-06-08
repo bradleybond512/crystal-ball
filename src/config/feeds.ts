@@ -602,10 +602,10 @@ const FULL_FEEDS: Record<string, Feed[]> = {
  { name: 'Responsible Statecraft', url: rss('https://responsiblestatecraft.org/feed/') },
  // RUSI - Royal United Services Institute (UK defense & security)
  { name: 'RUSI', url: rss('https://news.google.com/rss/search?q=site:rusi.org+when:3d&hl=en-US&gl=US&ceid=US:en') },
- // FPRI - Foreign Policy Research Institute (US foreign policy)
- { name: 'FPRI', url: rss('https://www.fpri.org/feed/') },
- // Jamestown Foundation - Eurasia/China/Terrorism analysis
- { name: 'Jamestown', url: rss('https://jamestown.org/feed/') },
+ // FPRI - Foreign Policy Research Institute (US foreign policy) — direct feed blocks bots; use Google News proxy
+ { name: 'FPRI', url: rss('https://news.google.com/rss/search?q=site:fpri.org+when:7d&hl=en-US&gl=US&ceid=US:en') },
+ // Jamestown Foundation - Eurasia/China/Terrorism analysis — direct feed blocks bots; use Google News proxy
+ { name: 'Jamestown', url: rss('https://news.google.com/rss/search?q=site:jamestown.org+when:7d&hl=en-US&gl=US&ceid=US:en') },
  // ISW - Institute for the Study of War (daily Ukraine/Russia/MENA conflict assessments)
  { name: 'ISW', url: rss('https://news.google.com/rss/search?q=site:understandingwar.org+when:3d&hl=en-US&gl=US&ceid=US:en') },
  // Middle East Eye - regional news and analysis
@@ -1120,7 +1120,8 @@ export const INTEL_SOURCES: Feed[] = [
   { name: 'RUSI', url: rss('https://news.google.com/rss/search?q=site:rusi.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
   { name: 'Wilson Center', url: rss('https://news.google.com/rss/search?q=site:wilsoncenter.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
   { name: 'GMF', url: rss('https://news.google.com/rss/search?q=site:gmfus.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
-  { name: 'Stimson Center', url: rss('https://www.stimson.org/feed/'), type: 'research' },
+  // Stimson Center — direct feed blocks bots; use Google News proxy
+  { name: 'Stimson Center', url: rss('https://news.google.com/rss/search?q=site:stimson.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
   { name: 'CNAS', url: rss('https://news.google.com/rss/search?q=site:cnas.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
   { name: 'Lowy Institute', url: rss('https://news.google.com/rss/search?q=site:lowyinstitute.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
 

@@ -14,6 +14,11 @@ body.is-desktop-macos {
   --mac-toolbar-height: 44px;
   --mac-traffic-lights-height: 44px; /* safe area below traffic lights */
 
+  /* The content area starts at the toolbar bottom (44px), not the EEW bar
+     bottom (32px). Fixed overlays that should appear below the header must
+     use this value, not --eew-bar-h. */
+  --below-eew: var(--mac-toolbar-height);
+
   /* Dark-mode macOS system colors (approximated) */
   --mac-window-bg: #1c1c1e;
   --mac-sidebar-bg: rgba(44, 44, 46, 0.72);

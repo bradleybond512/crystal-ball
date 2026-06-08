@@ -9,7 +9,7 @@
   top: 0;
   left: 0;
   right: 0;
-  z-index: 9000; /* above panels (1000-2000), below modals (10000+) */
+  z-index: var(--z-status-bar); /* above panels (1000-2000), below modals (10000+) */
   font-family: 'SF Mono', ui-monospace, 'Monaco', monospace;
   font-size: 12px;
   font-weight: 600;

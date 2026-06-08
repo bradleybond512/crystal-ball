@@ -618,7 +618,7 @@
   top: env(safe-area-inset-top, 0);
   left: 0;
   right: 0;
-  z-index: 9000;
+  z-index: calc(var(--z-status-bar) + 1);
   pointer-events: none;
 }
 .cb-storm-mode-host:empty { display: none; }

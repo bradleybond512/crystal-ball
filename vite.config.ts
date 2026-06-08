@@ -792,6 +792,16 @@ export default defineConfig({
  },
  },
  {
+ // Vector tiles, tile index, and glyph PBFs for the Apple-style label layers
+ urlPattern: /^https:\/\/tiles\.basemaps\.cartocdn\.com\//,
+ handler: 'CacheFirst',
+ options: {
+ cacheName: 'carto-vector',
+ expiration: { maxEntries: 300, maxAgeSeconds: 7 * 24 * 60 * 60 },
+ cacheableResponse: { statuses: [0, 200] },
+ },
+ },
+ {
  urlPattern: /^https:\/\/[abc]\.tile\.opentopomap\.org\//,
  handler: 'CacheFirst',
  options: {

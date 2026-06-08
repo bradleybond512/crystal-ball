@@ -4,6 +4,17 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+## [2.25.143] - 2026-06-08
+
+### Fixed
+
+- Entity heat rail Apple-style chips with softer labels and no borders
+- Staleness banners redesigned with Apple-style dismiss, dedupe, and auto-clear
+- Triage dismiss button per pill and stop cyber scenarios on weather
+- Collapsed same-title same-source alerts into one story
+- Nominatim throttle repair and cancel stale searches
+- Test harness: ml-worker stub, missing gods-vision layers, panel category map, README inventory count
+
 ## [2.25.24] - 2026-05-25
 
 ### Added

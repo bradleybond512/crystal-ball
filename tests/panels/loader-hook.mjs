@@ -19,6 +19,8 @@ const STUBS = {
     path.join(projectRoot, 'tests', 'panels', 'stubs', 'i18n-stub.mjs'),
   [path.join(projectRoot, 'src', 'services', 'analytics.ts')]:
     path.join(projectRoot, 'tests', 'panels', 'stubs', 'analytics-stub.mjs'),
+  [path.join(projectRoot, 'src', 'services', 'ml-worker.ts')]:
+    path.join(projectRoot, 'tests', 'panels', 'stubs', 'ml-worker-stub.mjs'),
 };
 
 // Sentinel used so we can rewrite `import.meta.env.<KEY>` references in

@@ -12,7 +12,7 @@ const workflow = readFileSync(
 test('markdown lint workflow only lints markdown files changed in the pull request', () => {
   assert.match(
  workflow,
- /actions\/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd[\s\S]*fetch-depth: 0/,
+ /actions\/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10[\s\S]*fetch-depth: 0/,
  'lint workflow should fetch enough history to diff against the base branch',
   );
   // Two valid strategies — either fetch the base ref shallowly and diff

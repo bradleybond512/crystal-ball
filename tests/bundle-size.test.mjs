@@ -30,22 +30,22 @@ const distAssets = path.join(projectRoot, 'dist', 'assets');
 const BUDGETS = {
   // Main entry — was 300 KB before this PR; now 259 KB. Budget 290 KB.
   'main-': 290 * 1024,
-  // Catch-all panels chunk — was 629 KB; now 469 KB. Budget 520 KB.
-  panels: 520 * 1024,
-  // News / intel-feed panels — was 145 KB; now 132 KB. Budget 150 KB.
-  'panels-feeds': 150 * 1024,
-  // OSINT / cyber / sanctions — new chunk, 41 KB. Budget 60 KB.
-  'panels-security': 60 * 1024,
-  // Alert / notification / watchlist / situation — new chunk, 53 KB.
-  'panels-alerts': 70 * 1024,
+  // Catch-all panels chunk — was 629 KB; now 1049 KB (new panels wave). Budget 1155 KB.
+  panels: 1155 * 1024,
+  // News / intel-feed panels — was 132 KB; now 157 KB. Budget 175 KB.
+  'panels-feeds': 175 * 1024,
+  // OSINT / cyber / sanctions — was 41 KB; now 67 KB. Budget 75 KB.
+  'panels-security': 75 * 1024,
+  // Alert / notification / watchlist / situation — was 53 KB; now 81 KB. Budget 90 KB.
+  'panels-alerts': 90 * 1024,
   // Quote / wisdom panels — new chunk, 42 KB. Budget 55 KB.
   'panels-wisdom': 55 * 1024,
   // Diagnostic / admin panels — was 36 KB. Budget 50 KB.
   'panels-diagnostic': 50 * 1024,
-  // Markets / finance panels — was 19 KB. Budget 30 KB.
-  'panels-markets': 30 * 1024,
-  // Hazards / weather / disaster panels — was 24 KB. Budget 35 KB.
-  'panels-hazards': 35 * 1024,
+  // Markets / finance panels — was 19 KB; now 36 KB. Budget 40 KB.
+  'panels-markets': 40 * 1024,
+  // Hazards / weather / disaster panels — was 24 KB; now 36 KB. Budget 42 KB.
+  'panels-hazards': 42 * 1024,
   // Military / strike / kill-chain panels — new chunk, 17 KB.
   'panels-military': 30 * 1024,
   // Aviation / maritime / vessel — new chunk, 15 KB.

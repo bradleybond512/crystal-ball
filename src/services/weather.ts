@@ -148,6 +148,8 @@ export function getSeverityColor(severity: WeatherAlert['severity']): string {
 
 export interface OpenMeteoConditions {
   temperature: number;
+  feelsLike: number;
+  humidity: number;
   windSpeed: number;
   windDirection: number;
   precipitation: number;
@@ -170,29 +172,172 @@ export async function fetchOpenMeteoConditions(
   if (cached && Date.now() - cached.ts < OPEN_METEO_TTL_MS) return cached.data;
 
   try {
- const url = `https://api.open-meteo.com/v1/forecast` +
- `?latitude=${lat}&longitude=${lon}` +
- `&current=temperature_2m,wind_speed_10m,wind_direction_10m,precipitation,weather_code,is_day,uv_index` +
- `&wind_speed_unit=kmh&timezone=auto`;
- const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
- if (!res.ok) return null;
- const raw = await res.json() as { current?: Record<string, number | boolean | null> };
- const c = raw.current;
- if (!c) return null;
- const data: OpenMeteoConditions = {
- temperature: typeof c.temperature_2m === 'number' ? c.temperature_2m : 0,
- windSpeed: typeof c.wind_speed_10m === 'number' ? c.wind_speed_10m : 0,
- windDirection: typeof c.wind_direction_10m === 'number' ? c.wind_direction_10m : 0,
- precipitation: typeof c.precipitation === 'number' ? c.precipitation : 0,
- weatherCode: typeof c.weather_code === 'number' ? c.weather_code : 0,
- isDay: c.is_day === 1,
- uvIndex: typeof c.uv_index === 'number' ? c.uv_index : null,
- fetchedAt: new Date(),
- source: 'open-meteo',
- };
- _openMeteoCache.set(cacheKey, { data, ts: Date.now() });
- return data;
+    const url = `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation,weather_code,is_day,uv_index` +
+      `&wind_speed_unit=kmh&timezone=auto`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const raw = await res.json() as { current?: Record<string, number | boolean | null> };
+    const c = raw.current;
+    if (!c) return null;
+    const data: OpenMeteoConditions = {
+      temperature: typeof c.temperature_2m === 'number' ? c.temperature_2m : 0,
+      feelsLike: typeof c.apparent_temperature === 'number' ? c.apparent_temperature : 0,
+      humidity: typeof c.relative_humidity_2m === 'number' ? c.relative_humidity_2m : 0,
+      windSpeed: typeof c.wind_speed_10m === 'number' ? c.wind_speed_10m : 0,
+      windDirection: typeof c.wind_direction_10m === 'number' ? c.wind_direction_10m : 0,
+      precipitation: typeof c.precipitation === 'number' ? c.precipitation : 0,
+      weatherCode: typeof c.weather_code === 'number' ? c.weather_code : 0,
+      isDay: c.is_day === 1,
+      uvIndex: typeof c.uv_index === 'number' ? c.uv_index : null,
+      fetchedAt: new Date(),
+      source: 'open-meteo',
+    };
+    _openMeteoCache.set(cacheKey, { data, ts: Date.now() });
+    return data;
   } catch {
- return null;
+    return null;
   }
+}
+
+// ── Site-specific helpers for Data Center Readiness ─────────────
+
+import type { ForecastSlot, SiteAirQuality, ConnectivitySignal } from './datacenter/datacenter-types.ts';
+
+/** WMO weather code → single representative emoji. */
+export function wmoCodeEmoji(code: number): string {
+  if (code === 0) return '☀️';
+  if (code <= 2) return '🌤';
+  if (code === 3) return '☁️';
+  if (code <= 48) return '🌫';
+  if (code <= 57) return '🌦';
+  if (code <= 67) return '🌧';
+  if (code <= 77) return '❄️';
+  if (code <= 82) return '🌦';
+  if (code <= 86) return '🌨';
+  return '⛈';
+}
+
+/** Wind direction degrees → 8-point compass abbreviation. */
+export function degreesToCompass(deg: number): string {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round(((deg % 360) + 360) % 360 / 45) % 8]!;
+}
+
+/** Celsius → Fahrenheit (rounded). */
+export function cToF(c: number): number {
+  return Math.round(c * 9 / 5 + 32);
+}
+
+/** US AQI value → short descriptive label. */
+export function aqiLabel(aqi: number): string {
+  if (aqi <= 50) return 'Good';
+  if (aqi <= 100) return 'Moderate';
+  if (aqi <= 150) return 'Sensitive';
+  if (aqi <= 200) return 'Unhealthy';
+  if (aqi <= 300) return 'Very Unhealthy';
+  return 'Hazardous';
+}
+
+const _forecast24hCache = new Map<string, { data: ForecastSlot[]; ts: number }>();
+const FORECAST_TTL_MS = 30 * 60 * 1000;
+
+/** Fetch 4 forecast slots at +0h, +6h, +12h, +18h for a given location. */
+export async function fetchSite24hForecast(lat: number, lon: number): Promise<ForecastSlot[]> {
+  const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const cached = _forecast24hCache.get(key);
+  if (cached && Date.now() - cached.ts < FORECAST_TTL_MS) return cached.data;
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${lat}&longitude=${lon}` +
+      `&hourly=temperature_2m,precipitation_probability,weather_code` +
+      `&forecast_days=1&timezone=auto`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const raw = await res.json() as {
+      hourly?: {
+        time?: string[];
+        temperature_2m?: number[];
+        precipitation_probability?: (number | null)[];
+        weather_code?: number[];
+      };
+    };
+    const h = raw.hourly;
+    if (!h?.time?.length) return [];
+
+    const nowHour = new Date().getHours();
+    const slots: ForecastSlot[] = [];
+    for (const offset of [0, 6, 12, 18]) {
+      const idx = (nowHour + offset) % 24;
+      if (idx >= (h.temperature_2m?.length ?? 0)) continue;
+      slots.push({
+        offsetHours: offset,
+        tempC: h.temperature_2m?.[idx] ?? 0,
+        precipProbabilityPct: h.precipitation_probability?.[idx] ?? 0,
+        weatherCode: h.weather_code?.[idx] ?? 0,
+      });
+    }
+    _forecast24hCache.set(key, { data: slots, ts: Date.now() });
+    return slots;
+  } catch {
+    return [];
+  }
+}
+
+const _aqCache = new Map<string, { data: SiteAirQuality; ts: number }>();
+const AQ_TTL_MS = 30 * 60 * 1000;
+
+/** Fetch US AQI + PM2.5 for a specific location via open-meteo air quality API. */
+export async function fetchSiteAirQuality(lat: number, lon: number): Promise<SiteAirQuality | null> {
+  const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const cached = _aqCache.get(key);
+  if (cached && Date.now() - cached.ts < AQ_TTL_MS) return cached.data;
+
+  try {
+    const url = `https://air-quality-api.open-meteo.com/v1/air-quality` +
+      `?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const raw = await res.json() as { current?: { us_aqi?: number | null; pm2_5?: number | null } };
+    const c = raw.current;
+    if (!c) return null;
+    const data: SiteAirQuality = {
+      usAqi: typeof c.us_aqi === 'number' ? c.us_aqi : null,
+      pm25: typeof c.pm2_5 === 'number' ? c.pm2_5 : null,
+    };
+    _aqCache.set(key, { data, ts: Date.now() });
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+let _connCache: { data: ConnectivitySignal; ts: number } | null = null;
+const CONN_TTL_MS = 5 * 60 * 1000;
+
+/** Check Cloudflare + Fastly status pages and return a blended connectivity signal. */
+export async function fetchConnectivitySignal(): Promise<ConnectivitySignal> {
+  if (_connCache && Date.now() - _connCache.ts < CONN_TTL_MS) return _connCache.data;
+
+  const [cf, fastly] = await Promise.allSettled([
+    fetch('https://www.cloudflarestatus.com/api/v2/summary.json', { signal: AbortSignal.timeout(5000) })
+      .then((r) => r.json() as Promise<{ status?: { indicator?: string } }>)
+      .then((j) => j.status?.indicator === 'none'),
+    fetch('https://www.fastlystatus.com/status.json', { signal: AbortSignal.timeout(5000) })
+      .then((r) => r.json() as Promise<{ status?: { indicator?: string } }>)
+      .then((j) => j.status?.indicator === 'none'),
+  ]);
+
+  const cfOk = cf.status === 'fulfilled' ? cf.value : null;
+  const fastlyOk = fastly.status === 'fulfilled' ? fastly.value : null;
+
+  let status: ConnectivitySignal['status'] = 'normal';
+  if (cfOk === false || fastlyOk === false) status = 'degraded';
+  if (cfOk === false && fastlyOk === false) status = 'outage';
+
+  const data: ConnectivitySignal = { status, cloudflare: cfOk, fastly: fastlyOk };
+  _connCache = { data, ts: Date.now() };
+  return data;
 }

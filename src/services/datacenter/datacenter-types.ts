@@ -78,12 +78,55 @@ export interface WeatherPosture {
   drivers: string[];
 }
 
+export interface SiteConditions {
+  tempC: number;
+  feelsLikeC: number;
+  humidityPct: number;
+  windSpeedKmh: number;
+  windDirectionDeg: number;
+  precipMm: number;
+  uvIndex: number | null;
+  weatherCode: number;
+}
+
+export interface ForecastSlot {
+  offsetHours: number;
+  tempC: number;
+  precipProbabilityPct: number;
+  weatherCode: number;
+}
+
+export interface SiteAirQuality {
+  usAqi: number | null;
+  pm25: number | null;
+}
+
+export interface NearbySeismicEvent {
+  magnitudeM: number;
+  distanceKm: number;
+  place: string;
+  occurredAt: number;
+}
+
+export type ConnectivityStatus = 'normal' | 'degraded' | 'outage';
+
+export interface ConnectivitySignal {
+  status: ConnectivityStatus;
+  cloudflare: boolean | null;
+  fastly: boolean | null;
+}
+
 export interface DataCenterPosture {
   site: SiteConfig;
   overall: DcLevel;
   headline: string;
   power: PowerPosture;
   weather: WeatherPosture;
+  conditions: SiteConditions | null;
+  forecast24h: ForecastSlot[];
+  airQuality: SiteAirQuality | null;
+  seismicNearby: NearbySeismicEvent[];
+  connectivity: ConnectivitySignal | null;
   actions: ReadinessAction[];
   updatedAt: number;
   staleInputs: string[];

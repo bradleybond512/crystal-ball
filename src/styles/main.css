@@ -20527,3 +20527,103 @@ body.is-desktop-macos .mac-sidebar-panel-item {
   padding-top: 4px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
+
+/* ── Data Center Readiness — intelligence dashboard additions ── */
+
+.dc-conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.dc-conditions-chip {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.dc-forecast-strip {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  margin-bottom: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dc-forecast-strip::-webkit-scrollbar { display: none; }
+
+.dc-forecast-slot {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+  padding-right: 10px;
+}
+.dc-forecast-slot:not(:last-child)::after {
+  content: ' ·';
+  color: rgba(255, 255, 255, 0.25);
+  margin-left: 6px;
+}
+
+.dc-gauges-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.dc-gauges-row .dc-gauge {
+  flex: 1;
+}
+
+.dc-connectivity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dc-conn-label {
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.dc-conn-status {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.dc-conn-detail {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10px;
+}
+
+.dc-conn--normal  .dc-conn-status { color: #30d158; }
+.dc-conn--degraded .dc-conn-status { color: #ff9f0a; }
+.dc-conn--outage  .dc-conn-status { color: #ff453a; }
+.dc-conn--degraded { border-left: 2px solid #ff9f0a; }
+.dc-conn--outage   { border-left: 2px solid #ff453a; }
+
+.dc-seismic-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 6px;
+  padding: 3px 6px;
+  background: rgba(255, 159, 10, 0.08);
+  border-left: 2px solid #ff9f0a;
+  border-radius: 3px;
+}
+
+.dc-seismic-icon { font-size: 12px; }
+.dc-seismic-text { flex: 1; }

@@ -20379,3 +20379,151 @@ body.is-desktop-macos .mac-sidebar-panel-item {
   font-size: 12px;
 }
 .ai-brief-modal-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Data Center Readiness panel ───────────────────────────────── */
+.dc-empty {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 8px 2px;
+  line-height: 1.5;
+}
+
+/* Gauge row — two (or more) side-by-side status indicators */
+.dc-status-header {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dc-gauge {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+
+.dc-gauge-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+}
+
+.dc-gauge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dc-gauge-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-gauge-level {
+  font-size: 11px;
+  font-weight: 700;
+  color: #e0e0e0;
+  white-space: nowrap;
+}
+
+.dc-gauge-detail {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* All-clear headline */
+.dc-allclear {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 4px 2px;
+  line-height: 1.5;
+}
+
+/* Readiness action list */
+.dc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+
+.dc-action {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  padding: 5px 7px;
+}
+
+.dc-action--onsite_safety  { border-left: 3px solid #ff453a; }
+.dc-action--commute_staffing { border-left: 3px solid #ff9f0a; }
+.dc-action--facility_ops   { border-left: 3px solid #0a84ff; }
+.dc-action--escalation     { border-left: 3px solid #bf5af2; }
+
+.dc-action-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 2px;
+}
+
+.dc-urgency {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: 0.05em;
+}
+.dc-urgency--now       { background: rgba(255, 69, 58, 0.25); color: #ff6b60; }
+.dc-urgency--soon      { background: rgba(255, 159, 10, 0.25); color: #ffb830; }
+.dc-urgency--be_ready  { background: rgba(10, 132, 255, 0.20); color: #409cff; }
+.dc-urgency--monitor   { background: rgba(255, 255, 255, 0.10); color: rgba(255, 255, 255, 0.55); }
+
+.dc-action-aud {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.dc-action-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #e0e0e0;
+  line-height: 1.35;
+}
+
+.dc-action-detail {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.dc-action-trigger {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 1px;
+  font-style: italic;
+}
+
+/* Footer — stale inputs or "all feeds current" */
+.dc-footer {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}

@@ -1272,6 +1272,7 @@ export class PanelLayoutManager implements AppModule {
  onPickLocationMode: (active, callback) => {
  this.ctx.map?.setPickLocationMode(active ? callback : null);
  },
+ screenToLatLon: (x, y) => this.ctx.map?.getLatLonAtScreen(x, y) ?? null,
  });
 
  const openCreate = () => savedPlaceModal.openCreate();

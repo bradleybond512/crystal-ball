@@ -124,6 +124,7 @@ function buildRow(label: string, subtext: string, icon: string, canDismiss: bool
   const iconEl = document.createElement('span');
   iconEl.className = 'cb-osb-icon';
   iconEl.textContent = icon;
+  iconEl.style.marginRight = '6px'; // fallback when class CSS gap is unavailable
 
   const textEl = document.createElement('span');
   textEl.className = 'cb-osb-text';
@@ -135,6 +136,7 @@ function buildRow(label: string, subtext: string, icon: string, canDismiss: bool
   const subtextEl = document.createElement('span');
   subtextEl.className = 'cb-osb-subtext';
   subtextEl.textContent = subtext;
+  subtextEl.style.marginLeft = '6px'; // fallback when class CSS gap is unavailable
 
   textEl.append(labelEl, subtextEl);
 

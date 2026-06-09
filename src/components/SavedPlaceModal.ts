@@ -533,6 +533,19 @@ export class SavedPlaceModal {
  this.pickModeActive = true;
  this.render();
  this.overlay.classList.add('spm-pick-mode');
+
+ // Ensure the 2D map is visible so the user can click on it.
+ // The map section may be hidden (user disabled it in settings) or scrolled
+ // out of view (panels-grid is below the map). Reveal + scroll before
+ // registering the pick callback so the canvas is ready for the click.
+ const mapSection = document.getElementById('mapSection');
+ if (mapSection) {
+ if (mapSection.classList.contains('hidden')) {
+ mapSection.classList.add('spm-pick-revealed');
+ }
+ mapSection.scrollIntoView({ block: 'start', behavior: 'instant' } as ScrollIntoViewOptions);
+ }
+
  this.options.onPickLocationMode(true, (lat, lon) => {
  this.formState.lat = lat.toFixed(6);
  this.formState.lon = lon.toFixed(6);
@@ -545,6 +558,8 @@ export class SavedPlaceModal {
  this.pickModeActive = false;
  this.overlay.classList.remove('spm-pick-mode');
  this.options.onPickLocationMode(false, null);
+ // Un-reveal map section if we temporarily showed it for pick mode.
+ document.getElementById('mapSection')?.classList.remove('spm-pick-revealed');
  this.render();
   }
 

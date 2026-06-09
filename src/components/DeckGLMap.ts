@@ -6234,11 +6234,12 @@ export class DeckGLMap {
  }, 0.6);
 
  // Satellite imagery (NOAA GOES geocolor)
- // GoogleMapsCompatible_Level7 tiles only exist at zoom 0–7; pass maxzoom
- // so MapLibre overzooms at z8+ instead of requesting out-of-bounds tiles.
+ // GoogleMapsCompatible_Level7 tiles exist at zoom 0–7. With tileSize:256 MapLibre
+ // adds +1 to viewport zoom when selecting tile zoom, so maxzoom:6 makes the highest
+ // tile zoom requested = 7. Avoids the "Zoom Level Not Supported" GIBS error image.
  this.syncRasterTileLayer(map, 'wm-satellite', ml.weatherSatellite, () => {
  return [getGoesWmsTileUrl('geocolor')];
- }, 0.5, 7);
+ }, 0.5, 6);
 
  // OWM tile layers (require API key)
  const owmLayers: [string, boolean, OwmTileLayer][] = [

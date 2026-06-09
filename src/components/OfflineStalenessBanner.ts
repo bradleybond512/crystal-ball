@@ -113,9 +113,9 @@ function ensureStyles(): void {
 }
 
 const STATUS_ICON: Record<string, string> = {
-  stale: '⏱',
+  stale: '⚠',
   'very-stale': '⚠',
-  offline: '📡',
+  offline: '⚠',
 };
 
 function buildRow(label: string, subtext: string, icon: string, canDismiss: boolean): DocumentFragment {

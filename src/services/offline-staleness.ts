@@ -83,13 +83,13 @@ function oldestCachedAge(): number {
 }
 
 function formatAge(ms: number): string {
-  if (!Number.isFinite(ms)) return 'NEVER';
+  if (!Number.isFinite(ms)) return 'never';
   const mins = Math.floor(ms / 60_000);
-  if (mins < 1) return 'JUST NOW';
-  if (mins < 60) return `${mins}m AGO`;
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h AGO`;
-  return `${Math.floor(hrs / 24)}d AGO`;
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 export function getOfflineState(): OfflineState {
@@ -113,13 +113,13 @@ export function getOfflineState(): OfflineState {
   let bannerSubtext = '';
   if (status === 'offline') {
     bannerLabel = 'No connection';
-    bannerSubtext = `Viewing cached data from ${ageLabel} ago`;
+    bannerSubtext = `Viewing cached data from ${ageLabel}`;
   } else if (status === 'very-stale') {
     bannerLabel = 'Data is very old';
-    bannerSubtext = `Last updated ${ageLabel} ago \u2014 verify before use`;
+    bannerSubtext = `Last updated ${ageLabel} \u2014 verify before use`;
   } else if (status === 'stale') {
     bannerLabel = 'Viewing cached data';
-    bannerSubtext = `Last updated ${ageLabel} ago`;
+    bannerSubtext = `Last updated ${ageLabel}`;
   }
 
   return {

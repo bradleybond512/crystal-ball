@@ -180,7 +180,8 @@ export async function fetchCachedRiskScores(signal?: AbortSignal): Promise<Cache
   if (signal?.aborted) throw createAbortError();
   const now = Date.now();
 
-  if (cachedScores && now - lastFetchTime < REFETCH_INTERVAL_MS) {
+  // Throttle retries even when cachedScores is null (sustained backend failure)
+  if (lastFetchTime > 0 && now - lastFetchTime < REFETCH_INTERVAL_MS) {
  return cachedScores;
   }
 

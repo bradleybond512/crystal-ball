@@ -6377,6 +6377,13 @@ a.prediction-link:hover {
   display: flex;
 }
 
+/* SavedPlaceModal must stack above UnifiedSettings (both z-index:1000 but
+   PanelLayout appends SavedPlaceModal to body before EventHandlers appends
+   UnifiedSettings, so DOM order would otherwise put Settings on top). */
+#savedPlaceModal {
+  z-index: 1010;
+}
+
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);

@@ -63,8 +63,7 @@ export class OperatorShiftReportPanel extends Panel {
         ? reports.find((r) => r.id === this.selectedReportId) ?? null
         : reports[0] ?? null;
       this.setCount(reports.length);
-      this.setContent(this.buildHtml(reports, selected));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(reports, selected), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Shift-report panel error: ${escapeHtml(String(error))}</div>`,

@@ -62,8 +62,7 @@ export class AlertDeduplicationPanel extends Panel {
       const stats = this.service.getStats();
       const duplicates = this.service.getRecords({ isDuplicate: true }, DEDUP_LIST_LIMIT);
       this.setCount(stats.duplicates);
-      this.setContent(this.buildHtml(stats, duplicates));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(stats, duplicates), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Dedup panel error: ${escapeHtml(String(error))}</div>`,

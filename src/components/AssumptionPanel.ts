@@ -79,8 +79,7 @@ export class AssumptionPanel extends Panel {
   private render(): void {
     try {
       const html = this.buildHtml();
-      this.setContent(html);
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(html, () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Assumption panel error: ${escapeHtml(String(error))}</div>`,

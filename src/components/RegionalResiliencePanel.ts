@@ -76,8 +76,7 @@ export class RegionalResiliencePanel extends Panel {
     const svc = getRegionalResilienceIndex();
     const all = svc.getAllScores();
     this.setCount(all.length);
-    this.setContent(this.buildHtml(all));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(all), () => this.wireHandlers());
   }
 
   private buildHtml(all: RegionalScore[]): string {

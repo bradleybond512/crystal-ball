@@ -131,8 +131,7 @@ export class SystemDiagnosticPanel extends Panel {
   private render(): void {
     try {
       const html = this.buildHtml();
-      this.setContent(html);
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(html, () => this.wireHandlers());
     } catch (error) {
       console.warn('[SystemDiagnosticPanel] render failed:', error);
       this.setContent(`<div style="padding:12px;color:var(--severity-critical);">Diagnostic render error: ${escapeHtml(String(error))}</div>`);

@@ -54,8 +54,7 @@ export class NotificationSettingsPanel extends Panel {
       (d) => settings.global.masterMute || !settings.domains[d].enabled,
     ).length;
     this.setCount(mutedOrDisabled);
-    this.setContent(this.buildHtml());
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(), () => this.wireHandlers());
   }
 
   private buildHtml(): string {

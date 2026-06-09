@@ -216,6 +216,7 @@ export class Panel {
   private colSpanReconcileRaf: number | null = null;
   private readonly contentDebounceMs = 150;
   private pendingContentHtml: string | null = null;
+  private pendingOnRendered: (() => void) | null = null;
   private contentDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   // Cache the last HTML string we actually wrote to the DOM. Reading
   // `element.innerHTML` forces the browser to serialize the subtree, which is
@@ -750,13 +751,14 @@ export class Panel {
  }
   }
 
-  public setContent(html: string): void {
+  public setContent(html: string, onRendered?: () => void): void {
  // No-op detection uses only cached strings — avoid reading innerHTML, which
  // forces a full subtree serialization every call.
  if (this.pendingContentHtml === html) return;
  if (this.pendingContentHtml === null && this.lastAppliedContentHtml === html) return;
 
  this.pendingContentHtml = html;
+ this.pendingOnRendered = onRendered ?? null;
  if (this.contentDebounceTimer) {
  clearTimeout(this.contentDebounceTimer);
  }
@@ -775,7 +777,9 @@ export class Panel {
  }
 
  this.pendingContentHtml = null;
- if (this.lastAppliedContentHtml !== html) {
+ if (this.lastAppliedContentHtml === html) {
+ this.pendingOnRendered = null;
+ } else {
  // Crash-isolate the DOM write so a malformed string from one panel subclass
  // (bad escaping, oversized attribute, CSP blocker) can't abort the debounce
  // timer. On failure we swap in a minimal error card and mark the cache so
@@ -784,9 +788,13 @@ export class Panel {
  this.content.innerHTML = html;
  this.lastAppliedContentHtml = html;
  this.markFresh();
+ const cb = this.pendingOnRendered;
+ this.pendingOnRendered = null;
+ cb?.();
  } catch (error) {
  // eslint-disable-next-line no-console
  console.warn(`[Panel ${this.panelId}] setContent failed:`, error);
+ this.pendingOnRendered = null;
  this.renderErrorFallback(error instanceof Error ? error.message : String(error));
  }
  }

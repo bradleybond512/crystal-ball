@@ -61,8 +61,7 @@ export class IntelligenceTrustBudgetPanel extends Panel {
       const statuses = [...this.service.getAllStatuses()].sort((a, b) => a.domain.localeCompare(b.domain));
       const suppressedCount = statuses.filter((s) => s.suppressionActive).length;
       this.setCount(suppressedCount);
-      this.setContent(this.buildHtml(statuses));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(statuses), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Trust-budget panel error: ${escapeHtml(String(error))}</div>`,

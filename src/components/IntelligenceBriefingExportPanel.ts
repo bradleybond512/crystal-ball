@@ -88,8 +88,7 @@ export class IntelligenceBriefingExportPanel extends Panel {
   private render(): void {
     const history = this.service.getBriefings(10);
     this.setCount(history.length);
-    this.setContent(this.buildHtml(history));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(history), () => this.wireHandlers());
   }
 
   private buildHtml(history: readonly IntelligenceBriefing[]): string {

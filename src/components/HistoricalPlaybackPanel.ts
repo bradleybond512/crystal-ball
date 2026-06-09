@@ -131,8 +131,7 @@ export class HistoricalPlaybackPanel extends Panel {
     this.setCount(stats.highSeverityDomainCount);
     this.setContent(this.buildHtml({
       timeline, activeId, liveId, selected, live, stats, comparison,
-    }));
-    queueMicrotask(() => this.wireHandlers());
+    }), () => this.wireHandlers());
   }
 
   private buildHtml(view: {

@@ -111,8 +111,7 @@ export class NotificationAuditPanel extends Panel {
   private render(): void {
     const svc = getNotificationAuditService();
     this.setCount(svc.unreadCount());
-    this.setContent(this.buildHtml());
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(), () => this.wireHandlers());
   }
 
   private buildHtml(): string {

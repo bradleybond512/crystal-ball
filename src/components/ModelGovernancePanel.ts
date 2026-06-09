@@ -48,8 +48,7 @@ export class ModelGovernancePanel extends Panel {
     const all = svc.getAll();
     this.setCount(all.length);
     const visible = this.applyFilters(all);
-    this.setContent(this.buildHtml(visible, all));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(visible, all), () => this.wireHandlers());
   }
 
   private applyFilters(cards: ModelCard[]): ModelCard[] {

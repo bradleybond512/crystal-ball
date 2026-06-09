@@ -55,8 +55,7 @@ export class CrossDomainContradictionDetectorPanel extends Panel {
     const stats = det.getStats();
     const active = det.getActive();
     this.setCount(stats.active);
-    this.setContent(this.buildHtml(stats, active));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(stats, active), () => this.wireHandlers());
   }
 
   private buildHtml(

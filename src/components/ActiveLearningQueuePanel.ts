@@ -73,8 +73,7 @@ export class ActiveLearningQueuePanel extends Panel {
     try {
       const stats = this.service.getStats();
       this.setCount(stats.pending + stats.claimed);
-      this.setContent(this.buildHtml(stats));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(stats), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Active-learning panel error: ${escapeHtml(String(error))}</div>`,

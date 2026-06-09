@@ -74,8 +74,7 @@ export class VulnersCvePanel extends Panel {
   private render(): void {
     const critical = this.records.filter((r) => r.exploitRiskTier === 'critical').length;
     this.setCount(critical);
-    this.setContent(this.buildHtml());
-    this.attachHandlers();
+    this.setContent(this.buildHtml(), () => this.attachHandlers());
   }
 
   private buildHtml(): string {

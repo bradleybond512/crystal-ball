@@ -57,6 +57,14 @@ export class NetworkTopologyPanel extends Panel {
  trackActivity: true,
  infoTooltip: 'Network topology and asset visibility dashboard. Tracks nodes (servers, firewalls, ICS devices), connections, and security alerts. Highlights compromised assets and suspicious connections.',
  });
+ // Delegate node-row clicks once so re-renders never accumulate listeners.
+ this.getContentElement().addEventListener('click', (e) => {
+ const row = (e.target as Element).closest<HTMLElement>('.topo-node-row');
+ if (!row) return;
+ const id = row.dataset.nodeId ?? null;
+ this.selectedNodeId = this.selectedNodeId === id ? null : id;
+ this.render();
+ });
  this.showLoading('Mapping network topology\u2026');
  this.start();
   }
@@ -117,14 +125,6 @@ export class NetworkTopologyPanel extends Panel {
  ${alertHtml}
  </div>
  `);
-
- this.getContentElement().querySelectorAll('.topo-node-row').forEach(row => {
- row.addEventListener('click', () => {
- const id = row.getAttribute('data-node-id');
- this.selectedNodeId = this.selectedNodeId === id ? null : id;
- this.render();
- });
- });
   }
 
   private renderNode(n: TopoNode): string {

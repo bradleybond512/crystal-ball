@@ -72,8 +72,7 @@ export class ActiveLearningPanel extends Panel {
     const svc = getActiveLearningQueue();
     const pending = svc.getPending();
     this.setCount(pending.length);
-    this.setContent(this.buildHtml(pending, svc.getAll()));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(pending, svc.getAll()), () => this.wireHandlers());
   }
 
   private buildHtml(pending: LearningItem[], all: LearningItem[]): string {

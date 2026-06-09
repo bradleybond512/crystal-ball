@@ -81,8 +81,7 @@ export class FailurePredictionPanel extends Panel {
       const top = risks.slice(0, 10);
       const counts = countByBand(risks);
       this.setCount(counts.critical + counts.high);
-      this.setContent(this.buildHtml(counts, top, risks.length));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(counts, top, risks.length), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Failure-prediction panel error: ${escapeHtml(String(error))}</div>`,

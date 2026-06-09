@@ -84,8 +84,7 @@ export class RecoveryModelingPanel extends Panel {
     const active = svc.getActiveProfiles();
     const completed = svc.getCompletedProfiles(HISTORY_LIMIT);
     this.setCount(active.length);
-    this.setContent(this.buildHtml(active, completed));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(active, completed), () => this.wireHandlers());
   }
 
   private buildHtml(active: RecoveryProfile[], completed: RecoveryProfile[]): string {

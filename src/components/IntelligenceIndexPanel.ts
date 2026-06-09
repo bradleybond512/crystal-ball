@@ -96,8 +96,7 @@ export class IntelligenceIndexPanel extends Panel {
     const svc = getIntelligenceIndexService();
     const stats = svc.getStats();
     this.setCount(stats.total);
-    this.setContent(this.buildHtml());
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(), () => this.wireHandlers());
   }
 
   private buildHtml(): string {

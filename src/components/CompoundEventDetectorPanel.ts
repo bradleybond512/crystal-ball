@@ -73,8 +73,7 @@ export class CompoundEventDetectorPanel extends Panel {
       const history = this.service.getHistory(HISTORY_LIMIT);
       const summary = this.service.getSummary();
       this.setCount(summary.activeEvents.length);
-      this.setContent(this.buildHtml(active, history, summary));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(active, history, summary), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Compound Events panel error: ${escapeHtml(String(error))}</div>`,

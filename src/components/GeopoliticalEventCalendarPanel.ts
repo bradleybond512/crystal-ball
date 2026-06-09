@@ -94,8 +94,7 @@ export class GeopoliticalEventCalendarPanel extends Panel {
     const events = svc.getUpcoming(horizonMs, filter);
     const summary = svc.getSummary();
     this.setCount(summary.highRiskCount);
-    this.setContent(this.buildHtml(events, summary.highRiskCount));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(events, summary.highRiskCount), () => this.wireHandlers());
   }
 
   private buildFilter(): UpcomingFilter | undefined {

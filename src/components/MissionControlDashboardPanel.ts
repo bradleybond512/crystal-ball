@@ -83,8 +83,7 @@ export class MissionControlDashboardPanel extends Panel {
     try {
       const snap = this.service.getLatest();
       this.setCount(snap ? snap.activeSituationCount : 0);
-      this.setContent(this.buildHtml(snap));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(snap), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Mission Control panel error: ${escapeHtml(String(error))}</div>`,

@@ -109,8 +109,7 @@ export class WorldStateComparatorPanel extends Panel {
       nowSnapshot,
       deltas,
       summary,
-    }));
-    queueMicrotask(() => this.wireHandlers());
+    }), () => this.wireHandlers());
   }
 
   private buildHtml(view: {

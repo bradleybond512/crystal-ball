@@ -75,8 +75,7 @@ export class WorldNarrativePanel extends Panel {
     try {
       const narrative = getWorldNarrativeEngine().getLatestNarrative();
       this.setCount(narrative?.criticalAlertCount ?? 0);
-      this.setContent(this.buildHtml(narrative));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(narrative), () => this.wireHandlers());
     } catch (error) {
       this.setContent(`<div style="padding:12px;color:var(--severity-critical);">World-narrative render error: ${escapeHtml(String(error))}</div>`);
     }

@@ -94,8 +94,7 @@ export class QualityDebtPanel extends Panel {
     try {
       const summary = this.tracker.scan(this.collectScanParams());
       this.setCount(summary.items.length);
-      this.setContent(this.buildHtml(summary));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(summary), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Quality debt scan error: ${escapeHtml(String(error))}</div>`,

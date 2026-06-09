@@ -67,8 +67,7 @@ export class ThreatCorrelationMatrixPanel extends Panel {
     const svc = getThreatCorrelationMatrix();
     const snapshot = svc.getSnapshot();
     this.setCount(snapshot.hotPairs.length);
-    this.setContent(this.buildHtml(snapshot));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(snapshot), () => this.wireHandlers());
   }
 
   private buildHtml(snapshot: MatrixSnapshot): string {

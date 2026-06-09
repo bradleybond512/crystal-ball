@@ -67,8 +67,7 @@ export class NotificationPreferencesPanel extends Panel {
       ? prefs.domains.filter((d) => d.enabled).length
       : 0;
     this.setCount(enabledCount);
-    this.setContent(this.buildHtml());
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(), () => this.wireHandlers());
   }
 
   private buildHtml(): string {

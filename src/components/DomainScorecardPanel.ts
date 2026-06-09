@@ -102,8 +102,7 @@ export class DomainScorecardPanel extends Panel {
     const summary = this.service.generateAll(this.feedMap());
     const cards = this.sortCards(summary.scorecards);
     this.setCount(summary.domainsNeedingAttention.length);
-    this.setContent(this.buildHtml(summary.systemGrade, summary.domainsNeedingAttention, cards));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(summary.systemGrade, summary.domainsNeedingAttention, cards), () => this.wireHandlers());
   }
 
   private feedMap(): Record<string, FeedHealth> {

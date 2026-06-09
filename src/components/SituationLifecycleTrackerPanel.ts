@@ -74,8 +74,7 @@ export class SituationLifecycleTrackerPanel extends Panel {
       const lifecycles = this.service.getAll(filterArg, RECENT_LIMIT);
       const stats = this.service.getStats(this.filterDomain ?? undefined);
       this.setCount(lifecycles.length);
-      this.setContent(this.buildHtml(stats, lifecycles));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(stats, lifecycles), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Lifecycle panel error: ${escapeHtml(String(error))}</div>`,

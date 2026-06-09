@@ -81,8 +81,7 @@ export class ExperimentManagerPanel extends Panel {
     const experiments = svc.getExperiments();
     const running = experiments.filter((e) => e.status === 'running').length;
     this.setCount(running);
-    this.setContent(this.buildHtml(experiments));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(experiments), () => this.wireHandlers());
   }
 
   private buildHtml(experiments: readonly Experiment[]): string {

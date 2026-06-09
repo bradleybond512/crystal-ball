@@ -64,8 +64,7 @@ export class MetaConfidenceCalibrationPanel extends Panel {
       const summaries = this.service.getAllSummaries();
       const totalRecords = this.service.getRecords().length;
       this.setCount(summaries.length);
-      this.setContent(this.buildHtml(summaries, totalRecords));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(summaries, totalRecords), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Meta-confidence panel error: ${escapeHtml(String(error))}</div>`,

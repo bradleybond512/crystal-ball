@@ -75,8 +75,7 @@ export class ContradictionDetectorPanel extends Panel {
     const open = svc.getOpen();
     const all = svc.getAll();
     this.setCount(open.length);
-    this.setContent(this.buildHtml(open, all, svc.stats()));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(open, all, svc.stats()), () => this.wireHandlers());
   }
 
   private buildHtml(

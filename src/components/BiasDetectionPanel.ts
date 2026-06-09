@@ -98,8 +98,7 @@ export class BiasDetectionPanel extends Panel {
     const svc = getBiasDetectorService();
     const active = svc.getActive();
     this.setCount(active.length);
-    this.setContent(this.buildHtml(active, svc.getHistory()));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(active, svc.getHistory()), () => this.wireHandlers());
   }
 
   private buildHtml(active: BiasSignal[], history: BiasSignal[]): string {

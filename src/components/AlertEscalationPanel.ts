@@ -78,8 +78,7 @@ export class AlertEscalationPanel extends Panel {
       const pending = this.service.getRecords({ status: 'pending' }, LIST_LIMIT);
       const escalated = this.service.getRecords({ status: 'escalated' }, LIST_LIMIT);
       this.setCount(summary.pending + summary.escalated);
-      this.setContent(this.buildHtml(summary, pending, escalated));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(summary, pending, escalated), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Escalation panel error: ${escapeHtml(String(error))}</div>`,

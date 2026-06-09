@@ -99,8 +99,7 @@ export class DomainScorecardsPanel extends Panel {
     const cards = this.sortCards(svc.getAllScorecards());
     const flagged = cards.filter((c) => c.overallGrade === 'D' || c.overallGrade === 'F').length;
     this.setCount(flagged);
-    this.setContent(this.buildHtml(cards));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(cards), () => this.wireHandlers());
   }
 
   private sortCards(cards: readonly DomainScorecard[]): DomainScorecard[] {

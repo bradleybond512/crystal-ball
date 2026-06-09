@@ -62,9 +62,7 @@ export class ApiDiagnosticPanel extends Panel {
   private render(): void {
     const report = diagnoseAll();
     this.setCount(report.failing + report.silent);
-    this.setContent(this.buildHtml(report));
-    // Attach click handlers after DOM update
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(report), () => this.wireHandlers());
   }
 
   private buildHtml(report: DiagnosticReport): string {

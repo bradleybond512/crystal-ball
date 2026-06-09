@@ -55,8 +55,7 @@ export class CausalChainPanel extends Panel {
     try {
       const chains = [...this.builder.getChains()].sort((a, b) => b.builtAt - a.builtAt);
       this.setCount(chains.length);
-      this.setContent(this.buildHtml(chains));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(chains), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Causal-chain panel error: ${escapeHtml(String(error))}</div>`,

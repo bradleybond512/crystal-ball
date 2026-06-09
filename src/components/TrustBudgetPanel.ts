@@ -63,8 +63,7 @@ export class TrustBudgetPanel extends Panel {
   private render(): void {
     const snap = getTrustBudgetService().getSnapshot();
     this.setCount(snap.exhaustedDomains.length);
-    this.setContent(this.buildHtml(snap));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(snap), () => this.wireHandlers());
   }
 
   private buildHtml(snap: TrustBudgetSnapshot): string {

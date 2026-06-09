@@ -65,8 +65,7 @@ export class GeospatialClusteringPanel extends Panel {
     const svc = getGeospatialClusteringService();
     const summary = svc.getSummary();
     this.setCount(summary.hotspots.length);
-    this.setContent(this.buildHtml(summary));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(summary), () => this.wireHandlers());
   }
 
   private buildHtml(summary: ClusterSummary): string {

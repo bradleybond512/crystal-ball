@@ -59,8 +59,7 @@ export class SchedulerPanel extends Panel {
     const tasks = svc.getAllTasks();
     const enabledCount = tasks.filter((t) => t.enabled).length;
     this.setCount(enabledCount);
-    this.setContent(this.buildHtml(tasks, svc.getHistory(undefined, HISTORY_DISPLAY_LIMIT), svc.isRunning(), svc.stats()));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(tasks, svc.getHistory(undefined, HISTORY_DISPLAY_LIMIT), svc.isRunning(), svc.stats()), () => this.wireHandlers());
   }
 
   private buildHtml(

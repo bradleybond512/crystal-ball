@@ -64,8 +64,7 @@ export class IntelligenceDigestPanel extends Panel {
     const svc = getIntelligenceDigestService();
     const digest = svc.getLatestDigest();
     this.setCount(digest ? digest.totalAlerts : 0);
-    this.setContent(this.buildHtml(digest));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(digest), () => this.wireHandlers());
   }
 
   private buildHtml(digest: IntelligenceDigest | undefined): string {

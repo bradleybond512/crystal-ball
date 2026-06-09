@@ -68,8 +68,7 @@ export class SafetyCaseDashboardPanel extends Panel {
     const svc = getSafetyCaseDashboardService();
     const summary = svc.getSummary();
     this.setCount(summary.criticalFailures.length);
-    this.setContent(this.buildHtml(summary));
-    queueMicrotask(() => this.wireHandlers());
+    this.setContent(this.buildHtml(summary), () => this.wireHandlers());
   }
 
   private buildHtml(summary: SafetyCaseSummary): string {

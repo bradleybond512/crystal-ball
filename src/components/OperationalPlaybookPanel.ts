@@ -72,8 +72,7 @@ export class OperationalPlaybookPanel extends Panel {
       const history = this.engine.getAll().filter((p) => p.status !== 'active');
       const stats = this.engine.stats();
       this.setCount(active.length);
-      this.setContent(this.buildHtml(active, history, stats));
-      queueMicrotask(() => this.wireHandlers());
+      this.setContent(this.buildHtml(active, history, stats), () => this.wireHandlers());
     } catch (error) {
       this.setContent(
         `<div style="padding:12px;color:var(--severity-critical);">Operational-playbook panel error: ${escapeHtml(String(error))}</div>`,

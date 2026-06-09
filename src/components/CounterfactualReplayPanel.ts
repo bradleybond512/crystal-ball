@@ -100,8 +100,7 @@ export class CounterfactualReplayPanel extends Panel {
         ${renderResultPane(selected)}
       </div>
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private renderToolbar(): string {

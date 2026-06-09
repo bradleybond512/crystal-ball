@@ -214,8 +214,7 @@ export class IntelligenceTimelinePanel extends Panel {
     if (level === 'raw') {
       let raw = '[]';
       try { raw = JSON.stringify(events.slice(0, 50), null, 2); } catch { raw = '[]'; }
-      this.setContent(`<div style="padding:8px;">${switcherRow}<pre style="margin:0;padding:8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border-subtle,#333);border-radius:4px;overflow:auto;max-height:520px;">${escapeHtml(raw)}</pre></div>`);
-      this.wireHandlers();
+      this.setContent(`<div style="padding:8px;">${switcherRow}<pre style="margin:0;padding:8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border-subtle,#333);border-radius:4px;overflow:auto;max-height:520px;">${escapeHtml(raw)}</pre></div>`, () => this.wireHandlers());
       return;
     }
 
@@ -224,16 +223,14 @@ export class IntelligenceTimelinePanel extends Panel {
       const list = recent.length === 0
         ? '<div class="panel-empty" style="padding:16px 0;text-align:center;opacity:0.7;">No events.</div>'
         : `<div style="display:flex;flex-direction:column;gap:4px;">${recent.map((e) => this.renderEventRow(e)).join('')}</div>`;
-      this.setContent(`<div style="padding:8px;">${switcherRow}${list}<div style="opacity:0.5;font-size:11px;margin-top:6px;">5 most recent of ${events.length} · switch to Detail for filters</div></div>`);
-      this.wireHandlers();
+      this.setContent(`<div style="padding:8px;">${switcherRow}${list}<div style="opacity:0.5;font-size:11px;margin-top:6px;">5 most recent of ${events.length} · switch to Detail for filters</div></div>`, () => this.wireHandlers());
       return;
     }
 
     const list = events.length === 0
       ? '<div class="panel-empty" style="padding:16px 0;text-align:center;opacity:0.7;">No events in this time range. Adjust filters or wait for new data.</div>'
       : `<div style="display:flex;flex-direction:column;gap:4px;max-height:520px;overflow-y:auto;">${events.map((e) => this.renderEventRow(e)).join('')}</div>`;
-    this.setContent(`<div style="padding:8px;">${switcherRow}${this.renderFilterBar(domains)}${list}</div>`);
-    this.wireHandlers();
+    this.setContent(`<div style="padding:8px;">${switcherRow}${this.renderFilterBar(domains)}${list}</div>`, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {

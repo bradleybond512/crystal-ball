@@ -97,8 +97,7 @@ export class PersistentQueryEnginePanel extends Panel {
       ${renderMatchesFeed(matches)}
       ${renderFooter()}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private renderCreateForm(): string {

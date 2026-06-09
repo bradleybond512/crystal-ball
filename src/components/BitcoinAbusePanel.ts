@@ -226,8 +226,7 @@ export class BitcoinAbusePanel extends Panel {
       case 'domains': { body = this.renderDomains(); break; }
       case 'lookup': { body = this.renderLookup(); break; }
     }
-    this.setContent(`${this.renderTabStrip()}${body}`);
-    this.wireHandlers();
+    this.setContent(`${this.renderTabStrip()}${body}`, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {

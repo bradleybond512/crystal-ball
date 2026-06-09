@@ -91,8 +91,7 @@ export class IntelligenceHealthMonitorPanel extends Panel {
       ${renderComponents(latest)}
       ${renderFooter(latest)}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {

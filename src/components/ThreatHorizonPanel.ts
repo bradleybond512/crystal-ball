@@ -82,8 +82,7 @@ export class ThreatHorizonPanel extends Panel {
       ${this.renderTabs(scanner)}
       ${renderThreatList(active)}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private renderTabs(scanner: ReturnType<typeof getThreatHorizonScanner>): string {

@@ -141,8 +141,7 @@ export class IpInfoPanel extends Panel {
       case 'lookup': { body = this.renderLookupTab(); break; }
       case 'batch':  { body = this.renderBatchTab(); break; }
     }
-    this.setContent(`${this.renderTabStrip()}<div style="padding:0 2px;">${body}</div>`);
-    this.wireHandlers();
+    this.setContent(`${this.renderTabStrip()}<div style="padding:0 2px;">${body}</div>`, () => this.wireHandlers());
   }
 
   private renderTabStrip(): string {

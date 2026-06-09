@@ -130,15 +130,13 @@ export class GDACSAlertsPanel extends Panel {
 
     if (level === 'raw') {
       const raw = this.rssData ?? { events: [], degraded: false };
-      this.setContent(`<div style="padding:8px;font-size:12px;">${switcherRow}<pre style="margin:0;padding:8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border-subtle,#333);border-radius:4px;overflow:auto;max-height:520px;">${escapeHtml(JSON.stringify(raw, null, 2))}</pre></div>`);
-      this.wireHandlers();
+      this.setContent(`<div style="padding:8px;font-size:12px;">${switcherRow}<pre style="margin:0;padding:8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border-subtle,#333);border-radius:4px;overflow:auto;max-height:520px;">${escapeHtml(JSON.stringify(raw, null, 2))}</pre></div>`, () => this.wireHandlers());
       return;
     }
 
     if (level === 'summary') {
       const summary = this.renderSummary();
-      this.setContent(`<div style="padding:8px;font-size:12px;">${switcherRow}${summary}</div>`);
-      this.wireHandlers();
+      this.setContent(`<div style="padding:8px;font-size:12px;">${switcherRow}${summary}</div>`, () => this.wireHandlers());
       return;
     }
 
@@ -154,8 +152,7 @@ export class GDACSAlertsPanel extends Panel {
 
     const content = this.activeTab === 'rss' ? this.renderRss() : this.renderJson();
 
-    this.setContent(`<div style="padding:8px;font-size:12px;">${switcherRow}${tabBar}${content}</div>`);
-    this.wireHandlers();
+    this.setContent(`<div style="padding:8px;font-size:12px;">${switcherRow}${tabBar}${content}</div>`, () => this.wireHandlers());
   }
 
   private renderSummary(): string {

@@ -89,8 +89,7 @@ export class SituationTimelinePanel extends Panel {
       ${this.renderFilterBar(breakdown)}
       ${renderTimeline(entries, this.state.expandedId)}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private renderFilterBar(breakdown: readonly DomainBreakdownRow[]): string {

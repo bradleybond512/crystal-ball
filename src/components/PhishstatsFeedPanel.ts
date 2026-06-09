@@ -118,8 +118,7 @@ export class PhishstatsFeedPanel extends Panel {
         </table>
         ${more}
       </div>
-    `);
-    this.wireHandlers();
+    `, () => this.wireHandlers());
   }
 
   private renderSummary(stats: ReturnType<typeof summarisePhishing>): string {

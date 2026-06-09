@@ -104,8 +104,7 @@ export class MediastackNewsPanel extends Panel {
   }
 
   private render(): void {
-    this.setContent(`${this.renderChipStrip()}${this.renderSearchInput()}${this.renderFeed()}`);
-    this.wireHandlers();
+    this.setContent(`${this.renderChipStrip()}${this.renderSearchInput()}${this.renderFeed()}`, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {

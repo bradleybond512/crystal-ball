@@ -81,8 +81,7 @@ export class AnalystNotebookPanel extends Panel {
       ${this.renderCategoryTabs(stats)}
       ${this.renderNotes(notes)}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private collectNotes(): Note[] {

@@ -76,8 +76,7 @@ export class SituationPriorityQueuePanel extends Panel {
       ${renderWeightEditor(snapshot.weights)}
       ${renderQueue(entries, snapshot.computedAt)}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {

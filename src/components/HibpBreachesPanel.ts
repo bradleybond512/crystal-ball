@@ -121,8 +121,7 @@ export class HibpBreachesPanel extends Panel {
       case 'search': { body = renderSearchTab(this.query, this.hits, this.searchLoading); break; }
       case 'stats': { body = renderStatisticsTab(this.stats, this.statsLoading); break; }
     }
-    this.setContent(`${this.renderTabStrip()}<div style="padding:0 2px;">${body}</div>`);
-    this.wireHandlers();
+    this.setContent(`${this.renderTabStrip()}<div style="padding:0 2px;">${body}</div>`, () => this.wireHandlers());
   }
 
   private renderTabStrip(): string {

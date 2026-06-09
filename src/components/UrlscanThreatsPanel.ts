@@ -132,8 +132,7 @@ export class UrlscanThreatsPanel extends Panel {
         ${summaryHtml}
         <div style="display:flex;flex-direction:column;gap:4px;">${listHtml}</div>
       </div>
-    `);
-    this.wireHandlers();
+    `, () => this.wireHandlers());
   }
 
   private renderSubmit(): string {

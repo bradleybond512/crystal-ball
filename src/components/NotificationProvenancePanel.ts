@@ -76,8 +76,7 @@ export class NotificationProvenancePanel extends Panel {
       ${this.renderSearchBar()}
       ${renderList(records, this.state.expandedId)}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private renderSearchBar(): string {

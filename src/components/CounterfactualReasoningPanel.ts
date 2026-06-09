@@ -109,8 +109,7 @@ export class CounterfactualReasoningPanel extends Panel {
       ${this.renderFilterBar(domains)}
       ${this.renderCards(filtered)}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private renderFilterBar(domains: readonly string[]): string {

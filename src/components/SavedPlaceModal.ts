@@ -353,7 +353,8 @@ export class SavedPlaceModal {
  const tmp = document.createElement('div');
  // renderPickGeocodeResults escapes all user-provided displayName values via escapeHtml
  tmp.innerHTML = this.renderPickGeocodeResults();
- searchRow.after(tmp.firstElementChild!);
+ const el = tmp.firstElementChild;
+ if (el) searchRow.after(el);
   }
 
   private getValidationError(): string | null {
@@ -567,12 +568,17 @@ export class SavedPlaceModal {
   }
 
   private async runSearch(query: string): Promise<void> {
+ try {
  const results = await forwardGeocode(query);
  this.geocodeResults = results;
  if (this.pickModeActive) {
  this.refreshPickBannerResults();
  } else {
  this.refreshGeocodeResults();
+ }
+ } catch {
+ // forwardGeocode swallows its own errors; this guards against any
+ // unexpected exception reaching WebKit's unhandled-rejection handler.
  }
   }
 
@@ -587,7 +593,8 @@ export class SavedPlaceModal {
  const tmp = document.createElement('div');
  // renderGeocodeResults escapes all user-provided displayName values via escapeHtml
  tmp.innerHTML = this.renderGeocodeResults();
- searchRow.after(tmp.firstElementChild!);
+ const el = tmp.firstElementChild;
+ if (el) searchRow.after(el);
   }
 
   private applyGeocodeResult(result: GeocodeResult): void {

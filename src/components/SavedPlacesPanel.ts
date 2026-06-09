@@ -93,13 +93,19 @@ export class SavedPlacesPanel extends Panel {
       this.options.focusPlace(placeId);
     });
 
-    // Coalesce burst events: up to 7 sources can fire simultaneously on a
-    // single data refresh.  Collapsing them into one deferred render keeps
-    // the main thread free so click events on + Add place register correctly.
+    // Coalesce burst events into one deferred render.  requestIdleCallback
+    // explicitly yields to user interactions (clicks, key presses) before
+    // running background work — setTimeout(0) does not guarantee that
+    // ordering.  500 ms timeout ensures the panel stays reasonably fresh
+    // even during sustained interaction.
     this.boundRefresh = () => {
       if (this.refreshPending) return;
       this.refreshPending = true;
-      setTimeout(() => { this.refreshPending = false; this.refresh(); }, 0);
+      if (typeof requestIdleCallback === 'undefined') {
+        setTimeout(() => { this.refreshPending = false; this.refresh(); }, 0);
+      } else {
+        requestIdleCallback(() => { this.refreshPending = false; this.refresh(); }, { timeout: 500 });
+      }
     };
     document.addEventListener('wm:breaking-news', this.boundRefresh);
     document.addEventListener('wm:intelligence-updated', this.boundRefresh);
@@ -126,10 +132,10 @@ export class SavedPlacesPanel extends Panel {
 
   /** Count alerts whose location falls inside a saved place's radius,
    *  grouped by severity tier. Used to render the threat badges on
-   *  each place card. */
-  private summarizeThreats(place: SavedPlace): PlaceThreatSummary {
+   *  each place card. The caller passes a pre-fetched alerts snapshot
+   *  so getAll() is called once per render instead of once per place. */
+  private summarizeThreats(place: SavedPlace, alerts: UnifiedAlert[]): PlaceThreatSummary {
     const summary: PlaceThreatSummary = { total: 0, critical: 0, high: 0, medium: 0 };
-    const alerts = unifiedAlertStore.getAll();
     for (const alert of alerts) {
       if (!alert.location) continue;
       if (alert.acknowledged) continue;
@@ -195,14 +201,16 @@ export class SavedPlacesPanel extends Panel {
     }
 
     const visible = this.places.slice(0, MAX_PLACES);
-    // Compute briefs once for all visible places so getRecentBreakingAlerts
-    // and getRecentSignals are called once instead of once-per-place.
+    // Compute briefs and alerts once for all visible places so the shared
+    // inputs (getRecentBreakingAlerts, getRecentSignals, getAll) are called
+    // once instead of once-per-place.
     const briefs = computePlaceBriefsBatch(visible);
+    const allAlerts = unifiedAlertStore.getAll();
 
     const listEl = document.createElement('div');
     listEl.className = 'watchlist-list';
     for (const place of visible) {
-      listEl.append(this.renderCardEl(place, briefs.get(place.id) ?? null));
+      listEl.append(this.renderCardEl(place, briefs.get(place.id) ?? null, allAlerts));
     }
     if (this.places.length < MAX_PLACES && this.options.createPlace) {
       const addBtn = document.createElement('button');
@@ -215,10 +223,10 @@ export class SavedPlacesPanel extends Panel {
     this.content.replaceChildren(listEl);
   }
 
-  private renderCardEl(place: SavedPlace, brief: PlaceBrief | null): HTMLElement {
+  private renderCardEl(place: SavedPlace, brief: PlaceBrief | null, allAlerts: UnifiedAlert[]): HTMLElement {
     const hasStormPosture = brief?.items.some((item) => item.kind === 'preparedness');
     const hasForecastRisk = brief?.items.some((item) => item.kind === 'forecast');
-    const threats = this.summarizeThreats(place);
+    const threats = this.summarizeThreats(place, allAlerts);
 
     const wrapper = document.createElement('div');
     wrapper.className = 'spm-card-wrapper';

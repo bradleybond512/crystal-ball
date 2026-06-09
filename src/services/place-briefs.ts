@@ -219,7 +219,15 @@ export function getPlaceBriefSnapshot(
   }
 
   const brief = buildPlaceBrief(place, breakingAlerts, signals, stormPreparedness, forecastSnapshot, logisticsSnapshot, now);
-  writeOfflineCacheEntry(placeBriefCacheKey(place.id), serializeBrief(brief));
+  // Defer the localStorage write so it never blocks a UI render or click handler.
+  // The offline cache is background bookkeeping — a 5-second window is fine.
+  const cacheKey = placeBriefCacheKey(place.id);
+  const serialized = serializeBrief(brief);
+  if (typeof requestIdleCallback === 'undefined') {
+    setTimeout(() => { writeOfflineCacheEntry(cacheKey, serialized); }, 0);
+  } else {
+    requestIdleCallback(() => { writeOfflineCacheEntry(cacheKey, serialized); }, { timeout: 5000 });
+  }
   return brief;
 }
 

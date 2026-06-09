@@ -11,7 +11,26 @@ import {
 } from './saved-place-weather';
 import { getSavedPlace, getSavedPlaces, type SavedPlace } from './saved-places';
 import { isOffline, readOfflineCacheEntry, writeOfflineCacheEntry } from './offline-alert-cache';
-import { getStormPreparednessForPlace, summarizeStormPreparedness, type PlaceStormPreparedness } from './storm-preparedness';
+import {
+  getStormPreparednessContext,
+  getStormPreparednessForPlace,
+  summarizeStormPreparedness,
+  type PlaceStormPreparedness,
+} from './storm-preparedness';
+
+// Per-place storm preparedness cache keyed by stormContext.updatedAt.
+// Polygon math (ray-cast over NWS alert geometry) is O(places × alerts × vertices)
+// and must not run on every panel re-render — only when storm data actually changes.
+const stormPrepCache = new Map<string, { result: PlaceStormPreparedness | null; version: number }>();
+
+function getCachedStormPreparedness(place: SavedPlace): PlaceStormPreparedness | null {
+  const version = getStormPreparednessContext().updatedAt;
+  const cached = stormPrepCache.get(place.id);
+  if (cached?.version === version) return cached.result;
+  const result = getStormPreparednessForPlace(place);
+  stormPrepCache.set(place.id, { result, version });
+  return result;
+}
 
 export interface PlaceBriefItem {
   kind: 'breaking' | 'signal' | 'preparedness' | 'forecast' | 'logistics';
@@ -206,7 +225,7 @@ export function getPlaceBriefSnapshot(
   const now = options.now ?? Date.now();
   const breakingAlerts = options.breakingAlerts ?? getRecentBreakingAlerts();
   const signals = options.signals ?? getRecentSignals();
-  const stormPreparedness = options.stormPreparedness ?? getStormPreparednessForPlace(place);
+  const stormPreparedness = options.stormPreparedness ?? getCachedStormPreparedness(place);
   const forecastSnapshot = options.forecastSnapshot ?? getCachedSavedPlaceWeather(place.id);
   const logisticsSnapshot = options.logisticsSnapshot ?? getCachedLocalLogistics(place.id);
   const offline = options.offline ?? isOffline();

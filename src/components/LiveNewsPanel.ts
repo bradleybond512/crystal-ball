@@ -801,7 +801,7 @@ export class LiveNewsPanel extends Panel {
 
   private async fetchChannelPlaylist(channel: LiveChannel): Promise<void> {
  try {
- const res = await fetch(`/api/local-youtube-recent-videos?channel=${encodeURIComponent(channel.handle)}&count=15`);
+ const res = await fetch(`${getApiBaseUrl()}/api/local-youtube-recent-videos?channel=${encodeURIComponent(channel.handle)}&count=15`);
  if (!res.ok) throw new Error(`HTTP ${res.status}`);
  const data = await res.json() as { videoIds?: unknown };
  if (Array.isArray(data.videoIds) && data.videoIds.length > 0) {

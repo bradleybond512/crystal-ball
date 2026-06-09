@@ -1273,6 +1273,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.map?.setPickLocationMode(active ? callback : null);
  },
  screenToLatLon: (x, y) => this.ctx.map?.getLatLonAtScreen(x, y) ?? null,
+ navigateTo: (lat, lon, zoom) => { this.ctx.map?.setCenter(lat, lon, zoom); },
  });
 
  const openCreate = () => savedPlaceModal.openCreate();

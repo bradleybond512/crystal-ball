@@ -218,6 +218,7 @@ export class Panel {
   private pendingContentHtml: string | null = null;
   private pendingOnRendered: (() => void) | null = null;
   private contentDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private freshFlashRafId: number | null = null;
   // Cache the last HTML string we actually wrote to the DOM. Reading
   // `element.innerHTML` forces the browser to serialize the subtree, which is
   // expensive on panels with large or animated content. Keeping a cached copy
@@ -850,7 +851,11 @@ export class Panel {
  // synchronous layout flush with `void offsetWidth`. The 1-frame (~16 ms)
  // delay is imperceptible but avoids serialising the full-grid layout on
  // every content write across all 473 panel instances.
- requestAnimationFrame(() => {
+ // Store the RAF id so destroy() can cancel it and avoid a post-destroy
+ // class mutation on a detached element.
+ if (this.freshFlashRafId !== null) cancelAnimationFrame(this.freshFlashRafId);
+ this.freshFlashRafId = requestAnimationFrame(() => {
+ this.freshFlashRafId = null;
  this.content.classList.add('panel-fresh-flash');
  });
  this.updateHeartbeat();
@@ -938,7 +943,24 @@ export class Panel {
  document.addEventListener('visibilitychange', () => {
  Panel.appVisible = document.visibilityState !== 'hidden';
  if (Panel.appVisible) {
- for (const p of Panel.instances) p.flushPendingIfVisible();
+ // Flush panels that are currently on-screen immediately.
+ // Off-screen panels that were suppressed while hidden will be flushed by
+ // the IntersectionObserver when they scroll into view.  However if a
+ // panel scrolled out of view while the app was backgrounded the observer
+ // won't re-fire on foreground — so also queue a deferred flush for those
+ // so they're ready the moment the user scrolls to them.
+ for (const p of Panel.instances) {
+ if (p.panelIntersecting) {
+ p.flushPendingIfVisible();
+ } else if (p.pendingContentHtml !== null) {
+ // Off-screen with stale content: queue a low-priority debounce so
+ // the content is written before the user can scroll to the panel.
+ if (p.contentDebounceTimer) clearTimeout(p.contentDebounceTimer);
+ p.contentDebounceTimer = setTimeout(() => {
+ if (p.pendingContentHtml !== null) p.setContentImmediate(p.pendingContentHtml);
+ }, 500);
+ }
+ }
  }
  });
  }
@@ -1234,8 +1256,13 @@ export class Panel {
   }
 
   public destroy(): void {
+ Panel.instances.delete(this);
  this.intersectionObserver?.disconnect();
  this.intersectionObserver = null;
+ if (this.freshFlashRafId !== null) {
+ cancelAnimationFrame(this.freshFlashRafId);
+ this.freshFlashRafId = null;
+ }
  this.abortController.abort();
  if (this.aiSummaryOverlay) {
  this.aiSummaryOverlay.remove();

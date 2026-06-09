@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/prefer-nullish-coalescing, sonarjs/cognitive-complexity, sonarjs/regex-complexity, sonarjs/no-alphabetical-sort, sonarjs/no-nested-template-literals, no-console -- pre-existing violations; refactor tracked separately */
 import type { MilitaryFlight, MilitaryFlightCluster, MilitaryAircraftType, MilitaryOperator } from '@/types';
 import { createCircuitBreaker } from '@/utils';
 import {
@@ -28,6 +29,7 @@ const isLocalhostRuntime = typeof window !== 'undefined' && ['localhost', '127.0
 // Cache configuration
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes - reduce upstream API pressure
 let flightCache: { data: MilitaryFlight[]; timestamp: number } | null = null;
+let flightInflight: Promise<{ flights: MilitaryFlight[]; clusters: MilitaryFlightCluster[] }> | null = null;
 
 // Track flight history for trails
 const flightHistory = new Map<string, { positions: [number, number][]; lastUpdate: number }>();
@@ -503,15 +505,17 @@ if (typeof window !== 'undefined') {
 /**
  * Main function to fetch military flights
  */
-export async function fetchMilitaryFlights(): Promise<{
+export function fetchMilitaryFlights(): Promise<{
   flights: MilitaryFlight[];
   clusters: MilitaryFlightCluster[];
 }> {
   if (!isFeatureAvailable('openskyRelay')) {
- return { flights: [], clusters: [] };
+ return Promise.resolve({ flights: [], clusters: [] });
   }
 
-  return breaker.execute(async () => {
+  if (flightInflight) return flightInflight;
+
+  flightInflight = breaker.execute(async () => {
  // Check cache
  if (flightCache && Date.now() - flightCache.timestamp < CACHE_TTL) {
  const clusters = clusterFlights(flightCache.data);
@@ -535,7 +539,9 @@ export async function fetchMilitaryFlights(): Promise<{
  const clusters = clusterFlights(flights);
 
  return { flights, clusters };
-  }, { flights: [], clusters: [] });
+  }, { flights: [], clusters: [] }).finally(() => { flightInflight = null; });
+
+  return flightInflight;
 }
 
 /**

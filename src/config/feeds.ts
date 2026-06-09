@@ -102,7 +102,7 @@ export const SOURCE_TIERS: Record<string, number> = {
   'CrisisWatch': 3,
   'CSIS': 3,
   'RAND': 3,
-  'Brookings': 3,
+  'Brookings': 2,
   'Carnegie': 3,
   'IAEA': 1,
   'WHO': 1,
@@ -220,7 +220,7 @@ export const SOURCE_TIERS: Record<string, number> = {
   'RUSI': 2,
   'Wilson Center': 3,
   'GMF': 3,
-  'Stimson Center': 3,
+  'Chatham House': 2,
   'CNAS': 2,
   // Nuclear & Arms Control
   'Arms Control Assn': 2,
@@ -232,8 +232,7 @@ export const SOURCE_TIERS: Record<string, number> = {
   'War on the Rocks': 2,
   'AEI': 3,
   'Responsible Statecraft': 3,
-  'FPRI': 3,
-  'Jamestown': 3,
+  'Lawfare': 2,
   'ISW': 2,
   'Middle East Eye': 2,
   'GDACS Alerts': 2,
@@ -365,14 +364,14 @@ export const SOURCE_TYPES: Record<string, SourceType> = {
   'EFF News': 'intel', 'Politico Tech': 'intel',
   // Security/Defense Think Tanks
   'RUSI': 'intel', 'Wilson Center': 'intel', 'GMF': 'intel',
-  'Stimson Center': 'intel', 'CNAS': 'intel',
+  'Chatham House': 'intel', 'CNAS': 'intel',
   // Nuclear & Arms Control
   'Arms Control Assn': 'intel', 'Bulletin of Atomic Scientists': 'intel',
   // Food Security & Regional
   'FAO GIEWS': 'gov', 'EU ISS': 'intel',
   // New verified think tanks
   'War on the Rocks': 'intel', 'AEI': 'intel', 'Responsible Statecraft': 'intel',
-  'FPRI': 'intel', 'Jamestown': 'intel',
+  'Lawfare': 'intel',
   'ISW': 'intel', 'Middle East Eye': 'wire',
   'GDACS Alerts': 'gov', 'ReliefWeb': 'gov', 'NOAA Alerts': 'gov',
 
@@ -591,7 +590,7 @@ const FULL_FEEDS: Record<string, Feed[]> = {
  { name: 'Foreign Affairs', url: rss('https://www.foreignaffairs.com/rss.xml') },
  { name: 'CSIS', url: rss('https://news.google.com/rss/search?q=site:csis.org+when:7d&hl=en-US&gl=US&ceid=US:en') },
  { name: 'RAND', url: rss('https://news.google.com/rss/search?q=site:rand.org+when:7d&hl=en-US&gl=US&ceid=US:en') },
- { name: 'Brookings', url: rss('https://news.google.com/rss/search?q=site:brookings.edu+when:7d&hl=en-US&gl=US&ceid=US:en') },
+ { name: 'Brookings', url: rss('https://www.brookings.edu/feed/') },
  { name: 'Carnegie', url: rss('https://news.google.com/rss/search?q=site:carnegieendowment.org+when:7d&hl=en-US&gl=US&ceid=US:en') },
  // New verified think tank feeds
  // War on the Rocks - Defense and national security analysis
@@ -602,10 +601,8 @@ const FULL_FEEDS: Record<string, Feed[]> = {
  { name: 'Responsible Statecraft', url: rss('https://responsiblestatecraft.org/feed/') },
  // RUSI - Royal United Services Institute (UK defense & security)
  { name: 'RUSI', url: rss('https://news.google.com/rss/search?q=site:rusi.org+when:3d&hl=en-US&gl=US&ceid=US:en') },
- // FPRI - Foreign Policy Research Institute (US foreign policy) — direct feed blocks bots; use Google News proxy
- { name: 'FPRI', url: rss('https://news.google.com/rss/search?q=site:fpri.org+when:7d&hl=en-US&gl=US&ceid=US:en') },
- // Jamestown Foundation - Eurasia/China/Terrorism analysis — direct feed blocks bots; use Google News proxy
- { name: 'Jamestown', url: rss('https://news.google.com/rss/search?q=site:jamestown.org+when:7d&hl=en-US&gl=US&ceid=US:en') },
+ // Lawfare — security law, intelligence, counterterrorism analysis
+ { name: 'Lawfare', url: rss('https://www.lawfaremedia.org/feed') },
  // ISW - Institute for the Study of War (daily Ukraine/Russia/MENA conflict assessments)
  { name: 'ISW', url: rss('https://news.google.com/rss/search?q=site:understandingwar.org+when:3d&hl=en-US&gl=US&ceid=US:en') },
  // Middle East Eye - regional news and analysis
@@ -1120,8 +1117,8 @@ export const INTEL_SOURCES: Feed[] = [
   { name: 'RUSI', url: rss('https://news.google.com/rss/search?q=site:rusi.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
   { name: 'Wilson Center', url: rss('https://news.google.com/rss/search?q=site:wilsoncenter.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
   { name: 'GMF', url: rss('https://news.google.com/rss/search?q=site:gmfus.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
-  // Stimson Center — direct feed blocks bots; use Google News proxy
-  { name: 'Stimson Center', url: rss('https://news.google.com/rss/search?q=site:stimson.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
+  // Chatham House — UK premier foreign policy institution, direct RSS
+  { name: 'Chatham House', url: rss('https://www.chathamhouse.org/rss.xml'), type: 'research' },
   { name: 'CNAS', url: rss('https://news.google.com/rss/search?q=site:cnas.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
   { name: 'Lowy Institute', url: rss('https://news.google.com/rss/search?q=site:lowyinstitute.org+when:7d&hl=en-US&gl=US&ceid=US:en'), type: 'research' },
 

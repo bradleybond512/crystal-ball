@@ -298,10 +298,12 @@ export class UnifiedSettings {
  if (placesAction) {
  const placeId = target.closest<HTMLElement>('[data-place-id]')?.dataset.placeId;
  if (placesAction === 'add') {
+ this.close(); // dismiss settings so pick-mode can reach the map
  this.config.openCreatePlace?.();
  return;
  }
  if (placesAction === 'edit' && placeId) {
+ this.close(); // dismiss settings so pick-mode can reach the map
  this.config.openEditPlace?.(placeId);
  return;
  }

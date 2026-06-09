@@ -95,6 +95,7 @@ export class SavedPlaceModal {
   }
 
   public openCreate(): void {
+ if (this.pickModeActive) this.exitPickMode();
  this.editingPlace = null;
  this.formState = this.defaultFormState();
  this.geocodeResults = [];
@@ -106,6 +107,7 @@ export class SavedPlaceModal {
   }
 
   public openEdit(place: SavedPlace): void {
+ if (this.pickModeActive) this.exitPickMode();
  this.editingPlace = place;
  this.formState = {
  name: place.name,

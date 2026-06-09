@@ -4,7 +4,17 @@ import {
   getDatacenterPosture, getDatacenterSite, subscribeDatacenterPosture,
 } from '../services/datacenter/datacenter-state';
 import { levelLabel, levelColor } from '../services/datacenter/datacenter-view';
-import type { DataCenterPosture, DcLevel, ReadinessAction } from '../services/datacenter/datacenter-types';
+import type {
+  DataCenterPosture,
+  DcLevel,
+  ForecastSlot,
+  NearbySeismicEvent,
+  ReadinessAction,
+  SiteAirQuality,
+  SiteConditions,
+  ConnectivitySignal,
+} from '../services/datacenter/datacenter-types';
+import { wmoCodeEmoji, degreesToCompass, cToF, aqiLabel } from '../services/weather';
 
 const URGENCY_LABEL: Record<ReadinessAction['urgency'], string> = {
   now: 'NOW', soon: 'SOON', be_ready: 'BE READY', monitor: 'MONITOR',
@@ -13,6 +23,15 @@ const AUDIENCE_LABEL: Record<ReadinessAction['audience'], string> = {
   onsite_safety: 'On-site safety', commute_staffing: 'Commute & staffing',
   facility_ops: 'Facility ops', escalation: 'Escalation',
 };
+
+function seismicLevel(events: NearbySeismicEvent[]): DcLevel {
+  if (events.length === 0) return 'normal';
+  const max = Math.max(...events.map((e) => e.magnitudeM));
+  if (max >= 6) return 'critical';
+  if (max >= 5) return 'warning';
+  if (max >= 4) return 'advisory';
+  return 'watch';
+}
 
 export class DataCenterReadinessPanel extends Panel {
   private unsub: (() => void) | null = null;
@@ -25,8 +44,6 @@ export class DataCenterReadinessPanel extends Panel {
 
   private render(posture: DataCenterPosture | null): void {
     if (!posture) {
-      // A configured site with no posture yet means the first refresh hasn't
-      // landed — don't tell a configured user to set a location they already set.
       const message = getDatacenterSite()
         ? 'Data center configured — awaiting the first grid + weather refresh.'
         : 'Set your data center location (tag a saved place "data_center") to activate this panel.';
@@ -37,7 +54,75 @@ export class DataCenterReadinessPanel extends Panel {
 
     this.setCount(posture.actions.filter((a) => a.urgency === 'now').length);
 
-    const header = h('div', { className: 'dc-status-header' },
+    const nodes: (HTMLElement | null)[] = [];
+
+    if (posture.conditions) {
+      nodes.push(this.conditionsRow(posture.conditions, posture.airQuality));
+    }
+
+    if (posture.forecast24h.length > 0) {
+      nodes.push(this.forecastStrip(posture.forecast24h));
+    }
+
+    nodes.push(this.gaugesRow(posture));
+
+    if (posture.connectivity) {
+      nodes.push(this.connectivityLine(posture.connectivity));
+    }
+
+    if (posture.seismicNearby.length > 0) {
+      nodes.push(this.seismicLine(posture.seismicNearby));
+    }
+
+    const actionList = posture.actions.length === 0
+      ? h('div', { className: 'dc-allclear' }, 'No active threats — monitoring.')
+      : h('div', { className: 'dc-actions' }, ...posture.actions.map((a) => this.actionRow(a)));
+    nodes.push(actionList);
+
+    const footerParts: string[] = [];
+    if (posture.staleInputs.length > 0) footerParts.push(`Stale/missing: ${posture.staleInputs.join(', ')}`);
+    nodes.push(h('div', { className: 'dc-footer' }, footerParts.join(' · ') || 'All feeds current'));
+
+    replaceChildren(this.content, ...(nodes.filter(Boolean) as HTMLElement[]));
+    this.invalidateContentCache();
+    this.markFresh();
+  }
+
+  private conditionsRow(c: SiteConditions, aq: SiteAirQuality | null): HTMLElement {
+    const chips: string[] = [
+      `${cToF(c.tempC)}°F / feels ${cToF(c.feelsLikeC)}°F`,
+      `💧${Math.round(c.humidityPct)}%`,
+      `💨${Math.round(c.windSpeedKmh * 0.621)} mph ${degreesToCompass(c.windDirectionDeg)}`,
+      `${wmoCodeEmoji(c.weatherCode)}${c.precipMm.toFixed(1)}"`,
+    ];
+    if (aq?.usAqi !== null && aq?.usAqi !== undefined) {
+      chips.push(`AQI ${aq.usAqi} ${aqiLabel(aq.usAqi)}`);
+    }
+    if (c.uvIndex !== null) {
+      chips.push(`UV ${Math.round(c.uvIndex)}`);
+    }
+    return h('div', { className: 'dc-conditions' },
+      ...chips.map((txt) => h('span', { className: 'dc-conditions-chip' }, txt)),
+    );
+  }
+
+  private forecastStrip(slots: ForecastSlot[]): HTMLElement {
+    const items = slots.map((s) => {
+      const label = s.offsetHours === 0 ? 'Now' : `+${s.offsetHours}h`;
+      return h('span', { className: 'dc-forecast-slot' },
+        `${label} ${cToF(s.tempC)}°F ${wmoCodeEmoji(s.weatherCode)}`,
+      );
+    });
+    return h('div', { className: 'dc-forecast-strip' }, ...items);
+  }
+
+  private gaugesRow(posture: DataCenterPosture): HTMLElement {
+    const seisLevel = seismicLevel(posture.seismicNearby);
+    const seisDetail = posture.seismicNearby.length === 0
+      ? 'No M3.5+ / 200 km / 24 h'
+      : `M${posture.seismicNearby[0]!.magnitudeM.toFixed(1)} ${posture.seismicNearby[0]!.distanceKm} km`;
+
+    return h('div', { className: 'dc-gauges-row' },
       this.gauge('Power', posture.power.level, posture.power.drivers[0] ?? '—'),
       this.gauge(
         'Weather',
@@ -46,19 +131,34 @@ export class DataCenterReadinessPanel extends Panel {
           ? (posture.weather.drivers[0] ?? '—')
           : `ETA ${posture.weather.arrivalWindowMins} min`,
       ),
+      this.gauge('Seismic', seisLevel, seisDetail),
     );
+  }
 
-    const actionList = posture.actions.length === 0
-      ? h('div', { className: 'dc-allclear' }, 'No power or weather action needed — monitoring.')
-      : h('div', { className: 'dc-actions' }, ...posture.actions.map((a) => this.actionRow(a)));
+  private connMark(val: boolean | null): string {
+    if (val === null) return '?';
+    return val ? '✓' : '✗';
+  }
 
-    const footerParts: string[] = [];
-    if (posture.staleInputs.length > 0) footerParts.push(`Stale/missing: ${posture.staleInputs.join(', ')}`);
-    const footer = h('div', { className: 'dc-footer' }, footerParts.join(' · ') || 'All feeds current');
+  private connectivityLine(conn: ConnectivitySignal): HTMLElement {
+    const cfMark = this.connMark(conn.cloudflare);
+    const fastlyMark = this.connMark(conn.fastly);
+    const statusClass = `dc-conn--${conn.status}`;
+    return h('div', { className: `dc-connectivity ${statusClass}` },
+      h('span', { className: 'dc-conn-label' }, 'Connectivity'),
+      h('span', { className: 'dc-conn-status' }, conn.status.charAt(0).toUpperCase() + conn.status.slice(1)),
+      h('span', { className: 'dc-conn-detail' }, `CF ${cfMark} · Fastly ${fastlyMark}`),
+    );
+  }
 
-    replaceChildren(this.content, header, actionList, footer);
-    this.invalidateContentCache();
-    this.markFresh();
+  private seismicLine(events: NearbySeismicEvent[]): HTMLElement {
+    const top = events[0]!;
+    const ago = Math.round((Date.now() - top.occurredAt) / (60 * 60 * 1000));
+    const text = `M${top.magnitudeM.toFixed(1)} · ${top.distanceKm} km · ${top.place} · ${ago}h ago`;
+    return h('div', { className: 'dc-seismic-line' },
+      h('span', { className: 'dc-seismic-icon' }, '🌍'),
+      h('span', { className: 'dc-seismic-text' }, text),
+    );
   }
 
   private gauge(label: string, level: DcLevel, detail: string): HTMLElement {

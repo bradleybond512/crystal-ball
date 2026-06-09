@@ -297,6 +297,12 @@ import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGridStatus } from '@/services/power-grid';
 import { getDatacenterSite, setDatacenterSite, recomputeDatacenterPosture } from '@/services/datacenter/datacenter-state';
+import {
+  fetchOpenMeteoConditions,
+  fetchSite24hForecast,
+  fetchSiteAirQuality,
+  fetchConnectivitySignal,
+} from '@/services/weather';
 import { fetchGreyNoise, fetchOtxPulses, fetchAbuseIpDb, fetchUrlscanFeed } from '@/services/osint';
 import { fetchAcledEvents, fetchAdsbMilitary } from '@/services/osint';
 import { fetchHibpBreaches, fetchTorMetrics } from '@/services/osint';
@@ -1431,6 +1437,15 @@ export class DataLoaderManager implements AppModule {
  }
   }
 
+  private haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
   async loadWeatherAlerts(): Promise<void> {
  try {
  const { data: alerts } = await withOfflineCache('weather-alerts', () => fetchWeatherAlerts(), 1 * 60 * 60 * 1000);
@@ -1483,10 +1498,45 @@ export class DataLoaderManager implements AppModule {
  ugcZones: a.ugcZones,
  headline: a.headline,
  }));
+ const [condResult, forecastResult, aqResult, connResult] = await Promise.allSettled([
+   fetchOpenMeteoConditions(site.lat, site.lon),
+   fetchSite24hForecast(site.lat, site.lon),
+   fetchSiteAirQuality(site.lat, site.lon),
+   fetchConnectivitySignal(),
+ ]);
+ const rawCond = condResult.status === 'fulfilled' ? condResult.value : null;
+ const siteConditions = rawCond ? {
+   tempC: rawCond.temperature,
+   feelsLikeC: rawCond.feelsLike,
+   humidityPct: rawCond.humidity,
+   windSpeedKmh: rawCond.windSpeed,
+   windDirectionDeg: rawCond.windDirection,
+   precipMm: rawCond.precipitation,
+   uvIndex: rawCond.uvIndex,
+   weatherCode: rawCond.weatherCode,
+ } : null;
+ const nearbySeismic = (this.ctx.intelligenceCache?.earthquakes ?? [])
+   .filter((eq) => {
+     if (!eq.location) return false;
+     if (eq.magnitude < 3.5) return false;
+     if (Date.now() - eq.occurredAt > 24 * 60 * 60 * 1000) return false;
+     return this.haversineKm(site.lat, site.lon, eq.location.latitude, eq.location.longitude) <= 200;
+   })
+   .map((eq) => ({
+     magnitudeM: eq.magnitude,
+     distanceKm: Math.round(this.haversineKm(site.lat, site.lon, eq.location!.latitude, eq.location!.longitude)),
+     place: eq.place,
+     occurredAt: eq.occurredAt,
+   }));
  recomputeDatacenterPosture({
- gridStatus,
- weatherAlerts: nwsAlerts,
- nearbyOutageCount: null, // v1: county-radius outage rollup not yet wired
+   gridStatus,
+   weatherAlerts: nwsAlerts,
+   nearbyOutageCount: null,
+   conditions: siteConditions,
+   forecast24h: forecastResult.status === 'fulfilled' ? forecastResult.value : [],
+   airQuality: aqResult.status === 'fulfilled' ? aqResult.value : null,
+   seismicNearby: nearbySeismic,
+   connectivity: connResult.status === 'fulfilled' ? connResult.value : null,
  });
  }
 

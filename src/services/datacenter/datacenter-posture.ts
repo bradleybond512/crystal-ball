@@ -1,6 +1,15 @@
 import type { GridStatus } from '../power-grid.ts';
 import type { NwsAlertMinimal } from '../weather/weather-threat-types.ts';
-import type { DataCenterPosture, DcLevel, SiteConfig } from './datacenter-types.ts';
+import type {
+  ConnectivitySignal,
+  DataCenterPosture,
+  DcLevel,
+  ForecastSlot,
+  NearbySeismicEvent,
+  SiteAirQuality,
+  SiteConditions,
+  SiteConfig,
+} from './datacenter-types.ts';
 import { bumpDcLevel, dcLevelRank, maxDcLevel } from './datacenter-types.ts';
 import { computePowerPosture } from './power-posture.ts';
 import { computeWeatherPosture } from './weather-posture.ts';
@@ -12,6 +21,11 @@ export interface PostureInput {
   weatherAlerts: readonly NwsAlertMinimal[];
   nearbyOutageCount: number | null;
   now?: number;
+  conditions?: SiteConditions | null;
+  forecast24h?: ForecastSlot[];
+  airQuality?: SiteAirQuality | null;
+  seismicNearby?: NearbySeismicEvent[];
+  connectivity?: ConnectivitySignal | null;
 }
 
 function blendOverall(power: DcLevel, weather: DcLevel): DcLevel {
@@ -61,6 +75,11 @@ export function computeDatacenterPosture(input: PostureInput): DataCenterPosture
     headline: buildHeadline(overall, weather, power),
     power,
     weather,
+    conditions: input.conditions ?? null,
+    forecast24h: input.forecast24h ?? [],
+    airQuality: input.airQuality ?? null,
+    seismicNearby: input.seismicNearby ?? [],
+    connectivity: input.connectivity ?? null,
     actions,
     updatedAt: now,
     staleInputs,

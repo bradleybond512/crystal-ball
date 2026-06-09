@@ -1,6 +1,14 @@
 import type { GridStatus } from '../power-grid.ts';
 import type { NwsAlertMinimal } from '../weather/weather-threat-types.ts';
-import type { DataCenterPosture, SiteConfig } from './datacenter-types.ts';
+import type {
+  ConnectivitySignal,
+  DataCenterPosture,
+  ForecastSlot,
+  NearbySeismicEvent,
+  SiteAirQuality,
+  SiteConditions,
+  SiteConfig,
+} from './datacenter-types.ts';
 import { computeDatacenterPosture } from './datacenter-posture.ts';
 
 type Listener = (posture: DataCenterPosture | null) => void;
@@ -29,6 +37,11 @@ export interface RecomputeInput {
   weatherAlerts: readonly NwsAlertMinimal[];
   nearbyOutageCount: number | null;
   now?: number;
+  conditions?: SiteConditions | null;
+  forecast24h?: ForecastSlot[];
+  airQuality?: SiteAirQuality | null;
+  seismicNearby?: NearbySeismicEvent[];
+  connectivity?: ConnectivitySignal | null;
 }
 
 export function recomputeDatacenterPosture(input: RecomputeInput): DataCenterPosture | null {

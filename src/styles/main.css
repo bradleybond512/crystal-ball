@@ -18657,13 +18657,32 @@ body.has-breaking-alert .panels-grid {
   border-radius: 10px;
   padding: 12px 20px;
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 360px;
   font-size: 13px;
   color: var(--text);
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
   z-index: 10003;  /* top of modal stack — floats above all overlays */
+}
+.spm-pick-banner-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   white-space: nowrap;
+}
+.spm-pick-search-row { position: relative; }
+.spm-pick-search-input { width: 100%; box-sizing: border-box; }
+.spm-pick-banner .spm-geocode-results {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 1;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .spm-pick-mode {

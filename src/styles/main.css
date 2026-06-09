@@ -18665,6 +18665,9 @@ body.has-breaking-alert .panels-grid {
 .spm-pick-mode .spm-pick-banner {
   pointer-events: all;
 }
+.map-section.spm-pick-revealed {
+  display: flex !important;
+}
 
 /* Panel header add button */
 .spm-header-add {

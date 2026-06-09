@@ -232,3 +232,20 @@ export function getSavedPlaceBrief(placeId: string): PlaceBrief | null {
 export function getSavedPlaceBriefs(): PlaceBrief[] {
   return getSavedPlaces().map((place) => getPlaceBriefSnapshot(place));
 }
+
+/**
+ * Compute briefs for a list of places in one pass, reusing the
+ * shared getRecentBreakingAlerts/getRecentSignals results rather than
+ * re-fetching them once per place.  Use this in any UI that renders
+ * multiple place cards so those two calls happen exactly once.
+ */
+export function computePlaceBriefsBatch(places: SavedPlace[]): Map<string, PlaceBrief> {
+  const out = new Map<string, PlaceBrief>();
+  if (places.length === 0) return out;
+  const breakingAlerts = getRecentBreakingAlerts();
+  const signals = getRecentSignals();
+  for (const place of places) {
+    out.set(place.id, getPlaceBriefSnapshot(place, { breakingAlerts, signals }));
+  }
+  return out;
+}

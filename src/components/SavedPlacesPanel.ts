@@ -1,7 +1,6 @@
 import { Panel } from './Panel';
-import { escapeHtml } from '@/utils/sanitize';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace, type SavedPlaceTag } from '@/services/saved-places';
-import { getSavedPlaceBrief } from '@/services/place-briefs';
+import { computePlaceBriefsBatch, type PlaceBrief } from '@/services/place-briefs';
 import { computeDistanceKm, unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
 
 interface SavedPlacesPanelOptions {
@@ -50,179 +49,247 @@ export class SavedPlacesPanel extends Panel {
   private unsubscribeAlerts: (() => void) | null = null;
   private readonly boundRefresh: () => void;
   private places: SavedPlace[] = [];
+  private refreshPending = false;
 
   constructor(options: SavedPlacesPanelOptions) {
- super({
- id: 'saved-places',
- title: 'Saved Places',
- showCount: true,
- trackActivity: true,
- infoTooltip: 'Personal locations prioritized for place-first monitoring, fast map focus, and later place briefs.',
- });
- this.options = options;
+    super({
+      id: 'saved-places',
+      title: 'Saved Places',
+      showCount: true,
+      trackActivity: true,
+      infoTooltip: 'Personal locations prioritized for place-first monitoring, fast map focus, and later place briefs.',
+    });
+    this.options = options;
 
- if (options.createPlace) {
- const addBtn = document.createElement('button');
- addBtn.className = 'spm-header-add';
- addBtn.title = 'Add place';
- addBtn.type = 'button';
- addBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
- addBtn.addEventListener('click', () => options.createPlace?.());
- this.header.append(addBtn);
- }
+    if (options.createPlace) {
+      const addBtn = document.createElement('button');
+      addBtn.className = 'spm-header-add';
+      addBtn.title = 'Add place';
+      addBtn.type = 'button';
+      addBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+      addBtn.addEventListener('click', () => options.createPlace?.());
+      this.header.append(addBtn);
+    }
 
- this.content.addEventListener('click', (event) => {
- const target = event.target as HTMLElement | null;
- const createButton = target?.closest<HTMLElement>('[data-saved-place-create]');
- if (createButton) {
- this.options.createPlace?.();
- return;
- }
+    this.content.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement | null;
+      const createButton = target?.closest<HTMLElement>('[data-saved-place-create]');
+      if (createButton) {
+        this.options.createPlace?.();
+        return;
+      }
 
- const editButton = target?.closest<HTMLElement>('[data-saved-place-edit]');
- if (editButton) {
- event.stopPropagation();
- const placeId = editButton.dataset.savedPlaceEdit;
- if (placeId) this.options.editPlace?.(placeId);
- return;
- }
+      const editButton = target?.closest<HTMLElement>('[data-saved-place-edit]');
+      if (editButton) {
+        event.stopPropagation();
+        const placeId = editButton.dataset.savedPlaceEdit;
+        if (placeId) this.options.editPlace?.(placeId);
+        return;
+      }
 
- const placeCard = target?.closest<HTMLElement>('[data-saved-place-id]');
- const placeId = placeCard?.dataset.savedPlaceId;
- if (!placeId) return;
- this.options.focusPlace(placeId);
- });
+      const placeCard = target?.closest<HTMLElement>('[data-saved-place-id]');
+      const placeId = placeCard?.dataset.savedPlaceId;
+      if (!placeId) return;
+      this.options.focusPlace(placeId);
+    });
 
- this.boundRefresh = () => this.refresh();
- document.addEventListener('wm:breaking-news', this.boundRefresh);
- document.addEventListener('wm:intelligence-updated', this.boundRefresh);
- document.addEventListener('wm:local-logistics-updated', this.boundRefresh);
- document.addEventListener('wm:saved-place-weather-updated', this.boundRefresh);
- document.addEventListener('wm:storm-data-updated', this.boundRefresh);
- this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.refresh());
- this.unsubscribeAlerts = unifiedAlertStore.subscribe(() => this.refresh());
- this.refresh();
+    // Coalesce burst events: up to 7 sources can fire simultaneously on a
+    // single data refresh.  Collapsing them into one deferred render keeps
+    // the main thread free so click events on + Add place register correctly.
+    this.boundRefresh = () => {
+      if (this.refreshPending) return;
+      this.refreshPending = true;
+      setTimeout(() => { this.refreshPending = false; this.refresh(); }, 0);
+    };
+    document.addEventListener('wm:breaking-news', this.boundRefresh);
+    document.addEventListener('wm:intelligence-updated', this.boundRefresh);
+    document.addEventListener('wm:local-logistics-updated', this.boundRefresh);
+    document.addEventListener('wm:saved-place-weather-updated', this.boundRefresh);
+    document.addEventListener('wm:storm-data-updated', this.boundRefresh);
+    this.unsubscribeSavedPlaces = subscribeSavedPlaces(() => this.boundRefresh());
+    this.unsubscribeAlerts = unifiedAlertStore.subscribe(() => this.boundRefresh());
+    this.refresh();
   }
 
   override destroy(): void {
- document.removeEventListener('wm:breaking-news', this.boundRefresh);
- document.removeEventListener('wm:intelligence-updated', this.boundRefresh);
- document.removeEventListener('wm:local-logistics-updated', this.boundRefresh);
- document.removeEventListener('wm:saved-place-weather-updated', this.boundRefresh);
- document.removeEventListener('wm:storm-data-updated', this.boundRefresh);
- this.unsubscribeSavedPlaces?.();
- this.unsubscribeSavedPlaces = null;
- this.unsubscribeAlerts?.();
- this.unsubscribeAlerts = null;
- super.destroy();
+    document.removeEventListener('wm:breaking-news', this.boundRefresh);
+    document.removeEventListener('wm:intelligence-updated', this.boundRefresh);
+    document.removeEventListener('wm:local-logistics-updated', this.boundRefresh);
+    document.removeEventListener('wm:saved-place-weather-updated', this.boundRefresh);
+    document.removeEventListener('wm:storm-data-updated', this.boundRefresh);
+    this.unsubscribeSavedPlaces?.();
+    this.unsubscribeSavedPlaces = null;
+    this.unsubscribeAlerts?.();
+    this.unsubscribeAlerts = null;
+    super.destroy();
   }
 
   /** Count alerts whose location falls inside a saved place's radius,
    *  grouped by severity tier. Used to render the threat badges on
    *  each place card. */
   private summarizeThreats(place: SavedPlace): PlaceThreatSummary {
- const summary: PlaceThreatSummary = { total: 0, critical: 0, high: 0, medium: 0 };
- const alerts = unifiedAlertStore.getAll();
- for (const alert of alerts) {
- if (!alert.location) continue;
- if (alert.acknowledged) continue;
- const distKm = computeDistanceKm(place.lat, place.lon, alert.location.lat, alert.location.lon);
- if (distKm > place.radiusKm) continue;
- summary.total += 1;
- if (alert.severity === 'critical') summary.critical += 1;
- else if (alert.severity === 'high') summary.high += 1;
- else if (alert.severity === 'medium') summary.medium += 1;
- }
- return summary;
+    const summary: PlaceThreatSummary = { total: 0, critical: 0, high: 0, medium: 0 };
+    const alerts = unifiedAlertStore.getAll();
+    for (const alert of alerts) {
+      if (!alert.location) continue;
+      if (alert.acknowledged) continue;
+      const distKm = computeDistanceKm(place.lat, place.lon, alert.location.lat, alert.location.lon);
+      if (distKm > place.radiusKm) continue;
+      summary.total += 1;
+      if (alert.severity === 'critical') summary.critical += 1;
+      else if (alert.severity === 'high') summary.high += 1;
+      else if (alert.severity === 'medium') summary.medium += 1;
+    }
+    return summary;
   }
 
   /** Pick the worst severity tier represented in a summary so the
    *  badge color tracks the most-critical alert in the radius. */
   private worstSeverity(summary: PlaceThreatSummary): UnifiedAlert['severity'] {
- if (summary.critical > 0) return 'critical';
- if (summary.high > 0) return 'high';
- if (summary.medium > 0) return 'medium';
- return 'low';
+    if (summary.critical > 0) return 'critical';
+    if (summary.high > 0) return 'high';
+    if (summary.medium > 0) return 'medium';
+    return 'low';
   }
 
-  /** Render a colored severity-count badge for a place. Returns empty
-   *  string when there are no threats — saving vertical space. */
-  private renderThreatBadge(summary: PlaceThreatSummary): string {
- if (summary.total === 0) return '';
- const color = SEVERITY_COLOR[this.worstSeverity(summary)];
- const tooltip = `${summary.total} alert${summary.total === 1 ? '' : 's'} in radius`
- + (summary.critical > 0 ? ` · ${summary.critical} critical` : '')
- + (summary.high > 0 ? ` · ${summary.high} high` : '');
- return `<span class="watchlist-panel-chip spm-threat-chip" title="${escapeHtml(tooltip)}" style="background:${color};color:#0a0a0c;font-weight:600">⚠ ${summary.total}</span>`;
+  /** Build a colored severity-count badge for a place. Returns null when
+   *  there are no threats — saving vertical space. */
+  private buildThreatBadge(summary: PlaceThreatSummary): HTMLElement | null {
+    if (summary.total === 0) return null;
+    const color = SEVERITY_COLOR[this.worstSeverity(summary)];
+    const tooltip = `${summary.total} alert${summary.total === 1 ? '' : 's'} in radius`
+      + (summary.critical > 0 ? ` · ${summary.critical} critical` : '')
+      + (summary.high > 0 ? ` · ${summary.high} high` : '');
+    const span = document.createElement('span');
+    span.className = 'watchlist-panel-chip spm-threat-chip';
+    span.title = tooltip;
+    span.style.cssText = `background:${color};color:#0a0a0c;font-weight:600`;
+    span.textContent = `⚠ ${summary.total}`;
+    return span;
   }
 
   public refresh(): void {
- this.places = getSavedPlaces();
- this.setCount(this.places.length);
+    this.places = getSavedPlaces();
+    this.setCount(this.places.length);
 
- if (this.places.length === 0) {
- this.content.innerHTML = `
- <div class="watchlist-empty">
- <div class="watchlist-empty-title">No saved places yet</div>
- <div class="watchlist-empty-copy">Add home, work, family, or bug-out locations so the app can prioritize what matters near you.</div>
- ${this.options.createPlace ? '<button class="watchlist-card" data-saved-place-create="1" type="button">Add your first place</button>' : ''}
- </div>
- `;
- return;
- }
+    if (this.places.length === 0) {
+      const emptyEl = document.createElement('div');
+      emptyEl.className = 'watchlist-empty';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'watchlist-empty-title';
+      titleEl.textContent = 'No saved places yet';
+      const copyEl = document.createElement('div');
+      copyEl.className = 'watchlist-empty-copy';
+      copyEl.textContent = 'Add home, work, family, or bug-out locations so the app can prioritize what matters near you.';
+      emptyEl.append(titleEl, copyEl);
+      if (this.options.createPlace) {
+        const firstBtn = document.createElement('button');
+        firstBtn.className = 'watchlist-card';
+        firstBtn.dataset.savedPlaceCreate = '1';
+        firstBtn.type = 'button';
+        firstBtn.textContent = 'Add your first place';
+        emptyEl.append(firstBtn);
+      }
+      this.content.replaceChildren(emptyEl);
+      return;
+    }
 
- this.content.innerHTML = `
- <div class="watchlist-list">
- ${this.places.slice(0, MAX_PLACES).map((place) => this.renderCard(place)).join('')}
- ${this.places.length < MAX_PLACES && this.options.createPlace ? `
- <button class="spm-add-inline" data-saved-place-create="1" type="button">
- <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
- Add place
- </button>
- ` : ''}
- </div>
- `;
+    const visible = this.places.slice(0, MAX_PLACES);
+    // Compute briefs once for all visible places so getRecentBreakingAlerts
+    // and getRecentSignals are called once instead of once-per-place.
+    const briefs = computePlaceBriefsBatch(visible);
+
+    const listEl = document.createElement('div');
+    listEl.className = 'watchlist-list';
+    for (const place of visible) {
+      listEl.append(this.renderCardEl(place, briefs.get(place.id) ?? null));
+    }
+    if (this.places.length < MAX_PLACES && this.options.createPlace) {
+      const addBtn = document.createElement('button');
+      addBtn.className = 'spm-add-inline';
+      addBtn.dataset.savedPlaceCreate = '1';
+      addBtn.type = 'button';
+      addBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add place`;
+      listEl.append(addBtn);
+    }
+    this.content.replaceChildren(listEl);
   }
 
-  private renderCard(place: SavedPlace): string {
- const brief = getSavedPlaceBrief(place.id);
- const hasStormPosture = brief?.items.some((item) => item.kind === 'preparedness');
- const hasForecastRisk = brief?.items.some((item) => item.kind === 'forecast');
- const threats = this.summarizeThreats(place);
- const badges = [
- this.renderThreatBadge(threats),
- place.primary ? '<span class="watchlist-panel-chip">Primary</span>' : '',
- place.offlinePinned ? '<span class="watchlist-panel-chip">Offline</span>' : '',
- brief?.isStale ? '<span class="watchlist-panel-chip">Cached</span>' : '',
- hasStormPosture ? '<span class="watchlist-panel-chip">Storm</span>' : '',
- hasForecastRisk ? '<span class="watchlist-panel-chip">Forecast</span>' : '',
- ...place.tags.map((tag) => `<span class="watchlist-panel-chip">${escapeHtml(TAG_LABELS[tag] ?? tag)}</span>`),
- ].filter(Boolean).join('');
+  private renderCardEl(place: SavedPlace, brief: PlaceBrief | null): HTMLElement {
+    const hasStormPosture = brief?.items.some((item) => item.kind === 'preparedness');
+    const hasForecastRisk = brief?.items.some((item) => item.kind === 'forecast');
+    const threats = this.summarizeThreats(place);
 
- const editBtn = this.options.editPlace
- ? `<button class="spm-card-edit" data-saved-place-edit="${escapeHtml(place.id)}" type="button" title="Edit place">${PENCIL_SVG}</button>`
- : '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'spm-card-wrapper';
 
- return `
- <div class="spm-card-wrapper">
- <button class="watchlist-card" data-saved-place-id="${escapeHtml(place.id)}" type="button">
- <div class="watchlist-card-top">
- <div>
- <div class="watchlist-country">${escapeHtml(place.name)}</div>
- <div class="watchlist-scenario">${place.radiusKm.toLocaleString()} km radius</div>
- </div>
- </div>
- <div class="watchlist-summary">${escapeHtml(brief?.headline ?? this.renderSubtitle(place))}</div>
- <div class="watchlist-card-bottom">
- <div class="watchlist-panels">${badges}</div>
- </div>
- </button>
- ${editBtn}
- </div>
- `;
+    const card = document.createElement('button');
+    card.className = 'watchlist-card';
+    card.dataset.savedPlaceId = place.id;
+    card.type = 'button';
+
+    const top = document.createElement('div');
+    top.className = 'watchlist-card-top';
+    const nameGroup = document.createElement('div');
+    const nameEl = document.createElement('div');
+    nameEl.className = 'watchlist-country';
+    nameEl.textContent = place.name;
+    const radiusEl = document.createElement('div');
+    radiusEl.className = 'watchlist-scenario';
+    radiusEl.textContent = `${place.radiusKm.toLocaleString()} km radius`;
+    nameGroup.append(nameEl, radiusEl);
+    top.append(nameGroup);
+
+    const summary = document.createElement('div');
+    summary.className = 'watchlist-summary';
+    summary.textContent = brief?.headline ?? this.renderSubtitle(place);
+
+    const bottom = document.createElement('div');
+    bottom.className = 'watchlist-card-bottom';
+    const panelsRow = document.createElement('div');
+    panelsRow.className = 'watchlist-panels';
+
+    const threatBadge = this.buildThreatBadge(threats);
+    if (threatBadge) panelsRow.append(threatBadge);
+
+    const chips: string[] = [
+      place.primary ? 'Primary' : '',
+      place.offlinePinned ? 'Offline' : '',
+      brief?.isStale ? 'Cached' : '',
+      hasStormPosture ? 'Storm' : '',
+      hasForecastRisk ? 'Forecast' : '',
+    ].filter(Boolean);
+    for (const label of chips) {
+      const chip = document.createElement('span');
+      chip.className = 'watchlist-panel-chip';
+      chip.textContent = label;
+      panelsRow.append(chip);
+    }
+    for (const tag of place.tags) {
+      const chip = document.createElement('span');
+      chip.className = 'watchlist-panel-chip';
+      chip.textContent = TAG_LABELS[tag] ?? tag;
+      panelsRow.append(chip);
+    }
+
+    bottom.append(panelsRow);
+    card.append(top, summary, bottom);
+    wrapper.append(card);
+
+    if (this.options.editPlace) {
+      const editBtn = document.createElement('button');
+      editBtn.className = 'spm-card-edit';
+      editBtn.dataset.savedPlaceEdit = place.id;
+      editBtn.type = 'button';
+      editBtn.title = 'Edit place';
+      editBtn.innerHTML = PENCIL_SVG;
+      wrapper.append(editBtn);
+    }
+
+    return wrapper;
   }
 
   private renderSubtitle(place: SavedPlace): string {
- return `${place.lat.toFixed(2)}, ${place.lon.toFixed(2)}`;
+    return `${place.lat.toFixed(2)}, ${place.lon.toFixed(2)}`;
   }
 }

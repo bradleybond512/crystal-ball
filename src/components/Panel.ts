@@ -223,6 +223,16 @@ export class Panel {
   // expensive on panels with large or animated content. Keeping a cached copy
   // lets setContent() detect no-op updates without touching the DOM.
   private lastAppliedContentHtml = '';
+  // Cached reference to the heartbeat text node — avoids a querySelector on
+  // every 5-second heartbeat tick across 473+ panel instances.
+  private heartbeatTextEl: HTMLElement | null = null;
+  private lastHeartbeatStale = false;
+  private lastHeartbeatVeryStale = false;
+  // IntersectionObserver state — panels that are scrolled out of view skip DOM
+  // writes entirely; the pending HTML is flushed when they scroll back in.
+  private panelIntersecting = true;
+  private intersectionObserver: IntersectionObserver | null = null;
+  private static appVisible = true;
   private aiSummaryOverlay: HTMLElement | null = null;
 
   /** Panel IDs that should not offer AI Summary (video streams or already-AI panels). */
@@ -316,6 +326,7 @@ export class Panel {
  const hbText = document.createElement('span');
  hbText.className = 'panel-heartbeat-text';
  hbText.textContent = '—';
+ this.heartbeatTextEl = hbText;
  this.heartbeatEl.append(hbDot, hbText);
  this.header.append(this.heartbeatEl);
 
@@ -334,6 +345,7 @@ export class Panel {
 
  Panel.instances.add(this);
  Panel.startHeartbeatTicker();
+ this.setupVisibilityTracking();
 
  // Add resize handle
  this.resizeHandle = document.createElement('div');
@@ -759,6 +771,12 @@ export class Panel {
 
  this.pendingContentHtml = html;
  this.pendingOnRendered = onRendered ?? null;
+
+ // Panel is off-screen or app is backgrounded — cache the new HTML but do
+ // NOT start the debounce timer. The IntersectionObserver / visibilitychange
+ // handler will queue the flush when the panel becomes renderable again.
+ if (!this.panelIntersecting || !Panel.appVisible) return;
+
  if (this.contentDebounceTimer) {
  clearTimeout(this.contentDebounceTimer);
  }
@@ -828,9 +846,13 @@ export class Panel {
   public markFresh(): void {
  this.lastTickAt = Date.now();
  this.content.classList.remove('panel-fresh-flash');
- // Force reflow so the animation restarts.
- void this.content.offsetWidth;
+ // Re-add the class on the next animation frame instead of forcing a
+ // synchronous layout flush with `void offsetWidth`. The 1-frame (~16 ms)
+ // delay is imperceptible but avoids serialising the full-grid layout on
+ // every content write across all 473 panel instances.
+ requestAnimationFrame(() => {
  this.content.classList.add('panel-fresh-flash');
+ });
  this.updateHeartbeat();
   }
 
@@ -847,15 +869,62 @@ export class Panel {
   }
 
   private updateHeartbeat(): void {
- if (!this.heartbeatEl) return;
- const text = this.heartbeatEl.querySelector<HTMLElement>('.panel-heartbeat-text');
- if (!text) return;
- if (this.lastTickAt === 0) { text.textContent = '—'; return; }
+ if (!this.heartbeatEl || !this.heartbeatTextEl) return;
+ if (this.lastTickAt === 0) {
+ // Only write if the text isn't already the placeholder.
+ if (this.heartbeatTextEl.textContent !== '—') this.heartbeatTextEl.textContent = '—';
+ return;
+ }
  const ago = Math.max(0, Math.round((Date.now() - this.lastTickAt) / 1000));
- text.textContent = ago < 60 ? `${ago}s` : (ago < 3600 ? `${Math.floor(ago / 60)}m` : `${Math.floor(ago / 3600)}h`);
- // Stale tiers via class for CSS color.
- this.heartbeatEl.classList.toggle('stale', ago > 300);
- this.heartbeatEl.classList.toggle('very-stale', ago > 1800);
+ const label = ago < 60 ? `${ago}s` : (ago < 3600 ? `${Math.floor(ago / 60)}m` : `${Math.floor(ago / 3600)}h`);
+ // Only mutate the DOM when the label actually changes to avoid triggering
+ // unnecessary text layout on every 5-second heartbeat tick.
+ if (this.heartbeatTextEl.textContent !== label) this.heartbeatTextEl.textContent = label;
+ // Only call classList.toggle when stale state transitions — each toggle that
+ // changes a class invalidates styles for that element.
+ const isStale = ago > 300;
+ const isVeryStale = ago > 1800;
+ if (isStale !== this.lastHeartbeatStale) {
+ this.heartbeatEl.classList.toggle('stale', isStale);
+ this.lastHeartbeatStale = isStale;
+ }
+ if (isVeryStale !== this.lastHeartbeatVeryStale) {
+ this.heartbeatEl.classList.toggle('very-stale', isVeryStale);
+ this.lastHeartbeatVeryStale = isVeryStale;
+ }
+  }
+
+  /**
+   * Set up an IntersectionObserver so that panels outside the viewport skip
+   * DOM writes while off-screen. When a panel scrolls back into view any
+   * pending HTML is flushed immediately via the normal debounce path.
+   * The 200 px rootMargin means rendering starts just before the panel is
+   * fully visible, avoiding a blank flash on scroll-in.
+   */
+  private setupVisibilityTracking(): void {
+ if (typeof IntersectionObserver === 'undefined') return;
+ this.intersectionObserver = new IntersectionObserver(
+ (entries) => {
+ const entry = entries[entries.length - 1];
+ if (!entry) return;
+ const wasHidden = !this.panelIntersecting;
+ this.panelIntersecting = entry.isIntersecting;
+ if (this.panelIntersecting && wasHidden) this.flushPendingIfVisible();
+ },
+ { rootMargin: '200px 0px' },
+ );
+ this.intersectionObserver.observe(this.element);
+  }
+
+  /** Queue the debounce for any HTML that accumulated while the panel was
+   *  off-screen, provided the app is also foregrounded. */
+  private flushPendingIfVisible(): void {
+ if (!this.panelIntersecting || !Panel.appVisible) return;
+ if (this.pendingContentHtml === null) return;
+ if (this.contentDebounceTimer) clearTimeout(this.contentDebounceTimer);
+ this.contentDebounceTimer = setTimeout(() => {
+ if (this.pendingContentHtml !== null) this.setContentImmediate(this.pendingContentHtml);
+ }, this.contentDebounceMs);
   }
 
   private static startHeartbeatTicker(): void {
@@ -864,6 +933,15 @@ export class Panel {
  Panel.heartbeatTickerId = window.setInterval(() => {
  for (const p of Panel.instances) p.updateHeartbeat();
  }, 5000) as unknown as ReturnType<typeof setInterval>;
+ // Pause DOM writes when the whole app is backgrounded; flush when it returns.
+ if (typeof document !== 'undefined') {
+ document.addEventListener('visibilitychange', () => {
+ Panel.appVisible = document.visibilityState !== 'hidden';
+ if (Panel.appVisible) {
+ for (const p of Panel.instances) p.flushPendingIfVisible();
+ }
+ });
+ }
  document.addEventListener('cb:panel-narrative', (ev: Event) => {
  const detail = (ev as CustomEvent<{ panelId: string; text: string }>).detail;
  if (!detail) return;
@@ -1156,6 +1234,8 @@ export class Panel {
   }
 
   public destroy(): void {
+ this.intersectionObserver?.disconnect();
+ this.intersectionObserver = null;
  this.abortController.abort();
  if (this.aiSummaryOverlay) {
  this.aiSummaryOverlay.remove();

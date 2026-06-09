@@ -424,6 +424,7 @@ export class App {
  this.eventHandlers.setupPizzIntIndicator();
  this.eventHandlers.setupExportPanel();
  this.eventHandlers.setupUnifiedSettings();
+ this.panelLayout.wirePlaceCallbacks();
 
  // Phase 4: SearchManager, MapLayerHandlers, CountryIntel
  this.searchManager.init();

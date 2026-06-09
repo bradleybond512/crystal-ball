@@ -636,6 +636,15 @@ export class PanelLayoutManager implements AppModule {
   }
 
   private stalenessBanner: StalenessBanner | null = null;
+  private _savedPlaceOpenCreate: (() => void) | null = null;
+  private _savedPlaceOpenEdit: ((id: string) => void) | null = null;
+
+  /** Called by App.ts after setupUnifiedSettings() to wire the place callbacks. */
+  public wirePlaceCallbacks(): void {
+    if (this._savedPlaceOpenCreate && this._savedPlaceOpenEdit) {
+      this.ctx.unifiedSettings?.setPlaceCallbacks(this._savedPlaceOpenCreate, this._savedPlaceOpenEdit);
+    }
+  }
 
   init(): void {
  this.renderLayout();
@@ -1270,6 +1279,8 @@ export class PanelLayoutManager implements AppModule {
  const place = getSavedPlace(placeId);
  if (place) savedPlaceModal.openEdit(place);
  };
+ this._savedPlaceOpenCreate = openCreate;
+ this._savedPlaceOpenEdit = openEdit;
 
  const savedPlacesPanel = new SavedPlacesPanel({
  focusPlace: focusSavedPlace,
@@ -1282,8 +1293,6 @@ export class PanelLayoutManager implements AppModule {
  const watchlistLocationsPanel = new WatchlistLocationsPanel();
  this.ctx.panels['watchlist-locations'] = watchlistLocationsPanel;
  this.ctx.panels['watch-area-alerting'] = new WatchAreaAlertingPanel();
-
- this.ctx.unifiedSettings?.setPlaceCallbacks(openCreate, openEdit);
 
  localLogisticsPanel = new LocalLogisticsPanel({
  focusNode: (lat, lon) => {

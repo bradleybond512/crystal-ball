@@ -104,7 +104,8 @@ export class SavedPlacesPanel extends Panel {
       if (typeof requestIdleCallback === 'undefined') {
         setTimeout(() => { this.refreshPending = false; this.refresh(); }, 0);
       } else {
-        requestIdleCallback(() => { this.refreshPending = false; this.refresh(); }, { timeout: 500 });
+        // No timeout — never preempt user input to run a background panel update.
+        requestIdleCallback(() => { this.refreshPending = false; this.refresh(); });
       }
     };
     document.addEventListener('wm:breaking-news', this.boundRefresh);

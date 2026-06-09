@@ -33,6 +33,7 @@ const RADIUS_PRESETS = [
 
 export interface SavedPlaceModalOptions {
   onPickLocationMode: (active: boolean, callback: ((lat: number, lon: number) => void) | null) => void;
+  screenToLatLon: (x: number, y: number) => { lat: number; lon: number } | null;
 }
 
 interface FormState {
@@ -367,7 +368,22 @@ export class SavedPlaceModal {
  }
   }
 
+  private applyPickedLocation(e: MouseEvent): boolean {
+ if (!this.pickModeActive) return false;
+ if ((e.target as HTMLElement).closest('.spm-pick-banner')) return false;
+ const pos = this.options.screenToLatLon(e.clientX, e.clientY);
+ if (pos) {
+ this.formState.lat = pos.lat.toFixed(6);
+ this.formState.lon = pos.lon.toFixed(6);
+ this.exitPickMode();
+ void this.tryAutoName(pos.lat, pos.lon);
+ }
+ return true;
+  }
+
   private handleClick(e: MouseEvent): void {
+ if (this.applyPickedLocation(e)) return;
+
  const target = e.target as HTMLElement;
 
  if (target === this.overlay) {

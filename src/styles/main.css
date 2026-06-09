@@ -18667,10 +18667,10 @@ body.has-breaking-alert .panels-grid {
 
 .spm-pick-mode {
   background: transparent !important;
-  pointer-events: none;
+  cursor: crosshair;
 }
 .spm-pick-mode .spm-pick-banner {
-  pointer-events: all;
+  cursor: default;
 }
 .map-section.spm-pick-revealed {
   display: flex !important;

@@ -3862,6 +3862,18 @@ export class DeckGLMap {
  this.onLocationPick = callback ?? undefined;
   }
 
+  public getLatLonAtScreen(x: number, y: number): { lat: number; lon: number } | null {
+ if (!this.maplibreMap) return null;
+ try {
+ const container = this.maplibreMap.getContainer();
+ const rect = container.getBoundingClientRect();
+ const lngLat = this.maplibreMap.unproject([x - rect.left, y - rect.top]);
+ return { lat: lngLat.lat, lon: lngLat.lng };
+ } catch {
+ return null;
+ }
+  }
+
   private handleClick(info: PickingInfo): void {
  if (info.coordinate && this.onLocationPick) {
  const [lon, lat] = info.coordinate as [number, number];

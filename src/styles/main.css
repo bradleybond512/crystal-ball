@@ -6377,11 +6377,11 @@ a.prediction-link:hover {
   display: flex;
 }
 
-/* SavedPlaceModal must stack above UnifiedSettings (both z-index:1000 but
-   PanelLayout appends SavedPlaceModal to body before EventHandlers appends
-   UnifiedSettings, so DOM order would otherwise put Settings on top). */
+/* SavedPlaceModal must stack above UnifiedSettings and the replay scrubber
+   (--z-strip: 1040). Use --z-modal (10000) so pick mode also sits above
+   the status bar and toast layers. */
 #savedPlaceModal {
-  z-index: 1010;
+  z-index: var(--z-modal);
 }
 
 .modal {
@@ -18648,7 +18648,8 @@ body.has-breaking-alert .panels-grid {
 /* Pick mode banner — overlays map */
 .spm-pick-banner {
   position: fixed;
-  bottom: 24px;
+  top: 16px;
+  bottom: auto;
   left: 50%;
   transform: translateX(-50%);
   background: var(--surface);

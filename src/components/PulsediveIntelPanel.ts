@@ -111,8 +111,7 @@ export class PulsediveIntelPanel extends Panel {
         ${this.renderTabBar()}
         <div style="margin-top:8px;">${body}</div>
       </div>
-    `);
-    this.wireHandlers();
+    `, () => this.wireHandlers());
   }
 
   private renderTabBar(): string {

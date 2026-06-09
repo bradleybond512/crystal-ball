@@ -82,8 +82,7 @@ export class IntelligenceLoopOrchestratorPanel extends Panel {
       ${renderRunsTable(runs)}
       ${renderFooter()}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {

@@ -118,8 +118,7 @@ export class AssumptionTrackerPanel extends Panel {
       ${renderRecentViolations(summary.recentViolations)}
       ${this.renderAssumptionsList(filteredAssumptions)}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private renderFilterBar(domains: readonly string[]): string {

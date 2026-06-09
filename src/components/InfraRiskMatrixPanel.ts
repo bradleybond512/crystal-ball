@@ -147,8 +147,7 @@ export class InfraRiskMatrixPanel extends Panel {
       case 'acled': { body = this.renderAcledTab(); break; }
     }
     const footer = '<div style="opacity:0.65;font-size:11px;margin-top:6px">Sources: poweroutage.us · CISA KEV · RIPE NCC · ACLED · 60s refresh</div>';
-    this.setContent(`${this.renderHeader()}${this.renderTabStrip()}${body}${footer}`);
-    this.wireHandlers();
+    this.setContent(`${this.renderHeader()}${this.renderTabStrip()}${body}${footer}`, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {

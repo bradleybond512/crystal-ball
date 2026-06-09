@@ -175,8 +175,7 @@ export class AviationIntelPanel extends Panel {
         </div>
       </div>
     `;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private renderTabBar(counts: Record<Tab, number>): string {

@@ -155,8 +155,7 @@ export class RedditOsintPanel extends Panel {
     } else {
       body = visible.slice(0, 200).map((entry) => this.renderPostRow(entry)).join('');
     }
-    this.setContent(`${chips}${keywords}${body}${this.renderFooter()}`);
-    this.wireHandlers();
+    this.setContent(`${chips}${keywords}${body}${this.renderFooter()}`, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {

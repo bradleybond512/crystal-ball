@@ -211,8 +211,7 @@ export class SanctionsPanel extends Panel {
       case 'vessels': { body = this.renderVesselsTab(); break; }
       case 'aircraft': { body = this.renderAircraftTab(); break; }
     }
-    this.setContent(`${this.renderTabStrip()}${body}`);
-    this.wireHandlers();
+    this.setContent(`${this.renderTabStrip()}${body}`, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {

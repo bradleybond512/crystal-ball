@@ -92,8 +92,7 @@ export class NotificationHistoryPanel extends Panel {
       ${this.renderFilterBar(stats)}
       ${renderTable(records, this.state.expandedId)}
     </div>`;
-    this.setContent(html);
-    this.wireHandlers();
+    this.setContent(html, () => this.wireHandlers());
   }
 
   private renderFilterBar(stats: NotificationProvenanceStats): string {

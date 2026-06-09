@@ -166,8 +166,7 @@ export class OpenaqMonitorPanel extends Panel {
       case 'worst': { body = this.renderWorstTab(); break; }
       case 'search': { body = this.renderSearchTab(); break; }
     }
-    this.setContent(`${this.renderTabStrip()}${body}`);
-    this.wireHandlers();
+    this.setContent(`${this.renderTabStrip()}${body}`, () => this.wireHandlers());
   }
 
   private wireHandlers(): void {

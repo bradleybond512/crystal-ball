@@ -109,8 +109,7 @@ export class ScenarioReplayPanel extends Panel {
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;">${cards}</div>
       </div>
-    `);
-    this.wireHandlers();
+    `, () => this.wireHandlers());
   }
 
   private renderSummary(passCount: number, failCount: number): string {

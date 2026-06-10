@@ -128,6 +128,26 @@ const DECLARATIONS: readonly TunableDeclaration[] = [
     description: 'Weight applied to the down-vote ratio in the hypothesis feedback multiplier.',
     affectsNotifications: false,
   },
+
+  // ── PR 15: LLM quality engineering ───────────────────────────────────
+  {
+    algorithmId: 'superforecast',
+    parameterId: 'selfConsistencyK',
+    default: 3,
+    min: 1,
+    max: 5,
+    step: 1,
+    // Number of samples drawn per persona probability elicitation when the
+    // budget allows. k=1 is byte-identical to the pre-PR-15 path (no extra
+    // calls, no median logic). k=3 is the default: each persona elicitation
+    // draws 3 samples and the median is used, reducing variance. k=5 gives
+    // the tightest estimates at the highest cloud-call cost.
+    // Tune down if cloud budget is tight; tune up if persona disagreement
+    // (spread) is persistently high and budget permits extra sampling.
+    fixDirection: 'decrease',
+    description: 'Number of self-consistency samples per persona probability elicitation (k=1 = legacy, k=3 = default).',
+    affectsNotifications: false,
+  },
 ];
 
 type Store = Record<string, number>; // `${algorithmId}:${parameterId}` -> value

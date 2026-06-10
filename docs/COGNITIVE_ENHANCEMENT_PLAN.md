@@ -44,7 +44,7 @@ rather than disappearing; every output is testable with static fixtures.
 | PR | Feature | Status | Branch | Notes |
 |----|---------|--------|--------|-------|
 | 1 | Episodic Memory + Semantic Retrieval | ✅ | `claude/cognition-pr1-episodic-memory` | embedding-provider (hashed+neural), vector-index, episodic-memory, episodic-memory-bridge; sidecar /api/intel-embed route; wired into analyst-loop + hypothesis-accuracy + hypothesis-forecast; analog score cache bridges sync forecastAll; tests: vector-index + episodic-memory (hashed tier, static fixtures); `test:cognition` script added. Typecheck 0 errors. |
-| 2 | Closed Calibration Loop | 🔲 | `claude/cognition-pr2-recalibration` | |
+| 2 | Closed Calibration Loop | ✅ | `claude/cognition-pr2-recalibration` | stacked on PR1 branch; recalibration.ts (10-bin PAV monotone curves, Laplace shrinkage, clamp [0.02,0.98], explanation invariant); getRecalibrator() in forecast-calibration-adapter.ts (lazy 10-min rebuild, reasoning-memory persist); recalibrate() applied as final step in hypothesis-forecast.ts with explanation appended to components; tests: PAV monotonicity, shrinkage math, n-threshold fallbacks, clamps, explanation content, perfect-calibration ≈ identity. Typecheck 0 errors. |
 | 3 | Superforecaster Pipeline | 🔲 | `claude/cognition-pr3-superforecast` | needs PR 1+2 |
 | 4 | Operator Model | 🔲 | `claude/cognition-pr4-operator-model` | independent |
 | 5 | Entity Dossiers | 🔲 | `claude/cognition-pr5-entity-dossiers` | needs PR 1 |

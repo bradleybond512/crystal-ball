@@ -271,6 +271,7 @@ import { ObservationRulesPanel } from '@/components/ObservationRulesPanel';
 import { PatternOfLifePanel } from '@/components/PatternOfLifePanel';
 import { SigintPanel } from '@/components/SigintPanel';
 import { DarkVesselPanel } from '@/components/DarkVesselPanel';
+import { ShadowFleetPanel } from '@/components/ShadowFleetPanel';
 import { CourseOfActionPanel } from '@/components/CourseOfActionPanel';
 import { KillChainPanel } from '@/components/KillChainPanel';
 import { IcsOtDashboardPanel } from '@/components/IcsOtDashboardPanel';
@@ -1579,6 +1580,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['pattern-of-life'] = new PatternOfLifePanel();
  this.ctx.panels['sigint-panel'] = new SigintPanel();
  this.ctx.panels['dark-vessel'] = new DarkVesselPanel();
+ this.ctx.panels['shadow-fleet'] = new ShadowFleetPanel();
  this.ctx.panels['course-of-action'] = new CourseOfActionPanel();
  this.ctx.panels['kill-chain'] = new KillChainPanel();
  this.ctx.panels['ics-ot-dashboard'] = new IcsOtDashboardPanel();

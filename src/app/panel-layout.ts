@@ -60,6 +60,7 @@ import {
   DailyWisdomPanel,
 } from '@/components';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
+import { FirmsPanel } from '@/components/FirmsPanel';
 import { WatchAreaAlertingPanel } from '@/components/WatchAreaAlertingPanel';
 import { TriageBar } from '@/components/TriageBar';
 import { notificationStack } from '@/components/NotificationStack';
@@ -1354,6 +1355,8 @@ export class PanelLayoutManager implements AppModule {
 
  const satelliteFiresPanel = new SatelliteFiresPanel();
  this.ctx.panels['satellite-fires'] = satelliteFiresPanel;
+
+ this.ctx.panels['firms-thermal'] = new FirmsPanel();
 
  const earthquakesPanel = new EarthquakesPanel();
  this.ctx.panels.earthquakes = earthquakesPanel;

@@ -341,6 +341,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'regime-stability': { name: 'Regime Stability', enabled: true, priority: 1 },
   'coup-risk': { name: 'Coup Risk Monitor', enabled: true, priority: 1 },
   'arms-sales': { name: 'Arms Sales', enabled: true, priority: 1 },
+  'firms-thermal': { name: 'Thermal Anomalies (FIRMS)', enabled: true, priority: 1 },
   'global-logistics-chokepoints': { name: 'Global Logistics Chokepoints', enabled: true, priority: 1 },
   'coalition-dynamics': { name: 'Coalition Dynamics', enabled: true, priority: 1 },
   'transnational-repression': { name: 'Transnational Repression', enabled: true, priority: 1 },
@@ -1229,7 +1230,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   hazards: {
  labelKey: 'header.panelCatHazards',
 
- panelKeys: ['wildfire-intel', 'satellite-fires', 'earthquakes', 'emsc-seismic', 'gdacs-alerts', 'volcano-alerts', 'volcano-monitor', 'severe-weather', 'shakealert', 'weather-hazard', 'nws-alerts', 'faa-weather-cams', 'faa-tfrs', 'tsunami-alerts', 'tropical-cyclones', 'climate', 'wildfire-incidents', 'hazmat-incidents', 'oil-spill', 'fcdo-warnings', 'dfat-warnings', 'gac-warnings', 'avalanche-hazard', 'wildfire-smoke', 'spc-mesoscale', 'amtrak-alerts', 'habsos', 'global-weather', 'extended-forecast', 'tide-predictions', 'pollen', 'weather-radar', 'goes-satellite', 'flood-monitor', 'weather-superpower'],
+ panelKeys: ['wildfire-intel', 'satellite-fires', 'firms-thermal', 'earthquakes', 'emsc-seismic', 'gdacs-alerts', 'volcano-alerts', 'volcano-monitor', 'severe-weather', 'shakealert', 'weather-hazard', 'nws-alerts', 'faa-weather-cams', 'faa-tfrs', 'tsunami-alerts', 'tropical-cyclones', 'climate', 'wildfire-incidents', 'hazmat-incidents', 'oil-spill', 'fcdo-warnings', 'dfat-warnings', 'gac-warnings', 'avalanche-hazard', 'wildfire-smoke', 'spc-mesoscale', 'amtrak-alerts', 'habsos', 'global-weather', 'extended-forecast', 'tide-predictions', 'pollen', 'weather-radar', 'goes-satellite', 'flood-monitor', 'weather-superpower'],
  variants: ['full'],
   },
   healthEnv: {

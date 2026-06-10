@@ -12072,6 +12072,187 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── FIRMS thermal-anomaly summary (panel: firms-thermal) ─────────────────
+  // Aggregated global VIIRS picture + hotspot regions + conflict-zone
+  // cross-reference. 1h cache (matches the panel refresh). Returns a static
+  // demo summary with `demo: true` when NASA_FIRMS_API_KEY is unset so the
+  // panel is always usable. Region / conflict-zone defs mirror
+  // src/components/firms-helpers.ts (separate Node process — cannot import TS).
+  if (requestUrl.pathname === '/api/firms/summary' && req.method === 'GET') {
+    const cors = makeCorsHeaders(req);
+    const cached = getCached('firms-summary', 60 * 60 * 1000);
+    if (cached) return json(cached, 200, cors);
+
+    // bbox = [lon_min, lat_min, lon_max, lat_max]
+    const FIRMS_REGIONS = [
+      { name: 'Sub-Saharan Africa', bbox: [-20, -35, 52, 15], isConflictZone: false },
+      { name: 'Amazon Basin', bbox: [-80, -20, -44, 6], isConflictZone: false },
+      { name: 'Southeast Asia', bbox: [92, -11, 141, 29], isConflictZone: false },
+      { name: 'Eastern Europe', bbox: [22, 44, 50, 60], isConflictZone: true },
+      { name: 'Central Asia', bbox: [46, 35, 88, 56], isConflictZone: false },
+      { name: 'Western North America', bbox: [-130, 30, -100, 60], isConflictZone: false },
+      { name: 'Australia', bbox: [113, -44, 154, -10], isConflictZone: false },
+      { name: 'Middle East', bbox: [34, 12, 63, 42], isConflictZone: true },
+    ];
+    const FIRMS_CONFLICT_ZONES = [
+      { name: 'Eastern Ukraine', bbox: [36, 46.5, 41, 50.5], baseline: 12 },
+      { name: 'Sudan', bbox: [22, 9, 39, 22], baseline: 8 },
+      { name: 'Gaza', bbox: [34.2, 31.2, 34.6, 31.6], baseline: 1 },
+      { name: 'Myanmar', bbox: [92, 9.5, 101.5, 28.5], baseline: 20 },
+      { name: 'Syria', bbox: [35.5, 32, 42.5, 37.5], baseline: 6 },
+      { name: 'Sahel (Mali–Niger)', bbox: [-12, 11, 16, 20], baseline: 25 },
+      { name: 'DR Congo (East)', bbox: [27, -3.5, 30, 1], baseline: 5 },
+      { name: 'Yemen', bbox: [42.5, 12.5, 53, 19], baseline: 4 },
+      { name: 'Nagorno-Karabakh', bbox: [45.5, 38.8, 47.2, 40.2], baseline: 1 },
+      { name: 'Sahel (Burkina Faso)', bbox: [-5.5, 9.5, 2.5, 15.2], baseline: 10 },
+    ];
+    const inBbox = (lat, lon, b) =>
+      lon >= b[0] && lon <= b[2] && lat >= b[1] && lat <= b[3];
+    const severityFor = (count, baseline) => {
+      const ratio = count / Math.max(baseline, 1);
+      if (ratio >= 5) return 'extreme';
+      if (ratio >= 3) return 'high';
+      if (ratio >= 1.5) return 'elevated';
+      return 'normal';
+    };
+
+    const demoSummary = () => ({
+      demo: true,
+      generatedAt: new Date().toISOString(),
+      global: { count: 14823, highConfidenceCount: 8102, totalFrp: 892_000 },
+      regions: [
+        { name: 'Sub-Saharan Africa', bbox: [-20, -35, 52, 15], count: 5203, totalFrp: 312_000, highConfidenceCount: 2950, isConflictZone: false },
+        { name: 'Amazon Basin', bbox: [-80, -20, -44, 6], count: 3102, totalFrp: 198_000, highConfidenceCount: 1780, isConflictZone: false },
+        { name: 'Southeast Asia', bbox: [92, -11, 141, 29], count: 2891, totalFrp: 142_000, highConfidenceCount: 1610, isConflictZone: false },
+        { name: 'Eastern Europe', bbox: [22, 44, 50, 60], count: 1204, totalFrp: 41_000, highConfidenceCount: 540, isConflictZone: true },
+        { name: 'Central Asia', bbox: [46, 35, 88, 56], count: 892, totalFrp: 28_000, highConfidenceCount: 401, isConflictZone: false },
+        { name: 'Middle East', bbox: [34, 12, 63, 42], count: 421, totalFrp: 19_000, highConfidenceCount: 198, isConflictZone: true },
+      ],
+      conflictZones: [
+        { name: 'Eastern Ukraine', count: 89, baseline: 12, totalFrp: 3_400, severity: 'extreme' },
+        { name: 'Sudan', count: 34, baseline: 8, totalFrp: 1_900, severity: 'high' },
+        { name: 'Myanmar', count: 41, baseline: 20, totalFrp: 2_100, severity: 'elevated' },
+        { name: 'Syria', count: 12, baseline: 6, totalFrp: 600, severity: 'elevated' },
+        { name: 'Gaza', count: 2, baseline: 1, totalFrp: 90, severity: 'elevated' },
+      ],
+      satellites: { satellites: ['N', 'N20'], viirsSnpp: true, noaa20: true },
+    });
+
+    const apiKey = process.env.NASA_FIRMS_API_KEY;
+    if (!apiKey) {
+      const demo = demoSummary();
+      setCached('firms-summary', demo, 60 * 60 * 1000);
+      return json(demo, 200, cors);
+    }
+
+    // Global coverage via 6 continental boxes (each under the FIRMS area limit).
+    const FETCH_BOXES = [
+      [-170, 15, -52, 72],
+      [-82, -56, -34, 15],
+      [-25, 35, 55, 72],
+      [-20, -35, 55, 38],
+      [25, -10, 145, 72],
+      [100, -50, 180, -10],
+    ];
+    const parseRows = (csvText) => {
+      const lines = (csvText || '').trim().split(/\r?\n/);
+      if (lines.length < 2) return [];
+      const header = lines[0].split(',').map((h) => h.trim().replace(/"/g, '').toLowerCase());
+      const latI = header.indexOf('latitude');
+      const lonI = header.indexOf('longitude');
+      const frpI = header.indexOf('frp');
+      const confI = header.indexOf('confidence');
+      const satI = header.indexOf('satellite');
+      if (latI === -1 || lonI === -1) return [];
+      const out = [];
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i] || !lines[i].trim()) continue;
+        const cols = lines[i].split(',').map((c) => c.trim().replace(/"/g, ''));
+        const lat = Number.parseFloat(cols[latI]);
+        const lon = Number.parseFloat(cols[lonI]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        if (lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+        const cRaw = (confI !== -1 ? cols[confI] : '').toLowerCase();
+        const cNum = Number.parseInt(cRaw, 10);
+        const confidence = cRaw === 'h' || cRaw === 'high' || cNum >= 80 ? 'high'
+          : (cRaw === 'l' || cRaw === 'low' || (Number.isFinite(cNum) && cNum < 30)) ? 'low'
+          : 'nominal';
+        out.push({
+          lat, lon,
+          frp: Number.parseFloat(cols[frpI]) || 0,
+          confidence,
+          satellite: satI !== -1 ? (cols[satI] || '') : '',
+        });
+      }
+      return out;
+    };
+
+    try {
+      const settled = await Promise.allSettled(
+        FETCH_BOXES.map(([w, s, e, n]) => {
+          const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(apiKey)}/VIIRS_SNPP_NRT/${w},${s},${e},${n}/1`;
+          return fetchWithTimeout(url, { headers: { 'User-Agent': CHROME_UA } }, 20_000)
+            .then((r) => (r.ok ? r.text() : ''))
+            .then(parseRows);
+        }),
+      );
+      const fires = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+
+      let highConfidenceCount = 0;
+      let totalFrp = 0;
+      const sats = new Set();
+      let viirsSnpp = false;
+      let noaa20 = false;
+      for (const f of fires) {
+        if (f.confidence === 'high') highConfidenceCount++;
+        totalFrp += f.frp;
+        const tok = (f.satellite || '').trim();
+        if (tok) {
+          sats.add(tok);
+          const up = tok.toUpperCase();
+          if (up === 'N' || up.includes('NPP') || up.includes('SUOMI')) viirsSnpp = true;
+          if (up === 'N20' || up.includes('NOAA-20') || up.includes('NOAA20') || up === '1') noaa20 = true;
+        }
+      }
+
+      const regions = FIRMS_REGIONS.map((r) => {
+        let count = 0, frp = 0, hi = 0;
+        for (const f of fires) {
+          if (!inBbox(f.lat, f.lon, r.bbox)) continue;
+          count++; frp += f.frp; if (f.confidence === 'high') hi++;
+        }
+        return { name: r.name, bbox: r.bbox, count, totalFrp: frp, highConfidenceCount: hi, isConflictZone: r.isConflictZone };
+      }).sort((a, b) => b.count - a.count);
+
+      const conflictZones = FIRMS_CONFLICT_ZONES.map((z) => {
+        let count = 0, frp = 0;
+        for (const f of fires) {
+          if (!inBbox(f.lat, f.lon, z.bbox)) continue;
+          count++; frp += f.frp;
+        }
+        return { name: z.name, count, baseline: z.baseline, totalFrp: frp, severity: severityFor(count, z.baseline) };
+      }).sort((a, b) => b.count - a.count);
+
+      const summary = {
+        demo: false,
+        generatedAt: new Date().toISOString(),
+        global: { count: fires.length, highConfidenceCount, totalFrp },
+        regions,
+        conflictZones,
+        satellites: { satellites: [...sats].sort(), viirsSnpp, noaa20 },
+      };
+      trackSuccess('firms', 'primary');
+      setCached('firms-summary', summary, 60 * 60 * 1000);
+      return json(summary, 200, cors);
+    } catch (error) {
+      trackFailure('firms', error);
+      const stale = getCachedStale('firms-summary');
+      if (stale) return json(stale, 200, cors);
+      const demo = demoSummary();
+      return json(demo, 200, cors);
+    }
+  }
+
   // ── NIFC active fire perimeters (free public ArcGIS REST) ────────────────
   if (requestUrl.pathname === '/api/wildfire/perimeters') {
  try {

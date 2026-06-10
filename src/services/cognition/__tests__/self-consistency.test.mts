@@ -14,6 +14,20 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
+// ── localStorage stub ─────────────────────────────────────────────────────────
+// tunable-params-store.ts reads/writes via globalThis.localStorage.  In the
+// pure Node.js test runner there is no localStorage, so setTunedParam() is a
+// silent no-op and getTunedParam() always returns the declaration default
+// (selfConsistencyK = 3).  We stub it here — before any module import — so
+// that setTunedParam('superforecast', 'selfConsistencyK', 1) actually takes
+// effect and getTunedParam reads back the injected value.
+const _tunableStore: Record<string, string> = {};
+(globalThis as unknown as Record<string, unknown>).localStorage ??= {
+  getItem: (k: string): string | null => _tunableStore[k] ?? null,
+  setItem: (k: string, v: string): void => { _tunableStore[k] = v; },
+  removeItem: (k: string): void => { delete _tunableStore[k]; },
+};
+
 import {
   medianOf,
   applyAggregateReview,
@@ -188,7 +202,12 @@ describe('self-consistency k=1: byte-identical path', () => {
           provider: 'local' as const,
         };
       }
-      if (prompt.includes('reviewer') || prompt.includes('"keep"')) {
+      // Aggregate review prompt is identified by its distinctive preamble.
+      // Note: the skeptic persona prompt contains the word "reviewer" too
+      // ("skeptical reviewer"), so we must use a more specific marker that only
+      // appears in buildAggregateReviewPrompt — namely "senior forecasting reviewer"
+      // or the '"keep": true/false' literal from its JSON format instructions.
+      if (prompt.includes('senior forecasting reviewer') || prompt.includes('"keep": true/false')) {
         // Aggregate review call.
         callLog.push('review');
         return { text: '{"keep": true, "reason": "reasonable"}', provider: 'local' as const };
@@ -263,7 +282,11 @@ describe('self-consistency k=3: median of samples', () => {
     };
 
     _injectGenerateTextForTests(async (prompt) => {
-      if (prompt.includes('"keep"') || prompt.includes('reviewer')) {
+      // Aggregate review prompt is identified by its distinctive preamble.
+      // The skeptic persona prompt also contains "reviewer" ("skeptical reviewer")
+      // so we must use a more specific marker: "senior forecasting reviewer" or
+      // the '"keep": true/false' literal from the format instructions.
+      if (prompt.includes('senior forecasting reviewer') || prompt.includes('"keep": true/false')) {
         return { text: '{"keep": true, "reason": "ok"}', provider: 'local' as const };
       }
       if (prompt.includes('NECESSARY') || prompt.includes('"conditions"')) {
@@ -327,7 +350,7 @@ describe('self-consistency: partial-budget degradation', () => {
 
     _injectGenerateTextForTests(async (prompt) => {
       callCount += 1;
-      if (prompt.includes('"keep"') || prompt.includes('reviewer')) {
+      if (prompt.includes('senior forecasting reviewer') || prompt.includes('"keep": true/false')) {
         return { text: '{"keep": true, "reason": "ok"}', provider: 'local' as const };
       }
       if (prompt.includes('NECESSARY') || prompt.includes('"conditions"')) {
@@ -356,7 +379,7 @@ describe('self-consistency: partial-budget degradation', () => {
 
   it('all persona samples fail: pipeline degrades gracefully to deterministic-only', async () => {
     _injectGenerateTextForTests(async (prompt) => {
-      if (prompt.includes('"keep"') || prompt.includes('reviewer')) {
+      if (prompt.includes('senior forecasting reviewer') || prompt.includes('"keep": true/false')) {
         return { text: '{"keep": true, "reason": "ok"}', provider: 'local' as const };
       }
       // All calls throw.

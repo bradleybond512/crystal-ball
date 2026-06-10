@@ -89,8 +89,11 @@ describe('dedupe window — same signature + kind within 24 h', () => {
     const updated = await recordEpisode({ ...input, summary: 'new refined summary text' });
 
     assert.equal(getAllEpisodes().length, 1, 'still only one episode');
-    assert.equal(updated.summary, 'Black Sea grain corridor disrupted wheat exports',
-      'returned episode keeps original summary (embedding stays from original insert)');
+    // Per plan PR 14: dedupe within 24 h updates the existing episode's summary
+    // if changed (the embedding stays from the original insert, but the summary
+    // text is refreshed to reflect the latest refinement).
+    assert.equal(updated.summary, 'new refined summary text',
+      'returned episode has the updated summary (embedding stays from original insert)');
   });
 
   it('allows duplicate signature when kind differs', async () => {

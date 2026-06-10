@@ -3,6 +3,8 @@ import type { PCIScore } from './predictive-crisis-index';
 import { getProviderSnapshots } from '@/services/insights/insights-state';
 import { assessProviderRedundancy } from '@/services/diagnostics/provider-redundancy';
 import { getBoostMultiplier } from './forecast-calibration-adapter';
+import { getCachedAnalogScore } from '@/services/cognition/episodic-memory';
+import { signatureFor } from '@/services/hypothesis-feedback';
 
 export interface HypothesisForecast {
   hypothesisId: string;
@@ -73,6 +75,12 @@ export function forecastAll(hypotheses: Hypothesis[], pci: PCIScore | null): Hyp
     } catch {
       multiplier = 1;
     }
-    return forecastHypothesis(h, pci, null, multiplier);
+    // Read the analog score from the module-level cache maintained by
+    // updateAnalogCache() in episodic-memory.ts, which runs asynchronously
+    // after each analyst cycle. The cache is at most one cycle (5 min) stale.
+    // This avoids converting forecastAll's sync signature to async, which would
+    // be invasive across many call sites. (Design note per cognition PR 1 spec.)
+    const analogScore = getCachedAnalogScore(signatureFor(h));
+    return forecastHypothesis(h, pci, analogScore, multiplier);
   });
 }

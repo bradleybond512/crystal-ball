@@ -6377,13 +6377,6 @@ a.prediction-link:hover {
   display: flex;
 }
 
-/* SavedPlaceModal must stack above UnifiedSettings and the replay scrubber
-   (--z-strip: 1040). Use --z-modal (10000) so pick mode also sits above
-   the status bar and toast layers. */
-#savedPlaceModal {
-  z-index: var(--z-modal);
-}
-
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -18648,8 +18641,7 @@ body.has-breaking-alert .panels-grid {
 /* Pick mode banner — overlays map */
 .spm-pick-banner {
   position: fixed;
-  top: 16px;
-  bottom: auto;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
   background: var(--surface);
@@ -18657,43 +18649,21 @@ body.has-breaking-alert .panels-grid {
   border-radius: 10px;
   padding: 12px 20px;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  min-width: 360px;
+  align-items: center;
+  gap: 16px;
   font-size: 13px;
   color: var(--text);
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
   z-index: 10003;  /* top of modal stack — floats above all overlays */
-}
-.spm-pick-banner-hint {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
   white-space: nowrap;
-}
-.spm-pick-search-row { position: relative; }
-.spm-pick-search-input { width: 100%; box-sizing: border-box; }
-.spm-pick-banner .spm-geocode-results {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  z-index: 1;
-  max-height: 200px;
-  overflow-y: auto;
 }
 
 .spm-pick-mode {
   background: transparent !important;
-  cursor: crosshair;
+  pointer-events: none;
 }
 .spm-pick-mode .spm-pick-banner {
-  cursor: default;
-}
-.map-section.spm-pick-revealed {
-  display: flex !important;
+  pointer-events: all;
 }
 
 /* Panel header add button */
@@ -18844,13 +18814,7 @@ body.has-breaking-alert .panels-grid {
   background: #4ade80;
   box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
   animation: panel-hb-pulse 2.4s ease-in-out infinite;
-}
-/* Pause + de-promote dots scrolled out of view. The dashboard mounts hundreds
-   of panels; only the handful on-screen should animate (set by Panel's
-   IntersectionObserver). Without this every dot is a live compositor layer. */
-.panel-heartbeat-dot.hb-offscreen {
-  animation-play-state: paused;
-  will-change: auto;
+  will-change: opacity;
 }
 .panel-heartbeat.stale .panel-heartbeat-dot { background: var(--mac-orange, #ff9f0a); box-shadow: 0 0 6px rgba(251, 191, 36, 0.6); }
 .panel-heartbeat.very-stale .panel-heartbeat-dot { background: var(--mac-red, #ff453a); box-shadow: 0 0 6px rgba(239, 68, 68, 0.6); animation: none; }
@@ -18927,9 +18891,8 @@ body.has-breaking-alert .panels-grid {
 .mac-sidebar-heat-badge[data-sev="critical"] {
   background: var(--mac-red, #ff453a) !important;
   color: #fff;
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
   animation: sidebar-heat-pulse 1.6s ease-in-out infinite;
-  will-change: opacity;
 }
 .mac-sidebar-heat-badge[data-sev="high"] {
   background: #fb923c !important;
@@ -18941,11 +18904,9 @@ body.has-breaking-alert .panels-grid {
 }
 .mac-sidebar-panel-item.heat-critical { border-left: 2px solid var(--mac-red, #ff453a); }
 .mac-sidebar-panel-item.heat-high { border-left: 2px solid #fb923c; }
-/* Pulse via opacity (compositor-only) rather than animating box-shadow,
-   which forces a full raster repaint every frame. Static glow is kept above. */
 @keyframes sidebar-heat-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.62; }
+  0%, 100% { box-shadow: 0 0 6px rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 14px rgba(239, 68, 68, 0.95); }
 }
 
 /* ── SIGINT legend chip ───────────────────────────────────────────── */

@@ -63,6 +63,14 @@ export interface OperatorModel {
   attentionRhythm: AttentionRhythm;
   responseProfile: ResponseProfile;
   updatedAt: number;
+  /**
+   * Per-domain human edge = systemBrier − operatorBrier (from PR 10 journal).
+   * Positive = operator outperforms system in that domain.
+   * Computed only when n ≥ 30 resolved entries on BOTH sides.
+   * Feeds into interestMultiplier: the combined [0.8, 1.2] bound is preserved.
+   * Optional for backward compatibility — absent means edge unknown.
+   */
+  humanEdge?: Record<string, number>;
 }
 
 /** What the caller observed about user interaction with one piece of content. */
@@ -380,12 +388,56 @@ export function interestScore(
 /**
  * Bounded operator-model multiplier for any scoring surface.
  *
- * Formula: 0.8 + 0.4 × interestScore(text)
- * Result is clamped to [0.8, 1.2] — personalization tilts, never dominates (±20%).
+ * Formula: 0.8 + 0.4 × combinedScore
+ * combinedScore = interestScore(text) blended with humanEdge signal for the
+ * given domain (if available from the PR 10 forecast journal). humanEdge is
+ * a Brier-difference in [-1, 1]; we normalize it into [0, 1] and weight it
+ * at 30% of the combined signal when present, interestScore at 70%. When
+ * humanEdge is absent the formula collapses to the original 0.8 + 0.4 × interestScore.
+ *
+ * Combined bound invariant: result is hard-clamped to [0.8, 1.2] so the total
+ * personalization effect never exceeds ±20%, regardless of humanEdge value.
+ * Property-tested in operator-model.test.mts.
+ *
+ * @param text    Content to score by interest terms.
+ * @param domain  Domain for humanEdge lookup (optional).
  */
-export function interestMultiplier(text: string): number {
-  const { score } = interestScore(text);
-  return Math.max(0.8, Math.min(1.2, 0.8 + 0.4 * score));
+export function interestMultiplier(text: string, domain?: string): number {
+  const { score: interestScoreVal } = interestScore(text);
+  ensureLoaded();
+
+  // Blend in humanEdge if available for this domain.
+  // humanEdge ∈ [-1, 1] (systemBrier − operatorBrier); normalize to [0, 1].
+  // Positive humanEdge (operator better) → boost; negative → pull back.
+  const edge = domain !== undefined ? (_model.humanEdge?.[domain] ?? null) : null;
+  let combinedScore: number;
+  if (edge !== null) {
+    // Normalize: edge of +0.25 (operator quite a bit better) → edgeNorm ≈ 1.0
+    // edge of -0.25 (system better) → edgeNorm ≈ 0.0; clamp to [0, 1].
+    const edgeNorm = Math.max(0, Math.min(1, (edge + 0.25) / 0.5));
+    combinedScore = 0.7 * interestScoreVal + 0.3 * edgeNorm;
+  } else {
+    combinedScore = interestScoreVal;
+  }
+
+  // Hard clamp to [0.8, 1.2] — the ±20% personalization bound is inviolable.
+  return Math.max(0.8, Math.min(1.2, 0.8 + 0.4 * combinedScore));
+}
+
+/**
+ * Update the per-domain human edge values on the operator model.
+ *
+ * Called by forecast-journal.refreshHumanEdge() after each batch of resolutions.
+ * Ghost Mode writes are suppressed by the journal before this is called, but
+ * we guard here as well for defense-in-depth.
+ *
+ * @param edge  Record<domain, systemBrier − operatorBrier>
+ */
+export function updateHumanEdge(edge: Record<string, number>): void {
+  if (isGhostMode()) return;
+  ensureLoaded();
+  _model.humanEdge = { ...(_model.humanEdge ?? {}), ...edge };
+  save();
 }
 
 /**

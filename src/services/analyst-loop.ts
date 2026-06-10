@@ -32,6 +32,7 @@ import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
 import type { Situation } from './situation-types';
 import { recordEpisode, updateAnalogCache } from '@/services/cognition/episodic-memory';
+import { interestMultiplier } from '@/services/cognition/operator-model';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -109,10 +110,18 @@ const RISK_RANK: Record<EscalationRisk, number> = {
 };
 
 /**
- * Ranking weight = raw confidence × learned user preference × outcome accuracy.
+ * Ranking weight = raw confidence × learned user preference × outcome accuracy
+ *                × operator-model personalization tilt (bounded ±20%).
+ *
+ * The operator-model multiplier is: 0.8 + 0.4 × interestScore(statement).
+ * It is clamped to [0.8, 1.2] inside interestMultiplier() so personalization
+ * never dominates — it tilts, it does not determine the ranking.
  */
 function rankingWeight(h: Hypothesis): number {
-  return h.confidence * getHypothesisFeedbackMult(h) * getHypothesisAccuracyMult(h);
+  return h.confidence
+    * getHypothesisFeedbackMult(h)
+    * getHypothesisAccuracyMult(h)
+    * interestMultiplier(h.statement);
 }
 
 // ── Per-source hypothesis builders ───────────────────────────────────────────

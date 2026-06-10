@@ -21,6 +21,7 @@ export * from './SearchModal';
 export * from './MobileWarningModal';
 export * from './PizzIntIndicator';
 export * from './GdeltIntelPanel';
+export * from './GdeltPanel';
 export * from './LiveNewsPanel';
 export * from './LiveWebcamsPanel';
 export * from './CIIPanel';

@@ -27,6 +27,7 @@ import type {
   TruthLabel,
   LocationPrecision,
 } from './types';
+import { createBelief } from '@/components/belief-helpers';
 
 // ── Inputs the caller supplies (decoupled from runtime services) ──────────
 
@@ -202,11 +203,13 @@ export function scoreFact(fact: NormalizedFact, ctx: TruthScoreContext = default
   const disputed = components.contradictionPenalty >= 0.3;
   const label = labelFor(final, disputed);
 
+  const providers = [...new Set(fact.sources.map((s) => s.providerId))];
   return {
     score: round3(final),
+    belief: createBelief(round3(final), { provenance: providers }),
     label,
     components: roundComponents(components),
-    contributingProviders: [...new Set(fact.sources.map((s) => s.providerId))],
+    contributingProviders: providers,
     disputed,
   };
 }

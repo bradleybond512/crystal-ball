@@ -323,6 +323,7 @@ import { CollectionGapPanel } from '@/components/CollectionGapPanel';
 import { getShadowRunner } from '@/services/intelligence/shadow-runner';
 import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow-algorithms';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
+import { BeliefCalibrationPanel } from '@/components/BeliefCalibrationPanel';
 import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
 import { BiasDetectionPanel } from '@/components/BiasDetectionPanel';
 import { ContradictionDetectorPanel } from '@/components/ContradictionDetectorPanel';
@@ -1600,6 +1601,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['meta-confidence'] = new MetaConfidencePanel();
  this.ctx.panels['meta-confidence-calibration'] = new MetaConfidenceCalibrationPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
+ this.ctx.panels['belief-calibration'] = new BeliefCalibrationPanel();
  this.ctx.panels['outcome-ledger'] = new OutcomeLedgerPanel();
  this.ctx.panels['bias-detection'] = new BiasDetectionPanel();
  this.ctx.panels['contradiction-detector'] = new ContradictionDetectorPanel();

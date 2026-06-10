@@ -14,6 +14,8 @@ import type { ObservationEvent } from './observation-adapters';
 import type { EvidenceEdge, Situation } from './situation-store-v2';
 import { getAttentionAllocator } from './attention-allocator';
 import { buildInputHash, getAlgoEvalLedger } from './algo-eval-ledger';
+import type { BeliefValue } from '@/types/belief';
+import { createBelief } from '@/components/belief-helpers';
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -60,6 +62,11 @@ export interface EvidenceScore {
   attentionMultiplier: number;
   finalScore: number;
   derivedSeverity: DerivedSeverity;
+  /** First-class probability view of `finalScore` (AI-2 BeliefValue). The
+   *  legacy numeric score is retained for existing callers; the belief adds a
+   *  confidence interval, provenance, and an ICD-203-labelable point estimate
+   *  that the epistemic layer can propagate. */
+  belief: BeliefValue;
   explanation: string;
 }
 
@@ -129,6 +136,7 @@ export class DriverScoringEngine {
       attentionMultiplier,
       finalScore,
       derivedSeverity: severityFor(finalScore),
+      belief: createBelief(finalScore, { provenance: [obs.id] }),
       explanation: explainEvidence(obs, driverScores, baseScore, edgeBonus, attentionMultiplier, finalScore),
     };
     // Side-effect: hand the prediction to the eval ledger so the

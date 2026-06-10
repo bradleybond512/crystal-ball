@@ -33,6 +33,7 @@ import { recordLatency, incrementCounter } from './reasoning-metrics';
 import type { Situation } from './situation-types';
 import { recordEpisode, updateAnalogCache } from '@/services/cognition/episodic-memory';
 import { interestMultiplier } from '@/services/cognition/operator-model';
+import { ingestFromHypotheses } from '@/services/cognition/entity-dossier';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -377,6 +378,16 @@ export function runAnalystCycle(): AnalystSnapshot {
       // Never let episodic memory errors crash the analyst loop.
     }
   })();
+
+  // Entity dossier wiring: ingest hypotheses into the temporal knowledge graph.
+  // Ghost Mode suppression is handled inside ingestFromHypotheses.
+  // Fire-and-forget: never block the sync cycle on dossier ingestion.
+  try {
+    ingestFromHypotheses(hypothesisSnapshot);
+  } catch {
+    // Never let entity-dossier errors crash the analyst loop.
+  }
+
   logDebug({ level: 'info', category: 'hypothesis', source: 'analyst-loop',
     message: 'cycle complete', latencyMs,
     data: {

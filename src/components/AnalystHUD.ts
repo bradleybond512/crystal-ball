@@ -35,6 +35,27 @@ import { forecastAll, type HypothesisForecast } from '@/services/intelligence/hy
 import { getLatestPCI } from '@/services/intelligence/predictive-crisis-index';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
+// ── Cognition PR 6 UI wiring ──────────────────────────────────────────────────
+import { recall } from '@/services/cognition/episodic-memory';
+import type { Recall } from '@/services/cognition/episodic-memory';
+import { superforecast } from '@/services/cognition/superforecast';
+import type { SuperForecast } from '@/services/cognition/superforecast';
+import { logForecast } from '@/services/cognition/forecast-journal';
+import { getComparison } from '@/services/cognition/forecast-journal';
+import type { CalibrationComparison } from '@/services/cognition/forecast-journal';
+import { planCollection, buildEvoiContext } from '@/services/cognition/evoi-planner';
+import type { CollectionAction } from '@/services/cognition/evoi-planner';
+import {
+  cogFlags,
+  wipeEpisodicMemory,
+  wipeJournalEntries,
+  resetOperatorModelStore,
+  formatIntervalWhisker,
+  formatEstimatesTable,
+  formatSpreadLabel,
+  formatEvoiChip,
+  formatAnalogLine,
+} from '@/services/cognition/ui-helpers';
 
 const MAX_VISIBLE = 5;
 
@@ -90,6 +111,23 @@ export class AnalystHUD {
   private expandedEnsemble = new Set<string>();
   private exportedFlash: { id: string; at: number } | null = null;
   private outcomeSubmitted = new Set<string>();
+  // ── Cognition PR 6 state ──────────────────────────────────────────────────
+  /** Cached analog recalls keyed by hypothesis id. */
+  private analogCache = new Map<string, { recalls: Recall[]; loadedAt: number }>();
+  private loadingAnalogs = new Set<string>();
+  private expandedAnalogs = new Set<string>();
+  /** Cached superforecasts keyed by hypothesis id. */
+  private superforecastCache = new Map<string, SuperForecast>();
+  private loadingSuperforecast = new Set<string>();
+  private expandedSuperforecast = new Set<string>();
+  /** Journal comparison keyed by hypothesis id. */
+  private journalComparisonCache = new Map<string, CalibrationComparison>();
+  /** Pending journal input value keyed by hypothesis id (0–99 integer). */
+  private journalInputValue = new Map<string, number>();
+  /** Submitted journal entries keyed by hypothesis id (to show confirmation). */
+  private journalSubmitted = new Set<string>();
+  /** Cached EVOI actions keyed by hypothesis id. */
+  private evoiCache = new Map<string, CollectionAction[]>();
   // Anchor the replay position to a SNAPSHOT TIMESTAMP, not an index.
   // Index-based replay drifts silently when the archive evicts the oldest
   // snapshots (120-slot ring buffer): what the user had as index 5 before
@@ -477,6 +515,8 @@ export class AnalystHUD {
       this.buildCloudCapSlider(),
     );
 
+    card.append(this.buildCognitionSettings());
+
     const resetRow = document.createElement('div');
     resetRow.className = 'analyst-hud-settings-row';
     const resetBtn = document.createElement('button');
@@ -498,6 +538,101 @@ export class AnalystHUD {
 
     overlay.append(card);
     return overlay;
+  }
+
+  // ── Cognition PR 6: Cognition settings section ────────────────────────────
+
+  private buildCognitionSettings(): HTMLElement {
+
+    const section = document.createElement('div');
+    section.className = 'analyst-hud-settings-section';
+
+    const title = document.createElement('div');
+    title.className = 'analyst-hud-settings-section-title';
+    title.textContent = 'Cognition (learning features)';
+    section.append(title);
+
+    // Feature toggles.
+    const epToggle = this.buildCognitionToggle(
+      'Episodic memory (past analogs)',
+      cogFlags.get('episodic-memory'),
+      (v) => { cogFlags.set('episodic-memory', v); this.render(); },
+    );
+    const persToggle = this.buildCognitionToggle(
+      'Personalization (operator model)',
+      cogFlags.get('personalization'),
+      (v) => { cogFlags.set('personalization', v); this.render(); },
+    );
+    const sfToggle = this.buildCognitionToggle(
+      'Superforecaster pipeline (cloud budget)',
+      cogFlags.get('superforecast'),
+      (v) => { cogFlags.set('superforecast', v); this.render(); },
+    );
+    section.append(epToggle, persToggle, sfToggle);
+
+    // Destructive actions.
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'analyst-hud-settings-row analyst-hud-settings-destructive-row';
+
+    const wipeMemBtn = this.buildDestructiveButton('Wipe episodic memory', () => {
+      wipeEpisodicMemory();
+      this.analogCache.clear();
+      this.render();
+    });
+    const wipeJrnBtn = this.buildDestructiveButton('Reset forecast journal', () => {
+      wipeJournalEntries();
+      this.journalComparisonCache.clear();
+      this.journalSubmitted.clear();
+      this.render();
+    });
+    const resetOpBtn = this.buildDestructiveButton('Reset operator model', () => {
+      resetOperatorModelStore();
+      this.render();
+    });
+
+    actionsRow.append(wipeMemBtn, wipeJrnBtn, resetOpBtn);
+    section.append(actionsRow);
+    return section;
+  }
+
+  private buildCognitionToggle(label: string, checked: boolean, set: (v: boolean) => void): HTMLElement {
+    const row = document.createElement('label');
+    row.className = 'analyst-hud-settings-row';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = checked;
+    cb.addEventListener('change', () => set(cb.checked));
+    const span = document.createElement('span');
+    span.textContent = label;
+    row.append(cb, span);
+    return row;
+  }
+
+  private buildDestructiveButton(label: string, action: () => void): HTMLElement {
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-settings-btn analyst-hud-settings-btn-destructive';
+    btn.textContent = label;
+    btn.title = `${label} — requires confirmation`;
+    let confirmPending = false;
+    btn.addEventListener('click', () => {
+      if (!confirmPending) {
+        confirmPending = true;
+        btn.textContent = `Confirm: ${label}`;
+        btn.classList.add('analyst-hud-confirm-pending');
+        // Auto-cancel after 5 s.
+        setTimeout(() => {
+          confirmPending = false;
+          btn.textContent = label;
+          btn.classList.remove('analyst-hud-confirm-pending');
+        }, 5000);
+      } else {
+        action();
+        confirmPending = false;
+        btn.textContent = label;
+        btn.classList.remove('analyst-hud-confirm-pending');
+      }
+    });
+    return btn;
   }
 
   private buildSettingToggle(label: string, checked: boolean, set: (v: boolean) => void): HTMLElement {
@@ -613,6 +748,12 @@ export class AnalystHUD {
       this.buildHypSkeptic(h),
       this.buildHypProjection(h),
       this.buildHypEnsemble(h),
+      // ── Cognition PR 6 surfaces ─────────────────────────────────────────
+      this.buildHypAnalogs(h),
+      this.buildHypSuperforecast(h),
+      this.buildHypJournal(h),
+      this.buildHypEvoi(h),
+      // ────────────────────────────────────────────────────────────────────
       this.buildHypActions(h),
     );
     return row;
@@ -1053,6 +1194,326 @@ export class AnalystHUD {
     const snap = this.effectiveSnapshot();
     if (!snap) return null;
     return snap.hypotheses.find(h => h.evidence.some(ev => ev.id === e.id && ev.source === e.source)) ?? null;
+  }
+
+  // ── Cognition PR 6: Past analogs ──────────────────────────────────────────
+
+  /**
+   * "Past analogs" block — top recall() results with outcome badges,
+   * similarity %, and explanation line. Async load, graceful empty state.
+   * Only shown when the episodic-memory flag is on.
+   */
+  private buildHypAnalogs(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-cognition-block';
+
+    if (!cogFlags.get('episodic-memory')) return wrap;
+
+    const cached = this.analogCache.get(h.id);
+    const loading = this.loadingAnalogs.has(h.id);
+    const expanded = this.expandedAnalogs.has(h.id);
+
+    // Trigger async load on first render for this hypothesis.
+    if (!cached && !loading) {
+      this.loadingAnalogs.add(h.id);
+      void recall(h.statement, { k: 3, kinds: ['hypothesis', 'situation'] })
+        .then(recalls => {
+          this.analogCache.set(h.id, { recalls, loadedAt: Date.now() });
+          this.scheduleRender();
+        })
+        .catch(() => {
+          // Store an empty result so we don't retry on every render.
+          this.analogCache.set(h.id, { recalls: [], loadedAt: Date.now() });
+        })
+        .finally(() => {
+          this.loadingAnalogs.delete(h.id);
+          this.scheduleRender();
+        });
+    }
+
+    // Header button to toggle.
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-cognition-btn';
+    if (loading) {
+      btn.textContent = 'analogs …';
+      btn.disabled = true;
+    } else if (!cached) {
+      btn.textContent = 'analogs …';
+      btn.disabled = true;
+    } else {
+      const n = cached.recalls.length;
+      btn.textContent = n === 0
+        ? 'analogs: none'
+        : expanded ? `analogs (${n}) ▾` : `analogs (${n}) ▸`;
+      btn.disabled = n === 0;
+      btn.addEventListener('click', () => {
+        if (this.expandedAnalogs.has(h.id)) this.expandedAnalogs.delete(h.id);
+        else this.expandedAnalogs.add(h.id);
+        this.render();
+      });
+    }
+    wrap.append(btn);
+
+    if (expanded && cached && cached.recalls.length > 0) {
+      const list = document.createElement('div');
+      list.className = 'analyst-hud-cognition-list';
+      for (const r of cached.recalls) {
+        const item = document.createElement('div');
+        item.className = 'analyst-hud-cognition-item';
+        if (r.episode.contradictory) item.classList.add('analyst-hud-cognition-contradictory');
+        const line = document.createTextNode(formatAnalogLine(r));
+        item.append(line);
+        if (r.episode.outcomeNote) {
+          const note = document.createElement('span');
+          note.className = 'analyst-hud-cognition-note';
+          note.textContent = ` → ${r.episode.outcomeNote}`;
+          item.append(note);
+        }
+        list.append(item);
+      }
+      wrap.append(list);
+    }
+    return wrap;
+  }
+
+  // ── Cognition PR 6: Superforecast provenance ───────────────────────────────
+
+  /**
+   * "Forecast provenance" — on-demand Superforecast button rendering the
+   * estimates table, spread, conformal interval whisker, llmTier, and
+   * recalibration explanation line. Only shown when superforecast flag is on.
+   */
+  private buildHypSuperforecast(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-cognition-block';
+
+    if (!cogFlags.get('superforecast')) return wrap;
+
+    const cached = this.superforecastCache.get(h.id);
+    const loading = this.loadingSuperforecast.has(h.id);
+    const expanded = this.expandedSuperforecast.has(h.id);
+
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-cognition-btn';
+    if (loading) {
+      btn.textContent = 'superforecast …';
+      btn.disabled = true;
+    } else if (!cached) {
+      btn.textContent = 'superforecast ▸';
+      btn.addEventListener('click', () => {
+        this.loadingSuperforecast.add(h.id);
+        this.render();
+        void superforecast(h)
+          .then(sf => {
+            this.superforecastCache.set(h.id, sf);
+            this.expandedSuperforecast.add(h.id);
+          })
+          .catch(() => { /* budget exhausted or unavailable — silent */ })
+          .finally(() => {
+            this.loadingSuperforecast.delete(h.id);
+            this.scheduleRender();
+          });
+      });
+    } else {
+      btn.textContent = expanded ? 'superforecast ▾' : 'superforecast ▸';
+      btn.addEventListener('click', () => {
+        if (this.expandedSuperforecast.has(h.id)) this.expandedSuperforecast.delete(h.id);
+        else this.expandedSuperforecast.add(h.id);
+        this.render();
+      });
+    }
+    wrap.append(btn);
+
+    if (expanded && cached) {
+      const detail = document.createElement('div');
+      detail.className = 'analyst-hud-cognition-detail';
+
+      // Probability + interval whisker.
+      const pLine = document.createElement('div');
+      pLine.className = 'analyst-hud-cognition-p';
+      const iv = cached.interval;
+      pLine.textContent = formatIntervalWhisker(
+        cached.probability,
+        iv?.lo,
+        iv?.hi,
+      ) + ` · ${formatSpreadLabel(cached.spread)} · ${cached.llmTier}`;
+      detail.append(pLine);
+
+      // Estimates table.
+      const estLines = formatEstimatesTable(cached.estimates);
+      for (const line of estLines) {
+        const est = document.createElement('div');
+        est.className = 'analyst-hud-cognition-est';
+        est.textContent = line;
+        detail.append(est);
+      }
+
+      // Recalibration explanation (last paragraph of explanation chain).
+      if (cached.explanation) {
+        const expEl = document.createElement('div');
+        expEl.className = 'analyst-hud-cognition-exp';
+        expEl.textContent = cached.explanation;
+        detail.append(expEl);
+      }
+
+      wrap.append(detail);
+    }
+    return wrap;
+  }
+
+  // ── Cognition PR 6: Operator forecast journal ──────────────────────────────
+
+  /**
+   * "Your call" — probability input (0–99%) + log button calling logForecast.
+   * Shows "you vs system" Brier line from getComparison when available.
+   * Suppressed in Ghost Mode (logForecast no-ops there anyway).
+   */
+  private buildHypJournal(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-cognition-block';
+
+    if (isGhostMode()) return wrap;
+    if (!cogFlags.get('personalization')) return wrap;
+
+    const submitted = this.journalSubmitted.has(h.id);
+    const comparison = this.journalComparisonCache.get(h.id);
+
+    const row = document.createElement('div');
+    row.className = 'analyst-hud-journal-row';
+
+    if (submitted) {
+      const confirm = document.createElement('span');
+      confirm.className = 'analyst-hud-journal-confirm';
+      confirm.textContent = 'Your call logged.';
+      row.append(confirm);
+    } else {
+      const label = document.createElement('label');
+      label.className = 'analyst-hud-journal-label';
+      label.textContent = 'Your call: ';
+
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = '0';
+      input.max = '99';
+      input.step = '1';
+      input.className = 'analyst-hud-journal-input';
+      input.placeholder = '0–99%';
+      const storedVal = this.journalInputValue.get(h.id);
+      if (storedVal !== undefined) input.value = String(storedVal);
+      input.addEventListener('input', () => {
+        const v = parseInt(input.value, 10);
+        if (!isNaN(v)) this.journalInputValue.set(h.id, Math.max(0, Math.min(99, v)));
+      });
+
+      const logBtn = document.createElement('button');
+      logBtn.className = 'analyst-hud-journal-btn';
+      logBtn.textContent = 'Log';
+      logBtn.title = 'Record your probability forecast for this hypothesis';
+      logBtn.addEventListener('click', () => {
+        const raw = parseInt(input.value, 10);
+        if (isNaN(raw)) return;
+        const p = Math.max(0, Math.min(99, raw)) / 100;
+        // logForecast needs signature and domain — read from hypothesis.
+        const hLike = {
+          id: h.id,
+          signature: (h as Hypothesis & { signature?: string }).signature ?? h.id,
+          domain: (h as Hypothesis & { domain?: string }).domain as import('@/services/intelligence/types').FactDomain ?? 'security',
+          statement: h.statement,
+        };
+        logForecast(hLike, p);
+        this.journalSubmitted.add(h.id);
+        // Kick off an async comparison load.
+        void getComparison().then(cmp => {
+          this.journalComparisonCache.set(h.id, cmp);
+          this.scheduleRender();
+        }).catch(() => { /* unavailable */ });
+        this.render();
+      });
+
+      row.append(label, input, logBtn);
+    }
+    wrap.append(row);
+
+    // "You vs system" Brier line when available.
+    if (comparison) {
+      const cmpLine = document.createElement('div');
+      cmpLine.className = 'analyst-hud-journal-comparison';
+      // Use the helper to generate the comparison line but format it inline.
+      const opB = comparison.operator.brier.toFixed(3);
+      const sysB = comparison.system.brier.toFixed(3);
+      const edge = comparison.humanEdge;
+      if (edge !== null) {
+        const sign = edge > 0 ? '+' : '';
+        cmpLine.textContent = `You: Brier ${opB} · System: Brier ${sysB} · edge ${sign}${edge.toFixed(3)}`;
+      } else {
+        cmpLine.textContent = `You: Brier ${opB} (n=${comparison.operator.n}) · System: Brier ${sysB} (n=${comparison.system.n})`;
+      }
+      wrap.append(cmpLine);
+    }
+
+    return wrap;
+  }
+
+  // ── Cognition PR 6: EVOI "What to check next" chips ───────────────────────
+
+  /**
+   * Top-3 EVOI planCollection actions as chips with expectedInfoGainBits
+   * + explanation tooltip. Clicking a chip with panelId jumps to panel.
+   */
+  private buildHypEvoi(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-cognition-block';
+
+    // Build EVOI on first render for this hypothesis (synchronous).
+    if (!this.evoiCache.has(h.id)) {
+      try {
+        const forecasts = forecastAll([h], getLatestPCI());
+        const p = forecasts[0]?.probability ?? h.confidence;
+        // buildEvoiContext(probability, negEvidence?, providerReport?, gaps?)
+        // We pass null for the optional context sources — EVOI still works
+        // purely from the prior probability when no provider/gap data is
+        // available at this call site.
+        const ctx = buildEvoiContext(p, null, null, []);
+        const actions = planCollection(
+          { kind: h.kind, statement: h.statement, confidence: h.confidence },
+          ctx,
+        );
+        this.evoiCache.set(h.id, actions.slice(0, 3));
+      } catch {
+        this.evoiCache.set(h.id, []);
+      }
+    }
+
+    const actions = this.evoiCache.get(h.id) ?? [];
+    if (actions.length === 0) return wrap;
+
+    const header = document.createElement('div');
+    header.className = 'analyst-hud-cognition-label';
+    header.textContent = 'What to check next:';
+    wrap.append(header);
+
+    const chipRow = document.createElement('div');
+    chipRow.className = 'analyst-hud-evoi-chips';
+    for (const action of actions) {
+      const chip = document.createElement('button');
+      chip.className = 'analyst-hud-evoi-chip';
+      chip.textContent = formatEvoiChip(action);
+      chip.title = action.explanation;
+      if (action.panelId) {
+        chip.addEventListener('click', () => {
+          if (action.panelId) {
+            jumpToPanel(action.panelId);
+            this.hide();
+          }
+        });
+      } else {
+        chip.disabled = action.effort === 'task';
+        chip.classList.add('analyst-hud-evoi-no-link');
+      }
+      chipRow.append(chip);
+    }
+    wrap.append(chipRow);
+    return wrap;
   }
 
   private buildBriefsSection(): HTMLElement {

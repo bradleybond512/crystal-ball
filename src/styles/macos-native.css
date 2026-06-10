@@ -2167,3 +2167,270 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
     transform: none !important;
   }
 }
+
+/* ============================================================
+ * Cognition PR 6 — UI wiring styles.
+ * Scoped to body.is-desktop-macos for native feel; the web
+ * build gets minimal fallback from the base analyst-hud rules.
+ * prefers-reduced-motion respected via the block at the end.
+ * ============================================================ */
+
+/* ── Cognition blocks inside hypothesis detail rows ─────────────── */
+
+.analyst-hud-cognition-block {
+  margin-top: 4px;
+}
+
+.analyst-hud-cognition-btn {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.12));
+  border-radius: 3px;
+  color: var(--text-secondary, #aaa);
+  cursor: pointer;
+}
+.analyst-hud-cognition-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.analyst-hud-cognition-btn:hover:not(:disabled) {
+  color: var(--mac-label, #fff);
+  border-color: var(--mac-accent, #0a84ff);
+}
+
+.analyst-hud-cognition-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  padding: 4px 6px;
+  background: rgba(255,255,255,0.03);
+  border-left: 2px solid var(--border-subtle, rgba(255,255,255,0.12));
+  border-radius: 0 3px 3px 0;
+}
+
+.analyst-hud-cognition-item {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary, #aaa);
+}
+
+.analyst-hud-cognition-contradictory {
+  color: var(--severity-medium, #f39c12);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.analyst-hud-cognition-note {
+  color: var(--text-secondary, #aaa);
+  font-style: italic;
+  font-size: 10px;
+}
+
+/* ── Superforecast detail panel ─────────────────────────────────── */
+
+.analyst-hud-cognition-detail {
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.03);
+  border-left: 2px solid var(--mac-accent, #0a84ff);
+  border-radius: 0 3px 3px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.analyst-hud-cognition-p {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mac-label, #fff);
+}
+
+.analyst-hud-cognition-est {
+  font-size: 10px;
+  color: var(--text-secondary, #aaa);
+  font-family: ui-monospace, monospace;
+}
+
+.analyst-hud-cognition-exp {
+  font-size: 10px;
+  color: var(--text-secondary, #aaa);
+  font-style: italic;
+  margin-top: 2px;
+  border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
+  padding-top: 3px;
+}
+
+.analyst-hud-cognition-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary, #aaa);
+  margin-bottom: 2px;
+}
+
+/* ── Operator forecast journal row ──────────────────────────────── */
+
+.analyst-hud-journal-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.analyst-hud-journal-label {
+  font-size: 11px;
+  color: var(--text-secondary, #aaa);
+}
+
+.analyst-hud-journal-input {
+  width: 48px;
+  padding: 2px 4px;
+  font-size: 11px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.15));
+  border-radius: 3px;
+  color: var(--mac-label, #fff);
+  text-align: center;
+}
+
+.analyst-hud-journal-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--mac-accent, #0a84ff);
+  border: none;
+  border-radius: 3px;
+  color: #fff;
+  cursor: pointer;
+}
+.analyst-hud-journal-btn:hover { background: var(--mac-accent-hover, #409cff); }
+
+.analyst-hud-journal-confirm {
+  font-size: 11px;
+  color: var(--severity-ok, #27ae60);
+}
+
+.analyst-hud-journal-comparison {
+  font-size: 10px;
+  color: var(--text-secondary, #aaa);
+  font-family: ui-monospace, monospace;
+  margin-top: 2px;
+}
+
+/* ── EVOI chips ─────────────────────────────────────────────────── */
+
+.analyst-hud-evoi-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.analyst-hud-evoi-chip {
+  font-size: 10px;
+  padding: 2px 7px;
+  background: rgba(74,158,255,0.12);
+  border: 1px solid rgba(74,158,255,0.3);
+  border-radius: 10px;
+  color: var(--mac-accent, #0a84ff);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.analyst-hud-evoi-chip:hover:not(:disabled) {
+  background: rgba(74,158,255,0.22);
+}
+.analyst-hud-evoi-chip:disabled,
+.analyst-hud-evoi-chip.analyst-hud-evoi-no-link {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* ── Cognition settings section ─────────────────────────────────── */
+
+.analyst-hud-settings-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.1));
+}
+
+.analyst-hud-settings-section-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary, #aaa);
+  margin-bottom: 6px;
+}
+
+.analyst-hud-settings-destructive-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.analyst-hud-settings-btn-destructive {
+  background: transparent;
+  border: 1px solid var(--severity-high, #e67e22);
+  color: var(--severity-high, #e67e22);
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.analyst-hud-settings-btn-destructive:hover {
+  background: rgba(230,126,34,0.12);
+}
+.analyst-hud-settings-btn-destructive.analyst-hud-confirm-pending {
+  background: var(--severity-high, #e67e22);
+  color: #fff;
+}
+
+/* ── macOS-specific polish (desktop only) ───────────────────────── */
+
+body.is-desktop-macos .analyst-hud-cognition-block {
+  margin-top: 5px;
+}
+
+body.is-desktop-macos .analyst-hud-cognition-btn {
+  border-radius: 5px;
+  font-size: 11px;
+  font-family: var(--mac-font);
+}
+
+body.is-desktop-macos .analyst-hud-cognition-list {
+  border-left-color: var(--mac-separator, rgba(255,255,255,0.15));
+  background: rgba(255,255,255,0.02);
+  border-radius: 0 5px 5px 0;
+}
+
+body.is-desktop-macos .analyst-hud-cognition-detail {
+  border-left-color: var(--mac-accent, #0a84ff);
+  background: rgba(10,132,255,0.05);
+  border-radius: 0 5px 5px 0;
+}
+
+body.is-desktop-macos .analyst-hud-evoi-chip {
+  border-radius: 12px;
+  font-family: var(--mac-font);
+}
+
+body.is-desktop-macos .analyst-hud-journal-input {
+  border-radius: 5px;
+  font-family: var(--mac-font);
+}
+
+body.is-desktop-macos .analyst-hud-settings-section-title {
+  font-family: var(--mac-font);
+}
+
+/* ── Reduced motion for cognition elements ──────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .analyst-hud-cognition-btn,
+  .analyst-hud-journal-btn,
+  .analyst-hud-evoi-chip,
+  .analyst-hud-settings-btn-destructive {
+    transition: none !important;
+  }
+}

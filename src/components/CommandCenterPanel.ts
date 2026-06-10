@@ -69,6 +69,15 @@ import {
 } from '@/services/intelligence/command-center-summary';
 import { mountLensBanner } from '@/services/intelligence/panel-lens-adapter';
 import { getLensContextService } from '@/services/intelligence/lens-context';
+// ── Cognition PR 6 UI wiring ──────────────────────────────────────────────────
+import { getHotEntities } from '@/services/cognition/entity-dossier';
+import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
+import { buildCurve } from '@/services/cognition/recalibration';
+import {
+  formatTrajectoryArrow,
+  formatTrajectoryTooltip,
+  formatCalibrationSummary,
+} from '@/services/cognition/ui-helpers';
 
 const REFRESH_MS = 10_000;
 
@@ -252,7 +261,8 @@ export class CommandCenterPanel extends Panel {
         ${this.renderPersonalImpact(personalImpact.impacts)}
         ${this.renderTopThings(concerning)}
         ${this.renderProviderRedundancy(redundancy)}
-        ${this.renderWatchNext(feedAudit.entries.length, feedAudit.entries.filter((e) => e.level !== 'fresh' && e.level !== 'unknown').length)}
+        ${this.renderWatchNextWithDossiers(feedAudit.entries.length, feedAudit.entries.filter((e) => e.level !== 'fresh' && e.level !== 'unknown').length)}
+        ${this.renderCalibrationReportCard()}
         ${this.renderRecommendations(report.recommendations)}
       </div>
     `;
@@ -440,15 +450,72 @@ export class CommandCenterPanel extends Panel {
     </div>`;
   }
 
-  private renderWatchNext(totalFeeds: number, drifting: number): string {
-    if (totalFeeds === 0) return '';
+
+  /**
+   * Dossier-enriched "Watch next" section.
+   *
+   * Merges getHotEntities(5) with trajectory arrows (▲/▬/▼) into the
+   * existing sentinel-feed drifting count, sorted heat desc.
+   */
+  private renderWatchNextWithDossiers(totalFeeds: number, drifting: number): string {
+    // Hot entities from the entity dossier (PR 5 + PR 6 wiring).
+    const hotDossiers = (() => {
+      try { return getHotEntities(5); }
+      catch { return []; }
+    })();
+
+    const feedSummary = totalFeeds === 0
+      ? ''
+      : drifting === 0
+        ? `<div style="font-size:12px;margin-bottom:6px;">${totalFeeds} feeds fresh — nothing drifting.</div>`
+        : `<div style="font-size:12px;margin-bottom:6px;"><strong style="color:var(--severity-high);">${drifting}</strong> of ${totalFeeds} sentinel feeds drifting. See Diagnostic → Feeds.</div>`;
+
+    const entityRows = hotDossiers.length === 0
+      ? ''
+      : hotDossiers.map(d => {
+          const arrow = escapeHtml(formatTrajectoryArrow(d.trajectory));
+          const tip = escapeHtml(formatTrajectoryTooltip(d));
+          const heat = Math.round(d.heat * 100);
+          const heatColor = d.heat > 0.7 ? 'var(--severity-high)' : d.heat > 0.4 ? 'var(--severity-medium)' : 'var(--text-secondary,#aaa)';
+          return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;" title="${tip}">
+            <span style="font-size:14px;color:${heatColor};">${arrow}</span>
+            <span style="font-size:12px;font-weight:600;">${escapeHtml(d.entity)}</span>
+            <span style="font-size:10px;color:var(--text-secondary,#aaa);">${escapeHtml(d.entityType)} · heat ${heat}%</span>
+          </div>`;
+        }).join('');
+
+    if (!feedSummary && !entityRows) return '';
+
     return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:12px;">
       <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Watch next</div>
-      <div style="font-size:12px;">
-        ${drifting === 0
-          ? `${totalFeeds} feeds fresh — nothing drifting.`
-          : `<strong style="color:var(--severity-high);">${drifting}</strong> of ${totalFeeds} sentinel feeds drifting. See Diagnostic → Feeds.`}
-      </div>
+      ${feedSummary}
+      ${entityRows ? `<div style="display:flex;flex-direction:column;gap:0;">${entityRows}</div>` : ''}
+    </div>`;
+  }
+
+  /**
+   * Calibration report card section.
+   *
+   * Per-domain reliability summary (system Brier, n, biggest miscalibrated
+   * bin sentence). Text-light; follows AlgorithmDiagnosticPanel's render style.
+   */
+  private renderCalibrationReportCard(): string {
+    let curve;
+    try {
+      const store = getCalibrationStore();
+      const records = store.all();
+      curve = buildCurve(records);
+    } catch {
+      return '';
+    }
+
+    if (curve.sampleSize === 0) return '';
+
+    const summary = escapeHtml(formatCalibrationSummary(curve));
+
+    return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:12px;">
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Calibration report</div>
+      <div style="font-size:12px;color:var(--text-secondary,#aaa);">${summary}</div>
     </div>`;
   }
 

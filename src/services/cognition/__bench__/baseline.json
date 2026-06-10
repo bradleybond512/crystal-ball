@@ -1,4 +1,8 @@
 {
-  "pending": true,
-  "_note": "Run `npm run bench:cognition:update-baseline` to replace this sentinel with a real baseline after the first successful local execution."
+  "overallBrier": 0.2182,
+  "coverageRate": 0.8571,
+  "analogPrecisionMean": 0.4881,
+  "schemaTruePositiveRate": 0.5,
+  "windowCount": 14,
+  "updatedAt": "2026-06-10T08:26:55.800Z"
 }

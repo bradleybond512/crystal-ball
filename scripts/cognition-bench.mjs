@@ -132,7 +132,9 @@ if (baseline.pending === true) {
 // ── Gate comparison ───────────────────────────────────────────────────────────
 
 console.log('\n--- Gate Comparison ---');
-const brierDelta = report.overallBrier - (baseline.overallBrier ?? 0);
+// Round to 4dp before comparing to avoid IEEE 754 rounding artifacts
+// (e.g. 0.17 - 0.15 = 0.020000000000000018 raw, must round to 0.02 exactly).
+const brierDelta = Math.round((report.overallBrier - (baseline.overallBrier ?? 0)) * 10000) / 10000;
 const coverageDelta = report.coverageRate - (baseline.coverageRate ?? 1);
 
 console.log(`  Brier:    ${report.overallBrier.toFixed(4)} vs baseline ${(baseline.overallBrier ?? 0).toFixed(4)} (delta ${brierDelta >= 0 ? '+' : ''}${brierDelta.toFixed(4)})`);

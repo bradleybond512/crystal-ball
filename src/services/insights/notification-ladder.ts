@@ -26,6 +26,7 @@ import type {
   NotificationUrgency,
 } from '@/services/diagnostics/notification-trace';
 import type { AlertExplanation } from '@/services/intelligence/explainer';
+import { attentionWeight, nextActiveHour } from '@/services/cognition/operator-model';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -54,6 +55,17 @@ export interface RouteToLadderOptions {
    * it to the notification payload.
    */
   explanation?: AlertExplanation;
+  /**
+   * Whether to apply operator-model attention-rhythm deferral for
+   * non-safety-critical notifications. When true, a low attentionWeight
+   * at the current hour may defer the notification to the next active
+   * window. SAFETY-CRITICAL NOTIFICATIONS ARE NEVER DEFERRED regardless
+   * of this flag — the safetyCritical check gates the deferral branch
+   * so the safety path cannot reach it.
+   */
+  applyAttentionDeferral?: boolean;
+  /** Threshold below which attentionWeight triggers deferral (default 0.3). */
+  attentionDeferralThreshold?: number;
 }
 
 export interface LadderDecision {
@@ -73,6 +85,14 @@ export interface LadderDecision {
    * only care about rung assignment).
    */
   explanation?: AlertExplanation;
+  /**
+   * If set, the notification was deferred to the user's next active
+   * hour per the operator-model attention rhythm. The value is the
+   * Unix-ms timestamp of the next active window.
+   * NOTE: safety-critical notifications are NEVER deferred; this field
+   * is absent for them.
+   */
+  deferredUntil?: number;
 }
 
 let nextAutoId = 1;
@@ -161,6 +181,36 @@ export function routeBigEventToLadder(
       kind: 'urgency_check',
       reason: 'Safety-critical override: dispatching despite quiet hours.',
     });
+  }
+
+  // Attention-rhythm deferral — ONLY for non-safety-critical notifications.
+  // Safety-critical events MUST NOT enter this branch. The `!safetyCritical`
+  // guard is the structural guarantee: the safety path physically cannot
+  // reach the deferral code.
+  if (options.applyAttentionDeferral && !safetyCritical) {
+    const threshold = options.attentionDeferralThreshold ?? 0.3;
+    const currentAttention = attentionWeight(at);
+    if (currentAttention < threshold) {
+      const nextWindow = nextActiveHour(at, threshold);
+      registry.recordEvent(candidateId, {
+        kind: 'urgency_check',
+        reason: `Attention-rhythm deferral: weight ${currentAttention.toFixed(2)} < threshold ${threshold}.${nextWindow ? ` Next active window: ${new Date(nextWindow).toISOString()}.` : ' No active window found in 24h — dispatching now.'}`,
+        detail: { currentAttention, threshold, nextWindow },
+      });
+      if (nextWindow !== undefined) {
+        // Defer: record as silent now; host is responsible for re-routing at nextWindow.
+        registry.suppress(candidateId, 'quiet-hours-no-bypass', at);
+        return {
+          candidateId,
+          rung: 'silent',
+          dispatched: false,
+          reason: `Deferred — low attention weight (${currentAttention.toFixed(2)}). Next active window: ${new Date(nextWindow).toISOString()}.`,
+          unsafeSuppression: false,
+          deferredUntil: nextWindow,
+        };
+      }
+      // If no active window in 24h, fall through and dispatch now.
+    }
   }
 
   const rung = pickRung(result.deliveryPriority, safetyCritical);

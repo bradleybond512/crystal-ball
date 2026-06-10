@@ -517,6 +517,7 @@ import { GoesSatellitePanel } from '@/components/GoesSatellitePanel';
 import { FloodMonitorPanel } from '@/components/FloodMonitorPanel';
 // Consolidated intelligence panels from PRs 789–950
 import { ConflictEscalationPanel } from '@/components/ConflictEscalationPanel';
+import { InsurgencyTrackerPanel } from '@/components/InsurgencyTrackerPanel';
 import { NuclearNonproliferationPanel } from '@/components/NuclearNonproliferationPanel';
 import { FoodSystemsGeopoliticsPanel } from '@/components/FoodSystemsGeopoliticsPanel';
 import { DroneWarfarePanel } from '@/components/DroneWarfarePanel';
@@ -1760,6 +1761,7 @@ export class PanelLayoutManager implements AppModule {
 
  // Consolidated intelligence panels (PRs 789–950)
  this.ctx.panels['conflict-escalation'] = new ConflictEscalationPanel();
+ this.ctx.panels['insurgency-tracker'] = new InsurgencyTrackerPanel();
  this.ctx.panels['nuclear-nonproliferation'] = new NuclearNonproliferationPanel();
  this.ctx.panels['food-systems-geopolitics'] = new FoodSystemsGeopoliticsPanel();
  this.ctx.panels['drone-warfare'] = new DroneWarfarePanel();

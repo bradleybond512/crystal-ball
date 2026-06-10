@@ -77,6 +77,16 @@ export interface Episode {
   /** Serialized Float32Array as plain number[]. */
   vector: number[];
   tier: 'neural' | 'hashed';
+  /**
+   * PR 14 — memory hygiene: marks episodes whose hypothesis was refuted by
+   * competitive-hypothesis resolution. Contradictory episodes remain retrievable
+   * in recall() results but are excluded from analogScoreFor() computations by
+   * default (excludeContradictory option, default ON).
+   * Contradictions surface rather than being silently dropped — plan invariant.
+   */
+  contradictory?: boolean;
+  /** Human-readable reason for the contradictory flag (≤ 280 chars). */
+  contradictoryReason?: string;
 }
 
 export interface Recall {
@@ -85,6 +95,13 @@ export interface Recall {
   ageDays: number;
   /** "matched on: Black Sea, wheat, escalation" — plan invariant: every score has an explanation. */
   explanation: string;
+  /**
+   * PR 14 — memory hygiene: true when this episode has been marked contradictory
+   * (hypothesis refuted by competitive-hypothesis resolution). The episode is still
+   * returned in recall results for full visibility; analogScoreFor() excludes it
+   * from scoring by default (excludeContradictory option).
+   */
+  contradictory?: boolean;
 }
 
 // ── Injectable storage interface (for tests) ──────────────────────────────────
@@ -123,6 +140,8 @@ const DEFAULT_K = 5;
 const DEFAULT_MIN_SIM = 0.45;
 const MIN_RECALLS_FOR_ANALOG = 3;
 const EVENT_NAME = 'cb:episodic-recall';
+/** Dedupe window: same signature + same kind within this many ms → update existing, no new insert. */
+const DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 h
 
 // ── Module-level singleton state ──────────────────────────────────────────────
 
@@ -313,11 +332,24 @@ export async function recordEpisode(
     tier: embResult.tier,
   };
 
-  // Deduplicate by signature before insert.
+  // Deduplicate by signature + kind within 24 h window (PR 14 memory hygiene).
+  // Same signature + same kind within DEDUPE_WINDOW_MS → update existing episode
+  // (refresh summary if changed) instead of inserting a duplicate.
   if (episode.signature) {
-    const existing = episodes.find(ep => ep.signature === episode.signature && ep.resolvedAt === undefined);
+    const dedupeCutoff = nowMs - DEDUPE_WINDOW_MS;
+    const existing = episodes.find(ep =>
+      ep.signature === episode.signature &&
+      ep.kind === episode.kind &&
+      ep.resolvedAt === undefined &&
+      ep.createdAt >= dedupeCutoff,
+    );
     if (existing !== undefined) {
-      // Already tracking a pending episode with this signature — return it.
+      // Already tracking a recent pending episode with this signature+kind.
+      // Update the summary if it changed (embedding stays from original insert).
+      if (existing.summary !== episode.summary) {
+        existing.summary = episode.summary;
+        save();
+      }
       return existing;
     }
   }
@@ -360,16 +392,57 @@ export async function resolveEpisode(
 }
 
 /**
+ * Mark an episode as contradictory — its hypothesis was refuted by
+ * competitive-hypothesis resolution.
+ *
+ * PR 14 — memory hygiene entry point. The episode remains in the store
+ * and is retrievable via recall() (contradictions surface, never silently
+ * dropped — plan invariant). Its `contradictory` flag is set to true so
+ * analogScoreFor() excludes it from supportive analog scoring by default.
+ *
+ * Accepts either an episode id or a signature string. When a signature is
+ * passed, all matching unresolved episodes are marked.
+ *
+ * Wiring: expose this entry point here. Clean hook wiring from
+ * competitive-hypothesis.ts lands with PR 6/12 (no ugly injection forced
+ * in this PR — the API is available for that wiring to plug into).
+ *
+ * Not suppressed by Ghost Mode: contradictory marking is a correctness
+ * operation on existing state, not a new learning write.
+ */
+export function markEpisodeContradictory(
+  idOrSignature: string,
+  reason?: string,
+): number {
+  load();
+  let marked = 0;
+  for (const ep of episodes) {
+    if (ep.id === idOrSignature || ep.signature === idOrSignature) {
+      ep.contradictory = true;
+      if (reason !== undefined) ep.contradictoryReason = reason.slice(0, 280);
+      marked += 1;
+    }
+  }
+  if (marked > 0) save();
+  return marked;
+}
+
+/**
  * Recall top-K semantically similar past episodes to the given text.
  * Emits a `cb:episodic-recall` event on window when results are non-empty.
  *
  * Opts:
- *   k     - max results (default 5)
- *   kinds - filter by episode kind
+ *   k                    - max results (default 5)
+ *   kinds                - filter by episode kind
+ *   excludeContradictory - (PR 14, default true) when true, contradictory episodes
+ *                          are still included in the recall results (full visibility,
+ *                          plan invariant: contradictions surface, never silently dropped)
+ *                          but are flagged recall.contradictory = true. analogScoreFor()
+ *                          respects this flag and excludes them from scoring.
  */
 export async function recall(
   text: string,
-  opts?: { k?: number; kinds?: Episode['kind'][] },
+  opts?: { k?: number; kinds?: Episode['kind'][]; excludeContradictory?: boolean },
 ): Promise<Recall[]> {
   load();
 
@@ -406,7 +479,8 @@ export async function recall(
     const nowMs = _nowFn();
     const ageDays = (nowMs - ep.createdAt) / (1000 * 60 * 60 * 24);
     const explanation = buildExplanation(ep, queryTokens, [], similarity);
-    return [{ episode: ep, similarity, ageDays, explanation }];
+    const contradictory = ep.contradictory === true;
+    return [{ episode: ep, similarity, ageDays, explanation, ...(contradictory ? { contradictory: true } : {}) }];
   });
 
   if (recalls.length > 0 && typeof window !== 'undefined') {
@@ -460,7 +534,8 @@ export async function recallWithContext(
     const nowMs = _nowFn();
     const ageDays = (nowMs - ep.createdAt) / (1000 * 60 * 60 * 24);
     const explanation = buildExplanation(ep, queryEntities, queryDomains, similarity);
-    return [{ episode: ep, similarity, ageDays, explanation }];
+    const contradictory = ep.contradictory === true;
+    return [{ episode: ep, similarity, ageDays, explanation, ...(contradictory ? { contradictory: true } : {}) }];
   });
 
   if (recalls.length > 0 && typeof window !== 'undefined') {
@@ -482,11 +557,26 @@ export async function recallWithContext(
  * situations materialized, weighted by their similarity to the current query.
  * This is the value forecastHypothesis(..., analogScore, ...) was designed to receive.
  *
+ * PR 14 — memory hygiene: by default, episodes flagged as contradictory
+ * (hypothesis refuted by competitive-hypothesis resolution) are excluded from
+ * scoring. They remain visible in recall results (contradictions surface, never
+ * silently dropped — plan invariant), but do not contribute to the analog score
+ * since their materialization outcome is misleading (the hypothesis was refuted,
+ * not confirmed). Pass excludeContradictory: false to include them.
+ *
  * Plan invariant: every score has an explanation. The explanation is embedded
  * in each Recall's `explanation` field; the caller can surface it in the HUD.
  */
-export function analogScoreFor(recalls: readonly Recall[]): number | null {
-  const qualified = recalls.filter(r => r.similarity >= effectiveMinSim() && r.episode.outcome !== undefined);
+export function analogScoreFor(
+  recalls: readonly Recall[],
+  opts?: { excludeContradictory?: boolean },
+): number | null {
+  const excludeContradictory = opts?.excludeContradictory !== false; // default: true
+  const qualified = recalls.filter(r =>
+    r.similarity >= effectiveMinSim() &&
+    r.episode.outcome !== undefined &&
+    (!excludeContradictory || !r.contradictory),
+  );
   if (qualified.length < MIN_RECALLS_FOR_ANALOG) return null;
 
   let weightedSum = 0;

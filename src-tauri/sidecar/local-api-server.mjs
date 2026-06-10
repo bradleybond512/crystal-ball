@@ -5754,12 +5754,12 @@ async function dispatch(requestUrl, req, routes, context) {
     try {
       const data = await cachedFetch('gdelt-summary-v1', 15 * 60 * 1000, fetchGdeltSummary);
       return json(data, 200, makeCorsHeaders(req));
-    } catch (err) {
+    } catch (error) {
       // Throttled and no fresh cache — serve last-good if we have one.
       if (_gdeltLastGood) {
         return json({ ..._gdeltLastGood, stale: true }, 200, makeCorsHeaders(req));
       }
-      return json({ error: `GDELT unavailable: ${String(err)}` }, 502, makeCorsHeaders(req));
+      return json({ error: `GDELT unavailable: ${String(error)}` }, 502, makeCorsHeaders(req));
     }
   }
 

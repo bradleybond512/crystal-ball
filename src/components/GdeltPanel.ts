@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-async-constructor */
 import { Panel } from './Panel';
 import { h, replaceChildren } from '@/utils/dom-utils';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -17,15 +18,15 @@ function relativeTime(iso: string): string {
   if (!iso) return '';
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return '';
-  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+  const mins = Math.max(0, Math.round((Date.now() - then) / 60_000));
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins} min ago`;
   const hrs = Math.round(mins / 60);
   return `${hrs}h ago`;
 }
 
-function maxCount(rows: Array<{ count: number }>): number {
-  return rows.reduce((m, r) => (r.count > m ? r.count : m), 0);
+function maxCount(rows: { count: number }[]): number {
+  return rows.reduce((m, r) => (Math.max(r.count, m)), 0);
 }
 
 export class GdeltPanel extends Panel {

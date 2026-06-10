@@ -8,10 +8,10 @@
 
 export interface GdeltSummary {
   tone: number;
-  topThemes: Array<{ theme: string; count: number }>;
-  topLocations: Array<{ name: string; count: number }>;
-  topPeople: Array<{ name: string; count: number }>;
-  topOrgs: Array<{ name: string; count: number }>;
+  topThemes: { theme: string; count: number }[];
+  topLocations: { name: string; count: number }[];
+  topPeople: { name: string; count: number }[];
+  topOrgs: { name: string; count: number }[];
   fetchedAt: string;
 }
 
@@ -23,10 +23,14 @@ const EMPTY = '░';
 /** Human-readable tone band. */
 export function parseToneDescription(tone: number): string {
   switch (getToneClass(tone)) {
-    case 'crisis': return 'Extremely Negative';
-    case 'negative': return 'Negative';
-    case 'positive': return 'Positive';
-    default: return 'Neutral';
+    case 'crisis': { return 'Extremely Negative';
+    }
+    case 'negative': { return 'Negative';
+    }
+    case 'positive': { return 'Positive';
+    }
+    default: { return 'Neutral';
+    }
   }
 }
 
@@ -77,7 +81,7 @@ export function formatThemeName(gdeltTheme: string): string {
 
   // If stripping consumed everything, fall back to the raw tokens.
   const meaningful = start < tokens.length ? tokens.slice(start) : tokens;
-  return meaningful.map(titleCaseToken).join(' ');
+  return meaningful.map(t => titleCaseToken(t)).join(' ');
 }
 
 function normalizeCountRows<T extends { count: number }>(
@@ -100,7 +104,7 @@ function normalizeCountRows<T extends { count: number }>(
 //
 // THEME_SIGNALS is mirrored verbatim in the sidecar route
 // (src-tauri/sidecar/local-api-server.mjs, fetchGdeltSummary). Keep in sync.
-export const THEME_SIGNALS: Array<[label: string, pattern: RegExp]> = [
+export const THEME_SIGNALS: [label: string, pattern: RegExp][] = [
   ['Conflict & Violence', /\b(war|wars|attack|attacks|strike|strikes|clash|clashes|fighting|killed|kills|troops|missile|missiles|shelling|combat|offensive)\b/i],
   ['Protest & Unrest', /\b(protest|protests|riot|riots|unrest|rally|uprising|demonstration|demonstrations)\b/i],
   ['Military & Defense', /\b(military|army|navy|defense|defence|nato|weapon|weapons|drone|drones|warship|warships|deploy|deployment)\b/i],
@@ -132,7 +136,7 @@ function latestFiniteTone(toneJson: unknown): number {
   return tone;
 }
 
-function countLocations(articles: unknown[]): Array<{ name: string; count: number }> {
+function countLocations(articles: unknown[]): { name: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const a of articles) {
     if (!a || typeof a !== 'object') continue;
@@ -147,7 +151,7 @@ function countLocations(articles: unknown[]): Array<{ name: string; count: numbe
     .slice(0, MAX_LOCATIONS);
 }
 
-function tallyThemes(articles: unknown[]): Array<{ theme: string; count: number }> {
+function tallyThemes(articles: unknown[]): { theme: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const a of articles) {
     if (!a || typeof a !== 'object') continue;

@@ -4704,6 +4704,71 @@ async function handleIntelGenerate(req, res, context) {
   }
 }
 
+// ── Episodic memory embedding (cognition PR 1) ──────────────────────────────
+// Mirrors intel-generate's Ollama probing pattern.
+// Accepts { text } and returns { vector: number[], model } from Ollama
+// nomic-embed-text. Returns 503 when Ollama is absent.
+async function handleIntelEmbed(req, res, context) {
+  const cors = getSidecarCorsOrigin(req);
+  const headers = { 'content-type': 'application/json', 'access-control-allow-origin': cors, 'vary': 'Origin' };
+
+  const body = await readBody(req);
+  if (!body) { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'expected JSON body' })); return; }
+  let parsed;
+  try { parsed = JSON.parse(body.toString()); }
+  catch { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'invalid JSON' })); return; }
+
+  const text = typeof parsed.text === 'string' ? parsed.text.slice(0, 8000) : '';
+  if (!text) { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'text required' })); return; }
+
+  // Probe Ollama embedding endpoint. nomic-embed-text is the recommended
+  // open-source embedding model for Ollama (768-dim, Apache 2.0).
+  const EMBED_MODEL = 'nomic-embed-text';
+  const localBases = process.env.OLLAMA_API_URL
+    ? [process.env.OLLAMA_API_URL]
+    : ['http://127.0.0.1:11434'];
+
+  for (const base of localBases) {
+    let embedUrl;
+    try { embedUrl = new URL('/api/embeddings', base).toString(); } catch { continue; }
+    try {
+      const requestBody = JSON.stringify({ model: EMBED_MODEL, prompt: text });
+      const u = new URL(embedUrl);
+      const reqOptions = {
+        hostname: u.hostname, port: u.port || 80, path: u.pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(requestBody) },
+        family: 4,
+      };
+      const result = await new Promise((resolve, reject) => {
+        const r = http.request(reqOptions, (resp) => {
+          const chunks = [];
+          resp.on('data', c => chunks.push(c));
+          resp.on('end', () => {
+            if (resp.statusCode !== 200) return reject(new Error(`upstream ${resp.statusCode}`));
+            try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch (e) { reject(e); }
+          });
+          resp.on('error', reject);
+        });
+        r.on('error', reject);
+        r.setTimeout(10_000, () => { r.destroy(new Error('timeout')); });
+        r.write(requestBody);
+        r.end();
+      });
+      if (!result || !Array.isArray(result.embedding)) continue;
+      res.writeHead(200, headers);
+      res.end(JSON.stringify({ vector: result.embedding, model: EMBED_MODEL }));
+      return;
+    } catch (embedError) {
+      context.logger.warn(`[intel-embed] Ollama unavailable (${embedUrl}):`, embedError.message);
+    }
+  }
+
+  // Ollama absent — return 503 so the renderer falls back to hashed embedder.
+  res.writeHead(503, headers);
+  res.end(JSON.stringify({ error: 'Ollama unavailable — use hashed fallback' }));
+}
+
 // ── Weather-hazard helpers (PR 1) ────────────────────────────────────────────
 function alertCategoryFor(event) {
   const e = String(event || '').toLowerCase();
@@ -15742,6 +15807,20 @@ export async function createLocalApiServer(options = {}) {
  }
  }
  await handleIntelGenerate(req, res, context);
+ return;
+ }
+
+ // Episodic memory embedding — proxies text to Ollama nomic-embed-text.
+ if (requestUrl.pathname === '/api/intel-embed' && req.method === 'POST') {
+ {
+ const authHeader = req.headers['authorization'] || '';
+ if (!isValidToken(authHeader)) {
+ res.writeHead(401, { 'content-type': 'application/json' });
+ res.end(JSON.stringify({ error: 'Unauthorized' }));
+ return;
+ }
+ }
+ await handleIntelEmbed(req, res, context);
  return;
  }
 

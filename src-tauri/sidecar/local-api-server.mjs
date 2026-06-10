@@ -111,6 +111,7 @@ export function appendSituationToEventStore(store, situation) {
     warnEventStoreWriteFailure('situation', error);
   }
 }
+import { initWatchboardEngine, evaluateSignal as wbEvaluateSignal, getWatchboards, createWatchboard, updateWatchboard, deleteWatchboard, getRecentFirings, getWatchboardTemplates } from './watchboard-engine.mjs';
 
 let _smsConfig = loadSmsConfig();
 const _smsRateLimitMap = new Map();
@@ -16042,6 +16043,7 @@ export async function createLocalApiServer(options = {}) {
   }
   const context = resolveConfig(options);
   loadVerboseState(context.dataDir);
+  initWatchboardEngine(path.join(context.dataDir, 'watchboards.json'));
   const routes = await buildRouteTable(context.apiDir);
   const ofacCache = new OfacCache({ dataDir: context.dataDir });
   context.ofacCache = ofacCache;
@@ -16435,6 +16437,51 @@ export async function createLocalApiServer(options = {}) {
    }));
    return;
  }
+
+  // ── /api/watchboards — geofenced standing queries (tripwires) ─────
+  if (requestUrl.pathname === '/api/watchboards' || requestUrl.pathname === '/api/watchboards/') {
+    if (req.method === 'GET') {
+      return json({ watchboards: getWatchboards() }, 200, makeCorsHeaders(req));
+    }
+    if (req.method === 'POST') {
+      const raw = await readBody(req);
+      const body = raw ? JSON.parse(raw.toString()) : null;
+      if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400, makeCorsHeaders(req));
+      const created = createWatchboard(body);
+      return json({ watchboard: created }, 201, makeCorsHeaders(req));
+    }
+    return json({ error: 'Method not allowed' }, 405, makeCorsHeaders(req));
+  }
+
+  const wbIdMatch = requestUrl.pathname.match(/^\/api\/watchboards\/([^/]+)$/);
+  if (wbIdMatch) {
+    const wbId = wbIdMatch[1];
+    if (wbId === 'firings') {
+      if (req.method === 'GET') {
+        const limit = Math.min(Number(requestUrl.searchParams.get('limit') || '50'), 200);
+        return json({ firings: getRecentFirings(limit) }, 200, makeCorsHeaders(req));
+      }
+    }
+    if (wbId === 'templates') {
+      if (req.method === 'GET') {
+        return json({ templates: getWatchboardTemplates() }, 200, makeCorsHeaders(req));
+      }
+    }
+    if (req.method === 'PUT') {
+      const raw = await readBody(req);
+      const body = raw ? JSON.parse(raw.toString()) : null;
+      if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400, makeCorsHeaders(req));
+      const updated = updateWatchboard(wbId, body);
+      if (!updated) return json({ error: 'not found' }, 404, makeCorsHeaders(req));
+      return json({ watchboard: updated }, 200, makeCorsHeaders(req));
+    }
+    if (req.method === 'DELETE') {
+      const deleted = deleteWatchboard(wbId);
+      if (!deleted) return json({ error: 'not found' }, 404, makeCorsHeaders(req));
+      return json({ ok: true }, 200, makeCorsHeaders(req));
+    }
+    return json({ error: 'Method not allowed' }, 405, makeCorsHeaders(req));
+  }
 
  // ── /api/diag — full diagnostics snapshot for bug reports ─────────
  if (requestUrl.pathname === '/api/diag') {

@@ -39,7 +39,7 @@ config was needlessly maxed out: continuous 60fps rendering (no `requestRenderMo
   handling. MSAA reduced 4× → 2× (visually indistinguishable paired with FXAA).
 - **Listener-leak ratchet** (`scripts/check-listener-leaks.mjs` + baseline + npm
   `perf:listeners{,:ci,:update}`): mirrors the a11y-baseline pattern. Reports the worst
-  offenders (currently 1,036 unmatched listeners across 337 files; top: `Map.ts` 53,
+  offenders (currently 1,074 unmatched listeners across 342 files; top: `Map.ts` 53,
   `panel-layout.ts` 35, `event-handlers.ts` 27) and, in `--ci` mode, fails only when a
   file's imbalance grows beyond baseline or a new offender appears. Prevents the leak
   class from worsening while the real teardown fixes are worked through the ranked list.

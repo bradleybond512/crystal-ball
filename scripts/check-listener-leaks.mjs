@@ -15,13 +15,13 @@
 // can legitimately add in one method and remove in another, so the goal is
 // "don't get worse", not "zero imbalance".
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, relative } from 'node:path';
+import path from 'node:path';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const BASELINE_PATH = join(ROOT, 'scripts', 'listener-leak-baseline.json');
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const SRC = path.join(ROOT, 'src');
+const BASELINE_PATH = path.join(ROOT, 'scripts', 'listener-leak-baseline.json');
 const REPORT_LIMIT = 25;
 
 const args = new Set(process.argv.slice(2));
@@ -30,16 +30,28 @@ const UPDATE = args.has('--update');
 
 function count(haystack, needle) {
   // Count "<needle>(" call sites; tolerant of optional chaining (?.needle).
-  const re = new RegExp(`(?:\\.|\\b)${needle}\\s*\\(`, 'g');
+  const re = new RegExp(String.raw`(?:\.|\b)` + needle + String.raw`\s*\(`, 'g');
   return (haystack.match(re) || []).length;
 }
 
-function listTrackedTs() {
-  const out = execSync('git ls-files "src/**/*.ts"', { cwd: ROOT, encoding: 'utf8' });
-  return out.split('\n').filter((f) => f && !f.includes('__tests__') && !f.endsWith('.test.ts') && !f.endsWith('.test.mts'));
+function isTestPath(rel) {
+  return rel.includes('__tests__') || rel.endsWith('.test.ts') || rel.endsWith('.test.mts');
 }
 
-const files = listTrackedTs();
+function walkTs(dir, acc) {
+  for (const entry of readdirSync(dir)) {
+    const abs = path.join(dir, entry);
+    if (statSync(abs).isDirectory()) {
+      walkTs(abs, acc);
+    } else if (abs.endsWith('.ts')) {
+      const rel = path.relative(ROOT, abs);
+      if (!isTestPath(rel)) acc.push(rel);
+    }
+  }
+  return acc;
+}
+
+const files = walkTs(SRC, []);
 const offenders = {};
 let totalAddRemove = 0;
 let totalTimerImbalance = 0;
@@ -47,7 +59,7 @@ let totalTimerImbalance = 0;
 for (const rel of files) {
   let src;
   try {
-    src = readFileSync(join(ROOT, rel), 'utf8');
+    src = readFileSync(path.join(ROOT, rel), 'utf8');
   } catch {
     continue;
   }

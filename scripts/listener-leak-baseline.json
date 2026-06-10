@@ -1,5 +1,13 @@
 {
   "offenders": {
+    "src/App.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
     "src/app/biometric-gate.ts": {
       "add": 4,
       "remove": 2,
@@ -2096,6 +2104,22 @@
       "clearI": 0,
       "timerGap": 0
     },
+    "src/live-channels-window.ts": {
+      "add": 12,
+      "remove": 0,
+      "listenerGap": 12,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/main.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
     "src/services/alert-correlator.ts": {
       "add": 0,
       "remove": 0,
@@ -2280,14 +2304,6 @@
       "clearI": 0,
       "timerGap": 0
     },
-    "src/services/infrastructure-alert-bridge.ts": {
-      "add": 0,
-      "remove": 0,
-      "listenerGap": 0,
-      "setI": 2,
-      "clearI": 0,
-      "timerGap": 2
-    },
     "src/services/infrastructure/grid-intelligence-loader.ts": {
       "add": 0,
       "remove": 0,
@@ -2295,6 +2311,14 @@
       "setI": 4,
       "clearI": 1,
       "timerGap": 3
+    },
+    "src/services/infrastructure-alert-bridge.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 2,
+      "clearI": 0,
+      "timerGap": 2
     },
     "src/services/intel-channels-bridge.ts": {
       "add": 0,
@@ -2656,6 +2680,22 @@
       "clearI": 0,
       "timerGap": 0
     },
+    "src/settings-main.ts": {
+      "add": 21,
+      "remove": 0,
+      "listenerGap": 21,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/settings-window.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
     "src/utils/dom-utils.ts": {
       "add": 1,
       "remove": 0,
@@ -2697,6 +2737,6 @@
       "timerGap": 0
     }
   },
-  "totalAddRemove": 1036,
-  "totalTimerImbalance": 36
+  "totalAddRemove": 1074,
+  "totalTimerImbalance": 37
 }

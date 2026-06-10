@@ -52,6 +52,7 @@ small PR with an existing service contract on one side and an existing UI patter
 (tabs like `SystemDiagnosticPanel`, cards like `ShortageRadarPanel`) on the other.
 
 ### A1. Shortage Radar live inputs
+
 - `src/services/shortage/` has 8 commodity models + `ShortageRadarPanel.setRequests(...)`,
   but no live data flows. Build the input bridge in `src/app/data-loader.ts`:
   EIA (diesel/gasoline/natgas/jet fuel inventories + prices), FRED (food price
@@ -62,6 +63,7 @@ small PR with an existing service contract on one side and an existing UI patter
   Extend `shortage-input-bridge` tests with live-shaped fixtures.
 
 ### A2. Replay & outcome learning surfaced
+
 - Add a **Replay** tab to `SystemDiagnosticPanel`: run
   `runReplayHarness(replayFixturesCatalog)` on demand, render per-fixture
   pass/fail with expectation kind and explanation ("would Crystal Ball have warned
@@ -72,6 +74,7 @@ small PR with an existing service contract on one side and an existing UI patter
   run completes < 1s; deterministic snapshot test per tab.
 
 ### A3. Algorithm self-improvement review queue
+
 - `AlgorithmDiagnosticPanel` shows proposals; add the missing human-in-the-loop:
   Apply / Dismiss buttons for `apply`-verdict Safe Adjustment proposals, writing to
   the tuning decision log with rollback affordance. Never auto-apply.
@@ -79,6 +82,7 @@ small PR with an existing service contract on one side and an existing UI patter
   tunable; tests for both paths.
 
 ### A4. Ask-The-Data in the product
+
 - Wire `src/services/insights/ask-the-data.ts` (6 intents, deterministic answers +
   evidence rows) into (a) the Command Center as suggestion chips on the active
   situation and (b) the Command Palette (⌘K) as a query mode. Merge it into
@@ -88,6 +92,7 @@ small PR with an existing service contract on one side and an existing UI patter
   the underlying panel/hub; zero LLM calls for recognized intents.
 
 ### A5. Notification ladder end-to-end
+
 - `notification-ladder.ts` records lifecycles but only weather flows through it.
   Route shortage tier escalations (`shortage-alert-emitter`), big-event detections,
   and ops/replay regressions through the ladder → trace registry → native
@@ -97,6 +102,7 @@ small PR with an existing service contract on one side and an existing UI patter
   families; quiet-hours suppression visible in the trace; ladder tests extended.
 
 ### A6. Datacenter readiness panel completion
+
 - `datacenter-readiness` exists as a panel key; `src/services/datacenter/` has 0 UI
   imports. Build the panel on the `ShortageRadarPanel` card pattern: DcLevel rung,
   power + weather posture, people-first `ReadinessAction` list, stale-input badges.
@@ -106,6 +112,7 @@ small PR with an existing service contract on one side and an existing UI patter
   never dropped; uses `datacenter-view.ts` helpers exclusively for labels/colors.
 
 ### A7. Personal Impact strip + Share
+
 - Render `PersonalImpact` rows (5 categories + dormant bucket) as the top strip of
   Command Center, and add a "Share this briefing" action wired to
   `buildSharePacket()` (markdown → clipboard / share sheet).
@@ -153,11 +160,13 @@ shadow-mode/shadow-comparison fold into an "Evaluation" tab of Algorithm
 Diagnostics.
 
 ### Naming normalization
+
 One vocabulary: hubs are nouns ("Cyber", "Weather & Hazards"); tabs are plain
 ("Overview", "Rules", "Trace"). Retire the "Superpower" suffix in user-facing
 names. Keep `HUMAN_LABELS` in `settings-constants.ts` as the single source.
 
 ### Acceptance for the workstream
+
 - Sidebar shows ≤ 14 top-level entries in the full variant; every retired panel ID
   still resolves via alias (Command Palette test enumerates all legacy IDs).
 - No data-loader regressions: hubs lazy-mount tabs; initial bundle does not grow.
@@ -173,6 +182,7 @@ provider-redundancy from day one (every source registers in
 breadth *trustworthy*, which is the actual differentiator).
 
 **Tier 1 — critical gaps (free, no key):**
+
 1. **NetBlocks / IODA** — internet shutdowns & telecom disruption → Infrastructure hub.
 2. **CPSC + FDA + NHTSA recalls** — product/food/vehicle safety → new "Recalls" tab in Health hub + Personal Impact matching against the user's profile.
 3. **FEMA OpenFEMA + Overpass (OSM)** — shelters, hospitals, fuel, pharmacies near saved places → Preparedness hub (this is the "survival tools" ask: nearest-resources, offline-cacheable).
@@ -217,6 +227,7 @@ without a consumer is dark matter and out of scope.
 ## 6. Workstream E — Security & quality hardening (interleave)
 
 From the two scan docs, prioritize in this order (highest blast-radius first):
+
 1. **SEC-001** remove/gate `get_all_secrets` renderer exposure.
 2. **SEC-007/008** centralize `safe-html` utility; ban raw `innerHTML`; strip
    inline `style` from untrusted sanitizer paths; add XSS payload tests.

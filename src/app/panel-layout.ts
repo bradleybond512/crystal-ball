@@ -426,6 +426,7 @@ import { GreatPowerCompetitionPanel } from '@/components/GreatPowerCompetitionPa
 import { UrbanInstabilityPanel } from '@/components/UrbanInstabilityPanel';
 import { CyberEspionagePanel } from '@/components/CyberEspionagePanel';
 import { CounterterrorismPanel } from '@/components/CounterterrorismPanel';
+import { ExtremismTrackingPanel } from '@/components/ExtremismTrackingPanel';
 import { ThreatInboxPanel } from '@/components/ThreatInboxPanel';
 import { FaaTfrsPanel } from '@/components/FaaTfrsPanel';
 import { InfrastructureSuperpowerPanel } from '@/components/InfrastructureSuperpowerPanel';
@@ -1721,6 +1722,7 @@ export class PanelLayoutManager implements AppModule {
     this.ctx.panels['urban-instability'] = new UrbanInstabilityPanel();
     this.ctx.panels['cyber-espionage'] = new CyberEspionagePanel();
     this.ctx.panels['counterterrorism'] = new CounterterrorismPanel();
+    this.ctx.panels['extremism-tracking'] = new ExtremismTrackingPanel();
     this.ctx.panels['threat-inbox'] = new ThreatInboxPanel();
     this.ctx.panels['faa-tfrs'] = new FaaTfrsPanel();
     this.ctx.panels['infrastructure-superpower'] = new InfrastructureSuperpowerPanel();

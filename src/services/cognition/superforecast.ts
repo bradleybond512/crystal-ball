@@ -54,6 +54,8 @@ import { forecastHypothesis } from '@/services/intelligence/hypothesis-forecast'
 import type { GenerateTextFn } from './decomposition';
 import { conformalInterval } from './conformal';
 import type { ForecastInterval } from './conformal';
+import { parseStrictJson } from './llm-json';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -105,8 +107,10 @@ const PERSONA_PROBABILITY_SYSTEMS: Record<PersonaKind, string> = {
 /**
  * Build the persona probability elicitation prompt.
  * All feed-derived text is wrapped in <evidence> tags.
+ *
+ * Exported for prompt-fixtures tests (PR 15).
  */
-function buildPersonaPrompt(h: Hypothesis, persona: PersonaKind): string {
+export function buildPersonaPrompt(h: Hypothesis, persona: PersonaKind): string {
   const evidenceLines = h.evidence
     .slice(0, 6)
     .map(e => `  - [${e.source}] ${e.label}`)
@@ -128,33 +132,126 @@ function buildPersonaPrompt(h: Hypothesis, persona: PersonaKind): string {
   );
 }
 
-/** Parse a "probability": 0.XX response from a persona LLM call. */
+// ── Persona response type ──────────────────────────────────────────────────────
+
+interface PersonaResponse {
+  probability: number;
+  rationale?: string;
+}
+
+function isPersonaResponse(x: unknown): x is PersonaResponse {
+  if (x === null || typeof x !== 'object' || Array.isArray(x)) return false;
+  const o = x as Record<string, unknown>;
+  const p = Number(o['probability']);
+  return Number.isFinite(p) && p >= 0 && p <= 1;
+}
+
+/**
+ * Parse a "probability": 0.XX response from a persona LLM call.
+ * Uses the shared parseStrictJson with one repair attempt (PR 15).
+ */
 function parsePersonaProbability(text: string): number | null {
-  // First try: JSON parse.
-  try {
-    const parsed = JSON.parse(text) as Record<string, unknown>;
-    const p = Number(parsed['probability']);
-    if (Number.isFinite(p) && p >= 0 && p <= 1) return Math.max(0.02, Math.min(0.98, p));
-  } catch { /* fall through */ }
+  const parsed = parseStrictJson<PersonaResponse>(text, isPersonaResponse);
+  if (parsed === null) return null;
+  const p = Number(parsed.probability);
+  if (!Number.isFinite(p) || p < 0 || p > 1) return null;
+  return Math.max(0.02, Math.min(0.98, p));
+}
 
-  // Repair attempt: extract outermost {…}.
-  const match = text.match(/\{[\s\S]*\}/);
-  if (match) {
-    try {
-      const parsed = JSON.parse(match[0]) as Record<string, unknown>;
-      const p = Number(parsed['probability']);
-      if (Number.isFinite(p) && p >= 0 && p <= 1) return Math.max(0.02, Math.min(0.98, p));
-    } catch { /* fall through */ }
+// ── Aggregate review prompt ────────────────────────────────────────────────────
+
+/**
+ * Build the aggregate-review prompt for the optional final LLM gate.
+ * All feed-derived text is wrapped in <evidence> tags.
+ * This is the ONLY call that may set preferCloud: true (difficulty routing).
+ *
+ * Exported for prompt-fixtures tests (PR 15).
+ */
+export function buildAggregateReviewPrompt(
+  h: Hypothesis,
+  aggregateP: number,
+  estimates: readonly Estimate[],
+): string {
+  const estimateSummary = estimates
+    .map(e => `  ${e.source}: ${(e.p * 100).toFixed(0)}% (weight ${e.weight.toFixed(1)})`)
+    .join('\n');
+
+  return (
+    `You are a senior forecasting reviewer performing a final sanity check.\n\n` +
+    `Review the aggregate probability for the following hypothesis and flag any obvious blunders.\n` +
+    `Do NOT change the probability unless there is a clear error — conservative reviews are preferred.\n\n` +
+    `Hypothesis (${h.kind}, ${h.risk} risk):\n` +
+    `<evidence>\n` +
+    `"${h.statement}"\n` +
+    `</evidence>\n\n` +
+    `Individual estimates:\n` +
+    `<evidence>\n` +
+    `${estimateSummary}\n` +
+    `</evidence>\n\n` +
+    `Aggregate probability: ${(aggregateP * 100).toFixed(1)}%\n\n` +
+    `IMPORTANT: respond ONLY with a JSON object in EXACTLY this format, no other text:\n` +
+    `{ "keep": true/false, "adjustedP": 0.XX (optional), "reason": "1 sentence" }\n\n` +
+    `Rules:\n` +
+    `- If the aggregate looks reasonable, set keep=true and omit adjustedP.\n` +
+    `- If you see a blunder, set keep=false and provide adjustedP.\n` +
+    `- adjustedP must be within ±0.10 of ${aggregateP.toFixed(2)} (hard constraint).\n` +
+    `- Do not include any text outside the JSON object.`
+  );
+}
+
+// ── Aggregate review response type ────────────────────────────────────────────
+
+interface AggregateReviewResponse {
+  keep: boolean;
+  adjustedP?: number;
+  reason?: string;
+}
+
+function isAggregateReviewResponse(x: unknown): x is AggregateReviewResponse {
+  if (x === null || typeof x !== 'object' || Array.isArray(x)) return false;
+  const o = x as Record<string, unknown>;
+  return typeof o['keep'] === 'boolean';
+}
+
+/**
+ * Apply the aggregate review response to the aggregate probability.
+ * Hard-clamps any adjustedP to ±0.10 of the original (plan invariant).
+ */
+export function applyAggregateReview(
+  aggregateP: number,
+  review: AggregateReviewResponse,
+): number {
+  if (review.keep || review.adjustedP === undefined) return aggregateP;
+  const p = Number(review.adjustedP);
+  if (!Number.isFinite(p)) return aggregateP;
+  // Hard clamp: ±0.10 of the aggregate. Documented in this function.
+  const MAX_DELTA = 0.10;
+  const clamped = Math.max(aggregateP - MAX_DELTA, Math.min(aggregateP + MAX_DELTA, p));
+  return Math.max(0.02, Math.min(0.98, clamped));
+}
+
+// ── Self-consistency median ────────────────────────────────────────────────────
+
+/**
+ * Compute the median of a sorted array of numbers.
+ *
+ * For odd-length arrays: returns the middle value (no averaging needed).
+ * For even-length arrays: returns the lower of the two middle values to avoid
+ * creating an artificial probability not in the original sample set.
+ *
+ * k=1: single sample → median = that sample → byte-identical to pre-PR-15 path.
+ *
+ * Exported for tests.
+ */
+export function medianOf(samples: readonly number[]): number {
+  if (samples.length === 0) return 0;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return sorted[mid]!;
   }
-
-  // Last resort: regex scan for first decimal that looks like a probability.
-  const probMatch = text.match(/["']?probability["']?\s*:\s*(0\.\d+|1\.0|0|1)\b/);
-  if (probMatch?.[1]) {
-    const p = Number(probMatch[1]);
-    if (Number.isFinite(p) && p >= 0 && p <= 1) return Math.max(0.02, Math.min(0.98, p));
-  }
-
-  return null;
+  // Even length: lower middle (avoids synthetic intermediate probability).
+  return sorted[mid - 1]!;
 }
 
 // ── Persona cache ──────────────────────────────────────────────────────────────
@@ -347,7 +444,19 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
         // Decomposition failed — continue without it.
       }
 
-      // Step 2b: Persona probability elicitation (60-min cache).
+      // Step 2b: Persona probability elicitation with self-consistency sampling (PR 15).
+      //
+      // Difficulty routing (PR 15): persona calls do NOT set preferCloud — they
+      // run local-first. Only the final aggregate-review call (step 3b) may set
+      // preferCloud: true. This is encoded here, not in the adapter.
+      //
+      // Self-consistency: for each persona, draw k samples (from the tunable store)
+      // and take the median. k=1 is byte-identical to the pre-PR-15 path.
+
+      const selfConsistencyK = Math.round(
+        getTunedParam('superforecast', 'selfConsistencyK', 3),
+      );
+
       const cachedPersonas = getCachedPersonaProbabilities(sig);
       const personaResults: Partial<Record<PersonaKind, number>> =
         cachedPersonas ? { ...cachedPersonas } : {};
@@ -361,21 +470,38 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
           continue; // Cache hit.
         }
 
-        // Check budget before each call.
+        // Check budget before each persona.
         const stillBudget = !(await isBudgetExhausted());
         if (!stillBudget) break;
 
-        try {
-          const res = await generate(buildPersonaPrompt(h, persona), { maxTokens: 200 });
-          if (res.text && res.provider !== 'none') {
-            const p = parsePersonaProbability(res.text);
-            if (p !== null) {
-              personaResults[persona] = p;
-              anyPersonaSucceeded = true;
-            }
+        // Self-consistency: collect up to k samples, stop early on budget exhaustion.
+        const samples: number[] = [];
+        const prompt = buildPersonaPrompt(h, persona);
+
+        for (let sample = 0; sample < selfConsistencyK; sample++) {
+          // For k=1: identical to the pre-PR-15 path (no extra budget checks, no median).
+          if (sample > 0) {
+            const budgetOk = !(await isBudgetExhausted());
+            if (!budgetOk) break; // Use however many samples succeeded.
           }
-        } catch {
-          // Persona call failed — skip and continue.
+
+          try {
+            // No preferCloud — local-first (difficulty routing, PR 15).
+            const res = await generate(prompt, { maxTokens: 200 });
+            if (res.text && res.provider !== 'none') {
+              const p = parsePersonaProbability(res.text);
+              if (p !== null) samples.push(p);
+            }
+          } catch {
+            // Sample failed — skip, use remaining samples.
+          }
+        }
+
+        if (samples.length > 0) {
+          // Compute median of samples.
+          const p = medianOf(samples);
+          personaResults[persona] = p;
+          anyPersonaSucceeded = true;
         }
       }
 
@@ -406,7 +532,8 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
           .filter(p => personaResults[p] !== undefined)
           .map(p => `${p}=${(personaResults[p]! * 100).toFixed(0)}%`)
           .join(', ');
-        explanationParts.push(`[personas] ${personaSummary}`);
+        const kNote = selfConsistencyK > 1 ? ` (k=${selfConsistencyK} samples, median)` : '';
+        explanationParts.push(`[personas] ${personaSummary}${kNote}`);
 
         // Upgrade tier to 'full' if all three personas ran.
         const succeededPersonas = personas.filter(p => personaResults[p] !== undefined).length;
@@ -424,16 +551,59 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
   const { p: aggregatedP, spread, explanation: aggregationExplanation } = aggregate(allEstimates);
   explanationParts.push(`[aggregate] ${aggregationExplanation}`);
 
+  // ── Step 3b: Optional aggregate-review call (difficulty routing, PR 15) ──
+  //
+  // This is the ONLY LLM call that may set preferCloud: true (the hardest
+  // reasoning step, reviewing the aggregate for obvious blunders). It is
+  // budget-gated and only fires when at least one persona succeeded (meaning
+  // we have a meaningful aggregate to review).
+  //
+  // Hard clamp: adjustedP is restricted to ±0.10 of the aggregate.
+  // Applied only when keep=false and an adjustedP is provided.
+
+  let reviewedP = aggregatedP;
+  try {
+    const reviewBudgetOk = !(await isBudgetExhausted());
+    const generate = await getGenerateText();
+    const hasPersonaEstimates = allEstimates.some(
+      e => e.source === 'persona-analyst' || e.source === 'persona-skeptic' || e.source === 'persona-pragmatist',
+    );
+
+    if (reviewBudgetOk && generate && hasPersonaEstimates) {
+      // preferCloud: true — this is the one call allowed to use the cloud tier.
+      const res = await generate(buildAggregateReviewPrompt(h, aggregatedP, allEstimates), {
+        maxTokens: 150,
+        preferCloud: true,
+      });
+      if (res.text && res.provider !== 'none') {
+        const review = parseStrictJson<AggregateReviewResponse>(res.text, isAggregateReviewResponse);
+        if (review !== null) {
+          reviewedP = applyAggregateReview(aggregatedP, review);
+          if (reviewedP !== aggregatedP) {
+            explanationParts.push(
+              `[review] adjusted ${(aggregatedP * 100).toFixed(0)}% → ${(reviewedP * 100).toFixed(0)}%` +
+              (review.reason ? `: ${review.reason}` : ''),
+            );
+          } else {
+            explanationParts.push(`[review] kept aggregate${review.reason ? `: ${review.reason}` : ''}`);
+          }
+        }
+      }
+    }
+  } catch {
+    // Review failed — use the unadjusted aggregate.
+  }
+
   // ── Step 4: Recalibrate (PR 2) ───────────────────────────────────────────
 
-  let finalP = aggregatedP;
+  let finalP = reviewedP;
   try {
     const recalibrator = getRecalibrator();
-    const { p: recalibratedP, explanation: recalibrationExplanation } = recalibrator(aggregatedP);
+    const { p: recalibratedP, explanation: recalibrationExplanation } = recalibrator(reviewedP);
     finalP = recalibratedP;
     explanationParts.push(`[recalibrated] ${recalibrationExplanation}`);
   } catch {
-    // Recalibration not available — use aggregated probability as-is.
+    // Recalibration not available — use reviewed probability as-is.
     explanationParts.push(`[recalibrated] skipped (calibration adapter unavailable)`);
   }
 

@@ -580,6 +580,7 @@ import { TravelSafetyPanel } from '@/components/TravelSafetyPanel';
 import { GlobalConflictPanel } from '@/components/GlobalConflictPanel';
 import { EconomicEspionagePanel } from '@/components/EconomicEspionagePanel';
 import { QuantumTechRacePanel } from '@/components/QuantumTechRacePanel';
+import { SemiconductorGeopoliticsPanel } from '@/components/SemiconductorGeopoliticsPanel';
 import { EnergyGeopoliticsPanel } from '@/components/EnergyGeopoliticsPanel';
 import { SovereignDebtCrisisPanel } from '@/components/SovereignDebtCrisisPanel';
 import { PandemicPreparednessPanel } from '@/components/PandemicPreparednessPanel';
@@ -1843,6 +1844,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['global-conflict'] = new GlobalConflictPanel();
  this.ctx.panels['economic-espionage'] = new EconomicEspionagePanel();
  this.ctx.panels['quantum-tech-race'] = new QuantumTechRacePanel();
+ this.ctx.panels['semiconductor-geopolitics'] = new SemiconductorGeopoliticsPanel();
  this.ctx.panels['energy-geopolitics'] = new EnergyGeopoliticsPanel();
  this.ctx.panels['sovereign-debt-crisis'] = new SovereignDebtCrisisPanel();
  this.ctx.panels['pandemic-preparedness'] = new PandemicPreparednessPanel();

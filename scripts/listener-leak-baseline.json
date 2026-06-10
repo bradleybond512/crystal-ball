@@ -1,0 +1,2702 @@
+{
+  "offenders": {
+    "src/app/biometric-gate.ts": {
+      "add": 4,
+      "remove": 2,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/app/data-loader.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/app/desktop-updater.ts": {
+      "add": 5,
+      "remove": 1,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/app/event-handlers.ts": {
+      "add": 38,
+      "remove": 11,
+      "listenerGap": 27,
+      "setI": 2,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/app/panel-layout.ts": {
+      "add": 39,
+      "remove": 4,
+      "listenerGap": 35,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/app/vault-intro.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/bootstrap/chunk-reload.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/AarPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ActiveLearningPanel.ts": {
+      "add": 7,
+      "remove": 0,
+      "listenerGap": 7,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ActiveLearningQueuePanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/AiBriefModal.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/AirstrikesPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/AlertCenterPanel.ts": {
+      "add": 3,
+      "remove": 2,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/AlertDeduplicationPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/AlertEscalationPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 2,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/components/AlertReplayScrubber.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/AlertRulesPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/AlertRulesTuningPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/AlertTimeline.ts": {
+      "add": 4,
+      "remove": 1,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/AnalystHUD.ts": {
+      "add": 27,
+      "remove": 0,
+      "listenerGap": 27,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/AnalystNotebookPanel.ts": {
+      "add": 7,
+      "remove": 0,
+      "listenerGap": 7,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ApiDiagnosticPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/AskCrystalBallPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/AssumptionPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/AssumptionTrackerPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/AviationIntelPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/BacktestGatePanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/BacktestPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/BiasDetectionPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/BitcoinAbusePanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/BreakingNewsBanner.ts": {
+      "add": 4,
+      "remove": 3,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CIIPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CascadePanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CascadeSimulatorPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CausalChainPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CesiumGlobe.ts": {
+      "add": 8,
+      "remove": 0,
+      "listenerGap": 8,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ClimateAnomalyPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CognitiveBiasDetectorPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CollectionGapPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CommandCenterPanel.ts": {
+      "add": 5,
+      "remove": 3,
+      "listenerGap": 2,
+      "setI": 2,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/components/CommandPalette.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CommandPalettePanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CommsPlanPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CommunityWidget.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CompetitiveHypothesisEnginePanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CompoundEventDetectorPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ContextualHint.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/ContradictionDetectorPanel.ts": {
+      "add": 5,
+      "remove": 0,
+      "listenerGap": 5,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CorrelationAlertBanner.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CorrelationMapPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CorrelationMatrixPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CounterfactualReasoningPanel.ts": {
+      "add": 6,
+      "remove": 0,
+      "listenerGap": 6,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CounterfactualReplayPanel.ts": {
+      "add": 9,
+      "remove": 0,
+      "listenerGap": 9,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CountryBriefPage.ts": {
+      "add": 12,
+      "remove": 2,
+      "listenerGap": 10,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CountryIntelModal.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CountryTimeline.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CourseOfActionPanel.ts": {
+      "add": 2,
+      "remove": 1,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/CrisisSignaturePanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CrossDomainContradictionDetectorPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CrystalBallSays.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CveTrackerPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CyberGeoPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/CyberThreatPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/DailyWisdomPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/DataCenterPinnedStrip.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/DeckGLMap.ts": {
+      "add": 18,
+      "remove": 2,
+      "listenerGap": 16,
+      "setI": 3,
+      "clearI": 3,
+      "timerGap": 0
+    },
+    "src/components/DigestOverlay.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/DiseaseIntelPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/DiseaseOutbreakPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 2,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/components/DisplacementPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/DomainDependencyPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/DomainScorecardPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/DomainScorecardsPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/DownloadBanner.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/EEWStatusBar.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 2,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/components/EconomicIntelPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/EconomicPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/EmptyState.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/EntityHeatRail.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/EscalationForecastPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/EvacuationPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/EvidenceChainBuilderPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/EvidenceDrawer.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/EvidenceGraphPanel.ts": {
+      "add": 3,
+      "remove": 2,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ExperimentManagerPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/FAAWeatherCamsPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/FaaTfrsPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/FailurePredictionPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/FamilyTrackerPanel.ts": {
+      "add": 7,
+      "remove": 0,
+      "listenerGap": 7,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/FeedWatchdogPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/GDACSAlertsPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/GeoHubsPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/GeopoliticalEventCalendarPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/GeospatialClusteringPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/GivingPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/GlobalRhythmPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/GlobeDataManager.ts": {
+      "add": 2,
+      "remove": 1,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/GlobeHUD.ts": {
+      "add": 14,
+      "remove": 0,
+      "listenerGap": 14,
+      "setI": 2,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/components/GlobeTimeMachine.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/GodsVisionView.ts": {
+      "add": 3,
+      "remove": 2,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/GoesSatellitePanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/GridIntelligencePanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/HazardAlertsPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/HelpOverlay.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/HeroSpotlightPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/HibpBreachesPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/HistoricalPlaybackPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/InfraRiskMatrixPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/InfrastructureBannerBar.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/IntelReportPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/IntelligenceBriefingExportPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/IntelligenceBriefingPanel.ts": {
+      "add": 22,
+      "remove": 0,
+      "listenerGap": 22,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/IntelligenceDigestPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/IntelligenceFeedPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/IntelligenceGapBadge.ts": {
+      "add": 11,
+      "remove": 4,
+      "listenerGap": 7,
+      "setI": 1,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/components/IntelligenceHealthMonitorPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/IntelligenceIndexPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/IntelligenceLoopOrchestratorPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/IntelligenceTimelinePanel.ts": {
+      "add": 5,
+      "remove": 0,
+      "listenerGap": 5,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/IntelligenceTrustBudgetPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/InvestmentsPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/IpInfoPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/JustInRail.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/KeyDashboard.ts": {
+      "add": 5,
+      "remove": 0,
+      "listenerGap": 5,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/KillChainPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/LittleSnitchPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/LiveNewsPanel.ts": {
+      "add": 21,
+      "remove": 3,
+      "listenerGap": 18,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/LiveWebcamsPanel.ts": {
+      "add": 10,
+      "remove": 3,
+      "listenerGap": 7,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/LocalLogisticsPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/Map.ts": {
+      "add": 55,
+      "remove": 2,
+      "listenerGap": 53,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/MapContextMenu.ts": {
+      "add": 3,
+      "remove": 1,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/MapPopup.ts": {
+      "add": 10,
+      "remove": 7,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/MediastackNewsPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/MetaConfidenceCalibrationPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/MetaConfidencePanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/MissionControlDashboardPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/MobileWarningModal.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/ModelGovernancePanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/MultiAgentReviewPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/NationalDebtPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/NavigationPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/NetworkTopologyPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/NewsPanel.ts": {
+      "add": 9,
+      "remove": 3,
+      "listenerGap": 6,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/NotificationAuditPanel.ts": {
+      "add": 7,
+      "remove": 0,
+      "listenerGap": 7,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/NotificationDigestPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/NotificationHistoryPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/NotificationPreferencesPanel.ts": {
+      "add": 9,
+      "remove": 0,
+      "listenerGap": 9,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/NotificationProvenancePanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/NotificationSettingsPanel.ts": {
+      "add": 8,
+      "remove": 1,
+      "listenerGap": 7,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/ObservationRulesPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/OfflineMapPanel.ts": {
+      "add": 5,
+      "remove": 0,
+      "listenerGap": 5,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/OfflineStalenessBanner.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/OpenaqMonitorPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/OperationalPlaybookPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/OperatorShiftReportPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/OrbatPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/Panel.ts": {
+      "add": 24,
+      "remove": 22,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/PersistentQueryEnginePanel.ts": {
+      "add": 11,
+      "remove": 0,
+      "listenerGap": 11,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/PersonalRelevancePanel.ts": {
+      "add": 5,
+      "remove": 0,
+      "listenerGap": 5,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/PersonalStormMode.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/PhishstatsFeedPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/PinnedWebcamsPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/PlaybackControl.ts": {
+      "add": 5,
+      "remove": 0,
+      "listenerGap": 5,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/PlaybookPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/PoliticalViolencePanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/PositiveNewsFeedPanel.ts": {
+      "add": 3,
+      "remove": 2,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/PredictiveCrisisIndexPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/PulsediveIntelPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/QualityDebtPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/RadiationDecayPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/ReasoningDebugOverlay.ts": {
+      "add": 10,
+      "remove": 0,
+      "listenerGap": 10,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/RecoveryModelingPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/RedditOsintPanel.ts": {
+      "add": 5,
+      "remove": 0,
+      "listenerGap": 5,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/RegionalResiliencePanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/RegulationPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/RelatedStrip.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/RepairRecommendationsPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ResourceInventoryPanel.ts": {
+      "add": 10,
+      "remove": 0,
+      "listenerGap": 10,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/RuntimeConfigPanel.ts": {
+      "add": 17,
+      "remove": 0,
+      "listenerGap": 17,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/S2UIntelPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 2,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/components/S2UndergroundPanel.ts": {
+      "add": 3,
+      "remove": 2,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SafetyCaseDashboard.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SafetyCaseDashboardPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SanctionsPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SavedPlaceModal.ts": {
+      "add": 5,
+      "remove": 1,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SavedPlacesFilterPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SavedPlacesPanel.ts": {
+      "add": 7,
+      "remove": 5,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/ScenarioReplayPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SchedulerPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SearchModal.ts": {
+      "add": 6,
+      "remove": 0,
+      "listenerGap": 6,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SecurityAdvisoriesPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SetupWizard.ts": {
+      "add": 3,
+      "remove": 1,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SevereWeatherPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/ShadowComparisonPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ShadowModePanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ShakeAlertPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/ShiftHandoffCard.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/ShortageDetailPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ShortageRadarPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SignalModal.ts": {
+      "add": 6,
+      "remove": 0,
+      "listenerGap": 6,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SituationLifecycleTrackerPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SituationPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SituationPriorityQueuePanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SituationStorePanel.ts": {
+      "add": 3,
+      "remove": 2,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SituationTimelinePanel.ts": {
+      "add": 7,
+      "remove": 0,
+      "listenerGap": 7,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SmsSettingsPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SourceCredibilityTrackerPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SpaceWeatherPanel.ts": {
+      "add": 3,
+      "remove": 1,
+      "listenerGap": 2,
+      "setI": 2,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/components/StalenessBanner.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/StatusOverlay.ts": {
+      "add": 13,
+      "remove": 0,
+      "listenerGap": 13,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/StoryModal.ts": {
+      "add": 7,
+      "remove": 0,
+      "listenerGap": 7,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/StrategicPosturePanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/components/StrategicRiskPanel.ts": {
+      "add": 6,
+      "remove": 1,
+      "listenerGap": 5,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/StrikePackagePanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/StrikePackagesPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SupplyChainDisruptionPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SupplyChainImpactPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SupplyChainPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SurvivalAdvisorPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/SynthesisPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/SystemDiagnosticPanel.ts": {
+      "add": 5,
+      "remove": 0,
+      "listenerGap": 5,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/TechHubsPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/TemporalAnomalyDetectorPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ThreatCorrelationMatrixPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ThreatDashboard.ts": {
+      "add": 3,
+      "remove": 1,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/ThreatHorizonPanel.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ThreatInboxPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/ThreatIntelHubPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/TidePredictionsPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/Toast.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/TodayView.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/TradePolicyPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/TradeRouteRiskScorerPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/TriageBar.ts": {
+      "add": 12,
+      "remove": 2,
+      "listenerGap": 10,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/TrustBudgetPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/UcdpEventsPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/UnifiedAlertInboxPanel.ts": {
+      "add": 3,
+      "remove": 2,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/UnifiedSettings.ts": {
+      "add": 5,
+      "remove": 2,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/UnifiedWebcamPanel.ts": {
+      "add": 15,
+      "remove": 1,
+      "listenerGap": 14,
+      "setI": 2,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/components/UrlscanThreatsPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/VolcanoAlertsPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/VolcanoMonitorPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/VulnersCvePanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/WatchAreaAlertingPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/WatchlistEditor.ts": {
+      "add": 6,
+      "remove": 0,
+      "listenerGap": 6,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/WatchlistLocationsPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/WatchlistPanel.ts": {
+      "add": 2,
+      "remove": 1,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/WeatherHazardPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 4,
+      "clearI": 1,
+      "timerGap": 3
+    },
+    "src/components/WeatherRadarPanel.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/WelcomeFlow.ts": {
+      "add": 8,
+      "remove": 0,
+      "listenerGap": 8,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/WikidataBasesPanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/WorldClockPanel.ts": {
+      "add": 5,
+      "remove": 2,
+      "listenerGap": 3,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/WorldNarrativePanel.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/WorldStateComparatorPanel.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/components/api-key-gate.ts": {
+      "add": 8,
+      "remove": 0,
+      "listenerGap": 8,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/globeClustering.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/gods-vision/GlobeHeatmapToggle.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/gods-vision/GlobeMiniMap.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/gods-vision/GlobeSearch.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/gods-vision/GlobeSwimlane.ts": {
+      "add": 9,
+      "remove": 2,
+      "listenerGap": 7,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/components/location-gate.ts": {
+      "add": 4,
+      "remove": 0,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/e2e/mobile-map-harness.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/alert-correlator.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 2,
+      "clearI": 0,
+      "timerGap": 2
+    },
+    "src/services/alert-fatigue.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/alert-geo-cluster.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/alert-lifecycle.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/alert-store.ts": {
+      "add": 22,
+      "remove": 0,
+      "listenerGap": 22,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/analyst-command-listener.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/analytics.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/anomaly-baselines.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/app-activity.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/auto-brief.ts": {
+      "add": 2,
+      "remove": 1,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/blackout-signature.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/compound-alert-bridge.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/diagnostics/recurring-loops.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 2,
+      "clearI": 4,
+      "timerGap": 0
+    },
+    "src/services/escalation-lifecycle.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/export-briefing.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/forecast-accuracy.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/geofence-alerts.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/gps-tracker.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 2,
+      "clearI": 1,
+      "timerGap": 1
+    },
+    "src/services/hypothesis-accuracy.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 1,
+      "timerGap": 0
+    },
+    "src/services/hypothesis-entities.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/hypothesis-notifier.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/hypothesis-skeptic.ts": {
+      "add": 3,
+      "remove": 1,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/hypothesis-threads.ts": {
+      "add": 2,
+      "remove": 1,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/infrastructure-alert-bridge.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 2,
+      "clearI": 0,
+      "timerGap": 2
+    },
+    "src/services/infrastructure/grid-intelligence-loader.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 4,
+      "clearI": 1,
+      "timerGap": 3
+    },
+    "src/services/intel-channels-bridge.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 2,
+      "clearI": 0,
+      "timerGap": 2
+    },
+    "src/services/intel-pipeline.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/intelligence/active-learning-queue.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/intelligence/crisis-trajectory.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/intelligence/panel-lens-adapter.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/intelligence/predictive-crisis-index.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/llm-adapter.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/log-bridge.ts": {
+      "add": 6,
+      "remove": 0,
+      "listenerGap": 6,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/maritime/index.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 2,
+      "clearI": 2,
+      "timerGap": 0
+    },
+    "src/services/military-flights.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/military-vessels.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/mode-transition-card.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/motion.ts": {
+      "add": 6,
+      "remove": 2,
+      "listenerGap": 4,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/notifications/notification-history-service.ts": {
+      "add": 9,
+      "remove": 0,
+      "listenerGap": 9,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/offline-staleness.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/panel-correlation.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/panel-narrator.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 2,
+      "clearI": 0,
+      "timerGap": 2
+    },
+    "src/services/pattern-memory.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/periodicity-detector.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/persistent-cache.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/pressure-baselines.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/pressure-history.ts": {
+      "add": 2,
+      "remove": 1,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/proximity-cascade.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/reasoning-memory.ts": {
+      "add": 18,
+      "remove": 0,
+      "listenerGap": 18,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/relevance-learner.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/runtime-config.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/satellite-propagator.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/settings-descriptions.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/severity-recalibration.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/sidebar-heat.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/sidecar-pusher.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/silence-anomaly.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/silence-detector.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/snapshot-archive.ts": {
+      "add": 2,
+      "remove": 1,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/sound-manager.ts": {
+      "add": 11,
+      "remove": 9,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/storage.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/story-renderer.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/survival-advisor.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/threat-corridor.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/unified-alerts.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/watchlist-proximity.ts": {
+      "add": 0,
+      "remove": 0,
+      "listenerGap": 0,
+      "setI": 1,
+      "clearI": 0,
+      "timerGap": 1
+    },
+    "src/services/web-secret-store.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/webcams/smoke-detector.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/webhook-dispatcher.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/services/youtube-account.ts": {
+      "add": 2,
+      "remove": 0,
+      "listenerGap": 2,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/utils/dom-utils.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/utils/export.ts": {
+      "add": 3,
+      "remove": 0,
+      "listenerGap": 3,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/utils/theme-manager.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/workers/analysis.worker.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 0,
+      "clearI": 0,
+      "timerGap": 0
+    },
+    "src/workers/satellite-propagator.worker.ts": {
+      "add": 1,
+      "remove": 0,
+      "listenerGap": 1,
+      "setI": 1,
+      "clearI": 2,
+      "timerGap": 0
+    }
+  },
+  "totalAddRemove": 1036,
+  "totalTimerImbalance": 36
+}

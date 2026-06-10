@@ -1,0 +1,4 @@
+{
+  "pending": true,
+  "_note": "Run `npm run bench:cognition:update-baseline` to replace this sentinel with a real baseline after the first successful local execution."
+}

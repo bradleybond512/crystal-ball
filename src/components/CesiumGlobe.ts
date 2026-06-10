@@ -27,6 +27,7 @@ export class CesiumGlobe {
   private viewer: Viewer | null = null;
   private container: HTMLElement;
   private resizeObserver: ResizeObserver | null = null;
+  private renderHeartbeat: ReturnType<typeof setInterval> | null = null;
   private fallbackAdded = false;
 
   constructor(private readonly options: CesiumGlobeOptions) {
@@ -68,8 +69,15 @@ export class CesiumGlobe {
  powerPreference: 'high-performance',
  },
  },
- msaaSamples: 4,
+ // MSAA 2× (was 4×) — paired with FXAA this is visually indistinguishable on
+ // the globe while roughly halving the per-frame anti-aliasing cost.
+ msaaSamples: 2,
  useBrowserRecommendedResolution: false,
+ // On-demand rendering: only paint when the scene actually changes (camera
+ // motion, imagery load, explicit requestRender) instead of a continuous
+ // 60fps loop. Idle GPU/power drops dramatically. A low-frequency heartbeat
+ // (see startRenderHeartbeat) covers data mutations that don't self-flag.
+ requestRenderMode: true,
  });
 
  const scene = this.viewer.scene;
@@ -77,6 +85,12 @@ export class CesiumGlobe {
 
  // ── Resolution ──────────────────────────────────────
  this.viewer.resolutionScale = Math.min(window.devicePixelRatio, 2);
+
+ // With requestRenderMode on, GlobeDataManager's imperative entity/primitive
+ // mutations don't all self-flag a render. A 1s heartbeat guarantees data
+ // updates surface within ≤1s while still cutting idle rendering from ~60fps
+ // to ~1fps. Camera interaction renders immediately via Cesium's own handling.
+ this.startRenderHeartbeat();
 
  // ── Sky & Space ────────────────────────────────────
  scene.backgroundColor = Color.fromCssColorString('#050510');
@@ -455,7 +469,24 @@ export class CesiumGlobe {
  return this.viewer?.scene.globe.enableLighting ?? false;
   }
 
+  /**
+   * Periodically request a render so on-demand mode still reflects data that
+   * was mutated imperatively (entity/primitive adds in GlobeDataManager) without
+   * a continuous 60fps loop. Cleared in destroy().
+   */
+  private startRenderHeartbeat(): void {
+ if (this.renderHeartbeat) return;
+ this.renderHeartbeat = setInterval(() => {
+ const scene = this.viewer?.scene;
+ if (scene && !this.viewer?.isDestroyed()) scene.requestRender();
+ }, 1000);
+  }
+
   destroy(): void {
+ if (this.renderHeartbeat) {
+ clearInterval(this.renderHeartbeat);
+ this.renderHeartbeat = null;
+ }
  this.resizeObserver?.disconnect();
  this.resizeObserver = null;
  if (this.viewer && !this.viewer.isDestroyed()) {

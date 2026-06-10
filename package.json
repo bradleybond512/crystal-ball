@@ -170,7 +170,10 @@
     "desktop:package:windows:full:sign": "node scripts/desktop-package.mjs --os windows --variant full --sign",
     "desktop:package:windows:tech:sign": "node scripts/desktop-package.mjs --os windows --variant tech --sign",
     "desktop:package": "node scripts/desktop-package.mjs",
-    "postdesktop:build:full": "node scripts/local-install.mjs"
+    "postdesktop:build:full": "node scripts/local-install.mjs",
+    "perf:listeners": "node scripts/check-listener-leaks.mjs",
+    "perf:listeners:ci": "node scripts/check-listener-leaks.mjs --ci",
+    "perf:listeners:update": "node scripts/check-listener-leaks.mjs --update"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

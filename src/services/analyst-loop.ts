@@ -23,7 +23,7 @@ import { unifiedAlertStore, type UnifiedAlert } from './unified-alerts';
 import { scoreAlert, panelForAlert } from './alert-routing';
 import { getCachedSynthesis, type CrossDomainCluster, type EscalationRisk } from './threat-synthesis';
 import { isGhostMode, getGhostRefreshMultiplier } from './mode-manager';
-import { getHypothesisFeedbackMult } from './hypothesis-feedback';
+import { getHypothesisFeedbackMult, signatureFor } from './hypothesis-feedback';
 import { getHypothesisAccuracyMult } from './hypothesis-accuracy';
 import { getDomainCalibrationMult } from './intelligence/forecast-calibration-adapter';
 import { recordHypothesisPredictions, domainForHypothesis } from './intelligence/hypothesis-prediction-bridge';
@@ -33,6 +33,7 @@ import { getWatchlistHypotheses } from './watchlist-hypothesis-bridge';
 import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
 import type { Situation } from './situation-types';
+import { recordEpisode, updateAnalogCache } from '@/services/cognition/episodic-memory';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -346,6 +347,36 @@ export function runAnalystCycle(): AnalystSnapshot {
   const latencyMs = performance.now() - t0;
   recordLatency('analyst-cycle', latencyMs);
   incrementCounter('analyst-cycle.runs');
+
+  // Episodic memory wiring: record new hypothesis signatures as episodes
+  // and update the analog score cache for forecastAll. Ghost Mode suppression
+  // is handled inside recordEpisode and updateAnalogCache.
+  // Fire-and-forget: never block the sync cycle on async embedding.
+  const hypothesisSnapshot = [...hypotheses]; // capture before async
+  void (async () => {
+    try {
+      for (const h of hypothesisSnapshot) {
+        await recordEpisode({
+          kind: 'hypothesis',
+          signature: signatureFor(h),
+          summary: h.statement.slice(0, 500),
+          domains: [h.kind],
+          entities: [],
+          region: h.region,
+          createdAt: h.timestamp,
+        });
+      }
+      await updateAnalogCache(
+        hypothesisSnapshot.map(h => ({ statement: h.statement, id: h.id })),
+        h => {
+          const match = hypothesisSnapshot.find(hy => hy.id === h.id);
+          return match ? signatureFor(match) : h.id;
+        },
+      );
+    } catch {
+      // Never let episodic memory errors crash the analyst loop.
+    }
+  })();
   logDebug({ level: 'info', category: 'hypothesis', source: 'analyst-loop',
     message: 'cycle complete', latencyMs,
     data: {

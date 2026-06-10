@@ -52,6 +52,8 @@ import { getRecalibrator } from '@/services/intelligence/forecast-calibration-ad
 import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
 import { forecastHypothesis } from '@/services/intelligence/hypothesis-forecast';
 import type { GenerateTextFn } from './decomposition';
+import { conformalInterval } from './conformal';
+import type { ForecastInterval } from './conformal';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -75,6 +77,13 @@ export interface SuperForecast {
   explanation: string;
   /** Whether LLM calls succeeded fully, partially, or not at all. */
   llmTier: LlmTier;
+  /**
+   * Conformal prediction interval around `probability` (PR 7).
+   * Present when the calibration store has enough resolved records.
+   * Consumers should treat this as optional — it may be uninformative
+   * (lo=0, hi=1) when history is insufficient.
+   */
+  interval?: ForecastInterval;
 }
 
 // ── Persona probability elicitation ───────────────────────────────────────────
@@ -432,6 +441,18 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
 
   logToCalibrationStore(h.id, finalP, h);
 
+  // ── Step 6: Conformal prediction interval (PR 7) ─────────────────────────
+
+  let interval: ForecastInterval | undefined;
+  try {
+    const store = getCalibrationStore();
+    const allRecords = store.all();
+    // Hypotheses are domain-agnostic ('other'); use the global pool.
+    interval = conformalInterval(finalP, 'other', allRecords);
+  } catch {
+    // Never let interval computation crash the pipeline.
+  }
+
   // ── Build result ─────────────────────────────────────────────────────────
 
   const explanation = explanationParts.join('\n');
@@ -444,5 +465,6 @@ export async function superforecast(h: Hypothesis): Promise<SuperForecast> {
     referenceClass: referenceClassId,
     explanation,
     llmTier,
+    interval,
   };
 }

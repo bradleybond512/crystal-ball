@@ -1,3 +1,6 @@
+import type { BeliefValue } from '@/types/belief';
+import { createBelief } from '@/components/belief-helpers';
+
 export const EVENT_TAXONOMY = [
   'conflict',
   'protest',
@@ -62,6 +65,10 @@ export interface NormalizedLocation {
   admin1?: string;
   sourceLabel?: string;
   confidence: number;
+  /** First-class probability view of `confidence` (AI-2 BeliefValue). Optional
+   *  because NormalizedLocation is built via spread and not every caller
+   *  threads the belief through; populated by `normalizeLocation`. */
+  confidenceBelief?: BeliefValue;
 }
 
 export function normalizeLocation(input: {
@@ -86,7 +93,13 @@ export function normalizeLocation(input: {
     confidence = 0.1;
   }
 
-  return { ...input, confidence };
+  return {
+    ...input,
+    confidence,
+    confidenceBelief: createBelief(confidence, {
+      provenance: input.sourceLabel ? [input.sourceLabel] : [],
+    }),
+  };
 }
 
 export function SEVERITY_BUCKETS(score: number): string {

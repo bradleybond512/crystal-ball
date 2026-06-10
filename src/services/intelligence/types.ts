@@ -12,6 +12,8 @@
  * services (situation clustering PR 2, negative evidence PR 3, etc.).
  */
 
+import type { BeliefValue } from '@/types/belief';
+
 // ── NormalizedFact ────────────────────────────────────────────────────────
 //
 // The atomic unit of intelligence. A fact is one specific claim about the
@@ -165,6 +167,10 @@ export interface TruthScoreComponents {
 export interface TruthScore {
   /** Numeric score in [0, 1] after the formula + penalty. */
   score: number;
+  /** First-class probability view of `score` (AI-2 BeliefValue): the same
+   *  point estimate plus a confidence interval and source provenance, so the
+   *  epistemic layer can propagate this truth score through belief math. */
+  belief: BeliefValue;
   /** Categorical label derived from score + contradictions. */
   label: TruthLabel;
   /** Per-component breakdown driving the score. */

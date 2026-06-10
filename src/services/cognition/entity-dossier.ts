@@ -39,6 +39,7 @@ import {
   type EntityEdge,
 } from './entity-graph';
 import { isGhostMode } from '@/services/mode-manager';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── IDB lazy loader (same pattern as episodic-memory.ts) ─────────────────────
 
@@ -159,11 +160,20 @@ const MAX_TIMELINE_EVENTS = 100;
 const MAX_ASSOCIATES = 5;
 
 /**
- * 72-hour exponential half-life for heat decay.
- * λ = ln(2) / halfLifeMs
+ * Default half-life for entity heat decay (72 hours).
+ * The effective value is read from the tunable store at compute time via
+ * getTunedParam('entity-trajectory', 'heatHalfLifeHours', 72).
+ * In Node.js test environments (no localStorage) the store returns this
+ * default, keeping existing heat-math tests valid.
  */
-const HALF_LIFE_MS = 72 * 60 * 60 * 1000;
-const DECAY_LAMBDA = Math.LN2 / HALF_LIFE_MS;
+const DEFAULT_HEAT_HALF_LIFE_HOURS = 72;
+
+/** Compute the exponential decay lambda from the current tuned half-life. */
+function effectiveDecayLambda(): number {
+  const halfLifeHours = getTunedParam('entity-trajectory', 'heatHalfLifeHours', DEFAULT_HEAT_HALF_LIFE_HOURS);
+  const halfLifeMs = halfLifeHours * 60 * 60 * 1000;
+  return Math.LN2 / halfLifeMs;
+}
 
 /**
  * Normalization ceiling: sum of weights for a perfectly-fresh entity with
@@ -288,10 +298,14 @@ function save(): void {
  * Exported for tests to verify the half-life math.
  */
 export function computeHeat(timeline: readonly DossierEvent[], nowMs: number): number {
+  // decayLambda is computed from the tunable half-life at call time.
+  // In test environments (no localStorage) getTunedParam returns the default
+  // 72h, so hand-verified heat math in tests remains valid.
+  const decayLambda = effectiveDecayLambda();
   let sum = 0;
   for (const ev of timeline) {
     const ageMs = Math.max(0, nowMs - ev.ts);
-    sum += Math.exp(-DECAY_LAMBDA * ageMs);
+    sum += Math.exp(-decayLambda * ageMs);
   }
   return Math.min(1, sum / MAX_HEAT);
 }
@@ -401,7 +415,7 @@ function buildAssociates(
   return edges.map((e) => {
     const partner = e.a === canonicalKey ? e.b : e.a;
     // Normalize strength to 0–1 by clamping raw decayed weight at 10.
-    const decayed = e.weight * Math.exp(-Math.LN2 / HALF_LIFE_MS * Math.max(0, nowMs - e.lastSeen));
+    const decayed = e.weight * Math.exp(-effectiveDecayLambda() * Math.max(0, nowMs - e.lastSeen));
     const strength = Math.min(1, decayed / 10);
     return { entity: partner, strength };
   });

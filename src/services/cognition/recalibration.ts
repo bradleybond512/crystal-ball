@@ -34,6 +34,7 @@
 
 import type { PredictionRecord } from '@/services/intelligence/forecast-calibration';
 import type { FactDomain } from '@/services/intelligence/types';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -204,7 +205,10 @@ export function buildCurve(
     const rawObservedRate = n > 0 ? binTrueCount[i]! / n : predictedMean;
 
     // Laplace-style shrinkage: pull correction toward 0 when n is small.
-    const shrinkage = n / (n + SHRINK_PRIOR);
+    // shrinkagePrior is read from the tunable store at call time; the default
+    // (10) matches SHRINK_PRIOR so existing tests are unaffected.
+    const shrinkagePrior = getTunedParam('cognition-recalibration', 'shrinkagePrior', SHRINK_PRIOR);
+    const shrinkage = n / (n + shrinkagePrior);
     const rawCorrection = rawObservedRate - predictedMean;
     const correction = rawCorrection * shrinkage;
     const calibratedValue = predictedMean + correction;

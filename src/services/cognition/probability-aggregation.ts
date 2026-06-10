@@ -45,6 +45,8 @@
  * Per docs/COGNITIVE_ENHANCEMENT_PLAN.md PR 3.
  */
 
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Default extremization sharpening parameter (Good Judgment Project empirical). */
@@ -251,7 +253,11 @@ export function aggregate(estimates: readonly Estimate[]): AggregationResult {
   const gmo = geoMeanOfOdds(safeEstimates);
 
   // Step 2: Extremize (may be a no-op depending on spread/n conditions).
-  const extremized = extremize(gmo, DEFAULT_K, spread, safeEstimates.length);
+  // Read k and spread-skip threshold from tunable store at call time.
+  // In Node.js test env (no localStorage) these return the declared defaults.
+  const tunedK = getTunedParam('superforecast', 'extremizationK', DEFAULT_K);
+  const tunedSpreadSkip = getTunedParam('superforecast', 'spreadSkipThreshold', SPREAD_SKIP_THRESHOLD);
+  const extremized = extremize(gmo, tunedK, spread, safeEstimates.length);
   const wasExtremized = Math.abs(extremized - gmo) > 0.001;
 
   // Step 3: Clamp.
@@ -265,15 +271,15 @@ export function aggregate(estimates: readonly Estimate[]): AggregationResult {
   let extremizeNote: string;
   if (safeEstimates.length < MIN_ESTIMATES_FOR_EXTREMIZE) {
     extremizeNote = `extremization skipped (only ${safeEstimates.length} estimate(s) — need ≥${MIN_ESTIMATES_FOR_EXTREMIZE})`;
-  } else if (spread > SPREAD_SKIP_THRESHOLD) {
-    extremizeNote = `extremization skipped (spread=${pct(spread)} > ${pct(SPREAD_SKIP_THRESHOLD)} threshold — high disagreement)`;
+  } else if (spread > tunedSpreadSkip) {
+    extremizeNote = `extremization skipped (spread=${pct(spread)} > ${pct(tunedSpreadSkip)} threshold — high disagreement)`;
   } else if (wasExtremized) {
-    extremizeNote = `extremized ${pct(gmo)} → ${pct(extremized)} (k=${DEFAULT_K})`;
+    extremizeNote = `extremized ${pct(gmo)} → ${pct(extremized)} (k=${tunedK})`;
   } else {
     extremizeNote = `extremized ${pct(gmo)} (no movement, already near center)`;
   }
 
-  const disagreementNote = spread > SPREAD_SKIP_THRESHOLD
+  const disagreementNote = spread > tunedSpreadSkip
     ? `⚠ high spread (${pct(spread)}) — estimates disagree significantly`
     : spread > 0.15
       ? `moderate spread (${pct(spread)})`

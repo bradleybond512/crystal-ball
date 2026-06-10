@@ -29,6 +29,7 @@ import { embed, maybeUpgradeEmbedding } from './embedding-provider';
 import { topK } from './vector-index';
 import type { IndexedVector } from './vector-index';
 import { isGhostMode } from '@/services/mode-manager';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // getMemory/putMemory are IDB-backed and may not be available in pure Node.js
 // tests. The injectible storage option below lets tests bypass them.
@@ -102,6 +103,13 @@ export interface EpisodicMemoryOptions {
   putMemoryFn?: <T>(key: string, value: T) => Promise<void>;
   /** Override Date.now() for deterministic timestamps in tests. */
   now?: () => number;
+  /**
+   * Override minimum cosine similarity for analog qualification.
+   * When set, bypasses the tunable-params-store read so tests stay pure
+   * (no localStorage access). Production reads from the tunable store
+   * at call time via getTunedParam('episodic-analog', 'minSim', 0.45).
+   */
+  minSim?: number;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -109,7 +117,10 @@ export interface EpisodicMemoryOptions {
 const STORAGE_KEY = 'crystalball-cognition-episodic-v1';
 const MAX_EPISODES = 2_000;
 const DEFAULT_K = 5;
-const MIN_SIM = 0.45;
+/** Default minSim — the hardcoded value before this was made tunable.
+ *  Production reads from tunable-params-store at call time. Tests inject
+ *  via configureForTests({ minSim }) to avoid touching localStorage. */
+const DEFAULT_MIN_SIM = 0.45;
 const MIN_RECALLS_FOR_ANALOG = 3;
 const EVENT_NAME = 'cb:episodic-recall';
 
@@ -124,6 +135,14 @@ let _storage: EpisodicStorageLike | null | undefined = undefined; // undefined =
 let _getMemoryOverride: (<T>(key: string) => Promise<T | null>) | null = null;
 let _putMemoryOverride: (<T>(key: string, value: T) => Promise<void>) | null = null;
 let _nowFn: (() => number) = Date.now;
+/** Injected minSim override (tests only). undefined = read from tunable store. */
+let _minSimOverride: number | undefined = undefined;
+
+/** Current effective minSim — reads from the tunable store unless overridden by tests. */
+function effectiveMinSim(): number {
+  if (_minSimOverride !== undefined) return _minSimOverride;
+  return getTunedParam('episodic-analog', 'minSim', DEFAULT_MIN_SIM);
+}
 
 // ── ID generation ─────────────────────────────────────────────────────────────
 
@@ -375,7 +394,7 @@ export async function recall(
     tier: ep.tier,
   }));
 
-  const results = topK(queryVec, corpusVecs, k, MIN_SIM);
+  const results = topK(queryVec, corpusVecs, k, effectiveMinSim());
 
   // Extract query entities/domains for explanation (heuristic: parse from text).
   // In real wiring these come from hypothesis-entities; here we approximate.
@@ -433,7 +452,7 @@ export async function recallWithContext(
     tier: ep.tier,
   }));
 
-  const results = topK(queryVec, corpusVecs, k, MIN_SIM);
+  const results = topK(queryVec, corpusVecs, k, effectiveMinSim());
 
   const recalls: Recall[] = results.flatMap(({ id, similarity }) => {
     const ep = episodes.find(e => e.id === id);
@@ -467,7 +486,7 @@ export async function recallWithContext(
  * in each Recall's `explanation` field; the caller can surface it in the HUD.
  */
 export function analogScoreFor(recalls: readonly Recall[]): number | null {
-  const qualified = recalls.filter(r => r.similarity >= MIN_SIM && r.episode.outcome !== undefined);
+  const qualified = recalls.filter(r => r.similarity >= effectiveMinSim() && r.episode.outcome !== undefined);
   if (qualified.length < MIN_RECALLS_FOR_ANALOG) return null;
 
   let weightedSum = 0;
@@ -517,6 +536,7 @@ export function configureForTests(opts: EpisodicMemoryOptions): void {
   _getMemoryOverride = opts.getMemoryFn ?? null;
   _putMemoryOverride = opts.putMemoryFn ?? null;
   _nowFn = opts.now ?? Date.now;
+  _minSimOverride = opts.minSim;
 }
 
 /** Reset module state for test isolation. */
@@ -529,6 +549,7 @@ export function resetForTests(): void {
   _putMemoryOverride = null;
   _nowFn = Date.now;
   _idCounter = 0;
+  _minSimOverride = undefined;
 }
 
 // ── Module-level analog score cache (for sync forecastAll callers) ────────────

@@ -27,6 +27,7 @@
 
 import { getMemory, putMemory } from '@/services/reasoning-memory';
 import { isGhostMode } from '@/services/mode-manager';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -103,8 +104,20 @@ const MAX_INTERESTS = 200;
 const MIN_TERM_LEN = 4;
 const TOP_TERMS_PER_CONTENT = 8;
 
-/** Weekly half-life: weight halves after 7 days without reinforcement. */
-const INTEREST_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * Default interest decay half-life: 7 days.
+ * The effective value is read from the tunable store at call time via
+ * getTunedParam('operator-ranking', 'interestDecayHalfLifeDays', 7).
+ * In Node.js test environments (no localStorage) the store returns this
+ * default, keeping half-life math tests valid.
+ */
+const DEFAULT_INTEREST_HALF_LIFE_DAYS = 7;
+
+/** Compute the current effective interest half-life in ms from the tunable store. */
+function effectiveInterestHalfLifeMs(): number {
+  const days = getTunedParam('operator-ranking', 'interestDecayHalfLifeDays', DEFAULT_INTEREST_HALF_LIFE_DAYS);
+  return days * 24 * 60 * 60 * 1000;
+}
 
 /** Interest weight step sizes. */
 const POSITIVE_STEP = 0.3;
@@ -226,12 +239,16 @@ function extractTerms(text: string): string[] {
 // ── Interest weight helpers ───────────────────────────────────────────────────
 
 /**
- * Apply weekly half-life decay to a weight based on age since last reinforcement.
+ * Apply decay to a weight based on age since last reinforcement.
  * weight × 0.5^(age / half-life)
+ *
+ * The half-life is read from the tunable store at call time
+ * (default: 7 days). Tests that call this with no store override
+ * will see the declared default, keeping half-life math tests valid.
  */
 export function decayWeight(weight: number, lastReinforced: number, nowMs: number): number {
   const ageMs = Math.max(0, nowMs - lastReinforced);
-  const halfLives = ageMs / INTEREST_HALF_LIFE_MS;
+  const halfLives = ageMs / effectiveInterestHalfLifeMs();
   return weight * Math.pow(0.5, halfLives);
 }
 

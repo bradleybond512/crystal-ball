@@ -20,6 +20,7 @@
  */
 
 import type { HypothesisKind } from '@/services/analyst-loop';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -370,8 +371,12 @@ export function blendWithEpisodic(
     };
   }
 
-  // Episodic weight: analogN / (analogN + 5).
-  const episodicWeight = analogN / (analogN + 5);
+  // Episodic weight: analogN / (analogN + blendConstant).
+  // blendConstant is a Bayesian pseudo-count read from the tunable store at
+  // call time (default 5). In Node.js test environments with no localStorage
+  // the store returns the declared default, keeping tests pure.
+  const blendConstant = getTunedParam('episodic-analog', 'analogBlendConstant', 5);
+  const episodicWeight = analogN / (analogN + blendConstant);
   const blended = staticRate * (1 - episodicWeight) + analogScore * episodicWeight;
 
   const direction = blended > staticRate ? 'elevated' : blended < staticRate ? 'reduced' : 'unchanged';

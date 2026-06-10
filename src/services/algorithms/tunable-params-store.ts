@@ -90,6 +90,138 @@ const DECLARATIONS: readonly TunableDeclaration[] = [
     // not gate any notification rung, suppression window, or bypass.
     affectsNotifications: false,
   },
+
+  // ── Cognition layer tunables (PR 12) ──────────────────────────────────
+  // These eight knobs expose the constants in src/services/cognition/
+  // that were identified as high-leverage tuning targets. The bounds
+  // come directly from docs/COGNITIVE_ENHANCEMENT_PLAN.md PR 12 section.
+  // None of these directly gate a notification rung or suppression window,
+  // so affectsNotifications is false for all of them.
+
+  {
+    algorithmId: 'episodic-analog',
+    parameterId: 'minSim',
+    default: 0.45,
+    min: 0.30,
+    max: 0.60,
+    step: 0.05,
+    // When episodic recall quality degrades (too many low-quality analogs),
+    // raise the threshold to require tighter semantic similarity before a
+    // recall qualifies for the analog score. Lower it if the system can't
+    // find enough analogs to produce a score (recall = null too often).
+    fixDirection: 'increase',
+    description: 'Minimum cosine similarity for an episode to qualify as an analog (episodic recall threshold).',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'episodic-analog',
+    parameterId: 'analogBlendConstant',
+    default: 5,
+    min: 3,
+    max: 10,
+    step: 1,
+    // The Bayesian pseudo-count in blendWithEpisodic: rate weight =
+    // analogN / (analogN + constant). Larger constant means the static
+    // base rate dominates until many analogs accumulate. Tune down if
+    // episodic data is trustworthy; tune up if base rates are more reliable.
+    fixDirection: 'increase',
+    description: 'Pseudo-count denominator for blending episodic analog score with static base rate.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'cognition-recalibration',
+    parameterId: 'shrinkagePrior',
+    default: 10,
+    min: 5,
+    max: 20,
+    step: 1,
+    // Laplace shrinkage: bin correction is shrunk by n/(n + prior). A
+    // larger prior means bin corrections require more data before they
+    // move the calibrated probability. Tune up when small bins
+    // over-correct; tune down when the calibration curve is too flat.
+    fixDirection: 'increase',
+    description: 'Laplace shrinkage pseudo-count for per-bin calibration corrections.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'superforecast',
+    parameterId: 'extremizationK',
+    default: 1.3,
+    min: 1.0,
+    max: 1.8,
+    step: 0.1,
+    // Extremization sharpening exponent. k=1 is identity; larger values
+    // push aggregated probabilities toward 0 or 1. Tune up when the
+    // system is underconfident (calibration shows predicted probs cluster
+    // near 0.5 more than observed rates warrant); tune down when it's
+    // over-confident or high spread makes sharpening unsafe.
+    fixDirection: 'decrease',
+    description: 'Extremization sharpening exponent k (p\' = p^k / (p^k + (1-p)^k)).',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'superforecast',
+    parameterId: 'spreadSkipThreshold',
+    default: 0.25,
+    min: 0.15,
+    max: 0.40,
+    step: 0.05,
+    // When spread (max-min of estimates) exceeds this, extremization is
+    // skipped because high disagreement means sharpening is unsafe. Tune
+    // up to permit extremization even when forecasters disagree more;
+    // tune down to skip extremization more conservatively.
+    fixDirection: 'increase',
+    description: 'Spread threshold above which extremization is skipped (high-disagreement guard).',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'entity-trajectory',
+    parameterId: 'heatHalfLifeHours',
+    default: 72,
+    min: 24,
+    max: 168,
+    step: 12,
+    // Half-life of entity heat decay. Shorter half-life makes entity
+    // heat decay quickly (fast-breaking events dominate, old events
+    // rapidly forgotten). Longer half-life maintains heat for slow-
+    // moving geopolitical or market situations. Tune down when entity
+    // heat is too "sticky" and old events crowd out fresh signals.
+    fixDirection: 'decrease',
+    description: 'Entity heat score exponential decay half-life in hours.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'operator-ranking',
+    parameterId: 'interestDecayHalfLifeDays',
+    default: 7,
+    min: 3,
+    max: 21,
+    step: 1,
+    // Half-life of operator interest weight decay. Shorter half-life
+    // makes the operator model track only very recent engagement.
+    // Longer half-life makes interests more persistent. Tune down if
+    // operator interests shift rapidly; tune up for domain experts.
+    fixDirection: 'increase',
+    description: 'Operator interest weight decay half-life in days.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'episodic-analog',
+    parameterId: 'consolidationClusterThreshold',
+    default: 0.6,
+    min: 0.5,
+    max: 0.75,
+    step: 0.05,
+    // Cosine similarity threshold for greedy episode clustering during
+    // memory consolidation. Higher threshold → tighter clusters, more
+    // specific learned schemas. Lower threshold → broader clusters,
+    // more general schemas. Tune down if consolidation rarely finds
+    // clusters large enough to learn from; tune up if schemas are too
+    // coarse-grained.
+    fixDirection: 'increase',
+    description: 'Cosine similarity threshold for greedy episode clustering during memory consolidation.',
+    affectsNotifications: false,
+  },
 ];
 
 type Store = Record<string, number>; // `${algorithmId}:${parameterId}` -> value

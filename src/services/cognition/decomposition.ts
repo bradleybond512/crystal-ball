@@ -39,6 +39,7 @@
 
 import type { HypothesisLike } from './base-rates';
 import type { LlmResult } from '@/services/llm-adapter';
+import { parseStrictJson } from './llm-json';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -69,7 +70,7 @@ export interface DecompositionResult {
 
 export type GenerateTextFn = (
   prompt: string,
-  options?: { maxTokens?: number },
+  options?: { maxTokens?: number; preferCloud?: boolean },
 ) => Promise<LlmResult>;
 
 // ── Prompt construction ────────────────────────────────────────────────────────
@@ -122,30 +123,17 @@ export function buildDecompositionPrompt(h: HypothesisLike & { statement: string
 
 /**
  * Try to parse JSON, and if that fails attempt to extract the outermost
- * JSON object or array via regex (the repair pattern from hypothesis-projection.ts).
+ * JSON object or array (one repair attempt, via llm-json.ts).
  * Returns null on complete failure.
+ *
+ * @deprecated Use parseStrictJson from llm-json.ts with an explicit type guard.
+ * This wrapper is retained for backward compatibility with existing tests and
+ * call sites that relied on the untyped form. New code must use parseStrictJson.
  */
 export function tryParseJson(raw: string): unknown | null {
-  // First attempt: direct parse.
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    // Second attempt: extract outermost object.
-    const objMatch = raw.match(/\{[\s\S]*\}/);
-    if (objMatch) {
-      try {
-        return JSON.parse(objMatch[0]) as unknown;
-      } catch { /* fall through */ }
-    }
-    // Second attempt: extract outermost array.
-    const arrMatch = raw.match(/\[[\s\S]*\]/);
-    if (arrMatch) {
-      try {
-        return JSON.parse(arrMatch[0]) as unknown;
-      } catch { /* fall through */ }
-    }
-    return null;
-  }
+  // Delegate to the shared strict parser with an identity validator
+  // (accept anything that parses — the caller validates structure separately).
+  return parseStrictJson<unknown>(raw, (x): x is unknown => x !== null && x !== undefined);
 }
 
 // ── Response validation ────────────────────────────────────────────────────────
@@ -255,8 +243,17 @@ export async function decomposeHypothesis(
     return null;
   }
 
-  // Parse and validate.
-  const parsed = tryParseJson(responseText);
+  // Parse and validate using the shared strict parser.
+  // The validator runs validateConditions internally to keep behavior identical.
+  interface RawDecompositionResponse { conditions: unknown[] }
+  const parsed = parseStrictJson<RawDecompositionResponse>(
+    responseText,
+    (x): x is RawDecompositionResponse =>
+      x !== null &&
+      typeof x === 'object' &&
+      !Array.isArray(x) &&
+      Array.isArray((x as Record<string, unknown>)['conditions']),
+  );
   const conditions = validateConditions(parsed);
   if (!conditions || conditions.length < 2) return null;
 

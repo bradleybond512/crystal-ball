@@ -540,6 +540,7 @@ import { ForeignFightersPanel } from '@/components/ForeignFightersPanel';
 import { EscalationLadderPanel } from '@/components/EscalationLadderPanel';
 import { ResourceNationalismPanel } from '@/components/ResourceNationalismPanel';
 import { CoerciveDiplomacyPanel } from '@/components/CoerciveDiplomacyPanel';
+import { DiplomaticSignalsPanel } from '@/components/DiplomaticSignalsPanel';
 import { TreatySurveillancePanel } from '@/components/TreatySurveillancePanel';
 import { SeabedWarfarePanel } from '@/components/SeabedWarfarePanel';
 import { InternationalLawViolationsPanel } from '@/components/InternationalLawViolationsPanel';
@@ -1784,6 +1785,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['escalation-ladder'] = new EscalationLadderPanel();
  this.ctx.panels['resource-nationalism'] = new ResourceNationalismPanel();
  this.ctx.panels['coercive-diplomacy'] = new CoerciveDiplomacyPanel();
+ this.ctx.panels['diplomatic-signals'] = new DiplomaticSignalsPanel();
  this.ctx.panels['treaty-surveillance'] = new TreatySurveillancePanel();
  this.ctx.panels['seabed-warfare'] = new SeabedWarfarePanel();
  this.ctx.panels['intl-law-violations'] = new InternationalLawViolationsPanel();

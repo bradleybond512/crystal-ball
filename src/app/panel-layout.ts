@@ -12,6 +12,7 @@ import {
   MonitorPanel,
   EconomicPanel,
   GdeltIntelPanel,
+  GdeltPanel,
   LiveNewsPanel,
   LiveWebcamsPanel,
   CIIPanel,
@@ -1315,6 +1316,9 @@ export class PanelLayoutManager implements AppModule {
 
  const gdeltIntelPanel = new GdeltIntelPanel();
  this.ctx.panels['gdelt-intel'] = gdeltIntelPanel;
+
+ const gdeltPanel = new GdeltPanel();
+ this.ctx.panels['gdelt-monitor'] = gdeltPanel;
 
  const geoHubsPanel = new GeoHubsPanel();
  geoHubsPanel.setOnHubClick(focusGeoHub);

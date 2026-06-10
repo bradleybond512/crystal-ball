@@ -269,6 +269,98 @@ function cachedFetch(key, ttlMs, fetcher) {
   return promise;
 }
 
+// ── GDELT 2.0 media-intelligence summary ────────────────────────────────
+// Mirror of mapGdeltResponse in src/components/gdelt-helpers.ts. The free
+// GDELT DOC API exposes tone (mode=timelinetone) and an article list
+// (mode=artlist) as JSON; the theme/person/org rollups live only on the
+// HTML-only summary endpoint. So we derive tone from the latest timelinetone
+// value, locations from article sourcecountry frequency, and themes from a
+// transparent keyword tally over real headlines. People/orgs stay empty
+// rather than being fabricated. Keep GDELT_THEME_SIGNALS in sync with the TS.
+const GDELT_DOC_URL = 'https://api.gdeltproject.org/api/v2/doc/doc';
+const GDELT_QUERY = 'conflict OR protest OR military';
+const GDELT_THEME_SIGNALS = [
+  ['Conflict & Violence', /\b(war|wars|attack|attacks|strike|strikes|clash|clashes|fighting|killed|kills|troops|missile|missiles|shelling|combat|offensive)\b/i],
+  ['Protest & Unrest', /\b(protest|protests|riot|riots|unrest|rally|uprising|demonstration|demonstrations)\b/i],
+  ['Military & Defense', /\b(military|army|navy|defense|defence|nato|weapon|weapons|drone|drones|warship|warships|deploy|deployment)\b/i],
+  ['Economy & Trade', /\b(economy|economic|inflation|trade|tariff|tariffs|market|markets|recession|currency|sanction|sanctions)\b/i],
+  ['Diplomacy', /\b(talks|summit|treaty|negotiation|negotiations|diplomat|diplomatic|ceasefire|accord|envoy)\b/i],
+  ['Disaster & Crisis', /\b(flood|floods|earthquake|storm|storms|wildfire|wildfires|hurricane|disaster|drought|famine)\b/i],
+  ['Energy', /\b(oil|gas|pipeline|fuel|nuclear|grid|electricity|electric)\b/i],
+  ['Security & Terror', /\b(terror|terrorist|bomb|bombing|hostage|insurgent|insurgency|extremist|militant|militants|kidnap)\b/i],
+];
+
+let _gdeltLastGood = null; // last successful summary — served stale on throttle
+
+async function gdeltDocJson(params) {
+  const url = `${GDELT_DOC_URL}?${new URLSearchParams(params).toString()}`;
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(12_000),
+    headers: { 'user-agent': 'CrystalBall/1.0 (media intelligence panel)' },
+  });
+  if (!res.ok) throw new Error(`GDELT ${res.status}`);
+  const text = await res.text();
+  const trimmed = text.replace(/^﻿/, '').trimStart();
+  // GDELT throttle / error responses come back as plaintext or HTML.
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    throw new Error('GDELT returned non-JSON (throttled?)');
+  }
+  return JSON.parse(trimmed);
+}
+
+function gdeltLatestTone(toneJson) {
+  const series = Array.isArray(toneJson?.timeline) ? toneJson.timeline[0] : null;
+  const data = Array.isArray(series?.data) ? series.data : [];
+  let tone = 0;
+  for (const p of data) {
+    if (p && typeof p === 'object' && typeof p.value === 'number' && Number.isFinite(p.value)) {
+      tone = p.value;
+    }
+  }
+  return tone;
+}
+
+function gdeltMapSummary(toneJson, artJson, fetchedAt) {
+  const articles = Array.isArray(artJson?.articles) ? artJson.articles : [];
+  const countryCounts = new Map();
+  const themeCounts = new Map();
+  for (const a of articles) {
+    if (!a || typeof a !== 'object') continue;
+    const country = typeof a.sourcecountry === 'string' ? a.sourcecountry.trim() : '';
+    if (country) countryCounts.set(country, (countryCounts.get(country) || 0) + 1);
+    const title = typeof a.title === 'string' ? a.title : '';
+    if (title) {
+      for (const [label, pattern] of GDELT_THEME_SIGNALS) {
+        if (pattern.test(title)) themeCounts.set(label, (themeCounts.get(label) || 0) + 1);
+      }
+    }
+  }
+  const topLocations = [...countryCounts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+  const topThemes = [...themeCounts.entries()]
+    .map(([theme, count]) => ({ theme, count }))
+    .sort((a, b) => b.count - a.count);
+  return { tone: gdeltLatestTone(toneJson), topThemes, topLocations, topPeople: [], topOrgs: [], fetchedAt };
+}
+
+async function fetchGdeltSummary() {
+  // Two sequential calls spaced to respect GDELT's 1-request/5s throttle.
+  // Runs at most once per 15-minute cache window. Tone is the headline
+  // signal — if the (secondary) article list throttles, still return
+  // tone-only so the panel stays useful.
+  const toneJson = await gdeltDocJson({ query: GDELT_QUERY, mode: 'timelinetone', timespan: '7d', format: 'json' });
+  let artJson = { articles: [] };
+  try {
+    await new Promise((r) => setTimeout(r, 5500));
+    artJson = await gdeltDocJson({ query: GDELT_QUERY, mode: 'artlist', maxrecords: '75', timespan: '24h', format: 'json', sort: 'datedesc' });
+  } catch { /* keep tone-only this cycle; locations/themes refill next refresh */ }
+  const summary = gdeltMapSummary(toneJson, artJson, new Date().toISOString());
+  _gdeltLastGood = summary;
+  return summary;
+}
+
 // Pre-compiled regex patterns (avoid re-creation in hot paths)
 const RE_HTML_TAGS = /<[^>]+>/g;
 
@@ -5653,6 +5745,22 @@ async function dispatch(requestUrl, req, routes, context) {
     if (!entry) return json({ commodity, forecast: null, available: false });
     const ageMs = Date.now() - s.updatedAt;
     return json({ commodity, forecast: entry.forecast, riskLevel: entry.riskLevel, trend: entry.trend, ageMs, available: true });
+  }
+
+  // GET /api/gdelt/summary — GDELT 2.0 global media intelligence, cached 15
+  // min (matches GDELT's 15-minute update cadence). Proxied server-side so the
+  // strict 1-request/5s throttle is hit once per window, not once per client.
+  if (requestUrl.pathname === '/api/gdelt/summary' && req.method === 'GET') {
+    try {
+      const data = await cachedFetch('gdelt-summary-v1', 15 * 60 * 1000, fetchGdeltSummary);
+      return json(data, 200, makeCorsHeaders(req));
+    } catch (err) {
+      // Throttled and no fresh cache — serve last-good if we have one.
+      if (_gdeltLastGood) {
+        return json({ ..._gdeltLastGood, stale: true }, 200, makeCorsHeaders(req));
+      }
+      return json({ error: `GDELT unavailable: ${String(err)}` }, 502, makeCorsHeaders(req));
+    }
   }
 
   // ── Supply Chain Disruption — renderer POSTs state, MCP reads it back ────

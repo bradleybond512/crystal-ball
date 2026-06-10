@@ -335,6 +335,7 @@ import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
 import { EventStorePanel } from '@/components/EventStorePanel';
 import { BeliefCalibrationPanel } from '@/components/BeliefCalibrationPanel';
+import { WatchboardPanel } from '@/components/WatchboardPanel';
 import { OutcomeLedgerPanel } from '@/components/OutcomeLedgerPanel';
 import { BiasDetectionPanel } from '@/components/BiasDetectionPanel';
 import { ContradictionDetectorPanel } from '@/components/ContradictionDetectorPanel';
@@ -1628,6 +1629,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
  this.ctx.panels['event-store'] = new EventStorePanel();
  this.ctx.panels['belief-calibration'] = new BeliefCalibrationPanel();
+ this.ctx.panels['watchboards'] = new WatchboardPanel();
  this.ctx.panels['outcome-ledger'] = new OutcomeLedgerPanel();
  this.ctx.panels['bias-detection'] = new BiasDetectionPanel();
  this.ctx.panels['contradiction-detector'] = new ContradictionDetectorPanel();

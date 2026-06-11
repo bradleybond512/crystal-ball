@@ -11,6 +11,7 @@
 **Branch & worktree rules (MANDATORY):** This repo's canonical dir is shared by multiple sessions. Do NOT `git checkout -b` in `~/Developer/crystalball` directly. Create a worktree: `git fetch origin && git worktree add .worktrees/claude-observability -b claude/observability-enhancement origin/main`, work there, push to `origin`, open a PR. Commit this plan file as your first commit. Every commit must include `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`. Run `npm run typecheck:all` before claiming any task complete. Stage files by name, never `git add -A`.
 
 **Conventions you must follow:**
+
 - Frontend unit tests: `*.test.mts` next to source in `__tests__/`, run via `tsx --test <files>` npm scripts (see `package.json` `test:*` for examples).
 - Sidecar tests: `src-tauri/sidecar/__tests__/*.test.mjs`, run via `node --test`.
 - Pure modules: no `Date.now()` default deep inside logic — accept `now?: () => number` or a `generatedAt` param like `runReplay` does.
@@ -23,6 +24,7 @@
 ### Task 1: `npm run smoke` script
 
 **Files:**
+
 - Create: `scripts/smoke.mts`
 - Modify: `package.json` (scripts block)
 
@@ -43,6 +45,7 @@ Exit codes: 0 green, 1 warnings only, 2 any failure (same contract as checkup).
 ### Task 2: replay + smoke in CI
 
 **Files:**
+
 - Create: `.github/workflows/smoke.yml`
 - Modify: `package.json` (add `test:replay` alias)
 
@@ -58,6 +61,7 @@ Exit codes: 0 green, 1 warnings only, 2 any failure (same contract as checkup).
 ### Task 3: renderer structured logger
 
 **Files:**
+
 - Create: `src/services/structured-log.ts`
 - Test: `src/services/__tests__/structured-log.test.mts`
 - Modify: `package.json` (extend an existing `test:*` script or add `test:structured-log`)
@@ -106,6 +110,7 @@ export function slog(
 ### Task 4: sidecar file logging with rotation
 
 **Files:**
+
 - Create: `src-tauri/sidecar/sidecar-logger.mjs`
 - Test: `src-tauri/sidecar/__tests__/sidecar-logger.test.mjs`
 - Modify: `src-tauri/sidecar/local-api-server.mjs` (context.logger wiring — read how `context.logger` is constructed first; it currently defaults to `console`)
@@ -126,6 +131,7 @@ export function slog(
 ### Task 5: pure registry
 
 **Files:**
+
 - Create: `src/services/diagnostics/pipeline-trace.ts`
 - Test: `src/services/diagnostics/__tests__/pipeline-trace.test.mts`
 - Modify: `src/services/diagnostics/diagnostics-state.ts` (add singleton getter, mirror the `getNotificationTraceRegistry` pattern at `:53`), `package.json` (append test file to `test:diagnostics`)
@@ -174,6 +180,7 @@ export function createPipelineTraceRegistry(opts?: { cap?: number /* default 500
 ### Task 6: wire trace recording + expose via MCP
 
 **Files:**
+
 - Modify: `src/services/insights/data-bridge.ts` (record `ingested` per bridged event, traceId = the event's stable id — read how `IncomingEvent` ids are built there), `src/services/insights/notification-ladder.ts` host or its caller (record `evaluated` + `routed`; find the caller with `grep -rn "routeBigEventToLadder" src/ --include="*.ts" | grep -v __tests__ | grep -v notification-ladder.ts`), `src/services/sidecar-pusher.ts` (add `pipelineTrace: getPipelineTraceRegistry().snapshot()` to the mirrored state — read the existing payload shape first and match it), `tools/mcp-server/tools/analyst.mjs` (new tool `get_pipeline_trace` reading the mirrored state from `/api/analyst-state`, filterable by domain and `stalledOnly`).
 
 - [ ] **Step 1:** Wire `ingested` in data-bridge with `slog('info','pipeline',...)` alongside (Phase 2 logger, same traceId — this is where traceId and logs join up). Wire `evaluated`/`routed` at the ladder call-site, recording `routed` with `reason: decision.reason` and `detail: { rung: decision.rung, dispatched: decision.dispatched }`.
@@ -189,6 +196,7 @@ export function createPipelineTraceRegistry(opts?: { cap?: number /* default 500
 ### Task 7: pure degradation detector
 
 **Files:**
+
 - Create: `src/services/diagnostics/degradation-alerts.ts`
 - Test: `src/services/diagnostics/__tests__/degradation-alerts.test.mts`
 - Modify: `package.json` (append to `test:diagnostics`)
@@ -225,6 +233,7 @@ Rules: (1) feature healthy→degraded or any→unsafe alerts (unsafe ⇒ safetyC
 ### Task 8: host wiring through the notification ladder
 
 **Files:**
+
 - Modify: `src/app/panel-layout.ts` (a 60 s interval near the existing 30 s provider tick — find it with `grep -n "30" src/app/panel-layout.ts | grep -i interval` or search for `bridgeSourcesToProviderRedundancy`)
 
 Each tick: build `curr` via `aggregateFromRegistries` (see `system-health.ts:100`), run `detectDegradations(prev, curr)`, and for each alert register it on the notification trace registry at domain `'system'` with `urgency: alert.safetyCritical ? 'critical' : 'normal'` and `safetyCritical: alert.safetyCritical` — reuse `routeBigEventToLadder`'s registry-recording shape OR call `registry.register` + `recordEvent` directly (simpler; copy the event sequence from `notification-ladder.ts:95-121`). Dedupe by alert `id` with a session-scoped `Set` so a persistent degradation alerts once, not every minute. Dispatch native notification only for `safetyCritical` alerts (find how existing critical notifications dispatch natively: `grep -rn "hypothesis-notifier" src/services/ | head -3` and reuse that mechanism).
@@ -236,6 +245,7 @@ Each tick: build `curr` via `aggregateFromRegistries` (see `system-health.ts:100
 ### Task 9: persistent reasoning metrics
 
 **Files:**
+
 - Modify: `src/services/reasoning-metrics.ts`
 - Test: extend its existing test file if present (`ls src/services/__tests__/ | grep -i metric`), else create `src/services/__tests__/reasoning-metrics-persist.test.mts`
 
@@ -248,6 +258,7 @@ Counters (not histograms — YAGNI) persist across reloads: on `snapshot()`-shap
 ### Task 10: integrate smoke into checkup + docs
 
 **Files:**
+
 - Modify: `scripts/checkup.mjs` (add replay-baseline check as section 7, reusing the smoke script's baseline-compare function — export it from `scripts/smoke.mts` or duplicate the 10-line compare), `CLAUDE.md` (add `npm run smoke` to the Commands section and one line each for pipeline-trace + degradation-alerts under the diagnostics docs), `docs/ELITE_REMAINING_GAPS_FOR_CLAUDE.md` only if it lists these gaps (check first).
 
 - [ ] **Step 1:** Wire + run `npm run checkup` end-to-end (expect GREEN or pre-existing YELLOWs only).

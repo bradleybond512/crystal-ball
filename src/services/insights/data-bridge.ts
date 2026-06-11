@@ -20,6 +20,7 @@ import {
 import type { IncomingEvent, SavedPlace } from '../personal/personal-impact';
 import type { SituationDescriptor } from './action-briefs';
 import type { ProviderSnapshot, ProviderHealthLevel } from '../diagnostics/provider-redundancy';
+import { slog } from '../structured-log';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -79,6 +80,10 @@ export function bridgeWeatherAlertsToInsights(
 
   const situation = pickActiveSituation(alerts, places);
   setActiveSituation(situation);
+
+  slog('info', 'pipeline', 'bridgeWeatherAlertsToInsights', {
+    fields: { alertsIn: alerts.length, eventsBridged: events.length, hasSituation: situation !== undefined },
+  });
 
   return { events, situation };
 }

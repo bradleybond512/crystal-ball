@@ -328,6 +328,7 @@ import { riverDischargeToObservations, type OpenMeteoFloodForecast } from '@/ser
 import { marineForecastToObservations, type OpenMeteoMarineForecast } from '@/services/intelligence/adapters/marine-forecast-adapter';
 import { fewsNetToObservations, hdxHapiToObservations, type FEWSNETResponse, type HDXHAPIResponse } from '@/services/intelligence/adapters/food-security-adapter';
 import { ingest as ingestObservations, getRecent as getRecentObservations } from '@/services/intelligence/observation-store';
+import { slog } from '@/services/structured-log';
 
 const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_UNSPECIFIED: 'info',
@@ -502,7 +503,10 @@ export class DataLoaderManager implements AppModule {
  try {
  await fn();
  } catch (error) {
- if (!this.ctx.isDestroyed) console.error(`[App] ${name} failed:`, error);
+ if (!this.ctx.isDestroyed) {
+   console.error(`[App] ${name} failed:`, error);
+   slog('error', 'feed', `${name} failed`, { fields: { feed: name, err: String(error).slice(0, 200) } });
+ }
  } finally {
  this.ctx.inFlight.delete(name);
  }

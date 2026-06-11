@@ -21,6 +21,10 @@ import {
   type NotificationTraceRegistry,
 } from './notification-trace';
 import {
+  createPipelineTraceRegistry,
+  type PipelineTraceRegistry,
+} from './pipeline-trace';
+import {
   getDefaultDiagnosticBus,
   type DiagnosticEventBus,
 } from './diagnostic-events';
@@ -32,6 +36,7 @@ import {
 let panels: PanelHealthRegistry | undefined;
 let features: FeatureHealthRegistry | undefined;
 let notifications: NotificationTraceRegistry | undefined;
+let pipeline: PipelineTraceRegistry | undefined;
 let sentinels: FeedSentinel[] | undefined;
 
 export function getPanelHealthRegistry(): PanelHealthRegistry {
@@ -55,6 +60,11 @@ export function getNotificationTraceRegistry(): NotificationTraceRegistry {
   return notifications;
 }
 
+export function getPipelineTraceRegistry(): PipelineTraceRegistry {
+  pipeline ??= createPipelineTraceRegistry();
+  return pipeline;
+}
+
 export function getDiagnosticEventBus(): DiagnosticEventBus {
   return getDefaultDiagnosticBus();
 }
@@ -69,5 +79,6 @@ export function resetDiagnosticsState(): void {
   panels = undefined;
   features = undefined;
   notifications = undefined;
+  pipeline = undefined;
   sentinels = undefined;
 }

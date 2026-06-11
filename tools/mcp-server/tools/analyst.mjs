@@ -95,6 +95,18 @@ export const schemas = {
       'understand throughput, error rates, and where time is being spent.',
     inputSchema: z.object({}),
   },
+  get_pipeline_trace: {
+    description:
+      "Audit trail of facts (alerts, events) tracked through the intelligence " +
+      "pipeline — ingested → scored → clustered → evaluated → routed/dropped. " +
+      "Use to debug why a fact did/didn't trigger a notification. " +
+      "Filter by domain (e.g. 'weather') or stalledOnly=true for stuck facts.",
+    inputSchema: z.object({
+      domain: z.string().optional().describe('Filter by domain (e.g. "weather", "shortage")'),
+      stalledOnly: z.boolean().optional().describe('Return only entries stuck before routed/dropped (default false)'),
+      limit: z.number().optional().describe('Max entries to return (default 25)'),
+    }),
+  },
 };
 
 const RISK_RANK = { low: 0, moderate: 1, high: 2, critical: 3 };
@@ -333,6 +345,43 @@ export function makeAnalystTools(client) {
         latencies: metrics.latencies ?? {},
         counters: metrics.counters ?? {},
         snapshotTimestamp: new Date(metrics.timestamp).toISOString(),
+        timestamp: new Date().toISOString(),
+      };
+    },
+
+    async get_pipeline_trace(args = {}) {
+      const state = await loadState();
+      if (!state?.available) return unavailable(state, 'Pipeline trace');
+      const trace = state.pipelineTrace;
+      if (!trace) {
+        return {
+          available: true,
+          summary: 'No pipeline trace data yet — the renderer pushes one per analyst cycle.',
+          entries: [],
+          total: 0,
+          timestamp: new Date().toISOString(),
+        };
+      }
+      const stalledOnly = args.stalledOnly === true;
+      const domain = typeof args.domain === 'string' ? args.domain : null;
+      const limit = Math.min(100, Math.max(1, typeof args.limit === 'number' ? args.limit : 25));
+      const TEN_MIN_MS = 10 * 60 * 1000;
+      const now = Date.now();
+      let entries = trace.entries ?? [];
+      if (domain) entries = entries.filter(e => e.domain === domain);
+      if (stalledOnly) {
+        entries = entries.filter(e => {
+          const hasTerminal = e.events.some(ev => ev.stage === 'routed' || ev.stage === 'dropped');
+          return !hasTerminal && (now - e.createdAt) > TEN_MIN_MS;
+        });
+      }
+      const tail = entries.slice(-limit).reverse();
+      return {
+        available: true,
+        summary: tail.length + ' of ' + trace.total + ' trace entries (domain=' + (domain ?? 'all') + ', stalledOnly=' + stalledOnly + ').',
+        stale: state.stale === true,
+        total: trace.total,
+        entries: tail,
         timestamp: new Date().toISOString(),
       };
     },

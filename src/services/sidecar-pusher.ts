@@ -24,6 +24,7 @@ import { getAllThreads } from './hypothesis-threads';
 import { getHotEntities, getEntityMentions } from './hypothesis-entities';
 import { dumpDebug, getErrorCounts, type DebugEntry } from './reasoning-debug';
 import { getMetricsSnapshot, type MetricsSnapshot } from './reasoning-metrics';
+import { getPipelineTraceRegistry } from './diagnostics/diagnostics-state';
 
 const ENDPOINT = '/api/analyst-state';
 
@@ -56,6 +57,8 @@ interface PushPayload {
   debugErrorCounts?: Record<string, number>;
   /** Metrics snapshot (latencies + counters). */
   metrics?: MetricsSnapshot;
+  /** Pipeline trace registry snapshot (fact lifecycle). */
+  pipelineTrace?: ReturnType<ReturnType<typeof getPipelineTraceRegistry>['snapshot']>;
 }
 
 let lastPushAt = 0;
@@ -163,6 +166,7 @@ export function startSidecarPusher(): void {
     pendingPayload.debugLog = dumpDebug().slice(-50);
     pendingPayload.debugErrorCounts = { ...getErrorCounts() };
     pendingPayload.metrics = getMetricsSnapshot();
+    pendingPayload.pipelineTrace = getPipelineTraceRegistry().snapshot();
     schedule();
   });
 
@@ -172,6 +176,7 @@ export function startSidecarPusher(): void {
     // Keep metrics fresh on every cycle — useful for watching forecast op
     // latencies from MCP without waiting for the next analyst cycle.
     pendingPayload.metrics = getMetricsSnapshot();
+    pendingPayload.pipelineTrace = getPipelineTraceRegistry().snapshot();
     schedule();
   });
 

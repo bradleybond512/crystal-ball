@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createSidecarLogger } from './sidecar-logger.mjs';
 import { OfacCache } from './ofac-cache.mjs';
 import http, { createServer } from 'node:http';
 import { timingSafeEqual, randomUUID } from 'node:crypto';
@@ -1730,7 +1731,7 @@ function resolveConfig(options = {}) {
   const dataDir = String(options.dataDir ?? process.env.LOCAL_API_DATA_DIR ?? resourceDir);
   const mode = String(options.mode ?? process.env.LOCAL_API_MODE ?? 'desktop-sidecar');
   const cloudFallback = String(options.cloudFallback ?? process.env.LOCAL_API_CLOUD_FALLBACK ?? '') === 'true';
-  const logger = options.logger ?? console;
+  const logger = options.logger ?? (process.env.CB_SIDECAR_FILE_LOG !== '0' ? createSidecarLogger() : console);
 
   return {
  port,

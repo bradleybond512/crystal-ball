@@ -5,6 +5,8 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
+    "smoke": "tsx scripts/smoke.mts",
+    "smoke:offline": "tsx scripts/smoke.mts --offline",
     "checkup": "node scripts/checkup.mjs",
     "checkup:schedule": "node scripts/install-checkup-schedule.mjs",
     "postinstall": "node scripts/patch-satellite-js.mjs",
@@ -78,6 +80,7 @@
     "test:event-store": "tsx --test src/components/__tests__/event-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/event-store.test.mjs src-tauri/sidecar/__tests__/event-store-wiring.test.mjs",
     "test:diagnostics": "tsx --test src/services/diagnostics/__tests__/diagnostic-events.test.mts src/services/diagnostics/__tests__/panel-health-registry.test.mts src/services/diagnostics/__tests__/feature-health-registry.test.mts src/services/diagnostics/__tests__/system-health.test.mts src/services/diagnostics/__tests__/notification-trace.test.mts src/services/diagnostics/__tests__/export-bundle.test.mts src/services/diagnostics/__tests__/sentinel-feed-audit.test.mts src/services/diagnostics/__tests__/self-test.test.mts src/services/diagnostics/__tests__/provider-redundancy.test.mts",
     "test:mission-bridges": "tsx --test tests/intelligence/mission-bridges/maritime-bridges.test.mts tests/intelligence/mission-bridges/health-bridges.test.mts tests/intelligence/mission-bridges/space-bridges.test.mts",
+    "test:replay": "tsx --test src/services/ops/__tests__/replay-harness.test.mts src/services/ops/__tests__/replay-fixtures-catalog.test.mts",
     "test:ops": "tsx --test src/services/ops/__tests__/mission-ledger.test.mts src/services/ops/__tests__/mission-ledger-persistence.test.mts src/services/ops/__tests__/time-to-warn.test.mts src/services/ops/__tests__/closed-loop-batch.test.mts src/services/ops/__tests__/replay-fixtures-catalog.test.mts src/services/ops/__tests__/replay-harness.test.mts",
     "test:algorithms": "tsx --test src/services/algorithms/__tests__/algorithm-evaluation-ledger.test.mts src/services/algorithms/__tests__/algorithm-health.test.mts src/services/algorithms/__tests__/safe-adjustment.test.mts src/services/algorithms/__tests__/algorithm-registry.test.mts src/services/algorithms/__tests__/algorithm-ledger-persistence.test.mts src/services/algorithms/__tests__/outcome-grading-runner.test.mts src/services/algorithms/__tests__/tunable-params-store.test.mts src/services/algorithms/__tests__/tuning-apply-runner.test.mts src/services/algorithms/__tests__/tuning-decision-log.test.mts src/services/algorithms/__tests__/tracked-negative-evidence-tuning.test.mts src/services/algorithms/__tests__/tuning-safety-fixtures.test.mts",
     "test:insights6": "tsx --test src/services/insights/__tests__/presentation-export.test.mts",

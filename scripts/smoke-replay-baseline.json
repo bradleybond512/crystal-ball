@@ -1,0 +1,9 @@
+{
+  "fixtures": {
+    "fixture-fixture-late-severe-wind-2025-late_warning": "fail",
+    "fixture-fixture-silent-tornado-polygon-2025-external_discovery": "fail",
+    "fixture-fixture-fuel-stress-late-2025-late_warning": "fail",
+    "fixture-fixture-quiet-hours-suppression-2025-external_discovery": "fail",
+    "fixture-fixture-adsb-outage-2025-external_discovery": "inapplicable"
+  }
+}

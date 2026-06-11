@@ -28,6 +28,13 @@ function resolveRetentionMonths(explicit) {
   return 3;
 }
 
+// Escape SQL LIKE metacharacters (\ % _) so a caller-supplied token matches
+// literally under an `ESCAPE '\'` clause. Backslash is escaped first.
+const LIKE_ESCAPE_CHAR = String.fromCodePoint(92); // single backslash
+function escapeLikePattern(s) {
+  return String(s).replace(/[\\%_]/g, (c) => LIKE_ESCAPE_CHAR + c);
+}
+
 function partitionKeyForTimestamp(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) {
@@ -63,6 +70,7 @@ const SCHEMA_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_events_domain ON events(domain)',
   'CREATE INDEX IF NOT EXISTS idx_events_partition ON events(partition_key)',
   'CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type)',
+  'CREATE INDEX IF NOT EXISTS idx_events_source ON events(source_id)',
 ];
 
 export class EventStore {
@@ -73,8 +81,10 @@ export class EventStore {
     this.db.prepare('PRAGMA synchronous = NORMAL').get();
     for (const stmt of SCHEMA_STATEMENTS) this.db.prepare(stmt).run();
     this.retentionMonths = resolveRetentionMonths(retentionMonths);
+    // Plain INSERT — the log is append-only, so a duplicate id must fail closed
+    // rather than silently overwrite prior history (INSERT OR REPLACE would).
     this._insert = this.db.prepare(
-      `INSERT OR REPLACE INTO events
+      `INSERT INTO events
         (id, event_type, occurred_at, domain, entity_ids, source_id, severity, payload, partition_key)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
@@ -98,17 +108,24 @@ export class EventStore {
     }
     if (event.payload == null) throw new Error('appendEvent: payload is required');
     const partitionKey = event.partition_key ?? partitionKeyForTimestamp(event.occurred_at);
-    this._insert.run(
-      event.id,
-      event.event_type,
-      event.occurred_at,
-      event.domain ?? null,
-      typeof event.entity_ids === 'string' ? event.entity_ids : JSON.stringify(event.entity_ids ?? []),
-      event.source_id ?? null,
-      typeof event.severity === 'number' ? event.severity : null,
-      typeof event.payload === 'string' ? event.payload : JSON.stringify(event.payload),
-      partitionKey,
-    );
+    try {
+      this._insert.run(
+        event.id,
+        event.event_type,
+        event.occurred_at,
+        event.domain ?? null,
+        typeof event.entity_ids === 'string' ? event.entity_ids : JSON.stringify(event.entity_ids ?? []),
+        event.source_id ?? null,
+        typeof event.severity === 'number' ? event.severity : null,
+        typeof event.payload === 'string' ? event.payload : JSON.stringify(event.payload),
+        partitionKey,
+      );
+    } catch (error) {
+      if (String(error?.message ?? '').includes('UNIQUE')) {
+        throw new Error(`appendEvent: append-only violation — event id ${event.id} already exists`);
+      }
+      throw error;
+    }
   }
 
   queryEvents(opts = {}) {
@@ -123,10 +140,12 @@ export class EventStore {
       params.push(...opts.eventTypes);
     }
     if (Array.isArray(opts.entityIds) && opts.entityIds.length > 0) {
-      const clauses = opts.entityIds.map(() => 'entity_ids LIKE ?');
+      const clauses = opts.entityIds.map(() => `entity_ids LIKE ? ESCAPE '${LIKE_ESCAPE_CHAR}'`);
       where.push(`(${clauses.join(' OR ')})`);
       // entity_ids is a JSON array string like ["a","b"]; match the quoted token.
-      params.push(...opts.entityIds.map((id) => `%${JSON.stringify(String(id))}%`));
+      // Escape LIKE metachars (% _ \) in the id so they match literally — an id
+      // like "a_c" must not wildcard-match the stored token "abc".
+      params.push(...opts.entityIds.map((id) => `%${escapeLikePattern(JSON.stringify(String(id)))}%`));
     }
     const limit = Number.isFinite(opts.limit) ? Math.max(0, Math.floor(opts.limit)) : DEFAULT_QUERY_LIMIT;
     const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.floor(opts.offset)) : 0;

@@ -1879,6 +1879,71 @@ export class PanelLayoutManager implements AppModule {
  { priority: 'normal', runImmediately: true },
  );
  });
+ // 60 s degradation alerting — compare consecutive system-health snapshots
+ // and route transitions through the notification trace registry.
+ void Promise.all([
+ import('@/services/diagnostics/degradation-alerts'),
+ import('@/services/diagnostics/diagnostics-state'),
+ import('@/services/insights/notification-ladder'),
+ import('@/services/insights/big-event-detector'),
+ import('@/services/structured-log'),
+ import('@/services/diagnostics/recurring-loops'),
+ ]).then(([{ detectDegradations }, {
+   getFeatureHealthRegistry, getPanelHealthRegistry, getNotificationTraceRegistry,
+ }, { routeBigEventToLadder }, { detectBigEvent }, { slog }, { registerRecurringLoop }]) => {
+   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   let prevReport: any = null;
+   const alertedIds = new Set();
+   registerRecurringLoop(
+     'degradation-alerting',
+     () => {
+       try {
+         // Build a minimal SystemHealthReport from registry snapshots.
+         const featureReg = getFeatureHealthRegistry();
+         const panelReg = getPanelHealthRegistry();
+         const ntReg = getNotificationTraceRegistry();
+         const ntSummary = ntReg.summary();
+         const curr = {
+           generatedAt: Date.now(),
+           status: 'unknown' as import('@/services/diagnostics/system-health-types').HealthStatus,
+           summary: '',
+           features: featureReg.all(),
+           panels: panelReg.all(),
+           sources: [],
+           providers: [],
+           notifications: ntSummary,
+           sidecar: { status: 'unknown' as import('@/services/diagnostics/system-health-types').HealthStatus, authenticated: false, reason: '' },
+           recommendations: [],
+         };
+         const newAlerts = detectDegradations(prevReport, curr);
+         prevReport = curr;
+         const registry = ntReg;
+         for (const alert of newAlerts) {
+           if (alertedIds.has(alert.id)) continue;
+           alertedIds.add(alert.id);
+           slog('warn', 'diagnostics', alert.headline, { traceId: alert.id });
+           try {
+             const fakeBigInput = {
+               id: alert.id, domain: 'system', severityScore: alert.safetyCritical ? 95 : 60,
+               truthScore: 1, sourceCount: 1, hasOfficialSource: true,
+               overlappingDomains: ['system'], userExposure: 80, potentialImpact: 80,
+             };
+             const bigEvent = detectBigEvent(fakeBigInput);
+             routeBigEventToLadder(registry, bigEvent, fakeBigInput, {
+               domain: 'system', candidateId: alert.id,
+               headline: alert.headline,
+             });
+           } catch { /* ladder unavailable */ }
+         }
+       } catch (error) {
+         console.warn('[degradation-alerting] tick failed:', error);
+       }
+     },
+     60_000,
+     { priority: 'low', runImmediately: false },
+   );
+ }).catch(() => { /* degradation alerting optional */ });
+
  // Periodic sidecar /api/health probe so System Diagnostic + Command
  // Center reflect actual sidecar reachability. Skips the network
  // call in the web build.

@@ -20,8 +20,6 @@ import {
 import type { IncomingEvent, SavedPlace } from '../personal/personal-impact';
 import type { SituationDescriptor } from './action-briefs';
 import type { ProviderSnapshot, ProviderHealthLevel } from '../diagnostics/provider-redundancy';
-import { slog } from '../structured-log';
-
 // ── Public API ──────────────────────────────────────────────────────────
 
 /** A subset of the `WeatherAlert` shape from `services/weather.ts` —
@@ -68,12 +66,19 @@ const SEVERITY_TO_TIER: Record<WeatherAlertLike['severity'], 'low' | 'medium' | 
   Unknown: 'low',
 };
 
+/** Optional logger callback injected by the host (data-loader / panel-layout).
+ *  Keeps the service-layer pure — no direct slog import. Defaults to a no-op. */
+export type BridgeLogFn = (level: 'debug' | 'info' | 'warn' | 'error', message: string, fields?: Record<string, unknown>) => void;
+
+const _noop: BridgeLogFn = () => undefined;
+
 /** Translate a weather alert list into IncomingEvent[] + push the
  *  highest-severity matching alert as the active situation. */
 export function bridgeWeatherAlertsToInsights(
   alerts: readonly WeatherAlertLike[],
-  options: { savedPlaces?: readonly SavedPlace[] } = {},
+  options: { savedPlaces?: readonly SavedPlace[]; log?: BridgeLogFn } = {},
 ): { events: readonly IncomingEvent[]; situation: SituationDescriptor | undefined } {
+  const log = options.log ?? _noop;
   const places = options.savedPlaces ?? getPersonalProfile().savedPlaces;
   const events: IncomingEvent[] = alerts.map((a) => alertToEvent(a));
   setRecentEvents(events);
@@ -82,12 +87,10 @@ export function bridgeWeatherAlertsToInsights(
   setActiveSituation(situation);
 
   for (const evt of events) {
-    slog('info', 'pipeline', 'ingested', { traceId: evt.eventId, fields: { domain: 'weather', alertsIn: alerts.length } });
+    log('info', 'ingested', { domain: 'weather', alertsIn: alerts.length, traceId: evt.eventId });
   }
   if (events.length === 0) {
-    slog('info', 'pipeline', 'bridgeWeatherAlertsToInsights', {
-      fields: { alertsIn: alerts.length, eventsBridged: 0, hasSituation: false },
-    });
+    log('info', 'bridgeWeatherAlertsToInsights', { alertsIn: alerts.length, eventsBridged: 0, hasSituation: false });
   }
 
   return { events, situation };

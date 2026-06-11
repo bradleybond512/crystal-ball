@@ -1549,7 +1549,10 @@ export class DataLoaderManager implements AppModule {
  // data view.
  try {
  const { bridgeWeatherAlertsToInsights } = await import('@/services/insights/data-bridge');
- const bridgeResult = bridgeWeatherAlertsToInsights(alerts);
+ const { slog: _slog } = await import('@/services/structured-log');
+ const bridgeResult = bridgeWeatherAlertsToInsights(alerts, {
+   log: (level, message, fields) => _slog(level, 'pipeline', message, { fields: fields as Record<string, string | number | boolean | null> | undefined }),
+ });
  // Record ingested stage for each bridged event
  try {
    const { getPipelineTraceRegistry: getPTR } = await import('@/services/diagnostics/diagnostics-state');

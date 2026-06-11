@@ -1920,6 +1920,13 @@ export class PanelLayoutManager implements AppModule {
          const registry = ntReg;
          for (const alert of newAlerts) {
            if (alertedIds.has(alert.id)) continue;
+           // Cap the dedupe Set to prevent unbounded memory growth.
+           // When exceeded, rebuild from the most recent 250 entries.
+           if (alertedIds.size >= 500) {
+             const entries = Array.from(alertedIds);
+             alertedIds.clear();
+             for (const e of entries.slice(-250)) alertedIds.add(e);
+           }
            alertedIds.add(alert.id);
            slog('warn', 'diagnostics', alert.headline, { traceId: alert.id });
            try {

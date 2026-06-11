@@ -73,36 +73,38 @@ export function slog(
     now?: () => number;
   },
 ): void {
-  const at = (opts?.now ?? (() => Date.now()))();
-  const record: SlogRecord = { at, level, category, message, traceId: opts?.traceId, fields: opts?.fields };
-  const line = formatRecord(record);
+  try {
+    const at = (opts?.now ?? (() => Date.now()))();
+    const record: SlogRecord = { at, level, category, message, traceId: opts?.traceId, fields: opts?.fields };
+    const line = formatRecord(record);
 
-  // Console fan-out — debug only in DEV
-  /* eslint-disable no-console */
-  if (level === 'debug') {
-    if (import.meta.env.DEV) {
-      console.debug(line);
+    // Console fan-out — debug only in DEV
+    /* eslint-disable no-console */
+    if (level === 'debug') {
+      if (import.meta.env.DEV) {
+        console.debug(line);
+      }
+    } else if (level === 'info') {
+      console.info(line);
+    } else if (level === 'warn') {
+      console.warn(line);
+    } else {
+      console.error(line);
     }
-  } else if (level === 'info') {
-    console.info(line);
-  } else if (level === 'warn') {
-    console.warn(line);
-  } else {
-    console.error(line);
-  }
-  /* eslint-enable no-console */
+    /* eslint-enable no-console */
 
-  // Breadcrumb ring buffer
-  recordBreadcrumb(
-    LEVEL_TO_BREADCRUMB[level],
-    category,
-    message.slice(0, 200),
-    opts?.fields as Record<string, unknown> | undefined,
-  );
+    // Breadcrumb ring buffer
+    recordBreadcrumb(
+      LEVEL_TO_BREADCRUMB[level],
+      category,
+      message.slice(0, 200),
+      opts?.fields as Record<string, unknown> | undefined,
+    );
 
-  // Desktop log (warn + error only)
-  if (level in LEVEL_TO_DESKTOP) {
-    const desktopLevel = LEVEL_TO_DESKTOP[level as keyof typeof LEVEL_TO_DESKTOP];
-    logToDesktop(desktopLevel, message, opts?.fields as Record<string, unknown> | undefined);
-  }
+    // Desktop log (warn + error only)
+    if (level in LEVEL_TO_DESKTOP) {
+      const desktopLevel = LEVEL_TO_DESKTOP[level as keyof typeof LEVEL_TO_DESKTOP];
+      logToDesktop(desktopLevel, message, opts?.fields as Record<string, unknown> | undefined);
+    }
+  } catch { /* slog must never throw */ }
 }

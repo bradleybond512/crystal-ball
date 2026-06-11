@@ -13,6 +13,8 @@ import { escapeHtml } from '@/utils/sanitize';
 const FRESHNESS_ICON = { fresh: '✓', aging: '◷', stale: '⚠' } as const;
 const FRESHNESS_COLOR = { fresh: '#4ade80', aging: '#fbbf24', stale: '#f87171' } as const;
 
+const num = (n: number): string => n.toLocaleString('en-US');
+
 export class OpenSanctionsPanel extends Panel {
   private stats: SanctionsStats | null = null;
 
@@ -40,8 +42,6 @@ export class OpenSanctionsPanel extends Panel {
       this.setContent('<div class="panel-empty">No sanctions coverage data available.</div>');
       return;
     }
-
-    const num = (n: number): string => n.toLocaleString('en-US');
 
     const coverage = [
       ['Datasets', `${num(stats.totalDatasets)} sources`],

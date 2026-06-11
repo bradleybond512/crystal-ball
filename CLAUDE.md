@@ -98,6 +98,8 @@ Action Briefs (`reaction-playbooks.ts` + `action-briefs.ts`) are now rendered in
 
 - `npm run docs:check` runs `scripts/check-docs-freshness.mjs` to flag README/docs that are out of step with the source (panel counts, secret-key counts, etc.).
 - `npm run cross-check` (alias `cross-agent:check`) runs `scripts/cross-agent-check.mjs` to identify the required cross-agent reviewer for the current branch (Claude → Codex, Codex → Claude). The `.github/workflows/cross-agent-review.yml` workflow blocks merge of `claude/*` / `codex/*` / `copilot/*` branches without a recorded cross-agent review.
+- `src/services/diagnostics/pipeline-trace.ts` — fact lifecycle registry tracking each `traceId` through stages `ingested→scored→clustered→evaluated→routed|dropped`; `stalled()` surfaces entries stuck in mid-flight.
+- `src/services/diagnostics/degradation-alerts.ts` — pure detector: compares two `SystemHealthReport` snapshots, emits `DegradationAlert` for feature healthy→degraded/unsafe, panel →stale/failing, and unsafeSuppressions increase. Safety-critical alerts have `safetyCritical: true`.
 
 ## Foundation Intelligence Layers
 
@@ -125,6 +127,8 @@ Plan invariants honored across all four layers:
 npm run desktop:build:full   # full production build
 npm run typecheck:all        # type-check both tsconfig.json + tsconfig.api.json (must stay at zero errors)
 npm run dev                  # vite dev server (web only, no Tauri)
+npm run smoke                # three-tier smoke test: replay baseline + pipeline invariants + sidecar probe
+npm run smoke:offline        # same but skips live sidecar probe (safe in CI / offline)
 npm run release:prepare -- --bump patch --push   # only supported release path
 ```
 

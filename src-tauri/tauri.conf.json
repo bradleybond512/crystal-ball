@@ -58,6 +58,7 @@
     "resources": [
       "../api",
       "sidecar/local-api-server.mjs",
+      "sidecar/event-store.mjs",
       "sidecar/sitrep-severity.mjs",
       "sidecar/sitrep-filter.mjs",
       "sidecar/s2u-xmpp.bundle.mjs",

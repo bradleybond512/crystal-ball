@@ -53,9 +53,78 @@ export function recordLatency(op: string, latencyMs: number): void {
   if (arr.length > SAMPLES_PER_OP) arr.splice(0, arr.length - SAMPLES_PER_OP);
 }
 
+// ── Persistence (counter snapshot) ───────────────────────────────────────────
+
+const COUNTERS_KEY = 'cb-reasoning-counters-v1';
+const PERSIST_DEBOUNCE_MS = 10_000;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let countersLoaded = false;
+
+function scheduleCounterPersist(): void {
+  if (persistTimer !== null) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    void persistCounters();
+  }, PERSIST_DEBOUNCE_MS);
+  // Don't hold the Node event loop open in tests.
+  const t = persistTimer as unknown as { unref?: () => void };
+  if (typeof t?.unref === 'function') t.unref();
+}
+
+async function persistCounters(): Promise<void> {
+  try {
+    const { putMemory } = await import('./reasoning-memory');
+    const snap: Record<string, number> = {};
+    for (const [k, v] of counters) snap[k] = v;
+    await putMemory(COUNTERS_KEY, snap);
+  } catch { /* IDB unavailable — not a hard failure */ }
+}
+
+function hydrateCounters(stored: Record<string, number>): void {
+  for (const [k, v] of Object.entries(stored)) {
+    counters.set(k, (counters.get(k) ?? 0) + v);
+  }
+}
+
+function loadCounters(): void {
+  if (countersLoaded) return;
+  countersLoaded = true;
+  void import('./reasoning-memory')
+    .then(({ getMemory }) => getMemory<Record<string, number>>(COUNTERS_KEY))
+    .then((stored) => {
+      if (stored !== null && typeof stored === 'object') hydrateCounters(stored);
+    })
+    .catch(() => { /* IDB unavailable */ });
+}
+
+// ── Test-only APIs ────────────────────────────────────────────────────────────
+
+/** Inject a counter snapshot directly (for tests that can't use real IDB). */
+export function initCountersForTest(stored: Record<string, number>): Promise<void> {
+  countersLoaded = true; // prevent real IDB load from clobbering
+  hydrateCounters(stored);
+  return Promise.resolve();
+}
+
+/** Synchronously flush pending debounced persist to a callback (for tests). */
+export function flushCountersForTest(
+  persist: (counters: Record<string, number>) => void,
+): Promise<void> {
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  const snap: Record<string, number> = {};
+  for (const [k, v] of counters) snap[k] = v;
+  persist(snap);
+  return Promise.resolve();
+}
+
 /** Increment a named counter. */
 export function incrementCounter(name: string, by = 1): void {
+  loadCounters();
   counters.set(name, (counters.get(name) ?? 0) + by);
+  scheduleCounterPersist();
 }
 
 /** Time an async op and record its latency; errors still count (and throw). */
@@ -137,6 +206,11 @@ export function getMetricsSnapshot(): MetricsSnapshot {
 export function resetMetrics(): void {
   latencies.clear();
   counters.clear();
+  countersLoaded = false;
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────

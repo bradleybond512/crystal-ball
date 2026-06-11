@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { formatRecord } from '../structured-log.ts';
+import { formatRecord, slog } from '../structured-log.ts';
 import type { SlogRecord } from '../structured-log.ts';
 
 function base(overrides: Partial<SlogRecord> = {}): SlogRecord {
@@ -56,4 +56,26 @@ test('formatRecord: stable key order — at, level, cat, msg', () => {
   assert.equal(keys[1], 'level');
   assert.equal(keys[2], 'cat');
   assert.equal(keys[3], 'msg');
+});
+
+// ── slog() resilience ──────────────────────────────────────────────────
+
+test('slog: does not throw when now() throws', () => {
+  assert.doesNotThrow(() => {
+    slog('info', 'test', 'should not throw', {
+      now: () => { throw new Error('clock broken'); },
+    });
+  });
+});
+
+test('slog: does not throw when fields contain a circular reference', () => {
+  // formatRecord / JSON.stringify will throw on circular refs.
+  // slog must swallow it.
+  assert.doesNotThrow(() => {
+    const circular: Record<string, unknown> = {};
+    circular['self'] = circular;
+    // fields must be Record<string, string|number|boolean|null> per the type,
+    // but at runtime we can pass anything — the point is no throw.
+    slog('warn', 'test', 'circular', { fields: circular as never });
+  });
 });

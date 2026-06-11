@@ -104,3 +104,58 @@ test('throwing fs append does not propagate', () => {
   // Should not throw
   assert.doesNotThrow(() => logger.info('this will silently fail'));
 });
+
+test('circular-ref field does not propagate', () => {
+  const dir = makeTmpDir();
+  const logger = createSidecarLogger({ dir });
+  const circular = {};
+  circular.self = circular;
+  assert.doesNotThrow(() => logger.info('circular', circular));
+});
+
+test('BigInt field does not propagate', () => {
+  const dir = makeTmpDir();
+  const logger = createSidecarLogger({ dir });
+  assert.doesNotThrow(() => logger.warn('bigint', { n: 9_007_199_254_740_993n }));
+});
+
+test('throwing injected console does not propagate', () => {
+  const dir = makeTmpDir();
+  const throwingConsole = {
+    warn: () => { throw new Error('console.warn broken'); },
+    error: () => { throw new Error('console.error broken'); },
+  };
+  const logger = createSidecarLogger({ dir, console: throwingConsole });
+  assert.doesNotThrow(() => logger.warn('will trigger console.warn'));
+  assert.doesNotThrow(() => logger.error('will trigger console.error'));
+});
+
+// ── log() method (alias of info) ───────────────────────────────────────
+
+test('returned logger has info, warn, error, and log methods', () => {
+  const dir = makeTmpDir();
+  const logger = createSidecarLogger({ dir });
+  assert.equal(typeof logger.info, 'function', 'info must be callable');
+  assert.equal(typeof logger.warn, 'function', 'warn must be callable');
+  assert.equal(typeof logger.error, 'function', 'error must be callable');
+  assert.equal(typeof logger.log, 'function', 'log must be callable');
+});
+
+test('log() writes at info level', () => {
+  const dir = makeTmpDir();
+  const logger = createSidecarLogger({ dir });
+  logger.log('via log method', { x: 1 });
+  const content = readLog(dir);
+  assert.ok(content, 'log file must exist');
+  const parsed = JSON.parse(content.trim().split('\n')[0]);
+  assert.equal(parsed.level, 'info');
+  assert.equal(parsed.msg, 'via log method');
+});
+
+test('child logger also has log() method', () => {
+  const dir = makeTmpDir();
+  const logger = createSidecarLogger({ dir });
+  const child = logger.child({ component: 'test' });
+  assert.equal(typeof child.log, 'function', 'child.log must be callable');
+  assert.doesNotThrow(() => child.log('child log call'));
+});

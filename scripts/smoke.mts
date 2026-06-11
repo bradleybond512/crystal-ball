@@ -25,6 +25,9 @@ import { createNotificationTraceRegistry } from '../src/services/diagnostics/not
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE_PATH = path.join(root, 'scripts', 'smoke-replay-baseline.json');
 const SIDECAR_URL = 'http://127.0.0.1:46123/api/health';
+// Guard: only run the smoke suite when executed directly (not when imported).
+// This lets checkup.mjs import compareReplayBaseline without running the suite.
+const isMain = process.argv[1] != null && import.meta.url.endsWith(path.basename(process.argv[1]));
 const offline = process.argv.includes('--offline');
 
 // ── Colour helpers ──────────────────────────────────────────────────────
@@ -38,161 +41,163 @@ const RESET  = '[0m';
 const dim  = (s: string) => `${DIM}${s}${RESET}`;
 const bold = (s: string) => `${BOLD}${s}${RESET}`;
 
-// ── Shared state ────────────────────────────────────────────────────────
-const issues: { label: string; detail: string }[] = [];
-const warnings: { label: string; detail: string }[] = [];
-const passes: { label: string; detail: string }[] = [];
+if (isMain) {
+  // ── Shared state ────────────────────────────────────────────────────────
+  const issues: { label: string; detail: string }[] = [];
+  const warnings: { label: string; detail: string }[] = [];
+  const passes: { label: string; detail: string }[] = [];
 
-function addOk(label: string, detail = '')   { passes.push({ label, detail }); }
-function addWarn(label: string, detail = '') { warnings.push({ label, detail }); }
-function addFail(label: string, detail = '') { issues.push({ label, detail }); }
+  function addOk(label: string, detail = '')   { passes.push({ label, detail }); }
+  function addWarn(label: string, detail = '') { warnings.push({ label, detail }); }
+  function addFail(label: string, detail = '') { issues.push({ label, detail }); }
 
-// ── Tier 1: Replay baseline ────────────────────────────────────────────
-process.stdout.write(dim('  replay baseline... '));
-try {
-  if (!existsSync(BASELINE_PATH)) {
-    addFail('smoke:replay', `Baseline file not found: ${BASELINE_PATH}`);
-    process.stdout.write(`${RED}✗ (no baseline)${RESET}\n`);
-  } else {
-    const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as {
-      fixtures: Record<string, string>;
-    };
-    const result = runReplay({ fixtures: buildCatalogReplayFixtures(), generatedAt: 0 });
-    const mismatches: string[] = [];
-    for (const r of result.results) {
-      const expected = baseline.fixtures[r.fixtureId];
-      if (expected === undefined) {
-        mismatches.push(`${r.fixtureId}: new fixture not in baseline (expected missing)`);
-      } else if (r.outcome !== expected) {
-        mismatches.push(`${r.fixtureId}: expected ${expected}, got ${r.outcome}`);
-      }
-    }
-    // Also flag baselines that no longer have a matching fixture
-    for (const id of Object.keys(baseline.fixtures)) {
-      if (!result.results.some(r => r.fixtureId === id)) {
-        mismatches.push(`${id}: in baseline but no matching fixture`);
-      }
-    }
-    if (mismatches.length > 0) {
-      addFail('smoke:replay', `${mismatches.length} baseline mismatch(es):\n    ${mismatches.join('\n    ')}\nUpdate scripts/smoke-replay-baseline.json to acknowledge intentional changes.`);
-      process.stdout.write(`${RED}✗ (${mismatches.length} mismatch)${RESET}\n`);
+  // ── Tier 1: Replay baseline ────────────────────────────────────────────
+  process.stdout.write(dim('  replay baseline... '));
+  try {
+    if (!existsSync(BASELINE_PATH)) {
+      addFail('smoke:replay', `Baseline file not found: ${BASELINE_PATH}`);
+      process.stdout.write(`${RED}✗ (no baseline)${RESET}\n`);
     } else {
-      addOk('smoke:replay', `${result.results.length} fixture(s) match baseline`);
-      process.stdout.write(`${GREEN}✓ (${result.results.length} fixtures)${RESET}\n`);
-    }
-  }
-} catch (err) {
-  addFail('smoke:replay', String(err));
-  process.stdout.write(`${RED}✗ (error)${RESET}\n`);
-}
-
-// ── Tier 2: Pipeline invariants ────────────────────────────────────────
-process.stdout.write(dim('  pipeline invariants... '));
-try {
-  resetNotificationLadderState();
-
-  // Invariant (a): safety-critical + quiet hours → still dispatched
-  const criticalInput = {
-    id: 'smoke-a',
-    domain: 'weather' as const,
-    severityScore: 95,
-    truthScore: 0.9,
-    sourceCount: 5,
-    hasOfficialSource: true,
-    overlappingDomains: ['weather', 'emergency'],
-    userExposure: 90,
-    potentialImpact: 90,
-  };
-  const criticalResult = detectBigEvent(criticalInput, { threshold: 40 });
-  const registryA = createNotificationTraceRegistry({ now: () => 1_000_000 });
-  const decisionA = routeBigEventToLadder(registryA, criticalResult, criticalInput, {
-    domain: 'weather',
-    quietHoursActive: true,
-    quietHoursBypassEnabled: false,
-    now: () => 1_000_000,
-  });
-  assert.equal(decisionA.dispatched, true, 'safety-critical event must be dispatched even during quiet hours');
-  assert.equal(decisionA.unsafeSuppression, false, 'dispatched safety-critical must not be unsafeSuppression');
-
-  // Invariant (b): low-tier + dedupe match → suppressed, unsafeSuppression false
-  const lowInput = {
-    id: 'smoke-b',
-    domain: 'weather' as const,
-    severityScore: 15,
-    truthScore: 0.3,
-    sourceCount: 1,
-    hasOfficialSource: false,
-    overlappingDomains: ['weather'],
-    userExposure: 10,
-    potentialImpact: 10,
-  };
-  const lowResult = detectBigEvent(lowInput, { threshold: 40 });
-  const registryB = createNotificationTraceRegistry({ now: () => 2_000_000 });
-  const decisionB = routeBigEventToLadder(registryB, lowResult, lowInput, {
-    domain: 'weather',
-    dedupeMatch: true,
-    now: () => 2_000_000,
-  });
-  assert.equal(decisionB.dispatched, false, 'low-tier deduped event must be suppressed');
-  assert.equal(decisionB.unsafeSuppression, false, 'low-tier dedupe suppression is not unsafe');
-
-  addOk('smoke:pipeline', 'critical+quiet-hours dispatched, low+dedupe suppressed safely');
-  process.stdout.write(`${GREEN}✓${RESET}\n`);
-} catch (err) {
-  addFail('smoke:pipeline', String(err));
-  process.stdout.write(`${RED}✗ (${String(err).split('\n')[0]})${RESET}\n`);
-}
-
-// ── Tier 3: Live sidecar probe ─────────────────────────────────────────
-if (offline) {
-  process.stdout.write(dim('  sidecar... skipped (--offline)\n'));
-} else {
-  process.stdout.write(dim('  sidecar... '));
-  await new Promise<void>((resolve_) => {
-    const req = http.get(SIDECAR_URL, { timeout: 2000 }, (res) => {
-      let body = '';
-      res.on('data', (chunk: Buffer) => { body += String(chunk); });
-      res.on('end', () => {
-        try {
-          JSON.parse(body);
-          addOk('smoke:sidecar', 'responding');
-          process.stdout.write(`${GREEN}✓${RESET}\n`);
-        } catch {
-          addWarn('smoke:sidecar', 'responded but returned non-JSON');
-          process.stdout.write(`${YELLOW}–${RESET}\n`);
+      const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as {
+        fixtures: Record<string, string>;
+      };
+      const result = runReplay({ fixtures: buildCatalogReplayFixtures(), generatedAt: 0 });
+      const mismatches: string[] = [];
+      for (const r of result.results) {
+        const expected = baseline.fixtures[r.fixtureId];
+        if (expected === undefined) {
+          mismatches.push(`${r.fixtureId}: new fixture not in baseline (expected missing)`);
+        } else if (r.outcome !== expected) {
+          mismatches.push(`${r.fixtureId}: expected ${expected}, got ${r.outcome}`);
         }
+      }
+      // Also flag baselines that no longer have a matching fixture
+      for (const id of Object.keys(baseline.fixtures)) {
+        if (!result.results.some(r => r.fixtureId === id)) {
+          mismatches.push(`${id}: in baseline but no matching fixture`);
+        }
+      }
+      if (mismatches.length > 0) {
+        addFail('smoke:replay', `${mismatches.length} baseline mismatch(es):\n    ${mismatches.join('\n    ')}\nUpdate scripts/smoke-replay-baseline.json to acknowledge intentional changes.`);
+        process.stdout.write(`${RED}✗ (${mismatches.length} mismatch)${RESET}\n`);
+      } else {
+        addOk('smoke:replay', `${result.results.length} fixture(s) match baseline`);
+        process.stdout.write(`${GREEN}✓ (${result.results.length} fixtures)${RESET}\n`);
+      }
+    }
+  } catch (err) {
+    addFail('smoke:replay', String(err));
+    process.stdout.write(`${RED}✗ (error)${RESET}\n`);
+  }
+
+  // ── Tier 2: Pipeline invariants ────────────────────────────────────────
+  process.stdout.write(dim('  pipeline invariants... '));
+  try {
+    resetNotificationLadderState();
+
+    // Invariant (a): safety-critical + quiet hours → still dispatched
+    const criticalInput = {
+      id: 'smoke-a',
+      domain: 'weather' as const,
+      severityScore: 95,
+      truthScore: 0.9,
+      sourceCount: 5,
+      hasOfficialSource: true,
+      overlappingDomains: ['weather', 'emergency'],
+      userExposure: 90,
+      potentialImpact: 90,
+    };
+    const criticalResult = detectBigEvent(criticalInput, { threshold: 40 });
+    const registryA = createNotificationTraceRegistry({ now: () => 1_000_000 });
+    const decisionA = routeBigEventToLadder(registryA, criticalResult, criticalInput, {
+      domain: 'weather',
+      quietHoursActive: true,
+      quietHoursBypassEnabled: false,
+      now: () => 1_000_000,
+    });
+    assert.equal(decisionA.dispatched, true, 'safety-critical event must be dispatched even during quiet hours');
+    assert.equal(decisionA.unsafeSuppression, false, 'dispatched safety-critical must not be unsafeSuppression');
+
+    // Invariant (b): low-tier + dedupe match → suppressed, unsafeSuppression false
+    const lowInput = {
+      id: 'smoke-b',
+      domain: 'weather' as const,
+      severityScore: 15,
+      truthScore: 0.3,
+      sourceCount: 1,
+      hasOfficialSource: false,
+      overlappingDomains: ['weather'],
+      userExposure: 10,
+      potentialImpact: 10,
+    };
+    const lowResult = detectBigEvent(lowInput, { threshold: 40 });
+    const registryB = createNotificationTraceRegistry({ now: () => 2_000_000 });
+    const decisionB = routeBigEventToLadder(registryB, lowResult, lowInput, {
+      domain: 'weather',
+      dedupeMatch: true,
+      now: () => 2_000_000,
+    });
+    assert.equal(decisionB.dispatched, false, 'low-tier deduped event must be suppressed');
+    assert.equal(decisionB.unsafeSuppression, false, 'low-tier dedupe suppression is not unsafe');
+
+    addOk('smoke:pipeline', 'critical+quiet-hours dispatched, low+dedupe suppressed safely');
+    process.stdout.write(`${GREEN}✓${RESET}\n`);
+  } catch (err) {
+    addFail('smoke:pipeline', String(err));
+    process.stdout.write(`${RED}✗ (${String(err).split('\n')[0]})${RESET}\n`);
+  }
+
+  // ── Tier 3: Live sidecar probe ─────────────────────────────────────────
+  if (offline) {
+    process.stdout.write(dim('  sidecar... skipped (--offline)\n'));
+  } else {
+    process.stdout.write(dim('  sidecar... '));
+    await new Promise<void>((resolve_) => {
+      const req = http.get(SIDECAR_URL, { timeout: 2000 }, (res) => {
+        let body = '';
+        res.on('data', (chunk: Buffer) => { body += String(chunk); });
+        res.on('end', () => {
+          try {
+            JSON.parse(body);
+            addOk('smoke:sidecar', 'responding');
+            process.stdout.write(`${GREEN}✓${RESET}\n`);
+          } catch {
+            addWarn('smoke:sidecar', 'responded but returned non-JSON');
+            process.stdout.write(`${YELLOW}–${RESET}\n`);
+          }
+          resolve_();
+        });
+      });
+      req.on('error', () => {
+        addWarn('smoke:sidecar', 'not reachable — start the app or run `npm run dev` first');
+        process.stdout.write(`${YELLOW}–${RESET}\n`);
+        resolve_();
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        addWarn('smoke:sidecar', 'connection timed out (2s)');
+        process.stdout.write(`${YELLOW}–${RESET}\n`);
         resolve_();
       });
     });
-    req.on('error', () => {
-      addWarn('smoke:sidecar', 'not reachable — start the app or run `npm run dev` first');
-      process.stdout.write(`${YELLOW}–${RESET}\n`);
-      resolve_();
-    });
-    req.on('timeout', () => {
-      req.destroy();
-      addWarn('smoke:sidecar', 'connection timed out (2s)');
-      process.stdout.write(`${YELLOW}–${RESET}\n`);
-      resolve_();
-    });
-  });
-}
+  }
 
-// ── Report ───────────────────────────────────────────────────────────────
-const exitCode = issues.length > 0 ? 2 : warnings.length > 0 ? 1 : 0;
-const statusColor = exitCode === 0 ? GREEN : exitCode === 1 ? YELLOW : RED;
-const statusLabel = exitCode === 0 ? 'GREEN' : exitCode === 1 ? 'YELLOW' : 'RED';
-console.log(`\n${bold(`─── Crystal Ball Smoke ─── ${statusColor}${statusLabel}${RESET}`)}`);
-for (const p of passes) {
-  console.log(`  ${GREEN}✓${RESET} ${p.label}${p.detail ? `  ${DIM}${p.detail}${RESET}` : ''}`);
+  // ── Report ───────────────────────────────────────────────────────────────
+  const exitCode = issues.length > 0 ? 2 : warnings.length > 0 ? 1 : 0;
+  const statusColor = exitCode === 0 ? GREEN : exitCode === 1 ? YELLOW : RED;
+  const statusLabel = exitCode === 0 ? 'GREEN' : exitCode === 1 ? 'YELLOW' : 'RED';
+  console.log(`\n${bold(`─── Crystal Ball Smoke ─── ${statusColor}${statusLabel}${RESET}`)}`);
+  for (const p of passes) {
+    console.log(`  ${GREEN}✓${RESET} ${p.label}${p.detail ? `  ${DIM}${p.detail}${RESET}` : ''}`);
+  }
+  for (const w of warnings) {
+    console.log(`  ${YELLOW}⚠${RESET} ${w.label}${w.detail ? `  ${DIM}${w.detail}${RESET}` : ''}`);
+  }
+  for (const f of issues) {
+    console.log(`  ${RED}✗${RESET} ${f.label}${f.detail ? `\n    ${f.detail}` : ''}`);
+  }
+  process.exit(exitCode);
 }
-for (const w of warnings) {
-  console.log(`  ${YELLOW}⚠${RESET} ${w.label}${w.detail ? `  ${DIM}${w.detail}${RESET}` : ''}`);
-}
-for (const f of issues) {
-  console.log(`  ${RED}✗${RESET} ${f.label}${f.detail ? `\n    ${f.detail}` : ''}`);
-}
-process.exit(exitCode);
 
 /** Re-export for checkup.mjs to call directly without re-running the full smoke. */
 export function compareReplayBaseline(): { ok: boolean; mismatches: string[] } {

@@ -62,10 +62,7 @@ export function createSidecarLogger(opts = {}) {
     try { if (existsSync(logPath)) renameSync(logPath, join(dir, 'sidecar.log.1')); } catch { /* ignore */ }
   }
 
-  function write(level, msg, fields) {
-    const record = { at: now(), level, msg, ...fields };
-    const line = JSON.stringify(record) + '\n';
-
+  function appendLine(line) {
     try {
       mkdirSync(dir, { recursive: true });
       // Check size before append
@@ -74,25 +71,55 @@ export function createSidecarLogger(opts = {}) {
         if (size >= maxBytes) rotate();
       } catch { /* file doesn't exist yet, skip */ }
       appendFileSync(logPath, line, 'utf8');
+      // Post-write rotation: if the file grew past maxBytes after append,
+      // rotate now so the log can never grow unbounded. Concurrent-instance
+      // races may cause slightly early/late rotation — that is acceptable.
+      try {
+        const sizeAfter = statSync(logPath).size;
+        if (sizeAfter >= maxBytes) rotate();
+      } catch { /* ignore */ }
     } catch { /* never propagate */ }
+  }
 
-    // Console mirror for warn/error
-    if (level === 'warn') {
-      con.warn(`[sidecar] ${msg}`, fields ?? '');
-    } else if (level === 'error') {
-      con.error(`[sidecar] ${msg}`, fields ?? '');
+  function mirrorToConsole(level, msg, fields) {
+    // Throwing injected console must not propagate.
+    try {
+      if (level === 'warn') {
+        con.warn(`[sidecar] ${msg}`, fields ?? '');
+      } else if (level === 'error') {
+        con.error(`[sidecar] ${msg}`, fields ?? '');
+      }
+    } catch { /* never propagate */ }
+  }
+
+  function write(level, msg, fields) {
+    // Serialize inside try/catch — circular refs or BigInt fields must not throw.
+    let line;
+    try {
+      const record = { at: now(), level, msg, ...fields };
+      line = JSON.stringify(record) + '\n';
+    } catch {
+      try {
+        line = JSON.stringify({ at: Date.now(), level, msg, _serializeErr: true }) + '\n';
+      } catch { /* give up on the line */ }
     }
+
+    if (line !== undefined) appendLine(line);
+    mirrorToConsole(level, msg, fields);
   }
 
   return {
     info(msg, fields) { write('info', msg, fields); },
     warn(msg, fields) { write('warn', msg, fields); },
     error(msg, fields) { write('error', msg, fields); },
+    /** Alias of info — provided so callers using logger.log() work correctly. */
+    log(msg, fields) { write('info', msg, fields); },
     child(extra) {
       return {
         info(msg, fields) { write('info', msg, { ...extra, ...fields }); },
         warn(msg, fields) { write('warn', msg, { ...extra, ...fields }); },
         error(msg, fields) { write('error', msg, { ...extra, ...fields }); },
+        log(msg, fields) { write('info', msg, { ...extra, ...fields }); },
       };
     },
   };

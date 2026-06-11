@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { OfacCache } from './ofac-cache.mjs';
 import http, { createServer } from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, randomUUID } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
 import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync } from 'node:fs';
@@ -35,6 +35,60 @@ import {
 } from './sms-command-parser.mjs';
 import { buildRecentChanges } from './recent-changes.mjs';
 import { explain as explainEvent } from './explainer.mjs';
+import { EventStore } from './event-store.mjs';
+
+// ── Temporal World Store append helpers ──
+// These translate the renderer's observation/situation shapes into EventRecords
+// and append them to the event log. They never throw into the caller: an event
+// log write must not break live ingestion.
+const EVENT_SEVERITY_SCORES = { CRITICAL: 0.95, HIGH: 0.85, MEDIUM: 0.7, LOW: 0.55, INFO: 0.4 };
+
+function eventSeverityScore(label) {
+  const k = String(label ?? '').toUpperCase();
+  return k in EVENT_SEVERITY_SCORES ? EVENT_SEVERITY_SCORES[k] : null;
+}
+
+export function appendObservationToEventStore(store, obs) {
+  if (!store) return;
+  try {
+    const occurredAt = typeof obs?.timestamp === 'number' && obs.timestamp > 0
+      ? new Date(obs.timestamp).toISOString()
+      : new Date().toISOString();
+    store.appendEvent({
+      id: randomUUID(),
+      event_type: 'observation',
+      occurred_at: occurredAt,
+      domain: typeof obs?.domain === 'string' && obs.domain ? obs.domain : null,
+      entity_ids: JSON.stringify(Array.isArray(obs?.entityIds) ? obs.entityIds.map(String) : []),
+      source_id: typeof obs?.sourceId === 'string' && obs.sourceId ? obs.sourceId : null,
+      severity: eventSeverityScore(obs?.severity),
+      payload: JSON.stringify(obs ?? {}),
+    });
+  } catch { /* event log write must never break ingestion */ }
+}
+
+export function appendSituationToEventStore(store, situation) {
+  if (!store) return;
+  try {
+    const status = String(situation?.status ?? '');
+    const eventType = status === 'resolved' || status === 'closed' ? 'situation_closed' : 'situation_created';
+    const occurredAt = new Date(situation?.updatedAt ?? situation?.startedAt ?? Date.now()).toISOString();
+    const entityIds = [
+      ...(Array.isArray(situation?.observationIds) ? situation.observationIds : []),
+      ...(Array.isArray(situation?.correlationIds) ? situation.correlationIds : []),
+    ].map(String);
+    store.appendEvent({
+      id: randomUUID(),
+      event_type: eventType,
+      occurred_at: occurredAt,
+      domain: typeof situation?.domain === 'string' ? situation.domain : null,
+      entity_ids: JSON.stringify(entityIds),
+      source_id: 'situation-store',
+      severity: eventSeverityScore(situation?.severity),
+      payload: JSON.stringify(situation ?? {}),
+    });
+  } catch { /* event log write must never break ingestion */ }
+}
 
 let _smsConfig = loadSmsConfig();
 const _smsRateLimitMap = new Map();
@@ -5880,6 +5934,7 @@ async function dispatch(requestUrl, req, routes, context) {
         }));
         if (!context._intelligenceObs) context._intelligenceObs = [];
         context._intelligenceObs = safe;
+        for (const obs of safe) appendObservationToEventStore(context.eventStore, obs);
         return json({ ok: true, count: safe.length });
       } catch (error) {
         return json({ error: String(error?.message || error) }, 400);
@@ -5897,6 +5952,56 @@ async function dispatch(requestUrl, req, routes, context) {
       return json({ observations: filtered, total: obs.length });
     }
     return json({ error: 'Method not allowed' }, 405);
+  }
+
+  // ── Temporal World Store HTTP API (events.db) ──────────────────────────
+  // query / count / health (read) + prune (manual maintenance). Returns 503
+  // when the store failed to initialize so callers can degrade gracefully.
+  if (requestUrl.pathname === '/api/events/query' && req.method === 'GET') {
+    if (!context.eventStore) return json({ error: 'event store unavailable' }, 503);
+    const p = requestUrl.searchParams;
+    const list = (v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined);
+    const limitRaw = parseInt(p.get('limit') ?? '', 10);
+    const offsetRaw = parseInt(p.get('offset') ?? '', 10);
+    const events = context.eventStore.queryEvents({
+      from: p.get('from') ?? undefined,
+      to: p.get('to') ?? undefined,
+      domain: p.get('domain') ?? undefined,
+      eventTypes: list(p.get('eventTypes') ?? p.get('eventType')),
+      entityIds: list(p.get('entityIds')),
+      sourceId: p.get('sourceId') ?? undefined,
+      limit: Number.isFinite(limitRaw) ? Math.min(Math.max(1, limitRaw), 5000) : undefined,
+      offset: Number.isFinite(offsetRaw) ? Math.max(0, offsetRaw) : undefined,
+    });
+    return json({ events, count: events.length });
+  }
+
+  if (requestUrl.pathname === '/api/events/count' && req.method === 'GET') {
+    if (!context.eventStore) return json({ error: 'event store unavailable' }, 503);
+    const p = requestUrl.searchParams;
+    const count = context.eventStore.getEventCount({
+      domain: p.get('domain') ?? undefined,
+      from: p.get('from') ?? undefined,
+      to: p.get('to') ?? undefined,
+    });
+    return json({ count });
+  }
+
+  if (requestUrl.pathname === '/api/events/health' && req.method === 'GET') {
+    if (!context.eventStore) return json({ error: 'event store unavailable' }, 503);
+    return json({ ...context.eventStore.health(), retentionMonths: context.eventStore.retentionMonths });
+  }
+
+  if (requestUrl.pathname === '/api/events/prune' && req.method === 'POST') {
+    if (!context.eventStore) return json({ error: 'event store unavailable' }, 503);
+    let body = null;
+    try { const raw = await readBody(req); body = raw ? JSON.parse(raw.toString()) : null; } catch { body = null; }
+    const months = Number(body?.months);
+    if (!Number.isFinite(months) || months < 0) {
+      return json({ error: 'months must be a non-negative number' }, 400);
+    }
+    const deleted = context.eventStore.pruneOlderThan(months);
+    return json({ ok: true, deleted });
   }
 
   // ── /api/intelligence/playbook — pure-data playbook lookup ──────────────
@@ -15428,6 +15533,22 @@ export async function createLocalApiServer(options = {}) {
   const ofacCache = new OfacCache({ dataDir: context.dataDir });
   context.ofacCache = ofacCache;
 
+  // ── Temporal World Store — append-only event log (events.db) ──
+  // Foundational v3.0 store: observations + situation transitions are appended
+  // here for anomaly detection, forecasting, and counterfactual replay.
+  try {
+    const eventStore = new EventStore({ dataDir: context.dataDir });
+    context.eventStore = eventStore;
+    const deleted = eventStore.pruneOlderThan(eventStore.retentionMonths);
+    if (deleted > 0) {
+      context.logger?.warn?.(`[event-store] startup prune removed ${deleted} events older than ${eventStore.retentionMonths} months`);
+    }
+  } catch (error) {
+    // A failed event store must not take down the whole sidecar.
+    context.logger?.error?.('[event-store] failed to initialize', String(error?.message || error));
+    context.eventStore = null;
+  }
+
   const server = createServer(async (req, res) => {
  const requestUrl = new URL(req.url || '/', `http://127.0.0.1:${context.port}`);
  // Rewrite alias paths to their canonical handlers (see ROUTE_ALIASES).
@@ -15565,6 +15686,7 @@ export async function createLocalApiServer(options = {}) {
        res.end(JSON.stringify({ error: result.error }));
        return;
      }
+     appendSituationToEventStore(context.eventStore, result.situation);
      res.writeHead(201, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
      res.end(JSON.stringify({ situation: result.situation }));
      return;

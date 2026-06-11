@@ -8,7 +8,7 @@
 import type { AppContext } from '@/app/app-context';
 import { fetchSavedPlaceWeather, getSavedPlaces } from '@/services';
 import { fetchGlobalWeather } from '@/services/global-weather';
-import { fetchRecentSanctions } from '@/services/opensanctions';
+import { fetchSanctionsCoverage } from '@/services/opensanctions';
 import { fetchRecentEdgarFilings } from '@/services/sec-edgar';
 import { fetchCommsHealth } from '@/services/comms-health';
 import { fetchGridStatus } from '@/services/power-grid';
@@ -76,8 +76,8 @@ export async function loadGlobalWeather(ctx: AppContext): Promise<void> {
 
 export async function loadOpenSanctions(ctx: AppContext): Promise<void> {
   try {
- const entities = await fetchRecentSanctions();
- (ctx.panels.opensanctions as OpenSanctionsPanel | undefined)?.update(entities);
+ const datasets = await fetchSanctionsCoverage();
+ (ctx.panels.opensanctions as OpenSanctionsPanel | undefined)?.update(datasets);
   } catch (error) {
  // eslint-disable-next-line no-console
  console.warn('[opensanctions] fetch failed', error);

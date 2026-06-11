@@ -135,6 +135,12 @@ jobs:
     name: Auto-merge when checks pass
     needs: auto-pr
     runs-on: ubuntu-latest
+    # enablePullRequestAutoMerge requires contents: write on the token;
+    # the top-level contents: read made every run fail with
+    # "Resource not accessible by integration".
+    permissions:
+      contents: write
+      pull-requests: write
     if: startsWith(github.ref_name, 'claude/') || startsWith(github.ref_name, 'codex/') || startsWith(github.ref_name, 'copilot/') || startsWith(github.ref_name, 'feat/') || startsWith(github.ref_name, 'fix/') || startsWith(github.ref_name, 'chore/')
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10

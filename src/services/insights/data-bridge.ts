@@ -81,9 +81,14 @@ export function bridgeWeatherAlertsToInsights(
   const situation = pickActiveSituation(alerts, places);
   setActiveSituation(situation);
 
-  slog('info', 'pipeline', 'bridgeWeatherAlertsToInsights', {
-    fields: { alertsIn: alerts.length, eventsBridged: events.length, hasSituation: situation !== undefined },
-  });
+  for (const evt of events) {
+    slog('info', 'pipeline', 'ingested', { traceId: evt.eventId, fields: { domain: 'weather', alertsIn: alerts.length } });
+  }
+  if (events.length === 0) {
+    slog('info', 'pipeline', 'bridgeWeatherAlertsToInsights', {
+      fields: { alertsIn: alerts.length, eventsBridged: 0, hasSituation: false },
+    });
+  }
 
   return { events, situation };
 }

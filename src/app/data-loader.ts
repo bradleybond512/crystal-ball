@@ -1549,7 +1549,15 @@ export class DataLoaderManager implements AppModule {
  // data view.
  try {
  const { bridgeWeatherAlertsToInsights } = await import('@/services/insights/data-bridge');
- bridgeWeatherAlertsToInsights(alerts);
+ const bridgeResult = bridgeWeatherAlertsToInsights(alerts);
+ // Record ingested stage for each bridged event
+ try {
+   const { getPipelineTraceRegistry: getPTR } = await import('@/services/diagnostics/diagnostics-state');
+   const ptr = getPTR();
+   for (const evt of bridgeResult.events) {
+     ptr.record(evt.eventId, 'weather', { stage: 'ingested' });
+   }
+ } catch { /* trace unavailable */ }
  } catch (error) {
  console.warn('[data-loader] insights bridge failed:', error);
  }
@@ -1562,7 +1570,7 @@ export class DataLoaderManager implements AppModule {
  const [
  { detectBigEvent },
  { routeBigEventToLadder },
- { getNotificationTraceRegistry },
+ { getNotificationTraceRegistry, getPipelineTraceRegistry },
  { recordAlgorithmEvaluation },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
@@ -1570,6 +1578,7 @@ export class DataLoaderManager implements AppModule {
  import('@/services/diagnostics/diagnostics-state'),
  import('@/services/algorithms/record-evaluation'),
  ]);
+ const pipelineTrace = getPipelineTraceRegistry();
  const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
  const RUNG_ACTION: Record<string, 'sound+banner' | 'banner' | null> = {
  announcement: 'sound+banner',
@@ -1623,7 +1632,11 @@ export class DataLoaderManager implements AppModule {
  detail: { priority: bigEventResult.deliveryPriority, urgency: bigEventResult.urgency },
  });
  } catch { /* ledger unavailable — skip silently */ }
- if (!bigEventResult.isBigEvent) continue;
+ if (!bigEventResult.isBigEvent) {
+   pipelineTrace.record(alert.id, 'weather', { stage: 'evaluated', detail: { isBigEvent: false, tier: bigEventResult.tier } });
+   continue;
+ }
+ pipelineTrace.record(alert.id, 'weather', { stage: 'evaluated', detail: { isBigEvent: true, tier: bigEventResult.tier } });
  const decision = routeBigEventToLadder(registry, bigEventResult, ladderInput, {
  domain: 'weather',
  headline: alert.headline || alert.event,
@@ -1632,6 +1645,7 @@ export class DataLoaderManager implements AppModule {
  quietHoursBypassEnabled: true,
  dedupeMatch: false,
  });
+ pipelineTrace.record(alert.id, 'weather', { stage: 'routed', detail: { rung: decision.rung, dispatched: decision.dispatched } });
  const action = RUNG_ACTION[decision.rung] ?? null;
  if (decision.dispatched && action) {
  notificationDispatcher.dispatchNotification(

@@ -219,6 +219,33 @@ try {
   process.stdout.write(`${RED}✗${RESET}\n`);
 }
 
+// ── 7. Replay baseline ────────────────────────────────────────────────────
+// Inline compare: mirrors compareReplayBaseline() from scripts/smoke.mts
+// to avoid cross-extension dynamic import (.mts from .mjs).
+process.stdout.write(dim('  replay baseline... '));
+const BASELINE_FILE = resolve(root, 'scripts', 'smoke-replay-baseline.json');
+try {
+  if (existsSync(BASELINE_FILE)) {
+    const baseline = JSON.parse(readFileSync(BASELINE_FILE, 'utf8'));
+    // We just verify the file is valid JSON with expected shape; a full replay
+    // run requires tsx — that is deferred to npm run smoke:offline and CI.
+    const fixtureCount = Object.keys(baseline?.fixtures ?? {}).length;
+    if (fixtureCount === 0) {
+      addWarn('smoke:replay', 'Baseline file exists but contains no fixtures');
+      process.stdout.write(`${YELLOW}–${RESET}\n`);
+    } else {
+      addOk('smoke:replay', `Baseline file valid — ${fixtureCount} fixture(s). Run npm run smoke:offline for full check.`);
+      process.stdout.write(`${GREEN}✓${RESET}\n`);
+    }
+  } else {
+    addWarn('smoke:replay', 'No replay baseline file — run: npm run smoke:offline to generate it');
+    process.stdout.write(`${YELLOW}–${RESET}\n`);
+  }
+} catch (error) {
+  addWarn('smoke:replay', `Replay baseline check failed: ${String(error).slice(0, 100)}`);
+  process.stdout.write(`${YELLOW}–${RESET}\n`);
+}
+
 // ── Report ────────────────────────────────────────────────────────────────
 let overallStatus;
 let statusColor;

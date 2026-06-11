@@ -48,6 +48,18 @@ function eventSeverityScore(label) {
   return k in EVENT_SEVERITY_SCORES ? EVENT_SEVERITY_SCORES[k] : null;
 }
 
+// An event-log write must never break live ingestion, but a swallowed failure
+// would let history develop silent gaps. Log at most once a minute per kind so
+// the gap is observable without flooding the sidecar log on a persistent fault.
+const _eventStoreWriteWarnAt = new Map();
+function warnEventStoreWriteFailure(kind, err) {
+  const now = Date.now();
+  const last = _eventStoreWriteWarnAt.get(kind) ?? 0;
+  if (now - last < 60_000) return;
+  _eventStoreWriteWarnAt.set(kind, now);
+  console.warn(`[sidecar] event-store ${kind} append failed: ${String(err?.message ?? err)}`);
+}
+
 export function appendObservationToEventStore(store, obs) {
   if (!store) return;
   try {
@@ -64,7 +76,9 @@ export function appendObservationToEventStore(store, obs) {
       severity: eventSeverityScore(obs?.severity),
       payload: JSON.stringify(obs ?? {}),
     });
-  } catch { /* event log write must never break ingestion */ }
+  } catch (error) {
+    warnEventStoreWriteFailure('observation', error);
+  }
 }
 
 export function appendSituationToEventStore(store, situation) {
@@ -87,7 +101,9 @@ export function appendSituationToEventStore(store, situation) {
       severity: eventSeverityScore(situation?.severity),
       payload: JSON.stringify(situation ?? {}),
     });
-  } catch { /* event log write must never break ingestion */ }
+  } catch (error) {
+    warnEventStoreWriteFailure('situation', error);
+  }
 }
 
 let _smsConfig = loadSmsConfig();

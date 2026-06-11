@@ -101,7 +101,7 @@ export function formatDatasetName(name: string): string {
   return name
     .split(/[_\s-]+/)
     .filter(Boolean)
-    .map(titleCaseToken)
+    .map((token) => titleCaseToken(token))
     .join(' ');
 }
 
@@ -131,7 +131,7 @@ export function getTopicBadge(topic: string): string {
 export function countBySchema(entities: SanctionedEntity[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const e of entities) {
-    const key = e.schema && e.schema.trim() ? e.schema : 'Unknown';
+    const key = e.schema?.trim() ? e.schema : 'Unknown';
     out[key] = (out[key] ?? 0) + 1;
   }
   return out;

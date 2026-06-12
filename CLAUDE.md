@@ -111,7 +111,7 @@ Four pure-deterministic, fixture-tested service layers. **No DOM, no fetch, no g
 - **`src/services/shortage/`** — 8 deterministic commodity forecast models. Each takes a `ShortageInputBag` (provenance-aware), runs through 7 driver buckets (production / inventory / transport / policy / demand / price / cross_domain), produces a `ShortageForecast` with drivers + confidence + data gaps. Seasonal multipliers honor the calendar.
 - **`src/services/datacenter/`** — single-site data-center readiness layer. Fuses EIA grid signals + NWS polygon alerts into a 5-rung `DcLevel` posture with a compound amplifier and people-first `ReadinessAction` playbook (onsite_safety → commute_staffing → facility_ops → escalation). Stale inputs are surfaced, not silently dropped.
 
-Test scripts: `npm run test:intelligence` / `test:weather` / `test:insights{,2,3,6}` / `test:shortage` / `test:datacenter`.
+Test scripts: `npm run test:intelligence` / `test:weather` / `test:insights{,2,3,6}` / `test:shortage` / `test:datacenter` / `test:providers`.
 
 Plan invariants honored across all four layers:
 
@@ -277,6 +277,13 @@ src/                        # TypeScript frontend (Vite)
     datacenter/site-resolver.ts              # resolveSiteConfig (highest-priority data_center place) + eiaRegionForLatLon
     datacenter/datacenter-state.ts           # singleton: setDatacenterSite / getDatacenterSite / recomputeDatacenterPosture / subscribe
     datacenter/datacenter-view.ts            # pure label/color/summary helpers for renderers
+    # ── Provider registry + fusion core (see docs/superpowers/specs/2026-06-11-provider-registry-fusion-core-design.md) ──
+    providers/provider-types.ts              # ProviderDefinition, FetchOutcome, ProviderHealth, SourceObservation, FusionResult
+    providers/provider-registry.ts           # static catalog (live sources + P0 expansion batch), independence groups
+    providers/provider-health.ts             # pure record/derive: ring buffer → healthy/stale/degraded/down + quota detection
+    providers/source-fusion.ts               # freshness × reliability × independence-aware corroboration; disagreements surface, capped at 0.6
+    providers/provider-bridge.ts             # snapshotsFromRegistry → provider-redundancy ProviderSnapshot contract
+    providers/providers-state.ts             # singleton: recordProviderFetchOutcome / getProviderHealthState
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes
                                 # /api/analyst-state + /api/analyst-commands

@@ -36,6 +36,7 @@ interface DailyCounts {
   local: number;
   cloudAgent: number;
   cloudChat: number;
+  cloudGroq: number;
   lastReset: number;
 }
 
@@ -51,7 +52,7 @@ function utcDateStr(now: Date = new Date()): string {
 }
 
 function initialState(): DailyCounts {
-  return { date: utcDateStr(), local: 0, cloudAgent: 0, cloudChat: 0, lastReset: Date.now() };
+  return { date: utcDateStr(), local: 0, cloudAgent: 0, cloudChat: 0, cloudGroq: 0, lastReset: Date.now() };
 }
 
 function applyLoaded(value: DailyCounts | null): void {
@@ -61,6 +62,7 @@ function applyLoaded(value: DailyCounts | null): void {
     local: Number(value.local) || 0,
     cloudAgent: Number(value.cloudAgent) || 0,
     cloudChat: Number(value.cloudChat) || 0,
+    cloudGroq: Number((value as DailyCounts).cloudGroq) || 0,
     lastReset: Number(value.lastReset) || Date.now(),
   };
   rolloverIfNeeded();
@@ -117,6 +119,7 @@ export interface BudgetStatus {
   date: string;
   local: number;
   cloud: number;
+  cloudGroq: number;
   cap: number;
   remaining: number;
   exhausted: boolean;
@@ -131,6 +134,7 @@ export function getBudgetStatus(): BudgetStatus {
     date: state.date,
     local: state.local,
     cloud,
+    cloudGroq: state.cloudGroq,
     cap,
     remaining: Math.max(0, cap - cloud),
     exhausted: cloud >= cap,
@@ -183,6 +187,7 @@ export function recordCall(provider: LlmProvider): void {
   if (provider === 'local') state.local += 1;
   else if (provider === 'cloud-agent') state.cloudAgent += 1;
   else if (provider === 'cloud-chat') state.cloudChat += 1;
+  else if (provider === 'cloud-groq') state.cloudGroq += 1;
   save();
   document.dispatchEvent(new CustomEvent<BudgetStatus>(EVENT_NAME, { detail: getBudgetStatus() }));
 }

@@ -25,6 +25,8 @@
 
 import { evaluateNegativeEvidence, type ExpectedSignal } from '@/services/intelligence/negative-evidence';
 import type { NormalizedFact } from '@/services/intelligence/types';
+import { detectBigEvent, type BigEventInput } from '@/services/insights/big-event-detector';
+import { feedbackMultiplier } from '@/services/hypothesis-feedback';
 
 export interface TuningSafetyScore {
   /** Fraction of fixtures whose suppress/keep decision matched ground truth. */
@@ -175,6 +177,186 @@ function scoreCorrelationFeedbackThreshold(threshold: number): TuningSafetyScore
   };
 }
 
+// ── big-event-detector.rapidJumpDelta fixtures ──────────────────────────
+
+/**
+ * Downstream decision: does the `rapid_severity_jump` trigger fire?
+ * T* cases have genuine jumps that SHOULD fire; F* cases are noise that
+ * should NOT fire. A delta too HIGH misses T2 (jump=28); a delta too LOW
+ * fires on anything — but the F* cases keep their jump below the valid
+ * minimum (15), so they never fire regardless, making the lower bound
+ * sanity-only. Discrimination comes from the T2/T3 cases.
+ */
+interface JumpCase {
+  id: string;
+  previousSeverityScore: number;
+  severityScore: number;
+  /** Should `rapid_severity_jump` fire for this input at this delta? */
+  expectFired: boolean;
+}
+
+const JUMP_CASES: readonly JumpCase[] = [
+  // jump=45 — always fires at any valid delta [15,40]. Sanity guard.
+  { id: 'T1-huge-jump', previousSeverityScore: 20, severityScore: 65, expectFired: true },
+  // jump=28 — fires when delta ≤ 28. At default (25): passes.
+  // Moving delta above 28 (e.g. 30) breaks this case → blocks increase.
+  { id: 'T2-clear-jump', previousSeverityScore: 30, severityScore: 58, expectFired: true },
+  // jump=20 — fires when delta ≤ 20. NOT passing at default (25). Becomes
+  // passing if delta decreases, but won't block an increase.
+  { id: 'T3-moderate-jump', previousSeverityScore: 40, severityScore: 60, expectFired: true },
+  // jump=2 — well below min delta (15). Never fires. Sanity guard.
+  { id: 'F1-noise', previousSeverityScore: 50, severityScore: 52, expectFired: false },
+  // jump=11 — below min delta. Never fires.
+  { id: 'F2-slight-uptick', previousSeverityScore: 45, severityScore: 56, expectFired: false },
+  // jump=3 — stable reading. Never fires.
+  { id: 'F3-stable', previousSeverityScore: 60, severityScore: 63, expectFired: false },
+];
+
+function jumpBaseInput(c: JumpCase): BigEventInput {
+  return {
+    id: `safety-${c.id}`,
+    domain: 'weather',
+    severityScore: c.severityScore,
+    previousSeverityScore: c.previousSeverityScore,
+    // All other triggers suppressed:
+    truthScore: 0.6,            // < 0.65 → no high_confidence_high_impact
+    sourceCount: 1,             // < 4 → no many_sources_converge
+    hasOfficialSource: false,
+    overlappingDomains: ['weather'], // single domain → no multi_domain_overlap
+    userExposure: 0,
+    potentialImpact: 50,        // < 70 and < 80 → no high/extreme impact
+    forecastThresholdCrossed: false,
+  };
+}
+
+function scoreBigEventRapidJumpDelta(rapidJumpDelta: number): TuningSafetyScore {
+  const passingCaseIds: string[] = [];
+  for (const c of JUMP_CASES) {
+    const result = detectBigEvent(jumpBaseInput(c), { rapidJumpDelta });
+    const fired = result.triggers.some((t) => t.kind === 'rapid_severity_jump');
+    if (fired === c.expectFired) passingCaseIds.push(c.id);
+  }
+  return {
+    hitRate: passingCaseIds.length / JUMP_CASES.length,
+    cases: JUMP_CASES.length,
+    passingCaseIds,
+  };
+}
+
+// ── big-event-detector.exposureFloor fixtures ────────────────────────────
+
+/**
+ * Downstream decision: does the `high_personal_exposure` trigger fire?
+ * T* cases are users genuinely in the path (SHOULD fire); F* cases are
+ * users outside the path (should NOT fire). A floor too HIGH (e.g. 86)
+ * misses T1/T2; a floor too LOW (e.g. 55) fires on F3 (moderate exposure).
+ * The fixture peaks in [56, 65] where both subsets are handled correctly.
+ */
+interface ExposureCase {
+  id: string;
+  userExposure: number;
+  /** Should `high_personal_exposure` fire for this input at this floor? */
+  expectFired: boolean;
+}
+
+const EXPOSURE_CASES: readonly ExposureCase[] = [
+  // exposure=85 — fires at any floor ≤ 85. At default (70): passes.
+  { id: 'T1-direct-path', userExposure: 85, expectFired: true },
+  // exposure=80 — fires at any floor ≤ 80. At default (70): passes.
+  // Moving floor above 80 breaks this case → blocks large increases.
+  { id: 'T2-clear-exposure', userExposure: 80, expectFired: true },
+  // exposure=65 — fires at floor ≤ 65. NOT passing at default (70).
+  { id: 'T3-borderline', userExposure: 65, expectFired: true },
+  // exposure=20 — always below any valid floor (min=50). Never fires.
+  { id: 'F1-not-in-path', userExposure: 20, expectFired: false },
+  // exposure=40 — below min valid floor (50). Never fires.
+  { id: 'F2-low-exposure', userExposure: 40, expectFired: false },
+  // exposure=55 — fires at floor ≤ 55. At default (70): doesn't fire → passes.
+  // Moving floor below 56 breaks this case → blocks large decreases.
+  { id: 'F3-moderate-exposure', userExposure: 55, expectFired: false },
+];
+
+function exposureBaseInput(id: string, userExposure: number): BigEventInput {
+  return {
+    id: `safety-${id}`,
+    domain: 'weather',
+    severityScore: 50,
+    // All other triggers suppressed:
+    truthScore: 0.6,
+    sourceCount: 1,
+    hasOfficialSource: false,
+    overlappingDomains: ['weather'],
+    userExposure,
+    potentialImpact: 50,
+    forecastThresholdCrossed: false,
+  };
+}
+
+function scoreBigEventExposureFloor(exposureFloor: number): TuningSafetyScore {
+  const passingCaseIds: string[] = [];
+  for (const c of EXPOSURE_CASES) {
+    const result = detectBigEvent(exposureBaseInput(c.id, c.userExposure), { exposureFloor });
+    const fired = result.triggers.some((t) => t.kind === 'high_personal_exposure');
+    if (fired === c.expectFired) passingCaseIds.push(c.id);
+  }
+  return {
+    hitRate: passingCaseIds.length / EXPOSURE_CASES.length,
+    cases: EXPOSURE_CASES.length,
+    passingCaseIds,
+  };
+}
+
+// ── hypothesis-feedback.downPenalty fixtures ─────────────────────────────
+
+/**
+ * Downstream decision: is a hypothesis demoted (feedback multiplier < 1.0)?
+ * U* cases are net-positive feedback (SHOULD NOT be demoted); D* cases are
+ * net-negative (SHOULD be demoted). M1 is a slight net-positive edge that
+ * becomes demoted at high penalties (> 0.6); D1 is balanced feedback that
+ * stops being demoted at very low penalties (< 0.35). Both extremes regress
+ * different subsets — the fixture peaks in [0.4, 0.6].
+ */
+const FEEDBACK_DEMOTE_THRESHOLD = 1.0; // mult strictly below 1.0 → demoted
+
+interface FeedbackCase {
+  id: string;
+  up: number;
+  down: number;
+  expectDemoted: boolean;
+}
+
+const FEEDBACK_CASES: readonly FeedbackCase[] = [
+  // up=4, down=0: mult always 1.3. Never demoted.
+  { id: 'U1-all-up', up: 4, down: 0, expectDemoted: false },
+  // up=3, down=1: mult ≥ 1.05 across [0.3,0.7]. Always not demoted.
+  { id: 'U2-mostly-up', up: 3, down: 1, expectDemoted: false },
+  // up=2, down=1: mult=1.033 at 0.5, drops below 1.0 at penalty ≈ 0.6.
+  // In passing set at default (0.5); fails when penalty > 0.6 → blocks increase.
+  { id: 'M1-slight-edge', up: 2, down: 1, expectDemoted: false },
+  // up=5, down=4: mult=0.944 at 0.5 (demoted); rises to 1.033 at penalty=0.3
+  // (not demoted). In passing set at default (0.5); fails at penalty ≤ 0.35
+  // → blocks decrease. Avoids the boundary problem of equal-vote cases.
+  { id: 'D1-slight-down-majority', up: 5, down: 4, expectDemoted: true },
+  // up=1, down=3: mult ≤ 0.85 across [0.3,0.7]. Always demoted.
+  { id: 'D2-mostly-down', up: 1, down: 3, expectDemoted: true },
+  // up=0, down=4: mult=0.5 (floor). Always demoted.
+  { id: 'D3-all-down', up: 0, down: 4, expectDemoted: true },
+];
+
+function scoreFeedbackDownPenalty(downPenalty: number): TuningSafetyScore {
+  const passingCaseIds: string[] = [];
+  for (const c of FEEDBACK_CASES) {
+    const mult = feedbackMultiplier(c.up, c.down, downPenalty);
+    const demoted = mult < FEEDBACK_DEMOTE_THRESHOLD;
+    if (demoted === c.expectDemoted) passingCaseIds.push(c.id);
+  }
+  return {
+    hitRate: passingCaseIds.length / FEEDBACK_CASES.length,
+    cases: FEEDBACK_CASES.length,
+    passingCaseIds,
+  };
+}
+
 // ── Registry + public API ────────────────────────────────────────────────
 
 type SafetyScorer = (candidateValue: number) => TuningSafetyScore;
@@ -182,6 +364,9 @@ type SafetyScorer = (candidateValue: number) => TuningSafetyScore;
 const SCORERS: Record<string, SafetyScorer> = {
   'negative-evidence:maxPenalty': scoreNegativeEvidenceMaxPenalty,
   'correlation-feedback:feedbackThreshold': scoreCorrelationFeedbackThreshold,
+  'big-event-detector:rapidJumpDelta': scoreBigEventRapidJumpDelta,
+  'big-event-detector:exposureFloor': scoreBigEventExposureFloor,
+  'hypothesis-feedback:downPenalty': scoreFeedbackDownPenalty,
 };
 
 function scorerKey(algorithmId: string, parameterId: string): string {

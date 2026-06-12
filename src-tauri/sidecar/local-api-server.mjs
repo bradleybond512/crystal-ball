@@ -5,7 +5,7 @@ import http, { createServer } from 'node:http';
 import { timingSafeEqual, randomUUID } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
-import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { brotliCompress, gzip } from 'node:zlib';
@@ -4762,6 +4762,8 @@ async function handleOllamaStream(requestUrl, req, res, context) {
 // Circuit breaker for intel-generate: fast-fail when LLM is unreachable
 let intelFailures = 0;
 let intelCooldownUntil = 0;
+let groqCallsToday = 0;
+let groqBudgetDay = '';
 
 // Generic non-streaming intel generation. Accepts { prompt, system?, maxTokens?,
 // temperature? } and returns { response, model } from OLLAMA_API_URL (any
@@ -4814,6 +4816,7 @@ async function handleIntelGenerate(req, res, context) {
   const system = typeof parsed.system === 'string' ? parsed.system.slice(0, 2000) : 'You are a concise intelligence analyst. Be factual, direct, no preamble.';
   const maxTokens = Math.min(2048, Math.max(16, Number(parsed.maxTokens) || 400));
   const temperature = Math.min(1, Math.max(0, Number(parsed.temperature) || 0.3));
+  const localOnly = parsed.localOnly === true;
   if (!prompt) { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'prompt required' })); return; }
 
   const messages = [{ role: 'system', content: system }, { role: 'user', content: prompt }];
@@ -4845,7 +4848,7 @@ async function handleIntelGenerate(req, res, context) {
     return 'local-model';
   };
 
-  let response, model;
+  let response, model, provider = 'local';
   for (const base of localBases) {
     let localUrl;
     try { localUrl = new URL('/v1/chat/completions', base).toString(); } catch { continue; }
@@ -4859,25 +4862,34 @@ async function handleIntelGenerate(req, res, context) {
     }
   }
 
-  // Groq fallback
-  if (response == null && process.env.GROQ_API_KEY) {
-    try {
-      response = await callChatCompletion(
-        'https://api.groq.com/openai/v1/chat/completions',
-        'llama-3.1-8b-instant', messages, maxTokens, temperature,
-        `Bearer ${process.env.GROQ_API_KEY}`, 30_000,
-      );
-      model = 'groq:llama-3.1-8b-instant';
-      context.logger.warn('[intel-generate] used Groq fallback');
-    } catch (groqError) {
-      context.logger.warn('[intel-generate] Groq fallback failed:', groqError.message);
+  // Groq fallback — skipped when caller sets localOnly=true
+  if (!localOnly && response == null && process.env.GROQ_API_KEY) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (groqBudgetDay !== today) { groqCallsToday = 0; groqBudgetDay = today; }
+    const GROQ_DAILY_CAP = 200;
+    if (groqCallsToday >= GROQ_DAILY_CAP) {
+      context.logger.warn(`[intel-generate] Groq daily cap (${GROQ_DAILY_CAP}) reached — skipping fallback`);
+    } else {
+      try {
+        response = await callChatCompletion(
+          'https://api.groq.com/openai/v1/chat/completions',
+          'llama-3.1-8b-instant', messages, maxTokens, temperature,
+          `Bearer ${process.env.GROQ_API_KEY}`, 30_000,
+        );
+        groqCallsToday++;
+        model = 'groq:llama-3.1-8b-instant';
+        provider = 'cloud-groq';
+        context.logger.warn(`[intel-generate] used Groq fallback (day ${groqBudgetDay}: ${groqCallsToday}/${GROQ_DAILY_CAP})`);
+      } catch (groqError) {
+        context.logger.warn('[intel-generate] Groq fallback failed:', groqError.message);
+      }
     }
   }
 
   if (response != null) {
     intelFailures = 0;
     res.writeHead(200, headers);
-    res.end(JSON.stringify({ response, model }));
+    res.end(JSON.stringify({ response, model, provider }));
   } else {
     intelFailures++;
     if (intelFailures >= 2) {
@@ -16156,7 +16168,11 @@ export async function createLocalApiServer(options = {}) {
    heap_mb: Math.round(mem0.heapUsed / 1024 / 1024),
    ais_connected: false,
    ais_vessels: 0,
-  }));
+  }), { mode: 0o600 });
+  // `mode` only applies when the file is created, so chmod tightens any stale
+  // world-readable heartbeat left by a pre-fix session. The interval writer
+  // below also passes `mode` so a mid-run recreate is never briefly exposed.
+  try { chmodSync(heartbeatPath, 0o600); } catch {}
  } catch {}
  setInterval(() => {
  const now = Date.now();
@@ -16174,7 +16190,7 @@ export async function createLocalApiServer(options = {}) {
  heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
  ais_connected: aisState.socket?.readyState === 1,
  ais_vessels: aisState.vessels.size,
- }));
+ }), { mode: 0o600 });
  } catch {}
  if (eventLoopLagMs > 2000) {
  context.logger.warn(`[local-api] event loop lag ${eventLoopLagMs}ms`);

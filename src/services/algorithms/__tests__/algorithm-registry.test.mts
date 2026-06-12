@@ -29,7 +29,7 @@ test('initial: registers all live algorithms (orphaned algos with no call sites 
   // call sites (confirmed by audit 2026-06-07). No recordAlgorithmEvaluation would ever
   // fire for them; keeping them would only pollute the ledger with fabricated entries.
   const expected = [
-    'big-event-detector', 'compound-risk', 'confidence-urgency-matrix',
+    'big-event-detector', 'competitive-hypothesis', 'compound-risk', 'confidence-urgency-matrix',
     'correlation-feedback', 'hypothesis-accuracy', 'negative-evidence',
     'nws-polygon-match', 'personal-storm-mode', 'relevance-learner',
     'shortage-diesel', 'shortage-wheat', 'source-feedback',

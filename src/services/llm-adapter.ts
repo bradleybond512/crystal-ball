@@ -23,7 +23,7 @@ import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
 import { isLocalModelOnly, isLlmEgressDisclosed } from './ai-flow-settings';
 
-export type LlmProvider = 'local' | 'cloud-agent' | 'cloud-chat' | 'none';
+export type LlmProvider = 'local' | 'cloud-groq' | 'cloud-agent' | 'cloud-chat' | 'none';
 
 export interface LlmResult {
   text: string;
@@ -48,6 +48,7 @@ interface LocalResponseShape {
   response?: unknown;
   text?: unknown;
   model?: unknown;
+  provider?: unknown;
   error?: unknown;
 }
 
@@ -98,14 +99,16 @@ async function tryLocalViaSidecar(prompt: string, options: LlmOptions): Promise<
       incrementCounter('llm.local.empty');
       return null;
     }
+    const sidecarProvider: LlmProvider = parsed.provider === 'cloud-groq' ? 'cloud-groq' : 'local';
     logDebug({ level: 'info', category: 'llm', source: 'llm-adapter',
       message: 'local ok', latencyMs,
       data: { promptChars: prompt.length, responseChars: text.length,
-              model: typeof parsed.model === 'string' ? parsed.model : undefined } });
-    incrementCounter('llm.local.success');
+              model: typeof parsed.model === 'string' ? parsed.model : undefined,
+              provider: sidecarProvider } });
+    incrementCounter(sidecarProvider === 'cloud-groq' ? 'llm.cloud-groq.success' : 'llm.local.success');
     return {
       text,
-      provider: 'local',
+      provider: sidecarProvider,
       model: typeof parsed.model === 'string' ? parsed.model : undefined,
     };
   } catch (error) {

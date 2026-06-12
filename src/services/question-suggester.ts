@@ -25,7 +25,7 @@ import { getMemory, putMemory } from './reasoning-memory';
 export interface QuestionAnswer {
   question: string;
   text: string;
-  provider: 'local' | 'cloud-agent' | 'cloud-chat' | 'none';
+  provider: 'local' | 'cloud-groq' | 'cloud-agent' | 'cloud-chat' | 'none';
   generatedAt: number;
 }
 

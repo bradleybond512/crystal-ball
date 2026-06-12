@@ -61,7 +61,7 @@
     "test:globe-overlay": "tsx --test src/services/globe/__tests__/overlay-helpers.test.mts",
     "test:data": "tsx --test tests/*.test.mjs tests/*.test.mts",
     "test:sanitize": "tsx --test src/utils/__tests__/sanitize.test.mts src/utils/__tests__/degraded-response.test.mts",
-    "test:reasoning": "tsx --test src/services/__tests__/hypothesis-dedupe.test.mts src/services/__tests__/hypothesis-entities.test.mts src/services/__tests__/hypothesis-feedback.test.mts src/services/__tests__/pressure-baselines.test.mts src/services/__tests__/llm-budget.test.mts src/services/__tests__/action-memory.test.mts src/services/__tests__/hypothesis-alternatives.test.mts",
+    "test:reasoning": "tsx --test src/services/__tests__/hypothesis-dedupe.test.mts src/services/__tests__/hypothesis-entities.test.mts src/services/__tests__/hypothesis-feedback.test.mts src/services/__tests__/hypothesis-feedback-mult.test.mts src/services/__tests__/pressure-baselines.test.mts src/services/__tests__/llm-budget.test.mts src/services/__tests__/action-memory.test.mts src/services/__tests__/hypothesis-alternatives.test.mts",
     "test:settings": "tsx --test src/services/__tests__/key-categories.test.mts src/services/__tests__/key-feature-index.test.mts src/services/__tests__/key-shape-registry.test.mts src/services/__tests__/wizard-state.test.mts",
     "test:thresholds": "tsx --test src/services/config/__tests__/alert-thresholds.test.mts src/services/notifications/__tests__/push-notifier.test.mts src/services/notifications/__tests__/push-notifier-thresholds.test.mts",
     "test:feed-health": "tsx --test src/services/diagnostics/__tests__/feed-catalog.test.mts src/components/__tests__/feed-health-panel.test.mts && node --test src-tauri/sidecar/__tests__/feed-tracker.test.mjs",

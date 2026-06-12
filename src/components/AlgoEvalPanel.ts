@@ -53,7 +53,8 @@ export class AlgoEvalPanel extends Panel {
     this.unsub = getAlgoEvalLedger().subscribe(() => this.render());
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;

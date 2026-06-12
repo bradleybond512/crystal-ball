@@ -61,7 +61,8 @@ export class FaaTfrsPanel extends Panel {
     this.onTfrClick = fn;
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;

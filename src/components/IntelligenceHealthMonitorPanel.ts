@@ -66,7 +66,8 @@ export class IntelligenceHealthMonitorPanel extends Panel {
     this.unsub = getIntelligenceHealthMonitorService().subscribe(() => this.render());
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;

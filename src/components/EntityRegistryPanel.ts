@@ -83,7 +83,8 @@ export class EntityRegistryPanel extends Panel {
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;

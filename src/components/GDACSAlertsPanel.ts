@@ -80,7 +80,8 @@ export class GDACSAlertsPanel extends Panel {
     this.onEventClick = fn;
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;

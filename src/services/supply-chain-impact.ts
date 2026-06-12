@@ -11,6 +11,7 @@
 import { getApiBaseUrl } from './runtime';
 import { haversineKm } from './proximity-filter';
 import { dataFreshness } from './data-freshness';
+import { runClaudeAgent } from './claude-agent';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -449,20 +450,13 @@ async function generateNarrative(disruption: {
 }): Promise<string> {
   const prompt = buildNarrativePrompt(disruption);
 
-  // Try Claude Agent first
+  // Try Claude Agent first — routes through the gated runClaudeAgent() path
+  // so localModelOnly and llmEgressDisclosed controls are honoured.
   try {
- const res = await fetch(`${getApiBaseUrl()}/api/claude-agent`, {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ query: prompt }),
- signal: AbortSignal.timeout(15000),
- });
- if (res.ok) {
- const data = (await res.json()) as { response?: string };
- if (data.response) return data.response;
- }
+ const agentRes = await runClaudeAgent(prompt, AbortSignal.timeout(15000));
+ if (agentRes.response) return agentRes.response;
   } catch {
- // Claude unavailable — try Ollama
+ // Claude unavailable or gate blocked — try Ollama
   }
 
   // Ollama fallback

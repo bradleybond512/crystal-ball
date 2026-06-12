@@ -246,8 +246,10 @@ function showDesktopRuntimeDebugNotice(snapshot: DesktopRuntimeSnapshot): void {
   document.body.append(banner);
 }
 
-// Initialize Vercel Analytics — only when user has consented and not in Ghost Mode.
-if (!isDesktopRuntime() && isAnalyticsAllowed()) inject();
+// Initialize Vercel Analytics on web only. beforeSend gates every event at
+// send-time so consent revocation mid-session takes effect immediately without
+// a reload (inject() itself has no shutdown path).
+if (!isDesktopRuntime()) inject({ beforeSend: (e) => isAnalyticsAllowed() ? e : null });
 
 // Initialize PostHog product analytics
 void initAnalytics();

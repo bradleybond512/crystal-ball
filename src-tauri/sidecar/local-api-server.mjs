@@ -34,6 +34,7 @@ import {
   loadSmsConfig, saveSmsConfig,
   handleSmsCommand,
 } from './sms-command-parser.mjs';
+import { validateTwilioSignature } from './sms-security.mjs';
 import { buildRecentChanges } from './recent-changes.mjs';
 import { explain as explainEvent } from './explainer.mjs';
 import { EventStore } from './event-store.mjs';
@@ -112,6 +113,7 @@ const _smsRateLimitMap = new Map();
 const _smsCommandLog = [];
 const _smsWatchRegistry = [];
 const _smsAlertRegistry = [];
+let _smsTwilioTokenWarned = false;
 
 // Keychain-loss fallback: a 2026-05-08 incident wiped the macOS Keychain
 // vault, taking 29 API credentials with it. If the keychain is empty
@@ -5080,10 +5082,40 @@ async function dispatch(requestUrl, req, routes, context) {
   // Security is enforced by the phone-number allowlist in sms-config.json.
   if (requestUrl.pathname === '/api/sms/command' && req.method === 'POST') {
     if (!_smsConfig.enabled) return json({ error: 'SMS command interface is disabled.' }, 503);
-    let smsBody;
-    try { smsBody = JSON.parse(await readBody(req)); } catch { return json({ error: 'Invalid JSON' }, 400); }
-    const from = String(smsBody.from ?? '');
-    const body = String(smsBody.body ?? '');
+
+    const rawBodyBuf = await readBody(req);
+    const rawBody = rawBodyBuf ? rawBodyBuf.toString('utf8') : '';
+    const contentType = String(req.headers['content-type'] || '').toLowerCase();
+    // Twilio webhooks POST application/x-www-form-urlencoded; the internal/test
+    // contract POSTs JSON {from, body}. Parse params accordingly so the signature
+    // is computed over exactly the fields the gateway sent.
+    let params;
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      params = Object.fromEntries(new URLSearchParams(rawBody));
+    } else {
+      try { params = JSON.parse(rawBody || '{}'); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    }
+
+    // Caller-ID (From) is spoofable. When a TWILIO_AUTH_TOKEN is configured we
+    // require a valid HMAC-SHA1 request signature before trusting the webhook;
+    // without a token we log once and fall back to phone-number-only validation.
+    const twilioToken = process.env.TWILIO_AUTH_TOKEN || '';
+    if (twilioToken) {
+      const signature = req.headers['x-twilio-signature'] || '';
+      const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+      const fullUrl = `${proto}://${host}${requestUrl.pathname}${requestUrl.search}`;
+      if (!validateTwilioSignature(twilioToken, fullUrl, params, signature)) {
+        context.logger.warn(`[local-api] rejected SMS webhook: invalid Twilio signature (from ${host || 'unknown host'})`);
+        return json({ error: 'Invalid Twilio signature' }, 403);
+      }
+    } else if (!_smsTwilioTokenWarned) {
+      _smsTwilioTokenWarned = true;
+      context.logger.warn('[local-api] TWILIO_AUTH_TOKEN not configured — SMS webhook accepted on phone-number allowlist only (set TWILIO_AUTH_TOKEN to require signed requests).');
+    }
+
+    const from = String(params.From ?? params.from ?? '');
+    const body = String(params.Body ?? params.body ?? '');
     const analystState = context._analystState ?? null;
     const result = await handleSmsCommand({
       from, body, analystState,

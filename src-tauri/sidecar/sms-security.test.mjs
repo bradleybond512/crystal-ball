@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createHmac } from 'node:crypto';
 import {
   loadAllowlist,
   saveAllowlist,
@@ -12,7 +13,14 @@ import {
   recordRateLimit,
   logCommand,
   normalizePhone,
+  validateTwilioSignature,
 } from './sms-security.mjs';
+
+// Mirror of Twilio's signing algorithm so tests can sign their own fixtures.
+function signTwilio(authToken, url, params) {
+  const paramString = Object.keys(params).sort().reduce((acc, k) => acc + k + params[k], '');
+  return createHmac('sha1', authToken).update(url + paramString).digest('base64');
+}
 
 describe('normalizePhone', () => {
   it('strips non-digits', () => {
@@ -172,5 +180,58 @@ describe('loadAllowlist / saveAllowlist', () => {
     ], p);
     const list = loadAllowlist(p);
     assert.equal(list.length, 1);
+  });
+});
+
+describe('validateTwilioSignature', () => {
+  const token = 'test_auth_token_0123456789';
+  const url = 'https://example.ngrok.app/api/sms/command';
+  const params = { From: '+15550001234', Body: 'STATUS', MessageSid: 'SM123' };
+
+  it('accepts a correctly-signed request', () => {
+    const sig = signTwilio(token, url, params);
+    assert.equal(validateTwilioSignature(token, url, params, sig), true);
+  });
+
+  it('is independent of param insertion order (signs in sorted key order)', () => {
+    const sig = signTwilio(token, url, params);
+    const reordered = { MessageSid: 'SM123', Body: 'STATUS', From: '+15550001234' };
+    assert.equal(validateTwilioSignature(token, url, reordered, sig), true);
+  });
+
+  it('rejects a tampered body', () => {
+    const sig = signTwilio(token, url, params);
+    const tampered = { ...params, Body: 'WATCH AAPL' };
+    assert.equal(validateTwilioSignature(token, url, tampered, sig), false);
+  });
+
+  it('rejects when the URL differs', () => {
+    const sig = signTwilio(token, url, params);
+    assert.equal(validateTwilioSignature(token, 'https://evil.example/api/sms/command', params, sig), false);
+  });
+
+  it('rejects when signed with a different auth token', () => {
+    const sig = signTwilio('other_token', url, params);
+    assert.equal(validateTwilioSignature(token, url, params, sig), false);
+  });
+
+  it('returns false when the auth token is missing', () => {
+    const sig = signTwilio(token, url, params);
+    assert.equal(validateTwilioSignature('', url, params, sig), false);
+  });
+
+  it('returns false when the signature header is missing', () => {
+    assert.equal(validateTwilioSignature(token, url, params, ''), false);
+    assert.equal(validateTwilioSignature(token, url, params, undefined), false);
+  });
+
+  it('returns false (no throw) for a malformed signature', () => {
+    assert.doesNotThrow(() => validateTwilioSignature(token, url, params, '!!!not base64!!!'));
+    assert.equal(validateTwilioSignature(token, url, params, '!!!not base64!!!'), false);
+  });
+
+  it('handles empty params', () => {
+    const sig = signTwilio(token, url, {});
+    assert.equal(validateTwilioSignature(token, url, {}, sig), true);
   });
 });

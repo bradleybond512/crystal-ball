@@ -5,6 +5,9 @@
  * Pure deterministic layer: no DOM, no fetch, no timers, no globals.
  */
 
+import type { RuntimeSecretKey } from '../runtime-config.ts';
+
+
 export type ProviderDomain =
   | 'weather'
   | 'disasters'
@@ -28,7 +31,7 @@ export interface ProviderDefinition {
   displayName: string;
   authType: ProviderAuthType;
   /** Key name from SUPPORTED_SECRET_KEYS when authType !== 'none'. */
-  requiredSecret?: string;
+  requiredSecret?: RuntimeSecretKey;
   baseUrl: string;
   /** Human note for the diagnostics display. */
   rateLimitNote: string;
@@ -97,3 +100,5 @@ export interface FusionResult {
   disagreements: readonly Disagreement[];
   independentSourceCount: number;
 }
+
+export {type RuntimeSecretKey} from '../runtime-config.ts';

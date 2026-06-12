@@ -32,7 +32,7 @@ A static, typed catalog. Each `ProviderDefinition`:
 | Field | Meaning |
 |---|---|
 | `id` | stable slug, e.g. `airplanes-live` |
-| `domain` | `aviation \| weather \| conflict \| cyber \| markets \| maritime \| infrastructure \| transport \| space` |
+| `domain` | `weather \| disasters \| adsb \| aviation \| commodities \| food_security \| conflict \| cyber \| markets \| maritime \| infrastructure \| transport \| space` |
 | `displayName` | human label |
 | `authType` | `none \| free_key \| account` |
 | `requiredSecret` | key name from `SUPPORTED_SECRET_KEYS`, when keyed |
@@ -102,14 +102,15 @@ Shape is designed to slot into the intelligence layer's
 
 ### 4. Bridge — `provider-bridge.ts`
 
-- `snapshotsFromRegistry(state, domain, now)` emits the `ProviderSnapshot`
+- `snapshotsFromRegistry(state, now, domain?)` emits the `ProviderSnapshot`
   shape `src/services/diagnostics/provider-redundancy.ts` already consumes, so
   Command Center and the diagnostics panel keep working unchanged.
-- Supersedes `bridgeSourcesToProviderRedundancy()` in
-  `src/services/insights/data-bridge.ts`: the data bridge switches to
-  registry-driven snapshots; the old translation path is removed.
-- The SystemDiagnosticPanel Feeds tab reads registry health for freshness and
-  failure-reason display (read-only wiring, no panel redesign).
+- The registry-driven path is the primary path for registered sources.
+  `bridgeSourcesToProviderRedundancy()` in `src/services/insights/data-bridge.ts`
+  is **kept as a fallback** for unregistered source ids (e.g. legacy diagnostic
+  ids not yet in the registry); it is not removed.
+- The SystemDiagnosticPanel Feeds tab reading registry health is **deferred** to
+  a later batch (out of scope for this PR).
 
 ## Data Flow
 
@@ -156,3 +157,4 @@ Fixture-only suite, `npm run test:providers`:
 - New sidecar routes.
 - UI changes beyond what the bridge feeds automatically.
 - Persisting health state across restarts (in-memory only for this batch).
+- SystemDiagnosticPanel Feeds tab reading registry health (deferred to a later batch).

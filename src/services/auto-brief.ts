@@ -28,7 +28,7 @@ export interface AutoBrief {
   /** Abbreviated summary suitable for HUD. */
   summary: string;
   /** Which provider generated this brief. */
-  provider?: 'local' | 'cloud-agent' | 'cloud-chat' | 'none';
+  provider?: 'local' | 'cloud-groq' | 'cloud-agent' | 'cloud-chat' | 'none';
 }
 
 // ── Tuning ────────────────────────────────────────────────────────────────────

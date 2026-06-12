@@ -95,7 +95,8 @@ export class InfraRiskMatrixPanel extends Panel {
     if (!power) return emptyState('Loading power-grid data…');
     if (power.records.length === 0) return emptyState('No active power outages reported.');
     const rows = power.records.slice(0, 30).map((r) => renderPowerRow(r)).join('');
-    return `<div style="font-size:12px;opacity:0.75;margin-bottom:4px">${escapeHtml(power.score.headline)}</div>
+    const asOf = power.dataAsOf ? ` · source data ${timeAgo(power.dataAsOf)}` : '';
+    return `<div style="font-size:12px;opacity:0.75;margin-bottom:4px">${escapeHtml(power.score.headline)}${asOf}</div>
       <table class="eq-table" style="width:100%;font-size:12px">
         <thead><tr><th>County</th><th>State</th><th style="text-align:right">Customers Out</th><th style="text-align:right">%</th><th>Severity</th></tr></thead>
         <tbody>${rows}</tbody>

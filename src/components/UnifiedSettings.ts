@@ -6,7 +6,7 @@ import { getAiFlowSettings, setAiFlowSetting, getStreamQuality, setStreamQuality
 import { isAlwaysOn, setAlwaysOn } from '@/services/always-on';
 import type { StreamQuality } from '@/services/ai-flow-settings';
 import { escapeHtml } from '@/utils/sanitize';
-import { trackLanguageChange, hasAnalyticsConsent, setAnalyticsConsent } from '@/services/analytics';
+import { trackLanguageChange, hasAnalyticsConsent, setAnalyticsConsent, initAnalytics } from '@/services/analytics';
 import type { PanelConfig } from '@/types';
 import { RuntimeConfigPanel } from './RuntimeConfigPanel';
 import {
@@ -423,6 +423,7 @@ export class UnifiedSettings {
  saveImessageSettings({ ...cur, threshold: next as ImessageThreshold });
  } else if (target.id === 'us-analytics-consent') {
  setAnalyticsConsent(target.checked);
+ if (target.checked) void initAnalytics();
  }
  });
 

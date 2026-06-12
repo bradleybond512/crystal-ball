@@ -5,6 +5,7 @@ import {
   getTunedParam,
   setTunedParam,
   getTunings,
+  tunableAffectsNotifications,
   _resetTunedParamsForTests,
 } from '../tunable-params-store.ts';
 
@@ -94,7 +95,7 @@ test('getTunings exposes all declared algorithms', () => {
   _resetTunedParamsForTests();
   const tunings = getTunings();
   const ids = tunings.map((t) => t.algorithmId).sort();
-  assert.deepEqual(ids, ['big-event-detector', 'correlation-feedback', 'negative-evidence']);
+  assert.deepEqual(ids, ['big-event-detector', 'correlation-feedback', 'hypothesis-feedback', 'negative-evidence']);
   const negEv = tunings.find((t) => t.algorithmId === 'negative-evidence');
   const maxPenalty = negEv!.parameters.find((p) => p.parameterId === 'maxPenalty');
   assert.equal(maxPenalty!.current, 0.6);
@@ -103,4 +104,21 @@ test('getTunings exposes all declared algorithms', () => {
   const ft = correl!.parameters.find((p) => p.parameterId === 'feedbackThreshold');
   assert.ok(Math.abs((ft!.current ?? 0) - 0.55) < 0.001);
   assert.equal(ft!.fixDirection, 'increase');
+});
+
+// ── New knobs: rapidJumpDelta, exposureFloor, downPenalty ────────────────
+
+test('new knobs are declared with clamped bounds', () => {
+  _resetTunedParamsForTests();
+  assert.equal(getTunedParam('big-event-detector', 'rapidJumpDelta', 25), 25);
+  assert.equal(getTunedParam('big-event-detector', 'exposureFloor', 70), 70);
+  assert.equal(getTunedParam('hypothesis-feedback', 'downPenalty', 0.5), 0.5);
+  setTunedParam('big-event-detector', 'rapidJumpDelta', 999);
+  assert.equal(getTunedParam('big-event-detector', 'rapidJumpDelta', 25), 40); // clamped to max
+});
+
+test('detector knobs are notification-affecting; downPenalty is not', () => {
+  assert.equal(tunableAffectsNotifications('big-event-detector', 'rapidJumpDelta'), true);
+  assert.equal(tunableAffectsNotifications('big-event-detector', 'exposureFloor'), true);
+  assert.equal(tunableAffectsNotifications('hypothesis-feedback', 'downPenalty'), false);
 });

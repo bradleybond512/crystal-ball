@@ -11,6 +11,7 @@
  */
 
 import type { Hypothesis } from './analyst-loop';
+import { getTunedParam } from './algorithms/tunable-params-store';
 
 const STORAGE_KEY = 'crystalball-hypothesis-feedback-v1';
 const MIN_SAMPLES = 2;
@@ -66,15 +67,23 @@ export function thumbsDown(h: Hypothesis): void {
   document.dispatchEvent(new CustomEvent<{ key: string }>('cb:hypothesis-feedback', { detail: { key } }));
 }
 
+/** Pure multiplier formula. up/down are vote counts; downPenalty is the
+ *  tunable weight on the down-vote ratio (hardcoded 0.5 before tuning). */
+export function feedbackMultiplier(up: number, down: number, downPenalty: number): number {
+  const total = up + down;
+  if (total < MIN_SAMPLES) return 1;
+  const upRatio = up / total;
+  const downRatio = down / total;
+  return Math.max(0.5, Math.min(1.3, 1 + upRatio * 0.3 - downRatio * downPenalty));
+}
+
 /** 0.5–1.3 multiplier applied to a hypothesis's confidence. */
 export function getHypothesisFeedbackMult(h: Pick<Hypothesis, 'kind' | 'evidence' | 'region'>): number {
   ensureLoaded();
   const s = stats.get(signatureFor(h));
-  if (!s || s.up + s.down < MIN_SAMPLES) return 1;
-  const total = s.up + s.down;
-  const upRatio = s.up / total;
-  const downRatio = s.down / total;
-  return Math.max(0.5, Math.min(1.3, 1 + upRatio * 0.3 - downRatio * 0.5));
+  if (!s) return 1;
+  const downPenalty = getTunedParam('hypothesis-feedback', 'downPenalty', 0.5);
+  return feedbackMultiplier(s.up, s.down, downPenalty);
 }
 
 /** Read-only current stats, for debug/overlay panels. */

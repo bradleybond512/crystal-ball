@@ -30,7 +30,7 @@ export interface HypothesisProjection {
   /** Narrative forward-look from the LLM. */
   narrative: string;
   /** Provider that generated the narrative. */
-  provider: 'local' | 'cloud-agent' | 'cloud-chat' | 'none';
+  provider: 'local' | 'cloud-groq' | 'cloud-agent' | 'cloud-chat' | 'none';
   /** Cascade-simulator output if a matching infra node was found, else null. */
   cascade: CascadeSimResult | null;
   generatedAt: number;

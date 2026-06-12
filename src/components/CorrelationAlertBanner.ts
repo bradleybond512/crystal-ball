@@ -16,7 +16,7 @@ import type {
 import { highestSeverity, rankSeverity } from '../services/synthesis/correlation-engine';
 
 const ENDPOINT = '/api/synthesis/correlations';
-const POLL_INTERVAL_MS = 15_000;
+const POLL_INTERVAL_MS = 60_000;
 
 const SEVERITY_CLASSES: Record<Severity, string> = {
   low: 'cb-correlation-banner-low',

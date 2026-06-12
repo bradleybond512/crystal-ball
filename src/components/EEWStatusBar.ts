@@ -28,7 +28,7 @@ import {
 import type { SpaceWxStatus } from '../services/spaceweather/swpc-monitor';
 
 const ENDPOINT = '/api/eew-status';
-const POLL_INTERVAL_MS = 5000;
+const POLL_INTERVAL_MS = 30_000;
 
 const COLOR_CLASSES: Record<StatusBarState['color'], string> = {
   gray: 'eew-bar-gray',

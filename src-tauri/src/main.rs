@@ -400,11 +400,13 @@ impl PersistentCache {
  let entry = data.get(key)?;
  // Entries without stored_at are pre-migration legacy entries → treat as expired.
  let stored_at = entry.get("stored_at").and_then(|v| v.as_u64())?;
+ // Per-entry TTL stored at write time; fall back to default 7 days for old entries.
+ let ttl = entry.get("ttl_ms").and_then(|v| v.as_u64()).unwrap_or(CACHE_TTL_MILLIS);
  let now_ms = SystemTime::now()
   .duration_since(UNIX_EPOCH)
   .map(|d| d.as_millis() as u64)
   .unwrap_or(0);
- if now_ms.saturating_sub(stored_at) > CACHE_TTL_MILLIS {
+ if now_ms.saturating_sub(stored_at) > ttl {
   return None;
  }
  entry.get("v").cloned()
@@ -441,9 +443,10 @@ impl PersistentCache {
   .map(|d| d.as_millis() as u64)
   .unwrap_or(0);
  data.retain(|_, v| {
+  let ttl = v.get("ttl_ms").and_then(|t| t.as_u64()).unwrap_or(CACHE_TTL_MILLIS);
   v.get("stored_at")
    .and_then(|t| t.as_u64())
-   .map(|t| now_ms.saturating_sub(t) <= CACHE_TTL_MILLIS)
+   .map(|t| now_ms.saturating_sub(t) <= ttl)
    .unwrap_or(false)
  });
 
@@ -891,7 +894,7 @@ fn delete_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, 
 }
 
 #[tauri::command]
-fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, PersistentCache>, key: String, value: String) -> Result<(), String> {
+fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, PersistentCache>, key: String, value: String, ttl_ms: Option<u64>) -> Result<(), String> {
  require_trusted_window(webview.label())?;
  if key.len() > 256 {
   return Err("Cache key exceeds 256 byte limit".into());
@@ -905,7 +908,8 @@ fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, P
   .duration_since(UNIX_EPOCH)
   .map(|d| d.as_millis() as u64)
   .unwrap_or(0);
- let envelope = serde_json::json!({ "v": parsed_value, "stored_at": stored_at });
+ let ttl = ttl_ms.unwrap_or(CACHE_TTL_MILLIS);
+ let envelope = serde_json::json!({ "v": parsed_value, "stored_at": stored_at, "ttl_ms": ttl });
  let _write_guard = cache.write_lock.lock().unwrap_or_else(|e| e.into_inner());
  {
  let mut data = cache.data.lock().unwrap_or_else(|e| e.into_inner());

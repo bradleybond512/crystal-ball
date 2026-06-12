@@ -184,9 +184,18 @@ export class GpsTracker {
   private async _tryTier3(): Promise<boolean> {
     try {
       const base = getApiBaseUrl();
-      const headers = await this._nmeaHeaders();
-      const res = await fetch(`${base}/gps/nmea`, { headers, signal: AbortSignal.timeout(3000) });
-      if (!res.ok) return false;
+      // The local API token can be transiently unavailable at desktop cold
+      // start, which now yields a 401 from the auth-gated route. Treat that as
+      // retryable (re-acquiring the token each attempt) so a startup race
+      // doesn't leave Tier 3 permanently disabled until the user toggles GPS.
+      let res: Response | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const headers = await this._nmeaHeaders();
+        res = await fetch(`${base}/gps/nmea`, { headers, signal: AbortSignal.timeout(3000) });
+        if (res.status !== 401) break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      if (!res || !res.ok) return false;
       const text = await res.text();
       const pos = parseNmea(text.trim());
       if (!pos || pos.latitude === 0 || pos.longitude === 0) return false;

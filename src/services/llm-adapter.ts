@@ -21,6 +21,7 @@ import { getRuntimeConfigSnapshot } from './runtime-config';
 import { recordCall, reserveCloudCall } from './llm-budget';
 import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
+import { isLocalModelOnly, isLlmEgressDisclosed } from './ai-flow-settings';
 
 export type LlmProvider = 'local' | 'cloud-agent' | 'cloud-chat' | 'none';
 
@@ -166,6 +167,22 @@ export async function generateText(prompt: string, options: LlmOptions = {}): Pr
       recordCall(local.provider);
       return local;
     }
+  }
+  // Block cloud egress if the user has enabled local-only mode.
+  if (isLocalModelOnly()) {
+    logDebug({ level: 'info', category: 'llm', source: 'llm-adapter',
+      message: 'cloud call blocked: local-model-only mode active' });
+    incrementCounter('llm.cloud-agent.blocked.local-only');
+    return { text: '', provider: 'none' };
+  }
+  // Block cloud egress until the user has acknowledged the disclosure notice.
+  if (!isLlmEgressDisclosed()) {
+    try { document.dispatchEvent(new CustomEvent('cb:llm-egress-disclosure-needed')); }
+    catch { /* non-browser test environment */ }
+    logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
+      message: 'cloud call blocked: LLM egress not yet disclosed to user' });
+    incrementCounter('llm.cloud-agent.blocked.undisclosed');
+    return { text: '', provider: 'none' };
   }
   // Atomically reserve a cloud-call slot before issuing the request.
   // If reserveCloudCall returns false, the cap is already hit; fail soft.

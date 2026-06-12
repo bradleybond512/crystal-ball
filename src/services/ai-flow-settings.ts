@@ -10,8 +10,11 @@ const STORAGE_KEY_BROWSER_MODEL = 'wm-ai-flow-browser-model';
 const STORAGE_KEY_CLOUD_LLM = 'wm-ai-flow-cloud-llm';
 const STORAGE_KEY_MAP_NEWS_FLASH = 'wm-map-news-flash';
 const STORAGE_KEY_STREAM_QUALITY = 'wm-stream-quality';
+const STORAGE_KEY_LLM_EGRESS_DISCLOSED = 'crystalball-llm-egress-disclosed';
+const STORAGE_KEY_LOCAL_MODEL_ONLY = 'crystalball-local-model-only';
 const EVENT_NAME = 'ai-flow-changed';
 const STREAM_QUALITY_EVENT = 'stream-quality-changed';
+const LLM_EGRESS_EVENT = 'crystalball-llm-egress-changed';
 
 export interface AiFlowSettings {
   browserModel: boolean;
@@ -74,6 +77,34 @@ export function subscribeAiFlowChange(cb: (changedKey?: keyof AiFlowSettings) =>
   };
   window.addEventListener(EVENT_NAME, handler);
   return () => window.removeEventListener(EVENT_NAME, handler);
+}
+
+// ── LLM Egress Disclosure + Local-Model-Only ──
+
+export function isLlmEgressDisclosed(): boolean {
+  return readBool(STORAGE_KEY_LLM_EGRESS_DISCLOSED, false);
+}
+
+export function setLlmEgressDisclosed(value: boolean): void {
+  writeBool(STORAGE_KEY_LLM_EGRESS_DISCLOSED, value);
+  try { window.dispatchEvent(new CustomEvent(LLM_EGRESS_EVENT, { detail: { key: 'llmEgressDisclosed' } })); }
+  catch { /* not in browser context */ }
+}
+
+export function isLocalModelOnly(): boolean {
+  return readBool(STORAGE_KEY_LOCAL_MODEL_ONLY, false);
+}
+
+export function setLocalModelOnly(value: boolean): void {
+  writeBool(STORAGE_KEY_LOCAL_MODEL_ONLY, value);
+  try { window.dispatchEvent(new CustomEvent(LLM_EGRESS_EVENT, { detail: { key: 'localModelOnly' } })); }
+  catch { /* not in browser context */ }
+}
+
+export function subscribeLlmEgressChange(cb: () => void): () => void {
+  const handler = (): void => { cb(); };
+  window.addEventListener(LLM_EGRESS_EVENT, handler);
+  return () => window.removeEventListener(LLM_EGRESS_EVENT, handler);
 }
 
 // ── Stream Quality ──

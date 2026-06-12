@@ -29,6 +29,7 @@ import { projectHypothesis, getCachedProjection, subscribeProjection } from '@/s
 import { exportHypothesisToClipboard } from '@/services/hypothesis-export';
 import { getBudgetStatus, subscribeBudget, setCloudCap, resetBudget } from '@/services/llm-budget';
 import { getTotalErrorCount, subscribeDebug } from '@/services/reasoning-debug';
+import { isLlmEgressDisclosed, setLlmEgressDisclosed, isLocalModelOnly, setLocalModelOnly, subscribeLlmEgressChange } from '@/services/ai-flow-settings';
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
 import { forecastAll, type HypothesisForecast } from '@/services/intelligence/hypothesis-forecast';
@@ -161,6 +162,13 @@ export class AnalystHUD {
       if (this.replayAtTimestamp === null) this.scheduleRender();
     });
     subscribeEnsemble(() => { this.scheduleRender(); });
+    subscribeLlmEgressChange(() => { this.scheduleRender(); });
+    // When llm-adapter blocks a cloud call because disclosure hasn't been
+    // acknowledged yet, show the disclosure banner in the HUD.
+    document.addEventListener('cb:llm-egress-disclosure-needed', () => {
+      if (this.visible) this.scheduleRender();
+      else this.show();
+    });
     document.addEventListener('cb:toggle-analyst-hud', () => this.toggle());
     document.addEventListener('cb:hypothesis-feedback', () => {
       if (this.visible) this.render();
@@ -474,6 +482,8 @@ export class AnalystHUD {
         isAutoBriefEnabled(), setAutoBriefEnabled),
       this.buildSettingToggle('Run skeptic pass on high/critical hypotheses',
         isSkepticEnabled(), setSkepticEnabled),
+      this.buildSettingToggle('Local model only (disable cloud LLM fallback)',
+        isLocalModelOnly(), setLocalModelOnly),
       this.buildCloudCapSlider(),
     );
 
@@ -1055,12 +1065,37 @@ export class AnalystHUD {
     return snap.hypotheses.find(h => h.evidence.some(ev => ev.id === e.id && ev.source === e.source)) ?? null;
   }
 
+  private buildEgressDisclosureBanner(): HTMLElement {
+    const banner = document.createElement('div');
+    banner.className = 'analyst-hud-egress-banner';
+
+    const msg = document.createElement('p');
+    msg.className = 'analyst-hud-egress-msg';
+    msg.textContent =
+      'When no local model is available, hypothesis summaries and evidence may be ' +
+      'sent to your configured cloud LLM provider (Anthropic, Groq, or OpenRouter). ' +
+      'Enable ‘Local model only’ below to disable this fallback.';
+    banner.append(msg);
+
+    const ackBtn = document.createElement('button');
+    ackBtn.className = 'analyst-hud-egress-ack';
+    ackBtn.textContent = 'Acknowledge';
+    ackBtn.addEventListener('click', () => {
+      setLlmEgressDisclosed(true);
+      this.render();
+    });
+    banner.append(ackBtn);
+    return banner;
+  }
+
   private buildBriefsSection(): HTMLElement {
     const sec = document.createElement('section');
     sec.className = 'analyst-hud-section';
     const h = document.createElement('h3');
     h.textContent = 'Auto-Briefs';
     sec.append(h);
+
+    if (!isLlmEgressDisclosed()) sec.append(this.buildEgressDisclosureBanner());
 
     const toggle = document.createElement('label');
     toggle.className = 'analyst-hud-toggle';

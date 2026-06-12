@@ -52,4 +52,51 @@ test('a knob without fixtures fails closed (no fixtures → never auto-apply)', 
   assert.equal(proposeTuningSafety('big-event-detector', 'threshold', 40, 45), false);
   assert.equal(hasTuningSafetyFixtures('big-event-detector', 'threshold'), false);
   assert.equal(hasTuningSafetyFixtures('negative-evidence', 'maxPenalty'), true);
+  assert.equal(hasTuningSafetyFixtures('big-event-detector', 'rapidJumpDelta'), true);
+  assert.equal(hasTuningSafetyFixtures('big-event-detector', 'exposureFloor'), true);
+  assert.equal(hasTuningSafetyFixtures('hypothesis-feedback', 'downPenalty'), true);
+});
+
+// ── New knob fixtures ────────────────────────────────────────────────────
+
+test('big-event-detector.rapidJumpDelta gate: lower delta fires more triggers (monotone)', () => {
+  const at = (delta: number) => scoreTuningSafety('big-event-detector', 'rapidJumpDelta', delta)!.hitRate;
+  // At the minimum valid delta all T cases fire — perfect score.
+  assert.equal(at(15), 1);
+  // At default (25) T3 (jump=20) does not fire — one case fails.
+  assert.ok(at(25) < 1, 'T3 does not fire at default delta');
+  // Higher deltas lose more T cases — score decreases.
+  assert.ok(at(25) >= at(30), 'stricter delta scores the same or lower');
+  // proposeTuningSafety: increasing delta from 25 breaks T2 (jump=28 < 30).
+  assert.equal(proposeTuningSafety('big-event-detector', 'rapidJumpDelta', 25, 30), false);
+  // Decreasing delta from 25 never regresses the current passing set.
+  assert.equal(proposeTuningSafety('big-event-detector', 'rapidJumpDelta', 25, 20), true);
+});
+
+test('big-event-detector.exposureFloor gate peaks in the middle (real algorithm)', () => {
+  const at = (floor: number) => scoreTuningSafety('big-event-detector', 'exposureFloor', floor)!.hitRate;
+  // Mid-range floor (60) correctly handles both in-path and out-of-path cases.
+  assert.equal(at(60), 1);
+  // Too-low floor fires on moderate-exposure users (F3 fails).
+  assert.ok(at(55) < 1, 'too-low floor fires on moderate-exposure user');
+  // Too-high floor misses direct-path users (T1 or T2 fails).
+  assert.ok(at(86) < 1, 'too-high floor misses high-exposure users');
+  // Increasing the floor to 85 regresses T2 (exposure=80).
+  assert.equal(proposeTuningSafety('big-event-detector', 'exposureFloor', 70, 85), false);
+  // Decreasing the floor to 60 does not regress — T3 gains.
+  assert.equal(proposeTuningSafety('big-event-detector', 'exposureFloor', 70, 60), true);
+});
+
+test('hypothesis-feedback.downPenalty gate peaks in the middle (real algorithm)', () => {
+  const at = (p: number) => scoreTuningSafety('hypothesis-feedback', 'downPenalty', p)!.hitRate;
+  // Mid-range (0.5) correctly classifies both demoted and promoted cases.
+  assert.equal(at(0.5), 1);
+  // Too-low penalty: D1 (balanced feedback) fails to be demoted.
+  assert.ok(at(0.3) < 1, 'too-low penalty misses balanced-feedback demotion');
+  // Too-high penalty: M1 (slight positive edge) is wrongly demoted.
+  assert.ok(at(0.7) < 1, 'too-high penalty wrongly demotes slight-positive case');
+  // Jumping to the extreme regresses the current passing set.
+  assert.equal(proposeTuningSafety('hypothesis-feedback', 'downPenalty', 0.5, 0.3), false);
+  // Small adjacent decrease is safe.
+  assert.equal(proposeTuningSafety('hypothesis-feedback', 'downPenalty', 0.5, 0.45), true);
 });

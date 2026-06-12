@@ -12175,7 +12175,8 @@ async function dispatch(requestUrl, req, routes, context) {
  // SSRF protection: block private IPs, reserved ranges, and DNS rebinding
  const safety = await isSafeUrl(feedUrl);
  if (!safety.safe) {
- context.logger.warn(`[local-api] rss-proxy SSRF blocked: ${safety.reason} (url=${feedUrl})`);
+ const blockedHost = (() => { try { return new URL(feedUrl).hostname; } catch { return 'invalid-url'; } })();
+ context.logger.warn(`[local-api] rss-proxy SSRF blocked: ${safety.reason} (host=${blockedHost})`);
  return json({ error: safety.reason }, 403);
  }
 
@@ -12211,7 +12212,8 @@ async function dispatch(requestUrl, req, routes, context) {
  const next = new URL(location, currentUrl).href;
  const nextSafety = await isSafeUrl(next);
  if (!nextSafety.safe) {
- context.logger.warn(`[local-api] rss-proxy SSRF blocked on redirect: ${nextSafety.reason} (url=${next})`);
+ const blockedRedirectHost = (() => { try { return new URL(next).hostname; } catch { return 'invalid-url'; } })();
+ context.logger.warn(`[local-api] rss-proxy SSRF blocked on redirect: ${nextSafety.reason} (host=${blockedRedirectHost})`);
  return json({ error: nextSafety.reason }, 403, makeCorsHeaders(req));
  }
  currentUrl = next;
@@ -16012,7 +16014,7 @@ export async function createLocalApiServer(options = {}) {
  recordTraffic({
  timestamp: new Date().toISOString(),
  method: req.method,
- path: requestUrl.pathname + (requestUrl.search || ''),
+ path: requestUrl.pathname,
  status: response.status,
  durationMs,
  });
@@ -16045,7 +16047,7 @@ export async function createLocalApiServer(options = {}) {
  recordTraffic({
  timestamp: new Date().toISOString(),
  method: req.method,
- path: requestUrl.pathname + (requestUrl.search || ''),
+ path: requestUrl.pathname,
  status: errorStatus,
  durationMs,
  error: error.message,

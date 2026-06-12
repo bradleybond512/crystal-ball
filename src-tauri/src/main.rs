@@ -2417,6 +2417,11 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  .append(true)
  .open(&log_path)
  .map_err(|e| format!("Failed to open local API log {}: {e}", log_path.display()))?;
+ #[cfg(unix)]
+ {
+ use std::os::unix::fs::PermissionsExt;
+ let _ = fs::set_permissions(&log_path, fs::Permissions::from_mode(0o600));
+ }
  let log_file_err = log_file
  .try_clone()
  .map_err(|e| format!("Failed to clone local API log handle: {e}"))?;

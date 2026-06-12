@@ -165,17 +165,19 @@ async function tryCloudAgent(prompt: string, options: LlmOptions): Promise<LlmRe
  * cap and overshoot.
  */
 export async function generateText(prompt: string, options: LlmOptions = {}): Promise<LlmResult> {
-  // Disclosure gate fires before tryLocal — the sidecar can fall back to Groq
-  // (cloud) when no local model is running, so tryLocal is not purely local.
-  if (!isLlmEgressDisclosed()) {
-    try { document.dispatchEvent(new CustomEvent('cb:llm-egress-disclosure-needed')); }
-    catch { /* non-browser test environment */ }
-    logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
-      message: 'cloud call blocked: LLM egress not yet disclosed to user' });
-    incrementCounter('llm.cloud-agent.blocked.undisclosed');
-    return { text: '', provider: 'none' };
-  }
   if (!options.preferCloud) {
+    // On desktop, tryLocal routes through the sidecar which can fall back to
+    // Groq (cloud) — enforce disclosure before that happens. On web,
+    // tryLocalDirect calls the user's own Ollama endpoint directly and never
+    // touches a cloud API, so no disclosure is required for that path.
+    if (isDesktopRuntime() && !isLlmEgressDisclosed()) {
+      try { document.dispatchEvent(new CustomEvent('cb:llm-egress-disclosure-needed')); }
+      catch { /* non-browser test environment */ }
+      logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
+        message: 'cloud call blocked: LLM egress not yet disclosed to user' });
+      incrementCounter('llm.cloud-agent.blocked.undisclosed');
+      return { text: '', provider: 'none' };
+    }
     const local = await tryLocal(prompt, options);
     if (local) {
       recordCall(local.provider);
@@ -187,6 +189,15 @@ export async function generateText(prompt: string, options: LlmOptions = {}): Pr
     logDebug({ level: 'info', category: 'llm', source: 'llm-adapter',
       message: 'cloud call blocked: local-model-only mode active' });
     incrementCounter('llm.cloud-agent.blocked.local-only');
+    return { text: '', provider: 'none' };
+  }
+  // Block cloud egress until the user has acknowledged the disclosure notice.
+  if (!isLlmEgressDisclosed()) {
+    try { document.dispatchEvent(new CustomEvent('cb:llm-egress-disclosure-needed')); }
+    catch { /* non-browser test environment */ }
+    logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
+      message: 'cloud call blocked: LLM egress not yet disclosed to user' });
+    incrementCounter('llm.cloud-agent.blocked.undisclosed');
     return { text: '', provider: 'none' };
   }
   // Atomically reserve a cloud-call slot before issuing the request.

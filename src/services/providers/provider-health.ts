@@ -94,7 +94,7 @@ export function deriveProviderHealth(
 /** All registered providers derived from `state`, sorted by status severity
  *  (down → degraded → stale → healthy → unknown_provider). For status panels. */
 export function getAllProviderHealth(state: ProviderHealthState, now: number): ProviderHealth[] {
-  const order: ProviderHealth['status'][] = ['down', 'degraded', 'stale', 'unknown_provider', 'healthy'];
+  const order: ProviderHealth['status'][] = ['down', 'degraded', 'stale', 'healthy', 'unknown_provider'];
   const results = PROVIDER_DEFINITIONS.map((def) => deriveProviderHealth(state, def.id, now));
   return results.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
 }

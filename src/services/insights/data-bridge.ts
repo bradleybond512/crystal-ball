@@ -189,8 +189,8 @@ const STATUS_TO_LEVEL: Record<SourceDiagnosticLike['status'], ProviderHealthLeve
  *  sources keep the legacy translation. */
 export function bridgeSourcesToProviderRedundancy(
   sources: readonly SourceDiagnosticLike[],
+  now = Date.now(),
 ): readonly ProviderSnapshot[] {
-  const now = Date.now();
   const registryIds = new Set<string>();
   const legacy: ProviderSnapshot[] = [];
 

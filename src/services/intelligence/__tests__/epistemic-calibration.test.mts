@@ -81,11 +81,17 @@ test('situation resolution triggers a meta-confidence evaluation record', () => 
     recorded.push({ algorithmId, score: input.score });
     return { id: `eval-${recorded.length}` } as EvaluationRecord;
   }) as unknown as Parameters<typeof wireEpistemicCalibration>[0]['recordEvaluation'];
+  const graded: Array<{ recordId: string; outcome: string }> = [];
+  const recordOutcome = ((recordId: string, outcome: string) => {
+    graded.push({ recordId, outcome });
+    return { id: recordId } as EvaluationRecord;
+  }) as unknown as Parameters<typeof wireEpistemicCalibration>[0]['recordOutcome'];
 
   const unsubscribe = wireEpistemicCalibration({
     lifecycleTracker,
     metaService,
     recordEvaluation,
+    recordOutcome,
     // resolved situation that genuinely materialized → actual outcome 1.
     resolutionOutcome: () => 1,
   });
@@ -97,6 +103,29 @@ test('situation resolution triggers a meta-confidence evaluation record', () => 
   assert.equal(recorded[0]!.algorithmId, META_CONFIDENCE_ALGORITHM_ID);
   // deviation = |actual(1) − metaConfidence(0.64)| = 0.36
   assert.ok(Math.abs((recorded[0]!.score ?? -1) - 0.36) < 1e-9);
+  // The record is graded so summarizeCalibration counts it. 0.36 > 0.35 → miss.
+  assert.equal(graded.length, 1);
+  assert.equal(graded[0]!.recordId, 'eval-1');
+  assert.equal(graded[0]!.outcome, 'miss');
+});
+
+test('grade ignores an estimate that is not a situation (id collision guard)', () => {
+  const calls: number[] = [];
+  const result = gradeMetaConfidenceOnResolution(
+    { situationId: 'sit-1', actualOutcome: 1 },
+    {
+      // A score estimate happens to reuse the situation id.
+      metaService: {
+        getEstimate: () => ({ ...makeFakeEstimate(0.5), targetType: 'score' }),
+      },
+      recordEvaluation: (() => {
+        calls.push(1);
+        return { id: 'x' } as EvaluationRecord;
+      }) as unknown as Parameters<typeof gradeMetaConfidenceOnResolution>[1]['recordEvaluation'],
+    },
+  );
+  assert.equal(result, null);
+  assert.equal(calls.length, 0);
 });
 
 test('grade returns null when no estimate was made for the situation', () => {

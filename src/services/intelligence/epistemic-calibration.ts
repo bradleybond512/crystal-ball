@@ -34,7 +34,11 @@ import {
   type PhaseTransition,
   type SituationLifecycleTrackerService,
 } from './situation-lifecycle-tracker';
-import { recordAlgorithmEvaluation } from '../algorithms/record-evaluation';
+import {
+  recordAlgorithmEvaluation,
+  recordAlgorithmOutcome,
+} from '../algorithms/record-evaluation';
+import type { EvaluationOutcome } from '../algorithms/algorithm-evaluation-ledger';
 import {
   getAlgorithm,
   registerAlgorithm,
@@ -98,6 +102,16 @@ export interface MetaConfidenceGradeInput {
 export interface MetaConfidenceGradeDeps extends RegistrySeam {
   metaService?: Pick<MetaConfidenceService, 'getEstimate'>;
   recordEvaluation?: typeof recordAlgorithmEvaluation;
+  recordOutcome?: typeof recordAlgorithmOutcome;
+}
+
+/** Map calibration deviation to a graded outcome so the record counts in
+ *  `summarizeCalibration` (which ignores records with no outcome). A
+ *  well-calibrated estimate sits close to the actual outcome. */
+function deviationToOutcome(deviation: number): EvaluationOutcome {
+  if (deviation <= 0.15) return 'hit';
+  if (deviation <= 0.35) return 'partial';
+  return 'miss';
 }
 
 export interface MetaConfidenceGradeResult {
@@ -123,6 +137,10 @@ export function gradeMetaConfidenceOnResolution(
   const metaService = deps.metaService ?? getMetaConfidenceService();
   const estimate = metaService.getEstimate(input.situationId);
   if (!estimate) return null;
+  // The estimate service is keyed by target id alone, so a score or
+  // hypothesis estimate could shadow a situation sharing that id. We only
+  // grade situation resolutions — reject anything else.
+  if (estimate.targetType !== 'situation') return null;
 
   const actual = clamp01(input.actualOutcome);
   const deviation = Math.abs(actual - estimate.metaConfidence);
@@ -142,6 +160,16 @@ export function gradeMetaConfidenceOnResolution(
       },
       notes: `Meta-confidence ${estimate.metaConfidence} vs actual ${actual} on resolution (deviation ${deviation.toFixed(4)}).`,
     },
+  );
+
+  // Grade the record immediately — without an outcome, summarizeCalibration
+  // ignores it and the tuning loop never sees this signal.
+  const outcome = deviationToOutcome(deviation);
+  (deps.recordOutcome ?? recordAlgorithmOutcome)(
+    record.id,
+    outcome,
+    `Calibration deviation ${deviation.toFixed(4)} → ${outcome}.`,
+    input.at,
   );
 
   return {
@@ -222,6 +250,7 @@ export interface WireEpistemicCalibrationDeps extends RegistrySeam {
   lifecycleTracker?: Pick<SituationLifecycleTrackerService, 'subscribe'>;
   metaService?: Pick<MetaConfidenceService, 'getEstimate'>;
   recordEvaluation?: typeof recordAlgorithmEvaluation;
+  recordOutcome?: typeof recordAlgorithmOutcome;
   /** Map a resolution transition to a ground-truth outcome in [0,1].
    *  Default: a situation that ran to resolution proved real → 1. */
   resolutionOutcome?: (transition: PhaseTransition) => number;
@@ -247,11 +276,31 @@ export function wireEpistemicCalibration(
       {
         metaService: deps.metaService,
         recordEvaluation: deps.recordEvaluation,
+        recordOutcome: deps.recordOutcome,
         getAlgorithm: deps.getAlgorithm,
         registerAlgorithm: deps.registerAlgorithm,
       },
     );
   });
+}
+
+let epistemicCalibrationUnsubscribe: (() => void) | null = null;
+
+/**
+ * Production entry point — wires the situation-resolution → meta-confidence
+ * grading subscription into the live lifecycle tracker once. Idempotent:
+ * a second call tears down the prior subscription first. Mirrors the other
+ * boot starters (startOutcomeGradingCadence / startTuningApplyCadence).
+ */
+export function startEpistemicCalibration(
+  deps: WireEpistemicCalibrationDeps = {},
+): () => void {
+  epistemicCalibrationUnsubscribe?.();
+  epistemicCalibrationUnsubscribe = wireEpistemicCalibration(deps);
+  return () => {
+    epistemicCalibrationUnsubscribe?.();
+    epistemicCalibrationUnsubscribe = null;
+  };
 }
 
 export const __internals = {

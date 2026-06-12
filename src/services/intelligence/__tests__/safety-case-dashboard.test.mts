@@ -17,8 +17,10 @@ test('stubbed safety checks report not_implemented, never passed', () => {
     domain: 'system',
     // signals omitted so BIAS-FREE stub path triggers
   });
+  // A stub that falsely claims 'passed' would slip through a filter on
+  // r.status === 'not_implemented', so we gate on evidence text only.
   for (const r of results) {
-    if (r.evidence.includes('no real check wired yet') || r.status === 'not_implemented') {
+    if (r.evidence.includes('no real check wired yet')) {
       assert.equal(
         r.status,
         'not_implemented',
@@ -84,4 +86,47 @@ test('stub properties all return not_implemented with signals present', () => {
     assert.equal(r!.status, 'not_implemented', `${id} should be not_implemented`);
     assert.equal(r!.passed, false, `${id} stub should have passed=false`);
   }
+});
+
+test('summary excludes not_implemented from failCount and criticalFailures', () => {
+  const svc = createSafetyCaseDashboardService({ storage: null });
+  // Run checks: 3 real properties checked (FEED-COVERAGE pass, ACCURACY pass,
+  // BIAS-FREE pass with 2 sources), plus 5 stubs → not_implemented.
+  svc.runChecks({
+    id: 'sit-6',
+    severity: 'low',
+    domain: 'system',
+    signals: [{ sourceId: 'nws' }, { sourceId: 'noaa' }],
+  });
+  const summary = svc.getSummary();
+
+  // not_implemented count must equal the 5 stub properties (+ BIAS-FREE never,
+  // since signals provided → BIAS-FREE runs real check above).
+  assert.equal(summary.notImplementedCount, 5, 'exactly 5 not_implemented stubs');
+
+  // criticalFailures must be empty — no actual failed checks.
+  assert.equal(summary.criticalFailures.length, 0, 'no criticalFailures from stubs');
+
+  // overallPassRate should be computed over implemented checks only (3/3 = 1.0).
+  assert.equal(summary.overallPassRate, 1.0, 'pass rate over implemented checks only');
+
+  // Per-property: each stub should have failCount=0 and notImplementedCount>0.
+  for (const ps of summary.propertySummaries) {
+    if (ps.notImplementedCount === ps.totalChecks && ps.totalChecks > 0) {
+      assert.equal(ps.failCount, 0, `${ps.propertyId} stub should have failCount=0`);
+      assert.equal(ps.passRate, 0, `${ps.propertyId} stub passRate is 0 (no implemented checks)`);
+    }
+  }
+});
+
+test('summary notImplementedCount field exists and counts stubs correctly', () => {
+  const svc = createSafetyCaseDashboardService({ storage: null });
+  const summary = svc.getSummary();
+  // No checks run yet.
+  assert.equal(summary.notImplementedCount, 0, 'zero before any checks');
+
+  svc.runChecks({ id: 'sit-7', severity: 'low', domain: 'system' });
+  const after = svc.getSummary();
+  // 5 explicit stubs + BIAS-FREE (signals absent) = 6 not_implemented.
+  assert.equal(after.notImplementedCount, 6, '6 not_implemented after one runChecks with no signals');
 });

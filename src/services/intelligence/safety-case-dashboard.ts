@@ -6,16 +6,17 @@
  * Pure service with injectable Storage + clock. Three properties have
  * actual heuristics today:
  *   - FEED-COVERAGE  → pass if situation has ≥1 signal
- *   - BIAS-FREE      → pass if signals span ≥2 distinct sources
- *                       (stub-pass when signals absent)
+ *   - BIAS-FREE      → pass if signals span ≥2 distinct sources;
+ *                       not_implemented when signals field is absent
  *   - ACCURACY       → pass if severity ≠ 'critical' OR signals ≥ 3
  *
  * The remaining 5 properties (FALSE-POSITIVE-RATE, ASSUMPTIONS-
- * DISCLOSED, ALGORITHM-STABLE, ALERT-BUDGET, HUMAN-IN-LOOP) are
- * intentional placeholders that always pass with "not evaluated"
- * evidence. They are still tracked + surfaced so the dashboard has
- * 8 rows from day 1, and later PRs can replace each stub with a
- * real detector without changing the surrounding service or panel.
+ * DISCLOSED, ALGORITHM-STABLE, ALERT-BUDGET, HUMAN-IN-LOOP) report
+ * `not_implemented` — a NEUTRAL third state, never red/failed. They
+ * are excluded from pass-rate denominators and from criticalFailures
+ * so the dashboard is honest rather than artificially green or red.
+ * Later PRs replace each stub with a real detector without changing
+ * the surrounding service or panel.
  */
 
 import type { SafetyPropertyId } from './repair-engine';
@@ -42,6 +43,8 @@ export interface SafetyPropertySummary {
   totalChecks: number;
   passCount: number;
   failCount: number;
+  /** Checks with status === 'not_implemented'. Excluded from passRate denominator. */
+  notImplementedCount: number;
   passRate: number;
   lastCheckedAt: number | null;
   trend: SafetyTrend;
@@ -50,7 +53,10 @@ export interface SafetyPropertySummary {
 export interface SafetyCaseSummary {
   overallPassRate: number;
   totalChecks: number;
+  /** Checks with status === 'not_implemented'. Excluded from overallPassRate denominator. */
+  notImplementedCount: number;
   propertySummaries: SafetyPropertySummary[];
+  /** Only includes checks with status === 'failed'. not_implemented checks are excluded. */
   criticalFailures: SafetyCheckResult[];
 }
 
@@ -234,8 +240,10 @@ function buildPropertySummary(
   checks: readonly SafetyCheckResult[],
 ): SafetyPropertySummary {
   const ofProperty = checks.filter((c) => c.propertyId === propertyId);
-  const passCount = ofProperty.filter((c) => c.passed).length;
-  const failCount = ofProperty.length - passCount;
+  const notImplementedCount = ofProperty.filter((c) => c.status === 'not_implemented').length;
+  const implemented = ofProperty.filter((c) => c.status !== 'not_implemented');
+  const passCount = implemented.filter((c) => c.passed).length;
+  const failCount = implemented.length - passCount;
   const lastCheckedAt = ofProperty.length === 0
     ? null
     : ofProperty[ofProperty.length - 1]!.checkedAt;
@@ -244,7 +252,8 @@ function buildPropertySummary(
     totalChecks: ofProperty.length,
     passCount,
     failCount,
-    passRate: passRate(passCount, ofProperty.length),
+    notImplementedCount,
+    passRate: passRate(passCount, implemented.length),
     lastCheckedAt,
     trend: computeTrend(ofProperty),
   };
@@ -270,16 +279,19 @@ export function createSafetyCaseDashboardService(
     const propertySummaries = ALL_SAFETY_PROPERTY_IDS.map(
       (id) => buildPropertySummary(id, checks),
     );
-    const passCount = checks.filter((c) => c.passed).length;
-    const overallPassRate = passRate(passCount, checks.length);
+    const notImplementedCount = checks.filter((c) => c.status === 'not_implemented').length;
+    const implementedChecks = checks.filter((c) => c.status !== 'not_implemented');
+    const passCount = implementedChecks.filter((c) => c.passed).length;
+    const overallPassRate = passRate(passCount, implementedChecks.length);
     const criticalFailures: SafetyCheckResult[] = [];
     for (let i = checks.length - 1; i >= 0 && criticalFailures.length < CRITICAL_FAILURE_LIMIT; i--) {
       const c = checks[i]!;
-      if (!c.passed) criticalFailures.push(cloneCheck(c));
+      if (c.status === 'failed') criticalFailures.push(cloneCheck(c));
     }
     return {
       overallPassRate,
       totalChecks: checks.length,
+      notImplementedCount,
       propertySummaries,
       criticalFailures,
     };

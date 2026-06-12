@@ -67,6 +67,7 @@ export class SafetyCaseDashboardPanel extends Panel {
   private render(): void {
     const svc = getSafetyCaseDashboardService();
     const summary = svc.getSummary();
+    // Badge count reflects only real failures, not not_implemented stubs.
     this.setCount(summary.criticalFailures.length);
     this.setContent(this.buildHtml(summary), () => this.wireHandlers());
   }
@@ -93,7 +94,7 @@ export class SafetyCaseDashboardPanel extends Panel {
         </div>
         <span style="font-size:13px;color:${color};font-weight:700;">${pct.toFixed(0)}%</span>
       </div>
-      <div style="font-size:10px;opacity:0.6;">${summary.totalChecks} total checks · ${summary.criticalFailures.length} recent failure${summary.criticalFailures.length === 1 ? '' : 's'}</div>
+      <div style="font-size:10px;opacity:0.6;">${summary.totalChecks} total checks · ${summary.criticalFailures.length} recent failure${summary.criticalFailures.length === 1 ? '' : 's'}${summary.notImplementedCount > 0 ? ` · ${summary.notImplementedCount} not implemented` : ''}</div>
     </div>`;
   }
 
@@ -102,24 +103,28 @@ export class SafetyCaseDashboardPanel extends Panel {
   }
 
   private renderPropertyRow(p: SafetyPropertySummary): string {
+    const allNotImplemented = p.totalChecks > 0 && p.notImplementedCount === p.totalChecks;
     const pct = p.passRate * 100;
-    const color = p.totalChecks === 0 ? '#666' : pctColor(pct);
+    const color = (p.totalChecks === 0 || allNotImplemented) ? '#666' : pctColor(pct);
     const trendIcon = TREND_ICON[p.trend];
     const trendColor = TREND_COLOR[p.trend];
     const last = p.lastCheckedAt
       ? ageLabel(new Date(p.lastCheckedAt), Date.now())
       : '—';
+    const statusLabel = allNotImplemented
+      ? 'not implemented'
+      : `${p.passCount}/${p.totalChecks - p.notImplementedCount}`;
     return `<div style="border-left:3px solid ${color};background:rgba(255,255,255,0.02);border-radius:0 3px 3px 0;padding:5px 8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
         <span style="font-family:ui-monospace,monospace;font-size:11px;color:#ddd;">${escapeHtml(p.propertyId)}</span>
         <span style="display:flex;align-items:center;gap:6px;font-size:10px;opacity:0.7;">
-          <span>${p.passCount}/${p.totalChecks}</span>
+          <span style="${allNotImplemented ? 'color:#9ca3af;font-style:italic;' : ''}">${escapeHtml(statusLabel)}</span>
           <span style="color:${trendColor};font-size:13px;">${trendIcon}</span>
           <span>last ${escapeHtml(last)}</span>
         </span>
       </div>
       <div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden;margin-top:3px;">
-        <div style="width:${p.totalChecks === 0 ? 0 : pct.toFixed(0)}%;height:100%;background:${color};"></div>
+        <div style="width:${(p.totalChecks === 0 || allNotImplemented) ? 0 : pct.toFixed(0)}%;height:100%;background:${color};"></div>
       </div>
     </div>`;
   }

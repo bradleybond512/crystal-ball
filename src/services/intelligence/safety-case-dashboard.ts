@@ -24,10 +24,14 @@ import type { SafetyPropertyId } from './repair-engine';
 
 export type SafetyTrend = 'improving' | 'stable' | 'degrading';
 
+export type SafetyCheckStatus = 'passed' | 'failed' | 'not_implemented';
+
 export interface SafetyCheckResult {
   id: string;
   propertyId: SafetyPropertyId;
   situationId: string;
+  status: SafetyCheckStatus;
+  /** Derived from status for backwards-compat with summary math. */
   passed: boolean;
   evidence: string;
   checkedAt: number;
@@ -138,7 +142,7 @@ function rehydrate(storage: StorageLike | null): SafetyCheckResult[] {
 // ── Heuristics ──────────────────────────────────────────────────────────
 
 interface HeuristicOutcome {
-  passed: boolean;
+  status: SafetyCheckStatus;
   evidence: string;
 }
 
@@ -155,18 +159,18 @@ function countDistinctSources(signals: readonly unknown[]): number {
 function checkFeedCoverage(situation: SituationInput): HeuristicOutcome {
   const count = situation.signals?.length ?? 0;
   return {
-    passed: count >= 1,
+    status: count >= 1 ? 'passed' : 'failed',
     evidence: `signals=${count}`,
   };
 }
 
 function checkBiasFree(situation: SituationInput): HeuristicOutcome {
   if (situation.signals === undefined) {
-    return { passed: true, evidence: 'signals absent — stub pass' };
+    return { status: 'not_implemented', evidence: 'no real check wired yet' };
   }
   const distinct = countDistinctSources(situation.signals);
   return {
-    passed: distinct >= 2,
+    status: distinct >= 2 ? 'passed' : 'failed',
     evidence: `distinct sources=${distinct}`,
   };
 }
@@ -174,16 +178,15 @@ function checkBiasFree(situation: SituationInput): HeuristicOutcome {
 function checkAccuracy(situation: SituationInput): HeuristicOutcome {
   const isCritical = situation.severity === 'critical';
   const signalCount = situation.signals?.length ?? 0;
-  const passed = !isCritical || signalCount >= 3;
+  const ok = !isCritical || signalCount >= 3;
   return {
-    passed,
+    status: ok ? 'passed' : 'failed',
     evidence: `severity=${situation.severity}, signals=${signalCount}`,
   };
 }
 
 function checkStub(): HeuristicOutcome {
-  // Placeholder: heuristic not yet implemented for this property.
-  return { passed: true, evidence: 'not evaluated' };
+  return { status: 'not_implemented', evidence: 'no real check wired yet' };
 }
 
 function evaluateProperty(
@@ -301,6 +304,7 @@ export function createSafetyCaseDashboardService(
       const now = clock();
       const result: SafetyCheckResult = {
         ...input,
+        passed: input.status === 'passed',
         id: nextId(now),
         checkedAt: now,
       };
@@ -319,7 +323,8 @@ export function createSafetyCaseDashboardService(
           id: nextId(now),
           propertyId,
           situationId: situation.id,
-          passed: outcome.passed,
+          status: outcome.status,
+          passed: outcome.status === 'passed',
           evidence: outcome.evidence,
           checkedAt: now,
         };

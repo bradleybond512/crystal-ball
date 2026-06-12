@@ -36,3 +36,24 @@ jobs:
       - name: cargo audit
         working-directory: src-tauri
         run: cargo audit
+
+  sidecar-http-guardrail:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - name: No plain-HTTP external URLs in sidecar
+        run: |
+          # Flag plain-HTTP only when it targets a real external host (dotted TLD).
+          # This shape requirement already drops loopback IPs (digit after the final
+          # dot), `ws://`->`http://` scheme transforms, and `http://x` URL-parse
+          # bases (no TLD). XML namespace identifiers, comments, and test/spec
+          # fixtures are excluded explicitly. `|| true` keeps the step alive under
+          # bash -eo pipefail when grep finds nothing.
+          matches="$(grep -rnE "http://[a-zA-Z0-9.-]+\.[a-zA-Z]" src-tauri/sidecar/ \
+              | grep -v "127\.0\.0\.1\|localhost\|xmlns\|#\|\.test\.\|spec\." || true)"
+          if [ -n "$matches" ]; then
+            echo "ERROR: Plain HTTP external URL found in sidecar. Use HTTPS." >&2
+            echo "$matches" >&2
+            exit 1
+          fi
+          echo "OK: No plain-HTTP external URLs in sidecar."

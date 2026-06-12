@@ -1,14 +1,30 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { beforeEach, test } from 'node:test';
 
-import { brierScore, createForecastCalibrationStore } from '../forecast-calibration.ts';
+const mem = new Map<string, string>();
+(globalThis as any).localStorage = {
+  getItem: (k: string) => mem.get(k) ?? null,
+  setItem: (k: string, v: string) => { mem.set(k, v); },
+  removeItem: (k: string) => { mem.delete(k); },
+};
+
+import {
+  brierScore,
+  createForecastCalibrationStore,
+} from '../forecast-calibration.ts';
 import type { PredictionRecord } from '../forecast-calibration.ts';
+import {
+  getCalibrationStore,
+  recordPrediction,
+  getDomainCalibrationMult,
+  _resetCalibrationForTests,
+} from '../forecast-calibration-adapter.ts';
 
-function makeRecord(id: string, probability: number, outcome: boolean): PredictionRecord {
+function makeRecord(id: string, probability: number, outcome: boolean, domain = 'other'): PredictionRecord {
   return {
     id,
     sourceId: 'test',
-    domain: 'general',
+    domain: domain as PredictionRecord['domain'],
     claim: 'test claim',
     probability,
     predictedAt: 1_000_000,
@@ -27,6 +43,8 @@ function boostMultiplierFromRecords(records: PredictionRecord[]): number {
   if (result.score <= 0.30) return 0.7;
   return 0.4;
 }
+
+// ── Original boost-multiplier tests (domain corrected to 'other') ─────────
 
 test('empty store returns 1.0', () => {
   const store = createForecastCalibrationStore();
@@ -65,4 +83,56 @@ test('5+ poor records (Brier > 0.30) returns 0.4', () => {
   assert.ok(bs.score > 0.30, `expected brier > 0.30, got ${bs.score}`);
   const result = boostMultiplierFromRecords(records);
   assert.equal(result, 0.4);
+});
+
+// ── Persistence tests ─────────────────────────────────────────────────────
+
+beforeEach(() => { mem.clear(); _resetCalibrationForTests(); });
+
+test('recordPrediction persists and reloads', () => {
+  recordPrediction({
+    id: 'p1', sourceId: 'analyst-loop', domain: 'weather',
+    claim: 'test claim', probability: 0.7,
+    predictedAt: 1000, resolveBy: 2000, status: 'pending',
+  });
+  _resetCalibrationForTests();
+  assert.equal(getCalibrationStore().get('p1')?.claim, 'test claim');
+});
+
+test('store caps at 500 records, oldest dropped', () => {
+  for (let i = 0; i < 510; i++) {
+    recordPrediction({
+      id: `p${i}`, sourceId: 's', domain: 'weather', claim: 'c',
+      probability: 0.5, predictedAt: i, resolveBy: i + 100, status: 'pending',
+    });
+  }
+  assert.equal(getCalibrationStore().all().length, 500);
+  assert.equal(getCalibrationStore().get('p0'), undefined);
+});
+
+// ── Domain calibration multiplier tests ──────────────────────────────────
+
+test('domain multiplier is neutral below 10 resolved', () => {
+  assert.equal(getDomainCalibrationMult('weather'), 1);
+});
+
+test('well-calibrated domain boosts; badly calibrated damps', () => {
+  // 12 resolved, perfect calibration (p=0.9 all true) → low brier → boost
+  for (let i = 0; i < 12; i++) {
+    recordPrediction({
+      id: `g${i}`, sourceId: 's', domain: 'weather', claim: 'c',
+      probability: 0.9, predictedAt: i, resolveBy: i + 10,
+      status: 'resolved_true', resolvedAt: i + 1,
+    });
+  }
+  assert.ok(getDomainCalibrationMult('weather') > 1);
+
+  for (let i = 0; i < 12; i++) {
+    recordPrediction({
+      id: `b${i}`, sourceId: 's', domain: 'markets', claim: 'c',
+      probability: 0.9, predictedAt: i, resolveBy: i + 10,
+      status: 'resolved_false', resolvedAt: i + 1,
+    });
+  }
+  assert.ok(getDomainCalibrationMult('markets') < 1);
 });

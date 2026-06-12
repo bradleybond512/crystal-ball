@@ -5099,15 +5099,23 @@ async function dispatch(requestUrl, req, routes, context) {
     // Caller-ID (From) is spoofable. When a TWILIO_AUTH_TOKEN is configured we
     // require a valid HMAC-SHA1 request signature before trusting the webhook;
     // without a token we log once and fall back to phone-number-only validation.
+    //
+    // The in-app test command (SmsSettingsPanel) POSTs to this same pre-auth
+    // route but carries a valid LOCAL_API_TOKEN via the renderer's fetch
+    // wrapper. A valid token already proves a trusted local caller, so skip the
+    // Twilio-signature requirement for it — external webhooks never have one.
+    const trustedLocalCaller = isValidToken(req.headers.authorization || '');
     const twilioToken = process.env.TWILIO_AUTH_TOKEN || '';
     if (twilioToken) {
-      const signature = req.headers['x-twilio-signature'] || '';
-      const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
-      const host = req.headers['x-forwarded-host'] || req.headers.host || '';
-      const fullUrl = `${proto}://${host}${requestUrl.pathname}${requestUrl.search}`;
-      if (!validateTwilioSignature(twilioToken, fullUrl, params, signature)) {
-        context.logger.warn(`[local-api] rejected SMS webhook: invalid Twilio signature (from ${host || 'unknown host'})`);
-        return json({ error: 'Invalid Twilio signature' }, 403);
+      if (!trustedLocalCaller) {
+        const signature = req.headers['x-twilio-signature'] || '';
+        const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
+        const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+        const fullUrl = `${proto}://${host}${requestUrl.pathname}${requestUrl.search}`;
+        if (!validateTwilioSignature(twilioToken, fullUrl, params, signature)) {
+          context.logger.warn(`[local-api] rejected SMS webhook: invalid Twilio signature (from ${host || 'unknown host'})`);
+          return json({ error: 'Invalid Twilio signature' }, 403);
+        }
       }
     } else if (!_smsTwilioTokenWarned) {
       _smsTwilioTokenWarned = true;

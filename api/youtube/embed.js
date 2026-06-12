@@ -13,7 +13,12 @@ function sanitizeVideoId(value) {
 const ALLOWED_ORIGINS = [
   /^https:\/\/crystalball\.app$/,
   /^https:\/\/(tech|finance|happy|api)\.crystalball\.app$/,
-  // Vercel preview URLs anchored to known owner accounts (mirrors _cors.ts)
+  // Vercel preview URLs anchored to known owner accounts (mirrors _cors.ts).
+  // The `-<account-slug>` suffix (e.g. `-bradleybond512`) is appended by Vercel
+  // from the OWNING account and cannot be forged by a third party. Without it,
+  // `crystalball-[a-z0-9-]+\.vercel\.app` would match any project literally named
+  // `crystalball-<anything>` — e.g. an attacker's `crystalball-evil.vercel.app` —
+  // granting it a trusted embed origin. Keep every preview pattern account-anchored.
   /^https:\/\/crystalball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
   /^https:\/\/crystal-ball-[a-z0-9-]+-bradleybond512\.vercel\.app$/,
   /^https:\/\/crystalball-[a-z0-9-]+-elie-[a-z0-9]+\.vercel\.app$/,

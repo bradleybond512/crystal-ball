@@ -8,7 +8,7 @@
 
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
-import { statSync } from 'node:fs';
+import { statSync, chmodSync, existsSync } from 'node:fs';
 
 const EVENT_TYPES = new Set([
   'observation',
@@ -77,9 +77,16 @@ export class EventStore {
   constructor({ dataDir, dbPath, retentionMonths } = {}) {
     this._filePath = dbPath ?? path.join(dataDir ?? '.', 'events.db');
     this.db = new DatabaseSync(this._filePath);
+    // Restrict the DB to owner-only — the event log can contain
+    // location/saved-place data, so it must not be world-readable.
+    try { chmodSync(this._filePath, 0o600); } catch { /* best effort */ }
     this.db.prepare('PRAGMA journal_mode = WAL').get();
     this.db.prepare('PRAGMA synchronous = NORMAL').get();
     for (const stmt of SCHEMA_STATEMENTS) this.db.prepare(stmt).run();
+    // The -wal sidecar only exists once WAL mode is active and a write has
+    // happened (the schema statements above), so chmod it here, not at open.
+    const walPath = `${this._filePath}-wal`;
+    try { if (existsSync(walPath)) chmodSync(walPath, 0o600); } catch { /* best effort */ }
     this.retentionMonths = resolveRetentionMonths(retentionMonths);
     // Plain INSERT — the log is append-only, so a duplicate id must fail closed
     // rather than silently overwrite prior history (INSERT OR REPLACE would).

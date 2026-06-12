@@ -80,3 +80,57 @@ test('observations from unknown providers are dropped with a reason', () => {
   assert.equal(r.independentSourceCount, 0);
   assert.equal(r.label, 'very_low');
 });
+
+// Finding 2: reliability must incorporate a status factor so a 'down'
+// provider contributes 0 reliability even if its successRate history is high.
+
+test('provider with 3 consecutive failures contributes 0 reliability', () => {
+  let s = emptyProviderHealthState();
+  for (let i = 0; i < 3; i++) {
+    s = recordFetchOutcome(s, 'nws-alerts', { ok: false, latencyMs: 0, at: T0 - (2 - i) * 1000 });
+  }
+  const r = fuseObservations({ observations: [obs('nws-alerts', 1, T0)], healthState: s, now: T0 });
+  assert.equal(r.components.reliability.score, 0,
+    `expected 0 reliability for down provider, got ${r.components.reliability.score}`);
+  assert.match(r.components.reliability.reason, /status factor/i);
+});
+
+test('provider with no recorded outcomes (stale status) is penalized to 0.5x', () => {
+  const s = emptyProviderHealthState(); // no outcomes → stale
+  const r = fuseObservations({ observations: [obs('nws-alerts', 1, T0)], healthState: s, now: T0 });
+  // reliabilityWeight for nws-alerts = 0.95, successRate for stale = 1, factor = 0.5
+  // expected = 0.95 * 1 * 0.5 = 0.475
+  const expected = 0.95 * 1 * 0.5;
+  assert.ok(
+    Math.abs(r.components.reliability.score - expected) < 0.01,
+    `expected reliability ~${expected}, got ${r.components.reliability.score}`,
+  );
+});
+
+// Finding 3: splitConsensus must rank by distinct independence groups, not
+// raw observation count.
+
+test('two providers from one group do NOT outvote two providers from two groups', () => {
+  // adsb-lol + adsb-fi both independenceGroup='community-adsb' → value 99
+  // opensky independenceGroup='opensky' + airplanes-live independenceGroup='community-adsb'
+  // wait — let's use opensky (group opensky) + wingbits (group wingbits) → value 42
+  // vs adsb-lol + adsb-fi (both community-adsb) → value 99
+  // community-adsb (1 group, 2 obs) vs opensky+wingbits (2 groups, 2 obs)
+  // Result: opensky+wingbits cluster has MORE distinct independence groups → wins consensus
+  let s = emptyProviderHealthState();
+  for (const id of ['adsb-lol', 'adsb-fi', 'opensky', 'wingbits']) {
+    s = recordFetchOutcome(s, id, { ok: true, latencyMs: 100, at: T0 });
+  }
+  const r = fuseObservations({
+    observations: [
+      obs('adsb-lol', 99), obs('adsb-fi', 99),         // 1 group
+      obs('opensky', 42), obs('wingbits', 42),           // 2 groups
+    ],
+    healthState: s, now: T0,
+  });
+  // The 42-cluster (opensky + wingbits: 2 distinct groups) should win consensus.
+  // The 99-cluster should be in disagreements.
+  assert.equal(r.disagreements.length, 1);
+  assert.equal(r.disagreements[0]!.value, 99,
+    `expected 99 (single-group cluster) to be the disagreement, not the consensus`);
+});

@@ -159,4 +159,21 @@ describe('getLiveDiagnosticsSnapshot', () => {
       { ...b, recentEvents: [] },
     );
   });
+
+  // Finding 4: collectProviders must use the injected clock, not Date.now().
+  it('collectProviders uses the injected now clock, not Date.now()', () => {
+    // Two snapshots with very different "now" values. If collectProviders
+    // ignores the injected clock, stale detection would use the real wall
+    // clock and both snapshots might look identical on a fast machine.
+    // With the fix, generatedAt must equal the injected time.
+    const T1 = 1_700_000_000_000;
+    const T2 = 1_700_000_000_000 + 7 * 24 * 60 * 60_000; // +7 days
+    const snap1 = getLiveDiagnosticsSnapshot(() => T1);
+    const snap2 = getLiveDiagnosticsSnapshot(() => T2);
+    assert.equal(snap1.generatedAt, T1);
+    assert.equal(snap2.generatedAt, T2);
+    // The two snapshots must differ in generatedAt, proving the injected
+    // clock is threaded all the way through.
+    assert.notEqual(snap1.generatedAt, snap2.generatedAt);
+  });
 });

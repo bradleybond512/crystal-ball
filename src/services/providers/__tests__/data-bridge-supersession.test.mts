@@ -32,3 +32,25 @@ test('unregistered source falls back to the legacy translation', () => {
   assert.equal(legacy.label, 'Legacy Feed');
   assert.equal(legacy.level, 'degraded');
 });
+
+// Finding 1: registry-known source with a failing/silent diagnostic status
+// must emit that level directly — not pass through deriveProviderHealth which
+// needs 3 consecutive failures before it reports 'down'.
+
+test('registry-known source with status silent emits level silent', () => {
+  const snapshots = bridgeSourcesToProviderRedundancy([
+    { id: 'nws-alerts', name: 'NWS', status: 'silent', lastUpdateMs: null },
+  ]);
+  const nws = snapshots.find((s) => s.providerId === 'nws-alerts');
+  assert.ok(nws, 'nws-alerts snapshot must be present');
+  assert.equal(nws.level, 'silent', `expected level 'silent', got '${nws.level}'`);
+});
+
+test('registry-known source with status failing emits level failing', () => {
+  const snapshots = bridgeSourcesToProviderRedundancy([
+    { id: 'nws-alerts', name: 'NWS', status: 'failing', lastUpdateMs: null },
+  ]);
+  const nws = snapshots.find((s) => s.providerId === 'nws-alerts');
+  assert.ok(nws, 'nws-alerts snapshot must be present');
+  assert.equal(nws.level, 'failing', `expected level 'failing', got '${nws.level}'`);
+});

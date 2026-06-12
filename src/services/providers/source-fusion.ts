@@ -21,6 +21,16 @@ export interface FuseInput {
 const DISAGREEMENT_CAP = 0.6; // mirrors redundant_disagreement in provider-redundancy.ts
 const WEIGHTS = { freshness: 0.25, reliability: 0.25, corroboration: 0.5 };
 
+/** Multiply the raw reliability score by this factor based on derived health status.
+ *  A 'down' provider contributes nothing regardless of historical successRate. */
+const STATUS_RELIABILITY_FACTOR: Record<string, number> = {
+  healthy: 1,
+  degraded: 0.7,
+  stale: 0.5,
+  down: 0,
+  unknown_provider: 0,
+};
+
 export function fuseObservations(input: FuseInput): FusionResult {
   const known = input.observations.filter((o) => getProviderDefinition(o.providerId));
   const droppedCount = input.observations.length - known.length;
@@ -52,11 +62,13 @@ export function fuseObservations(input: FuseInput): FusionResult {
   });
   const freshness = mean(freshnessScores);
 
-  // Reliability: registry prior × observed success rate.
+  // Reliability: registry prior × observed success rate × status factor.
+  // A 'down' provider contributes 0 even if historical successRate is high.
   const reliabilityScores = consensus.map((o) => {
     const def = getProviderDefinition(o.providerId)!;
     const health = deriveProviderHealth(input.healthState, o.providerId, input.now);
-    return def.reliabilityWeight * health.successRate;
+    const statusFactor = STATUS_RELIABILITY_FACTOR[health.status] ?? 0;
+    return def.reliabilityWeight * health.successRate * statusFactor;
   });
   const reliability = mean(reliabilityScores);
 
@@ -78,7 +90,7 @@ export function fuseObservations(input: FuseInput): FusionResult {
     label: labelFor(multiplier),
     components: {
       freshness: { score: freshness, reason: `Mean freshness ${freshness.toFixed(2)} across ${consensus.length} consensus observation(s).` },
-      reliability: { score: reliability, reason: `Mean prior×observed reliability ${reliability.toFixed(2)}.` },
+      reliability: { score: reliability, reason: `Mean prior×observed reliability×status factor ${reliability.toFixed(2)}.` },
       corroboration: { score: corroboration, reason: buildCorrobReason(independentSourceCount, droppedCount) },
     },
     disagreements,
@@ -91,7 +103,9 @@ function buildCorrobReason(independentSourceCount: number, droppedCount: number)
   return droppedCount > 0 ? `${base}; ${droppedCount} unknown-provider observation(s) dropped` : `${base}.`;
 }
 
-/** Consensus = the largest agreement cluster; everything else disagrees. */
+/** Consensus = the cluster with the most distinct independence groups.
+ *  Ties broken by observation count, then summed reliabilityWeight (via
+ *  registry lookup), then first-seen order. */
 function splitConsensus(
   observations: readonly SourceObservation[],
   tolerance: number,
@@ -102,7 +116,20 @@ function splitConsensus(
     if (home) home.push(o);
     else clusters.push([o]);
   }
-  clusters.sort((a, b) => b.length - a.length);
+  clusters.sort((a, b) => {
+    // Primary: most distinct independence groups
+    const ga = independentGroupsFor(a.map((o) => o.providerId)).size;
+    const gb = independentGroupsFor(b.map((o) => o.providerId)).size;
+    if (gb !== ga) return gb - ga;
+    // Tie-break 1: observation count
+    if (b.length !== a.length) return b.length - a.length;
+    // Tie-break 2: summed reliabilityWeight
+    const wa = a.reduce((s, o) => s + (getProviderDefinition(o.providerId)?.reliabilityWeight ?? 0), 0);
+    const wb = b.reduce((s, o) => s + (getProviderDefinition(o.providerId)?.reliabilityWeight ?? 0), 0);
+    if (wb !== wa) return wb - wa;
+    // Tie-break 3: first-seen order (stable — no change)
+    return 0;
+  });
   const [consensus = [], ...rest] = clusters;
   const disagreements = rest.map((c) => ({
     providerIds: c.map((o) => o.providerId),

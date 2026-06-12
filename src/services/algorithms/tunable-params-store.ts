@@ -90,6 +90,44 @@ const DECLARATIONS: readonly TunableDeclaration[] = [
     // not gate any notification rung, suppression window, or bypass.
     affectsNotifications: false,
   },
+  {
+    algorithmId: 'big-event-detector',
+    parameterId: 'rapidJumpDelta',
+    default: 25,
+    min: 15,
+    max: 40,
+    step: 5,
+    // Over-firing on small severity wiggles → require a bigger jump.
+    fixDirection: 'increase',
+    description: 'Severity-points jump (current − previous) that fires rapid_severity_jump.',
+    // Trigger feeds the big-event score that gates the notification ladder.
+    affectsNotifications: true,
+  },
+  {
+    algorithmId: 'big-event-detector',
+    parameterId: 'exposureFloor',
+    default: 70,
+    min: 50,
+    max: 90,
+    step: 5,
+    // Personal-exposure trigger firing on weak exposure → raise the floor.
+    fixDirection: 'increase',
+    description: 'User-exposure score (0-100) above which high_personal_exposure fires.',
+    affectsNotifications: true,
+  },
+  {
+    algorithmId: 'hypothesis-feedback',
+    parameterId: 'downPenalty',
+    default: 0.5,
+    min: 0.3,
+    max: 0.7,
+    step: 0.05,
+    // Hypotheses graded as misses despite down-votes not sinking them →
+    // weight down-votes harder.
+    fixDirection: 'increase',
+    description: 'Weight applied to the down-vote ratio in the hypothesis feedback multiplier.',
+    affectsNotifications: false,
+  },
 ];
 
 type Store = Record<string, number>; // `${algorithmId}:${parameterId}` -> value

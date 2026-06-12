@@ -713,11 +713,12 @@ fn get_local_api_port(webview: Webview, state: tauri::State<'_, LocalApiState>) 
 }
 
 #[tauri::command]
-fn list_supported_secret_keys() -> Vec<String> {
- SUPPORTED_SECRET_KEYS
+fn list_supported_secret_keys(webview: Webview) -> Result<Vec<String>, String> {
+ require_trusted_window(webview.label())?;
+ Ok(SUPPORTED_SECRET_KEYS
  .iter()
  .map(|key| (*key).to_string())
- .collect()
+ .collect())
 }
 
 #[tauri::command]

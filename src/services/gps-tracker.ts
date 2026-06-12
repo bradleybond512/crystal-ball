@@ -172,10 +172,20 @@ export class GpsTracker {
     });
   }
 
+  private async _nmeaHeaders(): Promise<Record<string, string>> {
+    // The /gps/nmea route is auth-gated like the other sidecar endpoints, but
+    // it lives outside the /api/ prefix the global fetch patch authorizes, so
+    // attach the local API token here. Tier 3 is desktop-only; in the browser
+    // build the token is absent and the fetch simply fails back to no Tier 3.
+    const token = await tryInvokeTauri<string>('get_local_api_token').catch(() => null);
+    return token ? { Authorization: `Bearer ${token.trim()}` } : {};
+  }
+
   private async _tryTier3(): Promise<boolean> {
     try {
       const base = getApiBaseUrl();
-      const res = await fetch(`${base}/gps/nmea`, { signal: AbortSignal.timeout(3000) });
+      const headers = await this._nmeaHeaders();
+      const res = await fetch(`${base}/gps/nmea`, { headers, signal: AbortSignal.timeout(3000) });
       if (!res.ok) return false;
       const text = await res.text();
       const pos = parseNmea(text.trim());
@@ -194,7 +204,10 @@ export class GpsTracker {
 
       this._pollId = setInterval(async () => {
         try {
-          const r = await fetch(`${base}/gps/nmea`, { signal: AbortSignal.timeout(3000) });
+          const r = await fetch(`${base}/gps/nmea`, {
+            headers: await this._nmeaHeaders(),
+            signal: AbortSignal.timeout(3000),
+          });
           if (!r.ok) return;
           const t = await r.text();
           const p = parseNmea(t.trim());

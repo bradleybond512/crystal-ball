@@ -1082,6 +1082,11 @@ fn open_sidecar_log_impl(app: &AppHandle) -> Result<PathBuf, String> {
  if !log_path.exists() {
  File::create(&log_path)
  .map_err(|e| format!("Failed to create sidecar log {}: {e}", log_path.display()))?;
+ #[cfg(unix)]
+ {
+ use std::os::unix::fs::PermissionsExt;
+ let _ = fs::set_permissions(&log_path, fs::Permissions::from_mode(0o600));
+ }
  }
  open_path_in_shell(&log_path)?;
  Ok(log_path)

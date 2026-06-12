@@ -7,6 +7,7 @@
  */
 
 import { getApiBaseUrl } from './runtime';
+import { isLocalModelOnly, isLlmEgressDisclosed } from './ai-flow-settings';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,6 +81,14 @@ export async function runClaudeAgent(
   query: string,
   signal?: AbortSignal,
 ): Promise<AgentResponse> {
+  if (isLocalModelOnly()) {
+    throw new Error('cloud LLM is disabled: local-model-only mode is active');
+  }
+  if (!isLlmEgressDisclosed()) {
+    try { document.dispatchEvent(new CustomEvent('cb:llm-egress-disclosure-needed')); }
+    catch { /* non-browser context */ }
+    throw new Error('cloud LLM is disabled: egress not yet acknowledged by user');
+  }
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}/api/claude-agent`;
 

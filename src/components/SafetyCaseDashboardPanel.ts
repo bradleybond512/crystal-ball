@@ -76,7 +76,7 @@ export class SafetyCaseDashboardPanel extends Panel {
     return `<div class="sc-panel" style="display:flex;flex-direction:column;gap:8px;padding:10px;font-size:12px;line-height:1.45;">
       ${this.renderHeader(summary)}
       ${this.renderProperties(summary.propertySummaries)}
-      ${this.renderFailures(summary.criticalFailures)}
+      ${this.renderFailures(summary.criticalFailures, summary.notImplementedCount)}
     </div>`;
   }
 
@@ -129,8 +129,11 @@ export class SafetyCaseDashboardPanel extends Panel {
     </div>`;
   }
 
-  private renderFailures(failures: readonly SafetyCheckResult[]): string {
+  private renderFailures(failures: readonly SafetyCheckResult[], notImplementedCount: number): string {
     if (failures.length === 0) {
+      if (notImplementedCount > 0) {
+        return `<div style="font-size:11px;opacity:0.55;padding:6px 0;text-align:center;">No failures in implemented checks · ${notImplementedCount} check${notImplementedCount === 1 ? '' : 's'} not yet implemented.</div>`;
+      }
       return `<div style="font-size:11px;opacity:0.55;padding:6px 0;text-align:center;">No recent failures — invariants holding.</div>`;
     }
     const toggleLabel = this.failuresExpanded ? '▼ Hide' : `▶ Show recent failures (${failures.length})`;

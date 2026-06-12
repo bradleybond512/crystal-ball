@@ -17,6 +17,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const DEFAULT_ALLOWLIST_PATH = path.join(homedir(), '.config', 'crystalball', 'sms-allowlist.json');
 export const RATE_LIMIT_MAX = 10;
@@ -112,4 +113,32 @@ export function logCommand(phoneNumber, command, outcome, commandLog, now = Date
     at: now,
   });
   if (commandLog.length > 50) commandLog.length = 50;
+}
+
+// Validate a Twilio webhook request signature.
+//
+// Twilio signs each request with HMAC-SHA1 over (full request URL + the POST
+// params concatenated in lexical key order, as key1value1key2value2...), keyed
+// by the account's auth token, then base64-encodes the digest into the
+// X-Twilio-Signature header. Caller-ID (the From number) is spoofable, so this
+// signature is the only thing that proves the request actually came from Twilio.
+//
+// Returns false (never throws) when the token or signature is missing, or when
+// the digests differ. The comparison is constant-time once lengths match.
+export function validateTwilioSignature(authToken, url, params, signature) {
+  if (!authToken || !signature) return false;
+  const sortedKeys = Object.keys(params ?? {}).sort();
+  const paramString = sortedKeys.reduce((acc, k) => acc + k + params[k], '');
+  const expected = createHmac('sha1', authToken)
+    .update(url + paramString)
+    .digest('base64');
+  let sigBuf;
+  try {
+    sigBuf = Buffer.from(signature, 'base64');
+  } catch {
+    return false;
+  }
+  const expBuf = Buffer.from(expected, 'base64');
+  if (sigBuf.length !== expBuf.length) return false;
+  return timingSafeEqual(sigBuf, expBuf);
 }

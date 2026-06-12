@@ -70,7 +70,7 @@ export function appendObservationToEventStore(store, obs) {
       : new Date().toISOString();
     store.appendEvent({
       id: (typeof obs?.id === 'string' && obs.id)
-        ? `${obs.sourceId ?? obs.domain ?? 'obs'}:${obs.id}`
+        ? `${obs.sourceId || obs.domain || 'obs'}:${obs.id}`
         : randomUUID(),
       event_type: 'observation',
       occurred_at: occurredAt,
@@ -6031,9 +6031,10 @@ async function dispatch(requestUrl, req, routes, context) {
         context._intelligenceObs = safe;
         if (context.eventStore) {
           // Batch the whole push in one transaction to reduce fsync overhead.
-          // Duplicate-key skips are swallowed inside appendObservationToEventStore
-          // (warnEventStoreWriteFailure) so the catch below only fires on
-          // unexpected errors (disk full, schema mismatch, etc.).
+          // All append errors (including UNIQUE violations) are swallowed inside
+          // appendObservationToEventStore (warnEventStoreWriteFailure), so the
+          // outer catch only fires on BEGIN/COMMIT failures (disk full, WAL
+          // corruption, etc.) — not on per-row append errors.
           context.eventStore.db.prepare('BEGIN').run();
           try {
             for (const obs of safe) appendObservationToEventStore(context.eventStore, obs);

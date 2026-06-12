@@ -83,6 +83,7 @@ import { startPredictiveCrisisIndex } from '@/services/intelligence/predictive-c
 import { startCrisisTrajectory } from '@/services/intelligence/crisis-trajectory';
 import { startActiveLearningQueue } from '@/services/intelligence/active-learning-queue';
 import { startSituationHypothesisBridge } from '@/services/intelligence/situation-hypothesis-bridge';
+import { startEpistemicBridge } from '@/services/intelligence/epistemic-bridge';
 import { startOutcomeGradingCadence } from '@/services/algorithms/outcome-grading-runner';
 import { startTuningApplyCadence } from '@/services/algorithms/tuning-apply-runner';
 import { startLlmGradingCadence } from '@/services/algorithms/llm-grading-pass';
@@ -895,6 +896,7 @@ export class PanelLayoutManager implements AppModule {
  startAssumptionExpirySweep();
  setInterval(() => { try { expirePendingPredictions(); } catch { /* noop */ } }, 60 * 60 * 1000);
  startSituationHypothesisBridge();
+ startEpistemicBridge();
  startNotificationRouter();
  startSilenceDetector();
  startSourceFeedback();

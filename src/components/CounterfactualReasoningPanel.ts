@@ -69,7 +69,8 @@ export class CounterfactualReasoningPanel extends Panel {
     this.unsub = getCounterfactualReasoningService().subscribe(() => this.render());
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;

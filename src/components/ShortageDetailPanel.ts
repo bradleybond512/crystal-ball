@@ -105,6 +105,13 @@ export class ShortageDetailPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private readonly commodity: FullSetCommodity;
 
+  private readonly onDrillDown = (ev: Event): void => {
+    const detail = (ev as CustomEvent<{ commodity: string }>).detail;
+    if (detail?.commodity === this.commodity) {
+      this.getElement().scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   constructor(commodity: FullSetCommodity) {
     const name = commodity.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     super({
@@ -118,11 +125,13 @@ export class ShortageDetailPanel extends Panel {
     this.start();
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    document.removeEventListener('wm:shortage-drill-down', this.onDrillDown);
   }
 
   private start(): void {
@@ -130,12 +139,7 @@ export class ShortageDetailPanel extends Panel {
     this.refreshTimer = setInterval(() => void this.refresh(), REFRESH_MS);
 
     // Listen for drill-down event so the panel can scroll into view.
-    document.addEventListener('wm:shortage-drill-down', (ev) => {
-      const detail = (ev as CustomEvent<{ commodity: string }>).detail;
-      if (detail?.commodity === this.commodity) {
-        this.getElement().scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
+    document.addEventListener('wm:shortage-drill-down', this.onDrillDown);
   }
 
   private async refresh(): Promise<void> {

@@ -109,7 +109,8 @@ export class ThreatDashboard extends Panel {
     this.render();
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     if (this.listener && typeof document !== 'undefined') {
       document.removeEventListener(THREAT_LEVELS_EVENT, this.listener);
       this.listener = null;

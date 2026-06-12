@@ -65,7 +65,8 @@ export class DiseaseOutbreakPanel extends Panel {
  this.ariTimer = setInterval(() => void this.refreshAri(), ARI_REFRESH_MS);
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
  if (this.ariTimer !== null) {
  clearInterval(this.ariTimer);
  this.ariTimer = null;

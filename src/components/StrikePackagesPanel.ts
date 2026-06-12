@@ -5,6 +5,11 @@ import { summarizeStrikePackages } from '@/services/strike-package';
 import { escapeHtml } from '@/utils/sanitize';
 
 export class StrikePackagesPanel extends Panel {
+  private readonly onStrikePackages = (e: Event): void => {
+ const packages = (e as CustomEvent<StrikePackage[]>).detail ?? [];
+ this.update(packages);
+  };
+
   constructor() {
  super({
  id: 'strike-packages',
@@ -16,10 +21,12 @@ export class StrikePackagesPanel extends Panel {
  this.setContent('<div class="panel-empty">Awaiting military flight data\u2026</div>');
 
  // Listen for strike package updates from the data-loader
- document.addEventListener('wm:strike-packages', (e: Event) => {
- const packages = (e as CustomEvent<StrikePackage[]>).detail ?? [];
- this.update(packages);
- });
+ document.addEventListener('wm:strike-packages', this.onStrikePackages);
+  }
+
+  public destroy(): void {
+ super.destroy();
+ document.removeEventListener('wm:strike-packages', this.onStrikePackages);
   }
 
   public update(packages: StrikePackage[]): void {

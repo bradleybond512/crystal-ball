@@ -332,6 +332,11 @@ export class FAAWeatherCamsPanel extends Panel {
  }
   }
 
+  public destroy(): void {
+    super.destroy();
+    this._pauseLoop();
+  }
+
   private async _analyzeCamera(cam: ScoredFAACamera, btn: HTMLButtonElement): Promise<void> {
  btn.textContent = 'Analyzing…';
  btn.disabled = true;

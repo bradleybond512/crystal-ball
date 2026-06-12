@@ -82,6 +82,13 @@ export class UnifiedAlertInboxPanel extends Panel {
   private readonly unsubscribe: () => void;
   private readonly boundOnClick: (e: Event) => void;
   private readonly boundOnKeydown: (e: Event) => void;
+  private readonly onEntityFilter = (e: Event): void => {
+    const det = (e as CustomEvent<{ entity: string; alertIds: string[] }>).detail;
+    if (!det) return;
+    this.filterEntityIds = new Set(det.alertIds);
+    this.filterShow = 'all';
+    this.render();
+  };
 
   constructor() {
  super({
@@ -116,19 +123,14 @@ export class UnifiedAlertInboxPanel extends Panel {
  this.render();
 
  // Listen for cross-component entity filter (EntityHeatRail chip click)
- document.addEventListener('cb:entity-filter', (e) => {
-   const det = (e as CustomEvent<{ entity: string; alertIds: string[] }>).detail;
-   if (!det) return;
-   this.filterEntityIds = new Set(det.alertIds);
-   this.filterShow = 'all';
-   this.render();
- });
+ document.addEventListener('cb:entity-filter', this.onEntityFilter);
   }
 
   override destroy(): void {
  this.unsubscribe();
  this.content.removeEventListener('click', this.boundOnClick);
  this.element.removeEventListener('keydown', this.boundOnKeydown);
+ document.removeEventListener('cb:entity-filter', this.onEntityFilter);
  super.destroy();
   }
 

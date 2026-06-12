@@ -45,7 +45,8 @@ export class GoesSatellitePanel extends Panel {
     void this.reload();
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     this.stopAnimation();
     this.fetchAbort?.abort();
   }

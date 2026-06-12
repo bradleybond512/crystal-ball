@@ -60,7 +60,8 @@ export class PulsediveIntelPanel extends Panel {
     this.refreshTimer = setInterval(() => void this.refreshExplore(), REFRESH_MS);
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;

@@ -123,6 +123,10 @@ export class ShortageRadarPanel extends Panel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('click', this.onRowToggle);
+      document.removeEventListener('keydown', this.onRowKey);
+    }
     super.destroy();
   }
 

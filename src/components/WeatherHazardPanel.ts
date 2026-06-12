@@ -127,7 +127,8 @@ export class WeatherHazardPanel extends Panel {
     );
   }
 
-  public dispose(): void {
+  public destroy(): void {
+    super.destroy();
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
   }

@@ -4347,6 +4347,9 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  const text = await response.text();
  if (/usage_limit_reached/i.test(text)) return ok('MediaStack key verified (usage limit reached)');
  if (/invalid_access_key/i.test(text)) return fail('MediaStack rejected this key');
+ // Free tier serves over plaintext HTTP only and rejects HTTPS with this
+ // code; we never probe over HTTP, so skip live validation instead.
+ if (/https_access_restricted/i.test(text)) return ok('HTTPS validation skipped — not available on free tier');
  if (!response.ok) return fail(`MediaStack probe failed (${response.status})`);
  return ok('MediaStack key verified');
  }
@@ -10191,7 +10194,16 @@ async function dispatch(requestUrl, req, routes, context) {
  { headers: { Accept: 'application/json' } },
  12000,
  );
- if (!r.ok) throw new Error(`MediaStack ${r.status}`);
+ if (!r.ok) {
+ // MediaStack's free tier rejects HTTPS with https_access_restricted. We
+ // never fall back to plaintext HTTP — surface a clear degraded reason
+ // instead of a generic upstream error so the cause is actionable.
+ const errText = await r.text().catch(() => '');
+ if (/https_access_restricted/i.test(errText)) {
+ return json({ error: 'MediaStack HTTPS requires a paid plan; free-tier keys cannot be served over HTTPS', degraded: true, reason: 'mediastack_https_restricted', source: 'mediastack.com' }, 502);
+ }
+ throw new Error(`MediaStack ${r.status}`);
+ }
  const data = await r.json();
  const articles = (data.data ?? []).map((item, i) => ({
  id: `ms-${i}`,

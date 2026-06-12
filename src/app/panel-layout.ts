@@ -85,6 +85,7 @@ import { startActiveLearningQueue } from '@/services/intelligence/active-learnin
 import { startSituationHypothesisBridge } from '@/services/intelligence/situation-hypothesis-bridge';
 import { startOutcomeGradingCadence } from '@/services/algorithms/outcome-grading-runner';
 import { startTuningApplyCadence } from '@/services/algorithms/tuning-apply-runner';
+import { startLlmGradingCadence } from '@/services/algorithms/llm-grading-pass';
 import { startAssumptionExpirySweep } from '@/services/intelligence/assumption-producers';
 import { expirePendingPredictions } from '@/services/intelligence/forecast-calibration-adapter';
 import { startNotificationRouter } from '@/services/notification-router';
@@ -886,6 +887,7 @@ export class PanelLayoutManager implements AppModule {
  startActiveLearningQueue();
  startOutcomeGradingCadence();
  startTuningApplyCadence();
+ startLlmGradingCadence();
  startAssumptionExpirySweep();
  setInterval(() => { try { expirePendingPredictions(); } catch { /* noop */ } }, 60 * 60 * 1000);
  startSituationHypothesisBridge();

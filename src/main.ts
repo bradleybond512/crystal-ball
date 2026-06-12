@@ -165,7 +165,7 @@ import { debugGetCells, getCellCount } from '@/services/geo-convergence';
 import { initMetaTags } from '@/services/meta-tags';
 import { installRuntimeFetchPatch, installWebApiRedirect, isDesktopRuntime } from '@/services/runtime';
 import { loadDesktopSecrets } from '@/services/runtime-config';
-import { initAnalytics, trackApiKeysSnapshot } from '@/services/analytics';
+import { initAnalytics, isAnalyticsAllowed, trackApiKeysSnapshot } from '@/services/analytics';
 import { applyStoredTheme } from '@/utils/theme-manager';
 import { SITE_VARIANT } from '@/config/variant';
 import { clearChunkReloadGuard, installChunkReloadGuard } from '@/bootstrap/chunk-reload';
@@ -246,8 +246,8 @@ function showDesktopRuntimeDebugNotice(snapshot: DesktopRuntimeSnapshot): void {
   document.body.append(banner);
 }
 
-// Initialize Vercel Analytics (skip in Tauri — script can't load from tauri:// protocol)
-if (!isDesktopRuntime()) inject();
+// Initialize Vercel Analytics — only when user has consented and not in Ghost Mode.
+if (!isDesktopRuntime() && isAnalyticsAllowed()) inject();
 
 // Initialize PostHog product analytics
 void initAnalytics();

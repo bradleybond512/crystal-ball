@@ -20,6 +20,9 @@ import {
 import type { IncomingEvent, SavedPlace } from '../personal/personal-impact';
 import type { SituationDescriptor } from './action-briefs';
 import type { ProviderSnapshot, ProviderHealthLevel } from '../diagnostics/provider-redundancy';
+import { getProviderDefinition } from '../providers/provider-registry';
+import { snapshotsFromRegistry } from '../providers/provider-bridge';
+import { recordProviderFetchOutcome, getProviderHealthState } from '../providers/providers-state';
 // ── Public API ──────────────────────────────────────────────────────────
 
 /** A subset of the `WeatherAlert` shape from `services/weather.ts` —
@@ -181,18 +184,41 @@ const STATUS_TO_LEVEL: Record<SourceDiagnosticLike['status'], ProviderHealthLeve
 };
 
 /** Translate api-diagnostic SourceDiagnostic[] into ProviderSnapshot[]
- *  and push them through the singleton. */
+ *  and push them through the singleton. Registry-known sources flow
+ *  through the provider registry (richer health + fusion); unregistered
+ *  sources keep the legacy translation. */
 export function bridgeSourcesToProviderRedundancy(
   sources: readonly SourceDiagnosticLike[],
 ): readonly ProviderSnapshot[] {
-  const snapshots: ProviderSnapshot[] = sources.map((s) => ({
-    providerId: s.id,
-    domain: s.domain ?? KNOWN_DOMAIN_BY_SOURCE[s.id] ?? s.id,
-    label: s.name,
-    primary: s.primary ?? KNOWN_PRIMARIES.has(s.id),
-    level: STATUS_TO_LEVEL[s.status] ?? 'unknown',
-    lastSuccessAt: s.lastUpdateMs ?? undefined,
-  }));
+  const now = Date.now();
+  const registryIds = new Set<string>();
+  const legacy: ProviderSnapshot[] = [];
+
+  for (const s of sources) {
+    if (getProviderDefinition(s.id)) {
+      registryIds.add(s.id);
+      const okStatus = s.status === 'healthy' || s.status === 'degraded';
+      recordProviderFetchOutcome(s.id, {
+        ok: okStatus,
+        latencyMs: 0,
+        at: s.lastUpdateMs ?? now,
+        errorMessage: okStatus ? undefined : `diagnostic status: ${s.status}`,
+      });
+    } else {
+      legacy.push({
+        providerId: s.id,
+        domain: s.domain ?? KNOWN_DOMAIN_BY_SOURCE[s.id] ?? s.id,
+        label: s.name,
+        primary: s.primary ?? KNOWN_PRIMARIES.has(s.id),
+        level: STATUS_TO_LEVEL[s.status] ?? 'unknown',
+        lastSuccessAt: s.lastUpdateMs ?? undefined,
+      });
+    }
+  }
+
+  const fromRegistry = snapshotsFromRegistry(getProviderHealthState(), now)
+    .filter((snap) => registryIds.has(snap.providerId));
+  const snapshots = [...fromRegistry, ...legacy];
   setProviderSnapshots(snapshots);
   return snapshots;
 }

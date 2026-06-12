@@ -100,7 +100,7 @@ export function getLiveDiagnosticsSnapshot(now: () => number = Date.now): LiveDi
   const generatedAt = now();
   const panels = getPanelHealthRegistry().all();
   const sources = collectSources();
-  const providers = collectProviders();
+  const providers = collectProviders(generatedAt);
   const sidecar = sidecarOverride ?? unknownSidecar('Sidecar reachability not yet probed.');
   const feedSnapshots = [...feedSnapshotMap.values()].sort((a, b) =>
     a.feedId.localeCompare(b.feedId),
@@ -158,10 +158,9 @@ function collectSources(): SourceDiagnostic[] {
 
 // ── Provider adapter ────────────────────────────────────────────────────
 
-function collectProviders(): ProviderHealthRecord[] {
+function collectProviders(now: number): ProviderHealthRecord[] {
   try {
     const state = getProviderHealthState();
-    const now = Date.now();
     const all = getAllProviderHealth(state, now);
     return all.map((p) => ({
       providerId: p.providerId,

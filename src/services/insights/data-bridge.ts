@@ -21,7 +21,6 @@ import type { IncomingEvent, SavedPlace } from '../personal/personal-impact';
 import type { SituationDescriptor } from './action-briefs';
 import type { ProviderSnapshot, ProviderHealthLevel } from '../diagnostics/provider-redundancy';
 import { getProviderDefinition } from '../providers/provider-registry';
-import { snapshotsFromRegistry } from '../providers/provider-bridge';
 import { recordProviderFetchOutcome, getProviderHealthState } from '../providers/providers-state';
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -191,19 +190,13 @@ export function bridgeSourcesToProviderRedundancy(
   sources: readonly SourceDiagnosticLike[],
   now = Date.now(),
 ): readonly ProviderSnapshot[] {
-  const registryIds = new Set<string>();
   const legacy: ProviderSnapshot[] = [];
+  const registrySnapshots: ProviderSnapshot[] = [];
 
   for (const s of sources) {
-    if (getProviderDefinition(s.id)) {
-      registryIds.add(s.id);
-      const okStatus = s.status === 'healthy' || s.status === 'degraded';
-      recordProviderFetchOutcome(s.id, {
-        ok: okStatus,
-        latencyMs: 0,
-        at: s.lastUpdateMs ?? now,
-        errorMessage: okStatus ? undefined : `diagnostic status: ${s.status}`,
-      });
+    const registrySnapshot = registrySnapshotFor(s, now);
+    if (registrySnapshot) {
+      registrySnapshots.push(registrySnapshot);
     } else {
       legacy.push({
         providerId: s.id,
@@ -216,11 +209,38 @@ export function bridgeSourcesToProviderRedundancy(
     }
   }
 
-  const fromRegistry = snapshotsFromRegistry(getProviderHealthState(), now)
-    .filter((snap) => registryIds.has(snap.providerId));
-  const snapshots = [...fromRegistry, ...legacy];
+  const snapshots = [...registrySnapshots, ...legacy];
   setProviderSnapshots(snapshots);
   return snapshots;
+}
+
+/** Build a snapshot for a registry-known source, recording the outcome for
+ *  history first. The snapshot level comes directly from the diagnostic
+ *  status so a dead primary reports its real level, not 'degraded' (which
+ *  deriveProviderHealth emits until it sees 3 consecutive failures). */
+function registrySnapshotFor(s: SourceDiagnosticLike, now: number): ProviderSnapshot | undefined {
+  const def = getProviderDefinition(s.id);
+  if (!def) return undefined;
+  const okStatus = s.status === 'healthy' || s.status === 'degraded';
+  recordProviderFetchOutcome(s.id, {
+    ok: okStatus,
+    latencyMs: 0,
+    at: s.lastUpdateMs ?? now,
+    errorMessage: okStatus ? undefined : `diagnostic status: ${s.status}`,
+  });
+  const health = getProviderHealthState().outcomes[s.id];
+  const successes = health ? health.filter((o) => o.ok) : [];
+  const successRate = health && health.length > 0 ? successes.length / health.length : undefined;
+  const lastSuccessAt = successes.length > 0 ? successes[successes.length - 1]!.at : (s.lastUpdateMs ?? undefined);
+  return {
+    providerId: s.id,
+    domain: def.domain,
+    label: def.displayName,
+    primary: def.fallbackPriority === 1,
+    level: STATUS_TO_LEVEL[s.status] ?? 'unknown',
+    lastSuccessAt,
+    successRate,
+  };
 }
 
 // ── Personal profile helper ────────────────────────────────────────────

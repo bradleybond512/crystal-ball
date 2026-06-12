@@ -44,6 +44,15 @@ export interface MetaConfidenceEstimate {
   computedAt: Date;
 }
 
+/** Structural subset of bias-detector.ts's `BiasSignal` — only the two
+ *  fields the damping rule reads. Declared locally so this module stays
+ *  pure (no runtime import of the bias detector); callers pass the real
+ *  `BiasSignal[]` (e.g. `getActive()` filtered to this target) directly. */
+export interface BiasDetectionSignal {
+  severity: 'advisory' | 'warning' | 'alert';
+  acknowledged: boolean;
+}
+
 export interface EstimateInput {
   targetId: string;
   targetType: MetaConfidenceTargetType;
@@ -54,6 +63,12 @@ export interface EstimateInput {
    *  (oldest first). The current `reportedConfidence` is appended
    *  internally for stability scoring. */
   priorEstimates?: readonly number[];
+  /** Bias detections relevant to this target — typically the
+   *  unacknowledged signals from bias-detector.ts whose
+   *  `affectedTargetIds` include `targetId`. When any is unacknowledged
+   *  AND high-severity ('alert'), the raw meta-confidence is damped by
+   *  `BIAS_DAMPING_FACTOR` before the assumption penalty is applied. */
+  biasDetections?: readonly BiasDetectionSignal[];
 }
 
 export interface MetaConfidenceStats {
@@ -86,6 +101,12 @@ const WEIGHT_STABILITY = 0.3;
 
 const ASSUMPTION_PENALTY = 0.1;
 const CI_WIDTH_SCALE = 0.4;
+
+/** Multiplicative damping applied to raw meta-confidence when an
+ *  unacknowledged high-severity ('alert') bias detection targets the
+ *  same subject. Hard-coded by design — deliberately NOT a tunable knob
+ *  until a set-wise non-regression safety-fixtures suite exists for it. */
+const BIAS_DAMPING_FACTOR = 0.85;
 
 const RELIABILITY_THRESHOLDS = {
   anchored: 0.75,
@@ -167,6 +188,15 @@ function assumptionPenalty(assumptions?: readonly Assumption[]): number {
   return Math.min(penalty, 1);
 }
 
+/** True when any supplied bias detection is both unacknowledged and
+ *  high-severity ('alert'). 'advisory'/'warning' bands do not damp. */
+function hasUnacknowledgedHighSeverityBias(
+  detections?: readonly BiasDetectionSignal[],
+): boolean {
+  if (!detections || detections.length === 0) return false;
+  return detections.some((d) => !d.acknowledged && d.severity === 'alert');
+}
+
 function deriveReliability(meta: number): ConfidenceReliability {
   if (meta >= RELIABILITY_THRESHOLDS.anchored) return 'anchored';
   if (meta >= RELIABILITY_THRESHOLDS.moderate) return 'moderate';
@@ -185,6 +215,7 @@ function buildExplanation(
   observations: readonly ObservationEvent[],
   consistency: number,
   assumptionPenaltyValue: number,
+  biasDamped = false,
 ): string {
   const sources = new Set(observations.map((o) => o.sourceId)).size;
   const agreement = describeAgreement(consistency);
@@ -193,10 +224,13 @@ function buildExplanation(
   const assumptionSuffix = assumptionPenaltyValue > 0
     ? ` Reduced by ${Math.round(assumptionPenaltyValue * 100)}% for critical assumption risk.`
     : '';
+  const biasSuffix = biasDamped
+    ? ` Damped ${Math.round((1 - BIAS_DAMPING_FACTOR) * 100)}% for an unacknowledged high-severity bias detection.`
+    : '';
   if (observations.length === 0) {
-    return `No observations available to ground this confidence estimate.${assumptionSuffix}`;
+    return `No observations available to ground this confidence estimate.${assumptionSuffix}${biasSuffix}`;
   }
-  return `Based on ${observations.length} ${obsWord} from ${sources} ${sourceWord} with ${agreement}.${assumptionSuffix}`;
+  return `Based on ${observations.length} ${obsWord} from ${sources} ${sourceWord} with ${agreement}.${assumptionSuffix}${biasSuffix}`;
 }
 
 function confidenceIntervalFor(reported: number, meta: number): [number, number] {
@@ -234,10 +268,12 @@ export class MetaConfidenceService {
       + (consistency * WEIGHT_CONSISTENCY)
       + (stability * WEIGHT_STABILITY);
     const penalty = assumptionPenalty(input.assumptions);
-    const meta = clamp01(rawMeta * (1 - penalty));
+    const biasDamped = hasUnacknowledgedHighSeverityBias(input.biasDetections);
+    const biasFactor = biasDamped ? BIAS_DAMPING_FACTOR : 1;
+    const meta = clamp01(rawMeta * (1 - penalty) * biasFactor);
     const reliability = deriveReliability(meta);
     const interval = confidenceIntervalFor(reported, meta);
-    const explanation = buildExplanation(input.observations, consistency, penalty);
+    const explanation = buildExplanation(input.observations, consistency, penalty, biasDamped);
     const estimate: MetaConfidenceEstimate = {
       targetId: input.targetId,
       targetType: input.targetType,
@@ -465,6 +501,7 @@ export const __internals = {
   computeConsistency,
   computeStability,
   assumptionPenalty,
+  hasUnacknowledgedHighSeverityBias,
   deriveReliability,
   confidenceIntervalFor,
   buildExplanation,
@@ -474,6 +511,7 @@ export const __internals = {
   WEIGHT_CONSISTENCY,
   WEIGHT_STABILITY,
   ASSUMPTION_PENALTY,
+  BIAS_DAMPING_FACTOR,
   CI_WIDTH_SCALE,
   RELIABILITY_THRESHOLDS,
   MAX_ESTIMATES,

@@ -75,7 +75,7 @@ export interface DomainScore {
 }
 
 export interface InfraRiskState {
-  power: { records: PowerOutageRecord[]; score: DomainScore; alerts: UnifiedAlert[] };
+  power: { records: PowerOutageRecord[]; score: DomainScore; alerts: UnifiedAlert[]; dataAsOf?: number };
   kev: { entries: CisaKevEntry[]; score: DomainScore; alerts: UnifiedAlert[] };
   bgp: { records: BgpAnomalyRecord[]; score: DomainScore; alerts: UnifiedAlert[] };
   acled: { events: AcledEvent[]; score: DomainScore; alerts: UnifiedAlert[] };
@@ -404,7 +404,7 @@ export function acledAlertsFor(events: readonly AcledEvent[], now: number): Unif
 const DOMAIN_WEIGHTS = { power: 0.3, kev: 0.25, bgp: 0.2, acled: 0.25 };
 
 export function composeInfraRiskState(input: {
-  power: { records: PowerOutageRecord[]; score: DomainScore; alerts: UnifiedAlert[] };
+  power: { records: PowerOutageRecord[]; score: DomainScore; alerts: UnifiedAlert[]; dataAsOf?: number };
   kev: { entries: CisaKevEntry[]; score: DomainScore; alerts: UnifiedAlert[] };
   bgp: { records: BgpAnomalyRecord[]; score: DomainScore; alerts: UnifiedAlert[] };
   acled: { events: AcledEvent[]; score: DomainScore; alerts: UnifiedAlert[] };
@@ -461,9 +461,12 @@ export async function fetchInfraRisks(opts: FetchInfraRisksOptions = {}): Promis
   const kevEntries = parseCisaKev(kevRaw, now);
   const bgpRecords = parseBgpAnomalies(bgpRaw);
   const acledEvents = parseAcledEvents(acledRaw);
+  const powerDataAsOf = typeof (powerRaw as { cachedAt?: unknown } | null)?.cachedAt === 'number'
+    ? (powerRaw as { cachedAt: number }).cachedAt
+    : undefined;
 
   const state = composeInfraRiskState({
-    power: { records: powerRecords, score: scorePowerOutages(powerRecords), alerts: powerAlertsFor(powerRecords, now) },
+    power: { records: powerRecords, score: scorePowerOutages(powerRecords), alerts: powerAlertsFor(powerRecords, now), dataAsOf: powerDataAsOf },
     kev: { entries: kevEntries, score: scoreCisaKev(kevEntries, now), alerts: kevAlertsFor(kevEntries, now) },
     bgp: { records: bgpRecords, score: scoreBgpAnomalies(bgpRecords), alerts: bgpAlertsFor(bgpRecords, now) },
     acled: { events: acledEvents, score: scoreAcled(acledEvents), alerts: acledAlertsFor(acledEvents, now) },

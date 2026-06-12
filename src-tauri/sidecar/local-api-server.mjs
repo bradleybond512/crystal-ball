@@ -7073,7 +7073,10 @@ async function dispatch(requestUrl, req, routes, context) {
         headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
       }, 15_000);
       if (!r.ok) throw new Error(`poweroutage.us HTTP ${r.status}`);
-      const data = await r.json();
+      const raw = await r.json();
+      // cachedAt lets consumers show true source-data age while the
+      // 15-min cache amortizes the panel's 60s poll.
+      const data = { ...raw, cachedAt: Date.now() };
       setCached('infrarisks-power', data, 15 * 60 * 1000);
       return json(data);
     } catch (error) {

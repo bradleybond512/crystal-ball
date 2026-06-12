@@ -16156,8 +16156,10 @@ export async function createLocalApiServer(options = {}) {
    heap_mb: Math.round(mem0.heapUsed / 1024 / 1024),
    ais_connected: false,
    ais_vessels: 0,
-  }));
-  // Owner-only: the heartbeat exposes pid/port/memory state to local users.
+  }), { mode: 0o600 });
+  // `mode` only applies when the file is created, so chmod tightens any stale
+  // world-readable heartbeat left by a pre-fix session. The interval writer
+  // below also passes `mode` so a mid-run recreate is never briefly exposed.
   try { chmodSync(heartbeatPath, 0o600); } catch {}
  } catch {}
  setInterval(() => {
@@ -16176,7 +16178,7 @@ export async function createLocalApiServer(options = {}) {
  heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
  ais_connected: aisState.socket?.readyState === 1,
  ais_vessels: aisState.vessels.size,
- }));
+ }), { mode: 0o600 });
  } catch {}
  if (eventLoopLagMs > 2000) {
  context.logger.warn(`[local-api] event loop lag ${eventLoopLagMs}ms`);

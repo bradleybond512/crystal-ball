@@ -1649,7 +1649,7 @@ export class DataLoaderManager implements AppModule {
  // stats() shows nonzero totalOutputs. Guarded: must never break the
  // notification path.
  try {
-   annotateWeatherOutput(alert.id, 'alert', { observations: getRecentObservations(50) }, { algorithmId: 'big-event-detector', domain: 'weather' });
+   annotateWeatherOutput(alert.id, 'alert', { observations: getRecentObservations(50).filter(o => o.domain === 'weather') }, { algorithmId: 'big-event-detector', domain: 'weather' });
  } catch { /* assumption instrumentation is non-critical */ }
  if (!bigEventResult.isBigEvent) {
    pipelineTrace.record(alert.id, 'weather', { stage: 'evaluated', detail: { isBigEvent: false, tier: bigEventResult.tier } });

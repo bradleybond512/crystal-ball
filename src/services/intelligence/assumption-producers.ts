@@ -65,6 +65,12 @@ export function annotateModelOutput(
   for (const a of annotation.assumptions) {
     if (!a.isCritical && a.violationRisk !== 'high') continue;
 
+    // Avoid churning the ring on repeated polling of the same outputId.
+    const alreadyActive = svc
+      .getAssumptions({ outputId, algorithmId: opts.algorithmId })
+      .some((e) => e.label === a.statement && e.status === 'active');
+    if (alreadyActive) continue;
+
     const confidence =
       a.confidence >= 0.7 ? 'high'
       : a.confidence >= 0.4 ? 'medium'

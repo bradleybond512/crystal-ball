@@ -106,8 +106,8 @@ test('summary excludes not_implemented from failCount and criticalFailures', () 
   });
   const summary = svc.getSummary();
 
-  // not_implemented count must equal the 5 stub properties (+ BIAS-FREE never,
-  // since signals provided → BIAS-FREE runs real check above).
+  // not_implemented count must equal the 5 stub properties; BIAS-FREE is excluded
+  // because signals were provided so it ran a real check (passed).
   assert.equal(summary.notImplementedCount, 5, 'exactly 5 not_implemented stubs');
 
   // criticalFailures must be empty — no actual failed checks.
@@ -150,20 +150,8 @@ test('health monitor safety-case probe returns unknown when all checks are not_i
   const safetyProbe = probes.find((p) => p.componentId === 'safety-case');
   assert.ok(safetyProbe, 'safety-case probe present in buildDefaultProbes');
 
-  // The singleton was reset in beforeEach → getSafetyCaseDashboardService() creates
-  // a fresh one with no checks run → notImplementedCount=0, totalChecks=0.
-  // We need totalChecks > 0 with all not_implemented. Achieve this by running
-  // checks with no signals on a fresh singleton (6 not_implemented, 2 failed).
-  // That doesn't give all-not-implemented, so we can't rely on the real service
-  // for this edge case. Instead, swap the singleton out with a stub by calling
-  // createSafetyCaseDashboardService with a custom getSummary override via monkey-patch.
-  // Simpler: test the logic directly via a custom probe that mirrors the fix.
-  //
-  // The probe reads getSafetyCaseDashboardService().getSummary().
-  // We verify the FIXED behaviour: a real summary where all N checks are
-  // not_implemented must not return status='error'. We do this by making the
-  // fresh singleton return a known all-not-implemented summary by forcing
-  // the stub service to override getSummary.
+  // Patch the singleton's getSummary to simulate all-not-implemented (totalChecks=5,
+  // notImplementedCount=5) — the real service can't produce this cleanly in isolation.
 
   // Use the singleton returned by getSafetyCaseDashboardService().
   const svc = getSafetyCaseDashboardService();
@@ -215,4 +203,59 @@ test('health monitor safety-case probe scores normally when at least one impleme
     typeof result.detail === 'string' && result.detail.includes('passRate='),
     `detail should include passRate; got: ${result.detail}`,
   );
+});
+
+// ── Legacy migration test ─────────────────────────────────────────────────
+
+test('rehydrate migrates legacy records lacking status field', () => {
+  // Simulate storage pre-seeded with old-shape records (no `status` field).
+  const legacyRecords = [
+    // Old stub pass — evidence 'not evaluated' → should become not_implemented.
+    {
+      id: 'sc-old-1',
+      propertyId: 'HUMAN-IN-LOOP',
+      situationId: 'sit-legacy-1',
+      passed: true,
+      evidence: 'not evaluated',
+      checkedAt: 1000,
+    },
+    // Old real pass → should become passed.
+    {
+      id: 'sc-old-2',
+      propertyId: 'FEED-COVERAGE',
+      situationId: 'sit-legacy-1',
+      passed: true,
+      evidence: 'signals=2',
+      checkedAt: 1001,
+    },
+    // Old real failure → should become failed.
+    {
+      id: 'sc-old-3',
+      propertyId: 'ACCURACY',
+      situationId: 'sit-legacy-1',
+      passed: false,
+      evidence: 'severity=critical, signals=1',
+      checkedAt: 1002,
+    },
+  ];
+
+  const fakeStorage = {
+    data: { [String('wm-safety-case')]: JSON.stringify(legacyRecords) } as Record<string, string>,
+    getItem(key: string) { return this.data[key] ?? null; },
+    setItem(key: string, value: string) { this.data[key] = value; },
+    removeItem(key: string) { delete this.data[key]; },
+  };
+
+  const svc = createSafetyCaseDashboardService({ storage: fakeStorage });
+  const summary = svc.getSummary();
+
+  // The old stub pass should NOT count as a real pass.
+  assert.equal(summary.notImplementedCount, 1, 'legacy not-evaluated stub → not_implemented');
+
+  // The old real failure should appear in criticalFailures.
+  assert.equal(summary.criticalFailures.length, 1, 'legacy failed check surfaces in criticalFailures');
+  assert.equal(summary.criticalFailures[0]!.propertyId, 'ACCURACY');
+
+  // overallPassRate is over implemented checks only (1 pass, 1 fail → 0.5).
+  assert.equal(summary.overallPassRate, 0.5, 'pass rate over implemented legacy checks');
 });

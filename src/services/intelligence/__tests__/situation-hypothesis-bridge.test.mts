@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   startSituationHypothesisBridge,
   classifyAlignment,
+  __internals,
   type AlignmentContext,
   type BridgeOptions,
 } from '../situation-hypothesis-bridge.ts';
@@ -83,6 +84,7 @@ function makeDeps(clockMs = BASE_TIME) {
 // ── Pipeline: new situation + hypothesis set ──────────────────────────────
 
 test('first HIGH event creates situation and 3-hypothesis set summing to 1.0', () => {
+  __internals.reset();
   const { store, engine, opts, fireEvent } = makeDeps();
   startSituationHypothesisBridge(opts);
 
@@ -100,6 +102,7 @@ test('first HIGH event creates situation and 3-hypothesis set summing to 1.0', (
 });
 
 test('second observation in same situation produces evidence rows', () => {
+  __internals.reset();
   const { store, engine, opts, fireEvent } = makeDeps();
   startSituationHypothesisBridge(opts);
 
@@ -126,6 +129,7 @@ test('second observation in same situation produces evidence rows', () => {
 // ── Corroboration + consensus ─────────────────────────────────────────────
 
 test('corroborating second source raises primary confidence', () => {
+  __internals.reset();
   const { store, engine, opts, fireEvent } = makeDeps();
   startSituationHypothesisBridge(opts);
 
@@ -146,6 +150,7 @@ test('corroborating second source raises primary confidence', () => {
 });
 
 test('consensus flips statuses and emits exactly one recordAlgorithmEvaluation', () => {
+  __internals.reset();
   const { store, engine, opts, fireEvent, recorderCalls } = makeDeps();
   startSituationHypothesisBridge(opts);
 
@@ -304,7 +309,23 @@ test('default: known source, same domain, stable severity → neutral for all ty
 
 // ── Unsubscribe ───────────────────────────────────────────────────────────
 
+test('startSituationHypothesisBridge is idempotent — second call is a no-op', () => {
+  __internals.reset();
+  let callCount = 0;
+  const observationBus = (listener: (e: ObservationEvent) => void): (() => void) => {
+    callCount++;
+    return () => {};
+  };
+  const store = new SituationStoreV2({ clock: () => BASE_TIME });
+  const engine = new CompetitiveHypothesisEngine({ storage: nullStorage, clock: () => BASE_TIME });
+  startSituationHypothesisBridge({ store, engine, observationBus });
+  startSituationHypothesisBridge({ store, engine, observationBus });
+  assert.equal(callCount, 1, 'bus should only be subscribed once');
+  __internals.reset();
+});
+
 test('unsubscribe stops further processing', () => {
+  __internals.reset();
   let busListener: ((e: ObservationEvent) => void) | null = null;
   const observationBus = (listener: (e: ObservationEvent) => void): (() => void) => {
     busListener = listener;

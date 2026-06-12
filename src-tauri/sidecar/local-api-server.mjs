@@ -3920,6 +3920,24 @@ function setCached(key, data, ttlMs) {
   _ensureSidecarCacheSweep();
 }
 
+// Single-flight de-duplication for cold-cache fetches. Without this, N callers
+// that all miss the cache for the same key each fire their own upstream fetch.
+// This collapses the concurrent-miss window: the first caller's promise is held
+// in `_sidecarInflight` and subsequent callers await it instead of issuing a
+// duplicate request. The TTL cache (getCached/setCached) remains the source of
+// truth for completed results — the fetcher still reads/writes it as before; the
+// inflight map only spans the in-progress fetch and is cleared once it settles.
+const _sidecarInflight = new Map(); // key -> Promise
+function dedupeInflight(key, fetcher) {
+  const existing = _sidecarInflight.get(key);
+  if (existing) return existing;
+  const promise = Promise.resolve()
+    .then(() => fetcher())
+    .finally(() => { _sidecarInflight.delete(key); });
+  _sidecarInflight.set(key, promise);
+  return promise;
+}
+
 // ── ProMED snapshot helper (shared by /api/promed and /api/disease-intel) ──
 const PROMED_RSS_URL = 'https://promedmail.org/feed/';
 const PROMED_TTL_MS = 15 * 60 * 1000;
@@ -3927,43 +3945,49 @@ const PROMED_TTL_MS = 15 * 60 * 1000;
 async function getOrFetchPromedSnapshot() {
   const cached = getCached('promed', PROMED_TTL_MS);
   if (cached) return cached;
-  try {
-    const resp = await fetchWithTimeout(
-      PROMED_RSS_URL,
-      { headers: { Accept: 'application/rss+xml, application/xml, text/xml', 'User-Agent': CHROME_UA } },
-      15_000,
-    );
-    if (!resp.ok) {
+  // Concurrent cold-cache callers (e.g. /api/promed and /api/disease-intel
+  // firing together) share one upstream fetch instead of each hitting ProMED.
+  return dedupeInflight('promed', async () => {
+    try {
+      const resp = await fetchWithTimeout(
+        PROMED_RSS_URL,
+        { headers: { Accept: 'application/rss+xml, application/xml, text/xml', 'User-Agent': CHROME_UA } },
+        15_000,
+      );
+      if (!resp.ok) {
+        return {
+          alerts: [],
+          lastFetch: new Date().toISOString(),
+          novelCount: 0,
+          outbreakCount: 0,
+          degraded: true,
+          reason: `ProMED upstream returned HTTP ${resp.status}`,
+        };
+      }
+      const xml = await resp.text();
+      const alerts = parseProMedRss(xml);
+      const { novelCount, outbreakCount } = summarizeProMedAlerts(alerts);
+      const result = {
+        alerts,
+        lastFetch: new Date().toISOString(),
+        novelCount,
+        outbreakCount,
+      };
+      // Only successful snapshots are cached; degraded results stay uncached so
+      // the next caller retries rather than serving a stale failure for the TTL.
+      setCached('promed', result);
+      return result;
+    } catch (error) {
       return {
         alerts: [],
         lastFetch: new Date().toISOString(),
         novelCount: 0,
         outbreakCount: 0,
         degraded: true,
-        reason: `ProMED upstream returned HTTP ${resp.status}`,
+        reason: `promed fetch error: ${error.message ?? error}`,
       };
     }
-    const xml = await resp.text();
-    const alerts = parseProMedRss(xml);
-    const { novelCount, outbreakCount } = summarizeProMedAlerts(alerts);
-    const result = {
-      alerts,
-      lastFetch: new Date().toISOString(),
-      novelCount,
-      outbreakCount,
-    };
-    setCached('promed', result);
-    return result;
-  } catch (error) {
-    return {
-      alerts: [],
-      lastFetch: new Date().toISOString(),
-      novelCount: 0,
-      outbreakCount: 0,
-      degraded: true,
-      reason: `promed fetch error: ${error.message ?? error}`,
-    };
-  }
+  });
 }
 
 // ── Local IDS log helpers ─────────────────────────────────────────────────
@@ -15869,22 +15893,35 @@ export async function createLocalApiServer(options = {}) {
  const reqStartedAt = Date.now();
 
  if (requestUrl.pathname === '/gps/nmea') {
+ const authHeader = req.headers['authorization'] || '';
+ if (!isValidToken(authHeader)) {
+ warnUnauthorizedOnce(context, requestUrl.pathname);
+ res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+ res.end(JSON.stringify({ error: 'Unauthorized' }));
+ return;
+ }
  try {
- const { execFileSync } = await import('node:child_process');
+ const { execFile } = await import('node:child_process');
+ const { readFile } = await import('node:fs/promises');
+ const { promisify } = await import('node:util');
+ const execFileAsync = promisify(execFile);
  const configPath = path.join(os.homedir(), '.crystalball-gps.json');
  let port = '/dev/tty.usbserial-0001';
 
  try {
- const config = JSON.parse(readFileSync(configPath, 'utf8'));
+ const config = JSON.parse(await readFile(configPath, 'utf8'));
  port = config.port || port;
  } catch {
  // Use defaults
  }
 
- const line = execFileSync('head', ['-n', '5', port], {
+ // Async exec so a slow/absent serial device can't block the event loop
+ // for up to the 3s timeout while every other sidecar request stalls.
+ const { stdout } = await execFileAsync('head', ['-n', '5', port], {
  encoding: 'utf8',
  timeout: 3000,
- }).trim();
+ });
+ const line = stdout.trim();
 
  if (!line || !line.startsWith('$')) {
  res.writeHead(404, { 'content-type': 'application/json', ...makeCorsHeaders(req) });

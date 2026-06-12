@@ -61,6 +61,7 @@ import {
   setLlmEgressDisclosed,
   isLocalModelOnly,
   setLocalModelOnly,
+  subscribeLlmEgressChange,
 } from '../ai-flow-settings.ts';
 
 // ── ai-flow-settings tests ─────────────────────────────────────────────────────
@@ -176,4 +177,105 @@ test('disclosed + not local-only allows cloud path to proceed', async () => {
   const result = await generateText('test prompt', { preferCloud: true });
   assert.equal(disclosureEventFired, false, 'disclosure event should not fire when egress is disclosed');
   assert.equal(result.provider, 'none'); // cap=0 → exhausted
+});
+
+// ── runClaudeAgent() gate tests ───────────────────────────────────────────────
+// These prove that direct callers (ClaudeAgentPanel, intel-provider, etc.) are
+// protected by the gate inside runClaudeAgent() itself — not only via
+// generateText(). The gate must throw before any fetch() call.
+
+import { runClaudeAgent } from '../claude-agent.ts';
+
+test('runClaudeAgent throws when localModelOnly is true', async () => {
+  storage.clear();
+  setLocalModelOnly(true);
+  setLlmEgressDisclosed(true);
+
+  await assert.rejects(
+    () => runClaudeAgent('test query'),
+    (err: Error) => {
+      assert.ok(err.message.includes('local-model-only'), `unexpected message: ${err.message}`);
+      return true;
+    },
+  );
+});
+
+test('runClaudeAgent throws and fires disclosure event when egress not acknowledged', async () => {
+  storage.clear();
+  setLocalModelOnly(false);
+  setLlmEgressDisclosed(false);
+
+  let disclosureEventFired = false;
+  docListeners.set('cb:llm-egress-disclosure-needed', [() => { disclosureEventFired = true; }]);
+
+  await assert.rejects(
+    () => runClaudeAgent('test query'),
+    (err: Error) => {
+      assert.ok(err.message.includes('egress not yet acknowledged'), `unexpected message: ${err.message}`);
+      return true;
+    },
+  );
+  assert.equal(disclosureEventFired, true, 'disclosure event must fire when egress is undisclosed');
+});
+
+test('runClaudeAgent bypasses gate when both conditions pass (reaches fetch)', async () => {
+  storage.clear();
+  setLocalModelOnly(false);
+  setLlmEgressDisclosed(true);
+
+  // Stub fetch so we can prove the gate was cleared without a real network call.
+  const FETCH_SENTINEL = new Error('stub-fetch-reached');
+  const origFetch = (globalThis as unknown as { fetch?: unknown }).fetch;
+  (globalThis as unknown as { fetch: () => Promise<never> }).fetch = () => Promise.reject(FETCH_SENTINEL);
+
+  try {
+    await assert.rejects(
+      () => runClaudeAgent('test query'),
+      (err: Error) => {
+        // Must be our stub sentinel — not a gate error.
+        assert.equal(err, FETCH_SENTINEL, 'should have reached fetch, not a gate error');
+        return true;
+      },
+    );
+  } finally {
+    if (origFetch === undefined) {
+      delete (globalThis as unknown as { fetch?: unknown }).fetch;
+    } else {
+      (globalThis as unknown as { fetch: unknown }).fetch = origFetch;
+    }
+  }
+});
+
+// ── subscribeLlmEgressChange() lifecycle tests ────────────────────────────────
+
+test('subscribeLlmEgressChange fires callback when llmEgressDisclosed changes', () => {
+  storage.clear();
+  windowListeners.clear();
+
+  let callCount = 0;
+  const unsub = subscribeLlmEgressChange(() => { callCount++; });
+
+  setLlmEgressDisclosed(true);
+  assert.equal(callCount, 1, 'callback should fire on setLlmEgressDisclosed');
+
+  setLocalModelOnly(true);
+  assert.equal(callCount, 2, 'callback should fire on setLocalModelOnly too');
+
+  unsub();
+});
+
+test('subscribeLlmEgressChange unsub stops further callbacks', () => {
+  storage.clear();
+  windowListeners.clear();
+
+  let callCount = 0;
+  const unsub = subscribeLlmEgressChange(() => { callCount++; });
+
+  setLlmEgressDisclosed(true);
+  assert.equal(callCount, 1);
+
+  unsub();
+
+  setLlmEgressDisclosed(false);
+  assert.equal(callCount, 1, 'callback must not fire after unsubscribe');
 });

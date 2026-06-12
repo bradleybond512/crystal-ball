@@ -127,6 +127,8 @@ static IMESSAGE_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
 static VOICE_LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
 const VOICE_RATE_LIMIT: Duration = Duration::from_secs(5);
 const MIN_CACHE_FLUSH_INTERVAL: Duration = Duration::from_secs(2);
+const CACHE_TTL_MILLIS: u64 = 7 * 24 * 60 * 60 * 1000; // 7 days
+const CACHE_MAX_BYTES: usize = 32 * 1024 * 1024; // 32 MB
 
 struct LocalApiState {
  child: Mutex<Option<Child>>,
@@ -395,7 +397,19 @@ impl PersistentCache {
 
  fn get(&self, key: &str) -> Option<Value> {
  let data = self.data.lock().unwrap_or_else(|e| e.into_inner());
- data.get(key).cloned()
+ let entry = data.get(key)?;
+ // Entries without stored_at are pre-migration legacy entries → treat as expired.
+ let stored_at = entry.get("stored_at").and_then(|v| v.as_u64())?;
+ // Per-entry TTL stored at write time; fall back to default 7 days for old entries.
+ let ttl = entry.get("ttl_ms").and_then(|v| v.as_u64()).unwrap_or(CACHE_TTL_MILLIS);
+ let now_ms = SystemTime::now()
+  .duration_since(UNIX_EPOCH)
+  .map(|d| d.as_millis() as u64)
+  .unwrap_or(0);
+ if now_ms.saturating_sub(stored_at) > ttl {
+  return None;
+ }
+ entry.get("v").cloned()
  }
 
  /// Flush to disk only if dirty. Returns Ok(true) if written.
@@ -421,10 +435,54 @@ impl PersistentCache {
  }
  }
 
- let data = self.data.lock().unwrap_or_else(|e| e.into_inner());
+ let mut data = self.data.lock().unwrap_or_else(|e| e.into_inner());
+
+ // Evict expired and legacy (no stored_at) entries before persisting.
+ let now_ms = SystemTime::now()
+  .duration_since(UNIX_EPOCH)
+  .map(|d| d.as_millis() as u64)
+  .unwrap_or(0);
+ data.retain(|_, v| {
+  let ttl = v.get("ttl_ms").and_then(|t| t.as_u64()).unwrap_or(CACHE_TTL_MILLIS);
+  v.get("stored_at")
+   .and_then(|t| t.as_u64())
+   .map(|t| now_ms.saturating_sub(t) <= ttl)
+   .unwrap_or(false)
+ });
+
+ // Enforce 32 MB total cap: evict oldest-stored_at-first.
+ let serialized_size = serde_json::to_vec(&*data).map(|v| v.len()).unwrap_or(0);
+ if serialized_size > CACHE_MAX_BYTES {
+  let mut keys_by_age: Vec<(String, u64)> = data
+   .iter()
+   .map(|(k, v)| {
+    let t = v.get("stored_at").and_then(|t| t.as_u64()).unwrap_or(0);
+    (k.clone(), t)
+   })
+   .collect();
+  keys_by_age.sort_by_key(|(_, t)| *t);
+  let mut remaining = serialized_size;
+  for (key, _) in keys_by_age {
+   if remaining <= CACHE_MAX_BYTES {
+    break;
+   }
+   if let Some(removed) = data.remove(&key) {
+    let removed_size = serde_json::to_vec(&removed).map(|v| v.len()).unwrap_or(0);
+    remaining = remaining.saturating_sub(removed_size + key.len() + 6);
+   }
+  }
+ }
+
  let tmp_path = path.with_extension("json.tmp");
  let tmp_file = File::create(&tmp_path)
  .map_err(|e| format!("Failed to create cache temp file {}: {e}", tmp_path.display()))?;
+
+ #[cfg(unix)]
+ {
+  use std::os::unix::fs::PermissionsExt;
+  let _ = fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o600));
+ }
+
  let mut writer = BufWriter::new(tmp_file);
  serde_json::to_writer(&mut writer, &*data)
  .map_err(|e| format!("Failed to serialize cache: {e}"))?;
@@ -713,11 +771,12 @@ fn get_local_api_port(webview: Webview, state: tauri::State<'_, LocalApiState>) 
 }
 
 #[tauri::command]
-fn list_supported_secret_keys() -> Vec<String> {
- SUPPORTED_SECRET_KEYS
+fn list_supported_secret_keys(webview: Webview) -> Result<Vec<String>, String> {
+ require_trusted_window(webview.label())?;
+ Ok(SUPPORTED_SECRET_KEYS
  .iter()
  .map(|key| (*key).to_string())
- .collect()
+ .collect())
 }
 
 #[tauri::command]
@@ -835,7 +894,7 @@ fn delete_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, 
 }
 
 #[tauri::command]
-fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, PersistentCache>, key: String, value: String) -> Result<(), String> {
+fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, PersistentCache>, key: String, value: String, ttl_ms: Option<u64>) -> Result<(), String> {
  require_trusted_window(webview.label())?;
  if key.len() > 256 {
   return Err("Cache key exceeds 256 byte limit".into());
@@ -845,10 +904,16 @@ fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, P
  }
  let parsed_value: Value = serde_json::from_str(&value)
  .map_err(|e| format!("Invalid cache payload JSON: {e}"))?;
+ let stored_at = SystemTime::now()
+  .duration_since(UNIX_EPOCH)
+  .map(|d| d.as_millis() as u64)
+  .unwrap_or(0);
+ let ttl = ttl_ms.unwrap_or(CACHE_TTL_MILLIS);
+ let envelope = serde_json::json!({ "v": parsed_value, "stored_at": stored_at, "ttl_ms": ttl });
  let _write_guard = cache.write_lock.lock().unwrap_or_else(|e| e.into_inner());
  {
  let mut data = cache.data.lock().unwrap_or_else(|e| e.into_inner());
- data.insert(key, parsed_value);
+ data.insert(key, envelope);
  }
  {
  let mut dirty = cache.dirty.lock().unwrap_or_else(|e| e.into_inner());
@@ -2226,6 +2291,117 @@ mod secret_ipc_tests {
  let key = "ANTHROPIC_API_KEY";
  let allowed = SUPPORTED_SECRET_KEYS.contains(&key);
  assert!(allowed, "known key must be accepted");
+ }
+}
+
+#[cfg(test)]
+mod persistent_cache_tests {
+ use super::{PersistentCache, CACHE_MAX_BYTES, CACHE_TTL_MILLIS};
+ use serde_json::{json, Value};
+ use std::path::Path;
+ use std::time::{SystemTime, UNIX_EPOCH};
+
+ fn now_ms() -> u64 {
+  SystemTime::now()
+   .duration_since(UNIX_EPOCH)
+   .map(|d| d.as_millis() as u64)
+   .unwrap_or(0)
+ }
+
+ fn cache_with(entries: Vec<(&str, Value)>) -> PersistentCache {
+  let cache = PersistentCache::load(Path::new("/nonexistent_cb_test_xyz"));
+  let mut data = cache.data.lock().unwrap();
+  for (k, v) in entries {
+   data.insert(k.to_string(), v);
+  }
+  drop(data);
+  cache
+ }
+
+ #[test]
+ fn fresh_entry_returns_inner_value() {
+  let ts = now_ms();
+  let cache = cache_with(vec![
+   ("k1", json!({ "v": { "data": "hello" }, "stored_at": ts })),
+  ]);
+  assert_eq!(cache.get("k1"), Some(json!({ "data": "hello" })));
+ }
+
+ #[test]
+ fn expired_entry_returns_none() {
+  let ts = now_ms().saturating_sub(CACHE_TTL_MILLIS + 1);
+  let cache = cache_with(vec![
+   ("k1", json!({ "v": { "data": "stale" }, "stored_at": ts })),
+  ]);
+  assert_eq!(cache.get("k1"), None, "entry older than TTL must be a miss");
+ }
+
+ #[test]
+ fn entry_without_stored_at_returns_none() {
+  // Pre-migration format: raw CacheEnvelope with no stored_at wrapper.
+  let cache = cache_with(vec![
+   ("k1", json!({ "key": "k1", "data": "legacy", "updatedAt": 1718000000000_u64 })),
+  ]);
+  assert_eq!(cache.get("k1"), None, "legacy entry without stored_at must be a miss");
+ }
+
+ #[test]
+ fn missing_key_returns_none() {
+  let cache = cache_with(vec![]);
+  assert_eq!(cache.get("nonexistent"), None);
+ }
+
+ #[test]
+ fn flush_evicts_expired_entries() {
+  let now = now_ms();
+  let expired_ts = now.saturating_sub(CACHE_TTL_MILLIS + 1);
+  let fresh_ts = now.saturating_sub(60_000); // 1 minute ago
+
+  let cache = cache_with(vec![
+   ("expired", json!({ "v": "old", "stored_at": expired_ts })),
+   ("fresh", json!({ "v": "new", "stored_at": fresh_ts })),
+   ("no_ts", json!({ "key": "no_ts", "data": "legacy" })),
+  ]);
+  *cache.dirty.lock().unwrap() = true;
+
+  let tmp = std::env::temp_dir().join("cb_flush_evict_test.json");
+  cache.flush(&tmp, true).expect("flush should succeed");
+
+  let data = cache.data.lock().unwrap();
+  assert!(!data.contains_key("expired"), "expired entry must be evicted on flush");
+  assert!(!data.contains_key("no_ts"), "legacy entry without stored_at must be evicted on flush");
+  assert!(data.contains_key("fresh"), "fresh entry must survive flush");
+  drop(data);
+
+  let contents = std::fs::read_to_string(&tmp).unwrap_or_default();
+  assert!(!contents.contains("\"expired\""));
+  assert!(contents.contains("\"fresh\""));
+  let _ = std::fs::remove_file(&tmp);
+ }
+
+ #[test]
+ fn flush_evicts_oldest_when_over_size_cap() {
+  let now = now_ms();
+  let old_ts = now.saturating_sub(2 * 24 * 60 * 60 * 1000); // 2 days old
+  let new_ts = now.saturating_sub(1 * 24 * 60 * 60 * 1000); // 1 day old
+
+  // Two entries totalling well over 32 MB so the size cap kicks in.
+  let big: String = "a".repeat(CACHE_MAX_BYTES / 2 + 1024 * 1024);
+  let cache = cache_with(vec![
+   ("oldest", json!({ "v": big.clone(), "stored_at": old_ts })),
+   ("newest", json!({ "v": big, "stored_at": new_ts })),
+  ]);
+  *cache.dirty.lock().unwrap() = true;
+
+  let tmp = std::env::temp_dir().join("cb_cap_evict_test.json");
+  cache.flush(&tmp, true).expect("flush should succeed");
+
+  let data = cache.data.lock().unwrap();
+  assert!(!data.contains_key("oldest"), "oldest entry must be evicted when over size cap");
+  assert!(data.contains_key("newest"), "newest entry must survive size-cap eviction");
+  drop(data);
+
+  let _ = std::fs::remove_file(&tmp);
  }
 }
 

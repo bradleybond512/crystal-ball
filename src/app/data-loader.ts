@@ -1335,7 +1335,15 @@ export class DataLoaderManager implements AppModule {
  ingestEarthquakesToTimeline(earthquakeResult.value);
  ingestEarthquakesToMatrix(earthquakeResult.value);
  ingestEarthquakesUnified(earthquakeResult.value);
- ingestObservations(earthquakesToObservations(earthquakeResult.value));
+ const eqObs = earthquakesToObservations(earthquakeResult.value);
+ ingestObservations(eqObs);
+ if (eqObs.length > 0) {
+   try {
+     const { annotateModelOutput } = await import('@/services/intelligence/assumption-producers');
+     const latestId = eqObs[eqObs.length - 1]!.id;
+     annotateModelOutput(`earthquake-batch-${latestId}`, 'score', { observations: eqObs.slice(0, 50) }, { algorithmId: 'big-event-detector', domain: 'earthquake' });
+   } catch { /* assumption instrumentation is non-critical */ }
+ }
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
  dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
@@ -1575,11 +1583,13 @@ export class DataLoaderManager implements AppModule {
  { routeBigEventToLadder },
  { getNotificationTraceRegistry, getPipelineTraceRegistry },
  { recordAlgorithmEvaluation },
+ { annotateModelOutput: annotateWeatherOutput },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
  import('@/services/diagnostics/diagnostics-state'),
  import('@/services/algorithms/record-evaluation'),
+ import('@/services/intelligence/assumption-producers'),
  ]);
  const pipelineTrace = getPipelineTraceRegistry();
  const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
@@ -1635,6 +1645,12 @@ export class DataLoaderManager implements AppModule {
  detail: { priority: bigEventResult.deliveryPriority, urgency: bigEventResult.urgency },
  });
  } catch { /* ledger unavailable — skip silently */ }
+ // Assumption tracking — annotate live model output so AssumptionPanel
+ // stats() shows nonzero totalOutputs. Guarded: must never break the
+ // notification path.
+ try {
+   annotateWeatherOutput(alert.id, 'alert', { observations: getRecentObservations(50) }, { algorithmId: 'big-event-detector', domain: 'weather' });
+ } catch { /* assumption instrumentation is non-critical */ }
  if (!bigEventResult.isBigEvent) {
    pipelineTrace.record(alert.id, 'weather', { stage: 'evaluated', detail: { isBigEvent: false, tier: bigEventResult.tier } });
    continue;
@@ -2461,6 +2477,16 @@ export class DataLoaderManager implements AppModule {
         const obs = hdxHapiToObservations(await hr.json() as HDXHAPIResponse);
         if (obs.length > 0) ingestObservations(obs);
       }
+
+      // Assumption tracking — annotate once per batch (not per observation).
+      try {
+        const { annotateModelOutput } = await import('@/services/intelligence/assumption-producers');
+        const batch = getRecentObservations(50);
+        if (batch.length > 0) {
+          const latestId = batch[batch.length - 1]!.id;
+          annotateModelOutput(`hazard-batch-${latestId}`, 'score', { observations: batch }, { algorithmId: 'big-event-detector', domain: 'intelligence' });
+        }
+      } catch { /* assumption instrumentation is non-critical */ }
     } catch {
       /* expanded intelligence is supplemental — failures are non-critical */
     }

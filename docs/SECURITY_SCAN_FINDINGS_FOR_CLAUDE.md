@@ -1,10 +1,14 @@
 # Security Scan Findings For Claude
 
-Checked: April 28, 2026.
+Checked: April 28, 2026. Reconciled against `SECURITY_AUDIT_2026-06-11.md` on
+June 11, 2026.
 
 Goal: bring Crystal Ball toward an elite desktop/web security posture. This is
 not a full third-party penetration test, but it is an actionable repo-grounded
 scan using existing scripts, dependency audit, and targeted static review.
+
+**Status legend** (per-finding labels reflect the 2026-06-11 reconciliation):
+🔴 Open · 🟡 In Progress · ✅ Fixed · 🟢 Tracked/Accepted (mitigated).
 
 ## Copy/Paste Prompt For Claude
 
@@ -59,55 +63,68 @@ The major security work is architectural hardening:
 
 ## Findings
 
-### SEC-001: Broad Tauri Secret Read APIs Increase Renderer Compromise Blast Radius
+### SEC-001: Trusted-Window Renderer Can Read Every Configured Secret Key-By-Key
 
-Severity: High.
+Severity: High. **Status: 🔴 Open** (description corrected 2026-06-11 — original
+overstated the exposure).
+
+> **Correction (2026-06-11 audit):** the original finding claimed a broad
+> `get_all_secrets` IPC command that returns a `HashMap<String, String>` of
+> every key in one call. **No such command exists** in the current 33-command
+> IPC surface — the audit enumerated all `#[tauri::command]` functions and found
+> only the per-key `get_secret`. The real (lesser, but still High-severity)
+> exposure is described below.
 
 Location:
 
-- `src-tauri/src/main.rs:452`
-- `src-tauri/src/main.rs:469`
-- `src-tauri/src/main.rs:2255`
-- `src-tauri/src/main.rs:2256`
-- `src/services/runtime-config.ts:1231`
+- `src-tauri/src/main.rs:724` (`get_secret`)
+- `src-tauri/src/main.rs:42` (`SUPPORTED_SECRET_KEYS: [&str; 73]`)
+- `src/services/runtime-config.ts` (renderer call sites)
 
 Evidence:
 
 ```text
-fn get_secret(...)
-fn get_all_secrets(...) -> Result<HashMap<String, String>, String>
-...
-get_secret,
-get_all_secrets,
-...
-const allSecrets = await invokeTauri<Record<string, string>>('get_all_secrets');
+#[tauri::command]
+fn get_secret(webview: Webview, key: String, ...) -> Result<Option<String>, String> {
+    require_trusted_window(webview.label())?;
+    if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) { return Err(...); }
+    Ok(secrets.get(&key).cloned())
+}
 ```
 
 Impact:
 
-Any XSS, malicious dependency, or compromised trusted window can ask Tauri for
-all configured API keys. The code already acknowledges this renderer trust
-boundary in `src/services/runtime.ts:231-249`.
+`get_secret` is gated by `require_trusted_window`, but a trusted-window renderer
+(or any XSS / malicious dependency executing inside it) can iterate the 73 known
+`SUPPORTED_SECRET_KEYS` and call `get_secret` once per key, reconstructing the
+full secret set. There is no single-call dump, so the blast radius is narrower
+than originally documented, but the effective outcome for a compromised trusted
+renderer is the same. The code already acknowledges this renderer trust boundary
+in `src/services/runtime.ts:231-249`.
 
 Fix:
 
-- Remove `get_all_secrets` from normal renderer access.
-- Replace it with purpose-specific commands that return only metadata, masked
-  values, or per-key values after an explicit user action.
+- Return only the specific key the active settings screen is editing, after an
+  explicit user action; avoid bulk per-key enumeration paths in the renderer.
 - Keep actual provider secrets in Keychain and sidecar memory, not renderer
-  memory.
-- Add a capability split so the main window cannot read all secrets by default.
-- Add tests proving unsupported windows cannot invoke secret commands.
+  memory, wherever a feature can run server-side.
+- Consider a capability split so only the settings window can read secret values
+  and the main window cannot.
+- Add tests proving unsupported windows cannot invoke `get_secret` and that the
+  command rejects keys outside `SUPPORTED_SECRET_KEYS`.
 
-Mitigation if a full removal is too large:
+Mitigation if a full split is too large:
 
-- Gate `get_all_secrets` behind an explicit unlock/biometry flow.
-- Return only supported keys requested by the active settings screen.
-- Add diagnostics that flag when broad secret reads occur.
+- Mask values in the renderer unless the user is actively editing one key.
+- Add diagnostics that flag when many distinct `get_secret` reads occur in a
+  short window (bulk-enumeration heuristic).
 
 ### SEC-002: Desktop CSP Allows `unsafe-eval` And Broad Local Frame/Connect Access
 
-Severity: High.
+Severity: High. **Status: 🔴 Open** — `frame-src` narrowing is scheduled
+(audit M-2, plan T3-B); `unsafe-eval` removal is blocked on Cesium strict-CSP
+support (audit I-1/I-2, backlog T4-C); `connect-src https:` narrowing is backlog
+T4-B.
 
 Location:
 
@@ -144,7 +161,8 @@ Mitigation:
 
 ### SEC-003: Web CSP Allows Inline Scripts And Eval-Like Execution
 
-Severity: High.
+Severity: High. **Status: 🔴 Open** — not yet scheduled; depends on HTML-sink
+centralization (SEC-007) before `unsafe-inline` can be safely removed.
 
 Location:
 
@@ -176,7 +194,17 @@ Mitigation:
 
 ### SEC-004: Broad Vercel Preview Origin Regexes Are Inconsistent With Stricter CORS Rules
 
-Severity: Medium.
+Severity: Medium. **Status: 🟡 In Progress** — being anchored to the deploy
+account slug (`…-bradleybond512.vercel.app`) under audit M-5 / plan T2-D
+(`claude/sec-vercel-origin-regex`).
+
+> **Related item ✅ Fixed (2026-06-11 audit):** the separate *sebuf wildcard-CORS
+> fallback* flagged in `SECURITY_SCAN_ROUND_2_FOR_CLAUDE.md` is now fail-closed.
+> The handler at `api/[domain]/v1/[rpc].ts:167-185` rejects disallowed origins
+> with HTTP 403 (`isDisallowedOrigin` check + a `getCorsHeaders` try/catch that
+> also returns 403). Verified directly during the 2026-06-11 audit. This is a
+> distinct code path from the Vercel preview-origin regexes below, which remain
+> open.
 
 Location:
 
@@ -213,7 +241,12 @@ Fix:
 
 ### SEC-005: RSS Proxy Does Not Require HTTPS For Allowlisted Feeds
 
-Severity: Medium.
+Severity: Medium. **Status: 🟡 In Progress** — the audit re-confirmed this as
+part of the plain-HTTP family (audit H-1/H-2). The sidecar's plain-HTTP external
+API calls are being switched to HTTPS by PR `claude/sec-https-urls` (plan T1-A),
+with a CI guardrail in T2-A. The RSS-proxy-specific HTTPS-enforcement and
+dev-proxy manual-redirect parity described below are not yet covered by that PR
+and remain to be scheduled.
 
 Location:
 
@@ -252,7 +285,12 @@ Fix:
 
 ### SEC-006: Local API Token Is Persisted To A File For Tooling
 
-Severity: Medium.
+Severity: Medium. **Status: 🟢 Tracked/Accepted (mitigated)** — re-confirmed by
+the 2026-06-11 audit as M-1. The at-rest copy is accepted for now with these
+mitigations in place: file written mode `0600`, the token is rotated
+per-session, and the file is deleted on clean shutdown. The ideal fix —
+eliminating the at-rest copy via an in-memory token handoff to the MCP server at
+spawn time — is tracked as backlog plan T4-A.
 
 Location:
 
@@ -285,7 +323,8 @@ Fix:
 
 ### SEC-007: HTML Injection Sinks Are Widespread And Need A Central Policy
 
-Severity: Medium.
+Severity: Medium. **Status: 🔴 Open** — not yet scheduled; prerequisite for
+hardening web CSP (SEC-003).
 
 Location examples:
 
@@ -325,7 +364,8 @@ Fix:
 
 ### SEC-008: Custom Sanitizer Allows Inline Style Attributes
 
-Severity: Medium.
+Severity: Medium. **Status: 🔴 Open** — not yet scheduled; folds into the
+SEC-007 central-sanitizer work.
 
 Location:
 
@@ -358,7 +398,7 @@ Fix:
 
 ### SEC-009: Window `open` Fallbacks Bypass Tauri `open_url` Policy
 
-Severity: Low to Medium.
+Severity: Low to Medium. **Status: 🔴 Open** — not yet scheduled.
 
 Location examples:
 
@@ -389,7 +429,8 @@ Fix:
 
 ### SEC-010: Clipboard Read Permission Should Be Narrowed Or Audited
 
-Severity: Low.
+Severity: Low. **Status: 🔴 Open** — not yet scheduled; the 2026-06-11 audit
+notes clipboard read remains the broadest capability grant.
 
 Location:
 
@@ -483,3 +524,7 @@ Fix:
 - New tests cover each changed security boundary.
 - No new `unsafe-inline`, `unsafe-eval`, raw `innerHTML`, broad origin regex, or
   secret-returning IPC command is added without a documented exception.
+
+---
+
+Last reconciled against `SECURITY_AUDIT_2026-06-11.md` on 2026-06-11.

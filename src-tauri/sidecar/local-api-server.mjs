@@ -68,7 +68,9 @@ export function appendObservationToEventStore(store, obs) {
       ? new Date(obs.timestamp).toISOString()
       : new Date().toISOString();
     store.appendEvent({
-      id: (typeof obs?.id === 'string' && obs.id) ? obs.id : randomUUID(),
+      id: (typeof obs?.id === 'string' && obs.id)
+        ? `${obs.sourceId ?? obs.domain ?? 'obs'}:${obs.id}`
+        : randomUUID(),
       event_type: 'observation',
       occurred_at: occurredAt,
       domain: typeof obs?.domain === 'string' && obs.domain ? obs.domain : null,
@@ -93,7 +95,9 @@ export function appendSituationToEventStore(store, situation) {
       ...(Array.isArray(situation?.correlationIds) ? situation.correlationIds : []),
     ].map(String);
     store.appendEvent({
-      id: (typeof situation?.id === 'string' && situation.id) ? situation.id : randomUUID(),
+      id: (typeof situation?.id === 'string' && situation.id)
+        ? `situation-store:${situation.id}`
+        : randomUUID(),
       event_type: eventType,
       occurred_at: occurredAt,
       domain: typeof situation?.domain === 'string' ? situation.domain : null,
@@ -5974,6 +5978,10 @@ async function dispatch(requestUrl, req, routes, context) {
         if (!context._intelligenceObs) context._intelligenceObs = [];
         context._intelligenceObs = safe;
         if (context.eventStore) {
+          // Batch the whole push in one transaction to reduce fsync overhead.
+          // Duplicate-key skips are swallowed inside appendObservationToEventStore
+          // (warnEventStoreWriteFailure) so the catch below only fires on
+          // unexpected errors (disk full, schema mismatch, etc.).
           context.eventStore.db.prepare('BEGIN').run();
           try {
             for (const obs of safe) appendObservationToEventStore(context.eventStore, obs);

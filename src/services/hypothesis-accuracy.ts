@@ -18,6 +18,7 @@ import { scoreAlert } from './alert-routing';
 import { signatureFor } from './hypothesis-feedback';
 import { getMemory, putMemory } from './reasoning-memory';
 import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
+import { resolveHypothesisPredictionBySig } from './intelligence/hypothesis-prediction-bridge';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -191,6 +192,7 @@ function gradeOne(p: PendingHypothesis): void {
       detail: { kind: p.kind, situationIds: p.situationIds.length, alertIds: p.alertIds.length },
     });
   } catch { /* ledger unavailable */ }
+  try { resolveHypothesisPredictionBySig(p.signature, hit); } catch { /* best-effort */ }
 }
 
 function gradeDue(): void {

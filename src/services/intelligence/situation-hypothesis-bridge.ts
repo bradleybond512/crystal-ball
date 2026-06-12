@@ -44,6 +44,45 @@ function isSeverityDecreasing(prev: string, current: string): boolean {
   return (SEVERITY_RANK[prev] ?? 0) > (SEVERITY_RANK[current] ?? 0);
 }
 
+interface AlignmentResult { alignment: EvidenceAlignment; weight: number }
+const NEUTRAL: AlignmentResult = { alignment: 'neutral', weight: 0 };
+
+// Rule 1: new distinct source_id in same domain → supporting for primary only.
+function rule1(
+  obs: ObservationEvent, type: HypothesisType, ctx: AlignmentContext,
+): AlignmentResult | null {
+  if (ctx.seenSourceIds.has(obs.sourceId) || obs.domain !== ctx.situationDomain) return null;
+  return type === 'primary' ? { alignment: 'supporting', weight: 0.6 } : NEUTRAL;
+}
+
+// Rule 2: severity decreasing across 2+ updates → devil-advocate supporting, primary contradicting.
+function rule2(
+  obs: ObservationEvent, type: HypothesisType, ctx: AlignmentContext,
+): AlignmentResult | null {
+  if (ctx.prevObsCount < 2 || ctx.prevSeverity === undefined) return null;
+  if (!isSeverityDecreasing(ctx.prevSeverity, obs.severity)) return null;
+  if (type === 'devil-advocate') return { alignment: 'supporting', weight: 0.4 };
+  if (type === 'primary') return { alignment: 'contradicting', weight: 0.3 };
+  return NEUTRAL;
+}
+
+// Rule 3: single-source after 3+ updates → devil-advocate supporting only.
+function rule3(
+  _obs: ObservationEvent, type: HypothesisType, ctx: AlignmentContext,
+): AlignmentResult | null {
+  if (ctx.prevObsCount < 3 || ctx.seenSourceIds.size !== 1) return null;
+  return type === 'devil-advocate' ? { alignment: 'supporting', weight: 0.3 } : NEUTRAL;
+}
+
+// Rule 4: cross-domain entity match → alternative supporting only.
+function rule4(
+  obs: ObservationEvent, type: HypothesisType, ctx: AlignmentContext,
+): AlignmentResult | null {
+  if (obs.domain === ctx.situationDomain) return null;
+  if (!obs.entityIds.some((id) => ctx.situationEntityIds.includes(id))) return null;
+  return type === 'alternative' ? { alignment: 'supporting', weight: 0.4 } : NEUTRAL;
+}
+
 /**
  * Deterministic rule table: given an incoming observation and a hypothesis
  * type, return how the observation aligns with that hypothesis.
@@ -63,44 +102,19 @@ export function classifyAlignment(
   obs: ObservationEvent,
   hypothesisType: HypothesisType,
   ctx: AlignmentContext,
-): { alignment: EvidenceAlignment; weight: number } {
-  const isNewSource = !ctx.seenSourceIds.has(obs.sourceId);
-  const isSameDomain = obs.domain === ctx.situationDomain;
-
-  // Rule 1: new distinct source_id in same domain+area
-  if (isNewSource && isSameDomain) {
-    if (hypothesisType === 'primary') return { alignment: 'supporting', weight: 0.6 };
-    return { alignment: 'neutral', weight: 0.0 };
-  }
-
-  // Rule 2: severity decreasing across 2+ updates
-  if (
-    ctx.prevObsCount >= 2
-    && ctx.prevSeverity !== undefined
-    && isSeverityDecreasing(ctx.prevSeverity, obs.severity)
-  ) {
-    if (hypothesisType === 'devil-advocate') return { alignment: 'supporting', weight: 0.4 };
-    if (hypothesisType === 'primary') return { alignment: 'contradicting', weight: 0.3 };
-    return { alignment: 'neutral', weight: 0.0 };
-  }
-
-  // Rule 3: single-source after 3+ updates (no corroboration)
-  if (ctx.prevObsCount >= 3 && ctx.seenSourceIds.size === 1) {
-    if (hypothesisType === 'devil-advocate') return { alignment: 'supporting', weight: 0.3 };
-    return { alignment: 'neutral', weight: 0.0 };
-  }
-
-  // Rule 4: cross-domain observation matching the situation entities
-  const entityMatch = obs.entityIds.some((id) => ctx.situationEntityIds.includes(id));
-  if (!isSameDomain && entityMatch) {
-    if (hypothesisType === 'alternative') return { alignment: 'supporting', weight: 0.4 };
-    return { alignment: 'neutral', weight: 0.0 };
-  }
-
-  return { alignment: 'neutral', weight: 0.0 };
+): AlignmentResult {
+  return (
+    rule1(obs, hypothesisType, ctx)
+    ?? rule2(obs, hypothesisType, ctx)
+    ?? rule3(obs, hypothesisType, ctx)
+    ?? rule4(obs, hypothesisType, ctx)
+    ?? NEUTRAL
+  );
 }
 
 // ── Bridge ────────────────────────────────────────────────────────────────
+
+let _unsubscribe: (() => void) | null = null;
 
 interface SituationTrackingState {
   startTimeMs: number;
@@ -120,57 +134,110 @@ export interface BridgeOptions {
   observationBus?: (listener: (event: ObservationEvent) => void) => (() => void);
 }
 
+function seedSituation(
+  engine: CompetitiveHypothesisEngine,
+  tracked: Map<string, SituationTrackingState>,
+  event: ObservationEvent,
+  sitId: string,
+  domain: string,
+  severity: string,
+  nowMs: number,
+): void {
+  tracked.set(sitId, {
+    startTimeMs: nowMs,
+    seenSourceIds: new Set([event.sourceId]),
+    prevSeverity: event.severity,
+    obsCount: 1,
+    evaluated: false,
+  });
+  engine.generate(sitId, domain, severity);
+}
+
+function addEvidenceToSet(
+  engine: CompetitiveHypothesisEngine,
+  setId: string,
+  event: ObservationEvent,
+  ctx: AlignmentContext,
+): void {
+  const set = engine.getSet(setId);
+  if (!set) return;
+  for (const h of set.hypotheses) {
+    const { alignment, weight } = classifyAlignment(event, h.type, ctx);
+    engine.addEvidence(h.id, { evidenceId: event.id, alignment, weight });
+  }
+}
+
+function maybeEmitEvaluation(
+  engine: CompetitiveHypothesisEngine,
+  recorder: typeof recordAlgorithmEvaluation,
+  state: SituationTrackingState,
+  sitId: string,
+  sitDomain: string,
+  sitStatus: string,
+  nowMs: number,
+): void {
+  const updatedSet = engine.getSet(sitId);
+  if (!updatedSet) return;
+  const shouldEvaluate = updatedSet.consensusReached === true || sitStatus === 'resolved';
+  if (!shouldEvaluate) return;
+
+  const leader = updatedSet.leadingHypothesis;
+  if (!leader) return;
+
+  state.evaluated = true;
+  for (const h of updatedSet.hypotheses) {
+    engine.updateStatus(h.id, h.id === leader.id ? 'supported' : 'refuted');
+  }
+
+  try {
+    recorder('competitive-hypothesis', {
+      score: leader.confidence,
+      label: leader.type,
+      durationMs: nowMs - state.startTimeMs,
+      detail: { situationId: sitId, domain: sitDomain, consensus: updatedSet.consensusReached },
+    });
+  } catch { /* ledger unavailable — skip silently */ }
+}
+
 /**
  * Subscribe to the observation bus and route each event through:
  *   SituationStoreV2.ingest → CompetitiveHypothesisEngine.generate / addEvidence
  *   → AlgorithmEvaluationLedger (on consensus or resolution).
  *
- * Returns an unsubscribe function.
+ * Returns an unsubscribe function. Idempotent — repeated calls return without
+ * installing a second subscription.
  */
+export function stopSituationHypothesisBridge(): void {
+  _unsubscribe?.();
+  _unsubscribe = null;
+}
+
 export function startSituationHypothesisBridge(options: BridgeOptions = {}): () => void {
+  if (_unsubscribe !== null) return stopSituationHypothesisBridge;
   const store = options.store ?? getSituationStoreV2();
   const engine = options.engine ?? getCompetitiveHypothesisEngine();
   const clock = options.clock ?? (() => Date.now());
   const recorder = options.recorder ?? recordAlgorithmEvaluation;
   const bus = options.observationBus ?? onIngest;
 
-  // Per-situation tracking lives in the closure so each bridge instance is independent.
   const tracked = new Map<string, SituationTrackingState>();
 
-  const unsubscribe = bus((event: ObservationEvent) => {
-    // Snapshot existing situation IDs before ingest so we can detect new ones.
+  _unsubscribe = bus((event: ObservationEvent) => {
     const beforeIds = new Set(store.list().map((s) => s.id));
-
-    // Drive the v2 store's correlation + detection pipeline with this event.
     store.ingest([event]);
-
     const now = clock();
-    const after = store.list();
 
-    for (const sit of after) {
+    for (const sit of store.list()) {
       const isNew = !beforeIds.has(sit.id);
-      const alreadyTracked = tracked.has(sit.id);
+      const state = tracked.get(sit.id);
 
-      if (isNew && !alreadyTracked) {
-        // New situation — seed the hypothesis set.
-        tracked.set(sit.id, {
-          startTimeMs: now,
-          seenSourceIds: new Set([event.sourceId]),
-          prevSeverity: event.severity,
-          obsCount: 1,
-          evaluated: false,
-        });
-        engine.generate(sit.id, sit.domain, sit.severity);
+      if (isNew && !state) {
+        seedSituation(engine, tracked, event, sit.id, sit.domain, sit.severity, now);
         continue;
       }
 
-      if (!isNew && alreadyTracked) {
-        // Check that the v2 store actually absorbed this event into this situation.
+      if (!isNew && state) {
         if (!sit.observations.some((o) => o.id === event.id)) continue;
-
-        const state = tracked.get(sit.id)!;
-        const currentSet = engine.getSet(sit.id);
-        if (!currentSet) continue;
 
         const ctx: AlignmentContext = {
           seenSourceIds: new Set(state.seenSourceIds),
@@ -180,53 +247,19 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
           situationEntityIds: sit.entityIds,
         };
 
-        // Add evidence to every hypothesis in the set.
-        for (const h of currentSet.hypotheses) {
-          const { alignment, weight } = classifyAlignment(event, h.type, ctx);
-          engine.addEvidence(h.id, { evidenceId: event.id, alignment, weight });
-        }
-
-        // Update tracking state after classification.
+        addEvidenceToSet(engine, sit.id, event, ctx);
         state.seenSourceIds.add(event.sourceId);
         state.prevSeverity = event.severity;
         state.obsCount += 1;
 
-        if (state.evaluated) continue;
-
-        // Check for consensus or situation close — emit exactly one evaluation.
-        const updatedSet = engine.getSet(sit.id);
-        const shouldEvaluate = (updatedSet?.consensusReached === true)
-          || sit.status === 'resolved';
-
-        if (shouldEvaluate && updatedSet) {
-          state.evaluated = true;
-          const leader = updatedSet.leadingHypothesis;
-          if (!leader) continue;
-
-          // Flip statuses: leader → supported, sub-floor → refuted.
-          for (const h of updatedSet.hypotheses) {
-            engine.updateStatus(h.id, h.id === leader.id ? 'supported' : 'refuted');
-          }
-
-          const durationMs = now - state.startTimeMs;
-          try {
-            recorder('competitive-hypothesis', {
-              score: leader.confidence,
-              label: leader.type,
-              durationMs,
-              detail: {
-                situationId: sit.id,
-                domain: sit.domain,
-                consensus: updatedSet.consensusReached,
-              },
-            });
-          } catch { /* ledger unavailable — skip silently */ }
+        if (!state.evaluated) {
+          maybeEmitEvaluation(engine, recorder, state, sit.id, sit.domain, sit.status, now);
         }
       }
     }
   });
 
-  return unsubscribe;
+  return stopSituationHypothesisBridge;
 }
 
 // ── Internals exposed for tests ───────────────────────────────────────────
@@ -235,4 +268,6 @@ export const __internals = {
   classifyAlignment,
   isSeverityDecreasing,
   SEVERITY_RANK,
+  /** Test seam: clear the module-level idempotency flag between tests. */
+  reset(): void { _unsubscribe = null; },
 };

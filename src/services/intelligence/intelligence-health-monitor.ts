@@ -169,11 +169,16 @@ export function buildDefaultProbes(): HealthProbe[] {
     ),
     safeProbe('safety-case', 'Safety Case', () => {
       const svc = getSafetyCaseDashboardService() as unknown as {
-        getSummary?: () => { overallPassRate?: number } | undefined;
+        getSummary?: () => { overallPassRate?: number; notImplementedCount?: number; totalChecks?: number } | undefined;
       };
       const summary = typeof svc.getSummary === 'function' ? svc.getSummary() : undefined;
       if (!summary || typeof summary.overallPassRate !== 'number') {
         return unknownPartial('no safety-case summary available');
+      }
+      const total = summary.totalChecks ?? 0;
+      const notImpl = summary.notImplementedCount ?? 0;
+      if (total > 0 && notImpl === total) {
+        return unknownPartial('no implemented safety checks yet');
       }
       const score = clamp01(summary.overallPassRate);
       return { status: componentStatusFromScore(score), score, detail: `passRate=${(score * 100).toFixed(0)}%` };

@@ -1,14 +1,14 @@
 /**
  * PostHog Analytics Service
  *
- * Active when VITE_POSTHOG_KEY is set AND the user has not opted out.
- * All exports are no-ops when the key is absent (dev/local) or user opted out.
+ * Active when VITE_POSTHOG_KEY is set AND the user has explicitly opted in.
+ * All exports are no-ops when the key is absent (dev/local) or user has not consented.
  *
  * Consent model:
  * - localStorage key 'wm-analytics-consent':
- * 'false'  → user explicitly opted out (analytics disabled)
- * 'true' → user explicitly opted in
- * absent → not yet decided (analytics active by default for existing users)
+ * 'true'  → user explicitly opted in (analytics enabled)
+ * 'false' → user explicitly opted out
+ * absent  → not consented (analytics disabled by default)
  * - Ghost Mode always suppresses analytics regardless of consent.
  *
  * Data safety:
@@ -21,27 +21,31 @@
 import { isDesktopRuntime } from './runtime';
 import { isGhostMode } from './mode-manager';
 import { getRuntimeConfigSnapshot, type RuntimeSecretKey } from './runtime-config';
-import { SITE_VARIANT } from '@/config';
-import { isMobileDevice } from '@/utils';
-import { invokeTauri } from './tauri-bridge';
+import { SITE_VARIANT } from '@/config/variant';
 
 // ── Analytics consent ──
 
 const CONSENT_KEY = 'wm-analytics-consent';
 
 export function hasAnalyticsConsent(): boolean {
-  // Explicit opt-out takes precedence. Absent = default active (preserves existing behaviour for
-  // users who installed before consent gating was added). Set to 'false' to opt out.
-  return localStorage.getItem(CONSENT_KEY) !== 'false';
+  // Absent key = no consent (default-off). Only 'true' means consented.
+  return localStorage.getItem(CONSENT_KEY) === 'true';
+}
+
+/** Single gate: consent granted AND not in Ghost Mode. Call before every send path. */
+export function isAnalyticsAllowed(): boolean {
+  return hasAnalyticsConsent() && !isGhostMode();
 }
 
 export function setAnalyticsConsent(allow: boolean): void {
   localStorage.setItem(CONSENT_KEY, allow ? 'true' : 'false');
   if (!allow) {
- // Clear the persistent installation ID so re-identification is not possible.
- localStorage.removeItem('wm-installation-id');
- posthogInstance = null;
- initPromise = null;
+    // Clear the persistent installation ID so re-identification is not possible.
+    localStorage.removeItem('wm-installation-id');
+    // Clear the offline queue — revoked consent must not replay buffered events.
+    try { localStorage.removeItem(OFFLINE_QUEUE_KEY); } catch { /* ignore */ }
+    posthogInstance = null;
+    initPromise = null;
   }
 }
 
@@ -134,19 +138,14 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
 
 // ── Typed event schemas (allowlisted properties per event) ──
 
-const HAS_KEYS = Object.values(SECRET_ANALYTICS_NAMES).map(n => `has_${n}`);
-
 const EVENT_SCHEMAS: Record<string, Set<string>> = {
   // Phase 1 — core events
   wm_app_loaded: new Set(['load_time_ms', 'panel_count']),
   wm_panel_viewed: new Set(['panel_id']),
   wm_summary_generated: new Set(['provider', 'model', 'cached']),
   wm_summary_failed: new Set(['last_provider']),
-  wm_api_keys_configured: new Set([
- 'total_keys_configured', 'total_features_enabled', 'enabled_features',
- 'ollama_model', 'platform',
- ...HAS_KEYS,
-  ]),
+  // Payload minimized: count only, no per-key presence map, no OLLAMA_MODEL value.
+  wm_api_keys_configured: new Set(['configured_key_count']),
   // Phase 2 — plan-specified events
   wm_panel_resized: new Set(['panel_id', 'new_span']),
   wm_variant_switched: new Set(['from', 'to']),
@@ -219,16 +218,22 @@ interface PostHogInstance {
 let posthogInstance: PostHogInstance | null = null;
 let initPromise: Promise<void> | null = null;
 
-const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
+/** Inject a fake PostHog instance for unit tests only. */
+export function _setPosthogForTest(instance: PostHogInstance | null): void {
+  posthogInstance = instance;
+}
+
+const _env = (import.meta.env as Record<string, string> | undefined) ?? {};
+const POSTHOG_KEY = _env.VITE_POSTHOG_KEY as string | undefined;
 const POSTHOG_HOST = isDesktopRuntime()
-  ? ((import.meta.env.VITE_POSTHOG_HOST as string | undefined) ?? 'https://us.i.posthog.com')
+  ? ((_env.VITE_POSTHOG_HOST as string | undefined) ?? 'https://us.i.posthog.com')
   : '/ingest'; // Reverse proxy through own domain to bypass ad blockers
 
 // ── Public API ──
 
 export async function initAnalytics(): Promise<void> {
   if (!POSTHOG_KEY) return;
-  if (!hasAnalyticsConsent()) return;
+  if (!isAnalyticsAllowed()) return;
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
@@ -248,34 +253,12 @@ export async function initAnalytics(): Promise<void> {
  sanitize_properties: (props: Record<string, unknown>) => deepStripSecrets(props),
  });
 
- // Register super properties (attached to every event)
+ // Register minimal super properties — app version + platform only.
  const superProps: Record<string, unknown> = {
  platform: isDesktopRuntime() ? 'desktop' : 'web',
  variant: SITE_VARIANT,
  app_version: __APP_VERSION__,
- is_mobile: isMobileDevice(),
- screen_width: screen.width,
- screen_height: screen.height,
- viewport_width: innerWidth,
- viewport_height: innerHeight,
- is_big_screen: screen.width >= 2560 || screen.height >= 1440,
- is_tv_mode: screen.width >= 3840,
- device_pixel_ratio: devicePixelRatio,
- browser_language: navigator.language,
- local_hour: new Date().getHours(),
- local_day: new Date().getDay(),
  };
-
- // Desktop additionally registers OS and arch
- if (isDesktopRuntime()) {
- try {
- const info = await invokeTauri<{ os: string; arch: string }>('get_desktop_runtime_info');
- superProps.desktop_os = info.os;
- superProps.desktop_arch = info.arch;
- } catch {
- // Tauri bridge may not be available yet
- }
- }
 
  posthog.register(superProps);
  posthogInstance = posthog as unknown as PostHogInstance;
@@ -317,31 +300,36 @@ function enqueueOffline(name: string, props: Record<string, unknown>): void {
 }
 
 function flushOfflineQueue(): void {
+  if (!isAnalyticsAllowed()) {
+    // Consent revoked or ghost mode — clear queue without sending.
+    try { localStorage.removeItem(OFFLINE_QUEUE_KEY); } catch { /* ignore */ }
+    return;
+  }
   if (!posthogInstance) return;
   try {
- const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
- if (!raw) return;
- const queue = JSON.parse(raw) as { name: string; props: Record<string, unknown> }[];
- localStorage.removeItem(OFFLINE_QUEUE_KEY);
- for (const { name, props } of queue) {
- posthogInstance.capture(name, props);
- }
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (!raw) return;
+    const queue = JSON.parse(raw) as { name: string; props: Record<string, unknown> }[];
+    localStorage.removeItem(OFFLINE_QUEUE_KEY);
+    for (const { name, props } of queue) {
+      posthogInstance.capture(name, props);
+    }
   } catch { /* corrupt queue, discard */ }
 }
 
 export function trackEvent(name: string, props?: Record<string, unknown>): void {
-  if (isGhostMode()) return;  // Ghost Mode: analytics suppressed
-  if (!hasAnalyticsConsent()) return;
+  if (!isAnalyticsAllowed()) return;
   const safeProps = props ? sanitizeProps(name, props) : {};
   if (!posthogInstance) {
- if (isDesktopRuntime() && POSTHOG_KEY) enqueueOffline(name, safeProps);
- return;
+    if (isDesktopRuntime() && POSTHOG_KEY) enqueueOffline(name, safeProps);
+    return;
   }
   posthogInstance.capture(name, safeProps);
 }
 
 /** Use sendBeacon transport for events fired just before page reload. */
 export function trackEventBeforeUnload(name: string, props?: Record<string, unknown>): void {
+  if (!isAnalyticsAllowed()) return;
   if (!posthogInstance) return;
   const safeProps = props ? sanitizeProps(name, props) : {};
   posthogInstance.capture(name, safeProps, { transport: 'sendBeacon' });
@@ -353,23 +341,9 @@ export function trackPanelView(panelId: string): void {
 
 export function trackApiKeysSnapshot(): void {
   const config = getRuntimeConfigSnapshot();
-  const presence: Record<string, boolean> = {};
-  for (const [internalKey, analyticsName] of Object.entries(SECRET_ANALYTICS_NAMES)) {
- const state = config.secrets[internalKey as RuntimeSecretKey];
- presence[`has_${analyticsName}`] = Boolean(state?.value);
-  }
-
-  const enabledFeatures = Object.entries(config.featureToggles)
- .filter(([, v]) => v).map(([k]) => k);
-
-  trackEvent('wm_api_keys_configured', {
- platform: isDesktopRuntime() ? 'desktop' : 'web',
- total_keys_configured: Object.values(presence).filter(Boolean).length,
- ...presence,
- enabled_features: enabledFeatures,
- total_features_enabled: enabledFeatures.length,
- ollama_model: config.secrets.OLLAMA_MODEL?.value ?? 'none',
-  });
+  const configured_key_count = (Object.keys(SECRET_ANALYTICS_NAMES) as RuntimeSecretKey[])
+    .filter(k => Boolean(config.secrets[k]?.value)).length;
+  trackEvent('wm_api_keys_configured', { configured_key_count });
 }
 
 export function trackLLMUsage(provider: string, model: string, cached: boolean): void {

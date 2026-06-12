@@ -6,7 +6,7 @@ import { getAiFlowSettings, setAiFlowSetting, getStreamQuality, setStreamQuality
 import { isAlwaysOn, setAlwaysOn } from '@/services/always-on';
 import type { StreamQuality } from '@/services/ai-flow-settings';
 import { escapeHtml } from '@/utils/sanitize';
-import { trackLanguageChange } from '@/services/analytics';
+import { trackLanguageChange, hasAnalyticsConsent, setAnalyticsConsent } from '@/services/analytics';
 import type { PanelConfig } from '@/types';
 import { RuntimeConfigPanel } from './RuntimeConfigPanel';
 import {
@@ -421,6 +421,8 @@ export class UnifiedSettings {
  const cur = getImessageSettings();
  const next = target.value === 'high+critical' ? 'high+critical' : 'critical';
  saveImessageSettings({ ...cur, threshold: next as ImessageThreshold });
+ } else if (target.id === 'us-analytics-consent') {
+ setAnalyticsConsent(target.checked);
  }
  });
 
@@ -758,6 +760,10 @@ export class UnifiedSettings {
  html += `<option value="${lang.code}"${selected}>${lang.flag} ${lang.label}</option>`;
  }
  html += `</select>`;
+
+ // Privacy section
+ html += `<div class="ai-flow-section-label">Privacy</div>`;
+ html += this.toggleRowHtml('us-analytics-consent', 'Share anonymous usage analytics', 'Sends aggregate counts (no key names, no personal data) to PostHog to help improve Crystal Ball. Off by default.', hasAnalyticsConsent());
 
  html += `<div class="ai-flow-section-label">Build Identity</div>`;
  html += `

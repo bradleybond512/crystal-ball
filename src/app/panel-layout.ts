@@ -82,6 +82,7 @@ import { startRulesEngineBootstrap } from '@/services/intelligence/rules-bootstr
 import { startPredictiveCrisisIndex } from '@/services/intelligence/predictive-crisis-index';
 import { startCrisisTrajectory } from '@/services/intelligence/crisis-trajectory';
 import { startActiveLearningQueue } from '@/services/intelligence/active-learning-queue';
+import { startSituationHypothesisBridge } from '@/services/intelligence/situation-hypothesis-bridge';
 import { startOutcomeGradingCadence } from '@/services/algorithms/outcome-grading-runner';
 import { startTuningApplyCadence } from '@/services/algorithms/tuning-apply-runner';
 import { startAssumptionExpirySweep } from '@/services/intelligence/assumption-producers';
@@ -884,6 +885,7 @@ export class PanelLayoutManager implements AppModule {
  startOutcomeGradingCadence();
  startTuningApplyCadence();
  startAssumptionExpirySweep();
+ startSituationHypothesisBridge();
  startNotificationRouter();
  startSilenceDetector();
  startSourceFeedback();

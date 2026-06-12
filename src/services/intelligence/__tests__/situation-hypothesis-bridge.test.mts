@@ -1,0 +1,327 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  startSituationHypothesisBridge,
+  classifyAlignment,
+  type AlignmentContext,
+  type BridgeOptions,
+} from '../situation-hypothesis-bridge.ts';
+import { SituationStoreV2 } from '../situation-store-v2.ts';
+import {
+  CompetitiveHypothesisEngine,
+} from '../competitive-hypothesis.ts';
+import type { ObservationEvent } from '@/types/intelligence';
+import type { RecordEvaluationInput } from '../../algorithms/record-evaluation.ts';
+import type { AlgorithmDomain, EvaluationRecord } from '../../algorithms/algorithm-evaluation-ledger.ts';
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+const BASE_TIME = Date.parse('2026-06-12T12:00:00Z');
+
+function makeEvent(over: Partial<ObservationEvent> & Pick<ObservationEvent, 'id'>): ObservationEvent {
+  return {
+    sourceId: over.sourceId ?? 'usgs-primary',
+    domain: over.domain ?? 'earthquake',
+    timestamp: over.timestamp ?? BASE_TIME,
+    severity: over.severity ?? 'HIGH',
+    title: over.title ?? 'M6.2 earthquake',
+    raw: {},
+    entityIds: over.entityIds ?? ['JP'],
+    tags: over.tags ?? ['earthquake'],
+    location: over.location ?? { lat: 35.0, lon: 138.0, radiusKm: 50 },
+    ...over,
+  };
+}
+
+const nullStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+
+interface RecorderCall {
+  algorithmId: string;
+  input: RecordEvaluationInput;
+}
+
+function stubRecord(algorithmId: string, input: RecordEvaluationInput): EvaluationRecord {
+  return {
+    id: `stub-${algorithmId}`,
+    algorithmId,
+    domain: 'reasoning_hypothesis' as AlgorithmDomain,
+    version: '1.0.0',
+    at: BASE_TIME,
+    durationMs: input.durationMs,
+    score: input.score,
+    label: input.label,
+    detail: input.detail,
+  };
+}
+
+function makeDeps(clockMs = BASE_TIME) {
+  const clock = () => clockMs;
+  const store = new SituationStoreV2({ clock });
+  const engine = new CompetitiveHypothesisEngine({ storage: nullStorage, clock });
+
+  const recorderCalls: RecorderCall[] = [];
+  const recorder = (algorithmId: string, input: RecordEvaluationInput): EvaluationRecord => {
+    recorderCalls.push({ algorithmId, input });
+    return stubRecord(algorithmId, input);
+  };
+
+  let busListener: ((e: ObservationEvent) => void) | null = null;
+  const observationBus = (listener: (e: ObservationEvent) => void): (() => void) => {
+    busListener = listener;
+    return () => { busListener = null; };
+  };
+  const fireEvent = (event: ObservationEvent): void => {
+    assert.ok(busListener !== null, 'bridge not started');
+    busListener(event);
+  };
+
+  const opts: BridgeOptions = { store, engine, clock, recorder, observationBus };
+  return { store, engine, clock, recorder, observationBus, fireEvent, recorderCalls, opts };
+}
+
+// ── Pipeline: new situation + hypothesis set ──────────────────────────────
+
+test('first HIGH event creates situation and 3-hypothesis set summing to 1.0', () => {
+  const { store, engine, opts, fireEvent } = makeDeps();
+  startSituationHypothesisBridge(opts);
+
+  fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'usgs-primary' }));
+
+  const situations = store.list();
+  assert.ok(situations.length >= 1, 'at least one situation should be created');
+
+  const set = engine.getSet(situations[0]!.id);
+  assert.ok(set !== null, 'hypothesis set should exist');
+  assert.equal(set!.hypotheses.length, 3, 'should have exactly 3 hypotheses');
+
+  const total = set!.hypotheses.reduce((sum, h) => sum + h.confidence, 0);
+  assert.ok(Math.abs(total - 1.0) < 0.001, `confidences must sum to ~1.0, got ${total}`);
+});
+
+test('second observation in same situation produces evidence rows', () => {
+  const { store, engine, opts, fireEvent } = makeDeps();
+  startSituationHypothesisBridge(opts);
+
+  fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'usgs-primary' }));
+  const sitId = store.list()[0]!.id;
+
+  const evidenceBefore = engine.getSet(sitId)!.hypotheses.reduce(
+    (sum, h) => sum + h.evidence.length, 0,
+  );
+
+  fireEvent(makeEvent({
+    id: 'eq-2',
+    severity: 'HIGH',
+    sourceId: 'emsc-secondary',
+    timestamp: BASE_TIME + 60_000,
+  }));
+
+  const evidenceAfter = engine.getSet(sitId)!.hypotheses.reduce(
+    (sum, h) => sum + h.evidence.length, 0,
+  );
+  assert.ok(evidenceAfter > evidenceBefore, 'evidence should grow after second observation');
+});
+
+// ── Corroboration + consensus ─────────────────────────────────────────────
+
+test('corroborating second source raises primary confidence', () => {
+  const { store, engine, opts, fireEvent } = makeDeps();
+  startSituationHypothesisBridge(opts);
+
+  fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'src-A' }));
+  const sitId = store.list()[0]!.id;
+  const confidenceBefore = engine.getSet(sitId)!.hypotheses
+    .find((h) => h.type === 'primary')!.confidence;
+
+  fireEvent(makeEvent({ id: 'eq-2', severity: 'HIGH', sourceId: 'src-B', timestamp: BASE_TIME + 60_000 }));
+
+  const confidenceAfter = engine.getSet(sitId)!.hypotheses
+    .find((h) => h.type === 'primary')!.confidence;
+
+  assert.ok(
+    confidenceAfter > confidenceBefore,
+    `primary confidence should increase; was ${confidenceBefore}, now ${confidenceAfter}`,
+  );
+});
+
+test('consensus flips statuses and emits exactly one recordAlgorithmEvaluation', () => {
+  const { store, engine, opts, fireEvent, recorderCalls } = makeDeps();
+  startSituationHypothesisBridge(opts);
+
+  // Seed
+  fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'src-1' }));
+  const sitId = store.list()[0]!.id;
+
+  // Add many corroborating sources until consensus (primary > 0.7, others < 0.4)
+  let consensusReached = false;
+  for (let i = 2; i <= 20; i++) {
+    const set = engine.getSet(sitId);
+    if (set?.consensusReached) { consensusReached = true; break; }
+    fireEvent(makeEvent({
+      id: `eq-${i}`,
+      severity: 'HIGH',
+      sourceId: `src-corroborate-${i}`,
+      timestamp: BASE_TIME + i * 60_000,
+    }));
+  }
+
+  assert.ok(
+    consensusReached || engine.getSet(sitId)?.consensusReached,
+    'consensus should be reached within 20 corroborating events',
+  );
+
+  const evalCalls = recorderCalls.filter((c) => c.algorithmId === 'competitive-hypothesis');
+  assert.equal(evalCalls.length, 1, `expected exactly 1 evaluation, got ${evalCalls.length}`);
+
+  // Leader should be 'supported', others 'refuted'
+  const finalSet = engine.getSet(sitId)!;
+  const leaderId = finalSet.leadingHypothesis!.id;
+  for (const h of finalSet.hypotheses) {
+    const expected = h.id === leaderId ? 'supported' : 'refuted';
+    assert.equal(h.status, expected, `${h.type} should be ${expected}`);
+  }
+
+  // Further events must not emit a second evaluation
+  fireEvent(makeEvent({ id: 'eq-late', severity: 'HIGH', sourceId: 'src-late', timestamp: BASE_TIME + 30 * 60_000 }));
+  assert.equal(
+    recorderCalls.filter((c) => c.algorithmId === 'competitive-hypothesis').length,
+    1,
+    'should not emit a second evaluation after consensus',
+  );
+});
+
+// ── classifyAlignment — table-driven ─────────────────────────────────────
+
+function ctx(over: Partial<AlignmentContext> = {}): AlignmentContext {
+  return {
+    seenSourceIds: new Set(['source-A']),
+    prevObsCount: 1,
+    prevSeverity: 'HIGH',
+    situationDomain: 'earthquake',
+    situationEntityIds: ['JP'],
+    ...over,
+  };
+}
+
+function obs(over: Partial<ObservationEvent> = {}): ObservationEvent {
+  return makeEvent({ id: 'obs-test', ...over });
+}
+
+test('rule 1: new source same domain → supporting 0.6 for primary', () => {
+  const r = classifyAlignment(obs({ sourceId: 'src-B', domain: 'earthquake' }), 'primary', ctx());
+  assert.equal(r.alignment, 'supporting');
+  assert.equal(r.weight, 0.6);
+});
+
+test('rule 1: new source same domain → neutral for alternative', () => {
+  const r = classifyAlignment(obs({ sourceId: 'src-B', domain: 'earthquake' }), 'alternative', ctx());
+  assert.equal(r.alignment, 'neutral');
+  assert.equal(r.weight, 0.0);
+});
+
+test('rule 1: new source same domain → neutral for devil-advocate', () => {
+  const r = classifyAlignment(obs({ sourceId: 'src-B', domain: 'earthquake' }), 'devil-advocate', ctx());
+  assert.equal(r.alignment, 'neutral');
+  assert.equal(r.weight, 0.0);
+});
+
+test('rule 2: severity decreasing → supporting 0.4 for devil-advocate', () => {
+  const r = classifyAlignment(
+    obs({ sourceId: 'source-A', domain: 'earthquake', severity: 'LOW' }),
+    'devil-advocate',
+    ctx({ prevObsCount: 3, prevSeverity: 'HIGH' }),
+  );
+  assert.equal(r.alignment, 'supporting');
+  assert.equal(r.weight, 0.4);
+});
+
+test('rule 2: severity decreasing → contradicting 0.3 for primary', () => {
+  const r = classifyAlignment(
+    obs({ sourceId: 'source-A', domain: 'earthquake', severity: 'LOW' }),
+    'primary',
+    ctx({ prevObsCount: 3, prevSeverity: 'HIGH' }),
+  );
+  assert.equal(r.alignment, 'contradicting');
+  assert.equal(r.weight, 0.3);
+});
+
+test('rule 2: non-decreasing severity does not trigger', () => {
+  const r = classifyAlignment(
+    obs({ sourceId: 'source-A', domain: 'earthquake', severity: 'CRITICAL' }),
+    'primary',
+    ctx({ prevObsCount: 3, prevSeverity: 'HIGH' }),
+  );
+  // Rule 1 also doesn't fire (known source). Should be neutral via default.
+  assert.equal(r.alignment, 'neutral');
+});
+
+test('rule 3: single-source after 3+ updates → supporting 0.3 for devil-advocate', () => {
+  const r = classifyAlignment(
+    obs({ sourceId: 'source-A', domain: 'earthquake', severity: 'HIGH' }),
+    'devil-advocate',
+    ctx({ seenSourceIds: new Set(['source-A']), prevObsCount: 4, prevSeverity: 'HIGH' }),
+  );
+  assert.equal(r.alignment, 'supporting');
+  assert.equal(r.weight, 0.3);
+});
+
+test('rule 3: single-source → neutral for primary', () => {
+  const r = classifyAlignment(
+    obs({ sourceId: 'source-A', domain: 'earthquake', severity: 'HIGH' }),
+    'primary',
+    ctx({ seenSourceIds: new Set(['source-A']), prevObsCount: 4, prevSeverity: 'HIGH' }),
+  );
+  assert.equal(r.alignment, 'neutral');
+});
+
+test('rule 4: cross-domain with entity match → supporting 0.4 for alternative', () => {
+  const r = classifyAlignment(
+    obs({ sourceId: 'src-X', domain: 'cyber', entityIds: ['JP'], severity: 'MEDIUM' }),
+    'alternative',
+    ctx({ seenSourceIds: new Set(['source-A']), situationDomain: 'earthquake', situationEntityIds: ['JP'] }),
+  );
+  assert.equal(r.alignment, 'supporting');
+  assert.equal(r.weight, 0.4);
+});
+
+test('rule 4: cross-domain without entity match → neutral', () => {
+  const r = classifyAlignment(
+    obs({ sourceId: 'src-X', domain: 'cyber', entityIds: ['US'], severity: 'MEDIUM' }),
+    'alternative',
+    ctx({ seenSourceIds: new Set(['source-A']), situationDomain: 'earthquake', situationEntityIds: ['JP'] }),
+  );
+  assert.equal(r.alignment, 'neutral');
+});
+
+test('default: known source, same domain, stable severity → neutral for all types', () => {
+  const o = obs({ sourceId: 'source-A', domain: 'earthquake', severity: 'HIGH' });
+  const c = ctx({ prevObsCount: 1, prevSeverity: 'HIGH' });
+  for (const type of ['primary', 'alternative', 'devil-advocate'] as const) {
+    assert.equal(classifyAlignment(o, type, c).alignment, 'neutral', `${type} should be neutral`);
+  }
+});
+
+// ── Unsubscribe ───────────────────────────────────────────────────────────
+
+test('unsubscribe stops further processing', () => {
+  let busListener: ((e: ObservationEvent) => void) | null = null;
+  const observationBus = (listener: (e: ObservationEvent) => void): (() => void) => {
+    busListener = listener;
+    return () => { busListener = null; };
+  };
+  const store = new SituationStoreV2({ clock: () => BASE_TIME });
+  const engine = new CompetitiveHypothesisEngine({ storage: nullStorage, clock: () => BASE_TIME });
+  const stop = startSituationHypothesisBridge({ store, engine, observationBus });
+
+  assert.ok(busListener !== null, 'listener should be registered after start');
+  busListener!(makeEvent({ id: 'eq-1', severity: 'HIGH' }));
+  const countBefore = store.list().length;
+
+  stop();
+
+  // After unsubscribe, busListener is null — bridge no longer processes events.
+  assert.equal(busListener, null, 'listener should be removed after stop');
+  // Even if we could fire, store should remain unchanged.
+  assert.equal(store.list().length, countBefore, 'no changes after unsubscribe');
+});

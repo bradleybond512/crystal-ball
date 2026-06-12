@@ -251,6 +251,17 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     outputs: ['ranking'],
     criticality: 'medium',
   },
+  {
+    id: 'competitive-hypothesis',
+    label: 'Competitive hypothesis engine',
+    version: '1.0.0',
+    domain: 'reasoning',
+    healthDomain: 'reasoning_hypothesis',
+    ownerFeature: 'analyst',
+    dependencies: { sources: [], providers: [], services: ['situation-store-v2'] },
+    outputs: ['ranking'],
+    criticality: 'medium',
+  },
 ];
 
 const registry = new Map<string, AlgorithmDefinition>(

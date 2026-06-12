@@ -336,7 +336,7 @@ async function defaultRead(key: string): Promise<EvaluationRecord[] | null> {
 
 async function defaultWrite(key: string, records: EvaluationRecord[]): Promise<void> {
   const { setPersistentCache } = await loadPersistentCache();
-  await setPersistentCache<EvaluationRecord[]>(key, records);
+  await setPersistentCache<EvaluationRecord[]>(key, records, 365 * 24 * 60 * 60 * 1000);
 }
 
 const defaultEmit: DiagnosticEmitter = (severity, message, detail) => {

@@ -5,7 +5,7 @@ import http, { createServer } from 'node:http';
 import { timingSafeEqual, randomUUID } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
-import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { brotliCompress, gzip } from 'node:zlib';
@@ -34,6 +34,7 @@ import {
   loadSmsConfig, saveSmsConfig,
   handleSmsCommand,
 } from './sms-command-parser.mjs';
+import { validateTwilioSignature } from './sms-security.mjs';
 import { buildRecentChanges } from './recent-changes.mjs';
 import { explain as explainEvent } from './explainer.mjs';
 import { EventStore } from './event-store.mjs';
@@ -68,7 +69,9 @@ export function appendObservationToEventStore(store, obs) {
       ? new Date(obs.timestamp).toISOString()
       : new Date().toISOString();
     store.appendEvent({
-      id: randomUUID(),
+      id: (typeof obs?.id === 'string' && obs.id)
+        ? `${obs.sourceId || obs.domain || 'obs'}:${obs.id}`
+        : randomUUID(),
       event_type: 'observation',
       occurred_at: occurredAt,
       domain: typeof obs?.domain === 'string' && obs.domain ? obs.domain : null,
@@ -93,7 +96,9 @@ export function appendSituationToEventStore(store, situation) {
       ...(Array.isArray(situation?.correlationIds) ? situation.correlationIds : []),
     ].map(String);
     store.appendEvent({
-      id: randomUUID(),
+      id: (typeof situation?.id === 'string' && situation.id)
+        ? `situation-store:${situation.id}`
+        : randomUUID(),
       event_type: eventType,
       occurred_at: occurredAt,
       domain: typeof situation?.domain === 'string' ? situation.domain : null,
@@ -112,6 +117,7 @@ const _smsRateLimitMap = new Map();
 const _smsCommandLog = [];
 const _smsWatchRegistry = [];
 const _smsAlertRegistry = [];
+let _smsTwilioTokenWarned = false;
 
 // Keychain-loss fallback: a 2026-05-08 incident wiped the macOS Keychain
 // vault, taking 29 API credentials with it. If the keychain is empty
@@ -4762,6 +4768,8 @@ async function handleOllamaStream(requestUrl, req, res, context) {
 // Circuit breaker for intel-generate: fast-fail when LLM is unreachable
 let intelFailures = 0;
 let intelCooldownUntil = 0;
+let groqCallsToday = 0;
+let groqBudgetDay = '';
 
 // Generic non-streaming intel generation. Accepts { prompt, system?, maxTokens?,
 // temperature? } and returns { response, model } from OLLAMA_API_URL (any
@@ -4814,6 +4822,7 @@ async function handleIntelGenerate(req, res, context) {
   const system = typeof parsed.system === 'string' ? parsed.system.slice(0, 2000) : 'You are a concise intelligence analyst. Be factual, direct, no preamble.';
   const maxTokens = Math.min(2048, Math.max(16, Number(parsed.maxTokens) || 400));
   const temperature = Math.min(1, Math.max(0, Number(parsed.temperature) || 0.3));
+  const localOnly = parsed.localOnly === true;
   if (!prompt) { res.writeHead(400, headers); res.end(JSON.stringify({ error: 'prompt required' })); return; }
 
   const messages = [{ role: 'system', content: system }, { role: 'user', content: prompt }];
@@ -4845,7 +4854,7 @@ async function handleIntelGenerate(req, res, context) {
     return 'local-model';
   };
 
-  let response, model;
+  let response, model, provider = 'local';
   for (const base of localBases) {
     let localUrl;
     try { localUrl = new URL('/v1/chat/completions', base).toString(); } catch { continue; }
@@ -4859,25 +4868,34 @@ async function handleIntelGenerate(req, res, context) {
     }
   }
 
-  // Groq fallback
-  if (response == null && process.env.GROQ_API_KEY) {
-    try {
-      response = await callChatCompletion(
-        'https://api.groq.com/openai/v1/chat/completions',
-        'llama-3.1-8b-instant', messages, maxTokens, temperature,
-        `Bearer ${process.env.GROQ_API_KEY}`, 30_000,
-      );
-      model = 'groq:llama-3.1-8b-instant';
-      context.logger.warn('[intel-generate] used Groq fallback');
-    } catch (groqError) {
-      context.logger.warn('[intel-generate] Groq fallback failed:', groqError.message);
+  // Groq fallback — skipped when caller sets localOnly=true
+  if (!localOnly && response == null && process.env.GROQ_API_KEY) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (groqBudgetDay !== today) { groqCallsToday = 0; groqBudgetDay = today; }
+    const GROQ_DAILY_CAP = 200;
+    if (groqCallsToday >= GROQ_DAILY_CAP) {
+      context.logger.warn(`[intel-generate] Groq daily cap (${GROQ_DAILY_CAP}) reached — skipping fallback`);
+    } else {
+      try {
+        response = await callChatCompletion(
+          'https://api.groq.com/openai/v1/chat/completions',
+          'llama-3.1-8b-instant', messages, maxTokens, temperature,
+          `Bearer ${process.env.GROQ_API_KEY}`, 30_000,
+        );
+        groqCallsToday++;
+        model = 'groq:llama-3.1-8b-instant';
+        provider = 'cloud-groq';
+        context.logger.warn(`[intel-generate] used Groq fallback (day ${groqBudgetDay}: ${groqCallsToday}/${GROQ_DAILY_CAP})`);
+      } catch (groqError) {
+        context.logger.warn('[intel-generate] Groq fallback failed:', groqError.message);
+      }
     }
   }
 
   if (response != null) {
     intelFailures = 0;
     res.writeHead(200, headers);
-    res.end(JSON.stringify({ response, model }));
+    res.end(JSON.stringify({ response, model, provider }));
   } else {
     intelFailures++;
     if (intelFailures >= 2) {
@@ -5080,10 +5098,48 @@ async function dispatch(requestUrl, req, routes, context) {
   // Security is enforced by the phone-number allowlist in sms-config.json.
   if (requestUrl.pathname === '/api/sms/command' && req.method === 'POST') {
     if (!_smsConfig.enabled) return json({ error: 'SMS command interface is disabled.' }, 503);
-    let smsBody;
-    try { smsBody = JSON.parse(await readBody(req)); } catch { return json({ error: 'Invalid JSON' }, 400); }
-    const from = String(smsBody.from ?? '');
-    const body = String(smsBody.body ?? '');
+
+    const rawBodyBuf = await readBody(req);
+    const rawBody = rawBodyBuf ? rawBodyBuf.toString('utf8') : '';
+    const contentType = String(req.headers['content-type'] || '').toLowerCase();
+    // Twilio webhooks POST application/x-www-form-urlencoded; the internal/test
+    // contract POSTs JSON {from, body}. Parse params accordingly so the signature
+    // is computed over exactly the fields the gateway sent.
+    let params;
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      params = Object.fromEntries(new URLSearchParams(rawBody));
+    } else {
+      try { params = JSON.parse(rawBody || '{}'); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    }
+
+    // Caller-ID (From) is spoofable. When a TWILIO_AUTH_TOKEN is configured we
+    // require a valid HMAC-SHA1 request signature before trusting the webhook;
+    // without a token we log once and fall back to phone-number-only validation.
+    //
+    // The in-app test command (SmsSettingsPanel) POSTs to this same pre-auth
+    // route but carries a valid LOCAL_API_TOKEN via the renderer's fetch
+    // wrapper. A valid token already proves a trusted local caller, so skip the
+    // Twilio-signature requirement for it — external webhooks never have one.
+    const trustedLocalCaller = isValidToken(req.headers.authorization || '');
+    const twilioToken = process.env.TWILIO_AUTH_TOKEN || '';
+    if (twilioToken) {
+      if (!trustedLocalCaller) {
+        const signature = req.headers['x-twilio-signature'] || '';
+        const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
+        const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+        const fullUrl = `${proto}://${host}${requestUrl.pathname}${requestUrl.search}`;
+        if (!validateTwilioSignature(twilioToken, fullUrl, params, signature)) {
+          context.logger.warn(`[local-api] rejected SMS webhook: invalid Twilio signature (from ${host || 'unknown host'})`);
+          return json({ error: 'Invalid Twilio signature' }, 403);
+        }
+      }
+    } else if (!_smsTwilioTokenWarned) {
+      _smsTwilioTokenWarned = true;
+      context.logger.warn('[local-api] TWILIO_AUTH_TOKEN not configured — SMS webhook accepted on phone-number allowlist only (set TWILIO_AUTH_TOKEN to require signed requests).');
+    }
+
+    const from = String(params.From ?? params.from ?? '');
+    const body = String(params.Body ?? params.body ?? '');
     const analystState = context._analystState ?? null;
     const result = await handleSmsCommand({
       from, body, analystState,
@@ -5973,7 +6029,20 @@ async function dispatch(requestUrl, req, routes, context) {
         }));
         if (!context._intelligenceObs) context._intelligenceObs = [];
         context._intelligenceObs = safe;
-        for (const obs of safe) appendObservationToEventStore(context.eventStore, obs);
+        if (context.eventStore) {
+          // Batch the whole push in one transaction to reduce fsync overhead.
+          // All append errors (including UNIQUE violations) are swallowed inside
+          // appendObservationToEventStore (warnEventStoreWriteFailure), so the
+          // outer catch only fires on BEGIN/COMMIT failures (disk full, WAL
+          // corruption, etc.) — not on per-row append errors.
+          context.eventStore.db.prepare('BEGIN').run();
+          try {
+            for (const obs of safe) appendObservationToEventStore(context.eventStore, obs);
+            context.eventStore.db.prepare('COMMIT').run();
+          } catch (_txErr) {
+            try { context.eventStore.db.prepare('ROLLBACK').run(); } catch {}
+          }
+        }
         return json({ ok: true, count: safe.length });
       } catch (error) {
         return json({ error: String(error?.message || error) }, 400);
@@ -6853,6 +6922,10 @@ async function dispatch(requestUrl, req, routes, context) {
     if (seriesParam.length === 0) {
       return json({ error: 'invalid or empty series parameter' }, 400);
     }
+    const FRED_TTL = 6 * 60 * 60 * 1000;
+    const freightCacheKey = `freight-stress:${seriesParam.join(',')}`;
+    const freightCached = getCached(freightCacheKey, FRED_TTL);
+    if (freightCached) return json(freightCached);
     const components = [];
     for (const series of seriesParam) {
       try {
@@ -6876,7 +6949,9 @@ async function dispatch(requestUrl, req, routes, context) {
       if (c.asOf && (!asOf || c.asOf > asOf)) asOf = c.asOf;
     }
     const overallLevel = overallScore >= 75 ? 'critical' : overallScore >= 50 ? 'high' : overallScore >= 25 ? 'medium' : 'low';
-    return json({ components, overallScore, overallLevel, asOf });
+    const freightResult = { components, overallScore, overallLevel, asOf };
+    setCached(freightCacheKey, freightResult, FRED_TTL);
+    return json(freightResult);
   }
 
   // ── Dark vessel gap events (driven by aisState.darkHistory) ─────────────
@@ -6961,6 +7036,10 @@ async function dispatch(requestUrl, req, routes, context) {
     if (seriesParam.length === 0) {
       return json({ error: 'invalid or empty series parameter' }, 400);
     }
+    const MACRO_TTL = 6 * 60 * 60 * 1000;
+    const macroCacheKey = `macro-stress:${seriesParam.join(',')}`;
+    const macroCached = getCached(macroCacheKey, MACRO_TTL);
+    if (macroCached) return json(macroCached);
     const components = [];
     let asOf = null;
     for (const series of seriesParam) {
@@ -6982,7 +7061,9 @@ async function dispatch(requestUrl, req, routes, context) {
           mean30: null, stddev30: null, zScore: null, trend: 'stable', vixGauge: null });
       }
     }
-    return json({ components, asOf });
+    const macroResult = { components, asOf };
+    setCached(macroCacheKey, macroResult, MACRO_TTL);
+    return json(macroResult);
   }
 
   // ── Reddit ransomware-mentions proxy (no auth) ──────────────────────────
@@ -11739,6 +11820,8 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/nasa-firms') {
  const apiKey = process.env.NASA_FIRMS_API_KEY;
  if (!apiKey) return json({ fires: [], error: 'NASA_FIRMS_API_KEY not configured' }, 503);
+ const firmsCached = getCached('nasa-firms', 30 * 60 * 1000);
+ if (firmsCached) return json(firmsCached);
 
  // Cover the globe with 6 bounding boxes each well under the 10M km² area limit.
  // Format: [west, south, east, north]
@@ -11798,7 +11881,9 @@ async function dispatch(requestUrl, req, routes, context) {
  );
  const fires = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
  trackSuccess('firms', 'primary');
- return json({ fires, count: fires.length });
+ const firmsResult = { fires, count: fires.length };
+ setCached('nasa-firms', firmsResult, 30 * 60 * 1000);
+ return json(firmsResult);
  } catch (error) {
  trackFailure('firms', error);
  return json({ fires: [], error: String(error.message ?? error) }, 500);
@@ -12704,9 +12789,11 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── ADS-B live aircraft tracking (OpenSky Network, no key required) ──────
+  // opensky:states:all is a shared raw snapshot used by /api/adsb,
+  // /api/adsb-military, and /api/aviation/flights — one fetch per 55 s.
   if (requestUrl.pathname === '/api/adsb') {
- const CACHE_TTL = 55 * 1000;
- const cached = getCached('adsb', CACHE_TTL);
+ const OPENSKY_TTL = 55 * 1000;
+ const cached = getCached('opensky:states:all', OPENSKY_TTL);
  if (cached) return json(cached);
 
  const clientId = process.env.OPENSKY_CLIENT_ID?.trim() || '';
@@ -12730,7 +12817,7 @@ async function dispatch(requestUrl, req, routes, context) {
  }
  if (!res.ok) throw new Error(`OpenSky HTTP ${res.status}`);
  const data = await res.json();
- setCached('adsb', data);
+ setCached('opensky:states:all', data, OPENSKY_TTL);
  return json(data);
  } catch (error) {
  return json({ states: null, time: Math.floor(Date.now() / 1000), error: error?.message ?? 'unknown' });
@@ -13799,9 +13886,14 @@ async function dispatch(requestUrl, req, routes, context) {
  headers['Authorization'] = `Basic ${creds}`;
  }
  try {
+ const OPENSKY_TTL = 55 * 1000;
+ let data = getCached('opensky:states:all', OPENSKY_TTL);
+ if (!data) {
  const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
  if (!r.ok) throw new Error(`OpenSky HTTP ${r.status}`);
- const data = await r.json();
+ data = await r.json();
+ setCached('opensky:states:all', data, OPENSKY_TTL);
+ }
  const MILITARY_SQUAWKS = new Set(['7700', '7600', '7500']);
  // Verified country-tagged ICAO 24-bit hex ranges (ads-b.nl/icao.php).
  // Each range: [startHex, endHex]. Inclusive on both ends.
@@ -13973,6 +14065,9 @@ async function dispatch(requestUrl, req, routes, context) {
  };
  };
  try {
+ const OPENSKY_TTL = 55 * 1000;
+ let data = getCached('opensky:states:all', OPENSKY_TTL);
+ if (!data) {
  const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
  if (r.status === 429) {
  const env = {
@@ -13982,7 +14077,9 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(env, 429);
  }
  if (!r.ok) throw new Error(`OpenSky HTTP ${r.status}`);
- const data = await r.json();
+ data = await r.json();
+ setCached('opensky:states:all', data, OPENSKY_TTL);
+ }
  const flights = [];
  const counts = { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 };
  for (const state of (data.states ?? [])) {
@@ -15601,6 +15698,10 @@ export async function createLocalApiServer(options = {}) {
     context.logger?.error?.('[event-store] failed to initialize', String(error?.message || error));
     context.eventStore = null;
   }
+  const _eventStorePruneTimer = setInterval(() => {
+    if (context.eventStore) context.eventStore.pruneOlderThan(context.eventStore.retentionMonths);
+  }, 24 * 60 * 60 * 1000);
+  if (_eventStorePruneTimer.unref) _eventStorePruneTimer.unref();
 
   const server = createServer(async (req, res) => {
  const requestUrl = new URL(req.url || '/', `http://127.0.0.1:${context.port}`);
@@ -16156,7 +16257,11 @@ export async function createLocalApiServer(options = {}) {
    heap_mb: Math.round(mem0.heapUsed / 1024 / 1024),
    ais_connected: false,
    ais_vessels: 0,
-  }));
+  }), { mode: 0o600 });
+  // `mode` only applies when the file is created, so chmod tightens any stale
+  // world-readable heartbeat left by a pre-fix session. The interval writer
+  // below also passes `mode` so a mid-run recreate is never briefly exposed.
+  try { chmodSync(heartbeatPath, 0o600); } catch {}
  } catch {}
  setInterval(() => {
  const now = Date.now();
@@ -16174,7 +16279,7 @@ export async function createLocalApiServer(options = {}) {
  heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
  ais_connected: aisState.socket?.readyState === 1,
  ais_vessels: aisState.vessels.size,
- }));
+ }), { mode: 0o600 });
  } catch {}
  if (eventLoopLagMs > 2000) {
  context.logger.warn(`[local-api] event loop lag ${eventLoopLagMs}ms`);

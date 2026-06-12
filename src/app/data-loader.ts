@@ -1623,6 +1623,8 @@ export class DataLoaderManager implements AppModule {
  // store, falling back to the detector's built-in default (40) when unset.
  const bigEventResult = detectBigEvent(ladderInput, {
  threshold: getTunedParam('big-event-detector', 'threshold', 40),
+ rapidJumpDelta: getTunedParam('big-event-detector', 'rapidJumpDelta', 25),
+ exposureFloor: getTunedParam('big-event-detector', 'exposureFloor', 70),
  });
  // B1 (self-improvement gameplan): feed the evaluation ledger so the
  // adaptive-tuner has data. Guarded — instrumentation must never break

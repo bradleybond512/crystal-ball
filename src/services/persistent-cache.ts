@@ -96,12 +96,12 @@ export async function getPersistentCache<T>(key: string): Promise<CacheEnvelope<
   }
 }
 
-export async function setPersistentCache<T>(key: string, data: T): Promise<void> {
+export async function setPersistentCache<T>(key: string, data: T, ttlMs?: number): Promise<void> {
   const payload: CacheEnvelope<T> = { key, data, updatedAt: Date.now() };
 
   if (isDesktopRuntime()) {
  try {
- await invokeTauri<void>('write_cache_entry', { key, value: JSON.stringify(payload) });
+ await invokeTauri<void>('write_cache_entry', { key, value: JSON.stringify(payload), ttlMs });
  return;
  } catch (error) {
  console.warn('[persistent-cache] Desktop write failed; falling back to browser storage', error);

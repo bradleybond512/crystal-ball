@@ -294,7 +294,7 @@ async function defaultRead(key: string): Promise<EewLedgerPayload | null> {
 
 async function defaultWrite(key: string, payload: EewLedgerPayload): Promise<void> {
   const { setPersistentCache } = await loadPersistentCache();
-  await setPersistentCache<EewLedgerPayload>(key, payload);
+  await setPersistentCache<EewLedgerPayload>(key, payload, 365 * 24 * 60 * 60 * 1000);
 }
 
 function failLoad(error: unknown, now: () => number): EewLedgerPersistenceStatus {

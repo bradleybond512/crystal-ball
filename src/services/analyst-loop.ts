@@ -25,6 +25,8 @@ import { getCachedSynthesis, type CrossDomainCluster, type EscalationRisk } from
 import { isGhostMode, getGhostRefreshMultiplier } from './mode-manager';
 import { getHypothesisFeedbackMult } from './hypothesis-feedback';
 import { getHypothesisAccuracyMult } from './hypothesis-accuracy';
+import { getDomainCalibrationMult } from './intelligence/forecast-calibration-adapter';
+import { recordHypothesisPredictions, domainForHypothesis } from './intelligence/hypothesis-prediction-bridge';
 import { isDismissed } from './analyst-command-listener';
 import { dedupeHypotheses } from './hypothesis-dedupe';
 import { getWatchlistHypotheses } from './watchlist-hypothesis-bridge';
@@ -108,10 +110,16 @@ const RISK_RANK: Record<EscalationRisk, number> = {
 };
 
 /**
- * Ranking weight = raw confidence × learned user preference × outcome accuracy.
+ * Ranking weight = raw confidence × learned user preference × outcome accuracy
+ * × per-domain Brier-derived calibration multiplier.
+ * Multiplier bounds: feedback [0.5,1.3] × accuracy [0.7,1.3] × calibration [0.7,1.2].
+ * Worst-case floor ≈ 0.25 — a hypothesis class wrong on every axis sinks.
  */
 function rankingWeight(h: Hypothesis): number {
-  return h.confidence * getHypothesisFeedbackMult(h) * getHypothesisAccuracyMult(h);
+  return h.confidence
+    * getHypothesisFeedbackMult(h)
+    * getHypothesisAccuracyMult(h)
+    * getDomainCalibrationMult(domainForHypothesis(h));
 }
 
 // ── Per-source hypothesis builders ───────────────────────────────────────────
@@ -332,6 +340,7 @@ export function runAnalystCycle(): AnalystSnapshot {
   };
 
   persist(snapshot);
+  try { recordHypothesisPredictions(hypotheses); } catch { /* calibration is best-effort */ }
   document.dispatchEvent(new CustomEvent<AnalystSnapshot>(EVENT_NAME, { detail: snapshot }));
 
   const latencyMs = performance.now() - t0;

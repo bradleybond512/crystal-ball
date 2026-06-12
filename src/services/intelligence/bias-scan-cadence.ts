@@ -12,7 +12,9 @@
  * Honesty caps (logged in the evaluation detail, never silent):
  *  - driverScores are re-scored from the observation store's current window
  *    (getRecent), not a 30-day archive;
- *  - domainRollingAverages are computed over that same window;
+ *  - the availability baseline (domainRollingAverages) is omitted entirely
+ *    until an independent historical window exists — feeding it the current
+ *    window would yield ratio ≈ 1 and silently disable detectAvailability;
  *  - outcomeRecords cover only ledger records that already carry a graded
  *    outcome.
  *
@@ -134,27 +136,26 @@ export function createBiasScanCadence(deps: BiasScanDeps = {}) {
       };
     });
 
+    // Map each observation back to the active situation that owns it. The
+    // anchoring detector groups driver scores by situationId and skips
+    // undefined keys, so without this link anchoring could never fire.
+    const obsToSituation = new Map<string, string>();
+    for (const s of active) {
+      for (const o of s.observations) obsToSituation.set(o.id, s.id);
+    }
+
     // Re-score the current observation window through the pure engine.
     const driverScores: BiasDriverScore[] = recent(OBSERVATION_WINDOW).map((o) => {
       const score = engine.scoreObservation(o);
       return {
         observationId: o.id,
+        situationId: obsToSituation.get(o.id),
         domain: o.domain,
         finalScore: score.finalScore,
         derivedSeverity: score.derivedSeverity,
         observedAt: new Date(o.timestamp),
       };
     });
-
-    const rolling: Record<string, number> = {};
-    const byDomain = new Map<string, number[]>();
-    for (const d of driverScores) {
-      if (!byDomain.has(d.domain)) byDomain.set(d.domain, []);
-      byDomain.get(d.domain)!.push(d.finalScore);
-    }
-    for (const [domain, scores] of byDomain) {
-      rolling[domain] = scores.reduce((a, b) => a + b, 0) / scores.length;
-    }
 
     const hypothesisSets: BiasHypothesisSet[] = hypotheses.getAllSets(HYPOTHESIS_SET_LIMIT).map((set) => ({
       id: set.situationId,
@@ -186,13 +187,17 @@ export function createBiasScanCadence(deps: BiasScanDeps = {}) {
       if (sit) metaEstimates.push({ domain: sit.domain, metaConfidence: e.metaConfidence });
     }
 
+    // domainRollingAverages is intentionally omitted: an honest availability
+    // baseline must come from an INDEPENDENT historical window, not the same
+    // window detectAvailability scores as "current" (that yields ratio ≈ 1 and
+    // silently disables the detector). Until a real baseline source is wired,
+    // the detector cleanly skips rather than reporting a false "clean".
     return {
       situations: biasSituations,
       driverScores,
       hypothesisSets,
       outcomeRecords,
       metaEstimates,
-      domainRollingAverages: rolling,
       now: new Date(now),
     };
   }
@@ -220,6 +225,7 @@ export function createBiasScanCadence(deps: BiasScanDeps = {}) {
             situationCount: input.situations.length,
             outcomeRecordCount: input.outcomeRecords.length,
             observationWindow: OBSERVATION_WINDOW,
+            availabilityBaselineAvailable: false,
           },
         });
       }

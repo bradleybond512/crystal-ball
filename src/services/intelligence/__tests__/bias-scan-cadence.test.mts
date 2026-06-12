@@ -176,6 +176,36 @@ test('first run reports delta 0 and full observation count', () => {
   assert.equal(input.situations[0].addedObservationsInLastUpdate, 2);
 });
 
+test('driver scores carry the owning situation id so anchoring can fire', () => {
+  let captured: BiasScanInput | null = null;
+  const owned = observation('o1');
+  const situations = [situation({ observations: [owned] as never })];
+  const { deps } = makeDeps({ situations, scanResult: report() });
+  deps.recentObservations = (_n?: number) => [owned, observation('o2')];
+  (deps.detector as { scan: (i: BiasScanInput) => BiasReport }).scan = (i) => {
+    captured = i;
+    return report();
+  };
+  const cadence = createBiasScanCadence(deps as never);
+  cadence.runOnce();
+  const input = captured as unknown as BiasScanInput;
+  assert.equal(input.driverScores[0].situationId, 'sit-1');
+  assert.equal(input.driverScores[1].situationId, undefined);
+});
+
+test('availability baseline is omitted (no self-referential domainRollingAverages)', () => {
+  let captured: BiasScanInput | null = null;
+  const { deps } = makeDeps({ situations: [situation()], scanResult: report() });
+  (deps.detector as { scan: (i: BiasScanInput) => BiasReport }).scan = (i) => {
+    captured = i;
+    return report();
+  };
+  const cadence = createBiasScanCadence(deps as never);
+  cadence.runOnce();
+  const input = captured as unknown as BiasScanInput;
+  assert.equal(input.domainRollingAverages, undefined);
+});
+
 test('__internals exposes cadence constants', () => {
   assert.equal(__internals.CADENCE_MS, 15 * 60 * 1000);
   assert.equal(__internals.FIRST_RUN_DELAY_MS, 60 * 1000);

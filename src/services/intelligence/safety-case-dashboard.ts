@@ -79,7 +79,7 @@ export interface SafetyCaseDashboardOptions {
 }
 
 export interface SafetyCaseDashboardService {
-  recordCheck(result: Omit<SafetyCheckResult, 'id' | 'checkedAt'>): SafetyCheckResult;
+  recordCheck(result: Omit<SafetyCheckResult, 'id' | 'checkedAt' | 'passed'>): SafetyCheckResult;
   runChecks(situation: SituationInput): SafetyCheckResult[];
   getSummary(): SafetyCaseSummary;
   getChecksForProperty(propertyId: SafetyPropertyId, limit?: number): SafetyCheckResult[];
@@ -127,6 +127,11 @@ function cloneCheck(c: SafetyCheckResult): SafetyCheckResult {
   return { ...c };
 }
 
+function deriveStatus(r: Record<string, unknown>): SafetyCheckStatus {
+  if (r.evidence === 'not evaluated') return 'not_implemented';
+  return r.passed ? 'passed' : 'failed';
+}
+
 function rehydrate(storage: StorageLike | null): SafetyCheckResult[] {
   if (!storage) return [];
   let raw: string | null;
@@ -138,9 +143,14 @@ function rehydrate(storage: StorageLike | null): SafetyCheckResult[] {
   const out: SafetyCheckResult[] = [];
   for (const item of parsed) {
     if (!item || typeof item !== 'object') continue;
-    const r = item as SafetyCheckResult;
+    const r = item as Record<string, unknown>;
     if (typeof r.id !== 'string') continue;
-    out.push(r);
+    // Migrate legacy records that lack `status`.
+    if (typeof r.status !== 'string') {
+      r.status = deriveStatus(r);
+      r.passed = r.status === 'passed';
+    }
+    out.push(r as unknown as SafetyCheckResult);
   }
   return out;
 }

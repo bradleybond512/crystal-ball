@@ -380,7 +380,7 @@ async function defaultRead(key: string): Promise<MissionRecord[] | null> {
 
 async function defaultWrite(key: string, records: MissionRecord[]): Promise<void> {
   const { setPersistentCache } = await loadPersistentCache();
-  await setPersistentCache<MissionRecord[]>(key, records);
+  await setPersistentCache<MissionRecord[]>(key, records, 365 * 24 * 60 * 60 * 1000);
 }
 
 const defaultEmit: MissionDiagnosticEmitter = (severity, message, detail) => {

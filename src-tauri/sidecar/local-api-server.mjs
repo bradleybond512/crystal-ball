@@ -68,7 +68,7 @@ export function appendObservationToEventStore(store, obs) {
       ? new Date(obs.timestamp).toISOString()
       : new Date().toISOString();
     store.appendEvent({
-      id: randomUUID(),
+      id: (typeof obs?.id === 'string' && obs.id) ? obs.id : randomUUID(),
       event_type: 'observation',
       occurred_at: occurredAt,
       domain: typeof obs?.domain === 'string' && obs.domain ? obs.domain : null,
@@ -93,7 +93,7 @@ export function appendSituationToEventStore(store, situation) {
       ...(Array.isArray(situation?.correlationIds) ? situation.correlationIds : []),
     ].map(String);
     store.appendEvent({
-      id: randomUUID(),
+      id: (typeof situation?.id === 'string' && situation.id) ? situation.id : randomUUID(),
       event_type: eventType,
       occurred_at: occurredAt,
       domain: typeof situation?.domain === 'string' ? situation.domain : null,
@@ -5973,7 +5973,15 @@ async function dispatch(requestUrl, req, routes, context) {
         }));
         if (!context._intelligenceObs) context._intelligenceObs = [];
         context._intelligenceObs = safe;
-        for (const obs of safe) appendObservationToEventStore(context.eventStore, obs);
+        if (context.eventStore) {
+          context.eventStore.db.prepare('BEGIN').run();
+          try {
+            for (const obs of safe) appendObservationToEventStore(context.eventStore, obs);
+            context.eventStore.db.prepare('COMMIT').run();
+          } catch (_txErr) {
+            try { context.eventStore.db.prepare('ROLLBACK').run(); } catch {}
+          }
+        }
         return json({ ok: true, count: safe.length });
       } catch (error) {
         return json({ error: String(error?.message || error) }, 400);
@@ -6853,6 +6861,10 @@ async function dispatch(requestUrl, req, routes, context) {
     if (seriesParam.length === 0) {
       return json({ error: 'invalid or empty series parameter' }, 400);
     }
+    const FRED_TTL = 6 * 60 * 60 * 1000;
+    const freightCacheKey = `freight-stress:${seriesParam.join(',')}`;
+    const freightCached = getCached(freightCacheKey, FRED_TTL);
+    if (freightCached) return json(freightCached);
     const components = [];
     for (const series of seriesParam) {
       try {
@@ -6876,7 +6888,9 @@ async function dispatch(requestUrl, req, routes, context) {
       if (c.asOf && (!asOf || c.asOf > asOf)) asOf = c.asOf;
     }
     const overallLevel = overallScore >= 75 ? 'critical' : overallScore >= 50 ? 'high' : overallScore >= 25 ? 'medium' : 'low';
-    return json({ components, overallScore, overallLevel, asOf });
+    const freightResult = { components, overallScore, overallLevel, asOf };
+    setCached(freightCacheKey, freightResult, FRED_TTL);
+    return json(freightResult);
   }
 
   // ── Dark vessel gap events (driven by aisState.darkHistory) ─────────────
@@ -6961,6 +6975,10 @@ async function dispatch(requestUrl, req, routes, context) {
     if (seriesParam.length === 0) {
       return json({ error: 'invalid or empty series parameter' }, 400);
     }
+    const MACRO_TTL = 6 * 60 * 60 * 1000;
+    const macroCacheKey = `macro-stress:${seriesParam.join(',')}`;
+    const macroCached = getCached(macroCacheKey, MACRO_TTL);
+    if (macroCached) return json(macroCached);
     const components = [];
     let asOf = null;
     for (const series of seriesParam) {
@@ -6982,7 +7000,9 @@ async function dispatch(requestUrl, req, routes, context) {
           mean30: null, stddev30: null, zScore: null, trend: 'stable', vixGauge: null });
       }
     }
-    return json({ components, asOf });
+    const macroResult = { components, asOf };
+    setCached(macroCacheKey, macroResult, MACRO_TTL);
+    return json(macroResult);
   }
 
   // ── Reddit ransomware-mentions proxy (no auth) ──────────────────────────
@@ -11739,6 +11759,8 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/nasa-firms') {
  const apiKey = process.env.NASA_FIRMS_API_KEY;
  if (!apiKey) return json({ fires: [], error: 'NASA_FIRMS_API_KEY not configured' }, 503);
+ const firmsCached = getCached('nasa-firms', 30 * 60 * 1000);
+ if (firmsCached) return json(firmsCached);
 
  // Cover the globe with 6 bounding boxes each well under the 10M km² area limit.
  // Format: [west, south, east, north]
@@ -11798,7 +11820,9 @@ async function dispatch(requestUrl, req, routes, context) {
  );
  const fires = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
  trackSuccess('firms', 'primary');
- return json({ fires, count: fires.length });
+ const firmsResult = { fires, count: fires.length };
+ setCached('nasa-firms', firmsResult, 30 * 60 * 1000);
+ return json(firmsResult);
  } catch (error) {
  trackFailure('firms', error);
  return json({ fires: [], error: String(error.message ?? error) }, 500);
@@ -12704,9 +12728,11 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── ADS-B live aircraft tracking (OpenSky Network, no key required) ──────
+  // opensky:states:all is a shared raw snapshot used by /api/adsb,
+  // /api/adsb-military, and /api/aviation/flights — one fetch per 55 s.
   if (requestUrl.pathname === '/api/adsb') {
- const CACHE_TTL = 55 * 1000;
- const cached = getCached('adsb', CACHE_TTL);
+ const OPENSKY_TTL = 55 * 1000;
+ const cached = getCached('opensky:states:all', OPENSKY_TTL);
  if (cached) return json(cached);
 
  const clientId = process.env.OPENSKY_CLIENT_ID?.trim() || '';
@@ -12730,7 +12756,7 @@ async function dispatch(requestUrl, req, routes, context) {
  }
  if (!res.ok) throw new Error(`OpenSky HTTP ${res.status}`);
  const data = await res.json();
- setCached('adsb', data);
+ setCached('opensky:states:all', data, OPENSKY_TTL);
  return json(data);
  } catch (error) {
  return json({ states: null, time: Math.floor(Date.now() / 1000), error: error?.message ?? 'unknown' });
@@ -13799,9 +13825,14 @@ async function dispatch(requestUrl, req, routes, context) {
  headers['Authorization'] = `Basic ${creds}`;
  }
  try {
+ const OPENSKY_TTL = 55 * 1000;
+ let data = getCached('opensky:states:all', OPENSKY_TTL);
+ if (!data) {
  const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
  if (!r.ok) throw new Error(`OpenSky HTTP ${r.status}`);
- const data = await r.json();
+ data = await r.json();
+ setCached('opensky:states:all', data, OPENSKY_TTL);
+ }
  const MILITARY_SQUAWKS = new Set(['7700', '7600', '7500']);
  // Verified country-tagged ICAO 24-bit hex ranges (ads-b.nl/icao.php).
  // Each range: [startHex, endHex]. Inclusive on both ends.
@@ -13973,6 +14004,9 @@ async function dispatch(requestUrl, req, routes, context) {
  };
  };
  try {
+ const OPENSKY_TTL = 55 * 1000;
+ let data = getCached('opensky:states:all', OPENSKY_TTL);
+ if (!data) {
  const r = await fetchWithTimeout('https://opensky-network.org/api/states/all', { headers }, 12000);
  if (r.status === 429) {
  const env = {
@@ -13982,7 +14016,9 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(env, 429);
  }
  if (!r.ok) throw new Error(`OpenSky HTTP ${r.status}`);
- const data = await r.json();
+ data = await r.json();
+ setCached('opensky:states:all', data, OPENSKY_TTL);
+ }
  const flights = [];
  const counts = { military: 0, commercial: 0, cargo: 0, helicopter: 0, general_aviation: 0, total: 0, emergency: 0, squawk7500: 0, squawk7600: 0, squawk7700: 0 };
  for (const state of (data.states ?? [])) {
@@ -15601,6 +15637,10 @@ export async function createLocalApiServer(options = {}) {
     context.logger?.error?.('[event-store] failed to initialize', String(error?.message || error));
     context.eventStore = null;
   }
+  const _eventStorePruneTimer = setInterval(() => {
+    if (context.eventStore) context.eventStore.pruneOlderThan(context.eventStore.retentionMonths);
+  }, 24 * 60 * 60 * 1000);
+  if (_eventStorePruneTimer.unref) _eventStorePruneTimer.unref();
 
   const server = createServer(async (req, res) => {
  const requestUrl = new URL(req.url || '/', `http://127.0.0.1:${context.port}`);

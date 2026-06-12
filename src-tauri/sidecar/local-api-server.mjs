@@ -5,7 +5,7 @@ import http, { createServer } from 'node:http';
 import { timingSafeEqual, randomUUID } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
-import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { brotliCompress, gzip } from 'node:zlib';
@@ -16169,6 +16169,8 @@ export async function createLocalApiServer(options = {}) {
    ais_connected: false,
    ais_vessels: 0,
   }));
+  // Owner-only: the heartbeat exposes pid/port/memory state to local users.
+  try { chmodSync(heartbeatPath, 0o600); } catch {}
  } catch {}
  setInterval(() => {
  const now = Date.now();

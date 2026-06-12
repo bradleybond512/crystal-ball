@@ -5,7 +5,7 @@
  */
 
 import { strict as assert } from 'node:assert';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -101,6 +101,7 @@ test('loadEnvFile: applies new keys, returns count', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'env-loader-'));
   const file = path.join(dir, '.env.local');
   writeFileSync(file, 'FOO=bar\nBAZ=qux\n');
+  chmodSync(file, 0o600);
   try {
     const env = {};
     const n = loadEnvFile(file, env);
@@ -116,6 +117,7 @@ test('loadEnvFile: never overwrites an already-set env var', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'env-loader-'));
   const file = path.join(dir, '.env.local');
   writeFileSync(file, 'FOO=fromfile\nBAZ=fromfile\n');
+  chmodSync(file, 0o600);
   try {
     const env = { FOO: 'from-keychain' };
     const n = loadEnvFile(file, env);
@@ -131,11 +133,42 @@ test('loadEnvFile: empty-string env vars are treated as unset and overwritten', 
   const dir = mkdtempSync(path.join(tmpdir(), 'env-loader-'));
   const file = path.join(dir, '.env.local');
   writeFileSync(file, 'FOO=fromfile\n');
+  chmodSync(file, 0o600);
   try {
     const env = { FOO: '' };
     const n = loadEnvFile(file, env);
     assert.equal(n, 1);
     assert.equal(env.FOO, 'fromfile');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('loadEnvFile: refuses to load a world/group-readable file (mode 0644)', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'env-loader-'));
+  const file = path.join(dir, '.env.local');
+  writeFileSync(file, 'FOO=secret\n');
+  chmodSync(file, 0o644);
+  try {
+    const env = {};
+    const n = loadEnvFile(file, env);
+    assert.equal(n, 0, 'must refuse an insecurely-permissioned file');
+    assert.equal(env.FOO, undefined, 'no key may leak from a 0644 file');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('loadEnvFile: loads normally from a 0600 file', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'env-loader-'));
+  const file = path.join(dir, '.env.local');
+  writeFileSync(file, 'FOO=secret\n');
+  chmodSync(file, 0o600);
+  try {
+    const env = {};
+    const n = loadEnvFile(file, env);
+    assert.equal(n, 1);
+    assert.equal(env.FOO, 'secret');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

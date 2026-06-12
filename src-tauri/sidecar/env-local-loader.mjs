@@ -11,7 +11,7 @@
  * Pure parser is exported for tests; IO sits in `loadEnvFile`.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 
 /**
  * Parse a `.env.local` blob into a Map<key, value>. Handles:
@@ -54,15 +54,34 @@ export function parseEnvFile(content) {
  *
  * Returns 0 (no error thrown) when the file is missing — fallback is
  * advisory; a real keychain read should still be the primary source.
+ *
+ * Also returns 0 (refuses to load) when the file is group- or
+ * world-readable. Plaintext credentials must live in a 0600 file; loading
+ * from a looser mode would leak every API key to any local user, so we
+ * warn and decline rather than silently regress after the initial chmod.
  */
 export function loadEnvFile(path, env = process.env) {
-  if (!existsSync(path)) return 0;
+  let stat;
+  try {
+    stat = statSync(path);
+  } catch {
+    return 0; // missing or unreadable — fallback is advisory
+  }
+  if ((stat.mode & 0o077) !== 0) {
+    console.warn(
+      `[env-local-loader] WARNING: ${path} is readable by other users ` +
+      `(mode ${(stat.mode & 0o777).toString(8)}). ` +
+      `Run \`chmod 600 ${path}\` to fix. Refusing to load plaintext credentials from an insecure file.`
+    );
+    return 0;
+  }
   let content;
   try {
     content = readFileSync(path, 'utf8');
   } catch {
     return 0;
   }
+  console.info('[env-local-loader] INFO: Loading API keys from plaintext .env.local fallback (keychain unavailable).');
   const parsed = parseEnvFile(content);
   let applied = 0;
   for (const [key, value] of parsed) {

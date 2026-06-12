@@ -2,7 +2,9 @@
 
 Implementation plan for the 5 High findings in `docs/PRIVACY_AUDIT_2026-06-11.md`, plus
 the highest-impact performance fixes from `docs/PERFORMANCE_AUDIT_2026-06-11.md` not
-already landed by `claude/perf-quick-wins` (PR #1069, merged).
+already landed by `claude/perf-quick-wins` (PR #1069, merged). Both audit docs are
+committed alongside this plan (they previously existed only as untracked local files),
+so every finding reference below is verifiable in-repo.
 
 **Read this first — overlap with the in-flight security PR stack.** Several security PRs
 already cover slices of these findings. Each Fix section below states exactly what is
@@ -92,8 +94,8 @@ conflicts in the same file (rebase whichever lands second).
 (:344-348) skips the ghost-mode check; the init `$pageview` (:286) and
 `flushOfflineQueue` (:319-330) bypass ghost mode; Vercel Analytics `inject()` at
 `src/main.ts:250` runs unconditionally; `wm_api_keys_configured` (:354-373) sends a
-73-key boolean presence map plus the literal `OLLAMA_MODEL` value; super properties
-(:252-274) are fingerprint-adjacent.
+70-key boolean presence map (`SECRET_ANALYTICS_NAMES`) plus the literal `OLLAMA_MODEL`
+value; super properties (:252-274) are fingerprint-adjacent.
 
 **Files to modify:**
 
@@ -153,9 +155,9 @@ its scope note explicitly excludes `local-api.log` / `sidecar.log` (created by t
 host). The content problem — query strings persisted — is fully open.
 
 **Problem recap:** the verbose console write at `local-api-server.mjs:1685` and the
-traffic-log entries (`entry.path = pathname + search` at :16014 and :16046) record full
-query strings; verbose mode persists across restarts via `verbose-mode.json`
-(:6519-6527). The Rust host pipes sidecar stdout to `local-api.log`
+traffic-log entries (`entry.path = pathname + search` at ~:16015 and ~:16048) record
+full query strings; verbose mode persists across restarts via `verbose-mode.json`
+(state read/write at ~:1658-1668, toggle save near :6570). The Rust host pipes sidecar stdout to `local-api.log`
 (`src-tauri/src/main.rs:2497-2498`), and `copy_diagnostics` (main.rs:2657-2686) exports
 the last 200 lines to the clipboard. The only sanitized surface today is the
 `/api/local-traffic-log` JSON route (:16022-16028).
@@ -192,8 +194,8 @@ the last 200 lines to the clipboard. The only sanitized surface today is the
     short, so the default-deny length rule alone won't catch them. Add `lat`, `lon`,
     `latitude`, `longitude`, `q`, `query`, `address` to `SENSITIVE_QUERY_PARAMS`.
   - route path itself is always preserved (`/api/weather/alerts` stays intact)
-- `npm run test:sidecar` green; `cargo build` (or `npm run desktop:build:full` if
-  touching main.rs warrants it) compiles.
+- `npm run test:sidecar` green; the main.rs change requires a full desktop build to
+  verify: `npm run desktop:build:full` must complete cleanly.
 
 **Risk assessment:** Low-medium. Debugging ergonomics degrade slightly (param values
 gone from verbose logs); acceptable — param *names* remain, which is enough to identify
@@ -244,8 +246,9 @@ responses (which include location-derived data) indefinitely. Renderer side:
   - entry older than TTL ⇒ read miss
   - entry without `stored_at` ⇒ read miss
   - over-cap save evicts oldest entries first and lands under cap
-- Manual verification in PR body: after running the app, `ls -la` shows
-  `persistent-cache.json` mode 0600 and a sane size.
+- Manual verification in PR body: after running the app once, `ls -la` shows
+  `persistent-cache.json` with mode `-rw-------` (0600) and a size ≤ 32 MB (the
+  pre-fix file was 46 MB; the stored_at migration must have shrunk it).
 - `npm run typecheck:all` + desktop build compile.
 
 **Risk assessment:** Medium. The one-time cache flush causes a cold-start burst of API
@@ -291,10 +294,16 @@ Item 3 is the actual privacy hole; 1 and 2 are honesty/metering.
      entirely and return `503 { error: 'no local model available', provider: 'none' }`
      after Ollama and LM Studio fail.
 2. `src/services/llm-adapter.ts`
+   - **Type change first:** `LlmProvider` at `llm-adapter.ts:26` is
+     `'local' | 'cloud-agent' | 'cloud-chat' | 'none'`. Add a new variant
+     `'cloud-groq'` to the union. Then grep for every exhaustive use of the union
+     (`grep -rn "cloud-chat" src/`) and extend each switch/conditional — reasoning
+     metrics, debug log labels, and any provider-display code must handle
+     `'cloud-groq'` or typecheck will fail.
    - Pass `localOnly: isLocalModelOnly()` in the `/api/intel-generate` request body.
-   - Read `provider` from the response. When it is `'groq'`:
-     - record the result with `provider: 'groq'` (not `'local'`)
-     - call `reserveCloudCall('groq-fallback')` *before* using the result; if the
+   - Read `provider` from the sidecar response. When it is `'groq'`:
+     - record the result with `provider: 'cloud-groq'` (not `'local'`)
+     - call `reserveCloudCall('cloud-groq')` *before* using the result; if the
        budget is exhausted, discard the result and fall through to the existing
        no-cloud-budget behavior. Reserve-on-detect (after the response reveals Groq
        served it) is the pragmatic v1 — the alternative, reserving before the request,
@@ -305,8 +314,14 @@ Item 3 is the actual privacy hole; 1 and 2 are honesty/metering.
        `!isLlmEgressDisclosed()`, treat a `provider:'groq'` response as a failure and
        dispatch `cb:llm-egress-disclosure-needed`, same as the direct-cloud path.
 3. `src/services/llm-budget.ts`
-   - No structural change; verify `reserveCloudCall` accepts the new caller tag and that
-     metrics/labels surface it (grep for existing tags).
+   - **Structural change required:** `reserveCloudCall(provider)` at :160-168 and
+     `recordCall` at :184-185 only increment for `'cloud-agent'` and `'cloud-chat'` —
+     any other string is silently unmetered. Add a `cloudGroq` counter to the budget
+     state, increment it in both functions for `'cloud-groq'`, and include it in the
+     daily-cap total (the 50/day cap must cover agent + chat + groq combined, since
+     the cap exists to bound cloud egress, not per-provider usage). Update the budget
+     snapshot/serialization shape and any UI that renders the counters (grep for
+     `cloudChat` consumers).
 4. **Webcam/FAA-cam disclosure (audit-related):** `/api/webcam/analyze` (:8539) and
    `/api/faa-cam-digest` (:8574) send imagery + camera locations to Anthropic with no UI
    disclosure. Minimal v1: route both behind the existing `isLlmEgressDisclosed()`
@@ -322,8 +337,9 @@ Item 3 is the actual privacy hole; 1 and 2 are honesty/metering.
     (mock fetch; assert no call to `api.groq.com`)
   - response always carries `provider`
 - `src/services/__tests__/llm-adapter-groq-labeling.test.mts`:
-  - mocked sidecar response `provider:'groq'` ⇒ result recorded as `groq`, budget
-    reserve called once
+  - mocked sidecar response `provider:'groq'` ⇒ result recorded as `cloud-groq`,
+    `reserveCloudCall('cloud-groq')` called once, and the call counts toward the
+    daily cap total
   - budget exhausted ⇒ groq result discarded
   - `isLocalModelOnly()` true ⇒ request body contains `localOnly: true`
 - `npm run test:sidecar` + `npm run typecheck:all` green.

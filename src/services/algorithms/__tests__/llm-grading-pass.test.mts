@@ -38,7 +38,7 @@ test('grades aged ungraded records via injected llmFn and writes outcomes back',
   assert.equal(rec?.outcome, 'hit');
 });
 
-test('respects maxPerPass cap', async () => {
+test('respects maxPerPass cap — graded is capped but eligible reflects full pool', async () => {
   const ledger = createAlgorithmEvaluationLedger();
   for (let i = 0; i < 10; i++) {
     ledger.recordEvaluation({
@@ -54,6 +54,7 @@ test('respects maxPerPass cap', async () => {
   const result = await runLlmGradingPass({ ledger, llmFn: fakeLlmMiss, now, maxPerPass: 3 });
 
   assert.equal(result.graded, 3);
+  assert.equal(result.eligible, 10, 'eligible should reflect full pool, not batch size');
 });
 
 test('skips records younger than 48h', async () => {
@@ -90,6 +91,51 @@ test('does not overwrite already-graded records', async () => {
   assert.equal(result.graded, 0);
   const rec = ledger.get('already');
   assert.equal(rec?.outcome, 'miss');
+});
+
+test('malformed JSON response leaves record pending and counts as failed', async () => {
+  const ledger = createAlgorithmEvaluationLedger();
+  ledger.recordEvaluation({
+    id: 'malformed1',
+    algorithmId: 'a',
+    domain: 'other',
+    at: now - 72 * 3_600_000,
+    durationMs: 1,
+    label: 'x',
+  });
+
+  // Returns non-JSON — parseLlmGradeResponse yields grade=INCONCLUSIVE, confidence=0
+  const malformedLlm = (): Promise<string> => Promise.resolve('not json at all');
+  const result = await runLlmGradingPass({ ledger, llmFn: malformedLlm, now, maxPerPass: 5 });
+
+  assert.equal(result.failed, 1, 'malformed response should count as failed');
+  assert.equal(result.graded, 0, 'malformed response should not count as graded');
+  const rec = ledger.get('malformed1');
+  assert.equal(rec?.outcome, undefined, 'malformed response should leave record pending for retry');
+});
+
+test('genuine high-confidence INCONCLUSIVE verdict is written to ledger', async () => {
+  const ledger = createAlgorithmEvaluationLedger();
+  ledger.recordEvaluation({
+    id: 'genuine-inc',
+    algorithmId: 'a',
+    domain: 'other',
+    at: now - 72 * 3_600_000,
+    durationMs: 1,
+    label: 'x',
+  });
+
+  // LLM confidently says INCONCLUSIVE — confidence above threshold (0.75)
+  const genuineInconclusiveLlm = (): Promise<string> =>
+    Promise.resolve(
+      JSON.stringify({ grade: 'INCONCLUSIVE', confidence: 0.85, reasoning: 'genuinely ambiguous outcome' }),
+    );
+  const result = await runLlmGradingPass({ ledger, llmFn: genuineInconclusiveLlm, now, maxPerPass: 5 });
+
+  assert.equal(result.graded, 1, 'genuine inconclusive should be written');
+  assert.equal(result.failed, 0);
+  const rec = ledger.get('genuine-inc');
+  assert.equal(rec?.outcome, 'inconclusive');
 });
 
 test('counts failed (unavailable) separately from graded', async () => {

@@ -128,6 +128,7 @@ describe('wm_api_keys_configured payload minimization', () => {
       init: () => undefined,
       register: () => undefined,
       capture: (event, props) => captured.push({ event, props: props ?? {} }),
+      opt_out_capturing: () => undefined,
     });
 
     trackApiKeysSnapshot();

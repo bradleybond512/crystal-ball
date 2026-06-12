@@ -44,6 +44,10 @@ export function setAnalyticsConsent(allow: boolean): void {
     localStorage.removeItem('wm-installation-id');
     // Clear the offline queue — revoked consent must not replay buffered events.
     try { localStorage.removeItem(OFFLINE_QUEUE_KEY); } catch { /* ignore */ }
+    // Tell the SDK to stop capturing before dropping the reference — the
+    // posthog-js singleton persists in module scope and would otherwise
+    // still fire automatic events (capture_pageleave) after revocation.
+    try { posthogInstance?.opt_out_capturing(); } catch { /* ignore */ }
     posthogInstance = null;
     initPromise = null;
   }
@@ -213,6 +217,7 @@ interface PostHogInstance {
   init: (key: string, config: Record<string, unknown>) => void;
   register: (props: Record<string, unknown>) => void;
   capture: (event: string, props?: Record<string, unknown>, options?: { transport?: 'XHR' | 'sendBeacon' }) => void;
+  opt_out_capturing: () => void;
 }
 
 let posthogInstance: PostHogInstance | null = null;

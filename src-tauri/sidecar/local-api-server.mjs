@@ -15893,6 +15893,14 @@ export async function createLocalApiServer(options = {}) {
  const reqStartedAt = Date.now();
 
  if (requestUrl.pathname === '/gps/nmea') {
+ // CORS preflight carries no Authorization header, so answer it before the
+ // auth gate — otherwise the browser preflight 401s and the real GET (which
+ // does carry the token) is never sent.
+ if (req.method === 'OPTIONS') {
+ res.writeHead(204, makeCorsHeaders(req));
+ res.end();
+ return;
+ }
  const authHeader = req.headers['authorization'] || '';
  if (!isValidToken(authHeader)) {
  warnUnauthorizedOnce(context, requestUrl.pathname);

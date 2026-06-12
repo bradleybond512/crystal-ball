@@ -22,9 +22,16 @@ export interface NWSAlert {
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let cache: { data: NWSAlert[]; ts: number } | null = null;
+let inflight: Promise<NWSAlert[]> | null = null;
 
 export async function fetchNWSAlerts(): Promise<NWSAlert[]> {
   if (cache && Date.now() - cache.ts < CACHE_TTL_MS) return cache.data;
+  if (inflight) return inflight;
+  inflight = doFetchNWSAlerts().finally(() => { inflight = null; });
+  return inflight;
+}
+
+async function doFetchNWSAlerts(): Promise<NWSAlert[]> {
   try {
     const res = await fetch(`${getApiBaseUrl()}/api/nws-alerts`, {
       signal: AbortSignal.timeout(12_000),

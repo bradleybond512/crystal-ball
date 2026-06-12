@@ -7066,7 +7066,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // upstream is unreachable so the panel can render an empty-state.
 
   if (requestUrl.pathname === '/api/infrarisks/power') {
-    const cached = getCached('infrarisks-power', 60_000);
+    const cached = getCached('infrarisks-power', 15 * 60 * 1000);
     if (cached) return json(cached);
     try {
       const r = await fetchWithTimeout('https://poweroutage.us/api/stat/county', {
@@ -7074,7 +7074,7 @@ async function dispatch(requestUrl, req, routes, context) {
       }, 15_000);
       if (!r.ok) throw new Error(`poweroutage.us HTTP ${r.status}`);
       const data = await r.json();
-      setCached('infrarisks-power', data, 60_000);
+      setCached('infrarisks-power', data, 15 * 60 * 1000);
       return json(data);
     } catch (error) {
       return json({ CountyOutages: [], degraded: true, reason: `poweroutage.us error: ${error.message ?? error}` });

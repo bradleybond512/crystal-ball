@@ -15,8 +15,8 @@ const fail = (at: number) => ({ ok: false, latencyMs: 0, httpStatus: 500, at, er
 
 test('snapshots satisfy the provider-redundancy contract', () => {
   let s = emptyProviderHealthState();
-  s = recordFetchOutcome(s, 'adsbexchange', ok(T0));
   s = recordFetchOutcome(s, 'opensky', ok(T0));
+  s = recordFetchOutcome(s, 'wingbits', ok(T0));
   const snapshots = snapshotsFromRegistry(s, T0 + 1000, 'adsb');
   const report = assessProviderRedundancy({ generatedAt: T0 + 1000, snapshots });
   const adsb = report.domains.find((d) => d.domain === 'adsb');
@@ -26,11 +26,11 @@ test('snapshots satisfy the provider-redundancy contract', () => {
 
 test('primary down with healthy backup maps to the right verdict', () => {
   let s = emptyProviderHealthState();
-  for (let i = 0; i < 3; i++) s = recordFetchOutcome(s, 'adsbexchange', fail(T0 + i)); // primary down
-  s = recordFetchOutcome(s, 'opensky', ok(T0));
+  for (let i = 0; i < 3; i++) s = recordFetchOutcome(s, 'opensky', fail(T0 + i)); // primary down
+  s = recordFetchOutcome(s, 'wingbits', ok(T0));
   // only the two providers with data, so backups without outcomes don't dilute the verdict
   const snapshots = snapshotsFromRegistry(s, T0 + 1000, 'adsb').filter(
-    (snap) => snap.providerId === 'adsbexchange' || snap.providerId === 'opensky',
+    (snap) => snap.providerId === 'opensky' || snap.providerId === 'wingbits',
   );
   const report = assessProviderRedundancy({ generatedAt: T0 + 1000, snapshots });
   assert.equal(report.domains[0].verdict, 'primary_down_with_backup');
@@ -47,8 +47,8 @@ test('status maps to ProviderHealthLevel: down→failing, stale→silent', () =>
 
 test('primary flag comes from fallbackPriority === 1', () => {
   const all = snapshotsFromRegistry(emptyProviderHealthState(), T0, 'adsb');
-  assert.equal(all.find((p) => p.providerId === 'adsbexchange')?.primary, true);
-  assert.equal(all.find((p) => p.providerId === 'opensky')?.primary, false);
+  assert.equal(all.find((p) => p.providerId === 'opensky')?.primary, true);
+  assert.equal(all.find((p) => p.providerId === 'wingbits')?.primary, false);
 });
 
 test('singleton state records and resets', () => {

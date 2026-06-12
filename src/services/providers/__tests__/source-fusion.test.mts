@@ -29,9 +29,9 @@ test('same independence group counts as one source', () => {
 });
 
 test('independent agreement raises corroboration and label', () => {
-  const state = healthyState(['adsbexchange', 'opensky', 'airplanes-live']);
+  const state = healthyState(['wingbits', 'opensky', 'airplanes-live']);
   const r = fuseObservations({
-    observations: [obs('adsbexchange', 42), obs('opensky', 42), obs('airplanes-live', 42)],
+    observations: [obs('wingbits', 42), obs('opensky', 42), obs('airplanes-live', 42)],
     healthState: state, now: T0, numericTolerance: 1,
   });
   assert.equal(r.independentSourceCount, 3);
@@ -40,9 +40,9 @@ test('independent agreement raises corroboration and label', () => {
 });
 
 test('disagreement surfaces and caps the multiplier', () => {
-  const state = healthyState(['adsbexchange', 'opensky']);
+  const state = healthyState(['wingbits', 'opensky']);
   const r = fuseObservations({
-    observations: [obs('adsbexchange', 42), obs('opensky', 99)],
+    observations: [obs('wingbits', 42), obs('opensky', 99)],
     healthState: state, now: T0, numericTolerance: 1,
   });
   assert.equal(r.disagreements.length, 1);

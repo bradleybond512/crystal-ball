@@ -22,7 +22,8 @@
  */
 
 import type { SourceDiagnostic as RuntimeSourceDiagnostic } from '@/services/api-diagnostic';
-import { getAllHealth } from '@/services/providers/health';
+import { getAllProviderHealth } from '@/services/providers/provider-health';
+import { getProviderHealthState } from '@/services/providers/providers-state';
 import type {
   SourceDiagnostic,
   ProviderHealthRecord,
@@ -159,15 +160,17 @@ function collectSources(): SourceDiagnostic[] {
 
 function collectProviders(): ProviderHealthRecord[] {
   try {
-    const all = getAllHealth();
+    const state = getProviderHealthState();
+    const now = Date.now();
+    const all = getAllProviderHealth(state, now);
     return all.map((p) => ({
       providerId: p.providerId,
       status: mapProviderStatus(p.status),
-      successRate: computeSuccessRate(p),
-      meanLatencyMs: p.avgLatencyMs ?? undefined,
-      lastCallAt: (p.lastSuccessAt ?? p.lastErrorAt) ?? undefined,
-      lastFailureAt: p.lastErrorAt ?? undefined,
-      rateLimitedUntilMs: p.quotaResetsAt ?? undefined,
+      successRate: p.successRate,
+      meanLatencyMs: p.p50LatencyMs > 0 ? p.p50LatencyMs : undefined,
+      lastCallAt: p.lastSuccessAt,
+      lastFailureAt: undefined,
+      rateLimitedUntilMs: undefined,
     }));
   } catch {
     return [];
@@ -175,22 +178,14 @@ function collectProviders(): ProviderHealthRecord[] {
 }
 
 function mapProviderStatus(status: string): HealthStatus {
-  // providers/health.ts: 'unknown' | 'healthy' | 'degraded' | 'stale' | 'rateLimited' | 'down'
-  // system-health HealthStatus: uses 'failing' instead of 'down', no 'rateLimited'.
+  // provider-health.ts: 'healthy' | 'stale' | 'degraded' | 'down' | 'unknown_provider'
+  // system-health HealthStatus: uses 'failing' instead of 'down'.
   if (status === 'down') return 'failing';
-  if (status === 'rateLimited') return 'degraded';
-  if (status === 'healthy' || status === 'degraded' || status === 'stale' || status === 'unknown') {
+  if (status === 'unknown_provider') return 'unknown';
+  if (status === 'healthy' || status === 'degraded' || status === 'stale') {
     return status;
   }
   return 'unknown';
-}
-
-function computeSuccessRate(p: { successCount?: number; errorCount?: number }): number {
-  const ok = p.successCount ?? 0;
-  const err = p.errorCount ?? 0;
-  const total = ok + err;
-  if (total === 0) return 1;
-  return ok / total;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────

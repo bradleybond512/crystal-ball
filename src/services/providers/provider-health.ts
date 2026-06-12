@@ -5,7 +5,7 @@
  */
 
 import type { FetchOutcome, ProviderHealth } from './provider-types.ts';
-import { getProviderDefinition } from './provider-registry.ts';
+import { getProviderDefinition, PROVIDER_DEFINITIONS } from './provider-registry.ts';
 
 export const OUTCOME_RING_LIMIT = 50;
 export const DOWN_CONSECUTIVE_FAILURES = 3;
@@ -89,6 +89,14 @@ export function deriveProviderHealth(
     lastError: lastFailure?.errorMessage,
     reason,
   };
+}
+
+/** All registered providers derived from `state`, sorted by status severity
+ *  (down → degraded → stale → healthy → unknown_provider). For status panels. */
+export function getAllProviderHealth(state: ProviderHealthState, now: number): ProviderHealth[] {
+  const order: ProviderHealth['status'][] = ['down', 'degraded', 'stale', 'unknown_provider', 'healthy'];
+  const results = PROVIDER_DEFINITIONS.map((def) => deriveProviderHealth(state, def.id, now));
+  return results.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
 }
 
 function median(values: readonly number[]): number {

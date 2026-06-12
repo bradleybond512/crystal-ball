@@ -21,6 +21,7 @@ import { getKindAccuracy } from '@/services/hypothesis-accuracy';
 import { getThreadFor } from '@/services/hypothesis-threads';
 import { entitiesForHypothesis, entitiesFromHypothesis, getHotEntities, type EntityMention } from '@/services/hypothesis-entities';
 import { getSkepticNote, isSkepticEnabled, setSkepticEnabled, subscribeSkeptic } from '@/services/hypothesis-skeptic';
+import { getAlternativeView, isAlternativesEnabled, setAlternativesEnabled, subscribeAlternatives } from '@/services/hypothesis-alternatives';
 import { getPressureHistory, buildSparklinePath, subscribePressureHistory } from '@/services/pressure-history';
 import { getPlaybookFor, summarizePlaybook, recordAction, noteRecurrence } from '@/services/action-memory';
 import { suggestQuestions, getCachedAnswer, askQuestion, subscribeQuestionAnswered } from '@/services/question-suggester';
@@ -83,6 +84,7 @@ export class AnalystHUD {
   private pressure: Record<ForecastDomain, PressureSample[]>;
   private visible = false;
   private expandedSkeptic = new Set<string>();
+  private expandedAlternative = new Set<string>();
   private expandedQuestion = new Set<string>();
   private loadingQuestion = new Set<string>();
   private loadingProjection = new Set<string>();
@@ -141,6 +143,7 @@ export class AnalystHUD {
       this.scheduleRender();
     });
     subscribeSkeptic(() => { this.scheduleRender(); });
+    subscribeAlternatives(() => { this.scheduleRender(); });
     subscribeQuestionAnswered(() => { this.scheduleRender(); });
     subscribeBriefingArchive(() => { this.scheduleRender(); });
     subscribeProjection(() => { this.scheduleRender(); });
@@ -621,6 +624,7 @@ export class AnalystHUD {
       this.buildHypEvidence(h),
       this.buildHypQuestions(h),
       this.buildHypSkeptic(h),
+      this.buildHypAlternatives(h),
       this.buildHypProjection(h),
       this.buildHypEnsemble(h),
       this.buildHypActions(h),
@@ -896,6 +900,36 @@ export class AnalystHUD {
     return wrap;
   }
 
+  private buildHypAlternatives(h: Hypothesis): HTMLElement {
+    const view = getAlternativeView(h);
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-alternatives';
+    if (!view) return wrap;
+    const expanded = this.expandedAlternative.has(view.signature);
+    const summary = `alt: ${view.alternative.slice(0, 80)}${view.alternative.length > 80 ? '…' : ''}`;
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-alternatives-toggle';
+    btn.textContent = expanded ? `[alt ▼] ${summary}` : `[alt ▶] ${summary}`;
+    btn.title = 'Click to expand the alternative explanation and pre-mortem';
+    btn.addEventListener('click', () => {
+      if (expanded) this.expandedAlternative.delete(view.signature);
+      else this.expandedAlternative.add(view.signature);
+      this.render();
+    });
+    wrap.append(btn);
+    if (expanded) {
+      const altRow = document.createElement('p');
+      altRow.className = 'analyst-hud-alternatives-detail';
+      const confPct = `${(view.alternativeConfidence * 100).toFixed(0)}%`;
+      altRow.textContent = `Alternative (${confPct} confidence): ${view.alternative}`;
+      const premortRow = document.createElement('p');
+      premortRow.className = 'analyst-hud-alternatives-premortem';
+      premortRow.textContent = `Pre-mortem: ${view.premortem}`;
+      wrap.append(altRow, premortRow);
+    }
+    return wrap;
+  }
+
   private buildHypActions(h: Hypothesis): HTMLElement {
     const actions = document.createElement('div');
     actions.className = 'analyst-hud-hyp-actions';
@@ -1122,6 +1156,19 @@ export class AnalystHUD {
     skLabel.textContent = 'Run skeptic pass on high/critical hypotheses';
     skepticToggle.append(sk, skLabel);
     sec.append(skepticToggle);
+
+    const altToggle = document.createElement('label');
+    altToggle.className = 'analyst-hud-toggle';
+    const alt = document.createElement('input');
+    alt.type = 'checkbox';
+    alt.checked = isAlternativesEnabled();
+    alt.addEventListener('change', () => {
+      setAlternativesEnabled(alt.checked);
+    });
+    const altLabel = document.createElement('span');
+    altLabel.textContent = 'Run alternatives pass on high/critical hypotheses';
+    altToggle.append(alt, altLabel);
+    sec.append(altToggle);
 
     const briefs = (['finance', 'security', 'disaster', 'cyber'] as const)
       .map(d => this.briefs[d])

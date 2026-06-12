@@ -1116,23 +1116,31 @@ const ROUTE_ALIASES = {
 };
 
 // ── IP geolocation helpers ────────────────────────────────────────────────
-// ip-api.com batch endpoint: free, no key, up to 100 IPs per request.
-// Note: free tier requires HTTP (not HTTPS).
+// IPQuery.io bulk endpoint: free, no key, HTTPS-only, comma-separated IPs.
+// (ip-api.com's free tier only serves plaintext HTTP, so we standardize on
+// the same HTTPS provider already used for IP risk scoring below.)
 async function geolocateIPs(ips) {
   if (!ips || ips.length === 0) return new Map();
   try {
- const batch = ips.slice(0, 100).map(ip => ({ query: ip, fields: 'query,country,countryCode,lat,lon' }));
- const resp = await fetchWithTimeout('http://ip-api.com/batch?fields=query,country,countryCode,lat,lon', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json', 'User-Agent': 'CrystalBall/1.0' },
- body: JSON.stringify(batch),
+ const batch = ips.slice(0, 100);
+ const resp = await fetchWithTimeout(`https://api.ipquery.io/${batch.map(ip => encodeURIComponent(ip)).join(',')}`, {
+ headers: { 'User-Agent': 'CrystalBall/1.0', Accept: 'application/json' },
  }, 8000);
  if (!resp.ok) return new Map();
  const results = await resp.json();
+ const rows = Array.isArray(results) ? results : [results];
  const map = new Map();
- for (const r of results) {
- if (r.query && r.lat && r.lon) {
- map.set(r.query, { lat: r.lat, lon: r.lon, country: r.country ?? '', countryCode: r.countryCode ?? '' });
+ for (const r of rows) {
+ const query = r?.ip;
+ const lat = r?.location?.latitude;
+ const lon = r?.location?.longitude;
+ if (query && lat != null && lon != null) {
+ map.set(query, {
+ lat,
+ lon,
+ country: r.location?.country ?? '',
+ countryCode: r.location?.country_code ?? '',
+ });
  }
  }
  return map;
@@ -4333,7 +4341,7 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  }
 
  case 'MEDIASTACK_API_KEY': {
- const response = await fetchWithTimeout(`http://api.mediastack.com/v1/news?access_key=${encodeURIComponent(value)}&limit=1`, {
+ const response = await fetchWithTimeout(`https://api.mediastack.com/v1/news?access_key=${encodeURIComponent(value)}&limit=1`, {
  headers: { Accept: 'application/json' },
  });
  const text = await response.text();
@@ -4464,14 +4472,25 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  }
 
  case 'AVIATIONSTACK_API': {
- const response = await fetchWithTimeout(`http://api.aviationstack.com/v1/flights?access_key=${encodeURIComponent(value)}&limit=1`, {
+ // AviationStack's free tier serves the API over plaintext HTTP only and
+ // returns an https_access_restricted error on HTTPS. We never fall back to
+ // HTTP for the key probe — if HTTPS is rejected, skip live validation
+ // rather than send the access key in the clear.
+ try {
+ const response = await fetchWithTimeout(`https://api.aviationstack.com/v1/flights?access_key=${encodeURIComponent(value)}&limit=1`, {
  headers: { Accept: 'application/json' },
  });
  const text = await response.text();
  if (/invalid_access_key/i.test(text)) return fail('AviationStack rejected this key');
  if (/usage_limit_reached/i.test(text)) return ok('AviationStack key verified (usage limit reached)');
+ if (/https_access_restricted|function_access_restricted/i.test(text)) {
+ return ok('HTTPS validation skipped — not available on free tier');
+ }
  if (!response.ok) return fail(`AviationStack probe failed (${response.status})`);
  return ok('AviationStack key verified');
+ } catch {
+ return ok('HTTPS validation skipped — not available on free tier');
+ }
  }
 
  case 'ICAO_API_KEY': {
@@ -4539,7 +4558,7 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  }
 
  case 'GEONAMES_USERNAME': {
- const response = await fetchWithTimeout(`http://api.geonames.org/searchJSON?q=london&maxRows=1&username=${encodeURIComponent(value)}`, {
+ const response = await fetchWithTimeout(`https://secure.geonames.org/searchJSON?q=london&maxRows=1&username=${encodeURIComponent(value)}`, {
  headers: { Accept: 'application/json' },
  });
  const text = await response.text();
@@ -10168,7 +10187,7 @@ async function dispatch(requestUrl, req, routes, context) {
  sort: 'published_desc',
  });
  const r = await fetchWithTimeout(
- `http://api.mediastack.com/v1/news?${params}`,
+ `https://api.mediastack.com/v1/news?${params}`,
  { headers: { Accept: 'application/json' } },
  12000,
  );

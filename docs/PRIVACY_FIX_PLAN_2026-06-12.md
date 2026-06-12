@@ -22,7 +22,10 @@ already done and what is residual. Before starting any fix, run
 General conventions for every fix:
 
 - Branch from `origin/main` in a worktree: `git worktree add .worktrees/<name> -b <branch> origin/main`
-- Sidecar tests: add `.test.mjs` under `src-tauri/sidecar/__tests__/`, runnable via `npm run test:sidecar` (plain `node --test`)
+- Sidecar tests: add `.test.mjs` under `src-tauri/sidecar/__tests__/`, runnable via
+  `npm run test:sidecar` (plain `node --test`). **The `test:sidecar` script in
+  `package.json` is an explicit file list, not a glob — every new test file must also
+  be appended to that script or it will never run.**
 - Renderer service tests: `.test.mts` next to the module or in `src/services/__tests__/`, runnable via `tsx --test`
 - `npm run typecheck:all` must stay at zero errors
 - Push: `SKIP_STALE_CHECK=1 git push --force-with-lease origin <branch>`

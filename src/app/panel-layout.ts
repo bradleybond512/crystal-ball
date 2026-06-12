@@ -84,6 +84,7 @@ import { startCrisisTrajectory } from '@/services/intelligence/crisis-trajectory
 import { startActiveLearningQueue } from '@/services/intelligence/active-learning-queue';
 import { startOutcomeGradingCadence } from '@/services/algorithms/outcome-grading-runner';
 import { startTuningApplyCadence } from '@/services/algorithms/tuning-apply-runner';
+import { startAssumptionExpirySweep } from '@/services/intelligence/assumption-producers';
 import { startNotificationRouter } from '@/services/notification-router';
 import { startSilenceDetector } from '@/services/silence-detector';
 import { startSourceFeedback } from '@/services/source-feedback';
@@ -882,6 +883,7 @@ export class PanelLayoutManager implements AppModule {
  startActiveLearningQueue();
  startOutcomeGradingCadence();
  startTuningApplyCadence();
+ startAssumptionExpirySweep();
  startNotificationRouter();
  startSilenceDetector();
  startSourceFeedback();

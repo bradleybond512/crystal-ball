@@ -205,6 +205,52 @@ test('health monitor safety-case probe scores normally when at least one impleme
   );
 });
 
+// ── computeTrend not_implemented exclusion test ───────────────────────────
+
+test('computeTrend ignores not_implemented records — stubs do not skew the trend', () => {
+  // TREND_WINDOW = 10; we need 20 implemented records to get a non-stable trend.
+  // Strategy: seed 10 "prior" passes + 10 "last" passes (all implemented = 'stable'),
+  // then add 20 not_implemented records that, if included naively, would look like
+  // 10 prior fails + 10 last passes → 'improving'. The trend must stay 'stable'.
+  const svc = createSafetyCaseDashboardService({ storage: null });
+
+  // Record 10 prior implemented passes then 10 more passes (all FEED-COVERAGE).
+  for (let i = 0; i < 20; i++) {
+    svc.recordCheck({
+      propertyId: 'FEED-COVERAGE',
+      situationId: `trend-sit-impl-${i}`,
+      status: 'passed',
+      evidence: `signals=2 (${i})`,
+    });
+  }
+  const summaryBefore = svc.getSummary();
+  const propBefore = summaryBefore.propertySummaries.find((p) => p.propertyId === 'FEED-COVERAGE');
+  assert.ok(propBefore, 'FEED-COVERAGE summary present');
+  // Baseline: 20 implemented passes → trend should be stable (equal rates).
+  assert.equal(propBefore!.trend, 'stable', 'baseline: all-pass window is stable');
+
+  // Now inject 20 not_implemented records for the same property, interleaved after
+  // the existing records. Without the fix these would dilute the "last" window with
+  // passed=false entries, flipping the trend to 'degrading'.
+  for (let i = 0; i < 20; i++) {
+    svc.recordCheck({
+      propertyId: 'FEED-COVERAGE',
+      situationId: `trend-sit-stub-${i}`,
+      status: 'not_implemented',
+      evidence: 'no real check wired yet',
+    });
+  }
+
+  const summaryAfter = svc.getSummary();
+  const propAfter = summaryAfter.propertySummaries.find((p) => p.propertyId === 'FEED-COVERAGE');
+  assert.ok(propAfter, 'FEED-COVERAGE summary present after stubs');
+  assert.equal(
+    propAfter!.trend,
+    'stable',
+    'trend must remain stable after injecting not_implemented records',
+  );
+});
+
 // ── Legacy migration test ─────────────────────────────────────────────────
 
 test('rehydrate migrates legacy records lacking status field', () => {

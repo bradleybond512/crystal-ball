@@ -233,10 +233,11 @@ function passRate(passed: number, total: number): number {
 }
 
 function computeTrend(checks: readonly SafetyCheckResult[]): SafetyTrend {
-  if (checks.length < TREND_WINDOW * 2) return 'stable';
+  const implemented = checks.filter((c) => c.status !== 'not_implemented');
+  if (implemented.length < TREND_WINDOW * 2) return 'stable';
   // checks are stored oldest-first internally
-  const lastN = checks.slice(-TREND_WINDOW);
-  const priorN = checks.slice(-(TREND_WINDOW * 2), -TREND_WINDOW);
+  const lastN = implemented.slice(-TREND_WINDOW);
+  const priorN = implemented.slice(-(TREND_WINDOW * 2), -TREND_WINDOW);
   const lastRate = passRate(lastN.filter((c) => c.passed).length, lastN.length);
   const priorRate = passRate(priorN.filter((c) => c.passed).length, priorN.length);
   const delta = lastRate - priorRate;

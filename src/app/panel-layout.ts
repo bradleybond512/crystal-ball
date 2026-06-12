@@ -133,6 +133,7 @@ import { startAutoBrief } from '@/services/auto-brief';
 import { startHypothesisThreads } from '@/services/hypothesis-threads';
 import { startHypothesisEntities } from '@/services/hypothesis-entities';
 import { startHypothesisSkeptic } from '@/services/hypothesis-skeptic';
+import { startHypothesisAlternatives } from '@/services/hypothesis-alternatives';
 import { startPressureHistory } from '@/services/pressure-history';
 import { startSidecarPusher } from '@/services/sidecar-pusher';
 import { startAnalystCommandListener } from '@/services/analyst-command-listener';
@@ -930,6 +931,7 @@ export class PanelLayoutManager implements AppModule {
  startHypothesisEntities();
  startHypothesisAccuracy();
  startHypothesisSkeptic();
+ startHypothesisAlternatives();
  startAutoBrief();
  startSnapshotArchive();
  startHypothesisNotifier();

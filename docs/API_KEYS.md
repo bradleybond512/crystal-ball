@@ -1,198 +1,252 @@
 # Crystal Ball — API Keys & Data Sources
 
-Crystal Ball supports **All 73 secret keys** wired through the Tauri desktop runtime
-(see [`src-tauri/src/main.rs`](../src-tauri/src/main.rs) — `SUPPORTED_SECRET_KEYS`). Most
-features work out of the box with free public APIs; the keys below unlock additional
-sources or higher rate limits. Keys are entered via **Settings (gear icon) → API Keys**
-in both the desktop and web builds.
+Crystal Ball reads API credentials from two authoritative surfaces:
 
-> **Each field in the in-app Settings overlay also shows a one-line description of what
-> the key does, free vs paid, and a "Get key" link** — added in the v2.11 release as
-> part of the documentation refresh.
+1. **`SUPPORTED_SECRET_KEYS`** in [`src-tauri/src/main.rs`](../src-tauri/src/main.rs) — the
+   **73-key allowlist** the desktop runtime will accept, store in the macOS Keychain
+   (service `crystal-ball`), and inject into the sidecar. Anything not on this list
+   **cannot be saved via Settings → API Keys.**
+2. **`process.env.*` reads** inside [`src-tauri/sidecar/`](../src-tauri/sidecar/) — the
+   env vars the Node sidecar actually consumes at runtime.
+
+This document is reconciled against both as of the current `main`. **No key is required
+to launch the app** — every credential below is optional and unlocks a feed, raises a
+rate limit, or enables a feature. Keys are entered via **Settings (gear icon) → API Keys**
+in the desktop and web builds.
+
+> Each field in the in-app Settings overlay also shows a one-line description, free-vs-paid,
+> and a "Get key" link.
 
 ## Where keys are stored
 
-- **Desktop (Tauri)** — keys live in the macOS Keychain under service name
-  `crystal-ball`. The renderer never sees them; they're injected into the Node.js
-  sidecar at startup and proxied through a bearer-authenticated localhost port.
-- **Web (browser)** — keys live in a passphrase-encrypted vault in IndexedDB.
-  AES-GCM-256 over PBKDF2-SHA-256 (600,000 iterations); ciphertext only, derived
-  key + plaintext map held in module closure for the duration of the session.
-  Auto-locks after 15 min of the tab being hidden.
-
-## Quick Start — Essential Free Keys
-
-These keys unlock the most impactful features and are free with simple registration:
-
-| Key | What It Unlocks | Signup |
-|-----|----------------|--------|
-| `GOOGLE_MAPS_API_KEY` | Photorealistic 3D building tiles on the God's Vision globe | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
-| `CESIUM_ION_TOKEN` | God's Vision 3D globe with Bing satellite imagery | [ion.cesium.com](https://ion.cesium.com/signup/) |
-| `NASA_FIRMS_API_KEY` | 7,000+ satellite fire detections worldwide | [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/api/area/) |
-| `OWM_API_KEY` | Weather map tiles (temperature, precipitation, clouds, wind, pressure) | [openweathermap.org](https://openweathermap.org/api) |
-| `FINNHUB_API_KEY` | Real-time stock market data | [finnhub.io](https://finnhub.io/register) |
-| `NEWSAPI_KEY` | 150k+ news sources for headline aggregation | [newsapi.org](https://newsapi.org/register) |
+- **Desktop (Tauri)** — keys live in the macOS Keychain under service `crystal-ball`.
+  The renderer never sees them; they are injected into the Node sidecar at startup and
+  proxied through a bearer-authenticated localhost port.
+- **Web (browser)** — keys live in a passphrase-encrypted IndexedDB vault. AES-GCM-256
+  over PBKDF2-SHA-256 (600,000 iterations); ciphertext only. Auto-locks after 15 min of
+  the tab being hidden.
 
 ---
 
-## All Supported Keys by Category
+## Keys consumed by the Node sidecar
 
-### Intelligence & Tracking
+Every row below is read via `process.env.<KEY>` in `src-tauri/sidecar/`. Rows marked
+**⚠ not in allowlist** are read by the sidecar but are **absent from
+`SUPPORTED_SECRET_KEYS`**, so they can only be supplied through the raw environment or a
+`.env.local` fallback — they will **not** appear in Settings → API Keys until added to the
+Rust allowlist.
 
-| Key | Free? | What It Enables | Signup |
-|-----|-------|-----------------|--------|
-| `ACLED_ACCESS_TOKEN` | Registration | Conflict events, battles, explosions | [developer.acleddata.com](https://developer.acleddata.com/) |
-| `ACLED_EMAIL` | — | Paired with ACLED token | Same as above |
-| `ACLED_REFRESH_TOKEN` | — | Long-lived refresh for ACLED OAuth | Same as above |
-| `OPENSKY_CLIENT_ID` | Free | Military flight tracking (OAuth pair) | [opensky-network.org](https://opensky-network.org/login?view=registration) |
-| `OPENSKY_CLIENT_SECRET` | Free | Military flight tracking (OAuth pair) | Same as above |
-| `VITE_OPENSKY_RELAY_URL` | — | Relay URL for OpenSky data (self-hosted) | Self-hosted |
-| `WS_RELAY_URL` | — | Generic websocket relay endpoint | Self-hosted |
-| `VITE_WS_RELAY_URL` | — | Browser-side websocket relay URL | Self-hosted |
-| `AISSTREAM_API_KEY` | Free | Military vessel & dark ship tracking | [aisstream.io](https://aisstream.io/authenticate) |
-| `WINGBITS_API_KEY` | Paid | Aircraft metadata enrichment | [wingbits.com](https://wingbits.com/register) |
-| `NASA_FIRMS_API_KEY` | Free | Satellite fire detections (FIRMS) | [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/api/area/) |
-| `ICAO_API_KEY` | Paid | Airport closure NOTAMs | [dataservices.icao.int](https://dataservices.icao.int/) |
-| `AVIATIONSTACK_API` | Free | Airport delay data | [aviationstack.com](https://aviationstack.com/signup/free) |
-| `UCDP_API_TOKEN` | Free | Uppsala Conflict Data Program events | [ucdp.uu.se](https://ucdp.uu.se/) |
+### AI summarization & local LLM
 
-### Cyber Threat Intelligence
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `ANTHROPIC_API_KEY` | Anthropic (Claude) | Optional | [console.anthropic.com](https://console.anthropic.com/) | Falls back to local Ollama; no cloud summaries |
+| `GROQ_API_KEY` | Groq | Optional | [console.groq.com](https://console.groq.com/keys) | Cloud summarization skipped |
+| `OLLAMA_API_URL` | Ollama (self-hosted) | Optional | [ollama.com](https://ollama.com/download) | Local LLM inference disabled |
+| `OLLAMA_MODEL` | Ollama | Optional | [ollama.com/library](https://ollama.com/library) | Adapter default model used |
 
-| Key | Free? | What It Enables | Signup |
-|-----|-------|-----------------|--------|
-| `THREATFOX_API_KEY` | Free | C2 servers, malware IOCs | [auth.abuse.ch](https://auth.abuse.ch/) |
-| `URLHAUS_AUTH_KEY` | Free | Malicious URL indicators | [auth.abuse.ch](https://auth.abuse.ch/) |
-| `OTX_API_KEY` | Free | Community threat intelligence | [otx.alienvault.com](https://otx.alienvault.com/) |
-| `ABUSEIPDB_API_KEY` | Free (limited) | IP reputation scoring | [abuseipdb.com](https://www.abuseipdb.com/login) |
-| `VIRUSTOTAL_API_KEY` | Free (limited) | IOC reputation lookups | [virustotal.com](https://www.virustotal.com/gui/join-us) |
-| `SHODAN_API_KEY` | Paid | ICS/SCADA exposure scanning | [account.shodan.io](https://account.shodan.io/) |
-| `URLSCAN_API_KEY` | Free | URL scanner results | [urlscan.io](https://urlscan.io/user/signup) |
-| `BITCOINABUSE_API_KEY` | Free | Ransomware address tracker | [bitcoinabuse.com](https://www.bitcoinabuse.com/api-docs) |
-| `VULNERS_API_KEY` | Free (limited) | CVE & exploit intelligence | [vulners.com](https://vulners.com/docs/api/) |
-| `PULSEDIVE_API_KEY` | Free (limited) | Threat indicator scoring | [pulsedive.com](https://pulsedive.com/api/) |
-| `GREYNOISE_API_KEY` | Free (50/day) | Internet noise classification | [greynoise.io](https://www.greynoise.io/plans/community) |
-| `HIBP_API_KEY` | Free/Paid | Data breach lookups | [haveibeenpwned.com](https://haveibeenpwned.com/API/Key) |
+### News & media
 
-### Economics & Markets
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `NEWSAPI_KEY` | NewsAPI.org | Optional | [newsapi.org](https://newsapi.org/register) | That news source skipped |
+| `NEWSDATA_API_KEY` | NewsData.io | Optional | [newsdata.io](https://newsdata.io/register) | That news source skipped |
+| `MEDIASTACK_API_KEY` | mediastack | Optional | [mediastack.com](https://mediastack.com/signup/free) | That news source skipped |
 
-| Key | Free? | What It Enables | Signup |
-|-----|-------|-----------------|--------|
-| `FINNHUB_API_KEY` | Free (limited) | Real-time stock & crypto data | [finnhub.io](https://finnhub.io/register) |
-| `FMP_API_KEY` | Free (250 req/day) | Market data fallback | [financialmodelingprep.com](https://financialmodelingprep.com/developer/docs) |
-| `FRED_API_KEY` | Free | Federal Reserve economic data + supply chain | [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) |
-| `EIA_API_KEY` | Free | US energy production & pricing | [eia.gov](https://www.eia.gov/opendata/register.php) |
-| `WTO_API_KEY` | Free | International trade data | [apiportal.wto.org](https://apiportal.wto.org/) |
+### Economics & markets
 
-### News & Media
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `FINNHUB_API_KEY` | Finnhub | Optional | [finnhub.io](https://finnhub.io/register) | Real-time market data feed disabled |
+| `FRED_API_KEY` | FRED (St. Louis Fed) | Optional | [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) | Macro / supply-chain series disabled |
+| `EIA_API_KEY` | US EIA | Optional | [eia.gov](https://www.eia.gov/opendata/register.php) | Energy production/pricing feed disabled |
 
-| Key | Free? | What It Enables | Signup |
-|-----|-------|-----------------|--------|
-| `NEWSAPI_KEY` | Free (limited) | 150k+ news sources | [newsapi.org](https://newsapi.org/register) |
-| `NEWSDATA_API_KEY` | Free (limited) | 95k+ news sources | [newsdata.io](https://newsdata.io/register) |
-| `MEDIASTACK_API_KEY` | Free (500 req/mo) | 7,500+ news sources | [mediastack.com](https://mediastack.com/signup/free) |
+### Cyber threat intelligence
 
-### Geolocation, Air Quality & Infrastructure
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `THREATFOX_API_KEY` | ThreatFox (abuse.ch) | Optional | [auth.abuse.ch](https://auth.abuse.ch/) | Feed disabled |
+| `OTX_API_KEY` | AlienVault OTX | Optional | [otx.alienvault.com](https://otx.alienvault.com/) | Feed disabled |
+| `ABUSEIPDB_API_KEY` | AbuseIPDB | Optional | [abuseipdb.com](https://www.abuseipdb.com/login) | IP reputation lookup disabled |
+| `VIRUSTOTAL_API_KEY` | VirusTotal | Optional | [virustotal.com](https://www.virustotal.com/gui/join-us) | IOC reputation lookup disabled |
+| `URLSCAN_API_KEY` | urlscan.io | Optional | [urlscan.io](https://urlscan.io/user/signup) | Authenticated scans disabled (public still works) |
+| `BITCOINABUSE_API_KEY` | BitcoinAbuse / Chainabuse | Optional | [bitcoinabuse.com](https://www.bitcoinabuse.com/api-docs) | Ransomware address lookup disabled |
+| `VULNERS_API_KEY` | Vulners | Optional | [vulners.com](https://vulners.com/docs/api/) | CVE/exploit enrichment disabled |
+| `PULSEDIVE_API_KEY` | Pulsedive | Optional | [pulsedive.com](https://pulsedive.com/api/) | Falls back to free tier |
+| `GREYNOISE_API_KEY` | GreyNoise | Optional | [greynoise.io](https://www.greynoise.io/plans/community) | Internet-noise classification disabled |
+| `HIBP_API_KEY` | Have I Been Pwned | Optional | [haveibeenpwned.com](https://haveibeenpwned.com/API/Key) | Breach lookup disabled |
+| `CENSYS_API_ID` | Censys | Optional | [search.censys.io](https://search.censys.io/account/api) | Censys host/cert lookup disabled |
+| `CENSYS_API_SECRET` | Censys | Optional | Same as above | Paired with `CENSYS_API_ID` |
+| `SECURITYTRAILS_API_KEY` | SecurityTrails | Optional | [securitytrails.com](https://securitytrails.com/app/account/credentials) | DNS/domain history disabled |
+| `WHOISXML_API_KEY` | WhoisXML API | Optional | [whoisxmlapi.com](https://whois.whoisxmlapi.com/) | WHOIS enrichment disabled |
+| `MISP_URL` | MISP (self-hosted) | Optional | Self-hosted | MISP feed disabled |
+| `MISP_API_KEY` | MISP (self-hosted) | Optional | Self-hosted instance | Paired with `MISP_URL` |
+| `OPENCTI_URL` | OpenCTI (self-hosted) | Optional | Self-hosted | OpenCTI feed disabled |
+| `OPENCTI_API_KEY` | OpenCTI (self-hosted) | Optional | Self-hosted instance | Paired with `OPENCTI_URL` |
 
-| Key | Free? | What It Enables | Signup |
-|-----|-------|-----------------|--------|
-| `GEONAMES_USERNAME` | Free | Place name lookups | [geonames.org](https://www.geonames.org/login) |
-| `IPINFO_TOKEN` | Free (50k/mo) | IP geolocation | [ipinfo.io](https://ipinfo.io/signup) |
-| `CLOUDFLARE_API_TOKEN` | Paid | Internet outage detection | [cloudflare.com](https://dash.cloudflare.com/profile/api-tokens) |
-| `NASA_API_KEY` | Free | Boosts DONKI rate limits | [api.nasa.gov](https://api.nasa.gov/#signUp) |
-| `AIRNOW_API_KEY` | Free | EPA AirNow particulate readings (US) | [docs.airnowapi.org](https://docs.airnowapi.org/) |
-| `PURPLEAIR_API_KEY` | Free | PurpleAir community PM2.5 sensors | [develop.purpleair.com](https://develop.purpleair.com/) |
+### Aviation, maritime & flight tracking
 
-### Traffic & Highway Cameras
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `OPENSKY_CLIENT_ID` | OpenSky Network | Optional | [opensky-network.org](https://opensky-network.org/login?view=registration) | Anonymous OpenSky rate limits |
+| `OPENSKY_CLIENT_SECRET` | OpenSky Network | Optional | Same as above | Paired with `OPENSKY_CLIENT_ID` |
+| `AISSTREAM_API_KEY` | aisstream.io | Optional | [aisstream.io](https://aisstream.io/authenticate) | Vessel / dark-ship tracking disabled |
+| `AVIATIONSTACK_API` | aviationstack | Optional | [aviationstack.com](https://aviationstack.com/signup/free) | Airport delay data disabled |
 
-| Key | Free? | What It Enables | Signup |
-|-----|-------|-----------------|--------|
-| `NSW_API_KEY` | Free (registration) | NSW (Australia) transport open data | [opendata.transport.nsw.gov.au](https://opendata.transport.nsw.gov.au/) |
-| `UK_HIGHWAYS_API_KEY` | Free | National Highways (UK) DATEX-II | [webtris.nationalhighways.co.uk](https://webtris.nationalhighways.co.uk/) |
-| `ROAD511_API_KEY` | Paid | 511 multi-state highway camera roll-up | [511.org](https://511.org/) |
+### Weather, air quality & environment
 
-### Mapping & Visualization
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `OWM_API_KEY` | OpenWeatherMap | Optional | [openweathermap.org](https://openweathermap.org/api) | Weather tiles hidden (Open-Meteo base weather still works) |
+| `NASA_FIRMS_API_KEY` | NASA FIRMS | Optional | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/area/) | Satellite fire detections disabled |
+| `NASA_API_KEY` | NASA (api.nasa.gov) | Optional | [api.nasa.gov](https://api.nasa.gov/#signUp) | DONKI uses shared `DEMO_KEY` rate limit |
+| `AIRNOW_API_KEY` | EPA AirNow | Optional | [docs.airnowapi.org](https://docs.airnowapi.org/) | US particulate readings disabled |
+| `PURPLEAIR_API_KEY` | PurpleAir | Optional | [develop.purpleair.com](https://develop.purpleair.com/) | Community PM2.5 sensors disabled |
+| `OPENAQ_API_KEY` ⚠ **not in allowlist** | OpenAQ | Optional | [docs.openaq.org](https://docs.openaq.org/) | Air-quality feed unavailable when OpenAQ requires a key |
+| `WINDY_WEBCAMS_API_KEY` ⚠ **not in allowlist** | Windy Webcams | Optional | [api.windy.com](https://api.windy.com/) | Webcam layer disabled |
+| `NPS_API_KEY` ⚠ **not in allowlist** | US National Park Service | Optional | [nps.gov/subjects/developer](https://www.nps.gov/subjects/developer/get-started.htm) | NPS data disabled |
 
-| Key | Free? | What It Enables | Signup |
-|-----|-------|-----------------|--------|
-| `GOOGLE_MAPS_API_KEY` | Free tier ($200/mo credit, ~28,500 session loads/mo) | Photorealistic 3D building tiles | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
-| `CESIUM_ION_TOKEN` | Free | God's Vision 3D globe (Bing satellite tiles); 3D buildings fallback | [ion.cesium.com](https://ion.cesium.com/signup/) |
-| `OWM_API_KEY` | Free (limited) | Weather map tiles | [openweathermap.org](https://openweathermap.org/api) |
-| `MAPBOX_API_KEY` | Free (50k loads/mo) | Mapbox basemap tiles + geocoding | [account.mapbox.com](https://account.mapbox.com/) |
-| `MAPTILER_API_KEY` | Free (100k tiles/mo) | MapTiler vector tile basemaps | [maptiler.com](https://www.maptiler.com/cloud/) |
+### Geolocation & infrastructure
 
-### AI Summarization & Local LLM
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `GEONAMES_USERNAME` | GeoNames | Optional | [geonames.org](https://www.geonames.org/login) | Place-name lookups disabled |
+| `IPINFO_TOKEN` | ipinfo.io | Optional | [ipinfo.io](https://ipinfo.io/signup) | IP geolocation uses keyless fallback |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Radar | Optional | [dash.cloudflare.com](https://dash.cloudflare.com/profile/api-tokens) | Internet-outage detection disabled |
 
-| Key | Free? | What It Enables | Signup |
-|-----|-------|-----------------|--------|
-| `GROQ_API_KEY` | Paid | Fast LLM summarization | [console.groq.com](https://console.groq.com/keys) |
-| `ANTHROPIC_API_KEY` | Paid | Claude AI summaries | [console.anthropic.com](https://console.anthropic.com/) |
-| `OPENROUTER_API_KEY` | Paid | LLM routing fallback | [openrouter.ai](https://openrouter.ai/settings/keys) |
-| `OLLAMA_API_URL` | Free (self-hosted) | Local LLM inference | [ollama.com](https://ollama.com/download) |
-| `OLLAMA_MODEL` | Free | Model selection (e.g. `llama3`) | [ollama.com/library](https://ollama.com/library) |
+### Traffic & highway cameras
 
-### Server-to-Server Bridges (S2U / TAK)
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `NSW_API_KEY` | Transport for NSW (AU) | Optional | [opendata.transport.nsw.gov.au](https://opendata.transport.nsw.gov.au/) | NSW transport feed disabled |
+| `UK_HIGHWAYS_API_KEY` | National Highways (UK) | Optional | [webtris.nationalhighways.co.uk](https://webtris.nationalhighways.co.uk/) | UK DATEX-II feed disabled |
+| `ROAD511_API_KEY` | 511.org | Optional | [511.org](https://511.org/) | 511 camera roll-up disabled |
 
-These keys configure outbound bridges from the desktop runtime to upstream collaboration
-or tactical situational-awareness servers. They are not consumed by any panel directly.
+### Server-to-server bridges (S2U / TAK)
 
-| Key | Free? | What It Enables | Signup |
-|-----|-------|-----------------|--------|
-| `S2U_XMPP_JID` | Self-hosted | XMPP bridge identity (jabber JID) | Self-hosted |
-| `S2U_XMPP_SECRET` | Self-hosted | XMPP bridge password | Self-hosted |
-| `S2U_TAK_URL` | Self-hosted | TAK server base URL | Self-hosted |
-| `S2U_TAK_USERNAME` | Self-hosted | TAK server username | Self-hosted |
-| `S2U_TAK_SECRET` | Self-hosted | TAK server password / token | Self-hosted |
-| `S2U_TLS_INSECURE_OPT_IN` | — | Explicit opt-in to skip TLS verification for the S2U bridges (dev / lab only) | — |
+Outbound bridges from the desktop runtime to collaboration or tactical SA servers. Not
+consumed by any panel directly.
 
-### Cloud & Platform
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `S2U_XMPP_JID` | XMPP bridge (self-hosted) | Optional | Self-hosted | XMPP bridge off |
+| `S2U_XMPP_SECRET` | XMPP bridge (self-hosted) | Optional | Self-hosted | Paired with `S2U_XMPP_JID` |
+| `S2U_TAK_URL` | TAK server (self-hosted) | Optional | Self-hosted | TAK bridge off |
+| `S2U_TAK_USERNAME` | TAK server (self-hosted) | Optional | Self-hosted | Paired with `S2U_TAK_URL` |
+| `S2U_TAK_SECRET` | TAK server (self-hosted) | Optional | Self-hosted | Paired with `S2U_TAK_URL` |
+| `S2U_TLS_INSECURE_OPT_IN` | (flag) | Optional | N/A | TLS verification stays on (recommended) |
 
-| Key | Free? | What It Enables | Signup |
-|-----|-------|-----------------|--------|
-| `CRYSTALBALL_API_KEY` | Paid | Cloud fallback when sidecar is down | [crystalball.app](https://crystalball.app) |
+### Comms & notifications
 
----
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `TWILIO_AUTH_TOKEN` ⚠ **not in allowlist** | Twilio | Optional | [twilio.com/console](https://www.twilio.com/console) | SMS-command webhook falls back to phone-number-only validation |
 
-## Features That Work Without Any Keys
+### Patreon (membership / audio)
 
-These data sources are free and require no registration:
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `PATREON_OAUTH_CLIENT_ID` | Patreon | Optional | [patreon.com/portal](https://www.patreon.com/portal/registration/register-clients) | Patreon integration off |
+| `PATREON_OAUTH_CLIENT_SECRET` | Patreon | Optional | Same as above | Paired with client ID |
+| `PATREON_ACCESS_TOKEN` | Patreon | Optional | Same as above | Patreon integration off |
+| `PATREON_REFRESH_TOKEN` | Patreon | Optional | Same as above | Token refresh disabled |
+| `PATREON_AUDIO_RSS_URL` | Patreon (audio RSS) | Optional | Patreon creator RSS | Audio feed off |
 
-- Earthquakes (USGS)
-- GDACS disaster alerts
-- Volcano alerts (USGS/Smithsonian)
-- Tropical cyclones (NOAA)
-- Nuclear facilities database
-- Military bases database
-- Undersea cables map
-- Strategic waterways/chokepoints
-- Spaceports & launch sites
-- Critical minerals database
-- Intel hotspots with escalation scores
-- Space weather (NOAA SWPC)
-- CISA Known Exploited Vulnerabilities
-- Open sanctions lists
-- Reddit OSINT feeds
-- ISW situation reports
-- Travel warnings (UK FCDO, Australia DFAT, Canada GAC)
-- Global weather (Open-Meteo)
-- 7-day extended forecast (Open-Meteo)
-- Weather radar (RainViewer — global radar composite)
-- Lightning detection (Blitzortung)
-- Satellite weather imagery (NOAA GOES/Himawari)
-- Tide predictions (NOAA CO-OPS — US coastal stations)
-- Pollen & allergy data (Open-Meteo Air Quality)
-- Red Flag / fire weather warnings (NWS/SPC)
-- Air quality (OpenAQ)
-- PhishStats, urlscan.io public, Pulsedive free tier
-- BGPView (no key required)
+### Platform & relay
+
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `CRYSTALBALL_API_KEY` | Crystal Ball cloud | Optional | [crystalball.app](https://crystalball.app) | Cloud fallback when sidecar is down disabled |
+| `WS_RELAY_URL` | Generic websocket relay (self-hosted) | Optional | Self-hosted | Relay disabled |
+| `CONVEX_URL` ⚠ **not in allowlist** | Convex backend | Optional | [convex.dev](https://www.convex.dev/) | Convex-backed sync disabled |
 
 ---
 
-## How to Add Keys
+## Reconciliation notes
 
-1. Open Crystal Ball
-2. Click the **gear icon** (Settings)
-3. Navigate to **API Keys**
-4. Paste your key into the corresponding field
-5. Keys are stored in your macOS keychain (`crystal-ball` service)
+### A. Sidecar reads these but they are **not** in `SUPPORTED_SECRET_KEYS`
 
-Keys take effect immediately — no restart required for most features.
+These five are consumed by the sidecar via `process.env` yet are missing from the Rust
+allowlist, so they cannot be entered in Settings → API Keys and are only honored when
+present in the raw environment or `.env.local`:
+
+- `TWILIO_AUTH_TOKEN`
+- `WINDY_WEBCAMS_API_KEY`
+- `OPENAQ_API_KEY`
+- `NPS_API_KEY`
+- `CONVEX_URL`
+
+**Action item:** add these to `SUPPORTED_SECRET_KEYS` (and bump the array length) if they
+should be user-configurable through the Keychain/vault; otherwise document them as
+deploy-time-only env vars.
+
+### B. Allowlist keys **not** read directly by the sidecar
+
+These are on the 73-key allowlist but are not read via `process.env` in
+`src-tauri/sidecar/` — they are consumed by the **frontend/Vite build** or the **Rust
+host**, or are not yet wired into a sidecar route:
+
+`OPENROUTER_API_KEY`, `ACLED_REFRESH_TOKEN`, `URLHAUS_AUTH_KEY`, `WINGBITS_API_KEY`,
+`VITE_OPENSKY_RELAY_URL`, `VITE_WS_RELAY_URL`, `WTO_API_KEY`, `ICAO_API_KEY`,
+`SHODAN_API_KEY`, `UCDP_API_TOKEN`, `FMP_API_KEY`, `CESIUM_ION_TOKEN`,
+`GOOGLE_MAPS_API_KEY`, `MAPBOX_API_KEY`, `MAPTILER_API_KEY`.
+
+(`VITE_`-prefixed and the mapping/Cesium keys are inherently renderer-side; the rest are
+either Rust-side or awaiting a sidecar consumer.)
+
+---
+
+## Non-credential runtime/config env vars
+
+The sidecar also reads these operational env vars. They are **not** API keys and are
+**not** on the allowlist; they are set by the app, the build, or a deploy environment.
+
+| Var | Purpose | Default if absent |
+|-----|---------|-------------------|
+| `LOCAL_API_PORT` | Sidecar listen port | `46123` |
+| `SIDECAR_PORT` | Alternate sidecar port var | `46123` |
+| `LOCAL_API_PORT_FILE` | File the chosen port is written to | unset (no file written) |
+| `LOCAL_API_MODE` | Runtime mode | `desktop-sidecar` |
+| `LOCAL_API_CLOUD_FALLBACK` | Enable cloud fallback | `false` |
+| `LOCAL_API_REMOTE_BASE` | Cloud fallback base URL | `https://crystalball.app` |
+| `LOCAL_API_DATA_DIR` | Writable data dir (events.db, logs) | platform default |
+| `LOCAL_API_RESOURCE_DIR` | Bundled resource dir | platform default |
+| `LOCAL_API_TOKEN` | Bearer token for localhost auth | injected by host at spawn |
+| `EVENT_STORE_RETENTION_MONTHS` | events.db retention window | see code default |
+| `CB_SIDECAR_FILE_LOG` | File logging toggle | on unless set to `0` |
+| `WM_TRACE` | Verbose trace logging | off unless `1` |
+| `WM_BUILD_TAG` | Build identifier stamp | unset |
+| `WM_TEST_UPSTREAM` | Test-only upstream override | unset |
+| `CORS_ALLOW_ALL` | Dev-only: allow all CORS origins | off |
+| `ALLOW_ALL_ORIGINS` | Dev-only: allow all origins | off |
+| `RELAY_SHARED_SECRET` | Shared secret for self-hosted relay auth (sensitive) | relay auth off |
+| `RELAY_AUTH_HEADER` | Header name carrying the relay secret | default header |
+| `LITTLE_SNITCH_BASELINE_PATH` | Little Snitch baseline export path | integration off |
+| `LITTLE_SNITCH_EXPORT_PATH` | Little Snitch current export path | integration off |
+
+> `RELAY_SHARED_SECRET` / `RELAY_AUTH_HEADER` carry a secret but are supplied via the
+> deploy environment for a self-hosted relay, not through the Keychain allowlist.
+
+---
+
+## Features that work without any keys
+
+Earthquakes (USGS), GDACS disaster alerts, volcano alerts (USGS/Smithsonian), tropical
+cyclones (NOAA), nuclear facilities, military bases, undersea cables, strategic waterways,
+spaceports, critical minerals, intel hotspots, space weather (NOAA SWPC), CISA KEV, open
+sanctions lists, Reddit OSINT, ISW reports, travel warnings (UK FCDO / AU DFAT / CA GAC),
+global weather + 7-day forecast (Open-Meteo), weather radar (RainViewer), lightning
+(Blitzortung), satellite imagery (NOAA GOES/Himawari), tide predictions (NOAA CO-OPS),
+pollen (Open-Meteo Air Quality), Red Flag / fire-weather warnings (NWS/SPC), BGPView.
+
+---
+
+## How to add keys
+
+1. Open Crystal Ball → **gear icon** (Settings) → **API Keys**.
+2. Paste your key into the matching field. Desktop stores it in the macOS Keychain
+   (`crystal-ball` service); web stores it in the encrypted vault.
+3. Keys take effect immediately — no restart for most features.
+
+Keys flagged **⚠ not in allowlist** above cannot be added this way until they are added to
+`SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`.

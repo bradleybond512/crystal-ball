@@ -23,9 +23,11 @@ import { getCachedBriefing } from '../intelligence-briefing';
 import { getFeatureHealthRegistry } from '../diagnostics/diagnostics-state';
 import type { ThreatSeverity } from '../intelligence-briefing';
 import { getApiBaseUrl } from '../runtime';
+import { getCachedSynthesis } from '../threat-synthesis';
 import {
   type AlertEntry,
   type CorrelationEntry,
+  type CrossDomainSynthesisInput,
   type EconomicIndicator,
   type EnhancedBriefingInput,
   type FeedHealthRow,
@@ -60,7 +62,7 @@ export async function collectEnhancedBriefing(
 
   // All collectors are independently try/catch'd — never let one section
   // sink the whole snapshot.
-  const [executiveSummary, threatMatrix, activeAlerts, spaceWeather, topWildfires, economicIndicators, feedHealth, correlations, shortageRadar, personalizedAlerts] =
+  const [executiveSummary, threatMatrix, activeAlerts, spaceWeather, topWildfires, economicIndicators, feedHealth, correlations, shortageRadar, personalizedAlerts, crossDomainSynthesis] =
     await Promise.all([
       Promise.resolve().then(() => collectExecutiveSummary()),
       Promise.resolve().then(() => collectThreatMatrix()),
@@ -72,12 +74,13 @@ export async function collectEnhancedBriefing(
       collectCorrelations(apiBase),
       collectShortageRadar(apiBase),
       collectPersonalizedAlerts(apiBase),
+      Promise.resolve().then(() => collectCrossDomainSynthesis()),
     ]);
 
   return {
     executiveSummary, threatMatrix, activeAlerts, spaceWeather,
     topWildfires, economicIndicators, feedHealth,
-    correlations, shortageRadar, personalizedAlerts,
+    correlations, shortageRadar, personalizedAlerts, crossDomainSynthesis,
     dataCurrentAt: now(), appVersion,
   };
 }
@@ -337,6 +340,20 @@ function readAppVersion(): string {
     const v = (globalThis as unknown as { __APP_VERSION__?: string }).__APP_VERSION__;
     return typeof v === 'string' && v.length > 0 ? v : 'dev';
   } catch { return 'dev'; }
+}
+
+export function collectCrossDomainSynthesis(): CrossDomainSynthesisInput | undefined {
+  try {
+    const report = getCachedSynthesis();
+    if (!report) return undefined;
+    return {
+      overallAssessment: report.overallAssessment,
+      escalationRisk: report.escalationRisk,
+      causalHypotheses: report.causalHypotheses,
+      recommendedActions: report.recommendedActions,
+      clusterCount: report.clusters.length,
+    };
+  } catch { return undefined; }
 }
 
 export {mapHealthStatusToFeedStatus, topScenarioSeverity} from './enhanced-brief-mappers';

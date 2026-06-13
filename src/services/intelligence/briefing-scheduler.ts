@@ -1,3 +1,6 @@
+import { isDesktopRuntime } from '../runtime';
+import { invokeTauri } from '../tauri-bridge';
+
 export interface BriefingSchedule {
   enabled: boolean;
   hour: number;       // 0-23
@@ -100,10 +103,15 @@ export class BriefingScheduler {
   private schedule: BriefingSchedule;
   private timerId: ReturnType<typeof setTimeout> | null = null;
   private onFire: () => Promise<void>;
+  private buildPdfBytes?: () => Promise<Uint8Array | null>;
 
-  constructor(onFire: () => Promise<void>) {
+  constructor(
+    onFire: () => Promise<void>,
+    buildPdfBytes?: () => Promise<Uint8Array | null>,
+  ) {
     this.schedule = loadSchedule();
     this.onFire = onFire;
+    this.buildPdfBytes = buildPdfBytes;
   }
 
   getSchedule(): BriefingSchedule { return { ...this.schedule }; }
@@ -134,11 +142,23 @@ export class BriefingScheduler {
 
   private async fire(): Promise<void> {
     try {
-      await this.onFire();
+      if (this.buildPdfBytes && isDesktopRuntime()) {
+        await this.fireTauri();
+      } else {
+        await this.onFire();
+      }
       this.schedule.lastGeneratedAt = Date.now();
       saveSchedule(this.schedule);
     } finally {
       this.reschedule();
     }
+  }
+
+  private async fireTauri(): Promise<void> {
+    const bytes = await this.buildPdfBytes!();
+    if (!bytes) return;
+    const iso = new Date().toISOString().slice(0, 10);
+    const filename = `brief-${iso}.pdf`;
+    await invokeTauri<string>('save_brief', { filename, bytes: Array.from(bytes) });
   }
 }

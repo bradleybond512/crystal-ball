@@ -924,6 +924,35 @@ fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, P
  Ok(())
 }
 
+/// Save a PDF brief to ~/Documents/Crystal Ball Briefs/<filename>.
+/// Creates the directory if absent. Restricted to the trusted window list.
+#[tauri::command]
+fn save_brief(webview: Webview, filename: String, bytes: Vec<u8>) -> Result<String, String> {
+ require_trusted_window(webview.label())?;
+ if filename.is_empty() || filename.contains('/') || filename.contains('\\') {
+  return Err("Invalid filename".into());
+ }
+ if bytes.len() > 64 * 1024 * 1024 {
+  return Err("Brief exceeds 64 MB limit".into());
+ }
+ let home = std::env::var_os("HOME")
+  .map(PathBuf::from)
+  .ok_or_else(|| "Cannot determine home directory".to_string())?;
+ let dir = home.join("Documents").join("Crystal Ball Briefs");
+ fs::create_dir_all(&dir)
+  .map_err(|e| format!("Failed to create briefs directory: {e}"))?;
+ let path = dir.join(&filename);
+ fs::write(&path, &bytes)
+  .map_err(|e| format!("Failed to write brief: {e}"))?;
+ #[cfg(unix)]
+ {
+  use std::os::unix::fs::PermissionsExt;
+  let perms = fs::Permissions::from_mode(0o644);
+  fs::set_permissions(&path, perms).ok();
+ }
+ Ok(path.display().to_string())
+}
+
 fn logs_dir_path(app: &AppHandle) -> Result<PathBuf, String> {
  let dir = app
  .path()
@@ -3135,6 +3164,7 @@ fn main() {
  read_cache_entry,
  write_cache_entry,
  delete_cache_entry,
+ save_brief,
  open_logs_folder,
  open_sidecar_log_file,
  log_frontend,

@@ -74,9 +74,13 @@ export class IntelligenceBriefingPanel extends Panel {
  title: 'Intelligence Briefing',
  });
 
- this._scheduler = new BriefingScheduler(async () => {
- await this.handleDownloadReport();
- });
+ this._scheduler = new BriefingScheduler(
+ async () => { await this.handleDownloadReport(); },
+ async () => {
+ const blob = await this.buildReportBlob();
+ return new Uint8Array(await blob.arrayBuffer());
+ },
+ );
  this._scheduler.start();
 
  this._unsub = subscribeBriefing(() => this.render());

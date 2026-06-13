@@ -111,6 +111,14 @@ export interface PersonalizedAlertEntry {
   topSeverity: number;   // 0–10
 }
 
+export interface CrossDomainSynthesisInput {
+  overallAssessment: string;
+  escalationRisk: string;
+  causalHypotheses: string[];
+  recommendedActions: string[];
+  clusterCount: number;
+}
+
 export interface EnhancedBriefingInput {
   /** Optional pre-built executive summary (e.g. from AI brief). When
    *  absent, the renderer derives one from the threat matrix. */
@@ -124,6 +132,7 @@ export interface EnhancedBriefingInput {
   correlations?: CorrelationEntry[];
   shortageRadar?: ShortageRadarEntry[];
   personalizedAlerts?: PersonalizedAlertEntry[];
+  crossDomainSynthesis?: CrossDomainSynthesisInput;
   /** Wall-clock data-current-as-of timestamp shown in the footer. */
   dataCurrentAt: number;
   /** Crystal Ball app version, shown in the footer. */
@@ -196,7 +205,8 @@ export function renderEnhancedBriefingPdf(
   y = renderFeedHealth(doc, input.feedHealth, y, onPageBreak);
   y = renderCorrelations(doc, input.correlations ?? [], y, onPageBreak);
   y = renderShortageRadar(doc, input.shortageRadar ?? [], y, onPageBreak);
-  renderPersonalizedAlerts(doc, input.personalizedAlerts ?? [], y, onPageBreak);
+  y = renderPersonalizedAlerts(doc, input.personalizedAlerts ?? [], y, onPageBreak);
+  renderCrossDomainSynthesis(doc, input.crossDomainSynthesis ?? null, y, onPageBreak);
 
   // Stamp footer + page numbers across every page.
   const pageCount = doc.getNumberOfPages();
@@ -758,6 +768,94 @@ function renderPersonalizedAlerts(
     }
     y += 2;
   }
+  return y + 8;
+}
+
+function renderCrossDomainSynthesis(
+  doc: jsPDF,
+  synthesis: CrossDomainSynthesisInput | null,
+  startY: number,
+  onPageBreak: () => number,
+): number {
+  let y = ensureRoomFor(doc, startY, 50, onPageBreak);
+  y = drawSectionHeader(doc, 'CROSS-DOMAIN THREAT SYNTHESIS', y);
+  if (!synthesis) {
+    return drawEmptyLine(doc, 'Synthesis data unavailable — no active cross-domain situations detected.', y) + 14;
+  }
+
+  // Overall assessment paragraph.
+  if (synthesis.overallAssessment) {
+    y = ensureRoomFor(doc, y, 14, onPageBreak);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(20, 20, 20);
+    doc.text('Assessment:', MARGIN, y);
+    y += 14;
+    y = renderWrappedText(doc, synthesis.overallAssessment, y, onPageBreak);
+    y += 6;
+  }
+
+  // Escalation risk badge.
+  const riskColors: Record<string, [number, number, number]> = {
+    critical: [194, 0, 0], high: [217, 86, 0], moderate: [186, 137, 0], low: [70, 113, 70],
+  };
+  const [rr, rg, rb] = riskColors[synthesis.escalationRisk.toLowerCase()] ?? [80, 80, 80];
+  y = ensureRoomFor(doc, y, 14, onPageBreak);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(20, 20, 20);
+  doc.text(`Escalation Risk: `, MARGIN, y);
+  doc.setTextColor(rr, rg, rb);
+  doc.text(synthesis.escalationRisk.toUpperCase(), MARGIN + 100, y);
+  doc.setTextColor(20, 20, 20);
+  doc.text(`  |  Clusters: ${synthesis.clusterCount}`, MARGIN + 160, y);
+  y += 16;
+
+  // Causal hypotheses list.
+  if (synthesis.causalHypotheses.length > 0) {
+    y = ensureRoomFor(doc, y, 14, onPageBreak);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(20, 20, 20);
+    doc.text('Causal Hypotheses:', MARGIN, y);
+    y += 14;
+    for (const hyp of synthesis.causalHypotheses.slice(0, 4)) {
+      const wrapped = doc.splitTextToSize(`• ${hyp}`, CONTENT_WIDTH) as string[];
+      for (const wline of wrapped) {
+        y = ensureRoomFor(doc, y, 13, onPageBreak);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(40, 40, 40);
+        doc.text(wline, MARGIN, y);
+        y += 13;
+      }
+      y += 2;
+    }
+    y += 4;
+  }
+
+  // Recommended actions list.
+  if (synthesis.recommendedActions.length > 0) {
+    y = ensureRoomFor(doc, y, 14, onPageBreak);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(20, 20, 20);
+    doc.text('Recommended Actions:', MARGIN, y);
+    y += 14;
+    for (const action of synthesis.recommendedActions.slice(0, 5)) {
+      const wrapped = doc.splitTextToSize(`→ ${action}`, CONTENT_WIDTH) as string[];
+      for (const wline of wrapped) {
+        y = ensureRoomFor(doc, y, 13, onPageBreak);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(40, 40, 40);
+        doc.text(wline, MARGIN, y);
+        y += 13;
+      }
+      y += 2;
+    }
+  }
+
   return y + 8;
 }
 

@@ -40,7 +40,6 @@ Set these before enabling strict relay auth.
 | `VITE_WS_RELAY_URL` | Browser (local dev) | none | No | Localhost fallback path for direct browser calls in development only. |
 | `RELAY_SHARED_SECRET` | Railway + Vercel | empty | Yes in production | Shared secret for non-public relay routes. |
 | `RELAY_AUTH_HEADER` | Railway + Vercel | `x-relay-key` | No (but recommended explicit) | Header name carrying relay secret. |
-| `ALLOW_UNAUTHENTICATED_RELAY` | Railway | `false` | No | Emergency override. If `true`, production can start without secret. Keep `false`. |
 | `ALLOW_VERCEL_PREVIEW_ORIGINS` | Railway | `false` | No | If `true`, allows `*.vercel.app` origins in relay CORS checks. |
 
 ## Relay-Adjacent Feature Flags
@@ -108,7 +107,6 @@ These are safe starting points for a busy relay:
 RELAY_SHARED_SECRET=<strong-random-secret>
 RELAY_AUTH_HEADER=x-relay-key
 WS_RELAY_URL=https://<your-railway-relay>.up.railway.app
-ALLOW_UNAUTHENTICATED_RELAY=false
 
 # OpenSky cache/cardinality
 OPENSKY_CACHE_MAX_ENTRIES=256

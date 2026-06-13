@@ -1880,7 +1880,7 @@ export class PanelLayoutManager implements AppModule {
  const sync = () => bridgeSavedPlacesToProfile(getSavedPlaces().map((p) => adaptExistingSavedPlace(p)));
  sync();
  if (typeof subscribeSavedPlaces === 'function') subscribeSavedPlaces(sync);
- });
+ }).catch((err) => { console.error('[boot] saved-places bridge failed:', err); });
  // Periodic provider-snapshot bridge so Command Center's "Provider
  // Stress" + System Diagnostic's redundancy view stay current.
  // All recurring loops here go through registerRecurringLoop() so
@@ -1905,7 +1905,7 @@ export class PanelLayoutManager implements AppModule {
  30_000,
  { priority: 'normal', runImmediately: true },
  );
- });
+ }).catch((err) => { console.error('[boot] provider bridge failed:', err); });
  // 60 s degradation alerting — compare consecutive system-health snapshots
  // and route transitions through the notification trace registry.
  void Promise.all([
@@ -2031,7 +2031,7 @@ export class PanelLayoutManager implements AppModule {
  }).catch((error) => {
  console.warn('[quality-debt] failed to wire collector:', error);
  });
- });
+ }).catch((err) => { console.error('[boot] bridge load failed:', err); });
  this.ctx.panels['cascade-simulator'] = new CascadeSimulatorPanel();
  this.ctx.panels['emergency-broadcast'] = new EmergencyBroadcastPanel();
  this.ctx.panels['satellite-change'] = new SatelliteChangePanel();

@@ -16478,6 +16478,12 @@ export async function createLocalApiServer(options = {}) {
      return;
    }
    if (req.method === 'POST') {
+     const authHeader = req.headers['authorization'] || '';
+     if (!isValidToken(authHeader)) {
+       res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'Unauthorized' }));
+       return;
+     }
      let bodyText = '';
      try {
        const _rb1 = await readBody(req); bodyText = _rb1 ? _rb1.toString('utf-8') : '';
@@ -16560,6 +16566,12 @@ export async function createLocalApiServer(options = {}) {
      return;
    }
    if (req.method === 'POST') {
+     const authHeader = req.headers['authorization'] || '';
+     if (!isValidToken(authHeader)) {
+       res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'Unauthorized' }));
+       return;
+     }
      let bodyText = '';
      try { const _rb2 = await readBody(req); bodyText = _rb2 ? _rb2.toString('utf-8') : ''; } catch { bodyText = ''; }
      let parsed = null;
@@ -16589,6 +16601,12 @@ export async function createLocalApiServer(options = {}) {
      return;
    }
    if (req.method === 'POST') {
+     const authHeader = req.headers['authorization'] || '';
+     if (!isValidToken(authHeader)) {
+       res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'Unauthorized' }));
+       return;
+     }
      let bodyText = '';
      try { const _rb2 = await readBody(req); bodyText = _rb2 ? _rb2.toString('utf-8') : ''; } catch { bodyText = ''; }
      let parsed = null;
@@ -16616,6 +16634,12 @@ export async function createLocalApiServer(options = {}) {
      res.end(JSON.stringify({ error: 'method not allowed' }));
      return;
    }
+   const authHeader = req.headers['authorization'] || '';
+   if (!isValidToken(authHeader)) {
+     res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: 'Unauthorized' }));
+     return;
+   }
    let bodyText = '';
    try { const _rb3 = await readBody(req); bodyText = _rb3 ? _rb3.toString('utf-8') : ''; } catch { bodyText = ''; }
    let parsed = null;
@@ -16632,6 +16656,12 @@ export async function createLocalApiServer(options = {}) {
  }
  const ruleDetailMatch = requestUrl.pathname.match(/^\/api\/intelligence\/rules\/([^/]+)$/);
  if (ruleDetailMatch && req.method === 'DELETE') {
+   const authHeader = req.headers['authorization'] || '';
+   if (!isValidToken(authHeader)) {
+     res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: 'Unauthorized' }));
+     return;
+   }
    const removed = deleteRuleSidecar(ruleDetailMatch[1]);
    res.writeHead(removed ? 200 : 404,
      { 'content-type': 'application/json', ...makeCorsHeaders(req) });
@@ -16715,6 +16745,12 @@ export async function createLocalApiServer(options = {}) {
       return sendJson({ watchboards: getWatchboards() });
     }
     if (req.method === 'POST') {
+      const authHeader = req.headers['authorization'] || '';
+      if (!isValidToken(authHeader)) {
+        res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       const raw = await readBody(req);
       const body = raw ? JSON.parse(raw.toString()) : null;
       if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
@@ -16735,6 +16771,12 @@ export async function createLocalApiServer(options = {}) {
       return sendJson({ templates: getWatchboardTemplates() });
     }
     if (req.method === 'PUT') {
+      const authHeader = req.headers['authorization'] || '';
+      if (!isValidToken(authHeader)) {
+        res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       const raw = await readBody(req);
       const body = raw ? JSON.parse(raw.toString()) : null;
       if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
@@ -16743,6 +16785,12 @@ export async function createLocalApiServer(options = {}) {
       return sendJson({ watchboard: updated });
     }
     if (req.method === 'DELETE') {
+      const authHeader = req.headers['authorization'] || '';
+      if (!isValidToken(authHeader)) {
+        res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       const deleted = deleteWatchboard(wbId);
       if (!deleted) return sendJson({ error: 'not found' }, 404);
       return sendJson({ ok: true });

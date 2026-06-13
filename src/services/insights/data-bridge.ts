@@ -15,6 +15,7 @@ import {
   getRecentEvents,
   setActiveSituation,
   setActiveActionBrief,
+  getActiveSituation,
   setProviderSnapshots,
   setPersonalProfile,
   getPersonalProfile,
@@ -177,11 +178,21 @@ export function bridgeEarthquakeToInsights(
   const places = options.savedPlaces ?? getPersonalProfile().savedPlaces;
 
   const events: IncomingEvent[] = quakes.map((q) => quakeToEvent(q));
-  // Append rather than overwrite so a prior weather bridge isn't clobbered.
-  setRecentEvents([...getRecentEvents(), ...events]);
+  // Replace the earthquake slice (not append) so repeated refreshes with the
+  // same snapshot don't accumulate duplicates, and quakes that fall out of the
+  // feed don't linger. Non-earthquake events from other bridges are preserved.
+  const nonQuake = getRecentEvents().filter((e) => e.domain !== 'earthquake');
+  setRecentEvents([...nonQuake, ...events]);
 
   const picked = pickActiveQuake(quakes, places);
   if (!picked) {
+    // If a prior earthquake left an active situation/brief but the current
+    // snapshot has no relevant quake, clear it so the Command Center stops
+    // rendering a stale earthquake brief. Don't touch a non-earthquake
+    // situation set by another bridge.
+    if (getActiveSituation()?.category === 'earthquake') {
+      setActiveSituation(undefined); // also clears the injected brief
+    }
     if (events.length === 0) {
       log('info', 'bridgeEarthquakeToInsights', { quakesIn: quakes.length, eventsBridged: 0, hasSituation: false });
     }

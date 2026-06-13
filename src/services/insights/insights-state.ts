@@ -20,6 +20,7 @@ import type { ProviderRedundancyReport, ProviderSnapshot } from '../diagnostics/
 import { assessProviderRedundancy } from '../diagnostics/provider-redundancy';
 
 let activeSituation: SituationDescriptor | undefined;
+let activeActionBrief: ActionBrief | undefined;
 let personalProfile: PersonalProfile = {
   savedPlaces: [],
   watchedEntities: [],
@@ -34,13 +35,24 @@ let providerSnapshots: ProviderSnapshot[] = [];
 
 export function setActiveSituation(situation: SituationDescriptor | undefined): void {
   activeSituation = situation;
+  // A new situation invalidates any previously injected brief so they don't
+  // permanently mask each other.
+  activeActionBrief = undefined;
 }
 
 export function getActiveSituation(): SituationDescriptor | undefined {
   return activeSituation;
 }
 
+/** Inject a pre-built brief (e.g. from a domain-specific guidance function
+ *  like earthquake-action-guidance) that overrides the playbook-derived one.
+ *  Call AFTER setActiveSituation, which clears any prior injection. */
+export function setActiveActionBrief(brief: ActionBrief | undefined): void {
+  activeActionBrief = brief;
+}
+
 export function getActiveActionBrief(): ActionBrief | undefined {
+  if (activeActionBrief) return activeActionBrief;
   if (!activeSituation) return undefined;
   return buildActionBrief(activeSituation);
 }
@@ -85,6 +97,7 @@ export function getProviderRedundancyReport(): ProviderRedundancyReport {
 
 export function resetInsightsState(): void {
   activeSituation = undefined;
+  activeActionBrief = undefined;
   personalProfile = {
     savedPlaces: [],
     watchedEntities: [],

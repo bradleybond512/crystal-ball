@@ -4,6 +4,35 @@ All notable changes to Crystal Ball are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Phase 4B — Epistemic intelligence wiring**: bias scan cadence, the epistemic
+  calibration loop (outcome-graded, wired to boot), and the epistemic bridge
+  connecting meta-confidence, counterfactuals, and the bias detector to the live
+  data path (PRs #1131, #1132, #1133).
+- **Phase 3 (start) — Feed resilience P0**: rolled `fetchWithFallback` to 5 P0
+  feeds (GDACS, NHC, disease, tsunami, FIRMS), added the BDI live feed and the
+  earthquake mission bridge, and completed the daily PDF brief (PRs #1140, #1139,
+  #1143, #1142).
+
+### Performance
+
+- **NWS in-flight dedupe** and **poweroutage cache TTL**: collapse concurrent
+  duplicate NWS requests and bound poweroutage payload lifetime (PRs #1129, #1130).
+
+### Fixed
+
+- **Performance sprint**: panel lifecycle teardown on `destroy()` and the Groq
+  egress-disclosure gate (scoped to desktop, honors local-only in the sidecar)
+  (PRs #1135, #1136).
+- **Tooling**: ESLint scope fix and sidecar routes classification (PRs #1145, #1146).
+
+### Security
+
+- **Security sprint (2026-06-12)**: Privacy Fix 1 — secret-in-query tripwire that
+  warns when an API key would be sent in a query string to a non-allowlisted host
+  — and removal of the `RELAY_ALLOW_ANON` anonymous-relay bypass (PRs #1138, #1144).
+
 ## [2.25.143] - 2026-06-08
 
 ### Fixed

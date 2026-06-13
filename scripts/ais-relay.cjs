@@ -62,7 +62,6 @@ const IS_PRODUCTION_RELAY = process.env.NODE_ENV === 'production'
   || !!process.env.RAILWAY_ENVIRONMENT
   || !!process.env.RAILWAY_PROJECT_ID
   || !!process.env.RAILWAY_STATIC_URL;
-const ALLOW_UNAUTHENTICATED_RELAY = process.env.ALLOW_UNAUTHENTICATED_RELAY === 'true' && !IS_PRODUCTION_RELAY;
 const RELAY_RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.RELAY_RATE_LIMIT_WINDOW_MS || 60000));
 const RELAY_RATE_LIMIT_MAX = Number.isFinite(Number(process.env.RELAY_RATE_LIMIT_MAX))
   ? Number(process.env.RELAY_RATE_LIMIT_MAX) : 1200;
@@ -82,15 +81,10 @@ const OREF_ENABLED = !!OREF_PROXY_AUTH;
 const RELAY_OREF_RATE_LIMIT_MAX = Number.isFinite(Number(process.env.RELAY_OREF_RATE_LIMIT_MAX))
   ? Number(process.env.RELAY_OREF_RATE_LIMIT_MAX) : 600;
 
-if (IS_PRODUCTION_RELAY && !RELAY_SHARED_SECRET && !ALLOW_UNAUTHENTICATED_RELAY) {
-  console.error('[Relay] Error: RELAY_SHARED_SECRET is required in production');
+if (!RELAY_SHARED_SECRET) {
+  console.error('[Relay] Error: RELAY_SHARED_SECRET is required');
   console.error('[Relay] Set RELAY_SHARED_SECRET on Railway and Vercel to secure relay endpoints');
-  console.error('[Relay] To bypass temporarily, set ALLOW_UNAUTHENTICATED_RELAY=true (non-production only)');
   process.exit(1);
-}
-if (ALLOW_UNAUTHENTICATED_RELAY) {
-  console.warn('[Relay] WARNING: ALLOW_UNAUTHENTICATED_RELAY is enabled — all auth checks are bypassed');
-  console.warn('[Relay] This flag is blocked in production (IS_PRODUCTION_RELAY=false required)');
 }
 
 let upstreamSocket = null;
@@ -626,7 +620,6 @@ function getRelaySecretFromRequest(req) {
 }
 
 function isAuthorizedRequest(req) {
-  if (!RELAY_SHARED_SECRET) return true;
   const provided = getRelaySecretFromRequest(req);
   if (!provided) return false;
   return safeTokenEquals(provided, RELAY_SHARED_SECRET);
@@ -2752,7 +2745,6 @@ const server = http.createServer(async (req, res) => {
  auth: {
  sharedSecretEnabled: !!RELAY_SHARED_SECRET,
  authHeader: RELAY_AUTH_HEADER,
- allowUnauthenticated: ALLOW_UNAUTHENTICATED_RELAY,
  allowVercelPreviewOrigins: ALLOW_VERCEL_PREVIEW_ORIGINS,
  },
  rateLimit: {

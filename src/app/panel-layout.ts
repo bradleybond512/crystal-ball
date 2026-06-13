@@ -1688,8 +1688,8 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();
  this.ctx.panels['repair-recommendations'] = new RepairRecommendationsPanel();
  this.ctx.panels['mission-ledger-bridge'] = new MissionLedgerBridgePanel();
- try { getMissionLedgerBridge().connect(); } catch { /* non-critical */ }
  try { getMissionOutcomeGrader().connect(); } catch { /* non-critical */ }
+ try { getMissionLedgerBridge().connect(); } catch { /* non-critical */ }
  this.ctx.panels['counterfactual-replay'] = new CounterfactualReplayPanel();
  this.ctx.panels['counterfactual-reasoning'] = new CounterfactualReasoningPanel();
  this.ctx.panels['situation-priority-queue'] = new SituationPriorityQueuePanel();

@@ -81,7 +81,7 @@ const DOMAIN_MAP: Record<MissionDomain, string> = {
   food_commodity_shortage: 'food',
   energy_fuel_stress: 'energy',
   travel_disruption: 'travel',
-  market_portfolio_risk: 'markets',
+  market_portfolio_risk: 'finance',
   local_infrastructure: 'infra',
 };
 

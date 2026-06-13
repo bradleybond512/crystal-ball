@@ -518,6 +518,7 @@ import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import { initModeTransitionCards } from '@/services/mode-transition-card';
 import { initPanelCorrelation } from '@/services/panel-correlation';
 import { getPrimarySavedPlace, getSavedPlace, getSavedPlaces, subscribeSavedPlaces } from '@/services/saved-places';
+import { getSavedPlacesFilterService } from '@/services/intelligence/saved-places-filter';
 import { DataCenterReadinessPanel } from '@/components/DataCenterReadinessPanel';
 import { DataCenterPinnedStrip } from '@/components/DataCenterPinnedStrip';
 import { setDatacenterSite } from '@/services/datacenter/datacenter-state';
@@ -2391,6 +2392,36 @@ export class PanelLayoutManager implements AppModule {
  document.dispatchEvent(new CustomEvent('cb:toggle-gods-vision'));
  }
  });
+
+ // Saved-places proximity filter toggle
+ const syncFilterBtn = () => {
+ const btn = document.getElementById('savedPlacesFilterBtn');
+ if (!btn) return;
+ const ctx = getSavedPlacesFilterService().getContext();
+ if (ctx.isActive && ctx.activePlaceName) {
+ btn.textContent = `📍 ${ctx.activePlaceName}`;
+ btn.classList.add('mac-ghost-mode-active');
+ } else {
+ btn.textContent = '📍 Proximity: OFF';
+ btn.classList.remove('mac-ghost-mode-active');
+ }
+ };
+ document.addEventListener('click', (e) => {
+ const target = (e.target as HTMLElement).closest('#savedPlacesFilterBtn');
+ if (!target) return;
+ const svc = getSavedPlacesFilterService();
+ const ctx = svc.getContext();
+ if (ctx.isActive) {
+ svc.deactivate();
+ } else {
+ const primary = getPrimarySavedPlace();
+ const all = getSavedPlaces();
+ const place = primary ?? all[0];
+ if (place) svc.activate(place.id);
+ }
+ });
+ getSavedPlacesFilterService().subscribe(syncFilterBtn);
+ syncFilterBtn();
  document.addEventListener('wm:toggle-ghost-mode', () => {
  toggleGhostMode();
  });

@@ -1,5 +1,6 @@
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
+import { getSavedPlacesFilterService, isNearActivePlace } from '@/services/intelligence/saved-places-filter';
 
 interface StateFloodEntry {
   state: string;
@@ -51,6 +52,7 @@ export class FloodMonitorPanel extends Panel {
   private gaugeData: GaugeData | null = null;
   private warningData: WarningData | null = null;
   private lastUpdated: Date | null = null;
+  private filterUnsub: (() => void) | null = null;
 
   constructor() {
     super({
@@ -61,6 +63,13 @@ export class FloodMonitorPanel extends Panel {
       infoTooltip: 'USGS stream gauge readings at flood stage + NWS active flood watches and warnings.',
     });
     this.showLoading('Fetching flood data...');
+    this.filterUnsub = getSavedPlacesFilterService().subscribe(() => this.render());
+  }
+
+  public destroy(): void {
+    super.destroy();
+    this.filterUnsub?.();
+    this.filterUnsub = null;
   }
 
   public updateGauges(data: GaugeData): void {
@@ -89,8 +98,20 @@ export class FloodMonitorPanel extends Panel {
       return;
     }
 
+    const ctx = getSavedPlacesFilterService().getContext();
+    const allTop10 = this.gaugeData?.top10 ?? [];
+    const filteredTop10 = ctx.isActive
+      ? allTop10.filter(g => g.lat != null && g.lon != null ? isNearActivePlace(g.lat!, g.lon!) : true)
+      : allTop10;
+    const hiddenGauges = allTop10.length - filteredTop10.length;
+
+    const filterBanner = ctx.isActive
+      ? `<div class="spf-proximity-banner">📍 ${escapeHtml(ctx.activePlaceName ?? '')} · ${ctx.radiusKm} km · ${hiddenGauges > 0 ? `${hiddenGauges} gauges hidden` : 'showing all'}</div>`
+      : '';
+
     const updatedStr = this.lastUpdated ? timeAgo(this.lastUpdated) : 'never';
     const sections: string[] = [];
+    if (filterBanner) sections.push(filterBanner);
 
     // Summary row
     const gaugeCount = this.gaugeData?.atFloodStage ?? '—';
@@ -134,9 +155,9 @@ export class FloodMonitorPanel extends Panel {
       sections.push('<div class="panel-empty flood-empty">No active NWS flood alerts.</div>');
     }
 
-    // Top 10 gauges
-    if (this.gaugeData && this.gaugeData.top10.length > 0) {
-      const rows = this.gaugeData.top10.map(g => {
+    // Top 10 gauges (proximity-filtered when filter is active)
+    if (this.gaugeData && filteredTop10.length > 0) {
+      const rows = filteredTop10.map(g => {
         const stageClass = stageRowClass(g.stage);
         return `<tr class="${stageClass}">
           <td class="flood-gauge-name">${escapeHtml(g.siteName)}</td>
@@ -155,6 +176,8 @@ export class FloodMonitorPanel extends Panel {
           </table>
         </div>
       `);
+    } else if (this.gaugeData && filteredTop10.length === 0 && allTop10.length > 0) {
+      sections.push(`<div class="panel-empty flood-empty">No flood-stage gauges within ${ctx.radiusKm} km of ${escapeHtml(ctx.activePlaceName ?? 'saved place')}.</div>`);
     } else if (this.gaugeData && !this.gaugeData.degraded) {
       sections.push('<div class="panel-empty flood-empty">No gauges currently at flood stage.</div>');
     }

@@ -806,3 +806,14 @@
 .neo-prob { color: #f97316; }
 .neo-row-sub { font-size: 10px; color: var(--text-faint, #888); margin-top: 1px; }
 .neo-degraded { padding: 4px 8px; font-size: 10px; color: #ffb74d; }
+
+/* Saved Places proximity filter banner (shown inside panels when filter is active) */
+.spf-proximity-banner {
+  padding: 4px 8px;
+  font-size: 10px;
+  background: rgba(74, 158, 255, 0.1);
+  border-left: 2px solid #4a9eff;
+  border-radius: 2px;
+  color: #4a9eff;
+  margin-bottom: 6px;
+}

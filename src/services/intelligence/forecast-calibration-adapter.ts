@@ -160,8 +160,8 @@ function lazyLoadIdb(): void {
     _getMemory = mod.getMemory;
     _putMemory = mod.putMemory;
   } catch {
-    _getMemory = async () => null;
-    _putMemory = async () => undefined;
+    _getMemory = () => Promise.resolve(null);
+    _putMemory = () => Promise.resolve();
   }
 }
 
@@ -191,7 +191,7 @@ function bootstrapFromIdb(): void {
 function isCurveShape(v: unknown): v is ReliabilityCurve {
   if (!v || typeof v !== 'object') return false;
   const c = v as Record<string, unknown>;
-  return Array.isArray(c['bins']) && typeof c['sampleSize'] === 'number';
+  return Array.isArray(c.bins) && typeof c.sampleSize === 'number';
 }
 
 // ── Curve rebuild ─────────────────────────────────────────────────────────────
@@ -267,13 +267,9 @@ export function getRecalibrator(domain?: FactDomain): (p: number) => Recalibrati
   if (domain !== undefined) {
     curve = _curveCache.get(domain);
   }
-  if (curve === undefined) {
-    curve = _curveCache.get('global');
-  }
-  if (curve === undefined) {
-    // Identity: no data yet.
-    curve = identityCurve(domain ?? 'global');
-  }
+  curve ??= _curveCache.get('global');
+  // Identity: no data yet.
+  curve ??= identityCurve(domain ?? 'global');
 
   // Capture curve at closure-creation time.
   const capturedCurve = curve;
@@ -290,8 +286,8 @@ export function _configureAdapterForTests(opts: {
   getMemoryFn?: <T>(key: string) => Promise<T | null>;
   putMemoryFn?: <T>(key: string, value: T) => Promise<void>;
 }): void {
-  _getMemory = opts.getMemoryFn ?? (async () => null);
-  _putMemory = opts.putMemoryFn ?? (async () => undefined);
+  _getMemory = opts.getMemoryFn ?? (() => Promise.resolve(null));
+  _putMemory = opts.putMemoryFn ?? (() => Promise.resolve());
   _bootstrapped = true; // Skip the async bootstrap in tests.
 }
 

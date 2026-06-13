@@ -43,8 +43,8 @@ const NEURAL_DIM = 768; // nomic-embed-text default
 function djb2(token: string, buckets: number): number {
   let h = 5381;
   for (let i = 0; i < token.length; i++) {
-    // eslint-disable-next-line no-bitwise
-    h = ((h << 5) + h + token.charCodeAt(i)) >>> 0;
+     
+    h = ((h << 5) + h + (token.codePointAt(i) ?? 0)) >>> 0;
   }
   return h % buckets;
 }
@@ -62,7 +62,7 @@ function tokenize(text: string): string[] {
  */
 function l2NormalizeInPlace(vec: Float32Array): void {
   let norm = 0;
-  for (let i = 0; i < vec.length; i++) norm += (vec[i] ?? 0) * (vec[i] ?? 0);
+  for (const v of vec) { const x = v ?? 0; norm += x * x; }
   norm = Math.sqrt(norm);
   if (norm === 0) return;
   for (let i = 0; i < vec.length; i++) { const v = vec[i] ?? 0; vec[i] = v / norm; }

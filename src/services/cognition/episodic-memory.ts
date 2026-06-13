@@ -50,8 +50,8 @@ function lazyLoadIdb(): void {
     _putMemory = mod.putMemory;
   } catch {
     // In test environments without IDB, fall back to no-op implementations.
-    _getMemory = async () => null;
-    _putMemory = async () => undefined;
+    _getMemory = () => Promise.resolve(null);
+    _putMemory = () => Promise.resolve();
   }
 }
 
@@ -107,7 +107,7 @@ export interface EpisodicMemoryOptions {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'crystalball-cognition-episodic-v1';
-const MAX_EPISODES = 2_000;
+const MAX_EPISODES = 2000;
 const DEFAULT_K = 5;
 const MIN_SIM = 0.45;
 const MIN_RECALLS_FOR_ANALOG = 3;
@@ -155,10 +155,10 @@ function applyLoaded(arr: Episode[] | null): void {
 function isValidEpisode(ep: unknown): ep is Episode {
   if (!ep || typeof ep !== 'object') return false;
   const e = ep as Record<string, unknown>;
-  return typeof e['id'] === 'string' &&
-    typeof e['summary'] === 'string' &&
-    typeof e['createdAt'] === 'number' &&
-    Array.isArray(e['vector']);
+  return typeof e.id === 'string' &&
+    typeof e.summary === 'string' &&
+    typeof e.createdAt === 'number' &&
+    Array.isArray(e.vector);
 }
 
 function load(): void {
@@ -290,7 +290,7 @@ export async function recordEpisode(
     ...input,
     id: genId(nowMs),
     summary,
-    vector: Array.from(embResult.vector),
+    vector: [...embResult.vector],
     tier: embResult.tier,
   };
 
@@ -313,15 +313,15 @@ export async function recordEpisode(
  * Mark an episode as resolved with an outcome and optional note.
  * Suppressed when Ghost Mode is active.
  */
-export async function resolveEpisode(
+export function resolveEpisode(
   id: string,
   outcome: Episode['outcome'],
   note?: string,
 ): Promise<void> {
-  if (isGhostMode()) return;
+  if (isGhostMode()) return Promise.resolve();
   load();
   const ep = episodes.find(e => e.id === id);
-  if (!ep) return;
+  if (!ep) return Promise.resolve();
   ep.resolvedAt = _nowFn();
   ep.outcome = outcome;
   if (note !== undefined) ep.outcomeNote = note.slice(0, 280);
@@ -330,7 +330,7 @@ export async function resolveEpisode(
   if (ep.tier === 'hashed') {
     void maybeUpgradeEmbedding('hashed', ep.summary).then(upgraded => {
       if (upgraded && ep.tier === 'hashed') {
-        ep.vector = Array.from(upgraded.vector);
+        ep.vector = [...upgraded.vector];
         ep.tier = upgraded.tier;
         save();
       }
@@ -338,6 +338,7 @@ export async function resolveEpisode(
   }
 
   save();
+  return Promise.resolve();
 }
 
 /**
@@ -474,9 +475,9 @@ export function analogScoreFor(recalls: readonly Recall[]): number | null {
   let totalWeight = 0;
   for (const r of qualified) {
     const weight = r.similarity;
-    const materialized = r.episode.outcome === 'materialized' ? 1
-      : r.episode.outcome === 'partial' ? 0.5
-      : 0; // fizzled | unknown → 0
+    let materialized = 0; // fizzled | unknown → 0
+    if (r.episode.outcome === 'materialized') materialized = 1;
+    else if (r.episode.outcome === 'partial') materialized = 0.5;
     weightedSum += weight * materialized;
     totalWeight += weight;
   }
@@ -513,7 +514,7 @@ export function getEpisodeById(id: string): Episode | null {
  * first to clear any accumulated state.
  */
 export function configureForTests(opts: EpisodicMemoryOptions): void {
-  _storage = opts.storage !== undefined ? opts.storage : undefined;
+  _storage = opts.storage === undefined ? undefined : opts.storage;
   _getMemoryOverride = opts.getMemoryFn ?? null;
   _putMemoryOverride = opts.putMemoryFn ?? null;
   _nowFn = opts.now ?? Date.now;
@@ -557,7 +558,7 @@ export function getCachedAnalogScore(signature: string): number | null {
  * Called asynchronously from analyst-loop after each cycle.
  */
 export async function updateAnalogCache(
-  hypotheses: Array<{ statement: string; id: string }>,
+  hypotheses: { statement: string; id: string }[],
   getSignature: (h: { statement: string; id: string }) => string,
 ): Promise<void> {
   for (const h of hypotheses) {

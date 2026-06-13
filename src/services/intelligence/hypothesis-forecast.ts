@@ -2,6 +2,9 @@ import type { Hypothesis } from '@/services/analyst-loop';
 import type { PCIScore } from './predictive-crisis-index';
 import { getProviderSnapshots } from '@/services/insights/insights-state';
 import { assessProviderRedundancy } from '@/services/diagnostics/provider-redundancy';
+// getBoostMultiplier is deprecated but deliberately retained for the legacy
+// pre-recalibration path below until it is fully superseded by getRecalibrator.
+// eslint-disable-next-line sonarjs/deprecation
 import { getBoostMultiplier, getRecalibrator } from './forecast-calibration-adapter';
 import { getCachedAnalogScore } from '@/services/cognition/episodic-memory';
 import { signatureFor } from '@/services/hypothesis-feedback';
@@ -41,6 +44,7 @@ export function forecastHypothesis(
   providerMultiplier = 1,
 ): HypothesisForecast {
   const baseConfidence = hypothesis.confidence;
+  // eslint-disable-next-line sonarjs/deprecation -- legacy path, superseded by recalibration below
   const calibrationMultiplier = getBoostMultiplier();
   const pciBoost = pci !== null && pci.index > 60 ? (pci.index - 60) / 200 : 0;
   const analogBoost = analogScore === null ? 0 : analogScore * 0.1;

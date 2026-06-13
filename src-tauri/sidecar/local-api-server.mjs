@@ -8152,13 +8152,15 @@ async function dispatch(requestUrl, req, routes, context) {
         const rwItems = Array.isArray(rwData?.data) ? rwData.data : [];
         events = rwItems.map((item) => ({
           id: `rw-${item.id ?? ''}`,
-          title: item.fields?.name ?? 'Disaster',
-          description: '',
+          eventType: (item.fields?.type?.[0]?.name ?? 'OTHER').toUpperCase().slice(0, 10),
+          name: item.fields?.name ?? 'Disaster',
           alertLevel: 'Green',
-          type: item.fields?.type?.[0]?.name ?? 'disaster',
-          lat: null, lon: null,
+          score: 0,
           country: Array.isArray(item.fields?.country) ? item.fields.country.map((c) => c.name ?? '').join(', ') : '',
-          pubDate: item.fields?.date?.created ?? null,
+          coordinates: null,
+          fromDate: item.fields?.date?.created ?? '',
+          severity: '',
+          url: item.href ?? '',
         }));
         feedSource = 'reliefweb.int';
         degraded = true;
@@ -8403,8 +8405,8 @@ async function dispatch(requestUrl, req, routes, context) {
       trackFailure('nhc-tropical', error);
       return json([], 200);
     }
-    // Primary (NHC format): parse activeStorms array
-    if (tcResult.source === 'primary') {
+    // Primary or cached (NHC format): parse activeStorms array
+    if (tcResult.source === 'primary' || tcResult.source === 'cached') {
       const list = Array.isArray(tcResult.data?.activeStorms) ? tcResult.data.activeStorms : [];
       const out = list.map((s) => {
         const lat = parseFloat(String(s.latitudeNumeric ?? s.latitude ?? ''));
@@ -8428,7 +8430,7 @@ async function dispatch(requestUrl, req, routes, context) {
           advisoryNumber: String(s.advNum ?? ''),
           publicAdvisoryUrl: typeof s.publicAdvisory === 'string' ? s.publicAdvisory : undefined,
           forecastTrackUrl: typeof s.forecastTrack === 'string' ? s.forecastTrack : undefined,
-          degraded: false, source: 'nhc.noaa.gov',
+          degraded: tcResult.source === 'cached', source: 'nhc.noaa.gov',
         };
       }).filter(Boolean);
       return json(out);

@@ -651,7 +651,18 @@ const REDACTED = '[redacted]';
 const SENSITIVE_KEY_PATTERN =
   /(?:api[_-]?key|secret|token|password|bearer|cookie|session|email|phone|ssn|account[_-]?number|credit[_-]?card)/i;
 
-const COORDINATE_KEY_PATTERN = /^(?:lat|lng|long|latitude|longitude)$/i;
+// Matches exact coordinate keys AND camelCase compound suffixes (savedPlaceLat,
+// homeLng, etc.) plus GeoJSON-adjacent keys (coord, coordinates, position, gps, geo).
+const COORDINATE_KEY_PATTERN =
+  /^(?:lat|lng|long|latitude|longitude|coord|coordinates|position|gps|geo)$|(?:lat|lng|lon(?:g)?)$/i;
+
+// Recursively blur numeric coordinates inside a GeoJSON coordinates array
+// (e.g. [lng, lat] or [[lng, lat], ...]).  Non-number elements pass through.
+function blurGeoJsonCoords(v: unknown): unknown {
+  if (typeof v === 'number') return Math.round(v * 10) / 10;
+  if (Array.isArray(v)) return v.map(blurGeoJsonCoords);
+  return v;
+}
 
 /** Strip API keys, bearer tokens, e-mails, phone numbers, exact lat/lng,
  *  and free-text user messages from a structural detail object. The
@@ -665,10 +676,17 @@ export function redactDetail(value: unknown): unknown {
     for (const [key, val] of Object.entries(source)) {
       if (SENSITIVE_KEY_PATTERN.test(key)) {
         out[key] = REDACTED;
-      } else if (COORDINATE_KEY_PATTERN.test(key) && typeof val === 'number') {
-        // Round to ~10 km grid so the bundle reflects "user is near here"
-        // without exact location.
-        out[key] = Math.round(val * 10) / 10;
+      } else if (COORDINATE_KEY_PATTERN.test(key)) {
+        if (typeof val === 'number') {
+          // Round to ~10 km grid so the bundle reflects "user is near here"
+          // without exact location.
+          out[key] = Math.round(val * 10) / 10;
+        } else if (Array.isArray(val)) {
+          // GeoJSON coordinates array — blur all numeric members recursively.
+          out[key] = blurGeoJsonCoords(val);
+        } else {
+          out[key] = redactDetail(val);
+        }
       } else {
         out[key] = redactDetail(val);
       }

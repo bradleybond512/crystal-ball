@@ -173,6 +173,40 @@ test('redactDetail: lat/lng coordinates are coarsened to ~10 km grid', () => {
   assert.deepEqual(out, { lat: 41.6, lng: -86.7 });
 });
 
+test('redactDetail: camelCase compound coordinate keys are blurred', () => {
+  const out = redactDetail({
+    savedPlaceLat: 41.8827,
+    savedPlaceLng: -87.6233,
+    homeLat: 41.5,
+    homeLon: -87.1,
+    label: 'Chicago',
+  }) as Record<string, unknown>;
+  assert.equal(out.savedPlaceLat, 41.9);
+  assert.equal(out.savedPlaceLng, -87.6);
+  assert.equal(out.homeLat, 41.5);
+  assert.equal(out.homeLon, -87.1);
+  assert.equal(out.label, 'Chicago');
+});
+
+test('redactDetail: GeoJSON coordinates arrays are blurred element-wise', () => {
+  // Point: [lng, lat]
+  const point = redactDetail({ coordinates: [-87.6233456, 41.8827123] }) as Record<string, unknown>;
+  assert.deepEqual(point.coordinates, [-87.6, 41.9]);
+
+  // LineString: [[lng, lat], ...]
+  const line = redactDetail({
+    coordinates: [[-87.6233, 41.8827], [-86.9999, 41.4444]],
+  }) as Record<string, unknown>;
+  assert.deepEqual(line.coordinates, [[-87.6, 41.9], [-87.0, 41.4]]);
+});
+
+test('redactDetail: position/gps/geo keys with numbers are blurred', () => {
+  const out = redactDetail({ gps: 41.8827123, geo: -87.6233456, position: 12.3456 }) as Record<string, unknown>;
+  assert.equal(out.gps, 41.9);
+  assert.equal(out.geo, -87.6);
+  assert.equal(out.position, 12.3);
+});
+
 test('redactDetail: long hex strings are scrubbed (likely token leaks)', () => {
   const out = redactDetail({ raw: 'abcdef0123456789abcdef0123456789' });
   assert.equal((out as Record<string, unknown>).raw, '[redacted]');

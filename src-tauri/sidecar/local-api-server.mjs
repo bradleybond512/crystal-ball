@@ -62,6 +62,52 @@ function warnEventStoreWriteFailure(kind, err) {
   console.warn(`[sidecar] event-store ${kind} append failed: ${String(err?.message ?? err)}`);
 }
 
+// ── Event-store payload redaction ──────────────────────────────────────────
+// events.db must not store entity names, watchlist content, free-text titles,
+// or exact coordinates.  Use a whitelist (keep only safe structural fields)
+// and blur location to ~10 km (1 decimal place ≈ 11 km).
+const _COORD_KEY_RE = /^(?:lat|lng|long|latitude|longitude|x|y)$/i;
+
+function _blurLocation(loc) {
+  if (!loc || typeof loc !== 'object' || Array.isArray(loc)) return null;
+  const out = {};
+  for (const [k, v] of Object.entries(loc)) {
+    out[k] = _COORD_KEY_RE.test(k) && typeof v === 'number' ? Math.round(v * 10) / 10 : v;
+  }
+  return out;
+}
+
+function redactObsPayload(obs) {
+  if (!obs || typeof obs !== 'object') return {};
+  return {
+    id: obs.id,
+    sourceId: obs.sourceId,
+    domain: obs.domain,
+    timestamp: obs.timestamp,
+    severity: obs.severity,
+    entityIds: obs.entityIds,
+    tags: obs.tags,
+    location: _blurLocation(obs.location),
+    // entityName, watchlistMatch, title, description intentionally omitted
+  };
+}
+
+function redactSituationPayload(sit) {
+  if (!sit || typeof sit !== 'object') return {};
+  return {
+    id: sit.id,
+    domain: sit.domain,
+    status: sit.status,
+    severity: sit.severity,
+    tier: sit.tier,
+    updatedAt: sit.updatedAt,
+    startedAt: sit.startedAt,
+    observationIds: sit.observationIds,
+    correlationIds: sit.correlationIds,
+    // summary, description, title, watchlistMatches intentionally omitted
+  };
+}
+
 export function appendObservationToEventStore(store, obs) {
   if (!store) return;
   try {
@@ -78,7 +124,7 @@ export function appendObservationToEventStore(store, obs) {
       entity_ids: JSON.stringify(Array.isArray(obs?.entityIds) ? obs.entityIds.map(String) : []),
       source_id: typeof obs?.sourceId === 'string' && obs.sourceId ? obs.sourceId : null,
       severity: eventSeverityScore(obs?.severity),
-      payload: JSON.stringify(obs ?? {}),
+      payload: JSON.stringify(redactObsPayload(obs)),
     });
   } catch (error) {
     warnEventStoreWriteFailure('observation', error);
@@ -105,7 +151,7 @@ export function appendSituationToEventStore(store, situation) {
       entity_ids: JSON.stringify(entityIds),
       source_id: 'situation-store',
       severity: eventSeverityScore(situation?.severity),
-      payload: JSON.stringify(situation ?? {}),
+      payload: JSON.stringify(redactSituationPayload(situation)),
     });
   } catch (error) {
     warnEventStoreWriteFailure('situation', error);

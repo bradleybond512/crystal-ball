@@ -23,13 +23,13 @@ function sit(overrides: Partial<SituationDescriptor> = {}): SituationDescriptor 
 
 // ── Playbook library hygiene ────────────────────────────────────────────
 
-test('library: 10 categories present', () => {
+test('library: 11 categories present', () => {
   const cats = listCategories();
-  assert.equal(cats.length, 10);
+  assert.equal(cats.length, 11);
   for (const c of [
     'severe_weather', 'wildfire', 'oil_fuel_shortage', 'food_shortage',
     'cyber_campaign', 'banking_outage', 'conflict_escalation',
-    'travel_disruption', 'grid_outage', 'disease_outbreak',
+    'travel_disruption', 'grid_outage', 'disease_outbreak', 'earthquake',
   ] as const) {
     assert.ok(cats.includes(c), `missing ${c}`);
   }

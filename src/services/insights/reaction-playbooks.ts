@@ -23,7 +23,8 @@ export type PlaybookCategory =
   | 'conflict_escalation'
   | 'travel_disruption'
   | 'grid_outage'
-  | 'disease_outbreak';
+  | 'disease_outbreak'
+  | 'earthquake';
 
 export interface ReactionPlaybook {
   category: PlaybookCategory;
@@ -294,6 +295,32 @@ const PLAYBOOK_LIBRARY: Record<PlaybookCategory, ReactionPlaybook> = {
     recommendedPanels: ['Humanitarian', 'Hazard Alerts'],
     notificationRule: 'digest; banner for travel-plan-overlap or local outbreak',
     timeWindow: '1-12 weeks',
+  },
+
+  earthquake: {
+    category: 'earthquake',
+    description: 'Significant earthquake near a saved place, with aftershock and possible tsunami risk.',
+    userActions: [
+      'Drop, cover, and hold on until the shaking stops',
+      'Move to high ground if a tsunami warning is in effect',
+      'Check yourself and others for injuries',
+      'Inspect for gas leaks, fires, and structural damage before re-entering',
+      'Prepare for aftershocks — stay clear of damaged structures',
+    ],
+    confirmingSources: [
+      'USGS earthquake feed',
+      'NOAA / NWS tsunami bulletins',
+      'Local emergency management',
+      'ShakeMap intensity reports',
+    ],
+    invalidatingSources: [
+      'USGS downgrades magnitude',
+      'Tsunami warning canceled',
+      'No aftershocks within 6 hours',
+    ],
+    recommendedPanels: ['Hazard Alerts', 'Weather', 'Family Tracker'],
+    notificationRule: 'banner + sound for M5.5+ or any tsunami warning near a saved place; digest otherwise',
+    timeWindow: '0-72 hours; reset on major aftershock',
   },
 };
 

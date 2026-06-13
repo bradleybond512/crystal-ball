@@ -12,13 +12,16 @@
 
 import {
   setRecentEvents,
+  getRecentEvents,
   setActiveSituation,
+  setActiveActionBrief,
   setProviderSnapshots,
   setPersonalProfile,
   getPersonalProfile,
 } from './insights-state';
 import type { IncomingEvent, SavedPlace } from '../personal/personal-impact';
 import type { SituationDescriptor } from './action-briefs';
+import { actionsForEarthquake } from '../action-guidance/earthquake-action-guidance';
 import type { ProviderSnapshot, ProviderHealthLevel } from '../diagnostics/provider-redundancy';
 import { getProviderDefinition } from '../providers/provider-registry';
 import { recordProviderFetchOutcome, getProviderHealthState } from '../providers/providers-state';
@@ -146,6 +149,111 @@ function pickCategory(eventName: string): SituationDescriptor['category'] {
     return 'severe_weather';
   }
   return 'severe_weather';
+}
+
+// ── Earthquake → active situation + injected Action Brief ──────────────
+
+/** A subset of a USGS / mission-bridge earthquake event — kept decoupled
+ *  from the seismic feed types on purpose. */
+export interface EarthquakeLike {
+  id: string;
+  magnitude: number;
+  depthKm: number;
+  latitude: number;
+  longitude: number;
+  place?: string;
+  tsunamiWarning?: boolean;
+}
+
+/** When an earthquake (domain earthquake/seismic) becomes the dominant felt
+ *  event near a saved place, set it as the active situation AND inject the
+ *  proximity-aware brief from `actionsForEarthquake`. Mirrors
+ *  `bridgeWeatherAlertsToInsights`. */
+export function bridgeEarthquakeToInsights(
+  quakes: readonly EarthquakeLike[],
+  options: { savedPlaces?: readonly SavedPlace[]; populationDensity?: 'low' | 'medium' | 'high'; log?: BridgeLogFn } = {},
+): { events: readonly IncomingEvent[]; situation: SituationDescriptor | undefined } {
+  const log = options.log ?? _noop;
+  const places = options.savedPlaces ?? getPersonalProfile().savedPlaces;
+
+  const events: IncomingEvent[] = quakes.map((q) => quakeToEvent(q));
+  // Append rather than overwrite so a prior weather bridge isn't clobbered.
+  setRecentEvents([...getRecentEvents(), ...events]);
+
+  const picked = pickActiveQuake(quakes, places);
+  if (!picked) {
+    if (events.length === 0) {
+      log('info', 'bridgeEarthquakeToInsights', { quakesIn: quakes.length, eventsBridged: 0, hasSituation: false });
+    }
+    return { events, situation: undefined };
+  }
+
+  const { quake, distanceKm } = picked;
+  const situation: SituationDescriptor = {
+    id: quake.id,
+    title: quakeTitle(quake),
+    category: 'earthquake',
+    severityScore: magnitudeToScore(quake.magnitude),
+    confidence: quake.magnitude >= 5 ? 'high' : 'medium',
+  };
+  setActiveSituation(situation);
+
+  const brief = actionsForEarthquake(quake.magnitude, quake.depthKm, distanceKm, {
+    populationDensity: options.populationDensity,
+    tsunamiWarning: quake.tsunamiWarning,
+  });
+  // Pin the brief to the real situation id so consumers stay consistent.
+  setActiveActionBrief({ ...brief, situationId: situation.id });
+
+  log('info', 'ingested', { domain: 'earthquake', quakesIn: quakes.length, traceId: quake.id });
+  return { events, situation };
+}
+
+function quakeToEvent(q: EarthquakeLike): IncomingEvent {
+  return {
+    eventId: q.id,
+    description: quakeTitle(q),
+    domain: 'earthquake',
+    severity: magnitudeToScore(q.magnitude),
+    at: Date.now(),
+    location: { latitude: q.latitude, longitude: q.longitude },
+  };
+}
+
+function quakeTitle(q: EarthquakeLike): string {
+  return `M${q.magnitude.toFixed(1)} earthquake${q.place ? ` near ${q.place}` : ''}`;
+}
+
+function magnitudeToScore(magnitude: number): number {
+  return Math.max(0, Math.min(100, Math.round(magnitude * 12)));
+}
+
+/** Pick the highest-magnitude quake whose epicenter is within a
+ *  magnitude-scaled felt radius of a saved place. */
+function pickActiveQuake(
+  quakes: readonly EarthquakeLike[],
+  places: readonly SavedPlace[],
+): { quake: EarthquakeLike; distanceKm: number } | undefined {
+  if (quakes.length === 0 || places.length === 0) return undefined;
+  const sorted = [...quakes].sort((a, b) => {
+    if (a.magnitude !== b.magnitude) return b.magnitude - a.magnitude;
+    return a.id.localeCompare(b.id);
+  });
+  for (const quake of sorted) {
+    const distanceKm = nearestPlaceKm(places, quake.latitude, quake.longitude);
+    if (distanceKm === undefined) continue;
+    if (quake.tsunamiWarning || distanceKm <= feltRadiusKm(quake.magnitude)) {
+      return { quake, distanceKm };
+    }
+  }
+  return undefined;
+}
+
+function feltRadiusKm(magnitude: number): number {
+  if (magnitude >= 6) return 500;
+  if (magnitude >= 5) return 250;
+  if (magnitude >= 4) return 100;
+  return 40;
 }
 
 // ── Sources → ProviderSnapshot[] ───────────────────────────────────────

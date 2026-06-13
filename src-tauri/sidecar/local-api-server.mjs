@@ -111,7 +111,7 @@ export function appendSituationToEventStore(store, situation) {
     warnEventStoreWriteFailure('situation', error);
   }
 }
-import { initWatchboardEngine, evaluateSignal as wbEvaluateSignal, getWatchboards, createWatchboard, updateWatchboard, deleteWatchboard, getRecentFirings, getWatchboardTemplates } from './watchboard-engine.mjs';
+import { initWatchboardEngine, getWatchboards, createWatchboard, updateWatchboard, deleteWatchboard, getRecentFirings, getWatchboardTemplates } from './watchboard-engine.mjs';
 
 let _smsConfig = loadSmsConfig();
 const _smsRateLimitMap = new Map();
@@ -5047,7 +5047,7 @@ async function handleIntelEmbed(req, res, context) {
           resp.on('data', c => chunks.push(c));
           resp.on('end', () => {
             if (resp.statusCode !== 200) return reject(new Error(`upstream ${resp.statusCode}`));
-            try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch (e) { reject(e); }
+            try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch (error) { reject(error); }
           });
           resp.on('error', reject);
         });
@@ -6202,7 +6202,7 @@ async function dispatch(requestUrl, req, routes, context) {
           try {
             for (const obs of safe) appendObservationToEventStore(context.eventStore, obs);
             context.eventStore.db.prepare('COMMIT').run();
-          } catch (_txErr) {
+          } catch {
             try { context.eventStore.db.prepare('ROLLBACK').run(); } catch {}
           }
         }
@@ -8278,9 +8278,9 @@ async function dispatch(requestUrl, req, routes, context) {
       degraded = false;
       trackSuccess('gdacs', 'primary');
       recordFeedSuccess('gdacs-rss');
-    } catch (primaryErr) {
-      trackFailure('gdacs', primaryErr);
-      recordFeedFailure('gdacs-rss', primaryErr);
+    } catch (error) {
+      trackFailure('gdacs', error);
+      recordFeedFailure('gdacs-rss', error);
       // Fallback 1: ReliefWeb disasters API
       try {
         const rwResp = await fetchWithTimeout(GDACS_RELIEFWEB_FALLBACK, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 8_000);
@@ -16568,16 +16568,12 @@ export async function createLocalApiServer(options = {}) {
   const wbIdMatch = requestUrl.pathname.match(/^\/api\/watchboards\/([^/]+)$/);
   if (wbIdMatch) {
     const wbId = wbIdMatch[1];
-    if (wbId === 'firings') {
-      if (req.method === 'GET') {
-        const limit = Math.min(Number(requestUrl.searchParams.get('limit') || '50'), 200);
-        return json({ firings: getRecentFirings(limit) }, 200, makeCorsHeaders(req));
-      }
+    if (wbId === 'firings' && req.method === 'GET') {
+      const limit = Math.min(Number(requestUrl.searchParams.get('limit') || '50'), 200);
+      return json({ firings: getRecentFirings(limit) }, 200, makeCorsHeaders(req));
     }
-    if (wbId === 'templates') {
-      if (req.method === 'GET') {
-        return json({ templates: getWatchboardTemplates() }, 200, makeCorsHeaders(req));
-      }
+    if (wbId === 'templates' && req.method === 'GET') {
+      return json({ templates: getWatchboardTemplates() }, 200, makeCorsHeaders(req));
     }
     if (req.method === 'PUT') {
       const raw = await readBody(req);

@@ -283,12 +283,7 @@ export function recalibrate(p: number, curve: ReliabilityCurve): RecalibrationRe
   const pctAdj = Math.round(calibratedP * 100);
   const binN = bin.n;
 
-  let explanation: string;
-  if (adjustment === 0) {
-    explanation = `${domainLabel} at ~${pctRaw}% are well-calibrated (n=${binN}, observed ${pctObs}%) — no adjustment`;
-  } else {
-    explanation = `${domainLabel} at ~${pctRaw}% have materialized ${pctObs}% of the time (n=${binN}) → adjusted to ${pctAdj}%`;
-  }
+  const explanation = adjustment === 0 ? `${domainLabel} at ~${pctRaw}% are well-calibrated (n=${binN}, observed ${pctObs}%) — no adjustment` : `${domainLabel} at ~${pctRaw}% have materialized ${pctObs}% of the time (n=${binN}) → adjusted to ${pctAdj}%`;
 
   return { p: calibratedP, adjustment, explanation };
 }

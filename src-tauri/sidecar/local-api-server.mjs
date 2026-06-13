@@ -5295,6 +5295,14 @@ async function dispatch(requestUrl, req, routes, context) {
   // gateway webhooks (Twilio, etc.) can POST without a LOCAL_API_TOKEN.
   // Security is enforced by the phone-number allowlist in sms-config.json.
   if (requestUrl.pathname === '/api/sms/command' && req.method === 'POST') {
+    // Reject browser-originated requests (CSRF protection) before touching the
+    // body. Real Twilio webhooks are server-to-server and never carry an Origin
+    // header; the in-app test caller is trusted via bearer token.
+    const trustedLocalCaller = isValidToken(req.headers.authorization || '');
+    if (req.headers.origin && !trustedLocalCaller) {
+      return json({ error: 'Forbidden' }, 403);
+    }
+
     if (!_smsConfig.enabled) return json({ error: 'SMS command interface is disabled.' }, 503);
 
     const rawBodyBuf = await readBody(req);
@@ -5308,14 +5316,6 @@ async function dispatch(requestUrl, req, routes, context) {
       params = Object.fromEntries(new URLSearchParams(rawBody));
     } else {
       try { params = JSON.parse(rawBody || '{}'); } catch { return json({ error: 'Invalid JSON' }, 400); }
-    }
-
-    // Reject browser-originated requests (CSRF protection). Real Twilio
-    // webhooks are server-to-server and never carry an Origin header; the
-    // in-app test caller is trusted via bearer token.
-    const trustedLocalCaller = isValidToken(req.headers.authorization || '');
-    if (req.headers.origin && !trustedLocalCaller) {
-      return json({ error: 'Forbidden' }, 403);
     }
 
     // Caller-ID (From) is spoofable. When a TWILIO_AUTH_TOKEN is configured we

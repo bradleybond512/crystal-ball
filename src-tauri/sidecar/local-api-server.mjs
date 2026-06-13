@@ -2252,6 +2252,19 @@ export function parseFredCsvSidecar(csv) {
   return out;
 }
 
+// Mirror of src/services/supplychain/bdi-feed.ts parseBdiCloseFromCsv. The
+// sidecar runs raw .mjs with no build step, so it cannot import the .ts copy;
+// keep the two byte-for-byte equivalent in logic.
+export function parseStooqBdiSidecar(csv) {
+  const lines = String(csv).split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length < 2) throw new Error('BDI CSV has no data rows');
+  const cols = lines[lines.length - 1].split(',');
+  if (cols.length < 5) throw new Error('BDI CSV last row malformed');
+  const bdi = parseFloat(cols[4].trim());
+  if (!Number.isFinite(bdi)) throw new Error('BDI close is not a finite number');
+  return { bdi, date: cols[0].trim() };
+}
+
 export function computeFreightStressSidecar(series, observations) {
   if (observations.length === 0) {
     return { series, current: null, avg12m: null, stdev12m: null, deviationPct: null,
@@ -7037,6 +7050,40 @@ async function dispatch(requestUrl, req, routes, context) {
     const freightResult = { components, overallScore, overallLevel, asOf };
     setCached(freightCacheKey, freightResult, FRED_TTL);
     return json(freightResult);
+  }
+
+  // ── Live Baltic Dry Index ───────────────────────────────────────────────
+  // Primary: stooq daily CSV (last row = most recent, Close = column 4).
+  // Fallback: FRED PPIACO commodity-price proxy, marked degraded so the UI
+  // can flag that it is not the real BDI. Total failure → 503.
+  if (requestUrl.pathname === '/api/supplychain/bdi') {
+    const BDI_TTL = 4 * 60 * 60 * 1000;
+    const bdiCached = getCached('supplychain:bdi', BDI_TTL);
+    if (bdiCached) return json(bdiCached);
+    try {
+      const resp = await fetchWithTimeout('https://stooq.com/q/d/l/?s=bdi&i=d', { headers: { Accept: 'text/csv' } }, 12_000);
+      if (!resp.ok) throw new Error(`stooq ${resp.status}`);
+      const csv = await resp.text();
+      const { bdi, date } = parseStooqBdiSidecar(csv);
+      const result = { bdi, date, degraded: false, source: 'stooq' };
+      setCached('supplychain:bdi', result, BDI_TTL);
+      return json(result);
+    } catch {
+      // stooq failed — fall back to the FRED PPIACO proxy and mark degraded.
+      try {
+        const url = 'https://fred.stlouisfed.org/graph/fredgraph.csv?id=PPIACO';
+        const resp = await fetchWithTimeout(url, { headers: { Accept: 'text/csv' } }, 12_000);
+        if (!resp.ok) throw new Error(`FRED ${resp.status}`);
+        const observations = parseFredCsvSidecar(await resp.text());
+        if (observations.length === 0) throw new Error('FRED returned no observations');
+        const last = observations[observations.length - 1];
+        const result = { bdi: last.value, date: last.date, degraded: true, source: 'fred:PPIACO' };
+        setCached('supplychain:bdi', result, BDI_TTL);
+        return json(result);
+      } catch {
+        return json({ error: 'BDI unavailable', degraded: true }, 503);
+      }
+    }
   }
 
   // ── Dark vessel gap events (driven by aisState.darkHistory) ─────────────

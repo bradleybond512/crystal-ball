@@ -84,6 +84,13 @@ Rust allowlist.
 | `OPENCTI_URL` | OpenCTI (self-hosted) | Optional | Self-hosted | OpenCTI feed disabled |
 | `OPENCTI_API_KEY` | OpenCTI (self-hosted) | Optional | Self-hosted instance | Paired with `OPENCTI_URL` |
 
+### Conflict & geopolitics
+
+| Key | Service | Required/Optional | Where to get it | Default if absent |
+|-----|---------|-------------------|-----------------|-------------------|
+| `ACLED_ACCESS_TOKEN` | ACLED | Optional | [developer.acleddata.com](https://developer.acleddata.com/) | `/api/airstrikes` + conflict-event feeds disabled |
+| `ACLED_EMAIL` | ACLED | Optional | Same as above | Paired with `ACLED_ACCESS_TOKEN` (both required together) |
+
 ### Aviation, maritime & flight tracking
 
 | Key | Service | Required/Optional | Where to get it | Default if absent |

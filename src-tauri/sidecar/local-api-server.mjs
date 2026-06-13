@@ -3625,10 +3625,70 @@ export function _resetSecurityCaches() {
   securityVulnersCacheExpiresAt = 0;
 }
 
+// ── Secret-in-query-string tripwire (privacy regression guard) ─────────────
+// Some upstream APIs only accept their credential as a URL query parameter and
+// expose no header or POST-body auth (audited against vendor docs, 2026-06 — see
+// docs/PRIVACY_RESIDUAL_RISKS.md). For those, key-in-query is an unavoidable,
+// documented residual risk, so their hosts are allowlisted below. Any OTHER host
+// that carries a credential query param is flagged once per host: it likely
+// supports header auth and a new code path reintroduced key-in-query by mistake.
+// The warning never throws — it only surfaces the regression for follow-up.
+const CREDENTIAL_QUERY_PARAMS = ['access_key', 'apikey', 'key'];
+// Broader set used only for log redaction (never warns), covering credential
+// params some upstreams carry under different names.
+const REDACTABLE_QUERY_PARAMS = ['access_key', 'apikey', 'api_key', 'key', 'username', 'token', 'appid', 'app_id', 'auth', 'password'];
+// Registrable host suffixes whose vendor design requires the key in the query
+// string (no header/body auth). Documented in docs/PRIVACY_RESIDUAL_RISKS.md.
+const QUERY_ONLY_KEY_HOST_SUFFIXES = [
+  'mediastack.com',
+  'aviationstack.com',
+  'geonames.org',
+  'financialmodelingprep.com',
+  'newsdata.io',
+  '511ny.org',
+  'acleddata.com',
+  'maptiler.com',
+  'googleapis.com',
+  'pulsedive.com',
+];
+const warnedQueryKeyHosts = new Set();
+
+function hostMatchesSuffix(hostname, suffix) {
+  return hostname === suffix || hostname.endsWith(`.${suffix}`);
+}
+
+function redactSecretsInUrl(url) {
+  try {
+    const u = new URL(url instanceof URL ? url.href : url);
+    let redacted = false;
+    for (const name of REDACTABLE_QUERY_PARAMS) {
+      if (u.searchParams.has(name)) { u.searchParams.set(name, 'REDACTED'); redacted = true; }
+    }
+    return redacted ? u.toString() : (url instanceof URL ? url.href : String(url));
+  } catch {
+    return url instanceof URL ? url.href : String(url);
+  }
+}
+
+function warnIfSecretInQuery(u) {
+  const leaked = CREDENTIAL_QUERY_PARAMS.filter((p) => u.searchParams.has(p));
+  if (leaked.length === 0) return;
+  if (QUERY_ONLY_KEY_HOST_SUFFIXES.some((s) => hostMatchesSuffix(u.hostname, s))) return;
+  if (warnedQueryKeyHosts.has(u.hostname)) return;
+  warnedQueryKeyHosts.add(u.hostname);
+  console.warn(
+    `[privacy] outbound request to ${u.hostname} carries a credential in the query string ` +
+    `(${leaked.join(', ')}). If this upstream supports header or POST-body auth, move the key ` +
+    `off the query string; otherwise add the host to QUERY_ONLY_KEY_HOST_SUFFIXES and record it ` +
+    `in docs/PRIVACY_RESIDUAL_RISKS.md. URL=${redactSecretsInUrl(u)}`,
+  );
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 12_000) {
   // Use node:https with IPv4 forced — Node.js built-in fetch (undici) tries IPv6
   // first and some servers (EIA, NASA FIRMS) have broken IPv6 causing ETIMEDOUT.
   const u = new URL(url);
+  warnIfSecretInQuery(u);
   if (u.protocol === 'https:') {
  return new Promise((resolve, reject) => {
  const reqOpts = {

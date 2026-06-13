@@ -63,6 +63,9 @@ export class SupplyChainDisruptionPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private prevAnchored: Partial<Record<PortCode, number>> = {};
   private vessels: VesselPosition[] = [];
+  private bdi: number | null = null;
+  private bdiDate: string | null = null;
+  private bdiDegraded = false;
 
   constructor() {
     super({
@@ -76,10 +79,28 @@ export class SupplyChainDisruptionPanel extends Panel {
     });
     this._compute();
     this.render();
+    void this._fetchBdi();
     this.refreshTimer = setInterval(() => {
       this._compute();
       this.render();
+      void this._fetchBdi();
     }, REFRESH_MS);
+  }
+
+  /** Pull the live Baltic Dry Index from the sidecar; degraded = FRED proxy. */
+  private async _fetchBdi(): Promise<void> {
+    try {
+      const resp = await fetch('/api/supplychain/bdi', { headers: { Accept: 'application/json' } });
+      if (!resp.ok) { this.bdi = null; this.bdiDegraded = true; this.render(); return; }
+      const data = (await resp.json()) as { bdi?: number; date?: string; degraded?: boolean };
+      this.bdi = typeof data.bdi === 'number' ? data.bdi : null;
+      this.bdiDate = data.date ?? null;
+      this.bdiDegraded = data.degraded === true;
+    } catch {
+      this.bdi = null;
+      this.bdiDegraded = true;
+    }
+    this.render();
   }
 
   /** Inject live AIS vessel positions from the data loader. */
@@ -214,7 +235,20 @@ export class SupplyChainDisruptionPanel extends Panel {
     const note = `<p style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:6px">
       Composite = 65% AIS closure risk + 35% freight stress. Canals: ${Object.values(cfgNames).join(', ')}.
     </p>`;
-    return `<div>${rows || '<p style="color:rgba(255,255,255,0.4);font-size:12px">No risk data.</p>'}${note}</div>`;
+    return `<div>${rows || '<p style="color:rgba(255,255,255,0.4);font-size:12px">No risk data.</p>'}${this._buildBdiLine()}${note}</div>`;
+  }
+
+  private _buildBdiLine(): string {
+    if (this.bdi === null && !this.bdiDegraded) return '';
+    const value = this.bdi === null
+      ? '<span style="color:rgba(255,255,255,0.4)">unavailable</span>'
+      : `<strong>${escapeHtml(String(this.bdi))}</strong>${this.bdiDate ? ` <span style="color:rgba(255,255,255,0.35)">(${escapeHtml(this.bdiDate)})</span>` : ''}`;
+    const warn = this.bdiDegraded
+      ? '<div style="font-size:10px;color:#ff9800;margin-top:2px">⚠ Using index proxy (live BDI unavailable)</div>'
+      : '';
+    return `<div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:rgba(255,255,255,0.6)">
+      Baltic Dry Index: ${value}${warn}
+    </div>`;
   }
 
   private _bindTabClicks(): void {

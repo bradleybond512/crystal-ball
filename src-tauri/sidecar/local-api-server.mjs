@@ -5275,6 +5275,14 @@ async function dispatch(requestUrl, req, routes, context) {
       try { params = JSON.parse(rawBody || '{}'); } catch { return json({ error: 'Invalid JSON' }, 400); }
     }
 
+    // Reject browser-originated requests (CSRF protection). Real Twilio
+    // webhooks are server-to-server and never carry an Origin header; the
+    // in-app test caller is trusted via bearer token.
+    const trustedLocalCaller = isValidToken(req.headers.authorization || '');
+    if (req.headers.origin && !trustedLocalCaller) {
+      return json({ error: 'Forbidden' }, 403);
+    }
+
     // Caller-ID (From) is spoofable. When a TWILIO_AUTH_TOKEN is configured we
     // require a valid HMAC-SHA1 request signature before trusting the webhook;
     // without a token we log once and fall back to phone-number-only validation.
@@ -5283,7 +5291,6 @@ async function dispatch(requestUrl, req, routes, context) {
     // route but carries a valid LOCAL_API_TOKEN via the renderer's fetch
     // wrapper. A valid token already proves a trusted local caller, so skip the
     // Twilio-signature requirement for it — external webhooks never have one.
-    const trustedLocalCaller = isValidToken(req.headers.authorization || '');
     const twilioToken = process.env.TWILIO_AUTH_TOKEN || '';
     if (twilioToken) {
       if (!trustedLocalCaller) {
@@ -5317,6 +5324,7 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   if (requestUrl.pathname === '/api/sms/status' && req.method === 'GET') {
+    if (!isValidToken(req.headers.authorization || '')) return json({ error: 'Unauthorized' }, 401);
     return json({
       enabled: _smsConfig.enabled,
       allowlistSize: (_smsConfig.allowlist ?? []).length,

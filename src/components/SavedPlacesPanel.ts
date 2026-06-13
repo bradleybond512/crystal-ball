@@ -1,6 +1,6 @@
 import { Panel } from './Panel';
 import { getSavedPlaces, subscribeSavedPlaces, type SavedPlace, type SavedPlaceTag } from '@/services/saved-places';
-import { computePlaceBriefsBatch, type PlaceBrief } from '@/services/place-briefs';
+import { getSavedPlaceBrief, computePlaceBriefsBatch, type PlaceBrief } from '@/services/place-briefs';
 import { computeDistanceKm, unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
 
 interface SavedPlacesPanelOptions {
@@ -211,7 +211,7 @@ export class SavedPlacesPanel extends Panel {
     const listEl = document.createElement('div');
     listEl.className = 'watchlist-list';
     for (const place of visible) {
-      listEl.append(this.renderCardEl(place, briefs.get(place.id) ?? null, allAlerts));
+      listEl.append(this.renderCardEl(place, briefs.get(place.id) ?? getSavedPlaceBrief(place.id), allAlerts));
     }
     if (this.places.length < MAX_PLACES && this.options.createPlace) {
       const addBtn = document.createElement('button');

@@ -1704,7 +1704,7 @@ function loadVerboseState(dataDir) {
 
 function saveVerboseState() {
   if (!_verboseStatePath) return;
-  try { writeFileSync(_verboseStatePath, JSON.stringify({ verboseMode })); } catch { /* ignore */ }
+  try { writeFileSync(_verboseStatePath, JSON.stringify({ verboseMode })); chmodSync(_verboseStatePath, 0o600); } catch { /* ignore */ }
 }
 
 function _getTrafficEntries() {
@@ -12649,7 +12649,7 @@ async function dispatch(requestUrl, req, routes, context) {
       return out;
     });
     if (baselinePath) {
-      try { writeFileSync(baselinePath, JSON.stringify(baseline)); } catch { /* non-fatal */ }
+      try { writeFileSync(baselinePath, JSON.stringify(baseline)); chmodSync(baselinePath, 0o600); } catch { /* non-fatal */ }
     }
     return json({ available: true, generatedAt: raw.generatedAt, entries: sanitized, summary: { totalConnections: sanitized.length } });
   }
@@ -16943,7 +16943,7 @@ export async function createLocalApiServer(options = {}) {
 
  const portFile = process.env.LOCAL_API_PORT_FILE;
  if (portFile) {
- try { writeFileSync(portFile, String(boundPort)); } catch {}
+ try { writeFileSync(portFile, String(boundPort)); chmodSync(portFile, 0o600); } catch {}
  }
 
  context.logger.log(`[local-api] listening on http://127.0.0.1:${boundPort} (apiDir=${context.apiDir}, routes=${routes.length}, cloudFallback=${context.cloudFallback})`);

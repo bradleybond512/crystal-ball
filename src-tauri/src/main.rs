@@ -969,7 +969,7 @@ fn save_brief(webview: Webview, filename: String, bytes: Vec<u8>) -> Result<Stri
  #[cfg(unix)]
  {
   use std::os::unix::fs::PermissionsExt;
-  let perms = fs::Permissions::from_mode(0o644);
+  let perms = fs::Permissions::from_mode(0o600);
   fs::set_permissions(&path, perms).ok();
  }
  Ok(path.display().to_string())
@@ -1020,6 +1020,11 @@ fn append_desktop_log(app: &AppHandle, level: &str, message: &str) {
  let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) else {
  return;
  };
+ #[cfg(unix)]
+ {
+  use std::os::unix::fs::PermissionsExt;
+  let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+ }
 
  // Replace embedded CR/LF so frontend-supplied content can't inject forged
  // log entries into subsequent lines. Each `append_desktop_log` call MUST
@@ -3084,6 +3089,8 @@ fn main() {
  if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log) {
  let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
  let _ = writeln!(f, "[{ts}][v{}+{}][PANIC] {msg} at {location}", env!("CARGO_PKG_VERSION"), BUILD_SHA);
+ #[cfg(unix)]
+ { use std::os::unix::fs::PermissionsExt; let _ = fs::set_permissions(&log, fs::Permissions::from_mode(0o600)); }
  }
  }
  }));

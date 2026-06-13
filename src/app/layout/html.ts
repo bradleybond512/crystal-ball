@@ -143,6 +143,7 @@ export function buildDesktopLayout(ctx: AppContext): string {
  <button class="mac-alert-family-btn" id="alertFamilyBtn">⚠ Alert Family</button>
  <button class="mac-ghost-mode-btn${ghostActive}" id="ghostModeBtn" title="Ghost Mode — Reduce polling, suppress notifications (⌘⇧G)">👻 Ghost Mode</button>
  <button class="mac-ghost-mode-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)">🌍 God's Vision</button>
+ <button class="mac-ghost-mode-btn" id="savedPlacesFilterBtn" title="Filter all panels by saved place proximity">📍 Proximity: OFF</button>
  </div>
  <div class="mac-situational-mode-section" id="situationalModeSwitcherSection">
  <div class="mac-situational-mode-label">

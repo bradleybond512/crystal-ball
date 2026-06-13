@@ -1,10 +1,12 @@
 import { Panel } from './Panel';
 import type { Earthquake } from '@/services/earthquakes';
 import { escapeHtml } from '@/utils/sanitize';
+import { getSavedPlacesFilterService, isNearActivePlace } from '@/services/intelligence/saved-places-filter';
 
 export class EarthquakesPanel extends Panel {
-  private earthquakes: Earthquake[] = [];
+  private allEarthquakes: Earthquake[] = [];
   private lastUpdated: Date | null = null;
+  private filterUnsub: (() => void) | null = null;
 
   constructor() {
  super({
@@ -15,22 +17,44 @@ export class EarthquakesPanel extends Panel {
  infoTooltip: 'USGS earthquake data — M4.5+ events in the past 24 hours.',
  });
  this.showLoading('Fetching seismic data...');
+ this.filterUnsub = getSavedPlacesFilterService().subscribe(() => this.render());
+  }
+
+  public destroy(): void {
+ super.destroy();
+ this.filterUnsub?.();
+ this.filterUnsub = null;
   }
 
   public update(earthquakes: Earthquake[]): void {
- this.earthquakes = [...earthquakes].sort((a, b) => b.magnitude - a.magnitude);
+ this.allEarthquakes = [...earthquakes].sort((a, b) => b.magnitude - a.magnitude);
  this.lastUpdated = new Date();
- this.setCount(this.earthquakes.length);
  this.render();
   }
 
   private render(): void {
- if (this.earthquakes.length === 0) {
+ const ctx = getSavedPlacesFilterService().getContext();
+ const earthquakes = ctx.isActive
+ ? this.allEarthquakes.filter(eq => !eq.location || isNearActivePlace(eq.location.latitude, eq.location.longitude))
+ : this.allEarthquakes;
+ const hiddenCount = this.allEarthquakes.length - earthquakes.length;
+ this.setCount(earthquakes.length);
+
+ if (earthquakes.length === 0 && this.allEarthquakes.length === 0) {
  this.setContent('<div class="panel-empty">No earthquakes reported in the past 24 hours.</div>');
  return;
  }
 
- const rows = this.earthquakes.map(eq => {
+ const filterBanner = ctx.isActive
+ ? `<div class="spf-proximity-banner">📍 ${escapeHtml(ctx.activePlaceName ?? '')} · ${ctx.radiusKm} km · ${hiddenCount > 0 ? `${hiddenCount} hidden` : 'showing all'}</div>`
+ : '';
+
+ if (earthquakes.length === 0) {
+ this.setContent(`${filterBanner}<div class="panel-empty">No earthquakes within ${ctx.radiusKm} km of ${escapeHtml(ctx.activePlaceName ?? 'saved place')}.</div>`);
+ return;
+ }
+
+ const rows = earthquakes.map(eq => {
  const mag = eq.magnitude.toFixed(1);
  const depth = eq.depthKm == undefined ? '—' : `${Math.round(eq.depthKm)} km`;
  const ago = timeAgo(eq.occurredAt);
@@ -47,6 +71,7 @@ export class EarthquakesPanel extends Panel {
 
  this.setContent(`
  <div class="eq-panel-content">
+ ${filterBanner}
  <table class="eq-table">
  <thead>
  <tr>

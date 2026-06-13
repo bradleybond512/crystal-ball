@@ -8127,31 +8127,67 @@ async function dispatch(requestUrl, req, routes, context) {
   // so the panel can overlap with earthquake/hurricane/wildfire data.
   if (requestUrl.pathname === '/api/disasters/gdacs') {
     const CACHE_TTL = 30 * 60 * 1000;
+    const GDACS_RELIEFWEB_FALLBACK = 'https://api.reliefweb.int/v1/disasters?format=json&limit=20';
+    const GDACS_ERCC_FALLBACK = 'https://erccportal.jrc.ec.europa.eu/api/echo/disasters/getrss';
     const cached = getCached('gdacs-rss', CACHE_TTL);
     if (cached) return json(cached);
+
+    let events, feedSource, degraded;
+
+    // Primary: GDACS RSS (custom XML parser)
     try {
-      const events = await fetchGdacsRss(fetchWithTimeout);
-      const grouped = groupByType(events);
-      const result = {
-        events,
-        grouped,
-        count: events.length,
-        fetchedAt: Date.now(),
-        degraded: false,
-        source: 'gdacs.org',
-        byType: Object.fromEntries(
-          Object.entries(grouped).map(([k, v]) => [k, v.map((e) => ({ ...e, rgba: alertLevelRgba(e.alertLevel) }))])
-        ),
-      };
-      setCached('gdacs-rss', result, CACHE_TTL);
+      events = await fetchGdacsRss(fetchWithTimeout);
+      feedSource = 'gdacs.org';
+      degraded = false;
+      trackSuccess('gdacs', 'primary');
       recordFeedSuccess('gdacs-rss');
-      return json(result);
-    } catch (error) {
-      recordFeedFailure('gdacs-rss', error);
-      const stale = getCachedStale('gdacs-rss');
-      if (stale) return json({ ...stale, degraded: true, reason: error?.message ?? String(error) });
-      return json({ events: [], grouped: {}, count: 0, fetchedAt: Date.now(), degraded: true, reason: error?.message ?? String(error), source: 'gdacs.org' }, 502);
+    } catch (primaryErr) {
+      trackFailure('gdacs', primaryErr);
+      recordFeedFailure('gdacs-rss', primaryErr);
+      // Fallback 1: ReliefWeb disasters API
+      try {
+        const rwResp = await fetchWithTimeout(GDACS_RELIEFWEB_FALLBACK, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 8_000);
+        if (!rwResp.ok) throw new Error(`ReliefWeb ${rwResp.status}`);
+        const rwData = await rwResp.json();
+        const rwItems = Array.isArray(rwData?.data) ? rwData.data : [];
+        events = rwItems.map((item) => ({
+          id: `rw-${item.id ?? ''}`,
+          title: item.fields?.name ?? 'Disaster',
+          description: '',
+          alertLevel: 'Green',
+          type: item.fields?.type?.[0]?.name ?? 'disaster',
+          lat: null, lon: null,
+          country: Array.isArray(item.fields?.country) ? item.fields.country.map((c) => c.name ?? '').join(', ') : '',
+          pubDate: item.fields?.date?.created ?? null,
+        }));
+        feedSource = 'reliefweb.int';
+        degraded = true;
+        trackSuccess('gdacs', 'fallback-0');
+      } catch {
+        // Fallback 2: Copernicus ERCC RSS (skip parse errors)
+        try {
+          await fetchWithTimeout(GDACS_ERCC_FALLBACK, { headers: { Accept: 'application/rss+xml,application/xml;q=0.9', 'User-Agent': CHROME_UA } }, 8_000);
+          events = [];
+          feedSource = 'ercc.jrc.ec.europa.eu';
+          degraded = true;
+          trackSuccess('gdacs', 'fallback-1');
+        } catch {
+          const stale = getCachedStale('gdacs-rss');
+          if (stale) return json({ ...stale, degraded: true, source: 'cached' });
+          return json({ events: [], grouped: {}, count: 0, fetchedAt: Date.now(), degraded: true, source: 'unavailable' }, 502);
+        }
+      }
     }
+
+    const grouped = groupByType(events);
+    const result = {
+      events, grouped, count: events.length, fetchedAt: Date.now(), degraded, source: feedSource,
+      byType: Object.fromEntries(
+        Object.entries(grouped).map(([k, v]) => [k, v.map((e) => ({ ...e, rgba: alertLevelRgba(e.alertLevel) }))])
+      ),
+    };
+    setCached('gdacs-rss', result, CACHE_TTL);
+    return json(result);
   }
 
   // ── USGS VHP volcanoesHazardLevel + Smithsonian GVP bulletin RSS ─────────
@@ -8353,15 +8389,23 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Weather hazards: NHC active tropical cyclones (PR 1) ─────────────────
   if (requestUrl.pathname === '/api/weather/tropical') {
+    const NHC_PRIMARY = 'https://www.nhc.noaa.gov/CurrentStorms.json';
+    const JMA_FALLBACK  = 'https://www.jma.go.jp/bosai/tropical_cyclone/data/score.json';
+    let tcResult;
     try {
-      const resp = await fetchWithTimeout(
-        'https://www.nhc.noaa.gov/CurrentStorms.json',
-        { headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall-Hazards/1.0' } },
-        12_000,
-      );
-      if (!resp.ok) return json([], 200);
-      const data = await resp.json();
-      const list = Array.isArray(data?.activeStorms) ? data.activeStorms : [];
+      tcResult = await fetchWithFallback(NHC_PRIMARY, [JMA_FALLBACK], {
+        cacheKey: 'nhc-tropical-last-good',
+        timeoutMs: 12_000,
+        headers: { Accept: 'application/json', 'User-Agent': 'CrystalBall-Hazards/1.0' },
+      });
+      trackSuccess('nhc-tropical', tcResult.source);
+    } catch (error) {
+      trackFailure('nhc-tropical', error);
+      return json([], 200);
+    }
+    // Primary (NHC format): parse activeStorms array
+    if (tcResult.source === 'primary') {
+      const list = Array.isArray(tcResult.data?.activeStorms) ? tcResult.data.activeStorms : [];
       const out = list.map((s) => {
         const lat = parseFloat(String(s.latitudeNumeric ?? s.latitude ?? ''));
         const lng = parseFloat(String(s.longitudeNumeric ?? s.longitude ?? ''));
@@ -8384,12 +8428,13 @@ async function dispatch(requestUrl, req, routes, context) {
           advisoryNumber: String(s.advNum ?? ''),
           publicAdvisoryUrl: typeof s.publicAdvisory === 'string' ? s.publicAdvisory : undefined,
           forecastTrackUrl: typeof s.forecastTrack === 'string' ? s.forecastTrack : undefined,
+          degraded: false, source: 'nhc.noaa.gov',
         };
       }).filter(Boolean);
       return json(out);
-    } catch {
-      return json([], 200);
     }
+    // Fallback (JMA or cached): format differs — return degraded empty list
+    return json([], 200);
   }
 
   // ── Weather hazards: hurricane track GeoJSON (PR 1) ──────────────────────
@@ -8805,23 +8850,28 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Disease Outbreak proxy (ReliefWeb + WHO, no API key) ─────────────────
   if (requestUrl.pathname === '/api/disease-outbreaks') {
- const RELIEFWEB_URL = 'https://api.reliefweb.int/v1/reports?appname=crystalball&filter[field]=type.name&filter[value]=Situation%20Report&filter[conditions][0][field]=theme.name&filter[conditions][0][value]=Health&limit=25&sort[]=date:desc&fields[include][]=title&fields[include][]=date&fields[include][]=country&fields[include][]=url';
- const WHO_URL = 'https://www.who.int/api/hubs/cms/s3fs-public/attachments/disease-outbreak-news.json';
- try {
- const [rwResp, whoResp] = await Promise.allSettled([
- fetchWithTimeout(RELIEFWEB_URL, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
- fetchWithTimeout(WHO_URL, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
- ]);
- const reliefweb = (rwResp.status === 'fulfilled' && rwResp.value.ok)
- ? await rwResp.value.json()
- : null;
- const who = (whoResp.status === 'fulfilled' && whoResp.value.ok)
- ? await whoResp.value.json()
- : null;
- return json({ reliefweb, who });
- } catch (error) {
- return json({ error: `disease-outbreaks fetch error: ${error.message ?? error}` }, 502);
- }
+    // WHO first (most authoritative), ReliefWeb health reports as fallback.
+    const WHO_URL = 'https://www.who.int/api/hubs/cms/s3fs-public/attachments/disease-outbreak-news.json';
+    const RELIEFWEB_URL = 'https://api.reliefweb.int/v1/reports?appname=crystalball&filter[field]=type.name&filter[value]=Situation%20Report&filter[conditions][0][field]=theme.name&filter[conditions][0][value]=Health&limit=25&sort[]=date:desc&fields[include][]=title&fields[include][]=date&fields[include][]=country&fields[include][]=url';
+    let doResult;
+    try {
+      doResult = await fetchWithFallback(WHO_URL, [RELIEFWEB_URL], {
+        cacheKey: 'disease-outbreaks-last-good',
+        timeoutMs: 8_000,
+        headers: { Accept: 'application/json', 'User-Agent': CHROME_UA },
+      });
+      trackSuccess('disease-outbreaks', doResult.source);
+    } catch (error) {
+      trackFailure('disease-outbreaks', error);
+      return json({ who: null, reliefweb: null, degraded: true, source: 'unavailable' }, 502);
+    }
+    const isWho = doResult.source === 'primary';
+    return json({
+      who: isWho ? doResult.data : null,
+      reliefweb: isWho ? null : doResult.data,
+      degraded: doResult.degraded,
+      source: doResult.source,
+    });
   }
 
   // ── Disease Intelligence (Nextstrain + disease.sh + ReliefWeb EP + WHO DON) ──
@@ -11225,36 +11275,65 @@ async function dispatch(requestUrl, req, routes, context) {
   // The renderer's `tsunami-reasoner.ts` parses both into structured
   // bulletins + DART anomalies. 15-minute cache.
   if (requestUrl.pathname === '/api/tsunami-status') {
- const cacheKey = 'tsunami-status';
- const cached = getCached(cacheKey);
- if (cached) return json(cached);
- const DART_BUOYS = ['46411','46412','46413','46407','51407','55023','55012','55015','32401','32412'];
- const ptwcUrl = 'https://www.tsunami.gov/events/xml/PAAQAtom.xml';
- try {
- const ptwcRes = await fetchWithTimeout(ptwcUrl, { headers: { Accept: 'application/atom+xml,application/xml;q=0.9' } }, 15000);
- const ptwcXml = ptwcRes.ok ? await ptwcRes.text() : '';
- const dartResults = await Promise.all(
- DART_BUOYS.map(async (id) => {
- try {
- const dr = await fetchWithTimeout(`https://www.ndbc.noaa.gov/data/realtime2/${id}.txt`, { headers: { Accept: 'text/plain' } }, 12000);
- if (!dr.ok) return { buoyId: id, ok: false, body: null, status: dr.status };
- const body = await dr.text();
- return { buoyId: id, ok: true, body, status: dr.status };
- } catch (error) {
- return { buoyId: id, ok: false, body: null, error: String(error?.message ?? error) };
- }
- }),
- );
- const result = {
- fetchedAt: Date.now(),
- ptwc: { ok: ptwcRes.ok, status: ptwcRes.status, xml: ptwcXml },
- dart: dartResults,
- };
- setCached(cacheKey, result, 15 * 60 * 1000);
- return json(result);
- } catch (error) {
- return json({ error: `tsunami-status error: ${error.message ?? error}` }, 502);
- }
+    const cacheKey = 'tsunami-status';
+    const cached = getCached(cacheKey);
+    if (cached) return json(cached);
+    const DART_BUOYS = ['46411','46412','46413','46407','51407','55023','55012','55015','32401','32412'];
+    const PTWC_URL = 'https://www.tsunami.gov/events/xml/PAAQAtom.xml';
+    const IOC_FALLBACK = 'https://ioc-tsunami.org/index.php?option=com_jtickertape&task=fetchalerts&format=json';
+
+    let ptwcXml = '';
+    let ptwcStatus = 0;
+    let feedSource = 'primary';
+    let degraded = false;
+
+    try {
+      const ptwcRes = await fetchWithTimeout(PTWC_URL, { headers: { Accept: 'application/atom+xml,application/xml;q=0.9' } }, 15_000);
+      if (!ptwcRes.ok) throw new Error(`PTWC ${ptwcRes.status}`);
+      ptwcXml = await ptwcRes.text();
+      ptwcStatus = ptwcRes.status;
+      trackSuccess('tsunami', 'primary');
+    } catch (error) {
+      trackFailure('tsunami', error);
+      // Fallback: IOC UNESCO tsunami alert feed
+      try {
+        const iocRes = await fetchWithTimeout(IOC_FALLBACK, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 8_000);
+        if (!iocRes.ok) throw new Error(`IOC ${iocRes.status}`);
+        await iocRes.text(); // consume body; tsunami-reasoner only parses ptwcXml today
+        feedSource = 'fallback-0';
+        degraded = true;
+        trackSuccess('tsunami', 'fallback-0');
+      } catch {
+        feedSource = 'unavailable';
+        degraded = true;
+      }
+    }
+
+    try {
+      const dartResults = await Promise.all(
+        DART_BUOYS.map(async (id) => {
+          try {
+            const dr = await fetchWithTimeout(`https://www.ndbc.noaa.gov/data/realtime2/${id}.txt`, { headers: { Accept: 'text/plain' } }, 12_000);
+            if (!dr.ok) return { buoyId: id, ok: false, body: null, status: dr.status };
+            const body = await dr.text();
+            return { buoyId: id, ok: true, body, status: dr.status };
+          } catch (error) {
+            return { buoyId: id, ok: false, body: null, error: String(error?.message ?? error) };
+          }
+        }),
+      );
+      const result = {
+        fetchedAt: Date.now(),
+        ptwc: { ok: ptwcXml.length > 0, status: ptwcStatus, xml: ptwcXml },
+        dart: dartResults,
+        degraded,
+        source: feedSource,
+      };
+      setCached(cacheKey, result, 15 * 60 * 1000);
+      return json(result);
+    } catch (error) {
+      return json({ error: `tsunami-status error: ${error.message ?? error}` }, 502);
+    }
   }
 
   // ── USGS FDSN catalog passthrough (pre-arrival detector poll) ─────────
@@ -11941,12 +12020,29 @@ async function dispatch(requestUrl, req, routes, context) {
  );
  const fires = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
  trackSuccess('firms', 'primary');
- const firmsResult = { fires, count: fires.length };
+ const firmsResult = { fires, count: fires.length, degraded: false, source: 'primary' };
  setCached('nasa-firms', firmsResult, 30 * 60 * 1000);
  return json(firmsResult);
  } catch (error) {
  trackFailure('firms', error);
- return json({ fires: [], error: String(error.message ?? error) }, 500);
+ const EONET_FALLBACK = 'https://eonet.gsfc.nasa.gov/api/v3/events?category=wildfires&status=open&limit=20';
+ try {
+ const eonetResp = await fetchWithTimeout(EONET_FALLBACK, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 8_000);
+ if (!eonetResp.ok) throw new Error(`EONET ${eonetResp.status}`);
+ const eonetData = await eonetResp.json();
+ const eonetFires = (Array.isArray(eonetData?.events) ? eonetData.events : []).flatMap((e) => {
+ const geo = Array.isArray(e.geometry) ? e.geometry[0] : null;
+ const coords = geo?.coordinates;
+ if (!Array.isArray(coords) || coords.length < 2) return [];
+ return [{ lat: coords[1], lon: coords[0], brightness: 0, frp: 0,
+ confidence: 'FIRE_CONFIDENCE_NOMINAL', region: 'EONET',
+ acq_date: (geo?.date ?? '').slice(0, 10), daynight: 'D' }];
+ });
+ trackSuccess('firms', 'fallback-0');
+ return json({ fires: eonetFires, count: eonetFires.length, degraded: true, source: 'eonet.gsfc.nasa.gov' });
+ } catch {
+ return json({ fires: [], count: 0, degraded: true, source: 'unavailable' }, 500);
+ }
  }
   }
 

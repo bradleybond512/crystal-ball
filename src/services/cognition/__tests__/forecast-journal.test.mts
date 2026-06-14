@@ -5,7 +5,7 @@
  *   1. toPredictionRecord adapter fidelity
  *   2. buildCurve reuse on journal fixtures (no reimplementation)
  *   3. Brier math hand-checked
- *   4. humanEdge n≥20 (MIN_BOTH_SIDES_N) gate on both sides
+ *   4. humanEdge n≥30 (MIN_BOTH_SIDES_N) gate on both sides
  *   5. Combined-multiplier bound property: 0.8 ≤ m ≤ 1.2 for all inputs
  *   6. Ghost Mode suppression of logForecast
  *   7. FIFO cap (resolved-oldest first eviction)
@@ -284,7 +284,7 @@ describe('Brier math', () => {
   });
 });
 
-// ── 4. humanEdge n≥20 (MIN_BOTH_SIDES_N) gate ────────────────────────────────
+// ── 4. humanEdge n≥30 (MIN_BOTH_SIDES_N) gate ────────────────────────────────
 // We test the gate via getComparison indirectly by checking that updateHumanEdge
 // only stores values when the journal has enough data. Since getComparison is
 // async and imports the calibration store dynamically, we test the MIN_BOTH_SIDES_N

@@ -192,7 +192,7 @@
     "@types/topojson-specification": "^1.0.5",
     "@xmpp/client": "^0.14.0",
     "cross-env": "^10.1.0",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "eslint": "^10.3.0",
     "eslint-plugin-sonarjs": "^4.0.3",
     "eslint-plugin-unicorn": "^63.0.0",
@@ -250,7 +250,8 @@
     "fast-xml-parser": "^5.5.9",
     "serialize-javascript": "^7.0.5",
     "protobufjs": "^7.5.6",
-    "dompurify": "^3.4.0"
+    "dompurify": "^3.4.0",
+    "esbuild": "^0.28.1"
   },
   "engines": {
     "node": ">=22.0.0 <23.0.0"

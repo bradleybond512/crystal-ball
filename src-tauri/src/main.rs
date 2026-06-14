@@ -1128,6 +1128,8 @@ fn get_native_location_impl() -> Result<(f64, f64), String> {
  fn objc_getClass(name: *const u8) -> *mut c_void;
  fn sel_registerName(name: *const u8) -> *mut c_void;
  fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
+ fn objc_retain(obj: *mut c_void) -> *mut c_void;
+ fn objc_release(obj: *mut c_void);
  }
 
  #[repr(C)]
@@ -1157,6 +1159,12 @@ fn get_native_location_impl() -> Result<(f64, f64), String> {
   std::thread::sleep(Duration::from_millis(100));
  }
 
+ // The manager owns `loc`; retain it before releasing the manager so the
+ // coordinate read below is not a use-after-free.
+ if !loc.is_null() {
+  objc_retain(loc);
+ }
+
  let stop = sel_registerName(b"stopUpdatingLocation\0".as_ptr());
  objc_msgSend(mgr, stop);
  let release = sel_registerName(b"release\0".as_ptr());
@@ -1166,10 +1174,12 @@ fn get_native_location_impl() -> Result<(f64, f64), String> {
   return Err("Location not available — ensure Location Services is enabled for Crystal Ball in System Settings".into());
  }
 
- // On ARM64, CLLocationCoordinate2D (16 bytes) is returned in registers
+ // On ARM64, CLLocationCoordinate2D (16 bytes) is returned in registers.
+ // We hold our own retain on `loc`, so this is safe after the manager release.
  let coord_fn: unsafe extern "C" fn(*mut c_void, *mut c_void) -> CLLocationCoordinate2D =
   std::mem::transmute(objc_msgSend as *const ());
  let coord = coord_fn(loc, coord_sel);
+ objc_release(loc);
 
  if coord.latitude == 0.0 && coord.longitude == 0.0 {
   return Err("Location returned 0,0 — GPS may not have a fix yet".into());

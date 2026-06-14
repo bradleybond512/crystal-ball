@@ -16,6 +16,7 @@ import { notificationDispatcher } from './notification-dispatcher';
 import type { UnifiedAlert } from './unified-alerts';
 import type { AnalystSnapshot, Hypothesis } from './analyst-loop';
 import { signatureFor } from './hypothesis-feedback';
+import { isGhostMode } from './mode-manager';
 
 const NOTIFY_WINDOW_MS = 60 * 60 * 1000; // Don't re-notify the same signature within an hour.
 
@@ -33,7 +34,7 @@ function buildAlert(h: Hypothesis, count: number): UnifiedAlert {
     source: 'correlation',
     severity: 'critical',
     title: `Analyst: critical hypothesis${suffix}`,
-    body: h.statement.slice(0, 240),
+    body: 'Open Crystal Ball to review new critical hypothesis',
     timestamp: Date.now(),
     relevanceScore: 95,
     acknowledged: false,
@@ -42,6 +43,7 @@ function buildAlert(h: Hypothesis, count: number): UnifiedAlert {
 }
 
 function handleSnapshot(snapshot: AnalystSnapshot): void {
+  if (isGhostMode()) return; // Ghost Mode: suppress all notifications
   if (hudVisible) return; // user is looking — no need to nudge
   const now = Date.now();
   // Prune old entries.

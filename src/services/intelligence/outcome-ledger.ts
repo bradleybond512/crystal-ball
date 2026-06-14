@@ -167,7 +167,7 @@ function djb2(str: string): number {
   let h = 5381;
   for (let i = 0; i < str.length; i += 1) {
     // h = h * 33 ^ char  (classic DJB2 variant)
-    h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0;
+    h = (((h << 5) + h) ^ (str.codePointAt(i) ?? 0)) >>> 0;
   }
   return h;
 }
@@ -291,7 +291,6 @@ export class OutcomeLedger {
         if (blob.cs !== expected) {
           // Tampered or corrupt — discard the blob rather than trust it.
           this._tamperDetected = true;
-          console.warn('[OutcomeLedger] Checksum mismatch — persisted data discarded (possible tampering)');
           return;
         }
         this.records = deserialize(blob.data);

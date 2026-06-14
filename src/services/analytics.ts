@@ -138,6 +138,9 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   PATREON_ACCESS_TOKEN: 'patreon_access',
   PATREON_REFRESH_TOKEN: 'patreon_refresh',
   PATREON_AUDIO_RSS_URL: 'patreon_audio_rss',
+  OPENAQ_API_KEY: 'openaq',
+  WINDY_WEBCAMS_API_KEY: 'windy_webcams',
+  NPS_API_KEY: 'nps',
 };
 
 // ── Typed event schemas (allowlisted properties per event) ──

@@ -2723,9 +2723,11 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  }
  let local_api_token = token_slot.clone().unwrap();
  // Write token to file so MCP server and other local tools can authenticate.
- // Create the file with 0600 atomically (O_CREAT|O_TRUNC + mode) so there is
- // no world-readable window between creation and permission hardening that a
- // co-resident process could exploit to read the bearer token.
+ // Create the file with 0600 atomically (O_CREAT|O_TRUNC + mode) so a freshly
+ // created inode is never world-readable. mode() only governs newly created
+ // inodes, so when sidecar.token already exists we also re-assert 0600 on the
+ // open handle while it is still truncated/empty — before the bearer token is
+ // written — so a stale, permissively-moded file can't leak the new secret.
  let token_file = logs_dir_path(app)?.join("sidecar.token");
  let write_token = || -> std::io::Result<()> {
  let mut opts = std::fs::OpenOptions::new();
@@ -2736,6 +2738,11 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  opts.mode(0o600);
  }
  let mut file = opts.open(&token_file)?;
+ #[cfg(unix)]
+ {
+ use std::os::unix::fs::PermissionsExt;
+ file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+ }
  file.write_all(local_api_token.as_bytes())?;
  Ok(())
  };

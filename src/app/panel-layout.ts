@@ -613,6 +613,8 @@ export class PanelLayoutManager implements AppModule {
   private dcStrip: DataCenterPinnedStrip | null = null;
   private unsubDcPlaces: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
+  private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
+  private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
   private readonly applyTimeRangeFilterDebounced: () => void;
   private readonly _onUpdateState = () => { this.renderSidebarUpdateBtn(); };
 
@@ -688,6 +690,8 @@ export class PanelLayoutManager implements AppModule {
  this.stalenessBanner = null;
  }
  if (this.analystHud) { this.analystHud.destroy(); this.analystHud = null; }
+ if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
+ if (this._onBriefExportKey) { document.removeEventListener('keydown', this._onBriefExportKey); this._onBriefExportKey = null; }
  // Clean up datacenter strip + saved-places subscription
  if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
@@ -962,18 +966,20 @@ export class PanelLayoutManager implements AppModule {
  ensureReasoningDebugCss();
  const debugOverlay = new ReasoningDebugOverlay();
  debugOverlay.mount(document.body);
- document.addEventListener('keydown', (e: KeyboardEvent) => {
+ this._onAnalystHudKey = (e: KeyboardEvent) => {
    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
      e.preventDefault();
      this.analystHud?.toggle();
    }
- });
- document.addEventListener('keydown', (e: KeyboardEvent) => {
+ };
+ document.addEventListener('keydown', this._onAnalystHudKey);
+ this._onBriefExportKey = (e: KeyboardEvent) => {
    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
      e.preventDefault();
      exportBriefingToClipboard();
    }
- });
+ };
+ document.addEventListener('keydown', this._onBriefExportKey);
  const cbSays = new CrystalBallSays();
  cbSays.mount(document.body);
  const relatedStrip = new RelatedStrip();

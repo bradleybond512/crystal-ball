@@ -213,3 +213,80 @@ test('a proposal with replay pass + evidence auto-applies and logs', () => {
   assert.equal(log[0]?.nextValue, 12);
   assert.equal(log[0]?.ruleId, 'algo_tuning_gate_lowmed_ready');
 });
+
+// ── Backtest-before-apply gate (Phase 4) ───────────────────────────────────
+
+/** High-criticality, non-notification knob with a degraded calibration over
+ *  ≥30 graded samples — the high tuning gate needs replay + backtest + 30
+ *  samples. */
+const HIGHCRIT_DEF: AlgorithmDefinition = {
+  algorithmId: 'test-highcrit-algo',
+  label: 'High-criticality test knob',
+  domain: 'intelligence',
+  criticality: 'high',
+  minWeightedHitRate: 0.9,
+  minGradedSamples: 20,
+};
+
+const HIGHCRIT_TUNING: AlgorithmAdjustmentTuning = {
+  algorithmId: 'test-highcrit-algo',
+  parameters: [{
+    parameterId: 'p',
+    current: 10,
+    min: 0,
+    max: 20,
+    step: 2,
+    fixDirection: 'increase',
+    description: 'high-crit test knob',
+  }],
+};
+
+/** 30 graded (26 hit + 4 miss) → weightedHitRate 0.867, gap 0.033 < 0.1 →
+ *  'degraded' → an 'apply' proposal. evidenceCount 30 clears the high gate's
+ *  sample floor, isolating the backtest signal as the deciding factor. */
+function degradedHighcritLedger() {
+  const ledger = createAlgorithmEvaluationLedger({ now: () => 1 });
+  for (let i = 0; i < 30; i += 1) {
+    const r = ledger.recordEvaluation({
+      algorithmId: 'test-highcrit-algo',
+      domain: 'intelligence',
+      at: i,
+      durationMs: 5,
+    });
+    ledger.recordOutcome(r.id, i < 26 ? 'hit' : 'miss', 'test', i);
+  }
+  return ledger;
+}
+
+test('high-criticality knob is HELD when the computed backtest fails closed (not backtestable)', () => {
+  _resetTuningDecisionsForTests();
+  const captured: Array<[string, string, number]> = [];
+  const res = runTuningApply({
+    ledger: degradedHighcritLedger(),
+    definitions: [HIGHCRIT_DEF],
+    tunings: [HIGHCRIT_TUNING],
+    replayPassed: true,
+    // backtestPassed UNSET → runner computes it. 'test-highcrit-algo:p' is not
+    // a backtestable knob, so the honest backtest fails closed → held.
+    apply: (a, p, v) => captured.push([a, p, v]),
+  });
+  assert.deepEqual(res, { proposed: 1, applied: 0, heldForApproval: 1 });
+  assert.equal(captured.length, 0);
+  assert.equal(getTuningDecisions()[0]?.ruleId, 'algo_tuning_gate_high_pending');
+});
+
+test('high-criticality knob auto-applies once backtestPassed clears (signal is load-bearing)', () => {
+  _resetTuningDecisionsForTests();
+  const captured: Array<[string, string, number]> = [];
+  const res = runTuningApply({
+    ledger: degradedHighcritLedger(),
+    definitions: [HIGHCRIT_DEF],
+    tunings: [HIGHCRIT_TUNING],
+    replayPassed: true,
+    backtestPassed: true, // injected pass → high gate clears
+    apply: (a, p, v) => captured.push([a, p, v]),
+  });
+  assert.deepEqual(res, { proposed: 1, applied: 1, heldForApproval: 0 });
+  assert.deepEqual(captured, [['test-highcrit-algo', 'p', 12]]);
+  assert.equal(getTuningDecisions()[0]?.ruleId, 'algo_tuning_gate_high_ready');
+});

@@ -42,8 +42,8 @@ function lazyLoadIdb(): void {
     _getMemory = mod.getMemory;
     _putMemory = mod.putMemory;
   } catch {
-    _getMemory = async () => null;
-    _putMemory = async () => undefined;
+    _getMemory = () => Promise.resolve(null);
+    _putMemory = () => Promise.resolve();
   }
 }
 
@@ -80,7 +80,7 @@ export interface EntityGraphOptions {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'crystalball-cognition-entity-graph-v1';
-const MAX_EDGES = 2_000;
+const MAX_EDGES = 2000;
 
 /**
  * 72-hour exponential half-life for edge weight decay.
@@ -109,7 +109,7 @@ let _nowFn: () => number = Date.now;
  * Resets loaded/written state so the store can be initialized fresh.
  */
 export function configure(opts: EntityGraphOptions): void {
-  _storage = opts.storage !== undefined ? opts.storage : undefined;
+  _storage = opts.storage === undefined ? undefined : opts.storage;
   _getMemoryOverride = opts.getMemoryFn ?? null;
   _putMemoryOverride = opts.putMemoryFn ?? null;
   _nowFn = opts.now ?? Date.now;
@@ -132,10 +132,10 @@ function resolveStorage(): GraphStorageLike | null {
 function isValidEdge(e: unknown): e is EntityEdge {
   if (!e || typeof e !== 'object') return false;
   const edge = e as Record<string, unknown>;
-  return typeof edge['a'] === 'string' &&
-    typeof edge['b'] === 'string' &&
-    typeof edge['weight'] === 'number' &&
-    typeof edge['lastSeen'] === 'number';
+  return typeof edge.a === 'string' &&
+    typeof edge.b === 'string' &&
+    typeof edge.weight === 'number' &&
+    typeof edge.lastSeen === 'number';
 }
 
 function applyLoaded(arr: EntityEdge[] | null): void {

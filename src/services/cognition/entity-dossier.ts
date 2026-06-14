@@ -56,8 +56,8 @@ function lazyLoadIdb(): void {
     _getMemory = mod.getMemory;
     _putMemory = mod.putMemory;
   } catch {
-    _getMemory = async () => null;
-    _putMemory = async () => undefined;
+    _getMemory = () => Promise.resolve(null);
+    _putMemory = () => Promise.resolve();
   }
 }
 
@@ -201,7 +201,7 @@ let _nowFn: () => number = Date.now;
  * Resets loaded/written state so the store is initialized fresh.
  */
 export function configure(opts: EntityDossierOptions): void {
-  _storage = opts.storage !== undefined ? opts.storage : undefined;
+  _storage = opts.storage === undefined ? undefined : opts.storage;
   _getMemoryOverride = opts.getMemoryFn ?? null;
   _putMemoryOverride = opts.putMemoryFn ?? null;
   _nowFn = opts.now ?? Date.now;
@@ -224,13 +224,13 @@ function resolveStorage(): DossierStorageLike | null {
 function isValidDossier(d: unknown): d is EntityDossier {
   if (!d || typeof d !== 'object') return false;
   const dd = d as Record<string, unknown>;
-  return typeof dd['entity'] === 'string' &&
-    typeof dd['entityType'] === 'string' &&
-    typeof dd['firstSeen'] === 'number' &&
-    typeof dd['lastSeen'] === 'number' &&
-    Array.isArray(dd['timeline']) &&
-    typeof dd['heat'] === 'number' &&
-    typeof dd['trajectory'] === 'string';
+  return typeof dd.entity === 'string' &&
+    typeof dd.entityType === 'string' &&
+    typeof dd.firstSeen === 'number' &&
+    typeof dd.lastSeen === 'number' &&
+    Array.isArray(dd.timeline) &&
+    typeof dd.heat === 'number' &&
+    typeof dd.trajectory === 'string';
 }
 
 function dossierKey(entityType: DossierEntityType, entity: string): string {

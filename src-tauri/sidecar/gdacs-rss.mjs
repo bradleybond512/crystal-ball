@@ -62,7 +62,8 @@ export function parseCoordinates(item) {
   const lonRaw = xmlText(item, 'geo:long') || xmlText(item, 'gdacs:long') || xmlText(item, 'long');
   const lat = Number.parseFloat(latRaw);
   const lon = Number.parseFloat(lonRaw);
-  if (Number.isFinite(lat) && Number.isFinite(lon)) return [lon, lat];
+  if (Number.isFinite(lat) && Number.isFinite(lon)
+    && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) return [lon, lat];
 
   // georss:point "lat lon"
   const geoPoint = xmlText(item, 'georss:point') || xmlText(item, 'georss:Point');
@@ -71,7 +72,8 @@ export function parseCoordinates(item) {
     if (parts.length >= 2) {
       const glat = Number.parseFloat(parts[0]);
       const glon = Number.parseFloat(parts[1]);
-      if (Number.isFinite(glat) && Number.isFinite(glon)) return [glon, glat];
+      if (Number.isFinite(glat) && Number.isFinite(glon)
+        && glat >= -90 && glat <= 90 && glon >= -180 && glon <= 180) return [glon, glat];
     }
   }
   return null;

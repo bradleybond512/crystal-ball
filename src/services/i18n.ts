@@ -83,7 +83,7 @@ export async function initI18n(): Promise<void> {
  fallbackLng: 'en',
  debug: import.meta.env.DEV,
  interpolation: {
- escapeValue: false, // not needed for these simple strings
+ escapeValue: true, // HTML-escape interpolated values; HTML-bearing strings render via safeHtml()
  },
  detection: {
  order: ['localStorage', 'navigator'],

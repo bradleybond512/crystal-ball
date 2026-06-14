@@ -2515,6 +2515,11 @@ fn local_api_paths(app: &AppHandle) -> (PathBuf, PathBuf) {
 }
 
 fn resolve_node_binary(app: &AppHandle) -> Option<PathBuf> {
+ // The LOCAL_API_NODE_BIN override is honored in debug builds only. In a
+ // release build, an attacker who can set this env var could redirect the
+ // sidecar to an arbitrary executable that inherits the injected keychain
+ // secrets, so the override must be ignored outside development.
+ #[cfg(debug_assertions)]
  if let Ok(explicit) = env::var("LOCAL_API_NODE_BIN") {
  let explicit_path = PathBuf::from(explicit);
  if explicit_path.is_file() {
@@ -2717,20 +2722,39 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  *token_slot = Some(generate_local_token());
  }
  let local_api_token = token_slot.clone().unwrap();
- // Write token to file so MCP server and other local tools can authenticate
+ // Write token to file so MCP server and other local tools can authenticate.
+ // Create the file with 0600 atomically (O_CREAT|O_TRUNC + mode) so there is
+ // no world-readable window between creation and permission hardening that a
+ // co-resident process could exploit to read the bearer token.
  let token_file = logs_dir_path(app)?.join("sidecar.token");
- if let Err(e) = fs::write(&token_file, &local_api_token) {
- append_desktop_log(app, "WARN", &format!("failed to write token file: {e}"));
- } else {
+ let write_token = || -> std::io::Result<()> {
+ let mut opts = std::fs::OpenOptions::new();
+ opts.write(true).create(true).truncate(true);
  #[cfg(unix)]
  {
- use std::os::unix::fs::PermissionsExt;
- let _ = fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600));
+ use std::os::unix::fs::OpenOptionsExt;
+ opts.mode(0o600);
  }
+ let mut file = opts.open(&token_file)?;
+ file.write_all(local_api_token.as_bytes())?;
+ Ok(())
+ };
+ if let Err(e) = write_token() {
+ append_desktop_log(app, "WARN", &format!("failed to write token file: {e}"));
  }
  drop(token_slot);
 
  let mut cmd = Command::new(&node_binary);
+ // Strip dangerous Node runtime env vars inherited from the parent process so
+ // a co-resident attacker who controls the app's environment can't inject
+ // code into the sidecar (which receives the keychain secrets). We do NOT
+ // env_clear() because PATH-based Node resolution still relies on the
+ // inherited environment.
+ cmd.env_remove("NODE_OPTIONS")
+ .env_remove("NODE_PATH")
+ .env_remove("NODE_REPL_EXTERNAL_MODULE")
+ .env_remove("NODE_REPL_HISTORY")
+ .env_remove("NODE_EXTRA_CA_CERTS");
  #[cfg(windows)]
  cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW — hide the node.exe console
  // Sanitize paths for Node.js on Windows: strip \\?\ UNC prefix and set

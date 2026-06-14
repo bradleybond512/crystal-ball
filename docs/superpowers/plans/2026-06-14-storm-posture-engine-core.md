@@ -46,6 +46,7 @@ Tests live in `src/services/survival/__tests__/<name>.test.mts`.
 ## Task 1: Shared contract — `survival-types.ts`
 
 **Files:**
+
 - Create: `src/services/survival/survival-types.ts`
 - Test: `src/services/survival/__tests__/survival-types.test.mts`
 
@@ -268,6 +269,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 2: Threat projection — `threat-projection.ts`
 
 **Files:**
+
 - Create: `src/services/survival/threat-projection.ts`
 - Test: `src/services/survival/__tests__/threat-projection.test.mts`
 
@@ -397,6 +399,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 3: Posture engine — `survival-posture.ts`
 
 **Files:**
+
 - Create: `src/services/survival/survival-posture.ts`
 - Test: `src/services/survival/__tests__/survival-posture.test.mts`
 
@@ -572,6 +575,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 4: Moves + effect modeling — `survival-moves.ts`
 
 **Files:**
+
 - Create: `src/services/survival/survival-moves.ts`
 - Test: `src/services/survival/__tests__/survival-moves.test.mts`
 
@@ -707,6 +711,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 5: Plan + the commit→improve loop — `survival-plan.ts`
 
 **Files:**
+
 - Create: `src/services/survival/survival-plan.ts`
 - Test: `src/services/survival/__tests__/survival-plan.test.mts`
 
@@ -848,6 +853,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 6: Snapshot spine + grid-down projection — `world-snapshot.ts`
 
 **Files:**
+
 - Create: `src/services/survival/world-snapshot.ts`
 - Test: `src/services/survival/__tests__/world-snapshot.test.mts`
 
@@ -1010,6 +1016,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Task 7: End-to-end loop proof + test script + typecheck
 
 **Files:**
+
 - Create: `src/services/survival/__tests__/survival-loop.test.mts`
 - Modify: `package.json` (add `test:survival` script next to the other `test:*` scripts)
 
@@ -1089,6 +1096,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ## Self-Review (completed by plan author)
 
 **Spec coverage (Part III engine pieces):**
+
 - World Snapshot (Layer 0 spine) → Task 6. ✓
 - Threat projection (Layer 1) → Task 2. ✓
 - Survival posture, multi-axis, explainable (Layer 3) → Task 3. ✓

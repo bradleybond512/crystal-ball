@@ -3,7 +3,9 @@ import type { NwsAlertMinimal, SavedPlace } from '../weather/weather-threat-type
 import type { DomainFreshness, SurvivalPlan, SurvivalPosture, WorldSnapshot } from './survival-types.ts';
 import { axisLabel } from './survival-types.ts';
 import { emptyPlan } from './survival-plan.ts';
+import { applyPlanToPosture } from './survival-plan.ts';
 import { computePosture } from './survival-posture.ts';
+import { availableMoves } from './survival-moves.ts';
 
 export const SNAPSHOT_VERSION = 1;
 const DEFAULT_STALE_AFTER_MS = 15 * 60_000;
@@ -33,17 +35,23 @@ export function buildSnapshot(inputs: SnapshotInputs, options: SnapshotOptions =
 
   const weatherAlerts = [...inputs.weatherAlerts];
   const savedPlaces = [...inputs.savedPlaces];
-  const posture: SurvivalPosture = computePosture({ weatherAlerts, savedPlaces, freshness, capturedAtMs: now }, { now });
-
-  return {
+  const basePosture: SurvivalPosture = computePosture({ weatherAlerts, savedPlaces, freshness, capturedAtMs: now }, { now });
+  const plan = inputs.plan ?? emptyPlan();
+  const baseSnapshot: WorldSnapshot = {
     version: SNAPSHOT_VERSION,
     capturedAtMs: now,
     freshness,
     weatherAlerts,
     savedPlaces,
-    posture,
-    plan: inputs.plan ?? emptyPlan(),
+    posture: basePosture,
+    plan,
   };
+
+  if (plan.committed.length === 0) return baseSnapshot;
+
+  const moves = availableMoves(basePosture, baseSnapshot, { now });
+  const posture = applyPlanToPosture(basePosture, plan, moves);
+  return { ...baseSnapshot, posture };
 }
 
 export function serializeSnapshot(snapshot: WorldSnapshot): string {
@@ -71,10 +79,17 @@ export function projectView(snapshot: WorldSnapshot, options: { now?: number } =
   const now = options.now ?? snapshot.capturedAtMs;
   const weather = snapshot.freshness.find((f) => f.domain === 'weather');
   const weatherAgeMs = weather ? now - weather.fetchedAtMs : 0;
+  const isStale = weather ? weatherAgeMs > DEFAULT_STALE_AFTER_MS : true;
+
+  const staleNote = `weather feed stale (${Math.round(weatherAgeMs / 60_000)} min old)`;
+  const posture = isStale && !snapshot.posture.staleInputs.some((s) => s.includes('weather'))
+    ? { ...snapshot.posture, staleInputs: [...snapshot.posture.staleInputs, staleNote] }
+    : snapshot.posture;
+
   return {
-    posture: snapshot.posture,
+    posture,
     weatherAgeMs,
-    isStale: weather ? weatherAgeMs > DEFAULT_STALE_AFTER_MS : true,
+    isStale,
     worstAxisLabel: axisLabel(snapshot.posture.worstAxis),
   };
 }

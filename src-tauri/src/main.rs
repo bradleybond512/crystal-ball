@@ -870,6 +870,25 @@ fn cache_file_path(app: &AppHandle) -> Result<PathBuf, String> {
  Ok(dir.join("persistent-cache.json"))
 }
 
+// Exclude the app data directory from Time Machine / iCloud backups.
+// The persistent-cache.json contains plaintext intelligence data that should
+// not leave the machine. Uses the com.apple.metadata:com_apple_backup_excludeItem
+// xattr, which is the same mechanism Xcode uses for DerivedData.
+#[cfg(target_os = "macos")]
+fn exclude_app_data_from_backup(dir: &std::path::Path) {
+ let _ = std::process::Command::new("xattr")
+ .args([
+ "-w",
+ "com.apple.metadata:com_apple_backup_excludeItem",
+ "com.apple.backup.excludeItem",
+ &dir.to_string_lossy(),
+ ])
+ .output();
+}
+
+#[cfg(not(target_os = "macos"))]
+fn exclude_app_data_from_backup(_dir: &std::path::Path) {}
+
 #[tauri::command]
 fn read_cache_entry(webview: Webview, cache: tauri::State<'_, PersistentCache>, key: String) -> Result<Option<Value>, String> {
  require_trusted_window(webview.label())?;
@@ -3191,6 +3210,11 @@ fn main() {
  // Load persistent cache into memory (avoids 14MB file I/O on every IPC call)
  let cache_path = cache_file_path(&app.handle()).unwrap_or_default();
  app.manage(PersistentCache::load(&cache_path));
+ // Mark the app data dir as excluded from Time Machine / iCloud so
+ // persistent-cache.json (plaintext intelligence data) doesn't leave the machine.
+ if let Ok(data_dir) = app.handle().path().app_data_dir() {
+ exclude_app_data_from_backup(&data_dir);
+ }
 
  // Apply native macOS vibrancy (HudWindow material, 12pt rounded corners).
  // Pairs with `transparent: true` + `macOSPrivateApi: true` in tauri.conf.json

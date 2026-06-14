@@ -66,7 +66,7 @@ function warnEventStoreWriteFailure(kind, err) {
 // events.db must not store entity names, watchlist content, free-text titles,
 // or exact coordinates.  Use a whitelist (keep only safe structural fields)
 // and blur location to ~10 km (1 decimal place ≈ 11 km).
-const _COORD_KEY_RE = /^(?:lat|lng|long|latitude|longitude|x|y)$/i;
+const _COORD_KEY_RE = /^(?:lat|lng|lon|long|latitude|longitude|x|y)$/i;
 
 function _blurLocation(loc) {
   if (!loc || typeof loc !== 'object' || Array.isArray(loc)) return null;

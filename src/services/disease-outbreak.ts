@@ -127,19 +127,21 @@ async function fetchReliefWeb(): Promise<DiseaseOutbreak[]> {
  };
  }[];
  };
- return (json.data ?? []).map(item => {
- const f = item.fields;
+ const rows = Array.isArray(json?.data) ? json.data : [];
+ return rows.flatMap(item => {
+ const f = item?.fields;
+ if (!f || typeof f.title !== 'string') return [];
  const country = f.country?.[0]?.name ?? extractCountry(f.title);
- return {
+ return [{
  id: `rw-${item.id}`,
  title: f.title,
  country,
  disease: extractDiseaseName(f.title),
  date: new Date(f.date?.created ?? Date.now()),
  url: f.url,
- source: 'ReliefWeb',
+ source: 'ReliefWeb' as const,
  severity: scoreSeverity(f.title),
- };
+ }];
  });
   } catch {
  return [];

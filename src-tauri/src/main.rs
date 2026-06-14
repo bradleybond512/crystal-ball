@@ -1245,9 +1245,19 @@ fn close_settings_window(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 async fn open_live_channels_window_command(
+ webview: Webview,
  app: AppHandle,
  base_url: Option<String>,
 ) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
+ // The live-channels window loads `base_url` directly. Only permit the local
+ // sidecar origin so a compromised renderer cannot point this trusted window at
+ // an attacker-controlled host. Absent/empty falls through to bundled app content.
+ if let Some(ref origin) = base_url {
+ if !origin.is_empty() && !origin.starts_with("http://127.0.0.1:46123/") {
+ return Err("Refusing live-channels base URL outside the local sidecar origin".to_string());
+ }
+ }
  open_live_channels_window(&app, base_url)
 }
 
@@ -1729,6 +1739,13 @@ async fn fetch_polymarket(webview: Webview, path: String, params: String) -> Res
 }
 
 
+/// Navigation guard for trusted windows. Only same-origin bundled app content
+/// (`tauri://` scheme) or the local sidecar (`127.0.0.1` host) may be loaded;
+/// any attempt to navigate the window to an external origin is blocked.
+fn is_trusted_window_navigation(url: &Url) -> bool {
+ url.scheme() == "tauri" || url.host_str() == Some("127.0.0.1")
+}
+
 fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Result<(), String> {
  if let Some(window) = app.get_webview_window("live-channels") {
  let _ = window.show();
@@ -1754,6 +1771,7 @@ fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Resul
  .inner_size(680.0, 760.0)
  .min_inner_size(520.0, 600.0)
  .resizable(true)
+ .on_navigation(is_trusted_window_navigation)
  .background_color(tauri::webview::Color(26, 28, 30, 255))
  .build()
  .map_err(|e| format!("Failed to create live channels window: {e}"))?;

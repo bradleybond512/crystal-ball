@@ -120,16 +120,16 @@ export class FloodMonitorPanel extends Panel {
       <div class="flood-summary-row">
         <div class="flood-stat">
           <span class="flood-stat-value ${this.gaugeData?.atFloodStage ? 'flood-stat-alert' : ''}">${gaugeCount}</span>
-          <span class="flood-stat-label">Gauges at flood stage</span>
+          <span class="flood-stat-label">Gauges at flood stage${ctx.isActive ? ' (US total)' : ''}</span>
         </div>
         <div class="flood-stat">
           <span class="flood-stat-value ${this.warningData?.total ? 'flood-stat-alert' : ''}">${warningCount}</span>
-          <span class="flood-stat-label">NWS flood alerts</span>
+          <span class="flood-stat-label">NWS flood alerts${ctx.isActive ? ' (US total)' : ''}</span>
         </div>
       </div>
     `);
 
-    // NWS warnings by state
+    // NWS warnings by state (state-level data — no per-alert coordinates, shown nationwide when filter active)
     if (this.warningData && this.warningData.byState.length > 0) {
       const rows = this.warningData.byState.slice(0, 10).map(s => {
         const badge = severityBadge(s.maxSeverity ?? 'Unknown');
@@ -142,9 +142,10 @@ export class FloodMonitorPanel extends Panel {
         </tr>`;
       }).join('');
 
+      const stateNote = ctx.isActive ? ' <span style="font-size:10px;opacity:0.5;font-weight:400;">(state-level, not proximity filtered)</span>' : '';
       sections.push(`
         <div class="flood-section">
-          <div class="flood-section-header">NWS Active Alerts by State</div>
+          <div class="flood-section-header">NWS Active Alerts by State${stateNote}</div>
           <table class="flood-table">
             <thead><tr><th>State</th><th>#</th><th>Severity</th><th>Alert Type</th></tr></thead>
             <tbody>${rows}</tbody>

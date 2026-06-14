@@ -43,7 +43,6 @@ function buildAlert(h: Hypothesis, count: number): UnifiedAlert {
 }
 
 function handleSnapshot(snapshot: AnalystSnapshot): void {
-  if (isGhostMode()) return; // Ghost Mode: suppress all notifications
   if (hudVisible) return; // user is looking — no need to nudge
   const now = Date.now();
   // Prune old entries.
@@ -54,10 +53,13 @@ function handleSnapshot(snapshot: AnalystSnapshot): void {
     if (h.risk !== 'critical') continue;
     const sig = signatureFor(h);
     if (notified.has(sig)) continue;
+    // Always record the signature even in Ghost Mode so hypotheses seen during
+    // Ghost Mode don't re-fire as "fresh" once the mode is turned off.
     notified.set(sig, now);
     fresh.push(h);
   }
   if (fresh.length === 0) return;
+  if (isGhostMode()) return; // Ghost Mode: signatures recorded above, but no banner
 
   // Pick the highest-confidence fresh hypothesis as the notification headline.
   const lead = [...fresh].sort((a, b) => b.confidence - a.confidence)[0];

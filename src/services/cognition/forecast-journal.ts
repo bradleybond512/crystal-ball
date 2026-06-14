@@ -175,8 +175,12 @@ export interface HypothesisLike {
 
 // ── Simple ID generator (no crypto dependency) ────────────────────────────────
 
+let _idCounter = 0;
+
 function generateId(nowMs: number): string {
-  const r = Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
+  // Deterministic monotonic suffix — no Math.random, so IDs stay reproducible
+  // and collision-free even within the same millisecond.
+  const r = (_idCounter++).toString(36).padStart(6, '0');
   return `jrnl-${nowMs.toString(36)}-${r}`;
 }
 
@@ -320,7 +324,7 @@ export function getAllJournalEntries(): JournalEntry[] {
  */
 export function getOperatorCurve(domain?: FactDomain): ReliabilityCurve {
   ensureLoaded();
-  const records = _entries.map(toPredictionRecord);
+  const records = _entries.map(e => toPredictionRecord(e));
   return buildCurve(records, domain);
 }
 

@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildSnapshot, serializeSnapshot, deserializeSnapshot, projectView, SNAPSHOT_VERSION } from '../world-snapshot.ts';
 import { computePosture } from '../survival-posture.ts';
+import { availableMoves } from '../survival-moves.ts';
+import { commitMove, emptyPlan } from '../survival-plan.ts';
 import type { NwsAlertMinimal, AlertPolygon, SavedPlace } from '../../weather/weather-threat-types.ts';
 
 const NOW = 1_700_000_000_000;
@@ -32,6 +34,7 @@ test('GRID-DOWN: serialize -> deserialize -> project yields full posture with no
   assert.equal(view.isStale, true); // 3h old > 15min threshold
   assert.ok(view.weatherAgeMs >= 3 * 3_600_000);
   assert.equal(view.worstAxisLabel, 'Physical safety');
+  assert.ok(view.posture.staleInputs.some((s) => s.includes('weather')), 'projected stale snapshot must surface stale weather input');
 });
 
 test('recomputing posture from the deserialized snapshot equals the stored posture', () => {
@@ -44,4 +47,13 @@ test('recomputing posture from the deserialized snapshot equals the stored postu
 
 test('deserialize rejects an unknown version', () => {
   assert.throws(() => deserializeSnapshot(JSON.stringify({ version: 999 })), /Unsupported snapshot version/);
+});
+
+test('buildSnapshot applies a committed plan so the persisted posture is mitigated', () => {
+  const base = buildSnapshot({ weatherAlerts: ALERTS, savedPlaces: [HOME], weatherFetchedAtMs: NOW - 60_000 }, { now: NOW });
+  const moves = availableMoves(base.posture, base, { now: NOW });
+  assert.ok(moves.length >= 2);
+  const plan = commitMove(commitMove(emptyPlan(), moves[0]!, NOW), moves[1]!, NOW);
+  const withPlan = buildSnapshot({ weatherAlerts: ALERTS, savedPlaces: [HOME], weatherFetchedAtMs: NOW - 60_000, plan }, { now: NOW });
+  assert.ok(withPlan.posture.overallLevel < base.posture.overallLevel, 'committed plan should lower the persisted posture');
 });

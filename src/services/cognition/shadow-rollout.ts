@@ -181,7 +181,7 @@ function getCalStore(): ForecastCalibrationStore | null {
 function getStorage(): StorageLike | null {
   if (_deps.storage !== undefined) return _deps.storage;
   try {
-    const ls = (globalThis as Record<string, unknown>)['localStorage'] as StorageLike | undefined;
+    const ls = (globalThis as Record<string, unknown>).localStorage as StorageLike | undefined;
     return ls ?? null;
   } catch {
     return null;
@@ -332,7 +332,7 @@ export function pushSchemaPair(
  * Compute Brier score for a set of (probability, outcome) pairs.
  * Returns null when there are no pairs.
  */
-function brierScore(pairs: Array<{ p: number; outcome: boolean }>): number | null {
+function brierScore(pairs: { p: number; outcome: boolean }[]): number | null {
   if (pairs.length === 0) return null;
   let sum = 0;
   for (const { p, outcome } of pairs) {
@@ -427,8 +427,8 @@ export function shadowVerdict(
   // is within 0.001 of liveOutput and whose resolvedAt is not null.
   // This is sufficient for the flip-gate math but is noted as approximate.
 
-  const livePairs: Array<{ p: number; outcome: boolean }> = [];
-  const shadowPairs: Array<{ p: number; outcome: boolean }> = [];
+  const livePairs: { p: number; outcome: boolean }[] = [];
+  const shadowPairs: { p: number; outcome: boolean }[] = [];
 
   for (const cmp of comparisons) {
     const liveP = typeof cmp.liveOutput === 'number' ? cmp.liveOutput : null;

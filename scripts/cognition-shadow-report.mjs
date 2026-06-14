@@ -38,13 +38,13 @@ import { readFileSync } from 'node:fs';
 // ── ANSI colours (best-effort; disabled when not a TTY) ───────────────────────
 const isTTY = process.stdout.isTTY;
 const C = {
-  reset:  isTTY ? '\x1b[0m'  : '',
-  bold:   isTTY ? '\x1b[1m'  : '',
-  green:  isTTY ? '\x1b[32m' : '',
-  yellow: isTTY ? '\x1b[33m' : '',
-  red:    isTTY ? '\x1b[31m' : '',
-  cyan:   isTTY ? '\x1b[36m' : '',
-  dim:    isTTY ? '\x1b[2m'  : '',
+  reset:  isTTY ? '\u001B[0m'  : '',
+  bold:   isTTY ? '\u001B[1m'  : '',
+  green:  isTTY ? '\u001B[32m' : '',
+  yellow: isTTY ? '\u001B[33m' : '',
+  red:    isTTY ? '\u001B[31m' : '',
+  cyan:   isTTY ? '\u001B[36m' : '',
+  dim:    isTTY ? '\u001B[2m'  : '',
 };
 
 // ── Types (mirroring shadow-rollout.ts) ───────────────────────────────────────
@@ -127,8 +127,8 @@ let snapshot;
 try {
   const raw = readFileSync(jsonPath, 'utf8');
   snapshot = JSON.parse(raw);
-} catch (err) {
-  console.error(`${C.red}Error reading snapshot: ${err.message}${C.reset}`);
+} catch (error) {
+  console.error(`${C.red}Error reading snapshot: ${error.message}${C.reset}`);
   process.exit(1);
 }
 

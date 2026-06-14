@@ -133,6 +133,23 @@ test('appendObservationToEventStore blurs location coordinates to ~10 km', () =>
   });
 });
 
+test('appendObservationToEventStore blurs ObservationLocation { lat, lon } shape', () => {
+  withStore((store) => {
+    appendObservationToEventStore(store, {
+      id: 'obs-loc2',
+      domain: 'weather',
+      timestamp: Date.now(),
+      severity: 'LOW',
+      location: { lat: 41.8827, lon: -87.6233, radiusKm: 5 },
+    });
+    const [row] = store.queryEvents({});
+    const { location } = JSON.parse(row.payload);
+    assert.equal(location.lat, 41.9, 'lat blurred');
+    assert.equal(location.lon, -87.6, 'lon blurred');
+    assert.equal(location.radiusKm, 5, 'radiusKm passes through');
+  });
+});
+
 test('appendSituationToEventStore omits summary and description from payload', () => {
   withStore((store) => {
     appendSituationToEventStore(store, {

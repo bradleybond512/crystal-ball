@@ -11,6 +11,20 @@
  * Per docs/COGNITIVE_ENHANCEMENT_PLAN.md PR 15.
  */
 
+// Install a working in-memory localStorage BEFORE any import so the
+// tunable-params-store (which persists selfConsistencyK via localStorage)
+// actually retains values set with setTunedParam in this test process.
+// We assign unconditionally: Node exposes a native `localStorage` object whose
+// setItem throws unless --localstorage-file is given, so `??=` would leave that
+// broken object in place and every setTunedParam call would be dropped, making
+// getTunedParam always return the default (k=3).
+const _tunableStore: Record<string, string> = {};
+(globalThis as unknown as Record<string, unknown>).localStorage = {
+  getItem: (k: string): string | null => _tunableStore[k] ?? null,
+  setItem: (k: string, v: string): void => { _tunableStore[k] = v; },
+  removeItem: (k: string): void => { delete _tunableStore[k]; },
+};
+
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -188,7 +202,7 @@ describe('self-consistency k=1: byte-identical path', () => {
           provider: 'local' as const,
         };
       }
-      if (prompt.includes('reviewer') || prompt.includes('"keep"')) {
+      if (prompt.includes('senior forecasting reviewer') || prompt.includes('"keep": true/false')) {
         // Aggregate review call.
         callLog.push('review');
         return { text: '{"keep": true, "reason": "reasonable"}', provider: 'local' as const };
@@ -263,7 +277,7 @@ describe('self-consistency k=3: median of samples', () => {
     };
 
     _injectGenerateTextForTests(async (prompt) => {
-      if (prompt.includes('"keep"') || prompt.includes('reviewer')) {
+      if (prompt.includes('senior forecasting reviewer') || prompt.includes('"keep": true/false')) {
         return { text: '{"keep": true, "reason": "ok"}', provider: 'local' as const };
       }
       if (prompt.includes('NECESSARY') || prompt.includes('"conditions"')) {
@@ -327,7 +341,7 @@ describe('self-consistency: partial-budget degradation', () => {
 
     _injectGenerateTextForTests(async (prompt) => {
       callCount += 1;
-      if (prompt.includes('"keep"') || prompt.includes('reviewer')) {
+      if (prompt.includes('senior forecasting reviewer') || prompt.includes('"keep": true/false')) {
         return { text: '{"keep": true, "reason": "ok"}', provider: 'local' as const };
       }
       if (prompt.includes('NECESSARY') || prompt.includes('"conditions"')) {
@@ -356,7 +370,7 @@ describe('self-consistency: partial-budget degradation', () => {
 
   it('all persona samples fail: pipeline degrades gracefully to deterministic-only', async () => {
     _injectGenerateTextForTests(async (prompt) => {
-      if (prompt.includes('"keep"') || prompt.includes('reviewer')) {
+      if (prompt.includes('senior forecasting reviewer') || prompt.includes('"keep": true/false')) {
         return { text: '{"keep": true, "reason": "ok"}', provider: 'local' as const };
       }
       // All calls throw.

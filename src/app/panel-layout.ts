@@ -612,6 +612,7 @@ export class PanelLayoutManager implements AppModule {
   private criticalBannerEl: HTMLElement | null = null;
   private dcStrip: DataCenterPinnedStrip | null = null;
   private unsubDcPlaces: (() => void) | null = null;
+  private analystHud: AnalystHUD | null = null;
   private readonly applyTimeRangeFilterDebounced: () => void;
   private readonly _onUpdateState = () => { this.renderSidebarUpdateBtn(); };
 
@@ -686,6 +687,7 @@ export class PanelLayoutManager implements AppModule {
  this.stalenessBanner.destroy();
  this.stalenessBanner = null;
  }
+ if (this.analystHud) { this.analystHud.destroy(); this.analystHud = null; }
  // Clean up datacenter strip + saved-places subscription
  if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
@@ -955,15 +957,15 @@ export class PanelLayoutManager implements AppModule {
  // Emitters last.
  startModeForecast();
  startAnalystLoop();
- const analystHud = new AnalystHUD();
- analystHud.mount(document.body);
+ this.analystHud = new AnalystHUD();
+ this.analystHud.mount(document.body);
  ensureReasoningDebugCss();
  const debugOverlay = new ReasoningDebugOverlay();
  debugOverlay.mount(document.body);
  document.addEventListener('keydown', (e: KeyboardEvent) => {
    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
      e.preventDefault();
-     analystHud.toggle();
+     this.analystHud?.toggle();
    }
  });
  document.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -1995,7 +1997,7 @@ export class PanelLayoutManager implements AppModule {
  30_000,
  { priority: 'normal', runImmediately: true },
  );
- });
+ }).catch((err) => { console.error('[boot] sidecar-health-probe failed:', err); });
  // Periodic quality-debt collector. Priority='low' so it pauses
  // when the document is hidden (the export bundle and System
  // Diagnostic catch up on next tick once visible again).

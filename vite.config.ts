@@ -887,6 +887,13 @@ export default defineConfig({
  },
  }),
   ],
+  // Worker bundles do not inherit the top-level `plugins` array, so the
+  // satellite.js WASM re-export must be stripped here too — the SGP4 worker
+  // imports the satellite.js barrel and would otherwise pull in the WASM
+  // module's top-level await, which the IIFE worker output cannot represent.
+  worker: {
+ plugins: () => [satelliteWasmStripPlugin()],
+  },
   resolve: {
  alias: {
  '@': resolve(__dirname, 'src'),

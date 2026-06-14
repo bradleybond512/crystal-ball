@@ -495,6 +495,10 @@ test('resetEntityDossiers: clears all dossiers', () => {
   ingestFromHypotheses([makeHypothesis({ statement: 'RUS situation.' })]);
   assert.ok(getDossierCount() > 0);
   resetEntityDossiers();
+  // resetEntityDossiers clears the in-memory map but not the backing store;
+  // clear the persisted store too so the lazy reload on getDossierCount can't
+  // rehydrate the dossier we just ingested.
+  for (const k of Object.keys(_store)) delete _store[k];
   // After reset, configure again to ensure fresh state
   configure({
     storage: stubStorage,

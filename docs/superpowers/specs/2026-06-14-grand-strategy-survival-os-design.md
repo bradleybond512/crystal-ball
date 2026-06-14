@@ -125,6 +125,7 @@ does, how you use it, what it depends on.*
 1. **`world-snapshot.ts`** (pure)
    - *Does:* defines the on-device save-file and pure build/serialize/project fns.
    - *Interface:*
+
      ```ts
      interface WorldSnapshot {
        version: number;            // schema version for migration
@@ -140,6 +141,7 @@ does, how you use it, what it depends on.*
      deserializeSnapshot(json): WorldSnapshot;
      projectView(s): StormPostureViewModel;  // pure projection the UI renders
      ```
+
    - *Depends on:* the type modules only. **No IDB/DOM here.**
 
 2. **`snapshot-store.ts`** (adapter — IDB/DOM allowed)
@@ -150,6 +152,7 @@ does, how you use it, what it depends on.*
 3. **`survival-posture.ts`** (pure)
    - *Does:* defines the posture model and computes it from a snapshot.
    - *Interface:*
+
      ```ts
      type Axis = 'physical_safety' | 'supply' | 'financial' | 'mobility'
                | 'comms' | 'health' | 'energy_water' | 'security';
@@ -165,6 +168,7 @@ does, how you use it, what it depends on.*
      interface SurvivalPosture { axes: AxisState[]; overall: AxisState; capturedAt: string }
      computePosture(s: WorldSnapshot): SurvivalPosture;
      ```
+
    - *E1 scope:* `physical_safety` computed fully from weather threats; the other
      seven axes present-but-flat (so the multi-axis UI is real but only one axis
      moves). This makes E2 generalization a fill-in, not a rebuild.
@@ -172,6 +176,7 @@ does, how you use it, what it depends on.*
 4. **`threat-projection.ts`** (pure)
    - *Does:* turns a matched weather alert into posture threats.
    - *Interface:*
+
      ```ts
      interface PostureThreat {
        sourceEventId: string;
@@ -184,11 +189,13 @@ does, how you use it, what it depends on.*
      }
      projectWeatherThreats(matched: PolygonMatchResult[], places: SavedPlace[]): PostureThreat[];
      ```
+
    - *Depends on:* `nws-polygon-match`, `weather-urgency`, `personal-storm-mode`.
 
 5. **`survival-moves.ts`** (pure)
    - *Does:* the move library + effect modeling.
    - *Interface:*
+
      ```ts
      interface SurvivalMove {
        id: string;
@@ -203,6 +210,7 @@ does, how you use it, what it depends on.*
      availableMoves(p: SurvivalPosture, s: WorldSnapshot): SurvivalMove[];
      projectMoveEffect(m: SurvivalMove, p: SurvivalPosture): PostureDelta[];
      ```
+
    - *E1 scope:* storm-relevant moves only (shelter-in-place, evacuate via route,
      secure property, charge devices / fill water / fuel up, pre-position go-bag),
      seeded from `storm-preparedness` + `action-cards`.

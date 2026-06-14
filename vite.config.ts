@@ -637,6 +637,31 @@ function youtubeLivePlugin(): Plugin {
   };
 }
 
+/**
+ * Strips the WASM re-export from the satellite.js barrel at build time.
+ *
+ * satellite.js's dist/index.js does `export * from './wasm/index.js'`, and that
+ * WASM entry uses top-level await — incompatible with the IIFE bundle that
+ * vite-plugin-pwa emits. We only use the pure-JS SGP4 functions, never the WASM
+ * bulk propagator, so the re-export is dead weight that breaks the build.
+ *
+ * This replaces the former scripts/patch-satellite-js.mjs postinstall step, which
+ * mutated node_modules/satellite.js in place. A build transform keeps node_modules
+ * pristine and closes the install-time-mutation supply-chain window (a compromised
+ * satellite.js postinstall could have run before our patch did).
+ */
+function satelliteWasmStripPlugin(): Plugin {
+  return {
+ name: 'satellite-wasm-strip',
+ enforce: 'pre',
+ transform(code, id) {
+ if (!id.includes('satellite.js/dist/index.js')) return null;
+ const stripped = code.replace(/export \* from ['"]\.\/wasm\/index\.js['"];?\s*\n?/g, '');
+ return stripped === code ? null : { code: stripped, map: null };
+ },
+  };
+}
+
 export default defineConfig({
   base: process.env.BASE_PATH || '/',
   define: {
@@ -650,6 +675,7 @@ export default defineConfig({
  __BUILD_ARCH__: JSON.stringify(process.arch === 'arm64' ? 'aarch64' : 'x64'),
   },
   plugins: [
+ satelliteWasmStripPlugin(),
  htmlVariantPlugin(),
  polymarketPlugin(),
  rssProxyPlugin(),

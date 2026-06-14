@@ -1702,6 +1702,14 @@ function _getTrafficEntries() {
   return result;
 }
 
+// Strip query strings before a URL/path is logged. Verbose-mode and the traffic-log
+// endpoint both use this so API keys carried in query params (NASA DONKI, Pulsedive)
+// never reach the console or the persisted log.
+function sanitizeLogUrl(url) {
+  if (url == null) return url;
+  return String(url).split('?')[0];
+}
+
 function recordTraffic(entry) {
   const idx = (_trafficHead + _trafficSize) % TRAFFIC_LOG_MAX;
   trafficLog[idx] = entry;
@@ -1709,7 +1717,7 @@ function recordTraffic(entry) {
   else _trafficHead = (_trafficHead + 1) % TRAFFIC_LOG_MAX;
   if (verboseMode) {
  const ts = entry.timestamp.split('T')[1].replace('Z', '');
- console.log(`[traffic] ${ts} ${entry.method} ${entry.path} → ${entry.status} ${entry.durationMs}ms`);
+ console.log(`[traffic] ${ts} ${entry.method} ${sanitizeLogUrl(entry.path)} → ${entry.status} ${entry.durationMs}ms`);
   }
 }
 
@@ -6833,7 +6841,7 @@ async function dispatch(requestUrl, req, routes, context) {
  // user research patterns to anyone who can read the traffic log.
  const sanitized = _getTrafficEntries().map(entry => ({
  ...entry,
- path: entry.path?.split('?')[0] ?? entry.path,
+ path: sanitizeLogUrl(entry.path),
  }));
  return json({ entries: sanitized, verboseMode, maxEntries: TRAFFIC_LOG_MAX });
   }

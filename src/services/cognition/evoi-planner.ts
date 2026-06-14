@@ -56,7 +56,7 @@ import type { CollectionGap } from '../intelligence/collection-gap-discovery';
  * its continued absence gently reduces escalation probability (LR− = 0.6).
  * Source: calibrated against negative-evidence penalty tuning (PR 2 baseline).
  */
-export const LR_MISSING_SIGNAL_POSITIVE = 4.0;
+export const LR_MISSING_SIGNAL_POSITIVE = 4;
 export const LR_MISSING_SIGNAL_NEGATIVE = 0.6;
 
 /**
@@ -71,14 +71,14 @@ export const LR_PENDING_SIGNAL_NEGATIVE = 0.75;
  * which one is correct is highly informative. LR+ when the hypothesis source
  * is right = 3.0; LR− when it's wrong (other source is right) = 0.4.
  */
-export const LR_PROVIDER_DISAGREE_POSITIVE = 3.0;
+export const LR_PROVIDER_DISAGREE_POSITIVE = 3;
 export const LR_PROVIDER_DISAGREE_NEGATIVE = 0.4;
 
 /**
  * Single-source domain (no backup). Less diagnostic than a disagreement
  * because we're just establishing coverage, not resolving a conflict.
  */
-export const LR_SINGLE_SOURCE_POSITIVE = 2.0;
+export const LR_SINGLE_SOURCE_POSITIVE = 2;
 export const LR_SINGLE_SOURCE_NEGATIVE = 0.7;
 
 /**
@@ -88,7 +88,7 @@ export const LR_SINGLE_SOURCE_NEGATIVE = 0.7;
  */
 export const LR_GAP_HIGH_SEVERITY_POSITIVE = 3.5;
 export const LR_GAP_HIGH_SEVERITY_NEGATIVE = 0.5;
-export const LR_GAP_MEDIUM_SEVERITY_POSITIVE = 2.0;
+export const LR_GAP_MEDIUM_SEVERITY_POSITIVE = 2;
 export const LR_GAP_MEDIUM_SEVERITY_NEGATIVE = 0.65;
 export const LR_GAP_LOW_SEVERITY_POSITIVE = 1.5;
 export const LR_GAP_LOW_SEVERITY_NEGATIVE = 0.8;
@@ -237,12 +237,11 @@ export function expectedInfoGain(
 
   // Compute P(+|H=false) = x from normalization constraint.
   const lrDiff = lrPositive - lrNegative;
-  let pPosGivenFalse: number;
   if (Math.abs(lrDiff) < 1e-9) {
     // Degenerate case: LR+ ≈ LR− → non-diagnostic check.
     return 0;
   }
-  pPosGivenFalse = Math.max(0.01, Math.min(0.99, (1 - lrNegative) / lrDiff));
+  const pPosGivenFalse = Math.max(0.01, Math.min(0.99, (1 - lrNegative) / lrDiff));
   const pPosGivenTrue = Math.max(0.01, Math.min(0.99, lrPositive * pPosGivenFalse));
 
   // Marginal P(result=+).
@@ -369,7 +368,7 @@ const TOP_N = 5;
 export function planCollection(
   // h is the hypothesis this plan is for. Currently used for type context and
   // future per-hypothesis candidate filtering (e.g. domain-scoped gaps).
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   _h: HypothesisLike & { confidence?: number },
   ctx: EvoiContext,
 ): CollectionAction[] {

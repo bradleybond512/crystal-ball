@@ -56,7 +56,7 @@
 
 import { cosineSimilarity } from './vector-index';
 import type { Episode } from './episodic-memory';
-import type { CrisisSignature, CrisisSignatureLibraryOptions } from '../intelligence/crisis-signature-library';
+import type { CrisisSignature,  } from '../intelligence/crisis-signature-library';
 
 // getMemory/putMemory are IDB-backed; lazy-loaded so pure Node tests run fine.
 let _getMemory: (<T>(key: string) => Promise<T | null>) | null = null;
@@ -73,8 +73,8 @@ function lazyLoadIdb(): void {
     _getMemory = mod.getMemory;
     _putMemory = mod.putMemory;
   } catch {
-    _getMemory = async () => null;
-    _putMemory = async () => undefined;
+    _getMemory = () => Promise.resolve(null);
+    _putMemory = () => Promise.resolve();
   }
 }
 
@@ -103,7 +103,7 @@ export interface LearnedSchema {
   /** Whether the schema has been deregistered due to low subsequent hit rate. */
   retired: boolean;
   /** Subsequent outcomes logged after registration (hit/miss). */
-  subsequentOutcomes: Array<{ hit: boolean; recordedAt: number }>;
+  subsequentOutcomes: { hit: boolean; recordedAt: number }[];
 }
 
 /** Summary of one consolidation run. */
@@ -167,13 +167,13 @@ export interface ConsolidationOptions {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 export const STORAGE_KEY = 'crystalball-cognition-schemas-v1';
-const DEFAULT_CLUSTER_SIM = 0.60;
+const DEFAULT_CLUSTER_SIM = 0.6;
 const DEFAULT_MIN_CLUSTER_SIZE = 4;
 const DEFAULT_REGISTER_MIN_N = 6;
-const DEFAULT_HIGH_RATE = 0.70;
-const DEFAULT_LOW_RATE = 0.30;
+const DEFAULT_HIGH_RATE = 0.7;
+const DEFAULT_LOW_RATE = 0.3;
 const DEFAULT_MAX_SCHEMAS = 50;
-const DEFAULT_RETIRE_THRESHOLD = 0.40;
+const DEFAULT_RETIRE_THRESHOLD = 0.4;
 const MIN_SUBSEQUENT_FOR_RETIRE = 5;
 
 // ── Module-level singleton state (schema store) ───────────────────────────────
@@ -202,10 +202,10 @@ function resolveStorage(injected: ConsolidationStorageLike | null | undefined): 
 function isValidSchema(s: unknown): s is LearnedSchema {
   if (!s || typeof s !== 'object') return false;
   const sc = s as Record<string, unknown>;
-  return typeof sc['id'] === 'string' &&
-    typeof sc['name'] === 'string' &&
-    Array.isArray(sc['memberEpisodeIds']) &&
-    typeof sc['distilledAt'] === 'number';
+  return typeof sc.id === 'string' &&
+    typeof sc.name === 'string' &&
+    Array.isArray(sc.memberEpisodeIds) &&
+    typeof sc.distilledAt === 'number';
 }
 
 function applyLoaded(arr: unknown): void {
@@ -290,7 +290,7 @@ function clusterEpisodes(episodes: readonly Episode[], simThreshold: number): Cl
       const seedVec = new Float32Array(seed.vector);
       const clusterMembers: Episode[] = [seed];
 
-      for (const i of [...unassigned]) {
+      for (const i of unassigned) {
         const candidate = tierEps[i]!;
         if (candidate.vector.length !== seedVec.length) continue; // dim mismatch — skip
         const sim = cosineSimilarity(seedVec, new Float32Array(candidate.vector));
@@ -428,12 +428,12 @@ function schemaToSignature(schema: LearnedSchema): CrisisSignature {
 
 /** Generate a stable schema ID from a cluster (based on sorted episode ids). */
 function schemaId(episodes: readonly Episode[]): string {
-  const sorted = [...episodes].map(e => e.id).sort();
+  const sorted = [...episodes].map(e => e.id).sort((a, b) => a.localeCompare(b));
   // Simple deterministic hash of the sorted IDs.
   let h = 5381;
   for (const id of sorted) {
     for (let i = 0; i < id.length; i++) {
-      h = (((h << 5) + h) + id.charCodeAt(i)) >>> 0;
+      h = (((h << 5) + h) + (id.codePointAt(i) ?? 0)) >>> 0;
     }
   }
   return `learned:${h.toString(36)}`;
@@ -534,13 +534,15 @@ function getDefaultRegistrar(): SchemaRegistrar | null {
   }
 }
 
+const emptyEpisodeSource: EpisodeSource = () => [];
+
 function getDefaultEpisodeSource(): EpisodeSource {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require('./episodic-memory') as { getAllEpisodes: () => readonly Episode[] };
     return mod.getAllEpisodes;
   } catch {
-    return () => [];
+    return emptyEpisodeSource;
   }
 }
 
@@ -554,7 +556,7 @@ function getDefaultEpisodeSource(): EpisodeSource {
  *
  * Returns a ConsolidationReport summarising what changed.
  */
-export async function runConsolidation(opts: ConsolidationOptions = {}): Promise<ConsolidationReport> {
+export function runConsolidation(opts: ConsolidationOptions = {}): Promise<ConsolidationReport> {
   const nowFn = opts.now ?? (() => Date.now());
   const storage = resolveStorage(opts.storage);
   load(storage);
@@ -586,7 +588,7 @@ export async function runConsolidation(opts: ConsolidationOptions = {}): Promise
   );
 
   if (resolved.length === 0) {
-    return {
+    return Promise.resolve({
       episodesProcessed: 0,
       clustersFound: 0,
       schemasDistilled: 0,
@@ -594,7 +596,7 @@ export async function runConsolidation(opts: ConsolidationOptions = {}): Promise
       schemasRetired: 0,
       schemasEvicted: 0,
       ranAt,
-    };
+    });
   }
 
   // Step 2: greedy threshold clustering.
@@ -659,7 +661,7 @@ export async function runConsolidation(opts: ConsolidationOptions = {}): Promise
 
   // Check retirement for schemas with enough subsequent outcomes.
   let schemasRetired = 0;
-  for (const schema of [..._schemas]) {
+  for (const schema of _schemas) {
     if (schema.retired) continue;
     if (schema.subsequentOutcomes.length >= MIN_SUBSEQUENT_FOR_RETIRE) {
       const hits = schema.subsequentOutcomes.filter(o => o.hit).length;
@@ -676,7 +678,7 @@ export async function runConsolidation(opts: ConsolidationOptions = {}): Promise
 
   save(storage);
 
-  return {
+  return Promise.resolve({
     episodesProcessed: resolved.length,
     clustersFound: clusters.length,
     schemasDistilled,
@@ -684,7 +686,7 @@ export async function runConsolidation(opts: ConsolidationOptions = {}): Promise
     schemasRetired,
     schemasEvicted,
     ranAt,
-  };
+  });
 }
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -727,7 +729,7 @@ export function configureConsolidationForTests(opts: {
 export function scheduleConsolidation(): void {
   if (typeof globalThis === 'undefined') return;
   const g = globalThis as Record<string, unknown>;
-  if (typeof g['document'] === 'undefined') return; // Node.js — skip
+  if (g.document === undefined) return; // Node.js — skip
 
   const INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 h
 
@@ -771,4 +773,6 @@ export function scheduleConsolidation(): void {
 }
 
 // ── Re-export CrisisSignatureLibraryOptions for convenience (used by registrar type) ──
-export type { CrisisSignatureLibraryOptions };
+
+
+export {type CrisisSignatureLibraryOptions} from '../intelligence/crisis-signature-library';

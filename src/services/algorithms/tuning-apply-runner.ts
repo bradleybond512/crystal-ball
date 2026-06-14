@@ -22,6 +22,7 @@ import { gateAdjustmentProposal } from '@/services/governance/policy-gate';
 import { getTunings, setTunedParam, tunableAffectsNotifications } from './tunable-params-store';
 import { recordTuningDecision } from './tuning-decision-log';
 import { proposeTuningSafety } from './tuning-safety-fixtures';
+import { backtestChange, isBacktestable, type BacktestResult } from './historical-backtest';
 import type { AlgorithmAdjustmentTuning } from './safe-adjustment';
 
 export interface TuningApplyResult {
@@ -52,7 +53,23 @@ export interface TuningApplyDeps {
    * per-tuning boolean — see `tuning-safety-fixtures.ts` and the gameplan.)
    */
   replayPassed?: boolean;
+  /**
+   * Explicit override for the gate's `backtestPassed` signal. When UNSET (the
+   * production default), the runner computes it PER PROPOSAL by replaying the
+   * candidate value against the last 30 days of graded ledger history via
+   * `historical-backtest` — honestly: a change passes only if it does not
+   * regress the algorithm's accuracy over that window, and a knob that isn't
+   * backtestable (its score isn't comparable to the threshold) fails closed.
+   * Set explicitly only in tests.
+   *
+   * (Backtest-before-apply gate, Phase 4: this replaced the always-false
+   * default. The synthetic `backtest-engine` cannot score an arbitrary knob;
+   * see `historical-backtest.ts`.)
+   */
   backtestPassed?: boolean;
+  /** Reference clock for the backtest's rolling window. Defaults to Date.now().
+   *  Injectable so the historical window is reproducible in tests. */
+  now?: () => number;
   /** Per-proposal safety signal (algorithmId, parameterId, current, next) →
    *  safe?. Defaults to the tuning-safety fixtures. Injectable for tests. */
   safetyCheck?: (algorithmId: string, parameterId: string, currentValue: number, nextValue: number) => boolean;
@@ -88,7 +105,7 @@ export function runTuningApply(deps: TuningApplyDeps = {}): TuningApplyResult {
   const apply = deps.apply ?? setTunedParam;
   const tunings = deps.tunings ?? getTunings();
   const safetyCheck = deps.safetyCheck ?? proposeTuningSafety;
-  const backtestPassed = deps.backtestPassed ?? false;
+  const now = deps.now ?? (() => Date.now());
   const calibrations = summarizeCalibration(ledger.all());
   const report = aggregateAlgorithmHealth({ definitions, calibrations });
   const proposals = proposeAdjustments({ reports: [...report.algorithms], tunings });
@@ -110,6 +127,26 @@ export function runTuningApply(deps: TuningApplyDeps = {}): TuningApplyResult {
     // can't assess the change; and a throwing scorer must fail closed for
     // THIS proposal only (never abort the pass or leave partial applies).
     const replayPassed = deps.replayPassed ?? safetyPasses(safetyCheck, p.algorithmId, p.parameterId, prior, p.nextValue);
+    // Honest per-proposal backtest: replay the candidate against the last 30
+    // days of graded history. A non-backtestable knob or a regressing change
+    // fails closed, so the gate can never auto-apply a change we can't prove
+    // doesn't hurt accuracy. (The result is surfaced when it blocks a change.)
+    let backtestResult: BacktestResult | undefined;
+    let backtestPassed: boolean;
+    if (deps.backtestPassed !== undefined) {
+      backtestPassed = deps.backtestPassed;
+    } else {
+      backtestResult = backtestChange(
+        { algorithmId: p.algorithmId, parameterId: p.parameterId, priorValue: prior, nextValue: p.nextValue },
+        ledger.byAlgorithm(p.algorithmId),
+        { now: now() },
+      );
+      backtestPassed = backtestResult.verdict === 'pass';
+    }
+    if (backtestResult && backtestResult.verdict === 'fail' && isBacktestable(p.algorithmId, p.parameterId)) {
+      // eslint-disable-next-line no-console -- bridged to the desktop log; a blocked regression must be auditable
+      console.warn(`[backtest] held ${p.algorithmId}.${p.parameterId} ${prior} → ${p.nextValue}: ${backtestResult.reason}`);
+    }
     const gated = gateAdjustmentProposal({
       proposal: p,
       algorithm: def ? { id: def.algorithmId, criticality: def.criticality, domain: def.domain } : undefined,

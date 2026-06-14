@@ -376,7 +376,7 @@ Ghost Mode: polling ×5 (`getGhostRefreshMultiplier()`), analytics suppressed, n
 
 ## Settings / API Keys
 
-API keys entered via gear icon → API Keys tab. Almost all of the 73 supported keys use standard provider env-var names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc); the only app-branded key is `CRYSTALBALL_API_KEY`. The authoritative list is `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`.
+API keys entered via gear icon → API Keys tab. Almost all of the 76 supported keys use standard provider env-var names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc); the only app-branded key is `CRYSTALBALL_API_KEY`. The authoritative list is `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`.
 
 ## Secret Scan Guardrail
 

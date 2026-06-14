@@ -79,7 +79,10 @@ export type RuntimeSecretKey =
   | 'PATREON_OAUTH_CLIENT_SECRET'
   | 'PATREON_ACCESS_TOKEN'
   | 'PATREON_REFRESH_TOKEN'
-  | 'PATREON_AUDIO_RSS_URL';
+  | 'PATREON_AUDIO_RSS_URL'
+  | 'OPENAQ_API_KEY'
+  | 'WINDY_WEBCAMS_API_KEY'
+  | 'NPS_API_KEY';
 
 export type RuntimeFeatureId =
   | 'cloudApiFallbackAuth'
@@ -665,10 +668,9 @@ export const RUNTIME_FEATURES: RuntimeFeatureDefinition[] = [
   {
  id: 'openAqMonitor',
  name: 'OpenAQ air quality monitor',
- description: 'Real-time air quality readings (PM2.5, PM10, NO2, O3) from 10,000+ stations worldwide via OpenAQ — no key required.',
- requiredSecrets: [],
- desktopRequiredSecrets: [],
- fallback: 'OpenAQ readings are disabled.',
+ description: 'Real-time air quality readings (PM2.5, PM10, NO2, O3) from 10,000+ stations worldwide via OpenAQ. OpenAQ now requires a free API key.',
+ requiredSecrets: ['OPENAQ_API_KEY'],
+ fallback: 'OpenAQ readings show "key required" until an OPENAQ_API_KEY is configured.',
   },
   {
  id: 'geoNames',

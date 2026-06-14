@@ -1288,6 +1288,18 @@ export function pickPinnedIpv4(verdict) {
   return addrs.find((a) => typeof a === 'string' && !a.includes(':')) ?? null;
 }
 
+// Validates + shapes a /api/local-webhook-dispatch request body. The renderer routes
+// outbound webhook delivery through the sidecar (which is not CSP-bound) so
+// user "generic" webhook URLs survive the tightened connect-src; the renderer
+// pre-formats the body, the sidecar SSRF-validates the URL and forwards it.
+export function parseWebhookDispatchRequest(raw) {
+  if (!raw || typeof raw !== 'object') return { ok: false, error: 'Request body must be an object' };
+  const { url, body, secret } = raw;
+  if (typeof url !== 'string' || url.length === 0) return { ok: false, error: 'url is required' };
+  if (typeof body !== 'string') return { ok: false, error: 'body (pre-formatted JSON string) is required' };
+  return { ok: true, url, body, secret: typeof secret === 'string' ? secret : undefined };
+}
+
 function json(data, status = 200, extraHeaders = {}) {
   return Response.json(data, {
  status,
@@ -12862,6 +12874,62 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch (error) {
  const isTimeout = error.name === 'AbortError' || error.message?.includes('timeout');
  return json({ error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed' }, isTimeout ? 504 : 502, makeCorsHeaders(req));
+ }
+  }
+
+  if (requestUrl.pathname === '/api/local-webhook-dispatch' && req.method === 'POST') {
+ // Outbound webhook delivery for the renderer's webhook-dispatcher. Routed
+ // through the sidecar (not CSP-bound) so user "generic" webhook URLs survive
+ // the tightened connect-src. The renderer pre-formats the body per platform;
+ // the sidecar SSRF-validates the target, pins the IP, and forwards the POST.
+ // `/api/local-*` prefix is REQUIRED: it carries the user's webhook URL + secret
+ // and must never cloud-fallback to the remote API (see isLocalOnlyApiTarget).
+ // Require the local API token so no OTHER local process (or a cross-origin web
+ // page doing a no-CORS POST) can drive the sidecar as an arbitrary POST proxy
+ // with an attacker-chosen X-Webhook-Secret. The renderer's fetch wrapper injects
+ // this token automatically for /api/* sidecar calls.
+ if (!isValidToken(req.headers['authorization'] || '')) {
+ return json({ error: 'Unauthorized' }, 401, makeCorsHeaders(req));
+ }
+ const rawBody = await readBody(req);
+ if (!rawBody) return json({ error: 'Invalid request body' }, 400, makeCorsHeaders(req));
+ let parsedBody;
+ try { parsedBody = JSON.parse(rawBody.toString()); } catch { return json({ error: 'Invalid request body' }, 400, makeCorsHeaders(req)); }
+ const parsed = parseWebhookDispatchRequest(parsedBody);
+ if (!parsed.ok) return json({ error: parsed.error }, 400, makeCorsHeaders(req));
+
+ // SSRF protection: block private IPs, reserved ranges, and DNS rebinding.
+ const safety = await isSafeUrl(parsed.url);
+ if (!safety.safe) {
+ const blockedHost = (() => { try { return new URL(parsed.url).hostname; } catch { return 'invalid-url'; } })();
+ context.logger.warn(`[local-api] webhook-dispatch SSRF blocked: ${safety.reason} (host=${blockedHost})`);
+ return json({ error: safety.reason }, 403, makeCorsHeaders(req));
+ }
+ // Pin the IP isSafeUrl() validated so a hostile DNS can't rebind the host to a
+ // private IP after the check (TOCTOU). Fail closed when there is no IPv4 to
+ // pin: fetchWithTimeout forces an IPv4 lookup, so an IPv6-only validation
+ // would otherwise be re-resolved unpinned.
+ const pinnedIp = pickPinnedIpv4(safety);
+ if (!pinnedIp) {
+ return json({ error: 'Webhook host has no pinnable IPv4 address' }, 502, makeCorsHeaders(req));
+ }
+
+ const fwdHeaders = { 'Content-Type': 'application/json' };
+ if (parsed.secret) fwdHeaders['X-Webhook-Secret'] = parsed.secret;
+ try {
+ // redirect:'manual' — never follow a webhook redirect to a new (unvalidated,
+ // unpinned) host; a 3xx surfaces to the caller as delivered:false.
+ const resp = await fetchWithTimeout(parsed.url, {
+ method: 'POST',
+ headers: fwdHeaders,
+ body: parsed.body,
+ resolvedAddress: pinnedIp,
+ redirect: 'manual',
+ }, 5000);
+ return json({ delivered: resp.ok, upstreamStatus: resp.status }, 200, makeCorsHeaders(req));
+ } catch (error) {
+ const isTimeout = error?.name === 'AbortError' || /timeout|timed out/i.test(error?.message ?? '');
+ return json({ error: isTimeout ? 'Webhook timeout' : 'Webhook delivery failed' }, isTimeout ? 504 : 502, makeCorsHeaders(req));
  }
   }
 

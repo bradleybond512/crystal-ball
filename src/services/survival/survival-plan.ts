@@ -2,7 +2,7 @@
 import type {
   AxisState, CommittedMove, SurvivalAxis, SurvivalMove, SurvivalPlan, SurvivalPosture,
 } from './survival-types.ts';
-import { bandForLevel, buildHeadline } from './survival-types.ts';
+import { axisLabel, bandForLevel, buildHeadline } from './survival-types.ts';
 
 export function emptyPlan(): SurvivalPlan {
   return { committed: [] };
@@ -26,6 +26,7 @@ export function applyPlanToPosture(
 ): SurvivalPosture {
   const deltaByAxis = new Map<SurvivalAxis, number>();
   for (const c of plan.committed) {
+    if (c.status === 'skipped') continue;
     const move = moves.find((m) => m.id === c.moveId);
     if (!move) continue;
     for (const d of move.effect) {
@@ -37,12 +38,19 @@ export function applyPlanToPosture(
     const delta = deltaByAxis.get(a.axis) ?? 0;
     if (delta === 0) return a;
     const level = Math.max(0, Math.min(100, a.level + delta));
+    const band = bandForLevel(level);
     return {
       ...a,
       level,
-      band: bandForLevel(level),
+      band,
       trend: level < a.level ? 'improving' : a.trend,
       drivers: [...a.drivers, `Planned moves change exposure by ${delta}`],
+      confidence: {
+        total: level,
+        max: 100,
+        items: [{ label: a.threats[0]?.hazardLabel ?? 'Mitigated exposure', value: level, max: 100, polarity: 'negative' as const }],
+      },
+      explanation: { ...a.explanation, headline: `${axisLabel(a.axis)}: ${band}` },
     };
   });
 

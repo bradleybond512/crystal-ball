@@ -1,6 +1,7 @@
 // src/services/survival/world-snapshot.ts
 import type { NwsAlertMinimal, SavedPlace } from '../weather/weather-threat-types.ts';
 import type { DomainFreshness, SurvivalPlan, SurvivalPosture, WorldSnapshot } from './survival-types.ts';
+import { axisLabel } from './survival-types.ts';
 import { emptyPlan } from './survival-plan.ts';
 import { computePosture } from './survival-posture.ts';
 
@@ -74,6 +75,6 @@ export function projectView(snapshot: WorldSnapshot, options: { now?: number } =
     posture: snapshot.posture,
     weatherAgeMs,
     isStale: weather ? weatherAgeMs > DEFAULT_STALE_AFTER_MS : true,
-    worstAxisLabel: snapshot.posture.worstAxis,
+    worstAxisLabel: axisLabel(snapshot.posture.worstAxis),
   };
 }

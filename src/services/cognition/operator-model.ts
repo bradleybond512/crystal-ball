@@ -133,7 +133,7 @@ const STOPWORDS = new Set<string>([
 // ── Default model ─────────────────────────────────────────────────────────────
 
 function emptyRhythm(): number[] {
-  return new Array<number>(168).fill(1);
+  return Array.from({length: 168}, () => 1);
 }
 
 function defaultModel(): OperatorModel {
@@ -160,7 +160,7 @@ let _ackWindow: number[] = [];
 // ── Persistence ───────────────────────────────────────────────────────────────
 
 function applyLoaded(parsed: Partial<OperatorModel> | null): void {
-  if (!parsed || parsed.version !== 1) return;
+  if (parsed?.version !== 1) return;
   if (Array.isArray(parsed.interests)) _model.interests = parsed.interests;
   if (parsed.domainAffinity && typeof parsed.domainAffinity === 'object') {
     _model.domainAffinity = parsed.domainAffinity;
@@ -268,14 +268,12 @@ function updateAffinity(domain: string, positive: boolean): void {
  * Pin + export + panel-jump → expert signal.
  * Accumulate a running counter per domain; cross thresholds determine level.
  */
-type ExpertiseCounter = { fastDismiss: number; deep: number; total: number };
+interface ExpertiseCounter { fastDismiss: number; deep: number; total: number }
 const _expertiseCounts: Record<string, ExpertiseCounter> = {};
 
 function updateExpertise(domain: string, wentDeep: boolean, fastDismiss: boolean): void {
   if (!domain) return;
-  if (!_expertiseCounts[domain]) {
-    _expertiseCounts[domain] = { fastDismiss: 0, deep: 0, total: 0 };
-  }
+  _expertiseCounts[domain] ??= { fastDismiss: 0, deep: 0, total: 0 };
   const c = _expertiseCounts[domain]!;
   c.total += 1;
   if (wentDeep) c.deep += 1;
@@ -402,9 +400,12 @@ export function preferredDepth(domain: string): DepthPreference {
   ensureLoaded();
   const expertise = _model.expertise[domain] ?? 'familiar';
   switch (expertise) {
-    case 'novice': return 'headline';
-    case 'expert': return 'deep';
-    default: return 'standard';
+    case 'novice': { return 'headline';
+    }
+    case 'expert': { return 'deep';
+    }
+    default: { return 'standard';
+    }
   }
 }
 

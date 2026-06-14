@@ -178,6 +178,7 @@ None identified.
 **I-6: 54 MB git branch bundle stored in iCloud** — `~/Library/Mobile Documents/.../CrystalBall/cb-branch-backup-20260531-122327.bundle` sits alongside the encrypted key backups. It contains repo history (no secrets found in-tree, and the secret-scan guardrail enforces that), but be aware full source now lives in iCloud sync scope.
 
 **I-7: Verified-correct behaviors worth keeping** (regression watchlist):
+
 - Sidecar token: CSPRNG 32-byte, timing-safe compare ([local-api-server.mjs:170-177](../src-tauri/sidecar/local-api-server.mjs)), global auth gate at line 5108 with only seven deliberate pre-auth routes (health, YouTube embed, Patreon OAuth pair, SMS command/status; `/api/sms/config` IS gated).
 - New `/api/events/query|count|health|prune` all behind auth; `prune` validates `months` as finite non-negative; `limit` clamped 1–5000.
 - Event store SQL fully parameterized incl. dynamic `IN (...)` placeholder construction and `ESCAPE '\\'` LIKE handling with regression tests ([event-store.mjs:34-36,86-89,138-159,177](../src-tauri/sidecar/event-store.mjs)); append-only enforced via plain `INSERT` (duplicate id fails closed).

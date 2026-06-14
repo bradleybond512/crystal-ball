@@ -18,7 +18,7 @@
  *   - Persistence: reasoning-memory key crystalball-cognition-journal-v1
  *     plus localStorage mirror with loaded/writtenSinceLoad guards.
  *   - Cap 1000 entries FIFO, resolved-oldest first.
- *   - humanEdge per domain = systemBrier − operatorBrier when n ≥ 20 for
+ *   - humanEdge per domain = systemBrier − operatorBrier when n ≥ 30 for
  *     BOTH sides. Positive = human better. Stored on the OperatorModel via
  *     updateHumanEdge(). The ±20% total bound (0.8–1.2) is maintained in
  *     operator-model.interestMultiplier; humanEdge feeds into the same

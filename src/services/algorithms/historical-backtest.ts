@@ -92,9 +92,17 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  *     to qualify — big-event-detector total-score threshold).
  *   - 'score_lt': the algorithm "fires" when score < threshold (a floor below
  *     which something is disabled — kept for the inverse case).
+ *
+ * `recordedScoreScale`: multiplier that brings the ledger-recorded `score` onto
+ * the knob's own units before the fire comparison. This MUST match the scale
+ * the recording call site uses. big-event-detector records `totalScore / 100`
+ * (a 0..1 value) but its `threshold` knob lives on the 0..100 totalScore scale
+ * (range 20..60), so the recorded score is multiplied by 100 to compare. Get
+ * this wrong and the comparison is always one-sided (every threshold yields the
+ * same decision) — the gate would silently pass every change.
  */
-const BACKTESTABLE_KNOBS: Record<string, { compare: 'score_ge' | 'score_lt' }> = {
-  'big-event-detector:threshold': { compare: 'score_ge' },
+const BACKTESTABLE_KNOBS: Record<string, { compare: 'score_ge' | 'score_lt'; recordedScoreScale: number }> = {
+  'big-event-detector:threshold': { compare: 'score_ge', recordedScoreScale: 100 },
 };
 
 function knobKey(algorithmId: string, parameterId: string): string {
@@ -143,7 +151,11 @@ export function backtestChange(
     if (typeof r.score !== 'number' || !Number.isFinite(r.score)) continue;
     if (r.outcome === undefined || r.outcome === 'inconclusive') continue;
 
-    const firedPrior = fired(r.score, change.priorValue, knob.compare);
+    // Bring the recorded score onto the knob's own scale before comparing to
+    // the threshold (the ledger may record a normalized score — see the knob's
+    // `recordedScoreScale`).
+    const comparableScore = r.score * knob.recordedScoreScale;
+    const firedPrior = fired(comparableScore, change.priorValue, knob.compare);
     // Reconstruct ground truth from the decision the current threshold made:
     //  - a 'hit' means the decision matched reality, so reality == firedPrior;
     //  - a 'miss' means the decision was wrong, so reality == !firedPrior;
@@ -161,7 +173,7 @@ export function backtestChange(
       shouldFire = firedPrior;
       weight = 0.5;
     }
-    labelled.push({ score: r.score, shouldFire, weight });
+    labelled.push({ score: comparableScore, shouldFire, weight });
   }
 
   if (labelled.length < MIN_DECISIVE_SAMPLES) {

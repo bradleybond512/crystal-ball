@@ -14,6 +14,21 @@
 
 import { buildInputHash, getAlgoEvalLedger, type PredictionValue } from './algo-eval-ledger';
 
+// ── Enum allowlists (fix: validate on deserialise, not just cast) ─────
+
+const VALID_OUTCOME_ACTIONS: ReadonlySet<string> = new Set([
+  'dismissed',
+  'acted-on',
+  'escalated',
+  'de-escalated',
+  'confirmed-real',
+  'marked-false-positive',
+]);
+
+const VALID_PREDICTED_SEVERITIES: ReadonlySet<string> = new Set([
+  'low', 'medium', 'high', 'critical',
+]);
+
 export type OutcomeAction =
   | 'dismissed'
   | 'acted-on'
@@ -114,6 +129,11 @@ function deserializeEntry(entry: unknown): OutcomeRecord | undefined {
   if (typeof e.domain !== 'string') return undefined;
   if (typeof e.predictedSeverity !== 'string') return undefined;
   if (typeof e.actualOutcome !== 'string') return undefined;
+  // Reject entries whose action or severity is not in the known-good set —
+  // this blocks tampered blobs from injecting unrecognised strings that
+  // would corrupt downstream calibration math.
+  if (!VALID_OUTCOME_ACTIONS.has(e.actualOutcome)) return undefined;
+  if (!VALID_PREDICTED_SEVERITIES.has(e.predictedSeverity)) return undefined;
   return {
     id: e.id,
     alertId: typeof e.alertId === 'string' ? e.alertId : undefined,
@@ -135,6 +155,35 @@ function deserialize(raw: unknown): OutcomeRecord[] {
     if (parsed) out.push(parsed);
   }
   return out;
+}
+
+// ── Tamper-detection checksum ─────────────────────────────────────────
+//
+// Non-cryptographic DJB2 hash over the JSON-serialised data array.
+// Deters casual localStorage edits — not a substitute for cryptographic
+// integrity but raises the bar significantly for an opportunistic attacker.
+
+function djb2(str: string): number {
+  let h = 5381;
+  for (let i = 0; i < str.length; i += 1) {
+    // h = h * 33 ^ char  (classic DJB2 variant)
+    h = (((h << 5) + h) ^ str.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+/** Compute the checksum of a serialised data array. Exported via
+ *  `__internals` so tests can verify the round-trip independently. */
+function computeChecksum(data: PersistedOutcome[]): number {
+  return djb2(JSON.stringify(data));
+}
+
+interface PersistedBlob {
+  /** Format version. v1 = legacy bare array, v2 = this object. */
+  v: 2;
+  data: PersistedOutcome[];
+  /** DJB2 hash of `JSON.stringify(data)`. */
+  cs: number;
 }
 
 // ── Calibration math ──────────────────────────────────────────────────
@@ -210,9 +259,16 @@ export class OutcomeLedger {
   private hydrated = false;
   private idCounter = 0;
   private clock: () => number;
+  private _tamperDetected = false;
 
   constructor(options: OutcomeLedgerOptions = {}) {
     this.clock = options.clock ?? (() => Date.now());
+  }
+
+  /** True when a checksum mismatch was detected during hydration.
+   *  Resets to false after a successful persist. */
+  wasTamperDetected(): boolean {
+    return this._tamperDetected;
   }
 
   private ensureHydrated(): void {
@@ -224,7 +280,23 @@ export class OutcomeLedger {
     try { raw = store.getItem(STORAGE_KEY); } catch { return; }
     if (!raw) return;
     try {
-      this.records = deserialize(JSON.parse(raw));
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // v1 legacy bare-array format — accept without checksum.
+        this.records = deserialize(parsed);
+      } else if (parsed && typeof parsed === 'object' && (parsed as PersistedBlob).v === 2) {
+        const blob = parsed as PersistedBlob;
+        if (!Array.isArray(blob.data)) return;
+        const expected = computeChecksum(blob.data);
+        if (blob.cs !== expected) {
+          // Tampered or corrupt — discard the blob rather than trust it.
+          this._tamperDetected = true;
+          console.warn('[OutcomeLedger] Checksum mismatch — persisted data discarded (possible tampering)');
+          return;
+        }
+        this.records = deserialize(blob.data);
+      }
+      // Unknown format — start clean (no warn needed; forward-compat case).
     } catch {
       // Corrupt blob — start clean rather than crash on hydrate.
     }
@@ -234,7 +306,10 @@ export class OutcomeLedger {
     const store = safeStorage();
     if (!store) return;
     try {
-      store.setItem(STORAGE_KEY, JSON.stringify(serialize(this.records)));
+      const data = serialize(this.records);
+      const blob: PersistedBlob = { v: 2, data, cs: computeChecksum(data) };
+      store.setItem(STORAGE_KEY, JSON.stringify(blob));
+      this._tamperDetected = false;
     } catch {
       // Quota or storage disabled — best-effort.
     }
@@ -435,4 +510,6 @@ export const __internals = {
   MAX_RECORDS,
   DEFAULT_RECENT_WINDOW_MS,
   calibrationFor,
+  computeChecksum,
+  VALID_OUTCOME_ACTIONS,
 };

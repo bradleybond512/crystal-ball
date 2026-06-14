@@ -21,6 +21,12 @@ function rec(
   outcome: EvaluationOutcome | undefined,
   at: number,
   algorithmId = 'big-event-detector',
+  // Ground truth is anchored to the recorded decision label (see `firedLabel`
+  // in historical-backtest.ts). Records constructed here default to the FIRED
+  // label so the existing fixtures — all built to fire at the prior threshold —
+  // keep their intended meaning. Pass 'quiet' / undefined to exercise the
+  // not-fired and excluded paths.
+  label: string | undefined = 'big-event',
 ): EvaluationRecord {
   return {
     id: `r-${_seq++}`,
@@ -30,6 +36,7 @@ function rec(
     durationMs: 1,
     score,
     outcome,
+    label,
   };
 }
 
@@ -181,8 +188,9 @@ test('candidate with equal accuracy is not blocked (no measurable regression)', 
 });
 
 test('partial outcomes contribute half weight', () => {
-  // 12 partials @50 only. At prior=40 they fire and (partial → should-fire=firedPrior)
-  // are correct → accuracy 1.0. sampleSize counts them; total weight = 6.
+  // 12 partials @50, all labelled 'big-event' (fired). partial → should-fire=firedActual
+  // (true), and at prior=40 they fire → correct → accuracy 1.0. sampleSize counts
+  // them; total weight = 6.
   const records = inWindow([{ score: 0.5, outcome: 'partial', n: 12 }]);
   const r = backtestChange(CHANGE(40, 40), records, { now: NOW });
   assert.equal(r.sampleSize, 12);
@@ -235,4 +243,66 @@ test('recorded scores are normalized to the knob scale (raising past the cluster
   assert.ok(Math.abs(r.currentScore - 1) < 1e-9, 'all hits fire at prior 40 → accuracy 1.0');
   assert.ok(Math.abs(r.backtestScore - 0) < 1e-9, 'no hits fire at 55 → accuracy 0.0');
   assert.ok(r.delta < 0);
+});
+
+// ── Label-anchored ground truth (P2 regression guard) ──────────────────────
+// Ground truth must come from the recorded decision label, NOT reconstructed
+// from the current threshold. When the threshold moved during the window, the
+// two disagree — and reconstructing from today's prior flips the verdict. These
+// tests pin the label-anchored behavior so a regression to threshold-derived
+// truth is caught.
+
+test('truth is read from the recorded label, not reconstructed from the current threshold', () => {
+  // 12 records recorded as FIRED big-events (label 'big-event') that were graded
+  // 'hit' — but their score is 0.45 (comparable 45), BELOW the current prior of 50.
+  // (The threshold was lower, ~40, when these were recorded.)
+  //
+  // Label-anchored (correct): firedActual = true, hit → shouldFire = true.
+  //   accuracy@50: fired(45,50)=false ≠ true  → 0.0  (the raised prior misses them)
+  //   accuracy@40: fired(45,40)=true  = true  → 1.0  (lowering recovers them)
+  //   delta = +1.0 → PASS, currentScore 0, backtestScore 1.
+  //
+  // If truth were reconstructed from the prior=50 instead: firedPrior=false, hit
+  // → shouldFire=false, and the verdicts INVERT (accuracy@50=1.0, accuracy@40=0.0,
+  // delta −1 → fail). Same data, opposite answer — this test fails if that
+  // regression is reintroduced.
+  const records = inWindow([{ score: 0.45, outcome: 'hit', n: 12 }]);
+  const r = backtestChange(CHANGE(50, 40), records, { now: NOW });
+  assert.equal(r.verdict, 'pass');
+  assert.ok(Math.abs(r.currentScore - 0) < 1e-9, 'raised prior 50 misses the labelled-fired hits → 0.0');
+  assert.ok(Math.abs(r.backtestScore - 1) < 1e-9, 'lowering to 40 recovers them → 1.0');
+  assert.ok(r.delta > 0);
+});
+
+test('records without a label cannot be replayed and are excluded from the sample', () => {
+  // 12 labelled records (replayable) + 8 label-less records (score+outcome present
+  // but label undefined). Only the labelled ones count toward the sample. The
+  // label-less records are built without the rec() default so `label` stays
+  // genuinely undefined.
+  const labelless: EvaluationRecord[] = Array.from({ length: 8 }, () => {
+    const base = rec(0.5, 'hit' as const, NOW - DAY);
+    return { ...base, label: undefined };
+  });
+  const records: EvaluationRecord[] = [
+    ...inWindow([{ score: 0.5, outcome: 'hit', n: 12 }]),
+    ...labelless,
+  ];
+  const r = backtestChange(CHANGE(40, 41), records, { now: NOW });
+  assert.equal(r.sampleSize, 12);
+});
+
+test("a 'quiet' (not-fired) miss means reality wanted a fire", () => {
+  // 12 records labelled 'quiet' (the detector did NOT fire) graded 'miss' — i.e.
+  // it should have fired. firedActual=false, miss → shouldFire=true. The score is
+  // 0.5 (comparable 50), so a low-enough threshold would have caught them.
+  const quietMisses = Array.from({ length: 12 }, () =>
+    rec(0.5, 'miss' as const, NOW - DAY, 'big-event-detector', 'quiet'),
+  );
+  // prior=55 (score 50 does NOT fire → silent, but reality wanted a fire → wrong)
+  // candidate=40 (score 50 fires → matches shouldFire=true → correct)
+  const r = backtestChange(CHANGE(55, 40), quietMisses, { now: NOW });
+  assert.equal(r.sampleSize, 12);
+  assert.ok(Math.abs(r.currentScore - 0) < 1e-9, 'prior 55 keeps the missed events silent → 0.0');
+  assert.ok(Math.abs(r.backtestScore - 1) < 1e-9, 'candidate 40 lets them fire → 1.0');
+  assert.equal(r.verdict, 'pass');
 });

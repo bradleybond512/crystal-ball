@@ -100,9 +100,18 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * (range 20..60), so the recorded score is multiplied by 100 to compare. Get
  * this wrong and the comparison is always one-sided (every threshold yields the
  * same decision) — the gate would silently pass every change.
+ *
+ * `firedLabel`: the ledger `label` value the algorithm records when it actually
+ * FIRED at decision time. Ground truth is anchored to this recorded decision —
+ * NOT reconstructed from the current threshold — because a record's hit/miss
+ * was graded against whatever threshold was live when it was created. If the
+ * threshold moved during the window, reconstructing "did it fire?" from today's
+ * prior would mislabel those records (a true positive could look like a
+ * should-not-fire). The recorded label is the stable, threshold-independent
+ * truth signal. big-event-detector records `isBigEvent ? 'big-event' : 'quiet'`.
  */
-const BACKTESTABLE_KNOBS: Record<string, { compare: 'score_ge' | 'score_lt'; recordedScoreScale: number }> = {
-  'big-event-detector:threshold': { compare: 'score_ge', recordedScoreScale: 100 },
+const BACKTESTABLE_KNOBS: Record<string, { compare: 'score_ge' | 'score_lt'; recordedScoreScale: number; firedLabel: string }> = {
+  'big-event-detector:threshold': { compare: 'score_ge', recordedScoreScale: 100, firedLabel: 'big-event' },
 };
 
 function knobKey(algorithmId: string, parameterId: string): string {
@@ -150,27 +159,34 @@ export function backtestChange(
     if (r.at < windowStart || r.at > options.now) continue;
     if (typeof r.score !== 'number' || !Number.isFinite(r.score)) continue;
     if (r.outcome === undefined || r.outcome === 'inconclusive') continue;
+    // Ground truth is anchored to the recorded decision label (see `firedLabel`).
+    // Without a label we cannot establish what the algorithm actually did, so
+    // the record can't be honestly replayed — exclude it rather than guess.
+    if (r.label === undefined) continue;
 
     // Bring the recorded score onto the knob's own scale before comparing to
     // the threshold (the ledger may record a normalized score — see the knob's
     // `recordedScoreScale`).
     const comparableScore = r.score * knob.recordedScoreScale;
-    const firedPrior = fired(comparableScore, change.priorValue, knob.compare);
-    // Reconstruct ground truth from the decision the current threshold made:
-    //  - a 'hit' means the decision matched reality, so reality == firedPrior;
-    //  - a 'miss' means the decision was wrong, so reality == !firedPrior;
+    // The decision the algorithm ACTUALLY made at record time, read from the
+    // recorded label — not reconstructed from today's threshold (which may have
+    // moved since this record was graded).
+    const firedActual = r.label === knob.firedLabel;
+    // Derive reality from that actual decision and the observed outcome:
+    //  - a 'hit' means the decision matched reality, so reality == firedActual;
+    //  - a 'miss' means the decision was wrong, so reality == !firedActual;
     //  - a 'partial' leans correct but counts half.
     let shouldFire: boolean;
     let weight: number;
     if (r.outcome === 'hit') {
-      shouldFire = firedPrior;
+      shouldFire = firedActual;
       weight = 1;
     } else if (r.outcome === 'miss') {
-      shouldFire = !firedPrior;
+      shouldFire = !firedActual;
       weight = 1;
     } else {
       // partial
-      shouldFire = firedPrior;
+      shouldFire = firedActual;
       weight = 0.5;
     }
     labelled.push({ score: comparableScore, shouldFire, weight });

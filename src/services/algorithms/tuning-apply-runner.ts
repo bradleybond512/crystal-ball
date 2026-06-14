@@ -143,9 +143,30 @@ export function runTuningApply(deps: TuningApplyDeps = {}): TuningApplyResult {
       );
       backtestPassed = backtestResult.verdict === 'pass';
     }
+    // Hard backtest enforcement, independent of criticality. The policy gate
+    // only consults `backtestPassed` for high-criticality tunings and promotes,
+    // so a backtestable knob that REGRESSES accuracy could otherwise still
+    // auto-apply at low/medium criticality if it cleared the other signals.
+    // When we actually replayed the change (no test override) and it failed for
+    // a knob we know how to backtest, block it here — hold for approval — before
+    // the gate ever sees it. Non-backtestable knobs are NOT short-circuited
+    // here: they fall through to the gate (which fails them closed only where it
+    // requires a backtest), so the live loop is never frozen by this guard.
     if (backtestResult && backtestResult.verdict === 'fail' && isBacktestable(p.algorithmId, p.parameterId)) {
+      heldForApproval += 1;
+      recordTuningDecision({
+        at: p.generatedAt,
+        algorithmId: p.algorithmId,
+        parameterId: p.parameterId,
+        priorValue: prior,
+        nextValue: p.nextValue,
+        kind: 'held_for_approval',
+        ruleId: 'backtest_blocked',
+        reason: backtestResult.reason,
+      });
       // eslint-disable-next-line no-console -- bridged to the desktop log; a blocked regression must be auditable
       console.warn(`[backtest] held ${p.algorithmId}.${p.parameterId} ${prior} → ${p.nextValue}: ${backtestResult.reason}`);
+      continue;
     }
     const gated = gateAdjustmentProposal({
       proposal: p,

@@ -174,16 +174,19 @@ function severityFromObservations(observations: readonly ObservationEvent[]): Si
     else if (o.severity === 'HIGH') hasHigh = true;
     else if (o.severity === 'MEDIUM') hasMedium = true;
   }
-  // Source-trust-weighted CRITICAL rollup: a single CRITICAL observation only
-  // escalates the whole Situation when it comes from a high-trust source.
-  // Otherwise require independent corroboration (≥2 CRITICAL observations) so a
-  // lone low-trust feed can't unilaterally drive a Situation to critical.
-  if (criticalObs.length >= 2) return 'critical';
-  if (criticalObs.length === 1 && trustForObservation(criticalObs[0]!) >= CRITICAL_TRUST_FLOOR) {
+  // Source-trust-weighted CRITICAL rollup. Escalate the whole Situation to
+  // critical only when there is genuine corroboration or a trusted source:
+  //   - ≥2 CRITICAL observations from DISTINCT sources (independent agreement), or
+  //   - any CRITICAL observation from a high-trust source (trust ≥ floor).
+  // Counting observations alone is not enough — a single noisy low-trust feed
+  // can emit multiple CRITICALs, so we key independence on distinct sourceIds.
+  const distinctCriticalSources = new Set(criticalObs.map((o) => o.sourceId));
+  if (distinctCriticalSources.size >= 2) return 'critical';
+  if (criticalObs.some((o) => trustForObservation(o) >= CRITICAL_TRUST_FLOOR)) {
     return 'critical';
   }
-  // A single low-trust CRITICAL (or any HIGH) falls through to 'high'.
-  if (hasHigh || criticalObs.length === 1) return 'high';
+  // Remaining low-trust single-source CRITICALs (or any HIGH) fall through to 'high'.
+  if (hasHigh || criticalObs.length >= 1) return 'high';
   if (hasMedium || observations.length >= 2) return 'medium';
   return 'low';
 }

@@ -6029,7 +6029,7 @@ async function dispatch(requestUrl, req, routes, context) {
         context._shortageState = {
           entries: body.entries,
           updatedAt: typeof body.updatedAt === 'number' ? body.updatedAt : Date.now(),
-          ttlMs: typeof body.ttlMs === 'number' ? Math.min(Math.max(body.ttlMs, 60_000), 3_600_000) : 30 * 60 * 1000,
+          ttlMs: typeof body.ttlMs === 'number' && body.ttlMs >= 0 ? Math.min(body.ttlMs, 3_600_000) : 30 * 60 * 1000,
         };
         return json({ ok: true, count: body.entries.length });
       } catch (error) {
@@ -6128,7 +6128,7 @@ async function dispatch(requestUrl, req, routes, context) {
         canals: body.canals ?? [],
         risk: body.risk ?? [],
         updatedAt: Date.now(),
-        ttlMs: typeof body.ttlMs === 'number' ? Math.min(Math.max(body.ttlMs, 60_000), 3_600_000) : 30 * 60 * 1000,
+        ttlMs: typeof body.ttlMs === 'number' && body.ttlMs >= 0 ? Math.min(body.ttlMs, 3_600_000) : 30 * 60 * 1000,
       };
       return json({ ok: true });
     } catch {
@@ -6173,7 +6173,7 @@ async function dispatch(requestUrl, req, routes, context) {
         domainBreakdown: body.domainBreakdown ?? [],
         topThreats: body.topThreats ?? [],
         computedAt: body.computedAt ?? Date.now(),
-        ttlMs: typeof body.ttlMs === 'number' ? Math.min(Math.max(body.ttlMs, 60_000), 3_600_000) : 5 * 60 * 1000,
+        ttlMs: typeof body.ttlMs === 'number' && body.ttlMs >= 0 ? Math.min(body.ttlMs, 3_600_000) : 5 * 60 * 1000,
       };
       return json({ ok: true });
     } catch {

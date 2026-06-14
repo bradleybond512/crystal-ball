@@ -90,6 +90,11 @@ export interface AxisState {
   drivers: string[];
 }
 
+export function buildHeadline(worst: AxisState): string {
+  if (worst.level === 0) return 'All clear — survival posture secure across all domains.';
+  return `${axisLabel(worst.axis)} at ${worst.band} — ${worst.drivers[0] ?? 'active threat'}.`;
+}
+
 export type MoveCost = 'free' | 'low' | 'medium' | 'high';
 
 export interface PostureDelta {

@@ -31,6 +31,7 @@ test('GRID-DOWN: serialize -> deserialize -> project yields full posture with no
   assert.equal(view.posture.worstAxis, 'physical_safety');
   assert.equal(view.isStale, true); // 3h old > 15min threshold
   assert.ok(view.weatherAgeMs >= 3 * 3_600_000);
+  assert.equal(view.worstAxisLabel, 'Physical safety');
 });
 
 test('recomputing posture from the deserialized snapshot equals the stored posture', () => {

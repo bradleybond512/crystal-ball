@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyPlan, commitMove, moveStatus, applyPlanToPosture } from '../survival-plan.ts';
-import type { SurvivalMove, SurvivalPosture, AxisState } from '../survival-types.ts';
+import type { SurvivalMove, SurvivalPlan, SurvivalPosture, AxisState } from '../survival-types.ts';
 
 const NOW = 1_700_000_000_000;
 
@@ -45,4 +45,14 @@ test('applyPlanToPosture lowers the affected axis level and marks it improving',
   assert.equal(phys.trend, 'improving');
   assert.equal(improved.overallLevel, 60);
   assert.ok(improved.headline.includes('high'), 'headline should reflect the new (improved) band');
+  assert.equal(phys.confidence.total, 60);
+  assert.equal(phys.confidence.total, phys.confidence.items.reduce((s, i) => s + i.value, 0));
+  assert.ok(phys.explanation.headline.includes('high'));
+});
+
+test('applyPlanToPosture ignores skipped moves', () => {
+  const posture = postureWithPhysical(90);
+  const plan: SurvivalPlan = { committed: [{ moveId: 'move-shelter', committedAtMs: NOW, status: 'skipped' }] };
+  const result = applyPlanToPosture(posture, plan, [SHELTER]);
+  assert.equal(result.axes.find((a) => a.axis === 'physical_safety')!.level, 90);
 });

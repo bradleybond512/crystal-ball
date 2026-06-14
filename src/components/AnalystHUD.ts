@@ -189,6 +189,7 @@ export class AnalystHUD {
   }
 
   destroy(): void {
+    this.visible = false;
     for (const fn of this._cleanups) fn();
     this._cleanups.length = 0;
   }

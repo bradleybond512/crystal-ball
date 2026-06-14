@@ -51,6 +51,15 @@ test('every axis carries a confidence breakdown and explanation', () => {
   }
 });
 
+test('confidence.total equals the sum of its item values (contract), even with multiple threats on an axis', () => {
+  const two = [alert('Tornado Warning', around(HOME.lat, HOME.lon)), alert('Severe Thunderstorm Warning', around(HOME.lat, HOME.lon))];
+  const p = computePosture(input(two), { now: NOW });
+  const phys = p.axes.find((a) => a.axis === 'physical_safety')!;
+  assert.ok(phys.threats.length >= 2);
+  const sum = phys.confidence.items.reduce((s, i) => s + i.value, 0);
+  assert.equal(phys.confidence.total, sum);
+});
+
 test('a stale weather feed is surfaced, never dropped', () => {
   const p = computePosture(input([alert('Tornado Warning', around(HOME.lat, HOME.lon))], false), { now: NOW });
   assert.ok(p.staleInputs.some((s) => s.includes('weather')));

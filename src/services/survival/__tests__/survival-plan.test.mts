@@ -44,4 +44,5 @@ test('applyPlanToPosture lowers the affected axis level and marks it improving',
   assert.equal(phys.level, 60);
   assert.equal(phys.trend, 'improving');
   assert.equal(improved.overallLevel, 60);
+  assert.ok(improved.headline.includes('high'), 'headline should reflect the new (improved) band');
 });

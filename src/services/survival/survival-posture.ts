@@ -4,7 +4,7 @@ import type { ConfidenceBreakdown, AlgorithmExplanation } from '../intelligence/
 import type {
   AxisState, DomainFreshness, PostureThreat, SurvivalAxis, SurvivalPosture,
 } from './survival-types.ts';
-import { SURVIVAL_AXES, axisLabel, bandForLevel } from './survival-types.ts';
+import { SURVIVAL_AXES, axisLabel, bandForLevel, buildHeadline } from './survival-types.ts';
 import { projectWeatherThreats } from './threat-projection.ts';
 
 /** Structural subset of WorldSnapshot that posture computation needs.
@@ -54,13 +54,9 @@ function buildAxisState(axis: SurvivalAxis, threats: PostureThreat[], staleInput
   const band = bandForLevel(level);
   const drivers = threats.map((t) => `${t.hazardLabel} — ${t.why}`);
 
-  const confidence: ConfidenceBreakdown = {
-    total: level,
-    max: 100,
-    items: threats.length
-      ? threats.map((t) => ({ label: t.hazardLabel, value: t.severity, max: 100, polarity: 'negative' as const }))
-      : [{ label: 'No active threats', value: 0, max: 100, polarity: 'positive' as const }],
-  };
+  const confidence: ConfidenceBreakdown = threats.length
+    ? { total: level, max: 100, items: [{ label: threats[0]!.hazardLabel, value: level, max: 100, polarity: 'negative' as const }] }
+    : { total: 0, max: 100, items: [{ label: 'No active threats', value: 0, max: 100, polarity: 'positive' as const }] };
 
   const explanation: AlgorithmExplanation = {
     headline: threats.length ? `${axisLabel(axis)}: ${band}` : `${axisLabel(axis)}: secure`,
@@ -75,7 +71,3 @@ function buildAxisState(axis: SurvivalAxis, threats: PostureThreat[], staleInput
   return { axis, level, band, trend: 'steady', threats, confidence, explanation, drivers };
 }
 
-function buildHeadline(worst: AxisState): string {
-  if (worst.level === 0) return 'All clear — survival posture secure across all domains.';
-  return `${axisLabel(worst.axis)} at ${worst.band} — ${worst.drivers[0] ?? 'active threat'}.`;
-}

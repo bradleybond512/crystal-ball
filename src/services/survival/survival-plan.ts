@@ -2,7 +2,7 @@
 import type {
   AxisState, CommittedMove, SurvivalAxis, SurvivalMove, SurvivalPlan, SurvivalPosture,
 } from './survival-types.ts';
-import { bandForLevel } from './survival-types.ts';
+import { bandForLevel, buildHeadline } from './survival-types.ts';
 
 export function emptyPlan(): SurvivalPlan {
   return { committed: [] };
@@ -53,5 +53,6 @@ export function applyPlanToPosture(
     overallLevel: worst.level,
     overallBand: bandForLevel(worst.level),
     worstAxis: worst.axis,
+    headline: buildHeadline(worst),
   };
 }

@@ -5265,9 +5265,12 @@ async function dispatch(requestUrl, req, routes, context) {
     const code = requestUrl.searchParams.get('code') || '';
     const state = requestUrl.searchParams.get('state') || '';
     const ok = code && patreonStateStore.consume(state);
+    // Token-bearing payload is posted only to the trusted Tauri app origin —
+    // never a wildcard targetOrigin, which would deliver the access/refresh
+    // tokens to whatever window happens to be the opener.
     const page = (msg, payload) => new Response(
       `<!doctype html><meta charset=utf-8><body style="font:14px system-ui;background:#111;color:#eee;padding:24px">${msg}` +
-      `<script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)},'*')}catch(e){}setTimeout(function(){window.close()},1500)</script>`,
+      `<script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)},'tauri://localhost')}catch(e){}setTimeout(function(){window.close()},1500)</script>`,
       { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
     if (!ok) return page('Patreon connect failed (bad state).', { type: 'patreon-oauth', ok: false });
     try {

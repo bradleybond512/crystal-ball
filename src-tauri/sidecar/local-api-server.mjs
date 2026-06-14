@@ -1276,6 +1276,17 @@ async function isSafeUrl(urlString) {
   return { safe: true, resolvedAddresses: addresses };
 }
 
+// Selects the validated IPv4 address to PIN on the outbound connection, closing
+// the DNS-rebinding TOCTOU between isSafeUrl() and the subsequent fetch. Returns
+// null when the verdict is unsafe, has no addresses, or resolved only to IPv6
+// (fetchWithTimeout forces family 4, so a v6 pin can't be honored there).
+export function pickPinnedIpv4(verdict) {
+  if (!verdict || verdict.safe !== true) return null;
+  const addrs = verdict.resolvedAddresses;
+  if (!Array.isArray(addrs)) return null;
+  return addrs.find((a) => typeof a === 'string' && !a.includes(':')) ?? null;
+}
+
 function json(data, status = 200, extraHeaders = {}) {
   return Response.json(data, {
  status,
@@ -8859,7 +8870,16 @@ async function dispatch(requestUrl, req, routes, context) {
  // Fetch and base64-encode the camera image
  let imageB64;
  try {
- const imgResp = await fetchWithTimeout(imageUrl, { headers: { 'User-Agent': 'CrystalBall/1.0' } }, 10000);
+ // Pin the IP that isSafeUrl() validated so a hostile DNS can't rebind the
+ // public-passing hostname to a private IP after the safety check (TOCTOU).
+ // Fail closed when there's no IPv4 to pin: isSafeUrl may validate an IPv6-only
+ // (AAAA) answer, but fetchWithTimeout forces an IPv4 lookup, which a rebinding
+ // host could repoint to a private A record — so reject rather than fetch unpinned.
+ const pinnedIp = pickPinnedIpv4(safety);
+ if (!pinnedIp) {
+ return json({ error: 'Image host has no pinnable IPv4 address' }, 502);
+ }
+ const imgResp = await fetchWithTimeout(imageUrl, { headers: { 'User-Agent': 'CrystalBall/1.0' }, resolvedAddress: pinnedIp }, 10000);
  if (!imgResp.ok) return json({ error: 'Could not fetch camera image' }, 502);
  const buf = await imgResp.arrayBuffer();
  imageB64 = Buffer.from(buf).toString('base64');

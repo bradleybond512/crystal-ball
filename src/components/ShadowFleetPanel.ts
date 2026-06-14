@@ -162,7 +162,7 @@ export class ShadowFleetPanel extends Panel {
           <th style="padding:4px 6px;text-align:right;">Capacity</th>
           <th style="padding:4px 6px;">Flag States</th>
         </tr></thead>
-        <tbody>${data.stats.map(statRow).join('')}</tbody>
+        <tbody>${data.stats.map((s) => statRow(s)).join('')}</tbody>
       </table>
     </div>`;
 
@@ -179,7 +179,7 @@ export class ShadowFleetPanel extends Panel {
           <th style="padding:4px 6px;text-align:right;">Det.</th>
           <th style="padding:4px 6px;text-align:right;">Risk</th>
         </tr></thead>
-        <tbody>${sortedVessels.map(vesselRow).join('')}</tbody>
+        <tbody>${sortedVessels.map((v) => vesselRow(v)).join('')}</tbody>
       </table>
     </div>`;
 

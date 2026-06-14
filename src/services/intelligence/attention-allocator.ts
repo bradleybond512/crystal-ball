@@ -22,6 +22,11 @@ export type AttentionListener = (allocation: Record<string, number>) => void;
 
 const STORAGE_KEY = 'wm-attention-allocation';
 const NEUTRAL_MULTIPLIER = 1;
+/** Maximum multiplier change allowed per recompute() call per domain.
+ *  Limits the speed at which a tampered outcome ledger can shift the
+ *  allocation — an attacker needs many recompute cycles to move a
+ *  multiplier from 1.0 to 2.0, giving time for anomaly detection. */
+export const MAX_RECOMPUTE_STEP = 0.1;
 
 function safeStorage(): Storage | null {
   try {
@@ -107,10 +112,22 @@ export class AttentionAllocator {
   }
 
   /** Pull the latest weight recommendations from the OutcomeLedger and
-   *  replace the current allocation. Persists + notifies on change. */
+   *  replace the current allocation. Each domain's multiplier is clamped
+   *  to within ±MAX_RECOMPUTE_STEP of its previous value so a single
+   *  tampered-ledger recompute cannot instantly shift any domain to an
+   *  extreme. Persists + notifies on change. */
   recompute(): void {
     this.ensureHydrated();
-    const next = this.ledger.getWeightRecommendations();
+    const raw = this.ledger.getWeightRecommendations();
+    // Rate-limit per-domain movement.
+    const next: Record<string, number> = {};
+    for (const [domain, target] of Object.entries(raw)) {
+      const current = this.allocation[domain] ?? NEUTRAL_MULTIPLIER;
+      next[domain] = Math.max(
+        current - MAX_RECOMPUTE_STEP,
+        Math.min(current + MAX_RECOMPUTE_STEP, target),
+      );
+    }
     if (shallowEqual(this.allocation, next)) return;
     this.allocation = next;
     this.persist();
@@ -161,4 +178,5 @@ export function __resetAttentionAllocatorSingleton(): void {
 export const __internals = {
   STORAGE_KEY,
   NEUTRAL_MULTIPLIER,
+  MAX_RECOMPUTE_STEP,
 };

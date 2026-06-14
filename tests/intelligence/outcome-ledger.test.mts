@@ -456,15 +456,17 @@ test('AttentionAllocator.recompute picks up ledger changes', () => {
   assert.ok(alloc.getMultiplier('hot') > 1);
 });
 
-test('AttentionAllocator.recompute is a no-op when the recommendation is unchanged', () => {
+test('AttentionAllocator.recompute is a no-op once fully converged to target', () => {
   const ledger = freshLedger();
   const alloc = new AttentionAllocator({ ledger });
   for (let i = 0; i < 8; i++) record(ledger, 'hot', 'escalated');
   for (let i = 0; i < 2; i++) record(ledger, 'hot', 'acted-on');
-  alloc.recompute();
+  // Converge fully — rate-limiting caps each step at MAX_RECOMPUTE_STEP (0.1),
+  // so target 1.8 needs ≥8 recomputes from neutral 1.0.
+  for (let i = 0; i < 20; i++) alloc.recompute();
   let calls = 0;
   alloc.subscribe(() => { calls += 1; });
-  alloc.recompute(); // no change → no notify.
+  alloc.recompute(); // already at target → no change → no notify.
   assert.equal(calls, 0);
 });
 

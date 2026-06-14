@@ -21,6 +21,7 @@
 import { anomalyEngine, type Anomaly } from '@/services/anomaly-detection';
 import type { CompoundThreat } from '@/services/compound-threat';
 import type { StrikePackage } from '@/services/strike-package';
+import { getApiBaseUrl, isDesktopRuntime } from '@/services/runtime';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Types
@@ -228,21 +229,50 @@ function buildBody(config: WebhookConfig, payload: WebhookPayload): string {
   return JSON.stringify(formatGeneric(payload));
 }
 
-/** POST the payload to a single webhook, respecting timeout + errors. */
+/**
+ * Deliver the payload to a single webhook, respecting timeout + swallowing errors.
+ *
+ * Desktop (Tauri): the tightened CSP `connect-src` forbids the renderer from
+ * POSTing to arbitrary webhook hosts, so delivery routes through the sidecar's
+ * SSRF-validated `/api/local-webhook-dispatch` route (not CSP-bound; it validates
+ * + IP-pins the target). The desktop fetch wrapper auto-injects the local API
+ * bearer token, which that route requires. `/api/local-*` also blocks cloud
+ * fallback, so the webhook URL + secret never reach the remote API.
+ *
+ * Web: there is no Tauri CSP and no sidecar, so POST the webhook directly (the
+ * pre-tightening behavior). Cross-origin reachability is governed by the browser.
+ */
 async function dispatchOne(config: WebhookConfig, payload: WebhookPayload): Promise<void> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (config.secret) headers['X-Webhook-Secret'] = config.secret;
-    const res = await fetch(config.url, {
-      method: 'POST',
-      headers,
-      body: buildBody(config, payload),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      console.warn(`[webhook-dispatcher] ${config.label ?? config.id} returned ${res.status}`);
+    if (isDesktopRuntime()) {
+      const res = await fetch(`${getApiBaseUrl()}/api/local-webhook-dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: config.url, body: buildBody(config, payload), secret: config.secret }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        console.warn(`[webhook-dispatcher] ${config.label ?? config.id} dispatch failed (sidecar ${res.status})`);
+        return;
+      }
+      const result = (await res.json()) as { delivered?: boolean; upstreamStatus?: number };
+      if (!result.delivered) {
+        console.warn(`[webhook-dispatcher] ${config.label ?? config.id} returned ${result.upstreamStatus ?? 'unknown'}`);
+      }
+    } else {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (config.secret) headers['X-Webhook-Secret'] = config.secret;
+      const res = await fetch(config.url, {
+        method: 'POST',
+        headers,
+        body: buildBody(config, payload),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        console.warn(`[webhook-dispatcher] ${config.label ?? config.id} returned ${res.status}`);
+      }
     }
   } catch (error) {
     console.warn(`[webhook-dispatcher] ${config.label ?? config.id} failed:`, error);

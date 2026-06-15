@@ -30,10 +30,14 @@ import {
   type AttentionAllocator,
 } from './attention-allocator';
 import {
-  createForecastCalibrationStore,
   type ForecastCalibrationStore,
   type PredictionRecord,
 } from './forecast-calibration';
+import {
+  getCalibrationStore,
+  recordPrediction,
+  resolvePrediction,
+} from './forecast-calibration-adapter';
 import { getMissionLedger } from '../ops/mission-state';
 import type { MissionLedger } from '../ops/mission-ledger';
 import type { MissionDomain, MissionRecord, MissionStatus } from '../ops/mission-types';
@@ -60,6 +64,10 @@ export interface MissionOutcomeGraderOptions {
   /** Minimum resolved predictions before brierDomainMultiplier moves
    *  away from 1.0 (neutral). */
   minSamplesForMultiplier?: number;
+  /** Override the calibration store. Defaults to the shared adapter singleton
+   *  so mission outcomes are visible to getDomainCalibrationMult() and
+   *  getBoostMultiplier(). Inject a fresh store in tests for isolation. */
+  calibrationStore?: ForecastCalibrationStore;
 }
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -93,12 +101,12 @@ const TERMINAL_STATUSES: ReadonlySet<MissionStatus> = new Set([
 
 export class MissionOutcomeGrader {
   private readonly opts: Required<Omit<MissionOutcomeGraderOptions,
-    'closedLoopLedger' | 'bridge' | 'attentionAllocator' | 'missionLedger'>>;
+    'closedLoopLedger' | 'bridge' | 'attentionAllocator' | 'missionLedger' | 'calibrationStore'>>;
   private readonly closedLoopLedger: ClosedLoopMissionLedger;
   private readonly bridge: MissionLedgerBridge;
   private readonly allocator: AttentionAllocator;
   private readonly missionLedger: MissionLedger;
-  private readonly calibrationStore: ForecastCalibrationStore;
+  private readonly calibrationStore: ForecastCalibrationStore | undefined;
   private unsubscribe: (() => void) | null = null;
 
   private totalGraded = 0;
@@ -116,7 +124,7 @@ export class MissionOutcomeGrader {
     this.bridge = options.bridge ?? getMissionLedgerBridge();
     this.allocator = options.attentionAllocator ?? getAttentionAllocator();
     this.missionLedger = options.missionLedger ?? getMissionLedger();
-    this.calibrationStore = createForecastCalibrationStore();
+    this.calibrationStore = options.calibrationStore;
   }
 
   /** Subscribe to the bridge and begin grading terminal missions.
@@ -194,7 +202,7 @@ export class MissionOutcomeGrader {
    *  there is insufficient data (fewer than `minSamplesForMultiplier`
    *  resolved predictions for the domain). */
   brierDomainMultiplier(domain: string): number {
-    const domainAccuracies = this.calibrationStore.byDomain();
+    const domainAccuracies = (this.calibrationStore ?? getCalibrationStore()).byDomain();
     const entry = domainAccuracies.find((a) => a.domain === (domain as FactDomain));
     if (!entry || entry.predictionCount < this.opts.minSamplesForMultiplier) {
       return 1;
@@ -231,8 +239,13 @@ export class MissionOutcomeGrader {
       status: 'pending',
       algorithmVersion: mission.originAlgorithmId,
     };
-    this.calibrationStore.record(prediction);
-    this.calibrationStore.resolve(predictionId, wasAccurate, resolvedAt);
+    if (this.calibrationStore) {
+      this.calibrationStore.record(prediction);
+      this.calibrationStore.resolve(predictionId, wasAccurate, resolvedAt);
+    } else {
+      recordPrediction(prediction);
+      resolvePrediction(predictionId, wasAccurate, resolvedAt);
+    }
   }
 }
 

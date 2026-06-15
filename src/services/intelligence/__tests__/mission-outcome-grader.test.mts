@@ -35,6 +35,7 @@ import { OutcomeLedger } from '../outcome-ledger.ts';
 import { SituationLifecycleTrackerService } from '../situation-lifecycle-tracker.ts';
 import { createMissionLedger, type MissionLedger } from '../../ops/mission-ledger.ts';
 import type { MissionRecord, MissionDomain, MissionStatus } from '../../ops/mission-types.ts';
+import { createForecastCalibrationStore } from '../forecast-calibration.ts';
 
 // ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -161,6 +162,7 @@ function makeGrader(
     missionLedger,
     clock: overrides.clock ?? (() => T0 + 3 * HOUR),
     minSamplesForMultiplier: 3,
+    calibrationStore: createForecastCalibrationStore(),
   });
 }
 
@@ -316,6 +318,7 @@ describe('MissionOutcomeGrader', () => {
       ]),
       clock: () => T0 + 4 * HOUR,
       minSamplesForMultiplier: 3,
+      calibrationStore: createForecastCalibrationStore(),
     });
 
     gradeAll(grader, ['m1', 'm2', 'm3']);
@@ -338,6 +341,7 @@ describe('MissionOutcomeGrader', () => {
       ]),
       clock: () => T0 + 4 * HOUR,
       minSamplesForMultiplier: 3,
+      calibrationStore: createForecastCalibrationStore(),
     });
 
     gradeAll(grader, ['m1', 'm2', 'm3']);

@@ -1,4 +1,5 @@
 import { Panel } from './Panel';
+import { isTrustedOAuthMessage } from './s2-underground-helpers';
 import { escapeHtml } from '@/utils/sanitize';
 import { getLocalApiPort } from '@/services/runtime';
 import {
@@ -147,10 +148,8 @@ export class S2UndergroundPanel extends Panel {
     // popup window we opened. Without these checks any page/frame able to
     // postMessage to this window could inject an attacker-controlled
     // access_token that we'd persist to the keychain.
-    if (ev.origin !== `http://127.0.0.1:${getLocalApiPort()}`) return;
-    if (ev.source !== this.oauthWindow) return;
-    const m = ev.data as { type?: string; ok?: boolean; access_token?: string; refresh_token?: string };
-    if (m?.type !== 'patreon-oauth') return;
+    if (!isTrustedOAuthMessage(ev, `http://127.0.0.1:${getLocalApiPort()}`, this.oauthWindow)) return;
+    const m = ev.data as { ok?: boolean; access_token?: string; refresh_token?: string };
     window.removeEventListener('message', this.onOAuthMessage);
     this.oauthWindow = null;
     if (m.ok && m.access_token) {

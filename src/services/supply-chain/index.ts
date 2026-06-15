@@ -75,12 +75,12 @@ export async function fetchChokepointStatus(): Promise<GetChokepointStatusRespon
   const hydrated = getHydratedData('chokepoints') as GetChokepointStatusResponse | undefined;
   if (hydrated) {
     // Bootstrap-hydrated payloads bypass the fetch below, so record their health
-    // here too — otherwise valid hydrated data leaves the supply_chain feed
+    // here too — otherwise valid hydrated data leaves the chokepoint-status feed
     // looking down to the shortage fail-closed merge.
     if (hydrated.upstreamUnavailable) {
-      dataFreshness.recordError('supply_chain', 'hydrated payload marked upstream unavailable');
+      dataFreshness.recordError('chokepoint-status', 'hydrated payload marked upstream unavailable');
     } else {
-      dataFreshness.recordUpdate('supply_chain', hydrated.chokepoints.length);
+      dataFreshness.recordUpdate('chokepoint-status', hydrated.chokepoints.length);
     }
     return hydrated;
   }
@@ -106,13 +106,13 @@ export async function fetchChokepointStatus(): Promise<GetChokepointStatusRespon
  };
  }, unavailableChokepoints);
     if (result.upstreamUnavailable) {
-      dataFreshness.recordError('supply_chain', 'upstream unavailable');
+      dataFreshness.recordError('chokepoint-status', 'upstream unavailable');
     } else {
-      dataFreshness.recordUpdate('supply_chain', result.chokepoints.length);
+      dataFreshness.recordUpdate('chokepoint-status', result.chokepoints.length);
     }
     return result;
   } catch {
-    dataFreshness.recordError('supply_chain', 'fetch threw');
+    dataFreshness.recordError('chokepoint-status', 'fetch threw');
     return unavailableChokepoints;
   }
 }

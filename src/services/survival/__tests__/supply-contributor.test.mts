@@ -266,27 +266,31 @@ test('cold cache: empty base yields no supply threats (no crash, no phantom axis
   assert.deepEqual(contributor.contribute(NOW), []);
 });
 
-// ── Fail-closed shortage cache (feed outage must not clear a known risk) ──────
-// `loadShortageInputs()` is best-effort and drops failed feeds, so a total
-// outage returns an empty input map with no failure signal. `getSupplyEntries`
-// recomputes only when the refresh actually returned feed data — otherwise it
-// preserves the prior cache. `shortageCacheAction(gotFeedData, hasCache)` is the
-// pure decision seam: 'replace' (feed-backed → authoritative), 'keep' (outage +
-// warm cache → preserve prior risk), 'passthrough' (cold start + no feed data →
-// baseline but NOT authoritative, so the hydrated fallback wins).
-
-test('fail-closed: keep prior cache when feeds fail but a cache exists', () => {
-  // Outage (gotFeedData === false) + a prior HIGH/CRITICAL cache -> keep it.
-  assert.equal(shortageCacheAction(false, true), 'keep');
-});
-
-test('cold start + outage: passthrough (do NOT become authoritative)', () => {
-  // No prior cache + no feed data -> baseline but not authoritative, so a hydrated
-  // snapshot's supply threat is preserved by supplyContributorForBase (fail-closed).
-  assert.equal(shortageCacheAction(false, false), 'passthrough');
-});
+// ── Fail-closed shortage cache (a dead feed must not clear a known risk) ──────
+// Each shortage feed (drought / grid / chokepoint) reports its own health, so
+// `shortageCacheAction(gotAnyFeed, allFeedsOk, hasCache)` distinguishes a full
+// refresh from partial and total outages: 'replace' (all feeds healthy →
+// authoritative), 'merge' (partial outage + warm cache → keep cached entries for
+// the dead feed's commodities, refresh the rest), 'keep' (total outage + warm
+// cache → preserve prior risk), 'passthrough' (cold start under anything short of
+// a clean refresh → baseline but NOT authoritative, so the hydrated fallback wins).
 
 test('healthy refresh always replaces, regardless of prior cache', () => {
-  assert.equal(shortageCacheAction(true, true), 'replace');
-  assert.equal(shortageCacheAction(true, false), 'replace');
+  assert.equal(shortageCacheAction(true, true, true), 'replace');
+  assert.equal(shortageCacheAction(true, true, false), 'replace');
+});
+
+test('partial outage + warm cache: merge (keep dead-feed commodities, refresh rest)', () => {
+  assert.equal(shortageCacheAction(true, false, true), 'merge');
+});
+
+test('total outage + warm cache: keep prior cache (preserve known risk)', () => {
+  assert.equal(shortageCacheAction(false, false, true), 'keep');
+});
+
+test('cold start under an incomplete refresh: passthrough (do NOT become authoritative)', () => {
+  // No prior cache: a hydrated snapshot's supply threat must survive, so neither a
+  // total outage nor a partial refresh may seed the cache (only allFeedsOk does).
+  assert.equal(shortageCacheAction(false, false, false), 'passthrough');
+  assert.equal(shortageCacheAction(true, false, false), 'passthrough');
 });

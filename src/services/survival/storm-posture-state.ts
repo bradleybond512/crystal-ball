@@ -3,7 +3,11 @@ import { fetchNWSAlerts } from '../nws-alerts.ts';
 import { getSavedPlaces } from '../saved-places.ts';
 import { dataFreshness } from '../data-freshness.ts';
 import { computeShortageFullSet, type ShortageSummaryEntry } from '../shortage/shortage-fullset.ts';
-import { loadShortageInputs } from '../shortage/shortage-input-bridge.ts';
+import {
+  loadShortageInputsWithStatus,
+  mergeShortageEntriesByFeedStatus,
+  type ShortageFeedId,
+} from '../shortage/shortage-input-bridge.ts';
 import { buildSnapshot } from './world-snapshot.ts';
 import { commitMove, applyPlanToPosture } from './survival-plan.ts';
 import { computeMultiAxisPosture } from './survival-posture.ts';
@@ -20,58 +24,90 @@ import type { SurvivalMove, SurvivalPosture, WorldSnapshot } from './survival-ty
 // ── Shortage-entry TTL cache ────────────────────────────────────────────────
 // The three shortage feeds (drought / chokepoint / grid) move slowly, but
 // refreshStormPosture runs ~every 120s. Refetching them on every storm tick is
-// wasteful, so cache the computed entries and only re-`loadShortageInputs()`
-// when older than SHORTAGE_TTL_MS. Last-write-wins; no concurrency guard.
+// wasteful, so cache the computed entries and only re-fetch (via
+// loadShortageInputsWithStatus) when older than SHORTAGE_TTL_MS. Last-write-wins;
+// no concurrency guard.
 const SHORTAGE_TTL_MS = 15 * 60_000;
 let cachedShortageEntries: ShortageSummaryEntry[] = [];
 let cachedShortageAtMs = 0;
 let hasShortageCache = false;
 
-/** Decide whether a refresh result may REPLACE the cached supply entries.
- *  Fail-closed: `loadShortageInputs()` is best-effort (`Promise.allSettled`) and
- *  drops failed feeds, so a total feed outage returns an EMPTY input map with no
- *  failure signal. Recomputing from that empty bag pushes every commodity to
- *  baseline/LOW — which would silently overwrite a known HIGH/CRITICAL cache and
- *  flip the supply axis to an unsafe all-clear purely because feeds failed. So we
- *  only become the authoritative cache when the refresh actually returned feed
- *  data ('replace'); on an outage with a prior cache we keep the prior risk
- *  ('keep'); on a cold start with no feed data we pass through baseline WITHOUT
- *  caching it authoritatively ('passthrough'), so a hydrated snapshot's supply is
- *  preserved by `supplyContributorForBase` (fail-closed). Pure + exported so the
- *  decision is unit-testable. */
-export type ShortageCacheAction = 'replace' | 'keep' | 'passthrough';
-export function shortageCacheAction(gotFeedData: boolean, hasCache: boolean): ShortageCacheAction {
-  if (gotFeedData) return 'replace';
-  return hasCache ? 'keep' : 'passthrough';
+/** Decide how a refresh result interacts with the cached supply entries, now at
+ *  per-feed granularity. Each shortage feed (drought / grid / chokepoint) reports
+ *  its own health via `dataFreshness`, so we distinguish a FULL refresh, a PARTIAL
+ *  outage, and a TOTAL outage:
+ *
+ *  - `'replace'`  — every feed is healthy → the fresh full set is authoritative.
+ *  - `'merge'`    — a partial outage with a warm cache → keep the cached entry for
+ *                   any commodity whose feed is down, refresh the rest
+ *                   (`mergeShortageEntriesByFeedStatus`). This is the fix for the
+ *                   gap where one dead feed used to downgrade its commodities to
+ *                   baseline even though the others were fine.
+ *  - `'keep'`     — a total outage with a warm cache → preserve all prior risk and
+ *                   throttle the next retry.
+ *  - `'passthrough'` — a COLD start (no cache) under anything short of a fully
+ *                   clean refresh → return baseline but do NOT become authoritative,
+ *                   so a hydrated snapshot's supply threats are preserved by
+ *                   `supplyContributorForBase` (fail-closed). We refuse to seed the
+ *                   cache from incomplete data and clobber a known risk.
+ *
+ *  Pure + exported so the decision is unit-testable. */
+export type ShortageCacheAction = 'replace' | 'merge' | 'keep' | 'passthrough';
+export function shortageCacheAction(
+  gotAnyFeed: boolean,
+  allFeedsOk: boolean,
+  hasCache: boolean,
+): ShortageCacheAction {
+  if (allFeedsOk) return 'replace';
+  if (!hasCache) return 'passthrough';
+  return gotAnyFeed ? 'merge' : 'keep';
 }
 
-/** Returns the supply-axis shortage entries, refreshing from the live feeds
- *  only when the cache is empty or older than the TTL. On a feed outage the
- *  refresh returns an empty input map (no commodity keys); rather than downgrade
- *  a known risk to baseline we preserve the prior cache and throttle the next
- *  retry by one TTL window. `now` is injected for determinism. */
+/** Returns the supply-axis shortage entries, refreshing from the live feeds only
+ *  when the cache is empty or older than the TTL. Each feed reports its own health
+ *  (see `loadShortageInputsWithStatus`), so a partial outage keeps the cached
+ *  entries for the dead feed's commodities while refreshing the rest, and a total
+ *  outage preserves the whole prior cache — never downgrading a known risk to
+ *  baseline because a feed failed. `now` is injected for determinism. */
 async function getSupplyEntries(now: number): Promise<ShortageSummaryEntry[]> {
   if (hasShortageCache && now - cachedShortageAtMs < SHORTAGE_TTL_MS) {
     return cachedShortageEntries;
   }
-  let shortageInputs: Awaited<ReturnType<typeof loadShortageInputs>> = {};
+  let inputs: Awaited<ReturnType<typeof loadShortageInputsWithStatus>>['inputs'] = {};
+  let feedsOk: Record<ShortageFeedId, boolean> = {
+    'drought-monitor': false,
+    'power-grid-alerts': false,
+    'supply_chain': false,
+  };
   try {
-    shortageInputs = await loadShortageInputs();
-  } catch { shortageInputs = {}; }
-  const gotFeedData = Object.keys(shortageInputs).length > 0;
-  const action = shortageCacheAction(gotFeedData, hasShortageCache);
+    const res = await loadShortageInputsWithStatus();
+    inputs = res.inputs;
+    feedsOk = res.feedsOk;
+  } catch { /* leave all feeds marked failed */ }
+
+  const gotAnyFeed = feedsOk['drought-monitor'] || feedsOk['power-grid-alerts'] || feedsOk.supply_chain;
+  const allFeedsOk = feedsOk['drought-monitor'] && feedsOk['power-grid-alerts'] && feedsOk.supply_chain;
+  const action = shortageCacheAction(gotAnyFeed, allFeedsOk, hasShortageCache);
+
   if (action === 'keep') {
-    // Outage with a warm cache — preserve the known risk; throttle the next retry.
+    // Total outage with a warm cache — preserve all known risk; throttle next retry.
+    // (Skip recomputing `fresh` so the all-baseline result can't pollute trend state.)
     cachedShortageAtMs = now;
     return cachedShortageEntries;
   }
+  const fresh = computeShortageFullSet(inputs, { now });
   if (action === 'passthrough') {
-    // Cold start + no feed data: return baseline WITHOUT becoming authoritative, so
-    // `supplyContributorForBase` preserves any hydrated supply threat (fail-closed).
-    return computeShortageFullSet(shortageInputs, { now });
+    // Cold start under an incomplete refresh: return baseline WITHOUT becoming
+    // authoritative, so `supplyContributorForBase` preserves any hydrated supply
+    // threat (fail-closed). We refuse to seed the cache from partial/no data.
+    return fresh;
   }
-  // 'replace' — a real feed-backed computation becomes the authoritative cache.
-  cachedShortageEntries = computeShortageFullSet(shortageInputs, { now });
+  // 'merge' (partial outage + warm cache) keeps cached entries for the commodities
+  // whose feed is down and refreshes the rest; 'replace' (all feeds healthy) takes
+  // the fresh full set wholesale.
+  cachedShortageEntries = action === 'merge'
+    ? mergeShortageEntriesByFeedStatus(fresh, cachedShortageEntries, feedsOk)
+    : fresh;
   cachedShortageAtMs = now;
   hasShortageCache = true;
   return cachedShortageEntries;

@@ -22,7 +22,7 @@
 import type { DroughtState, DroughtSummary } from '@/services/drought-monitor';
 import type { PowerGridAlert } from '@/services/power-grid-alerts';
 import type { ShortageInput, ShortageInputBag } from './shortage-types';
-import type { FullSetCommodity } from './shortage-fullset';
+import type { FullSetCommodity, ShortageSummaryEntry } from './shortage-fullset';
 
 // Concrete `fetch*` modules are loaded lazily inside `loadShortageInputs`
 // below — they transitively pull in i18n.ts (which uses Vite's
@@ -81,56 +81,54 @@ export function buildShortageInputsFromSources(
   options: ShortageInputBridgeOptions = {},
 ): Partial<Record<FullSetCommodity, ShortageInputBag>> {
   const now = options.now ?? Date.now();
-  const out: Partial<Record<FullSetCommodity, ShortageInputBag>> = {};
-
-  const droughtFreshness = sources.drought ? sources.drought.fetchedAt.getTime() : now;
-
-  // ── Grains: drought-monitor drives the production drivers ──────────────
-  if (sources.drought?.states.length) {
-    const wheatBag = buildGrainBag(sources.drought.states, WHEAT_BELT, droughtFreshness, 'us-drought-monitor');
-    const cornBag  = buildGrainBag(sources.drought.states, CORN_BELT, droughtFreshness, 'us-drought-monitor');
-    const soyBag   = buildGrainBag(sources.drought.states, SOYBEAN_BELT, droughtFreshness, 'us-drought-monitor');
-    if (Object.keys(wheatBag).length) out.wheat    = { ...(out.wheat ?? {}),    ...wheatBag };
-    if (Object.keys(cornBag).length)  out.corn     = { ...(out.corn ?? {}),     ...cornBag };
-    if (Object.keys(soyBag).length)   out.soybeans = { ...(out.soybeans ?? {}), ...soyBag };
-  }
-
-  // ── Chokepoints: maritime export-corridor stress ───────────────────────
-  if (sources.chokepoints?.length) {
-    for (const cp of sources.chokepoints) {
-      const stress = corridorStressScore(cp);
-      const source = `chokepoint:${cp.key}`;
-      if (cp.key === 'bosphorus') {
-        out.wheat = {
-          ...(out.wheat ?? {}),
-          export_corridor_status: { value: stress, source, observedAt: now },
-        };
-      } else if (cp.key === 'suez') {
-        out.rice = {
-          ...(out.rice ?? {}),
-          export_corridor_status: { value: stress, source, observedAt: now },
-        };
-      } else if (cp.key === 'hormuz') {
-        // Hormuz disruption proxies for crude-import stress on both
-        // diesel and gasoline. Mapped onto crude_imports_wow as a
-        // negative delta — 100 stress → -40% WoW imports, which sits at
-        // the floor of the model's inverseLinear(-25, 5) saturation band.
-        const inp: ShortageInput = { value: -stress * 0.4, source, observedAt: now };
-        out.diesel   = { ...(out.diesel ?? {}),   crude_imports_wow: inp };
-        out.gasoline = { ...(out.gasoline ?? {}), crude_imports_wow: inp };
-      }
-    }
-  }
-
-  // ── Grid alerts: natural-gas demand + curtailment proxies ──────────────
-  if (sources.gridAlerts?.length) {
-    const natGasBag = buildNatGasBag(sources.gridAlerts, now);
-    if (Object.keys(natGasBag).length) {
-      out['natural-gas'] = { ...(out['natural-gas'] ?? {}), ...natGasBag };
-    }
-  }
-
+  const out: InputAccumulator = {};
+  const { drought, chokepoints, gridAlerts } = sources;
+  if (drought?.states.length) applyDroughtInputs(out, drought);
+  if (chokepoints?.length) applyChokepointInputs(out, chokepoints, now);
+  if (gridAlerts?.length) applyGridInputs(out, gridAlerts, now);
   return out;
+}
+
+type InputAccumulator = Partial<Record<FullSetCommodity, ShortageInputBag>>;
+
+/** Grains: drought-monitor drives the production drivers. observedAt is the
+ *  drought summary's own fetch time so freshness propagates accurately. */
+function applyDroughtInputs(out: InputAccumulator, drought: DroughtSummary): void {
+  const observedAt = drought.fetchedAt.getTime();
+  const wheatBag = buildGrainBag(drought.states, WHEAT_BELT, observedAt, 'us-drought-monitor');
+  const cornBag  = buildGrainBag(drought.states, CORN_BELT, observedAt, 'us-drought-monitor');
+  const soyBag   = buildGrainBag(drought.states, SOYBEAN_BELT, observedAt, 'us-drought-monitor');
+  if (Object.keys(wheatBag).length) out.wheat    = { ...out.wheat,    ...wheatBag };
+  if (Object.keys(cornBag).length)  out.corn     = { ...out.corn,     ...cornBag };
+  if (Object.keys(soyBag).length)   out.soybeans = { ...out.soybeans, ...soyBag };
+}
+
+/** Chokepoints: maritime export-corridor stress mapped to corridor/import drivers. */
+function applyChokepointInputs(out: InputAccumulator, chokepoints: readonly ChokepointSignal[], now: number): void {
+  for (const cp of chokepoints) {
+    const stress = corridorStressScore(cp);
+    const source = `chokepoint:${cp.key}`;
+    if (cp.key === 'bosphorus') {
+      out.wheat = { ...out.wheat, export_corridor_status: { value: stress, source, observedAt: now } };
+    } else if (cp.key === 'suez') {
+      out.rice = { ...out.rice, export_corridor_status: { value: stress, source, observedAt: now } };
+    } else if (cp.key === 'hormuz') {
+      // Hormuz disruption proxies for crude-import stress on both diesel and
+      // gasoline. Mapped onto crude_imports_wow as a negative delta — 100 stress
+      // → -40% WoW imports, at the floor of the model's inverseLinear(-25, 5) band.
+      const inp: ShortageInput = { value: -stress * 0.4, source, observedAt: now };
+      out.diesel   = { ...out.diesel,   crude_imports_wow: inp };
+      out.gasoline = { ...out.gasoline, crude_imports_wow: inp };
+    }
+  }
+}
+
+/** Grid alerts: natural-gas demand + curtailment proxies. */
+function applyGridInputs(out: InputAccumulator, gridAlerts: readonly PowerGridAlert[], now: number): void {
+  const natGasBag = buildNatGasBag(gridAlerts, now);
+  if (Object.keys(natGasBag).length) {
+    out['natural-gas'] = { ...out['natural-gas'], ...natGasBag };
+  }
 }
 
 // ── Grain helpers ─────────────────────────────────────────────────────────
@@ -199,7 +197,88 @@ function round(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
+// ── Per-feed status + per-commodity fail-closed merge ──────────────────────
+// A PARTIAL outage (e.g. the chokepoint feed is down but drought is healthy)
+// must not silently downgrade the commodities that depend on the dead feed.
+// We track which of the three underlying feeds actually refreshed this cycle,
+// then merge fresh-vs-cached entries PER COMMODITY: a commodity keeps its prior
+// (cached) risk whenever ANY feed it depends on failed.
+
+/** The `dataFreshness` source ids for the three wired shortage feeds. Each is a
+ *  valid `DataSourceId` (drought-monitor + power-grid-alerts record under their
+ *  own ids; chokepoint status records under the supply_chain domain id). */
+export type ShortageFeedId = 'drought-monitor' | 'power-grid-alerts' | 'supply_chain';
+
+/** Which feeds each commodity's inputs are derived from in
+ *  `buildShortageInputsFromSources`. Commodities with no wired feed have no
+ *  dependencies — their forecast is always the seasonal baseline, so there is
+ *  no live risk a failed feed could erase. */
+export const COMMODITY_SOURCE_FEEDS: Record<FullSetCommodity, readonly ShortageFeedId[]> = {
+  wheat: ['drought-monitor', 'supply_chain'], // belt drought + Bosphorus corridor
+  corn: ['drought-monitor'],
+  soybeans: ['drought-monitor'],
+  rice: ['supply_chain'],                       // Suez corridor
+  diesel: ['supply_chain'],                     // Hormuz crude imports
+  gasoline: ['supply_chain'],                   // Hormuz crude imports
+  'natural-gas': ['power-grid-alerts'],
+  'jet-fuel': [],
+  fertilizer: [],
+  crude: [],
+  propane: [],
+  electricity: [],
+};
+
+export interface ShortageInputsWithStatus {
+  inputs: Partial<Record<FullSetCommodity, ShortageInputBag>>;
+  /** True iff the feed actually refreshed (or last refreshed) without a pending
+   *  error this cycle — see `loadShortageInputsWithStatus`. */
+  feedsOk: Record<ShortageFeedId, boolean>;
+}
+
+/**
+ * Merges a freshly-computed full set against the prior cached set, per commodity.
+ * A commodity adopts its FRESH entry only when every feed it depends on is OK;
+ * otherwise it keeps its CACHED entry (preserving a known risk through the
+ * outage), falling back to the fresh baseline only when no cached entry exists.
+ * Pure + deterministic — no fetch, no clock.
+ */
+export function mergeShortageEntriesByFeedStatus(
+  fresh: readonly ShortageSummaryEntry[],
+  cached: readonly ShortageSummaryEntry[],
+  feedsOk: Readonly<Record<ShortageFeedId, boolean>>,
+): ShortageSummaryEntry[] {
+  const cachedByCommodity = new Map(cached.map((e) => [e.commodity, e]));
+  return fresh.map((freshEntry) => {
+    const deps = COMMODITY_SOURCE_FEEDS[freshEntry.commodity] ?? [];
+    const allDepsOk = deps.every((f) => feedsOk[f]);
+    if (allDepsOk) return freshEntry;
+    return cachedByCommodity.get(freshEntry.commodity) ?? freshEntry;
+  });
+}
+
 // ── Async shell ───────────────────────────────────────────────────────────
+
+/** Maps a provider's free-text chokepoint name onto one of the three corridors
+ *  the bridge models. Returns null for chokepoints we don't yet wire. */
+function chokepointKeyFromName(name: string): ChokepointKey | null {
+  const n = name.toLowerCase();
+  if (n.includes('bosphorus')) return 'bosphorus';
+  if (n.includes('suez')) return 'suez';
+  if (n.includes('hormuz')) return 'hormuz';
+  return null;
+}
+
+function toChokepointSignals(
+  chokepoints: readonly { name: string; disruptionScore: number; status: string }[],
+): ChokepointSignal[] {
+  const cps: ChokepointSignal[] = [];
+  for (const c of chokepoints) {
+    const key = chokepointKeyFromName(c.name);
+    if (!key) continue;
+    cps.push({ key, disruptionScore: c.disruptionScore, status: (c.status as ChokepointSignal['status']) ?? undefined });
+  }
+  return cps;
+}
 
 /**
  * Fetches the three currently-wired feeds in parallel (best-effort) and
@@ -217,23 +296,38 @@ export async function loadShortageInputs(): Promise<Partial<Record<FullSetCommod
     fetchPowerGridAlerts(),
     fetchChokepointStatus(),
   ]);
-  const cps: ChokepointSignal[] = [];
-  if (chokepoints.status === 'fulfilled') {
-    for (const c of chokepoints.value.chokepoints) {
-      const name = c.name.toLowerCase();
-      const key: ChokepointKey | null =
-        name.includes('bosphorus') ? 'bosphorus' :
-        name.includes('suez')      ? 'suez' :
-        name.includes('hormuz')    ? 'hormuz' :
-        null;
-      if (!key) continue;
-      const status = (c.status as ChokepointSignal['status']) ?? undefined;
-      cps.push({ key, disruptionScore: c.disruptionScore, status });
-    }
-  }
+  const cps = chokepoints.status === 'fulfilled'
+    ? toChokepointSignals(chokepoints.value.chokepoints)
+    : [];
   return buildShortageInputsFromSources({
     drought:     drought.status === 'fulfilled' ? drought.value : undefined,
     gridAlerts:  gridAlerts.status === 'fulfilled' ? gridAlerts.value : undefined,
     chokepoints: cps.length > 0 ? cps : undefined,
   });
+}
+
+/**
+ * Same as `loadShortageInputs`, plus a per-feed health verdict read from
+ * `dataFreshness` AFTER the fetchers have run. A feed is OK when it has a prior
+ * successful update and no pending error — `recordUpdate` clears `lastError`
+ * while `recordError` sets it, so this correctly treats an internal cache-hit
+ * (no new record this cycle) as healthy and only a genuine failure as down.
+ * Callers feed `feedsOk` into `mergeShortageEntriesByFeedStatus` to keep partial
+ * outages from downgrading commodities whose feed is still alive.
+ */
+export async function loadShortageInputsWithStatus(): Promise<ShortageInputsWithStatus> {
+  const inputs = await loadShortageInputs();
+  const { dataFreshness } = await import('@/services/data-freshness');
+  const feedOk = (id: ShortageFeedId): boolean => {
+    const s = dataFreshness.getSource(id);
+    return !!s?.lastUpdate && !s.lastError;
+  };
+  return {
+    inputs,
+    feedsOk: {
+      'drought-monitor': feedOk('drought-monitor'),
+      'power-grid-alerts': feedOk('power-grid-alerts'),
+      'supply_chain': feedOk('supply_chain'),
+    },
+  };
 }

@@ -615,9 +615,16 @@ test('inline /api routes: gated route requires auth, public route does not', asy
  const authedBody = await authed.json();
  assert.ok(Array.isArray(authedBody.feeds));
 
- // Allowlisted public route stays reachable without auth.
- const pub = await fetch(`http://127.0.0.1:${port}/api/service-status`);
- assert.notEqual(pub.status, 401);
+ // Every allowlisted public route stays reachable without auth (a non-401
+ // status — 200/400/405 are all fine; the point is the gate doesn't 401 them).
+ for (const route of ['/api/service-status', '/api/youtube-embed', '/api/patreon/authorize-url']) {
+ const pub = await fetch(`http://127.0.0.1:${port}${route}`);
+ assert.notEqual(pub.status, 401, `${route} should not be auth-gated`);
+ }
+
+ // /api/health is NOT on the allowlist and keeps its own token check.
+ const healthUnauth = await fetch(`http://127.0.0.1:${port}/api/health`);
+ assert.equal(healthUnauth.status, 401, '/api/health must stay gated');
   } finally {
  process.env.LOCAL_API_TOKEN = originalToken;
  await app.close();

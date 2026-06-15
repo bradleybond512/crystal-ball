@@ -1704,7 +1704,7 @@ function loadVerboseState(dataDir) {
 
 function saveVerboseState() {
   if (!_verboseStatePath) return;
-  try { writeFileSync(_verboseStatePath, JSON.stringify({ verboseMode })); } catch { /* ignore */ }
+  try { writeFileSync(_verboseStatePath, JSON.stringify({ verboseMode })); chmodSync(_verboseStatePath, 0o600); } catch { /* ignore */ }
 }
 
 function _getTrafficEntries() {
@@ -5265,9 +5265,12 @@ async function dispatch(requestUrl, req, routes, context) {
     const code = requestUrl.searchParams.get('code') || '';
     const state = requestUrl.searchParams.get('state') || '';
     const ok = code && patreonStateStore.consume(state);
+    // Token-bearing payload is posted only to the trusted Tauri app origin —
+    // never a wildcard targetOrigin, which would deliver the access/refresh
+    // tokens to whatever window happens to be the opener.
     const page = (msg, payload) => new Response(
       `<!doctype html><meta charset=utf-8><body style="font:14px system-ui;background:#111;color:#eee;padding:24px">${msg}` +
-      `<script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)},'*')}catch(e){}setTimeout(function(){window.close()},1500)</script>`,
+      `<script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)},'tauri://localhost')}catch(e){}setTimeout(function(){window.close()},1500)</script>`,
       { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
     if (!ok) return page('Patreon connect failed (bad state).', { type: 'patreon-oauth', ok: false });
     try {
@@ -5292,6 +5295,14 @@ async function dispatch(requestUrl, req, routes, context) {
   // gateway webhooks (Twilio, etc.) can POST without a LOCAL_API_TOKEN.
   // Security is enforced by the phone-number allowlist in sms-config.json.
   if (requestUrl.pathname === '/api/sms/command' && req.method === 'POST') {
+    // Reject browser-originated requests (CSRF protection) before touching the
+    // body. Real Twilio webhooks are server-to-server and never carry an Origin
+    // header; the in-app test caller is trusted via bearer token.
+    const trustedLocalCaller = isValidToken(req.headers.authorization || '');
+    if (req.headers.origin && !trustedLocalCaller) {
+      return json({ error: 'Forbidden' }, 403);
+    }
+
     if (!_smsConfig.enabled) return json({ error: 'SMS command interface is disabled.' }, 503);
 
     const rawBodyBuf = await readBody(req);
@@ -5305,14 +5316,6 @@ async function dispatch(requestUrl, req, routes, context) {
       params = Object.fromEntries(new URLSearchParams(rawBody));
     } else {
       try { params = JSON.parse(rawBody || '{}'); } catch { return json({ error: 'Invalid JSON' }, 400); }
-    }
-
-    // Reject browser-originated requests (CSRF protection). Real Twilio
-    // webhooks are server-to-server and never carry an Origin header; the
-    // in-app test caller is trusted via bearer token.
-    const trustedLocalCaller = isValidToken(req.headers.authorization || '');
-    if (req.headers.origin && !trustedLocalCaller) {
-      return json({ error: 'Forbidden' }, 403);
     }
 
     // Caller-ID (From) is spoofable. When a TWILIO_AUTH_TOKEN is configured we
@@ -12649,7 +12652,7 @@ async function dispatch(requestUrl, req, routes, context) {
       return out;
     });
     if (baselinePath) {
-      try { writeFileSync(baselinePath, JSON.stringify(baseline)); } catch { /* non-fatal */ }
+      try { writeFileSync(baselinePath, JSON.stringify(baseline)); chmodSync(baselinePath, 0o600); } catch { /* non-fatal */ }
     }
     return json({ available: true, generatedAt: raw.generatedAt, entries: sanitized, summary: { totalConnections: sanitized.length } });
   }
@@ -16478,6 +16481,12 @@ export async function createLocalApiServer(options = {}) {
      return;
    }
    if (req.method === 'POST') {
+     const authHeader = req.headers['authorization'] || '';
+     if (!isValidToken(authHeader)) {
+       res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'Unauthorized' }));
+       return;
+     }
      let bodyText = '';
      try {
        const _rb1 = await readBody(req); bodyText = _rb1 ? _rb1.toString('utf-8') : '';
@@ -16560,6 +16569,12 @@ export async function createLocalApiServer(options = {}) {
      return;
    }
    if (req.method === 'POST') {
+     const authHeader = req.headers['authorization'] || '';
+     if (!isValidToken(authHeader)) {
+       res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'Unauthorized' }));
+       return;
+     }
      let bodyText = '';
      try { const _rb2 = await readBody(req); bodyText = _rb2 ? _rb2.toString('utf-8') : ''; } catch { bodyText = ''; }
      let parsed = null;
@@ -16589,6 +16604,12 @@ export async function createLocalApiServer(options = {}) {
      return;
    }
    if (req.method === 'POST') {
+     const authHeader = req.headers['authorization'] || '';
+     if (!isValidToken(authHeader)) {
+       res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'Unauthorized' }));
+       return;
+     }
      let bodyText = '';
      try { const _rb2 = await readBody(req); bodyText = _rb2 ? _rb2.toString('utf-8') : ''; } catch { bodyText = ''; }
      let parsed = null;
@@ -16616,6 +16637,12 @@ export async function createLocalApiServer(options = {}) {
      res.end(JSON.stringify({ error: 'method not allowed' }));
      return;
    }
+   const authHeader = req.headers['authorization'] || '';
+   if (!isValidToken(authHeader)) {
+     res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: 'Unauthorized' }));
+     return;
+   }
    let bodyText = '';
    try { const _rb3 = await readBody(req); bodyText = _rb3 ? _rb3.toString('utf-8') : ''; } catch { bodyText = ''; }
    let parsed = null;
@@ -16632,6 +16659,12 @@ export async function createLocalApiServer(options = {}) {
  }
  const ruleDetailMatch = requestUrl.pathname.match(/^\/api\/intelligence\/rules\/([^/]+)$/);
  if (ruleDetailMatch && req.method === 'DELETE') {
+   const authHeader = req.headers['authorization'] || '';
+   if (!isValidToken(authHeader)) {
+     res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: 'Unauthorized' }));
+     return;
+   }
    const removed = deleteRuleSidecar(ruleDetailMatch[1]);
    res.writeHead(removed ? 200 : 404,
      { 'content-type': 'application/json', ...makeCorsHeaders(req) });
@@ -16715,6 +16748,12 @@ export async function createLocalApiServer(options = {}) {
       return sendJson({ watchboards: getWatchboards() });
     }
     if (req.method === 'POST') {
+      const authHeader = req.headers['authorization'] || '';
+      if (!isValidToken(authHeader)) {
+        res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       const raw = await readBody(req);
       const body = raw ? JSON.parse(raw.toString()) : null;
       if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
@@ -16735,6 +16774,12 @@ export async function createLocalApiServer(options = {}) {
       return sendJson({ templates: getWatchboardTemplates() });
     }
     if (req.method === 'PUT') {
+      const authHeader = req.headers['authorization'] || '';
+      if (!isValidToken(authHeader)) {
+        res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       const raw = await readBody(req);
       const body = raw ? JSON.parse(raw.toString()) : null;
       if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
@@ -16743,6 +16788,12 @@ export async function createLocalApiServer(options = {}) {
       return sendJson({ watchboard: updated });
     }
     if (req.method === 'DELETE') {
+      const authHeader = req.headers['authorization'] || '';
+      if (!isValidToken(authHeader)) {
+        res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       const deleted = deleteWatchboard(wbId);
       if (!deleted) return sendJson({ error: 'not found' }, 404);
       return sendJson({ ok: true });
@@ -16943,7 +16994,7 @@ export async function createLocalApiServer(options = {}) {
 
  const portFile = process.env.LOCAL_API_PORT_FILE;
  if (portFile) {
- try { writeFileSync(portFile, String(boundPort)); } catch {}
+ try { writeFileSync(portFile, String(boundPort)); chmodSync(portFile, 0o600); } catch {}
  }
 
  context.logger.log(`[local-api] listening on http://127.0.0.1:${boundPort} (apiDir=${context.apiDir}, routes=${routes.length}, cloudFallback=${context.cloudFallback})`);

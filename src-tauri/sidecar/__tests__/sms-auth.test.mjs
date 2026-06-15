@@ -1,12 +1,103 @@
 /**
  * Tests for SMS route auth hardening:
  *   - validateTwilioSignature (sms-security.mjs) — HMAC-SHA1 correctness
- *   - /api/sms/status auth gate
- *   - /api/sms/command CSRF Origin rejection
+ *   - /api/sms/status auth gate (integration)
+ *   - /api/sms/command CSRF Origin rejection (integration)
  */
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import { createHmac } from 'node:crypto';
+
+// ── Integration test helpers ────────────────────────────────────────────────
+
+const TEST_TOKEN = 'sms-auth-test-token-xyz';
+process.env.LOCAL_API_TOKEN ??= TEST_TOKEN;
+import { createLocalApiServer } from '../local-api-server.mjs';
+
+const silentLogger = { log() {}, warn() {}, error() {} };
+
+async function withServer(fn) {
+  const app = await createLocalApiServer({ port: 0, logger: silentLogger });
+  const { port } = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    await fn(base);
+  } finally {
+    await app.close();
+  }
+}
+
+// ── /api/sms/status — bearer-auth gate ──────────────────────────────────────
+
+test('/api/sms/status: returns 401 without bearer token', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/sms/status`);
+    assert.equal(res.status, 401);
+    const body = await res.json();
+    assert.ok(body.error);
+  });
+});
+
+test('/api/sms/status: returns 200 with valid bearer token', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/sms/status`, {
+      headers: { authorization: `Bearer ${process.env.LOCAL_API_TOKEN}` },
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.ok(typeof body.enabled === 'boolean');
+    assert.ok(typeof body.uptimeMs === 'number');
+  });
+});
+
+// ── /api/sms/command — CSRF Origin rejection ────────────────────────────────
+
+test('/api/sms/command: rejects request with Origin header and no bearer token (CSRF)', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/sms/command`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'origin': 'http://evil.example.com',
+      },
+      body: JSON.stringify({ from: '+15551234567', body: 'STATUS' }),
+    });
+    assert.equal(res.status, 403);
+    const body = await res.json();
+    assert.ok(body.error);
+  });
+});
+
+test('/api/sms/command: allows request with Origin header when bearer token is valid', async () => {
+  await withServer(async (base) => {
+    // Trusted local caller (bearer token) bypasses CSRF check;
+    // SMS is disabled by default so the next gate returns 503.
+    const res = await fetch(`${base}/api/sms/command`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'origin': 'http://127.0.0.1',
+        'authorization': `Bearer ${process.env.LOCAL_API_TOKEN}`,
+      },
+      body: JSON.stringify({ from: '+15551234567', body: 'STATUS' }),
+    });
+    // 503 means it passed CSRF and reached the enabled check (SMS disabled by default)
+    assert.equal(res.status, 503);
+  });
+});
+
+test('/api/sms/command: allows request with no Origin header (Twilio webhook pattern)', async () => {
+  await withServer(async (base) => {
+    // No Origin header — should reach the enabled check, not be blocked by CSRF
+    const res = await fetch(`${base}/api/sms/command`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ from: '+15551234567', body: 'STATUS' }),
+    });
+    // 503 means it passed CSRF and reached the enabled check (SMS disabled by default)
+    assert.equal(res.status, 503);
+  });
+});
 
 import { validateTwilioSignature } from '../sms-security.mjs';
 

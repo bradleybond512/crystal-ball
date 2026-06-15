@@ -360,7 +360,7 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 | Panel categories | 19 | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
 | MCP tools | 41 | `tools/mcp-server/index.mjs` |
-| Supported secret keys | 76 | `src-tauri/src/main.rs` |
+| Supported secret keys | 77 | `src-tauri/src/main.rs` |
 | Foundation intelligence modules | 24 | `src/services/{intelligence,weather,insights,shortage}/` |
 | Foundation deterministic tests | 600+ | `npm run test:intelligence` + `test:weather` + `test:insights*` + `test:shortage` |
 | Commodity shortage models | 8 (wheat, corn, rice, soybeans, diesel, gasoline, natural gas, jet fuel) | `src/services/shortage/*-shortage-risk.ts` |
@@ -413,7 +413,7 @@ API keys are optional -- most panels degrade gracefully without them. Configure 
 | [docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md](docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md) | Big Event Detector, Confidence × Urgency Matrix, What Changed Digest, Action Briefs + Reaction Playbooks, Presentation Export |
 | [docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md](docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md) | Food + energy shortage forecast framework — 8 commodity models with seasonal multipliers and provenance-aware inputs |
 | [docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md](docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md) | Enhanced `/sitrep` design -- 3-phase intelligence cycle, personalization, full MCP tool surface |
-| [docs/API_KEYS.md](docs/API_KEYS.md) | All 76 API keys -- categories, signup URLs, free/paid, plain-language descriptions |
+| [docs/API_KEYS.md](docs/API_KEYS.md) | All 77 API keys -- categories, signup URLs, free/paid, plain-language descriptions |
 | [docs/DESKTOP_CONFIGURATION.md](docs/DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, fallback behavior |
 | [docs/RELEASE_PACKAGING.md](docs/RELEASE_PACKAGING.md) | Desktop packaging and signing workflow |
 | [docs/MCP_PIPELINE.md](docs/MCP_PIPELINE.md) | How Claude Code gathers intelligence via MCP -- pipeline, auth, tools |

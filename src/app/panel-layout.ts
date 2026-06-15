@@ -1928,7 +1928,7 @@ export class PanelLayoutManager implements AppModule {
  ]).then(([{ detectDegradations }, {
    getFeatureHealthRegistry, getPanelHealthRegistry, getNotificationTraceRegistry,
  }, { routeBigEventToLadder }, { detectBigEvent }, { slog }, { registerRecurringLoop }]) => {
-   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    
    let prevReport: any = null;
    const alertedIds = new Set();
    registerRecurringLoop(

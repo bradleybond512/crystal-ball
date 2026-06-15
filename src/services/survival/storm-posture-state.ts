@@ -2,8 +2,7 @@
 import { fetchNWSAlerts } from '../nws-alerts.ts';
 import { getSavedPlaces } from '../saved-places.ts';
 import { buildSnapshot } from './world-snapshot.ts';
-import { availableMoves } from './survival-moves.ts';
-import { commitMove, applyPlanToPosture } from './survival-plan.ts';
+import { commitMove } from './survival-plan.ts';
 import { adaptLiveAlert, adaptSavedPlace, type LiveAlertInput } from './storm-posture-adapter.ts';
 import { saveSnapshot, loadLatestSnapshot } from './snapshot-store.ts';
 import type { SurvivalMove, WorldSnapshot } from './survival-types.ts';
@@ -45,8 +44,11 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
 export function commitStormMove(move: SurvivalMove, now = Date.now()): void {
   if (!current) return;
   const plan = commitMove(current.plan, move, now);
-  const moves = availableMoves(current.posture, current, { now });
-  current = { ...current, plan, posture: applyPlanToPosture(current.posture, plan, moves) };
+  const weatherFetchedAtMs = current.freshness.find((f) => f.domain === 'weather')?.fetchedAtMs ?? current.capturedAtMs;
+  current = buildSnapshot(
+    { weatherAlerts: current.weatherAlerts, savedPlaces: current.savedPlaces, weatherFetchedAtMs, plan },
+    { now: current.capturedAtMs },
+  );
   notify();
   void saveSnapshot(current);
 }

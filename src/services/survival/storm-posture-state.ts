@@ -33,13 +33,16 @@ let hasShortageCache = false;
  *  failure signal. Recomputing from that empty bag pushes every commodity to
  *  baseline/LOW — which would silently overwrite a known HIGH/CRITICAL cache and
  *  flip the supply axis to an unsafe all-clear purely because feeds failed. So we
- *  only replace the cache when the refresh actually returned feed data; when it
- *  did not and we already hold a prior cache, we keep the prior risk. With no
- *  prior cache (true cold start) we fall through to baseline — there is no prior
- *  risk to preserve (a hydrated snapshot's supply is preserved separately by
- *  `supplyContributorForBase`). Pure + exported so the invariant is unit-testable. */
-export function shouldReplaceShortageCache(gotFeedData: boolean, hasCache: boolean): boolean {
-  return gotFeedData || !hasCache;
+ *  only become the authoritative cache when the refresh actually returned feed
+ *  data ('replace'); on an outage with a prior cache we keep the prior risk
+ *  ('keep'); on a cold start with no feed data we pass through baseline WITHOUT
+ *  caching it authoritatively ('passthrough'), so a hydrated snapshot's supply is
+ *  preserved by `supplyContributorForBase` (fail-closed). Pure + exported so the
+ *  decision is unit-testable. */
+export type ShortageCacheAction = 'replace' | 'keep' | 'passthrough';
+export function shortageCacheAction(gotFeedData: boolean, hasCache: boolean): ShortageCacheAction {
+  if (gotFeedData) return 'replace';
+  return hasCache ? 'keep' : 'passthrough';
 }
 
 /** Returns the supply-axis shortage entries, refreshing from the live feeds
@@ -56,12 +59,18 @@ async function getSupplyEntries(now: number): Promise<ShortageSummaryEntry[]> {
     shortageInputs = await loadShortageInputs();
   } catch { shortageInputs = {}; }
   const gotFeedData = Object.keys(shortageInputs).length > 0;
-  if (!shouldReplaceShortageCache(gotFeedData, hasShortageCache)) {
-    // Shortage feeds unavailable — do NOT downgrade a known risk to baseline.
-    // Preserve the prior entries; throttle the next retry to one TTL window.
+  const action = shortageCacheAction(gotFeedData, hasShortageCache);
+  if (action === 'keep') {
+    // Outage with a warm cache — preserve the known risk; throttle the next retry.
     cachedShortageAtMs = now;
     return cachedShortageEntries;
   }
+  if (action === 'passthrough') {
+    // Cold start + no feed data: return baseline WITHOUT becoming authoritative, so
+    // `supplyContributorForBase` preserves any hydrated supply threat (fail-closed).
+    return computeShortageFullSet(shortageInputs, { now });
+  }
+  // 'replace' — a real feed-backed computation becomes the authoritative cache.
   cachedShortageEntries = computeShortageFullSet(shortageInputs, { now });
   cachedShortageAtMs = now;
   hasShortageCache = true;

@@ -5,7 +5,7 @@ import { makeSupplyMoveProvider } from '../supply-move-provider.ts';
 import { makeWeatherContributor } from '../weather-contributor.ts';
 import { computeMultiAxisPosture, type MultiAxisInput } from '../survival-posture.ts';
 import { availableMoves } from '../survival-moves.ts';
-import { supplyContributorForBase, shouldReplaceShortageCache } from '../storm-posture-state.ts';
+import { supplyContributorForBase, shortageCacheAction } from '../storm-posture-state.ts';
 import type { ShortageSummaryEntry } from '../../shortage/shortage-fullset.ts';
 import type { ShortageForecast } from '../../shortage/shortage-types.ts';
 import type { WorldSnapshot } from '../survival-types.ts';
@@ -270,20 +270,23 @@ test('cold cache: empty base yields no supply threats (no crash, no phantom axis
 // `loadShortageInputs()` is best-effort and drops failed feeds, so a total
 // outage returns an empty input map with no failure signal. `getSupplyEntries`
 // recomputes only when the refresh actually returned feed data — otherwise it
-// preserves the prior cache. `shouldReplaceShortageCache(gotFeedData, hasCache)`
-// is the pure decision seam.
+// preserves the prior cache. `shortageCacheAction(gotFeedData, hasCache)` is the
+// pure decision seam: 'replace' (feed-backed → authoritative), 'keep' (outage +
+// warm cache → preserve prior risk), 'passthrough' (cold start + no feed data →
+// baseline but NOT authoritative, so the hydrated fallback wins).
 
 test('fail-closed: keep prior cache when feeds fail but a cache exists', () => {
-  // Outage (gotFeedData === false) + a prior HIGH/CRITICAL cache -> DO NOT replace.
-  assert.equal(shouldReplaceShortageCache(false, true), false);
+  // Outage (gotFeedData === false) + a prior HIGH/CRITICAL cache -> keep it.
+  assert.equal(shortageCacheAction(false, true), 'keep');
 });
 
-test('cold start: recompute to baseline when feeds fail and no cache exists', () => {
-  // No prior risk to preserve -> fall through to baseline.
-  assert.equal(shouldReplaceShortageCache(false, false), true);
+test('cold start + outage: passthrough (do NOT become authoritative)', () => {
+  // No prior cache + no feed data -> baseline but not authoritative, so a hydrated
+  // snapshot's supply threat is preserved by supplyContributorForBase (fail-closed).
+  assert.equal(shortageCacheAction(false, false), 'passthrough');
 });
 
 test('healthy refresh always replaces, regardless of prior cache', () => {
-  assert.equal(shouldReplaceShortageCache(true, true), true);
-  assert.equal(shouldReplaceShortageCache(true, false), true);
+  assert.equal(shortageCacheAction(true, true), 'replace');
+  assert.equal(shortageCacheAction(true, false), 'replace');
 });

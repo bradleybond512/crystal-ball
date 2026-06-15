@@ -8438,6 +8438,7 @@ async function dispatch(requestUrl, req, routes, context) {
  expires: p.expires ?? '',
  status: p.status ?? '',
  centroid: extractAlertCentroid(f),
+ geometry: f?.geometry ?? null,
  };
  });
  return json(alerts);

@@ -42,18 +42,19 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
     const weatherFetchedAtMs = nwsLastUpdate ? nwsLastUpdate.getTime() : (priorFetchedAt ?? now);
     const next = buildSnapshot({ weatherAlerts: alerts, savedPlaces: places, weatherFetchedAtMs, plan }, { now });
 
-    // Survival guard: never erase a known threat because of a DATA GAP. The alert
-    // feed returns [] on upstream failure with HTTP 200, so an outage can look like
-    // "all clear". Only keep the last posture when the weather data is actually
-    // STALE (the fetch did not refresh) AND prior alerts are still unexpired. A
-    // legitimate all-clear on FRESH data (NWS canceled the alert, or the affected
-    // place was moved/removed) updates normally.
+    // Survival guard: an EMPTY alert result must never clear an unexpired threat.
+    // The feed returns [] + HTTP 200 on upstream failure (recorded as a "success",
+    // so no freshness signal can tell failure from a real all-clear). Genuine
+    // clears always arrive as NON-empty fetches — an NWS cancel message, or alerts
+    // that simply no longer match a moved/removed place — so those update normally.
+    // A truly empty fetch is treated as a possible data gap: keep the last posture
+    // until the prior alerts expire on their own (a feed-independent signal).
+    const fetchWasEmpty = rawAlerts.length === 0;
     const hadThreat = (current?.posture.overallLevel ?? 0) > 0;
     const nowAllClear = next.posture.overallLevel === 0;
     const priorUnexpired = current?.weatherAlerts.some((a) => Date.parse(a.expires) > now) ?? false;
-    const weatherStale = !(next.freshness.find((f) => f.domain === 'weather')?.ok ?? false);
-    if (hadThreat && nowAllClear && priorUnexpired && weatherStale) {
-      notify(); // keep last posture during a data gap, but re-render so the stale banner ages
+    if (fetchWasEmpty && hadThreat && nowAllClear && priorUnexpired) {
+      notify(); // keep last posture during a possible data gap; re-render so the stale banner ages
       return;
     }
 

@@ -1,4 +1,4 @@
-import type { AlertPolygon, Coord, NwsAlertMinimal, SavedPlace, WeatherSeverity } from '../weather/weather-threat-types.ts';
+import type { AlertPolygon, Coord, NwsAlertMinimal, SavedPlace, WeatherMessageType, WeatherSeverity } from '../weather/weather-threat-types.ts';
 
 export interface AppSavedPlaceLike {
   id: string;
@@ -21,6 +21,7 @@ export interface LiveAlertInput {
   onset: string;
   expires: string;
   headline?: string;
+  messageType?: string | null;
   centroid?: [number, number] | null;
   geometry?: GeoJsonGeometry | null;
 }
@@ -30,6 +31,19 @@ const SYNTHETIC_POINTS = 12;
 
 export function adaptSavedPlace(p: AppSavedPlaceLike): SavedPlace {
   return { id: p.id, label: p.name, lat: p.lat, lon: p.lon, radiusKm: p.radiusKm, ugcZones: p.ugcZones };
+}
+
+function normalizeMessageType(raw: string | null | undefined): WeatherMessageType {
+  switch ((raw ?? '').toLowerCase()) {
+    case 'cancel': { return 'cancel';
+    }
+    case 'update': { return 'update';
+    }
+    case 'alert': { return 'alert';
+    }
+    default: { return 'unknown';
+    }
+  }
 }
 
 function normalizeSeverity(raw: string | undefined): WeatherSeverity {
@@ -89,5 +103,6 @@ export function adaptLiveAlert(raw: LiveAlertInput): NwsAlertMinimal {
     expires: raw.expires,
     severity: normalizeSeverity(raw.severity),
     headline: raw.headline,
+    messageType: normalizeMessageType(raw.messageType),
   };
 }

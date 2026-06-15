@@ -42,19 +42,20 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
     const weatherFetchedAtMs = nwsLastUpdate ? nwsLastUpdate.getTime() : (priorFetchedAt ?? now);
     const next = buildSnapshot({ weatherAlerts: alerts, savedPlaces: places, weatherFetchedAtMs, plan }, { now });
 
-    // Survival guard: an EMPTY alert result must never clear an unexpired threat.
-    // The feed returns [] + HTTP 200 on upstream failure (recorded as a "success",
-    // so no freshness signal can tell failure from a real all-clear). Genuine
-    // clears always arrive as NON-empty fetches — an NWS cancel message, or alerts
-    // that simply no longer match a moved/removed place — so those update normally.
-    // A truly empty fetch is treated as a possible data gap: keep the last posture
+    // Survival guard: an upstream FAILURE must never clear an unexpired threat,
+    // but a genuine all-clear must. The sidecar now signals upstream failure with
+    // HTTP 503 (instead of []+200), so `dataFreshness` records an error and
+    // `lastUpdate` does NOT advance — only a confirmed successful fetch advances it.
+    // We treat the fetch as confirmed-fresh only when that timestamp is recent.
+    // On a confirmed-fresh all-clear (incl. an NWS cancel that dropped the alert
+    // from /active) we DO clear. Only a failure/outage keeps the prior posture
     // until the prior alerts expire on their own (a feed-independent signal).
-    const fetchWasEmpty = rawAlerts.length === 0;
+    const freshThisCycle = nwsLastUpdate != null && (now - nwsLastUpdate.getTime()) < 5 * 60_000;
     const hadThreat = (current?.posture.overallLevel ?? 0) > 0;
     const nowAllClear = next.posture.overallLevel === 0;
     const priorUnexpired = current?.weatherAlerts.some((a) => Date.parse(a.expires) > now) ?? false;
-    if (fetchWasEmpty && hadThreat && nowAllClear && priorUnexpired) {
-      notify(); // keep last posture during a possible data gap; re-render so the stale banner ages
+    if (!freshThisCycle && hadThreat && nowAllClear && priorUnexpired) {
+      notify(); // keep last posture during a failure/data gap; re-render so the stale banner ages
       return;
     }
 

@@ -8408,8 +8408,8 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── NOAA NWS All-Hazards alerts ──────────────────────────────────────────
   if (requestUrl.pathname === '/api/nws-alerts') {
  try {
- const NWS_PRIMARY = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert&urgency=Immediate,Expected&severity=Extreme,Severe,Moderate';
- const NWS_FALLBACK = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert';
+ const NWS_PRIMARY = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update&urgency=Immediate,Expected&severity=Extreme,Severe,Moderate';
+ const NWS_FALLBACK = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update';
  let result;
  try {
    result = await fetchWithFallback(NWS_PRIMARY, [NWS_FALLBACK], {
@@ -8417,11 +8417,18 @@ async function dispatch(requestUrl, req, routes, context) {
      timeoutMs: 12_000,
      headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-NWS/1.0 (https://github.com/bradleybond512/crystal-ball)' },
    });
-   trackSuccess('nws-alerts', result.source);
  } catch (error) {
+   // Total upstream failure — never report an outage as a fresh all-clear.
    trackFailure('nws-alerts', error);
-   return json([], 200);
+   return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
  }
+ // A stale last-good cache hit (`source: 'cached'`) is NOT a fresh fetch — surface
+ // it as a failure so dataFreshness doesn't advance and downstream guards keep posture.
+ if (result.source === 'cached') {
+   trackFailure('nws-alerts', new Error('nws-alerts upstream unavailable; served stale cache'));
+   return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
+ }
+ trackSuccess('nws-alerts', result.source);
  const data = result.data;
  const features = Array.isArray(data?.features) ? data.features : [];
  const alerts = features.slice(0, 100).map((f, i) => {
@@ -8437,13 +8444,15 @@ async function dispatch(requestUrl, req, routes, context) {
  onset: p.onset ?? '',
  expires: p.expires ?? '',
  status: p.status ?? '',
+ messageType: p.messageType ?? null,
  centroid: extractAlertCentroid(f),
  geometry: f?.geometry ?? null,
  };
  });
  return json(alerts);
- } catch {
- return json([], 200);
+ } catch (error) {
+ trackFailure('nws-alerts', error);
+ return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
  }
   }
 

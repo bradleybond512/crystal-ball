@@ -44,3 +44,13 @@ test('adaptLiveAlert with neither geometry nor centroid -> no polygon (no_match 
   const m = adaptLiveAlert({ id: 'a3', event: 'Flood Watch', severity: 'Minor', onset: 'x', expires: 'y' });
   assert.equal(m.polygon, undefined);
 });
+
+test('adaptLiveAlert threads + normalizes messageType for isCancellation detection', () => {
+  const base = { id: 'm', event: 'Tornado Warning', severity: 'Extreme', onset: 'x', expires: 'y' } as const;
+  assert.equal(adaptLiveAlert({ ...base, messageType: 'Cancel' }).messageType, 'cancel');
+  assert.equal(adaptLiveAlert({ ...base, messageType: 'Update' }).messageType, 'update');
+  assert.equal(adaptLiveAlert({ ...base, messageType: 'Alert' }).messageType, 'alert');
+  assert.equal(adaptLiveAlert({ ...base, messageType: 'Ack' }).messageType, 'unknown');
+  assert.equal(adaptLiveAlert({ ...base, messageType: null }).messageType, 'unknown');
+  assert.equal(adaptLiveAlert(base).messageType, 'unknown');
+});

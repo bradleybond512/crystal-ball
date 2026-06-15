@@ -17,6 +17,7 @@ export interface NWSAlert {
   onset: string;
   expires: string;
   status: string;
+  messageType?: string | null;
   centroid: [number, number] | null;
   geometry?: { type: string; coordinates: unknown } | null;
 }

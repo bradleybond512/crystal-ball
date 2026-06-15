@@ -3,6 +3,7 @@ import { fetchLiveVideoInfo } from '@/services/live-news';
 import { isDesktopRuntime, getRemoteApiBaseUrl, getApiBaseUrl, getLocalApiPort } from '@/services/runtime';
 import { tryInvokeTauri } from '@/services/tauri-bridge';
 import { t } from '../services/i18n';
+import { escapeHtml } from '@/utils/sanitize';
 import { loadFromStorage, rafSchedule, saveToStorage } from '@/utils';
 import { STORAGE_KEYS, SITE_VARIANT } from '@/config';
 import { getStreamQuality } from '@/services/ai-flow-settings';
@@ -912,10 +913,13 @@ export class LiveNewsPanel extends Panel {
 
   private showOfflineMessage(channel: LiveChannel): void {
  this.destroyPlayer();
+ // channel.name is pre-escaped via escapeHtml() (belt-and-suspenders that holds even
+ // if the global i18next escape is ever disabled); escapeValue:false on the t() calls
+ // below avoids double-encoding names containing &, <, etc.
  this.content.innerHTML = `
  <div class="live-offline">
  <div class="offline-icon">📺</div>
- <div class="offline-text">${t('components.liveNews.notLive', { name: channel.name })}</div>
+ <div class="offline-text">${t('components.liveNews.notLive', { name: escapeHtml(channel.name), interpolation: { escapeValue: false } })}</div>
  <button class="offline-retry" type="button">${t('common.retry')}</button>
  </div>
  `;
@@ -933,7 +937,7 @@ export class LiveNewsPanel extends Panel {
  this.content.innerHTML = `
  <div class="live-offline">
  <div class="offline-icon">!</div>
- <div class="offline-text">${t('components.liveNews.cannotEmbed', { name: channel.name, code: String(errorCode) })}</div>
+ <div class="offline-text">${t('components.liveNews.cannotEmbed', { name: escapeHtml(channel.name), code: String(errorCode), interpolation: { escapeValue: false } })}</div>
  <a class="offline-retry" href="${watchUrl}" target="_blank" rel="noopener noreferrer">${t('components.liveNews.openOnYouTube')}</a>
  </div>
  `;

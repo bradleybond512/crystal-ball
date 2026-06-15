@@ -11,6 +11,7 @@ import { getSourceTrust } from './source-trust';
 import { getSourceFeedbackMult } from './source-feedback';
 import { getRecalMult } from './severity-recalibration';
 import { getRelevanceBoost } from './relevance-learner';
+import { interestMultiplier } from '@/services/cognition/operator-model';
 
 // ─── Tunable weights (start values; we'll iterate) ────────────────────────
 const SEVERITY_WEIGHT: Record<AlertSeverity, number> = {
@@ -113,12 +114,17 @@ export interface ScoreBreakdown {
   watchlistMult: number;
   pinMult: number;
   relevanceMult: number;
+  /**
+   * Operator-model personalization tilt. Formula: 0.8 + 0.4 × interestScore(text).
+   * Bounded to [0.8, 1.2] — personalization tilts scores ±20% at most, never dominates.
+   */
+  operatorMult: number;
   total: number;
 }
 
 export function scoreBreakdown(a: UnifiedAlert, nowMs: number = Date.now()): ScoreBreakdown {
   if (a.acknowledged || (typeof a.snoozedUntil === 'number' && a.snoozedUntil > nowMs)) {
-    return { base: 0, decay: 0, sourceMult: 0, trustMult: 1, proximityMult: 1, watchlistMult: 1, pinMult: 1, relevanceMult: 1, total: 0 };
+    return { base: 0, decay: 0, sourceMult: 0, trustMult: 1, proximityMult: 1, watchlistMult: 1, pinMult: 1, relevanceMult: 1, operatorMult: 1, total: 0 };
   }
   const base = SEVERITY_WEIGHT[a.severity] ?? 0;
   const ageMin = Math.max(0, (nowMs - a.timestamp) / 60_000);
@@ -129,8 +135,10 @@ export function scoreBreakdown(a: UnifiedAlert, nowMs: number = Date.now()): Sco
   const watchlistMult = a.relevanceScore >= 100 ? WATCHLIST_MULT : 1;
   const pinMult = a.pinned ? 1.25 : 1;
   const relevanceMult = getRelevanceBoost(a);
-  const total = base * decay * sourceMult * trustMult * proximityMult * watchlistMult * pinMult * relevanceMult;
-  return { base, decay, sourceMult, trustMult, proximityMult, watchlistMult, pinMult, relevanceMult, total };
+  // Operator-model tilt: bounded ±20% so personalization never dominates.
+  const operatorMult = interestMultiplier(`${a.title} ${a.body}`);
+  const total = base * decay * sourceMult * trustMult * proximityMult * watchlistMult * pinMult * relevanceMult * operatorMult;
+  return { base, decay, sourceMult, trustMult, proximityMult, watchlistMult, pinMult, relevanceMult, operatorMult, total };
 }
 
 /** Compute current hotness score for a single alert. */

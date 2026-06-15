@@ -39,7 +39,7 @@ const MENU_VIEW_MODE_ID: &str = "view.mode_status";
 #[cfg(feature = "devtools")]
 const MENU_HELP_DEVTOOLS_ID: &str = "help.devtools";
 const TRUSTED_WINDOWS: [&str; 3] = ["main", "settings", "live-channels"];
-const SUPPORTED_SECRET_KEYS: [&str; 73] = [
+const SUPPORTED_SECRET_KEYS: [&str; 77] = [
  "CRYSTALBALL_API_KEY",
  "ANTHROPIC_API_KEY",
  "GROQ_API_KEY",
@@ -113,6 +113,10 @@ const SUPPORTED_SECRET_KEYS: [&str; 73] = [
  "PATREON_ACCESS_TOKEN",
  "PATREON_REFRESH_TOKEN",
  "PATREON_AUDIO_RSS_URL",
+ "OPENAQ_API_KEY",
+ "WINDY_WEBCAMS_API_KEY",
+ "NPS_API_KEY",
+ "TWILIO_AUTH_TOKEN",
 ];
 
 // Rate-limit native notifications: no more than 1 per 30 seconds across all threads.
@@ -966,7 +970,7 @@ fn save_brief(webview: Webview, filename: String, bytes: Vec<u8>) -> Result<Stri
  #[cfg(unix)]
  {
   use std::os::unix::fs::PermissionsExt;
-  let perms = fs::Permissions::from_mode(0o644);
+  let perms = fs::Permissions::from_mode(0o600);
   fs::set_permissions(&path, perms).ok();
  }
  Ok(path.display().to_string())
@@ -1017,6 +1021,11 @@ fn append_desktop_log(app: &AppHandle, level: &str, message: &str) {
  let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) else {
  return;
  };
+ #[cfg(unix)]
+ {
+  use std::os::unix::fs::PermissionsExt;
+  let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+ }
 
  // Replace embedded CR/LF so frontend-supplied content can't inject forged
  // log entries into subsequent lines. Each `append_desktop_log` call MUST
@@ -1128,6 +1137,8 @@ fn get_native_location_impl() -> Result<(f64, f64), String> {
  fn objc_getClass(name: *const u8) -> *mut c_void;
  fn sel_registerName(name: *const u8) -> *mut c_void;
  fn objc_msgSend(receiver: *mut c_void, sel: *mut c_void, ...) -> *mut c_void;
+ fn objc_retain(obj: *mut c_void) -> *mut c_void;
+ fn objc_release(obj: *mut c_void);
  }
 
  #[repr(C)]
@@ -1157,6 +1168,12 @@ fn get_native_location_impl() -> Result<(f64, f64), String> {
   std::thread::sleep(Duration::from_millis(100));
  }
 
+ // The manager owns `loc`; retain it before releasing the manager so the
+ // coordinate read below is not a use-after-free.
+ if !loc.is_null() {
+  objc_retain(loc);
+ }
+
  let stop = sel_registerName(b"stopUpdatingLocation\0".as_ptr());
  objc_msgSend(mgr, stop);
  let release = sel_registerName(b"release\0".as_ptr());
@@ -1166,10 +1183,12 @@ fn get_native_location_impl() -> Result<(f64, f64), String> {
   return Err("Location not available — ensure Location Services is enabled for Crystal Ball in System Settings".into());
  }
 
- // On ARM64, CLLocationCoordinate2D (16 bytes) is returned in registers
+ // On ARM64, CLLocationCoordinate2D (16 bytes) is returned in registers.
+ // We hold our own retain on `loc`, so this is safe after the manager release.
  let coord_fn: unsafe extern "C" fn(*mut c_void, *mut c_void) -> CLLocationCoordinate2D =
   std::mem::transmute(objc_msgSend as *const ());
  let coord = coord_fn(loc, coord_sel);
+ objc_release(loc);
 
  if coord.latitude == 0.0 && coord.longitude == 0.0 {
   return Err("Location returned 0,0 — GPS may not have a fix yet".into());
@@ -1206,12 +1225,14 @@ fn open_sidecar_log_impl(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn open_logs_folder(app: AppHandle) -> Result<String, String> {
+fn open_logs_folder(webview: Webview, app: AppHandle) -> Result<String, String> {
+ require_trusted_window(webview.label())?;
  open_logs_folder_impl(&app).map(|path| path.display().to_string())
 }
 
 #[tauri::command]
-fn open_sidecar_log_file(app: AppHandle) -> Result<String, String> {
+fn open_sidecar_log_file(webview: Webview, app: AppHandle) -> Result<String, String> {
+ require_trusted_window(webview.label())?;
  open_sidecar_log_impl(&app).map(|path| path.display().to_string())
 }
 
@@ -1235,9 +1256,19 @@ fn close_settings_window(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 async fn open_live_channels_window_command(
+ webview: Webview,
  app: AppHandle,
  base_url: Option<String>,
 ) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
+ // The live-channels window loads `base_url` directly. Only permit the local
+ // sidecar origin so a compromised renderer cannot point this trusted window at
+ // an attacker-controlled host. Absent/empty falls through to bundled app content.
+ if let Some(ref origin) = base_url {
+ if !origin.is_empty() && !origin.starts_with("http://127.0.0.1:46123/") {
+ return Err("Refusing live-channels base URL outside the local sidecar origin".to_string());
+ }
+ }
  open_live_channels_window(&app, base_url)
 }
 
@@ -1719,6 +1750,13 @@ async fn fetch_polymarket(webview: Webview, path: String, params: String) -> Res
 }
 
 
+/// Navigation guard for trusted windows. Only same-origin bundled app content
+/// (`tauri://` scheme) or the local sidecar (`127.0.0.1` host) may be loaded;
+/// any attempt to navigate the window to an external origin is blocked.
+fn is_trusted_window_navigation(url: &Url) -> bool {
+ url.scheme() == "tauri" || url.host_str() == Some("127.0.0.1")
+}
+
 fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Result<(), String> {
  if let Some(window) = app.get_webview_window("live-channels") {
  let _ = window.show();
@@ -1734,7 +1772,18 @@ fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Resul
  Some(ref origin) if !origin.is_empty() => {
  let path = origin.trim_end_matches('/');
  let full_url = format!("{}/live-channels.html", path);
- WebviewUrl::External(Url::parse(&full_url).map_err(|_| "Invalid base URL".to_string())?)
+ let parsed = Url::parse(&full_url).map_err(|_| "Invalid base URL".to_string())?;
+ // This window holds the same IPC trust as `main`, so it must never be
+ // navigated to an attacker-supplied origin. Only loopback dev origins are
+ // honored; anything else falls back to the bundled app asset.
+ let host = parsed.host_str().unwrap_or("");
+ let is_loopback_dev = matches!(parsed.scheme(), "http" | "https")
+ && matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]");
+ if is_loopback_dev {
+ WebviewUrl::External(parsed)
+ } else {
+ WebviewUrl::App("live-channels.html".into())
+ }
  }
  _ => WebviewUrl::App("live-channels.html".into()),
  };
@@ -1744,6 +1793,7 @@ fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Resul
  .inner_size(680.0, 760.0)
  .min_inner_size(520.0, 600.0)
  .resizable(true)
+ .on_navigation(is_trusted_window_navigation)
  .background_color(tauri::webview::Color(26, 28, 30, 255))
  .build()
  .map_err(|e| format!("Failed to create live channels window: {e}"))?;
@@ -2487,6 +2537,11 @@ fn local_api_paths(app: &AppHandle) -> (PathBuf, PathBuf) {
 }
 
 fn resolve_node_binary(app: &AppHandle) -> Option<PathBuf> {
+ // The LOCAL_API_NODE_BIN override is honored in debug builds only. In a
+ // release build, an attacker who can set this env var could redirect the
+ // sidecar to an arbitrary executable that inherits the injected keychain
+ // secrets, so the override must be ignored outside development.
+ #[cfg(debug_assertions)]
  if let Ok(explicit) = env::var("LOCAL_API_NODE_BIN") {
  let explicit_path = PathBuf::from(explicit);
  if explicit_path.is_file() {
@@ -2689,20 +2744,46 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  *token_slot = Some(generate_local_token());
  }
  let local_api_token = token_slot.clone().unwrap();
- // Write token to file so MCP server and other local tools can authenticate
+ // Write token to file so MCP server and other local tools can authenticate.
+ // Create the file with 0600 atomically (O_CREAT|O_TRUNC + mode) so a freshly
+ // created inode is never world-readable. mode() only governs newly created
+ // inodes, so when sidecar.token already exists we also re-assert 0600 on the
+ // open handle while it is still truncated/empty — before the bearer token is
+ // written — so a stale, permissively-moded file can't leak the new secret.
  let token_file = logs_dir_path(app)?.join("sidecar.token");
- if let Err(e) = fs::write(&token_file, &local_api_token) {
- append_desktop_log(app, "WARN", &format!("failed to write token file: {e}"));
- } else {
+ let write_token = || -> std::io::Result<()> {
+ let mut opts = std::fs::OpenOptions::new();
+ opts.write(true).create(true).truncate(true);
+ #[cfg(unix)]
+ {
+ use std::os::unix::fs::OpenOptionsExt;
+ opts.mode(0o600);
+ }
+ let mut file = opts.open(&token_file)?;
  #[cfg(unix)]
  {
  use std::os::unix::fs::PermissionsExt;
- let _ = fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600));
+ file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
  }
+ file.write_all(local_api_token.as_bytes())?;
+ Ok(())
+ };
+ if let Err(e) = write_token() {
+ append_desktop_log(app, "WARN", &format!("failed to write token file: {e}"));
  }
  drop(token_slot);
 
  let mut cmd = Command::new(&node_binary);
+ // Strip dangerous Node runtime env vars inherited from the parent process so
+ // a co-resident attacker who controls the app's environment can't inject
+ // code into the sidecar (which receives the keychain secrets). We do NOT
+ // env_clear() because PATH-based Node resolution still relies on the
+ // inherited environment.
+ cmd.env_remove("NODE_OPTIONS")
+ .env_remove("NODE_PATH")
+ .env_remove("NODE_REPL_EXTERNAL_MODULE")
+ .env_remove("NODE_REPL_HISTORY")
+ .env_remove("NODE_EXTRA_CA_CERTS");
  #[cfg(windows)]
  cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW — hide the node.exe console
  // Sanitize paths for Node.js on Windows: strip \\?\ UNC prefix and set
@@ -2868,7 +2949,8 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
 /// unhandledrejection, and key event handlers so renderer-side errors land
 /// in desktop.log instead of dying in WebInspector.
 #[tauri::command]
-fn log_frontend(app: AppHandle, level: String, message: String, context: Option<String>) {
+fn log_frontend(webview: Webview, app: AppHandle, level: String, message: String, context: Option<String>) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  let lvl = match level.to_uppercase().as_str() {
  "ERROR" | "WARN" | "INFO" | "DEBUG" => level.to_uppercase(),
  _ => "INFO".to_string(),
@@ -2884,12 +2966,14 @@ fn log_frontend(app: AppHandle, level: String, message: String, context: Option<
  &lvl,
  &format!("[FRONTEND] {truncated_msg}{}", if truncated_ctx.is_empty() { String::new() } else { format!(" | {truncated_ctx}") }),
  );
+ Ok(())
 }
 
 /// Returns a diagnostics bundle (last N log lines + sidecar /api/diag) as a
 /// single string suitable for copying to the clipboard. Triggered by Cmd+Shift+D.
 #[tauri::command]
-async fn copy_diagnostics(app: AppHandle) -> Result<String, String> {
+async fn copy_diagnostics(webview: Webview, app: AppHandle) -> Result<String, String> {
+ require_trusted_window(webview.label())?;
  let mut out = String::new();
  out.push_str(&format!(
  "=== Crystal Ball diagnostics ===\nversion: v{}+{}\ntime: {}\n\n",
@@ -3022,6 +3106,8 @@ fn main() {
  if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log) {
  let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
  let _ = writeln!(f, "[{ts}][v{}+{}][PANIC] {msg} at {location}", env!("CARGO_PKG_VERSION"), BUILD_SHA);
+ #[cfg(unix)]
+ { use std::os::unix::fs::PermissionsExt; let _ = fs::set_permissions(&log, fs::Permissions::from_mode(0o600)); }
  }
  }
  }));

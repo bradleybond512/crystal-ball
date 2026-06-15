@@ -9,10 +9,31 @@ import test from 'node:test';
 
 import {
   buildShortageInputsFromSources,
+  mergeShortageEntriesByFeedStatus,
+  healthyCommodities,
+  COMMODITY_SOURCE_FEEDS,
   type ChokepointSignal,
+  type ShortageFeedId,
 } from '../shortage-input-bridge.ts';
+import {
+  ALL_FULLSET_COMMODITIES,
+  type FullSetCommodity,
+  type RiskLevel,
+  type ShortageSummaryEntry,
+} from '../shortage-fullset.ts';
 import type { DroughtState, DroughtSummary } from '@/services/drought-monitor';
 import type { PowerGridAlert } from '@/services/power-grid-alerts';
+
+const ALL_FEEDS_OK: Record<ShortageFeedId, boolean> = {
+  'drought-monitor': true,
+  'power-grid-alerts': true,
+  'chokepoint-status': true,
+};
+
+function summaryEntry(commodity: FullSetCommodity, riskLevel: RiskLevel): ShortageSummaryEntry {
+  // The merge only reads `commodity`; `riskLevel` is the marker we assert on.
+  return { commodity, riskLevel, riskScore: 0, primaryDrivers: [], timeToImpact: '', trend: 'stable' } as unknown as ShortageSummaryEntry;
+}
 
 const NOW = Date.parse('2026-05-12T12:00:00Z');
 
@@ -247,4 +268,72 @@ test('output is JSON-serializable', () => {
   );
   const round = JSON.parse(JSON.stringify(r));
   assert.deepEqual(round, r);
+});
+
+// ── Per-commodity feed map + fail-closed merge ──────────────────────────────
+
+test('COMMODITY_SOURCE_FEEDS covers every commodity with valid feed ids', () => {
+  const validFeeds: ShortageFeedId[] = ['drought-monitor', 'power-grid-alerts', 'chokepoint-status'];
+  for (const commodity of ALL_FULLSET_COMMODITIES) {
+    const deps = COMMODITY_SOURCE_FEEDS[commodity];
+    assert.ok(deps, `${commodity} missing from COMMODITY_SOURCE_FEEDS`);
+    for (const f of deps) assert.ok(validFeeds.includes(f), `${commodity} has invalid feed ${f}`);
+  }
+  // Matches what buildShortageInputsFromSources actually wires.
+  assert.deepEqual([...COMMODITY_SOURCE_FEEDS.wheat].sort(), ['chokepoint-status', 'drought-monitor']);
+  assert.deepEqual(COMMODITY_SOURCE_FEEDS.rice, ['chokepoint-status']);
+  assert.deepEqual(COMMODITY_SOURCE_FEEDS['natural-gas'], ['power-grid-alerts']);
+  assert.deepEqual(COMMODITY_SOURCE_FEEDS['jet-fuel'], []);
+});
+
+test('merge with all feeds OK takes every fresh entry', () => {
+  const fresh = [summaryEntry('rice', 'LOW'), summaryEntry('corn', 'LOW')];
+  const cached = [summaryEntry('rice', 'CRITICAL'), summaryEntry('corn', 'HIGH')];
+  const merged = mergeShortageEntriesByFeedStatus(fresh, cached, ALL_FEEDS_OK);
+  assert.deepEqual(merged.map((e) => e.riskLevel), ['LOW', 'LOW']);
+});
+
+test('merge keeps cached entry only for commodities whose feed is down', () => {
+  // Chokepoint-status feed down, drought + grid healthy.
+  const feedsOk: Record<ShortageFeedId, boolean> = {
+    'drought-monitor': true,
+    'power-grid-alerts': true,
+    'chokepoint-status': false,
+  };
+  const fresh = [
+    summaryEntry('rice', 'LOW'),      // deps chokepoint-status (down)  -> keep cached
+    summaryEntry('diesel', 'LOW'),    // deps chokepoint-status (down)  -> keep cached
+    summaryEntry('wheat', 'LOW'),     // deps drought + chokepoint-status (down) -> keep cached
+    summaryEntry('corn', 'LOW'),      // deps drought (up)         -> take fresh
+    summaryEntry('natural-gas', 'LOW'), // deps grid (up)          -> take fresh
+    summaryEntry('jet-fuel', 'LOW'),  // no deps                   -> take fresh
+  ];
+  const cached = [
+    summaryEntry('rice', 'CRITICAL'),
+    summaryEntry('diesel', 'HIGH'),
+    summaryEntry('wheat', 'CRITICAL'),
+    summaryEntry('corn', 'CRITICAL'),     // stale; corn's feed is up so this is dropped
+    summaryEntry('natural-gas', 'CRITICAL'),
+    summaryEntry('jet-fuel', 'CRITICAL'),
+  ];
+  const byCommodity = new Map(
+    mergeShortageEntriesByFeedStatus(fresh, cached, feedsOk).map((e) => [e.commodity, e.riskLevel]),
+  );
+  assert.equal(byCommodity.get('rice'), 'CRITICAL');     // preserved through outage
+  assert.equal(byCommodity.get('diesel'), 'HIGH');       // preserved
+  assert.equal(byCommodity.get('wheat'), 'CRITICAL');    // any dead dep preserves
+  assert.equal(byCommodity.get('corn'), 'LOW');          // refreshed (feed up)
+  assert.equal(byCommodity.get('natural-gas'), 'LOW');   // refreshed (feed up)
+  assert.equal(byCommodity.get('jet-fuel'), 'LOW');      // no deps -> always fresh
+});
+
+test('merge falls back to fresh when a down-feed commodity has no cached entry', () => {
+  // Cold-ish merge: chokepoint-status down, but no prior rice entry to preserve.
+  const feedsOk: Record<ShortageFeedId, boolean> = {
+    'drought-monitor': true,
+    'power-grid-alerts': true,
+    'chokepoint-status': false,
+  };
+  const merged = mergeShortageEntriesByFeedStatus([summaryEntry('rice', 'LOW')], [], feedsOk);
+  assert.deepEqual(merged.map((e) => e.riskLevel), ['LOW']);
 });

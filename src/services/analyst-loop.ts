@@ -34,6 +34,8 @@ import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
 import type { Situation } from './situation-types';
 import { recordEpisode, updateAnalogCache } from '@/services/cognition/episodic-memory';
+import { interestMultiplier } from '@/services/cognition/operator-model';
+import { ingestFromHypotheses } from '@/services/cognition/entity-dossier';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -112,15 +114,18 @@ const RISK_RANK: Record<EscalationRisk, number> = {
 
 /**
  * Ranking weight = raw confidence × learned user preference × outcome accuracy
- * × per-domain Brier-derived calibration multiplier.
- * Multiplier bounds: feedback [0.5,1.3] × accuracy [0.7,1.3] × calibration [0.7,1.2].
- * Worst-case floor ≈ 0.25 — a hypothesis class wrong on every axis sinks.
+ * × per-domain Brier-derived calibration multiplier
+ * × operator-model personalization tilt (bounded ±20%).
+ * Multiplier bounds: feedback [0.5,1.3] × accuracy [0.7,1.3] × calibration [0.7,1.2]
+ * × operator interest [0.8,1.2] (0.8 + 0.4 × interestScore(statement), clamped inside
+ * interestMultiplier() so personalization tilts the ranking, it does not determine it).
  */
 function rankingWeight(h: Hypothesis): number {
   return h.confidence
     * getHypothesisFeedbackMult(h)
     * getHypothesisAccuracyMult(h)
-    * getDomainCalibrationMult(domainForHypothesis(h));
+    * getDomainCalibrationMult(domainForHypothesis(h))
+    * interestMultiplier(h.statement);
 }
 
 // ── Per-source hypothesis builders ───────────────────────────────────────────
@@ -377,6 +382,16 @@ export function runAnalystCycle(): AnalystSnapshot {
       // Never let episodic memory errors crash the analyst loop.
     }
   })();
+
+  // Entity dossier wiring: ingest hypotheses into the temporal knowledge graph.
+  // Ghost Mode suppression is handled inside ingestFromHypotheses.
+  // Fire-and-forget: never block the sync cycle on dossier ingestion.
+  try {
+    ingestFromHypotheses(hypothesisSnapshot);
+  } catch {
+    // Never let entity-dossier errors crash the analyst loop.
+  }
+
   logDebug({ level: 'info', category: 'hypothesis', source: 'analyst-loop',
     message: 'cycle complete', latencyMs,
     data: {

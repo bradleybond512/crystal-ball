@@ -1099,6 +1099,7 @@ const ALLOWED_ENV_KEYS = new Set([
   'NASA_API_KEY',
   'URLSCAN_API_KEY', 'BITCOINABUSE_API_KEY', 'VULNERS_API_KEY', 'MEDIASTACK_API_KEY',
   'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'GEONAMES_USERNAME', 'IPINFO_TOKEN',
+  'OPENAQ_API_KEY', 'WINDY_WEBCAMS_API_KEY', 'NPS_API_KEY',
 ]);
 
 const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -1274,6 +1275,29 @@ async function isSafeUrl(urlString) {
   }
 
   return { safe: true, resolvedAddresses: addresses };
+}
+
+// Selects the validated IPv4 address to PIN on the outbound connection, closing
+// the DNS-rebinding TOCTOU between isSafeUrl() and the subsequent fetch. Returns
+// null when the verdict is unsafe, has no addresses, or resolved only to IPv6
+// (fetchWithTimeout forces family 4, so a v6 pin can't be honored there).
+export function pickPinnedIpv4(verdict) {
+  if (!verdict || verdict.safe !== true) return null;
+  const addrs = verdict.resolvedAddresses;
+  if (!Array.isArray(addrs)) return null;
+  return addrs.find((a) => typeof a === 'string' && !a.includes(':')) ?? null;
+}
+
+// Validates + shapes a /api/local-webhook-dispatch request body. The renderer routes
+// outbound webhook delivery through the sidecar (which is not CSP-bound) so
+// user "generic" webhook URLs survive the tightened connect-src; the renderer
+// pre-formats the body, the sidecar SSRF-validates the URL and forwards it.
+export function parseWebhookDispatchRequest(raw) {
+  if (!raw || typeof raw !== 'object') return { ok: false, error: 'Request body must be an object' };
+  const { url, body, secret } = raw;
+  if (typeof url !== 'string' || url.length === 0) return { ok: false, error: 'url is required' };
+  if (typeof body !== 'string') return { ok: false, error: 'body (pre-formatted JSON string) is required' };
+  return { ok: true, url, body, secret: typeof secret === 'string' ? secret : undefined };
 }
 
 function json(data, status = 200, extraHeaders = {}) {
@@ -1680,7 +1704,7 @@ function loadVerboseState(dataDir) {
 
 function saveVerboseState() {
   if (!_verboseStatePath) return;
-  try { writeFileSync(_verboseStatePath, JSON.stringify({ verboseMode })); } catch { /* ignore */ }
+  try { writeFileSync(_verboseStatePath, JSON.stringify({ verboseMode })); chmodSync(_verboseStatePath, 0o600); } catch { /* ignore */ }
 }
 
 function _getTrafficEntries() {
@@ -1691,6 +1715,14 @@ function _getTrafficEntries() {
   return result;
 }
 
+// Strip query strings before a URL/path is logged. Verbose-mode and the traffic-log
+// endpoint both use this so API keys carried in query params (NASA DONKI, Pulsedive)
+// never reach the console or the persisted log.
+function sanitizeLogUrl(url) {
+  if (url == null) return url;
+  return String(url).split('?')[0];
+}
+
 function recordTraffic(entry) {
   const idx = (_trafficHead + _trafficSize) % TRAFFIC_LOG_MAX;
   trafficLog[idx] = entry;
@@ -1698,7 +1730,7 @@ function recordTraffic(entry) {
   else _trafficHead = (_trafficHead + 1) % TRAFFIC_LOG_MAX;
   if (verboseMode) {
  const ts = entry.timestamp.split('T')[1].replace('Z', '');
- console.log(`[traffic] ${ts} ${entry.method} ${entry.path} → ${entry.status} ${entry.durationMs}ms`);
+ console.log(`[traffic] ${ts} ${entry.method} ${sanitizeLogUrl(entry.path)} → ${entry.status} ${entry.durationMs}ms`);
   }
 }
 
@@ -5233,9 +5265,12 @@ async function dispatch(requestUrl, req, routes, context) {
     const code = requestUrl.searchParams.get('code') || '';
     const state = requestUrl.searchParams.get('state') || '';
     const ok = code && patreonStateStore.consume(state);
+    // Token-bearing payload is posted only to the trusted Tauri app origin —
+    // never a wildcard targetOrigin, which would deliver the access/refresh
+    // tokens to whatever window happens to be the opener.
     const page = (msg, payload) => new Response(
       `<!doctype html><meta charset=utf-8><body style="font:14px system-ui;background:#111;color:#eee;padding:24px">${msg}` +
-      `<script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)},'*')}catch(e){}setTimeout(function(){window.close()},1500)</script>`,
+      `<script>try{window.opener&&window.opener.postMessage(${JSON.stringify(payload)},'tauri://localhost')}catch(e){}setTimeout(function(){window.close()},1500)</script>`,
       { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
     if (!ok) return page('Patreon connect failed (bad state).', { type: 'patreon-oauth', ok: false });
     try {
@@ -5260,6 +5295,14 @@ async function dispatch(requestUrl, req, routes, context) {
   // gateway webhooks (Twilio, etc.) can POST without a LOCAL_API_TOKEN.
   // Security is enforced by the phone-number allowlist in sms-config.json.
   if (requestUrl.pathname === '/api/sms/command' && req.method === 'POST') {
+    // Reject browser-originated requests (CSRF protection) before touching the
+    // body. Real Twilio webhooks are server-to-server and never carry an Origin
+    // header; the in-app test caller is trusted via bearer token.
+    const trustedLocalCaller = isValidToken(req.headers.authorization || '');
+    if (req.headers.origin && !trustedLocalCaller) {
+      return json({ error: 'Forbidden' }, 403);
+    }
+
     if (!_smsConfig.enabled) return json({ error: 'SMS command interface is disabled.' }, 503);
 
     const rawBodyBuf = await readBody(req);
@@ -5273,14 +5316,6 @@ async function dispatch(requestUrl, req, routes, context) {
       params = Object.fromEntries(new URLSearchParams(rawBody));
     } else {
       try { params = JSON.parse(rawBody || '{}'); } catch { return json({ error: 'Invalid JSON' }, 400); }
-    }
-
-    // Reject browser-originated requests (CSRF protection). Real Twilio
-    // webhooks are server-to-server and never carry an Origin header; the
-    // in-app test caller is trusted via bearer token.
-    const trustedLocalCaller = isValidToken(req.headers.authorization || '');
-    if (req.headers.origin && !trustedLocalCaller) {
-      return json({ error: 'Forbidden' }, 403);
     }
 
     // Caller-ID (From) is spoofable. When a TWILIO_AUTH_TOKEN is configured we
@@ -6822,7 +6857,7 @@ async function dispatch(requestUrl, req, routes, context) {
  // user research patterns to anyone who can read the traffic log.
  const sanitized = _getTrafficEntries().map(entry => ({
  ...entry,
- path: entry.path?.split('?')[0] ?? entry.path,
+ path: sanitizeLogUrl(entry.path),
  }));
  return json({ entries: sanitized, verboseMode, maxEntries: TRAFFIC_LOG_MAX });
   }
@@ -8376,8 +8411,8 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── NOAA NWS All-Hazards alerts ──────────────────────────────────────────
   if (requestUrl.pathname === '/api/nws-alerts') {
  try {
- const NWS_PRIMARY = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert&urgency=Immediate,Expected&severity=Extreme,Severe,Moderate';
- const NWS_FALLBACK = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert';
+ const NWS_PRIMARY = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update&urgency=Immediate,Expected&severity=Extreme,Severe,Moderate';
+ const NWS_FALLBACK = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update';
  let result;
  try {
    result = await fetchWithFallback(NWS_PRIMARY, [NWS_FALLBACK], {
@@ -8385,11 +8420,18 @@ async function dispatch(requestUrl, req, routes, context) {
      timeoutMs: 12_000,
      headers: { Accept: 'application/geo+json', 'User-Agent': 'CrystalBall-NWS/1.0 (https://github.com/bradleybond512/crystal-ball)' },
    });
-   trackSuccess('nws-alerts', result.source);
  } catch (error) {
+   // Total upstream failure — never report an outage as a fresh all-clear.
    trackFailure('nws-alerts', error);
-   return json([], 200);
+   return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
  }
+ // A stale last-good cache hit (`source: 'cached'`) is NOT a fresh fetch — surface
+ // it as a failure so dataFreshness doesn't advance and downstream guards keep posture.
+ if (result.source === 'cached') {
+   trackFailure('nws-alerts', new Error('nws-alerts upstream unavailable; served stale cache'));
+   return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
+ }
+ trackSuccess('nws-alerts', result.source);
  const data = result.data;
  const features = Array.isArray(data?.features) ? data.features : [];
  const alerts = features.slice(0, 100).map((f, i) => {
@@ -8405,12 +8447,15 @@ async function dispatch(requestUrl, req, routes, context) {
  onset: p.onset ?? '',
  expires: p.expires ?? '',
  status: p.status ?? '',
+ messageType: p.messageType ?? null,
  centroid: extractAlertCentroid(f),
+ geometry: f?.geometry ?? null,
  };
  });
  return json(alerts);
- } catch {
- return json([], 200);
+ } catch (error) {
+ trackFailure('nws-alerts', error);
+ return json({ error: 'nws-alerts upstream unavailable', stale: true }, 503);
  }
   }
 
@@ -8859,7 +8904,16 @@ async function dispatch(requestUrl, req, routes, context) {
  // Fetch and base64-encode the camera image
  let imageB64;
  try {
- const imgResp = await fetchWithTimeout(imageUrl, { headers: { 'User-Agent': 'CrystalBall/1.0' } }, 10000);
+ // Pin the IP that isSafeUrl() validated so a hostile DNS can't rebind the
+ // public-passing hostname to a private IP after the safety check (TOCTOU).
+ // Fail closed when there's no IPv4 to pin: isSafeUrl may validate an IPv6-only
+ // (AAAA) answer, but fetchWithTimeout forces an IPv4 lookup, which a rebinding
+ // host could repoint to a private A record — so reject rather than fetch unpinned.
+ const pinnedIp = pickPinnedIpv4(safety);
+ if (!pinnedIp) {
+ return json({ error: 'Image host has no pinnable IPv4 address' }, 502);
+ }
+ const imgResp = await fetchWithTimeout(imageUrl, { headers: { 'User-Agent': 'CrystalBall/1.0' }, resolvedAddress: pinnedIp }, 10000);
  if (!imgResp.ok) return json({ error: 'Could not fetch camera image' }, 502);
  const buf = await imgResp.arrayBuffer();
  imageB64 = Buffer.from(buf).toString('base64');
@@ -12601,7 +12655,7 @@ async function dispatch(requestUrl, req, routes, context) {
       return out;
     });
     if (baselinePath) {
-      try { writeFileSync(baselinePath, JSON.stringify(baseline)); } catch { /* non-fatal */ }
+      try { writeFileSync(baselinePath, JSON.stringify(baseline)); chmodSync(baselinePath, 0o600); } catch { /* non-fatal */ }
     }
     return json({ available: true, generatedAt: raw.generatedAt, entries: sanitized, summary: { totalConnections: sanitized.length } });
   }
@@ -12836,6 +12890,62 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch (error) {
  const isTimeout = error.name === 'AbortError' || error.message?.includes('timeout');
  return json({ error: isTimeout ? 'Feed timeout' : 'Failed to fetch feed' }, isTimeout ? 504 : 502, makeCorsHeaders(req));
+ }
+  }
+
+  if (requestUrl.pathname === '/api/local-webhook-dispatch' && req.method === 'POST') {
+ // Outbound webhook delivery for the renderer's webhook-dispatcher. Routed
+ // through the sidecar (not CSP-bound) so user "generic" webhook URLs survive
+ // the tightened connect-src. The renderer pre-formats the body per platform;
+ // the sidecar SSRF-validates the target, pins the IP, and forwards the POST.
+ // `/api/local-*` prefix is REQUIRED: it carries the user's webhook URL + secret
+ // and must never cloud-fallback to the remote API (see isLocalOnlyApiTarget).
+ // Require the local API token so no OTHER local process (or a cross-origin web
+ // page doing a no-CORS POST) can drive the sidecar as an arbitrary POST proxy
+ // with an attacker-chosen X-Webhook-Secret. The renderer's fetch wrapper injects
+ // this token automatically for /api/* sidecar calls.
+ if (!isValidToken(req.headers['authorization'] || '')) {
+ return json({ error: 'Unauthorized' }, 401, makeCorsHeaders(req));
+ }
+ const rawBody = await readBody(req);
+ if (!rawBody) return json({ error: 'Invalid request body' }, 400, makeCorsHeaders(req));
+ let parsedBody;
+ try { parsedBody = JSON.parse(rawBody.toString()); } catch { return json({ error: 'Invalid request body' }, 400, makeCorsHeaders(req)); }
+ const parsed = parseWebhookDispatchRequest(parsedBody);
+ if (!parsed.ok) return json({ error: parsed.error }, 400, makeCorsHeaders(req));
+
+ // SSRF protection: block private IPs, reserved ranges, and DNS rebinding.
+ const safety = await isSafeUrl(parsed.url);
+ if (!safety.safe) {
+ const blockedHost = (() => { try { return new URL(parsed.url).hostname; } catch { return 'invalid-url'; } })();
+ context.logger.warn(`[local-api] webhook-dispatch SSRF blocked: ${safety.reason} (host=${blockedHost})`);
+ return json({ error: safety.reason }, 403, makeCorsHeaders(req));
+ }
+ // Pin the IP isSafeUrl() validated so a hostile DNS can't rebind the host to a
+ // private IP after the check (TOCTOU). Fail closed when there is no IPv4 to
+ // pin: fetchWithTimeout forces an IPv4 lookup, so an IPv6-only validation
+ // would otherwise be re-resolved unpinned.
+ const pinnedIp = pickPinnedIpv4(safety);
+ if (!pinnedIp) {
+ return json({ error: 'Webhook host has no pinnable IPv4 address' }, 502, makeCorsHeaders(req));
+ }
+
+ const fwdHeaders = { 'Content-Type': 'application/json' };
+ if (parsed.secret) fwdHeaders['X-Webhook-Secret'] = parsed.secret;
+ try {
+ // redirect:'manual' — never follow a webhook redirect to a new (unvalidated,
+ // unpinned) host; a 3xx surfaces to the caller as delivered:false.
+ const resp = await fetchWithTimeout(parsed.url, {
+ method: 'POST',
+ headers: fwdHeaders,
+ body: parsed.body,
+ resolvedAddress: pinnedIp,
+ redirect: 'manual',
+ }, 5000);
+ return json({ delivered: resp.ok, upstreamStatus: resp.status }, 200, makeCorsHeaders(req));
+ } catch (error) {
+ const isTimeout = error?.name === 'AbortError' || /timeout|timed out/i.test(error?.message ?? '');
+ return json({ error: isTimeout ? 'Webhook timeout' : 'Webhook delivery failed' }, isTimeout ? 504 : 502, makeCorsHeaders(req));
  }
   }
 
@@ -16198,6 +16308,16 @@ export async function createLocalApiServer(options = {}) {
  if (aliasTarget) requestUrl.pathname = aliasTarget;
  const reqStartedAt = Date.now();
 
+ // Inline routes below write directly to `res`. The module-level json()
+ // helper returns a Response object, which dispatch() converts to `res` at
+ // the end of this callback — but an inline `return json(...)` here just
+ // discards that Response and hangs the request. Use sendJson() for inline
+ // routes so they always flush.
+ const sendJson = (data, status = 200) => {
+ res.writeHead(status, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+ res.end(JSON.stringify(data));
+ };
+
  if (requestUrl.pathname === '/gps/nmea') {
  // CORS preflight carries no Authorization header, so answer it before the
  // auth gate — otherwise the browser preflight 401s and the real GET (which
@@ -16258,15 +16378,49 @@ export async function createLocalApiServer(options = {}) {
  return;
  }
 
+ // ── Shared auth gate for inline /api/ routes ──────────────────────────
+ // The inline handlers below (feeds health, diagnostics self-test, the
+ // intelligence mirror, command-center, timeline, watchboards) return
+ // before dispatch()'s global auth gate, so they were reachable without a
+ // LOCAL_API_TOKEN — an unauthenticated local caller could read and mutate
+ // sidecar state (POST situations/entities/rules, DELETE rules/watchboards).
+ // Gate them here. The few intentionally-public routes served pre-auth by
+ // dispatch() (iframe embed, service status, Patreon authorize-url, SMS
+ // webhook) must fall through.
+ const PUBLIC_API_ROUTES = new Set([
+ '/api/service-status',
+ '/api/youtube-embed',
+ '/api/patreon/authorize-url',
+ '/api/sms/command',
+ ]);
+ // Answer CORS preflight for every inline /api/ route here. Preflight
+ // (OPTIONS) carries no Authorization header, and the inline handlers below
+ // only branch on GET/POST/PUT/DELETE — merely exempting OPTIONS from the
+ // auth check would let it fall through to a 405/401 (or, before sendJson,
+ // a hung request), so the real request's preflight would never succeed.
+ // Mirrors the /gps/nmea handler above and dispatch()'s OPTIONS handler.
+ if (req.method === 'OPTIONS') {
+ res.writeHead(204, makeCorsHeaders(req));
+ res.end();
+ return;
+ }
+ if (!PUBLIC_API_ROUTES.has(requestUrl.pathname)
+ && !isValidToken(req.headers['authorization'] || '')) {
+ warnUnauthorizedOnce(context, requestUrl.pathname);
+ res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+ res.end(JSON.stringify({ error: 'Unauthorized' }));
+ return;
+ }
+
  // ── /api/feeds/health — per-feed resilience status ────────────────────
  if (requestUrl.pathname === '/api/feeds/health') {
-   return json({ feeds: getAllFeedStatuses(), asOf: new Date().toISOString() });
+   return sendJson({ feeds: getAllFeedStatuses(), asOf: new Date().toISOString() });
  }
 
  if (requestUrl.pathname.startsWith('/api/feeds/health/')) {
    const feedId = requestUrl.pathname.slice('/api/feeds/health/'.length);
-   if (!feedId || !/^[\w\-.:]+$/.test(feedId)) return json({ error: 'invalid feedId' }, 400);
-   return json(getFeedStatus(feedId));
+   if (!feedId || !/^[\w\-.:]+$/.test(feedId)) return sendJson({ error: 'invalid feedId' }, 400);
+   return sendJson(getFeedStatus(feedId));
  }
 
  // ── /api/health — lightweight liveness probe ──────────────────────
@@ -16330,6 +16484,12 @@ export async function createLocalApiServer(options = {}) {
      return;
    }
    if (req.method === 'POST') {
+     const authHeader = req.headers['authorization'] || '';
+     if (!isValidToken(authHeader)) {
+       res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'Unauthorized' }));
+       return;
+     }
      let bodyText = '';
      try {
        const _rb1 = await readBody(req); bodyText = _rb1 ? _rb1.toString('utf-8') : '';
@@ -16412,6 +16572,12 @@ export async function createLocalApiServer(options = {}) {
      return;
    }
    if (req.method === 'POST') {
+     const authHeader = req.headers['authorization'] || '';
+     if (!isValidToken(authHeader)) {
+       res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'Unauthorized' }));
+       return;
+     }
      let bodyText = '';
      try { const _rb2 = await readBody(req); bodyText = _rb2 ? _rb2.toString('utf-8') : ''; } catch { bodyText = ''; }
      let parsed = null;
@@ -16441,6 +16607,12 @@ export async function createLocalApiServer(options = {}) {
      return;
    }
    if (req.method === 'POST') {
+     const authHeader = req.headers['authorization'] || '';
+     if (!isValidToken(authHeader)) {
+       res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+       res.end(JSON.stringify({ error: 'Unauthorized' }));
+       return;
+     }
      let bodyText = '';
      try { const _rb2 = await readBody(req); bodyText = _rb2 ? _rb2.toString('utf-8') : ''; } catch { bodyText = ''; }
      let parsed = null;
@@ -16468,6 +16640,12 @@ export async function createLocalApiServer(options = {}) {
      res.end(JSON.stringify({ error: 'method not allowed' }));
      return;
    }
+   const authHeader = req.headers['authorization'] || '';
+   if (!isValidToken(authHeader)) {
+     res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: 'Unauthorized' }));
+     return;
+   }
    let bodyText = '';
    try { const _rb3 = await readBody(req); bodyText = _rb3 ? _rb3.toString('utf-8') : ''; } catch { bodyText = ''; }
    let parsed = null;
@@ -16484,6 +16662,12 @@ export async function createLocalApiServer(options = {}) {
  }
  const ruleDetailMatch = requestUrl.pathname.match(/^\/api\/intelligence\/rules\/([^/]+)$/);
  if (ruleDetailMatch && req.method === 'DELETE') {
+   const authHeader = req.headers['authorization'] || '';
+   if (!isValidToken(authHeader)) {
+     res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+     res.end(JSON.stringify({ error: 'Unauthorized' }));
+     return;
+   }
    const removed = deleteRuleSidecar(ruleDetailMatch[1]);
    res.writeHead(removed ? 200 : 404,
      { 'content-type': 'application/json', ...makeCorsHeaders(req) });
@@ -16564,16 +16748,22 @@ export async function createLocalApiServer(options = {}) {
   // ── /api/watchboards — geofenced standing queries (tripwires) ─────
   if (requestUrl.pathname === '/api/watchboards' || requestUrl.pathname === '/api/watchboards/') {
     if (req.method === 'GET') {
-      return json({ watchboards: getWatchboards() }, 200, makeCorsHeaders(req));
+      return sendJson({ watchboards: getWatchboards() });
     }
     if (req.method === 'POST') {
+      const authHeader = req.headers['authorization'] || '';
+      if (!isValidToken(authHeader)) {
+        res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       const raw = await readBody(req);
       const body = raw ? JSON.parse(raw.toString()) : null;
-      if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400, makeCorsHeaders(req));
+      if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
       const created = createWatchboard(body);
-      return json({ watchboard: created }, 201, makeCorsHeaders(req));
+      return sendJson({ watchboard: created }, 201);
     }
-    return json({ error: 'Method not allowed' }, 405, makeCorsHeaders(req));
+    return sendJson({ error: 'Method not allowed' }, 405);
   }
 
   const wbIdMatch = requestUrl.pathname.match(/^\/api\/watchboards\/([^/]+)$/);
@@ -16581,25 +16771,37 @@ export async function createLocalApiServer(options = {}) {
     const wbId = wbIdMatch[1];
     if (wbId === 'firings' && req.method === 'GET') {
       const limit = Math.min(Number(requestUrl.searchParams.get('limit') || '50'), 200);
-      return json({ firings: getRecentFirings(limit) }, 200, makeCorsHeaders(req));
+      return sendJson({ firings: getRecentFirings(limit) });
     }
     if (wbId === 'templates' && req.method === 'GET') {
-      return json({ templates: getWatchboardTemplates() }, 200, makeCorsHeaders(req));
+      return sendJson({ templates: getWatchboardTemplates() });
     }
     if (req.method === 'PUT') {
+      const authHeader = req.headers['authorization'] || '';
+      if (!isValidToken(authHeader)) {
+        res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       const raw = await readBody(req);
       const body = raw ? JSON.parse(raw.toString()) : null;
-      if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400, makeCorsHeaders(req));
+      if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
       const updated = updateWatchboard(wbId, body);
-      if (!updated) return json({ error: 'not found' }, 404, makeCorsHeaders(req));
-      return json({ watchboard: updated }, 200, makeCorsHeaders(req));
+      if (!updated) return sendJson({ error: 'not found' }, 404);
+      return sendJson({ watchboard: updated });
     }
     if (req.method === 'DELETE') {
+      const authHeader = req.headers['authorization'] || '';
+      if (!isValidToken(authHeader)) {
+        res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       const deleted = deleteWatchboard(wbId);
-      if (!deleted) return json({ error: 'not found' }, 404, makeCorsHeaders(req));
-      return json({ ok: true }, 200, makeCorsHeaders(req));
+      if (!deleted) return sendJson({ error: 'not found' }, 404);
+      return sendJson({ ok: true });
     }
-    return json({ error: 'Method not allowed' }, 405, makeCorsHeaders(req));
+    return sendJson({ error: 'Method not allowed' }, 405);
   }
 
  // ── /api/diag — full diagnostics snapshot for bug reports ─────────
@@ -16795,7 +16997,7 @@ export async function createLocalApiServer(options = {}) {
 
  const portFile = process.env.LOCAL_API_PORT_FILE;
  if (portFile) {
- try { writeFileSync(portFile, String(boundPort)); } catch {}
+ try { writeFileSync(portFile, String(boundPort)); chmodSync(portFile, 0o600); } catch {}
  }
 
  context.logger.log(`[local-api] listening on http://127.0.0.1:${boundPort} (apiDir=${context.apiDir}, routes=${routes.length}, cloudFallback=${context.cloudFallback})`);

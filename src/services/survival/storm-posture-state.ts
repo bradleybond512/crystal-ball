@@ -32,10 +32,22 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
     const alerts = (rawAlerts as unknown as LiveAlertInput[]).map((a) => adaptLiveAlert(a));
     const places = appPlaces.map((p) => adaptSavedPlace(p));
     const plan = current?.plan;
-    const snap = buildSnapshot({ weatherAlerts: alerts, savedPlaces: places, weatherFetchedAtMs: now, plan }, { now });
-    current = snap;
+    const next = buildSnapshot({ weatherAlerts: alerts, savedPlaces: places, weatherFetchedAtMs: now, plan }, { now });
+
+    // Survival guard: never erase a known threat because a refresh came back
+    // empty (the alert feed returns [] on upstream failure with HTTP 200). Keep
+    // the last snapshot while the prior alerts are still unexpired; only allow a
+    // genuine all-clear once those alerts have expired.
+    const hadThreat = (current?.posture.overallLevel ?? 0) > 0;
+    const nowAllClear = next.posture.overallLevel === 0;
+    const priorUnexpired = current?.weatherAlerts.some((a) => Date.parse(a.expires) > now) ?? false;
+    if (hadThreat && nowAllClear && priorUnexpired) {
+      return; // likely a data gap — keep the last known posture
+    }
+
+    current = next;
     notify();
-    void saveSnapshot(snap);
+    void saveSnapshot(next);
   } catch {
     // refresh failed — keep last snapshot
   }

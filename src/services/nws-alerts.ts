@@ -18,6 +18,7 @@ export interface NWSAlert {
   expires: string;
   status: string;
   centroid: [number, number] | null;
+  geometry?: { type: string; coordinates: unknown } | null;
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000;

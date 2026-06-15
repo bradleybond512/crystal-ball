@@ -566,6 +566,65 @@ test('responds to OPTIONS preflight with CORS headers', async () => {
   }
 });
 
+test('inline /api routes: OPTIONS preflight returns 204 (not 401/405)', async () => {
+  // Regression: the inline-route auth preamble must answer CORS preflight
+  // before the route handlers, otherwise an authenticated cross-origin GET to
+  // an inline route (e.g. /api/feeds/health) fails because its preflight 401s
+  // or 405s and the browser never sends the real request.
+  const localApi = await setupApiDir({});
+  const app = await createLocalApiServer({
+ port: 0,
+ apiDir: localApi.apiDir,
+ logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+  try {
+ for (const route of ['/api/feeds/health', '/api/watchboards']) {
+ const response = await fetch(`http://127.0.0.1:${port}${route}`, { method: 'OPTIONS' });
+ assert.equal(response.status, 204, `${route} OPTIONS should be 204`);
+ assert.ok(response.headers.get('access-control-allow-methods'), `${route} OPTIONS should carry CORS headers`);
+ }
+  } finally {
+ await app.close();
+ await localApi.cleanup();
+  }
+});
+
+test('inline /api routes: gated route requires auth, public route does not', async () => {
+  const localApi = await setupApiDir({});
+  const originalToken = process.env.LOCAL_API_TOKEN;
+  process.env.LOCAL_API_TOKEN = 'secret-inline-token';
+  const app = await createLocalApiServer({
+ port: 0,
+ apiDir: localApi.apiDir,
+ logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+  try {
+ // Gated inline route without auth → 401.
+ const unauth = await fetch(`http://127.0.0.1:${port}/api/feeds/health`);
+ assert.equal(unauth.status, 401);
+ const unauthBody = await unauth.json();
+ assert.equal(unauthBody.error, 'Unauthorized');
+
+ // Same route with the token → reachable.
+ const authed = await fetch(`http://127.0.0.1:${port}/api/feeds/health`, {
+ headers: { Authorization: 'Bearer secret-inline-token' },
+ });
+ assert.equal(authed.status, 200);
+ const authedBody = await authed.json();
+ assert.ok(Array.isArray(authedBody.feeds));
+
+ // Allowlisted public route stays reachable without auth.
+ const pub = await fetch(`http://127.0.0.1:${port}/api/service-status`);
+ assert.notEqual(pub.status, 401);
+  } finally {
+ process.env.LOCAL_API_TOKEN = originalToken;
+ await app.close();
+ await localApi.cleanup();
+  }
+});
+
 test('preserves Origin in Vary when gzip compression is applied', async () => {
   const localApi = await setupApiDir({
  'large.js': `

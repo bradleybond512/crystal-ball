@@ -37,15 +37,18 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
     const weatherFetchedAtMs = nwsLastUpdate ? nwsLastUpdate.getTime() : now;
     const next = buildSnapshot({ weatherAlerts: alerts, savedPlaces: places, weatherFetchedAtMs, plan }, { now });
 
-    // Survival guard: never erase a known threat because a refresh came back
-    // empty (the alert feed returns [] on upstream failure with HTTP 200). Keep
-    // the last snapshot while the prior alerts are still unexpired; only allow a
-    // genuine all-clear once those alerts have expired.
+    // Survival guard: never erase a known threat because of a DATA GAP. The alert
+    // feed returns [] on upstream failure with HTTP 200, so an outage can look like
+    // "all clear". Only keep the last posture when the weather data is actually
+    // STALE (the fetch did not refresh) AND prior alerts are still unexpired. A
+    // legitimate all-clear on FRESH data (NWS canceled the alert, or the affected
+    // place was moved/removed) updates normally.
     const hadThreat = (current?.posture.overallLevel ?? 0) > 0;
     const nowAllClear = next.posture.overallLevel === 0;
     const priorUnexpired = current?.weatherAlerts.some((a) => Date.parse(a.expires) > now) ?? false;
-    if (hadThreat && nowAllClear && priorUnexpired) {
-      notify(); // keep last posture, but re-render so the stale banner ages
+    const weatherStale = !(next.freshness.find((f) => f.domain === 'weather')?.ok ?? false);
+    if (hadThreat && nowAllClear && priorUnexpired && weatherStale) {
+      notify(); // keep last posture during a data gap, but re-render so the stale banner ages
       return;
     }
 

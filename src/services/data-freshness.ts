@@ -37,7 +37,8 @@ export type DataSourceId =
   | 'giving' // Global giving activity data
   | 'bis' // BIS central bank data
   | 'wto_trade' // WTO trade policy data
-  | 'supply_chain' // Supply chain disruption intelligence
+  | 'supply_chain' // Supply chain disruption intelligence (shipping + minerals aggregate)
+  | 'chokepoint-status' // Maritime chokepoint status — distinct from supply_chain so a shipping/minerals refresh can't mask a chokepoint outage
   | 'security_advisories'  // Government travel/security advisories
   | 'gpsjam' // GPS/GNSS interference
   | 'acled_airstrikes' // ACLED air/drone strikes & missile attacks
@@ -194,6 +195,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   bis: { name: 'BIS Central Banks', requiredForRisk: false, panelId: 'economic' },
   wto_trade: { name: 'WTO Trade Policy', requiredForRisk: false, panelId: 'trade-policy' },
   supply_chain: { name: 'Supply Chain Intelligence', requiredForRisk: false, panelId: 'supply-chain' },
+  'chokepoint-status': { name: 'Maritime Chokepoint Status', requiredForRisk: false, panelId: 'supply-chain' },
   security_advisories: { name: 'Security Advisories', requiredForRisk: false, panelId: 'security-advisories' },
   gpsjam: { name: 'GPS/GNSS Interference', requiredForRisk: false, panelId: 'map' },
   acled_airstrikes: { name: 'Air Strikes & Drones (ACLED)', requiredForRisk: false, panelId: 'airstrikes' },
@@ -555,6 +557,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   bis: 'Central bank policy data may be stale—BIS feed unavailable',
   wto_trade: 'Trade policy intelligence unavailable—WTO data not updating',
   supply_chain: 'Supply chain disruption status unavailable—chokepoint monitoring offline',
+  'chokepoint-status': 'Maritime chokepoint status unavailable—corridor disruption may be missed',
   security_advisories: 'Government travel advisory data unavailable—security alerts may be missed',
   gpsjam: 'GPS/GNSS interference data unavailable—jamming zones undetected',
   acled_airstrikes: 'Air strike & drone event data unavailable—ACLED feed not responding',

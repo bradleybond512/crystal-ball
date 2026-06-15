@@ -67,7 +67,7 @@
     "test:feed-health-dashboard": "tsx --test src/components/__tests__/feed-health-dashboard-panel.test.mts",
     "test:feed-health-tracker": "tsx --test tests/intelligence/feed-health-tracker.test.mts",
     "test:security": "tsx --test src/services/security/__tests__/cve-service.test.mts src/services/security/__tests__/vulners-service.test.mts src/components/__tests__/cve-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/security-cve-parity.test.mjs",
-    "test:sec-hardening": "node --test tests/csp-allowlist.test.mjs src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs",
+    "test:sec-hardening": "node --test tests/csp-allowlist.test.mjs src-tauri/sidecar/__tests__/faa-cam-ssrf-pinning.test.mjs src-tauri/sidecar/__tests__/webhook-dispatch.test.mjs src-tauri/sidecar/__tests__/ipv4-fetch-redirect.test.mjs",
     "test:notification-history": "tsx --test src/services/notifications/__tests__/notification-history-service.test.mts src/services/notifications/__tests__/push-notifier-history.test.mts src/components/__tests__/notification-history-helpers.test.mts src/services/diagnostics/__tests__/sidecar-self-test.test.mts && node --test src-tauri/sidecar/__tests__/self-test-classify.test.mjs",
     "test:situations": "tsx --test src/services/intelligence/__tests__/situation-store.test.mts src/services/intelligence/__tests__/situation-detector.test.mts src/components/__tests__/situation-panel-helpers.test.mts && node --test src-tauri/sidecar/__tests__/situations.test.mjs",
     "test:command-center": "tsx --test src/services/intelligence/__tests__/command-center-summary.test.mts",
@@ -77,6 +77,7 @@
     "test:shortage": "tsx --test src/services/shortage/__tests__/shortage-score.test.mts src/services/shortage/__tests__/commodity-playbooks.test.mts src/services/shortage/__tests__/corn-gasoline-models.test.mts src/services/shortage/__tests__/soft-commodities.test.mts src/services/shortage/__tests__/shortage-radar.test.mts src/services/shortage/__tests__/energy-fertilizer-models.test.mts src/services/shortage/__tests__/rice-soybeans-models.test.mts src/services/shortage/__tests__/natgas-jetfuel-models.test.mts src/services/shortage/__tests__/shortage-ui.test.mts src/services/shortage/__tests__/shortage-overview-helpers.test.mts src/services/shortage/__tests__/shortage-alert-emitter.test.mts src/services/shortage/__tests__/shortage-input-bridge.test.mts",
     "test:providers": "tsx --test src/services/providers/__tests__/provider-registry.test.mts src/services/providers/__tests__/provider-health.test.mts src/services/providers/__tests__/source-fusion.test.mts src/services/providers/__tests__/provider-bridge.test.mts src/services/providers/__tests__/data-bridge-supersession.test.mts",
     "test:datacenter": "tsx --test src/services/datacenter/__tests__/datacenter-types.test.mts src/services/datacenter/__tests__/power-posture.test.mts src/services/datacenter/__tests__/weather-posture.test.mts src/services/datacenter/__tests__/readiness-actions.test.mts src/services/datacenter/__tests__/datacenter-posture.test.mts src/services/datacenter/__tests__/site-resolver.test.mts src/services/datacenter/__tests__/datacenter-state.test.mts src/services/datacenter/__tests__/datacenter-view.test.mts",
+    "test:survival": "tsx --test src/services/survival/__tests__/survival-types.test.mts src/services/survival/__tests__/threat-projection.test.mts src/services/survival/__tests__/survival-posture.test.mts src/services/survival/__tests__/survival-moves.test.mts src/services/survival/__tests__/survival-plan.test.mts src/services/survival/__tests__/world-snapshot.test.mts src/services/survival/__tests__/survival-loop.test.mts src/services/survival/__tests__/posture-contributor.test.mts src/services/survival/__tests__/move-provider.test.mts src/services/survival/__tests__/storm-posture-adapter.test.mts src/services/survival/__tests__/supply-contributor.test.mts",
     "test:weather": "tsx --test src/services/weather/__tests__/nws-polygon-match.test.mts src/services/weather/__tests__/personal-storm-mode.test.mts src/services/weather/__tests__/weather-warning-diagnostics.test.mts",
     "test:event-store": "tsx --test src/components/__tests__/event-store-helpers.test.mts && node --test src-tauri/sidecar/__tests__/event-store.test.mjs src-tauri/sidecar/__tests__/event-store-wiring.test.mjs",
     "test:firms": "tsx --test src/components/__tests__/firms-helpers.test.mts",
@@ -244,15 +245,16 @@
     "telegram": "^2.26.22",
     "three": "^0.184.0",
     "topojson-client": "^3.1.0",
-    "ws": "^8.20.1",
+    "ws": "^8.21.0",
     "youtubei.js": "^16.0.1"
   },
   "overrides": {
     "fast-xml-parser": "^5.5.9",
     "serialize-javascript": "^7.0.5",
     "protobufjs": "^7.5.6",
-    "dompurify": "^3.4.0",
-    "esbuild": "^0.28.1"
+    "dompurify": "^3.4.10",
+    "esbuild": "^0.28.1",
+    "@babel/core": "^7.29.7"
   },
   "engines": {
     "node": ">=22.0.0 <23.0.0"

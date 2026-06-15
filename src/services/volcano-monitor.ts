@@ -38,6 +38,10 @@ export async function fetchVolcanoMonitorStatus(): Promise<VolcanoMonitorStatus>
       return cache?.data ?? { volcanoes: [], activeCount: 0, fetchedAt: new Date().toISOString() };
     }
     const data = (await res.json()) as VolcanoMonitorStatus;
+    if (!data || !Array.isArray(data.volcanoes)) {
+      dataFreshness.recordError('volcano-monitor', 'malformed response shape');
+      return cache?.data ?? { volcanoes: [], activeCount: 0, fetchedAt: new Date().toISOString() };
+    }
     cache = { data, ts: Date.now() };
     dataFreshness.recordUpdate('volcano-monitor', data.volcanoes.length);
     return data;

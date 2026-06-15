@@ -115,7 +115,8 @@ export async function fetchMaritimeWarnings(): Promise<MaritimeWarning[]> {
  }
 
  const data = await res.json() as NgaMsiResponse;
- const items: NgaMsiWarning[] = data.broadcastWarn ?? data.items ?? [];
+ const rawItems = data?.broadcastWarn ?? data?.items;
+ const items: NgaMsiWarning[] = Array.isArray(rawItems) ? rawItems : [];
 
  const now = Date.now();
  const warnings: MaritimeWarning[] = [];

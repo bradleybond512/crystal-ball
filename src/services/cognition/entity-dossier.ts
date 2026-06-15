@@ -206,7 +206,11 @@ export function configure(opts: EntityDossierOptions): void {
   _putMemoryOverride = opts.putMemoryFn ?? null;
   _nowFn = opts.now ?? Date.now;
   dossiers.clear();
-  loaded = false;
+  // Mark as already loaded so subsequent reads do NOT reload from the injected
+  // storage (which may still contain data from a prior test run). Tests that
+  // want to pre-seed the store should do so via ingestFromHypotheses() after
+  // calling configure(), not by relying on the storage auto-load path.
+  loaded = true;
   writtenSinceLoad = false;
 }
 

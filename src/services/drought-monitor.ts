@@ -212,11 +212,15 @@ export async function fetchDroughtMonitor(): Promise<DroughtSummary> {
   try {
  const res = await fetch(DROUGHT_API_URL, { signal: AbortSignal.timeout(12_000) });
  if (!res.ok) {
+ dataFreshness.recordError('drought-monitor', `HTTP ${res.status}`);
  return cache?.summary ?? emptyDroughtSummary();
  }
 
  const json = await res.json() as RawDroughtRow[];
- if (!Array.isArray(json)) return cache?.summary ?? emptyDroughtSummary();
+ if (!Array.isArray(json)) {
+ dataFreshness.recordError('drought-monitor', 'unexpected payload shape');
+ return cache?.summary ?? emptyDroughtSummary();
+ }
 
  let validDate: Date | null = null;
  const collected: DroughtState[] = [];

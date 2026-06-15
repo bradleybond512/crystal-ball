@@ -28,12 +28,14 @@ test('initial: registers all live algorithms (orphaned algos with no call sites 
   // situation-clustering, watchlist-relevance, what-changed-digest — all had zero live
   // call sites (confirmed by audit 2026-06-07). No recordAlgorithmEvaluation would ever
   // fire for them; keeping them would only pollute the ledger with fabricated entries.
+  // Cognitive Enhancement work registered 4 new live algorithms (2026-06):
+  // bias-detector, cognitive-bias-detector, counterfactual-reasoning, meta-confidence.
   const expected = [
-    'big-event-detector', 'competitive-hypothesis', 'compound-risk', 'confidence-urgency-matrix',
-    'correlation-feedback', 'hypothesis-accuracy', 'negative-evidence',
-    'nws-polygon-match', 'personal-storm-mode', 'relevance-learner',
-    'shortage-diesel', 'shortage-wheat', 'source-feedback',
-    'threat-classifier', 'truth-score', 'weather-urgency',
+    'bias-detector', 'big-event-detector', 'cognitive-bias-detector', 'competitive-hypothesis',
+    'compound-risk', 'confidence-urgency-matrix', 'correlation-feedback', 'counterfactual-reasoning',
+    'hypothesis-accuracy', 'meta-confidence', 'negative-evidence', 'nws-polygon-match',
+    'personal-storm-mode', 'relevance-learner', 'shortage-diesel', 'shortage-wheat',
+    'source-feedback', 'threat-classifier', 'truth-score', 'weather-urgency',
   ];
   assert.deepEqual(ids, expected);
 });

@@ -757,7 +757,7 @@ function aisProcessMessage(raw) {
   if (!mmsi) return;
   const lat = Number.isFinite(pos.Latitude) ? pos.Latitude : meta.latitude;
   const lon = Number.isFinite(pos.Longitude) ? pos.Longitude : meta.longitude;
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) return;
   const now = Date.now();
   aisState.vessels.set(mmsi, {
  mmsi, name: meta.ShipName || '', lat, lon, timestamp: now,
@@ -6029,7 +6029,7 @@ async function dispatch(requestUrl, req, routes, context) {
         context._shortageState = {
           entries: body.entries,
           updatedAt: typeof body.updatedAt === 'number' ? body.updatedAt : Date.now(),
-          ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : 30 * 60 * 1000,
+          ttlMs: typeof body.ttlMs === 'number' && body.ttlMs >= 0 ? Math.min(body.ttlMs, 3_600_000) : 30 * 60 * 1000,
         };
         return json({ ok: true, count: body.entries.length });
       } catch (error) {
@@ -6128,7 +6128,7 @@ async function dispatch(requestUrl, req, routes, context) {
         canals: body.canals ?? [],
         risk: body.risk ?? [],
         updatedAt: Date.now(),
-        ttlMs: body.ttlMs ?? 30 * 60 * 1000,
+        ttlMs: typeof body.ttlMs === 'number' && body.ttlMs >= 0 ? Math.min(body.ttlMs, 3_600_000) : 30 * 60 * 1000,
       };
       return json({ ok: true });
     } catch {
@@ -6173,7 +6173,7 @@ async function dispatch(requestUrl, req, routes, context) {
         domainBreakdown: body.domainBreakdown ?? [],
         topThreats: body.topThreats ?? [],
         computedAt: body.computedAt ?? Date.now(),
-        ttlMs: body.ttlMs ?? 5 * 60 * 1000,
+        ttlMs: typeof body.ttlMs === 'number' && body.ttlMs >= 0 ? Math.min(body.ttlMs, 3_600_000) : 5 * 60 * 1000,
       };
       return json({ ok: true });
     } catch {
@@ -10689,6 +10689,7 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── Reddit geopolitical OSINT (public RSS) ───────────────────────────────
   if (requestUrl.pathname === '/api/reddit-geo') {
  const sub = requestUrl.searchParams.get('sub') ?? 'worldnews+geopolitics+worldevents';
+ if (!/^[A-Za-z0-9_+]{1,200}$/.test(sub)) return json({ error: 'invalid subreddit' }, 400);
  const cacheKey = `reddit-${sub}`;
  const cached = getCached(cacheKey);
  if (cached) return json(cached);
@@ -11312,6 +11313,7 @@ async function dispatch(requestUrl, req, routes, context) {
       const events = features.slice(0, 200).map((f) => {
         const p = f.properties ?? {};
         const [lon, lat, depth] = f.geometry?.coordinates ?? [0, 0, null];
+        if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) return null;
         return {
           id: f.id ?? p.code ?? null,
           magnitude: p.mag ?? null,
@@ -11326,7 +11328,7 @@ async function dispatch(requestUrl, req, routes, context) {
           degraded: result.degraded,
           source: result.source,
         };
-      });
+      }).filter(Boolean);
       setCached('usgs-earthquakes', events, 60_000);
       return json({ events, degraded: result.degraded, source: result.source });
     } catch (error) {
@@ -12192,6 +12194,7 @@ async function dispatch(requestUrl, req, routes, context) {
  const lat  = Number.parseFloat(cols[latIdx]);
  const lon  = Number.parseFloat(cols[lonIdx]);
  if (isNaN(lat) || isNaN(lon)) return [];
+ if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return [];
  const confRaw = (cols[confIdx] ?? '').toLowerCase();
  const confidence = confRaw === 'h' || confRaw === 'high' ? 'FIRE_CONFIDENCE_HIGH'
  : (confRaw === 'n' || confRaw === 'nominal' ? 'FIRE_CONFIDENCE_NOMINAL'

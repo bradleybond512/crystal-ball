@@ -10,6 +10,7 @@ import test from 'node:test';
 import {
   buildShortageInputsFromSources,
   mergeShortageEntriesByFeedStatus,
+  healthyCommodities,
   COMMODITY_SOURCE_FEEDS,
   type ChokepointSignal,
   type ShortageFeedId,

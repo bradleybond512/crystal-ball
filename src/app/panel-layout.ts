@@ -320,6 +320,7 @@ import { CommandCenterPanel } from '@/components/CommandCenterPanel';
 import { RepairRecommendationsPanel } from '@/components/RepairRecommendationsPanel';
 import { MissionLedgerBridgePanel } from '@/components/MissionLedgerBridgePanel';
 import { getMissionLedgerBridge } from '@/services/intelligence/mission-ledger-bridge';
+import { getMissionOutcomeGrader } from '@/services/intelligence/mission-outcome-grader';
 import { HypothesisPanel } from '@/components/HypothesisPanel';
 import { CompetitiveHypothesisEnginePanel } from '@/components/CompetitiveHypothesisEnginePanel';
 import { MetaConfidencePanel } from '@/components/MetaConfidencePanel';
@@ -1687,6 +1688,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['multi-agent-review'] = new MultiAgentReviewPanel();
  this.ctx.panels['repair-recommendations'] = new RepairRecommendationsPanel();
  this.ctx.panels['mission-ledger-bridge'] = new MissionLedgerBridgePanel();
+ try { getMissionOutcomeGrader().connect(); } catch { /* non-critical */ }
  try { getMissionLedgerBridge().connect(); } catch { /* non-critical */ }
  this.ctx.panels['counterfactual-replay'] = new CounterfactualReplayPanel();
  this.ctx.panels['counterfactual-reasoning'] = new CounterfactualReasoningPanel();

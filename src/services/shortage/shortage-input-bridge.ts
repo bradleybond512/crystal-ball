@@ -235,25 +235,60 @@ export interface ShortageInputsWithStatus {
   feedsOk: Record<ShortageFeedId, boolean>;
 }
 
+/** Whether every feed a commodity depends on is healthy this cycle. A commodity
+ *  with no wired feed (empty deps) is always considered satisfiable. */
+export function commodityFeedsOk(
+  commodity: FullSetCommodity,
+  feedsOk: Readonly<Record<ShortageFeedId, boolean>>,
+): boolean {
+  return (COMMODITY_SOURCE_FEEDS[commodity] ?? []).every((f) => feedsOk[f]);
+}
+
+/** The set of commodities whose feeds are all healthy — i.e. the ones safe to
+ *  recompute during a partial outage. Callers pass this as `computeShortageFullSet`'s
+ *  `only` option so down-feed commodities are never recomputed (and so never
+ *  pollute trend memory with a discarded baseline score). */
+export function healthyCommodities(
+  feedsOk: Readonly<Record<ShortageFeedId, boolean>>,
+): Set<FullSetCommodity> {
+  const out = new Set<FullSetCommodity>();
+  for (const commodity of Object.keys(COMMODITY_SOURCE_FEEDS) as FullSetCommodity[]) {
+    if (commodityFeedsOk(commodity, feedsOk)) out.add(commodity);
+  }
+  return out;
+}
+
 /**
- * Merges a freshly-computed full set against the prior cached set, per commodity.
- * A commodity adopts its FRESH entry only when every feed it depends on is OK;
- * otherwise it keeps its CACHED entry (preserving a known risk through the
- * outage), falling back to the fresh baseline only when no cached entry exists.
- * Pure + deterministic — no fetch, no clock.
+ * Merges freshly-computed entries against the prior cached set, per commodity,
+ * over the UNION of both (so `fresh` may be a subset — only the healthy-feed
+ * commodities). A commodity adopts its FRESH entry only when every feed it
+ * depends on is OK and a fresh entry exists; otherwise it keeps its CACHED entry
+ * (preserving a known risk through the outage), falling back to the fresh entry
+ * only when no cached entry exists. Pure + deterministic — no fetch, no clock.
  */
 export function mergeShortageEntriesByFeedStatus(
   fresh: readonly ShortageSummaryEntry[],
   cached: readonly ShortageSummaryEntry[],
   feedsOk: Readonly<Record<ShortageFeedId, boolean>>,
 ): ShortageSummaryEntry[] {
+  const freshByCommodity = new Map(fresh.map((e) => [e.commodity, e]));
   const cachedByCommodity = new Map(cached.map((e) => [e.commodity, e]));
-  return fresh.map((freshEntry) => {
-    const deps = COMMODITY_SOURCE_FEEDS[freshEntry.commodity] ?? [];
-    const allDepsOk = deps.every((f) => feedsOk[f]);
-    if (allDepsOk) return freshEntry;
-    return cachedByCommodity.get(freshEntry.commodity) ?? freshEntry;
-  });
+  const out: ShortageSummaryEntry[] = [];
+  const seen = new Set<FullSetCommodity>();
+  for (const commodity of [...freshByCommodity.keys(), ...cachedByCommodity.keys()]) {
+    if (seen.has(commodity)) continue;
+    seen.add(commodity);
+    const freshEntry = freshByCommodity.get(commodity);
+    const cachedEntry = cachedByCommodity.get(commodity);
+    if (commodityFeedsOk(commodity, feedsOk) && freshEntry) {
+      out.push(freshEntry);
+    } else if (cachedEntry) {
+      out.push(cachedEntry);
+    } else if (freshEntry) {
+      out.push(freshEntry);
+    }
+  }
+  return out;
 }
 
 // ── Async shell ───────────────────────────────────────────────────────────

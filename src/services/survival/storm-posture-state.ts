@@ -6,6 +6,7 @@ import { computeShortageFullSet, type ShortageSummaryEntry } from '../shortage/s
 import {
   loadShortageInputsWithStatus,
   mergeShortageEntriesByFeedStatus,
+  healthyCommodities,
   type ShortageFeedId,
 } from '../shortage/shortage-input-bridge.ts';
 import { buildSnapshot } from './world-snapshot.ts';
@@ -91,23 +92,26 @@ async function getSupplyEntries(now: number): Promise<ShortageSummaryEntry[]> {
 
   if (action === 'keep') {
     // Total outage with a warm cache — preserve all known risk; throttle next retry.
-    // (Skip recomputing `fresh` so the all-baseline result can't pollute trend state.)
+    // (Skip recomputing entirely so the all-baseline result can't pollute trend state.)
     cachedShortageAtMs = now;
     return cachedShortageEntries;
   }
-  const fresh = computeShortageFullSet(inputs, { now });
   if (action === 'passthrough') {
     // Cold start under an incomplete refresh: return baseline WITHOUT becoming
     // authoritative, so `supplyContributorForBase` preserves any hydrated supply
     // threat (fail-closed). We refuse to seed the cache from partial/no data.
-    return fresh;
+    return computeShortageFullSet(inputs, { now });
   }
-  // 'merge' (partial outage + warm cache) keeps cached entries for the commodities
-  // whose feed is down and refreshes the rest; 'replace' (all feeds healthy) takes
-  // the fresh full set wholesale.
-  cachedShortageEntries = action === 'merge'
-    ? mergeShortageEntriesByFeedStatus(fresh, cachedShortageEntries, feedsOk)
-    : fresh;
+  if (action === 'merge') {
+    // Partial outage + warm cache: recompute ONLY the healthy-feed commodities (so
+    // down-feed commodities never write a discarded baseline score into trend
+    // memory), then keep cached entries for everything whose feed is down.
+    const fresh = computeShortageFullSet(inputs, { now, only: healthyCommodities(feedsOk) });
+    cachedShortageEntries = mergeShortageEntriesByFeedStatus(fresh, cachedShortageEntries, feedsOk);
+  } else {
+    // 'replace' — every feed healthy; the fresh full set is authoritative.
+    cachedShortageEntries = computeShortageFullSet(inputs, { now });
+  }
   cachedShortageAtMs = now;
   hasShortageCache = true;
   return cachedShortageEntries;

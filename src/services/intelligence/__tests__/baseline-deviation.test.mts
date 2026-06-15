@@ -126,6 +126,32 @@ test('deviation: confidence rises with sample count, falls with zero variance', 
   assert.ok(variedHigh > 0.5);
 });
 
+// ── Warmup mode ─────────────────────────────────────────────────────────
+
+test('warmup: confidence is non-zero and ramps within the warmup window', () => {
+  // 5 varied samples: above WARMUP_MIN_SAMPLES (3), below minSamplesForZ (12).
+  const early = createBaselineStore({ minSamplesForZ: 12, warmupMode: true });
+  fillRandom(early, 'm', 5, 100, 10);
+  const r5 = early.deviation('m', 130);
+  // Regression guard: the pre-fix code multiplied a floored-to-0 confidence by
+  // the warmup scale, pinning warmup confidence to 0 forever.
+  assert.notEqual(r5.label, 'insufficient_data');
+  assert.ok(r5.confidence > 0, `expected >0, got ${r5.confidence}`);
+  assert.ok(r5.confidence <= 0.5, `expected <=0.5 cap, got ${r5.confidence}`);
+
+  // More samples (still in warmup) → higher confidence.
+  const later = createBaselineStore({ minSamplesForZ: 12, warmupMode: true });
+  fillRandom(later, 'm', 10, 100, 10);
+  const r10 = later.deviation('m', 130);
+  assert.ok(r10.confidence > r5.confidence, `expected ramp ${r10.confidence} > ${r5.confidence}`);
+});
+
+test('warmup: flat history still yields zero confidence (no variance)', () => {
+  const s = createBaselineStore({ minSamplesForZ: 12, warmupMode: true });
+  fillFlat(s, 'm', 6, 100);
+  assert.equal(s.deviation('m', 100).confidence, 0);
+});
+
 test('deviation: summary string mentions sigma direction', () => {
   const s = createBaselineStore();
   fillRandom(s, 'm', 50, 100, 10);

@@ -176,12 +176,17 @@ export function createBaselineStore(options: BaselineStoreOptions = {}): Baselin
     const z = stats.stdDev > 0 ? (value - stats.mean) / stats.stdDev : 0;
     const percentile = computePercentile(samples, value);
     // In warmup mode, scale confidence linearly from 0 at WARMUP_MIN_SAMPLES
-    // to the normal value at minSamplesForZ so early deviations are usable
-    // but clearly discounted.
+    // to a 0.5 cap as we approach minSamplesForZ so early deviations are
+    // usable but clearly discounted.
     let confidence = computeConfidence(samples.length, stats.stdDev, opts.minSamplesForZ);
     if (opts.warmupMode && samples.length < opts.minSamplesForZ) {
+      // computeConfidence() floors to 0 below minSamplesForZ (its sample-count
+      // term goes negative), so multiplying it by the warmup scale always
+      // yielded 0 and defeated warmup mode. Derive the discounted confidence
+      // directly from the warmup ramp, gated on there being variance to read.
       const warmupScale = (samples.length - WARMUP_MIN_SAMPLES) / Math.max(1, opts.minSamplesForZ - WARMUP_MIN_SAMPLES);
-      confidence = confidence * warmupScale * 0.5; // cap at 50% during warmup
+      const varianceConfidence = stats.stdDev > 0 ? 1 : 0;
+      confidence = varianceConfidence * warmupScale * 0.5; // cap at 50% during warmup
     }
     const label = labelFor(z);
     const summary = buildSummary(z, stats, samples.length);

@@ -89,14 +89,14 @@ export interface BOCPDState {
    * Normal-Gamma sufficient statistics for each run length r:
    *   stats[r] = { mu, kappa, alpha, beta }
    */
-  stats: Array<{ mu: number; kappa: number; alpha: number; beta: number }>;
+  stats: { mu: number; kappa: number; alpha: number; beta: number }[];
   /** Most recent detected shift, if any. */
   lastShift?: RegimeShift;
 }
 
 const DEFAULTS = {
   hazardRate: 1 / 50,
-  changeThreshold: 3.0,   // log Bayes factor — moderate-to-strong evidence
+  changeThreshold: 3,   // log Bayes factor — moderate-to-strong evidence
   maxRunLength: 200,
   mu0: 0,
   kappa0: 1,
@@ -115,7 +115,7 @@ export function createBOCPDState(metric: MetricKey, opts: BOCPDOptions = {}): BO
   return {
     metric,
     n: 0,
-    runProbs: [1.0],                   // P(run-length=0) = 1 initially
+    runProbs: [1],                     // P(run-length=0) = 1 initially
     stats: [{ mu: mu0, kappa: kappa0, alpha: alpha0, beta: beta0 }],
   };
 }
@@ -144,9 +144,9 @@ function predictiveProb(x: number, s: { mu: number; kappa: number; alpha: number
 function lgamma(x: number): number {
   const g = 7;
   const c = [
-    0.99999999999980993, 676.5203681218851, -1259.1392167224028,
-    771.32342877765313, -176.61502916214059, 12.507343278686905,
-    -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7,
+    0.999_999_999_998_099_3, 676.520_368_121_885_1, -1_259.139_216_722_402_8,
+    771.323_428_777_653_13, -176.615_029_162_140_59, 12.507_343_278_686_905,
+    -0.138_571_095_265_720_12, 9.984_369_578_019_571_6e-6, 1.505_632_735_149_311_6e-7,
   ];
   if (x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - lgamma(1 - x);
   x -= 1;
@@ -171,6 +171,12 @@ function updateStats(
   return { mu: mu1, kappa: kappa1, alpha: alpha1, beta: beta1 };
 }
 
+function classifyDirection(value: number, fittedMean: number): RegimeShift['direction'] {
+  if (value > fittedMean + 0.5) return 'up';
+  if (value < fittedMean - 0.5) return 'down';
+  return 'unclear';
+}
+
 /**
  * Ingest one sample; returns a RegimeShift if a change-point is detected.
  */
@@ -187,13 +193,13 @@ export function ingestSample(
   state.n++;
 
   const R = state.runProbs.length;
-  const newProbs: number[] = new Array(R + 1).fill(0);
-  const newStats: Array<{ mu: number; kappa: number; alpha: number; beta: number }> = new Array(R + 1).fill(null);
+  const newProbs: number[] = Array.from({ length: R + 1 }, () => 0);
+  const newStats: { mu: number; kappa: number; alpha: number; beta: number }[] =
+    Array.from({ length: R + 1 }, () => ({ mu: 0, kappa: 0, alpha: 0, beta: 0 }));
 
   // P(run-length = 0 | data[1:t]) — reset/change point
   // = sum_r  P(x_t | stats[r]) * hazard * P(run-length = r-1)
   let changeProb = 0;
-  let growProb = 0;
 
   for (let r = 0; r < R; r++) {
     const rStats = state.stats[r]!;
@@ -208,7 +214,6 @@ export function ingestSample(
     if (r + 1 <= maxRunLength) {
       newProbs[r + 1] = (newProbs[r + 1] ?? 0) + pp * (1 - h) * rProb;
       newStats[r + 1] = updateStats(rStats, value);
-      growProb += pp * (1 - h) * rProb;
     }
   }
 
@@ -247,10 +252,7 @@ export function ingestSample(
   state.stats = newStats.slice(0, maxRunLength + 1);
 
   if (state.n >= minSamplesBeforeShift && logBF >= changeThreshold) {
-    const direction: RegimeShift['direction'] =
-      value > preUpdateFittedMean + 0.5 ? 'up' :
-      value < preUpdateFittedMean - 0.5 ? 'down' :
-      'unclear';
+    const direction = classifyDirection(value, preUpdateFittedMean);
 
     // Map logBF to a rough posterior probability via sigmoid: p = 1/(1+e^(-logBF/3)).
     const changeProbEst = Math.min(0.999, 1 / (1 + Math.exp(-logBF / 3)));
@@ -278,7 +280,8 @@ function buildExplanation(
   direction: RegimeShift['direction'],
 ): string {
   const pct = Math.round(prob * 100);
-  const dirLabel = direction === 'up' ? 'upward' : direction === 'down' ? 'downward' : '';
+  const dirLabels: Record<RegimeShift['direction'], string> = { up: 'upward', down: 'downward', unclear: '' };
+  const dirLabel = dirLabels[direction];
   const dirPart = dirLabel ? ` ${dirLabel}` : '';
   const epochPart = runLength > 0 ? ` after ${runLength}-sample stable period` : '';
   return `${pct}% probability of a${dirPart} regime shift in "${metric}" (value ${round2(value)})${epochPart}.`;
@@ -351,7 +354,7 @@ export function createRegimeDetector(opts: BOCPDOptions = {}): RegimeDetector {
 let _singleton: RegimeDetector | null = null;
 
 export function getRegimeDetector(): RegimeDetector {
-  if (!_singleton) _singleton = createRegimeDetector();
+  _singleton ??= createRegimeDetector();
   return _singleton;
 }
 

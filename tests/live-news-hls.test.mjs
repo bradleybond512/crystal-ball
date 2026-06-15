@@ -384,8 +384,8 @@ describe('optional channels fallback coverage', () => {
 // ── 11. CSP allows sidecar iframe ──
 
 describe('CSP configuration', () => {
-  it('frame-src allows http://127.0.0.1:*', () => {
- assert.match(indexHtml, /frame-src[^;]*http:\/\/127\.0\.0\.1:\*/,
+  it('frame-src allows http://127.0.0.1:46123 (sidecar port)', () => {
+ assert.match(indexHtml, /frame-src[^;]*http:\/\/127\.0\.0\.1:46123/,
  'CSP frame-src must allow sidecar localhost origin for YouTube embed iframe');
   });
 

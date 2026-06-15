@@ -23,7 +23,7 @@ import { unifiedAlertStore, type UnifiedAlert } from './unified-alerts';
 import { scoreAlert, panelForAlert } from './alert-routing';
 import { getCachedSynthesis, type CrossDomainCluster, type EscalationRisk } from './threat-synthesis';
 import { isGhostMode, getGhostRefreshMultiplier } from './mode-manager';
-import { getHypothesisFeedbackMult } from './hypothesis-feedback';
+import { getHypothesisFeedbackMult, signatureFor } from './hypothesis-feedback';
 import { getHypothesisAccuracyMult } from './hypothesis-accuracy';
 import { getDomainCalibrationMult } from './intelligence/forecast-calibration-adapter';
 import { recordHypothesisPredictions, domainForHypothesis } from './intelligence/hypothesis-prediction-bridge';
@@ -33,6 +33,9 @@ import { getWatchlistHypotheses } from './watchlist-hypothesis-bridge';
 import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
 import type { Situation } from './situation-types';
+import { recordEpisode, updateAnalogCache } from '@/services/cognition/episodic-memory';
+import { interestMultiplier } from '@/services/cognition/operator-model';
+import { ingestFromHypotheses } from '@/services/cognition/entity-dossier';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -111,15 +114,18 @@ const RISK_RANK: Record<EscalationRisk, number> = {
 
 /**
  * Ranking weight = raw confidence × learned user preference × outcome accuracy
- * × per-domain Brier-derived calibration multiplier.
- * Multiplier bounds: feedback [0.5,1.3] × accuracy [0.7,1.3] × calibration [0.7,1.2].
- * Worst-case floor ≈ 0.25 — a hypothesis class wrong on every axis sinks.
+ * × per-domain Brier-derived calibration multiplier
+ * × operator-model personalization tilt (bounded ±20%).
+ * Multiplier bounds: feedback [0.5,1.3] × accuracy [0.7,1.3] × calibration [0.7,1.2]
+ * × operator interest [0.8,1.2] (0.8 + 0.4 × interestScore(statement), clamped inside
+ * interestMultiplier() so personalization tilts the ranking, it does not determine it).
  */
 function rankingWeight(h: Hypothesis): number {
   return h.confidence
     * getHypothesisFeedbackMult(h)
     * getHypothesisAccuracyMult(h)
-    * getDomainCalibrationMult(domainForHypothesis(h));
+    * getDomainCalibrationMult(domainForHypothesis(h))
+    * interestMultiplier(h.statement);
 }
 
 // ── Per-source hypothesis builders ───────────────────────────────────────────
@@ -346,6 +352,46 @@ export function runAnalystCycle(): AnalystSnapshot {
   const latencyMs = performance.now() - t0;
   recordLatency('analyst-cycle', latencyMs);
   incrementCounter('analyst-cycle.runs');
+
+  // Episodic memory wiring: record new hypothesis signatures as episodes
+  // and update the analog score cache for forecastAll. Ghost Mode suppression
+  // is handled inside recordEpisode and updateAnalogCache.
+  // Fire-and-forget: never block the sync cycle on async embedding.
+  const hypothesisSnapshot = [...hypotheses]; // capture before async
+  void (async () => {
+    try {
+      for (const h of hypothesisSnapshot) {
+        await recordEpisode({
+          kind: 'hypothesis',
+          signature: signatureFor(h),
+          summary: h.statement.slice(0, 500),
+          domains: [h.kind],
+          entities: [],
+          region: h.region,
+          createdAt: h.timestamp,
+        });
+      }
+      await updateAnalogCache(
+        hypothesisSnapshot.map(h => ({ statement: h.statement, id: h.id })),
+        h => {
+          const match = hypothesisSnapshot.find(hy => hy.id === h.id);
+          return match ? signatureFor(match) : h.id;
+        },
+      );
+    } catch {
+      // Never let episodic memory errors crash the analyst loop.
+    }
+  })();
+
+  // Entity dossier wiring: ingest hypotheses into the temporal knowledge graph.
+  // Ghost Mode suppression is handled inside ingestFromHypotheses.
+  // Fire-and-forget: never block the sync cycle on dossier ingestion.
+  try {
+    ingestFromHypotheses(hypothesisSnapshot);
+  } catch {
+    // Never let entity-dossier errors crash the analyst loop.
+  }
+
   logDebug({ level: 'info', category: 'hypothesis', source: 'analyst-loop',
     message: 'cycle complete', latencyMs,
     data: {

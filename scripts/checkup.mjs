@@ -70,6 +70,7 @@ const CORE_SUITES = [
   'test:weather',
   'test:insights',
   'test:diagnostics',
+  'test:sec-hardening',
 ];
 
 for (const suite of CORE_SUITES) {

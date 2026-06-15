@@ -13,7 +13,7 @@
  *    os.tmpdir() elsewhere.
  */
 
-import { appendFileSync, renameSync, unlinkSync, existsSync, statSync, mkdirSync } from 'node:fs';
+import { appendFileSync, chmodSync, renameSync, unlinkSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 
@@ -44,6 +44,7 @@ export function createSidecarLogger(opts = {}) {
   const now = opts.now ?? (() => Date.now());
 
   const logPath = join(dir, 'sidecar.log');
+  let logPermsSet = false;
 
   function rotate() {
     // Delete overflow: sidecar.log.{keep}
@@ -60,6 +61,7 @@ export function createSidecarLogger(opts = {}) {
 
     // Rename current log to .1
     try { if (existsSync(logPath)) renameSync(logPath, join(dir, 'sidecar.log.1')); } catch { /* ignore */ }
+    logPermsSet = false;
   }
 
   function appendLine(line) {
@@ -71,6 +73,10 @@ export function createSidecarLogger(opts = {}) {
         if (size >= maxBytes) rotate();
       } catch { /* file doesn't exist yet, skip */ }
       appendFileSync(logPath, line, 'utf8');
+      if (!logPermsSet) {
+        try { chmodSync(logPath, 0o600); } catch { /* best effort */ }
+        logPermsSet = true;
+      }
       // Post-write rotation: if the file grew past maxBytes after append,
       // rotate now so the log can never grow unbounded. Concurrent-instance
       // races may cause slightly early/late rotation — that is acceptable.

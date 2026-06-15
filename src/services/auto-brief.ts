@@ -16,6 +16,7 @@ import { generateText } from './llm-adapter';
 import { isGhostMode } from './mode-manager';
 import { isFeatureAvailable } from './runtime-config';
 import type { ForecastSnapshot, ForecastDomain, ModeAdvisory } from './mode-forecast';
+import { preferredDepth } from '@/services/cognition/operator-model';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -136,11 +137,20 @@ function summarize(text: string): string {
   return lines.slice(0, 2).join(' ').slice(0, 240);
 }
 
+/** Token budget per depth preference (operator-model PR 4). */
+const DEPTH_TOKENS: Record<ReturnType<typeof preferredDepth>, number> = {
+  headline: 250,
+  standard: 500,
+  deep: 800,
+};
+
 async function runBrief(domain: ForecastDomain, pressure: number): Promise<void> {
   if (inFlight.has(domain)) return;
   inFlight.add(domain);
   try {
-    const res = await generateText(DOMAIN_PROMPT[domain], { maxTokens: 500 });
+    const depth = preferredDepth(domain);
+    const maxTokens = DEPTH_TOKENS[depth];
+    const res = await generateText(DOMAIN_PROMPT[domain], { maxTokens });
     if (!res.text) return; // failed — cooldown not burned, next crossing retries
     const brief: AutoBrief = {
       domain,

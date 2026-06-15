@@ -1,6 +1,6 @@
 # Crystal Ball
 
-Real-time global intelligence platform. Desktop app and web dashboard that aggregates 50+ live data feeds into 264 interactive panels, a 3D Cesium globe with 75 geospatial layers, an explainable algorithm intelligence layer (truth scoring + evidence graph + situation clustering + compound risk + forecast calibration + watchlist relevance), domain-aware shortage / weather / seismic / aviation / space / cyber engines, AI-powered analysis, SMS and desktop notification workflows, and an MCP server that lets Claude Code query it all from the terminal.
+Real-time global intelligence platform. Desktop app and web dashboard that aggregates 50+ live data feeds into 402 interactive panels, a 3D Cesium globe with 75 geospatial layers, an explainable algorithm intelligence layer (truth scoring + evidence graph + situation clustering + compound risk + forecast calibration + watchlist relevance), domain-aware shortage / weather / seismic / aviation / space / cyber engines, AI-powered analysis, SMS and desktop notification workflows, and an MCP server that lets Claude Code query it all from the terminal.
 
 [![Version](https://img.shields.io/github/v/release/bradleybond512/crystal-ball?label=version)](https://github.com/bradleybond512/crystal-ball/releases/latest)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
@@ -17,13 +17,13 @@ Real-time global intelligence platform. Desktop app and web dashboard that aggre
 
 ## What It Does
 
-Crystal Ball pulls data from ACLED, GDACS, NWS, USGS, CISA, ThreatFox, FRED, ADS-B, AIS, CelesTrak, NOAA, NASA, OpenSanctions, RIPE, SEC EDGAR, and dozens of other sources, then presents it across a 2D MapLibre map, a 3D Cesium globe, 264 live panels, a unified alert inbox, and a correlation engine that connects events across domains. You can ask Claude Code `/sitrep` and get a synthesized intelligence brief from all active feeds without opening the app.
+Crystal Ball pulls data from ACLED, GDACS, NWS, USGS, CISA, ThreatFox, FRED, ADS-B, AIS, CelesTrak, NOAA, NASA, OpenSanctions, RIPE, SEC EDGAR, and dozens of other sources, then presents it across a 2D MapLibre map, a 3D Cesium globe, 402 live panels, a unified alert inbox, and a correlation engine that connects events across domains. You can ask Claude Code `/sitrep` and get a synthesized intelligence brief from all active feeds without opening the app.
 
 Four product variants share one codebase:
 
 | Variant | Panels | Focus |
 |---------|--------|-------|
-| `full` | 264 | Geopolitics, conflict, cyber, infrastructure, disasters, markets |
+| `full` | 402 | Geopolitics, conflict, cyber, infrastructure, disasters, markets |
 | `tech` | 35 | AI, startups, cloud, service health, developer ecosystems |
 | `finance` | 31 | Markets, forex, bonds, commodities, crypto, central banks |
 | `happy` | 10 | Positive news, progress, science, conservation |
@@ -354,13 +354,13 @@ All sounds are synthesized with Web Audio API -- no audio files in the repo:
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Panels (full variant) | 392 | `src/config/panels.ts` |
-| Default panel inventory | `392 full / 35 tech / 31 finance / 10 happy` | `src/config/panels.ts` |
+| Panels (full variant) | 402 | `src/config/panels.ts` |
+| Default panel inventory | `402 full / 35 tech / 31 finance / 10 happy` | `src/config/panels.ts` |
 | God's Vision map layers | 75 (31 on by default) | `src/config/panels.ts` FULL_MAP_LAYERS |
 | Panel categories | 19 | `src/config/panels.ts` PANEL_CATEGORY_MAP |
 | Product variants | 4 | `src/config/variant.ts` |
 | MCP tools | 41 | `tools/mcp-server/index.mjs` |
-| Supported secret keys | 73 | `src-tauri/src/main.rs` |
+| Supported secret keys | 77 | `src-tauri/src/main.rs` |
 | Foundation intelligence modules | 24 | `src/services/{intelligence,weather,insights,shortage}/` |
 | Foundation deterministic tests | 600+ | `npm run test:intelligence` + `test:weather` + `test:insights*` + `test:shortage` |
 | Commodity shortage models | 8 (wheat, corn, rice, soybeans, diesel, gasoline, natural gas, jet fuel) | `src/services/shortage/*-shortage-risk.ts` |
@@ -413,7 +413,7 @@ API keys are optional -- most panels degrade gracefully without them. Configure 
 | [docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md](docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md) | Big Event Detector, Confidence × Urgency Matrix, What Changed Digest, Action Briefs + Reaction Playbooks, Presentation Export |
 | [docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md](docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md) | Food + energy shortage forecast framework — 8 commodity models with seasonal multipliers and provenance-aware inputs |
 | [docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md](docs/superpowers/specs/2026-04-14-enhanced-sitrep-design.md) | Enhanced `/sitrep` design -- 3-phase intelligence cycle, personalization, full MCP tool surface |
-| [docs/API_KEYS.md](docs/API_KEYS.md) | All 73 API keys -- categories, signup URLs, free/paid, plain-language descriptions |
+| [docs/API_KEYS.md](docs/API_KEYS.md) | All 77 API keys -- categories, signup URLs, free/paid, plain-language descriptions |
 | [docs/DESKTOP_CONFIGURATION.md](docs/DESKTOP_CONFIGURATION.md) | Desktop secret keys, feature availability, fallback behavior |
 | [docs/RELEASE_PACKAGING.md](docs/RELEASE_PACKAGING.md) | Desktop packaging and signing workflow |
 | [docs/MCP_PIPELINE.md](docs/MCP_PIPELINE.md) | How Claude Code gathers intelligence via MCP -- pipeline, auth, tools |

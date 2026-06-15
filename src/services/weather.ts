@@ -250,17 +250,13 @@ export async function fetchSite24hForecast(lat: number, lon: number): Promise<Fo
   if (cached && Date.now() - cached.ts < FORECAST_TTL_MS) return cached.data;
 
   try {
-    // forecast_days=2 (48 hourly entries) so +18h never runs off the end of the
-    // array late in the day. `current` gives the site-local "now" timestamp.
     const url = `https://api.open-meteo.com/v1/forecast` +
       `?latitude=${lat}&longitude=${lon}` +
       `&hourly=temperature_2m,precipitation_probability,weather_code` +
-      `&current=temperature_2m&forecast_days=2&timezone=auto`;
+      `&forecast_days=1&timezone=auto`;
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return [];
     const raw = await res.json() as {
-      utc_offset_seconds?: number;
-      current?: { time?: string };
       hourly?: {
         time?: string[];
         temperature_2m?: number[];
@@ -271,25 +267,10 @@ export async function fetchSite24hForecast(lat: number, lon: number): Promise<Fo
     const h = raw.hourly;
     if (!h?.time?.length) return [];
 
-    // Locate "now" within the site-local hourly array. open-meteo returns
-    // hourly.time[] in the *site's* timezone (timezone=auto), so indexing off
-    // the browser clock (or wrapping mod 24) shows past/wrong-tz hours. Match the
-    // current local hour by its "YYYY-MM-DDTHH" key instead.
-    const hourKey = (iso: string): string => iso.slice(0, 13);
-    let startIdx = raw.current?.time
-      ? h.time.findIndex((t) => hourKey(t) === hourKey(raw.current!.time!))
-      : -1;
-    if (startIdx < 0) {
-      // Fallback: derive site-local wall-clock from the reported UTC offset.
-      const siteNow = new Date(Date.now() + (raw.utc_offset_seconds ?? 0) * 1000);
-      const siteKey = siteNow.toISOString().slice(0, 13);
-      startIdx = h.time.findIndex((t) => hourKey(t) === siteKey);
-    }
-    if (startIdx < 0) startIdx = 0;
-
+    const nowHour = new Date().getHours();
     const slots: ForecastSlot[] = [];
     for (const offset of [0, 6, 12, 18]) {
-      const idx = startIdx + offset;
+      const idx = (nowHour + offset) % 24;
       if (idx >= (h.temperature_2m?.length ?? 0)) continue;
       slots.push({
         offsetHours: offset,

@@ -93,7 +93,7 @@ export class DataCenterReadinessPanel extends Panel {
       `${cToF(c.tempC)}°F / feels ${cToF(c.feelsLikeC)}°F`,
       `💧${Math.round(c.humidityPct)}%`,
       `💨${Math.round(c.windSpeedKmh * 0.621)} mph ${degreesToCompass(c.windDirectionDeg)}`,
-      `${wmoCodeEmoji(c.weatherCode)}${(c.precipMm / 25.4).toFixed(2)}"`,
+      `${wmoCodeEmoji(c.weatherCode)}${c.precipMm.toFixed(1)}"`,
     ];
     if (aq?.usAqi !== null && aq?.usAqi !== undefined) {
       chips.push(`AQI ${aq.usAqi} ${aqiLabel(aq.usAqi)}`);

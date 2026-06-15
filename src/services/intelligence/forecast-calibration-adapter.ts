@@ -1,10 +1,43 @@
+/**
+ * Forecast calibration adapter.
+ *
+ * Wraps the ForecastCalibrationStore singleton and exposes two APIs:
+ *
+ *   getBoostMultiplier() — kept for back-compat; returns the legacy global
+ *     Brier-derived multiplier. Consumers should migrate to getRecalibrator().
+ *
+ *   getRecalibrator(domain?) — returns a closure over the freshest per-domain
+ *     (or global) reliability curve, rebuilt lazily at most every 10 minutes.
+ *     Curves are persisted via reasoning-memory under 'crystalball-cognition-curves'.
+ *
+ * Lazy rebuild strategy: curves are expensive to build from scratch on every
+ * call, but also should not be stale for arbitrarily long. The 10-minute TTL
+ * is a pragmatic balance (analyst cycle is 5 min; curves are thus at most
+ * ~2 cycles behind). On first call curves are built immediately.
+ *
+ * Persistence: curves survive page reloads via reasoning-memory IDB store.
+ * On startup, the cached curves are loaded; any domain not yet in the cache
+ * falls back to the global curve or identity.
+ */
+
 import {
   brierScore,
   createForecastCalibrationStore,
   perDomainAccuracy,
 } from './forecast-calibration';
 import type { ForecastCalibrationStore, PredictionRecord } from './forecast-calibration';
+import {
+  buildCurve,
+  pooledCurve,
+  identityCurve,
+  recalibrate,
+  MIN_DOMAIN_N,
+  MIN_GLOBAL_N,
+} from '@/services/cognition/recalibration';
+import type { ReliabilityCurve, RecalibrationResult } from '@/services/cognition/recalibration';
 import type { FactDomain } from './types';
+
+// ── Calibration store singleton ───────────────────────────────────────────────
 
 let _calibrationStore: ForecastCalibrationStore | null = null;
 
@@ -78,12 +111,20 @@ export function getDomainCalibrationMult(domain: FactDomain): number {
   return Math.max(0.7, Math.min(1.2, 1.2 - 0.8 * acc.brier));
 }
 
+// ── Legacy boost multiplier (back-compat) ─────────────────────────────────────
+
+/**
+ * @deprecated Prefer getRecalibrator(domain) for per-domain recalibration.
+ *
+ * Returns a global Brier-derived multiplier in [0.4, 1.2]. Still used by
+ * the legacy path in hypothesis-forecast.ts until fully superseded.
+ */
 export function getBoostMultiplier(): number {
   const store = getCalibrationStore();
   const records = store.all();
-  const resolved = records.filter(r => r.status === 'resolved_true' || r.status === 'resolved_false');
-  if (resolved.length < 5) return 1;
-  const result = brierScore(resolved);
+  const resolvedRecs = records.filter(r => r.status === 'resolved_true' || r.status === 'resolved_false');
+  if (resolvedRecs.length < 5) return 1;
+  const result = brierScore(resolvedRecs);
   if (result.score <= 0.1) return 1.2;
   if (result.score <= 0.2) return 1;
   if (result.score <= 0.3) return 0.7;
@@ -91,3 +132,175 @@ export function getBoostMultiplier(): number {
 }
 
 export function _resetCalibrationForTests(): void { _calibrationStore = null; }
+
+// ── Curve cache ───────────────────────────────────────────────────────────────
+
+/** Rebuild curves at most once per CURVE_TTL_MS (10 minutes). */
+const CURVE_TTL_MS = 10 * 60 * 1000;
+
+/** In-memory curve store: domain → curve. 'global' key = pooled global curve. */
+const _curveCache = new Map<string, ReliabilityCurve>();
+let _lastBuiltAt = 0;
+
+/** IDB/LS key for curve persistence. */
+const CURVES_STORAGE_KEY = 'crystalball-cognition-curves';
+
+// Lazy IDB references (same pattern as episodic-memory.ts — injectable for tests).
+let _getMemory: (<T>(key: string) => Promise<T | null>) | null = null;
+let _putMemory: (<T>(key: string, value: T) => Promise<void>) | null = null;
+
+function lazyLoadIdb(): void {
+  if (_getMemory !== null) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('@/services/reasoning-memory') as {
+      getMemory: <T>(key: string) => Promise<T | null>;
+      putMemory: <T>(key: string, value: T) => Promise<void>;
+    };
+    _getMemory = mod.getMemory;
+    _putMemory = mod.putMemory;
+  } catch {
+    _getMemory = () => Promise.resolve(null);
+    _putMemory = () => Promise.resolve();
+  }
+}
+
+/** Persist the current curve cache to IDB. Fire-and-forget. */
+function persistCurves(): void {
+  const snapshot = Object.fromEntries(_curveCache.entries()) as Record<string, ReliabilityCurve>;
+  lazyLoadIdb();
+  void _putMemory!(CURVES_STORAGE_KEY, snapshot);
+}
+
+/** Load curves from IDB on first call (async bootstrap). */
+let _bootstrapped = false;
+function bootstrapFromIdb(): void {
+  if (_bootstrapped) return;
+  _bootstrapped = true;
+  lazyLoadIdb();
+  void _getMemory!<Record<string, ReliabilityCurve>>(CURVES_STORAGE_KEY).then(stored => {
+    if (!stored || typeof stored !== 'object') return;
+    // Only load if we haven't already rebuilt since boot.
+    if (_lastBuiltAt > 0) return;
+    for (const [key, curve] of Object.entries(stored)) {
+      if (isCurveShape(curve)) _curveCache.set(key, curve);
+    }
+  });
+}
+
+function isCurveShape(v: unknown): v is ReliabilityCurve {
+  if (!v || typeof v !== 'object') return false;
+  const c = v as Record<string, unknown>;
+  return Array.isArray(c.bins) && typeof c.sampleSize === 'number';
+}
+
+// ── Curve rebuild ─────────────────────────────────────────────────────────────
+
+/** All FactDomain values known to the calibration store. */
+const ALL_DOMAINS: readonly FactDomain[] = [
+  'weather', 'cyber', 'aviation', 'maritime', 'markets',
+  'conflict', 'humanitarian', 'space', 'infra', 'macro', 'other',
+];
+
+function rebuildCurves(): void {
+  const store = getCalibrationStore();
+  const records = store.all();
+  _curveCache.clear();
+
+  const domainCurves: ReliabilityCurve[] = [];
+
+  for (const domain of ALL_DOMAINS) {
+    const domainResolved = records.filter(
+      r => r.domain === domain && (r.status === 'resolved_true' || r.status === 'resolved_false'),
+    );
+    if (domainResolved.length >= MIN_DOMAIN_N) {
+      const curve = buildCurve(records, domain);
+      _curveCache.set(domain, curve);
+      domainCurves.push(curve);
+    }
+  }
+
+  // Build global curve from all resolved records.
+  const allResolved = records.filter(
+    r => r.status === 'resolved_true' || r.status === 'resolved_false',
+  );
+  if (allResolved.length >= MIN_GLOBAL_N) {
+    const global = domainCurves.length > 0
+      ? pooledCurve(domainCurves)
+      : buildCurve(records);
+    _curveCache.set('global', global);
+  }
+
+  _lastBuiltAt = Date.now();
+  persistCurves();
+}
+
+function maybeRebuild(): void {
+  bootstrapFromIdb();
+  const now = Date.now();
+  if (now - _lastBuiltAt >= CURVE_TTL_MS) {
+    rebuildCurves();
+  }
+}
+
+// ── getRecalibrator ───────────────────────────────────────────────────────────
+
+/**
+ * Returns a recalibration closure for the given domain (or global if omitted).
+ *
+ * The closure captures the freshest available curve at call time (rebuilt lazily
+ * at most every 10 minutes). Curve selection follows the fallback ladder:
+ *   1. Per-domain curve if n ≥ MIN_DOMAIN_N.
+ *   2. Global pooled curve if n ≥ MIN_GLOBAL_N.
+ *   3. Identity (adjustment = 0, explanation notes insufficient history).
+ *
+ * @example
+ * const recalibrator = getRecalibrator('finance');
+ * const { p, adjustment, explanation } = recalibrator(0.7);
+ * // → { p: 0.58, adjustment: -0.12,
+ * //     explanation: "finance forecasts at ~70% have materialized 54% of the time (n=41) → adjusted to 58%" }
+ */
+export function getRecalibrator(domain?: FactDomain): (p: number) => RecalibrationResult {
+  maybeRebuild();
+
+  let curve: ReliabilityCurve | undefined;
+  if (domain !== undefined) {
+    curve = _curveCache.get(domain);
+  }
+  curve ??= _curveCache.get('global');
+  // Identity: no data yet.
+  curve ??= identityCurve(domain ?? 'global');
+
+  // Capture curve at closure-creation time.
+  const capturedCurve = curve;
+  return (p: number) => recalibrate(p, capturedCurve);
+}
+
+// ── Test helpers (injectable) ─────────────────────────────────────────────────
+
+/**
+ * Override the IDB functions for tests. Pass null to disable persistence.
+ * Must be called before any curve operations in the test.
+ */
+export function _configureAdapterForTests(opts: {
+  getMemoryFn?: <T>(key: string) => Promise<T | null>;
+  putMemoryFn?: <T>(key: string, value: T) => Promise<void>;
+}): void {
+  _getMemory = opts.getMemoryFn ?? (() => Promise.resolve(null));
+  _putMemory = opts.putMemoryFn ?? (() => Promise.resolve());
+  _bootstrapped = true; // Skip the async bootstrap in tests.
+}
+
+/** Reset curve cache for test isolation. */
+export function _resetAdapterForTests(): void {
+  _curveCache.clear();
+  _lastBuiltAt = 0;
+  _bootstrapped = false;
+  _getMemory = null;
+  _putMemory = null;
+}
+
+/** Force an immediate curve rebuild (for tests that populate the store). */
+export function _rebuildCurvesForTests(): void {
+  rebuildCurves();
+}

@@ -1,9 +1,16 @@
 {
   "_comment": "Allowlist for sidecar-only routes — routes the sidecar serves that no renderer file calls. Each entry must be classified as one of:\n  - intentionalInternal: server-to-server / admin / health probe; never called from the renderer.\n  - futureUi: route exists for an unbuilt panel; expected to gain a renderer caller soon.\n  - deprecated: legacy route slated for removal.\nThe sidecar-routes-allowlist test fails when a NEW sidecar-only route appears that's not in any list. To clear, classify it here.",
-  "_updated": "2026-05-12 — release-gate: classify 25 renderer-mirror routes (command-center / diagnostics / earthquake / feeds / infrarisks / intelligence / notifications / shortage / supplychain) as intentionalInternal. These are MCP-facing mirrors: the renderer POSTs computed state for external consumers to read; the renderer panels use the local state singleton directly.",
+  "_updated": "2026-06-13 — release-gate: classify 7 newly-surfaced sidecar-only routes. Event-store read/maintenance API (/api/events/query|count|prune) and the Patreon OAuth callback are intentionalInternal (MCP/admin/browser-redirect, never a renderer fetch); FAO/IMF economic feeds and the GOES metadata probe are futureUi (awaiting panel wiring).",
   "_reasons": {
     "/api/sms/command": "Inbound webhook from SMS gateways (Twilio etc.) — POSTed by the external provider, never by the renderer. Sits before the auth gate; phone-number allowlist in sms-config.json provides authn.",
-    "renderer-mirror-pattern": "Routes under /api/command-center, /api/diagnostics, /api/earthquake, /api/feeds/health, /api/infrarisks, /api/intelligence, /api/notifications/trace, /api/shortage, /api/supplychain are all renderer→sidecar mirrors: the renderer computes state locally and POSTs a snapshot for MCP / external consumers. The renderer panels themselves read from the in-renderer state singleton, not via fetch."
+    "renderer-mirror-pattern": "Routes under /api/command-center, /api/diagnostics, /api/earthquake, /api/feeds/health, /api/infrarisks, /api/intelligence, /api/notifications/trace, /api/shortage, /api/supplychain are all renderer→sidecar mirrors: the renderer computes state locally and POSTs a snapshot for MCP / external consumers. The renderer panels themselves read from the in-renderer state singleton, not via fetch.",
+    "/api/events/query": "Temporal World Store (events.db) read API. MCP/diagnostics-facing; the renderer reads only /api/events/health. Returns 503 when the store is unavailable so callers degrade gracefully.",
+    "/api/events/count": "Temporal World Store count API — same MCP/diagnostics consumer as /api/events/query.",
+    "/api/events/prune": "Temporal World Store manual retention maintenance (POST). Admin-only; not called from the renderer.",
+    "/oauth/patreon/callback": "Browser OAuth redirect target hit by Patreon, not a renderer fetch. Returns an HTML page that postMessages the result back to the opener window.",
+    "/api/fao-price-index": "FAO GIEWS food price index feed (no key). Backs shortage-model confidence; awaiting a renderer panel caller.",
+    "/api/imf-gdp": "IMF DataMapper cross-country GDP growth feed (no key). Feeds war/sanction-impact + country shortage scoring; awaiting a renderer panel caller.",
+    "/api/satellite/goes": "NOAA GOES-East/West GeoColor metadata probe. The renderer uses the richer /api/satellite/goes-imagery catalog; this lightweight probe is reserved for a future imagery panel."
   },
 
   "intentionalInternal": [
@@ -17,6 +24,10 @@
     "/api/algorithm-state",
     "/api/aviation/_aviation-helpers",
     "/api/sms/command",
+    "/api/events/query",
+    "/api/events/count",
+    "/api/events/prune",
+    "/oauth/patreon/callback",
     "/api/command-center/summary",
     "/api/diagnostics/mission-state",
     "/api/earthquake/aftershock-forecast",
@@ -70,6 +81,9 @@
     "/api/dyfi",
     "/api/economic",
     "/api/ensemble-decision",
+    "/api/fao-price-index",
+    "/api/imf-gdp",
+    "/api/satellite/goes",
     "/api/feed-discovery",
     "/api/genealogy",
     "/api/genealogy/lineage",

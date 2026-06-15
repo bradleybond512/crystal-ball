@@ -1,4 +1,5 @@
 # Crystal Ball — Security Fix Plan
+
 **Date:** 2026-06-11  
 **Source:** SECURITY_AUDIT_2026-06-11.md  
 **Model:** Sonnet (`claude-sonnet-4-6`)  
@@ -9,43 +10,52 @@
 ## Tier 1 — Today (High severity, minutes each)
 
 ### T1-A: Switch all 5 plain-HTTP sidecar URLs to HTTPS
+
 **Audit refs:** H-1, H-2  
 **Files:** `src-tauri/sidecar/local-api-server.mjs`
 
 **Exact changes:**
 
 1. **Line 4335** — MediaStack key-validation probe:
+
    ```
    BEFORE: fetchWithTimeout(`http://api.mediastack.com/v1/news?access_key=...`)
    AFTER:  fetchWithTimeout(`https://api.mediastack.com/v1/news?access_key=...`)
    ```
 
 2. **Line 4466** — AviationStack key-validation probe:
+
    ```
    BEFORE: fetchWithTimeout(`http://api.aviationstack.com/v1/flights?access_key=...`)
    AFTER:  fetchWithTimeout(`https://api.aviationstack.com/v1/flights?access_key=...`)
    ```
+
    Note: AviationStack's free tier may reject HTTPS. If it does (non-2xx or connection error), skip live validation and return `{ valid: true, note: 'live validation skipped — HTTPS not available on free tier' }` rather than sending the key over HTTP.
 
 3. **Line 4541** — GeoNames key-validation probe:
+
    ```
    BEFORE: fetchWithTimeout(`http://api.geonames.org/searchJSON?...&username=...`)
    AFTER:  fetchWithTimeout(`https://secure.geonames.org/searchJSON?...&username=...`)
    ```
+
    (GeoNames HTTPS endpoint is `secure.geonames.org`)
 
 4. **Line 10167** — MediaStack production news fetch:
+
    ```
    BEFORE: fetchWithTimeout(`http://api.mediastack.com/v1/news?${params}`, ...)
    AFTER:  fetchWithTimeout(`https://api.mediastack.com/v1/news?${params}`, ...)
    ```
 
 5. **Line 1124** — ip-api.com batch geolocation:
+
    ```
    BEFORE: fetchWithTimeout('http://ip-api.com/batch?fields=...', { method: 'POST', ... })
    AFTER:  fetchWithTimeout('https://ipquery.io/batch', { method: 'POST', body: JSON.stringify(batch.map(ip => ({ ip }))), ... })
             — OR substitute ipinfo.io/batch if it's already integrated elsewhere in the sidecar.
    ```
+
    Check what HTTPS IP-geolocation providers are already present in the sidecar. Prefer one already in use. If none, use `https://ip-api.com/batch` (ip-api.com's paid HTTPS endpoint) OR `https://ipquery.io` (free, HTTPS-only). Maintain the same batch-response field shape that callers expect (`query`, `country`, `countryCode`, `lat`, `lon`).
 
 **Test:** After changes, `grep -n "http://" src-tauri/sidecar/local-api-server.mjs | grep -v "127.0.0.1\|localhost\|#"` should return zero matches for non-local URLs.
@@ -55,12 +65,14 @@
 ---
 
 ### T1-B: Fix .env.local file permissions + add loader permission check
+
 **Audit refs:** H-3, L-6  
 **Files:** `src-tauri/sidecar/env-local-loader.mjs`
 
 **Changes:**
 
 1. Add permission check at the top of the load function in `env-local-loader.mjs` (around line 58–75). After `fs.statSync(filePath)`, add:
+
    ```javascript
    const mode = stat.mode & 0o077; // world/group bits
    if (mode !== 0) {
@@ -71,9 +83,11 @@
      return {};
    }
    ```
+
    This means `loadEnvFile()` refuses to parse the file if group or world bits are set, preventing silent regression after the initial chmod.
 
 2. Also add a one-line console notice whenever the fallback path is actually used:
+
    ```javascript
    console.info('[env-local-loader] INFO: Loading API keys from plaintext .env.local fallback (keychain unavailable).');
    ```
@@ -89,6 +103,7 @@
 ## Tier 2 — This Week
 
 ### T2-A: Add CI grep blocking non-localhost http:// in sidecar
+
 **Audit ref:** H-1, H-2 (root-cause guardrail)  
 **Files:** `.github/workflows/` (or whichever CI file runs checks — look for an existing lint/check workflow)
 
@@ -112,12 +127,14 @@ Add a step to the CI workflow that fails if any `http://` URL pointing to a non-
 ---
 
 ### T2-B: Set events.db and log files to mode 0600 at creation
+
 **Audit ref:** L-7  
 **Files:** `src-tauri/sidecar/event-store.mjs`, `src-tauri/sidecar/local-api-server.mjs`
 
 The event store DB (`events.db`, `events.db-wal`) and log files (`local-api.log`, `sidecar.log`, `sidecar.health.json`) are created with default umask (0644). Fix:
 
 1. In `event-store.mjs`, after the `new DatabaseSync(dbPath)` call opens/creates the database file, add:
+
    ```javascript
    import { chmodSync, existsSync } from 'node:fs';
    // After DatabaseSync opens/creates the file:
@@ -136,6 +153,7 @@ The event store DB (`events.db`, `events.db-wal`) and log files (`local-api.log`
 ---
 
 ### T2-C: Add trusted-window gate to list_supported_secret_keys
+
 **Audit ref:** L-1  
 **Files:** `src-tauri/src/main.rs` (around line 716)
 
@@ -154,6 +172,7 @@ async fn list_supported_secret_keys(webview: tauri::WebviewWindow) -> Result<Vec
 ---
 
 ### T2-D: Unify Vercel preview-origin regex with sidecar enumerated allowlist
+
 **Audit ref:** M-5  
 **Files:** `api/_api-key.js`, `api/youtube/embed.js`
 
@@ -176,6 +195,7 @@ Apply the same pattern fix to both files. Also add a test case in any existing s
 ## Tier 3 — Next Pass
 
 ### T3-A: LLM cloud-egress disclosure and local-only toggle
+
 **Audit ref:** M-4  
 **Files:** `src/services/hypothesis-skeptic.ts`, `src/services/auto-brief.ts`, relevant settings UI component
 
@@ -191,14 +211,18 @@ When the Skeptic or Auto-Brief feature is first enabled, show a one-time disclos
 ---
 
 ### T3-B: Web CSP frame-src — replace wildcard localhost port with explicit list
+
 **Audit ref:** M-2  
 **File:** `index.html` (line 7)
 
 Replace:
+
 ```
 frame-src http://127.0.0.1:*
 ```
+
 With:
+
 ```
 frame-src http://127.0.0.1:3000 http://127.0.0.1:1420 http://127.0.0.1:5173 http://127.0.0.1:46123
 ```
@@ -210,6 +234,7 @@ This matches the exact port list used in the desktop `tauri.conf.json` CSP and t
 ---
 
 ### T3-C: Add Twilio request-signature validation to SMS webhook
+
 **Audit ref:** L-5  
 **Files:** `src-tauri/sidecar/local-api-server.mjs` (around line 5058–5075)
 
@@ -240,10 +265,12 @@ At the route handler, get `X-Twilio-Signature` header and `TWILIO_AUTH_TOKEN` fr
 ---
 
 ### T3-D: Sweep and update SECURITY_SCAN_FINDINGS_FOR_CLAUDE.md
+
 **Audit ref:** M-7  
 **File:** `docs/SECURITY_SCAN_FINDINGS_FOR_CLAUDE.md`
 
 Update the findings doc based on what the 2026-06-11 audit confirmed:
+
 - Mark **SEC-004** (sebuf wildcard-CORS) as ✅ FIXED — the fallback at `api/[domain]/v1/[rpc].ts:167-185` now returns 403.
 - Correct **SEC-001** — there is no `get_all_secrets` command in the current codebase (33 commands enumerated). The actual exposure is that a trusted-window renderer can call `get_secret` per key across all 73 keys. Update accordingly.
 - Mark **SEC-005** as addressed by T1-A in this plan (HTTP→HTTPS).
@@ -259,12 +286,15 @@ Update the findings doc based on what the 2026-06-11 audit confirmed:
 These require larger design work. Create GitHub issues for tracking, do not implement in the current sprint.
 
 ### T4-A: In-memory token handoff for MCP server (M-1)
+
 Instead of writing `sidecar.token` to disk, pass the token to the MCP server process via env var or stdin at spawn time. Remove the file-based path once the MCP server is updated to accept the env var. This eliminates the at-rest copy entirely.
 
 ### T4-B: Shrink connect-src by routing renderer fetches through sidecar (M-3)
+
 Long-term: route most renderer `fetch()` calls through the sidecar so the renderer only needs `connect-src 'self' http://127.0.0.1:46123` plus the handful of direct-renderer hosts (Cesium tiles, PostHog). Prerequisite for removing `https:` blanket scope.
 
 ### T4-C: Remove unsafe-eval when Cesium ships strict-CSP support (I-1/I-2)
+
 Track Cesium's strict-CSP build progress. When available, test `wasm-unsafe-eval`-only and remove the `unsafe-eval` exception. Also reconcile the version in `CSP_AUDIT.md` with the actual installed Cesium version.
 
 ---

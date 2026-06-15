@@ -5,7 +5,6 @@ import {
   formatCounterValue,
   type CounterMetric,
 } from '@/services/humanity-counters';
-import { isAppActive, onActivityChange } from '@/services/app-activity';
 
 /**
  * CountersPanel -- Worldometer-style ticking counters showing positive global metrics.
@@ -20,17 +19,11 @@ import { isAppActive, onActivityChange } from '@/services/app-activity';
 export class CountersPanel extends Panel {
   private animFrameId: number | null = null;
   private valueElements = new Map<string, HTMLElement>();
-  private _unsubActivity: (() => void) | null = null;
 
   constructor() {
  super({ id: 'counters', title: 'Live Counters', trackActivity: false });
  this.createCounterGrid();
  this.startTicking();
- // Resume the 60fps tick when the window regains focus/visibility — the
- // tick stops itself while inactive (counters recompute from absolute time).
- this._unsubActivity = onActivityChange((active) => {
- if (active) this.startTicking();
- });
   }
 
   /**
@@ -104,12 +97,6 @@ export class CountersPanel extends Panel {
  * to avoid layout thrashing at 60fps.
  */
   private tick = (): void => {
- // Pause when the window is hidden/blurred — stop re-scheduling so the
- // loop idles entirely (constructor's activity listener restarts it).
- if (!isAppActive()) {
- this.animFrameId = null;
- return;
- }
  for (const metric of COUNTER_METRICS) {
  const el = this.valueElements.get(metric.id);
  if (el) {
@@ -127,10 +114,6 @@ export class CountersPanel extends Panel {
  if (this.animFrameId !== null) {
  cancelAnimationFrame(this.animFrameId);
  this.animFrameId = null;
- }
- if (this._unsubActivity) {
- this._unsubActivity();
- this._unsubActivity = null;
  }
  this.valueElements.clear();
  super.destroy();

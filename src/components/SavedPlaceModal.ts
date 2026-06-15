@@ -33,8 +33,6 @@ const RADIUS_PRESETS = [
 
 export interface SavedPlaceModalOptions {
   onPickLocationMode: (active: boolean, callback: ((lat: number, lon: number) => void) | null) => void;
-  screenToLatLon: (x: number, y: number) => { lat: number; lon: number } | null;
-  navigateTo: (lat: number, lon: number, zoom?: number) => void;
 }
 
 interface FormState {
@@ -97,7 +95,6 @@ export class SavedPlaceModal {
   }
 
   public openCreate(): void {
- if (this.pickModeActive) this.exitPickMode();
  this.editingPlace = null;
  this.formState = this.defaultFormState();
  this.geocodeResults = [];
@@ -109,7 +106,6 @@ export class SavedPlaceModal {
   }
 
   public openEdit(place: SavedPlace): void {
- if (this.pickModeActive) this.exitPickMode();
  this.editingPlace = place;
  this.formState = {
  name: place.name,
@@ -313,48 +309,10 @@ export class SavedPlaceModal {
   private renderPickModeBanner(): string {
  return `
  <div class="spm-pick-banner">
- <div class="spm-pick-banner-hint">
- <span class="spm-pick-banner-text">Click the map to pin a location</span>
+ <span class="spm-pick-banner-text">Click anywhere on the map to set the location</span>
  <button class="spm-btn spm-btn--ghost" data-action="pick-cancel" type="button">Cancel</button>
  </div>
- <div class="spm-pick-search-row">
- <input
- class="spm-input spm-pick-search-input"
- type="text"
- placeholder="Search city or address to navigate..."
- data-field="pick-search"
- autocomplete="off"
- />
- </div>
- </div>
  `;
-  }
-
-  private renderPickGeocodeResults(): string {
- if (this.geocodeResults.length === 0) return '';
- // All user-provided displayName values are escaped via escapeHtml — safe for innerHTML.
- return `
- <div class="spm-geocode-results">
- ${this.geocodeResults.map((r, i) => `
- <button class="spm-geocode-item" data-action="pick-geocode-nav" data-index="${i}" type="button">
- ${escapeHtml(r.displayName)}
- </button>
- `).join('')}
- </div>
- `;
-  }
-
-  private refreshPickBannerResults(): void {
- const searchRow = this.overlay.querySelector('.spm-pick-search-row');
- if (!searchRow) return;
- const existing = searchRow.nextElementSibling;
- if (existing?.classList.contains('spm-geocode-results')) existing.remove();
- if (this.geocodeResults.length === 0) return;
- const tmp = document.createElement('div');
- // renderPickGeocodeResults escapes all user-provided displayName values via escapeHtml
- tmp.innerHTML = this.renderPickGeocodeResults();
- const el = tmp.firstElementChild;
- if (el) searchRow.after(el);
   }
 
   private getValidationError(): string | null {
@@ -397,8 +355,6 @@ export class SavedPlaceModal {
  this.formState.notes = target.value;
  } else if (field === 'search') {
  this.scheduleSearch(target.value);
- } else if (field === 'pick-search') {
- this.scheduleSearch(target.value);
  }
   }
 
@@ -409,46 +365,7 @@ export class SavedPlaceModal {
  }
   }
 
-  private applyPickedLocation(e: MouseEvent): boolean {
- if (!this.pickModeActive) return false;
- if ((e.target as HTMLElement).closest('.spm-pick-banner')) return false;
- const pos = this.options.screenToLatLon(e.clientX, e.clientY);
- if (pos) {
- this.formState.lat = pos.lat.toFixed(6);
- this.formState.lon = pos.lon.toFixed(6);
- this.exitPickMode();
- void this.tryAutoName(pos.lat, pos.lon);
- }
- return true;
-  }
-
-  private applyTagToggle(target: HTMLElement): void {
- const tagEl = target.closest<HTMLElement>('[data-tag]');
- const tag = tagEl?.dataset.tag as SavedPlaceTag | undefined;
- if (!tag) return;
- if (this.formState.tags.has(tag)) {
- this.formState.tags.delete(tag);
- } else {
- this.formState.tags.add(tag);
- }
- tagEl?.classList.toggle('spm-tag--active');
-  }
-
-  private navigateToPickResult(target: HTMLElement): void {
- const indexEl = target.closest<HTMLElement>('[data-index]');
- const index = Number.parseInt(indexEl?.dataset.index ?? '', 10);
- const result = this.geocodeResults[index];
- if (!result) return;
- this.geocodeResults = [];
- this.refreshPickBannerResults();
- const si = this.overlay.querySelector<HTMLInputElement>('[data-field="pick-search"]');
- if (si) si.value = '';
- this.options.navigateTo(result.lat, result.lon, 12);
-  }
-
   private handleClick(e: MouseEvent): void {
- if (this.applyPickedLocation(e)) return;
-
  const target = e.target as HTMLElement;
 
  if (target === this.overlay) {
@@ -470,7 +387,16 @@ export class SavedPlaceModal {
  break;
  }
  case 'toggle-tag': {
- this.applyTagToggle(target);
+ const tagEl = target.closest<HTMLElement>('[data-tag]');
+ const tag = tagEl?.dataset.tag as SavedPlaceTag | undefined;
+ if (tag) {
+ if (this.formState.tags.has(tag)) {
+ this.formState.tags.delete(tag);
+ } else {
+ this.formState.tags.add(tag);
+ }
+ tagEl?.classList.toggle('spm-tag--active');
+ }
  break;
  }
  case 'toggle-primary': {
@@ -491,10 +417,6 @@ export class SavedPlaceModal {
  const index = Number.parseInt(indexEl?.dataset.index ?? '', 10);
  const result = this.geocodeResults[index];
  if (result) this.applyGeocodeResult(result);
- break;
- }
- case 'pick-geocode-nav': {
- this.navigateToPickResult(target);
  break;
  }
  case 'delete': {
@@ -557,29 +479,16 @@ export class SavedPlaceModal {
  if (this.searchDebounce) clearTimeout(this.searchDebounce);
  if (!query.trim()) {
  this.geocodeResults = [];
- if (this.pickModeActive) {
- this.refreshPickBannerResults();
- } else {
  this.refreshGeocodeResults();
- }
  return;
  }
  this.searchDebounce = setTimeout(() => void this.runSearch(query), 400);
   }
 
   private async runSearch(query: string): Promise<void> {
- try {
  const results = await forwardGeocode(query);
  this.geocodeResults = results;
- if (this.pickModeActive) {
- this.refreshPickBannerResults();
- } else {
  this.refreshGeocodeResults();
- }
- } catch {
- // forwardGeocode swallows its own errors; this guards against any
- // unexpected exception reaching WebKit's unhandled-rejection handler.
- }
   }
 
   private refreshGeocodeResults(): void {
@@ -593,8 +502,7 @@ export class SavedPlaceModal {
  const tmp = document.createElement('div');
  // renderGeocodeResults escapes all user-provided displayName values via escapeHtml
  tmp.innerHTML = this.renderGeocodeResults();
- const el = tmp.firstElementChild;
- if (el) searchRow.after(el);
+ searchRow.after(tmp.firstElementChild!);
   }
 
   private applyGeocodeResult(result: GeocodeResult): void {
@@ -623,22 +531,8 @@ export class SavedPlaceModal {
 
   private enterPickMode(): void {
  this.pickModeActive = true;
- this.geocodeResults = [];
  this.render();
  this.overlay.classList.add('spm-pick-mode');
-
- // Ensure the 2D map is visible so the user can click on it.
- // The map section may be hidden (user disabled it in settings) or scrolled
- // out of view (panels-grid is below the map). Reveal + scroll before
- // registering the pick callback so the canvas is ready for the click.
- const mapSection = document.getElementById('mapSection');
- if (mapSection) {
- if (mapSection.classList.contains('hidden')) {
- mapSection.classList.add('spm-pick-revealed');
- }
- mapSection.scrollIntoView({ block: 'start', behavior: 'instant' } as ScrollIntoViewOptions);
- }
-
  this.options.onPickLocationMode(true, (lat, lon) => {
  this.formState.lat = lat.toFixed(6);
  this.formState.lon = lon.toFixed(6);
@@ -651,8 +545,6 @@ export class SavedPlaceModal {
  this.pickModeActive = false;
  this.overlay.classList.remove('spm-pick-mode');
  this.options.onPickLocationMode(false, null);
- // Un-reveal map section if we temporarily showed it for pick mode.
- document.getElementById('mapSection')?.classList.remove('spm-pick-revealed');
  this.render();
   }
 

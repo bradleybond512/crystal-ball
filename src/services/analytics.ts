@@ -4,11 +4,15 @@
  * Active when VITE_POSTHOG_KEY is set AND the user has explicitly opted in.
  * All exports are no-ops when the key is absent (dev/local) or user has not consented.
  *
- * Consent model:
+ * Consent model (opt-in):
  * - localStorage key 'wm-analytics-consent':
  * 'true'  → user explicitly opted in (analytics enabled)
  * 'false' → user explicitly opted out
  * absent  → not consented (analytics disabled by default)
+ * - A one-time consent prompt is surfaced on first boot for new installs
+ * (see AnalyticsConsentBanner); 'wm-analytics-consent-prompt-seen' records it.
+ * - Installs that predate consent gating are migrated once to 'true' so their
+ * prior (opt-out-era) behaviour is preserved — see migrateAnalyticsConsent().
  * - Ghost Mode always suppresses analytics regardless of consent.
  *
  * Data safety:
@@ -51,6 +55,42 @@ export function setAnalyticsConsent(allow: boolean): void {
     posthogInstance = null;
     initPromise = null;
   }
+}
+
+const CONSENT_PROMPT_SEEN_KEY = 'wm-analytics-consent-prompt-seen';
+
+/** True once the first-run consent prompt has been shown (or migration ran). */
+export function hasSeenConsentPrompt(): boolean {
+  return localStorage.getItem(CONSENT_PROMPT_SEEN_KEY) === 'true';
+}
+
+export function markConsentPromptSeen(): void {
+  localStorage.setItem(CONSENT_PROMPT_SEEN_KEY, 'true');
+}
+
+/**
+ * One-time consent migration. Runs at boot before initAnalytics().
+ *
+ * - Already prompted/migrated → no-op.
+ * - Explicit choice already on file (key present) → just mark prompt seen.
+ * - Pre-consent-gate install (no choice, but a prior installation id exists) →
+ *   migrate to 'true' to preserve the opt-out-era behaviour these users had.
+ * - Brand-new install (no choice, no installation id) → leave unconsented so the
+ *   first-run banner can ask. markConsentPromptSeen() is the banner's job here.
+ */
+export function migrateAnalyticsConsent(): void {
+  try {
+    if (hasSeenConsentPrompt()) return;
+    if (localStorage.getItem(CONSENT_KEY) !== null) {
+      markConsentPromptSeen();
+      return;
+    }
+    const isExistingInstall = localStorage.getItem('wm-installation-id') !== null;
+    if (isExistingInstall) {
+      localStorage.setItem(CONSENT_KEY, 'true');
+      markConsentPromptSeen();
+    }
+  } catch { /* localStorage unavailable — treat as unconsented */ }
 }
 
 // ── Installation identity ──
@@ -138,6 +178,9 @@ const SECRET_ANALYTICS_NAMES: Record<RuntimeSecretKey, string> = {
   PATREON_ACCESS_TOKEN: 'patreon_access',
   PATREON_REFRESH_TOKEN: 'patreon_refresh',
   PATREON_AUDIO_RSS_URL: 'patreon_audio_rss',
+  OPENAQ_API_KEY: 'openaq',
+  WINDY_WEBCAMS_API_KEY: 'windy_webcams',
+  NPS_API_KEY: 'nps',
 };
 
 // ── Typed event schemas (allowlisted properties per event) ──
@@ -161,7 +204,7 @@ const EVENT_SCHEMAS: Record<string, Set<string>> = {
   wm_search_used: new Set(['query_length', 'result_count']),
   // Phase 2 — additional interaction events
   wm_map_view_changed: new Set(['view']),
-  wm_country_selected: new Set(['country_code', 'country_name', 'source']),
+  wm_country_selected: new Set(['country_code', 'source']),
   wm_search_result_selected: new Set(['result_type']),
   wm_panel_toggled: new Set(['panel_id', 'enabled']),
   wm_finding_clicked: new Set(['finding_id', 'finding_source', 'finding_type', 'priority']),

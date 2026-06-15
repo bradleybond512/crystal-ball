@@ -174,12 +174,10 @@ export class Panel {
   protected header: HTMLElement;
   protected heartbeatEl: HTMLElement | null = null;
   protected narrativeEl: HTMLElement | null = null;
-  private heartbeatDotEl: HTMLElement | null = null;
   private lastTickAt = 0;
   private static instances = new Set<Panel>();
   private static tickerStarted = false;
   private static heartbeatTickerId: ReturnType<typeof setInterval> | null = null;
-  private static heartbeatObserver: IntersectionObserver | null = null;
   public getPanelId(): string { return this.panelId; }
 
   /** Returns the panel's content element for external mounting (e.g. embedding in settings modal). */
@@ -325,15 +323,13 @@ export class Panel {
  this.heartbeatEl = document.createElement('span');
  this.heartbeatEl.className = 'panel-heartbeat';
  const hbDot = document.createElement('span');
- hbDot.className = 'panel-heartbeat-dot hb-offscreen';
- this.heartbeatDotEl = hbDot;
+ hbDot.className = 'panel-heartbeat-dot';
  const hbText = document.createElement('span');
  hbText.className = 'panel-heartbeat-text';
  hbText.textContent = '—';
  this.heartbeatTextEl = hbText;
  this.heartbeatEl.append(hbDot, hbText);
  this.header.append(this.heartbeatEl);
- Panel.observeHeartbeatDot(hbDot);
 
  this.content = document.createElement('div');
  this.content.className = 'panel-content';
@@ -936,24 +932,6 @@ export class Panel {
  }, this.contentDebounceMs);
   }
 
-  /** Lazily create a shared observer that pauses heartbeat-dot animation
-   *  while the dot is scrolled out of view. Dots start paused (hb-offscreen)
-   *  and are un-paused only when they enter the viewport. */
-  private static observeHeartbeatDot(dot: HTMLElement): void {
- if (typeof IntersectionObserver === 'undefined') {
- dot.classList.remove('hb-offscreen');
- return;
- }
- if (!Panel.heartbeatObserver) {
- Panel.heartbeatObserver = new IntersectionObserver((entries) => {
- for (const entry of entries) {
- entry.target.classList.toggle('hb-offscreen', !entry.isIntersecting);
- }
- }, { rootMargin: '100px' });
- }
- Panel.heartbeatObserver.observe(dot);
-  }
-
   private static startHeartbeatTicker(): void {
  if (Panel.tickerStarted) return;
  Panel.tickerStarted = true;
@@ -1286,11 +1264,6 @@ export class Panel {
  this.freshFlashRafId = null;
  }
  this.abortController.abort();
- Panel.instances.delete(this);
- if (this.heartbeatDotEl) {
- Panel.heartbeatObserver?.unobserve(this.heartbeatDotEl);
- this.heartbeatDotEl = null;
- }
  if (this.aiSummaryOverlay) {
  this.aiSummaryOverlay.remove();
  this.aiSummaryOverlay = null;

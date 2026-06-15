@@ -252,21 +252,37 @@ export class SavedPlacesFilterService {
     try { raw = store.getItem(STORAGE_KEY); } catch { return; }
     if (!raw) return;
     try {
-      const parsed = JSON.parse(raw) as { activeId?: string | null } | null;
+      const parsed = JSON.parse(raw) as { activeId?: string | null; defaultRadius?: number } | null;
       const candidate = parsed?.activeId;
       if (typeof candidate === 'string' && this.adapter.get(candidate)) {
         this.activeId = candidate;
+      }
+      const r = parsed?.defaultRadius;
+      if (typeof r === 'number' && r >= 50 && r <= 5000) {
+        this.defaultRadiusKm = r;
       }
     } catch {
       // corrupt — leave defaults
     }
   }
 
+  setDefaultRadius(km: number): void {
+    const clamped = Math.max(50, Math.min(5000, Math.round(km)));
+    if (clamped === this.defaultRadiusKm) return;
+    this.defaultRadiusKm = clamped;
+    this.persist();
+    this.notify();
+  }
+
+  getDefaultRadius(): number {
+    return this.defaultRadiusKm;
+  }
+
   private persist(): void {
     const store = safeStorage();
     if (!store) return;
     try {
-      store.setItem(STORAGE_KEY, JSON.stringify({ activeId: this.activeId }));
+      store.setItem(STORAGE_KEY, JSON.stringify({ activeId: this.activeId, defaultRadius: this.defaultRadiusKm }));
     } catch {
       // best effort
     }
@@ -294,6 +310,14 @@ export function getSavedPlacesFilterService(): SavedPlacesFilterService {
 export function __resetSavedPlacesFilterSingleton(): void {
   _singleton?.resetForTesting();
   _singleton = null;
+}
+
+/** Convenience: returns true if (lat, lon) falls within the active saved-place
+ *  filter radius, or if no filter is active. Panels use this for per-item gating. */
+export function isNearActivePlace(lat: number, lon: number): boolean {
+  const ctx = getSavedPlacesFilterService().getContext();
+  if (!ctx.isActive || !ctx.center) return true;
+  return haversineKm(ctx.center.lat, ctx.center.lon, lat, lon) <= ctx.radiusKm;
 }
 
 export const __internals = {

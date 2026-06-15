@@ -26,6 +26,8 @@ import { CorrelateEngine, type CorrelatedPair, type EdgeType } from './correlate
 import { builtInCorrelationRules } from './built-in-correlation-rules';
 import { resolve as resolveEntity } from './entity-registry';
 import type { ObservationEvent } from './observation-adapters';
+import { getSourceTrust } from '../source-trust';
+import type { AlertSource } from '../unified-alerts';
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -140,18 +142,51 @@ function dedupeStrings(values: readonly string[]): string[] {
 
 // ── Severity + confidence rollups ─────────────────────────────────────
 
+/**
+ * Map an observation adapter's `sourceId` onto the AlertSource trust
+ * vocabulary so the severity rollup can weight by source reliability.
+ * Unmapped sources fall through to getSourceTrust's own default (0.7).
+ */
+const OBSERVATION_SOURCE_TO_ALERT_SOURCE: Record<string, AlertSource> = {
+  'usgs-earthquake': 'earthquake',
+  'nws-alerts': 'nws',
+  'aviation-track': 'aviation-hazard',
+  'ais-disruption': 'maritime',
+  'inciweb-wildfire': 'fire',
+  'swpc-space-weather': 'space-weather',
+};
+
+/** Minimum source trust for a lone CRITICAL observation to escalate a Situation. */
+const CRITICAL_TRUST_FLOOR = 0.7;
+
+function trustForObservation(o: ObservationEvent): number {
+  const mapped = OBSERVATION_SOURCE_TO_ALERT_SOURCE[o.sourceId];
+  return mapped ? getSourceTrust(mapped) : 0.7;
+}
+
 function severityFromObservations(observations: readonly ObservationEvent[]): SituationSeverity {
   if (observations.length === 0) return 'low';
-  let hasCritical = false;
   let hasHigh = false;
   let hasMedium = false;
+  const criticalObs: ObservationEvent[] = [];
   for (const o of observations) {
-    if (o.severity === 'CRITICAL') hasCritical = true;
+    if (o.severity === 'CRITICAL') criticalObs.push(o);
     else if (o.severity === 'HIGH') hasHigh = true;
     else if (o.severity === 'MEDIUM') hasMedium = true;
   }
-  if (hasCritical) return 'critical';
-  if (hasHigh) return 'high';
+  // Source-trust-weighted CRITICAL rollup. Escalate the whole Situation to
+  // critical only when there is genuine corroboration or a trusted source:
+  //   - ≥2 CRITICAL observations from DISTINCT sources (independent agreement), or
+  //   - any CRITICAL observation from a high-trust source (trust ≥ floor).
+  // Counting observations alone is not enough — a single noisy low-trust feed
+  // can emit multiple CRITICALs, so we key independence on distinct sourceIds.
+  const distinctCriticalSources = new Set(criticalObs.map((o) => o.sourceId));
+  if (distinctCriticalSources.size >= 2) return 'critical';
+  if (criticalObs.some((o) => trustForObservation(o) >= CRITICAL_TRUST_FLOOR)) {
+    return 'critical';
+  }
+  // Remaining low-trust single-source CRITICALs (or any HIGH) fall through to 'high'.
+  if (hasHigh || criticalObs.length >= 1) return 'high';
   if (hasMedium || observations.length >= 2) return 'medium';
   return 'low';
 }

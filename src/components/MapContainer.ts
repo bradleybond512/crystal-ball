@@ -738,10 +738,6 @@ export class MapContainer {
  this.deckGLMap?.setPickLocationMode(callback);
   }
 
-  public getLatLonAtScreen(x: number, y: number): { lat: number; lon: number } | null {
- return this.deckGLMap?.getLatLonAtScreen(x, y) ?? null;
-  }
-
   public fitCountry(code: string): void {
  if (this.useDeckGL) {
  this.deckGLMap?.fitCountry(code);

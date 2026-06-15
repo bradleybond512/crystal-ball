@@ -56,7 +56,6 @@ import { escapeHtml } from '@/utils/sanitize';
 import { tokenizeForMatch, matchKeyword, matchesAnyKeyword, findMatchingKeywords } from '@/utils/keyword-match';
 import { t } from '@/services/i18n';
 import { debounce, rafSchedule, getCurrentTheme } from '@/utils/index';
-import { isAppActive, onActivityChange } from '@/services/app-activity';
 import {
   INTEL_HOTSPOTS,
   CONFLICT_ZONES,
@@ -617,18 +616,11 @@ export class DeckGLMap {
   private moveTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private _themeChangedHandler: ((e: Event) => void) | null = null;
   private mapEventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
-  private _unsubActivity: (() => void) | null = null;
 
   constructor(container: HTMLElement, initialState: DeckMapState) {
  this.container = container;
  this.state = initialState;
  this.hotspots = [...INTEL_HOTSPOTS];
-
- // Resume self-arming animation loops (alert pulses) when the window
- // regains focus/visibility — they stop re-arming while inactive.
- this._unsubActivity = onActivityChange((active) => {
- if (active && this.alertPulses.length > 0) this.rafUpdateLayers();
- });
 
  this.debouncedRebuildLayers = debounce(() => {
  if (this.renderPaused || this.webglLost || !this.maplibreMap) return;
@@ -1503,10 +1495,8 @@ export class DeckGLMap {
  },
  updateTriggers: { getRadius: t, getLineColor: t },
  }));
- // Throttled repaint — drives alert pulse at ~4fps instead of unbounded RAF loop.
- // Gated on render state + app activity so the self-arming loop stops when the
- // map is paused or the window is hidden/blurred (resumed via onActivityChange).
- if (!this.rafUpdateLayersPending && !this.renderPaused && isAppActive()) {
+ // Throttled repaint — drives alert pulse at ~4fps instead of unbounded RAF loop
+ if (!this.rafUpdateLayersPending) {
  setTimeout(() => this.rafUpdateLayers(), 250);
  }
  }
@@ -3872,18 +3862,6 @@ export class DeckGLMap {
  this.onLocationPick = callback ?? undefined;
   }
 
-  public getLatLonAtScreen(x: number, y: number): { lat: number; lon: number } | null {
- if (!this.maplibreMap) return null;
- try {
- const container = this.maplibreMap.getContainer();
- const rect = container.getBoundingClientRect();
- const lngLat = this.maplibreMap.unproject([x - rect.left, y - rect.top]);
- return { lat: lngLat.lat, lon: lngLat.lng };
- } catch {
- return null;
- }
-  }
-
   private handleClick(info: PickingInfo): void {
  if (info.coordinate && this.onLocationPick) {
  const [lon, lat] = info.coordinate as [number, number];
@@ -5955,11 +5933,6 @@ export class DeckGLMap {
  this._themeChangedHandler = null;
  }
 
- if (this._unsubActivity) {
- this._unsubActivity();
- this._unsubActivity = null;
- }
-
  // Remove all MapLibre event listeners to prevent leaks
  for (const { event, handler } of this.mapEventHandlers) {
  this.maplibreMap?.off(event, handler);
@@ -6249,12 +6222,11 @@ export class DeckGLMap {
  }, 0.6);
 
  // Satellite imagery (NOAA GOES geocolor)
- // GoogleMapsCompatible_Level7 tiles exist at zoom 0–7. With tileSize:256 MapLibre
- // adds +1 to viewport zoom when selecting tile zoom, so maxzoom:6 makes the highest
- // tile zoom requested = 7. Avoids the "Zoom Level Not Supported" GIBS error image.
+ // GoogleMapsCompatible_Level7 tiles only exist at zoom 0–7; pass maxzoom
+ // so MapLibre overzooms at z8+ instead of requesting out-of-bounds tiles.
  this.syncRasterTileLayer(map, 'wm-satellite', ml.weatherSatellite, () => {
  return [getGoesWmsTileUrl('geocolor')];
- }, 0.5, 6);
+ }, 0.5, 7);
 
  // OWM tile layers (require API key)
  const owmLayers: [string, boolean, OwmTileLayer][] = [

@@ -52,6 +52,7 @@ Integrity is verified BEFORE any keychain writes:
 - **Weather warning remediation**: `docs/WEATHER_WARNING_REMEDIATION_PLAN.md` — implemented 4-PR stack under `src/services/weather/` (NWS polygon matching, urgency ladder, Personal Storm Mode payload, miss diagnostics). PR 5 (UI) deferred.
 - **Insights/notifications plan**: `docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md` — implemented 4-PR stack under `src/services/insights/` (Big Event Detector + Confidence/Urgency Matrix, What Changed Digest, Action Briefs + Reaction Playbooks, Presentation Export). PRs 4 (notification ladder wiring) + 5 (UI) deferred.
 - **Shortage forecast plan**: `docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md` — implemented 4 batches under `src/services/shortage/` covering 8 commodities (wheat, corn, rice, soybeans on the food side; diesel, gasoline, natural gas, jet fuel on the energy side).
+- **Cognitive enhancement plan**: `docs/COGNITIVE_ENHANCEMENT_PLAN.md` — **ACTIVE** 16-PR stack for `src/services/cognition/` (episodic memory, closed calibration loop, superforecaster pipeline, operator model, entity dossiers, conformal intervals, consolidation, EVOI planner, self-tuning + benchmark). The doc contains its own Progress Tracker + Session Protocol — implementing sessions must read it first and update the tracker in the same commit.
 - **API expansion plan**: `docs/API_SOURCE_EXPANSION_FREE_OPTIONS.md` — free/free-tier API redundancy list + Claude-ready prompts.
 - **Current remaining gaps**: `docs/ELITE_REMAINING_GAPS_FOR_CLAUDE.md` — latest Claude handoff for what is still missing after the recent service-layer PR wave: Command Center, diagnostics UI, notification wiring, native macOS finish, replay, and PR queue cleanup.
 - **Security scan findings**: `docs/SECURITY_SCAN_FINDINGS_FOR_CLAUDE.md` — current highest-standard cyber security hardening list: secret IPC minimization, CSP tightening, HTML sink governance, origin allowlist unification, proxy URL hardening, local token handling, and clipboard audit.
@@ -375,7 +376,7 @@ Ghost Mode: polling ×5 (`getGhostRefreshMultiplier()`), analytics suppressed, n
 
 ## Settings / API Keys
 
-API keys entered via gear icon → API Keys tab. Almost all of the 73 supported keys use standard provider env-var names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc); the only app-branded key is `CRYSTALBALL_API_KEY`. The authoritative list is `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`.
+API keys entered via gear icon → API Keys tab. Almost all of the 76 supported keys use standard provider env-var names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc); the only app-branded key is `CRYSTALBALL_API_KEY`. The authoritative list is `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`.
 
 ## Secret Scan Guardrail
 

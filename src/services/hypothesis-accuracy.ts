@@ -19,6 +19,7 @@ import { signatureFor } from './hypothesis-feedback';
 import { getMemory, putMemory } from './reasoning-memory';
 import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
 import { resolveHypothesisPredictionBySig } from './intelligence/hypothesis-prediction-bridge';
+import { resolveEpisodeForSignature } from '@/services/cognition/episodic-memory-bridge';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -193,6 +194,15 @@ function gradeOne(p: PendingHypothesis): void {
     });
   } catch { /* ledger unavailable */ }
   try { resolveHypothesisPredictionBySig(p.signature, hit); } catch { /* best-effort */ }
+
+  // Episodic memory: resolve the corresponding episode so it carries an outcome.
+  // Fire-and-forget via bridge; never throws into this grading path.
+  try {
+    resolveEpisodeForSignature(
+      p.signature,
+      hit ? 'materialized' : 'fizzled',
+    );
+  } catch { /* episodic memory unavailable */ }
 }
 
 function gradeDue(): void {

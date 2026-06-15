@@ -2,7 +2,12 @@ import type { Hypothesis } from '@/services/analyst-loop';
 import type { PCIScore } from './predictive-crisis-index';
 import { getProviderSnapshots } from '@/services/insights/insights-state';
 import { assessProviderRedundancy } from '@/services/diagnostics/provider-redundancy';
-import { getBoostMultiplier } from './forecast-calibration-adapter';
+// getBoostMultiplier is deprecated but deliberately retained for the legacy
+// pre-recalibration path below until it is fully superseded by getRecalibrator.
+// eslint-disable-next-line sonarjs/deprecation
+import { getBoostMultiplier, getRecalibrator } from './forecast-calibration-adapter';
+import { getCachedAnalogScore } from '@/services/cognition/episodic-memory';
+import { signatureFor } from '@/services/hypothesis-feedback';
 
 export interface HypothesisForecast {
   hypothesisId: string;
@@ -15,6 +20,12 @@ export interface HypothesisForecast {
     analogBoost: number;
     providerMultiplier: number;
     calibrationMultiplier: number;
+    /** Recalibrated probability before final clamp (added by PR 2). Undefined when no curve is available. */
+    recalibratedP?: number;
+    /** Signed adjustment from the reliability curve. Zero when identity curve was used. */
+    calibrationAdjustment?: number;
+    /** Human-readable explanation of the calibration step (plan invariant). Undefined when legacy path used. */
+    calibrationExplanation?: string;
   };
 }
 
@@ -33,10 +44,29 @@ export function forecastHypothesis(
   providerMultiplier = 1,
 ): HypothesisForecast {
   const baseConfidence = hypothesis.confidence;
+  // eslint-disable-next-line sonarjs/deprecation -- legacy path, superseded by recalibration below
   const calibrationMultiplier = getBoostMultiplier();
   const pciBoost = pci !== null && pci.index > 60 ? (pci.index - 60) / 200 : 0;
   const analogBoost = analogScore === null ? 0 : analogScore * 0.1;
-  const probability = clamp((baseConfidence + pciBoost + analogBoost) * calibrationMultiplier * providerMultiplier, 0, 1);
+
+  // Pre-recalibration probability (legacy path).
+  const rawProbability = clamp(
+    (baseConfidence + pciBoost + analogBoost) * calibrationMultiplier * providerMultiplier,
+    0,
+    1,
+  );
+
+  // PR 2 — Closed Calibration Loop: apply per-domain reliability curve as the
+  // FINAL step. The recalibrator was built lazily from the ForecastCalibrationStore
+  // (rebuilt at most every 10 minutes) and follows the fallback ladder:
+  //   domain curve (n≥30) → global pooled curve (n≥50) → identity (no change).
+  // The result carries an explanation string (plan invariant: every score has an
+  // explanation). The adjustment is appended to the components trail for provenance.
+  const recalibrator = getRecalibrator();
+  const { p: calibratedP, adjustment, explanation: calibrationExplanation } = recalibrator(rawProbability);
+
+  // Final probability: the calibrated value (already clamped to [0.02, 0.98] by recalibrate()).
+  const probability = calibratedP;
 
   const diff = probability - baseConfidence;
   let trend: HypothesisForecast['trend'] = 'stable';
@@ -52,7 +82,16 @@ export function forecastHypothesis(
     probability,
     trend,
     horizon,
-    components: { baseConfidence, pciBoost, analogBoost, providerMultiplier, calibrationMultiplier },
+    components: {
+      baseConfidence,
+      pciBoost,
+      analogBoost,
+      providerMultiplier,
+      calibrationMultiplier,
+      recalibratedP: calibratedP,
+      calibrationAdjustment: adjustment,
+      calibrationExplanation,
+    },
   };
 }
 
@@ -73,6 +112,12 @@ export function forecastAll(hypotheses: Hypothesis[], pci: PCIScore | null): Hyp
     } catch {
       multiplier = 1;
     }
-    return forecastHypothesis(h, pci, null, multiplier);
+    // Read the analog score from the module-level cache maintained by
+    // updateAnalogCache() in episodic-memory.ts, which runs asynchronously
+    // after each analyst cycle. The cache is at most one cycle (5 min) stale.
+    // This avoids converting forecastAll's sync signature to async, which would
+    // be invasive across many call sites. (Design note per cognition PR 1 spec.)
+    const analogScore = getCachedAnalogScore(signatureFor(h));
+    return forecastHypothesis(h, pci, analogScore, multiplier);
   });
 }

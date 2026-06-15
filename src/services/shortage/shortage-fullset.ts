@@ -73,6 +73,12 @@ export interface ShortageFullSetOptions {
   region?: string;
   /** Optional clock epoch ms for deterministic tests. */
   now?: number;
+  /** When provided, only these commodities are computed; the rest are skipped
+   *  entirely so their module-level trend memory is left untouched. The
+   *  partial-outage supply merge uses this to avoid writing a discarded baseline
+   *  score into trend state (which would show a false trend on recovery). Omit to
+   *  compute the full set. */
+  only?: ReadonlySet<FullSetCommodity>;
 }
 
 // ── Trend tracking ─────────────────────────────────────────────────────────
@@ -189,6 +195,7 @@ export function computeShortageFullSet(
   const entries: ShortageSummaryEntry[] = [];
 
   for (const commodity of ALL_FULLSET_COMMODITIES) {
+    if (options.only && !options.only.has(commodity)) continue;
     const bag = inputs[commodity] ?? {};
     const forecast = runCommodity(commodity, bag, region, now);
     if (!forecast) continue;

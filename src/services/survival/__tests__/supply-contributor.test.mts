@@ -5,6 +5,7 @@ import { makeSupplyMoveProvider } from '../supply-move-provider.ts';
 import { makeWeatherContributor } from '../weather-contributor.ts';
 import { computeMultiAxisPosture, type MultiAxisInput } from '../survival-posture.ts';
 import { availableMoves } from '../survival-moves.ts';
+import { supplyContributorForBase } from '../storm-posture-state.ts';
 import type { ShortageSummaryEntry } from '../../shortage/shortage-fullset.ts';
 import type { ShortageForecast } from '../../shortage/shortage-types.ts';
 import type { WorldSnapshot } from '../survival-types.ts';
@@ -205,4 +206,62 @@ test('availableMoves offers both weather and supply moves for a combined posture
   const moves = availableMoves(posture, snapshotFor(posture), { now: NOW });
   assert.ok(moves.some((m) => m.affects.includes('physical_safety')), 'weather moves offered');
   assert.ok(moves.some((m) => m.affects.includes('supply')), 'supply moves offered');
+});
+
+// ── Cold-cache fallback (grid-down cold start) ────────────────────────────────
+// Tested via the exported `supplyContributorForBase`. On a fresh module import
+// the module-private shortage cache is uninitialized (hasShortageCache === false),
+// which is exactly the grid-down cold-start state after hydrateStormPosture():
+// `current` holds a persisted supply threat but no live refresh has run yet.
+
+test('cold cache: supplyContributorForBase preserves the snapshot\'s persisted supply threat', () => {
+  // A snapshot that already carries a supply threat (e.g. hydrated from disk).
+  const hydratedPosture = computeMultiAxisPosture({
+    contributors: [makeSupplyContributor([entry('diesel', 77, 'CRITICAL', 'high', ['Distillate inventories below 5-year range'])])],
+    freshness: fresh, capturedAtMs: NOW,
+  }, { now: NOW });
+  const snapshot: WorldSnapshot = {
+    version: 1, capturedAtMs: NOW, freshness: fresh,
+    weatherAlerts: [], savedPlaces: [HOME], posture: hydratedPosture, plan: { committed: [] },
+  };
+
+  // Cache cold -> contributor falls back to the snapshot's existing supply threats.
+  const contributor = supplyContributorForBase(snapshot);
+  const threats = contributor.contribute(NOW);
+  assert.equal(threats.length, 1);
+  assert.equal(threats[0]!.sourceEventId, 'shortage-diesel');
+  assert.equal(threats[0]!.severity, 77);
+  assert.equal(threats[0]!.axis, 'supply');
+});
+
+test('cold cache: recomputing posture with the fallback keeps the supply axis (not cleared by [])', () => {
+  // Reproduce the commitStormMove recompute: rebuild posture from weather + the
+  // cold-cache supply contributor. Without the fix this used makeSupplyContributor([])
+  // and dropped the supply axis to level 0.
+  const hydratedPosture = computeMultiAxisPosture({
+    contributors: [makeSupplyContributor([entry('diesel', 77, 'CRITICAL', 'high', ['inventory below floor'])])],
+    freshness: fresh, capturedAtMs: NOW,
+  }, { now: NOW });
+  const snapshot: WorldSnapshot = {
+    version: 1, capturedAtMs: NOW, freshness: fresh,
+    weatherAlerts: [], savedPlaces: [HOME], posture: hydratedPosture, plan: { committed: [] },
+  };
+
+  const rebuilt = computeMultiAxisPosture({
+    contributors: [
+      makeWeatherContributor(snapshot.weatherAlerts, snapshot.savedPlaces),
+      supplyContributorForBase(snapshot),
+    ],
+    freshness: snapshot.freshness, capturedAtMs: snapshot.capturedAtMs,
+  }, { now: NOW });
+
+  const supply = rebuilt.axes.find((a) => a.axis === 'supply')!;
+  assert.equal(supply.level, 77, 'supply axis preserved through cold-cache recompute');
+  assert.equal(supply.threats.length, 1);
+  assert.equal(supply.threats[0]!.sourceEventId, 'shortage-diesel');
+});
+
+test('cold cache: empty base yields no supply threats (no crash, no phantom axis)', () => {
+  const contributor = supplyContributorForBase(null);
+  assert.deepEqual(contributor.contribute(NOW), []);
 });

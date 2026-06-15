@@ -238,7 +238,7 @@
     "jspdf": "^4.2.1",
     "lz-string": "^1.5.0",
     "maplibre-gl": "^5.24.0",
-    "onnxruntime-web": "^1.24.3",
+    "onnxruntime-web": "^1.26.0",
     "papaparse": "^5.5.3",
     "posthog-js": "^1.373.2",
     "satellite.js": "7.0.0",

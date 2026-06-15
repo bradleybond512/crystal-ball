@@ -15,6 +15,7 @@
 import type { FeatureHealth, PanelHealth } from '@/services/diagnostics/system-health-types';
 import type { AlgorithmHealth } from '@/services/algorithms/algorithm-health';
 import type { MissionRecord } from '@/services/ops/mission-types';
+import { semanticFallback } from '@/services/cognition/semantic-ask';
 
 // ── Public API ──────────────────────────────────────────────────────────
 
@@ -118,7 +119,7 @@ export function answer(question: string, context: AskContext): AnswerPacket {
       return answerLateWarning(question, context);
     }
     case 'unknown': {
-      return answerUnknown(question);
+      return semanticFallback(question) ?? answerUnknown(question);
     }
   }
 }

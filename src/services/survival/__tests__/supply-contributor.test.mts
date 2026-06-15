@@ -5,7 +5,7 @@ import { makeSupplyMoveProvider } from '../supply-move-provider.ts';
 import { makeWeatherContributor } from '../weather-contributor.ts';
 import { computeMultiAxisPosture, type MultiAxisInput } from '../survival-posture.ts';
 import { availableMoves } from '../survival-moves.ts';
-import { supplyContributorForBase } from '../storm-posture-state.ts';
+import { supplyContributorForBase, shouldReplaceShortageCache } from '../storm-posture-state.ts';
 import type { ShortageSummaryEntry } from '../../shortage/shortage-fullset.ts';
 import type { ShortageForecast } from '../../shortage/shortage-types.ts';
 import type { WorldSnapshot } from '../survival-types.ts';
@@ -264,4 +264,26 @@ test('cold cache: recomputing posture with the fallback keeps the supply axis (n
 test('cold cache: empty base yields no supply threats (no crash, no phantom axis)', () => {
   const contributor = supplyContributorForBase(null);
   assert.deepEqual(contributor.contribute(NOW), []);
+});
+
+// ── Fail-closed shortage cache (feed outage must not clear a known risk) ──────
+// `loadShortageInputs()` is best-effort and drops failed feeds, so a total
+// outage returns an empty input map with no failure signal. `getSupplyEntries`
+// recomputes only when the refresh actually returned feed data — otherwise it
+// preserves the prior cache. `shouldReplaceShortageCache(gotFeedData, hasCache)`
+// is the pure decision seam.
+
+test('fail-closed: keep prior cache when feeds fail but a cache exists', () => {
+  // Outage (gotFeedData === false) + a prior HIGH/CRITICAL cache -> DO NOT replace.
+  assert.equal(shouldReplaceShortageCache(false, true), false);
+});
+
+test('cold start: recompute to baseline when feeds fail and no cache exists', () => {
+  // No prior risk to preserve -> fall through to baseline.
+  assert.equal(shouldReplaceShortageCache(false, false), true);
+});
+
+test('healthy refresh always replaces, regardless of prior cache', () => {
+  assert.equal(shouldReplaceShortageCache(true, true), true);
+  assert.equal(shouldReplaceShortageCache(true, false), true);
 });

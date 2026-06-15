@@ -96,8 +96,9 @@ export class StormPosturePanel extends Panel {
       return;
     }
 
-    const view = projectView(snap);
-    const moves = availableMoves(snap.posture, snap, { now: Date.now() });
+    const now = Date.now();
+    const view = projectView(snap, { now });
+    const moves = availableMoves(snap.posture, snap, { now });
     const physical = snap.posture.axes.find((a) => a.axis === 'physical_safety');
     this.setCount(physical ? physical.threats.length : 0);
     this.setContent(this.buildHtml(snap, view.posture, moves, view.isStale, view.weatherAgeMs));

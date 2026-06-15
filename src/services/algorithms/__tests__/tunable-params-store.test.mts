@@ -95,7 +95,7 @@ test('getTunings exposes all declared algorithms', () => {
   _resetTunedParamsForTests();
   const tunings = getTunings();
   const ids = tunings.map((t) => t.algorithmId).sort();
-  assert.deepEqual(ids, ['big-event-detector', 'correlation-feedback', 'hypothesis-feedback', 'negative-evidence']);
+  assert.deepEqual(ids, ['big-event-detector', 'correlation-feedback', 'hypothesis-feedback', 'negative-evidence', 'superforecast']);
   const negEv = tunings.find((t) => t.algorithmId === 'negative-evidence');
   const maxPenalty = negEv!.parameters.find((p) => p.parameterId === 'maxPenalty');
   assert.equal(maxPenalty!.current, 0.6);

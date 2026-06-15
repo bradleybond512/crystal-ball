@@ -28,6 +28,7 @@ import {
   setPrimarySavedPlace,
   subscribeSavedPlaces,
 } from '@/services/saved-places';
+import { getSavedPlacesFilterService } from '@/services/intelligence/saved-places-filter';
 import {
   loadProximityConfig,
   saveProximityConfig,
@@ -422,6 +423,9 @@ export class UnifiedSettings {
  } else if (target.id === 'us-analytics-consent') {
  setAnalyticsConsent(target.checked);
  if (target.checked) void initAnalytics();
+ } else if (target.id === 'us-spf-radius') {
+ const km = Number.parseInt(target.value, 10);
+ if (Number.isFinite(km)) getSavedPlacesFilterService().setDefaultRadius(km);
  }
  });
 
@@ -1144,9 +1148,20 @@ export class UnifiedSettings {
  const container = this.overlay.querySelector('#usPlacesContent');
  if (!container) return;
 
+ const filterSvc = getSavedPlacesFilterService();
+ const currentRadius = filterSvc.getDefaultRadius();
+
  const places = getSavedPlaces();
  const MAX = 20;
- let html = `<div class="us-places-header"><span class="us-places-count">${places.length} / ${MAX} places</span><button class="spm-btn spm-btn--primary spm-btn--sm" data-places-action="add" type="button">+ Add Place</button></div>`;
+ let html = `<div class="us-proximity-filter-section" style="padding:10px 0 12px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:10px;">
+   <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;opacity:0.6;margin-bottom:6px;">Proximity Filter Fallback Radius</div>
+   <div style="display:flex;align-items:center;gap:8px;">
+     <input id="us-spf-radius" type="number" min="50" max="5000" step="50" value="${currentRadius}" style="width:80px;padding:4px 6px;background:var(--bg-secondary,#1e1e1e);border:1px solid var(--border-color,#333);border-radius:4px;color:var(--text-primary,#eee);font-size:12px;">
+     <span style="font-size:12px;opacity:0.7;">km</span>
+   </div>
+   <div style="font-size:11px;opacity:0.5;margin-top:4px;">Applies to places with no per-place radius set. Each place&apos;s own radius takes precedence — edit a place to set its radius.</div>
+ </div>`;
+ html += `<div class="us-places-header"><span class="us-places-count">${places.length} / ${MAX} places</span><button class="spm-btn spm-btn--primary spm-btn--sm" data-places-action="add" type="button">+ Add Place</button></div>`;
 
  if (places.length === 0) {
  html += `<div class="us-places-empty">No saved places yet. Add your home, work, and other key locations.</div>`;

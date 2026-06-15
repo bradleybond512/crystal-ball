@@ -399,6 +399,7 @@ import { EnergySuperpowerPanel } from '@/components/EnergySuperpowerPanel';
 import { SignalNoiseFilterPanel } from '@/components/SignalNoiseFilterPanel';
 import { IntelligenceFeedPanel } from '@/components/IntelligenceFeedPanel';
 import { ShortageRadarPanel } from '@/components/ShortageRadarPanel';
+import { StormPosturePanel } from '@/components/StormPosturePanel';
 import { FinancialSuperpowerPanel } from '@/components/FinancialSuperpowerPanel';
 import { PoliticalRiskSuperpowerPanel } from '@/components/PoliticalRiskSuperpowerPanel';
 import { StateFragilityPanel } from '@/components/StateFragilityPanel';
@@ -518,6 +519,7 @@ import { tryInvokeTauri, invokeTauri } from '@/services/tauri-bridge';
 import { initModeTransitionCards } from '@/services/mode-transition-card';
 import { initPanelCorrelation } from '@/services/panel-correlation';
 import { getPrimarySavedPlace, getSavedPlace, getSavedPlaces, subscribeSavedPlaces } from '@/services/saved-places';
+import { getSavedPlacesFilterService } from '@/services/intelligence/saved-places-filter';
 import { DataCenterReadinessPanel } from '@/components/DataCenterReadinessPanel';
 import { DataCenterPinnedStrip } from '@/components/DataCenterPinnedStrip';
 import { setDatacenterSite } from '@/services/datacenter/datacenter-state';
@@ -611,6 +613,9 @@ export class PanelLayoutManager implements AppModule {
   private criticalBannerEl: HTMLElement | null = null;
   private dcStrip: DataCenterPinnedStrip | null = null;
   private unsubDcPlaces: (() => void) | null = null;
+  private analystHud: AnalystHUD | null = null;
+  private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
+  private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
   private readonly applyTimeRangeFilterDebounced: () => void;
   private readonly _onUpdateState = () => { this.renderSidebarUpdateBtn(); };
 
@@ -685,6 +690,9 @@ export class PanelLayoutManager implements AppModule {
  this.stalenessBanner.destroy();
  this.stalenessBanner = null;
  }
+ if (this.analystHud) { this.analystHud.destroy(); this.analystHud = null; }
+ if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
+ if (this._onBriefExportKey) { document.removeEventListener('keydown', this._onBriefExportKey); this._onBriefExportKey = null; }
  // Clean up datacenter strip + saved-places subscription
  if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
@@ -954,23 +962,25 @@ export class PanelLayoutManager implements AppModule {
  // Emitters last.
  startModeForecast();
  startAnalystLoop();
- const analystHud = new AnalystHUD();
- analystHud.mount(document.body);
+ this.analystHud = new AnalystHUD();
+ this.analystHud.mount(document.body);
  ensureReasoningDebugCss();
  const debugOverlay = new ReasoningDebugOverlay();
  debugOverlay.mount(document.body);
- document.addEventListener('keydown', (e: KeyboardEvent) => {
+ this._onAnalystHudKey = (e: KeyboardEvent) => {
    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
      e.preventDefault();
-     analystHud.toggle();
+     this.analystHud?.toggle();
    }
- });
- document.addEventListener('keydown', (e: KeyboardEvent) => {
+ };
+ document.addEventListener('keydown', this._onAnalystHudKey);
+ this._onBriefExportKey = (e: KeyboardEvent) => {
    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
      e.preventDefault();
      exportBriefingToClipboard();
    }
- });
+ };
+ document.addEventListener('keydown', this._onBriefExportKey);
  const cbSays = new CrystalBallSays();
  cbSays.mount(document.body);
  const relatedStrip = new RelatedStrip();
@@ -1744,6 +1754,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['maritime-boundary'] = new MaritimeBoundaryPanel(); this.ctx.panels['maritime-piracy'] = new MaritimePiracyPanel();
  this.ctx.panels['tech-competition'] = new TechCompetitionPanel();
  this.ctx.panels['shortage-radar'] = new ShortageRadarPanel();
+ this.ctx.panels['storm-posture'] = new StormPosturePanel();
  this.ctx.panels['shortage-detail-wheat'] = new ShortageDetailPanel('wheat');
  this.ctx.panels['shortage-detail-corn'] = new ShortageDetailPanel('corn');
  this.ctx.panels['shortage-detail-rice'] = new ShortageDetailPanel('rice');
@@ -1879,7 +1890,7 @@ export class PanelLayoutManager implements AppModule {
  const sync = () => bridgeSavedPlacesToProfile(getSavedPlaces().map((p) => adaptExistingSavedPlace(p)));
  sync();
  if (typeof subscribeSavedPlaces === 'function') subscribeSavedPlaces(sync);
- });
+ }).catch((error) => { console.error('[boot] saved-places bridge failed:', error); });
  // Periodic provider-snapshot bridge so Command Center's "Provider
  // Stress" + System Diagnostic's redundancy view stay current.
  // All recurring loops here go through registerRecurringLoop() so
@@ -1904,7 +1915,7 @@ export class PanelLayoutManager implements AppModule {
  30_000,
  { priority: 'normal', runImmediately: true },
  );
- });
+ }).catch((error) => { console.error('[boot] provider bridge failed:', error); });
  // 60 s degradation alerting — compare consecutive system-health snapshots
  // and route transitions through the notification trace registry.
  void Promise.all([
@@ -1917,7 +1928,7 @@ export class PanelLayoutManager implements AppModule {
  ]).then(([{ detectDegradations }, {
    getFeatureHealthRegistry, getPanelHealthRegistry, getNotificationTraceRegistry,
  }, { routeBigEventToLadder }, { detectBigEvent }, { slog }, { registerRecurringLoop }]) => {
-   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    
    let prevReport: any = null;
    const alertedIds = new Set();
    registerRecurringLoop(
@@ -1994,7 +2005,7 @@ export class PanelLayoutManager implements AppModule {
  30_000,
  { priority: 'normal', runImmediately: true },
  );
- });
+ }).catch((error) => { console.error('[boot] sidecar-health-probe failed:', error); });
  // Periodic quality-debt collector. Priority='low' so it pauses
  // when the document is hidden (the export bundle and System
  // Diagnostic catch up on next tick once visible again).
@@ -2030,7 +2041,7 @@ export class PanelLayoutManager implements AppModule {
  }).catch((error) => {
  console.warn('[quality-debt] failed to wire collector:', error);
  });
- });
+ }).catch((error) => { console.error('[boot] bridge load failed:', error); });
  this.ctx.panels['cascade-simulator'] = new CascadeSimulatorPanel();
  this.ctx.panels['emergency-broadcast'] = new EmergencyBroadcastPanel();
  this.ctx.panels['satellite-change'] = new SatelliteChangePanel();
@@ -2391,6 +2402,36 @@ export class PanelLayoutManager implements AppModule {
  document.dispatchEvent(new CustomEvent('cb:toggle-gods-vision'));
  }
  });
+
+ // Saved-places proximity filter toggle
+ const syncFilterBtn = () => {
+ const btn = document.getElementById('savedPlacesFilterBtn');
+ if (!btn) return;
+ const ctx = getSavedPlacesFilterService().getContext();
+ if (ctx.isActive && ctx.activePlaceName) {
+ btn.textContent = `📍 ${ctx.activePlaceName}`;
+ btn.classList.add('mac-ghost-mode-active');
+ } else {
+ btn.textContent = '📍 Proximity: OFF';
+ btn.classList.remove('mac-ghost-mode-active');
+ }
+ };
+ document.addEventListener('click', (e) => {
+ const target = (e.target as HTMLElement).closest('#savedPlacesFilterBtn');
+ if (!target) return;
+ const svc = getSavedPlacesFilterService();
+ const ctx = svc.getContext();
+ if (ctx.isActive) {
+ svc.deactivate();
+ } else {
+ const primary = getPrimarySavedPlace();
+ const all = getSavedPlaces();
+ const place = primary ?? all[0];
+ if (place) svc.activate(place.id);
+ }
+ });
+ getSavedPlacesFilterService().subscribe(syncFilterBtn);
+ syncFilterBtn();
  document.addEventListener('wm:toggle-ghost-mode', () => {
  toggleGhostMode();
  });

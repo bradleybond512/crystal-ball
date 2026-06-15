@@ -165,7 +165,7 @@ import { debugGetCells, getCellCount } from '@/services/geo-convergence';
 import { initMetaTags } from '@/services/meta-tags';
 import { installRuntimeFetchPatch, installWebApiRedirect, isDesktopRuntime } from '@/services/runtime';
 import { loadDesktopSecrets } from '@/services/runtime-config';
-import { initAnalytics, isAnalyticsAllowed, trackApiKeysSnapshot } from '@/services/analytics';
+import { initAnalytics, isAnalyticsAllowed, migrateAnalyticsConsent, trackApiKeysSnapshot } from '@/services/analytics';
 import { applyStoredTheme } from '@/utils/theme-manager';
 import { SITE_VARIANT } from '@/config/variant';
 import { clearChunkReloadGuard, installChunkReloadGuard } from '@/bootstrap/chunk-reload';
@@ -250,6 +250,12 @@ function showDesktopRuntimeDebugNotice(snapshot: DesktopRuntimeSnapshot): void {
 // send-time so consent revocation mid-session takes effect immediately without
 // a reload (inject() itself has no shutdown path).
 if (!isDesktopRuntime()) inject({ beforeSend: (e) => isAnalyticsAllowed() ? e : null });
+
+// Migrate pre-consent-gate installs once, then surface a first-run opt-in banner
+// for brand-new installs that have no recorded choice. Must run before
+// initAnalytics() so migration's consent write is visible to the gate.
+migrateAnalyticsConsent();
+import('./components/AnalyticsConsentBanner').then(({ mountAnalyticsConsentBanner }) => { mountAnalyticsConsentBanner(); }).catch((error: unknown) => console.warn('[boot] AnalyticsConsentBanner failed to mount', error));
 
 // Initialize PostHog product analytics
 void initAnalytics();

@@ -2,10 +2,12 @@ import { Panel } from './Panel';
 import type { SevereWeatherStatus, ActiveWarning } from '@/services/severe-weather';
 import { riskLabelForCode, riskBadgeStyle, warningColor } from '@/services/severe-weather';
 import { escapeHtml } from '@/utils/sanitize';
+import { getSavedPlacesFilterService, isNearActivePlace } from '@/services/intelligence/saved-places-filter';
 
 export class SevereWeatherPanel extends Panel {
   private status: SevereWeatherStatus | null = null;
   private onWarningClick: ((lat: number, lon: number) => void) | null = null;
+  private filterUnsub: (() => void) | null = null;
 
   constructor() {
     super({
@@ -16,6 +18,13 @@ export class SevereWeatherPanel extends Panel {
       infoTooltip: 'SPC Day 1–2 convective outlook risk level + NWS active tornado and severe thunderstorm warnings.',
     });
     this.showLoading('Fetching SPC outlook...');
+    this.filterUnsub = getSavedPlacesFilterService().subscribe(() => this.render());
+  }
+
+  public destroy(): void {
+    super.destroy();
+    this.filterUnsub?.();
+    this.filterUnsub = null;
   }
 
   public setWarningClickHandler(fn: (lat: number, lon: number) => void): void {
@@ -35,7 +44,23 @@ export class SevereWeatherPanel extends Panel {
       return;
     }
 
-    const { outlook, warnings, tornadoWarningCount, thunderstormWarningCount, watchCount } = this.status;
+    const ctx = getSavedPlacesFilterService().getContext();
+    const allWarnings = this.status.warnings;
+    const warnings = ctx.isActive
+      ? allWarnings.filter(w => !w.centroid || isNearActivePlace(w.centroid.lat, w.centroid.lon))
+      : allWarnings;
+    const hiddenCount = allWarnings.length - warnings.length;
+
+    const filterBanner = ctx.isActive
+      ? `<div class="spf-proximity-banner">📍 ${escapeHtml(ctx.activePlaceName ?? '')} · ${ctx.radiusKm} km · ${hiddenCount > 0 ? `${hiddenCount} hidden` : 'showing all'}</div>`
+      : '';
+
+    const { outlook, tornadoWarningCount, thunderstormWarningCount, watchCount } = this.status;
+    const filteredTornado = ctx.isActive ? warnings.filter(w => w.warnType === 'tornado').length : tornadoWarningCount;
+    const filteredThunder = ctx.isActive ? warnings.filter(w => w.warnType === 'thunderstorm').length : thunderstormWarningCount;
+    const filteredWatch = ctx.isActive ? warnings.filter(w => w.warnType === 'watch').length : watchCount;
+    const count = filteredTornado + filteredThunder + filteredWatch;
+    this.setCount(count);
     const riskLabel = riskLabelForCode(outlook.maxRisk);
 
     const outlookHtml = `
@@ -48,9 +73,9 @@ export class SevereWeatherPanel extends Panel {
           </div>
         </div>
         <div style="margin-left:auto;text-align:right;font-size:11px">
-          <div style="color:#ef4444;font-weight:600">${tornadoWarningCount} Tornado Warn.</div>
-          <div style="color:#f97316">${thunderstormWarningCount} Thunder. Warn.</div>
-          <div style="color:#eab308">${watchCount} Watch${watchCount === 1 ? '' : 'es'}</div>
+          <div style="color:#ef4444;font-weight:600">${filteredTornado} Tornado Warn.</div>
+          <div style="color:#f97316">${filteredThunder} Thunder. Warn.</div>
+          <div style="color:#eab308">${filteredWatch} Watch${filteredWatch === 1 ? '' : 'es'}</div>
         </div>
       </div>`;
 
@@ -64,7 +89,7 @@ export class SevereWeatherPanel extends Panel {
         </table>`;
 
     this.setContent(
-      `<div class="ct-panel-content">${outlookHtml}${tableHtml}<div class="fires-footer"><span class="fires-source">NWS SPC · NWS CAP</span></div></div>`,
+      `<div class="ct-panel-content">${filterBanner}${outlookHtml}${tableHtml}<div class="fires-footer"><span class="fires-source">NWS SPC · NWS CAP</span></div></div>`,
     );
 
     this.getContentElement().addEventListener('click', (e) => {

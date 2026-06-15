@@ -16,6 +16,7 @@ import { notificationDispatcher } from './notification-dispatcher';
 import type { UnifiedAlert } from './unified-alerts';
 import type { AnalystSnapshot, Hypothesis } from './analyst-loop';
 import { signatureFor } from './hypothesis-feedback';
+import { isGhostMode } from './mode-manager';
 
 const NOTIFY_WINDOW_MS = 60 * 60 * 1000; // Don't re-notify the same signature within an hour.
 
@@ -33,7 +34,7 @@ function buildAlert(h: Hypothesis, count: number): UnifiedAlert {
     source: 'correlation',
     severity: 'critical',
     title: `Analyst: critical hypothesis${suffix}`,
-    body: h.statement.slice(0, 240),
+    body: 'Open Crystal Ball to review new critical hypothesis',
     timestamp: Date.now(),
     relevanceScore: 95,
     acknowledged: false,
@@ -52,10 +53,13 @@ function handleSnapshot(snapshot: AnalystSnapshot): void {
     if (h.risk !== 'critical') continue;
     const sig = signatureFor(h);
     if (notified.has(sig)) continue;
+    // Always record the signature even in Ghost Mode so hypotheses seen during
+    // Ghost Mode don't re-fire as "fresh" once the mode is turned off.
     notified.set(sig, now);
     fresh.push(h);
   }
   if (fresh.length === 0) return;
+  if (isGhostMode()) return; // Ghost Mode: signatures recorded above, but no banner
 
   // Pick the highest-confidence fresh hypothesis as the notification headline.
   const lead = [...fresh].sort((a, b) => b.confidence - a.confidence)[0];

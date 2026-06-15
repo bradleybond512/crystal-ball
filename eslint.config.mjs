@@ -12,9 +12,12 @@ export default tseslint.config(
  'src-tauri/target/**',
  '.agent/**',
  // Nested checkouts created by the git-worktree workflow live inside
- // `.claude/worktrees/<name>/` and contain a full copy of the tree.
- // Linting them from the canonical repo would report thousands of
- // duplicate errors against unrelated branches.
+ // `.worktrees/<name>/` (and historically `.claude/worktrees/<name>/`) and
+ // contain a full copy of the tree. Linting them from the canonical repo
+ // reports thousands of duplicate errors against unrelated branches.
+ // NOTE: `**/worktrees/**` does NOT match `.worktrees/` — the leading dot is
+ // a distinct path segment — so the `.worktrees/**` entry is required.
+ '.worktrees/**',
  '.claude/worktrees/**',
  '**/worktrees/**',
  'src/workers/ml.worker.ts',

@@ -79,16 +79,20 @@ function extractRegion(title: string, description: string): string {
   return states?.[0] ?? 'North America';
 }
 
-async function fetchRssFeed(feedUrl: string, source: PowerGridAlert['source']): Promise<PowerGridAlert[]> {
+// Returns the parsed alerts on success (possibly an empty array when the feed
+// has no grid-relevant items), or `null` when the fetch itself failed (HTTP
+// error, parse error, timeout). The null/empty distinction is what lets
+// fetchPowerGridAlerts tell a real outage apart from a quiet-but-healthy feed.
+async function fetchRssFeed(feedUrl: string, source: PowerGridAlert['source']): Promise<PowerGridAlert[] | null> {
   try {
  const proxyUrl = `/api/rss-proxy?url=${encodeURIComponent(feedUrl)}`;
  const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(12_000) });
- if (!res.ok) return [];
+ if (!res.ok) return null;
 
  const text = await res.text();
  const parser = new DOMParser();
  const doc = parser.parseFromString(text, 'text/xml');
- if (doc.querySelector('parsererror')) return [];
+ if (doc.querySelector('parsererror')) return null;
 
  const items = doc.querySelectorAll('item');
  const alerts: PowerGridAlert[] = [];
@@ -118,24 +122,21 @@ async function fetchRssFeed(feedUrl: string, source: PowerGridAlert['source']): 
 
  return alerts;
   } catch {
- return [];
+ return null;
   }
 }
 
 export async function fetchPowerGridAlerts(): Promise<PowerGridAlert[]> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.alerts;
 
-  const [nercResult, doeResult, oeResult] = await Promise.allSettled([
+  const settled = await Promise.allSettled([
  fetchRssFeed(NERC_ALERTS_RSS, 'NERC'),
  fetchRssFeed(DOE_CESER_RSS, 'DOE'),
  fetchRssFeed(DOE_OE_RSS, 'DOE'),
   ]);
-
-  const combined = [
- ...(nercResult.status === 'fulfilled' ? nercResult.value : []),
- ...(doeResult.status === 'fulfilled' ? doeResult.value : []),
- ...(oeResult.status === 'fulfilled' ? oeResult.value : []),
-  ];
+  // null = the sub-feed failed to fetch; [] = fetched OK but no grid-relevant items.
+  const feedResults = settled.map((r) => (r.status === 'fulfilled' ? r.value : null));
+  const combined = feedResults.flatMap((v) => v ?? []);
 
   // Dedupe by title similarity
   const seen = new Set<string>();
@@ -155,7 +156,14 @@ export async function fetchPowerGridAlerts(): Promise<PowerGridAlert[]> {
  .slice(0, 40);
 
   cache = { alerts: recent, fetchedAt: Date.now() };
-  dataFreshness.recordUpdate('power-grid-alerts', recent.length);
+  // Honest freshness signal: only a real success advances dataFreshness. Each
+  // fetchRssFeed catches its own errors and returns null on failure (vs [] for a
+  // healthy-but-quiet feed), so if every sub-feed is null the empty result is an
+  // outage, not "no alerts" — record an error so downstream fail-closed logic can
+  // tell the difference.
+  const anyFeedOk = feedResults.some((v) => v !== null);
+  if (anyFeedOk) dataFreshness.recordUpdate('power-grid-alerts', recent.length);
+  else dataFreshness.recordError('power-grid-alerts', 'all grid RSS feeds failed');
   return recent;
 }
 

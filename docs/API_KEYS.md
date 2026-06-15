@@ -1,6 +1,6 @@
 # Crystal Ball — API Keys & Data Sources
 
-Crystal Ball supports **All 73 secret keys** wired through the Tauri desktop runtime
+Crystal Ball supports **All 77 secret keys** wired through the Tauri desktop runtime
 (see [`src-tauri/src/main.rs`](../src-tauri/src/main.rs) — `SUPPORTED_SECRET_KEYS`). Most
 features work out of the box with free public APIs; the keys below unlock additional
 sources or higher rate limits. Keys are entered via **Settings (gear icon) → API Keys**
@@ -101,6 +101,9 @@ These keys unlock the most impactful features and are free with simple registrat
 | `NASA_API_KEY` | Free | Boosts DONKI rate limits | [api.nasa.gov](https://api.nasa.gov/#signUp) |
 | `AIRNOW_API_KEY` | Free | EPA AirNow particulate readings (US) | [docs.airnowapi.org](https://docs.airnowapi.org/) |
 | `PURPLEAIR_API_KEY` | Free | PurpleAir community PM2.5 sensors | [develop.purpleair.com](https://develop.purpleair.com/) |
+| `OPENAQ_API_KEY` | Free | OpenAQ air quality (PM2.5, PM10, NO2, O3) from 10,000+ global stations — OpenAQ now requires a key | [explore.openaq.org](https://explore.openaq.org/register) |
+| `WINDY_WEBCAMS_API_KEY` | Free tier | Live/recent webcam imagery near a location (Windy Webcams) | [api.windy.com](https://api.windy.com/keys) |
+| `NPS_API_KEY` | Free | US National Park Service park webcams & visitor data | [nps.gov/subjects/developer](https://www.nps.gov/subjects/developer/get-started.htm) |
 
 ### Traffic & Highway Cameras
 
@@ -150,6 +153,23 @@ or tactical situational-awareness servers. They are not consumed by any panel di
 |-----|-------|-----------------|--------|
 | `CRYSTALBALL_API_KEY` | Paid | Cloud fallback when sidecar is down | [crystalball.app](https://crystalball.app) |
 
+### Deploy-time-only environment variables
+
+These env vars are **not** in `SUPPORTED_SECRET_KEYS` and are intentionally not
+surfaced in Settings → API Keys. They configure infrastructure or signing, not
+per-user data sources, so they are injected through the process environment
+(`.env.local` for development, the deploy environment in production) rather than
+the keychain / web vault.
+
+| Env var | Purpose | Where to set |
+|---------|---------|--------------|
+| `CONVEX_URL` | Convex backend URL for the registration DB | Deploy environment / `.env.local` |
+| `TWILIO_AUTH_TOKEN` | Twilio `X-Twilio-Signature` validation for the SMS-command webhook | Deploy environment / `.env.local` |
+
+> `TWILIO_AUTH_TOKEN` gates a server-side webhook signature check; it is a secret
+> the *sidecar host* holds, not something an end user enters, so a Settings field
+> would be a dangling no-op. `CONVEX_URL` is an endpoint, not a credential.
+
 ---
 
 ## Features That Work Without Any Keys
@@ -181,7 +201,6 @@ These data sources are free and require no registration:
 - Tide predictions (NOAA CO-OPS — US coastal stations)
 - Pollen & allergy data (Open-Meteo Air Quality)
 - Red Flag / fire weather warnings (NWS/SPC)
-- Air quality (OpenAQ)
 - PhishStats, urlscan.io public, Pulsedive free tier
 - BGPView (no key required)
 

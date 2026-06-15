@@ -27,9 +27,26 @@ let cachedShortageEntries: ShortageSummaryEntry[] = [];
 let cachedShortageAtMs = 0;
 let hasShortageCache = false;
 
+/** Decide whether a refresh result may REPLACE the cached supply entries.
+ *  Fail-closed: `loadShortageInputs()` is best-effort (`Promise.allSettled`) and
+ *  drops failed feeds, so a total feed outage returns an EMPTY input map with no
+ *  failure signal. Recomputing from that empty bag pushes every commodity to
+ *  baseline/LOW — which would silently overwrite a known HIGH/CRITICAL cache and
+ *  flip the supply axis to an unsafe all-clear purely because feeds failed. So we
+ *  only replace the cache when the refresh actually returned feed data; when it
+ *  did not and we already hold a prior cache, we keep the prior risk. With no
+ *  prior cache (true cold start) we fall through to baseline — there is no prior
+ *  risk to preserve (a hydrated snapshot's supply is preserved separately by
+ *  `supplyContributorForBase`). Pure + exported so the invariant is unit-testable. */
+export function shouldReplaceShortageCache(gotFeedData: boolean, hasCache: boolean): boolean {
+  return gotFeedData || !hasCache;
+}
+
 /** Returns the supply-axis shortage entries, refreshing from the live feeds
- *  only when the cache is empty or older than the TTL. A feed failure degrades
- *  gracefully to baseline (empty input bag). `now` is injected for determinism. */
+ *  only when the cache is empty or older than the TTL. On a feed outage the
+ *  refresh returns an empty input map (no commodity keys); rather than downgrade
+ *  a known risk to baseline we preserve the prior cache and throttle the next
+ *  retry by one TTL window. `now` is injected for determinism. */
 async function getSupplyEntries(now: number): Promise<ShortageSummaryEntry[]> {
   if (hasShortageCache && now - cachedShortageAtMs < SHORTAGE_TTL_MS) {
     return cachedShortageEntries;
@@ -37,7 +54,14 @@ async function getSupplyEntries(now: number): Promise<ShortageSummaryEntry[]> {
   let shortageInputs: Awaited<ReturnType<typeof loadShortageInputs>> = {};
   try {
     shortageInputs = await loadShortageInputs();
-  } catch { /* baseline */ }
+  } catch { shortageInputs = {}; }
+  const gotFeedData = Object.keys(shortageInputs).length > 0;
+  if (!shouldReplaceShortageCache(gotFeedData, hasShortageCache)) {
+    // Shortage feeds unavailable — do NOT downgrade a known risk to baseline.
+    // Preserve the prior entries; throttle the next retry to one TTL window.
+    cachedShortageAtMs = now;
+    return cachedShortageEntries;
+  }
   cachedShortageEntries = computeShortageFullSet(shortageInputs, { now });
   cachedShortageAtMs = now;
   hasShortageCache = true;

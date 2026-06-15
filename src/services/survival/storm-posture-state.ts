@@ -2,7 +2,8 @@
 import { fetchNWSAlerts } from '../nws-alerts.ts';
 import { getSavedPlaces } from '../saved-places.ts';
 import { dataFreshness } from '../data-freshness.ts';
-import { computeShortageFullSet } from '../shortage/shortage-fullset.ts';
+import { computeShortageFullSet, type ShortageSummaryEntry } from '../shortage/shortage-fullset.ts';
+import { loadShortageInputs } from '../shortage/shortage-input-bridge.ts';
 import { buildSnapshot } from './world-snapshot.ts';
 import { commitMove, applyPlanToPosture } from './survival-plan.ts';
 import { computeMultiAxisPosture } from './survival-posture.ts';
@@ -15,16 +16,43 @@ import { adaptLiveAlert, adaptSavedPlace, type LiveAlertInput } from './storm-po
 import { saveSnapshot, loadLatestSnapshot } from './snapshot-store.ts';
 import type { SurvivalMove, SurvivalPosture, WorldSnapshot } from './survival-types.ts';
 
+// ── Shortage-entry TTL cache ────────────────────────────────────────────────
+// The three shortage feeds (drought / chokepoint / grid) move slowly, but
+// refreshStormPosture runs ~every 120s. Refetching them on every storm tick is
+// wasteful, so cache the computed entries and only re-`loadShortageInputs()`
+// when older than SHORTAGE_TTL_MS. Last-write-wins; no concurrency guard.
+const SHORTAGE_TTL_MS = 15 * 60_000;
+let cachedShortageEntries: ShortageSummaryEntry[] = [];
+let cachedShortageAtMs = 0;
+let hasShortageCache = false;
+
+/** Returns the supply-axis shortage entries, refreshing from the live feeds
+ *  only when the cache is empty or older than the TTL. A feed failure degrades
+ *  gracefully to baseline (empty input bag). `now` is injected for determinism. */
+async function getSupplyEntries(now: number): Promise<ShortageSummaryEntry[]> {
+  if (hasShortageCache && now - cachedShortageAtMs < SHORTAGE_TTL_MS) {
+    return cachedShortageEntries;
+  }
+  let shortageInputs: Awaited<ReturnType<typeof loadShortageInputs>> = {};
+  try {
+    shortageInputs = await loadShortageInputs();
+  } catch { /* baseline */ }
+  cachedShortageEntries = computeShortageFullSet(shortageInputs, { now });
+  cachedShortageAtMs = now;
+  hasShortageCache = true;
+  return cachedShortageEntries;
+}
+
 /** Re-derive posture across weather + supply contributors, then re-apply the
  *  committed plan once on the fresh base. Weather behavior is unchanged: the
  *  same weather contributor + weather moves feed in; supply is additive. The
  *  base is computed without the plan and the plan is applied exactly once, so
  *  this never double-counts the committed move effects. */
-function withSupplyPosture(snapshot: WorldSnapshot, now: number): WorldSnapshot {
+function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyEntries: readonly ShortageSummaryEntry[]): WorldSnapshot {
   const base: SurvivalPosture = computeMultiAxisPosture({
     contributors: [
       makeWeatherContributor(snapshot.weatherAlerts, snapshot.savedPlaces),
-      makeSupplyContributor(computeShortageFullSet({}, { now })),
+      makeSupplyContributor(supplyEntries),
     ],
     freshness: snapshot.freshness,
     capturedAtMs: snapshot.capturedAtMs,
@@ -98,7 +126,10 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
     }
 
     // Thread supply into the stored snapshot after the weather-driven guard.
-    const next = withSupplyPosture(weatherOnly, now);
+    // Live shortage feeds (TTL-cached) drive the supply axis; a feed failure
+    // degrades to baseline inside getSupplyEntries.
+    const supplyEntries = await getSupplyEntries(now);
+    const next = withSupplyPosture(weatherOnly, now, supplyEntries);
     current = next;
     notify();
     void saveSnapshot(next);
@@ -115,7 +146,9 @@ export function commitStormMove(move: SurvivalMove, now = Date.now()): void {
     { weatherAlerts: current.weatherAlerts, savedPlaces: current.savedPlaces, weatherFetchedAtMs, plan },
     { now: current.capturedAtMs },
   );
-  current = withSupplyPosture(rebuilt, current.capturedAtMs);
+  // Reuse the last cached supply entries (commit only re-applies an already-
+  // committed plan; it never needs a fresh shortage fetch).
+  current = withSupplyPosture(rebuilt, current.capturedAtMs, cachedShortageEntries);
   notify();
   void saveSnapshot(current);
 }

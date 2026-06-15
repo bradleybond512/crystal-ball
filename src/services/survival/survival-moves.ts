@@ -2,6 +2,7 @@
 import type { PostureDelta, SurvivalMove, SurvivalPosture, WorldSnapshot } from './survival-types.ts';
 import type { MoveProvider } from './move-provider.ts';
 import { makeWeatherMoveProvider } from './weather-move-provider.ts';
+import { makeSupplyMoveProvider } from './supply-move-provider.ts';
 
 
 
@@ -24,7 +25,7 @@ export function availableMoves(
   options: MovesOptions = {},
 ): SurvivalMove[] {
   return availableMovesFrom(
-    [makeWeatherMoveProvider({ maxMoves: options.maxMoves })],
+    [makeWeatherMoveProvider({ maxMoves: options.maxMoves }), makeSupplyMoveProvider()],
     posture,
     options.now ?? Date.now(),
   );

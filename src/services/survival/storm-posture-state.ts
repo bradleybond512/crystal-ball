@@ -1,6 +1,7 @@
 // src/services/survival/storm-posture-state.ts
 import { fetchNWSAlerts } from '../nws-alerts.ts';
 import { getSavedPlaces } from '../saved-places.ts';
+import { dataFreshness } from '../data-freshness.ts';
 import { buildSnapshot } from './world-snapshot.ts';
 import { commitMove } from './survival-plan.ts';
 import { adaptLiveAlert, adaptSavedPlace, type LiveAlertInput } from './storm-posture-adapter.ts';
@@ -32,7 +33,9 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
     const alerts = (rawAlerts as unknown as LiveAlertInput[]).map((a) => adaptLiveAlert(a));
     const places = appPlaces.map((p) => adaptSavedPlace(p));
     const plan = current?.plan;
-    const next = buildSnapshot({ weatherAlerts: alerts, savedPlaces: places, weatherFetchedAtMs: now, plan }, { now });
+    const nwsLastUpdate = dataFreshness.getSource('nws-alerts')?.lastUpdate;
+    const weatherFetchedAtMs = nwsLastUpdate ? nwsLastUpdate.getTime() : now;
+    const next = buildSnapshot({ weatherAlerts: alerts, savedPlaces: places, weatherFetchedAtMs, plan }, { now });
 
     // Survival guard: never erase a known threat because a refresh came back
     // empty (the alert feed returns [] on upstream failure with HTTP 200). Keep

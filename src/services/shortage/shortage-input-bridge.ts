@@ -205,21 +205,23 @@ function round(n: number): number {
 // (cached) risk whenever ANY feed it depends on failed.
 
 /** The `dataFreshness` source ids for the three wired shortage feeds. Each is a
- *  valid `DataSourceId` (drought-monitor + power-grid-alerts record under their
- *  own ids; chokepoint status records under the supply_chain domain id). */
-export type ShortageFeedId = 'drought-monitor' | 'power-grid-alerts' | 'supply_chain';
+ *  valid `DataSourceId`. The chokepoint feed records under its OWN
+ *  `'chokepoint-status'` id — deliberately NOT the shared `'supply_chain'` source,
+ *  which the supply-chain panel also advances for shipping/minerals; sharing it
+ *  would let a healthy shipping refresh mask a chokepoint outage. */
+export type ShortageFeedId = 'drought-monitor' | 'power-grid-alerts' | 'chokepoint-status';
 
 /** Which feeds each commodity's inputs are derived from in
  *  `buildShortageInputsFromSources`. Commodities with no wired feed have no
  *  dependencies — their forecast is always the seasonal baseline, so there is
  *  no live risk a failed feed could erase. */
 export const COMMODITY_SOURCE_FEEDS: Record<FullSetCommodity, readonly ShortageFeedId[]> = {
-  wheat: ['drought-monitor', 'supply_chain'], // belt drought + Bosphorus corridor
+  wheat: ['drought-monitor', 'chokepoint-status'], // belt drought + Bosphorus corridor
   corn: ['drought-monitor'],
   soybeans: ['drought-monitor'],
-  rice: ['supply_chain'],                       // Suez corridor
-  diesel: ['supply_chain'],                     // Hormuz crude imports
-  gasoline: ['supply_chain'],                   // Hormuz crude imports
+  rice: ['chokepoint-status'],                       // Suez corridor
+  diesel: ['chokepoint-status'],                     // Hormuz crude imports
+  gasoline: ['chokepoint-status'],                   // Hormuz crude imports
   'natural-gas': ['power-grid-alerts'],
   'jet-fuel': [],
   fertilizer: [],
@@ -362,7 +364,7 @@ export async function loadShortageInputsWithStatus(): Promise<ShortageInputsWith
     feedsOk: {
       'drought-monitor': feedOk('drought-monitor'),
       'power-grid-alerts': feedOk('power-grid-alerts'),
-      'supply_chain': feedOk('supply_chain'),
+      'chokepoint-status': feedOk('chokepoint-status'),
     },
   };
 }

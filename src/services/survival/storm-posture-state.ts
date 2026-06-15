@@ -78,7 +78,7 @@ async function getSupplyEntries(now: number): Promise<ShortageSummaryEntry[]> {
   let feedsOk: Record<ShortageFeedId, boolean> = {
     'drought-monitor': false,
     'power-grid-alerts': false,
-    'supply_chain': false,
+    'chokepoint-status': false,
   };
   try {
     const res = await loadShortageInputsWithStatus();
@@ -86,8 +86,8 @@ async function getSupplyEntries(now: number): Promise<ShortageSummaryEntry[]> {
     feedsOk = res.feedsOk;
   } catch { /* leave all feeds marked failed */ }
 
-  const gotAnyFeed = feedsOk['drought-monitor'] || feedsOk['power-grid-alerts'] || feedsOk.supply_chain;
-  const allFeedsOk = feedsOk['drought-monitor'] && feedsOk['power-grid-alerts'] && feedsOk.supply_chain;
+  const gotAnyFeed = feedsOk['drought-monitor'] || feedsOk['power-grid-alerts'] || feedsOk['chokepoint-status'];
+  const allFeedsOk = feedsOk['drought-monitor'] && feedsOk['power-grid-alerts'] && feedsOk['chokepoint-status'];
   const action = shortageCacheAction(gotAnyFeed, allFeedsOk, hasShortageCache);
 
   if (action === 'keep') {

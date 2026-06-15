@@ -1225,12 +1225,14 @@ fn open_sidecar_log_impl(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn open_logs_folder(app: AppHandle) -> Result<String, String> {
+fn open_logs_folder(webview: Webview, app: AppHandle) -> Result<String, String> {
+ require_trusted_window(webview.label())?;
  open_logs_folder_impl(&app).map(|path| path.display().to_string())
 }
 
 #[tauri::command]
-fn open_sidecar_log_file(app: AppHandle) -> Result<String, String> {
+fn open_sidecar_log_file(webview: Webview, app: AppHandle) -> Result<String, String> {
+ require_trusted_window(webview.label())?;
  open_sidecar_log_impl(&app).map(|path| path.display().to_string())
 }
 
@@ -1770,7 +1772,18 @@ fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Resul
  Some(ref origin) if !origin.is_empty() => {
  let path = origin.trim_end_matches('/');
  let full_url = format!("{}/live-channels.html", path);
- WebviewUrl::External(Url::parse(&full_url).map_err(|_| "Invalid base URL".to_string())?)
+ let parsed = Url::parse(&full_url).map_err(|_| "Invalid base URL".to_string())?;
+ // This window holds the same IPC trust as `main`, so it must never be
+ // navigated to an attacker-supplied origin. Only loopback dev origins are
+ // honored; anything else falls back to the bundled app asset.
+ let host = parsed.host_str().unwrap_or("");
+ let is_loopback_dev = matches!(parsed.scheme(), "http" | "https")
+ && matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]");
+ if is_loopback_dev {
+ WebviewUrl::External(parsed)
+ } else {
+ WebviewUrl::App("live-channels.html".into())
+ }
  }
  _ => WebviewUrl::App("live-channels.html".into()),
  };
@@ -2936,7 +2949,8 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
 /// unhandledrejection, and key event handlers so renderer-side errors land
 /// in desktop.log instead of dying in WebInspector.
 #[tauri::command]
-fn log_frontend(app: AppHandle, level: String, message: String, context: Option<String>) {
+fn log_frontend(webview: Webview, app: AppHandle, level: String, message: String, context: Option<String>) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  let lvl = match level.to_uppercase().as_str() {
  "ERROR" | "WARN" | "INFO" | "DEBUG" => level.to_uppercase(),
  _ => "INFO".to_string(),
@@ -2952,12 +2966,14 @@ fn log_frontend(app: AppHandle, level: String, message: String, context: Option<
  &lvl,
  &format!("[FRONTEND] {truncated_msg}{}", if truncated_ctx.is_empty() { String::new() } else { format!(" | {truncated_ctx}") }),
  );
+ Ok(())
 }
 
 /// Returns a diagnostics bundle (last N log lines + sidecar /api/diag) as a
 /// single string suitable for copying to the clipboard. Triggered by Cmd+Shift+D.
 #[tauri::command]
-async fn copy_diagnostics(app: AppHandle) -> Result<String, String> {
+async fn copy_diagnostics(webview: Webview, app: AppHandle) -> Result<String, String> {
+ require_trusted_window(webview.label())?;
  let mut out = String::new();
  out.push_str(&format!(
  "=== Crystal Ball diagnostics ===\nversion: v{}+{}\ntime: {}\n\n",

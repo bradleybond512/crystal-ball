@@ -124,7 +124,7 @@ test('a proposal without replay evidence is held and logged', () => {
 const NEGEV_DEF: AlgorithmDefinition = {
   algorithmId: 'negative-evidence',
   label: 'Negative evidence engine',
-  domain: 'intelligence',
+  domain: 'negative_evidence',
   criticality: 'medium',
   minWeightedHitRate: 0.9,
   minGradedSamples: 20,
@@ -148,7 +148,7 @@ function degradedNegEvLedger() {
   for (let i = 0; i < 20; i += 1) {
     const rec = ledger.recordEvaluation({
       algorithmId: 'negative-evidence',
-      domain: 'intelligence',
+      domain: 'negative_evidence',
       at: i,
       durationMs: 5,
     });
@@ -212,4 +212,190 @@ test('a proposal with replay pass + evidence auto-applies and logs', () => {
   assert.equal(log[0]?.kind, 'applied');
   assert.equal(log[0]?.nextValue, 12);
   assert.equal(log[0]?.ruleId, 'algo_tuning_gate_lowmed_ready');
+});
+
+// ── Backtest-before-apply gate (Phase 4) ───────────────────────────────────
+
+/** High-criticality, non-notification knob with a degraded calibration over
+ *  ≥30 graded samples — the high tuning gate needs replay + backtest + 30
+ *  samples. */
+const HIGHCRIT_DEF: AlgorithmDefinition = {
+  algorithmId: 'test-highcrit-algo',
+  label: 'High-criticality test knob',
+  domain: 'other',
+  criticality: 'high',
+  minWeightedHitRate: 0.9,
+  minGradedSamples: 20,
+};
+
+const HIGHCRIT_TUNING: AlgorithmAdjustmentTuning = {
+  algorithmId: 'test-highcrit-algo',
+  parameters: [{
+    parameterId: 'p',
+    current: 10,
+    min: 0,
+    max: 20,
+    step: 2,
+    fixDirection: 'increase',
+    description: 'high-crit test knob',
+  }],
+};
+
+/** 30 graded (26 hit + 4 miss) → weightedHitRate 0.867, gap 0.033 < 0.1 →
+ *  'degraded' → an 'apply' proposal. evidenceCount 30 clears the high gate's
+ *  sample floor, isolating the backtest signal as the deciding factor. */
+function degradedHighcritLedger() {
+  const ledger = createAlgorithmEvaluationLedger({ now: () => 1 });
+  for (let i = 0; i < 30; i += 1) {
+    const r = ledger.recordEvaluation({
+      algorithmId: 'test-highcrit-algo',
+      domain: 'other',
+      at: i,
+      durationMs: 5,
+    });
+    ledger.recordOutcome(r.id, i < 26 ? 'hit' : 'miss', 'test', i);
+  }
+  return ledger;
+}
+
+test('high-criticality knob is HELD when the computed backtest fails closed (not backtestable)', () => {
+  _resetTuningDecisionsForTests();
+  const captured: Array<[string, string, number]> = [];
+  const res = runTuningApply({
+    ledger: degradedHighcritLedger(),
+    definitions: [HIGHCRIT_DEF],
+    tunings: [HIGHCRIT_TUNING],
+    replayPassed: true,
+    // backtestPassed UNSET → runner computes it. 'test-highcrit-algo:p' is not
+    // a backtestable knob, so the honest backtest fails closed → held.
+    apply: (a, p, v) => captured.push([a, p, v]),
+  });
+  assert.deepEqual(res, { proposed: 1, applied: 0, heldForApproval: 1 });
+  assert.equal(captured.length, 0);
+  assert.equal(getTuningDecisions()[0]?.ruleId, 'algo_tuning_gate_high_pending');
+});
+
+test('high-criticality knob auto-applies once backtestPassed clears (signal is load-bearing)', () => {
+  _resetTuningDecisionsForTests();
+  const captured: Array<[string, string, number]> = [];
+  const res = runTuningApply({
+    ledger: degradedHighcritLedger(),
+    definitions: [HIGHCRIT_DEF],
+    tunings: [HIGHCRIT_TUNING],
+    replayPassed: true,
+    backtestPassed: true, // injected pass → high gate clears
+    apply: (a, p, v) => captured.push([a, p, v]),
+  });
+  assert.deepEqual(res, { proposed: 1, applied: 1, heldForApproval: 0 });
+  assert.deepEqual(captured, [['test-highcrit-algo', 'p', 12]]);
+  assert.equal(getTuningDecisions()[0]?.ruleId, 'algo_tuning_gate_high_ready');
+});
+
+// ── P1: hard backtest enforcement, independent of criticality ──────────────
+// The policy gate only consults `backtestPassed` for high-criticality tunings.
+// A LOW-criticality, backtestable knob whose replay REGRESSES accuracy must
+// still be blocked — otherwise it would auto-apply (it clears replay + the
+// low/med gate). The runner enforces this before the gate.
+
+const DAY = 24 * 60 * 60 * 1000;
+const BT_NOW = 100 * DAY;
+
+/** big-event-detector is the one backtestable knob. Build a LOW-criticality
+ *  definition + a threshold tuning that increases (40 → 45), and a ledger whose
+ *  records make that increase a measurable regression: 26 genuine hits and 4
+ *  false positives all firing at score 42 (label 'big-event'), so raising the
+ *  threshold to 45 stops the real hits firing. The 26/30 hit rate also lands
+ *  the calibration on 'degraded', producing the 'apply' proposal. */
+const BED_LOW_DEF: AlgorithmDefinition = {
+  algorithmId: 'big-event-detector',
+  label: 'Big Event Detector',
+  domain: 'reasoning_hypothesis',
+  criticality: 'low',
+  minWeightedHitRate: 0.9,
+  minGradedSamples: 20,
+};
+
+const BED_THRESHOLD_TUNING: AlgorithmAdjustmentTuning = {
+  algorithmId: 'big-event-detector',
+  parameters: [{
+    parameterId: 'threshold',
+    current: 40,
+    min: 20,
+    max: 60,
+    step: 5,
+    fixDirection: 'increase',
+    description: 'big-event total-score threshold',
+  }],
+};
+
+function regressingBedLedger() {
+  const ledger = createAlgorithmEvaluationLedger({ now: () => 1 });
+  for (let i = 0; i < 30; i += 1) {
+    const r = ledger.recordEvaluation({
+      algorithmId: 'big-event-detector',
+      domain: 'reasoning_hypothesis',
+      at: BT_NOW - DAY,
+      durationMs: 5,
+      score: 0.42,        // comparable 42 — fires at prior 40, stops firing at 45
+      label: 'big-event', // recorded as FIRED
+    });
+    ledger.recordOutcome(r.id, i < 26 ? 'hit' : 'miss', 'test', BT_NOW - DAY);
+  }
+  return ledger;
+}
+
+test('a LOW-criticality backtestable knob that regresses is hard-held before the gate', () => {
+  _resetTuningDecisionsForTests();
+  const captured: Array<[string, string, number]> = [];
+  const res = runTuningApply({
+    ledger: regressingBedLedger(),
+    definitions: [BED_LOW_DEF],
+    tunings: [BED_THRESHOLD_TUNING],
+    replayPassed: true,          // replay would clear it…
+    now: () => BT_NOW,           // anchor the 30-day backtest window to the records
+    // backtestPassed UNSET → runner replays 40 → 45 against the ledger and finds
+    // a regression. Without the hard enforcement this would auto-apply (low gate
+    // ignores backtestPassed); with it, the change is held.
+    apply: (a, p, v) => captured.push([a, p, v]),
+  });
+  assert.deepEqual(res, { proposed: 1, applied: 0, heldForApproval: 1 });
+  assert.equal(captured.length, 0, 'regressing change must not be applied');
+  const log = getTuningDecisions();
+  assert.equal(log.length, 1);
+  assert.equal(log[0]?.kind, 'held_for_approval');
+  assert.equal(log[0]?.ruleId, 'backtest_blocked');
+  assert.match(log[0]?.reason ?? '', /regress|blocked/);
+});
+
+test('a LOW-criticality backtestable knob that does NOT regress is not hard-held', () => {
+  _resetTuningDecisionsForTests();
+  const captured: Array<[string, string, number]> = [];
+  // Same ledger, but a tuning that DECREASES the threshold (40 → 35). The 26
+  // real hits still fire and the 4 false positives also still fire, so accuracy
+  // is unchanged (no regression) → the backtest passes and the runner does NOT
+  // short-circuit; the proposal flows to the gate like any other.
+  const res = runTuningApply({
+    ledger: regressingBedLedger(),
+    definitions: [BED_LOW_DEF],
+    tunings: [{
+      algorithmId: 'big-event-detector',
+      parameters: [{
+        parameterId: 'threshold',
+        current: 40,
+        min: 20,
+        max: 60,
+        step: 5,
+        fixDirection: 'decrease',
+        description: 'big-event total-score threshold',
+      }],
+    }],
+    replayPassed: true,
+    now: () => BT_NOW,
+    apply: (a, p, v) => captured.push([a, p, v]),
+  });
+  assert.equal(res.proposed, 1);
+  // Not hard-held by the backtest guard: the decision is whatever the gate says
+  // (big-event-detector.threshold affectsNotifications → held for approval), but
+  // crucially NOT via 'backtest_blocked'.
+  assert.notEqual(getTuningDecisions()[0]?.ruleId, 'backtest_blocked');
 });

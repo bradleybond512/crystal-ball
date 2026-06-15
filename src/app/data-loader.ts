@@ -69,6 +69,7 @@ import {
   getStormPreparednessSummary,
   updateStormPreparednessContext,
 } from '@/services';
+import { refreshStormPosture } from '@/services/survival/storm-posture-state';
 import { checkBatchForBreakingAlerts } from '@/services/breaking-news-alerts';
 import { evaluateWarThreat, evaluateFinanceTrigger, evaluateCommodityTrigger, evaluateDisasterTrigger, checkFinanceAutoTriggerTimeout } from '@/services/mode-manager';
 import { reportElevatedPanel } from '@/services/panel-correlation';
@@ -1467,6 +1468,11 @@ export class DataLoaderManager implements AppModule {
  dataFreshness.recordUpdate('weather', alerts.length);
  void import('@/services/offline-staleness').then(({ recordSourceUpdate }) => { recordSourceUpdate('weather', Date.now()); });
  updateStormPreparednessContext({ weatherAlerts: alerts });
+
+ // Refresh the survival "Storm Posture" engine on the weather tick. The
+ // state singleton owns its own fetch (NWS alerts + saved places); this
+ // just nudges it so the StormPosturePanel updates alongside the map.
+ void refreshStormPosture();
 
  // Feed weather alerts + grid status into the datacenter posture engine.
  // Only runs when the user has a saved place tagged data_center.

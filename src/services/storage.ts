@@ -20,11 +20,12 @@ export async function initDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
  const request = indexedDB.open(DB_NAME, DB_VERSION);
 
- request.onerror = () => reject(request.error);
+ request.addEventListener('error', () => reject(request.error ?? new Error('initDB open failed')));
 
  request.onsuccess = () => {
  db = request.result;
  db.addEventListener('close', () => { db = null; });
+ db.addEventListener('versionchange', () => { db?.close(); db = null; });
  resolve(db);
  };
 
@@ -58,17 +59,16 @@ async function withTransaction<T>(
  const request = fn(store, tx);
  if (request && extractResult !== false) {
  request.onsuccess = () => resolve(request.result as T);
- request.onerror = () => reject(request.error);
+ request.addEventListener('error', () => reject(request.error ?? new Error('IDB request failed')));
  } else {
  tx.oncomplete = () => resolve(undefined as T);
- tx.onerror = () => reject(tx.error);
+ tx.addEventListener('error', () => reject(tx.error ?? new Error('IDB transaction failed')));
  }
  });
  } catch (error: unknown) {
  if (error instanceof DOMException && error.name === 'InvalidStateError') {
  db = null;
  if (attempt === 0) continue;
- console.warn('[Storage] IndexedDB connection closing after retry');
  if (mode === 'readwrite') throw new DOMException('IndexedDB write failed — connection closing', 'InvalidStateError');
  return undefined as T;
  }
@@ -82,7 +82,7 @@ export async function getBaseline(key: string): Promise<BaselineEntry | null> {
   const result = await withTransaction<BaselineEntry | undefined>(
  'baselines', 'readonly', (store) => store.get(key), true,
   );
-  return result || null;
+  return result ?? null;
 }
 
 export async function updateBaseline(key: string, currentCount: number): Promise<BaselineEntry> {
@@ -165,7 +165,7 @@ export function calculateDeviation(current: number, baseline: BaselineEntry): {
 export async function getAllBaselines(): Promise<BaselineEntry[]> {
   return (await withTransaction<BaselineEntry[]>(
  'baselines', 'readonly', (store) => store.getAll(), true,
-  )) || [];
+  )) ?? [];
 }
 
 // Snapshot types and functions
@@ -195,7 +195,7 @@ export async function getSnapshots(fromTime?: number, toTime?: number): Promise<
  'snapshots', 'readonly',
  (store) => store.index('by_time').getAll(IDBKeyRange.bound(from, to)),
  true,
-  )) || [];
+  )) ?? [];
 }
 
 export async function getSnapshotAt(timestamp: number): Promise<DashboardSnapshot | null> {
@@ -204,7 +204,8 @@ export async function getSnapshotAt(timestamp: number): Promise<DashboardSnapsho
 
   // Find closest snapshot to requested time
   return snapshots.reduce((closest, snap) =>
- Math.abs(snap.timestamp - timestamp) < Math.abs(closest.timestamp - timestamp) ? snap : closest
+ Math.abs(snap.timestamp - timestamp) < Math.abs(closest.timestamp - timestamp) ? snap : closest,
+ snapshots[0]!,
   );
 }
 
@@ -213,13 +214,12 @@ export async function cleanOldSnapshots(): Promise<void> {
 
   await withTransaction<void>(
  'snapshots', 'readwrite',
- (store, tx) => {
+ (store) => {
  const request = store.index('by_time').openCursor(IDBKeyRange.upperBound(cutoff));
  request.onsuccess = () => {
  const cursor = request.result;
  if (cursor) { cursor.delete(); cursor.continue(); }
  };
- void tx;
  },
  false,
   );
@@ -228,5 +228,5 @@ export async function cleanOldSnapshots(): Promise<void> {
 export async function getSnapshotTimestamps(): Promise<number[]> {
   return (await withTransaction<number[]>(
  'snapshots', 'readonly', (store) => store.getAllKeys() as IDBRequest<number[]>, true,
-  )) || [];
+  )) ?? [];
 }

@@ -22,6 +22,7 @@ function upgrade(version: number): Promise<IDBDatabase> {
     });
     req.addEventListener('success', () => { dbInstance = req.result; attach(req.result); resolve(req.result); });
     req.addEventListener('error', () => reject(req.error ?? new Error('upgrade failed')));
+    req.addEventListener('blocked', () => reject(new Error('snapshot-store upgrade blocked by an open crystalball_db connection')));
   });
 }
 

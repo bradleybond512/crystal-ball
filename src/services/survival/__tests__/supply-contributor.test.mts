@@ -4,8 +4,10 @@ import { makeSupplyContributor } from '../supply-contributor.ts';
 import { makeSupplyMoveProvider } from '../supply-move-provider.ts';
 import { makeWeatherContributor } from '../weather-contributor.ts';
 import { computeMultiAxisPosture, type MultiAxisInput } from '../survival-posture.ts';
+import { availableMoves } from '../survival-moves.ts';
 import type { ShortageSummaryEntry } from '../../shortage/shortage-fullset.ts';
 import type { ShortageForecast } from '../../shortage/shortage-types.ts';
+import type { WorldSnapshot } from '../survival-types.ts';
 import type { NwsAlertMinimal, AlertPolygon, SavedPlace } from '../../weather/weather-threat-types.ts';
 
 const NOW = 1_700_000_000_000;
@@ -164,4 +166,43 @@ test('supply move provider returns [] when supply has no threats', () => {
     freshness: fresh, capturedAtMs: NOW,
   }, { now: NOW });
   assert.deepEqual(makeSupplyMoveProvider().provide(posture, NOW), []);
+});
+
+// ── availableMoves combines weather + supply providers ───────────────────────
+
+function snapshotFor(posture: ReturnType<typeof computeMultiAxisPosture>): WorldSnapshot {
+  return {
+    version: 1, capturedAtMs: NOW, freshness: fresh,
+    weatherAlerts: [], savedPlaces: [HOME], posture, plan: { committed: [] },
+  };
+}
+
+test('availableMoves offers supply moves when only supply is threatened', () => {
+  const posture = computeMultiAxisPosture({
+    contributors: [
+      makeWeatherContributor([], [HOME]),
+      makeSupplyContributor([entry('diesel', 70, 'HIGH', 'medium', ['inventory below floor'])]),
+    ],
+    freshness: fresh, capturedAtMs: NOW,
+  }, { now: NOW });
+
+  const moves = availableMoves(posture, snapshotFor(posture), { now: NOW });
+  const supplyMoves = moves.filter((m) => m.affects.includes('supply'));
+  const weatherMoves = moves.filter((m) => m.affects.includes('physical_safety'));
+  assert.ok(supplyMoves.length >= 3, 'supply moves offered');
+  assert.equal(weatherMoves.length, 0, 'no weather moves without a weather threat');
+});
+
+test('availableMoves offers both weather and supply moves for a combined posture', () => {
+  const posture = computeMultiAxisPosture({
+    contributors: [
+      makeWeatherContributor([TORNADO], [HOME]),
+      makeSupplyContributor([entry('diesel', 70, 'HIGH', 'medium', ['inventory below floor'])]),
+    ],
+    freshness: fresh, capturedAtMs: NOW,
+  }, { now: NOW });
+
+  const moves = availableMoves(posture, snapshotFor(posture), { now: NOW });
+  assert.ok(moves.some((m) => m.affects.includes('physical_safety')), 'weather moves offered');
+  assert.ok(moves.some((m) => m.affects.includes('supply')), 'supply moves offered');
 });

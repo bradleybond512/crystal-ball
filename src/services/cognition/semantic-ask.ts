@@ -93,7 +93,7 @@ export function semanticRetrieve(question: string, k = 5): SemanticHit[] {
   const hits: SemanticHit[] = [];
   for (const { id, similarity } of ranked) {
     if (id.startsWith('brief:')) {
-      const idx = parseInt(id.split(':')[1] ?? '0', 10);
+      const idx = Number.parseInt(id.split(':')[1] ?? '0', 10);
       const b = briefs[idx];
       if (!b) continue;
       hits.push({
@@ -105,7 +105,7 @@ export function semanticRetrieve(question: string, k = 5): SemanticHit[] {
         explanation: `Past brief (${b.domain}, ${ageLabel(b.generatedAt)}) matched with ${pct(similarity)} similarity.`,
       });
     } else if (id.startsWith('snapshot:')) {
-      const idx = parseInt(id.split(':')[1] ?? '0', 10);
+      const idx = Number.parseInt(id.split(':')[1] ?? '0', 10);
       const s = snapshots[idx];
       if (!s) continue;
       const topH = s.hypotheses[0]?.statement ?? 'no hypotheses';

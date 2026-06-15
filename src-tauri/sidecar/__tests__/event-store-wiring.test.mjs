@@ -42,7 +42,11 @@ test('appendObservationToEventStore maps domain, severity label, and entity ids'
     assert.equal(row.severity, 0.85);
     assert.equal(row.occurred_at, '2026-06-10T00:00:00.000Z');
     assert.deepEqual(JSON.parse(row.entity_ids), ['place-1', 'place-2']);
-    assert.equal(JSON.parse(row.payload).title, 'Severe storm');
+    // title is free-text and intentionally omitted from the stored payload.
+    const payload = JSON.parse(row.payload);
+    assert.equal(payload.title, undefined);
+    assert.equal(payload.domain, 'weather');
+    assert.equal(payload.severity, 'HIGH');
   });
 });
 
@@ -87,6 +91,83 @@ test('appendSituationToEventStore emits situation_closed for a resolved situatio
     });
     const [row] = store.queryEvents({});
     assert.equal(row.event_type, 'situation_closed');
+  });
+});
+
+test('appendObservationToEventStore redacts title and entityName from payload', () => {
+  withStore((store) => {
+    appendObservationToEventStore(store, {
+      id: 'obs-pii',
+      sourceId: 'watchlist',
+      domain: 'cyber',
+      timestamp: Date.now(),
+      severity: 'HIGH',
+      title: 'Alert for John Doe near home',
+      entityName: 'John Doe',
+      watchlistMatch: 'home-address',
+    });
+    const [row] = store.queryEvents({});
+    const payload = JSON.parse(row.payload);
+    assert.equal(payload.title, undefined, 'title must be omitted');
+    assert.equal(payload.entityName, undefined, 'entityName must be omitted');
+    assert.equal(payload.watchlistMatch, undefined, 'watchlistMatch must be omitted');
+    assert.equal(payload.domain, 'cyber');
+  });
+});
+
+test('appendObservationToEventStore blurs location coordinates to ~10 km', () => {
+  withStore((store) => {
+    appendObservationToEventStore(store, {
+      id: 'obs-loc',
+      domain: 'weather',
+      timestamp: Date.now(),
+      severity: 'LOW',
+      location: { lat: 41.8827, lng: -87.6233, label: 'Chicago' },
+    });
+    const [row] = store.queryEvents({});
+    const { location } = JSON.parse(row.payload);
+    assert.ok(location !== null, 'location must be present');
+    assert.equal(location.lat, 41.9, 'lat blurred to 1 decimal');
+    assert.equal(location.lng, -87.6, 'lng blurred to 1 decimal');
+    assert.equal(location.label, 'Chicago', 'non-coord fields pass through');
+  });
+});
+
+test('appendObservationToEventStore blurs ObservationLocation { lat, lon } shape', () => {
+  withStore((store) => {
+    appendObservationToEventStore(store, {
+      id: 'obs-loc2',
+      domain: 'weather',
+      timestamp: Date.now(),
+      severity: 'LOW',
+      location: { lat: 41.8827, lon: -87.6233, radiusKm: 5 },
+    });
+    const [row] = store.queryEvents({});
+    const { location } = JSON.parse(row.payload);
+    assert.equal(location.lat, 41.9, 'lat blurred');
+    assert.equal(location.lon, -87.6, 'lon blurred');
+    assert.equal(location.radiusKm, 5, 'radiusKm passes through');
+  });
+});
+
+test('appendSituationToEventStore omits summary and description from payload', () => {
+  withStore((store) => {
+    appendSituationToEventStore(store, {
+      id: 'sit-pii',
+      status: 'active',
+      severity: 'high',
+      domain: 'natural',
+      summary: 'Flooding near user home at 123 Main St',
+      description: 'Personal details here',
+      startedAt: Date.now(),
+      observationIds: ['obs-1'],
+    });
+    const [row] = store.queryEvents({});
+    const payload = JSON.parse(row.payload);
+    assert.equal(payload.summary, undefined, 'summary must be omitted');
+    assert.equal(payload.description, undefined, 'description must be omitted');
+    assert.equal(payload.domain, 'natural');
+    assert.equal(payload.status, 'active');
   });
 });
 

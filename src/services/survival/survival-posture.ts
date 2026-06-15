@@ -5,7 +5,8 @@ import type {
   AxisState, DomainFreshness, PostureThreat, SurvivalAxis, SurvivalPosture,
 } from './survival-types.ts';
 import { SURVIVAL_AXES, axisLabel, bandForLevel, buildHeadline } from './survival-types.ts';
-import { projectWeatherThreats } from './threat-projection.ts';
+import type { PostureContributor } from './posture-contributor.ts';
+import { makeWeatherContributor } from './weather-contributor.ts';
 
 /** Structural subset of WorldSnapshot that posture computation needs.
  *  A full WorldSnapshot satisfies this. */
@@ -20,9 +21,16 @@ export interface PostureOptions {
   now?: number;
 }
 
-export function computePosture(inputData: PostureInput, options: PostureOptions = {}): SurvivalPosture {
-  const now = options.now ?? inputData.capturedAtMs;
-  const threats = projectWeatherThreats(inputData.weatherAlerts, inputData.savedPlaces, { now });
+export interface MultiAxisInput {
+  contributors: readonly PostureContributor[];
+  freshness: readonly DomainFreshness[];
+  capturedAtMs: number;
+}
+
+/** Generalized posture: aggregate threats from all contributors across all axes. */
+export function computeMultiAxisPosture(input: MultiAxisInput, options: PostureOptions = {}): SurvivalPosture {
+  const now = options.now ?? input.capturedAtMs;
+  const threats = input.contributors.flatMap((c) => c.contribute(now));
 
   const byAxis = new Map<SurvivalAxis, PostureThreat[]>();
   for (const t of threats) {
@@ -30,8 +38,11 @@ export function computePosture(inputData: PostureInput, options: PostureOptions 
     arr.push(t);
     byAxis.set(t.axis, arr);
   }
+  // Strongest-first within each axis so buildAxisState's dominant-threat logic holds
+  // even when multiple contributors feed the same axis.
+  for (const arr of byAxis.values()) arr.sort((a, b) => b.severity - a.severity);
 
-  const staleInputs = inputData.freshness
+  const staleInputs = input.freshness
     .filter((f) => !f.ok)
     .map((f) => `${f.domain} feed stale (${Math.round(f.ageMs / 60_000)} min old)`);
 
@@ -47,6 +58,17 @@ export function computePosture(inputData: PostureInput, options: PostureOptions 
     capturedAtMs: now,
     staleInputs,
   };
+}
+
+export function computePosture(inputData: PostureInput, options: PostureOptions = {}): SurvivalPosture {
+  return computeMultiAxisPosture(
+    {
+      contributors: [makeWeatherContributor(inputData.weatherAlerts, inputData.savedPlaces)],
+      freshness: inputData.freshness,
+      capturedAtMs: inputData.capturedAtMs,
+    },
+    options,
+  );
 }
 
 function buildAxisState(axis: SurvivalAxis, threats: PostureThreat[], staleInputs: string[]): AxisState {
@@ -70,4 +92,3 @@ function buildAxisState(axis: SurvivalAxis, threats: PostureThreat[], staleInput
 
   return { axis, level, band, trend: 'steady', threats, confidence, explanation, drivers };
 }
-

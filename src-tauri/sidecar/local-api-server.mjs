@@ -16302,6 +16302,16 @@ export async function createLocalApiServer(options = {}) {
  if (aliasTarget) requestUrl.pathname = aliasTarget;
  const reqStartedAt = Date.now();
 
+ // Inline routes below write directly to `res`. The module-level json()
+ // helper returns a Response object, which dispatch() converts to `res` at
+ // the end of this callback — but an inline `return json(...)` here just
+ // discards that Response and hangs the request. Use sendJson() for inline
+ // routes so they always flush.
+ const sendJson = (data, status = 200) => {
+ res.writeHead(status, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+ res.end(JSON.stringify(data));
+ };
+
  if (requestUrl.pathname === '/gps/nmea') {
  // CORS preflight carries no Authorization header, so answer it before the
  // auth gate — otherwise the browser preflight 401s and the real GET (which
@@ -16362,15 +16372,39 @@ export async function createLocalApiServer(options = {}) {
  return;
  }
 
+ // ── Shared auth gate for inline /api/ routes ──────────────────────────
+ // The inline handlers below (feeds health, diagnostics self-test, the
+ // intelligence mirror, command-center, timeline, watchboards) return
+ // before dispatch()'s global auth gate, so they were reachable without a
+ // LOCAL_API_TOKEN — an unauthenticated local caller could read and mutate
+ // sidecar state (POST situations/entities/rules, DELETE rules/watchboards).
+ // Gate them here. OPTIONS preflight carries no auth header, and the few
+ // intentionally-public routes served pre-auth by dispatch() (iframe embed,
+ // service status, Patreon authorize-url, SMS webhook) must fall through.
+ const PUBLIC_API_ROUTES = new Set([
+ '/api/service-status',
+ '/api/youtube-embed',
+ '/api/patreon/authorize-url',
+ '/api/sms/command',
+ ]);
+ if (req.method !== 'OPTIONS'
+ && !PUBLIC_API_ROUTES.has(requestUrl.pathname)
+ && !isValidToken(req.headers['authorization'] || '')) {
+ warnUnauthorizedOnce(context, requestUrl.pathname);
+ res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+ res.end(JSON.stringify({ error: 'Unauthorized' }));
+ return;
+ }
+
  // ── /api/feeds/health — per-feed resilience status ────────────────────
  if (requestUrl.pathname === '/api/feeds/health') {
-   return json({ feeds: getAllFeedStatuses(), asOf: new Date().toISOString() });
+   return sendJson({ feeds: getAllFeedStatuses(), asOf: new Date().toISOString() });
  }
 
  if (requestUrl.pathname.startsWith('/api/feeds/health/')) {
    const feedId = requestUrl.pathname.slice('/api/feeds/health/'.length);
-   if (!feedId || !/^[\w\-.:]+$/.test(feedId)) return json({ error: 'invalid feedId' }, 400);
-   return json(getFeedStatus(feedId));
+   if (!feedId || !/^[\w\-.:]+$/.test(feedId)) return sendJson({ error: 'invalid feedId' }, 400);
+   return sendJson(getFeedStatus(feedId));
  }
 
  // ── /api/health — lightweight liveness probe ──────────────────────
@@ -16668,16 +16702,16 @@ export async function createLocalApiServer(options = {}) {
   // ── /api/watchboards — geofenced standing queries (tripwires) ─────
   if (requestUrl.pathname === '/api/watchboards' || requestUrl.pathname === '/api/watchboards/') {
     if (req.method === 'GET') {
-      return json({ watchboards: getWatchboards() }, 200, makeCorsHeaders(req));
+      return sendJson({ watchboards: getWatchboards() });
     }
     if (req.method === 'POST') {
       const raw = await readBody(req);
       const body = raw ? JSON.parse(raw.toString()) : null;
-      if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400, makeCorsHeaders(req));
+      if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
       const created = createWatchboard(body);
-      return json({ watchboard: created }, 201, makeCorsHeaders(req));
+      return sendJson({ watchboard: created }, 201);
     }
-    return json({ error: 'Method not allowed' }, 405, makeCorsHeaders(req));
+    return sendJson({ error: 'Method not allowed' }, 405);
   }
 
   const wbIdMatch = requestUrl.pathname.match(/^\/api\/watchboards\/([^/]+)$/);
@@ -16685,25 +16719,25 @@ export async function createLocalApiServer(options = {}) {
     const wbId = wbIdMatch[1];
     if (wbId === 'firings' && req.method === 'GET') {
       const limit = Math.min(Number(requestUrl.searchParams.get('limit') || '50'), 200);
-      return json({ firings: getRecentFirings(limit) }, 200, makeCorsHeaders(req));
+      return sendJson({ firings: getRecentFirings(limit) });
     }
     if (wbId === 'templates' && req.method === 'GET') {
-      return json({ templates: getWatchboardTemplates() }, 200, makeCorsHeaders(req));
+      return sendJson({ templates: getWatchboardTemplates() });
     }
     if (req.method === 'PUT') {
       const raw = await readBody(req);
       const body = raw ? JSON.parse(raw.toString()) : null;
-      if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400, makeCorsHeaders(req));
+      if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
       const updated = updateWatchboard(wbId, body);
-      if (!updated) return json({ error: 'not found' }, 404, makeCorsHeaders(req));
-      return json({ watchboard: updated }, 200, makeCorsHeaders(req));
+      if (!updated) return sendJson({ error: 'not found' }, 404);
+      return sendJson({ watchboard: updated });
     }
     if (req.method === 'DELETE') {
       const deleted = deleteWatchboard(wbId);
-      if (!deleted) return json({ error: 'not found' }, 404, makeCorsHeaders(req));
-      return json({ ok: true }, 200, makeCorsHeaders(req));
+      if (!deleted) return sendJson({ error: 'not found' }, 404);
+      return sendJson({ ok: true });
     }
-    return json({ error: 'Method not allowed' }, 405, makeCorsHeaders(req));
+    return sendJson({ error: 'Method not allowed' }, 405);
   }
 
  // ── /api/diag — full diagnostics snapshot for bug reports ─────────

@@ -17,6 +17,7 @@ const REFRESH_MS = 30 * 60 * 1000;
 export class S2UndergroundPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private activeVideoId: string | null = null;
+  private oauthWindow: Window | null = null;
 
   constructor() {
     super({
@@ -134,7 +135,7 @@ export class S2UndergroundPanel extends Panel {
         return;
       }
       window.addEventListener('message', this.onOAuthMessage);
-      window.open(j.url, 'patreon-oauth', 'width=600,height=800');
+      this.oauthWindow = window.open(j.url, 'patreon-oauth', 'width=600,height=800');
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       this.setContent(`<div style="padding:12px;font-size:12px;color:#f44336">Could not start Patreon connect: ${msg}</div>`);
@@ -142,9 +143,16 @@ export class S2UndergroundPanel extends Panel {
   }
 
   private readonly onOAuthMessage = (ev: MessageEvent): void => {
+    // Only trust the OAuth callback served by our own sidecar, and only the
+    // popup window we opened. Without these checks any page/frame able to
+    // postMessage to this window could inject an attacker-controlled
+    // access_token that we'd persist to the keychain.
+    if (ev.origin !== `http://127.0.0.1:${getLocalApiPort()}`) return;
+    if (ev.source !== this.oauthWindow) return;
     const m = ev.data as { type?: string; ok?: boolean; access_token?: string; refresh_token?: string };
     if (m?.type !== 'patreon-oauth') return;
     window.removeEventListener('message', this.onOAuthMessage);
+    this.oauthWindow = null;
     if (m.ok && m.access_token) {
       setPatreonSessionTokens(m.access_token, m.refresh_token);
     }

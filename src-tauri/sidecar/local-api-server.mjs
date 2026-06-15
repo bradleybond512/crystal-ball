@@ -16378,17 +16378,27 @@ export async function createLocalApiServer(options = {}) {
  // before dispatch()'s global auth gate, so they were reachable without a
  // LOCAL_API_TOKEN — an unauthenticated local caller could read and mutate
  // sidecar state (POST situations/entities/rules, DELETE rules/watchboards).
- // Gate them here. OPTIONS preflight carries no auth header, and the few
- // intentionally-public routes served pre-auth by dispatch() (iframe embed,
- // service status, Patreon authorize-url, SMS webhook) must fall through.
+ // Gate them here. The few intentionally-public routes served pre-auth by
+ // dispatch() (iframe embed, service status, Patreon authorize-url, SMS
+ // webhook) must fall through.
  const PUBLIC_API_ROUTES = new Set([
  '/api/service-status',
  '/api/youtube-embed',
  '/api/patreon/authorize-url',
  '/api/sms/command',
  ]);
- if (req.method !== 'OPTIONS'
- && !PUBLIC_API_ROUTES.has(requestUrl.pathname)
+ // Answer CORS preflight for every inline /api/ route here. Preflight
+ // (OPTIONS) carries no Authorization header, and the inline handlers below
+ // only branch on GET/POST/PUT/DELETE — merely exempting OPTIONS from the
+ // auth check would let it fall through to a 405/401 (or, before sendJson,
+ // a hung request), so the real request's preflight would never succeed.
+ // Mirrors the /gps/nmea handler above and dispatch()'s OPTIONS handler.
+ if (req.method === 'OPTIONS') {
+ res.writeHead(204, makeCorsHeaders(req));
+ res.end();
+ return;
+ }
+ if (!PUBLIC_API_ROUTES.has(requestUrl.pathname)
  && !isValidToken(req.headers['authorization'] || '')) {
  warnUnauthorizedOnce(context, requestUrl.pathname);
  res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });

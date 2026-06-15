@@ -42,7 +42,8 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
     const nowAllClear = next.posture.overallLevel === 0;
     const priorUnexpired = current?.weatherAlerts.some((a) => Date.parse(a.expires) > now) ?? false;
     if (hadThreat && nowAllClear && priorUnexpired) {
-      return; // likely a data gap — keep the last known posture
+      notify(); // keep last posture, but re-render so the stale banner ages
+      return;
     }
 
     current = next;

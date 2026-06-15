@@ -20,7 +20,7 @@ const localeModules = import.meta.glob<TranslationDictionary>(
 const RTL_LANGUAGES = new Set(['ar']);
 
 function normalizeLanguage(lng: string): SupportedLanguage {
-  const base = (lng || 'en').split('-')[0]?.toLowerCase() || 'en';
+  const base = (lng || 'en').split('-')[0]?.toLowerCase() ?? 'en';
   if (SUPPORTED_LANGUAGE_SET.has(base as SupportedLanguage)) {
  return base as SupportedLanguage;
   }
@@ -28,7 +28,7 @@ function normalizeLanguage(lng: string): SupportedLanguage {
 }
 
 function applyDocumentDirection(lang: string): void {
-  const base = lang.split('-')[0] || lang;
+  const base = lang.split('-')[0] ?? lang;
   document.documentElement.setAttribute('lang', base === 'zh' ? 'zh-CN' : base);
   if (RTL_LANGUAGES.has(base)) {
  document.documentElement.setAttribute('dir', 'rtl');
@@ -51,6 +51,7 @@ async function ensureLanguageLoaded(lng: string): Promise<SupportedLanguage> {
  if (loader) {
  translation = await loader();
  } else {
+ // eslint-disable-next-line no-console
  console.warn(`No locale file for "${normalized}", falling back to English`);
  translation = enTranslation as TranslationDictionary;
  }
@@ -126,7 +127,7 @@ export function isRTL(): boolean {
 export function getLocale(): string {
   const lang = getCurrentLanguage();
   const map: Record<string, string> = { en: 'en-US', el: 'el-GR', zh: 'zh-CN', pt: 'pt-BR', ja: 'ja-JP', ko: 'ko-KR', tr: 'tr-TR', th: 'th-TH', vi: 'vi-VN' };
-  return map[lang] || lang;
+  return map[lang] ?? lang;
 }
 
 export const LANGUAGES = [

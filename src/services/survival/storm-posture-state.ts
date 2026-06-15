@@ -34,7 +34,12 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
     const places = appPlaces.map((p) => adaptSavedPlace(p));
     const plan = current?.plan;
     const nwsLastUpdate = dataFreshness.getSource('nws-alerts')?.lastUpdate;
-    const weatherFetchedAtMs = nwsLastUpdate ? nwsLastUpdate.getTime() : now;
+    const priorFetchedAt = current?.freshness.find((f) => f.domain === 'weather')?.fetchedAtMs;
+    // Real successful-fetch time when available; otherwise carry the prior
+    // snapshot's fetch time so a failed/never-confirmed fetch stays honestly stale
+    // (so the data-gap guard preserves a hydrated threat at grid-down startup).
+    // Only fall back to `now` on a true cold start with no prior data at all.
+    const weatherFetchedAtMs = nwsLastUpdate ? nwsLastUpdate.getTime() : (priorFetchedAt ?? now);
     const next = buildSnapshot({ weatherAlerts: alerts, savedPlaces: places, weatherFetchedAtMs, plan }, { now });
 
     // Survival guard: never erase a known threat because of a DATA GAP. The alert

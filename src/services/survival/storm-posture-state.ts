@@ -14,6 +14,7 @@ import { makeWeatherMoveProvider } from './weather-move-provider.ts';
 import { makeSupplyMoveProvider } from './supply-move-provider.ts';
 import { adaptLiveAlert, adaptSavedPlace, type LiveAlertInput } from './storm-posture-adapter.ts';
 import { saveSnapshot, loadLatestSnapshot } from './snapshot-store.ts';
+import type { PostureContributor } from './posture-contributor.ts';
 import type { SurvivalMove, SurvivalPosture, WorldSnapshot } from './survival-types.ts';
 
 // ── Shortage-entry TTL cache ────────────────────────────────────────────────
@@ -43,16 +44,33 @@ async function getSupplyEntries(now: number): Promise<ShortageSummaryEntry[]> {
   return cachedShortageEntries;
 }
 
+/** Yields the supply contributor to drive the supply axis. When the shortage
+ *  cache has been populated by at least one live refresh, the live entries
+ *  drive supply. Before that first refresh (e.g. a grid-down cold start after
+ *  `hydrateStormPosture()`), the cache is empty but the persisted snapshot may
+ *  still carry a supply threat — recomputing from `[]` would silently clear it.
+ *  In that cold-cache case we fall back to the supply threats already present
+ *  on the snapshot's posture (these survive grid-down via the persisted
+ *  snapshot and are the original, unmitigated threats since `applyPlanToPosture`
+ *  preserves each axis's `threats` array). */
+export function supplyContributorForBase(base: WorldSnapshot | null): PostureContributor {
+  if (hasShortageCache) return makeSupplyContributor(cachedShortageEntries);
+  const existing = base?.posture.axes.find((a) => a.axis === 'supply')?.threats ?? [];
+  return { id: 'supply', contribute: () => [...existing] };
+}
+
 /** Re-derive posture across weather + supply contributors, then re-apply the
  *  committed plan once on the fresh base. Weather behavior is unchanged: the
  *  same weather contributor + weather moves feed in; supply is additive. The
  *  base is computed without the plan and the plan is applied exactly once, so
- *  this never double-counts the committed move effects. */
-function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyEntries: readonly ShortageSummaryEntry[]): WorldSnapshot {
+ *  this never double-counts the committed move effects. The supply contributor
+ *  is built from `supplyBase` (the snapshot whose persisted supply threats are
+ *  the cold-cache fallback). */
+function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyBase: WorldSnapshot | null): WorldSnapshot {
   const base: SurvivalPosture = computeMultiAxisPosture({
     contributors: [
       makeWeatherContributor(snapshot.weatherAlerts, snapshot.savedPlaces),
-      makeSupplyContributor(supplyEntries),
+      supplyContributorForBase(supplyBase),
     ],
     freshness: snapshot.freshness,
     capturedAtMs: snapshot.capturedAtMs,
@@ -127,9 +145,10 @@ export async function refreshStormPosture(now = Date.now()): Promise<void> {
 
     // Thread supply into the stored snapshot after the weather-driven guard.
     // Live shortage feeds (TTL-cached) drive the supply axis; a feed failure
-    // degrades to baseline inside getSupplyEntries.
-    const supplyEntries = await getSupplyEntries(now);
-    const next = withSupplyPosture(weatherOnly, now, supplyEntries);
+    // degrades to baseline inside getSupplyEntries. Once this resolves the cache
+    // is populated, so withSupplyPosture uses the live entries (not the fallback).
+    await getSupplyEntries(now);
+    const next = withSupplyPosture(weatherOnly, now, current);
     current = next;
     notify();
     void saveSnapshot(next);
@@ -147,8 +166,11 @@ export function commitStormMove(move: SurvivalMove, now = Date.now()): void {
     { now: current.capturedAtMs },
   );
   // Reuse the last cached supply entries (commit only re-applies an already-
-  // committed plan; it never needs a fresh shortage fetch).
-  current = withSupplyPosture(rebuilt, current.capturedAtMs, cachedShortageEntries);
+  // committed plan; it never needs a fresh shortage fetch). Before the first
+  // live refresh populates the cache (grid-down cold start), fall back to the
+  // current snapshot's persisted supply threats so committing a move doesn't
+  // clear a hydrated supply axis.
+  current = withSupplyPosture(rebuilt, current.capturedAtMs, current);
   notify();
   void saveSnapshot(current);
 }

@@ -75,7 +75,7 @@ async function tryMapbox(from: RouteCoord, to: RouteCoord, profile: RoutingProfi
   const mbProfile = profile === 'driving' ? 'driving-traffic' : profile;
   const url = `https://api.mapbox.com/directions/v5/mapbox/${mbProfile}/${from.lon},${from.lat};${to.lon},${to.lat}?access_token=${key}&geometries=geojson&steps=true&overview=full`;
 
-  const res = await fetch(url, { referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(3000) });
+  const res = await fetch(url, { referrerPolicy: 'strict-origin-when-cross-origin', signal: AbortSignal.timeout(3000) });
   if (!res.ok) return null;
 
   const data = (await res.json()) as Record<string, unknown>;
@@ -124,7 +124,7 @@ async function tryGoogle(from: RouteCoord, to: RouteCoord): Promise<RouteResult 
 
   const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${from.lat},${from.lon}&destination=${to.lat},${to.lon}&key=${key}`;
 
-  const res = await fetch(url, { referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(3000) });
+  const res = await fetch(url, { referrerPolicy: 'strict-origin-when-cross-origin', signal: AbortSignal.timeout(3000) });
   if (!res.ok) return null;
 
   const data = (await res.json()) as Record<string, unknown>;
@@ -176,7 +176,7 @@ async function tryValhalla(from: RouteCoord, to: RouteCoord, profile: RoutingPro
 
   const res = await fetch('https://valhalla1.openstreetmap.de/route', {
     method: 'POST',
-    referrerPolicy: 'no-referrer',
+    referrerPolicy: 'strict-origin-when-cross-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       locations: [{ lat: from.lat, lon: from.lon }, { lat: to.lat, lon: to.lon }],
@@ -226,7 +226,7 @@ async function tryValhalla(from: RouteCoord, to: RouteCoord, profile: RoutingPro
 async function tryOsrm(from: RouteCoord, to: RouteCoord): Promise<RouteResult | null> {
   const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson&steps=true`;
 
-  const res = await fetch(url, { referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(3000) });
+  const res = await fetch(url, { referrerPolicy: 'strict-origin-when-cross-origin', signal: AbortSignal.timeout(3000) });
   if (!res.ok) return null;
 
   const data = (await res.json()) as Record<string, unknown>;

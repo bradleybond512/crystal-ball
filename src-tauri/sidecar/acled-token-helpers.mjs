@@ -47,7 +47,7 @@ export function updateAcledTokenState(state, oauthData, now = Date.now()) {
   const newRefreshToken = oauthData.refresh_token ?? null;
   const rotated = newRefreshToken != null && newRefreshToken !== state.refreshToken;
   return {
-    expiresAt: expiresIn != null ? now + expiresIn * 1000 : state.expiresAt,
+    expiresAt: expiresIn == null ? state.expiresAt : now + expiresIn * 1000,
     refreshToken: newRefreshToken ?? state.refreshToken,
     refreshIssuedAt: rotated ? now : state.refreshIssuedAt,
   };

@@ -150,7 +150,7 @@ export class MacroSignalsPanel extends Panel {
  const sr = await fetch(`${getApiBaseUrl()}/api/macro-signals`);
  if (sr.ok) {
  const sd = await sr.json() as GetMacroSignalsResponse;
- if (!sd.unavailable && sd.totalCount > 0) res = sd;
+ if (sd && typeof sd === 'object' && !sd.unavailable && typeof sd.totalCount === 'number' && sd.totalCount > 0) res = sd;
  }
  } catch { /* fall through */ }
  if (!res) res = await economicClient.getMacroSignals({});

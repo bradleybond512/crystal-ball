@@ -56,7 +56,7 @@ export class ETFFlowsPanel extends Panel {
  const sr = await fetch(`${getApiBaseUrl()}/api/btc-etf-flows`);
  if (sr.ok) {
  const sd = await sr.json() as ListEtfFlowsResponse;
- if (Array.isArray(sd.etfs) && sd.etfs.length > 0) {
+ if (sd && typeof sd === 'object' && Array.isArray(sd.etfs) && sd.etfs.length > 0) {
  this.data = sd;
  sidecarOk = true;
  }

@@ -74,10 +74,18 @@ export class EconomicNewsPanel extends Panel {
       const [ms, nd] = await Promise.allSettled([
         fetch(`${base}/api/mediastack-news?categories=business&limit=20`, {
           signal: AbortSignal.timeout(12_000),
-        }).then(r => r.ok ? r.json() as Promise<MediastackResponse> : null),
+        }).then(async r => {
+          if (!r.ok) return null;
+          const j = await r.json() as MediastackResponse;
+          return (j && typeof j === 'object') ? j : null;
+        }),
         fetch(`${base}/api/newsdata-feed?category=business&size=15`, {
           signal: AbortSignal.timeout(12_000),
-        }).then(r => r.ok ? r.json() as Promise<NewsdataResponse> : null),
+        }).then(async r => {
+          if (!r.ok) return null;
+          const j = await r.json() as NewsdataResponse;
+          return (j && typeof j === 'object') ? j : null;
+        }),
       ]);
 
       if (ms.status === 'fulfilled' && ms.value?.data) {

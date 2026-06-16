@@ -107,7 +107,7 @@ export class CorrelationMapPanel extends Panel {
       const res = await fetch(`${getApiBaseUrl()}/api/intelligence/correlations/chains`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { chains: CorrelationChain[] };
-      this.chains = data.chains ?? [];
+      this.chains = Array.isArray(data?.chains) ? data.chains : [];
       this.error = null;
     } catch (error) {
       this.error = error instanceof Error ? error.message : 'fetch failed';

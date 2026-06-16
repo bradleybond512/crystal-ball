@@ -51,6 +51,10 @@ export class WhatChangedPanel extends Panel {
         return;
       }
       const report = await res.json() as WhatChangedReport;
+      if (!report || !Array.isArray(report.severityEscalations) || !Array.isArray(report.newCorrelationIds)) {
+        this.setContent('<div class="panel-empty">Change digest unavailable.</div>');
+        return;
+      }
       this.lastFetchAt = report.until;
       this.render(report);
     } catch {

@@ -823,7 +823,9 @@ export class RuntimeConfigPanel extends Panel {
  });
  if (res.ok) {
  const data = await res.json() as { models?: { name: string }[] };
- models = (data.models?.map(m => m.name) ?? []).filter(n => !n.includes('embed'));
+ if (data && Array.isArray(data.models)) {
+ models = data.models.map(m => m.name).filter(n => !n.includes('embed'));
+ }
  }
  } catch { /* Ollama endpoint not available, try OpenAI format */ }
 
@@ -834,7 +836,9 @@ export class RuntimeConfigPanel extends Panel {
  });
  if (res.ok) {
  const data = await res.json() as { data?: { id: string }[] };
- models = (data.data?.map(m => m.id) ?? []).filter(n => !n.includes('embed'));
+ if (data && Array.isArray(data.data)) {
+ models = data.data.map(m => m.id).filter(n => !n.includes('embed'));
+ }
  }
  } catch { /* OpenAI endpoint also unavailable */ }
  }

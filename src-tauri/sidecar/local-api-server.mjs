@@ -7206,7 +7206,8 @@ async function dispatch(requestUrl, req, routes, context) {
  // Proactively refresh the access token when it's within 5 min of expiry.
  let tokenRefreshed = false;
  if (isAcledTokenExpiringSoon(acledTokenState.expiresAt)) {
- const rt = acledTokenState.refreshToken || process.env.ACLED_REFRESH_TOKEN;
+ // Prefer process.env so settings-flow updates (via /api/local-env-update) are always honoured.
+ const rt = process.env.ACLED_REFRESH_TOKEN || acledTokenState.refreshToken;
  if (rt) {
  try {
  const refreshResp = await fetchWithTimeout(
@@ -13101,6 +13102,8 @@ async function dispatch(requestUrl, req, routes, context) {
  context.logger.log(`[local-api] env set: ${key}`);
  }
  if (key === 'AISSTREAM_API_KEY') aisOnKeyChanged(value || null);
+ if (key === 'ACLED_REFRESH_TOKEN') acledTokenState.refreshToken = value || null;
+ if (key === 'ACLED_ACCESS_TOKEN') acledTokenState.expiresAt = null; // expiry unknown after manual key update
  if (key === 'S2U_XMPP_JID' || key === 'S2U_XMPP_SECRET') {
  s2uXmppApplyCreds().catch((error) => {
  context.logger.log(`[s2u-xmpp] reapply creds failed: ${error?.message ?? error}`);

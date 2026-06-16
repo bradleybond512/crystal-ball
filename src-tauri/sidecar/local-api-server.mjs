@@ -30,7 +30,6 @@ import {
   isAcledTokenExpiringSoon,
   isRefreshTokenStale,
   updateAcledTokenState,
-  ACLED_TOKEN_REFRESH_BUFFER_MS,
   ACLED_REFRESH_TOKEN_WARN_DAYS,
 } from './acled-token-helpers.mjs';
 import { fetchWithFallback } from './feed-resilience.mjs';
@@ -7092,11 +7091,16 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!data.access_token) return json({ error: 'No access token in refresh response' }, 401);
  // Update in-memory state and warn if the refresh token hasn't rotated recently.
  const nowRefresh = Date.now();
+ // The caller-supplied refresh token just succeeded, so it is known-valid. Seed it
+ // as the baseline when in-memory state has none (e.g. after a sidecar restart);
+ // otherwise a non-rotating provider response would leave acledTokenState.refreshToken
+ // empty and silently disable proactive refresh in /api/acled-events.
+ if (!acledTokenState.refreshToken) acledTokenState.refreshToken = refreshToken;
  const wasStale = isRefreshTokenStale(acledTokenState.refreshIssuedAt, nowRefresh);
  const refreshedState = updateAcledTokenState(acledTokenState, data, nowRefresh);
  Object.assign(acledTokenState, refreshedState);
  process.env.ACLED_ACCESS_TOKEN = data.access_token;
- if (data.refresh_token) process.env.ACLED_REFRESH_TOKEN = data.refresh_token;
+ process.env.ACLED_REFRESH_TOKEN = data.refresh_token ?? refreshToken;
  return json({
  accessToken: data.access_token,
  refreshToken: data.refresh_token ?? refreshToken,

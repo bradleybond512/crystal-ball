@@ -104,7 +104,7 @@ export async function runClaudeAgent(
  try {
  const errData = await res.json() as { error?: string };
  if (errData && typeof errData === 'object') {
- errorMessage = errData.error || errorMessage;
+ errorMessage = errData.error ?? errorMessage;
  }
  } catch {
  // ignore parse error

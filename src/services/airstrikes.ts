@@ -57,7 +57,7 @@ export async function fetchAirstrikes(): Promise<AirstrikeEvent[]> {
  const res = await fetch(url);
  if (!res.ok) return _cache?.data ?? [];
  const json = await res.json() as { events?: unknown[]; error?: string };
- if (!json.events) return _cache?.data ?? [];
+ if (!Array.isArray(json.events)) return _cache?.data ?? [];
 
  const events: AirstrikeEvent[] = (json.events as AcledRawEvent[]).map(e => ({
  id: asStr(e.event_id_cnty),

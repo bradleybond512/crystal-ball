@@ -42,7 +42,7 @@ export async function fetchSpaceflightNews(): Promise<SpaceflightArticle[]> {
  return [];
  }
  const json = await res.json() as { results?: RawArticle[] };
- const raw = json.results ?? [];
+ const raw = Array.isArray(json.results) ? json.results : [];
  const articles: SpaceflightArticle[] = raw.map(r => ({
  id: r.id,
  title: r.title,

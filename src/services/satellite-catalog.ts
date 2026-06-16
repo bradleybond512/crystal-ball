@@ -59,6 +59,7 @@ export async function fetchSatelliteCatalog(): Promise<SatelliteTLE[]> {
  if (!res.ok) throw new Error(`CelesTrak HTTP ${String(res.status)}`);
 
  const data = await res.json() as CelesTrakGP[];
+ if (!Array.isArray(data)) throw new Error('CelesTrak unexpected response shape');
 
  return data.map(sat => ({
  noradId: sat.NORAD_CAT_ID,

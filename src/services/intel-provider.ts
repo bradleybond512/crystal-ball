@@ -85,6 +85,9 @@ async function callLocal(prompt: string, opts: IntelOptions): Promise<IntelRespo
   }
   consecutiveFailures = 0;
   const data = await res.json() as { response: string; model: string };
+  if (!data || typeof data !== 'object' || typeof data.response !== 'string') {
+    throw new Error('local intel malformed response');
+  }
   return { response: data.response, model: data.model, provider: 'local' };
 }
 

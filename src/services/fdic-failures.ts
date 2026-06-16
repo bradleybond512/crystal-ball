@@ -104,6 +104,10 @@ export async function fetchBankFailures(): Promise<FdicFailureSummary> {
  }
 
  const json = await res.json() as FdicResponse;
+ if (!json || typeof json !== 'object' || !Array.isArray(json.data)) {
+   dataFreshness.recordError('fdic-failures', 'unexpected payload shape');
+   return cache?.data ?? { failures: [], totalFailuresLastYear: 0, totalAssetsCoveredM: 0, fetchedAt: new Date() };
+ }
  const twoYearsAgo = new Date(now - 2 * 365 * 24 * 60 * 60 * 1000);
  const oneYearAgo = new Date(now - 365 * 24 * 60 * 60 * 1000);
 

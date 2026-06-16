@@ -50,6 +50,10 @@ export async function fetchGpsInterference(): Promise<GpsJamData | null> {
  stats: { totalHexes: number; highCount: number; mediumCount: number };
  hexes: { h3: string; pct: number; good: number; bad: number; total: number; level: string }[];
  };
+ if (!raw || typeof raw !== 'object' || !Array.isArray(raw.hexes)) {
+ dataFreshness.recordError('gps-interference', 'malformed response');
+ return cachedData;
+ }
 
  // Convert H3 hex IDs to lat/lon
  const hexes: GpsJamHex[] = [];

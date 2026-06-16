@@ -67,7 +67,7 @@ export async function fetchTidePredictions(stationId: string): Promise<TideData 
  if (!res.ok) throw new Error(`CO-OPS HTTP ${String(res.status)}`);
 
  const data = await res.json() as CoopsHiLo;
- if (!data.predictions) return null;
+ if (!data || typeof data !== 'object' || !Array.isArray(data.predictions)) return null;
 
  const predictions: TidePrediction[] = data.predictions.map(p => ({
  time: new Date(p.t),

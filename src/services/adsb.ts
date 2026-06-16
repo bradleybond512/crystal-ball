@@ -82,6 +82,7 @@ export async function fetchAdsbSnapshot(): Promise<AdsbSnapshot> {
  }
  if (!res.ok) throw new Error(`HTTP ${res.status}`);
  const data = await res.json() as { states: unknown[][] | null; time: number; rateLimited?: boolean };
+ if (!data || typeof data !== 'object') return { flights: [], fetchedAt: Date.now(), totalCount: 0, rateLimited: false };
  const states = data.states ?? [];
  const flights = parseStates(states);
  const snapshot: AdsbSnapshot = {

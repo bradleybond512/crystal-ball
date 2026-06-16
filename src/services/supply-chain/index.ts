@@ -40,7 +40,9 @@ const emptyMinerals: GetCriticalMineralsResponse = { minerals: [], fetchedAt: ''
 async function fetchSidecarData(): Promise<SidecarSupplyChain> {
   const resp = await fetch(`${getApiBaseUrl()}/api/supply-chain`);
   if (!resp.ok) throw new Error(`supply-chain sidecar ${resp.status}`);
-  return resp.json() as Promise<SidecarSupplyChain>;
+  const raw = await resp.json() as unknown;
+  if (!raw || typeof raw !== 'object') throw new Error('supply-chain sidecar malformed response');
+  return raw as SidecarSupplyChain;
 }
 
 export async function fetchShippingRates(): Promise<GetShippingRatesResponse> {

@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Manager, RunEvent, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, TitleBarStyle, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_biometry;
 
 mod corelocation;
@@ -3301,6 +3301,26 @@ fn main() {
  if let Ok(data_dir) = app.handle().path().app_data_dir() {
  exclude_app_data_from_backup(&data_dir);
  }
+
+ // Create the main window programmatically so on_navigation can be attached
+ // before the window exists — the callback is builder-only in Tauri 2.
+ // macOSPrivateApi: true in tauri.conf.json enables transparent + vibrancy.
+ #[allow(unused_mut)]
+ let mut main_builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+  .title("Crystal Ball")
+  .inner_size(1440.0, 960.0)
+  .min_inner_size(1200.0, 720.0)
+  .resizable(true)
+  .transparent(true)
+  .background_color(tauri::webview::Color(0, 0, 0, 0))
+  .on_navigation(is_trusted_window_navigation);
+ #[cfg(target_os = "macos")]
+ {
+  main_builder = main_builder
+   .title_bar_style(TitleBarStyle::Overlay)
+   .hidden_title(true);
+ }
+ main_builder.build().expect("failed to create main window");
 
  // Apply native macOS vibrancy (HudWindow material, 12pt rounded corners).
  // Pairs with `transparent: true` + `macOSPrivateApi: true` in tauri.conf.json

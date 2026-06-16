@@ -68,6 +68,7 @@ export async function fetchRedFlagWarnings(): Promise<RedFlagWarning[]> {
  if (!res.ok) throw new Error(`NWS HTTP ${String(res.status)}`);
 
  const data = await res.json() as { features: NWSAlertProps[] };
+ if (!data || !Array.isArray(data.features)) throw new Error('NWS unexpected response shape');
 
  return data.features.slice(0, 50).map(f => ({
  id: f.id,
@@ -95,6 +96,7 @@ export async function fetchFireWeatherOutlook(): Promise<FireWeatherOutlook[]> {
  geometry: { coordinates: number[][][][] | number[][][] };
  }[];
  };
+ if (!data || !Array.isArray(data.features)) return [];
 
  return data.features.map(f => ({
  riskLevel: riskFromLabel(f.properties.LABEL),

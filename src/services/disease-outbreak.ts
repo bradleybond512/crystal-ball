@@ -244,6 +244,7 @@ export async function fetchGlobalDiseaseSnapshots(): Promise<GlobalDiseaseSnapsh
 
  if (covidResp.status === 'fulfilled' && covidResp.value.ok) {
  const covid = await covidResp.value.json() as Record<string, number>;
+ if (!covid || typeof covid !== 'object') { _diseaseShCache = { snapshots, ts: Date.now() }; return snapshots; }
  let trend: GlobalDiseaseSnapshot['trend'] = 'stable';
  if (covidHistResp.status === 'fulfilled' && covidHistResp.value.ok) {
  const hist = await covidHistResp.value.json() as { cases?: Record<string, number> };

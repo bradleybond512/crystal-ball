@@ -26,13 +26,21 @@ export async function fetchRipeAtlasStatus(): Promise<RipeAtlasStatus> {
     fetch(`${base}/api/ripe-atlas?type=anchors`, { signal: AbortSignal.timeout(12_000) }),
   ]);
 
-  const statusData = statusRes.status === 'fulfilled' && statusRes.value.ok
-    ? await statusRes.value.json() as { totalConnectedProbes: number }
-    : { totalConnectedProbes: 0 };
+  let statusData: { totalConnectedProbes: number } = { totalConnectedProbes: 0 };
+  if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
+    const raw = await statusRes.value.json() as { totalConnectedProbes: number };
+    if (raw && typeof raw === 'object' && typeof raw.totalConnectedProbes === 'number') {
+      statusData = raw;
+    }
+  }
 
-  const anchorsData = anchorsRes.status === 'fulfilled' && anchorsRes.value.ok
-    ? await anchorsRes.value.json() as { anchors: RipeAtlasAnchor[]; count: number }
-    : { anchors: [] as RipeAtlasAnchor[], count: 0 };
+  let anchorsData: { anchors: RipeAtlasAnchor[]; count: number } = { anchors: [], count: 0 };
+  if (anchorsRes.status === 'fulfilled' && anchorsRes.value.ok) {
+    const raw = await anchorsRes.value.json() as { anchors: RipeAtlasAnchor[]; count: number };
+    if (raw && typeof raw === 'object' && Array.isArray(raw.anchors)) {
+      anchorsData = raw;
+    }
+  }
 
   const result: RipeAtlasStatus = {
     totalConnectedProbes: statusData.totalConnectedProbes,

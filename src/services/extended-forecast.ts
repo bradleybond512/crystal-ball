@@ -68,6 +68,7 @@ export async function fetchExtendedForecast(lat: number, lon: number, location =
  if (!res.ok) throw new Error(`Open-Meteo HTTP ${String(res.status)}`);
 
  const data = await res.json() as { daily: OpenMeteoDaily };
+ if (!data || typeof data !== 'object' || !('daily' in data)) throw new Error(`Open-Meteo unexpected payload shape`);
  const d = data.daily;
 
  const days: ForecastDay[] = d.time.map((date, i) => {

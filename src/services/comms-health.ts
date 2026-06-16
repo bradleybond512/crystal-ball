@@ -12,5 +12,7 @@ export interface CommsHealthData {
 export async function fetchCommsHealth(): Promise<CommsHealthData> {
   const res = await fetch(`${getApiBaseUrl()}/api/comms-health`);
   if (!res.ok) throw new Error(`comms-health: ${res.status}`);
-  return res.json() as Promise<CommsHealthData>;
+  const data = await res.json() as CommsHealthData;
+  if (!data || typeof data !== 'object' || !('overall' in data)) throw new Error('comms-health: malformed response');
+  return data;
 }

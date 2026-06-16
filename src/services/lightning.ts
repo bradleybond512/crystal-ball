@@ -44,6 +44,10 @@ export async function fetchLightningStrikes(): Promise<LightningStrike[]> {
  }
 
  const data = await res.json() as BlitzStrike[];
+ if (!Array.isArray(data)) {
+ dataFreshness.recordError('lightning', 'malformed response');
+ return cache?.strikes ?? [];
+ }
 
  const strikes: LightningStrike[] = data.slice(0, 500).map(s => ({
  lat: s.lat,

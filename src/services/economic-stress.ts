@@ -29,5 +29,9 @@ export interface EconomicStressData {
 export async function fetchEconomicStress(): Promise<EconomicStressData> {
   const res = await fetch(`${getApiBaseUrl()}/api/economic-stress`);
   if (!res.ok) throw new Error(`economic-stress: ${res.status}`);
-  return res.json() as Promise<EconomicStressData>;
+  const data = await res.json() as EconomicStressData;
+  if (!data || typeof data !== 'object' || typeof data.stressIndex !== 'number') {
+    throw new Error('economic-stress: unexpected payload shape');
+  }
+  return data;
 }

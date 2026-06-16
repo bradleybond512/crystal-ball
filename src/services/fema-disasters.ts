@@ -150,6 +150,10 @@ export async function fetchFemaDeclarations(daysBack = 90): Promise<FemaDeclarat
  }
 
  const data = await res.json() as FemaApiResponse<FemaApiDeclaration>;
+ if (!data || typeof data !== 'object') {
+   dataFreshness.recordError('fema-disasters', 'declarations unexpected payload shape');
+   return declarationsCache?.items ?? [];
+ }
  const raw = data.DisasterDeclarationsSummaries ?? [];
 
  const items: FemaDeclaration[] = raw.map(d => {
@@ -205,6 +209,10 @@ export async function fetchFemaShelters(): Promise<FemaShelter[]> {
  }
 
  const data = await res.json() as FemaApiResponse<FemaApiShelter>;
+ if (!data || typeof data !== 'object') {
+   dataFreshness.recordError('fema-disasters', 'shelters unexpected payload shape');
+   return sheltersCache?.items ?? [];
+ }
  const raw = data.OpenedShelters ?? [];
 
  const items: FemaShelter[] = raw.map(s => {

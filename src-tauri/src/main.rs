@@ -1762,7 +1762,8 @@ fn is_trusted_window_navigation(url: &Url) -> bool {
 /// The main window holds all trusted-window IPC privileges. Unlike auxiliary
 /// windows (live-channels) it never needs to navigate to a local HTTP service,
 /// so the allowed set is stricter:
-/// - Production: `tauri://` bundled content only.
+/// - Production: `tauri://` bundled content, plus the `tauri.localhost`
+///   WebView2 workaround origin that serves bundled app content on Windows.
 /// - Debug builds: also `localhost` (the Vite dev server at `devUrl`).
 ///
 /// `127.0.0.1` at any port is intentionally excluded — a compromised renderer
@@ -1770,6 +1771,15 @@ fn is_trusted_window_navigation(url: &Url) -> bool {
 /// `require_trusted_window` privileges.
 fn is_main_window_navigation(url: &Url) -> bool {
  if url.scheme() == "tauri" {
+  return true;
+ }
+ // Windows production builds serve bundled `WebviewUrl::App` content through
+ // the WebView2 workaround origin `http(s)://tauri.localhost` rather than the
+ // `tauri://` scheme. That host resolves to the bundled app itself — not a
+ // real loopback service — so it carries the same trust as `tauri://` and must
+ // be allowed; otherwise same-origin `window.location.reload()` after
+ // settings / API-key changes is canceled on Windows.
+ if matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost") {
   return true;
  }
  // Dev server only; compile-gated so the loopback escape hatch is absent
@@ -3544,4 +3554,62 @@ fn main() {
  _ => {}
  }
  });
+}
+
+#[cfg(test)]
+mod navigation_guard_tests {
+ use super::{is_main_window_navigation, is_trusted_window_navigation, Url};
+
+ fn url(s: &str) -> Url {
+  Url::parse(s).expect("valid test url")
+ }
+
+ // ── main-window guard ────────────────────────────────────────────────────
+
+ #[test]
+ fn main_window_allows_tauri_scheme() {
+  assert!(is_main_window_navigation(&url("tauri://localhost/index.html")));
+ }
+
+ #[test]
+ fn main_window_allows_windows_app_origin() {
+  // WebView2 serves bundled app content from this host on Windows production
+  // builds; same-origin reloads must not be canceled there.
+  assert!(is_main_window_navigation(&url("http://tauri.localhost/index.html")));
+  assert!(is_main_window_navigation(&url("https://tauri.localhost/settings")));
+ }
+
+ #[test]
+ fn main_window_rejects_loopback_service() {
+  // A compromised renderer must not redirect `main` to a sibling loopback
+  // service and inherit trusted-window IPC privileges.
+  assert!(!is_main_window_navigation(&url("http://127.0.0.1:46123/api/analyst-state")));
+  assert!(!is_main_window_navigation(&url("https://127.0.0.1/anything")));
+ }
+
+ #[test]
+ fn main_window_rejects_external_origin() {
+  assert!(!is_main_window_navigation(&url("https://evil.example.com/")));
+  // A look-alike host that merely ends in the trusted suffix must not pass.
+  assert!(!is_main_window_navigation(&url("https://tauri.localhost.evil.com/")));
+ }
+
+ #[cfg(debug_assertions)]
+ #[test]
+ fn main_window_allows_localhost_dev_only_in_debug() {
+  assert!(is_main_window_navigation(&url("http://localhost:3001/")));
+ }
+
+ // ── trusted-window (aux) guard ───────────────────────────────────────────
+
+ #[test]
+ fn trusted_window_allows_tauri_and_loopback() {
+  assert!(is_trusted_window_navigation(&url("tauri://localhost/index.html")));
+  assert!(is_trusted_window_navigation(&url("http://127.0.0.1:46123/live-channels.html")));
+ }
+
+ #[test]
+ fn trusted_window_rejects_external_origin() {
+  assert!(!is_trusted_window_navigation(&url("https://evil.example.com/")));
+ }
 }

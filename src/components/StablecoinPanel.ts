@@ -44,7 +44,7 @@ export class StablecoinPanel extends Panel {
  const sr = await fetch(`${getApiBaseUrl()}/api/stablecoin-markets`);
  if (sr.ok) {
  const sd = await sr.json() as ListStablecoinMarketsResponse;
- if (Array.isArray(sd.stablecoins) && sd.stablecoins.length > 0) {
+ if (sd && typeof sd === 'object' && Array.isArray(sd.stablecoins) && sd.stablecoins.length > 0) {
  this.data = sd;
  sidecarOk = true;
  }

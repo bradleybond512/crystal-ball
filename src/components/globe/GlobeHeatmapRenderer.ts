@@ -90,6 +90,7 @@ const DEFAULT_FETCHERS: Record<HeatmapDomain, SidecarFetcher> = {
     const res = await fetch(`${baseUrl}/api/earthquakes`, { signal });
     if (!res.ok) return [];
     const body = await res.json() as { earthquakes?: { magnitude?: unknown; location?: { latitude?: unknown; longitude?: unknown } }[] };
+    if (!body || typeof body !== 'object') return [];
     const out: HeatmapPoint[] = [];
     for (const q of body.earthquakes ?? []) {
       const lat = Number(q?.location?.latitude);
@@ -105,6 +106,7 @@ const DEFAULT_FETCHERS: Record<HeatmapDomain, SidecarFetcher> = {
     const res = await fetch(`${baseUrl}/api/nasa-firms`, { signal });
     if (!res.ok) return [];
     const body = await res.json() as { fires?: { latitude?: unknown; longitude?: unknown; frp?: unknown }[]; hotspots?: { latitude?: unknown; longitude?: unknown; frp?: unknown }[] };
+    if (!body || typeof body !== 'object') return [];
     const rows = body.fires ?? body.hotspots ?? [];
     const out: HeatmapPoint[] = [];
     for (const r of rows) {
@@ -121,6 +123,7 @@ const DEFAULT_FETCHERS: Record<HeatmapDomain, SidecarFetcher> = {
     const res = await fetch(`${baseUrl}/api/nws-alerts`, { signal });
     if (!res.ok) return [];
     const body = await res.json() as { alerts?: { lat?: unknown; lon?: unknown; latitude?: unknown; longitude?: unknown }[] };
+    if (!body || typeof body !== 'object') return [];
     const out: HeatmapPoint[] = [];
     for (const a of body.alerts ?? []) {
       const lat = Number(a?.lat ?? a?.latitude);
@@ -135,6 +138,7 @@ const DEFAULT_FETCHERS: Record<HeatmapDomain, SidecarFetcher> = {
     const res = await fetch(`${baseUrl}/api/infrastructure/outages`, { signal });
     if (!res.ok) return [];
     const body = await res.json() as { outages?: { lat?: unknown; lon?: unknown; latitude?: unknown; longitude?: unknown; customers?: unknown }[] };
+    if (!body || typeof body !== 'object') return [];
     const out: HeatmapPoint[] = [];
     for (const o of body.outages ?? []) {
       const lat = Number(o?.lat ?? o?.latitude);

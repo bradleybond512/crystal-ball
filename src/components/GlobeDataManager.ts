@@ -2353,7 +2353,7 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  const r = await fetch(`${base}/api/floods/warnings`, { signal: AbortSignal.timeout(10_000) });
  if (!r.ok) return;
  const data = await r.json() as { alerts?: { id: string; event: string; severity: string; headline: string; polygon: { type: string; coordinates: number[][][] } | null }[] };
- const alerts = data?.alerts ?? [];
+ const alerts = Array.isArray(data?.alerts) ? data.alerts : [];
  const SEVERITY_COLORS: Record<string, string> = {
  Extreme: '#cc0000',
  Severe: '#ff4400',

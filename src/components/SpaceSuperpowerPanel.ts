@@ -326,6 +326,10 @@ export class SpaceSuperpowerPanel extends Panel {
       const res = await fetch(`${base}/api/space-weather`, { signal: this.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const raw = await res.json() as Record<string, unknown>;
+      if (!raw || typeof raw !== 'object') {
+        this.setDataBadge('unavailable', 'Fetch error');
+        return;
+      }
       this.state = parseApiResponse(raw);
       this.updateCount();
       this.render();

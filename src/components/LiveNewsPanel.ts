@@ -805,7 +805,7 @@ export class LiveNewsPanel extends Panel {
  const res = await fetch(`${getApiBaseUrl()}/api/local-youtube-recent-videos?channel=${encodeURIComponent(channel.handle)}&count=15`);
  if (!res.ok) throw new Error(`HTTP ${res.status}`);
  const data = await res.json() as { videoIds?: unknown };
- if (Array.isArray(data.videoIds) && data.videoIds.length > 0) {
+ if (data && typeof data === 'object' && Array.isArray(data.videoIds) && data.videoIds.length > 0) {
  this.playlistVideoIds = (data.videoIds as unknown[]).filter((id): id is string => typeof id === 'string');
  this.playlistIndex = 0;
  channel.videoId = this.playlistVideoIds[0];

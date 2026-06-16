@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/use-type-alias -- pre-existing */
 import { getApiBaseUrl } from '@/services/runtime';
 
 export interface CommsHealthData {

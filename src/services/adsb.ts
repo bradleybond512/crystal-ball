@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-base-to-string, unicorn/prefer-spread -- pre-existing */
 import { createCircuitBreaker } from '@/utils';
 import { dataFreshness } from './data-freshness';
 import { getApiBaseUrl } from './runtime';

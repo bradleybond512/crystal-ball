@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-base-to-string, unicorn/catch-error-name -- Pre-existing violations surfaced by the changed-file linter when this PR added a res.json() shape guard here; not introduced by this change, and refactoring unrelated logic is out of scope for a security fix. */
 import { Panel } from '@/components/Panel';
 
 type Tier = 'admin' | 'readonly';

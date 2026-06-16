@@ -1757,6 +1757,30 @@ fn is_trusted_window_navigation(url: &Url) -> bool {
  url.scheme() == "tauri" || url.host_str() == Some("127.0.0.1")
 }
 
+/// Tighter navigation guard for the main window only.
+///
+/// The main window holds all trusted-window IPC privileges. Unlike auxiliary
+/// windows (live-channels) it never needs to navigate to a local HTTP service,
+/// so the allowed set is stricter:
+/// - Production: `tauri://` bundled content only.
+/// - Debug builds: also `localhost` (the Vite dev server at `devUrl`).
+///
+/// `127.0.0.1` at any port is intentionally excluded — a compromised renderer
+/// that redirected `main` to a sibling service on loopback would inherit all
+/// `require_trusted_window` privileges.
+fn is_main_window_navigation(url: &Url) -> bool {
+ if url.scheme() == "tauri" {
+  return true;
+ }
+ // Dev server only; compile-gated so the loopback escape hatch is absent
+ // from release builds.
+ #[cfg(debug_assertions)]
+ if url.host_str() == Some("localhost") {
+  return true;
+ }
+ false
+}
+
 fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Result<(), String> {
  if let Some(window) = app.get_webview_window("live-channels") {
  let _ = window.show();
@@ -3313,7 +3337,7 @@ fn main() {
   .resizable(true)
   .transparent(true)
   .background_color(tauri::webview::Color(0, 0, 0, 0))
-  .on_navigation(is_trusted_window_navigation);
+  .on_navigation(is_main_window_navigation);
  #[cfg(target_os = "macos")]
  {
   main_builder = main_builder

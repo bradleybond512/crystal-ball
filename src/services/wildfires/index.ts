@@ -69,7 +69,9 @@ async function fetchFromSidecar(): Promise<SidecarFire[] | null> {
  const base = getApiBaseUrl();
  const resp = await fetch(`${base}/api/nasa-firms`);
  if (!resp.ok) return null;
- const data = await resp.json() as { fires?: SidecarFire[]; error?: string };
+ const raw = await resp.json() as unknown;
+ if (!raw || typeof raw !== 'object') return null;
+ const data = raw as { fires?: SidecarFire[]; error?: string };
  if (!Array.isArray(data.fires) || data.fires.length === 0) return null;
  _sidecarCache = { fires: data.fires, ts: Date.now() };
  return data.fires;

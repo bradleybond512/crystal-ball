@@ -285,8 +285,13 @@ export function installRuntimeFetchPatch(): void {
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
  // Default timeout: ~100 data feeds route through this patched fetch with no
  // timeout of their own, so a hung connection would otherwise stall forever.
- // Only apply when the caller hasn't supplied its own AbortSignal.
- if (!init?.signal) init = { ...init, signal: AbortSignal.timeout(15000) };
+ // Honor a caller-supplied signal; otherwise give EACH fetch attempt its own
+ // fresh 15s timeout. We must not share one AbortSignal across the local
+ // attempt and the cloud fallback — once the local timeout fires, a reused
+ // signal would abort the fallback immediately and break it.
+ const callerSignal = init?.signal;
+ const withTimeout = (base?: RequestInit): RequestInit =>
+ callerSignal ? { ...base } : { ...base, signal: AbortSignal.timeout(15000) };
  const target = getApiTargetFromRequestInput(input);
  const debug = localStorage.getItem('wm-debug-log') === '1';
 
@@ -295,7 +300,7 @@ export function installRuntimeFetchPatch(): void {
  const raw = typeof input === 'string' ? input : (input instanceof URL ? input.href : input.url);
  console.log(`[fetch] passthrough → ${raw.slice(0, 120)}`);
  }
- return nativeFetch(input, init);
+ return nativeFetch(input, withTimeout(init));
  }
 
  // Resolve dynamic sidecar port on first API call
@@ -312,7 +317,7 @@ export function installRuntimeFetchPatch(): void {
  if (localApiToken) {
  headers.set('Authorization', `Bearer ${localApiToken}`);
  }
- const localInit = { ...init, headers };
+ const localInit = withTimeout({ ...init, headers });
 
  const localUrl = `${getApiBaseUrl()}${target}`;
  if (debug) console.log(`[fetch] intercept → ${target}`);
@@ -333,7 +338,7 @@ export function installRuntimeFetchPatch(): void {
  });
  }
  cloudHeaders.set('X-CrystalBall-Key', cloudApiKey);
- return nativeFetch(cloudUrl, { ...init, headers: cloudHeaders });
+ return nativeFetch(cloudUrl, withTimeout({ ...init, headers: cloudHeaders }));
  };
 
  try {
@@ -351,7 +356,7 @@ export function installRuntimeFetchPatch(): void {
  if (localApiToken) {
  const retryHeaders = new Headers(init?.headers);
  retryHeaders.set('Authorization', `Bearer ${localApiToken}`);
- response = await fetchLocalWithStartupRetry(nativeFetch, localUrl, { ...init, headers: retryHeaders });
+ response = await fetchLocalWithStartupRetry(nativeFetch, localUrl, withTimeout({ ...init, headers: retryHeaders }));
  if (debug) console.log(`[fetch] retry ${target} → ${response.status}`);
  }
  }

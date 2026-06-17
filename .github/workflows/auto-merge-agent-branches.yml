@@ -81,7 +81,9 @@ jobs:
               // agents own the body text after that.
               console.log(`PR #${prs[0].number} already exists; leaving body untouched.`);
               core.setOutput('pr_number', String(prs[0].number));
-            } else {
+              return;
+            }
+            try {
               const { data: pr } = await github.rest.pulls.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -93,6 +95,22 @@ jobs:
               });
               console.log(`Created PR #${pr.number}: ${pr.html_url}`);
               core.setOutput('pr_number', String(pr.number));
+            } catch (err) {
+              const msg = String((err && err.message) || err);
+              // 403 "GitHub Actions is not permitted to create or approve pull
+              // requests" => the repo/org setting "Allow GitHub Actions to
+              // create and approve pull requests" is off. Nothing this workflow
+              // can do about it; the PR is created by the agent/harness anyway.
+              // Warn instead of failing so the check stays green.
+              if (/not permitted to create|not accessible by integration|403/i.test(msg)) {
+                core.warning(
+                  `Could not auto-create a PR for ${branch}: ${msg}. ` +
+                  `Enable Settings → Actions → General → "Allow GitHub Actions to ` +
+                  `create and approve pull requests" to use auto-PR creation.`
+                );
+                return;
+              }
+              throw err;
             }
 
       - name: Label PR by branch prefix

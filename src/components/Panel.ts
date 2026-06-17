@@ -1117,7 +1117,7 @@ export class Panel {
  }
  // Non-SSE JSON response — check if Ollama is simply not configured
  const data = await streamResp.json() as { skipped?: boolean };
- ollamaSkipped = !!data.skipped;
+ ollamaSkipped = !!(data && typeof data === 'object' && data.skipped);
  if (!ollamaSkipped) {
  resetOnFailure();
  return;

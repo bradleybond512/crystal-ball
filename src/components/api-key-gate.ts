@@ -235,6 +235,11 @@ export function showApiKeyGate(
  });
  const data = await resp.json() as Record<string, unknown>;
 
+ if (!data || typeof data !== 'object') {
+ regStatus.textContent = 'Registration failed';
+ return;
+ }
+
  if (data.error) {
  // eslint-disable-next-line @typescript-eslint/no-base-to-string -- server error is string|undefined in practice
  regStatus.textContent = String(data.error);

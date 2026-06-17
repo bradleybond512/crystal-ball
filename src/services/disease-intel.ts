@@ -105,6 +105,7 @@ export async function fetchDiseaseIntel(): Promise<DiseaseIntelData> {
    whoDon: unknown;
    crossReferencedWithPromed?: unknown;
     };
+    if (!raw || typeof raw !== 'object') throw new Error('disease-intel: malformed response');
 
     const data: DiseaseIntelData = {
    variants: parseNextstrain(raw.nextstrain),

@@ -63,6 +63,7 @@ export async function geocodeCityStateCountry(
  });
  if (!res.ok) return null;
  const data = await res.json() as { lat?: string; lon?: string; display_name?: string }[];
+ if (!Array.isArray(data)) return null;
  const hit = data[0];
  if (!hit) return null;
  const lat = Number.parseFloat(hit.lat ?? '');

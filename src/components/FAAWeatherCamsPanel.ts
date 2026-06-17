@@ -299,6 +299,7 @@ export class FAAWeatherCamsPanel extends Panel {
  degraded?: boolean;
  reason?: string;
  };
+ if (!data || typeof data !== 'object') return;
  if (data.degraded || !data.frames || data.frames.length === 0) {
  // Fall back to the single latest image — at least the user
  // sees something change rather than a silent no-op.
@@ -352,6 +353,14 @@ export class FAAWeatherCamsPanel extends Panel {
  signal: AbortSignal.timeout(30_000),
  });
  const data = await res.json() as { conditions?: string; error?: string };
+ if (!data || typeof data !== 'object') {
+ btn.textContent = 'Analysis failed — tap to retry';
+ btn.disabled = false;
+ setTimeout(() => {
+ if (!btn.disabled) btn.textContent = 'Analyze conditions';
+ }, 3000);
+ return;
+ }
  if (data.conditions) {
  const idx = this.cameras.findIndex(c => c.id === cam.id);
  if (idx !== -1) {
@@ -385,7 +394,7 @@ export class FAAWeatherCamsPanel extends Panel {
  const res = await fetch(`${getApiBaseUrl()}${cam.imageUrl}`, { signal: AbortSignal.timeout(10_000) });
  if (!res.ok) return;
  const data = await res.json() as { imageUrl?: string | null; imageDatetime?: string };
- if (!data.imageUrl) return;
+ if (!data || typeof data !== 'object' || !data.imageUrl) return;
  const idx = this.cameras.findIndex(c => c.id === cam.id);
  if (idx === -1) return;
  this.cameras[idx]!.imageUrl = data.imageUrl;

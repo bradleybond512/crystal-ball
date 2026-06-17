@@ -120,7 +120,10 @@ export async function fetchUNHCRPopulation(year?: number): Promise<UNHCRPopulati
     const response = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error(`UNHCR API ${response.status}`);
     const payload = await response.json() as { items?: RawUnhcrRow[]; data?: RawUnhcrRow[] };
-    const rows = payload.items ?? payload.data ?? [];
+    if (!payload || typeof payload !== 'object') return [];
+    let rows: RawUnhcrRow[] = [];
+    if (Array.isArray(payload.items)) rows = payload.items;
+    else if (Array.isArray(payload.data)) rows = payload.data;
     return rows.map(normalizeRow);
   }, []);
 }

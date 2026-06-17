@@ -101,6 +101,13 @@ export class IntelligenceFeedPanel extends Panel {
       const res = await fetch(`${base}/api/intelligence/feed?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as FeedResponse;
+      if (!data || typeof data !== 'object') {
+        this.items = [];
+        this.error = null;
+        this.loading = false;
+        this.renderPanel();
+        return;
+      }
       this.items = Array.isArray(data.items) ? data.items : [];
       this.error = null;
     } catch (error) {

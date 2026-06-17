@@ -162,6 +162,7 @@ async function fetchAlerts(): Promise<MarineHazard[]> {
   if (!res.ok) return [];
 
   const json = await res.json() as NWSAlertsResponse;
+  if (!json || typeof json !== 'object') return [];
   const features = json.features ?? [];
   const now = new Date();
   const results: MarineHazard[] = [];
@@ -211,6 +212,7 @@ async function checkHighSeasForecasts(): Promise<boolean> {
  if (!res.ok) return false;
 
  const json = await res.json() as NWSProductListResponse;
+ if (!json || typeof json !== 'object') return false;
  const products = json['@graph'] ?? [];
  if (products.length === 0) return false;
 

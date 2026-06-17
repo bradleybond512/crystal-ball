@@ -135,6 +135,7 @@ async function fetchDay(day: 1 | 2 | 3): Promise<ExcessiveRainfallOutlook[]> {
  if (!res.ok) return [];
 
  const json = await res.json() as WpcResponse;
+ if (!json || typeof json !== 'object') return [];
  const features = json.features ?? [];
  const outlooks: ExcessiveRainfallOutlook[] = [];
 

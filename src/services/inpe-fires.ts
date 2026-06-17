@@ -29,6 +29,11 @@ export async function fetchInpeFires(): Promise<InpeHotspot[]> {
  return [];
  }
  const raw = await res.json() as (InpeHotspot & { acqTime: string })[];
+ if (!Array.isArray(raw)) {
+ dataFreshness.recordError('inpe-fires', 'malformed response');
+ _cache = { hotspots: [], ts: Date.now() };
+ return [];
+ }
  const hotspots = raw.map(h => ({ ...h, acqTime: new Date(h.acqTime) }));
  _cache = { hotspots, ts: Date.now() };
  dataFreshness.recordUpdate('inpe-fires', hotspots.length);

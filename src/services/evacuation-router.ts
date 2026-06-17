@@ -167,7 +167,11 @@ async function fetchOsrmRoute(from: LatLon, to: LatLon, waypoints: LatLon[]): Pr
  throw new Error(`OSRM request failed: HTTP ${resp.status}`);
  }
  const data = await resp.json() as OsrmResponse;
- dataFreshness.recordUpdate('evacuation-router', data.routes?.length ?? 0);
+ if (!data || typeof data !== 'object' || !Array.isArray(data.routes)) {
+   dataFreshness.recordError('evacuation-router', 'unexpected payload shape');
+   throw new Error('OSRM response missing routes array');
+ }
+ dataFreshness.recordUpdate('evacuation-router', data.routes.length);
  return data;
   } catch (error) {
  dataFreshness.recordError('evacuation-router', String(error));

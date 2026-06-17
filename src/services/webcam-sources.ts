@@ -94,7 +94,7 @@ export async function fetchWindyWebcams(region?: WebcamRegion): Promise<WebcamFe
     const res = await fetch(`${base}/api/windy-webcams?limit=20${countryParam}`);
     if (!res.ok) return [];
     const data = await res.json() as { webcams?: { id: string; title: string; playerUrl: string; city: string; country: string; countryCode: string; lat: number; lon: number; thumbnail?: string }[] };
-    const webcams = data.webcams ?? [];
+    const webcams = Array.isArray(data.webcams) ? data.webcams : [];
     const feeds: WebcamFeed[] = [];
     for (const cam of webcams) {
       const cc = cam.countryCode ?? '';
@@ -150,7 +150,7 @@ export async function fetchDotCams(region?: WebcamRegion): Promise<WebcamFeed[]>
     const res = await fetch(`${getApiBaseUrl()}/api/dot-traffic-cams`);
     if (!res.ok) return [];
     const data = await res.json() as { cameras?: { id: string; title: string; state: string; lat: number; lon: number; imageUrl: string; direction: string }[] };
-    const cams = data.cameras ?? [];
+    const cams = Array.isArray(data.cameras) ? data.cameras : [];
     return cams.map(cam => ({
       id: `dot-${cam.id}`,
       source: 'dot' as WebcamSource,

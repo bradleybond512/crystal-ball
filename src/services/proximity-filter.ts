@@ -130,6 +130,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<string> 
  });
  if (!res.ok) throw new Error('Nominatim failed');
  const data = await res.json() as { display_name?: string; address?: { city?: string; state?: string; country?: string } };
+ if (!data || typeof data !== 'object') throw new Error('Nominatim failed');
  const addr = data.address;
  if (addr) {
  const parts = [addr.city, addr.state, addr.country].filter(Boolean);

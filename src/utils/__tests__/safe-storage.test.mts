@@ -33,7 +33,7 @@ function totalBytes(skipKey?: string): number {
 const { safeSetItem, EVICTABLE_CACHE_PREFIXES, _resetQuotaLatchForTest } =
   await import('../safe-storage.ts');
 
-const { isStorageQuotaExceeded } = await import('../storage-quota.ts');
+const { isStorageQuotaExceeded, isIndexedDbQuotaExceeded } = await import('../storage-quota.ts');
 
 beforeEach(() => {
   store.clear();
@@ -101,10 +101,17 @@ describe('safeSetItem — fail-closed', () => {
     assert.equal(result, false);
   });
 
-  it('trips the shared quota latch so other writers can bail early', () => {
+  it('trips the localStorage quota latch so other writers can bail early', () => {
     budget = 5;
     safeSetItem('wm-too-big', 'x'.repeat(50));
     assert.equal(isStorageQuotaExceeded(), true);
+  });
+
+  it('does NOT trip the IndexedDB latch — a full localStorage must not disable healthy IDB writes', () => {
+    budget = 5;
+    safeSetItem('wm-too-big', 'x'.repeat(50));
+    assert.equal(isStorageQuotaExceeded(), true);
+    assert.equal(isIndexedDbQuotaExceeded(), false);
   });
 
   it('swallows non-quota errors and returns false without evicting', () => {
@@ -131,8 +138,13 @@ describe('safeSetItem — fail-closed', () => {
 
 describe('EVICTABLE_CACHE_PREFIXES', () => {
   it('covers the known disposable cache namespaces', () => {
+    // `crystalball-persistent-cache:` also covers proxy `api-response:` entries —
+    // proxy.ts writes them through setPersistentCache, which nests them under this
+    // prefix rather than storing a raw top-level `api-response:` key.
     assert.ok(EVICTABLE_CACHE_PREFIXES.includes('crystalball-persistent-cache:'));
-    assert.ok(EVICTABLE_CACHE_PREFIXES.includes('api-response:'));
+    // offline-alert-cache.ts last-known snapshots (saved-place-weather, place-briefs,
+    // local-logistics, …) all write under the `wm_offline_<serviceId>` prefix.
+    assert.ok(EVICTABLE_CACHE_PREFIXES.includes('wm_offline_'));
   });
 
   it('covers the high-frequency / rolling-buffer log-spam sources', () => {

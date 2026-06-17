@@ -61,6 +61,7 @@
       "sidecar/feed-health-tracker.mjs",
       "sidecar/recent-changes.mjs",
       "sidecar/env-local-loader.mjs",
+      "sidecar/acled-token-helpers.mjs",
       "sidecar/watchboard-engine.mjs",
       "sidecar/sms-command-parser.mjs",
       "sidecar/sms-security.mjs",

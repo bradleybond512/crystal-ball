@@ -235,7 +235,7 @@ export async function fetchOrefAlerts(): Promise<OrefAlertsResponse> {
 
   try {
  const res = await fetch(getOrefApiUrl(), {
- signal: AbortSignal.timeout(10000),
+ signal: AbortSignal.timeout(10_000),
  headers: { Accept: 'application/json' },
  });
  if (!res.ok) {
@@ -266,7 +266,7 @@ export async function fetchOrefHistory(): Promise<OrefHistoryResponse> {
   await ensureLocationMapLoaded();
   try {
  const res = await fetch(getOrefApiUrl('history'), {
- signal: AbortSignal.timeout(10000),
+ signal: AbortSignal.timeout(10_000),
  headers: { Accept: 'application/json' },
  });
  if (!res.ok) {
@@ -303,9 +303,11 @@ export function onOrefAlertsUpdate(cb: (data: OrefAlertsResponse) => void): void
 
 export function startOrefPolling(): void {
   if (pollingInterval) return;
-  pollingInterval = setInterval(async () => {
+  pollingInterval = setInterval(() => {
+ void (async () => {
  const data = await fetchOrefAlerts();
  for (const cb of updateCallbacks) cb(data);
+ })();
   }, 120_000);
 }
 

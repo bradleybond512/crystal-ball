@@ -63,7 +63,7 @@ let writtenSinceLoad = false;
 // confidenceHistory crashes upsertThread() when it spreads the array.
 function isValidThread(t: unknown): t is HypothesisThread {
   if (typeof t !== 'object' || t === null) return false;
-  const c = t as Partial<HypothesisThread>;
+  const c = t as Record<string, unknown>;
   return typeof c.signature === 'string'
     && Array.isArray(c.confidenceHistory)
     && typeof c.peakRisk === 'string'
@@ -77,8 +77,8 @@ function load(): void {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw);
-      const arr = Array.isArray(parsed) ? parsed.filter(isValidThread) : [];
+      const parsed: unknown = JSON.parse(raw);
+      const arr = (Array.isArray(parsed) ? parsed : []).filter((t): t is HypothesisThread => isValidThread(t));
       for (const t of arr) threads.set(t.signature, t);
     }
   } catch { /* ignore */ }
@@ -87,7 +87,7 @@ function load(): void {
   // a fresh write from a first-cycle event would be clobbered.
   void getMemory<HypothesisThread[]>(STORAGE_KEY).then(raw => {
     if (writtenSinceLoad) return;
-    const arr = Array.isArray(raw) ? raw.filter(isValidThread) : [];
+    const arr = Array.isArray(raw) ? raw.filter(t => isValidThread(t)) : [];
     if (arr.length === 0) return;
     threads.clear();
     for (const t of arr) threads.set(t.signature, t);

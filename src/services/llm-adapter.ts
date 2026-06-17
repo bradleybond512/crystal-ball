@@ -18,7 +18,7 @@
 import { runClaudeAgent } from './claude-agent';
 import { getApiBaseUrl, isDesktopRuntime } from './runtime';
 import { getRuntimeConfigSnapshot } from './runtime-config';
-import { recordCall, reserveCloudCall } from './llm-budget';
+import { recordCall, refundCloudCall, reserveCloudCall } from './llm-budget';
 import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
 import { isLocalModelOnly, isLlmEgressDisclosed } from './ai-flow-settings';
@@ -207,9 +207,17 @@ export async function generateText(prompt: string, options: LlmOptions = {}): Pr
   // Atomically reserve a cloud-call slot before issuing the request.
   // If reserveCloudCall returns false, the cap is already hit; fail soft.
   if (!reserveCloudCall('cloud-agent')) return { text: '', provider: 'none' };
-  const cloud = await tryCloudAgent(prompt, options);
-  if (cloud) return cloud; // already counted by reserveCloudCall
-  return { text: '', provider: 'none' };
+  let cloud: LlmResult | null = null;
+  try {
+    cloud = await tryCloudAgent(prompt, options);
+    if (cloud) return cloud; // already counted by reserveCloudCall
+    return { text: '', provider: 'none' };
+  } finally {
+    // The call never produced a usable result, so the reserved slot was
+    // never actually spent — release it so a failed attempt doesn't
+    // permanently burn budget.
+    if (!cloud) refundCloudCall('cloud-agent');
+  }
 }
 
 /**

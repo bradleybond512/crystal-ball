@@ -1,5 +1,6 @@
 import { isDesktopRuntime } from '../runtime';
 import { invokeTauri } from '../tauri-bridge';
+import { logDebug } from '../reasoning-debug';
 
 export interface BriefingSchedule {
   enabled: boolean;
@@ -149,6 +150,14 @@ export class BriefingScheduler {
       }
       this.schedule.lastGeneratedAt = Date.now();
       saveSchedule(this.schedule);
+    } catch (error) {
+      // Swallow the failure here so the rejected promise from `void this.fire()`
+      // doesn't surface as an unhandled rejection. The finally below still
+      // schedules the next run at its normal time rather than retrying in a
+      // tight loop.
+      logDebug({ level: 'error', category: 'forecast', source: 'briefing-scheduler',
+        message: 'briefing generation failed',
+        data: { error: error instanceof Error ? error.message : String(error) } });
     } finally {
       this.reschedule();
     }

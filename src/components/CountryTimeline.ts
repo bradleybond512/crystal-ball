@@ -173,7 +173,7 @@ export class CountryTimeline {
  .attr('fill', (d: TimelineEvent['lane']) => LANE_COLORS[d])
  .attr('font-size', '11px')
  .attr('font-weight', '500')
- .text((d: TimelineEvent['lane']) => laneLabels[d] || d);
+ .text((d: TimelineEvent['lane']) => laneLabels[d] ?? d);
   }
 
   private drawNowMarker(

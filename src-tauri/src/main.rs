@@ -855,7 +855,14 @@ fn wait_until_secrets_loaded(cache: &SecretsCache) -> bool {
  if cache.loaded.load(Ordering::SeqCst) {
  return true;
  }
- let deadline = Instant::now() + KEYCHAIN_VAULT_TIMEOUT + Duration::from_secs(30);
+ // Match the keychain read's own worst case: the 120s vault read plus, on a
+ // one-time migration from the legacy per-key format, up to one 3s ACL timeout
+ // per supported key. Giving up sooner would reject a save while the cache is
+ // still legitimately loading. Mirrors the renderer's waitUntilLoaded cap.
+ let max_wait = KEYCHAIN_VAULT_TIMEOUT
+ + KEYCHAIN_PER_CALL_TIMEOUT * (SUPPORTED_SECRET_KEYS.len() as u32)
+ + Duration::from_secs(30);
+ let deadline = Instant::now() + max_wait;
  while Instant::now() < deadline {
  if cache.loaded.load(Ordering::SeqCst) {
  return true;

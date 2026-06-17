@@ -51,7 +51,7 @@ export const SATELLITE_SOURCES: Record<string, SatelliteSource> = {
  * hour back and step further back on tile errors.
  */
 export function gibsHourTimestamp(hoursAgo = 0, now: Date = new Date()): string {
-  const d = new Date(now.getTime());
+  const d = new Date(now);
   d.setUTCMinutes(0, 0, 0);
   d.setUTCHours(d.getUTCHours() - hoursAgo);
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z');

@@ -93,38 +93,11 @@ export async function getBaseline(key: string): Promise<BaselineEntry | null> {
   return result || null;
 }
 
-export async function updateBaseline(key: string, currentCount: number): Promise<BaselineEntry> {
-  const now = Date.now();
+function mergeBaseline(existing: BaselineEntry | undefined, key: string, currentCount: number, now: number): BaselineEntry {
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  let entry = await getBaseline(key);
-
-  if (entry) {
- entry.counts.push(currentCount);
- entry.timestamps.push(now);
-
- const cutoff30d = now - 30 * DAY_MS;
- const validIndices = entry.timestamps
- .map((t, i) => (t > cutoff30d ? i : -1))
- .filter(i => i >= 0);
-
- entry.counts = validIndices.map(i => entry!.counts[i]!);
- entry.timestamps = validIndices.map(i => entry!.timestamps[i]!);
-
- const cutoff7d = now - 7 * DAY_MS;
- const last7dCounts = entry.counts.filter((_, i) => entry!.timestamps[i]! > cutoff7d);
-
- entry.avg7d = last7dCounts.length > 0
- ? last7dCounts.reduce((a, b) => a + b, 0) / last7dCounts.length
- : currentCount;
-
- entry.avg30d = entry.counts.length > 0
- ? entry.counts.reduce((a, b) => a + b, 0) / entry.counts.length
- : currentCount;
-
- entry.lastUpdated = now;
-  } else {
- entry = {
+  if (!existing) {
+ return {
  key,
  counts: [currentCount],
  timestamps: [now],
@@ -134,10 +107,66 @@ export async function updateBaseline(key: string, currentCount: number): Promise
  };
   }
 
-  await withTransaction<void>(
- 'baselines', 'readwrite', (store) => { store.put(entry); }, false,
-  );
-  return entry!;
+  const entry = existing;
+  entry.counts.push(currentCount);
+  entry.timestamps.push(now);
+
+  const cutoff30d = now - 30 * DAY_MS;
+  const validIndices = entry.timestamps
+ .map((t, i) => (t > cutoff30d ? i : -1))
+ .filter(i => i >= 0);
+
+  entry.counts = validIndices.map(i => entry.counts[i]!);
+  entry.timestamps = validIndices.map(i => entry.timestamps[i]!);
+
+  const cutoff7d = now - 7 * DAY_MS;
+  const last7dCounts = entry.counts.filter((_, i) => entry.timestamps[i]! > cutoff7d);
+
+  entry.avg7d = last7dCounts.length > 0
+ ? last7dCounts.reduce((a, b) => a + b, 0) / last7dCounts.length
+ : currentCount;
+
+  entry.avg30d = entry.counts.length > 0
+ ? entry.counts.reduce((a, b) => a + b, 0) / entry.counts.length
+ : currentCount;
+
+  entry.lastUpdated = now;
+  return entry;
+}
+
+// Read-modify-write must happen inside a single readwrite transaction. Splitting
+// the get and put across two transactions lets concurrent callers (e.g. two
+// `news:intel` writers) read the same baseline and clobber each other's append,
+// permanently dropping observations that skew avg7d/avg30d for anomaly detection.
+export async function updateBaseline(key: string, currentCount: number): Promise<BaselineEntry> {
+  const now = Date.now();
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+ try {
+ const database = await initDB();
+ return await new Promise<BaselineEntry>((resolve, reject) => {
+ const tx = database.transaction('baselines', 'readwrite');
+ const store = tx.objectStore('baselines');
+ const getReq = store.get(key);
+ getReq.onsuccess = () => {
+ const entry = mergeBaseline(getReq.result as BaselineEntry | undefined, key, currentCount, now);
+ const putReq = store.put(entry);
+ putReq.onsuccess = () => resolve(entry);
+ putReq.onerror = () => reject(putReq.error);
+ };
+ getReq.onerror = () => reject(getReq.error);
+ });
+ } catch (error: unknown) {
+ if (error instanceof DOMException && error.name === 'InvalidStateError') {
+ db = null;
+ if (attempt === 0) continue;
+ console.warn('[Storage] IndexedDB connection closing after retry');
+ throw new DOMException('IndexedDB write failed — connection closing', 'InvalidStateError');
+ }
+ throw error;
+ }
+  }
+  throw new Error('IndexedDB transaction failed after retry');
 }
 
 export function calculateDeviation(current: number, baseline: BaselineEntry): {

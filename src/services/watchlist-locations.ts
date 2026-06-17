@@ -6,6 +6,8 @@
  * `crystalball-user-location` localStorage key.
  */
 
+import { safeSetItem } from '../utils/safe-storage';
+
 const STORAGE_KEY = 'wm-watched-locations-v1';
 const LEGACY_LOCATION_KEY = 'crystalball-user-location';
 const LEGACY_SAVED_PLACES_KEY = 'crystalball-saved-places';
@@ -202,7 +204,7 @@ class WatchlistLocations {
   }
 
   private save(): void {
- localStorage.setItem(STORAGE_KEY, JSON.stringify(this.locations));
+ safeSetItem(STORAGE_KEY, JSON.stringify(this.locations));
   }
 
   private notify(): void {

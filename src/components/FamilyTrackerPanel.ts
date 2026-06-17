@@ -18,6 +18,7 @@ import {
   distanceKm,
 } from '@/services/family-tracker';
 import type { FamilyMember, FamilyStatus } from '@/services/family-tracker';
+import { safeSetItem } from '@/utils/safe-storage';
 
 const ICON_OPTIONS = ['👨', '👩', '👧', '👦', '🐕', '👴', '👵', '🧑', '👶'];
 
@@ -287,7 +288,7 @@ export class FamilyTrackerPanel extends Panel {
  member.lastUpdate = Date.now();
  member.status = status;
  if (battery != null) member.battery = battery;
- localStorage.setItem('wm-family-members-v1', JSON.stringify(members));
+ safeSetItem('wm-family-members-v1', JSON.stringify(members));
 
  resultEl.style.display = 'block';
  resultEl.textContent = `Updated ${member.icon} ${member.name}: ${lat.toFixed(4)}, ${lon.toFixed(4)} — ${STATUS_LABELS[status]}${battery != null ? ` — ${battery}%` : ''}`;

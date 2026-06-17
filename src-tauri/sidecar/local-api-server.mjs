@@ -129,10 +129,16 @@ export function appendObservationToEventStore(store, obs) {
     const occurredAt = typeof obs?.timestamp === 'number' && obs.timestamp > 0
       ? new Date(obs.timestamp).toISOString()
       : new Date().toISOString();
+    // Stable id for records that carry one (e.g. USGS earthquakes reappear in
+    // the feed every poll). Check-then-append makes re-ingestion idempotent so
+    // we don't keep re-inserting an already-stored event. Records without a
+    // stable id get a fresh UUID and are always genuinely new.
+    const id = (typeof obs?.id === 'string' && obs.id)
+      ? `${obs.sourceId || obs.domain || 'obs'}:${obs.id}`
+      : randomUUID();
+    if (typeof store.hasEvent === 'function' && store.hasEvent(id)) return;
     store.appendEvent({
-      id: (typeof obs?.id === 'string' && obs.id)
-        ? `${obs.sourceId || obs.domain || 'obs'}:${obs.id}`
-        : randomUUID(),
+      id,
       event_type: 'observation',
       occurred_at: occurredAt,
       domain: typeof obs?.domain === 'string' && obs.domain ? obs.domain : null,

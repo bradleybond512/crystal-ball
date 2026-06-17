@@ -67,10 +67,6 @@ export class EconomicStressPanel extends Panel {
 
  const ts = new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
- const wsbText = snapshots.length > 0
- ? snapshots.slice(0, 3).map(s => `${s.ticker} ${s.sentiment >= 0 ? '+' : ''}${s.sentiment.toFixed(2)}`).join(' · ')
- : '';
-
  el.innerHTML = `
 <div style="padding:0.8rem;display:flex;flex-direction:column;gap:0.7rem;">
   <div>
@@ -89,8 +85,18 @@ export class EconomicStressPanel extends Panel {
   <div style="padding:0.4rem 0.55rem;background:rgba(255,255,255,0.04);border-radius:5px;font-size:0.7rem;opacity:0.75;">
  Global Food Security: <strong style="color:${fsColor};">${fsVal} / 100</strong> — ${fsLabel}
   </div>
-  ${wsbText ? `<div style="padding:0.4rem 0.55rem;background:rgba(255,255,255,0.04);border-radius:5px;font-size:0.7rem;opacity:0.75;">WSB Retail: ${wsbText}</div>` : ''}
 </div>`;
+
+ // WSB ticker symbols are external/untrusted data — render as text, never
+ // as markup, so a crafted symbol can't inject script.
+ if (snapshots.length > 0) {
+ const wsbRow = document.createElement('div');
+ wsbRow.style.cssText = 'padding:0.4rem 0.55rem;background:rgba(255,255,255,0.04);border-radius:5px;font-size:0.7rem;opacity:0.75;';
+ wsbRow.textContent = 'WSB Retail: ' + snapshots.slice(0, 3)
+ .map(s => `${s.ticker} ${s.sentiment >= 0 ? '+' : ''}${s.sentiment.toFixed(2)}`)
+ .join(' · ');
+ el.firstElementChild?.appendChild(wsbRow);
+ }
   }
 
   private _renderKeyRequired(): void {

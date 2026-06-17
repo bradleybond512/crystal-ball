@@ -45,7 +45,11 @@ export async function fetchSpaceWxStatus(
       headers: { Accept: 'application/json' },
     });
     if (!r.ok) return null;
-    return await r.json() as SpaceWxStatus;
+    const data = await r.json() as SpaceWxStatus;
+    if (!data || typeof data !== 'object' || !Array.isArray(data.earthwardCmes)) {
+      return null;
+    }
+    return data;
   } catch {
     return null;
   }

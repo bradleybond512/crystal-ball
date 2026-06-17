@@ -56,6 +56,7 @@ export class GlobeSearch {
  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5`;
  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
  const data = await res.json() as NominatimResult[];
+ if (!Array.isArray(data)) { this.clearResults(); return; }
  this.renderResults(data);
  } catch {
  this.clearResults();

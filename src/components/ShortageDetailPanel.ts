@@ -163,7 +163,7 @@ export class ShortageDetailPanel extends Panel {
         });
         if (res.ok) {
           const json = await res.json() as { forecast?: ShortageForecast };
-          if (json?.forecast) return json.forecast;
+          if (json && typeof json === 'object' && json.forecast) return json.forecast;
         }
       } catch {
         // Fall through to direct service call.

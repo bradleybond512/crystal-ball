@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};
@@ -138,6 +138,11 @@ struct LocalApiState {
  child: Mutex<Option<Child>>,
  token: Mutex<Option<String>>,
  port: Mutex<Option<u16>>,
+ // True only once the sidecar has written its real bound port to the port
+ // file. On the timeout fallback we record the default port but leave this
+ // false — secret injection must not post plaintext to a port we never
+ // confirmed is actually our child (a squatter on 46123 would receive it).
+ port_confirmed: AtomicBool,
  restart_count: Mutex<u32>,
  last_restart_at: Mutex<Option<Instant>>,
 }
@@ -153,6 +158,7 @@ impl Default for LocalApiState {
  child: Mutex::new(None),
  token: Mutex::new(None),
  port: Mutex::new(None),
+ port_confirmed: AtomicBool::new(false),
  restart_count: Mutex::new(0),
  last_restart_at: Mutex::new(None),
  }
@@ -163,6 +169,11 @@ impl Default for LocalApiState {
 /// repeated macOS Keychain prompts (each `Entry::get_password()` triggers one).
 struct SecretsCache {
  secrets: Mutex<HashMap<String, String>>,
+ // Keys the user explicitly set or deleted via Settings since launch. The
+ // async keychain read works from a snapshot taken before these edits, so its
+ // merge must skip them — otherwise a just-deleted key gets resurrected (and
+ // re-injected into the sidecar). Lock order is always `secrets` then this.
+ user_mutated: Mutex<HashSet<String>>,
 }
 
 /// In-memory mirror of persistent-cache.json. The file can grow to 10+ MB,
@@ -228,6 +239,7 @@ impl SecretsCache {
  fn empty() -> Self {
  SecretsCache {
  secrets: Mutex::new(HashMap::new()),
+ user_mutated: Mutex::new(HashSet::new()),
  }
  }
 
@@ -242,12 +254,17 @@ impl SecretsCache {
  fn populate_from_keychain(&self, app: Option<&AppHandle>) {
  let loaded = Self::read_keychain_blocking(app);
  if let Ok(mut guard) = self.secrets.lock() {
- // Preserve entries written concurrently with the (up to 120s)
- // keychain read — e.g. a Settings save made while this was in
- // flight, now that the UI is usable before boot finishes. Those
- // are newer than the keychain snapshot, so only fill keys we
- // don't already hold rather than clobbering the whole map.
+ // Preserve edits made concurrently with the (up to 120s) keychain
+ // read — the UI is usable before boot finishes, so a Settings save
+ // or delete can land mid-flight. Those edits are newer than this
+ // snapshot: skip any key the user touched (a delete leaves it absent
+ // from the map, so a blind or_insert would resurrect it), and never
+ // clobber a key we already hold.
+ let touched = self.user_mutated.lock().ok();
  for (key, value) in loaded {
+ if touched.as_ref().is_some_and(|t| t.contains(&key)) {
+ continue;
+ }
  guard.entry(key).or_insert(value);
  }
  }
@@ -828,10 +845,14 @@ fn set_secret(
  if trimmed.is_empty() {
  proposed.remove(&key);
  } else {
- proposed.insert(key, trimmed);
+ proposed.insert(key.clone(), trimmed);
  }
  save_vault(&proposed)?;
  *secrets = proposed;
+ // Shield this edit from a still-in-flight async keychain read (see merge).
+ if let Ok(mut touched) = cache.user_mutated.lock() {
+ touched.insert(key);
+ }
  Ok(())
 }
 
@@ -849,6 +870,10 @@ fn delete_secret(webview: Webview, key: String, cache: tauri::State<'_, SecretsC
  proposed.remove(&key);
  save_vault(&proposed)?;
  *secrets = proposed;
+ // Shield this deletion from a still-in-flight async keychain read (see merge).
+ if let Ok(mut touched) = cache.user_mutated.lock() {
+ touched.insert(key);
+ }
  Ok(())
 }
 
@@ -2674,6 +2699,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  if let Ok(mut port_slot) = state.port.lock() {
  *port_slot = None;
  }
+ state.port_confirmed.store(false, Ordering::SeqCst);
 
  // ── Restart counter / flap detector ──────────────────────────────
  if let (Ok(mut count), Ok(mut last)) = (state.restart_count.lock(), state.last_restart_at.lock()) {
@@ -2972,6 +2998,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  if let Ok(mut port_slot) = state.port.lock() {
  *port_slot = Some(confirmed_port);
  }
+ state.port_confirmed.store(true, Ordering::SeqCst);
  } else {
  append_desktop_log(
  app,
@@ -2981,6 +3008,7 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
  if let Ok(mut port_slot) = state.port.lock() {
  *port_slot = Some(DEFAULT_LOCAL_API_PORT);
  }
+ state.port_confirmed.store(false, Ordering::SeqCst);
  }
 
  Ok(())
@@ -3098,6 +3126,18 @@ async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(Stri
  app,
  "WARN",
  "sidecar not alive at secret-injection time — secrets not pushed (will load on next launch)",
+ );
+ return;
+ }
+ // Only post to a port the sidecar actually confirmed via its port file. On
+ // the timeout fallback the recorded port is just the default (46123), which
+ // a foreign process could be squatting if our sidecar bound elsewhere after
+ // EADDRINUSE — posting plaintext secrets there would leak them.
+ if !state.port_confirmed.load(Ordering::SeqCst) {
+ append_desktop_log(
+ app,
+ "WARN",
+ "sidecar port unconfirmed at secret-injection time — secrets not pushed (will load on next launch)",
  );
  return;
  }

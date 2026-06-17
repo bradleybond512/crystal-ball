@@ -164,7 +164,7 @@ window.addEventListener('unhandledrejection', (e) => {
 import { debugGetCells, getCellCount } from '@/services/geo-convergence';
 import { initMetaTags } from '@/services/meta-tags';
 import { installRuntimeFetchPatch, installWebApiRedirect, isDesktopRuntime } from '@/services/runtime';
-import { loadDesktopSecrets } from '@/services/runtime-config';
+import { loadDesktopSecretsWhenReady } from '@/services/runtime-config';
 import { initAnalytics, isAnalyticsAllowed, migrateAnalyticsConsent, trackApiKeysSnapshot } from '@/services/analytics';
 import { applyStoredTheme } from '@/utils/theme-manager';
 import { SITE_VARIANT } from '@/config/variant';
@@ -278,7 +278,7 @@ import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { att
 installRuntimeFetchPatch();
 // In web production, route RPC calls through api.crystalball.app (Cloudflare edge).
 installWebApiRedirect();
-loadDesktopSecrets().then(async () => {
+loadDesktopSecretsWhenReady().then(async () => {
   await initAnalytics();
   trackApiKeysSnapshot();
 }).catch(() => {});

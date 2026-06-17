@@ -20,7 +20,7 @@ import {
   isFeatureEnabled,
   setFeatureToggle,
   validateSecret,
-  loadDesktopSecrets,
+  loadDesktopSecretsWhenReady,
   type RuntimeFeatureDefinition,
   type RuntimeFeatureId,
   type RuntimeSecretKey,
@@ -760,7 +760,7 @@ async function initSettingsWindow(): Promise<void> {
  document.documentElement.classList.remove('no-transition');
   });
 
-  await loadDesktopSecrets();
+  await loadDesktopSecretsWhenReady();
   settingsManager = new SettingsManager();
 
   renderSection('overview');

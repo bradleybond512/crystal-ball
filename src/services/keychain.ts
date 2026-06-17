@@ -26,6 +26,33 @@ class KeychainService {
     return this.supportedKeys;
   }
 
+  /**
+   * Resolve once the native keychain load has finished. Secrets load
+   * asynchronously after boot (so a slow Touch ID never freezes the window),
+   * which means an early `get` would memoize a null for every key for the whole
+   * renderer lifetime. Boot-time loaders await this first. Desktop only — web
+   * has no native cache, so it resolves immediately. Caps the wait so a stuck
+   * keychain ACL prompt can't hang boot forever (the read itself is bounded the
+   * same way on the Rust side; we just give it margin past the 120s vault
+   * timeout, then proceed with whatever loaded).
+   */
+  async waitUntilLoaded(capMs = 130_000, stepMs = 250): Promise<void> {
+    if (!hasTauriInvokeBridge()) return;
+    const deadline = Date.now() + capMs;
+    for (;;) {
+      let ready = false;
+      try {
+        ready = (await invokeTauri<boolean>('secrets_ready')) === true;
+      } catch {
+        // Command unavailable (older shell) or transient bridge error — stop
+        // waiting rather than spin; the caller proceeds optimistically.
+        return;
+      }
+      if (ready || Date.now() >= deadline) return;
+      await new Promise((resolve) => setTimeout(resolve, stepMs));
+    }
+  }
+
   async get(key: string): Promise<string | null> {
     if (!hasTauriInvokeBridge()) return null;
     if (this.cache.has(key)) return this.cache.get(key) ?? null;

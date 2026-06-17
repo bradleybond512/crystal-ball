@@ -842,6 +842,29 @@ fn get_secret(
  Ok(secrets.get(&key).cloned())
 }
 
+/// Block until the async keychain load has finished before a Settings write
+/// builds its `proposed` vault. The window now renders before hydration, so a
+/// user can hit Save while the in-memory cache is still empty; cloning that
+/// partial snapshot as the save base would persist a vault containing only the
+/// edited key and wipe every other stored secret. Waiting guarantees the cache
+/// is the full source of truth first. Bounded by the same worst-case the
+/// renderer waits on (`save_vault` already blocks on the keychain, so blocking
+/// here is consistent). Returns false if it never loads — the caller then
+/// refuses the write rather than risk a partial-vault overwrite.
+fn wait_until_secrets_loaded(cache: &SecretsCache) -> bool {
+ if cache.loaded.load(Ordering::SeqCst) {
+ return true;
+ }
+ let deadline = Instant::now() + KEYCHAIN_VAULT_TIMEOUT + Duration::from_secs(30);
+ while Instant::now() < deadline {
+ if cache.loaded.load(Ordering::SeqCst) {
+ return true;
+ }
+ std::thread::sleep(Duration::from_millis(50));
+ }
+ cache.loaded.load(Ordering::SeqCst)
+}
+
 #[tauri::command]
 fn set_secret(
  webview: Webview,
@@ -852,6 +875,9 @@ fn set_secret(
  require_trusted_window(webview.label())?;
  if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
  return Err(format!("Unsupported secret key: {key}"));
+ }
+ if !wait_until_secrets_loaded(&cache) {
+ return Err("Secrets are still loading from the keychain; please try again in a moment.".to_string());
  }
  let mut secrets = cache
  .secrets
@@ -879,6 +905,9 @@ fn delete_secret(webview: Webview, key: String, cache: tauri::State<'_, SecretsC
  require_trusted_window(webview.label())?;
  if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
  return Err(format!("Unsupported secret key: {key}"));
+ }
+ if !wait_until_secrets_loaded(&cache) {
+ return Err("Secrets are still loading from the keychain; please try again in a moment.".to_string());
  }
  let mut secrets = cache
  .secrets

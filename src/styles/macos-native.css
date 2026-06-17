@@ -19,6 +19,11 @@ body.is-desktop-macos {
      use this value, not --eew-bar-h. */
   --below-eew: var(--mac-toolbar-height);
 
+  /* The fixed NotificationStack starts at the viewport edge by default; on
+     desktop it must begin after the sidebar so banners (staleness/offline)
+     live inside the content area instead of overlapping the nav. */
+  --cb-notification-stack-left: var(--mac-sidebar-width);
+
   /* Dark-mode macOS system colors (approximated) */
   --mac-window-bg: #1c1c1e;
   --mac-sidebar-bg: rgba(44, 44, 46, 0.72);
@@ -112,12 +117,6 @@ body.is-desktop-macos .mac-sidebar {
   height: var(--mac-traffic-lights-height);
   flex-shrink: 0;
   cursor: default;
-}
-
-/* When a staleness banner is fixed at the top of content, push the sidebar
-   nav down by the same amount so it isn't hidden under the banner. */
-body.has-staleness-banner .mac-sidebar-nav {
-  padding-top: var(--notification-stack-h);
 }
 
 /* Sidebar scrollable nav */

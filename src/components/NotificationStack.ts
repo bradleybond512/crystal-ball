@@ -25,7 +25,9 @@ export class NotificationStack {
     Object.assign(el.style, {
       position: 'fixed',
       top: 'var(--eew-bar-h, 32px)',
-      left: '0',
+      // Defaults to the viewport edge; desktop chrome overrides the var to the
+      // sidebar width so banners stay inside the content area, not over the nav.
+      left: 'var(--cb-notification-stack-left, 0px)',
       right: '0',
       zIndex: '9001',
       display: 'flex',

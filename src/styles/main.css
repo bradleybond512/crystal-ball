@@ -15015,18 +15015,21 @@ body.has-critical-banner .panels-grid {
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* Matches .cb-offline-staleness-banner's .cb-osb-btn — same "Reset cache"
+   action lives in both sibling banners, so they share one button language. */
 .staleness-reset {
   background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: inherit;
   padding: 3px 10px;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
+  font: 600 11px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  white-space: nowrap;
   flex-shrink: 0;
+  transition: background 0.12s;
 }
-.staleness-reset:hover { background: rgba(255, 255, 255, 0.3); }
+.staleness-reset:hover { background: rgba(255, 255, 255, 0.25); }
 .staleness-reset:disabled { opacity: 0.6; cursor: wait; }
 
 .reg-profile-explainer {

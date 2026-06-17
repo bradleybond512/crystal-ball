@@ -738,6 +738,12 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar {
   overflow: hidden;
 }
 
+/* Sidebar collapsed → content spans the full window, so the notification
+   stack must follow the content edge instead of the (now 0-width) sidebar. */
+body.is-desktop-macos.sidebar-collapsed {
+  --cb-notification-stack-left: 0px;
+}
+
 /* Floating re-open tab — visible only when collapsed */
 .mac-sidebar-collapse-tab {
   display: none;

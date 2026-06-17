@@ -115,8 +115,10 @@ export function loadFromStorage<T>(key: string, defaultValue: T): T {
 
 export {
   isStorageQuotaExceeded,
+  isIndexedDbQuotaExceeded,
   isQuotaError,
   markStorageQuotaExceeded,
+  markIndexedDbQuotaExceeded,
   _resetStorageQuotaForTest,
 } from './storage-quota';
 export { safeSetItem, EVICTABLE_CACHE_PREFIXES } from './safe-storage';

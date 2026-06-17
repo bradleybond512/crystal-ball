@@ -15,6 +15,8 @@
  * const alerts = await withOfflineCache('nws-alerts', fetchNwsAlerts, 4 * 3600_000);
  */
 
+import { safeSetItem } from '@/utils/safe-storage';
+
 export interface CachedSnapshot<T> {
   data: T;
   cachedAt: number; // unix ms
@@ -56,7 +58,7 @@ function writeEntry<T>(serviceId: string, data: T): void {
  cachedAt: Date.now(),
  version: CACHE_VERSION,
  };
- localStorage.setItem(storageKey(serviceId), JSON.stringify(entry));
+ safeSetItem(storageKey(serviceId), JSON.stringify(entry));
   } catch {
  // localStorage might be full — fail silently
   }

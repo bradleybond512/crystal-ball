@@ -25,12 +25,15 @@ import { isQuotaError, markStorageQuotaExceeded, _resetStorageQuotaForTest } fro
  */
 export const EVICTABLE_CACHE_PREFIXES: readonly string[] = [
   // Re-fetchable derived caches (largest byte-hogs — most reclaimed per delete).
+  // `crystalball-persistent-cache:` also covers proxy `api-response:` entries,
+  // which are nested under it (setPersistentCache re-prefixes the key) rather
+  // than stored raw.
   'crystalball-persistent-cache:',   // persistent-cache.ts localStorage fallback
-  'api-response:',                   // utils/proxy.ts cached proxy responses
-  'saved-place-weather',             // saved-place-weather.ts
-  'saved-place-brief',               // place-briefs.ts
-  'local-logistics',                 // local-logistics.ts
   'crystalball-market-stale-',       // market/index.ts stale fallback
+  // offline-alert-cache.ts last-known snapshots — saved-place-weather,
+  // place-briefs, local-logistics and every other offline-cached service write
+  // under the `wm_offline_<serviceId>` prefix, not their raw service names.
+  'wm_offline_',
   // High-frequency writers + loss-tolerant rolling buffers (the log-spam sources).
   'wm-analytics-offline-queue',      // analytics.ts offline event queue
   'crystalball-pressure-history-v1', // pressure-history.ts sparkline samples

@@ -50,6 +50,7 @@ export async function fetchWeatherAlerts(): Promise<WeatherAlert[]> {
  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
  const data = await response.json() as NWSResponse;
+ if (!data || !Array.isArray(data.features)) return [];
 
  return data.features
  .filter(alert => alert.properties.severity !== 'Unknown')
@@ -179,6 +180,7 @@ export async function fetchOpenMeteoConditions(
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const raw = await res.json() as { current?: Record<string, number | boolean | null> };
+    if (!raw || typeof raw !== 'object') return null;
     const c = raw.current;
     if (!c) return null;
     const data: OpenMeteoConditions = {
@@ -264,6 +266,7 @@ export async function fetchSite24hForecast(lat: number, lon: number): Promise<Fo
         weather_code?: number[];
       };
     };
+    if (!raw || typeof raw !== 'object') return [];
     const h = raw.hourly;
     if (!h?.time?.length) return [];
 
@@ -301,6 +304,7 @@ export async function fetchSiteAirQuality(lat: number, lon: number): Promise<Sit
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const raw = await res.json() as { current?: { us_aqi?: number | null; pm2_5?: number | null } };
+    if (!raw || typeof raw !== 'object') return null;
     const c = raw.current;
     if (!c) return null;
     const data: SiteAirQuality = {

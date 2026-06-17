@@ -72,6 +72,7 @@ async function fetchCityPollen(city: typeof CITIES[0]): Promise<PollenReading | 
  if (!res.ok) return null;
 
  const data = await res.json() as PollenResponse;
+ if (!data || typeof data !== 'object' || !data.current) return null;
  const c = data.current;
 
  const grass = c.grass_pollen ?? 0;

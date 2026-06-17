@@ -20,6 +20,10 @@ export async function fetchLiveVideoInfo(channelHandle: string): Promise<LiveVid
  const res = await fetch(`${baseUrl}/api/youtube/live?channel=${encodeURIComponent(channelHandle)}`);
  if (!res.ok) throw new Error('API error');
  const data = await res.json() as { videoId?: string | null; hlsUrl?: string | null };
+ if (!data || typeof data !== 'object') {
+ dataFreshness.recordError('live-news', 'malformed response');
+ return { videoId: null, hlsUrl: null };
+ }
  const videoId = data.videoId ?? null;
  const hlsUrl = data.hlsUrl ?? null;
  liveVideoCache.set(channelHandle, { videoId, hlsUrl, timestamp: Date.now() });

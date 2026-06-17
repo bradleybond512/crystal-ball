@@ -33,6 +33,7 @@ export async function fetchDodContracts(opts: { days?: number; limit?: number } 
  const res = await fetch(`${getApiBaseUrl()}/api/dod-contracts?days=${days}&limit=${limit}`);
  if (!res.ok) throw new Error(`HTTP ${res.status}`);
  const data = await res.json() as DodContractsSnapshot;
+ if (!data || typeof data !== 'object' || !Array.isArray(data.awards)) throw new Error('dod-contracts: malformed response');
  _cache = { snap: data, ts: now };
  if (data.awards.length > 0) dataFreshness.recordUpdate('dod-contracts', data.awards.length);
  return data;

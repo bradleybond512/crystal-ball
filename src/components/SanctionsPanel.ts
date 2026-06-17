@@ -88,6 +88,11 @@ export class SanctionsPanel extends Panel {
       if (!r.ok) return;
       const data = await r.json() as { hits?: SearchHit[]; meta?: CacheMeta };
       if (controller.signal.aborted) return;
+      if (!data || typeof data !== 'object') {
+        this.hits = [];
+        this.render();
+        return;
+      }
       this.hits = Array.isArray(data.hits) ? data.hits : [];
       this.meta = data.meta ?? this.meta;
       this.render();

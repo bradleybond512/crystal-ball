@@ -26,6 +26,7 @@ export async function fetchWikidataBases(limit = 2000): Promise<WikidataBasesSna
  const res = await fetch(`${getApiBaseUrl()}/api/wikidata-military-bases?limit=${Math.max(50, Math.min(5000, limit))}`);
  if (!res.ok) throw new Error(`HTTP ${res.status}`);
  const data = await res.json() as WikidataBasesSnapshot;
+ if (!data || typeof data !== 'object' || !Array.isArray(data.bases)) throw new Error('bad shape');
  _cache = { snap: data, ts: now };
  if (data.bases.length > 0) dataFreshness.recordUpdate('wikidata-bases', data.bases.length);
  return data;

@@ -87,6 +87,7 @@ async function fetchCityAQ(city: typeof MONITORED_CITIES[0]): Promise<AirQuality
  time?: string;
  };
  };
+ if (!json || typeof json !== 'object') return null;
  const c = json.current ?? {};
  const pm25 = c.pm2_5 ?? null;
  const rawAqi = c.us_aqi ?? (pm25 === null ? null : aqiFromPm25(pm25));

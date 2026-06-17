@@ -64,8 +64,12 @@ export class GdeltIntelPanel extends Panel {
  const res = await fetch(`${getApiBaseUrl()}/api/gdelt-intel`);
  if (!res.ok) throw new Error(`HTTP ${res.status}`);
  const json = await res.json() as GdeltIntelResponse;
+ if (!json || typeof json !== 'object' || !Array.isArray(json.events)) {
+ this.error = 'GDELT returned a malformed response. Will retry every 15 min.';
+ } else {
  this.data = json;
  this.error = null;
+ }
  } catch (error) {
  if (this.isAbortError(error)) return;
  // Source: GDELT 2.0 (free, no key needed). Stale cache will be

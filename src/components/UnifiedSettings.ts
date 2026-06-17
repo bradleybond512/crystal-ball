@@ -1444,6 +1444,7 @@ export class UnifiedSettings {
  try {
  const res = await this._diagFetch('/api/local-debug-toggle');
  const data = await res.json() as { verboseMode: boolean };
+ if (!data || typeof data.verboseMode !== 'boolean') return;
  toggle.checked = data.verboseMode;
  } catch { /* sidecar not running */ }
   }
@@ -1453,6 +1454,7 @@ export class UnifiedSettings {
  try {
  const res = await this._diagFetch('/api/local-debug-toggle', { method: 'POST' });
  const data = await res.json() as { verboseMode: boolean };
+ if (!data || typeof data.verboseMode !== 'boolean') return;
  const toggle = this.overlay.querySelector<HTMLInputElement>('#us-verbose-log');
  if (toggle) toggle.checked = data.verboseMode;
  } catch { /* sidecar not running */ }
@@ -1465,7 +1467,7 @@ export class UnifiedSettings {
  try {
  const res = await this._diagFetch('/api/local-traffic-log');
  const data = await res.json() as { entries?: { timestamp: string; method: string; path: string; status: number; durationMs: number }[] };
- const entries = data.entries ?? [];
+ const entries = data && Array.isArray(data.entries) ? data.entries : [];
  if (countEl) countEl.textContent = `(${entries.length})`;
  if (entries.length === 0) {
  logEl.innerHTML = '<p class="us-debug-empty">No traffic recorded.</p>';

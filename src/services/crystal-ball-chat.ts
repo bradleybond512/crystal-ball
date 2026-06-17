@@ -369,6 +369,7 @@ async function* streamFromOllama(
 
   if (!ct.includes('text/event-stream')) {
  const data = await resp.json() as { skipped?: boolean; error?: string };
+ if (!data || typeof data !== 'object') throw new Error('OLLAMA_NOT_CONFIGURED');
  if (data.skipped) throw new Error('OLLAMA_NOT_CONFIGURED');
  throw new Error(data.error ?? 'Ollama returned non-streaming response');
   }

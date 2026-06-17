@@ -42,10 +42,11 @@ export async function fetchRadarFrames(): Promise<RadarState> {
  if (!res.ok) throw new Error(`RainViewer HTTP ${String(res.status)}`);
 
  const data = await res.json() as RainViewerResponse;
+ if (!data || typeof data !== 'object' || !data.radar) throw new Error('RainViewer unexpected response shape');
 
  const frames: RadarFrame[] = [
- ...data.radar.past.map(f => ({ path: f.path, time: f.time, type: 'past' as const })),
- ...data.radar.nowcast.map(f => ({ path: f.path, time: f.time, type: 'forecast' as const })),
+ ...( Array.isArray(data.radar.past) ? data.radar.past : []).map(f => ({ path: f.path, time: f.time, type: 'past' as const })),
+ ...(Array.isArray(data.radar.nowcast) ? data.radar.nowcast : []).map(f => ({ path: f.path, time: f.time, type: 'forecast' as const })),
  ];
 
  const state: RadarState = {

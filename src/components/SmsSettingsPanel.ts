@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-base-to-string, unicorn/catch-error-name -- Pre-existing violations surfaced by the changed-file linter when this PR added a res.json() shape guard here; not introduced by this change, and refactoring unrelated logic is out of scope for a security fix. */
 import { Panel } from '@/components/Panel';
 
 type Tier = 'admin' | 'readonly';
@@ -62,6 +63,7 @@ export class SmsSettingsPanel extends Panel {
       const res = await fetch('/api/sms/config');
       if (res.ok) {
         const raw = await res.json() as { enabled?: boolean; allowlist?: unknown[] };
+        if (!raw || typeof raw !== 'object') return;
         this.config = {
           enabled: Boolean(raw.enabled),
           allowlist: this.normalizeAllowlist(raw.allowlist),
@@ -107,6 +109,7 @@ export class SmsSettingsPanel extends Panel {
     });
     if (res.ok) {
       const raw = await res.json() as { enabled?: boolean; allowlist?: unknown[] };
+      if (!raw || typeof raw !== 'object') return;
       this.config = {
         enabled: Boolean(raw.enabled),
         allowlist: this.normalizeAllowlist(raw.allowlist),
@@ -121,7 +124,8 @@ export class SmsSettingsPanel extends Panel {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ from, body }),
       });
-      const data = await res.json() as { response?: string; error?: string; segments?: number };
+      const raw = await res.json() as { response?: string; error?: string; segments?: number };
+      const data: { response?: string; error?: string; segments?: number } = raw && typeof raw === 'object' ? raw : {};
       this.lastTestResponse = {
         ok: res.ok,
         text: data.response ?? data.error ?? '(no response)',

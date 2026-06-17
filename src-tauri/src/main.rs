@@ -3181,20 +3181,27 @@ async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(Stri
  let secrets_cache = app.state::<SecretsCache>();
  let mut pushed = 0usize;
  let mut skipped = 0usize;
- for (key, value) in secrets {
- // Re-check per key: if the user edited or deleted this secret in Settings
- // after this snapshot was taken, the renderer already pushed the live
- // value to the sidecar. POSTing our older snapshot value would clobber it
- // with a stale (or just-deleted) credential — skip and let the renderer win.
- if secrets_cache
- .user_mutated
- .lock()
- .map(|t| t.contains(&key))
- .unwrap_or(false)
- {
+ for (key, _snapshot) in secrets {
+ // Re-read the live cache value per key rather than trusting this snapshot.
+ // If the user edited the secret in Settings after the snapshot was taken,
+ // the cache holds the newer value and we post that (never the stale one).
+ // If the key was deleted since the snapshot it's gone from the cache, so
+ // skip it rather than resurrect a just-removed credential. Posting the
+ // current value is idempotent with the renderer's own push and recovers
+ // any key whose early renderer push silently failed.
+ let value = match secrets_cache.secrets.lock() {
+ Ok(map) => match map.get(&key) {
+ Some(v) => v.clone(),
+ None => {
  skipped += 1;
  continue;
  }
+ },
+ Err(_) => {
+ skipped += 1;
+ continue;
+ }
+ };
  // start_local_api already confirmed the sidecar's port before this runs,
  // so a few quick attempts absorb any momentary unreadiness.
  for attempt in 0..3 {
@@ -3224,7 +3231,7 @@ async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(Stri
  append_desktop_log(
  app,
  "INFO",
- &format!("injected {pushed}/{total} keychain secrets into running sidecar via IPC ({skipped} skipped: edited in Settings)"),
+ &format!("injected {pushed}/{total} keychain secrets into running sidecar via IPC ({skipped} skipped: deleted or unreadable since load)"),
  );
 }
 

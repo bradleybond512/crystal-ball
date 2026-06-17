@@ -89,6 +89,10 @@ async function tryLocalViaSidecar(prompt: string, options: LlmOptions): Promise<
       return null;
     }
     const parsed = await res.json() as LocalResponseShape;
+    if (!parsed || typeof parsed !== 'object') {
+      incrementCounter('llm.local.empty');
+      return null;
+    }
     let text = '';
     if (typeof parsed.response === 'string') text = parsed.response;
     else if (typeof parsed.text === 'string') text = parsed.text;
@@ -249,6 +253,10 @@ async function tryLocalDirect(prompt: string, options: LlmOptions): Promise<LlmR
       return null;
     }
     const parsed = await res.json() as { response?: unknown; model?: unknown };
+    if (!parsed || typeof parsed !== 'object') {
+      incrementCounter('llm.local.empty');
+      return null;
+    }
     const text = typeof parsed.response === 'string' ? parsed.response : '';
     if (!text) {
       incrementCounter('llm.local.empty');

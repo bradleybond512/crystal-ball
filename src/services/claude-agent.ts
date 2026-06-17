@@ -103,14 +103,20 @@ export async function runClaudeAgent(
  let errorMessage = 'Agent request failed';
  try {
  const errData = await res.json() as { error?: string };
- errorMessage = errData.error || errorMessage;
+ if (errData && typeof errData === 'object') {
+ errorMessage = errData.error ?? errorMessage;
+ }
  } catch {
  // ignore parse error
  }
  throw new Error(errorMessage);
   }
 
-  return res.json() as Promise<AgentResponse>;
+  const agentData = await res.json() as AgentResponse;
+  if (!agentData || typeof agentData !== 'object' || typeof agentData.response !== 'string') {
+ throw new Error('Agent response malformed');
+  }
+  return agentData;
 }
 
 /** Human-readable label for a tool name */

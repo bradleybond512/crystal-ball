@@ -105,6 +105,7 @@ async function fetchOutlookDay(day: 1 | 2): Promise<ConvectiveOutlook[]> {
  geometry?: { type: string; coordinates: unknown };
  }[];
  };
+ if (!json || typeof json !== 'object') return [];
  const features = json.features ?? [];
  const results: ConvectiveOutlook[] = [];
  for (const [i, f] of features.entries()) {
@@ -193,6 +194,7 @@ export async function fetchStormReports(): Promise<StormReport[]> {
  geometry?: { coordinates?: [number, number] };
  }[];
  };
+ if (!json || typeof json !== 'object') return reportsCache?.items ?? [];
  const features = json.features ?? [];
  const items: StormReport[] = [];
  for (const [i, f] of features.entries()) {

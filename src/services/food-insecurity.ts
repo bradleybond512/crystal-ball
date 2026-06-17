@@ -126,6 +126,7 @@ async function fetchIpc(): Promise<FoodInsecurityAlert[]> {
  if (!res.ok) return [];
 
  const data = await res.json() as IpcResponse;
+ if (!data || typeof data !== 'object') return [];
  const records: IpcRecord[] = data.body ?? data.data ?? [];
 
  // Filter to IPC Phase 3+ (Crisis or worse)

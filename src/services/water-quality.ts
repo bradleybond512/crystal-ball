@@ -117,6 +117,7 @@ async function fetchUSGSWaterQuality(): Promise<WaterAlert[]> {
  }[];
  };
  };
+ if (!json || typeof json !== 'object') return [];
 
  const alerts: WaterAlert[] = [];
  const series = json.value?.timeSeries ?? [];
@@ -210,6 +211,7 @@ async function fetchEPAViolations(): Promise<{ alerts: WaterAlert[]; systems: Wa
  compliance_begin_date?: string;
  }[];
  };
+ if (!json || typeof json !== 'object') return { alerts: [], systems: [] };
 
  const violations = json.violations ?? [];
  const alerts: WaterAlert[] = [];

@@ -19,7 +19,9 @@ export async function fetchNearbyInfrastructure(radiusMiles = 50): Promise<Hifld
  const url = `${getApiBaseUrl()}/api/hifld-infrastructure?lat=${config.location.lat}&lon=${config.location.lon}&radius=${radiusMiles}`;
  const resp = await fetch(url);
  if (!resp.ok) return [];
- const data = await resp.json() as { assets: HifldAsset[] };
+ const raw = await resp.json() as unknown;
+ if (!raw || typeof raw !== 'object') return [];
+ const data = raw as { assets?: HifldAsset[] };
  return data.assets ?? [];
   } catch {
  return [];

@@ -31,6 +31,8 @@ export async function fetchTorMetrics(): Promise<TorMetrics | null> {
   try {
  const r = await fetch(`${getApiBaseUrl()}/api/tor-metrics`);
  if (!r.ok) return null;
- return await r.json() as TorMetrics;
+ const raw = await r.json() as unknown;
+ if (!raw || typeof raw !== 'object' || typeof (raw as {totalRelays?: unknown}).totalRelays !== 'number') return null;
+ return raw as TorMetrics;
   } catch { return null; }
 }

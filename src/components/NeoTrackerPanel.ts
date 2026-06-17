@@ -41,8 +41,9 @@ export class NeoTrackerPanel extends Panel {
     }
   }
 
-  public dispose(): void {
+  public override destroy(): void {
     this.fetchAbort?.abort();
+    super.destroy();
   }
 
   private render(): void {

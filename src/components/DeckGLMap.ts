@@ -605,7 +605,11 @@ export class DeckGLMap {
   // so the latest top-of-hour is often a 404. Start one hour back and step
   // further on tile errors (see recoverSatelliteTiles).
   private satelliteHourOffset = 1;
+  // MapLibre emits one error per failed *tile*, so an unavailable hour fires a
+  // burst. Cooldown gates recovery to a single hour-step per rebuild attempt.
+  private satelliteRecoveryAt = 0;
   private static readonly MAX_SATELLITE_HOUR_OFFSET = 6;
+  private static readonly SATELLITE_RECOVERY_COOLDOWN_MS = 3000;
   private lightningStrikes: LightningStrike[] = [];
   private redFlagWarnings: RedFlagWarning[] = [];
   private satellitePositions: SatellitePosition[] = [];
@@ -6224,11 +6228,19 @@ export class DeckGLMap {
    * timestamp back one hour and rebuild the satellite source/layer so it
    * re-requests an earlier (available) frame. Returns false once we've
    * exhausted the lookback budget, letting the generic error overlay take over.
+   *
+   * MapLibre fires one `error` per failed tile, so a single unavailable hour
+   * produces a burst (plus late in-flight failures from the removed source).
+   * A cooldown swallows that burst — returning true without advancing — so we
+   * step exactly one hour per rebuild instead of racing to the lookback cap.
    */
   private recoverSatelliteTiles(): boolean {
  const map = this.maplibreMap;
  if (!map) return false;
+ const now = Date.now();
+ if (now - this.satelliteRecoveryAt < DeckGLMap.SATELLITE_RECOVERY_COOLDOWN_MS) return true;
  if (this.satelliteHourOffset >= DeckGLMap.MAX_SATELLITE_HOUR_OFFSET) return false;
+ this.satelliteRecoveryAt = now;
  this.satelliteHourOffset += 1;
  if (map.getLayer('wm-satellite-layer')) map.removeLayer('wm-satellite-layer');
  if (map.getSource('wm-satellite-src')) map.removeSource('wm-satellite-src');

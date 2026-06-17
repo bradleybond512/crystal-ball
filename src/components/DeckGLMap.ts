@@ -118,7 +118,7 @@ import type { TechHubActivity } from '@/services/tech-activity';
 import { getSigintPoints, getSigintClusters, type SigintEvent, type SigintConvergenceCluster } from '@/services/sigint-convergence';
 import { getRadarTileUrl, type RadarState } from '@/services/rainviewer-radar';
 import { strikeColor, strikeOpacity, type LightningStrike } from '@/services/lightning';
-import { getGoesWmsTileUrl } from '@/services/satellite-weather';
+import { getGoesWmsTileUrl, gibsHourTimestamp } from '@/services/satellite-weather';
 import { getOwmTileUrl, type OwmTileLayer } from '@/services/owm-weather-tiles';
 import type { RedFlagWarning } from '@/services/red-flag-warnings';
 import type { SatellitePosition, OrbitPath } from '@/services/satellite-propagator';
@@ -610,6 +610,10 @@ export class DeckGLMap {
   // per rebuild and keeps stepping while the rebuilt hour also fails.
   private satelliteRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private satelliteErrorSinceRebuild = false;
+  // The tile URL currently applied to the wm-satellite source, and the base
+  // UTC hour it was computed for — used to rebuild on hour-rollover/recovery.
+  private satelliteAppliedUrl: string | null = null;
+  private satelliteBaseHour: string | null = null;
   private static readonly MAX_SATELLITE_HOUR_OFFSET = 6;
   private static readonly SATELLITE_RECOVERY_COOLDOWN_MS = 3000;
   private lightningStrikes: LightningStrike[] = [];
@@ -861,9 +865,11 @@ export class DeckGLMap {
  const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
  const sourceId = (e as { sourceId?: string }).sourceId;
  console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId });
- // GIBS GOES tiles for the latest hour may not be published yet — step
- // back an hour and rebuild instead of counting toward the error overlay.
- if (sourceId === 'wm-satellite-src' && this.recoverSatelliteTiles()) {
+ // Satellite is an optional overlay (not the basemap) and GIBS GOES tiles
+ // for the latest hour are often not published yet — handle its errors via
+ // hourly fallback and never escalate them to the basemap error overlay.
+ if (sourceId === 'wm-satellite-src') {
+ this.recoverSatelliteTiles();
  return;
  }
  mapErrorCount += 1;
@@ -6230,27 +6236,23 @@ export class DeckGLMap {
   // ── Weather Raster Tile Layers (MapLibre GL native) ──────────────
 
   /**
-   * The latest GIBS GOES GeoColor hour isn't published yet. Returns true to
-   * swallow the error (recovery is in hand) or false once we've exhausted the
-   * lookback budget, letting the generic error overlay take over.
-   *
-   * MapLibre fires one `error` per failed tile, so a single unavailable hour
-   * produces a burst (plus late in-flight failures from the removed source).
-   * Rather than step per error, we flag that the current hour failed and let a
+   * Note that the current GIBS GOES hour failed and ensure a recovery timer is
+   * armed. MapLibre fires one `error` per failed tile, so a single unavailable
+   * hour produces a burst (plus late in-flight failures from the removed
+   * source). Rather than step per error, we flag the failure and let a
    * self-rescheduling timer (scheduleSatelliteRetry) drive the actual
    * hour-step — coalescing the burst and continuing to step while each rebuilt
    * hour also fails, without depending on MapLibre re-emitting after the burst.
+   * The base hour resets the offset each new UTC hour (see syncWeatherRasterLayers),
+   * so an exhausted lookback retries the freshest frame on the next hour.
    */
-  private recoverSatelliteTiles(): boolean {
- if (!this.maplibreMap) return false;
- // At the lookback cap with no rebuild pending — surface via the overlay.
- if (this.satelliteHourOffset >= DeckGLMap.MAX_SATELLITE_HOUR_OFFSET
- && this.satelliteRetryTimer === null) {
- return false;
- }
+  private recoverSatelliteTiles(): void {
+ if (!this.maplibreMap) return;
  this.satelliteErrorSinceRebuild = true;
- if (this.satelliteRetryTimer === null) this.scheduleSatelliteRetry();
- return true;
+ if (this.satelliteRetryTimer === null
+ && this.satelliteHourOffset < DeckGLMap.MAX_SATELLITE_HOUR_OFFSET) {
+ this.scheduleSatelliteRetry();
+ }
   }
 
   private scheduleSatelliteRetry(): void {
@@ -6258,14 +6260,16 @@ export class DeckGLMap {
  this.satelliteRetryTimer = null;
  // Rebuilt hour loaded cleanly (no errors since) — settled.
  if (!this.satelliteErrorSinceRebuild) return;
- // Exhausted the budget — stop; subsequent errors hit the overlay path.
- if (this.satelliteHourOffset >= DeckGLMap.MAX_SATELLITE_HOUR_OFFSET) return;
- const map = this.maplibreMap;
- if (!map) return;
+ if (!this.maplibreMap) return;
+ // Exhausted the lookback budget — surface a diagnostic and stop; the
+ // hour-rollover reset retries the freshest frame on the next UTC hour.
+ if (this.satelliteHourOffset >= DeckGLMap.MAX_SATELLITE_HOUR_OFFSET) {
+ console.warn('[DeckGLMap] GOES satellite imagery unavailable after exhausting GIBS hourly fallback (up to 6h back); will retry on the next UTC hour.');
+ return;
+ }
  this.satelliteErrorSinceRebuild = false;
  this.satelliteHourOffset += 1;
- if (map.getLayer('wm-satellite-layer')) map.removeLayer('wm-satellite-layer');
- if (map.getSource('wm-satellite-src')) map.removeSource('wm-satellite-src');
+ // syncWeatherRasterLayers rebuilds the source because the URL now differs.
  this.syncWeatherRasterLayers();
  // Re-arm to check whether this hour also fails.
  this.scheduleSatelliteRetry();
@@ -6284,12 +6288,28 @@ export class DeckGLMap {
  return url ? [url] : null;
  }, 0.6);
 
- // Satellite imagery (NOAA GOES geocolor)
+ // Satellite imagery (NOAA GOES geocolor) — time-stamped GIBS WMTS.
+ // The TIME segment advances each UTC hour, so reset the recovery offset on
+ // hour-rollover (retry the freshest frame) and rebuild the source whenever
+ // the computed URL changes — syncRasterTileLayer otherwise keeps the source
+ // pinned to the URL it was first created with.
+ const satelliteBaseHour = gibsHourTimestamp(0);
+ if (this.satelliteBaseHour !== null && this.satelliteBaseHour !== satelliteBaseHour) {
+ this.satelliteHourOffset = 1;
+ this.satelliteErrorSinceRebuild = false;
+ }
+ this.satelliteBaseHour = satelliteBaseHour;
+ const satelliteUrl = getGoesWmsTileUrl('geocolor', this.satelliteHourOffset);
+ if (ml.weatherSatellite
+ && this.satelliteAppliedUrl !== null
+ && this.satelliteAppliedUrl !== satelliteUrl) {
+ if (map.getLayer('wm-satellite-layer')) map.removeLayer('wm-satellite-layer');
+ if (map.getSource('wm-satellite-src')) map.removeSource('wm-satellite-src');
+ }
  // GoogleMapsCompatible_Level7 tiles only exist at zoom 0–7; pass maxzoom
  // so MapLibre overzooms at z8+ instead of requesting out-of-bounds tiles.
- this.syncRasterTileLayer(map, 'wm-satellite', ml.weatherSatellite, () => {
- return [getGoesWmsTileUrl('geocolor', this.satelliteHourOffset)];
- }, 0.5, 7);
+ this.syncRasterTileLayer(map, 'wm-satellite', ml.weatherSatellite, () => [satelliteUrl], 0.5, 7);
+ if (ml.weatherSatellite) this.satelliteAppliedUrl = satelliteUrl;
 
  // OWM tile layers (require API key)
  const owmLayers: [string, boolean, OwmTileLayer][] = [

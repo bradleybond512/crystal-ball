@@ -5708,10 +5708,16 @@ export class DeckGLMap {
  .then((geojson) => {
  if (!this.maplibreMap || !geojson) return;
  this.countriesGeoJsonData = geojson;
+ // Guard each add: rapid basemap switches reset countryGeoJsonLoaded
+ // synchronously, so two loads can race past the entry guard and both
+ // reach here after the await — re-adding throws "already a source/layer".
+ if (!this.maplibreMap.getSource('country-boundaries')) {
  this.maplibreMap.addSource('country-boundaries', {
  type: 'geojson',
  data: geojson,
  });
+ }
+ if (!this.maplibreMap.getLayer('country-interactive')) {
  this.maplibreMap.addLayer({
  id: 'country-interactive',
  type: 'fill',
@@ -5721,6 +5727,8 @@ export class DeckGLMap {
  'fill-opacity': 0,
  },
  });
+ }
+ if (!this.maplibreMap.getLayer('country-hover-fill')) {
  this.maplibreMap.addLayer({
  id: 'country-hover-fill',
  type: 'fill',
@@ -5731,6 +5739,8 @@ export class DeckGLMap {
  },
  filter: ['==', ['get', 'name'], ''],
  });
+ }
+ if (!this.maplibreMap.getLayer('country-highlight-fill')) {
  this.maplibreMap.addLayer({
  id: 'country-highlight-fill',
  type: 'fill',
@@ -5741,6 +5751,8 @@ export class DeckGLMap {
  },
  filter: ['==', ['get', 'ISO3166-1-Alpha-2'], ''],
  });
+ }
+ if (!this.maplibreMap.getLayer('country-highlight-border')) {
  this.maplibreMap.addLayer({
  id: 'country-highlight-border',
  type: 'line',
@@ -5752,6 +5764,7 @@ export class DeckGLMap {
  },
  filter: ['==', ['get', 'ISO3166-1-Alpha-2'], ''],
  });
+ }
 
  if (!this.countryHoverSetup) this.setupCountryHover();
  this.updateCountryLayerPaint(getCurrentTheme());

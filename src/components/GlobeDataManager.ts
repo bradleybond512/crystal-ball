@@ -753,16 +753,20 @@ export class GlobeDataManager {
   private async loadLayer(name: string): Promise<void> {
  const layer = this.layers.get(name);
  if (!layer || layer.loaded) return;
+ // Optimistic lock: camera.changed fires checkDeferredLayers repeatedly
+ // during a pan, so claim the layer BEFORE the await — otherwise a second
+ // fire re-enters while load() is pending and adds a duplicate entity set.
+ layer.loaded = true;
  try {
  await layer.load();
- layer.loaded = true;
  const categoryColor = CLUSTER_LAYERS[name];
  if (categoryColor) {
  applyClustering(layer.source, { categoryColor });
  this.clusterableLayers.add(name);
  }
  } catch {
- // Non-fatal — other layers continue loading
+ // Load failed — release the lock so a later camera move can retry.
+ layer.loaded = false;
  }
   }
 

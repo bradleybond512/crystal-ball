@@ -291,7 +291,7 @@ export function installRuntimeFetchPatch(): void {
  // signal would abort the fallback immediately and break it.
  const callerSignal = init?.signal;
  const withTimeout = (base?: RequestInit): RequestInit =>
- callerSignal ? { ...base } : { ...base, signal: AbortSignal.timeout(15000) };
+ callerSignal ? { ...base } : { ...base, signal: AbortSignal.timeout(15_000) };
  const target = getApiTargetFromRequestInput(input);
  const debug = localStorage.getItem('wm-debug-log') === '1';
 

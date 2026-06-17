@@ -18,13 +18,15 @@ export interface EmscEvent {
 export async function fetchEmscSeismic(): Promise<EmscEvent[]> {
   if (!isFeatureAvailable('emscSeismic')) return [];
   try {
- const res = await fetch(`${getApiBaseUrl()}/api/emsc-seismic`, { signal: AbortSignal.timeout(10000) });
+ const res = await fetch(`${getApiBaseUrl()}/api/emsc-seismic`, { signal: AbortSignal.timeout(10_000) });
  if (!res.ok) {
+ // eslint-disable-next-line no-console -- surface nuclear-test feed degradation, never swallow
  console.warn(`[emsc-seismic] feed returned HTTP ${res.status}`);
  return [];
  }
  return (await res.json()) as EmscEvent[];
   } catch (error) {
+ // eslint-disable-next-line no-console -- surface nuclear-test feed degradation, never swallow
  console.warn('[emsc-seismic] feed fetch failed (timeout or network):', error);
  return [];
   }

@@ -58,7 +58,7 @@ export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
   return breaker.execute(async () => {
  const response = await fetch(GDACS_API, {
  headers: { 'Accept': 'application/json' },
- signal: AbortSignal.timeout(10000),
+ signal: AbortSignal.timeout(10_000),
  });
 
  if (!response.ok) throw new Error(`HTTP ${response.status}`);

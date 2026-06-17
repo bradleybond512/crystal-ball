@@ -840,6 +840,18 @@ body.is-desktop-macos.sidebar-collapsed .mac-content-toolbar {
   padding-left: 80px;
 }
 
+/* Notification stack (staleness / offline / "Reset cache" banners) must start
+   where the sidebar ends so its banners stay scoped to the content area and
+   don't overlap the sidebar. Mirrors the .replay-scrubber treatment. The stack
+   anchors left:0 via inline styles, so !important is required to override.
+   When the sidebar is collapsed the content fills the window, so reset to 0. */
+body.is-desktop-macos #cb-notification-stack {
+  left: var(--mac-sidebar-width) !important;
+}
+body.is-desktop-macos.sidebar-collapsed #cb-notification-stack {
+  left: 0 !important;
+}
+
 /* Toolbar overflow controls — shown when sidebar is collapsed */
 .mac-toolbar-sidebar-overflow {
   display: none;

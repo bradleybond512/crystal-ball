@@ -78,17 +78,19 @@ const STYLE_CSS = `
   flex-shrink: 0;
 }
 .cb-osb-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.16);
+  border: 0.5px solid rgba(255, 255, 255, 0.28);
   color: inherit;
-  padding: 3px 10px;
-  border-radius: 5px;
-  font: 600 11px/1.4 -apple-system, sans-serif;
+  padding: 4px 11px;
+  border-radius: 6px;
+  font: 600 12px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  letter-spacing: -0.01em;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.12s;
+  transition: background 0.12s ease, border-color 0.12s ease;
 }
-.cb-osb-btn:hover { background: rgba(255, 255, 255, 0.25); }
+.cb-osb-btn:hover { background: rgba(255, 255, 255, 0.26); border-color: rgba(255, 255, 255, 0.4); }
+.cb-osb-btn:active { background: rgba(255, 255, 255, 0.34); }
 .cb-osb-dismiss {
   background: none;
   border: none;

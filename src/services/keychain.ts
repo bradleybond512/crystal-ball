@@ -31,12 +31,17 @@ class KeychainService {
    * asynchronously after boot (so a slow Touch ID never freezes the window),
    * which means an early `get` would memoize a null for every key for the whole
    * renderer lifetime. Boot-time loaders await this first. Desktop only — web
-   * has no native cache, so it resolves immediately. Caps the wait so a stuck
-   * keychain ACL prompt can't hang boot forever (the read itself is bounded the
-   * same way on the Rust side; we just give it margin past the 120s vault
-   * timeout, then proceed with whatever loaded).
+   * has no native cache, so it resolves immediately.
+   *
+   * The cap exceeds the Rust read's own worst-case bound — 120s for the
+   * consolidated vault plus, on a one-time migration from the legacy per-key
+   * format, up to 77 × 3s of per-key ACL timeouts (~351s). The Rust side always
+   * resolves within that bound (each read uses recv_timeout, orphaning a hung
+   * thread), so `secrets_ready` flips before this deadline in correct operation
+   * — the cap is only a backstop, never the thing that ends the wait, so we
+   * never proceed against a still-empty cache and memoize nulls.
    */
-  async waitUntilLoaded(capMs = 130_000, stepMs = 250): Promise<void> {
+  async waitUntilLoaded(capMs = 400_000, stepMs = 250): Promise<void> {
     if (!hasTauriInvokeBridge()) return;
     const deadline = Date.now() + capMs;
     for (;;) {

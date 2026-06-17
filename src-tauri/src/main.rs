@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Manager, RunEvent, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, TitleBarStyle, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_biometry;
 
 mod corelocation;
@@ -1757,6 +1757,40 @@ fn is_trusted_window_navigation(url: &Url) -> bool {
  url.scheme() == "tauri" || url.host_str() == Some("127.0.0.1")
 }
 
+/// Tighter navigation guard for the main window only.
+///
+/// The main window holds all trusted-window IPC privileges. Unlike auxiliary
+/// windows (live-channels) it never needs to navigate to a local HTTP service,
+/// so the allowed set is stricter:
+/// - Production: `tauri://` bundled content, plus the `tauri.localhost`
+///   WebView2 workaround origin that serves bundled app content on Windows.
+/// - Debug builds: also `localhost` (the Vite dev server at `devUrl`).
+///
+/// `127.0.0.1` at any port is intentionally excluded — a compromised renderer
+/// that redirected `main` to a sibling service on loopback would inherit all
+/// `require_trusted_window` privileges.
+fn is_main_window_navigation(url: &Url) -> bool {
+ if url.scheme() == "tauri" {
+  return true;
+ }
+ // Windows production builds serve bundled `WebviewUrl::App` content through
+ // the WebView2 workaround origin `http(s)://tauri.localhost` rather than the
+ // `tauri://` scheme. That host resolves to the bundled app itself — not a
+ // real loopback service — so it carries the same trust as `tauri://` and must
+ // be allowed; otherwise same-origin `window.location.reload()` after
+ // settings / API-key changes is canceled on Windows.
+ if matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost") {
+  return true;
+ }
+ // Dev server only; compile-gated so the loopback escape hatch is absent
+ // from release builds.
+ #[cfg(debug_assertions)]
+ if url.host_str() == Some("localhost") {
+  return true;
+ }
+ false
+}
+
 fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Result<(), String> {
  if let Some(window) = app.get_webview_window("live-channels") {
  let _ = window.show();
@@ -3302,6 +3336,26 @@ fn main() {
  exclude_app_data_from_backup(&data_dir);
  }
 
+ // Create the main window programmatically so on_navigation can be attached
+ // before the window exists — the callback is builder-only in Tauri 2.
+ // macOSPrivateApi: true in tauri.conf.json enables transparent + vibrancy.
+ #[allow(unused_mut)]
+ let mut main_builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+  .title("Crystal Ball")
+  .inner_size(1440.0, 960.0)
+  .min_inner_size(1200.0, 720.0)
+  .resizable(true)
+  .transparent(true)
+  .background_color(tauri::webview::Color(0, 0, 0, 0))
+  .on_navigation(is_main_window_navigation);
+ #[cfg(target_os = "macos")]
+ {
+  main_builder = main_builder
+   .title_bar_style(TitleBarStyle::Overlay)
+   .hidden_title(true);
+ }
+ main_builder.build().expect("failed to create main window");
+
  // Apply native macOS vibrancy (HudWindow material, 12pt rounded corners).
  // Pairs with `transparent: true` + `macOSPrivateApi: true` in tauri.conf.json
  // and the `app-root`/`app-titlebar` CSS in src/styles/window-chrome.css.
@@ -3500,4 +3554,62 @@ fn main() {
  _ => {}
  }
  });
+}
+
+#[cfg(test)]
+mod navigation_guard_tests {
+ use super::{is_main_window_navigation, is_trusted_window_navigation, Url};
+
+ fn url(s: &str) -> Url {
+  Url::parse(s).expect("valid test url")
+ }
+
+ // ── main-window guard ────────────────────────────────────────────────────
+
+ #[test]
+ fn main_window_allows_tauri_scheme() {
+  assert!(is_main_window_navigation(&url("tauri://localhost/index.html")));
+ }
+
+ #[test]
+ fn main_window_allows_windows_app_origin() {
+  // WebView2 serves bundled app content from this host on Windows production
+  // builds; same-origin reloads must not be canceled there.
+  assert!(is_main_window_navigation(&url("http://tauri.localhost/index.html")));
+  assert!(is_main_window_navigation(&url("https://tauri.localhost/settings")));
+ }
+
+ #[test]
+ fn main_window_rejects_loopback_service() {
+  // A compromised renderer must not redirect `main` to a sibling loopback
+  // service and inherit trusted-window IPC privileges.
+  assert!(!is_main_window_navigation(&url("http://127.0.0.1:46123/api/analyst-state")));
+  assert!(!is_main_window_navigation(&url("https://127.0.0.1/anything")));
+ }
+
+ #[test]
+ fn main_window_rejects_external_origin() {
+  assert!(!is_main_window_navigation(&url("https://evil.example.com/")));
+  // A look-alike host that merely ends in the trusted suffix must not pass.
+  assert!(!is_main_window_navigation(&url("https://tauri.localhost.evil.com/")));
+ }
+
+ #[cfg(debug_assertions)]
+ #[test]
+ fn main_window_allows_localhost_dev_only_in_debug() {
+  assert!(is_main_window_navigation(&url("http://localhost:3001/")));
+ }
+
+ // ── trusted-window (aux) guard ───────────────────────────────────────────
+
+ #[test]
+ fn trusted_window_allows_tauri_and_loopback() {
+  assert!(is_trusted_window_navigation(&url("tauri://localhost/index.html")));
+  assert!(is_trusted_window_navigation(&url("http://127.0.0.1:46123/live-channels.html")));
+ }
+
+ #[test]
+ fn trusted_window_rejects_external_origin() {
+  assert!(!is_trusted_window_navigation(&url("https://evil.example.com/")));
+ }
 }

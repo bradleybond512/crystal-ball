@@ -1366,3 +1366,19 @@ export async function loadDesktopSecrets(): Promise<void> {
  secretsReadyResolve();
   }
 }
+
+/**
+ * Boot-time desktop secret load that waits for the native keychain read to
+ * finish first. The keychain is now read asynchronously (so a slow Touch ID
+ * never freezes the window), so loading immediately would read an empty cache
+ * and memoize a null for every key for the whole session. We wait for the
+ * `secrets_ready` signal, drop any nulls a stray early read may have cached,
+ * then load. On web this is just `loadDesktopSecrets` (a no-op there).
+ */
+export async function loadDesktopSecretsWhenReady(): Promise<void> {
+  if (isDesktopRuntime()) {
+ await keychainService.waitUntilLoaded();
+ keychainService.invalidateAll();
+  }
+  await loadDesktopSecrets();
+}

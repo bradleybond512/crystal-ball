@@ -174,6 +174,10 @@ struct SecretsCache {
  // merge must skip them — otherwise a just-deleted key gets resurrected (and
  // re-injected into the sidecar). Lock order is always `secrets` then this.
  user_mutated: Mutex<HashSet<String>>,
+ // False until the async keychain read finishes (success, empty, or timeout).
+ // The renderer's boot-time secret load must wait on this — reading the cache
+ // before it flips would memoize a null for every key for the whole session.
+ loaded: AtomicBool,
 }
 
 /// In-memory mirror of persistent-cache.json. The file can grow to 10+ MB,
@@ -240,6 +244,7 @@ impl SecretsCache {
  SecretsCache {
  secrets: Mutex::new(HashMap::new()),
  user_mutated: Mutex::new(HashSet::new()),
+ loaded: AtomicBool::new(false),
  }
  }
 
@@ -268,6 +273,10 @@ impl SecretsCache {
  guard.entry(key).or_insert(value);
  }
  }
+ // Mark ready even on timeout/empty — the read is done, the cache is as
+ // populated as it will get this launch, and the renderer should stop
+ // waiting and reload from whatever loaded.
+ self.loaded.store(true, Ordering::SeqCst);
  }
 
  /// Pulled out so callers can run the load on whichever thread they
@@ -805,6 +814,15 @@ fn list_supported_secret_keys(webview: Webview) -> Result<Vec<String>, String> {
  .iter()
  .map(|key| (*key).to_string())
  .collect())
+}
+
+/// Whether the async keychain load has finished. The renderer's boot-time
+/// secret load polls this before reading any key, so it never memoizes a null
+/// for a key that simply hadn't loaded yet (see the async-boot reordering).
+#[tauri::command]
+fn secrets_ready(webview: Webview, cache: tauri::State<'_, SecretsCache>) -> Result<bool, String> {
+ require_trusted_window(webview.label())?;
+ Ok(cache.loaded.load(Ordering::SeqCst))
 }
 
 #[tauri::command]
@@ -3444,6 +3462,7 @@ fn main() {
  .invoke_handler(tauri::generate_handler![
  list_supported_secret_keys,
  get_secret,
+ secrets_ready,
  set_always_on,
  get_always_on,
  set_secret,

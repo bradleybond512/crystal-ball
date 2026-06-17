@@ -134,7 +134,7 @@ async function defaultSendNativeNotification(
  ) => Promise<unknown>;
  };
  if (typeof mod.tryInvokeTauri === 'function') {
- await mod.tryInvokeTauri('plugin:crystalball|send_notification', {
+ await mod.tryInvokeTauri('send_notification', {
  title,
  body,
  });
@@ -202,6 +202,7 @@ function defaultDeps(): RouterDeps {
 // ── Core delivery ──────────────────────────────────────────────────────
 
 let activeDeps: RouterDeps | null = null;
+let routerStarted = false;
 
 function alertToUnified(alert: ReactorAlert): UnifiedAlert {
   const { threat, relevance, alertId, createdAt } = alert;
@@ -311,6 +312,8 @@ const NOOP = (): void => {
 };
 
 export function startNotificationRouter(deps?: RouterDeps): () => void {
+  if (routerStarted) return NOOP;
+  routerStarted = true;
   const resolved = deps ?? defaultDeps();
   activeDeps = resolved;
 
@@ -346,4 +349,5 @@ export function __resetForTesting(): void {
   lastNotifiedBySeverity.clear();
   config = { ...DEFAULT_CONFIG };
   activeDeps = null;
+  routerStarted = false;
 }

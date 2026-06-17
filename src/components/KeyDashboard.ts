@@ -176,7 +176,7 @@ export class KeyDashboard {
       a.addEventListener('click', (ev) => {
         ev.preventDefault();
         void (async () => {
-          try { await invokeTauri('plugin:shell|open', { path: signupUrl }); }
+          try { await invokeTauri('open_url', { url: signupUrl }); }
           catch { window.open(signupUrl, '_blank', 'noopener,noreferrer'); }
         })();
       });

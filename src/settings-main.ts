@@ -768,7 +768,21 @@ async function initSettingsWindow(): Promise<void> {
   // keychain read, which can stall on an ACL/Touch ID prompt. The active section
   // re-renders once secrets land so loaded keys show their real state.
   void loadDesktopSecretsWhenReady()
- .then(() => renderSection(activeSection))
+ .then(() => {
+ const area = document.getElementById('contentArea');
+ // The window is usable mid-load, so the user may be typing when hydration
+ // lands. Capture any unsaved input first (a field's value is otherwise only
+ // read on blur/OK), so re-rendering can't drop a typed-but-unblurred secret.
+ if (area) settingsManager.captureUnsavedInputs(area);
+ // If a secret field still holds focus, skip the re-render entirely rather
+ // than yank the DOM (and the caret) out from under an active edit; the
+ // captured value is preserved and the view refreshes on the next render.
+ const active = document.activeElement as HTMLElement | null;
+ if (area && active && area.contains(active) && active.matches('input, select, textarea')) {
+ return;
+ }
+ renderSection(activeSection);
+ })
  .catch(() => {});
 
   document.getElementById('sidebarNav')?.addEventListener('click', (e) => {

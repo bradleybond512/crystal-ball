@@ -41,6 +41,23 @@ export const SATELLITE_SOURCES: Record<string, SatelliteSource> = {
 };
 
 /**
+ * GIBS WMTS time segment — the most recent top-of-hour UTC timestamp,
+ * optionally stepped back `hoursAgo` whole hours, as `YYYY-MM-DDTHH:00:00Z`.
+ *
+ * GOES/Himawari are sub-daily GIBS layers: their REST URLs *require* a TIME
+ * segment between the style and the TileMatrixSet, and GIBS publishes each
+ * frame into the "best" layer with a ~15–40 min latency. The current
+ * top-of-hour is therefore frequently still a 404, so callers default to one
+ * hour back and step further back on tile errors.
+ */
+export function gibsHourTimestamp(hoursAgo = 0, now: Date = new Date()): string {
+  const d = new Date(now.getTime());
+  d.setUTCMinutes(0, 0, 0);
+  d.setUTCHours(d.getUTCHours() - hoursAgo);
+  return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
  * NOAA GOES WMTS via NASA GIBS for tiled access.
  *
  * Iowa State Mesonet's TMS layer names (`goes_conus_geocolor`, etc.) were
@@ -50,10 +67,15 @@ export const SATELLITE_SOURCES: Record<string, SatelliteSource> = {
  * a layer is unavailable, so MapLibre falls through to a transparent tile
  * instead of rendering the error image.
  *
+ * GOES GeoColor is a *sub-daily* layer, so the REST URL must carry a TIME
+ * segment (`.../default/{YYYY-MM-DDTHH:00:00Z}/GoogleMapsCompatible_Level7/...`)
+ * — without it GIBS 502/404s and the layer never renders. `hoursAgo` lets the
+ * caller fall back to an earlier frame when the latest hour isn't published yet.
+ *
  * The {z}/{y}/{x} ordering is required by GIBS's WMTS service and matches
  * the existing satellite basemap config under `public/map-styles/satellite.json`.
  */
-export function getGoesWmsTileUrl(product: SatelliteProduct = 'geocolor'): string {
+export function getGoesWmsTileUrl(product: SatelliteProduct = 'geocolor', hoursAgo = 1): string {
   const layerMap: Record<SatelliteProduct, string> = {
  geocolor: 'GOES-East_ABI_GeoColor',
  infrared: 'GOES-East_ABI_Band13_Clean_Infrared',
@@ -61,12 +83,14 @@ export function getGoesWmsTileUrl(product: SatelliteProduct = 'geocolor'): strin
  visible: 'GOES-East_ABI_Band2_Red_Visible_1km',
   };
   const layer = layerMap[product];
-  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
+  const time = gibsHourTimestamp(hoursAgo);
+  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/${time}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
 }
 
 /** Himawari satellite tiles via NASA GIBS (Iowa State source returns Invalid TMS PNGs). */
-export function getHimawariTileUrl(): string {
-  return 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Himawari_AHI_Band3_Red_Visible_1km/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png';
+export function getHimawariTileUrl(hoursAgo = 1): string {
+  const time = gibsHourTimestamp(hoursAgo);
+  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Himawari_AHI_Band3_Red_Visible_1km/default/${time}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`;
 }
 
 /** Available satellite products with labels */

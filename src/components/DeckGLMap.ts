@@ -601,6 +601,11 @@ export class DeckGLMap {
   private theaterUnsubscribe: (() => void) | null = null;
   private convergenceSeenAlerts = new Set<string>();
   private radarState: RadarState | null = null;
+  // GIBS GOES GeoColor publishes each hourly frame with a ~15–40 min latency,
+  // so the latest top-of-hour is often a 404. Start one hour back and step
+  // further on tile errors (see recoverSatelliteTiles).
+  private satelliteHourOffset = 1;
+  private static readonly MAX_SATELLITE_HOUR_OFFSET = 6;
   private lightningStrikes: LightningStrike[] = [];
   private redFlagWarnings: RedFlagWarning[] = [];
   private satellitePositions: SatellitePosition[] = [];
@@ -850,6 +855,11 @@ export class DeckGLMap {
  const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
  const sourceId = (e as { sourceId?: string }).sourceId;
  console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId });
+ // GIBS GOES tiles for the latest hour may not be published yet — step
+ // back an hour and rebuild instead of counting toward the error overlay.
+ if (sourceId === 'wm-satellite-src' && this.recoverSatelliteTiles()) {
+ return;
+ }
  mapErrorCount += 1;
  if (mapErrorCount === mapErrorThreshold) {
  this.showMapErrorOverlay(msg, sourceId);
@@ -6209,6 +6219,23 @@ export class DeckGLMap {
 
   // ── Weather Raster Tile Layers (MapLibre GL native) ──────────────
 
+  /**
+   * The latest GIBS GOES GeoColor hour isn't published yet — step the
+   * timestamp back one hour and rebuild the satellite source/layer so it
+   * re-requests an earlier (available) frame. Returns false once we've
+   * exhausted the lookback budget, letting the generic error overlay take over.
+   */
+  private recoverSatelliteTiles(): boolean {
+ const map = this.maplibreMap;
+ if (!map) return false;
+ if (this.satelliteHourOffset >= DeckGLMap.MAX_SATELLITE_HOUR_OFFSET) return false;
+ this.satelliteHourOffset += 1;
+ if (map.getLayer('wm-satellite-layer')) map.removeLayer('wm-satellite-layer');
+ if (map.getSource('wm-satellite-src')) map.removeSource('wm-satellite-src');
+ this.syncWeatherRasterLayers();
+ return true;
+  }
+
   private syncWeatherRasterLayers(): void {
  if (!this.maplibreMap) return;
  const map = this.maplibreMap;
@@ -6225,7 +6252,7 @@ export class DeckGLMap {
  // GoogleMapsCompatible_Level7 tiles only exist at zoom 0–7; pass maxzoom
  // so MapLibre overzooms at z8+ instead of requesting out-of-bounds tiles.
  this.syncRasterTileLayer(map, 'wm-satellite', ml.weatherSatellite, () => {
- return [getGoesWmsTileUrl('geocolor')];
+ return [getGoesWmsTileUrl('geocolor', this.satelliteHourOffset)];
  }, 0.5, 7);
 
  // OWM tile layers (require API key)

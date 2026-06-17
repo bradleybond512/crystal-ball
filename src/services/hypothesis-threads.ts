@@ -58,6 +58,18 @@ const threads = new Map<string, HypothesisThread>();
 let loaded = false;
 let writtenSinceLoad = false;
 
+// Persisted threads may predate a schema change or be partially corrupt. Reject
+// any element missing a dereferenced field — otherwise a thread without
+// confidenceHistory crashes upsertThread() when it spreads the array.
+function isValidThread(t: unknown): t is HypothesisThread {
+  if (typeof t !== 'object' || t === null) return false;
+  const c = t as Partial<HypothesisThread>;
+  return typeof c.signature === 'string'
+    && Array.isArray(c.confidenceHistory)
+    && typeof c.peakRisk === 'string'
+    && typeof c.latest === 'object' && c.latest !== null;
+}
+
 function load(): void {
   if (loaded) return;
   loaded = true;
@@ -65,16 +77,18 @@ function load(): void {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const arr = JSON.parse(raw) as HypothesisThread[];
+      const parsed = JSON.parse(raw);
+      const arr = Array.isArray(parsed) ? parsed.filter(isValidThread) : [];
       for (const t of arr) threads.set(t.signature, t);
     }
   } catch { /* ignore */ }
   // Async IDB hydrate replaces bootstrap data with the richer store —
   // but only if nothing has been written since load() started, otherwise
   // a fresh write from a first-cycle event would be clobbered.
-  void getMemory<HypothesisThread[]>(STORAGE_KEY).then(arr => {
+  void getMemory<HypothesisThread[]>(STORAGE_KEY).then(raw => {
     if (writtenSinceLoad) return;
-    if (!arr || arr.length === 0) return;
+    const arr = Array.isArray(raw) ? raw.filter(isValidThread) : [];
+    if (arr.length === 0) return;
     threads.clear();
     for (const t of arr) threads.set(t.signature, t);
   });

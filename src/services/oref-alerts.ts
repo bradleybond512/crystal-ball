@@ -235,6 +235,7 @@ export async function fetchOrefAlerts(): Promise<OrefAlertsResponse> {
 
   try {
  const res = await fetch(getOrefApiUrl(), {
+ signal: AbortSignal.timeout(10000),
  headers: { Accept: 'application/json' },
  });
  if (!res.ok) {
@@ -265,9 +266,11 @@ export async function fetchOrefHistory(): Promise<OrefHistoryResponse> {
   await ensureLocationMapLoaded();
   try {
  const res = await fetch(getOrefApiUrl('history'), {
+ signal: AbortSignal.timeout(10000),
  headers: { Accept: 'application/json' },
  });
  if (!res.ok) {
+ dataFreshness.recordError('oref-alerts', `History HTTP ${res.status}`);
  // eslint-disable-next-line no-console -- diagnostic warning for upstream failure
  console.warn('[OREF History] HTTP', res.status);
  return { configured: false, history: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: `HTTP ${res.status}` };
@@ -286,6 +289,7 @@ export async function fetchOrefHistory(): Promise<OrefHistoryResponse> {
 
  return data;
   } catch (error) {
+ dataFreshness.recordError('oref-alerts', String(error));
  return { configured: false, history: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: String(error) };
   }
 }

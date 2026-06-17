@@ -3160,8 +3160,23 @@ async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(Stri
  }
  };
  let url = format!("http://127.0.0.1:{port}/api/local-env-update");
+ let secrets_cache = app.state::<SecretsCache>();
  let mut pushed = 0usize;
+ let mut skipped = 0usize;
  for (key, value) in secrets {
+ // Re-check per key: if the user edited or deleted this secret in Settings
+ // after this snapshot was taken, the renderer already pushed the live
+ // value to the sidecar. POSTing our older snapshot value would clobber it
+ // with a stale (or just-deleted) credential — skip and let the renderer win.
+ if secrets_cache
+ .user_mutated
+ .lock()
+ .map(|t| t.contains(&key))
+ .unwrap_or(false)
+ {
+ skipped += 1;
+ continue;
+ }
  // start_local_api already confirmed the sidecar's port before this runs,
  // so a few quick attempts absorb any momentary unreadiness.
  for attempt in 0..3 {
@@ -3191,7 +3206,7 @@ async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(Stri
  append_desktop_log(
  app,
  "INFO",
- &format!("injected {pushed}/{total} keychain secrets into running sidecar via IPC"),
+ &format!("injected {pushed}/{total} keychain secrets into running sidecar via IPC ({skipped} skipped: edited in Settings)"),
  );
 }
 

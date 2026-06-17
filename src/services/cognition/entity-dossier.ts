@@ -187,6 +187,13 @@ const COOLING_RATIO_THRESHOLD = 0.67;
 const dossiers = new Map<string, EntityDossier>();
 let loaded = false;
 let writtenSinceLoad = false;
+/**
+ * Monotonic counter bumped on every in-memory mutation (each save()). The async
+ * IDB hydrate captures this at read-start and only commits if it hasn't moved —
+ * so a hydrate whose async read began before a fresh ingest can't clobber the
+ * newer in-memory data with the stale snapshot it read.
+ */
+let mutationVersion = 0;
 
 // Injected overrides (populated via configure() for tests).
 let _storage: DossierStorageLike | null | undefined = undefined;
@@ -206,6 +213,7 @@ export function configure(opts: EntityDossierOptions): void {
   _putMemoryOverride = opts.putMemoryFn ?? null;
   _nowFn = opts.now ?? Date.now;
   dossiers.clear();
+  mutationVersion++;
   // Mark as already loaded so subsequent reads do NOT reload from the injected
   // storage (which may still contain data from a prior test run). Tests that
   // want to pre-seed the store should do so via ingestFromHypotheses() after
@@ -264,14 +272,18 @@ function load(): void {
     _getMemoryOverride
       ? (key) => (_getMemoryOverride as (k: string) => Promise<EntityDossier[] | null>)(key)
       : (key) => { lazyLoadIdb(); return _getMemory!<EntityDossier[]>(key); };
+  const versionAtReadStart = mutationVersion;
   void getMemFn(STORAGE_KEY).then((arr) => {
-    if (writtenSinceLoad) return;
+    // If any write landed while this async read was in flight, the in-memory
+    // state is fresher than the snapshot we just read — don't clobber it.
+    if (writtenSinceLoad || mutationVersion !== versionAtReadStart) return;
     applyLoaded(arr);
   });
 }
 
 function save(): void {
   writtenSinceLoad = true;
+  mutationVersion++;
   const arr = [...dossiers.values()];
   const stor = resolveStorage();
   if (stor) {
@@ -573,6 +585,7 @@ export function resetEntityDossiers(): void {
   dossiers.clear();
   loaded = false;
   writtenSinceLoad = false;
+  mutationVersion++;
 }
 
 /** Export all dossiers as an array (for testing / diagnostics). */

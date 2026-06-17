@@ -61,11 +61,20 @@ function eventSeverityScore(label) {
 // the gap is observable without flooding the sidecar log on a persistent fault.
 const _eventStoreWriteWarnAt = new Map();
 function warnEventStoreWriteFailure(kind, err) {
+  const message = String(err?.message ?? err);
+  // A duplicate event id is an idempotent re-append (same observation/situation
+  // seen again on a later refresh), not a failure — the append-only invariant
+  // already preserved the original row. Log at debug so known duplicates don't
+  // light up the error badge on every boot / refresh cycle.
+  if (message.includes('append-only violation')) {
+    console.debug(`[sidecar] event-store ${kind} duplicate id skipped (idempotent)`);
+    return;
+  }
   const now = Date.now();
   const last = _eventStoreWriteWarnAt.get(kind) ?? 0;
   if (now - last < 60_000) return;
   _eventStoreWriteWarnAt.set(kind, now);
-  console.warn(`[sidecar] event-store ${kind} append failed: ${String(err?.message ?? err)}`);
+  console.warn(`[sidecar] event-store ${kind} append failed: ${message}`);
 }
 
 // ── Event-store payload redaction ──────────────────────────────────────────

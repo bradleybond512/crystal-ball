@@ -13132,6 +13132,11 @@ async function dispatch(requestUrl, req, routes, context) {
  moduleCache.clear();
  failedImports.clear();
  cloudPreferred.clear();
+ // Async-boot timing: routes hit before this key arrived may have cached a
+ // degraded/requiresKey response. Drop the route caches so the next request
+ // re-fetches with the newly injected secret instead of serving stale.
+ _sidecarCache.clear();
+ _responseCache.clear();
  return json({ ok: true, key });
  }
  return json({ error: 'key not in allowlist' }, 403);

@@ -281,8 +281,8 @@ async function fetchEventsByTag(tag: string, limit = 30): Promise<PolymarketEven
  limit: String(limit),
   });
   if (!response.ok) return [];
-  const data = await response.json() as PolymarketEvent[];
-  return Array.isArray(data) ? data : [];
+  const data = await response.json() as unknown;
+  return Array.isArray(data) ? data as PolymarketEvent[] : [];
 }
 
 async function fetchTopMarkets(): Promise<PredictionMarket[]> {
@@ -296,7 +296,9 @@ async function fetchTopMarkets(): Promise<PredictionMarket[]> {
  limit: '100',
   });
   if (!response.ok) return [];
-  const data = await response.json() as PolymarketMarket[];
+  const raw = await response.json() as unknown;
+  if (!Array.isArray(raw)) return [];
+  const data = raw as PolymarketMarket[];
 
   return data
  .filter(m => m.question && !isExcluded(m.question))

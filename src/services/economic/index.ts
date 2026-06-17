@@ -40,9 +40,14 @@ async function fetchFredFromSidecar(): Promise<SidecarFredSeries[] | null> {
  // Try direct FRED API call first (uses stored key, returns richer data)
  const directResp = await fetch(`${base}/api/fred-series`);
  if (directResp.ok) {
- const d = await directResp.json() as { series: SidecarFredSeries[] };
- const valid = d.series?.filter(s => s.observations?.length > 0);
- if (valid && valid.length >= 4) return valid;
+ const raw = await directResp.json() as unknown;
+ if (raw && typeof raw === 'object') {
+ const d = raw as { series?: SidecarFredSeries[] };
+ if (Array.isArray(d.series)) {
+ const valid = d.series.filter(s => s.observations?.length > 0);
+ if (valid.length >= 4) return valid;
+ }
+ }
  }
   } catch { /* fall through */ }
   try {
@@ -50,8 +55,11 @@ async function fetchFredFromSidecar(): Promise<SidecarFredSeries[] | null> {
  // Fall back to free public sources (Yahoo Finance + BLS + Treasury)
  const fallbackResp = await fetch(`${base}/api/fred-fallback`);
  if (fallbackResp.ok) {
- const d = await fallbackResp.json() as { series: SidecarFredSeries[] };
- if (d.series?.length > 0) return d.series;
+ const raw = await fallbackResp.json() as unknown;
+ if (raw && typeof raw === 'object') {
+ const d = raw as { series?: SidecarFredSeries[] };
+ if (Array.isArray(d.series) && d.series.length > 0) return d.series;
+ }
  }
   } catch { /* fall through */ }
   return null;
@@ -87,7 +95,9 @@ async function fetchEnergyFromSidecar(): Promise<SidecarEnergyPrice[] | null> {
  const base = getApiBaseUrl();
  const r = await fetch(`${base}/api/energy-fallback`);
  if (!r.ok) return null;
- const d = await r.json() as { prices: SidecarEnergyPrice[] };
+ const raw = await r.json() as unknown;
+ if (!raw || typeof raw !== 'object') return null;
+ const d = raw as { prices?: SidecarEnergyPrice[] };
  if (Array.isArray(d.prices) && d.prices.length > 0) return d.prices;
   } catch { /* ignore */ }
   return null;

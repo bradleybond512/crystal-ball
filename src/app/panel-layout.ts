@@ -617,6 +617,7 @@ export class PanelLayoutManager implements AppModule {
   private analystHud: AnalystHUD | null = null;
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
   private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
+  private _onStatusOverlayKey: ((e: KeyboardEvent) => void) | null = null;
   private readonly applyTimeRangeFilterDebounced: () => void;
   private readonly _onUpdateState = () => { this.renderSidebarUpdateBtn(); };
 
@@ -694,6 +695,7 @@ export class PanelLayoutManager implements AppModule {
  if (this.analystHud) { this.analystHud.destroy(); this.analystHud = null; }
  if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
  if (this._onBriefExportKey) { document.removeEventListener('keydown', this._onBriefExportKey); this._onBriefExportKey = null; }
+ if (this._onStatusOverlayKey) { document.removeEventListener('keydown', this._onStatusOverlayKey); this._onStatusOverlayKey = null; }
  // Clean up datacenter strip + saved-places subscription
  if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
@@ -996,12 +998,13 @@ export class PanelLayoutManager implements AppModule {
  document.addEventListener('cb:toggle-status', () => statusOverlay.toggle());
  const shiftCard = new ShiftHandoffCard(); shiftCard.mount(document.body);
  const replayScrubber = new AlertReplayScrubber(); replayScrubber.mount(document.body);
- document.addEventListener('keydown', (ev) => {
+ this._onStatusOverlayKey = (ev: KeyboardEvent) => {
    if (ev.metaKey && ev.shiftKey && (ev.key === 'S' || ev.key === 's')) {
      ev.preventDefault();
      statusOverlay.toggle();
    }
- });
+ };
+ document.addEventListener('keydown', this._onStatusOverlayKey);
  startBlackoutSignature();
  const digestOverlay = new DigestOverlay();
  digestOverlay.mount(document.body);

@@ -38,7 +38,9 @@ export async function fetchTradeRestrictions(countries: string[] = [], limit = 5
  return await restrictionsBreaker.execute(async () => {
  const resp = await fetch(`${getApiBaseUrl()}/api/trade-policy`);
  if (!resp.ok) return { ...emptyRestrictions, upstreamUnavailable: true };
- const data = await resp.json() as { interventions: Array<{ id: string; title: string; country: string; type: string; announced: string; status: string; affected_countries: string[] }>; fetchedAt: string };
+ const raw = await resp.json() as unknown;
+ if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { interventions?: unknown }).interventions)) return { ...emptyRestrictions, upstreamUnavailable: true };
+ const data = raw as { interventions: Array<{ id: string; title: string; country: string; type: string; announced: string; status: string; affected_countries: string[] }>; fetchedAt: string };
  const filtered = countries.length > 0
  ? data.interventions.filter(i => countries.includes(i.country) || i.affected_countries.some(c => countries.includes(c)))
  : data.interventions;

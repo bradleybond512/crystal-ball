@@ -80,7 +80,9 @@ async function fetchMarketQuotesFromSidecar(
  const syms = symbols.map(s => s.symbol).join(',');
  const resp = await fetch(`${base}/api/market-quotes?symbols=${encodeURIComponent(syms)}`);
  if (!resp.ok) return null;
- const data = await resp.json() as { quotes?: SidecarQuote[] };
+ const raw = await resp.json() as unknown;
+ if (!raw || typeof raw !== 'object') return null;
+ const data = raw as { quotes?: SidecarQuote[] };
  if (!Array.isArray(data.quotes) || data.quotes.every(q => q.price === null)) return null;
  const metaMap = new Map(symbols.map(s => [s.symbol, s]));
  const quotes = data.quotes.map(q => ({
@@ -98,7 +100,9 @@ async function fetchMarketQuotesFromSidecar(
  try {
  const r = await fetch(`${base}/api/stock-chart?symbol=${encodeURIComponent(q.symbol)}&range=1mo&interval=1d`);
  if (!r.ok) return;
- const d = await r.json() as { closes: number[] };
+ const raw2 = await r.json() as unknown;
+ if (!raw2 || typeof raw2 !== 'object') return;
+ const d = raw2 as { closes?: number[] };
  if (Array.isArray(d.closes) && d.closes.length > 0) q.sparkline = d.closes;
  } catch { /* ignore */ }
  }));
@@ -115,7 +119,9 @@ async function fetchCryptoFromSidecar(): Promise<CryptoData[] | null> {
  const ids = Object.keys(CRYPTO_META).join(',');
  const resp = await fetch(`${base}/api/crypto-quotes?ids=${encodeURIComponent(ids)}`);
  if (!resp.ok) return null;
- const data = await resp.json() as { quotes?: SidecarCrypto[] };
+ const raw = await resp.json() as unknown;
+ if (!raw || typeof raw !== 'object') return null;
+ const data = raw as { quotes?: SidecarCrypto[] };
  if (!Array.isArray(data.quotes) || data.quotes.every(q => q.price === null)) return null;
  return data.quotes
  .map(q => ({

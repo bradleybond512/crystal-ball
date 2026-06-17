@@ -26,6 +26,12 @@ import {
   expireAlerts,
 } from './ipaws-aggregate.mjs';
 import { loadEnvFile } from './env-local-loader.mjs';
+import {
+  isAcledTokenExpiringSoon,
+  isRefreshTokenStale,
+  updateAcledTokenState,
+  ACLED_REFRESH_TOKEN_WARN_DAYS,
+} from './acled-token-helpers.mjs';
 import { fetchWithFallback } from './feed-resilience.mjs';
 import { trackSuccess, trackFailure, getAllFeedStatuses, getFeedStatus } from './feed-health-tracker.mjs';
 import { fetchAllTfrs, tfrColor } from './faa-tfrs.mjs';
@@ -265,6 +271,16 @@ function warnUnauthorizedOnce(context, pathname) {
   context.logger.warn(`[local-api] unauthorized request to ${pathname} (token race at startup/rotation)${extra}`);
 }
 const SIDECAR_START_MS = Date.now();
+
+// ── ACLED OAuth token state (in-memory) ──────────────────────────────────
+// Seeded from process.env at startup; updated by /api/acled/connect and
+// /api/acled/refresh calls so the /api/acled-events handler can proactively
+// refresh the access token before it expires.
+const acledTokenState = {
+  expiresAt: null,         // ms timestamp when the current access token expires
+  refreshToken: process.env.ACLED_REFRESH_TOKEN ?? null,
+  refreshIssuedAt: null,   // ms timestamp when we first saw the current refresh token
+};
 const wmHostStats = new Map(); // host → { ok, fail, lastStatus, lastOkAt, lastFailAt, lastError }
 const WM_HOST_STATS_CAP = 100;
 const wmHostFailures = new Map(); // host → { count, lastError, lastAt }
@@ -1133,7 +1149,7 @@ globalThis.fetch = async function wmInstrumentedFetch(input, init) {
 const ALLOWED_ENV_KEYS = new Set([
   'CRYSTALBALL_API_KEY',
   'ANTHROPIC_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY', 'FRED_API_KEY', 'EIA_API_KEY',
-  'CLOUDFLARE_API_TOKEN', 'ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'URLHAUS_AUTH_KEY',
+  'CLOUDFLARE_API_TOKEN', 'ACLED_ACCESS_TOKEN', 'ACLED_EMAIL', 'ACLED_REFRESH_TOKEN', 'URLHAUS_AUTH_KEY',
   'OTX_API_KEY', 'ABUSEIPDB_API_KEY', 'WINGBITS_API_KEY', 'WS_RELAY_URL',
   'VITE_OPENSKY_RELAY_URL', 'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET',
   'AISSTREAM_API_KEY', 'VITE_WS_RELAY_URL', 'FINNHUB_API_KEY', 'NASA_FIRMS_API_KEY', 'AIRNOW_API_KEY', 'PURPLEAIR_API_KEY',
@@ -7041,6 +7057,14 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!resp.ok) return json({ error: `ACLED auth failed (${resp.status})` }, resp.status);
  const data = await resp.json();
  if (!data.access_token) return json({ error: data.error_description ?? 'No access token returned' }, 401);
+ // Seed in-memory token state so /api/acled-events can proactively refresh.
+ const nowConnect = Date.now();
+ const nextState = updateAcledTokenState({ expiresAt: null, refreshToken: null, refreshIssuedAt: null }, data, nowConnect);
+ acledTokenState.expiresAt = nextState.expiresAt;
+ acledTokenState.refreshToken = nextState.refreshToken;
+ acledTokenState.refreshIssuedAt = nowConnect; // fresh connect → treat refresh token as newly issued
+ process.env.ACLED_ACCESS_TOKEN = data.access_token;
+ if (data.refresh_token) process.env.ACLED_REFRESH_TOKEN = data.refresh_token;
  return json({ accessToken: data.access_token, refreshToken: data.refresh_token ?? null, email });
  } catch {
  return json({ error: 'Request failed' }, 500);
@@ -7065,10 +7089,47 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!resp.ok) return json({ error: `Token refresh failed (${resp.status})` }, resp.status);
  const data = await resp.json();
  if (!data.access_token) return json({ error: 'No access token in refresh response' }, 401);
- return json({ accessToken: data.access_token, refreshToken: data.refresh_token ?? refreshToken });
+ // Update in-memory state and warn if the refresh token hasn't rotated recently.
+ const nowRefresh = Date.now();
+ // The caller-supplied refresh token just succeeded, so it is known-valid. Seed it
+ // as the baseline when in-memory state has none (e.g. after a sidecar restart);
+ // otherwise a non-rotating provider response would leave acledTokenState.refreshToken
+ // empty and silently disable proactive refresh in /api/acled-events.
+ if (!acledTokenState.refreshToken) acledTokenState.refreshToken = refreshToken;
+ const wasStale = isRefreshTokenStale(acledTokenState.refreshIssuedAt, nowRefresh);
+ const refreshedState = updateAcledTokenState(acledTokenState, data, nowRefresh);
+ Object.assign(acledTokenState, refreshedState);
+ process.env.ACLED_ACCESS_TOKEN = data.access_token;
+ process.env.ACLED_REFRESH_TOKEN = data.refresh_token ?? refreshToken;
+ return json({
+ accessToken: data.access_token,
+ refreshToken: data.refresh_token ?? refreshToken,
+ ...(wasStale ? {
+ rotateRefreshTokenWarning: `Refresh token is over ${ACLED_REFRESH_TOKEN_WARN_DAYS} days old — re-authenticate via /api/acled/connect to rotate it`,
+ } : {}),
+ });
  } catch {
  return json({ error: 'Request failed' }, 500);
  }
+  }
+
+  // ── ACLED token status ─────────────────────────────────────────────────────
+  if (requestUrl.pathname === '/api/acled/token-status') {
+ const nowStatus = Date.now();
+ const expiresInSeconds = acledTokenState.expiresAt != null
+ ? Math.floor((acledTokenState.expiresAt - nowStatus) / 1000)
+ : null;
+ const refreshTokenAgeDays = acledTokenState.refreshIssuedAt != null
+ ? Math.floor((nowStatus - acledTokenState.refreshIssuedAt) / (24 * 60 * 60 * 1000))
+ : null;
+ return json({
+ hasAccessToken: Boolean(process.env.ACLED_ACCESS_TOKEN),
+ expiresInSeconds,
+ expiringSoon: isAcledTokenExpiringSoon(acledTokenState.expiresAt, nowStatus),
+ hasRefreshToken: Boolean(acledTokenState.refreshToken || process.env.ACLED_REFRESH_TOKEN),
+ refreshTokenAgeDays,
+ refreshTokenStale: isRefreshTokenStale(acledTokenState.refreshIssuedAt, nowStatus),
+ });
   }
 
   // ── OREF (Israel Home Front Command) alerts ──────────────────────────────
@@ -7142,11 +7203,40 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ACLED air strikes & drone events (last 30 days)
   if (requestUrl.pathname === '/api/acled-events') {
- const key = process.env.ACLED_ACCESS_TOKEN;
  const email = process.env.ACLED_EMAIL;
- if (!key || !email) {
+ if (!process.env.ACLED_ACCESS_TOKEN || !email) {
  return json({ events: [], error: 'ACLED_ACCESS_TOKEN and ACLED_EMAIL are required' });
  }
+ // Proactively refresh the access token when it's within 5 min of expiry.
+ let tokenRefreshed = false;
+ if (isAcledTokenExpiringSoon(acledTokenState.expiresAt)) {
+ // Prefer process.env so settings-flow updates (via /api/local-env-update) are always honoured.
+ const rt = process.env.ACLED_REFRESH_TOKEN || acledTokenState.refreshToken;
+ if (rt) {
+ try {
+ const refreshResp = await fetchWithTimeout(
+ 'https://acleddata.com/oauth/token',
+ {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': CHROME_UA },
+ body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: rt, client_id: 'acled' }).toString(),
+ },
+ 15_000,
+ );
+ if (refreshResp.ok) {
+ const refreshData = await refreshResp.json();
+ if (refreshData.access_token) {
+ const updatedState = updateAcledTokenState(acledTokenState, refreshData);
+ Object.assign(acledTokenState, updatedState);
+ process.env.ACLED_ACCESS_TOKEN = refreshData.access_token;
+ if (refreshData.refresh_token) process.env.ACLED_REFRESH_TOKEN = refreshData.refresh_token;
+ tokenRefreshed = true;
+ }
+ }
+ } catch { /* auto-refresh is best-effort; continue with existing token */ }
+ }
+ }
+ const key = process.env.ACLED_ACCESS_TOKEN;
  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
  const today = new Date().toISOString().slice(0, 10);
  const fields = 'event_id_cnty|event_date|event_type|sub_event_type|actor1|actor2|country|admin1|location|latitude|longitude|fatalities|notes';
@@ -7157,7 +7247,7 @@ async function dispatch(requestUrl, req, routes, context) {
  return json({ events: [], error: `ACLED error: ${resp.status}` });
  }
  const data = await resp.json();
- return json({ events: data.data ?? [] });
+ return json({ events: data.data ?? [], ...(tokenRefreshed ? { tokenRefreshed: true } : {}) });
  } catch (error) {
  return json({ events: [], error: String(error.message ?? error) });
  }
@@ -13016,6 +13106,8 @@ async function dispatch(requestUrl, req, routes, context) {
  context.logger.log(`[local-api] env set: ${key}`);
  }
  if (key === 'AISSTREAM_API_KEY') aisOnKeyChanged(value || null);
+ if (key === 'ACLED_REFRESH_TOKEN') acledTokenState.refreshToken = value || null;
+ if (key === 'ACLED_ACCESS_TOKEN') acledTokenState.expiresAt = null; // expiry unknown after manual key update
  if (key === 'S2U_XMPP_JID' || key === 'S2U_XMPP_SECRET') {
  s2uXmppApplyCreds().catch((error) => {
  context.logger.log(`[s2u-xmpp] reapply creds failed: ${error?.message ?? error}`);

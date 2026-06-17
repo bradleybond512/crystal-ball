@@ -3493,6 +3493,11 @@ fn main() {
  &format!("local API sidecar failed to start: {err}"),
  );
  eprintln!("[tauri] local API sidecar failed to start: {err}");
+ // Do NOT load or inject secrets when the sidecar didn't start:
+ // inject_secrets_into_running_sidecar falls back to the default
+ // port, so pushing here could POST every keychain secret to
+ // whatever foreign process happens to hold 127.0.0.1:46123.
+ return;
  }
  Err(join_err) => {
  append_desktop_log(
@@ -3500,6 +3505,7 @@ fn main() {
  "ERROR",
  &format!("sidecar start task panicked: {join_err}"),
  );
+ return;
  }
  }
 

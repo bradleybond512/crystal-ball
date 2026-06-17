@@ -1162,6 +1162,22 @@ const ALLOWED_ENV_KEYS = new Set([
   'URLSCAN_API_KEY', 'BITCOINABUSE_API_KEY', 'VULNERS_API_KEY', 'MEDIASTACK_API_KEY',
   'PULSEDIVE_API_KEY', 'HIBP_API_KEY', 'GEONAMES_USERNAME', 'IPINFO_TOKEN',
   'OPENAQ_API_KEY', 'WINDY_WEBCAMS_API_KEY', 'NPS_API_KEY',
+  // Sidecar-consumed secrets that previously only reached process.env via the
+  // spawn-time env injection. Now that secrets are pushed in over this IPC
+  // endpoint at boot (so a stalled Keychain read can't gate sidecar startup),
+  // these must be accepted here too — otherwise these integrations would read
+  // as unconfigured after launch, and live Settings edits for them would be
+  // silently rejected. Pure renderer-side keys (CESIUM/MAPBOX/MAPTILER/
+  // GOOGLE_MAPS) are intentionally excluded: the sidecar never reads them.
+  'CENSYS_API_ID', 'CENSYS_API_SECRET',
+  'MISP_API_KEY', 'MISP_URL', 'OPENCTI_API_KEY', 'OPENCTI_URL',
+  'SECURITYTRAILS_API_KEY', 'WHOISXML_API_KEY',
+  'NSW_API_KEY', 'ROAD511_API_KEY', 'UK_HIGHWAYS_API_KEY', 'UCDP_API_TOKEN',
+  'TWILIO_AUTH_TOKEN',
+  'PATREON_ACCESS_TOKEN', 'PATREON_REFRESH_TOKEN', 'PATREON_AUDIO_RSS_URL',
+  'PATREON_OAUTH_CLIENT_ID', 'PATREON_OAUTH_CLIENT_SECRET',
+  'S2U_XMPP_JID', 'S2U_XMPP_SECRET',
+  'S2U_TAK_URL', 'S2U_TAK_USERNAME', 'S2U_TAK_SECRET', 'S2U_TLS_INSECURE_OPT_IN',
 ]);
 
 const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';

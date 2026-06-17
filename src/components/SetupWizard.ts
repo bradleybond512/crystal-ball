@@ -135,7 +135,7 @@ export class SetupWizard {
       a.addEventListener('click', (ev) => {
         ev.preventDefault();
         void (async () => {
-          try { await invokeTauri('plugin:shell|open', { path: signup }); }
+          try { await invokeTauri('open_url', { url: signup }); }
           catch { window.open(signup, '_blank', 'noopener,noreferrer'); }
         })();
       });

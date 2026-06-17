@@ -3059,6 +3059,76 @@ async fn copy_diagnostics(webview: Webview, app: AppHandle) -> Result<String, St
  Ok(out)
 }
 
+/// Push freshly-loaded keychain secrets into the already-running sidecar via
+/// its `/api/local-env-update` IPC endpoint — the same per-key channel the
+/// renderer uses when the user edits a key in Settings (`pushSecretToSidecar`).
+/// Secrets take effect without restarting the sidecar (or the app).
+///
+/// Used at boot so a slow Touch ID / Keychain read never gates sidecar startup:
+/// the sidecar boots with zero secrets, then these get injected the moment the
+/// keychain resolves. Best-effort — the keychain remains the source of truth,
+/// so a failed push just means those routes return 503 until the next launch.
+async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(String, String)>) {
+ let total = secrets.len();
+ if total == 0 {
+ return;
+ }
+ let (token, port) = {
+ let state = app.state::<LocalApiState>();
+ let token = state.token.lock().ok().and_then(|t| t.clone()).unwrap_or_default();
+ let port = state.port.lock().ok().and_then(|p| *p).unwrap_or(DEFAULT_LOCAL_API_PORT);
+ (token, port)
+ };
+ let client = match reqwest::Client::builder()
+ .timeout(Duration::from_secs(3))
+ .build()
+ {
+ Ok(c) => c,
+ Err(e) => {
+ append_desktop_log(
+ app,
+ "WARN",
+ &format!("secret injection skipped: http client build failed: {e}"),
+ );
+ return;
+ }
+ };
+ let url = format!("http://127.0.0.1:{port}/api/local-env-update");
+ let mut pushed = 0usize;
+ for (key, value) in secrets {
+ // start_local_api already confirmed the sidecar's port before this runs,
+ // so a few quick attempts absorb any momentary unreadiness.
+ for attempt in 0..3 {
+ let result = client
+ .post(&url)
+ .header("Authorization", format!("Bearer {token}"))
+ .json(&serde_json::json!({ "key": key, "value": value }))
+ .send()
+ .await;
+ match result {
+ Ok(resp) if resp.status().is_success() => {
+ pushed += 1;
+ break;
+ }
+ _ => {
+ if attempt < 2 {
+ // Sleep off the async executor (no tokio timer in scope).
+ let _ = tauri::async_runtime::spawn_blocking(|| {
+ std::thread::sleep(Duration::from_millis(400))
+ })
+ .await;
+ }
+ }
+ }
+ }
+ }
+ append_desktop_log(
+ app,
+ "INFO",
+ &format!("injected {pushed}/{total} keychain secrets into running sidecar via IPC"),
+ );
+}
+
 fn stop_local_api(app: &AppHandle) {
  if let Ok(state) = app.try_state::<LocalApiState>().ok_or(()) {
  if let Ok(mut slot) = state.child.lock() {
@@ -3390,43 +3460,33 @@ fn main() {
  ),
  );
 
- // Off-main-thread keychain load + sidecar boot.
+ // ── Async boot: sidecar FIRST, keychain SECOND ───────────────────
  //
- // The Tauri builder runs on the main UI thread; calling
- // `Entry::get_password()` there blocks until macOS Keychain
- // responds (multiple seconds when the user has a populated
- // vault, sometimes longer if Keychain Access is unlocked
- // mid-call). That freeze is what made Crystal Ball appear
- // hung after each rebuild.
+ // Nothing on the Tauri builder's main UI thread may block on the
+ // macOS Keychain: `Entry::get_password()` can stall for up to
+ // KEYCHAIN_VAULT_TIMEOUT (120s) while a Touch ID / "Always Allow"
+ // ACL prompt is pending. Previously the sidecar boot lived in the
+ // SAME task as the keychain read and ran AFTER it, so a stalled
+ // Touch ID delayed the entire data backend for the full timeout —
+ // the freeze this fixes.
  //
- // Sidecar startup intentionally lives inside the same task
- // because `start_local_api` reads `app.state::<SecretsCache>()`
- // to inject env vars — running it before the populate would
- // ship an empty env to the sidecar.
+ // Now we boot the sidecar first with an empty cache (0 secrets),
+ // then read the keychain on a worker thread, then inject the
+ // secrets into the already-running sidecar via the same
+ // `/api/local-env-update` IPC the renderer uses for live key edits.
+ // The window and the data backend are both usable immediately; no
+ // restart is required when the keychain finally resolves.
  let setup_handle = app.handle().clone();
- tauri::async_runtime::spawn_blocking(move || {
- let cache = setup_handle.state::<SecretsCache>();
- // populate_from_keychain has per-call timeouts so this returns
- // in bounded time even if individual keychain entries are blocked
- // by ACL prompts — see KEYCHAIN_PER_CALL_TIMEOUT.
- cache.populate_from_keychain(Some(&setup_handle));
- let loaded = cache
- .secrets
- .lock()
- .map(|m| m.len())
- .unwrap_or(0);
- append_desktop_log(
- &setup_handle,
- "INFO",
- &format!("secrets-cache: loaded {loaded} keys from keychain (async)"),
- );
- // Sidecar spawn is unconditional. start_local_api generates its
- // own auth token via generate_local_token() — it does not
- // depend on the keychain. Even when populate timed out and the
- // cache is empty, the sidecar boots and serves routes that
- // don't require API keys; routes that do return 503 +
- // `keyMissing` until the cache is filled on a future launch.
- if let Err(err) = start_local_api(&setup_handle) {
+ tauri::async_runtime::spawn(async move {
+ // 1. Boot the sidecar without waiting on the keychain.
+ //    start_local_api generates its own auth token and depends on
+ //    no secret; with the cache still empty it ships 0 secrets in
+ //    the env. It runs on a blocking thread because it waits (≤15s)
+ //    for the sidecar to confirm its listening port.
+ let start_handle = setup_handle.clone();
+ match tauri::async_runtime::spawn_blocking(move || start_local_api(&start_handle)).await {
+ Ok(Ok(())) => {}
+ Ok(Err(err)) => {
  append_desktop_log(
  &setup_handle,
  "ERROR",
@@ -3434,6 +3494,43 @@ fn main() {
  );
  eprintln!("[tauri] local API sidecar failed to start: {err}");
  }
+ Err(join_err) => {
+ append_desktop_log(
+ &setup_handle,
+ "ERROR",
+ &format!("sidecar start task panicked: {join_err}"),
+ );
+ }
+ }
+
+ // 2. Read the keychain on a worker thread. Bounded by the per-call
+ //    timeouts (≤120s for the consolidated vault), but the UI and
+ //    sidecar are already live so this no longer blocks startup.
+ let load_handle = setup_handle.clone();
+ let secrets: Vec<(String, String)> = tauri::async_runtime::spawn_blocking(move || {
+ let cache = load_handle.state::<SecretsCache>();
+ cache.populate_from_keychain(Some(&load_handle));
+ cache
+ .secrets
+ .lock()
+ .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+ .unwrap_or_default()
+ })
+ .await
+ .unwrap_or_default();
+ append_desktop_log(
+ &setup_handle,
+ "INFO",
+ &format!(
+ "secrets-cache: loaded {} keys from keychain (async)",
+ secrets.len()
+ ),
+ );
+
+ // 3. Inject the loaded secrets into the live sidecar via IPC — no
+ //    restart. Until this completes, key-dependent routes return
+ //    503 + `keyMissing`, exactly as on a cold cache.
+ inject_secrets_into_running_sidecar(&setup_handle, secrets).await;
  });
 
  // Request Location Services authorization so the app appears in

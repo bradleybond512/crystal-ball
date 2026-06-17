@@ -113,29 +113,17 @@ export function loadFromStorage<T>(key: string, defaultValue: T): T {
   return defaultValue;
 }
 
-let _storageQuotaExceeded = false;
-
-export function isStorageQuotaExceeded(): boolean {
-  return _storageQuotaExceeded;
-}
-
-export function isQuotaError(e: unknown): boolean {
-  return e instanceof DOMException && e.name === 'QuotaExceededError';
-}
-
-export function markStorageQuotaExceeded(): void {
-  _storageQuotaExceeded = true;
-}
+export {
+  isStorageQuotaExceeded,
+  isQuotaError,
+  markStorageQuotaExceeded,
+  _resetStorageQuotaForTest,
+} from './storage-quota';
+export { safeSetItem, EVICTABLE_CACHE_PREFIXES } from './safe-storage';
+import { safeSetItem } from './safe-storage';
 
 export function saveToStorage<T>(key: string, value: T): void {
-  if (_storageQuotaExceeded) return;
-  try {
- localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
- if (isQuotaError(error)) {
- markStorageQuotaExceeded();
- }
-  }
+  safeSetItem(key, JSON.stringify(value));
 }
 
 export function generateId(): string {

@@ -3,6 +3,7 @@ import { isDesktopRuntime, getApiBaseUrl } from '../services/runtime';
 import { invokeTauri } from '../services/tauri-bridge';
 import { t } from '../services/i18n';
 import { h, replaceChildren, safeHtml } from '../utils/dom-utils';
+import { safeSetItem } from '@/utils';
 import { trackPanelResized } from '@/services/analytics';
 // `summarization` is statically imported by other panels (GoodThingsDigest,
 // Insights, etc.), so it always lands in the panels chunk regardless of
@@ -33,7 +34,7 @@ function loadPanelSpans(): Record<string, number> {
 function savePanelSpan(panelId: string, span: number): void {
   const spans = loadPanelSpans();
   spans[panelId] = span;
-  localStorage.setItem(PANEL_SPANS_KEY, JSON.stringify(spans));
+  safeSetItem(PANEL_SPANS_KEY, JSON.stringify(spans));
 }
 
 const PANEL_COL_SPANS_KEY = 'crystalball-panel-col-spans';
@@ -53,7 +54,7 @@ function loadPanelColSpans(): Record<string, number> {
 function savePanelColSpan(panelId: string, span: number): void {
   const spans = loadPanelColSpans();
   spans[panelId] = span;
-  localStorage.setItem(PANEL_COL_SPANS_KEY, JSON.stringify(spans));
+  safeSetItem(PANEL_COL_SPANS_KEY, JSON.stringify(spans));
 }
 
 function clearPanelColSpan(panelId: string): void {
@@ -64,7 +65,7 @@ function clearPanelColSpan(panelId: string): void {
  localStorage.removeItem(PANEL_COL_SPANS_KEY);
  return;
   }
-  localStorage.setItem(PANEL_COL_SPANS_KEY, JSON.stringify(spans));
+  safeSetItem(PANEL_COL_SPANS_KEY, JSON.stringify(spans));
 }
 
 function getDefaultColSpan(element: HTMLElement): number {
@@ -1037,7 +1038,7 @@ export class Panel {
  this.element.classList.remove('resized', 'span-1', 'span-2', 'span-3', 'span-4');
  const spans = loadPanelSpans();
  delete spans[this.panelId];
- localStorage.setItem(PANEL_SPANS_KEY, JSON.stringify(spans));
+ safeSetItem(PANEL_SPANS_KEY, JSON.stringify(spans));
   }
 
   public resetWidth(): void {

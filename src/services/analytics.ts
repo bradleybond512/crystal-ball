@@ -23,6 +23,7 @@
  */
 
 import { isDesktopRuntime } from './runtime';
+import { safeSetItem } from '@/utils/safe-storage';
 import { isGhostMode } from './mode-manager';
 import { getRuntimeConfigSnapshot, type RuntimeSecretKey } from './runtime-config';
 import { SITE_VARIANT } from '@/config/variant';
@@ -42,7 +43,13 @@ export function isAnalyticsAllowed(): boolean {
 }
 
 export function setAnalyticsConsent(allow: boolean): void {
-  localStorage.setItem(CONSENT_KEY, allow ? 'true' : 'false');
+  const next = allow ? 'true' : 'false';
+  // Read-before-write: the banner can re-fire decide() and migration/init paths
+  // also call this; skip the write (and the QuotaExceededError it can throw)
+  // when the stored choice is already what we'd write.
+  if (localStorage.getItem(CONSENT_KEY) !== next) {
+    safeSetItem(CONSENT_KEY, next);
+  }
   if (!allow) {
     // Clear the persistent installation ID so re-identification is not possible.
     localStorage.removeItem('wm-installation-id');
@@ -65,7 +72,9 @@ export function hasSeenConsentPrompt(): boolean {
 }
 
 export function markConsentPromptSeen(): void {
-  localStorage.setItem(CONSENT_PROMPT_SEEN_KEY, 'true');
+  // Idempotent: only write the first time the prompt is marked seen.
+  if (localStorage.getItem(CONSENT_PROMPT_SEEN_KEY) === 'true') return;
+  safeSetItem(CONSENT_PROMPT_SEEN_KEY, 'true');
 }
 
 /**
@@ -87,7 +96,7 @@ export function migrateAnalyticsConsent(): void {
     }
     const isExistingInstall = localStorage.getItem('wm-installation-id') !== null;
     if (isExistingInstall) {
-      localStorage.setItem(CONSENT_KEY, 'true');
+      safeSetItem(CONSENT_KEY, 'true');
       markConsentPromptSeen();
     }
   } catch { /* localStorage unavailable — treat as unconsented */ }
@@ -100,7 +109,7 @@ function getOrCreateInstallationId(): string {
   let id = localStorage.getItem(STORAGE_KEY);
   if (!id) {
  id = crypto.randomUUID();
- localStorage.setItem(STORAGE_KEY, id);
+ safeSetItem(STORAGE_KEY, id);
   }
   return id;
 }
@@ -343,7 +352,7 @@ function enqueueOffline(name: string, props: Record<string, unknown>): void {
  const queue = (raw ? JSON.parse(raw) : []) as { name: string; props: Record<string, unknown>; ts: number }[];
  queue.push({ name, props, ts: Date.now() });
  if (queue.length > OFFLINE_QUEUE_CAP) queue.splice(0, queue.length - OFFLINE_QUEUE_CAP);
- localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+ safeSetItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
   } catch { /* localStorage full or unavailable */ }
 }
 

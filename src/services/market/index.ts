@@ -12,7 +12,7 @@ import {
   type CryptoQuote as ProtoCryptoQuote,
 } from '@/generated/client/crystalball/market/v1/service_client';
 import type { MarketData, CryptoData } from '@/types';
-import { createCircuitBreaker } from '@/utils';
+import { createCircuitBreaker, safeSetItem } from '@/utils';
 import { getApiBaseUrl } from '@/services/runtime';
 
 // ---- Upstream cloud client (fallback) ----
@@ -149,9 +149,7 @@ function symbolSetKey(symbols: string[]): string {
 const STALE_CACHE_PREFIX = 'crystalball-market-stale-';
 
 function persistStaleCache(key: string, data: MarketData[]): void {
-  try {
- localStorage.setItem(STALE_CACHE_PREFIX + key, JSON.stringify({ ts: Date.now(), data }));
-  } catch { /* quota exceeded — ignore */ }
+  safeSetItem(STALE_CACHE_PREFIX + key, JSON.stringify({ ts: Date.now(), data }));
 }
 
 function loadStaleCache(key: string): MarketData[] {

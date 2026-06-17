@@ -1,6 +1,6 @@
 import { isDesktopRuntime } from './runtime';
 import { invokeTauri } from './tauri-bridge';
-import { isStorageQuotaExceeded, isQuotaError, markStorageQuotaExceeded } from '@/utils';
+import { isStorageQuotaExceeded, isQuotaError, markStorageQuotaExceeded, safeSetItem } from '@/utils';
 
 interface CacheEnvelope<T> {
   key: string;
@@ -119,12 +119,7 @@ export async function setPersistentCache<T>(key: string, data: T, ttlMs?: number
  }
   }
 
-  if (isStorageQuotaExceeded()) return;
-  try {
- localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(payload));
-  } catch (error) {
- if (isQuotaError(error)) markStorageQuotaExceeded();
-  }
+  safeSetItem(`${CACHE_PREFIX}${key}`, JSON.stringify(payload));
 }
 
 export async function deletePersistentCache(key: string): Promise<void> {

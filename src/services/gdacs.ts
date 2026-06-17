@@ -57,7 +57,8 @@ const EVENT_TYPE_NAMES: Record<string, string> = {
 export async function fetchGDACSEvents(): Promise<GDACSEvent[]> {
   return breaker.execute(async () => {
  const response = await fetch(GDACS_API, {
- headers: { 'Accept': 'application/json' }
+ headers: { 'Accept': 'application/json' },
+ signal: AbortSignal.timeout(10000),
  });
 
  if (!response.ok) throw new Error(`HTTP ${response.status}`);

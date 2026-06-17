@@ -283,6 +283,10 @@ export function installRuntimeFetchPatch(): void {
   }
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+ // Default timeout: ~100 data feeds route through this patched fetch with no
+ // timeout of their own, so a hung connection would otherwise stall forever.
+ // Only apply when the caller hasn't supplied its own AbortSignal.
+ if (!init?.signal) init = { ...init, signal: AbortSignal.timeout(15000) };
  const target = getApiTargetFromRequestInput(input);
  const debug = localStorage.getItem('wm-debug-log') === '1';
 

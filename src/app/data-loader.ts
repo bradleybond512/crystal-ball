@@ -339,6 +339,22 @@ const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
   THREAT_LEVEL_CRITICAL: 'critical',
 };
 
+// Stable dedupe key for an NWS alert. Prefers the official alert id (unique
+// per issuance — an updated/re-issued warning gets a fresh id and re-notifies);
+// falls back to a hash of headline+area when the id is missing so a long-lived
+// warning still maps to one stable key across refreshes.
+function weatherAlertDedupeKey(alert: { id?: string; headline?: string; event?: string; areaDesc?: string }): string {
+  if (alert.id) return `nws-${alert.id}`;
+  const basis = `${alert.headline ?? alert.event ?? ''}|${alert.areaDesc ?? ''}`;
+  let hash = 5381;
+  for (const ch of basis) hash = (hash * 33 + (ch.codePointAt(0) ?? 0)) % 2_147_483_647;
+  return `nws-h${hash.toString(36)}`;
+}
+
+// A long-lived NWS warning keeps reappearing in every fetch. Re-notify at most
+// once per this window so the user gets a periodic reminder, not spam each cycle.
+const WEATHER_NOTIFY_DEDUPE_WINDOW_MS = 60 * 60 * 1000;
+
 function protoItemToNewsItem(p: ProtoNewsItem): NewsItem {
   const level = PROTO_TO_CLIENT_LEVEL[p.threat?.level ?? 'THREAT_LEVEL_UNSPECIFIED'];
   return {
@@ -1664,13 +1680,28 @@ export class DataLoaderManager implements AppModule {
    continue;
  }
  pipelineTrace.record(alert.id, 'weather', { stage: 'evaluated', detail: { isBigEvent: true, tier: bigEventResult.tier } });
+ // Dedupe: a stable per-alert key lets us detect a warning we already
+ // notified for. The trace candidateId stays unique per occurrence (the
+ // registry rejects duplicate ids), while situationId groups occurrences
+ // of the same alert so dedupeMatch can fire on a recent prior dispatch.
+ const dispatchAt = Date.now();
+ const dedupeKey = weatherAlertDedupeKey(alert);
+ const dedupeMatch = registry
+   .bySituation(dedupeKey)
+   .some((e) => {
+     if (e.decision !== 'dispatched') return false;
+     const lastAt = e.events[e.events.length - 1]?.at ?? e.candidate.createdAt;
+     return dispatchAt - lastAt < WEATHER_NOTIFY_DEDUPE_WINDOW_MS;
+   });
  const decision = routeBigEventToLadder(registry, bigEventResult, ladderInput, {
+ candidateId: `${dedupeKey}-${dispatchAt}`,
+ situationId: dedupeKey,
  domain: 'weather',
  headline: alert.headline || alert.event,
  summary: alert.areaDesc ? `${alert.event} — ${alert.areaDesc}` : alert.event,
  quietHoursActive: false,
  quietHoursBypassEnabled: true,
- dedupeMatch: false,
+ dedupeMatch,
  });
  pipelineTrace.record(alert.id, 'weather', { stage: 'routed', detail: { rung: decision.rung, dispatched: decision.dispatched } });
  const action = RUNG_ACTION[decision.rung] ?? null;

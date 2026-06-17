@@ -136,6 +136,7 @@ export interface DataSourceState {
   name: string;
   lastUpdate: Date | null;
   lastError: string | null;
+  lastErrorAt: number | null;
   itemCount: number;
   enabled: boolean;
   status: FreshnessStatus;
@@ -299,6 +300,7 @@ class DataFreshnessTracker {
  name: meta.name,
  lastUpdate: null,
  lastError: null,
+ lastErrorAt: null,
  itemCount: 0,
  enabled: true, // Assume enabled by default
  status: 'no_data',
@@ -316,6 +318,7 @@ class DataFreshnessTracker {
  source.lastUpdate = new Date();
  source.itemCount += itemCount;
  source.lastError = null;
+ source.lastErrorAt = null;
  source.status = this.calculateStatus(source);
  this.notifyListeners();
  }
@@ -328,9 +331,28 @@ class DataFreshnessTracker {
  const source = this.sources.get(sourceId);
  if (source) {
  source.lastError = error;
+ source.lastErrorAt = Date.now();
  source.status = 'error';
  this.notifyListeners();
  }
+  }
+
+  /**
+ * True when any source recorded an error within the given window.
+ * Used by the offline-staleness banner so a feed that is actively
+ * failing surfaces as stale even when other feeds are refreshing
+ * successfully (a failing feed stops writing cb-source-updates, so
+ * the age-only check alone reports false-fresh).
+ */
+  hasRecentError(windowMs = 10 * 60 * 1000): boolean {
+ const now = Date.now();
+ for (const source of this.sources.values()) {
+ if (!source.enabled) continue;
+ if (source.lastError && source.lastErrorAt !== null && now - source.lastErrorAt <= windowMs) {
+ return true;
+ }
+ }
+ return false;
   }
 
   /**

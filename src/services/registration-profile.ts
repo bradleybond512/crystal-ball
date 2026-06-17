@@ -1,3 +1,5 @@
+import { safeSetItem } from '../utils/safe-storage';
+
 export interface RegistrationProfile {
   firstName: string;
   lastName: string;
@@ -15,7 +17,7 @@ export function getRegistrationProfile(): RegistrationProfile | null {
 }
 
 export function saveRegistrationProfile(profile: RegistrationProfile): void {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  safeSetItem(PROFILE_KEY, JSON.stringify(profile));
 }
 
 export function clearRegistrationProfile(): void {

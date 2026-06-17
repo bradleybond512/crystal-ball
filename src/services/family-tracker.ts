@@ -8,6 +8,7 @@
  */
 
 import { locationService } from '@/services/location';
+import { safeSetItem } from '@/utils/safe-storage';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,7 +75,7 @@ function load(): FamilyMember[] {
 }
 
 function save(members: FamilyMember[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(members));
+  safeSetItem(STORAGE_KEY, JSON.stringify(members));
   notify();
 }
 

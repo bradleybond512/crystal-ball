@@ -1,4 +1,5 @@
 import { loadProximityConfig } from './proximity-filter';
+import { safeSetItem } from '../utils/safe-storage';
 
 export type SavedPlaceSource = 'manual' | 'gps' | 'search' | 'migrated-proximity';
 export type SavedPlaceTag = 'home' | 'work' | 'family' | 'bugout' | 'travel' | 'medical' | 'supply' | 'concern' | 'school' | 'shelter' | 'critical' | 'data_center';
@@ -209,7 +210,15 @@ function persistPlaces(storage: SavedPlacesStorageLike | null, places: SavedPlac
  storage.removeItem?.(STORAGE_KEY);
  return;
   }
-  storage.setItem(STORAGE_KEY, JSON.stringify(places));
+  const serialized = JSON.stringify(places);
+  // Route the real localStorage through the quota-safe wrapper so a
+  // QuotaExceededError can't seize the renderer; an injected custom storage
+  // (e.g. tests) keeps its own setItem.
+  if (typeof localStorage !== 'undefined' && storage === localStorage) {
+ safeSetItem(STORAGE_KEY, serialized);
+  } else {
+ storage.setItem(STORAGE_KEY, serialized);
+  }
 }
 
 function emitSavedPlacesChanged(places: SavedPlace[]): void {

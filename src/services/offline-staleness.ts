@@ -12,6 +12,8 @@
  * "current" — always with an explicit age.
  */
 
+import { dataFreshness } from './data-freshness';
+
 export type OfflineStatus = 'fresh' | 'stale' | 'very-stale' | 'offline';
 
 export interface OfflineState {
@@ -92,10 +94,18 @@ function formatAge(ms: number): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// A feed that is actively erroring stops writing cb-source-updates, so the
+// age-only check below can report "fresh" while a source is silently failing.
+// Consult the freshness tracker's error state so the banner reflects reality.
+function feedHasRecentError(): boolean {
+  try { return dataFreshness.hasRecentError(); } catch { return false; }
+}
+
 export function getOfflineState(): OfflineState {
   const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine !== false;
   const offlineDurationMs = isOnline ? 0 : Math.max(0, Date.now() - lastOnlineAt);
   const oldestAge = oldestCachedAge();
+  const feedError = feedHasRecentError();
 
   let status: OfflineStatus = 'fresh';
   if (!isOnline && offlineDurationMs > OFFLINE_GRACE_MS) {
@@ -104,7 +114,7 @@ export function getOfflineState(): OfflineState {
     status = 'very-stale';
   } else if (oldestAge > STALE_MS || (!isOnline && offlineDurationMs > 0)) {
     status = 'stale';
-  } else if (oldestAge > FRESH_MS) {
+  } else if (oldestAge > FRESH_MS || feedError) {
     status = 'stale';
   }
 
@@ -117,6 +127,9 @@ export function getOfflineState(): OfflineState {
   } else if (status === 'very-stale') {
     bannerLabel = 'Data is very old';
     bannerSubtext = `Last updated ${ageLabel} \u2014 verify before use`;
+  } else if (status === 'stale' && feedError && oldestAge <= STALE_MS) {
+    bannerLabel = 'A data feed is not updating';
+    bannerSubtext = `Some sources may be out of date — last refresh ${ageLabel}`;
   } else if (status === 'stale') {
     bannerLabel = 'Viewing cached data';
     bannerSubtext = `Last updated ${ageLabel}`;

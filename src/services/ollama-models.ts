@@ -14,7 +14,7 @@ export async function fetchOllamaModels(ollamaUrl: string): Promise<string[]> {
  });
  if (res.ok) {
  const data = await res.json() as { models?: { name: string }[] };
- const models = (data.models?.map(m => m.name) || []).filter(n => !n.includes('embed'));
+ const models = (Array.isArray(data.models) ? data.models.map(m => m.name) : []).filter(n => !n.includes('embed'));
  if (models.length > 0) return models;
  }
   } catch { /* Ollama endpoint not available */ }
@@ -25,7 +25,7 @@ export async function fetchOllamaModels(ollamaUrl: string): Promise<string[]> {
  });
  if (res.ok) {
  const data = await res.json() as { data?: { id: string }[] };
- return (data.data?.map(m => m.id) || []).filter(n => !n.includes('embed'));
+ return (Array.isArray(data.data) ? data.data.map(m => m.id) : []).filter(n => !n.includes('embed'));
  }
   } catch { /* OpenAI endpoint also unavailable */ }
 

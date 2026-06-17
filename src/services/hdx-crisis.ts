@@ -30,6 +30,11 @@ export async function fetchHdxCrises(): Promise<HumanitarianCrisis[]> {
  return [];
  }
  const raw = await res.json() as (HumanitarianCrisis & { updatedAt: string })[];
+ if (!Array.isArray(raw)) {
+ dataFreshness.recordError('hdx-crisis', 'malformed response');
+ _cache = { crises: [], ts: Date.now() };
+ return [];
+ }
  const crises = raw.map(r => ({ ...r, updatedAt: new Date(r.updatedAt) }));
  _cache = { crises, ts: Date.now() };
  dataFreshness.recordUpdate('hdx-crisis', crises.length);

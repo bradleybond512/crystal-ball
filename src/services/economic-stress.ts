@@ -29,5 +29,11 @@ export interface EconomicStressData {
 export async function fetchEconomicStress(): Promise<EconomicStressData> {
   const res = await fetch(`${getApiBaseUrl()}/api/economic-stress`);
   if (!res.ok) throw new Error(`economic-stress: ${res.status}`);
-  return res.json() as Promise<EconomicStressData>;
+  const data = await res.json() as EconomicStressData;
+  if (!data || typeof data !== 'object') throw new Error('economic-stress: unexpected payload shape');
+  // fredKeyMissing payload has no stressIndex — pass through so the panel can render the key-setup UI
+  if (!data.fredKeyMissing && typeof data.stressIndex !== 'number') {
+    throw new Error('economic-stress: unexpected payload shape');
+  }
+  return data;
 }

@@ -75,6 +75,10 @@ export async function fetchIodaOutages(): Promise<IodaOutage[]> {
  }
 
  const data = await res.json() as IodaResponse;
+ if (!data || typeof data !== 'object') {
+ dataFreshness.recordError('internet-outages', 'malformed response');
+ return cache?.outages ?? [];
+ }
  const alerts: IodaAlert[] = data.data ?? data.alerts ?? [];
 
  const outages: IodaOutage[] = alerts

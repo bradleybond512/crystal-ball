@@ -31,6 +31,7 @@ export async function fetchWikiSummary(title: string): Promise<WikiSummary | nul
    thumbnail?: { source: string; width: number; height: number };
    content_urls?: { desktop?: { page?: string } };
  };
+ if (!d || typeof d !== 'object') return null;
  if (d.type === 'disambiguation') return null;
  const summary: WikiSummary = {
  title: (d.title as string | undefined) ?? title,

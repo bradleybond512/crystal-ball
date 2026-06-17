@@ -269,6 +269,7 @@ export async function fetchLocalLogistics(
  });
  if (!response.ok) throw new Error(`HTTP ${response.status}`);
  const payload = await response.json() as LocalLogisticsApiResponse;
+ if (!payload || typeof payload !== 'object') throw new Error('malformed logistics response');
  const snapshotFetchedAt = payload.fetchedAt ? new Date(payload.fetchedAt) : new Date();
  const nodes = (payload.nodes ?? [])
  .map((node) => normalizeApiNode(place, node, snapshotFetchedAt))

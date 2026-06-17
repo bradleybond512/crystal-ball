@@ -74,6 +74,10 @@ export async function fetchFloodGauges(): Promise<FloodGauge[]> {
  }
 
  const data = await res.json() as WaterWatchResponse;
+ if (!data || typeof data !== 'object') {
+   dataFreshness.recordError('flood-gauges', 'unexpected payload shape');
+   return cache?.gauges ?? [];
+ }
  const sites = data.sites ?? data.site ?? [];
 
  const gauges: FloodGauge[] = [];

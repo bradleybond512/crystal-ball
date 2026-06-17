@@ -606,8 +606,10 @@ export class DeckGLMap {
   // further on tile errors (see recoverSatelliteTiles).
   private satelliteHourOffset = 1;
   // MapLibre emits one error per failed *tile*, so an unavailable hour fires a
-  // burst. Cooldown gates recovery to a single hour-step per rebuild attempt.
-  private satelliteRecoveryAt = 0;
+  // burst. A self-rescheduling timer coalesces the burst into one hour-step
+  // per rebuild and keeps stepping while the rebuilt hour also fails.
+  private satelliteRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private satelliteErrorSinceRebuild = false;
   private static readonly MAX_SATELLITE_HOUR_OFFSET = 6;
   private static readonly SATELLITE_RECOVERY_COOLDOWN_MS = 3000;
   private lightningStrikes: LightningStrike[] = [];
@@ -5936,6 +5938,10 @@ export class DeckGLMap {
  clearTimeout(this.moveTimeoutId);
  this.moveTimeoutId = null;
  }
+ if (this.satelliteRetryTimer) {
+ clearTimeout(this.satelliteRetryTimer);
+ this.satelliteRetryTimer = null;
+ }
 
  this.stopPulseAnimation();
  this.stopCablePulse();
@@ -6224,28 +6230,46 @@ export class DeckGLMap {
   // ── Weather Raster Tile Layers (MapLibre GL native) ──────────────
 
   /**
-   * The latest GIBS GOES GeoColor hour isn't published yet — step the
-   * timestamp back one hour and rebuild the satellite source/layer so it
-   * re-requests an earlier (available) frame. Returns false once we've
-   * exhausted the lookback budget, letting the generic error overlay take over.
+   * The latest GIBS GOES GeoColor hour isn't published yet. Returns true to
+   * swallow the error (recovery is in hand) or false once we've exhausted the
+   * lookback budget, letting the generic error overlay take over.
    *
    * MapLibre fires one `error` per failed tile, so a single unavailable hour
    * produces a burst (plus late in-flight failures from the removed source).
-   * A cooldown swallows that burst — returning true without advancing — so we
-   * step exactly one hour per rebuild instead of racing to the lookback cap.
+   * Rather than step per error, we flag that the current hour failed and let a
+   * self-rescheduling timer (scheduleSatelliteRetry) drive the actual
+   * hour-step — coalescing the burst and continuing to step while each rebuilt
+   * hour also fails, without depending on MapLibre re-emitting after the burst.
    */
   private recoverSatelliteTiles(): boolean {
+ if (!this.maplibreMap) return false;
+ // At the lookback cap with no rebuild pending — surface via the overlay.
+ if (this.satelliteHourOffset >= DeckGLMap.MAX_SATELLITE_HOUR_OFFSET
+ && this.satelliteRetryTimer === null) {
+ return false;
+ }
+ this.satelliteErrorSinceRebuild = true;
+ if (this.satelliteRetryTimer === null) this.scheduleSatelliteRetry();
+ return true;
+  }
+
+  private scheduleSatelliteRetry(): void {
+ this.satelliteRetryTimer = setTimeout(() => {
+ this.satelliteRetryTimer = null;
+ // Rebuilt hour loaded cleanly (no errors since) — settled.
+ if (!this.satelliteErrorSinceRebuild) return;
+ // Exhausted the budget — stop; subsequent errors hit the overlay path.
+ if (this.satelliteHourOffset >= DeckGLMap.MAX_SATELLITE_HOUR_OFFSET) return;
  const map = this.maplibreMap;
- if (!map) return false;
- const now = Date.now();
- if (now - this.satelliteRecoveryAt < DeckGLMap.SATELLITE_RECOVERY_COOLDOWN_MS) return true;
- if (this.satelliteHourOffset >= DeckGLMap.MAX_SATELLITE_HOUR_OFFSET) return false;
- this.satelliteRecoveryAt = now;
+ if (!map) return;
+ this.satelliteErrorSinceRebuild = false;
  this.satelliteHourOffset += 1;
  if (map.getLayer('wm-satellite-layer')) map.removeLayer('wm-satellite-layer');
  if (map.getSource('wm-satellite-src')) map.removeSource('wm-satellite-src');
  this.syncWeatherRasterLayers();
- return true;
+ // Re-arm to check whether this hour also fails.
+ this.scheduleSatelliteRetry();
+ }, DeckGLMap.SATELLITE_RECOVERY_COOLDOWN_MS);
   }
 
   private syncWeatherRasterLayers(): void {

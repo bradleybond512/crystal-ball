@@ -3584,8 +3584,8 @@ fn main() {
  //    the env. It runs on a blocking thread because it waits (≤15s)
  //    for the sidecar to confirm its listening port.
  let start_handle = setup_handle.clone();
- match tauri::async_runtime::spawn_blocking(move || start_local_api(&start_handle)).await {
- Ok(Ok(())) => {}
+ let sidecar_ok = match tauri::async_runtime::spawn_blocking(move || start_local_api(&start_handle)).await {
+ Ok(Ok(())) => true,
  Ok(Err(err)) => {
  append_desktop_log(
  &setup_handle,
@@ -3593,11 +3593,7 @@ fn main() {
  &format!("local API sidecar failed to start: {err}"),
  );
  eprintln!("[tauri] local API sidecar failed to start: {err}");
- // Do NOT load or inject secrets when the sidecar didn't start:
- // inject_secrets_into_running_sidecar falls back to the default
- // port, so pushing here could POST every keychain secret to
- // whatever foreign process happens to hold 127.0.0.1:46123.
- return;
+ false
  }
  Err(join_err) => {
  append_desktop_log(
@@ -3605,9 +3601,14 @@ fn main() {
  "ERROR",
  &format!("sidecar start task panicked: {join_err}"),
  );
- return;
+ false
  }
- }
+ };
+ // Always read the keychain even if the sidecar failed: the cache feeds the
+ // renderer (which polls `secrets_ready`) independently of the sidecar, and
+ // leaving `loaded` false would make both windows poll until the client cap.
+ // We just skip the IPC injection below — there's no sidecar to inject into,
+ // and its port_confirmed/liveness guards would no-op the push anyway.
 
  // 2. Read the keychain on a worker thread. Bounded by the per-call
  //    timeouts (≤120s for the consolidated vault), but the UI and
@@ -3635,8 +3636,11 @@ fn main() {
 
  // 3. Inject the loaded secrets into the live sidecar via IPC — no
  //    restart. Until this completes, key-dependent routes return
- //    503 + `keyMissing`, exactly as on a cold cache.
+ //    503 + `keyMissing`, exactly as on a cold cache. Skipped when the
+ //    sidecar never started — the renderer already has the secrets.
+ if sidecar_ok {
  inject_secrets_into_running_sidecar(&setup_handle, secrets).await;
+ }
  });
 
  // Request Location Services authorization so the app appears in

@@ -242,7 +242,14 @@ impl SecretsCache {
  fn populate_from_keychain(&self, app: Option<&AppHandle>) {
  let loaded = Self::read_keychain_blocking(app);
  if let Ok(mut guard) = self.secrets.lock() {
- *guard = loaded;
+ // Preserve entries written concurrently with the (up to 120s)
+ // keychain read — e.g. a Settings save made while this was in
+ // flight, now that the UI is usable before boot finishes. Those
+ // are newer than the keychain snapshot, so only fill keys we
+ // don't already hold rather than clobbering the whole map.
+ for (key, value) in loaded {
+ guard.entry(key).or_insert(value);
+ }
  }
  }
 
@@ -3075,6 +3082,25 @@ async fn inject_secrets_into_running_sidecar(app: &AppHandle, secrets: Vec<(Stri
  }
  let (token, port) = {
  let state = app.state::<LocalApiState>();
+ // Confirm the sidecar we launched is still the live listener before
+ // sending any secret bytes. If it exited during the keychain read, the
+ // recorded port may now belong to a foreign local process, and posting
+ // plaintext secrets there would leak them.
+ let alive = match state.child.lock() {
+ Ok(mut slot) => match slot.as_mut() {
+ Some(child) => matches!(child.try_wait(), Ok(None)),
+ None => false,
+ },
+ Err(_) => false,
+ };
+ if !alive {
+ append_desktop_log(
+ app,
+ "WARN",
+ "sidecar not alive at secret-injection time — secrets not pushed (will load on next launch)",
+ );
+ return;
+ }
  let token = state.token.lock().ok().and_then(|t| t.clone()).unwrap_or_default();
  let port = state.port.lock().ok().and_then(|p| *p).unwrap_or(DEFAULT_LOCAL_API_PORT);
  (token, port)

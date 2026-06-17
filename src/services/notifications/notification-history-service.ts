@@ -228,6 +228,13 @@ function openDb(): Promise<IDBDatabase> {
     req.addEventListener('success', () => {
       const db = req.result;
       db.addEventListener('close', () => { _dbPromise = null; });
+      // Yield to another module (reasoning-memory / alert-store) bumping the
+      // shared crystalball_db version — otherwise this open connection blocks
+      // their upgrade. Reopened lazily on the next openDb() call.
+      db.addEventListener('versionchange', () => {
+        db.close();
+        _dbPromise = null;
+      });
       resolve(db);
     });
     req.addEventListener('blocked', () => {

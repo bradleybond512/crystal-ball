@@ -23,9 +23,17 @@ export async function initDB(): Promise<IDBDatabase> {
  request.onerror = () => reject(request.error);
 
  request.onsuccess = () => {
- db = request.result;
- db.addEventListener('close', () => { db = null; });
- resolve(db);
+ const conn = request.result;
+ db = conn;
+ conn.addEventListener('close', () => { db = null; });
+ // Another module (reasoning-memory / alert-store) bumping the shared
+ // crystalball_db version fires `versionchange` here. Close so the upgrade
+ // isn't blocked; the next initDB() reopens at the new version.
+ conn.addEventListener('versionchange', () => {
+ conn.close();
+ db = null;
+ });
+ resolve(conn);
  };
 
  request.onupgradeneeded = (event) => {

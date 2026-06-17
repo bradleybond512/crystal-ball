@@ -760,10 +760,16 @@ async function initSettingsWindow(): Promise<void> {
  document.documentElement.classList.remove('no-transition');
   });
 
-  await loadDesktopSecretsWhenReady();
   settingsManager = new SettingsManager();
 
   renderSection('overview');
+
+  // Hydrate secrets in the background — never block the settings UI on the async
+  // keychain read, which can stall on an ACL/Touch ID prompt. The active section
+  // re-renders once secrets land so loaded keys show their real state.
+  void loadDesktopSecretsWhenReady()
+ .then(() => renderSection(activeSection))
+ .catch(() => {});
 
   document.getElementById('sidebarNav')?.addEventListener('click', (e) => {
  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-section]');

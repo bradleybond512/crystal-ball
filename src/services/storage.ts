@@ -1,7 +1,6 @@
 import type { ReplayWatchSummary } from '@/services/replay-narrative';
 
 const DB_NAME = 'crystalball_db';
-const DB_VERSION = 1;
 
 interface BaselineEntry {
   key: string;
@@ -14,39 +13,74 @@ interface BaselineEntry {
 
 let db: IDBDatabase | null = null;
 
+function createStores(database: IDBDatabase): void {
+  if (!database.objectStoreNames.contains('baselines')) {
+ database.createObjectStore('baselines', { keyPath: 'key' });
+  }
+
+  if (!database.objectStoreNames.contains('snapshots')) {
+ const store = database.createObjectStore('snapshots', { keyPath: 'timestamp' });
+ store.createIndex('by_time', 'timestamp');
+  }
+}
+
+function attachConn(conn: IDBDatabase, resolve: (database: IDBDatabase) => void): void {
+  db = conn;
+  conn.addEventListener('close', () => { db = null; });
+  // Another module (reasoning-memory / alert-store) bumping the shared
+  // crystalball_db version fires `versionchange` here. Close so the upgrade
+  // isn't blocked; the next initDB() reopens at the new version.
+  conn.addEventListener('versionchange', () => {
+ conn.close();
+ db = null;
+  });
+  resolve(conn);
+}
+
+function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+ const request = indexedDB.open(DB_NAME, currentVersion + 1);
+ request.onerror = () => reject(request.error);
+ request.onupgradeneeded = (event) => {
+ createStores((event.target as IDBOpenDBRequest).result);
+ };
+ request.onsuccess = () => attachConn(request.result, resolve);
+  });
+}
+
 export async function initDB(): Promise<IDBDatabase> {
   if (db) return db;
 
   return new Promise((resolve, reject) => {
- const request = indexedDB.open(DB_NAME, DB_VERSION);
+ // Open without a version first so we never request a version *lower* than
+ // what alert-store / reasoning-memory may have already bumped the shared
+ // crystalball_db to. Requesting a lower version throws "open ... using a
+ // lower version than the existing version", which rejected initDB() and
+ // broke every baseline/snapshot caller on boot.
+ const probe = indexedDB.open(DB_NAME);
 
- request.onerror = () => reject(request.error);
+ probe.onerror = () => reject(probe.error);
 
- request.onsuccess = () => {
- const conn = request.result;
- db = conn;
- conn.addEventListener('close', () => { db = null; });
- // Another module (reasoning-memory / alert-store) bumping the shared
- // crystalball_db version fires `versionchange` here. Close so the upgrade
- // isn't blocked; the next initDB() reopens at the new version.
- conn.addEventListener('versionchange', () => {
- conn.close();
- db = null;
- });
- resolve(conn);
+ // Fires only when the DB does not exist yet (fresh DB created at v1) —
+ // seed our stores immediately.
+ probe.onupgradeneeded = (event) => {
+ createStores((event.target as IDBOpenDBRequest).result);
  };
 
- request.onupgradeneeded = (event) => {
- const database = (event.target as IDBOpenDBRequest).result;
-
- if (!database.objectStoreNames.contains('baselines')) {
- database.createObjectStore('baselines', { keyPath: 'key' });
+ probe.onsuccess = () => {
+ const conn = probe.result;
+ if (
+ conn.objectStoreNames.contains('baselines') &&
+ conn.objectStoreNames.contains('snapshots')
+ ) {
+ attachConn(conn, resolve);
+ return;
  }
-
- if (!database.objectStoreNames.contains('snapshots')) {
- const store = database.createObjectStore('snapshots', { keyPath: 'timestamp' });
- store.createIndex('by_time', 'timestamp');
- }
+ // Stores missing on an existing (possibly already-bumped) DB — reopen
+ // one version higher to add them, never requesting a lower version.
+ const currentVersion = conn.version;
+ conn.close();
+ openWithUpgrade(currentVersion).then(resolve, reject);
  };
   });
 }

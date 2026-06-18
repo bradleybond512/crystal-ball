@@ -38,6 +38,11 @@ const NS = 'http://www.w3.org/2000/svg';
 const BIOMETRY_ENABLED_KEY = 'cb:vault-biometry-enabled';
 const CRASH_SENTINEL_KEY = 'cb:vault-biometry-crash-sentinel';
 const FAKE_AUTH_DELAY_MS = 600;
+// Hard ceiling on the native biometry call. The tauri-plugin-biometry
+// authenticate path can wedge (not crash, not resolve) when its keychain
+// item is in a bad state, which would otherwise freeze the vault door
+// forever. Bound it so a wedged prompt becomes a recoverable error.
+const BIOMETRY_NATIVE_TIMEOUT_MS = 30_000;
 
 function safeGetItem(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -78,9 +83,18 @@ async function attemptAuth(): Promise<AuthOutcome> {
     await new Promise<void>(r => setTimeout(r, FAKE_AUTH_DELAY_MS));
     return 'success';
   }
+  // Only the native path needs the Tauri invoke bridge. On a cold first
+  // launch the bridge can lag behind the tauri:// location that already
+  // marks us as a desktop runtime, so wait for it here (not before the
+  // bridge-free fake path) and degrade to a recoverable error if it never
+  // shows rather than dead-ending the whole gate.
+  if (!(await waitForBridge())) return 'error';
   safeSetItem(CRASH_SENTINEL_KEY, String(Date.now()));
   try {
-    await invokeTauri<void>(CMD, { reason: REASON, options: { allowDeviceCredential: true } });
+    await Promise.race([
+      invokeTauri<void>(CMD, { reason: REASON, options: { allowDeviceCredential: true } }),
+      sleep(BIOMETRY_NATIVE_TIMEOUT_MS).then(() => { throw new Error('biometry-timeout'); }),
+    ]);
     safeRemoveItem(CRASH_SENTINEL_KEY);
     return 'success';
   } catch (error) {
@@ -1117,18 +1131,15 @@ async function runBiometricFlow(
  if (settled || inFlight) return;
  inFlight = true;
 
- const ready = await waitForBridge();
- if (!ready || settled) { inFlight = false; return; }
-
  if (!manual) {
  setScannerWarmup(refs);
  await sleep(700);
- if (settled) return;
+ if (settled) { inFlight = false; return; }
  }
 
  setScannerPeak(refs);
  await sleep(600);
- if (settled) return;
+ if (settled) { inFlight = false; return; }
 
  // Native biometry is opt-in (see BIOMETRY_ENABLED_KEY comment up top).
  // When disabled — current default while the plugin's keychain item is

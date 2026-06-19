@@ -87,6 +87,7 @@ value, scored_at }` + `tracking_metrics` table.
 ### D. IMM cycle (Agent B)
 
 Per step over `r` modes with TPM Π:
+
 1. **Mixing:** `c̄_j = Σ_i π_ij μ_i`; `μ_{i|j} = π_ij μ_i / c̄_j`; mixed IC
    `x̂_0j = Σ_i x̂_i μ_{i|j}`, `P_0j = Σ_i μ_{i|j}[P_i + (x̂_i−x̂_0j)(…)ᵀ]`.
 2. **Mode-matched filtering:** each filter predict+update from mixed IC → `x̂_j,

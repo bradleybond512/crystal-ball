@@ -16,6 +16,15 @@ dashboard** (Tauri 2 + TypeScript + Vite + DeckGL, hundreds of pure-deterministi
 service modules under `src/services/`). Before dispatching any wave, square the
 plan with what is actually here:
 
+> **Note on the latest revision.** A revised roadmap correctly reframed Wave 7's
+> GPU rendering as *net-new* ("don't assume a shader layer already exists") and
+> relabeled layer 8 as "Map UI (React/TS)". Good. But §2's baseline still asserts
+> **Kalman tracking · Valhalla offline routing · React+TS · SQLite+SQLCipher** —
+> none of which exist in this repo (no React, no SQLite/SQLCipher, no Kalman, no
+> Valhalla; the UI is Vite + DeckGL/MapLibre). Treat §2's "shipped baseline" as
+> describing a *different* app; trust this reconciliation block for what is
+> actually present here.
+
 ### What already exists (do NOT rebuild)
 
 The roadmap's "measurement spine" (Wave 1.5 / Wave 4) is largely **already
@@ -73,7 +82,11 @@ have was **CRPS** (continuous scoring) and the calibration-diagram math
   is now closed. Remaining work is *wiring* (feed existing forecasters' outputs
   into the ledger), not new infrastructure.
 - **Wave 2 (estimation core / IMM+JPDA):** **out of scope** for this app — see
-  §7.1 above.
+  §7.1 above and the full deferred spec in
+  [`CRYSTAL_BALL_WAVE_2_ESTIMATION_CORE.md`](CRYSTAL_BALL_WAVE_2_ESTIMATION_CORE.md),
+  which documents the missing prerequisites (no Rust tracker, no `nalgebra`, no
+  Kalman baseline, no detection feed, no track-truth data) and what would unblock
+  it.
 - **Wave 3 (intent-aware / multimodal prediction):** the `crpsEnsemble` scorer
   now exists to grade multimodal hypothesis fans should that work proceed.
 - **Wave 4 (full spine + self-eval):** reliability diagrams + ECE math now exist;

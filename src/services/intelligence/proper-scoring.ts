@@ -311,6 +311,9 @@ function standardNormalCdf(x: number): number {
   return 0.5 * (1 + erf(x / Math.SQRT2));
 }
 
+/* eslint-disable unicorn/numeric-separators-style -- Abramowitz & Stegun 7.1.26
+   fitted erf coefficients; digit separators would imply a grouping these
+   constants do not have. */
 function erf(x: number): number {
   const sign = x < 0 ? -1 : 1;
   const ax = Math.abs(x);
@@ -322,6 +325,7 @@ function erf(x: number): number {
       Math.exp(-ax * ax);
   return sign * y;
 }
+/* eslint-enable unicorn/numeric-separators-style */
 
 // ── Local helpers ─────────────────────────────────────────────────────────
 
@@ -337,5 +341,5 @@ function clamp01(value: number): number {
 }
 
 function round4(x: number): number {
-  return Math.round(x * 10000) / 10000;
+  return Math.round(x * 10_000) / 10_000;
 }

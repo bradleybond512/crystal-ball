@@ -339,6 +339,13 @@ test('pitDiagnostic: dome-shaped PIT → underconfident (intervals too wide)', (
   assert.equal(pitDiagnostic(vals, 10).shape, 'underconfident');
 });
 
+test('pitDiagnostic: one-sided low cluster → biased (not overconfident)', () => {
+  // Systematically biased: predictive CDF runs low. A one-sided pile-up is bias,
+  // NOT a U-shape (which needs mass at BOTH tails).
+  const vals = Array.from({ length: 20 }, () => 0.08);
+  assert.equal(pitDiagnostic(vals, 10).shape, 'biased');
+});
+
 test('pitDiagnostic: too few values → insufficient_data', () => {
   assert.equal(pitDiagnostic([0.1, 0.9], 10).shape, 'insufficient_data');
 });

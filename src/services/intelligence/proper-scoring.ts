@@ -407,7 +407,10 @@ export function gaussianMixtureCdf(
     const w = Math.max(0, c.weight) / wSum;
     if (w === 0) continue;
     const sigma = Math.abs(c.sd);
-    cdf += w * (sigma === 0 ? (y >= c.mean ? 1 : 0) : standardNormalCdf((y - c.mean) / sigma));
+    let componentCdf: number;
+    if (sigma === 0) componentCdf = y >= c.mean ? 1 : 0;
+    else componentCdf = standardNormalCdf((y - c.mean) / sigma);
+    cdf += w * componentCdf;
   }
   return clamp01(cdf);
 }
@@ -448,7 +451,7 @@ export function pitDiagnostic(
   const histogram = Array.from({ length: bins }, () => 0);
   for (const v of vals) {
     const idx = Math.min(bins - 1, Math.floor(v * bins));
-    histogram[idx] += 1;
+    histogram[idx] = (histogram[idx] ?? 0) + 1;
   }
   if (n < minForShape) {
     return {
@@ -468,42 +471,53 @@ export function pitDiagnostic(
     ks = Math.max(ks, Math.abs((i + 1) / n - u), Math.abs(u - i / n));
   }
 
-  const shape = classifyPitShape(histogram, n);
+  const pitMean = vals.reduce((s, v) => s + v, 0) / n;
+  const shape = classifyPitShape(histogram, n, pitMean);
   return { count: n, histogram, ksStat: round4(ks), shape, summary: summarizePit(shape, round4(ks)) };
 }
 
-function classifyPitShape(histogram: readonly number[], n: number): PitShape {
+function classifyPitShape(histogram: readonly number[], n: number, pitMean: number): PitShape {
   const bins = histogram.length;
   if (bins < 3) return 'uniform';
   const expected = n / bins;
   const third = Math.max(1, Math.floor(bins / 3));
-  const edges = histogram.slice(0, third).reduce((s, c) => s + c, 0) +
-    histogram.slice(bins - third).reduce((s, c) => s + c, 0);
+  const leftEdge = histogram.slice(0, third).reduce((s, c) => s + c, 0);
+  const rightEdge = histogram.slice(bins - third).reduce((s, c) => s + c, 0);
   const middle = histogram.slice(third, bins - third).reduce((s, c) => s + c, 0);
-  const edgesExpected = expected * 2 * third;
+  const edgeExpected = expected * third;
   const middleExpected = expected * (bins - 2 * third);
-  const leftMass = histogram.slice(0, Math.floor(bins / 2)).reduce((s, c) => s + c, 0);
-  const rightMass = n - leftMass;
 
-  // 20% relative deviations flag a shape; otherwise uniform.
-  if (edges > edgesExpected * 1.2 && middle < middleExpected * 0.9) return 'overconfident';
-  if (middle > middleExpected * 1.2 && edges < edgesExpected * 0.9) return 'underconfident';
-  if (Math.abs(leftMass - rightMass) > n * 0.2) return 'biased';
+  // U-shape (overconfident) requires BOTH tails elevated — a one-sided pile-up
+  // is bias, not overconfidence. Dome (underconfident) is a fat middle with thin
+  // tails. Otherwise a skewed PIT mean (mass off-center) flags bias. 20%
+  // relative deviation thresholds; else uniform.
+  if (leftEdge > edgeExpected * 1.2 && rightEdge > edgeExpected * 1.2 && middle < middleExpected * 0.9) {
+    return 'overconfident';
+  }
+  if (middle > middleExpected * 1.2 && leftEdge < edgeExpected * 0.9 && rightEdge < edgeExpected * 0.9) {
+    return 'underconfident';
+  }
+  if (Math.abs(pitMean - 0.5) > 0.1) return 'biased';
   return 'uniform';
 }
 
 function summarizePit(shape: PitShape, ks: number): string {
   switch (shape) {
-    case 'overconfident':
+    case 'overconfident': {
       return `Overconfident — PIT is U-shaped (KS ${ks}); predictive intervals are too narrow.`;
-    case 'underconfident':
+    }
+    case 'underconfident': {
       return `Underconfident — PIT is dome-shaped (KS ${ks}); predictive intervals are too wide.`;
-    case 'biased':
+    }
+    case 'biased': {
       return `Biased — PIT mass is skewed to one side (KS ${ks}); forecasts run systematically high or low.`;
-    case 'uniform':
+    }
+    case 'uniform': {
       return `Well-calibrated — PIT is approximately uniform (KS ${ks}).`;
-    default:
+    }
+    default: {
       return 'Insufficient data to diagnose continuous calibration.';
+    }
   }
 }
 

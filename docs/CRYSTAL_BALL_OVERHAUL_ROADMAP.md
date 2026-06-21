@@ -89,13 +89,24 @@ have was **CRPS** (continuous scoring) and the calibration-diagram math
   it.
 - **Wave 3 (intent-aware / multimodal prediction):** the `crpsEnsemble` scorer
   now exists to grade multimodal hypothesis fans should that work proceed.
-- **Wave 4 (full spine + self-eval):** reliability diagrams + ECE math now exist
-  (`proper-scoring.ts`), and the self-eval **view model** over the forecast ledger
-  landed as `intelligence/calibration-report.ts` (`buildCalibrationReport` →
-  overall + per-domain + per-source reliability/ECE/Brier with a plain-English
-  over/under-confidence verdict). Remaining work is wiring it to a render surface
-  (the existing `MetaConfidenceCalibrationPanel` covers the meta-confidence
-  estimator; this report covers the prediction ledger itself).
+- **Wave 4 (full spine + self-eval):** the portable calibration *science* landed
+  in `proper-scoring.ts` + `calibration-report.ts`:
+  - reliability diagrams + ECE/MCE + Murphy decomposition;
+  - **Wilson confidence bands** + **equal-mass (adaptive) binning**
+    (`reliabilityDiagram`);
+  - **PIT** continuous-forecast calibration (`gaussianMixtureCdf`, `pitValue`,
+    `pitDiagnostic` → uniform / overconfident / underconfident / biased) with a
+    KS uniformity statistic;
+  - `buildCalibrationReport` rolls these into overall + per-domain + per-source
+    verdicts, with optional CRPS + PIT folded in.
+
+  **Deferred from Wave 4** (do not fit a pure-TS dashboard / belong to the
+  tracking app): the 2-D **energy score** (Monte-Carlo, for position forecasts),
+  **censored time-to-event** scoring (IPCW), **held-out recalibration** plumbing
+  (`recalibration.ts` already provides isotonic/Platt), the **React self-eval
+  surface** (the existing `MetaConfidenceCalibrationPanel` is the in-repo render
+  surface), tracker **replay-realism** (latency / out-of-order), and the Rust
+  `crystal_ball::spine::calibration` contracts.
 - **Waves 5–7:** decision support, reasoning depth, and uncertainty viz remain
   largely as written, but should be scoped against the substantial existing
   alert-prioritization, hypothesis, and globe-overlay surfaces.

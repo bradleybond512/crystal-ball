@@ -117,6 +117,16 @@ test('optional CRPS rollup folds in when Gaussian forecasts supplied', () => {
   assert.equal(r.crps!.meanCrps, 2);
 });
 
+test('optional PIT diagnostic folds in when PIT values supplied', () => {
+  const records = batch(0.7, 10, 7);
+  // Evenly-spread PIT values → uniform / well-calibrated continuous side.
+  const pitValues = Array.from({ length: 20 }, (_, i) => (i + 0.5) / 20);
+  const r = buildCalibrationReport(records, { pitValues });
+  assert.ok(r.pit);
+  assert.equal(r.pit!.shape, 'uniform');
+  assert.equal(r.pit!.count, 20);
+});
+
 test('empty ledger: no crash, insufficient_data, zero counts', () => {
   const r = buildCalibrationReport([]);
   assert.equal(r.totalRecords, 0);

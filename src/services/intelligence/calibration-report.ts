@@ -23,12 +23,14 @@ import {
   reliabilityBins,
   binaryForecastsFromRecords,
   meanCrpsGaussian,
+  pitDiagnostic,
   type BinaryForecast,
   type BrierDecomposition,
   type CalibrationError,
   type ReliabilityBin,
   type CrpsResult,
   type GaussianForecast,
+  type PitDiagnostic,
 } from './proper-scoring';
 
 // ── Public types ───────────────────────────────────────────────────────────
@@ -81,6 +83,9 @@ export interface CalibrationReport {
   /** Optional continuous-forecast CRPS rollup, when Gaussian forecasts are
    *  supplied alongside the binary ledger. */
   crps?: CrpsResult;
+  /** Optional continuous-forecast PIT calibration (the continuous analogue of
+   *  the reliability diagram), when PIT values are supplied. */
+  pit?: PitDiagnostic;
 }
 
 export interface BuildCalibrationReportOptions {
@@ -93,6 +98,9 @@ export interface BuildCalibrationReportOptions {
   wellCalibratedTolerance?: number;
   /** Optional continuous Gaussian forecasts to fold a CRPS rollup in. */
   gaussianForecasts?: readonly GaussianForecast[];
+  /** Optional PIT values F(y) (e.g. from `pitValue`) to fold a continuous
+   *  calibration diagnostic in. */
+  pitValues?: readonly number[];
 }
 
 // ── Builder ────────────────────────────────────────────────────────────────
@@ -120,6 +128,9 @@ export function buildCalibrationReport(
 
   if (options.gaussianForecasts && options.gaussianForecasts.length > 0) {
     report.crps = meanCrpsGaussian(options.gaussianForecasts);
+  }
+  if (options.pitValues && options.pitValues.length > 0) {
+    report.pit = pitDiagnostic(options.pitValues, binCount);
   }
   return report;
 }

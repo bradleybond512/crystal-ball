@@ -15,7 +15,6 @@
  * Pure deterministic. No DOM, no fetch, no globals.
  */
 
-import type { FactDomain } from './types';
 import type { PredictionRecord } from './forecast-calibration';
 import {
   brierScore,
@@ -236,4 +235,4 @@ function round4(x: number): number {
 
 // Re-export the domain type so a renderer can narrow group keys when it knows
 // a rollup is by-domain.
-export type { FactDomain };
+export type { FactDomain } from './types';

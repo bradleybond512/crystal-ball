@@ -89,9 +89,13 @@ have was **CRPS** (continuous scoring) and the calibration-diagram math
   it.
 - **Wave 3 (intent-aware / multimodal prediction):** the `crpsEnsemble` scorer
   now exists to grade multimodal hypothesis fans should that work proceed.
-- **Wave 4 (full spine + self-eval):** reliability diagrams + ECE math now exist;
-  remaining work is a presentation surface, much of which `MetaConfidenceCalibrationPanel`
-  already provides.
+- **Wave 4 (full spine + self-eval):** reliability diagrams + ECE math now exist
+  (`proper-scoring.ts`), and the self-eval **view model** over the forecast ledger
+  landed as `intelligence/calibration-report.ts` (`buildCalibrationReport` →
+  overall + per-domain + per-source reliability/ECE/Brier with a plain-English
+  over/under-confidence verdict). Remaining work is wiring it to a render surface
+  (the existing `MetaConfidenceCalibrationPanel` covers the meta-confidence
+  estimator; this report covers the prediction ledger itself).
 - **Waves 5–7:** decision support, reasoning depth, and uncertainty viz remain
   largely as written, but should be scoped against the substantial existing
   alert-prioritization, hypothesis, and globe-overlay surfaces.

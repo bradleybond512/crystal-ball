@@ -12,6 +12,11 @@ import {
   binaryForecastsFromRecords,
   calibrationErrorFromRecords,
   reliabilityBinsFromRecords,
+  reliabilityDiagram,
+  wilsonInterval,
+  gaussianMixtureCdf,
+  pitValue,
+  pitDiagnostic,
 } from '../proper-scoring.ts';
 import type { BinaryForecast } from '../proper-scoring.ts';
 import type { PredictionRecord } from '../forecast-calibration.ts';
@@ -232,6 +237,110 @@ test('binaryForecastsFromRecords: keeps only resolved rows', () => {
   assert.equal(fs.length, 2);
   assert.deepEqual(fs[0], { probability: 0.8, outcome: 1 });
   assert.deepEqual(fs[1], { probability: 0.2, outcome: 0 });
+});
+
+// ── CRPS non-finite guards (review hardening) ───────────────────────────────
+
+test('crpsGaussian: non-finite observation is unscoreable → 0, never NaN', () => {
+  assert.equal(crpsGaussian(0, 1, Number.NaN), 0);
+  assert.equal(crpsGaussian(0, 1, Number.POSITIVE_INFINITY), 0);
+});
+
+test('crpsEnsemble: non-finite observation → 0', () => {
+  assert.equal(crpsEnsemble([1, 2, 3], Number.NaN), 0);
+});
+
+test('meanCrpsGaussian: skips non-finite rows so one bad row cannot poison the mean', () => {
+  const r = meanCrpsGaussian([
+    { mean: 10, sd: 0, observation: 12 },
+    { mean: 10, sd: 0, observation: Number.NaN }, // skipped
+    { mean: 10, sd: 0, observation: 8 },
+  ]);
+  assert.equal(r.count, 2);
+  assert.equal(r.meanCrps, 2);
+  assert.ok(Number.isFinite(r.meanCrps));
+});
+
+// ── Wilson interval + reliability diagram ────────────────────────────────────
+
+test('wilsonInterval: n=0 → maximal ignorance [0,1]', () => {
+  assert.deepEqual(wilsonInterval(0, 0), { low: 0, high: 1 });
+});
+
+test('wilsonInterval: brackets the point estimate and tightens with n', () => {
+  const small = wilsonInterval(3, 4);
+  const large = wilsonInterval(75, 100);
+  assert.ok(small.low < 0.75 && small.high > 0.75);
+  assert.ok(large.high - large.low < small.high - small.low, 'more data → tighter band');
+});
+
+test('reliabilityDiagram equal-width: adds Wilson bands bracketing observed freq', () => {
+  const fs: BinaryForecast[] = [
+    { probability: 0.75, outcome: 1 },
+    { probability: 0.75, outcome: 1 },
+    { probability: 0.75, outcome: 1 },
+    { probability: 0.75, outcome: 0 },
+  ];
+  const pts = reliabilityDiagram(fs, { binCount: 10, mode: 'equal-width' });
+  const bin = pts.find((p) => p.count > 0)!;
+  assert.equal(bin.count, 4);
+  assert.ok(bin.ciLow <= bin.observedFrequency && bin.ciHigh >= bin.observedFrequency);
+});
+
+test('reliabilityDiagram equal-mass: equal counts per bin, empties dropped', () => {
+  // 9 forecasts clustered, 3 equal-mass bins → 3 each.
+  const fs: BinaryForecast[] = [
+    { probability: 0.01, outcome: 0 }, { probability: 0.02, outcome: 0 }, { probability: 0.03, outcome: 0 },
+    { probability: 0.5, outcome: 1 }, { probability: 0.5, outcome: 0 }, { probability: 0.51, outcome: 1 },
+    { probability: 0.98, outcome: 1 }, { probability: 0.99, outcome: 1 }, { probability: 1, outcome: 1 },
+  ];
+  const pts = reliabilityDiagram(fs, { binCount: 3, mode: 'equal-mass' });
+  assert.equal(pts.length, 3);
+  assert.deepEqual(pts.map((p) => p.count), [3, 3, 3]);
+});
+
+// ── PIT (continuous calibration) ─────────────────────────────────────────────
+
+test('gaussianMixtureCdf: single Gaussian matches Φ; sd=0 is a step', () => {
+  assert.ok(Math.abs(gaussianMixtureCdf([{ weight: 1, mean: 0, sd: 1 }], 0) - 0.5) < 1e-6);
+  assert.equal(gaussianMixtureCdf([{ weight: 1, mean: 5, sd: 0 }], 4), 0);
+  assert.equal(gaussianMixtureCdf([{ weight: 1, mean: 5, sd: 0 }], 6), 1);
+});
+
+test('gaussianMixtureCdf: normalizes weights defensively', () => {
+  // Unnormalized weights (sum 4) should still yield a valid CDF in [0,1].
+  const v = gaussianMixtureCdf([{ weight: 3, mean: 0, sd: 1 }, { weight: 1, mean: 0, sd: 1 }], 0);
+  assert.ok(Math.abs(v - 0.5) < 1e-6);
+});
+
+test('pitValue: equals F(y) for the predictive distribution', () => {
+  assert.ok(Math.abs(pitValue([{ weight: 1, mean: 10, sd: 2 }], 10) - 0.5) < 1e-6);
+});
+
+test('pitDiagnostic: well-calibrated → approximately uniform, low KS', () => {
+  // PIT values evenly spread across [0,1].
+  const vals = Array.from({ length: 20 }, (_, i) => (i + 0.5) / 20);
+  const d = pitDiagnostic(vals, 10);
+  assert.equal(d.shape, 'uniform');
+  assert.ok(d.ksStat < 0.1, `ks ${d.ksStat}`);
+});
+
+test('pitDiagnostic: U-shaped PIT → overconfident (intervals too narrow)', () => {
+  // Mass piled at 0 and 1.
+  const vals = [
+    ...Array.from({ length: 10 }, () => 0.02),
+    ...Array.from({ length: 10 }, () => 0.98),
+  ];
+  assert.equal(pitDiagnostic(vals, 10).shape, 'overconfident');
+});
+
+test('pitDiagnostic: dome-shaped PIT → underconfident (intervals too wide)', () => {
+  const vals = Array.from({ length: 20 }, () => 0.5);
+  assert.equal(pitDiagnostic(vals, 10).shape, 'underconfident');
+});
+
+test('pitDiagnostic: too few values → insufficient_data', () => {
+  assert.equal(pitDiagnostic([0.1, 0.9], 10).shape, 'insufficient_data');
 });
 
 test('calibrationErrorFromRecords + reliabilityBinsFromRecords run end-to-end on a ledger', () => {

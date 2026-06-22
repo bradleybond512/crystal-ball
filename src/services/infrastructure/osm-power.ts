@@ -316,6 +316,30 @@ function defaultLabel(kind: PowerAssetKind): string {
   }
 }
 
+export interface PowerOverlayStyle {
+  /** RGB 0..255. */
+  color: [number, number, number];
+  /** Point diameter in pixels. */
+  pixelSizePx: number;
+}
+
+const KIND_COLOR: Record<PowerAssetKind, [number, number, number]> = {
+  plant: [239, 68, 68], // red — generation
+  substation: [245, 158, 11], // amber — switching
+  data_center: [167, 139, 250], // violet — load
+  line: [34, 211, 238], // cyan — transmission
+  other: [148, 163, 184], // slate
+};
+
+/** Pure styling for a globe overlay row — keeps the Cesium layer thin and the
+ *  color/size decisions unit-testable. Size scales with the row's weight. */
+export function powerOverlayStyle(row: PowerOverlayRow): PowerOverlayStyle {
+  return {
+    color: KIND_COLOR[row.kind],
+    pixelSizePx: Math.round(6 + clamp01(row.weight) * 10),
+  };
+}
+
 // ── Fetch (impure, injectable) ───────────────────────────────────────────────
 
 export interface FetchPowerOptions {

@@ -2,7 +2,7 @@
 import { createSidecarLogger } from './sidecar-logger.mjs';
 import { OfacCache } from './ofac-cache.mjs';
 import http, { createServer } from 'node:http';
-import { timingSafeEqual, randomUUID } from 'node:crypto';
+import { timingSafeEqual, randomUUID, createHash } from 'node:crypto';
 import https from 'node:https';
 import dns from 'node:dns/promises';
 import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, chmodSync } from 'node:fs';
@@ -14542,6 +14542,43 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
  } catch (error) {
  return json({ assets: [], error: String(error) });
+ }
+  }
+
+  // ── OSM power infrastructure (Overpass proxy; CSP-safe relay) ───────────
+  // The renderer can't reach overpass-api.de directly (desktop CSP restricts
+  // connect-src to 127.0.0.1). This relays the renderer's Overpass QL body to
+  // a fixed upstream and returns the raw JSON for client-side parsing. The
+  // upstream URL is hardcoded (no SSRF surface); only the QL body is relayed.
+  if (requestUrl.pathname === '/api/osm-power' && req.method === 'POST') {
+ let rawBody = '';
+ try {
+ const buf = await readBody(req);
+ rawBody = buf ? buf.toString('utf8') : '';
+ } catch {
+ return json({ elements: [], error: 'request body too large' }, 413);
+ }
+ if (!rawBody.startsWith('data=')) {
+ return json({ elements: [], error: 'expected Overpass QL body (data=...)' }, 400);
+ }
+ const cacheKey = `osm-power-${createHash('sha1').update(rawBody).digest('hex')}`;
+ const cached = getCached(cacheKey, 6 * 60 * 60 * 1000);
+ if (cached) return json(cached);
+ try {
+ const resp = await fetchWithTimeout(
+ 'https://overpass-api.de/api/interpreter',
+ {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': CHROME_UA },
+ body: rawBody,
+ },
+ 30_000,
+ );
+ const data = resp.ok ? await resp.json() : { elements: [] };
+ setCached(cacheKey, data);
+ return json(data);
+ } catch (error) {
+ return json({ elements: [], error: String(error) });
  }
   }
 

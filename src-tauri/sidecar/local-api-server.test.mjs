@@ -2152,3 +2152,27 @@ test('rss-proxy SSRF blocks file:// protocol', async () => {
  assert.equal(res.status, 403);
   });
 });
+
+test('osm-power relay rejects a non-Overpass body with 400', async () => {
+  const localApi = await setupApiDir({});
+  const app = await createLocalApiServer({
+    port: 0,
+    apiDir: localApi.apiDir,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+  try {
+    const resp = await authFetch(`http://127.0.0.1:${port}/api/osm-power`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'notdata=oops',
+    });
+    assert.equal(resp.status, 400);
+    const body = await resp.json();
+    assert.deepEqual(body.elements, []);
+    assert.match(body.error, /Overpass QL/);
+  } finally {
+    await app.close();
+    await localApi.cleanup();
+  }
+});

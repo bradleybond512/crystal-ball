@@ -107,9 +107,18 @@ have was **CRPS** (continuous scoring) and the calibration-diagram math
   surface** (the existing `MetaConfidenceCalibrationPanel` is the in-repo render
   surface), tracker **replay-realism** (latency / out-of-order), and the Rust
   `crystal_ball::spine::calibration` contracts.
-- **Waves 5–7:** decision support, reasoning depth, and uncertainty viz remain
-  largely as written, but should be scoped against the substantial existing
-  alert-prioritization, hypothesis, and globe-overlay surfaces.
+- **Wave 5 (decision support / alert intelligence):** the decision-theoretic
+  core landed as `intelligence/alert-prioritization.ts` — `prioritizeAlerts`
+  ranks by **expected-impact × calibrated-probability × time-criticality** with a
+  4-tier recommendation ladder (act_now / prepare / monitor / suppress) and a
+  confidence+provenance explanation per alert. `calibrationAdjusterFromReport`
+  feeds the Wave 4 `CalibrationReport` back in so an overconfident source is
+  de-biased *before* it competes for attention. Complements (does not replace)
+  the existing additive `prioritizer.ts`, `alert-deduplication.ts`, and
+  `alert-fatigue-detector.ts`. Remaining Wave 5: counterfactual what-if (the
+  existing `counterfactual-replay.ts` is the in-repo basis).
+- **Waves 6–7:** reasoning depth and uncertainty viz remain largely as written,
+  scoped against the existing hypothesis and globe-overlay surfaces.
 
 The original strategic roadmap follows verbatim for reference.
 

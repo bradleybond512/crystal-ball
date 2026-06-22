@@ -14561,7 +14561,7 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!rawBody.startsWith('data=')) {
  return json({ elements: [], error: 'expected Overpass QL body (data=...)' }, 400);
  }
- const cacheKey = `osm-power-${createHash('sha1').update(rawBody).digest('hex')}`;
+ const cacheKey = `osm-power-${createHash('sha256').update(rawBody).digest('hex')}`;
  const cached = getCached(cacheKey, 6 * 60 * 60 * 1000);
  if (cached) return json(cached);
  try {

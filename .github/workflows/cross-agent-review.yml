@@ -5,6 +5,10 @@ on:
     types: [opened, edited, synchronize, reopened, ready_for_review]
     branches:
       - main
+  # Run inside the merge queue too. There is no PR (and no head_ref) in a
+  # merge_group event, so the marker cannot be re-verified here — but it was
+  # already enforced when the PR entered the queue, so we report success.
+  merge_group:
 
 permissions:
   contents: read
@@ -13,12 +17,17 @@ permissions:
 jobs:
   cross-agent-review:
     name: Cross-agent review marker
-    if: startsWith(github.head_ref, 'claude/') || startsWith(github.head_ref, 'codex/') || startsWith(github.head_ref, 'copilot/')
     runs-on: ubuntu-latest
     steps:
+      - name: Skip in merge queue
+        if: github.event_name == 'merge_group'
+        run: echo "Cross-agent gate is enforced at PR time; nothing to re-verify inside the merge queue."
+
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'claude/') || startsWith(github.head_ref, 'codex/') || startsWith(github.head_ref, 'copilot/'))
         with:
           fetch-depth: 0
 
       - name: Check PR review marker
+        if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'claude/') || startsWith(github.head_ref, 'codex/') || startsWith(github.head_ref, 'copilot/'))
         run: npm run cross-check -- --ci

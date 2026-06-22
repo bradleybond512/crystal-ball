@@ -17,7 +17,7 @@
 | **2** | IMM tracker + GNN + lifecycle | ⛔ **Deferred / N/A** — no Rust tracker, `nalgebra`, Kalman baseline, detections, or track-truth here | `CRYSTAL_BALL_WAVE_2_ESTIMATION_CORE.md` |
 | **3** | Goal-conditioned multimodal prediction (Valhalla) | ⛔ **Deferred / N/A** — no Valhalla / entity trajectories here; `crpsEnsemble` exists to score mixtures if it ever lands | — |
 | **4** | Full calibration + self-eval | ✅ **4a shipped** — Wilson bands, equal-mass bins, PIT, `buildCalibrationReport`; 4b surface = existing `MetaConfidenceCalibrationPanel`; energy-score/censored/recalibration deferred | this branch |
-| **5** | Decision-theoretic alert prioritization | ✅ **Shipped** — `alert-prioritization.ts` (expected-impact × calibrated-prob × time-criticality); dedup/fatigue already existed | this branch |
+| **5** | Decision-theoretic alert prioritization | ✅ **Shipped** — `alert-prioritization.ts` (expected-impact × calibrated-prob × time-criticality) + `alert-whatif.ts` (counterfactual queue mutation + act-by clock advance); dedup/fatigue already existed | this branch |
 | **6** | LLM reasons over verified state | ✅ **Kernel shipped** — `kent-hedging.ts` (enforced estimative-probability scale + calibration meta-hedge + mechanical hedge-verification gate). Tool layer / local-model sidecar / claim-grounding extend the existing reasoning layer (`analyst-loop`, `hypothesis-*`, `llm-adapter`) and are deferred | this branch |
 | **7** | Honest uncertainty viz + temporal scrubbing | ◻️ Pre-existing globe/timeline surfaces (`playback/`, globe overlays); net-new GPU path only if measured need | — |
 

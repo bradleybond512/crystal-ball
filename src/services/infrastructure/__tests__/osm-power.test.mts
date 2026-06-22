@@ -9,6 +9,7 @@ import {
   summarizePowerContext,
   describeGridReadiness,
   powerAssetsToOverlayRows,
+  powerOverlayStyle,
   fetchPowerInfrastructure,
   DEFAULT_OVERPASS_ENDPOINT,
 } from '../osm-power.ts';
@@ -145,6 +146,15 @@ test('powerAssetsToOverlayRows: capacity boosts plant weight; fallback labels', 
   const line = rows.find((r) => r.id === 'way/3')!;
   assert.ok(plant.weight > 0.6, `plant weight ${plant.weight} should exceed base 0.6`);
   assert.equal(line.label, 'Transmission line'); // no name → fallback
+});
+
+test('powerOverlayStyle: per-kind color and weight-scaled size', () => {
+  const plant = powerOverlayStyle({ id: 'p', kind: 'plant', lat: 0, lon: 0, label: 'x', weight: 1 });
+  const line = powerOverlayStyle({ id: 'l', kind: 'line', lat: 0, lon: 0, label: 'y', weight: 0 });
+  assert.deepEqual(plant.color, [239, 68, 68]);
+  assert.equal(plant.pixelSizePx, 16); // 6 + 1*10
+  assert.deepEqual(line.color, [34, 211, 238]);
+  assert.equal(line.pixelSizePx, 6); // 6 + 0
 });
 
 // ── Fetch (injected) ─────────────────────────────────────────────────────────

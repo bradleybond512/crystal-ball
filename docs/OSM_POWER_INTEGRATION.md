@@ -28,25 +28,27 @@ const rows = powerAssetsToOverlayRows(await fetchSitePowerAssets(site.lat, site.
 // rows: { id, kind, lat, lon, label, weight }[]  (weight ∝ plant capacity)
 ```
 
-## Remaining last-mile wiring (needs the running app to verify)
+## Wired in (this PR)
+
+- ✅ **Datacenter readiness** — `data-loader` resolves grid infrastructure per
+  site (6h-cached; Overpass is rate-limited) and threads it through
+  `recomputeDatacenterPosture` as an optional `gridInfrastructure: PowerContext`.
+  `DataCenterPosture` gained the field additively (existing posture tests
+  unchanged); `DataCenterReadinessPanel` renders a `⚡` grid line via
+  `describeGridReadiness` (flags a weak grid tie when no substation is in range).
+  Verified by the pure datacenter + osm-power suites (50 tests).
+- ✅ **Attribution** — the map already credits "© OpenStreetMap" (basemap is
+  OSM-derived; see `DeckGLMap` + `public/map-styles/*.json`), which covers the
+  ODbL requirement for these layers.
+
+## Remaining last-mile (needs the running app to verify)
 
 1. **Globe overlay layer** — feed `powerAssetsToOverlayRows(...)` into the God's
    Eye Cesium layer (`GlobeDataManager` / `GodsVisionView`) as a new point layer,
-   styled by `kind` and `weight`. Mirror an existing pure-emitter overlay
-   (e.g. `seismic/globe-overlay-emitter`) for the consumption side.
-2. **Datacenter readiness** — call `fetchSitePowerContext(site)` in the datacenter
-   loader and surface `nearestSubstationKm` / `nearbyCapacityMw` in
-   `ShortageRadarPanel`'s datacenter view or a dedicated card. Treat it as an
-   *additional* signal — do not change `computeDatacenterPosture`'s existing
-   contract; add an annotation alongside it.
-3. **Refresh cadence** — Overpass is rate-limited; the relay caches 6h. Poll on
-   site change, not on a timer.
-
-## Licensing — required attribution
-
-OpenStreetMap data is **ODbL**. Any surface that renders these layers MUST credit
-**"© OpenStreetMap contributors."** Add it to the map attribution line next to
-the existing basemap credits.
+   styled by `kind` and `weight`. The consumption side is bespoke Cesium code
+   (no data-driven overlay registry), so it needs in-app visual verification.
+2. **Panel CSS (cosmetic)** — `.dc-grid-line` / `.dc-grid--weak` render unstyled
+   today; add styling next to the existing `.dc-seismic-line` rules.
 
 ## Optional future sources (the rest of what OpenGridWorks aggregates)
 

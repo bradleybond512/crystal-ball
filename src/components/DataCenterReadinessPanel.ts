@@ -4,6 +4,8 @@ import {
   getDatacenterPosture, getDatacenterSite, subscribeDatacenterPosture,
 } from '../services/datacenter/datacenter-state';
 import { levelLabel, levelColor } from '../services/datacenter/datacenter-view';
+import { describeGridReadiness } from '../services/infrastructure/osm-power';
+import type { PowerContext } from '../services/infrastructure/osm-power';
 import type {
   DataCenterPosture,
   DcLevel,
@@ -72,6 +74,10 @@ export class DataCenterReadinessPanel extends Panel {
 
     if (posture.seismicNearby.length > 0) {
       nodes.push(this.seismicLine(posture.seismicNearby));
+    }
+
+    if (posture.gridInfrastructure) {
+      nodes.push(this.gridInfrastructureLine(posture.gridInfrastructure));
     }
 
     const actionList = posture.actions.length === 0
@@ -148,6 +154,15 @@ export class DataCenterReadinessPanel extends Panel {
       h('span', { className: 'dc-conn-label' }, 'Connectivity'),
       h('span', { className: 'dc-conn-status' }, conn.status.charAt(0).toUpperCase() + conn.status.slice(1)),
       h('span', { className: 'dc-conn-detail' }, `CF ${cfMark} · Fastly ${fastlyMark}`),
+    );
+  }
+
+  private gridInfrastructureLine(ctx: PowerContext): HTMLElement {
+    const { summary, weakGridTie } = describeGridReadiness(ctx);
+    const statusClass = weakGridTie ? 'dc-grid--weak' : 'dc-grid--ok';
+    return h('div', { className: `dc-grid-line ${statusClass}` },
+      h('span', { className: 'dc-grid-icon' }, '⚡'),
+      h('span', { className: 'dc-grid-detail' }, summary),
     );
   }
 

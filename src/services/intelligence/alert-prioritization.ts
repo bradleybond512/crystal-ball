@@ -212,8 +212,8 @@ export function calibrationAdjusterFromReport(report: CalibrationReport): Calibr
   const byDomain = indexGroups(report.byDomain);
   return (probability, ctx) => {
     const group =
-      (ctx.sourceId !== undefined ? bySource.get(ctx.sourceId) : undefined) ??
-      (ctx.domain !== undefined ? byDomain.get(ctx.domain) : undefined);
+      (ctx.sourceId === undefined ? undefined : bySource.get(ctx.sourceId)) ??
+      (ctx.domain === undefined ? undefined : byDomain.get(ctx.domain));
     if (!group || group.assessment.verdict === 'insufficient_data') return probability;
     return clamp01(probability - group.assessment.signedBias);
   };

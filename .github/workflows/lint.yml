@@ -13,10 +13,11 @@ on:
       - '.markdownlint-cli2.jsonc'
       - 'package.json'
       - 'package-lock.json'
+  merge_group:
 
 jobs:
   static-lint:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'merge_group' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -32,6 +33,9 @@ jobs:
       - run: npm run lint:yaml
       - run: npm run lint:shell
       - name: Lint changed markdown files
+        # base_ref is empty in a merge_group event; the static lints above
+        # already cover the combined tree, so skip the PR-diff markdown pass.
+        if: github.event_name == 'pull_request'
         run: |
           git fetch origin "${{ github.base_ref }}" --depth=1
           git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- '*.md' > "$RUNNER_TEMP/markdown-files.list"

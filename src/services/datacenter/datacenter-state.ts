@@ -9,6 +9,7 @@ import type {
   SiteConditions,
   SiteConfig,
 } from './datacenter-types.ts';
+import type { PowerContext } from '../infrastructure/osm-power.ts';
 import { computeDatacenterPosture } from './datacenter-posture.ts';
 
 type Listener = (posture: DataCenterPosture | null) => void;
@@ -42,6 +43,7 @@ export interface RecomputeInput {
   airQuality?: SiteAirQuality | null;
   seismicNearby?: NearbySeismicEvent[];
   connectivity?: ConnectivitySignal | null;
+  gridInfrastructure?: PowerContext | null;
 }
 
 export function recomputeDatacenterPosture(input: RecomputeInput): DataCenterPosture | null {

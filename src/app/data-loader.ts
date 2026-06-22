@@ -298,6 +298,7 @@ import { fetchDamSafetyAlerts } from '@/services/dam-safety';
 import { fetchPowerGridAlerts } from '@/services/power-grid-alerts';
 import { fetchGridStatus } from '@/services/power-grid';
 import { getDatacenterSite, setDatacenterSite, recomputeDatacenterPosture } from '@/services/datacenter/datacenter-state';
+import type { PowerContext } from '@/services/infrastructure/osm-power';
 import {
   fetchOpenMeteoConditions,
   fetchSite24hForecast,
@@ -380,6 +381,25 @@ const CYBER_LAYER_ENABLED = import.meta.env.VITE_ENABLE_CYBER_LAYER === 'true';
 // loop resolves a site's forecast/county zones once instead of hitting NWS
 // `/points` on every weather refresh.
 const _siteUgcZoneCache = new Map<string, string[]>();
+
+// Cache OSM grid infrastructure per `${lat},${lon}` — Overpass is rate-limited,
+// so the datacenter loop reuses a site's plants/substations/lines for 6h rather
+// than refetching on every weather refresh.
+const _siteGridInfraCache = new Map<string, { ctx: PowerContext; at: number }>();
+const GRID_INFRA_TTL_MS = 6 * 60 * 60 * 1000;
+async function resolveGridInfrastructure(lat: number, lon: number): Promise<PowerContext | null> {
+  const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+  const cached = _siteGridInfraCache.get(key);
+  if (cached && Date.now() - cached.at < GRID_INFRA_TTL_MS) return cached.ctx;
+  try {
+    const { fetchSitePowerContext } = await import('@/services/infrastructure/osm-power-source');
+    const ctx = await fetchSitePowerContext(lat, lon, 25);
+    _siteGridInfraCache.set(key, { ctx, at: Date.now() });
+    return ctx;
+  } catch {
+    return cached?.ctx ?? null;
+  }
+}
 
 export interface DataLoaderCallbacks {
   renderCriticalBanner: (postures: TheaterPostureSummary[]) => void;
@@ -1562,6 +1582,7 @@ export class DataLoaderManager implements AppModule {
      place: eq.place,
      occurredAt: eq.occurredAt,
    }));
+ const gridInfrastructure = await resolveGridInfrastructure(site.lat, site.lon);
  recomputeDatacenterPosture({
    gridStatus,
    weatherAlerts: nwsAlerts,
@@ -1571,6 +1592,7 @@ export class DataLoaderManager implements AppModule {
    airQuality: aqResult.status === 'fulfilled' ? aqResult.value : null,
    seismicNearby: nearbySeismic,
    connectivity: connResult.status === 'fulfilled' ? connResult.value : null,
+   gridInfrastructure,
  });
  }
 

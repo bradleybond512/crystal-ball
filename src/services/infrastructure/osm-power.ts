@@ -227,6 +227,34 @@ export function summarizePowerContext(
   };
 }
 
+// ── Grid-readiness annotation (pure) — for the datacenter panel ──────────────
+
+export interface GridReadiness {
+  /** One-line operator summary. */
+  summary: string;
+  /** No substation mapped within range — a weak / uncertain grid tie. */
+  weakGridTie: boolean;
+}
+
+/** Turn a `PowerContext` into a one-line grid-readiness annotation for the
+ *  datacenter surface. */
+export function describeGridReadiness(ctx: PowerContext): GridReadiness {
+  const parts: string[] = [];
+  const weakGridTie = ctx.nearestSubstationKm === undefined;
+  if (weakGridTie) {
+    parts.push('no substation mapped in range');
+  } else {
+    parts.push(`nearest substation ${ctx.nearestSubstationKm} km`);
+  }
+  if (ctx.nearbyCapacityMw > 0) {
+    parts.push(`${Math.round(ctx.nearbyCapacityMw)} MW generation within ${ctx.radiusKm} km`);
+  }
+  if (ctx.transmissionLineCount > 0) {
+    parts.push(`${ctx.transmissionLineCount} transmission line${ctx.transmissionLineCount === 1 ? '' : 's'}`);
+  }
+  return { summary: `Grid: ${parts.join('; ')}.`, weakGridTie };
+}
+
 // ── Globe overlay rows (pure) ────────────────────────────────────────────────
 
 export interface PowerOverlayRow {

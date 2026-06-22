@@ -7,6 +7,7 @@ import {
   parseVoltage,
   parsePowerMw,
   summarizePowerContext,
+  describeGridReadiness,
   powerAssetsToOverlayRows,
   fetchPowerInfrastructure,
   DEFAULT_OVERPASS_ENDPOINT,
@@ -113,6 +114,27 @@ test('summarizePowerContext: no substations → nearestSubstationKm undefined', 
   const ctx = summarizePowerContext({ lat: 0, lon: 0 }, 10, assets);
   assert.equal(ctx.nearestSubstationKm, undefined);
   assert.equal(ctx.nearbyCapacityMw, 0);
+});
+
+// ── Grid readiness ───────────────────────────────────────────────────────────
+
+test('describeGridReadiness: summarizes substation/generation/lines', () => {
+  const assets = parseOverpassPower(OVERPASS_FIXTURE);
+  const ctx = summarizePowerContext({ lat: 30, lon: -97 }, 60, assets);
+  const r = describeGridReadiness(ctx);
+  assert.equal(r.weakGridTie, false);
+  assert.match(r.summary, /nearest substation/);
+  assert.match(r.summary, /1500 MW generation within 60 km/);
+  assert.match(r.summary, /1 transmission line\b/);
+});
+
+test('describeGridReadiness: flags a weak grid tie when no substation in range', () => {
+  const ctx = summarizePowerContext({ lat: 0, lon: 0 }, 10, [
+    { id: 'node/1', kind: 'plant', lat: 0.01, lon: 0.01, capacityMw: 200 },
+  ]);
+  const r = describeGridReadiness(ctx);
+  assert.equal(r.weakGridTie, true);
+  assert.match(r.summary, /no substation mapped in range/);
 });
 
 // ── Overlay rows ─────────────────────────────────────────────────────────────

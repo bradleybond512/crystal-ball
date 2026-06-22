@@ -3,6 +3,7 @@ name: SAST (Semgrep)
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  merge_group:
 
 permissions:
   contents: read

@@ -62,3 +62,33 @@ test('every connect-src host entry is scheme-qualified (no accidental bare host)
     assert.match(entry, /^(https?|wss?):\/\//, `connect-src entry "${entry}" must be scheme-qualified`);
   }
 });
+
+// ── index.html meta CSP (the GitHub Pages web build) ──────────────────────────
+// The web build has no Tauri runtime CSP, so its only policy is the <meta> tag.
+// `default-src` does NOT fall back for base-uri/form-action, so these must be
+// declared explicitly or the web build has an unrestricted <base> + form-action.
+const indexPath = fileURLToPath(new URL('../index.html', import.meta.url));
+const indexHtml = readFileSync(indexPath, 'utf8');
+// The content attribute is double-quoted and contains single quotes ('self',
+// 'none'), so the capture must exclude only the double-quote delimiter.
+const metaCspMatch = indexHtml.match(
+  /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i,
+);
+const metaCsp = metaCspMatch ? metaCspMatch[1] : '';
+
+function metaDirective(name) {
+  const part = metaCsp.split(';').map((s) => s.trim()).find((s) => s.startsWith(`${name} `) || s === name);
+  return part ? part.slice(name.length).trim().split(/\s+/).filter(Boolean) : [];
+}
+
+test('index.html declares a Content-Security-Policy meta tag', () => {
+  assert.ok(metaCsp.length > 0, 'index.html meta CSP missing');
+});
+
+test('index.html meta CSP locks down object-src / base-uri / form-action', () => {
+  // Parity with the desktop tauri.conf.json CSP. Without these the web build
+  // allows arbitrary plugins, a hijacked <base href>, and cross-origin form posts.
+  assert.deepEqual(metaDirective('object-src'), ["'none'"], "object-src must be 'none'");
+  assert.deepEqual(metaDirective('base-uri'), ["'self'"], "base-uri must be 'self'");
+  assert.deepEqual(metaDirective('form-action'), ["'self'"], "form-action must be 'self'");
+});

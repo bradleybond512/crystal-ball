@@ -444,10 +444,11 @@ export class App {
  this.pendingDeepLinkCountry = initState.country ?? null;
  this.eventHandlers.setupUrlStateSync();
 
- // Phase 6: Data loading
+ // Phase 6: Data loading. Country geometry (a ~214 KB fetch + parse) is only
+ // needed later by map hit-testing / the country layer, not by loadAllData —
+ // so run both concurrently instead of gating the whole first data wave on it.
  this.dataLoader.syncDataFreshnessWithLayers();
- await preloadCountryGeometry();
- await this.dataLoader.loadAllData();
+ await Promise.all([preloadCountryGeometry(), this.dataLoader.loadAllData()]);
 
  startLearning();
 

@@ -54,9 +54,12 @@ Claude's GitHub tools.
    Rules → Rulesets** if you use rulesets).
 2. Enable **Require merge queue**.
 3. Under the merge queue settings:
-   - **Merge method:** `Rebase`. This repo allows **only** rebase merges —
-     squash and merge-commits are disabled in Settings → General → Pull
-     Requests, so the queue must use `Rebase` or merges will be rejected.
+   - **Merge method:** `Merge commit`. **The merge queue does not support
+     rebase merges** — only *merge commit* and *squash*. This repo was
+     historically rebase-only, so enabling the queue required turning on
+     **Allow merge commits** in Settings → General → Pull Requests. Do not
+     pick `Rebase` here: it is not a valid queue method and the ruleset API
+     rejects it with an (unhelpfully blank) `Invalid rule 'merge_queue'` 422.
    - **Build concurrency:** start at `1` for strict serialization; raise later
      for throughput once it's proven stable.
    - **Only merge non-failing pull requests:** on.

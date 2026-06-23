@@ -124,7 +124,7 @@ let fetchPromise: Promise<CachedTheaterPosture | null> | null = null;
 let lastFetchTime = 0;
 let lastErrorAt = 0;
 const REFETCH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes - reduce upstream API pressure
-const ERROR_BACKOFF_MS = 60 * 1000; // 60 seconds between failure retries
+const ERROR_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes between failure retries
 
 function createAbortError(): DOMException {
   return new DOMException('The operation was aborted.', 'AbortError');
@@ -195,9 +195,6 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
 
   // Throttle retries after errors — prevents retry storms when the sidecar is down
   if (lastErrorAt && now - lastErrorAt < ERROR_BACKOFF_MS) {
- const remainingSecs = Math.round((ERROR_BACKOFF_MS - (now - lastErrorAt)) / 1000);
- // eslint-disable-next-line no-console
- console.warn(`[CachedTheaterPosture] retry suppressed — backoff active (${remainingSecs}s remaining), returning ${cachedPosture ? 'stale cache' : 'null'}`);
  return cachedPosture;
   }
 

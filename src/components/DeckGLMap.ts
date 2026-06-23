@@ -615,7 +615,7 @@ export class DeckGLMap {
   private satelliteAppliedUrl: string | null = null;
   private satelliteBaseHour: string | null = null;
   private static readonly MAX_SATELLITE_HOUR_OFFSET = 6;
-  private static readonly SATELLITE_RECOVERY_COOLDOWN_MS = 3000;
+  private static readonly SATELLITE_RECOVERY_COOLDOWN_MS = 8000;
   private lightningStrikes: LightningStrike[] = [];
   private redFlagWarnings: RedFlagWarning[] = [];
   private satellitePositions: SatellitePosition[] = [];

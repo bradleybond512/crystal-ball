@@ -13,6 +13,8 @@
 
 import { getApiBaseUrl } from './runtime';
 import { runClaudeAgent } from './claude-agent';
+import { isLocalModelOnly, isLlmEgressDisclosed } from './ai-flow-settings';
+import { isGhostMode } from './mode-manager';
 
 export type IntelProvider = 'local' | 'local-only' | 'claude';
 
@@ -63,6 +65,13 @@ async function callLocal(prompt: string, opts: IntelOptions): Promise<IntelRespo
         system: opts.system,
         maxTokens: opts.maxTokens,
         temperature: opts.temperature,
+        // Honor local-only / Ghost Mode / undisclosed intent so the sidecar
+        // does not transparently fall back to Groq (cloud) on local failure.
+        localOnly:
+          getIntelProvider() === 'local-only' ||
+          isLocalModelOnly() ||
+          isGhostMode() ||
+          !isLlmEgressDisclosed(),
       }),
       signal: opts.signal,
     });

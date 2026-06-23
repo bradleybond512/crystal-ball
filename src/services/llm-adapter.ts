@@ -22,6 +22,7 @@ import { recordCall, refundCloudCall, reserveCloudCall } from './llm-budget';
 import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
 import { isLocalModelOnly, isLlmEgressDisclosed } from './ai-flow-settings';
+import { isGhostMode } from './mode-manager';
 
 export type LlmProvider = 'local' | 'cloud-groq' | 'cloud-agent' | 'cloud-chat' | 'none';
 
@@ -76,7 +77,8 @@ async function tryLocalViaSidecar(prompt: string, options: LlmOptions): Promise<
         prompt,
         system: options.system,
         maxTokens: options.maxTokens ?? 400,
-        localOnly: isLocalModelOnly() || !isLlmEgressDisclosed(),
+        // Ghost Mode must also pin local-only so the sidecar never Groq-falls-back.
+        localOnly: isLocalModelOnly() || isGhostMode() || !isLlmEgressDisclosed(),
       }),
       signal,
     });
@@ -159,6 +161,42 @@ async function tryCloudAgent(prompt: string, options: LlmOptions): Promise<LlmRe
   }
 }
 
+function dispatchEgressDisclosureNeeded(): void {
+  try { document.dispatchEvent(new CustomEvent('cb:llm-egress-disclosure-needed')); }
+  catch { /* non-browser test environment */ }
+}
+
+const BLOCKED: LlmResult = { text: '', provider: 'none' };
+
+/**
+ * Reason cloud egress is disallowed right now, or null if it's permitted.
+ * Single source of truth for the three privacy gates: Ghost Mode (the explicit
+ * privacy mode), local-model-only, and the one-time egress disclosure. Logs +
+ * counts the block and fires the disclosure prompt as a side effect.
+ */
+function cloudEgressBlocked(): LlmResult | null {
+  if (isGhostMode()) {
+    logDebug({ level: 'info', category: 'llm', source: 'llm-adapter',
+      message: 'cloud call blocked: Ghost Mode active' });
+    incrementCounter('llm.cloud-agent.blocked.ghost');
+    return BLOCKED;
+  }
+  if (isLocalModelOnly()) {
+    logDebug({ level: 'info', category: 'llm', source: 'llm-adapter',
+      message: 'cloud call blocked: local-model-only mode active' });
+    incrementCounter('llm.cloud-agent.blocked.local-only');
+    return BLOCKED;
+  }
+  if (!isLlmEgressDisclosed()) {
+    dispatchEgressDisclosureNeeded();
+    logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
+      message: 'cloud call blocked: LLM egress not yet disclosed to user' });
+    incrementCounter('llm.cloud-agent.blocked.undisclosed');
+    return BLOCKED;
+  }
+  return null;
+}
+
 /**
  * Generate text. Tries the local path first unless preferCloud is set.
  * Returns { provider: 'none' } if everything failed or the daily cloud
@@ -174,9 +212,10 @@ export async function generateText(prompt: string, options: LlmOptions = {}): Pr
     // Groq (cloud) — enforce disclosure before that happens. On web,
     // tryLocalDirect calls the user's own Ollama endpoint directly and never
     // touches a cloud API, so no disclosure is required for that path.
+    // (Ghost / local-only still allow on-device inference here; the sidecar's
+    // localOnly flag — set in tryLocalViaSidecar — prevents its Groq fallback.)
     if (isDesktopRuntime() && !isLlmEgressDisclosed()) {
-      try { document.dispatchEvent(new CustomEvent('cb:llm-egress-disclosure-needed')); }
-      catch { /* non-browser test environment */ }
+      dispatchEgressDisclosureNeeded();
       logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
         message: 'cloud call blocked: LLM egress not yet disclosed to user' });
       incrementCounter('llm.cloud-agent.blocked.undisclosed');
@@ -188,22 +227,9 @@ export async function generateText(prompt: string, options: LlmOptions = {}): Pr
       return local;
     }
   }
-  // Block cloud egress if the user has enabled local-only mode.
-  if (isLocalModelOnly()) {
-    logDebug({ level: 'info', category: 'llm', source: 'llm-adapter',
-      message: 'cloud call blocked: local-model-only mode active' });
-    incrementCounter('llm.cloud-agent.blocked.local-only');
-    return { text: '', provider: 'none' };
-  }
-  // Block cloud egress until the user has acknowledged the disclosure notice.
-  if (!isLlmEgressDisclosed()) {
-    try { document.dispatchEvent(new CustomEvent('cb:llm-egress-disclosure-needed')); }
-    catch { /* non-browser test environment */ }
-    logDebug({ level: 'warn', category: 'llm', source: 'llm-adapter',
-      message: 'cloud call blocked: LLM egress not yet disclosed to user' });
-    incrementCounter('llm.cloud-agent.blocked.undisclosed');
-    return { text: '', provider: 'none' };
-  }
+  // No usable local result — gate the cloud fallback through the same checks.
+  const blocked = cloudEgressBlocked();
+  if (blocked) return blocked;
   // Atomically reserve a cloud-call slot before issuing the request.
   // If reserveCloudCall returns false, the cap is already hit; fail soft.
   if (!reserveCloudCall('cloud-agent')) return { text: '', provider: 'none' };

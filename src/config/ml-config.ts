@@ -74,7 +74,7 @@ export const ML_THRESHOLDS = {
   minClustersForML: 5,
   maxTextsPerBatch: 20,
   modelLoadTimeoutMs: 600_000,
-  inferenceTimeoutMs: 120_000,
+  inferenceTimeoutMs: 30_000,
   memoryBudgetMB: 200,
 };
 

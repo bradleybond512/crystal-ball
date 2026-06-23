@@ -2533,11 +2533,16 @@ export class DataLoaderManager implements AppModule {
       }
 
       // HDX HAPI food-security rows (global IPC-coded)
-      const hdxUrl = `${getApiBaseUrl()}/api/hdx-food-security`;
-      const hr = await fetch(hdxUrl);
-      if (hr.ok) {
-        const obs = hdxHapiToObservations(await hr.json() as HDXHAPIResponse);
-        if (obs.length > 0) ingestObservations(obs);
+      // Gate behind the shared circuit breaker — when the sebuf HAPI RPC path
+      // (fetchHapiSummary) is on cooldown, this direct fetch would also fail
+      // and generate redundant errors / heat.
+      if (!getCircuitBreakerCooldownInfo('HDX HAPI').onCooldown) {
+        const hdxUrl = `${getApiBaseUrl()}/api/hdx-food-security`;
+        const hr = await fetch(hdxUrl);
+        if (hr.ok) {
+          const obs = hdxHapiToObservations(await hr.json() as HDXHAPIResponse);
+          if (obs.length > 0) ingestObservations(obs);
+        }
       }
 
       // Assumption tracking — annotate once per batch (not per observation).

@@ -18,6 +18,12 @@ const CACHE_STORE = 'entries';
 const MAX_ENTRIES = 500;
 const PRUNE_INTERVAL_MS = 5 * 60_000;
 
+// Suppress repeated fallback warnings — fires once per session per operation.
+let warnedDesktopRead = false;
+let warnedDesktopWrite = false;
+let warnedIdbRead = false;
+let warnedIdbWrite = false;
+
 let cacheDbPromise: Promise<IDBDatabase> | null = null;
 let lastPruneAt = 0;
 
@@ -121,7 +127,7 @@ export async function getPersistentCache<T>(key: string): Promise<CacheEnvelope<
       const value = await invokeTauri<CacheEnvelope<T> | null>('read_cache_entry', { key });
       return value ?? null;
     } catch (error) {
-      console.warn('[persistent-cache] Desktop read failed; falling back to browser storage', error); // eslint-disable-line no-console
+      if (!warnedDesktopRead) { warnedDesktopRead = true; console.warn('[persistent-cache] Desktop read failed; falling back to browser storage', error); } // eslint-disable-line no-console
     }
   }
 
@@ -131,7 +137,7 @@ export async function getPersistentCache<T>(key: string): Promise<CacheEnvelope<
       if (env && isExpired(env)) { void deletePersistentCache(key); return null; }
       return env;
     } catch (error) {
-      console.warn('[persistent-cache] IndexedDB read failed; falling back to localStorage', error); // eslint-disable-line no-console
+      if (!warnedIdbRead) { warnedIdbRead = true; console.warn('[persistent-cache] IndexedDB read failed; falling back to localStorage', error); } // eslint-disable-line no-console
       cacheDbPromise = null;
     }
   }
@@ -163,7 +169,7 @@ export async function setPersistentCache<T>(key: string, data: T, ttlMs?: number
       await invokeTauri<void>('write_cache_entry', { key, value: JSON.stringify(payload), ttlMs });
       return;
     } catch (error) {
-      console.warn('[persistent-cache] Desktop write failed; falling back to browser storage', error); // eslint-disable-line no-console
+      if (!warnedDesktopWrite) { warnedDesktopWrite = true; console.warn('[persistent-cache] Desktop write failed; falling back to browser storage', error); } // eslint-disable-line no-console
     }
   }
 
@@ -174,7 +180,7 @@ export async function setPersistentCache<T>(key: string, data: T, ttlMs?: number
       return;
     } catch (error) {
       if (isQuotaError(error)) markIndexedDbQuotaExceeded();
-      else console.warn('[persistent-cache] IndexedDB write failed; falling back to localStorage', error); // eslint-disable-line no-console
+      else if (!warnedIdbWrite) { warnedIdbWrite = true; console.warn('[persistent-cache] IndexedDB write failed; falling back to localStorage', error); } // eslint-disable-line no-console
       cacheDbPromise = null;
     }
   }

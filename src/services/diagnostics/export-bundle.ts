@@ -529,6 +529,7 @@ function redactPanelHealthSummary(
 function redactSituation(s: SituationSummary): SituationSummary {
   return {
     ...s,
+    name: s.name ? redactString(s.name) : s.name,
     observationIds: [...s.observationIds],
     correlationIds: [...s.correlationIds],
     tags: [...s.tags],
@@ -660,8 +661,21 @@ const COORDINATE_KEY_PATTERN =
 // (e.g. [lng, lat] or [[lng, lat], ...]).  Non-number elements pass through.
 function blurGeoJsonCoords(v: unknown): unknown {
   if (typeof v === 'number') return Math.round(v * 10) / 10;
-  if (Array.isArray(v)) return v.map(blurGeoJsonCoords);
+  if (Array.isArray(v)) return v.map((el) => blurGeoJsonCoords(el));
   return v;
+}
+
+/** Redact a single object entry by key + value (extracted from redactDetail
+ *  to keep that function's branching flat). */
+function redactDetailEntry(key: string, val: unknown): unknown {
+  if (SENSITIVE_KEY_PATTERN.test(key)) return REDACTED;
+  if (COORDINATE_KEY_PATTERN.test(key)) {
+    // Round to ~10 km grid so the bundle reflects "user is near here" without
+    // exact location; GeoJSON coordinate arrays are blurred member-wise.
+    if (typeof val === 'number') return Math.round(val * 10) / 10;
+    if (Array.isArray(val)) return blurGeoJsonCoords(val);
+  }
+  return redactDetail(val);
 }
 
 /** Strip API keys, bearer tokens, e-mails, phone numbers, exact lat/lng,
@@ -674,22 +688,7 @@ export function redactDetail(value: unknown): unknown {
     const source = value as Record<string, unknown>;
     const out: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(source)) {
-      if (SENSITIVE_KEY_PATTERN.test(key)) {
-        out[key] = REDACTED;
-      } else if (COORDINATE_KEY_PATTERN.test(key)) {
-        if (typeof val === 'number') {
-          // Round to ~10 km grid so the bundle reflects "user is near here"
-          // without exact location.
-          out[key] = Math.round(val * 10) / 10;
-        } else if (Array.isArray(val)) {
-          // GeoJSON coordinates array — blur all numeric members recursively.
-          out[key] = blurGeoJsonCoords(val);
-        } else {
-          out[key] = redactDetail(val);
-        }
-      } else {
-        out[key] = redactDetail(val);
-      }
+      out[key] = redactDetailEntry(key, val);
     }
     return out;
   }
@@ -713,6 +712,10 @@ const CRED_PHRASE_WORD_PATTERN = /\b(?:password|passwd|pwd|secret)\s*[:=]\s*\S+/
 const CRED_PHRASE_TOKEN_PATTERN = /\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token)\s*[:=]\s*\S+/gi;
 const SK_TOKEN_PATTERN = /\bsk-[A-Za-z0-9_\-]{16,}\b/g;
 const URL_CRED_QUERY_PATTERN = /([?&](?:access_token|api_key|apikey|key|token|secret|password)=)([^&\s]+)/gi;
+// Home-directory paths leak the OS username (e.g. via stack traces / log file
+// paths). Keep the structural prefix, redact the username segment.
+const HOME_PATH_PATTERN = /(\/(?:Users|home)\/)[^/\s]+/g;
+const WINDOWS_HOME_PATH_PATTERN = /([A-Za-z]:\\Users\\)[^\\\s]+/g;
 
 function redactCredPhrase(match: string): string {
   const sep = match.includes('=') ? '=' : ':';
@@ -720,7 +723,7 @@ function redactCredPhrase(match: string): string {
   return `${key}${sep}${REDACTED}`;
 }
 
-function redactString(s: string): string {
+export function redactString(s: string): string {
   return s
     .replace(EMAIL_PATTERN, REDACTED)
     .replace(PHONE_PATTERN, REDACTED)
@@ -729,6 +732,8 @@ function redactString(s: string): string {
     .replace(CRED_PHRASE_TOKEN_PATTERN, redactCredPhrase)
     .replace(SK_TOKEN_PATTERN, REDACTED)
     .replace(URL_CRED_QUERY_PATTERN, (_m, prefix: string) => `${prefix}${REDACTED}`)
+    .replace(HOME_PATH_PATTERN, (_m, prefix: string) => `${prefix}${REDACTED}`)
+    .replace(WINDOWS_HOME_PATH_PATTERN, (_m, prefix: string) => `${prefix}${REDACTED}`)
     .replace(LONG_HEX_PATTERN, REDACTED);
 }
 

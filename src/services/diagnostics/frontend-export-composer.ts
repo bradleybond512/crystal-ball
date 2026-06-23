@@ -19,6 +19,7 @@ import { aggregateSystemHealth, contextFromSnapshots } from './system-health';
 import {
   buildExportBundle,
   exportBundleToMarkdown,
+  redactString,
   type AlgorithmCalibrationSummary,
   type AlgorithmTraceEntry,
   type CorrelationSummary,
@@ -232,7 +233,11 @@ export function composeFrontendDiagnosticsExport(
 
   let markdown = exportBundleToMarkdown(bundle);
   if (input.appendix && input.appendix.trim().length > 0) {
-    markdown += `\n### Sidecar / desktop log appendix\n\n\`\`\`\n${input.appendix.trim()}\n\`\`\`\n`;
+    // The Rust log tails + client breadcrumbs are raw — run them through the
+    // same redaction the structured bundle gets so a shared "debug bundle"
+    // can't leak credentials, request-URL secrets, emails, or the OS username.
+    const safeAppendix = redactString(input.appendix.trim());
+    markdown += `\n### Sidecar / desktop log appendix\n\n\`\`\`\n${safeAppendix}\n\`\`\`\n`;
   }
 
   return { bundle, markdown };

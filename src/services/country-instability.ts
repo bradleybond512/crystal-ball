@@ -242,6 +242,9 @@ function normalizeCountryName(name: string): string | null {
 }
 
 export function ingestProtestsForCII(events: SocialUnrestEvent[]): void {
+  // Replace, don't accumulate: each fetch is the current snapshot, so re-pushing
+  // would inflate counts every refresh over a long session (matches ingestStrikes).
+  for (const [, data] of countryDataMap) data.protests = [];
   for (const e of events) {
  processedCount++;
  const code = normalizeCountryName(e.country);
@@ -254,6 +257,7 @@ export function ingestProtestsForCII(events: SocialUnrestEvent[]): void {
 }
 
 export function ingestConflictsForCII(events: ConflictEvent[]): void {
+  for (const [, data] of countryDataMap) data.conflicts = [];
   for (const e of events) {
  processedCount++;
  const code = normalizeCountryName(e.country);
@@ -391,6 +395,8 @@ function getHotspotBoost(countryCode: string): number {
 }
 
 export function ingestMilitaryForCII(flights: MilitaryFlight[], vessels: MilitaryVessel[]): void {
+  // Snapshot semantics: clear prior per-country military arrays before refilling.
+  for (const [, data] of countryDataMap) { data.militaryFlights = []; data.militaryVessels = []; }
   const foreignMilitaryByCountry = new Map<string, { flights: number; vessels: number }>();
 
   for (const f of flights) {
@@ -509,6 +515,7 @@ export function ingestStrikesForCII(events: {
 }
 
 export function ingestOutagesForCII(outages: InternetOutage[]): void {
+  for (const [, data] of countryDataMap) data.outages = [];
   for (const o of outages) {
  processedCount++;
  const code = normalizeCountryName(o.country);
@@ -532,6 +539,7 @@ function getOrefBlendBoost(code: string, data: CountryData): number {
 }
 
 export function ingestAviationForCII(alerts: AirportDelayAlert[]): void {
+  for (const [, data] of countryDataMap) data.aviationDisruptions = [];
   for (const a of alerts) {
  processedCount++;
  const code = normalizeCountryName(a.country);

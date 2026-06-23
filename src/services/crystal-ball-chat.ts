@@ -109,7 +109,9 @@ function buildLocationContext(): string {
  const proxConfig = loadProximityConfig();
  if (!proxConfig.location) return '';
  const loc = proxConfig.location;
- return `User location: ${loc.label} (${loc.lat.toFixed(2)}, ${loc.lon.toFixed(2)}), radius: ${proxConfig.radiusKm} km`;
+ // Send only the place label + radius to the cloud LLM — never precise home
+ // coordinates. The label already identifies the area for context.
+ return `User location: ${loc.label}, radius: ${proxConfig.radiusKm} km`;
   } catch {
  return '';
   }

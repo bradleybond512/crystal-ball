@@ -8,6 +8,7 @@
 
 import { getApiBaseUrl } from './runtime';
 import { isLocalModelOnly, isLlmEgressDisclosed } from './ai-flow-settings';
+import { isGhostMode } from './mode-manager';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,9 @@ export async function runClaudeAgent(
   query: string,
   signal?: AbortSignal,
 ): Promise<AgentResponse> {
+  if (isGhostMode()) {
+    throw new Error('cloud LLM is disabled: Ghost Mode suppresses external egress');
+  }
   if (isLocalModelOnly()) {
     throw new Error('cloud LLM is disabled: local-model-only mode is active');
   }

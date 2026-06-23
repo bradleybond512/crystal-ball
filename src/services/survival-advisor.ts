@@ -28,6 +28,7 @@ import {
 import { detectCompoundThreats, type CompoundThreat, type HazardSignal } from './compound-threat';
 import { getMode, type AppMode } from './mode-manager';
 import { runClaudeAgent } from './claude-agent';
+import { coarseCoordPair } from './geo-privacy';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -240,7 +241,7 @@ function buildPrompt(ctx: SurvivalContext): string {
 
   // Location
   if (ctx.location.location) {
- parts.push(`USER LOCATION: ${ctx.location.location.label} (${ctx.location.location.lat.toFixed(4)}, ${ctx.location.location.lon.toFixed(4)})`);
+ parts.push(`USER LOCATION: ${ctx.location.location.label} (${coarseCoordPair(ctx.location.location.lat, ctx.location.location.lon)})`);
   } else {
  parts.push('USER LOCATION: Not set');
   }
@@ -275,7 +276,7 @@ function buildPrompt(ctx: SurvivalContext): string {
   if (ctx.family.length > 0) {
  parts.push(`\nFAMILY MEMBERS (${ctx.family.length}):`);
  for (const m of ctx.family) {
- const loc = m.lastLocation ? `at ${m.lastLocation.lat.toFixed(4)}, ${m.lastLocation.lon.toFixed(4)}` : 'location unknown';
+ const loc = m.lastLocation ? `near ${coarseCoordPair(m.lastLocation.lat, m.lastLocation.lon)}` : 'location unknown';
  const age = m.lastUpdate ? `${Math.round((Date.now() - m.lastUpdate) / 60_000)} min ago` : 'never updated';
  parts.push(`  - ${m.icon} ${m.name}: ${m.status ?? 'unknown'} (${loc}, ${age})`);
  }

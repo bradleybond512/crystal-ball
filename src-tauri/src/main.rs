@@ -1836,11 +1836,34 @@ async fn fetch_polymarket(webview: Webview, path: String, params: String) -> Res
 }
 
 
-/// Navigation guard for trusted windows. Only same-origin bundled app content
-/// (`tauri://` scheme) or the local sidecar (`127.0.0.1` host) may be loaded;
-/// any attempt to navigate the window to an external origin is blocked.
+/// Navigation guard for the live-channels auxiliary window.
+///
+/// This window carries the same `require_trusted_window` IPC privileges as
+/// `main` (it can read secrets), so it must follow the same release-build rule:
+/// never navigable to an arbitrary loopback service, or a compromised renderer
+/// could redirect it to a sibling port and inherit those privileges.
+///
+/// - Production: `tauri://` bundled content, plus the `tauri.localhost`
+///   WebView2 workaround origin (parity with `is_main_window_navigation`). The
+///   window loads its document from the bundled asset and only *fetches* (never
+///   navigates to) the sidecar, so loopback is not needed.
+/// - Debug builds only: the Vite dev server / sidecar loopback origins, because
+///   in dev the window is loaded directly from one of them and reloads re-enter
+///   this guard. Compiled out of release builds.
 fn is_trusted_window_navigation(url: &Url) -> bool {
- url.scheme() == "tauri" || url.host_str() == Some("127.0.0.1")
+ if url.scheme() == "tauri" {
+  return true;
+ }
+ if matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost") {
+  return true;
+ }
+ #[cfg(debug_assertions)]
+ if matches!(url.scheme(), "http" | "https")
+  && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1" | "[::1]"))
+ {
+  return true;
+ }
+ false
 }
 
 /// Tighter navigation guard for the main window only.
@@ -3850,16 +3873,35 @@ mod navigation_guard_tests {
   assert!(is_main_window_navigation(&url("http://localhost:3001/")));
  }
 
- // ── trusted-window (aux) guard ───────────────────────────────────────────
+ // ── live-channels (trusted aux) guard ────────────────────────────────────
 
  #[test]
- fn trusted_window_allows_tauri_and_loopback() {
+ fn trusted_window_allows_tauri_scheme() {
   assert!(is_trusted_window_navigation(&url("tauri://localhost/index.html")));
-  assert!(is_trusted_window_navigation(&url("http://127.0.0.1:46123/live-channels.html")));
+ }
+
+ #[test]
+ fn trusted_window_allows_windows_app_origin() {
+  // Parity with the main-window guard: bundled content served by WebView2.
+  assert!(is_trusted_window_navigation(&url("http://tauri.localhost/live-channels.html")));
+  assert!(is_trusted_window_navigation(&url("https://tauri.localhost/live-channels.html")));
  }
 
  #[test]
  fn trusted_window_rejects_external_origin() {
   assert!(!is_trusted_window_navigation(&url("https://evil.example.com/")));
+  // A look-alike host that merely ends in the trusted suffix must not pass.
+  assert!(!is_trusted_window_navigation(&url("https://tauri.localhost.evil.com/")));
+ }
+
+ // Loopback is allowed ONLY in debug builds (the dev server / sidecar origin
+ // the window is loaded from). In release builds it is compiled out, so a
+ // compromised renderer cannot navigate to a sibling loopback service and
+ // inherit the window's trusted-window IPC privileges.
+ #[cfg(debug_assertions)]
+ #[test]
+ fn trusted_window_allows_loopback_dev_only_in_debug() {
+  assert!(is_trusted_window_navigation(&url("http://127.0.0.1:46123/live-channels.html")));
+  assert!(is_trusted_window_navigation(&url("http://localhost:3001/live-channels.html")));
  }
 }

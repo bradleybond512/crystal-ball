@@ -83,10 +83,30 @@ function clearEntry(serviceId: string): void {
  * @param fetchFn The actual network fetch function
  * @param staleMs How long to trust cached data (default: 4 hours)
  */
-export async function withOfflineCache<T>(
+// Coalesce concurrent callers for the same serviceId onto one in-flight fetch,
+// so N panels/tasks requesting the same feed at once don't each hit the network.
+const inFlightOfflineFetch = new Map<string, Promise<CachedSnapshot<unknown>>>();
+
+export function withOfflineCache<T>(
   serviceId: string,
   fetchFn: () => Promise<T>,
   staleMs = 4 * 3_600_000
+): Promise<CachedSnapshot<T>> {
+  const existing = inFlightOfflineFetch.get(serviceId);
+  if (existing) return existing as Promise<CachedSnapshot<T>>;
+  const run = runWithOfflineCache(serviceId, fetchFn, staleMs);
+  inFlightOfflineFetch.set(serviceId, run as Promise<CachedSnapshot<unknown>>);
+  return run.finally(() => {
+ if (inFlightOfflineFetch.get(serviceId) === (run as Promise<CachedSnapshot<unknown>>)) {
+ inFlightOfflineFetch.delete(serviceId);
+ }
+  });
+}
+
+async function runWithOfflineCache<T>(
+  serviceId: string,
+  fetchFn: () => Promise<T>,
+  staleMs: number
 ): Promise<CachedSnapshot<T>> {
   try {
  const data = await fetchFn();

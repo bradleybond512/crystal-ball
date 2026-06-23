@@ -69,8 +69,10 @@ export function startCorrelationFeedback(): void {
     const now = Date.now();
     const nowAcked = new Set<string>();
     const nowPinned = new Set<string>();
+    const currentIds = new Set<string>();
     for (const a of unifiedAlertStore.getAll()) {
       if (a.source !== 'correlation') continue;
+      currentIds.add(a.id);
       if (!firstSeen.has(a.id)) firstSeen.set(a.id, now);
       if (a.acknowledged) nowAcked.add(a.id);
       if (a.pinned) nowPinned.add(a.id);
@@ -101,6 +103,11 @@ export function startCorrelationFeedback(): void {
       changed = true;
     }
     if (changed) save();
+    // Bound firstSeen to live correlation alerts — its only use is the fast-ack
+    // window per id, so ids no longer in the store are dead weight.
+    for (const id of firstSeen.keys()) {
+      if (!currentIds.has(id)) firstSeen.delete(id);
+    }
     prevAcked = nowAcked;
     prevPinned = nowPinned;
   });

@@ -41,6 +41,9 @@ import { fetchRedFlagWarnings } from '@/services/red-flag-warnings';
 import { getRadarTileUrl, fetchRadarFrames } from '@/services/rainviewer-radar';
 import { getGoesWmsTileUrl } from '@/services/satellite-weather';
 import { getApiBaseUrl } from '@/services/runtime';
+import { getSavedPlaces } from '@/services/saved-places';
+import { resolveSiteConfig } from '@/services/datacenter/site-resolver';
+import { loadGodsVisionLayers } from '@/config/gods-vision-layers';
 import {
   computeAftershockForecast,
   computeCycloneCone,
@@ -89,6 +92,7 @@ import {
   ICON_MINERAL,
   ICON_HOTSPOT,
   ICON_DISPLACEMENT,
+  POWER_ICONS,
 } from '@/config/globe-icons';
 
 const ICON_SATELLITE = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
@@ -598,6 +602,9 @@ const DEFERRED_LAYER_ALTITUDE: Record<string, number> = {
   gpsJamming: 8_000_000,
   satChange: 15_000_000,
   darkVessels: 6_000_000,
+  // Local radius query against a rate-limited Overpass relay — only worth
+  // loading once the camera is reasonably close to a site / region.
+  powerInfrastructure: 2_000_000,
   redFlagWarnings: 5_000_000,
   weatherRadar: 5_000_000,
   weatherSatellite: 15_000_000,
@@ -648,6 +655,7 @@ export class GlobeDataManager {
  this.registerLayer('spaceWeather', () => this.loadSpaceWeatherOverlay());
  this.registerLayer('warRiskZones', () => this.loadWarRiskZones());
  this.registerLayer('infrastructure', () => this.loadInfrastructureOverlay());
+ this.registerLayer('powerInfrastructure', () => this.loadPowerInfrastructure());
  this.registerLayer('conflicts', () => this.loadConflicts());
  this.registerLayer('airstrikes', () => this.loadAirstrikes());
  this.registerLayer('strike-packages', () => this.loadStrikePackages());
@@ -1364,6 +1372,96 @@ export class GlobeDataManager {
  },
  name: `radnet-${hot.name}`,
  description: radnetDescription(hot),
+ });
+ }
+  }
+
+  /** Resolve the origin for the power-infrastructure Overpass query.
+   *  Site-first: the user's highest-priority `data_center` saved place (the
+   *  same origin the datacenter readiness layer uses). Falls back to the
+   *  current camera center when no site is configured. Radius is clamped so a
+   *  generous saved-place radius can't issue a punishing Overpass query. */
+  private resolvePowerAnchor(): { lat: number; lon: number; radiusKm: number } | null {
+ const site = resolveSiteConfig(getSavedPlaces());
+ if (site) {
+ const radiusKm = Math.min(50, site.radiusKm > 0 ? site.radiusKm : 25);
+ return { lat: site.lat, lon: site.lon, radiusKm };
+ }
+ // Camera-center fallback.
+ const carto = Ellipsoid.WGS84.cartesianToCartographic(this.viewer.camera.positionWC);
+ if (!carto) return null;
+ const lat = CesiumMath.toDegrees(carto.latitude);
+ const lon = CesiumMath.toDegrees(carto.longitude);
+ if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+ return { lat, lon, radiusKm: 25 };
+  }
+
+  /** OSM power infrastructure (OpenGridWorks open data via Overpass) around the
+   *  resolved site / camera center. Rate-limited relay, so the fetch is gated
+   *  on the layer actually being enabled; when it's off we release the load
+   *  lock so toggling it on re-triggers on the next camera move. Billboards are
+   *  styled by the pure `powerOverlayStyle` (per-kind color + weight). */
+  private async loadPowerInfrastructure(): Promise<void> {
+ const layer = this.layers.get('powerInfrastructure');
+ if (!layer) return;
+
+ // Don't spend an Overpass call while the layer is toggled off. Re-arm the
+ // load lock so a later enable + camera move loads it.
+ const config = loadGodsVisionLayers().powerInfrastructure;
+ if (config && !config.enabled) {
+ layer.loaded = false;
+ return;
+ }
+
+ const anchor = this.resolvePowerAnchor();
+ if (!anchor) {
+ layer.loaded = false;
+ return;
+ }
+
+ const [{ fetchSitePowerAssets }, { powerAssetsToOverlayRows, powerOverlayStyle, powerKindLabel }] =
+ await Promise.all([
+ import('@/services/infrastructure/osm-power-source'),
+ import('@/services/infrastructure/osm-power'),
+ ]);
+
+ const assets = await fetchSitePowerAssets(anchor.lat, anchor.lon, anchor.radiusKm);
+ const rows = powerAssetsToOverlayRows(assets);
+ if (rows.length === 0) {
+ // Nothing mapped here — re-arm so panning to a denser area retries.
+ layer.loaded = false;
+ return;
+ }
+
+ for (const row of rows) {
+ const style = powerOverlayStyle(row);
+ const color = Color.fromBytes(style.color[0], style.color[1], style.color[2]);
+ const showLabel = row.weight >= 0.7;
+ layer.source.entities.add({
+ position: Cartesian3.fromDegrees(row.lon, row.lat),
+ billboard: {
+ image: POWER_ICONS[row.kind],
+ color,
+ scale: 0.22 + row.weight * 0.28,
+ heightReference: HeightReference.CLAMP_TO_GROUND,
+ scaleByDistance: new NearFarScalar(1e4, 1.2, 1e7, 0.25),
+ verticalOrigin: VerticalOrigin.CENTER,
+ horizontalOrigin: HorizontalOrigin.CENTER,
+ },
+ label: showLabel ? {
+ text: row.label,
+ font: '10px monospace',
+ fillColor: color,
+ outlineColor: Color.BLACK,
+ outlineWidth: 2,
+ style: 2,
+ pixelOffset: LABEL_OFFSET_SM,
+ horizontalOrigin: HorizontalOrigin.CENTER,
+ verticalOrigin: VerticalOrigin.BOTTOM,
+ scaleByDistance: new NearFarScalar(1e5, 1, 1.5e7, 0.4),
+ distanceDisplayCondition: new DistanceDisplayCondition(0, 2e6),
+ } : undefined,
+ description: `<b>${escapeHtml(row.label)}</b><br/>${escapeHtml(powerKindLabel(row.kind))}<br/><i>© OpenStreetMap contributors</i>`,
  });
  }
   }

@@ -292,6 +292,44 @@ export const ICON_DISPLACEMENT = svg(
   `<path d="M34 56V40a8 8 0 0 1 16 0v16" fill="#fff" opacity="0.5"/>`,
 );
 
+// ── Power infrastructure (OSM / OpenGridWorks) ──
+
+// Lightning bolt — generation / power plant.
+export const ICON_POWER_PLANT = svg(
+  `<path d="M36 4 16 36h12l-4 24 24-34H34z" fill="#fff"/>`,
+);
+
+// Transformer box with terminals — substation / switching.
+export const ICON_SUBSTATION = svg(
+  `<rect x="16" y="18" width="32" height="28" rx="2" fill="none" stroke="#fff" stroke-width="3"/>` +
+  `<path d="M24 28h16M24 36h16" stroke="#fff" stroke-width="3"/>` +
+  `<path d="M32 8v10M32 46v10M8 32h8M48 32h8" stroke="#fff" stroke-width="2"/>`,
+);
+
+// Lattice pylon — transmission line.
+export const ICON_TRANSMISSION_LINE = svg(
+  `<path d="M12 56 32 8l20 48" fill="none" stroke="#fff" stroke-width="2.5"/>` +
+  `<path d="M18 40h28M22 28h20M26 18h12" stroke="#fff" stroke-width="2"/>`,
+);
+
+// Server rack — data center / load.
+export const ICON_DATA_CENTER_RACK = svg(
+  `<rect x="16" y="10" width="32" height="44" rx="2" fill="none" stroke="#fff" stroke-width="2.5"/>` +
+  `<path d="M16 24h32M16 38h32" stroke="#fff" stroke-width="2"/>` +
+  `<circle cx="23" cy="17" r="2" fill="#fff"/>` +
+  `<circle cx="23" cy="31" r="2" fill="#fff"/>` +
+  `<circle cx="23" cy="45" r="2" fill="#fff"/>`,
+);
+
+/** Power-asset kind → billboard icon (keys match osm-power's `PowerAssetKind`). */
+export const POWER_ICONS: Record<'plant' | 'substation' | 'line' | 'data_center' | 'other', string> = {
+  plant: ICON_POWER_PLANT,
+  substation: ICON_SUBSTATION,
+  line: ICON_TRANSMISSION_LINE,
+  data_center: ICON_DATA_CENTER_RACK,
+  other: ICON_SUBSTATION,
+};
+
 // ── Mapping helpers ──
 
 export const AIRCRAFT_ICONS: Record<string, string> = {

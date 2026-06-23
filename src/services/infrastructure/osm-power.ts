@@ -282,7 +282,7 @@ export function powerAssetsToOverlayRows(assets: readonly PowerAsset[]): PowerOv
     kind: a.kind,
     lat: a.lat,
     lon: a.lon,
-    label: a.name ?? defaultLabel(a.kind),
+    label: a.name ?? powerKindLabel(a.kind),
     weight: overlayWeight(a),
   }));
 }
@@ -296,7 +296,9 @@ function overlayWeight(a: PowerAsset): number {
   return base;
 }
 
-function defaultLabel(kind: PowerAssetKind): string {
+/** Human-readable label for a power-asset kind — used as the fallback overlay
+ *  label and the globe popup's kind line. Pure, so renderers stay thin. */
+export function powerKindLabel(kind: PowerAssetKind): string {
   switch (kind) {
     case 'plant': {
       return 'Power plant';

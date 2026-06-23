@@ -630,6 +630,11 @@ export class GlobeDataManager {
   // heading from successive advisories. The single-point fallback (random
   // hash bearing) only fires for first-sighting cyclones.
   private cycloneTracks = new Map<string, TrackPoint[]>();
+  // Power-infrastructure layer: in-memory enabled mirror (avoids a localStorage
+  // read on every camera move) + the last anchor cell we actually fetched, so a
+  // pan only re-hits the rate-limited Overpass relay when the cell changes.
+  private powerLayerEnabled = false;
+  private lastPowerAnchorKey: string | null = null;
 
   constructor(viewer: Viewer) {
  this.viewer = viewer;
@@ -656,6 +661,7 @@ export class GlobeDataManager {
  this.registerLayer('warRiskZones', () => this.loadWarRiskZones());
  this.registerLayer('infrastructure', () => this.loadInfrastructureOverlay());
  this.registerLayer('powerInfrastructure', () => this.loadPowerInfrastructure());
+ this.powerLayerEnabled = loadGodsVisionLayers().powerInfrastructure?.enabled ?? false;
  this.registerLayer('conflicts', () => this.loadConflicts());
  this.registerLayer('airstrikes', () => this.loadAirstrikes());
  this.registerLayer('strike-packages', () => this.loadStrikePackages());
@@ -1396,28 +1402,37 @@ export class GlobeDataManager {
  return { lat, lon, radiusKm: 25 };
   }
 
+  /** Coarse grid-snap key for an anchor so small pans reuse the same cell (and
+   *  the sidecar's 6h Overpass cache key) instead of refetching per camera
+   *  move. Grid step scales with the query radius. */
+  private powerAnchorKey(anchor: { lat: number; lon: number; radiusKm: number }): string {
+ const step = Math.max(0.25, anchor.radiusKm / 111); // ~radius in degrees
+ const snap = (v: number): number => Math.round(v / step) * step;
+ return `${snap(anchor.lat).toFixed(3)},${snap(anchor.lon).toFixed(3)},${anchor.radiusKm}`;
+  }
+
   /** OSM power infrastructure (OpenGridWorks open data via Overpass) around the
-   *  resolved site / camera center. Rate-limited relay, so the fetch is gated
-   *  on the layer actually being enabled; when it's off we release the load
-   *  lock so toggling it on re-triggers on the next camera move. Billboards are
-   *  styled by the pure `powerOverlayStyle` (per-kind color + weight). */
+   *  resolved site / camera center. Acts as a per-camera-move handler: it always
+   *  re-arms (in `finally`) so panning to a new area can refetch, but the actual
+   *  rate-limited Overpass call is gated on (a) the layer being enabled and
+   *  (b) the anchor *cell* actually changing — so hovering one area, or the
+   *  fixed-site path, fetches at most once. Billboards are styled by the pure
+   *  `powerOverlayStyle` (per-kind color + weight). */
   private async loadPowerInfrastructure(): Promise<void> {
  const layer = this.layers.get('powerInfrastructure');
  if (!layer) return;
 
- // Don't spend an Overpass call while the layer is toggled off. Re-arm the
- // load lock so a later enable + camera move loads it.
- const config = loadGodsVisionLayers().powerInfrastructure;
- if (config && !config.enabled) {
- layer.loaded = false;
- return;
- }
+ try {
+ // Don't spend an Overpass call while the layer is toggled off.
+ if (!this.powerLayerEnabled) return;
 
  const anchor = this.resolvePowerAnchor();
- if (!anchor) {
- layer.loaded = false;
- return;
- }
+ if (!anchor) return;
+
+ // Same anchor cell as last fetch → nothing new to load.
+ const key = this.powerAnchorKey(anchor);
+ if (key === this.lastPowerAnchorKey) return;
+ this.lastPowerAnchorKey = key;
 
  const [{ fetchSitePowerAssets }, { powerAssetsToOverlayRows, powerOverlayStyle, powerKindLabel }] =
  await Promise.all([
@@ -1425,14 +1440,11 @@ export class GlobeDataManager {
  import('@/services/infrastructure/osm-power'),
  ]);
 
+ try {
  const assets = await fetchSitePowerAssets(anchor.lat, anchor.lon, anchor.radiusKm);
  const rows = powerAssetsToOverlayRows(assets);
- if (rows.length === 0) {
- // Nothing mapped here — re-arm so panning to a denser area retries.
- layer.loaded = false;
- return;
- }
-
+ // New anchor cell → replace the previous cell's billboards.
+ layer.source.entities.removeAll();
  for (const row of rows) {
  const style = powerOverlayStyle(row);
  const color = Color.fromBytes(style.color[0], style.color[1], style.color[2]);
@@ -1463,6 +1475,15 @@ export class GlobeDataManager {
  } : undefined,
  description: `<b>${escapeHtml(row.label)}</b><br/>${escapeHtml(powerKindLabel(row.kind))}<br/><i>© OpenStreetMap contributors</i>`,
  });
+ }
+ } catch {
+ // Transient fetch failure — clear the cell key so a later move retries it.
+ this.lastPowerAnchorKey = null;
+ }
+ } finally {
+ // Re-arm so the next camera move re-checks the anchor cell (the cheap
+ // key compare above gates whether that actually refetches).
+ layer.loaded = false;
  }
   }
 
@@ -2916,7 +2937,16 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
 
   setLayerVisible(name: string, visible: boolean): void {
  const layer = this.layers.get(name);
- if (layer) layer.source.show = visible;
+ if (!layer) return;
+ layer.source.show = visible;
+ // The power-infrastructure layer defers BOTH its visibility and its fetch
+ // (rate-limited Overpass, enable-gated), unlike sibling layers whose
+ // entities already exist when toggled. So enabling it must mirror the flag
+ // and kick a load — otherwise the toggle looks dead until the camera moves.
+ if (name === 'powerInfrastructure') {
+ this.powerLayerEnabled = visible;
+ if (visible) void this.loadLayer(name);
+ }
   }
 
   getAftershockForecast(earthquakeId: string): AftershockForecast | null {

@@ -51,7 +51,12 @@ const rows = powerAssetsToOverlayRows(await fetchSitePowerAssets(site.lat, site.
   `config/globe-icons.ts` (`POWER_ICONS`); color + size come from the pure
   `powerOverlayStyle(...)`. The layer is **zoom-gated** (`DEFERRED_LAYER_ALTITUDE`,
   ≤ 2,000 km) and **enable-gated** (skips the rate-limited Overpass call while
-  the `Power Grid` HUD toggle is off, re-arming so a later enable re-triggers).
+  the `Power Grid` HUD toggle is off). Enabling the toggle kicks an immediate
+  load (`setLayerVisible` → `loadLayer`) so it isn't dead until the next camera
+  move. To protect the rate-limited relay, the loader acts as a per-move handler
+  that re-arms every time but only refetches when the **anchor cell changes** —
+  a coarse grid-snap (`powerAnchorKey`, ~radius in degrees) means small pans (and
+  the fixed-site path) reuse the same cell + the sidecar's 6h Overpass cache key.
   Popups carry the required `© OpenStreetMap contributors` attribution. Toggle
   lives in `config/gods-vision-layers.ts` (`powerInfrastructure`, default off).
   The pure popup label is `powerKindLabel(...)` (unit-tested).

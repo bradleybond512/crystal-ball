@@ -2486,16 +2486,17 @@ export class DataLoaderManager implements AppModule {
       const places = getSavedPlaces().slice(0, 3);
       await Promise.allSettled(places.map(async (place) => {
         if (!place.lat || !place.lon) return;
-        // Source 1: NOAA CO-OPS current water level
+        // The two sources are independent — fetch them concurrently rather than
+        // serializing the river-discharge call behind the CO-OPS call.
         const coopsUrl = `${getApiBaseUrl()}/api/flood-gauges/noaa-coops?lat=${place.lat}&lon=${place.lon}`;
-        const cr = await fetch(coopsUrl);
+        const dischargeUrl = `${getApiBaseUrl()}/api/river-discharge?lat=${place.lat}&lon=${place.lon}`;
+        const [cr, dr] = await Promise.all([fetch(coopsUrl), fetch(dischargeUrl)]);
+        // Source 1: NOAA CO-OPS current water level
         if (cr.ok) {
           const obs = floodGaugesToObservations(await cr.json() as NOAACoopsResponse, place.name ?? 'Saved Place');
           if (obs.length > 0) ingestObservations(obs);
         }
         // Source 2: Open-Meteo GloFAS river discharge forecast (7-day predictive)
-        const dischargeUrl = `${getApiBaseUrl()}/api/river-discharge?lat=${place.lat}&lon=${place.lon}`;
-        const dr = await fetch(dischargeUrl);
         if (dr.ok) {
           const obs = riverDischargeToObservations(await dr.json() as OpenMeteoFloodForecast, place.lat, place.lon, place.name ?? 'Saved Place');
           if (obs.length > 0) ingestObservations(obs);

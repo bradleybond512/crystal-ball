@@ -14565,6 +14565,13 @@ async function dispatch(requestUrl, req, routes, context) {
  const cached = getCached(cacheKey, 6 * 60 * 60 * 1000);
  if (cached) return json(cached);
  try {
+ // Single-flight: concurrent identical Overpass queries (e.g. rapid camera
+ // pans on the power overlay) share ONE upstream request instead of each
+ // firing its own 30s fetch. Without this, cold-cache bursts saturate the
+ // sidecar fetch pool and starve every other /api route — whole-app stall.
+ const data = await dedupeInflight(cacheKey, async () => {
+ const fresh = getCached(cacheKey, 6 * 60 * 60 * 1000);
+ if (fresh) return fresh;
  const resp = await fetchWithTimeout(
  'https://overpass-api.de/api/interpreter',
  {
@@ -14574,10 +14581,18 @@ async function dispatch(requestUrl, req, routes, context) {
  },
  30_000,
  );
- const data = resp.ok ? await resp.json() : { elements: [] };
- setCached(cacheKey, data);
+ if (!resp.ok) throw new Error(`overpass upstream ${resp.status}`);
+ const parsed = await resp.json();
+ setCached(cacheKey, parsed, 6 * 60 * 60 * 1000);
+ return parsed;
+ });
  return json(data);
  } catch (error) {
+ // Serve-stale-on-error: Overpass is aggressively rate-limited (429/queue).
+ // Reuse the last good payload rather than caching an empty set, which would
+ // blank the layer for the full 6h TTL on a transient failure.
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json(stale);
  return json({ elements: [], error: String(error) });
  }
   }

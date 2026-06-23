@@ -87,7 +87,11 @@ function save(): void {
 function fireCriticalNotification(domain: ForecastDomain, pressure: number): void {
   const label = DOMAIN_LABEL[domain];
   const alert: UnifiedAlert = {
-    id: `pressure-crit-${domain}-${Date.now()}`,
+    // Content-stable id: a domain sitting above critical is one condition, not a
+    // new alert on every sample. Bucketing by domain + hour (instead of
+    // Date.now()) coalesces the repeats while still re-alerting hourly if the
+    // pressure stays critical.
+    id: `pressure-crit-${domain}-${Math.floor(Date.now() / (60 * 60 * 1000))}`,
     source: 'correlation',
     severity: 'critical',
     title: `${label} pressure critical`,

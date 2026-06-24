@@ -54,6 +54,37 @@ if (!existsSync(reportPath)) {
 }
 
 const report = JSON.parse(readFileSync(reportPath, 'utf8'));
+
+// ── Non-degenerate guard ────────────────────────────────────────────────
+// The offender logic below subtracts the baseline, so a report that rendered
+// 0 panels (registry collapse) or where everything errored produced an EMPTY
+// offender list and slipped through as a green PASS. Reject reports that the
+// harness plainly didn't exercise. Floors are env-robust: an absolute minimum
+// (catches the registry returning a handful) plus a relative 10%-usable share
+// (catches "everything errored/skipped" without false-failing on fixture-sparse
+// runs where many panels legitimately skip).
+{
+  const states = report.states ?? {};
+  const panelCount = report.panelCount ?? (Array.isArray(report.panels) ? report.panels.length : 0);
+  const usable = (states.rendered ?? 0) + (states.degraded ?? 0);
+  const minPanels = Number(process.env.PANEL_SMOKE_MIN_PANELS ?? 50);
+  const degenerate = [];
+  if (!Array.isArray(report.panels) || report.panels.length === 0) {
+    degenerate.push('report contains 0 panels (harness/registry crashed before exercising panels)');
+  } else if (panelCount < minPanels) {
+    degenerate.push(`only ${panelCount} panels enumerated (expected >= ${minPanels}; the panel registry likely collapsed)`);
+  }
+  if (panelCount > 0 && usable < Math.ceil(panelCount * 0.1)) {
+    degenerate.push(`only ${usable}/${panelCount} panels reached a rendered/degraded state (>=10% expected; nearly everything errored or skipped)`);
+  }
+  if (degenerate.length > 0) {
+    console.error('\n[panel-smoke] FAIL — degenerate report; passing this would be green-when-broken:');
+    for (const d of degenerate) console.error(`  • ${d}`);
+    console.error('\nThis means the harness did not actually exercise the panels — not that the panels are healthy.');
+    process.exit(1);
+  }
+}
+
 const stateOffenders = (report.panels ?? []).filter((p) => failOn.includes(p.state));
 // Async errors are a separate signal: a panel can be `degraded` (a
 // loading banner is visible) yet have a fire-and-forget rejection

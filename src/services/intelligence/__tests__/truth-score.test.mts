@@ -139,6 +139,14 @@ test('scoreFact: always returns a finite score (never NaN) even with missing/unk
   }
 });
 
+test('scoreFact: a context returning NaN (reliability/historical) still yields a finite score', () => {
+  // clamp01 is NaN-safe so a hostile/custom context can't poison the score either.
+  const r1 = scoreFact(weatherFact(), fixedCtx({ reliabilityFor: () => Number.NaN }));
+  assert.ok(Number.isFinite(r1.score) && r1.score >= 0 && r1.score <= 1, `reliability NaN → ${r1.score}`);
+  const r2 = scoreFact(weatherFact(), fixedCtx({ historicalAccuracyFor: () => Number.NaN }));
+  assert.ok(Number.isFinite(r2.score) && r2.score >= 0 && r2.score <= 1, `historical NaN → ${r2.score}`);
+});
+
 test('corroborationScore: ladder matches doc', () => {
   assert.equal(corroborationScore(0), 0);
   // Single source has no corroboration; 0.3 keeps it under the

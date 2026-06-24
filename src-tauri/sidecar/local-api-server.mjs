@@ -16649,6 +16649,8 @@ export async function createLocalApiServer(options = {}) {
  const PUBLIC_API_ROUTES = new Set([
  '/api/service-status',
  '/api/health',
+ '/api/spaceweather/status',
+ '/api/spaceweather/alerts',
  '/api/youtube-embed',
  '/api/patreon/authorize-url',
  '/api/sms/command',

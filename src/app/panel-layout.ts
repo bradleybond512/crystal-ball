@@ -1945,9 +1945,12 @@ export class PanelLayoutManager implements AppModule {
  import('@/services/insights/big-event-detector'),
  import('@/services/structured-log'),
  import('@/services/diagnostics/recurring-loops'),
+ import('@/services/diagnostics/live-diagnostics-snapshot'),
+ import('@/services/diagnostics/diagnostics-heartbeat'),
  ]).then(([{ detectDegradations }, {
    getFeatureHealthRegistry, getPanelHealthRegistry, getNotificationTraceRegistry,
- }, { routeBigEventToLadder }, { detectBigEvent }, { slog }, { registerRecurringLoop }]) => {
+ }, { routeBigEventToLadder }, { detectBigEvent }, { slog }, { registerRecurringLoop },
+   { getLiveDiagnosticsSnapshot }, { recordDiagnosticsHeartbeat }]) => {
     
    let prevReport: any = null;
    const alertedIds = new Set();
@@ -1955,19 +1958,25 @@ export class PanelLayoutManager implements AppModule {
      'degradation-alerting',
      () => {
        try {
+         // Heartbeat: prove this tick is still running so the diagnostics-liveness
+         // deadman can tell "all green" from "frozen on last value".
+         recordDiagnosticsHeartbeat();
          // Build a minimal SystemHealthReport from registry snapshots.
          const featureReg = getFeatureHealthRegistry();
          const panelReg = getPanelHealthRegistry();
          const ntReg = getNotificationTraceRegistry();
          const ntSummary = ntReg.summary();
+         // Live source/provider health so degradation alerts fire on the most
+         // common real failure (a feed going down), not just feature transitions.
+         const liveSnap = getLiveDiagnosticsSnapshot();
          const curr = {
            generatedAt: Date.now(),
            status: 'unknown' as import('@/services/diagnostics/system-health-types').HealthStatus,
            summary: '',
            features: featureReg.all(),
            panels: panelReg.all(),
-           sources: [],
-           providers: [],
+           sources: liveSnap.sources,
+           providers: liveSnap.providers,
            notifications: ntSummary,
            sidecar: { status: 'unknown' as import('@/services/diagnostics/system-health-types').HealthStatus, authenticated: false, reason: '' },
            recommendations: [],

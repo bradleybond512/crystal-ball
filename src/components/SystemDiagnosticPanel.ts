@@ -29,6 +29,7 @@ import {
   contextFromSnapshots,
 } from '@/services/diagnostics/system-health';
 import { getLiveDiagnosticsSnapshot } from '@/services/diagnostics/live-diagnostics-snapshot';
+import { diagnosticsHeartbeatAgeMs } from '@/services/diagnostics/diagnostics-heartbeat';
 import { getApiBaseUrl } from '@/services/runtime';
 import { getSavedPlaces } from '@/services/saved-places';
 import { runNwsPolygonSelfTestFixture } from '@/services/weather/self-test-fixture';
@@ -695,6 +696,27 @@ export class SystemDiagnosticPanel extends Panel {
             return events.filter(
               (e) => (e.severity === 'error' || e.severity === 'critical') && now - e.at <= windowMs,
             ).length;
+          },
+        });
+        // Deadman: the registries above are only trustworthy while the 60s
+        // degradation tick keeps refreshing them. If it stops, they freeze on
+        // their last value and read green — so fail loudly when the heartbeat
+        // is stale (> 3× the 60s tick).
+        defs.push({
+          id: 'diagnostics_liveness',
+          label: 'Diagnostics liveness',
+          probe: () => {
+            const ageMs = diagnosticsHeartbeatAgeMs();
+            if (!Number.isFinite(ageMs)) {
+              return { status: 'warn' as const, reason: 'Diagnostics tick has not run yet (still booting).' };
+            }
+            if (ageMs > 180_000) {
+              return {
+                status: 'fail' as const,
+                reason: `Diagnostics tick last ran ${Math.round(ageMs / 1000)}s ago — health registries may be frozen (their green is stale).`,
+              };
+            }
+            return { status: 'pass' as const, reason: `Diagnostics tick fresh (${Math.round(ageMs / 1000)}s ago).` };
           },
         });
         this.selfTestReport = await runSelfTests(defs);

@@ -10,6 +10,7 @@ import { trackPanelResized } from '@/services/analytics';
 // whether we use a dynamic-import call here. Importing statically silences
 // Vite's INEFFECTIVE_DYNAMIC_IMPORT warning without changing bundle behaviour.
 import { generateSummary } from '@/services/summarization';
+import { getPanelHealthRegistry } from '@/services/diagnostics/diagnostics-state';
 
 export interface PanelOptions {
   id: string;
@@ -244,6 +245,14 @@ export class Panel {
 
   constructor(options: PanelOptions) {
  this.panelId = options.id;
+ // Register with the panel-health registry so the diagnostics surface reflects
+ // real mount/render/error lifecycle. Guarded: diagnostics must never be able
+ // to break panel construction.
+ try {
+   const reg = getPanelHealthRegistry();
+   reg.register({ panelId: options.id, label: options.title });
+   reg.recordMount(options.id);
+ } catch { /* diagnostics optional */ }
  this.element = document.createElement('div');
  this.element.className = `panel ${options.className || ''}`;
  this.element.dataset.panel = options.id;
@@ -721,6 +730,7 @@ export class Panel {
   }
 
   public showError(message = t('common.failedToLoad')): void {
+ try { getPanelHealthRegistry().recordError(this.panelId, message); } catch { /* diagnostics optional */ }
  replaceChildren(this.content, h('div', { className: 'error-message' }, message));
   }
 
@@ -808,12 +818,14 @@ export class Panel {
  this.content.innerHTML = html;
  this.lastAppliedContentHtml = html;
  this.markFresh();
+ try { getPanelHealthRegistry().recordRender(this.panelId, { hadData: html.trim().length > 0 }); } catch { /* diagnostics optional */ }
  const cb = this.pendingOnRendered;
  this.pendingOnRendered = null;
  cb?.();
  } catch (error) {
  // eslint-disable-next-line no-console
  console.warn(`[Panel ${this.panelId}] setContent failed:`, error);
+ try { getPanelHealthRegistry().recordError(this.panelId, error instanceof Error ? error.message : String(error)); } catch { /* diagnostics optional */ }
  this.pendingOnRendered = null;
  this.renderErrorFallback(error instanceof Error ? error.message : String(error));
  }

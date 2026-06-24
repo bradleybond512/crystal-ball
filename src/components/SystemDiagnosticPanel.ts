@@ -29,6 +29,10 @@ import {
   contextFromSnapshots,
 } from '@/services/diagnostics/system-health';
 import { getLiveDiagnosticsSnapshot } from '@/services/diagnostics/live-diagnostics-snapshot';
+import { getApiBaseUrl } from '@/services/runtime';
+import { getSavedPlaces } from '@/services/saved-places';
+import { runNwsPolygonSelfTestFixture } from '@/services/weather/self-test-fixture';
+import { PROVIDER_DEFINITIONS } from '@/services/providers/provider-registry';
 import { getActiveQualityDebt } from '@/services/quality/quality-debt-state';
 import {
   auditFeeds,
@@ -630,6 +634,57 @@ export class SystemDiagnosticPanel extends Panel {
       this.render();
       try {
         const defs = standardSelfTestDefinitions({
+          // Sidecar reachability — fetch /api/diag (relative on web).
+          fetchSidecarDiag: async () => {
+            try {
+              const r = await fetch(`${getApiBaseUrl()}/api/diag`);
+              if (!r.ok) return { ok: false, reason: `/api/diag returned ${r.status}` };
+              const detail = (await r.json().catch(() => undefined)) as Record<string, unknown> | undefined;
+              return { ok: true, detail };
+            } catch (error) {
+              return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+            }
+          },
+          // SAFETY: "can critical alerts reach me?" — the headline probe.
+          checkNotificationPermission: () => {
+            if (typeof Notification === 'undefined') return Promise.resolve('unsupported' as const);
+            const p = Notification.permission;
+            let state: 'granted' | 'denied' | 'default';
+            if (p === 'granted') state = 'granted';
+            else if (p === 'denied') state = 'denied';
+            else state = 'default';
+            return Promise.resolve(state);
+          },
+          countSavedPlaces: () => getSavedPlaces().length,
+          // Proves the NWS point-in-polygon matcher actually works.
+          runNwsPolygonFixture: () => Promise.resolve(runNwsPolygonSelfTestFixture()),
+          // Static provider catalog (not live health — empty pre-fetch would false-fail).
+          countProviderRegistry: () => PROVIDER_DEFINITIONS.length,
+          isStorageAvailable: () => ({
+            indexedDb: typeof indexedDB !== 'undefined',
+            localStorage: (() => {
+              try {
+                const k = '__cb_selftest__';
+                localStorage.setItem(k, '1');
+                localStorage.removeItem(k);
+                return true;
+              } catch {
+                return false;
+              }
+            })(),
+          }),
+          probeDataSources: () => {
+            const sources = getLiveDiagnosticsSnapshot().sources;
+            let healthy = 0;
+            let degraded = 0;
+            let failing = 0;
+            for (const s of sources) {
+              if (s.status === 'healthy') healthy++;
+              else if (s.status === 'degraded' || s.status === 'stale') degraded++;
+              else if (s.status === 'failing' || s.status === 'unsafe' || s.status === 'blind') failing++;
+            }
+            return Promise.resolve({ healthy, degraded, failing, detail: { total: sources.length } });
+          },
           countMountedPanels: () => {
             const all = getPanelHealthRegistry().all();
             return { mounted: all.filter((p) => p.mounted).length, total: all.length };

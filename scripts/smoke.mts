@@ -25,6 +25,16 @@ import { createNotificationTraceRegistry } from '../src/services/diagnostics/not
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE_PATH = path.join(root, 'scripts', 'smoke-replay-baseline.json');
 const SIDECAR_URL = 'http://127.0.0.1:46123/api/health';
+
+interface HealthFeedSnapshot { key?: string; lastError?: string | null }
+interface HealthPayload {
+  ok?: boolean;
+  uptime_ms?: number;
+  keys_configured?: number;
+  keys_total?: number;
+  feeds?: HealthFeedSnapshot[];
+}
+
 // Guard: only run the smoke suite when executed directly (not when imported).
 // This lets checkup.mjs import compareReplayBaseline without running the suite.
 const isMain = process.argv[1] != null && import.meta.url.endsWith(path.basename(process.argv[1]));
@@ -157,13 +167,39 @@ if (isMain) {
         let body = '';
         res.on('data', (chunk: Buffer) => { body += String(chunk); });
         res.on('end', () => {
+          let parsed: HealthPayload | null = null;
           try {
-            JSON.parse(body);
-            addOk('smoke:sidecar', 'responding');
-            process.stdout.write(`${GREEN}✓${RESET}\n`);
+            parsed = JSON.parse(body) as HealthPayload;
           } catch {
             addWarn('smoke:sidecar', 'responded but returned non-JSON');
             process.stdout.write(`${YELLOW}–${RESET}\n`);
+            resolve_();
+            return;
+          }
+          // Assert the health contract, not just "parses as JSON" — a sidecar
+          // that responds with the wrong shape is broken, not healthy.
+          const okShape = parsed?.ok === true
+            && typeof parsed.uptime_ms === 'number'
+            && Array.isArray(parsed.feeds);
+          if (!okShape) {
+            addWarn('smoke:sidecar', 'responded but /api/health payload missing expected fields (ok/uptime_ms/feeds)');
+            process.stdout.write(`${YELLOW}–${RESET}\n`);
+            resolve_();
+            return;
+          }
+          // Surface up-but-degraded: feeds erroring behind a 200 OK is exactly
+          // the "green-when-broken" case a JSON-parse-only check missed.
+          const failingFeeds = (parsed.feeds ?? []).filter((f) => f && f.lastError);
+          const keysConfigured = typeof parsed.keys_configured === 'number' ? parsed.keys_configured : '?';
+          const keysTotal = typeof parsed.keys_total === 'number' ? parsed.keys_total : '?';
+          if (failingFeeds.length > 0) {
+            const names = failingFeeds.slice(0, 5).map((f) => f.key ?? '?').join(', ');
+            addWarn('smoke:sidecar', `responding but ${failingFeeds.length} feed(s) erroring: ${names}`);
+            process.stdout.write(`${YELLOW}–${RESET}\n`);
+          } else {
+            const upS = Math.round((parsed.uptime_ms ?? 0) / 1000);
+            addOk('smoke:sidecar', `responding — ${keysConfigured}/${keysTotal} keys, ${parsed.feeds?.length ?? 0} feeds, up ${upS}s`);
+            process.stdout.write(`${GREEN}✓${RESET}\n`);
           }
           resolve_();
         });

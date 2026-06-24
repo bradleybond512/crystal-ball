@@ -121,6 +121,7 @@ async function pruneCache(): Promise<void> {
   });
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- warn-once guards add shallow nesting
 export async function getPersistentCache<T>(key: string): Promise<CacheEnvelope<T> | null> {
   if (isDesktopRuntime()) {
     try {
@@ -155,6 +156,7 @@ export async function getPersistentCache<T>(key: string): Promise<CacheEnvelope<
   }
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- warn-once guards add shallow nesting
 export async function setPersistentCache<T>(key: string, data: T, ttlMs?: number): Promise<void> {
   const now = Date.now();
   const payload: CacheEnvelope<T> = {

@@ -41,12 +41,31 @@ const rows = powerAssetsToOverlayRows(await fetchSitePowerAssets(site.lat, site.
   OSM-derived; see `DeckGLMap` + `public/map-styles/*.json`), which covers the
   ODbL requirement for these layers.
 
+## Wired in (globe overlay)
+
+- ✅ **God's Eye globe layer** — `GlobeDataManager` registers a
+  `powerInfrastructure` layer that resolves an origin (site-first via
+  `resolveSiteConfig(getSavedPlaces())`, camera-center fallback), fetches
+  `fetchSitePowerAssets(...)`, and renders one billboard per
+  `powerAssetsToOverlayRows(...)` row. Per-kind icons live in
+  `config/globe-icons.ts` (`POWER_ICONS`); color + size come from the pure
+  `powerOverlayStyle(...)`. The layer is **zoom-gated** (`DEFERRED_LAYER_ALTITUDE`,
+  ≤ 2,000 km) and **enable-gated** (skips the rate-limited Overpass call while
+  the `Power Grid` HUD toggle is off). Enabling the toggle kicks an immediate
+  load (`setLayerVisible` → `loadLayer`) so it isn't dead until the next camera
+  move. To protect the rate-limited relay, the loader acts as a per-move handler
+  that re-arms every time but only refetches when the **anchor cell changes** —
+  a coarse grid-snap (`powerAnchorKey`, ~radius in degrees) means small pans (and
+  the fixed-site path) reuse the same cell + the sidecar's 6h Overpass cache key.
+  Popups carry the required `© OpenStreetMap contributors` attribution. Toggle
+  lives in `config/gods-vision-layers.ts` (`powerInfrastructure`, default off).
+  The pure popup label is `powerKindLabel(...)` (unit-tested).
+
 ## Remaining last-mile (needs the running app to verify)
 
-1. **Globe overlay layer** — feed `powerAssetsToOverlayRows(...)` into the God's
-   Eye Cesium layer (`GlobeDataManager` / `GodsVisionView`) as a new point layer,
-   styled by `kind` and `weight`. The consumption side is bespoke Cesium code
-   (no data-driven overlay registry), so it needs in-app visual verification.
+1. **Visual pass** — the globe layer is wired and type/lint/unit-clean, but the
+   billboard scale ramp and icon legibility at altitude want a quick in-app
+   eyeball in a runnable build env (Cesium has no headless render here).
 2. **Panel CSS (cosmetic)** — `.dc-grid-line` / `.dc-grid--weak` render unstyled
    today; add styling next to the existing `.dc-seismic-line` rules.
 

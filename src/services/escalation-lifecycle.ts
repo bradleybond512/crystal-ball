@@ -106,7 +106,11 @@ export function handleEscalation(
 ): void {
   if (SEVERITY_RANK[newSeverity] <= SEVERITY_RANK[previousSeverity]) return;
   const alert: UnifiedAlert = {
-    id: `escalation-${situationId}-${Date.now()}`,
+    // Content-stable id: an escalation to a given severity for a situation is a
+    // single event. Keying on situation + new severity (instead of Date.now())
+    // stops repeated detections of the same escalation from re-notifying; a
+    // further rise produces a new id because newSeverity changes.
+    id: `escalation-${situationId}-${newSeverity}`,
     source: 'correlation',
     severity: newSeverity,
     title: `Situation Escalated: ${label}`,

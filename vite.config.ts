@@ -765,7 +765,10 @@ export default defineConfig({
  },
  {
  urlPattern: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>
- sameOrigin && /^\/api\//.test(url.pathname),
+ sameOrigin && /^\/api\//.test(url.pathname)
+ // Don't persist personal-location responses (home/saved-place lat/lon) into
+ // on-disk CacheStorage — they'd sit unencrypted in the browser profile.
+ && !/[?&](lat|lon|latitude|longitude)=/i.test(url.search),
  handler: 'NetworkFirst',
  method: 'GET',
  options: {

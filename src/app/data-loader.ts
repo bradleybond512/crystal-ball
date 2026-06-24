@@ -14,6 +14,7 @@ import {
 import { INTEL_HOTSPOTS, CONFLICT_ZONES } from '@/config/geo';
 import { tokenizeForMatch, matchKeyword } from '@/utils/keyword-match';
 import { createConcurrencyLimiter } from '@/utils/concurrency-limiter';
+import { fetchJsonCached } from '@/utils/point-fetch-cache';
 import {
   fetchCategoryFeeds,
   getFeedFailures,
@@ -1820,9 +1821,10 @@ export class DataLoaderManager implements AppModule {
  await Promise.allSettled(places.map(async (place) => {
  if (!place.lat || !place.lon) return;
  const url = `${getApiBaseUrl()}/api/weather/local-forecast?lat=${place.lat}&lon=${place.lon}`;
- const r = await fetch(url);
- if (!r.ok) return;
- const forecast = await r.json() as OpenMeteoHourlyForecast;
+ // Hourly-updated forecast; cache per lat,lon for 30m to avoid refetching the
+ // full payload every weather cycle (supplementary data, not safety alerts).
+ const forecast = await fetchJsonCached<OpenMeteoHourlyForecast>(url, 30 * 60_000);
+ if (!forecast) return;
  const obs = forecastToObservations(forecast, place.lat, place.lon, place.name ?? 'Saved Place');
  if (obs.length > 0) ingestObservations(obs);
  }));
@@ -2486,18 +2488,23 @@ export class DataLoaderManager implements AppModule {
       const places = getSavedPlaces().slice(0, 3);
       await Promise.allSettled(places.map(async (place) => {
         if (!place.lat || !place.lon) return;
-        // Source 1: NOAA CO-OPS current water level
+        // The two sources are independent — fetch them concurrently rather than
+        // serializing the river-discharge call behind the CO-OPS call.
         const coopsUrl = `${getApiBaseUrl()}/api/flood-gauges/noaa-coops?lat=${place.lat}&lon=${place.lon}`;
-        const cr = await fetch(coopsUrl);
-        if (cr.ok) {
-          const obs = floodGaugesToObservations(await cr.json() as NOAACoopsResponse, place.name ?? 'Saved Place');
+        const dischargeUrl = `${getApiBaseUrl()}/api/river-discharge?lat=${place.lat}&lon=${place.lon}`;
+        // Independent + slow-changing — fetch concurrently, cache per lat,lon 30m.
+        const [coops, discharge] = await Promise.all([
+          fetchJsonCached<NOAACoopsResponse>(coopsUrl, 30 * 60_000),
+          fetchJsonCached<OpenMeteoFloodForecast>(dischargeUrl, 30 * 60_000),
+        ]);
+        // Source 1: NOAA CO-OPS current water level
+        if (coops) {
+          const obs = floodGaugesToObservations(coops, place.name ?? 'Saved Place');
           if (obs.length > 0) ingestObservations(obs);
         }
         // Source 2: Open-Meteo GloFAS river discharge forecast (7-day predictive)
-        const dischargeUrl = `${getApiBaseUrl()}/api/river-discharge?lat=${place.lat}&lon=${place.lon}`;
-        const dr = await fetch(dischargeUrl);
-        if (dr.ok) {
-          const obs = riverDischargeToObservations(await dr.json() as OpenMeteoFloodForecast, place.lat, place.lon, place.name ?? 'Saved Place');
+        if (discharge) {
+          const obs = riverDischargeToObservations(discharge, place.lat, place.lon, place.name ?? 'Saved Place');
           if (obs.length > 0) ingestObservations(obs);
         }
       }));
@@ -2517,9 +2524,9 @@ export class DataLoaderManager implements AppModule {
       await Promise.allSettled(places.map(async (place) => {
         if (!place.lat || !place.lon) return;
         const url = `${getApiBaseUrl()}/api/marine-forecast?lat=${place.lat}&lon=${place.lon}`;
-        const r = await fetch(url);
-        if (!r.ok) return;
-        const obs = marineForecastToObservations(await r.json() as OpenMeteoMarineForecast, place.lat, place.lon, place.name ?? 'Saved Place');
+        const marine = await fetchJsonCached<OpenMeteoMarineForecast>(url, 30 * 60_000);
+        if (!marine) return;
+        const obs = marineForecastToObservations(marine, place.lat, place.lon, place.name ?? 'Saved Place');
         if (obs.length > 0) ingestObservations(obs);
       }));
 
@@ -2532,11 +2539,16 @@ export class DataLoaderManager implements AppModule {
       }
 
       // HDX HAPI food-security rows (global IPC-coded)
-      const hdxUrl = `${getApiBaseUrl()}/api/hdx-food-security`;
-      const hr = await fetch(hdxUrl);
-      if (hr.ok) {
-        const obs = hdxHapiToObservations(await hr.json() as HDXHAPIResponse);
-        if (obs.length > 0) ingestObservations(obs);
+      // Gate behind the shared circuit breaker — when the sebuf HAPI RPC path
+      // (fetchHapiSummary) is on cooldown, this direct fetch would also fail
+      // and generate redundant errors / heat.
+      if (!getCircuitBreakerCooldownInfo('HDX HAPI').onCooldown) {
+        const hdxUrl = `${getApiBaseUrl()}/api/hdx-food-security`;
+        const hr = await fetch(hdxUrl);
+        if (hr.ok) {
+          const obs = hdxHapiToObservations(await hr.json() as HDXHAPIResponse);
+          if (obs.length > 0) ingestObservations(obs);
+        }
       }
 
       // Assumption tracking — annotate once per batch (not per observation).

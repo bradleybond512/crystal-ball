@@ -200,11 +200,14 @@ const KEYCHAIN_PER_CALL_TIMEOUT: Duration = Duration::from_secs(3);
 /// The consolidated `secrets-vault` read surfaces a macOS "Always Allow" ACL
 /// dialog after every re-signed build. macOS Keychain ACL tracks applications
 /// by CDHash (per-binary), so each new build requires one "Always Allow" click.
-/// The previous 15s window was too narrow — the user often missed it, timing
-/// out every API key. 120s gives a full 2-minute window to click the prompt.
-/// The per-key fallback keeps its short timeout so a failed vault doesn't
-/// stack 40+ prompts. The load runs on a worker thread (UI is already up).
-const KEYCHAIN_VAULT_TIMEOUT: Duration = Duration::from_secs(120);
+/// 10s is enough to click the prompt; if dismissed, the shadow file fallback
+/// returns cached secrets instantly so the sidecar boots with keys regardless.
+const KEYCHAIN_VAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Filename for the plaintext shadow copy of the secrets vault written to the
+/// app data directory (mode 0600). Read as a fallback when the keychain prompt
+/// is dismissed or times out.
+const VAULT_SHADOW_FILE: &str = "secrets-vault-shadow.json";
 
 /// Run a single keychain `get_password()` call on a worker thread
 /// and wait at most `timeout` for the answer. Returns:
@@ -305,6 +308,8 @@ impl SecretsCache {
  })
  .map(|(k, v)| (k, v.trim().to_string()))
  .collect();
+ // Update the shadow file so the next timeout-fallback is fresh.
+ if let Some(a) = app { write_vault_shadow(a, &secrets); }
  return secrets;
  }
  }
@@ -317,9 +322,17 @@ impl SecretsCache {
  }
  Err(()) => {
  log_keychain_timeout(app, "secrets-vault", KEYCHAIN_VAULT_TIMEOUT);
- // Vault unreachable → still try migration; if every per-key
- // read also times out, we end up with an empty map and the
- // sidecar boots without secrets. Caller logs the count.
+ // Keychain prompt dismissed or timed out — fall back to the
+ // shadow file written on the last successful save/read.
+ if let Some(secrets) = app.and_then(read_vault_shadow) {
+     if let Some(a) = app {
+         append_desktop_log(a, "INFO", &format!(
+             "secrets-cache: keychain timed out, loaded {} keys from shadow vault",
+             secrets.len(),
+         ));
+     }
+     return secrets;
+ }
  }
  }
 
@@ -362,6 +375,7 @@ impl SecretsCache {
  if let Ok(vault_entry) = Entry::new(KEYRING_SERVICE, "secrets-vault") {
  if vault_entry.set_password(&json).is_ok() {
  vault_written = true;
+ if let Some(a) = app { write_vault_shadow(a, &secrets); }
  // Only delete keys we successfully read — not the full set.
  // Non-timeout errors collapse to Ok(None) so those entries
  // stay untouched and can be retried next launch.
@@ -666,6 +680,54 @@ fn save_vault(cache: &HashMap<String, String>) -> Result<(), String> {
  Ok(())
 }
 
+/// Write a plaintext shadow copy of the vault to the app data dir (mode 0600).
+/// Best-effort — failure here is non-fatal; the keychain remains authoritative.
+fn write_vault_shadow(app: &AppHandle, secrets: &HashMap<String, String>) {
+ let Ok(path) = vault_shadow_path(app) else { return };
+ let json = match serde_json::to_string(secrets) {
+     Ok(j) => j,
+     Err(_) => return,
+ };
+ if let Some(parent) = path.parent() {
+     let _ = fs::create_dir_all(parent);
+ }
+ // Write to a temp file then rename for atomic update.
+ let tmp = path.with_extension("tmp");
+ let wrote = (|| -> std::io::Result<()> {
+     fs::write(&tmp, json.as_bytes())?;
+     #[cfg(unix)]
+     {
+         use std::os::unix::fs::PermissionsExt;
+         fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
+     }
+     fs::rename(&tmp, &path)?;
+     Ok(())
+ })();
+ if let Err(e) = wrote {
+     eprintln!("[secrets] shadow vault write failed: {e}");
+     let _ = fs::remove_file(&tmp);
+ }
+}
+
+/// Read the shadow vault file if it exists. Returns a filtered map of valid keys.
+fn read_vault_shadow(app: &AppHandle) -> Option<HashMap<String, String>> {
+ let path = vault_shadow_path(app).ok()?;
+ let json = fs::read_to_string(&path).ok()?;
+ let map: HashMap<String, String> = serde_json::from_str(&json).ok()?;
+ let filtered: HashMap<String, String> = map
+     .into_iter()
+     .filter(|(k, v)| SUPPORTED_SECRET_KEYS.contains(&k.as_str()) && !v.trim().is_empty())
+     .map(|(k, v)| (k, v.trim().to_string()))
+     .collect();
+ if filtered.is_empty() { None } else { Some(filtered) }
+}
+
+fn vault_shadow_path(app: &AppHandle) -> Result<PathBuf, String> {
+ let dir = app.path().app_data_dir()
+     .map_err(|e| format!("Failed to resolve app data dir: {e}"))?;
+ Ok(dir.join(VAULT_SHADOW_FILE))
+}
+
 fn generate_local_token() -> String {
  let mut buf = [0u8; 32];
  getrandom::fill(&mut buf).expect("OS CSPRNG unavailable");
@@ -899,6 +961,7 @@ fn set_secret(
  proposed.insert(key.clone(), trimmed);
  }
  save_vault(&proposed)?;
+ write_vault_shadow(&webview.app_handle(), &proposed);
  *secrets = proposed;
  // Shield this edit from a still-in-flight async keychain read (see merge).
  if let Ok(mut touched) = cache.user_mutated.lock() {
@@ -923,6 +986,7 @@ fn delete_secret(webview: Webview, key: String, cache: tauri::State<'_, SecretsC
  let mut proposed = secrets.clone();
  proposed.remove(&key);
  save_vault(&proposed)?;
+ write_vault_shadow(&webview.app_handle(), &proposed);
  *secrets = proposed;
  // Shield this deletion from a still-in-flight async keychain read (see merge).
  if let Ok(mut touched) = cache.user_mutated.lock() {
@@ -1836,11 +1900,34 @@ async fn fetch_polymarket(webview: Webview, path: String, params: String) -> Res
 }
 
 
-/// Navigation guard for trusted windows. Only same-origin bundled app content
-/// (`tauri://` scheme) or the local sidecar (`127.0.0.1` host) may be loaded;
-/// any attempt to navigate the window to an external origin is blocked.
+/// Navigation guard for the live-channels auxiliary window.
+///
+/// This window carries the same `require_trusted_window` IPC privileges as
+/// `main` (it can read secrets), so it must follow the same release-build rule:
+/// never navigable to an arbitrary loopback service, or a compromised renderer
+/// could redirect it to a sibling port and inherit those privileges.
+///
+/// - Production: `tauri://` bundled content, plus the `tauri.localhost`
+///   WebView2 workaround origin (parity with `is_main_window_navigation`). The
+///   window loads its document from the bundled asset and only *fetches* (never
+///   navigates to) the sidecar, so loopback is not needed.
+/// - Debug builds only: the Vite dev server / sidecar loopback origins, because
+///   in dev the window is loaded directly from one of them and reloads re-enter
+///   this guard. Compiled out of release builds.
 fn is_trusted_window_navigation(url: &Url) -> bool {
- url.scheme() == "tauri" || url.host_str() == Some("127.0.0.1")
+ if url.scheme() == "tauri" {
+  return true;
+ }
+ if matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost") {
+  return true;
+ }
+ #[cfg(debug_assertions)]
+ if matches!(url.scheme(), "http" | "https")
+  && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1" | "[::1]"))
+ {
+  return true;
+ }
+ false
 }
 
 /// Tighter navigation guard for the main window only.
@@ -3850,16 +3937,35 @@ mod navigation_guard_tests {
   assert!(is_main_window_navigation(&url("http://localhost:3001/")));
  }
 
- // ── trusted-window (aux) guard ───────────────────────────────────────────
+ // ── live-channels (trusted aux) guard ────────────────────────────────────
 
  #[test]
- fn trusted_window_allows_tauri_and_loopback() {
+ fn trusted_window_allows_tauri_scheme() {
   assert!(is_trusted_window_navigation(&url("tauri://localhost/index.html")));
-  assert!(is_trusted_window_navigation(&url("http://127.0.0.1:46123/live-channels.html")));
+ }
+
+ #[test]
+ fn trusted_window_allows_windows_app_origin() {
+  // Parity with the main-window guard: bundled content served by WebView2.
+  assert!(is_trusted_window_navigation(&url("http://tauri.localhost/live-channels.html")));
+  assert!(is_trusted_window_navigation(&url("https://tauri.localhost/live-channels.html")));
  }
 
  #[test]
  fn trusted_window_rejects_external_origin() {
   assert!(!is_trusted_window_navigation(&url("https://evil.example.com/")));
+  // A look-alike host that merely ends in the trusted suffix must not pass.
+  assert!(!is_trusted_window_navigation(&url("https://tauri.localhost.evil.com/")));
+ }
+
+ // Loopback is allowed ONLY in debug builds (the dev server / sidecar origin
+ // the window is loaded from). In release builds it is compiled out, so a
+ // compromised renderer cannot navigate to a sibling loopback service and
+ // inherit the window's trusted-window IPC privileges.
+ #[cfg(debug_assertions)]
+ #[test]
+ fn trusted_window_allows_loopback_dev_only_in_debug() {
+  assert!(is_trusted_window_navigation(&url("http://127.0.0.1:46123/live-channels.html")));
+  assert!(is_trusted_window_navigation(&url("http://localhost:3001/live-channels.html")));
  }
 }

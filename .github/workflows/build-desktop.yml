@@ -393,6 +393,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write       # OIDC token to sign build provenance
+      attestations: write   # write the provenance attestation
     environment:
       name: release
     steps:
@@ -420,6 +422,18 @@ jobs:
             --mode combine \
             --manifests-dir downloaded-bundles \
             --output release-manifest.json
+
+      # Independent integrity anchor for the release artifacts: a signed SLSA
+      # build-provenance attestation tied to this workflow run, verifiable with
+      # `gh attestation verify <file> --repo <owner>/<repo>`. Generated before
+      # upload so a provenance failure aborts the publish rather than shipping
+      # un-attested binaries.
+      - name: Attest build provenance for release artifacts
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
+        with:
+          subject-path: |
+            downloaded-bundles/**/assets/*
+            release-manifest.json
 
       - name: Create or update GitHub release
         env:

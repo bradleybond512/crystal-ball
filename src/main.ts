@@ -167,6 +167,7 @@ import { installRuntimeFetchPatch, installWebApiRedirect, isDesktopRuntime } fro
 import { loadDesktopSecretsWhenReady } from '@/services/runtime-config';
 import { initAnalytics, isAnalyticsAllowed, migrateAnalyticsConsent, trackApiKeysSnapshot } from '@/services/analytics';
 import { applyStoredTheme } from '@/utils/theme-manager';
+import { installLocalStoragePatch } from '@/utils/safe-storage';
 import { SITE_VARIANT } from '@/config/variant';
 import { clearChunkReloadGuard, installChunkReloadGuard } from '@/bootstrap/chunk-reload';
 
@@ -274,6 +275,9 @@ Promise.all([
 }).catch((error: unknown) => console.warn('[boot] OfflineStalenessBanner failed to mount', error));
 import('./services/api-diagnostic').then(({ attachDiagnosticToWindow }) => { attachDiagnosticToWindow(); }).catch((error: unknown) => console.warn('[boot] api-diagnostic failed to mount', error));
 
+// Catch QuotaExceededError from any bare localStorage.setItem across the
+// codebase and auto-evict disposable cache entries instead of throwing.
+installLocalStoragePatch();
 // In desktop mode, route /api/* calls to the local Tauri sidecar backend.
 installRuntimeFetchPatch();
 // In web production, route RPC calls through api.crystalball.app (Cloudflare edge).

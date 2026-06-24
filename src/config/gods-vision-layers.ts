@@ -141,6 +141,12 @@ export const DEFAULT_GODS_VISION_LAYERS: GodsVisionLayers = {
  enabled: false,
  description: 'US grid outages by state (severity-colored) + RadNet stations pulsing above threshold',
   },
+  powerInfrastructure: {
+ name: 'Power Grid',
+ category: 'intelligence',
+ enabled: false,
+ description: 'OSM power infrastructure near your data-center site (or the map center) — plants, substations, transmission lines, data centers',
+  },
   // ── Static Geo Layers ──
   bases: {
  name: 'Mil. Bases',

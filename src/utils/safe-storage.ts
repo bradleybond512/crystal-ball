@@ -110,6 +110,42 @@ export function safeSetItem(key: string, value: string): boolean {
   }
 }
 
+/**
+ * Monkey-patch `localStorage.setItem` so EVERY caller gets quota-safe
+ * eviction automatically — even the ~100 bare `localStorage.setItem` calls
+ * across the codebase that don't use `safeSetItem`.
+ *
+ * Must be called once at boot (main.ts), before any data-loading begins.
+ */
+export function installLocalStoragePatch(): void {
+  if (typeof localStorage === 'undefined') return;
+  if ((globalThis as Record<string, unknown>).__lsPatchInstalled) return;
+
+  const nativeSetItem = localStorage.setItem.bind(localStorage);
+
+  localStorage.setItem = (key: string, value: string): void => {
+    try {
+      nativeSetItem(key, value);
+    } catch (error) {
+      if (!isQuotaError(error)) throw error;
+      const needed = key.length + value.length;
+      const removed = evictLargestCache(needed);
+      if (removed === 0) {
+        markStorageQuotaExceeded();
+        return; // swallow — nothing left to evict
+      }
+      try {
+        nativeSetItem(key, value);
+      } catch (retryError) {
+        if (isQuotaError(retryError)) markStorageQuotaExceeded();
+        // swallow — never throw QuotaExceededError to unsuspecting callers
+      }
+    }
+  };
+
+  (globalThis as Record<string, unknown>).__lsPatchInstalled = true;
+}
+
 /** Test-only: reset the shared quota latch between cases. */
 export function _resetQuotaLatchForTest(): void {
   _resetStorageQuotaForTest();

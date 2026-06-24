@@ -10,6 +10,7 @@ import {
   describeGridReadiness,
   powerAssetsToOverlayRows,
   powerOverlayStyle,
+  powerKindLabel,
   fetchPowerInfrastructure,
   DEFAULT_OVERPASS_ENDPOINT,
 } from '../osm-power.ts';
@@ -155,6 +156,14 @@ test('powerOverlayStyle: per-kind color and weight-scaled size', () => {
   assert.equal(plant.pixelSizePx, 16); // 6 + 1*10
   assert.deepEqual(line.color, [34, 211, 238]);
   assert.equal(line.pixelSizePx, 6); // 6 + 0
+});
+
+test('powerKindLabel: human label per kind, generic fallback', () => {
+  assert.equal(powerKindLabel('plant'), 'Power plant');
+  assert.equal(powerKindLabel('substation'), 'Substation');
+  assert.equal(powerKindLabel('line'), 'Transmission line');
+  assert.equal(powerKindLabel('data_center'), 'Data center');
+  assert.equal(powerKindLabel('other'), 'Power asset');
 });
 
 // ── Fetch (injected) ─────────────────────────────────────────────────────────

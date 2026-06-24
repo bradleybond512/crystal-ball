@@ -261,13 +261,30 @@ export function installRuntimeFetchPatch(): void {
   let tokenFetchedAt = 0;
   // Serialise concurrent token refreshes so parallel 401s don't each trigger a fresh IPC call.
   let tokenRefreshPromise: Promise<void> | null = null;
+  // Back off when IPC repeatedly fails to avoid hammering tryInvokeTauri on
+  // every fetch when the bridge is broken. Resets on first success.
+  let tokenFailCount = 0;
+  let tokenNextRetryAt = 0;
 
   async function refreshToken(): Promise<void> {
  if (tokenRefreshPromise) return tokenRefreshPromise;
+ if (tokenFailCount > 0 && Date.now() < tokenNextRetryAt) return;
  tokenRefreshPromise = (async () => {
  try {
- localApiToken = await tryInvokeTauri<string>('get_local_api_token');
+ const result = await tryInvokeTauri<string>('get_local_api_token');
+ if (result) {
+ localApiToken = result;
  tokenFetchedAt = Date.now();
+ tokenFailCount = 0;
+ tokenNextRetryAt = 0;
+ } else {
+ // IPC returned null (bridge unavailable / token not yet generated).
+ // Back off: 2s, 4s, 8s, ... capped at 30s so we recover quickly
+ // once the bridge is ready, without hammering it in the meantime.
+ tokenFailCount++;
+ const backoffMs = Math.min(2000 * (2 ** (tokenFailCount - 1)), 30_000);
+ tokenNextRetryAt = Date.now() + backoffMs;
+ }
  } catch {
  localApiToken = null;
  tokenFetchedAt = 0;

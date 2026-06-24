@@ -119,6 +119,24 @@ test('freshnessScore: 1.0 at observation, 0.5 at TTL, 0 at 2× TTL', () => {
 test('freshnessScore: bogus inputs return midpoint', () => {
   assert.equal(freshnessScore(Number.NaN, 1000, NOW), 0.5);
   assert.equal(freshnessScore(NOW, 0, NOW), 0.5);
+  assert.equal(freshnessScore(NOW, Number.NaN, NOW), 0.5); // non-finite ttl must not NaN the score
+});
+
+test('scoreFact: always returns a finite score (never NaN) even with missing/unknown fields', () => {
+  // locationPrecision is typed non-optional but facts from external data arrive
+  // without it; an undefined here used to fall through precisionScore and make
+  // the whole score NaN, silently poisoning the ledger. Lock the invariant.
+  const cases: NormalizedFact[] = [
+    weatherFact({ locationPrecision: undefined as unknown as NormalizedFact['locationPrecision'] }),
+    weatherFact({ domain: 'totally-unknown-domain' }),
+    weatherFact({ sources: [] }),
+    weatherFact(),
+  ];
+  for (const f of cases) {
+    const r = scoreFact(f);
+    assert.ok(Number.isFinite(r.score), `score must be finite, got ${r.score} for ${f.domain}/${String(f.locationPrecision)}`);
+    assert.ok(r.score >= 0 && r.score <= 1, `score in [0,1], got ${r.score}`);
+  }
 });
 
 test('corroborationScore: ladder matches doc', () => {

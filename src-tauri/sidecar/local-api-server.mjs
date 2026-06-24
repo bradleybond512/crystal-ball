@@ -5497,8 +5497,7 @@ async function dispatch(requestUrl, req, routes, context) {
     } else if (aisState.lastSnapshotAt > 0) {
       recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
     }
-    res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
-    res.end(JSON.stringify({
+    return Response.json({
       ok: true,
       pid: process.pid,
       uptime_ms: Date.now() - SIDECAR_START_MS,
@@ -5511,8 +5510,7 @@ async function dispatch(requestUrl, req, routes, context) {
       keys_total: EXPECTED_API_KEYS.length,
       keys_missing: missing,
       feeds: getFeedSnapshots(),
-    }));
-    return;
+    }, { status: 200, headers: { 'content-type': 'application/json', ...makeCorsHeaders(req) } });
   }
 
   if (requestUrl.pathname === '/api/spaceweather/status') {

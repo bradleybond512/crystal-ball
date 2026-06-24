@@ -864,14 +864,15 @@ export class DeckGLMap {
  const err = (e as { error?: unknown }).error;
  const msg = err instanceof Error ? err.message : String(err ?? 'unknown');
  const sourceId = (e as { sourceId?: string }).sourceId;
- console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId });
  // Satellite is an optional overlay (not the basemap) and GIBS GOES tiles
  // for the latest hour are often not published yet — handle its errors via
  // hourly fallback and never escalate them to the basemap error overlay.
+ // Suppress per-tile logging since recoverSatelliteTiles handles recovery.
  if (sourceId === 'wm-satellite-src') {
  this.recoverSatelliteTiles();
  return;
  }
+ console.warn('[DeckGLMap] MapLibre error', { message: msg, sourceId }); // eslint-disable-line no-console
  mapErrorCount += 1;
  if (mapErrorCount === mapErrorThreshold) {
  this.showMapErrorOverlay(msg, sourceId);

@@ -54,14 +54,18 @@ test('recordEvaluation: caller-supplied id passes through; collision throws', ()
   assert.throws(() => ledger.recordEvaluation({ ...baseEval(), id: 'custom' }), /already exists/);
 });
 
-test('recordEvaluation: rejects non-finite scores (NaN/Infinity would poison every hit-rate aggregate)', () => {
+test('recordEvaluation: sanitizes non-finite scores (drops + notes, never throws, keeps poison out of aggregates)', () => {
   const { ledger } = makeLedger();
-  assert.throws(() => ledger.recordEvaluation(baseEval({ score: Number.NaN })), /must be finite/);
-  assert.throws(() => ledger.recordEvaluation(baseEval({ score: Number.POSITIVE_INFINITY })), /must be finite/);
-  assert.throws(() => ledger.recordEvaluation(baseEval({ score: Number.NEGATIVE_INFINITY })), /must be finite/);
-  // Finite scores and an absent score are both accepted.
-  assert.ok(ledger.recordEvaluation(baseEval({ id: 'finite', score: 0.5 })));
-  assert.ok(ledger.recordEvaluation({ ...baseEval({ id: 'no-score' }), score: undefined }));
+  // A non-finite score must NOT throw (the tracked-* wrappers have no try/catch),
+  // and must NOT be stored as a number (it would poison every mean-based aggregate).
+  for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    const r = ledger.recordEvaluation(baseEval({ id: `bad-${String(bad)}`, score: bad }));
+    assert.equal(r.score, undefined, `${String(bad)} dropped from score`);
+    assert.match(r.notes ?? '', /non-finite score .* rejected/);
+  }
+  // Finite scores and an absent score pass through untouched.
+  assert.equal(ledger.recordEvaluation(baseEval({ id: 'finite', score: 0.5 })).score, 0.5);
+  assert.equal(ledger.recordEvaluation({ ...baseEval({ id: 'no-score' }), score: undefined }).score, undefined);
 });
 
 test('recordEvaluation: outcome fields cannot be set at recordEvaluation time (they are stripped by the type)', () => {

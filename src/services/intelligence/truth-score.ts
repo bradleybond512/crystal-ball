@@ -77,7 +77,7 @@ const DEFAULT_TTL_MS: Record<NormalizedFact['domain'], number> = {
 /** Linear freshness decay: 1.0 at observation, 0.5 at 1× TTL,
  *  0.0 at ≥2× TTL. Mirrors providers/fusion.scoreFreshness. */
 export function freshnessScore(latestObservedAt: number, ttlMs: number, now: number): number {
-  if (!Number.isFinite(latestObservedAt) || ttlMs <= 0) return 0.5;
+  if (!Number.isFinite(latestObservedAt) || !Number.isFinite(ttlMs) || ttlMs <= 0) return 0.5;
   const age = Math.max(0, now - latestObservedAt);
   if (age >= 2 * ttlMs) return 0;
   if (age <= 0) return 1;
@@ -133,8 +133,11 @@ export function sourceDiversityScore(fact: NormalizedFact): number {
   return Math.max(0.4, ratio);
 }
 
-/** Geographic precision multiplier from LocationPrecision. */
-export function precisionScore(precision: LocationPrecision): number {
+/** Geographic precision multiplier from LocationPrecision. Returns a coarse
+ *  default for a missing/unknown precision — the field is typed non-optional but
+ *  facts built from external data can arrive without it, and an undefined here
+ *  would make the whole truth-score NaN and silently poison the ledger. */
+export function precisionScore(precision: LocationPrecision | undefined): number {
   switch (precision) {
     case 'point': { return 1;
     }
@@ -145,6 +148,8 @@ export function precisionScore(precision: LocationPrecision): number {
     case 'country': { return 0.55;
     }
     case 'global': { return 0.3;
+    }
+    default: { return 0.55;
     }
   }
 }

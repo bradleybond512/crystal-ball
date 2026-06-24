@@ -92,3 +92,39 @@ test('index.html meta CSP locks down object-src / base-uri / form-action', () =>
   assert.deepEqual(metaDirective('base-uri'), ["'self'"], "base-uri must be 'self'");
   assert.deepEqual(metaDirective('form-action'), ["'self'"], "form-action must be 'self'");
 });
+
+const metaConnectSrc = metaDirective('connect-src');
+
+test('index.html meta CSP connect-src has no scheme-only wildcard (the exfiltration hole)', () => {
+  // The web build has no sidecar, so the renderer connects directly — a bare
+  // `https:`/`ws:`/`wss:` would let a compromised renderer exfiltrate anywhere.
+  for (const bad of ['https:', 'http:', 'ws:', 'wss:', '*']) {
+    assert.ok(!metaConnectSrc.includes(bad), `index.html connect-src must not contain bare "${bad}"`);
+  }
+});
+
+test('index.html meta CSP connect-src keeps self + load-bearing web origins', () => {
+  assert.ok(metaConnectSrc.includes("'self'"), "connect-src must include 'self'");
+  // The web build talks to its relay over https + wss and reaches the same
+  // direct-connect CDNs/providers as desktop. Dropping any silently breaks it.
+  const required = [
+    'https://*.crystalball.app',
+    'wss://*.crystalball.app',
+    'https://*.cesium.com',
+    'https://*.basemaps.cartocdn.com',
+    'https://api.anthropic.com',
+    'https://*.posthog.com',
+    'wss://stream.aisstream.io',
+  ];
+  for (const origin of required) {
+    assert.ok(metaConnectSrc.includes(origin), `index.html connect-src must include ${origin}`);
+  }
+});
+
+test('every index.html connect-src entry is scheme-qualified or a safe keyword', () => {
+  const keywords = new Set(["'self'", 'blob:', 'data:']);
+  for (const entry of metaConnectSrc) {
+    if (keywords.has(entry)) continue;
+    assert.match(entry, /^(https?|wss?):\/\//, `connect-src entry "${entry}" must be scheme-qualified`);
+  }
+});

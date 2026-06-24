@@ -125,17 +125,30 @@ function htmlVariantPlugin(): Plugin {
  .replace(/"description": "Real-time global intelligence dashboard with live news, markets, military tracking, infrastructure monitoring, and geopolitical data."/, `"description": "${activeMeta.description}"`)
  .replace(/"featureList": \[[\s\S]*?\]/, `"featureList": ${JSON.stringify(activeMeta.features, null, 8).replace(/\n/g, '\n ')}`);
 
- // Desktop CSP: inject localhost wildcard for dynamic sidecar port.
- // Web builds intentionally exclude localhost to avoid exposing attack surface.
+ // Desktop CSP: inject loopback wildcard for the dynamic sidecar port so the
+ // index.html meta-CSP (which intersects with the authoritative tauri.conf.json
+ // CSP) cannot block 127.0.0.1:<port>. The production *web* allowlist
+ // intentionally excludes localhost to avoid exposing the user's local services
+ // as attack surface from a hijacked page.
  if (isDesktopBuild) {
  result = result
  .replace(
- /connect-src 'self' https: http:\/\/localhost:5173/,
- "connect-src 'self' https: http://localhost:5173 http://127.0.0.1:*"
+ /connect-src 'self' blob: data:/,
+ "connect-src 'self' blob: data: http://127.0.0.1:* http://localhost:*"
  )
  .replace(
  /frame-src 'self'/,
  "frame-src 'self' http://127.0.0.1:*"
+ );
+ }
+
+ // Dev server only: the Vite HMR websocket + dev origin live on loopback, which
+ // the production allowlist (no bare ws:/http:) would otherwise block. The
+ // `ctx.server` field is present only for the `serve` (dev) command.
+ if (ctx.server) {
+ result = result.replace(
+ /connect-src 'self' blob: data:/,
+ "connect-src 'self' blob: data: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*"
  );
  }
 

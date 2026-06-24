@@ -51,6 +51,7 @@ export class CircuitBreaker<T> {
   private persistentLoaded = false;
   private persistentLoadPromise: Promise<void> | null = null;
   private lastDataState: BreakerDataState = { mode: 'unavailable', timestamp: null, offline: false };
+  private swrInFlight = false;
 
   constructor(options: CircuitBreakerOptions) {
  this.name = options.name;
@@ -223,13 +224,16 @@ export class CircuitBreaker<T> {
  // so returning stale data from a different call is wrong.
  if (this.cache !== null && this.cacheTtlMs > 0) {
  this.lastDataState = { mode: 'cached', timestamp: this.cache.timestamp, offline };
- // Fire-and-forget background refresh — skip if circuit breaker is cooling down
- if (!this.isOnCooldown()) {
+ // Fire-and-forget background refresh — skip if circuit breaker is cooling
+ // down OR if a previous SWR refresh is already in flight (prevents 20
+ // concurrent calls each spawning their own background refresh).
+ if (!this.isOnCooldown() && !this.swrInFlight) {
+ this.swrInFlight = true;
  fn().then(result => this.recordSuccess(result)).catch(error => {
  // eslint-disable-next-line no-console
  console.warn(`[${this.name}] Background refresh failed:`, error);
  this.recordFailure(String(error));
- });
+ }).finally(() => { this.swrInFlight = false; });
  }
  return this.cache.data as R;
  }

@@ -5483,6 +5483,47 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
+  // ── Read-only diagnostic endpoints (pre-auth) ─────────────────────────
+  // These are localhost-only, expose no secrets, and are polled frequently
+  // by the renderer.  Placing them above the auth gate avoids thousands of
+  // spurious 401s when the renderer's IPC token isn't ready yet (cold
+  // start / IPC custom-protocol fallback).
+
+  if (requestUrl.pathname === '/api/health') {
+    const mem = process.memoryUsage();
+    const missing = wmMissingKeys();
+    if (aisState.socket?.readyState === 1) {
+      recordFeedSuccess('ais', aisState.lastSnapshotAt || Date.now());
+    } else if (aisState.lastSnapshotAt > 0) {
+      recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
+    }
+    res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
+    res.end(JSON.stringify({
+      ok: true,
+      pid: process.pid,
+      uptime_ms: Date.now() - SIDECAR_START_MS,
+      port: context.port,
+      rss_mb: Math.round(mem.rss / 1024 / 1024),
+      heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
+      ais_connected: aisState.socket?.readyState === 1,
+      ais_vessels: aisState.vessels.size,
+      keys_configured: EXPECTED_API_KEYS.length - missing.length,
+      keys_total: EXPECTED_API_KEYS.length,
+      keys_missing: missing,
+      feeds: getFeedSnapshots(),
+    }));
+    return;
+  }
+
+  if (requestUrl.pathname === '/api/spaceweather/status') {
+    const status = await fetchSpaceweatherStatusSidecar();
+    return json(status);
+  }
+  if (requestUrl.pathname === '/api/spaceweather/alerts') {
+    const alerts = await fetchSpaceweatherAlertsSidecar();
+    return json({ alerts, asOf: new Date().toISOString() });
+  }
+
   // ── Global auth gate ────────────────────────────────────────────────────
   // Every endpoint below requires a valid LOCAL_API_TOKEN.  This prevents
   // other local processes, malicious browser scripts, and rogue extensions
@@ -9696,16 +9737,6 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch {
  return json([], 200);
  }
-  }
-
-  // ── Space Weather status + alerts (mirrors src/services/spaceweather/swpc-monitor.ts) ──
-  if (requestUrl.pathname === '/api/spaceweather/status') {
-    const status = await fetchSpaceweatherStatusSidecar();
-    return json(status);
-  }
-  if (requestUrl.pathname === '/api/spaceweather/alerts') {
-    const alerts = await fetchSpaceweatherAlertsSidecar();
-    return json({ alerts, asOf: new Date().toISOString() });
   }
 
   // ── Solar imagery catalog (metadata) — mirrors
@@ -14565,6 +14596,13 @@ async function dispatch(requestUrl, req, routes, context) {
  const cached = getCached(cacheKey, 6 * 60 * 60 * 1000);
  if (cached) return json(cached);
  try {
+ // Single-flight: concurrent identical Overpass queries (e.g. rapid camera
+ // pans on the power overlay) share ONE upstream request instead of each
+ // firing its own 30s fetch. Without this, cold-cache bursts saturate the
+ // sidecar fetch pool and starve every other /api route — whole-app stall.
+ const data = await dedupeInflight(cacheKey, async () => {
+ const fresh = getCached(cacheKey, 6 * 60 * 60 * 1000);
+ if (fresh) return fresh;
  const resp = await fetchWithTimeout(
  'https://overpass-api.de/api/interpreter',
  {
@@ -14574,10 +14612,18 @@ async function dispatch(requestUrl, req, routes, context) {
  },
  30_000,
  );
- const data = resp.ok ? await resp.json() : { elements: [] };
- setCached(cacheKey, data);
+ if (!resp.ok) throw new Error(`overpass upstream ${resp.status}`);
+ const parsed = await resp.json();
+ setCached(cacheKey, parsed, 6 * 60 * 60 * 1000);
+ return parsed;
+ });
  return json(data);
  } catch (error) {
+ // Serve-stale-on-error: Overpass is aggressively rate-limited (429/queue).
+ // Reuse the last good payload rather than caching an empty set, which would
+ // blank the layer for the full 6h TTL on a transient failure.
+ const stale = getCachedStale(cacheKey);
+ if (stale) return json(stale);
  return json({ elements: [], error: String(error) });
  }
   }
@@ -16632,43 +16678,6 @@ export async function createLocalApiServer(options = {}) {
    const feedId = requestUrl.pathname.slice('/api/feeds/health/'.length);
    if (!feedId || !/^[\w\-.:]+$/.test(feedId)) return sendJson({ error: 'invalid feedId' }, 400);
    return sendJson(getFeedStatus(feedId));
- }
-
- // ── /api/health — lightweight liveness probe ──────────────────────
- if (requestUrl.pathname === '/api/health') {
- {
- const authHeader = req.headers['authorization'] || '';
- if (!isValidToken(authHeader)) {
- res.writeHead(401, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
- res.end(JSON.stringify({ error: 'Unauthorized' }));
- return;
- }
- }
- const mem = process.memoryUsage();
- const missing = wmMissingKeys();
- // Reflect the AIS connection state into the feed-health tracker so
- // FeedHealthPanel can render it without per-message instrumentation.
- if (aisState.socket?.readyState === 1) {
-   recordFeedSuccess('ais', aisState.lastSnapshotAt || Date.now());
- } else if (aisState.lastSnapshotAt > 0) {
-   recordFeedFailure('ais', 'AIS websocket disconnected', Date.now());
- }
- res.writeHead(200, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
- res.end(JSON.stringify({
- ok: true,
- pid: process.pid,
- uptime_ms: Date.now() - SIDECAR_START_MS,
- port: context.port,
- rss_mb: Math.round(mem.rss / 1024 / 1024),
- heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
- ais_connected: aisState.socket?.readyState === 1,
- ais_vessels: aisState.vessels.size,
- keys_configured: EXPECTED_API_KEYS.length - missing.length,
- keys_total: EXPECTED_API_KEYS.length,
- keys_missing: missing,
- feeds: getFeedSnapshots(),
- }));
- return;
  }
 
  // ── /api/diagnostics/self-test — fan-out probe across 10 domain routes ──

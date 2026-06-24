@@ -32,7 +32,7 @@ import {
 import { getApiBaseUrl } from '@/services/runtime';
 import { escapeHtml } from '@/utils/sanitize';
 
-const REFRESH_MS = 10_000;
+const REFRESH_MS = 30_000;
 
 const STATUS_BADGE: Record<FeedHealth, { icon: string; color: string; label: string }> = {
   fresh: { icon: '🟢', color: '#4caf50', label: 'fresh' },

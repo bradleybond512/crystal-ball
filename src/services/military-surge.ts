@@ -77,6 +77,10 @@ export interface ForeignPresenceAlert {
 
 const activeForeignPresence = new Map<string, ForeignPresenceAlert>();
 const seenForeignAlerts = new Set<string>();
+// The 2-hour bucket index whose keys currently populate seenForeignAlerts.
+// When the bucket rolls over we clear the set so stale buckets aren't retained
+// for the whole session (the keys embed the bucket index and were never pruned).
+let seenForeignAlertsBucket = -1;
 
 export interface MilitaryTheater {
   id: string;
@@ -533,13 +537,21 @@ export function detectForeignMilitaryPresence(flights: MilitaryFlight[]): Foreig
  }
   }
 
+  // Dedup window: keys are bucketed by 2-hour window. Drop the prior bucket's
+  // keys on rollover so the set stays bounded over a long session.
+  const currentBucket = Math.floor(Date.now() / (2 * 60 * 60 * 1000));
+  if (currentBucket !== seenForeignAlertsBucket) {
+ seenForeignAlerts.clear();
+ seenForeignAlertsBucket = currentBucket;
+  }
+
   // Check for concentrations above threshold
   for (const [key, presence] of presenceMap) {
  const threshold = getOperatorThreshold(presence.operator);
  if (presence.flights.length < threshold) continue;
 
  // Check if we've already alerted on this (within last 2 hours)
- const alertKey = `${key}-${Math.floor(Date.now() / (2 * 60 * 60 * 1000))}`;
+ const alertKey = `${key}-${currentBucket}`;
  if (seenForeignAlerts.has(alertKey)) continue;
  seenForeignAlerts.add(alertKey);
 

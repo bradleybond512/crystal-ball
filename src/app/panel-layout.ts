@@ -59,6 +59,8 @@ import {
   McKennaQuotePanel,
   DailyWisdomPanel,
 } from '@/components';
+import type { Panel } from '@/components/Panel';
+import { findInsertBeforeKey } from '@/app/lazy-panel-order';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { FirmsPanel } from '@/components/FirmsPanel';
 import { WatchAreaAlertingPanel } from '@/components/WatchAreaAlertingPanel';
@@ -610,6 +612,12 @@ export interface PanelLayoutCallbacks {
 export class PanelLayoutManager implements AppModule {
   private ctx: AppContext;
   private callbacks: PanelLayoutCallbacks;
+  /** Lazy panels: id → factory that dynamically imports + constructs the panel.
+   *  Registered panels are only built when enabled (at boot or on toggle), so
+   *  disabled panels cost neither a module download nor a synchronous construct. */
+  private lazyFactories = new Map<string, () => Promise<Panel>>();
+  /** In-flight mounts, so concurrent enables of the same panel build it once. */
+  private mountingPanels = new Map<string, Promise<Panel | null>>();
   private panelDragCleanupHandlers: (() => void)[] = [];
   private criticalBannerEl: HTMLElement | null = null;
   private dcStrip: DataCenterPinnedStrip | null = null;
@@ -848,7 +856,12 @@ export class PanelLayoutManager implements AppModule {
  return;
  }
  const panel = this.ctx.panels[key];
- panel?.toggle(config.enabled);
+ if (panel) {
+ panel.toggle(config.enabled);
+ } else if (config.enabled && this.lazyFactories.has(key)) {
+ // Enabling a not-yet-built lazy panel: construct + insert on demand.
+ void this.mountLazyPanel(key);
+ }
  });
  // Sync sidebar dot states when panels are toggled
  document.querySelectorAll<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]').forEach(item => {
@@ -1421,12 +1434,14 @@ export class PanelLayoutManager implements AppModule {
  const sanctionsIntelPanel = new SanctionsPanel();
  this.ctx.panels['sanctions-intel'] = sanctionsIntelPanel;
 
- // Lazy-load all OSINT panels. They appear in the dataTracking category
- // but most users never open them at boot. The dynamic imports below let
- // Vite emit a shared `panels-osint` chunk that loads in parallel with
- // the first paint. Panel objects are attached to ctx.panels as soon as
- // each module resolves — Panel rendering itself is async-tolerant.
- void this.loadOsintPanels();
+ // Register lazy panels (OSINT) and mount the enabled ones now; disabled
+ // ones are built on demand when toggled on. Vite code-splits each factory's
+ // dynamic import, and mountLazyPanel inserts them at their canonical grid
+ // position once resolved (fixing the prior orphaned-off-DOM bug).
+ this.registerOsintPanels();
+ for (const id of this.lazyFactories.keys()) {
+ if (this.ctx.panelSettings[id]?.enabled ?? true) void this.mountLazyPanel(id);
+ }
 
  const edgarFilingsPanel = new EdgarFilingsPanel();
  this.ctx.panels['edgar-filings'] = edgarFilingsPanel;
@@ -2276,28 +2291,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels.renewable = this.ctx.renewablePanel;
  }
 
- const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');
- const savedOrder = this.getSavedPanelOrder();
- let panelOrder = defaultOrder;
- if (savedOrder.length > 0) {
- const missing = defaultOrder.filter(k => !savedOrder.includes(k));
- const valid = savedOrder.filter(k => defaultOrder.includes(k));
- const monitorsIdx = valid.indexOf('monitors');
- if (monitorsIdx !== -1) valid.splice(monitorsIdx, 1);
- const insertIdx = valid.indexOf('politics') + 1 || 0;
- const newPanels = missing.filter(k => k !== 'monitors');
- valid.splice(insertIdx, 0, ...newPanels);
- if (SITE_VARIANT !== 'happy') {
- valid.push('monitors');
- }
- panelOrder = valid;
- }
-
- if (SITE_VARIANT !== 'happy') {
- const anchors = PanelLayoutManager.MODE_ANCHORS.filter((key) => panelOrder.includes(key));
- const rest = panelOrder.filter((key) => !anchors.includes(key));
- panelOrder = [...anchors, ...rest];
- }
+ const panelOrder = this.computePanelOrder();
 
  panelOrder.forEach((key: string) => {
  const panel = this.ctx.panels[key];
@@ -2745,16 +2739,93 @@ export class PanelLayoutManager implements AppModule {
  localStorage.setItem(this.ctx.PANEL_ORDER_KEY, JSON.stringify(order));
   }
 
+  /** Canonical panel display order: DEFAULT_PANELS overlaid with the user's
+   *  saved order (new panels re-inserted after `politics`), then mode anchors
+   *  pulled to the front. Shared by boot layout and lazy insertion so a panel
+   *  mounted later lands in the same place it would have at boot. */
+  private computePanelOrder(): string[] {
+ const defaultOrder = Object.keys(DEFAULT_PANELS).filter(k => k !== 'map');
+ const savedOrder = this.getSavedPanelOrder();
+ let panelOrder = defaultOrder;
+ if (savedOrder.length > 0) {
+ const missing = defaultOrder.filter(k => !savedOrder.includes(k));
+ const valid = savedOrder.filter(k => defaultOrder.includes(k));
+ const monitorsIdx = valid.indexOf('monitors');
+ if (monitorsIdx !== -1) valid.splice(monitorsIdx, 1);
+ const insertIdx = valid.indexOf('politics') + 1 || 0;
+ const newPanels = missing.filter(k => k !== 'monitors');
+ valid.splice(insertIdx, 0, ...newPanels);
+ if (SITE_VARIANT !== 'happy') valid.push('monitors');
+ panelOrder = valid;
+ }
+ if (SITE_VARIANT !== 'happy') {
+ const anchors = PanelLayoutManager.MODE_ANCHORS.filter((key) => panelOrder.includes(key));
+ const rest = panelOrder.filter((key) => !anchors.includes(key));
+ panelOrder = [...anchors, ...rest];
+ }
+ return panelOrder;
+  }
+
+  /** Insert a lazily-built panel element at its canonical grid position
+   *  (before the nearest already-present later panel), or append if none. */
+  private insertPanelInOrder(key: string, el: HTMLElement): void {
+ const grid = document.getElementById('panelsGrid');
+ if (!grid) return;
+ const present = new Set<string>();
+ for (const child of Array.from(grid.children)) {
+ const k = (child as HTMLElement).dataset.panel;
+ if (k) present.add(k);
+ }
+ const beforeKey = findInsertBeforeKey(this.computePanelOrder(), present, key);
+ const ref = beforeKey
+ ? Array.from(grid.children).find(c => (c as HTMLElement).dataset.panel === beforeKey) ?? null
+ : null;
+ if (ref) ref.before(el);
+ else grid.append(el);
+  }
+
   /**
-   * Dynamic-import the seven OSINT panels in parallel so Vite splits them
-   * into their own chunk. Each panel is registered on ctx.panels as soon
-   * as its module resolves; the panel grid will display a placeholder for
-   * any not-yet-loaded panel until the chunk arrives (sub-100ms on modern
-   * hardware). Errors per-panel are swallowed so a single failed import
-   * cannot wedge the rest.
+   * Build + mount a registered lazy panel: dynamically import its module,
+   * construct it, insert its element at the correct grid position, and apply
+   * the current enabled state. Idempotent and concurrency-safe — repeated or
+   * parallel calls for the same key resolve to the single constructed instance.
    */
-  private async loadOsintPanels(): Promise<void> {
- const slots = [
+  private mountLazyPanel(key: string): Promise<Panel | null> {
+ const existing = this.ctx.panels[key];
+ if (existing) return Promise.resolve(existing);
+ const inflight = this.mountingPanels.get(key);
+ if (inflight) return inflight;
+ const factory = this.lazyFactories.get(key);
+ if (!factory) return Promise.resolve(null);
+ const p = (async (): Promise<Panel | null> => {
+ try {
+ const panel = await factory();
+ this.ctx.panels[key] = panel;
+ const el = panel.getElement();
+ this.makeDraggable(el, key);
+ this.insertPanelInOrder(key, el);
+ panel.toggle(this.ctx.panelSettings[key]?.enabled ?? true);
+ return panel;
+ } catch (error) {
+ console.warn(`[panel-layout] lazy panel '${key}' failed to load`, error); // eslint-disable-line no-console
+ return null;
+ } finally {
+ this.mountingPanels.delete(key);
+ }
+ })();
+ this.mountingPanels.set(key, p);
+ return p;
+  }
+
+  /**
+   * Register the seven OSINT panels as lazy factories (Vite splits each into
+   * the shared osint chunk). Previously these were constructed at boot but
+   * resolved *after* the ordering loop, so they never got placed in the grid;
+   * routing them through mountLazyPanel both fixes placement and skips
+   * constructing them at boot when disabled.
+   */
+  private registerOsintPanels(): void {
+ const slots: Array<[string, () => Promise<Panel>]> = [
  ['hibp-breaches',   () => import('@/components/HibpBreachesPanel').then((m) => new m.HibpBreachesPanel())],
  ['ipinfo-lookup',   () => import('@/components/IpInfoPanel').then((m) => new m.IpInfoPanel())],
  ['bitcoin-abuse',   () => import('@/components/BitcoinAbusePanel').then((m) => new m.BitcoinAbusePanel())],
@@ -2762,14 +2833,8 @@ export class PanelLayoutManager implements AppModule {
  ['phishstats-feed', () => import('@/components/PhishstatsFeedPanel').then((m) => new m.PhishstatsFeedPanel())],
  ['urlscan-threats', () => import('@/components/UrlscanThreatsPanel').then((m) => new m.UrlscanThreatsPanel())],
  ['pulsedive-intel', () => import('@/components/PulsediveIntelPanel').then((m) => new m.PulsediveIntelPanel())],
- ] as const;
- await Promise.all(slots.map(async ([id, load]) => {
- try {
- this.ctx.panels[id] = await load();
- } catch (error) {
- console.warn(`[panel-layout] OSINT panel '${id}' failed to load`, error);
- }
- }));
+ ];
+ for (const [id, factory] of slots) this.lazyFactories.set(id, factory);
   }
 
   private attachRelatedAssetHandlers(panel: NewsPanel): void {

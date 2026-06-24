@@ -39,6 +39,12 @@ const QUIET_HOURS_KEY = 'wm-quiet-hours';
 /** Minimum interval between notifications from the same source (ms). */
 const RATE_LIMIT_MS = 2 * 60 * 1000; // 2 minutes
 
+/** Coalescing window for convergence alert ids. A `Date.now()` id makes every
+ *  refresh look like a brand-new alert, so the store never dedupes it and the
+ *  OS notification tag never coalesces — they stack. Bucketing the id by a
+ *  location cell + this window collapses repeats of the same convergence. */
+const CONVERGENCE_COALESCE_MS = 30 * 60 * 1000; // 30 minutes
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
@@ -245,8 +251,12 @@ class NotificationDispatcher {
   dispatchConvergenceAlert(description: string, score: number, lat: number, lon: number): void {
     if (score < 70) return;
 
+    // Content-stable id: same convergence (location cell) within the coalescing
+    // window reuses one id, so the store dedupes it and the OS tag coalesces
+    // instead of stacking a fresh toast every refresh.
+    const cell = `${lat.toFixed(2)}_${lon.toFixed(2)}`;
     const alert: UnifiedAlert = {
-      id: `convergence-notif-${Date.now()}`,
+      id: `convergence-${cell}-${Math.floor(Date.now() / CONVERGENCE_COALESCE_MS)}`,
       source: 'correlation',
       severity: score >= 85 ? 'critical' : 'high',
       title: 'Weather-Threat Convergence',

@@ -17,7 +17,7 @@ export interface RefreshRegistration {
 
 // Anything slower than this gets a console.warn that log-bridge captures as a
 // perf breadcrumb. Chosen to trip on clear regressions, not noisy batch work.
-const SLOW_REFRESH_THRESHOLD_MS = 2500;
+const SLOW_REFRESH_THRESHOLD_MS = 15_000;
 
 export class RefreshScheduler implements AppModule {
   private ctx: AppContext;

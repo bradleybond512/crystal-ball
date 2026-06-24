@@ -610,6 +610,10 @@ const DEFERRED_LAYER_ALTITUDE: Record<string, number> = {
   weatherSatellite: 15_000_000,
 };
 
+// Settle delay before the power overlay fetches a new anchor cell, so an active
+// camera pan doesn't fire an Overpass request for every cell crossed.
+const POWER_FETCH_DEBOUNCE_MS = 600;
+
 export class GlobeDataManager {
   private viewer: Viewer;
   private layers = new Map<string, GlobeLayer>();
@@ -635,6 +639,9 @@ export class GlobeDataManager {
   // pan only re-hits the rate-limited Overpass relay when the cell changes.
   private powerLayerEnabled = false;
   private lastPowerAnchorKey: string | null = null;
+  // Debounce the Overpass fetch so cells we merely pan *through* don't each
+  // trigger a request — only the cell the camera settles on fetches.
+  private powerFetchTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(viewer: Viewer) {
  this.viewer = viewer;
@@ -1418,7 +1425,7 @@ export class GlobeDataManager {
    *  (b) the anchor *cell* actually changing — so hovering one area, or the
    *  fixed-site path, fetches at most once. Billboards are styled by the pure
    *  `powerOverlayStyle` (per-kind color + weight). */
-  private async loadPowerInfrastructure(): Promise<void> {
+  private loadPowerInfrastructure(): void {
  const layer = this.layers.get('powerInfrastructure');
  if (!layer) return;
 
@@ -1429,10 +1436,36 @@ export class GlobeDataManager {
  const anchor = this.resolvePowerAnchor();
  if (!anchor) return;
 
- // Same anchor cell as last fetch → nothing new to load.
+ // Same anchor cell as the last *successful* fetch → nothing new to load.
  const key = this.powerAnchorKey(anchor);
  if (key === this.lastPowerAnchorKey) return;
- this.lastPowerAnchorKey = key;
+
+ // Debounce: camera.changed fires repeatedly during a pan. Defer the fetch
+ // until the camera settles so cells panned *through* don't each hit the
+ // rate-limited Overpass relay. lastPowerAnchorKey is advanced only after a
+ // successful fetch (in fetchPowerInfrastructure), so a cancelled debounce
+ // or a failed fetch re-arms this cell cleanly on the next camera move.
+ if (this.powerFetchTimer) clearTimeout(this.powerFetchTimer);
+ this.powerFetchTimer = setTimeout(() => {
+ this.powerFetchTimer = null;
+ void this.fetchPowerInfrastructure(anchor, key);
+ }, POWER_FETCH_DEBOUNCE_MS);
+ } finally {
+ // Re-arm so the next camera move re-checks the anchor cell (the cheap key
+ // compare above gates whether that actually schedules a refetch).
+ layer.loaded = false;
+ }
+  }
+
+  /** Heavy path for {@link loadPowerInfrastructure}: fetch + render the power
+   *  assets for a settled anchor cell. Split out so the camera-driven entry can
+   *  debounce it. Commits `lastPowerAnchorKey` only on success. */
+  private async fetchPowerInfrastructure(
+ anchor: { lat: number; lon: number; radiusKm: number },
+ key: string,
+  ): Promise<void> {
+ const layer = this.layers.get('powerInfrastructure');
+ if (!layer || !this.powerLayerEnabled) return;
 
  const [{ fetchSitePowerAssets }, { powerAssetsToOverlayRows, powerOverlayStyle, powerKindLabel }] =
  await Promise.all([
@@ -1476,14 +1509,12 @@ export class GlobeDataManager {
  description: `<b>${escapeHtml(row.label)}</b><br/>${escapeHtml(powerKindLabel(row.kind))}<br/><i>© OpenStreetMap contributors</i>`,
  });
  }
+ // Commit the cell key only now that the fetch + render actually succeeded,
+ // so a cancelled debounce or a failed fetch leaves this cell retryable.
+ this.lastPowerAnchorKey = key;
  } catch {
- // Transient fetch failure — clear the cell key so a later move retries it.
- this.lastPowerAnchorKey = null;
- }
- } finally {
- // Re-arm so the next camera move re-checks the anchor cell (the cheap
- // key compare above gates whether that actually refetches).
- layer.loaded = false;
+ // Transient fetch failure — leave lastPowerAnchorKey unchanged so a later
+ // camera move retries this cell.
  }
   }
 
@@ -3090,6 +3121,10 @@ ${pkg.composition.map(u => u.type + ' x' + String(u.count)).join(', ')}`,
  this.heatmapRenderer = null;
  this.cameraMoveSub?.();
  this.cameraMoveSub = null;
+ if (this.powerFetchTimer) {
+ clearTimeout(this.powerFetchTimer);
+ this.powerFetchTimer = null;
+ }
  for (const [, layer] of this.layers) {
  this.viewer.dataSources.remove(layer.source, true);
  }

@@ -32,7 +32,8 @@ export type SelfTestId =
   | 'storage_available'
   | 'data_source_probes'
   | 'recent_renderer_errors'
-  | 'panel_registry_mounted';
+  | 'panel_registry_mounted'
+  | 'diagnostics_liveness';
 
 export interface SelfTestResult {
   /** SelfTestId for the standard nine; arbitrary strings welcome for

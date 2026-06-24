@@ -54,6 +54,16 @@ test('recordEvaluation: caller-supplied id passes through; collision throws', ()
   assert.throws(() => ledger.recordEvaluation({ ...baseEval(), id: 'custom' }), /already exists/);
 });
 
+test('recordEvaluation: rejects non-finite scores (NaN/Infinity would poison every hit-rate aggregate)', () => {
+  const { ledger } = makeLedger();
+  assert.throws(() => ledger.recordEvaluation(baseEval({ score: Number.NaN })), /must be finite/);
+  assert.throws(() => ledger.recordEvaluation(baseEval({ score: Number.POSITIVE_INFINITY })), /must be finite/);
+  assert.throws(() => ledger.recordEvaluation(baseEval({ score: Number.NEGATIVE_INFINITY })), /must be finite/);
+  // Finite scores and an absent score are both accepted.
+  assert.ok(ledger.recordEvaluation(baseEval({ id: 'finite', score: 0.5 })));
+  assert.ok(ledger.recordEvaluation({ ...baseEval({ id: 'no-score' }), score: undefined }));
+});
+
 test('recordEvaluation: outcome fields cannot be set at recordEvaluation time (they are stripped by the type)', () => {
   const { ledger } = makeLedger();
   const r = ledger.recordEvaluation(baseEval());

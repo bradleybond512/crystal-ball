@@ -134,6 +134,14 @@ export function createAlgorithmEvaluationLedger(
     if (records.has(id)) {
       throw new Error(`Evaluation "${id}" already exists`);
     }
+    // Score-sanity gate: a non-finite score (NaN / ±Infinity) permanently
+    // poisons every mean-based hit-rate and weighted-accuracy aggregate that
+    // reads this ledger — one bad record makes the whole algorithm's stats NaN
+    // forever, with no visible cause. Reject it at the boundary. Range (0..1) is
+    // left unenforced by design: some algorithms log on other scales.
+    if (input.score !== undefined && !Number.isFinite(input.score)) {
+      throw new Error(`Evaluation score must be finite, got ${String(input.score)} (algorithm "${input.algorithmId}")`);
+    }
     const record: EvaluationRecord = {
       id,
       algorithmId: input.algorithmId,

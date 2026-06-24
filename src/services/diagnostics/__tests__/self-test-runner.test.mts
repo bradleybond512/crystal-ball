@@ -17,6 +17,7 @@ import {
   type SmokeTestOracle,
   type SmokeTestResult,
 } from '../self-test-runner.ts';
+import { FEED_CATALOG } from '../feed-catalog.ts';
 
 import {
   DEFAULT_DEGRADED_FAIL_THRESHOLD,
@@ -245,6 +246,18 @@ test('buildDomainSmokeTest — wires oracle through to probeDomain', async () =>
   const def = buildDomainSmokeTest('earthquakes', oracle);
   const result = await def.test();
   assert.equal(result.status, 'pass');
+});
+
+test('DOMAIN_TO_FEED_IDS — every feed id resolves to FEED_CATALOG (no drift)', () => {
+  // createLiveOracle resolves snapshots only for FEED_CATALOG ids, so a feed id
+  // here that is NOT in the catalog makes that domain's smoke test fail
+  // "not registered" forever — a false alarm, not a real outage. Catch drift.
+  const catalogIds = new Set(FEED_CATALOG.map((f) => f.id));
+  const drift: string[] = [];
+  for (const [domain, ids] of Object.entries(DOMAIN_TO_FEED_IDS)) {
+    for (const id of ids) if (!catalogIds.has(id)) drift.push(`${domain} → ${id}`);
+  }
+  assert.deepEqual(drift, [], `Drifted feed ids (not in FEED_CATALOG): ${drift.join(', ')}`);
 });
 
 test('buildBuiltinSmokeTests — covers every domain in DOMAIN_TO_FEED_IDS', () => {

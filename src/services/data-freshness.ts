@@ -138,9 +138,24 @@ export interface DataSourceState {
   lastError: string | null;
   lastErrorAt: number | null;
   itemCount: number;
+  /** Items delivered by the MOST RECENT refresh (set, not accumulated, unlike
+   *  itemCount). Lets diagnostics distinguish "fresh and delivering" from
+   *  "fresh but the latest fetch came back empty" — an empty 200 OK that would
+   *  otherwise read as healthy. 0 with a non-null lastUpdate + no error =
+   *  delivered-empty (see isDeliveringEmpty). */
+  lastBatchItemCount: number;
   enabled: boolean;
   status: FreshnessStatus;
   requiredForRisk: boolean; // Is this source important for risk assessment?
+}
+
+/**
+ * True when a source looks fresh (recently updated, no error) but its most
+ * recent refresh delivered zero items — a silently-empty feed that age-based
+ * freshness alone reports as healthy. Pure; no side effects.
+ */
+export function isDeliveringEmpty(source: DataSourceState): boolean {
+  return source.lastUpdate !== null && !source.lastError && source.lastBatchItemCount === 0;
 }
 
 export interface DataFreshnessSummary {
@@ -302,6 +317,7 @@ class DataFreshnessTracker {
  lastError: null,
  lastErrorAt: null,
  itemCount: 0,
+ lastBatchItemCount: 0,
  enabled: true, // Assume enabled by default
  status: 'no_data',
  requiredForRisk: meta.requiredForRisk,
@@ -317,6 +333,7 @@ class DataFreshnessTracker {
  if (source) {
  source.lastUpdate = new Date();
  source.itemCount += itemCount;
+ source.lastBatchItemCount = itemCount;
  source.lastError = null;
  source.lastErrorAt = null;
  source.status = this.calculateStatus(source);
@@ -387,6 +404,16 @@ class DataFreshnessTracker {
  ...source,
  status: source.enabled ? this.calculateStatus(source) : 'disabled',
  }));
+  }
+
+  /**
+ * Enabled sources whose most recent refresh succeeded but returned zero items
+ * (delivered-empty). These read as `fresh` by age alone — this is the only way
+ * to tell "working and delivering" from "working but silently empty". Pure
+ * read; does not mutate status or affect risk aggregation.
+ */
+  getEmptyDeliverySources(): DataSourceState[] {
+ return this.getAllSources().filter((s) => s.enabled && isDeliveringEmpty(s));
   }
 
   /**

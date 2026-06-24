@@ -16648,6 +16648,7 @@ export async function createLocalApiServer(options = {}) {
  // webhook) must fall through.
  const PUBLIC_API_ROUTES = new Set([
  '/api/service-status',
+ '/api/health',
  '/api/youtube-embed',
  '/api/patreon/authorize-url',
  '/api/sms/command',

@@ -622,9 +622,10 @@ test('inline /api routes: gated route requires auth, public route does not', asy
  assert.notEqual(pub.status, 401, `${route} should not be auth-gated`);
  }
 
- // /api/health is NOT on the allowlist and keeps its own token check.
+ // /api/health is on the public allowlist — it's pre-auth by design so
+ // the renderer can poll it during startup before the IPC token is ready.
  const healthUnauth = await fetch(`http://127.0.0.1:${port}/api/health`);
- assert.equal(healthUnauth.status, 401, '/api/health must stay gated');
+ assert.notEqual(healthUnauth.status, 401, '/api/health should be public (pre-auth)');
   } finally {
  process.env.LOCAL_API_TOKEN = originalToken;
  await app.close();

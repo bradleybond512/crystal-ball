@@ -13112,6 +13112,10 @@ async function dispatch(requestUrl, req, routes, context) {
  const parsed = parseWebhookDispatchRequest(parsedBody);
  if (!parsed.ok) return json({ error: parsed.error }, 400, makeCorsHeaders(req));
 
+ // Webhooks carry secrets in body/headers — reject cleartext http: to prevent
+ // credential leakage and SSRF to LAN hosts via DNS rebinding over plaintext.
+ try { if (new URL(parsed.url).protocol !== 'https:') return json({ error: 'Webhook URLs must use HTTPS' }, 400, makeCorsHeaders(req)); } catch { return json({ error: 'Invalid webhook URL' }, 400, makeCorsHeaders(req)); }
+
  // SSRF protection: block private IPs, reserved ranges, and DNS rebinding.
  const safety = await isSafeUrl(parsed.url);
  if (!safety.safe) {

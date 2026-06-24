@@ -706,6 +706,21 @@ fn write_vault_shadow(app: &AppHandle, secrets: &HashMap<String, String>) {
  if let Err(e) = wrote {
      eprintln!("[secrets] shadow vault write failed: {e}");
      let _ = fs::remove_file(&tmp);
+ } else {
+     // Exclude the shadow vault file itself from Time Machine / iCloud backups.
+     // The parent app_data_dir already has the xattr, but per-file exclusion
+     // protects against iCloud snapshotting the file before the dir xattr is set.
+     #[cfg(target_os = "macos")]
+     {
+         let _ = std::process::Command::new("xattr")
+             .args([
+                 "-w",
+                 "com.apple.metadata:com_apple_backup_excludeItem",
+                 "com.apple.backup.excludeItem",
+                 &path.to_string_lossy(),
+             ])
+             .output();
+     }
  }
 }
 

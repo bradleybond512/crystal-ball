@@ -235,7 +235,10 @@ export function labelFor(score: number, disputed: boolean): TruthLabel {
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
-function clamp01(x: number): number { return Math.max(0, Math.min(1, x)); }
+// NaN-safe: Math.max(0, Math.min(1, NaN)) is NaN, which would propagate into the
+// final score. A NaN component (e.g. a custom context's reliabilityFor returning
+// NaN) clamps to 0 so scoreFact stays finite for ANY context, not just the default.
+function clamp01(x: number): number { return Number.isNaN(x) ? 0 : Math.max(0, Math.min(1, x)); }
 function round3(x: number): number { return Math.round(x * 1000) / 1000; }
 function roundComponents(c: TruthScoreComponents): TruthScoreComponents {
   return {

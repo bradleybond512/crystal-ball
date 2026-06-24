@@ -154,18 +154,24 @@ export interface SmokeTestOracle {
  * a `warn` ("no backing feed configured") so the panel still surfaces the
  * domain rather than silently dropping it.
  */
+// Every id here MUST exist in FEED_CATALOG (feed-catalog.ts) — createLiveOracle
+// resolves snapshots only for catalog feeds, so a drifted id makes the domain's
+// smoke test fail "not registered" forever (alarm fatigue masquerading as a real
+// failure). The drift guard in self-test-runner.test.mts enforces this. Domains
+// with no catalog-backed feed yet use [] → an honest "no backing feed configured
+// yet" warn instead of a misleading hard fail.
 export const DOMAIN_TO_FEED_IDS: Record<string, readonly string[]> = {
   earthquakes:       ['usgs-earthquakes'],
   weather:           ['nws-alerts', 'nhc-tropical'],
-  aviation:          ['opensky', 'aviation-stack'],
-  maritime:          ['aisstream', 'ais-relay'],
+  aviation:          ['opensky'],
+  maritime:          ['ais'],
   'space-wx':        ['swpc-xray', 'swpc-kp'],
-  biosurveillance:   ['promed', 'who-don', 'wastewater'],
+  biosurveillance:   [],
   wildfire:          ['firms-modis', 'firms-viirs', 'nifc-perimeters'],
-  sanctions:         ['ofac', 'opensanctions'],
+  sanctions:         [],
   infrastructure:    ['eia-930', 'poweroutage-us', 'cloudflare-bgp'],
-  gdacs:             ['gdacs'],
-  nuclear:           ['radnet', 'ctbto'],
+  gdacs:             [],
+  nuclear:           ['radnet'],
 };
 
 /** Domains the mission-state mapper treats as life-safety critical. */

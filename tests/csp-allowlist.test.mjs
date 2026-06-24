@@ -115,6 +115,7 @@ test('index.html meta CSP connect-src keeps self + load-bearing web origins', ()
     'https://api.anthropic.com',
     'https://*.posthog.com',
     'wss://stream.aisstream.io',
+    'https://*.sentry.io',
   ];
   for (const origin of required) {
     assert.ok(metaConnectSrc.includes(origin), `index.html connect-src must include ${origin}`);

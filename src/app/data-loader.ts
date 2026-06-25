@@ -1629,12 +1629,14 @@ export class DataLoaderManager implements AppModule {
  { getNotificationTraceRegistry, getPipelineTraceRegistry },
  { recordAlgorithmEvaluation },
  { annotateModelOutput: annotateWeatherOutput },
+ { getNotificationPreferencesService },
  ] = await Promise.all([
  import('@/services/insights/big-event-detector'),
  import('@/services/insights/notification-ladder'),
  import('@/services/diagnostics/diagnostics-state'),
  import('@/services/algorithms/record-evaluation'),
  import('@/services/intelligence/assumption-producers'),
+ import('@/services/notifications/notification-preferences'),
  ]);
  const pipelineTrace = getPipelineTraceRegistry();
  const SEVERITY_SCORE: Record<string, number> = { Extreme: 95, Severe: 80, Moderate: 55, Minor: 30, Unknown: 20 };
@@ -1647,6 +1649,15 @@ export class DataLoaderManager implements AppModule {
  silent: null,
  };
  const registry = getNotificationTraceRegistry();
+ // Real quiet-hours state + the user's per-domain bypass, instead of hardcoding
+ // them off. Non-safety weather alerts are now suppressible during quiet hours;
+ // safety-critical (emergency/critical tier) events still override via the
+ // ladder's safety path. Computed once per batch (same instant for all alerts).
+ const notifPrefs = getNotificationPreferencesService();
+ const quietHoursActive = notifPrefs.isQuietHour();
+ const weatherQuietHoursBypass = notifPrefs
+ .getPreferences()
+ .domains.find((d) => d.domain === 'weather')?.quietHoursOverride ?? false;
  const severeAlerts = alerts.filter(
  (a) => a.severity === 'Extreme' || a.severity === 'Severe',
  );
@@ -1722,8 +1733,8 @@ export class DataLoaderManager implements AppModule {
  domain: 'weather',
  headline: alert.headline || alert.event,
  summary: alert.areaDesc ? `${alert.event} — ${alert.areaDesc}` : alert.event,
- quietHoursActive: false,
- quietHoursBypassEnabled: true,
+ quietHoursActive,
+ quietHoursBypassEnabled: weatherQuietHoursBypass,
  dedupeMatch,
  });
  pipelineTrace.record(alert.id, 'weather', { stage: 'routed', detail: { rung: decision.rung, dispatched: decision.dispatched } });

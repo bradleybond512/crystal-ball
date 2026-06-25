@@ -79,17 +79,17 @@ test('toHealthDefinition: registry entry without healthDomain projects to "other
 });
 
 test('regression: all previously-tracked health domains are still represented', () => {
-  // The pre-PR catalog had 12 health domains hand-maintained in
-  // algorithms-state.ts. Deriving from the registry must not silently
-  // drop any of them (Codex review of #179 caught evidence-graph and
-  // baseline-deviation missing). This test pins the contract.
+  // Health domains that MUST stay represented in the derived catalog —
+  // every domain that has at least one live (call-site-backed) algorithm.
+  // The B1-cleanup (audit 2026-06-07) intentionally dropped the orphaned
+  // evidence-graph, situation-clustering, baseline-deviation and
+  // forecast-calibration algorithms (zero live call sites — keeping them
+  // would only fabricate ledger entries), so their domains are no longer
+  // expected here. Kept in sync with algorithm-registry.test.mts
+  // "registers all live algorithms".
   const required = new Set([
     'truth_score',
-    'evidence_graph',
-    'situation_clustering',
-    'baseline_deviation',
     'compound_risk',
-    'forecast_calibration',
     'watchlist_relevance',
     'negative_evidence',
     'shortage_score',

@@ -25,7 +25,7 @@ const fact = (id: string, sourceCount: number = 2): NormalizedFact => ({
   severity: 'medium',
   occurredAt: Date.now() - 60_000,
   ingestedAt: Date.now(),
-  precision: 'point',
+  locationPrecision: 'point',
   entities: ['JP'],
   sources: Array.from({ length: sourceCount }, (_, i) => ({
     providerId: `provider-${i}`,
@@ -83,7 +83,7 @@ test('trackedEvaluateNegativeEvidence: records totalAbsencePenalty as score', ()
   const ledger = getAlgorithmEvaluationLedger();
   const parent = fact('parent');
   const expected: ExpectedSignal[] = [
-    { id: 'aftershock', label: 'Aftershock within 1h', windowMs: 60 * 60 * 1000, weight: 0.3, predicate: () => false },
+    { id: 'aftershock', label: 'Aftershock within 1h', domain: 'weather', windowStartMs: 0, windowEndMs: 60 * 60 * 1000, absencePenalty: 0.3 },
   ];
   const result = trackedEvaluateNegativeEvidence(parent, expected, [], 0.7, { now: parent.occurredAt + 2 * 60 * 60 * 1000 });
   const records = ledger.byAlgorithm('negative-evidence');

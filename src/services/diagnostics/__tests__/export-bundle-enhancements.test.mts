@@ -159,6 +159,30 @@ test('situations summary field is redacted for embedded PII', () => {
   assert.ok(!bundle.situations?.[0]?.summary?.includes('user@example.com'));
 });
 
+test('situations name and tags are redacted for embedded PII', () => {
+  const situations: SituationSummary[] = [{
+    id: 'sit-1',
+    name: 'Outage flagged by user@example.com',
+    status: 'active',
+    severity: 'high',
+    domain: 'weather',
+    startedAt: NOW,
+    updatedAt: NOW,
+    observationIds: [],
+    correlationIds: [],
+    confidence: 0.5,
+    // tags propagate from event.tags — must get the same scrub as name/summary.
+    tags: ['contact:user@example.com', 'Bearer abcd1234abcd1234abcd1234abcd1234'],
+    summary: 'x',
+  }];
+  const bundle = buildExportBundle({ ...baseInput(), situations });
+  const s = bundle.situations?.[0];
+  assert.ok(!s?.name?.includes('user@example.com'), `name leaked: ${s?.name}`);
+  const tagsJson = JSON.stringify(s?.tags);
+  assert.ok(!tagsJson.includes('user@example.com'), `tag email leaked: ${tagsJson}`);
+  assert.ok(!tagsJson.includes('abcd1234abcd1234'), `tag token leaked: ${tagsJson}`);
+});
+
 // ── Correlations inventory ─────────────────────────────────────────────
 
 test('correlations inventory carries chainType, title, confidence, eventIds', () => {
@@ -176,6 +200,22 @@ test('correlations inventory carries chainType, title, confidence, eventIds', ()
   assert.equal(c?.chainType, 'seismic-cascade');
   assert.equal(c?.confidence, 0.7);
   assert.equal(c?.eventIds.length, 3);
+});
+
+test('correlations title is redacted for embedded PII', () => {
+  const correlations: CorrelationSummary[] = [{
+    id: 'corr-1',
+    chainType: 'seismic-cascade',
+    title: 'chain flagged by user@example.com',
+    confidence: 0.7,
+    detectedAt: NOW,
+    eventIds: [],
+  }];
+  const bundle = buildExportBundle({ ...baseInput(), correlations });
+  assert.ok(
+    !bundle.correlations?.[0]?.title?.includes('user@example.com'),
+    `title leaked: ${bundle.correlations?.[0]?.title}`,
+  );
 });
 
 test('correlations is omitted when not supplied', () => {

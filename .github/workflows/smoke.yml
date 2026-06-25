@@ -22,15 +22,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run smoke:offline
-      - run: npm run test:replay
-      # Unit suites that were previously CI-ungated and silently rotted
-      # (orphaned tests, audit 2026-06). test:algorithms globs the whole
-      # algorithms dir so new files can't slip past CI again.
-      - run: npm run test:algorithms
-      - run: npm run test:intelligence
-      # test:diagnostics globs the whole diagnostics dir so the privacy-canary
-      # gate (and other diagnostics tests) run in CI and can't silently rot.
-      - run: npm run test:diagnostics
-      # Notification delivery suite — covers the quiet-hours / safety-override
-      # ladder behavior wired into the live weather path in data-loader.ts.
-      - run: npm run test:notifications
+      # Full renderer unit-test sweep. Globs EVERY src/**/__tests__ dir (depths
+      # 2-4) so the ~100 test:* suites that previously ran in NO CI workflow —
+      # including the safety-critical weather / notification / seismic / provider
+      # suites and the hardcoded-list test:intelligence that silently skipped
+      # ~half its own files — now gate every PR and can't silently rot (audit
+      # 2026-06). Single-* globs (no globstar) so it's portable across the
+      # CI shell + Node version.
+      - run: npm run test:renderer

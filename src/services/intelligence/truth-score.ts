@@ -209,9 +209,14 @@ export function scoreFact(fact: NormalizedFact, ctx: TruthScoreContext = default
   const label = labelFor(final, disputed);
 
   const providers = [...new Set(fact.sources.map((s) => s.providerId))];
+  // Stamp the belief with the ctx clock so scoreFact is fully deterministic —
+  // createBelief otherwise defaults updatedAt to the wall clock, which made
+  // "same inputs → same output" flaky (two calls a millisecond apart differed).
+  const belief = createBelief(round3(final), { provenance: providers });
+  belief.updatedAt = new Date(now).toISOString();
   return {
     score: round3(final),
-    belief: createBelief(round3(final), { provenance: providers }),
+    belief,
     label,
     components: roundComponents(components),
     contributingProviders: providers,

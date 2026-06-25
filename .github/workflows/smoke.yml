@@ -31,3 +31,6 @@ jobs:
       # test:diagnostics globs the whole diagnostics dir so the privacy-canary
       # gate (and other diagnostics tests) run in CI and can't silently rot.
       - run: npm run test:diagnostics
+      # Notification delivery suite — covers the quiet-hours / safety-override
+      # ladder behavior wired into the live weather path in data-loader.ts.
+      - run: npm run test:notifications

@@ -1273,20 +1273,44 @@ async function scoreIPsQuery(ips) {
 // Block requests to private/reserved IP ranges to prevent the RSS proxy
 // from being used as a localhost pivot or internal network scanner.
 
-function isPrivateIP(ip) {
-  // IPv4-mapped IPv6 — extract the v4 portion
-  const v4Mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-  const addr = v4Mapped ? v4Mapped[1] : ip;
+export function isPrivateIP(ip) {
+  // Normalize: strip IPv6 brackets and any zone id (fe80::1%en0).
+  const addr = String(ip).replace(/^\[|\]$/g, '').split('%')[0];
+  const lower = addr.toLowerCase();
 
-  // IPv6 loopback
-  if (addr === '::1' || addr === '::') return true;
+  // IPv6 loopback / unspecified.
+  if (lower === '::1' || lower === '::') return true;
 
-  // IPv6 link-local / unique-local
-  if (/^f[cd][0-9a-f]{2}:/i.test(addr)) return true; // fc00::/7 (ULA)
-  if (/^fe[89ab][0-9a-f]:/i.test(addr)) return true;  // fe80::/10 (link-local)
+  // IPv6 link-local / unique-local.
+  if (/^f[cd][0-9a-f]{2}:/.test(lower)) return true; // fc00::/7 (ULA)
+  if (/^fe[89ab][0-9a-f]:/.test(lower)) return true; // fe80::/10 (link-local)
 
-  const parts = addr.split('.').map(Number);
-  if (parts.length !== 4 || parts.some(p => isNaN(p))) return false; // not an IPv4
+  // IPv6 transition/translation prefixes can wrap an ARBITRARY IPv4 (including
+  // 127.0.0.1 / 169.254.169.254 / RFC1918), and unwrapping every encoding by
+  // hand is error-prone — reject the prefixes outright. SSRF defense outweighs
+  // the rare IPv6-only-network legitimate case.
+  if (lower.startsWith('64:ff9b:')) return true; // NAT64  64:ff9b::/96
+  if (lower.startsWith('2002:')) return true;    // 6to4   2002::/16
+
+  // Extract an embedded IPv4 from the IPv4-mapped / IPv4-compatible forms
+  // (dotted `::ffff:1.2.3.4` / `::1.2.3.4`, or hex `::ffff:7f00:0001`) so a
+  // private v4 can't slip through wrapped in IPv6, then fall through to the v4
+  // octet checks below.
+  let target = addr;
+  let m = lower.match(/^::(?:ffff:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (m) {
+    target = m[1];
+  } else {
+    m = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (m) {
+      const hi = parseInt(m[1], 16);
+      const lo = parseInt(m[2], 16);
+      target = [(hi >> 8) & 255, hi & 255, (lo >> 8) & 255, lo & 255].join('.');
+    }
+  }
+
+  const parts = target.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) return false; // not an IPv4
 
   const [a, b] = parts;
   if (a === 127) return true; // 127.0.0.0/8  loopback
@@ -1294,8 +1318,30 @@ function isPrivateIP(ip) {
   if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
   if (a === 192 && b === 168) return true; // 192.168.0.0/16 private
   if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local
+  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
   if (a === 0) return true; // 0.0.0.0/8
   if (a >= 224) return true; // 224.0.0.0+ multicast/reserved
+  return false;
+}
+
+// For user-configured LOCAL-service probes (Ollama, self-hosted relays) where
+// loopback/LAN is legitimate, we still refuse the targets a real config never
+// uses but an attacker would: the link-local cloud-metadata range, the
+// unspecified address, and multicast/reserved. Literal-host check only (these
+// values are user-entered IPs/hosts, not DNS-rebind vectors).
+export function isDangerousProbeHost(urlString) {
+  let host;
+  try {
+    host = new URL(urlString).hostname.replace(/^\[|\]$/g, '').split('%')[0].toLowerCase();
+  } catch {
+    return true;
+  }
+  if (host === '0.0.0.0' || host === '::') return true; // unspecified
+  if (host.startsWith('169.254.') || host.startsWith('fe80:')) return true; // link-local incl. metadata
+  // ::ffff:169.254.x.x and 169.254.x.x wrapped in IPv6.
+  if (/(^|:)169\.254\./.test(host)) return true;
+  const o = host.split('.').map(Number);
+  if (o.length === 4 && o.every((n) => Number.isInteger(n)) && o[0] >= 224) return true; // multicast/reserved
   return false;
 }
 
@@ -4611,8 +4657,12 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  } catch {
  return fail('Invalid URL');
  }
- const safe = await isSafeUrl(probeUrl);
- if (!safe) return fail('URL points to a private or disallowed address');
+ // User-run LOCAL service (Ollama / self-hosted relay): localhost & LAN are the
+ // normal targets here, so the public-only SSRF guard does NOT apply — the probe
+ // is gated by the local API token. Still reject the cloud-metadata / unspecified
+ // / multicast targets a real config would never legitimately use, so a
+ // token-holder can't pivot the validation probe into a metadata grab.
+ if (isDangerousProbeHost(probeUrl)) return fail('Refusing to probe a metadata or unspecified address');
  const response = await fetchWithTimeout(probeUrl, { method: 'GET' }, 8000);
  if (!response.ok) {
  // Fall back to native Ollama /api/tags endpoint
@@ -4637,8 +4687,12 @@ async function validateSecretAgainstProvider(key, rawValue, context = {}) {
  case 'VITE_OPENSKY_RELAY_URL': {
  const probeUrl = relayToHttpUrl(value);
  if (!probeUrl) return fail('Relay URL is invalid');
- const safe = await isSafeUrl(probeUrl);
- if (!safe) return fail('URL points to a private or disallowed address');
+ // User-run LOCAL service (Ollama / self-hosted relay): localhost & LAN are the
+ // normal targets here, so the public-only SSRF guard does NOT apply — the probe
+ // is gated by the local API token. Still reject the cloud-metadata / unspecified
+ // / multicast targets a real config would never legitimately use, so a
+ // token-holder can't pivot the validation probe into a metadata grab.
+ if (isDangerousProbeHost(probeUrl)) return fail('Refusing to probe a metadata or unspecified address');
  const response = await fetchWithTimeout(probeUrl, { method: 'GET' });
  if (response.status >= 500) return fail(`Relay probe failed (${response.status})`);
  return ok('Relay URL is reachable');

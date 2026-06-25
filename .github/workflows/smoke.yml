@@ -30,3 +30,7 @@ jobs:
       # 2026-06). Single-* globs (no globstar) so it's portable across the
       # CI shell + Node version.
       - run: npm run test:renderer
+      # Sidecar security-hardening suite (SSRF IP classification + pinning, CSP
+      # allowlist, webhook dispatch, IPv4 redirect) — the Node sidecar tests live
+      # under src-tauri/ so test:renderer can't reach them; this gates them.
+      - run: npm run test:sec-hardening

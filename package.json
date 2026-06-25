@@ -88,6 +88,7 @@
     "test:replay": "tsx --test src/services/ops/__tests__/replay-harness.test.mts src/services/ops/__tests__/replay-fixtures-catalog.test.mts",
     "test:ops": "tsx --test src/services/ops/__tests__/mission-ledger.test.mts src/services/ops/__tests__/mission-ledger-persistence.test.mts src/services/ops/__tests__/time-to-warn.test.mts src/services/ops/__tests__/closed-loop-batch.test.mts src/services/ops/__tests__/replay-fixtures-catalog.test.mts src/services/ops/__tests__/replay-harness.test.mts",
     "test:algorithms": "tsx --test src/services/algorithms/__tests__/*.test.mts src/services/__tests__/military-patterns.test.mts",
+    "test:renderer": "tsx --test src/*/__tests__/*.test.mts src/*/*/__tests__/*.test.mts src/*/*/*/__tests__/*.test.mts",
     "test:insights6": "tsx --test src/services/insights/__tests__/presentation-export.test.mts",
     "test:self-improvement": "tsx --test tests/intelligence/self-improvement-scheduler.test.mts",
     "test:signal-noise-filter": "tsx --test tests/intelligence/signal-noise-filter.test.mts",

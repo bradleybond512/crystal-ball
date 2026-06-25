@@ -532,7 +532,9 @@ function redactSituation(s: SituationSummary): SituationSummary {
     name: s.name ? redactString(s.name) : s.name,
     observationIds: [...s.observationIds],
     correlationIds: [...s.correlationIds],
-    tags: [...s.tags],
+    // tags propagate from event.tags (event-derived content), so scrub them
+    // with the same PII pattern redaction as name/summary rather than copying raw.
+    tags: s.tags.map((t) => redactString(t)),
     summary: s.summary ? redactString(s.summary) : s.summary,
   };
 }

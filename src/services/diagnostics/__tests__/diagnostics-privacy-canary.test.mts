@@ -151,6 +151,18 @@ describe('Diagnostics privacy canary — schema completeness gate', () => {
       'improvementPlan',
       'scenarioCoverage',
       'truncations',
+      // Phase-2 diagnostic sections. Classification (confirmed against
+      // frontend-export-composer + export-bundle):
+      //  - Safe primitives only (ids / enums / numbers / timestamps, no free text):
+      'missionState',     // { state, staleFeedCount, criticalStaleFeedCount }
+      'feedHealth',       // { id, name(static catalog), status, lastUpdateIso }
+      'algorithmState',   // { algorithmId, domain, graded, hitRate, ... } — numbers
+      'systemInfo',       // { appVersion, buildHash, uptimeMs, memoryUsedBytes }
+      'algorithmTrace',   // ids + numbers; evidence summaries → redactString
+      //  - Carry free text, all run through redactString in export-bundle:
+      'panelHealthSummary', // entries[].reason (panel lastError) redacted
+      'situations',         // name + summary + tags redacted
+      'correlations',       // title redacted
     ]);
     const { bundleJson } = buildExportWithCanaries();
     const bundle = JSON.parse(bundleJson) as Record<string, unknown>;

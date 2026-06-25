@@ -28,3 +28,6 @@ jobs:
       # algorithms dir so new files can't slip past CI again.
       - run: npm run test:algorithms
       - run: npm run test:intelligence
+      # test:diagnostics globs the whole diagnostics dir so the privacy-canary
+      # gate (and other diagnostics tests) run in CI and can't silently rot.
+      - run: npm run test:diagnostics

@@ -718,6 +718,10 @@ const URL_CRED_QUERY_PATTERN = /([?&](?:access_token|api_key|apikey|key|token|se
 // paths). Keep the structural prefix, redact the username segment.
 const HOME_PATH_PATTERN = /(\/(?:Users|home)\/)[^/\s]+/g;
 const WINDOWS_HOME_PATH_PATTERN = /([A-Za-z]:\\Users\\)[^\\\s]+/g;
+// High-precision decimal coordinates (4+ decimal places) reveal exact
+// locations. Match pairs like "41.6105,-86.7234" or standalone values
+// in the range ±180 with 4+ fractional digits.
+const COORDINATE_PATTERN = /\b-?\d{1,3}\.\d{4,}\b/g;
 
 function redactCredPhrase(match: string): string {
   const sep = match.includes('=') ? '=' : ':';
@@ -736,7 +740,8 @@ export function redactString(s: string): string {
     .replace(URL_CRED_QUERY_PATTERN, (_m, prefix: string) => `${prefix}${REDACTED}`)
     .replace(HOME_PATH_PATTERN, (_m, prefix: string) => `${prefix}${REDACTED}`)
     .replace(WINDOWS_HOME_PATH_PATTERN, (_m, prefix: string) => `${prefix}${REDACTED}`)
-    .replace(LONG_HEX_PATTERN, REDACTED);
+    .replace(LONG_HEX_PATTERN, REDACTED)
+    .replace(COORDINATE_PATTERN, REDACTED);
 }
 
 function redactEvent(event: DiagnosticEvent): DiagnosticEvent {

@@ -5,10 +5,14 @@ import type { TheaterPostureSummary } from '../military-surge.ts';
 
 function makePosture(overrides: Partial<TheaterPostureSummary> = {}): TheaterPostureSummary {
   return {
-    theaterId: 'iran-theater',
-    theaterName: 'Iran Theater',
-    shortName: 'IRAN',
-    targetNation: 'Iran',
+    // Use a theater NOT in THEATER_CALIBRATIONS so these tests exercise base
+    // pattern-matching logic (DEFAULT_CALIBRATION: 1× minAircraft, no penalty).
+    // 'iran-theater' carries a 1.8× minAircraft multiplier + score penalty that
+    // these modest fixtures (10-18 aircraft) are not sized to clear.
+    theaterId: 'test-theater',
+    theaterName: 'Test Theater',
+    shortName: 'TEST',
+    targetNation: 'Testland',
     fighters: 0,
     tankers: 0,
     awacs: 0,

@@ -23,3 +23,8 @@ jobs:
       - run: npm ci
       - run: npm run smoke:offline
       - run: npm run test:replay
+      # Unit suites that were previously CI-ungated and silently rotted
+      # (orphaned tests, audit 2026-06). test:algorithms globs the whole
+      # algorithms dir so new files can't slip past CI again.
+      - run: npm run test:algorithms
+      - run: npm run test:intelligence

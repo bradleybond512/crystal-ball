@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { urgencyFor } from '../weather-urgency.ts';
+import { urgencyFor, deliveryPriorityRank } from '../weather-urgency.ts';
 import type { PreviousDelivery } from '../weather-urgency.ts';
 import type { PolygonMatchResult } from '../weather-threat-types.ts';
 
@@ -330,4 +330,23 @@ test('integration: plan section-1 example "Severe Weather Near Home"', () => {
   assert.equal(r.bypassQuietHours, true);
   assert.ok(r.watchWindow);
   assert.match(r.reason, /WARNING/);
+});
+
+// deliveryPriorityRank — the data-loader storm-decision selection ranks through
+// this instead of comparing the priority strings directly. The ranking MUST be
+// monotonic in urgency (string `>` is not: 'banner' < 'digest' lexicographically
+// yet 'banner' is the more urgent delivery).
+test('deliveryPriorityRank: strictly increasing with urgency', () => {
+  const order = ['background', 'digest', 'watch_window', 'banner', 'persistent_critical', 'persistent_critical_with_imessage'] as const;
+  for (let i = 1; i < order.length; i++) {
+    assert.ok(deliveryPriorityRank(order[i]) > deliveryPriorityRank(order[i - 1]),
+      `${order[i]} should outrank ${order[i - 1]}`);
+  }
+});
+
+test('deliveryPriorityRank: a critical alert outranks a less-severe one (the storm-decision bug)', () => {
+  // The bug: 'persistent_critical' must win over 'banner'/'watch_window'/'digest'.
+  assert.ok(deliveryPriorityRank('persistent_critical') > deliveryPriorityRank('banner'));
+  assert.ok(deliveryPriorityRank('persistent_critical_with_imessage') > deliveryPriorityRank('persistent_critical'));
+  assert.ok(deliveryPriorityRank('banner') > deliveryPriorityRank('digest'));
 });

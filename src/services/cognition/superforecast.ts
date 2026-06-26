@@ -46,6 +46,7 @@ import { signatureFor } from '@/services/hypothesis-feedback';
 import { recall, analogScoreFor } from '@/services/cognition/episodic-memory';
 import { matchReferenceClass, blendWithEpisodic } from './base-rates';
 import { decomposeHypothesis } from './decomposition';
+import { sanitizeForPrompt } from '@/utils/prompt-sanitize';
 import { aggregate } from './probability-aggregation';
 import type { Estimate } from './probability-aggregation';
 import { getRecalibrator } from '@/services/intelligence/forecast-calibration-adapter';
@@ -113,14 +114,14 @@ const PERSONA_PROBABILITY_SYSTEMS: Record<PersonaKind, string> = {
 export function buildPersonaPrompt(h: Hypothesis, persona: PersonaKind): string {
   const evidenceLines = h.evidence
     .slice(0, 6)
-    .map(e => `  - [${e.source}] ${e.label}`)
+    .map(e => `  - [${sanitizeForPrompt(e.source, 40)}] ${sanitizeForPrompt(e.label, 200)}`)
     .join('\n');
 
   return (
     `${PERSONA_PROBABILITY_SYSTEMS[persona]}\n\n` +
     `Hypothesis (${h.kind}, ${h.risk} risk):\n` +
     `<evidence>\n` +
-    `"${h.statement}"\n` +
+    `"${sanitizeForPrompt(h.statement, 280)}"\n` +
     `</evidence>\n\n` +
     `Supporting evidence:\n` +
     `<evidence>\n` +
@@ -182,7 +183,7 @@ export function buildAggregateReviewPrompt(
     `Do NOT change the probability unless there is a clear error — conservative reviews are preferred.\n\n` +
     `Hypothesis (${h.kind}, ${h.risk} risk):\n` +
     `<evidence>\n` +
-    `"${h.statement}"\n` +
+    `"${sanitizeForPrompt(h.statement, 280)}"\n` +
     `</evidence>\n\n` +
     `Individual estimates:\n` +
     `<evidence>\n` +

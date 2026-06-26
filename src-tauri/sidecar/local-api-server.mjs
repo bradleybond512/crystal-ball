@@ -1345,6 +1345,27 @@ export function isDangerousProbeHost(urlString) {
   return false;
 }
 
+// IPAWS (federal emergency alerts: NWS CAP + FEMA) outage disposition. Pure so
+// the safety rule — "a total upstream outage must never be reported as a fresh,
+// healthy all-clear" — is unit-testable without HTTP mocking. nwsData/femaData
+// are the parsed upstream payloads, or null when that upstream failed.
+export function ipawsOutageDisposition(nwsData, femaData) {
+  const nwsDown = nwsData === null || nwsData === undefined;
+  const femaDown = femaData === null || femaData === undefined;
+  const totalOutage = nwsDown && femaDown;
+  const partialOutage = nwsDown || femaDown;
+  return {
+    totalOutage,
+    partialOutage,
+    degraded: partialOutage,
+    reason: !partialOutage
+      ? null
+      : totalOutage
+        ? 'Both NWS and FEMA IPAWS upstreams are unreachable'
+        : 'One IPAWS upstream is unreachable',
+  };
+}
+
 // DNS resolution cache — avoids repeated lookups on the same hostname (5 min TTL).
 const _dnsCache = new Map(); // hostname → addresses[]
 const _DNS_CACHE_TTL = 5 * 60_000;
@@ -9007,6 +9028,12 @@ async function dispatch(requestUrl, req, routes, context) {
 
  const combined = [...parseNwsCapFeatures(nwsFeatures), ...parseFemaDisasters(femaRows)];
  const fresh = expireAlerts(dedupeAlerts(combined), Date.now());
+ // safeJson() + Promise.allSettled swallow upstream errors, so the catch
+ // below is UNREACHABLE for a NWS/FEMA outage. Detect it here: when BOTH
+ // upstreams are down this is a total outage of the federal emergency-alert
+ // feed — NEVER report that as a fresh, healthy all-clear (mirrors the
+ // /api/nws-alerts route's policy). A partial outage still surfaces `degraded`.
+ const disp = ipawsOutageDisposition(nwsData, femaData);
  const result = {
  alerts: fresh,
  fetchedAt: new Date().toISOString(),
@@ -9014,7 +9041,12 @@ async function dispatch(requestUrl, req, routes, context) {
  nws: nwsData ? 'ok' : 'degraded',
  fema: femaData ? 'ok' : 'degraded',
  },
+ ...(disp.degraded ? { degraded: true, reason: disp.reason } : {}),
  };
+ if (disp.totalOutage) {
+ trackFailure('ipaws', new Error(disp.reason));
+ return json(result); // NOT cached — an outage must not become a fresh all-clear
+ }
  trackSuccess('ipaws', 'primary');
  setCached('ipaws-active', result);
  return json(result);

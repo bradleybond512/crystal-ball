@@ -40,6 +40,7 @@
 import type { HypothesisLike } from './base-rates';
 import type { LlmResult } from '@/services/llm-adapter';
 import { parseStrictJson } from './llm-json';
+import { sanitizeForPrompt } from '@/utils/prompt-sanitize';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -85,7 +86,7 @@ export function buildDecompositionPrompt(h: HypothesisLike & { statement: string
       const evArr = (h as unknown as { evidence: { source: string; label: string }[] }).evidence;
       return evArr
         .slice(0, 6)
-        .map((e) => `  - [${e.source}] ${e.label}`)
+        .map((e) => `  - [${sanitizeForPrompt(e.source, 40)}] ${sanitizeForPrompt(e.label, 200)}`)
         .join('\n');
     }
     return '  (none provided)';
@@ -98,7 +99,7 @@ export function buildDecompositionPrompt(h: HypothesisLike & { statement: string
     `Assign a probability (0.00–1.00) to each condition.\n\n` +
     `Hypothesis (kind: ${h.kind}):\n` +
     `<evidence>\n` +
-    `"${h.statement}"\n` +
+    `"${sanitizeForPrompt(h.statement, 280)}"\n` +
     `</evidence>\n\n` +
     `Supporting evidence:\n` +
     `<evidence>\n` +

@@ -792,7 +792,21 @@ function redactSystemHealth(report: SystemHealthReport): SystemHealthReport {
       userImpact: redactString(f.userImpact),
       recommendedAction: redactString(f.recommendedAction),
     })),
+    // PanelHealth.lastError is a free-text error message that can carry a leaked
+    // URL / token / PII from whatever threw inside the panel — redact it.
+    panels: report.panels.map((p) => ({
+      ...p,
+      lastError: p.lastError ? redactString(p.lastError) : p.lastError,
+    })),
     sources: report.sources.map((s) => ({ ...s, reason: redactString(s.reason) })),
+    // The unsafe-suppression reasons are free-text and surface in the bundle.
+    notifications: {
+      ...report.notifications,
+      unsafeSuppressions: report.notifications.unsafeSuppressions.map((u) => ({
+        ...u,
+        reason: redactString(u.reason),
+      })),
+    },
     sidecar: { ...report.sidecar, reason: redactString(report.sidecar.reason) },
     recommendations: report.recommendations.map((r) => redactString(r)),
   };

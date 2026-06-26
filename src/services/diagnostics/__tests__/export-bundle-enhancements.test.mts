@@ -393,3 +393,31 @@ test('default cap on algorithmTrace prevents unbounded growth', () => {
   const note = bundle.truncations.find((t) => t.field === 'algorithmTrace');
   assert.ok(note, 'expected truncation note for algorithmTrace');
 });
+
+// Round-1 audit #6/#8: redactSystemHealth spread `...report` through, leaking the
+// free-text panels[].lastError and notifications.unsafeSuppressions[].reason
+// (which can carry a thrown URL / token / PII) into the GitHub-paste bundle.
+test('redactSystemHealth scrubs free text in panels[].lastError + unsafeSuppressions[].reason', () => {
+  const EMAIL = 'panel-canary@example.invalid';
+  const TOKEN = 'aaaabbbbccccddddeeeeffff00001111';
+  const systemHealth: SystemHealthReport = {
+    ...makeSystemHealth(),
+    panels: [{
+      panelId: 'nws-alerts',
+      label: 'Weather',
+      status: 'failing',
+      mounted: true,
+      enabled: true,
+      visible: true,
+      lastError: `render failed for ${EMAIL} (Bearer ${TOKEN})`,
+      dependencies: [],
+    }] as SystemHealthReport['panels'],
+    notifications: {
+      ...emptyNotifSummary(),
+      unsafeSuppressions: [{ candidateId: 'c1', reason: `suppressed alert from ${EMAIL}`, at: NOW }],
+    },
+  };
+  const json = exportBundleToJson(buildExportBundle({ ...baseInput(), systemHealth }));
+  assert.doesNotMatch(json, /panel-canary@example\.invalid/, 'panel/suppression email must be redacted');
+  assert.doesNotMatch(json, /aaaabbbbccccddddeeeeffff00001111/, 'panel lastError token must be redacted');
+});

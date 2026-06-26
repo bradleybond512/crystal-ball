@@ -7,6 +7,7 @@ import { spawnSync } from 'child_process';
 import { brotliCompress } from 'zlib';
 import { promisify } from 'util';
 import pkg from './package.json';
+import { isSafetyFeedPath } from './src/utils/sw-safety-feeds';
 
 const isE2E = process.env.VITE_E2E === '1';
 const isDesktopBuild = process.env.VITE_DESKTOP_RUNTIME === '1';
@@ -781,7 +782,11 @@ export default defineConfig({
  sameOrigin && /^\/api\//.test(url.pathname)
  // Don't persist personal-location responses (home/saved-place lat/lon) into
  // on-disk CacheStorage — they'd sit unencrypted in the browser profile.
- && !/[?&](lat|lon|latitude|longitude)=/i.test(url.search),
+ && !/[?&](lat|lon|latitude|longitude)=/i.test(url.search)
+ // Never cache safety-critical realtime feeds (NWS/IPAWS/severe/volcano/quake):
+ // a stale cached 200 would render an active warning as a fresh all-clear
+ // during a connectivity gap. They get the NetworkOnly rule below (fail-closed).
+ && !isSafetyFeedPath(url.pathname),
  handler: 'NetworkFirst',
  method: 'GET',
  options: {
@@ -790,6 +795,15 @@ export default defineConfig({
  expiration: { maxEntries: 200, maxAgeSeconds: 4 * 60 * 60 },
  cacheableResponse: { statuses: [0, 200] },
  },
+ },
+ {
+ // Safety-critical realtime feeds — fail CLOSED. NetworkOnly means an outage
+ // surfaces as a network error (the sidecar's 503 {stale:true}) the renderer
+ // can record as stale, instead of a Workbox cache fallback marking it fresh.
+ urlPattern: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>
+ sameOrigin && isSafetyFeedPath(url.pathname),
+ handler: 'NetworkOnly',
+ method: 'GET',
  },
  {
  urlPattern: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>

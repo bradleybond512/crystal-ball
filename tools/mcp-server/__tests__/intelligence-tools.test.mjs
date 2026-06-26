@@ -37,18 +37,29 @@ describe('trend tool', () => {
   let tmp;
   let storage;
 
+  // trend() filters snapshots to a window relative to Date.now() ('7d' here), so
+  // the fixtures must be dated relative to *now* — hardcoded calendar dates age
+  // out of the window and silently fail later (this test was a time bomb).
+  // parseFilenameDate parses YYYY-MM-DD-HHMM.json as UTC, so build from UTC parts.
+  function histFile(daysAgo) {
+    const d = new Date(Date.now() - daysAgo * 86400000);
+    const p = (n) => String(n).padStart(2, '0');
+    return `sentinel/history/${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}.json`;
+  }
+
   before(() => {
     tmp = mkdtempSync(join(tmpdir(), 'cb-trend-'));
     storage = createStorage(tmp);
-    storage.writeJSON('sentinel/history/2026-04-10-0800.json', {
+    // Oldest → newest, rising SPY price (420 → 425 → 430). All within the 7d window.
+    storage.writeJSON(histFile(3), {
       markets: { quotes: [{ symbol: 'SPY', price: 420 }] },
       conflicts: { events: [{ country: 'Sudan' }, { country: 'Sudan' }] },
     });
-    storage.writeJSON('sentinel/history/2026-04-11-0800.json', {
+    storage.writeJSON(histFile(2), {
       markets: { quotes: [{ symbol: 'SPY', price: 425 }] },
       conflicts: { events: [{ country: 'Sudan' }] },
     });
-    storage.writeJSON('sentinel/history/2026-04-12-0800.json', {
+    storage.writeJSON(histFile(1), {
       markets: { quotes: [{ symbol: 'SPY', price: 430 }] },
       conflicts: { events: [{ country: 'Sudan' }, { country: 'Sudan' }, { country: 'Sudan' }] },
     });

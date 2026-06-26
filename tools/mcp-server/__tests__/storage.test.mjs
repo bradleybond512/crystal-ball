@@ -21,6 +21,17 @@ describe('storage', () => {
     assert.equal(result, null);
   });
 
+  test('resolve refuses path traversal out of the sandbox', () => {
+    // Caller input (e.g. an MCP watchlist name) reaches resolve(); a `../`
+    // payload must not escape baseDir for read/write/delete.
+    assert.throws(() => storage.resolve('../evil.json'), /sandbox/i);
+    assert.throws(() => storage.resolve('../../.ssh/authorized_keys'), /sandbox/i);
+    assert.throws(() => storage.resolve('watchlists/../../../etc/x.json'), /sandbox/i);
+    assert.throws(() => storage.resolve('bad\0name'), /Invalid path/i);
+    // legitimate subpaths still resolve under baseDir
+    assert.ok(storage.resolve('watchlists/foo.json').endsWith(join('watchlists', 'foo.json')));
+  });
+
   test('writeJSON creates file and parent dirs', () => {
     storage.writeJSON('sentinel/latest-snapshot.json', { foo: 1 });
     const raw = readFileSync(join(tmp, 'sentinel', 'latest-snapshot.json'), 'utf8');

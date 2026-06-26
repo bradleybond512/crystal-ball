@@ -56,7 +56,14 @@ export function makeStatefulTools(client, storage) {
   const WL_DIR = 'watchlists';
   const RULES_FILE = `${WL_DIR}/_rules.json`;
 
+  // Reject names that contain a path separator or other filesystem metacharacter
+  // before building a path from caller input (storage.resolve is the backstop,
+  // but this gives a clean error instead of a thrown sandbox-escape).
+  const VALID_WL_NAME = /^[\w .-]{1,64}$/;
   function wlPath(name) {
+    if (typeof name !== 'string' || !VALID_WL_NAME.test(name)) {
+      throw new Error(`Invalid watchlist name "${name}" — use letters, digits, space, . _ - (max 64); no path separators.`);
+    }
     return `${WL_DIR}/${name}.json`;
   }
 

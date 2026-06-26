@@ -30,6 +30,10 @@ jobs:
       # 2026-06). Single-* globs (no globstar) so it's portable across the
       # CI shell + Node version.
       - run: npm run test:renderer
+      # MCP storage sandbox guard (path-traversal rejection). Runs with the root
+      # deps (storage.mjs has no external imports); the rest of the mcp-server
+      # suite needs its own node_modules + is gated separately.
+      - run: npm run test:mcp-storage
       # Sidecar security-hardening suite (SSRF IP classification + pinning, CSP
       # allowlist, webhook dispatch, IPv4 redirect) — the Node sidecar tests live
       # under src-tauri/ so test:renderer can't reach them; this gates them.

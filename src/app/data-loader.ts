@@ -162,7 +162,8 @@ import { classifyNewsItem } from '@/services/positive-classifier';
 import { fetchGivingSummary } from '@/services/giving';
 import { fetchNWSAlerts } from '@/services/nws-alerts';
 import { routeWeatherAlert } from '@/services/weather/weather-warning-router';
-import type { NwsAlertMinimal } from '@/services/weather/weather-threat-types';
+import { deliveryPriorityRank } from '@/services/weather/weather-urgency';
+import type { NwsAlertMinimal, AlertPolygon } from '@/services/weather/weather-threat-types';
 import { fetchFAACameras, scoreCamerasAgainstAlerts, getDisasterProximateCameras } from '@/services/faa-cameras';
 import { FAAWeatherCamsPanel } from '@/components/FAAWeatherCamsPanel';
 import { fetchAdsbSnapshot } from '@/services/adsb';
@@ -343,6 +344,21 @@ const PROTO_TO_CLIENT_LEVEL: Record<ProtoThreatLevel, ClientThreatLevel> = {
 
 // Stable dedupe key for an NWS alert. Prefers the official alert id (unique
 // per issuance — an updated/re-issued warning gets a fresh id and re-notifies);
+// Convert an NWS GeoJSON geometry (Polygon / MultiPolygon) to an AlertPolygon's
+// ring list so the saved-place matcher can run point-in-polygon. Returns
+// undefined for missing / non-polygon / degenerate geometry.
+function alertPolygonFromGeoJson(geometry: { type: string; coordinates: unknown } | null | undefined): AlertPolygon | undefined {
+  if (!geometry || !Array.isArray(geometry.coordinates)) return undefined;
+  let rings: unknown;
+  if (geometry.type === 'Polygon') rings = geometry.coordinates;
+  else if (geometry.type === 'MultiPolygon') rings = (geometry.coordinates as unknown[]).flat();
+  else return undefined;
+  if (!Array.isArray(rings) || rings.length === 0) return undefined;
+  const first = rings[0];
+  if (!Array.isArray(first) || first.length < 3) return undefined;
+  return { rings: rings as AlertPolygon['rings'] };
+}
+
 // falls back to a hash of headline+area when the id is missing so a long-lived
 // warning still maps to one stable key across refreshes.
 function weatherAlertDedupeKey(alert: { id?: string; headline?: string; event?: string; areaDesc?: string }): string {
@@ -2606,7 +2622,8 @@ export class DataLoaderManager implements AppModule {
  // Route alerts through Personal Storm Mode — find the highest-priority
  // decision across all alerts × saved places and broadcast it so the
  // PersonalStormMode component can show/hide the storm banner.
- // NWSAlert doesn't carry polygon data so matches fall back to UGC zones.
+ // Polygon (when present) + UGC zones are threaded into the minimal so the
+ // matcher can do point-in-polygon and fall back to zone matching.
  try {
  const { getSavedPlaces } = await import('@/services/saved-places');
  const places = getSavedPlaces();
@@ -2621,10 +2638,17 @@ export class DataLoaderManager implements AppModule {
  sent: raw.onset ?? raw.expires,
  expires: raw.expires,
  severity: (raw.severity?.toLowerCase() ?? 'unknown') as NwsAlertMinimal['severity'],
+ // Extract the GeoJSON polygon so routeWeatherAlert can do point-in-polygon
+ // against saved places. NWSAlert carries no UGC zones, so polygon-free alerts
+ // still won't match — but polygon-bearing alerts now do (they previously ALL
+ // resolved to no_match, leaving Personal Storm Mode structurally dead).
+ polygon: alertPolygonFromGeoJson(raw.geometry),
+ headline: raw.headline,
  };
  const decision = routeWeatherAlert(minimal, weatherPlaces);
  if (decision.payload?.activation !== 'inactive' && (!bestDecision ||
- (decision.urgency?.priority ?? 0) > (bestDecision.urgency?.priority ?? 0))) {
+ deliveryPriorityRank(decision.urgency?.priority ?? 'background')
+ > deliveryPriorityRank(bestDecision.urgency?.priority ?? 'background'))) {
  bestDecision = decision;
  }
  }

@@ -42,6 +42,19 @@ export type WeatherDeliveryPriority =
   | 'persistent_critical'    // banner + in-app persistent + menu bar
   | 'persistent_critical_with_imessage'; // adds optional iMessage contact
 
+/** Delivery priorities in ascending urgency. */
+const DELIVERY_PRIORITY_ORDER: readonly WeatherDeliveryPriority[] = [
+  'background', 'digest', 'watch_window', 'banner', 'persistent_critical', 'persistent_critical_with_imessage',
+];
+
+/** Numeric urgency rank for a delivery priority (higher = more urgent). Callers
+ *  that pick the "highest-priority" decision MUST rank through this rather than
+ *  comparing the priority strings directly — lexicographic order does not match
+ *  urgency (e.g. 'banner' < 'digest' as strings, but 'banner' is more urgent). */
+export function deliveryPriorityRank(priority: WeatherDeliveryPriority): number {
+  return Math.max(0, DELIVERY_PRIORITY_ORDER.indexOf(priority));
+}
+
 /** What signals would confirm or weaken the threat in the next ~30 min.
  *  Plan section 5 (Weather Watch Windows). */
 export interface WeatherWatchWindow {

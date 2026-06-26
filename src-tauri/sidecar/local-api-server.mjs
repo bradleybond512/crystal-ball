@@ -1366,6 +1366,23 @@ export function ipawsOutageDisposition(nwsData, femaData) {
   };
 }
 
+// ProMED: a HTTP-200 response that parses to ZERO alerts is a break signal — a
+// non-RSS body (maintenance page / Cloudflare challenge) or a schema change, not
+// a quiet feed (ProMED's live disease feed effectively always has items). Treat
+// 0 alerts as degraded so the snapshot is NOT cached and the next caller retries
+// instead of serving a 15-min "zero disease outbreaks" all-clear. Pure helper.
+export function promedResultIsDegraded(alerts) {
+  return !Array.isArray(alerts) || alerts.length === 0;
+}
+
+// GDACS: never persist a degraded EMPTY result for the full TTL. The ERCC
+// fallback discards its response (events=[]); caching that would serve "zero
+// global disasters" as a fresh 30-min all-clear, masking the primary outage. A
+// real primary result (degraded=false) or any fallback with events is cacheable.
+export function gdacsResultShouldCache(degraded, eventCount) {
+  return !(degraded && eventCount === 0);
+}
+
 // DNS resolution cache — avoids repeated lookups on the same hostname (5 min TTL).
 const _dnsCache = new Map(); // hostname → addresses[]
 const _DNS_CACHE_TTL = 5 * 60_000;
@@ -4172,6 +4189,19 @@ async function getOrFetchPromedSnapshot() {
       }
       const xml = await resp.text();
       const alerts = parseProMedRss(xml);
+      // A 200 that parses to zero alerts is a break signal (non-RSS body /
+      // schema change), not a quiet feed — degrade + do NOT cache, so the empty
+      // result can't be served as a fresh 15-min "zero disease outbreaks".
+      if (promedResultIsDegraded(alerts)) {
+        return {
+          alerts: [],
+          lastFetch: new Date().toISOString(),
+          novelCount: 0,
+          outbreakCount: 0,
+          degraded: true,
+          reason: 'ProMED returned HTTP 200 but parsed 0 items (non-RSS body or schema change)',
+        };
+      }
       const { novelCount, outbreakCount } = summarizeProMedAlerts(alerts);
       const result = {
         alerts,
@@ -8630,10 +8660,13 @@ async function dispatch(requestUrl, req, routes, context) {
         // Fallback 2: Copernicus ERCC RSS (skip parse errors)
         try {
           await fetchWithTimeout(GDACS_ERCC_FALLBACK, { headers: { Accept: 'application/rss+xml,application/xml;q=0.9', 'User-Agent': CHROME_UA } }, 8_000);
+          // ERCC is reachable but its RSS is not parsed here, so this yields zero
+          // usable events. That is NOT a success — record it as a failure so the
+          // feed reads degraded, and the empty result below is left uncached.
           events = [];
           feedSource = 'ercc.jrc.ec.europa.eu';
           degraded = true;
-          trackSuccess('gdacs', 'fallback-1');
+          trackFailure('gdacs', new Error('GDACS ERCC fallback reachable but returned no parseable events'));
         } catch {
           const stale = getCachedStale('gdacs-rss');
           if (stale) return json({ ...stale, degraded: true, source: 'cached' });
@@ -8649,7 +8682,12 @@ async function dispatch(requestUrl, req, routes, context) {
         Object.entries(grouped).map(([k, v]) => [k, v.map((e) => ({ ...e, rgba: alertLevelRgba(e.alertLevel) }))])
       ),
     };
-    setCached('gdacs-rss', result, CACHE_TTL);
+    // Don't persist a degraded empty result (the ERCC fallback discards its
+    // response → events=[]) for the full TTL — that would serve "zero global
+    // disasters" as a fresh 30-min all-clear, masking the primary outage.
+    if (gdacsResultShouldCache(degraded, events.length)) {
+      setCached('gdacs-rss', result, CACHE_TTL);
+    }
     return json(result);
   }
 

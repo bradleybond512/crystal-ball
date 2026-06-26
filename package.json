@@ -182,7 +182,8 @@
     "desktop:package:windows:full:sign": "node scripts/desktop-package.mjs --os windows --variant full --sign",
     "desktop:package:windows:tech:sign": "node scripts/desktop-package.mjs --os windows --variant tech --sign",
     "desktop:package": "node scripts/desktop-package.mjs",
-    "postdesktop:build:full": "node scripts/local-install.mjs"
+    "postdesktop:build:full": "node scripts/local-install.mjs",
+    "test:mcp-storage": "node --test tools/mcp-server/__tests__/storage.test.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",

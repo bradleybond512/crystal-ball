@@ -50,6 +50,9 @@ test('connect-src retains load-bearing direct-connect origins', () => {
     'https://www.fema.gov',
     'https://*.crystalball.app',
     'https://api.github.com',
+    // OWM weather-tile overlays (getOwmTileUrl) fetch from this host; without it
+    // the Temperature/Precipitation/Clouds/Wind overlays are CSP-blocked.
+    'https://tile.openweathermap.org',
   ];
   for (const origin of required) {
     assert.ok(connectSrc.includes(origin), `connect-src must include ${origin}`);

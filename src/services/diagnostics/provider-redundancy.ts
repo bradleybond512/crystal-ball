@@ -43,7 +43,8 @@ export interface ProviderSnapshot {
 }
 
 export type RedundancyVerdict =
-  | 'redundant_agreement'  // multiple providers up + agreeing
+  | 'redundant_agreement'  // multiple providers up + same fact fingerprint (verified)
+  | 'redundant_unverified'  // multiple up but no comparable fingerprints — agreement NOT verified
   | 'redundant_disagreement'  // multiple up but emitting different fingerprints
   | 'single_source'        // primary up, no working backup
   | 'primary_down_with_backup'
@@ -136,12 +137,16 @@ function decideVerdict(providers: readonly ProviderSnapshot[]): RedundancyVerdic
     }
     return 'primary_down_with_backup';
   }
-  // Two or more up — check for disagreement.
+  // Two or more up — compare fact fingerprints.
   const fingerprints = new Set<string>();
   for (const p of upProviders) {
     if (p.recentFactFingerprint) fingerprints.add(p.recentFactFingerprint);
   }
   if (fingerprints.size > 1) return 'redundant_disagreement';
+  // size 0 = no provider reported a comparable fingerprint, so we CANNOT claim
+  // the providers agree — don't grant the full-confidence 'redundant_agreement'.
+  // (This is the common case until the bridges populate recentFactFingerprint.)
+  if (fingerprints.size === 0) return 'redundant_unverified';
   return 'redundant_agreement';
 }
 
@@ -155,15 +160,19 @@ const LEVEL_RANK: Record<ProviderHealthLevel, number> = {
 
 const VERDICT_RANK: Record<RedundancyVerdict, number> = {
   redundant_agreement: 0,
-  unknown: 1,
-  single_source: 2,
-  redundant_disagreement: 3,
-  primary_down_with_backup: 4,
-  all_down: 5,
+  redundant_unverified: 1,
+  unknown: 2,
+  single_source: 3,
+  redundant_disagreement: 4,
+  primary_down_with_backup: 5,
+  all_down: 6,
 };
 
 const MULTIPLIER: Record<RedundancyVerdict, number> = {
   redundant_agreement: 1,
+  // 2+ providers up (some redundancy) but agreement unverified — a small
+  // discount from full confidence, still better than a lone source.
+  redundant_unverified: 0.9,
   redundant_disagreement: 0.6,
   single_source: 0.7,
   primary_down_with_backup: 0.5,
@@ -177,6 +186,9 @@ function describeVerdict(verdict: RedundancyVerdict, providers: readonly Provide
   switch (verdict) {
     case 'redundant_agreement': {
       return `${upCount} of ${total} providers up and agreeing.`;
+    }
+    case 'redundant_unverified': {
+      return `${upCount} of ${total} providers up, but agreement is unverified (no comparable fact fingerprints).`;
     }
     case 'redundant_disagreement': {
       return `${upCount} of ${total} providers up but emitting different fingerprints — manual review needed.`;
@@ -202,6 +214,9 @@ function pickRemediation(verdict: RedundancyVerdict, domain: string): string {
   switch (verdict) {
     case 'redundant_agreement': {
       return '';
+    }
+    case 'redundant_unverified': {
+      return `${domain}: providers are up but emit no comparable fact fingerprints, so agreement can't be verified — wire recentFactFingerprint into the snapshots.`;
     }
     case 'redundant_disagreement': {
       return `${domain}: providers disagree on the latest fact. Open the diagnostics inspector to compare fingerprints.`;

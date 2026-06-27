@@ -180,3 +180,19 @@ test('report is JSON-serializable', () => {
   const parsed = JSON.parse(JSON.stringify(r)) as { domains: unknown[] };
   assert.ok(Array.isArray(parsed.domains));
 });
+
+test('two providers up but NO comparable fingerprints → redundant_unverified (round-1 #12)', () => {
+  // The bridges don't (yet) populate recentFactFingerprint, so without this the
+  // verdict collapsed to a false full-confidence 'redundant_agreement'.
+  const r = assessProviderRedundancy({
+    generatedAt: 0,
+    snapshots: [
+      snap({ providerId: 'nws', primary: true }),
+      snap({ providerId: 'noaa-radar', primary: false }),
+    ],
+  });
+  assert.equal(r.domains[0].verdict, 'redundant_unverified');
+  // Discounted from full confidence, but still better than a single source.
+  assert.ok(r.domains[0].confidenceMultiplier < 1);
+  assert.ok(r.domains[0].confidenceMultiplier > 0.7);
+});

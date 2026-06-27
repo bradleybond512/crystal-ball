@@ -21,7 +21,10 @@ test('snapshots satisfy the provider-redundancy contract', () => {
   const report = assessProviderRedundancy({ generatedAt: T0 + 1000, snapshots });
   const adsb = report.domains.find((d) => d.domain === 'adsb');
   assert.ok(adsb);
-  assert.equal(adsb.verdict, 'redundant_agreement');
+  // Two providers up but snapshotsFromRegistry emits no fact fingerprints, so
+  // agreement can't be verified — 'redundant_unverified', not a false
+  // full-confidence 'redundant_agreement'.
+  assert.equal(adsb.verdict, 'redundant_unverified');
 });
 
 test('primary down with healthy backup maps to the right verdict', () => {

@@ -26,6 +26,32 @@ export interface CachedSnapshot<T> {
   source: 'network' | 'offline-cache';
 }
 
+export interface FeedFreshnessDisposition {
+  /** True only for a live (network) fetch. False when served from offline cache. */
+  fresh: boolean;
+  /** Human-readable staleness reason when !fresh (for dataFreshness.recordError + the feed status). */
+  staleReason: string | null;
+  /** The real "last live fetch" timestamp to record when stale (cachedAt), so the
+   *  staleness clock reflects the actual age — never advanced to now. */
+  staleTimestamp: number | null;
+}
+
+/**
+ * Decide how a feed should record its freshness from a CachedSnapshot.
+ *
+ * Consumers MUST advance freshness (recordUpdate / recordSourceUpdate(now)) only
+ * when `fresh` — a snapshot served from the offline cache (a failed live fetch)
+ * must be recorded as an ERROR, otherwise a stale snapshot renders as a fresh
+ * live update and a safety feed's StalenessBanner stays green during an outage.
+ */
+export function feedFreshnessFromSnapshot<T>(snapshot: CachedSnapshot<T>): FeedFreshnessDisposition {
+  if (snapshot.isStale) {
+    const ageMin = Math.round(snapshot.staleDurationMs / 60_000);
+    return { fresh: false, staleReason: `served from offline cache (~${ageMin}m stale)`, staleTimestamp: snapshot.cachedAt };
+  }
+  return { fresh: true, staleReason: null, staleTimestamp: null };
+}
+
 export interface OfflineCacheEntry<T> {
   data: T;
   cachedAt: number;

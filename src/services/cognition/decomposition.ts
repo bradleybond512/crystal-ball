@@ -131,7 +131,7 @@ export function buildDecompositionPrompt(h: HypothesisLike & { statement: string
  * This wrapper is retained for backward compatibility with existing tests and
  * call sites that relied on the untyped form. New code must use parseStrictJson.
  */
-export function tryParseJson(raw: string): unknown | null {
+export function tryParseJson(raw: string): unknown {
   // Delegate to the shared strict parser with an identity validator
   // (accept anything that parses — the caller validates structure separately).
   return parseStrictJson<unknown>(raw, (x): x is unknown => x !== null && x !== undefined);
@@ -148,18 +148,16 @@ interface RawCondition {
 function isValidRawCondition(v: unknown): v is RawCondition {
   if (!v || typeof v !== 'object') return false;
   const c = v as Record<string, unknown>;
-  return typeof c['label'] === 'string' && typeof c['probability'] === 'number';
+  return typeof c.label === 'string' && typeof c.probability === 'number';
 }
 
 function validateConditions(parsed: unknown): DecompositionCondition[] | null {
   if (!parsed || typeof parsed !== 'object') return null;
 
   const obj = parsed as Record<string, unknown>;
-  const rawConditions: unknown[] = Array.isArray(obj['conditions'])
-    ? (obj['conditions'] as unknown[])
-    : Array.isArray(parsed)
-      ? (parsed as unknown[])
-      : [];
+  let rawConditions: unknown[] = [];
+  if (Array.isArray(obj.conditions)) rawConditions = obj.conditions as unknown[];
+  else if (Array.isArray(parsed)) rawConditions = parsed as unknown[];
 
   if (rawConditions.length < 2 || rawConditions.length > 4) return null;
 
@@ -253,7 +251,7 @@ export async function decomposeHypothesis(
       x !== null &&
       typeof x === 'object' &&
       !Array.isArray(x) &&
-      Array.isArray((x as Record<string, unknown>)['conditions']),
+      Array.isArray((x as Record<string, unknown>).conditions),
   );
   const conditions = validateConditions(parsed);
   if (!conditions || conditions.length < 2) return null;

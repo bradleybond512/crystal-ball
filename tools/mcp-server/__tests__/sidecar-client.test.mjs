@@ -45,6 +45,27 @@ test('buildUrl constructs correct URL with params', () => {
   rmSync(tmp, { recursive: true });
 });
 
+test('buildUrl rejects SSRF routes that escape the loopback host (query_raw endpoint)', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'mcp-test-'));
+  writeFileSync(join(tmp, 'sidecar.port'), '46123');
+  writeFileSync(join(tmp, 'sidecar.token'), 'tok');
+  const client = createSidecarClient(tmp);
+
+  // @-userinfo turns 127.0.0.1:<port> into userinfo + the attacker host into the
+  // real host — would ship the bearer token off-box. Must be rejected (null).
+  assert.equal(client.buildUrl('@169.254.169.254/latest/meta-data'), null);
+  assert.equal(client.buildUrl('@evil.example.com/x'), null);
+  // protocol-relative + absolute + non-string routes also rejected.
+  assert.equal(client.buildUrl('//evil.example.com/x'), null);
+  assert.equal(client.buildUrl('http://evil.example.com/x'), null);
+  assert.equal(client.buildUrl('api/no-leading-slash'), null);
+  assert.equal(client.buildUrl(undefined), null);
+  // Legit relative routes still build against loopback.
+  assert.equal(client.buildUrl('/api/situation'), 'http://127.0.0.1:46123/api/situation');
+
+  rmSync(tmp, { recursive: true });
+});
+
 test('get returns error when sidecar not running', async () => {
   const client = createSidecarClient('/nonexistent/path');
   const result = await client.get('/api/health');

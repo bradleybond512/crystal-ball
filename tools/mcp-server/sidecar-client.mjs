@@ -33,7 +33,19 @@ export function createSidecarClient(dataDir = DEFAULT_DATA_DIR) {
   function buildUrl(route, params) {
     const port = discoverPort();
     if (!port) return null;
-    const url = new URL(`http://127.0.0.1:${port}${route}`);
+    // `route` is agent-/caller-supplied (query_raw / chain_query /
+    // compare_snapshots pass it through verbatim). It MUST be a leading-slash
+    // relative path. Without this, a route like `@169.254.169.254/...` turns
+    // `127.0.0.1:<port>` into URL userinfo and the attacker segment into the
+    // host — an SSRF that ships the sidecar bearer token (attached by get/post)
+    // to an arbitrary host. Reject non-relative routes, then assert the resolved
+    // host is still the loopback target (defense in depth against parser quirks).
+    if (typeof route !== 'string' || !route.startsWith('/') || route.startsWith('//')) {
+      return null;
+    }
+    const expectedHost = `127.0.0.1:${port}`;
+    const url = new URL(`http://${expectedHost}${route}`);
+    if (url.host !== expectedHost) return null;
     if (params) {
       for (const [k, v] of Object.entries(params)) {
         if (v != null) url.searchParams.set(k, String(v));

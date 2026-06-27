@@ -17,6 +17,7 @@
 import type { Hypothesis } from './analyst-loop';
 import { signatureFor } from './hypothesis-feedback';
 import { generateText, type LlmProvider } from './llm-adapter';
+import { sanitizeForPrompt } from '@/utils/prompt-sanitize';
 import { getMemory, putMemory } from './reasoning-memory';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -99,15 +100,16 @@ function save(): void {
 
 // ── Prompt ────────────────────────────────────────────────────────────────────
 
-function buildPrompt(h: Hypothesis, persona: PersonaKind): string {
+// Exported for the llm-prompt-injection regression test.
+export function buildEnsemblePrompt(h: Hypothesis, persona: PersonaKind): string {
   const evidenceLines = h.evidence
     .slice(0, 6)
-    .map(e => `- [${e.source}] ${e.label}`)
+    .map(e => `- [${sanitizeForPrompt(e.source, 40)}] ${sanitizeForPrompt(e.label, 200)}`)
     .join('\n');
   return (
     `${PERSONA_SYSTEMS[persona]}\n\n` +
     `Hypothesis (${h.kind}, ${h.risk} risk, ${(h.confidence * 100).toFixed(0)}% confidence):\n` +
-    `"${h.statement}"\n\n` +
+    `"${sanitizeForPrompt(h.statement, 280)}"\n\n` +
     `Supporting evidence:\n${evidenceLines || '- (none)'}\n\n` +
     `Respond as the ${persona}.`
   );
@@ -118,7 +120,7 @@ function buildPrompt(h: Hypothesis, persona: PersonaKind): string {
 const inFlight = new Set<string>();
 
 async function runOne(persona: PersonaKind, h: Hypothesis): Promise<PersonaTake | null> {
-  const res = await generateText(buildPrompt(h, persona), { maxTokens: 220 });
+  const res = await generateText(buildEnsemblePrompt(h, persona), { maxTokens: 220 });
   if (!res.text) return null;
   return { persona, text: res.text.trim(), provider: res.provider };
 }

@@ -112,9 +112,25 @@ test('quiet hours: watch-level severe TS does NOT bypass', () => {
   assert.equal(r.bypassQuietHours, false);
 });
 
-test('quiet hours: caller can override bypass-eligible hazards', () => {
-  const r = urgencyFor(match(), undefined, { quietHoursBypassHazards: [] });
+test('quiet hours: caller can override bypass for a warning-tier hazard', () => {
+  const r = urgencyFor(
+    match({ threatLevel: 'warning', event: 'Severe Thunderstorm Warning' }),
+    undefined,
+    { quietHoursBypassHazards: [] },
+  );
   assert.equal(r.bypassQuietHours, false);
+});
+
+test('quiet hours: emergency tier ALWAYS bypasses, even for a hazard off the list', () => {
+  // Safety (round-1 audit #16): a blizzard / ice storm at emergency level must
+  // never be silenced by quiet hours just because winter_storm isn't on the
+  // per-hazard bypass list — independent of the caller's config.
+  const blizzard = urgencyFor(
+    match({ threatLevel: 'emergency', hazardKind: 'winter_storm', event: 'Blizzard Warning' }),
+    undefined,
+    { quietHoursBypassHazards: [] },
+  );
+  assert.equal(blizzard.bypassQuietHours, true);
 });
 
 // ── Acknowledgment escalation ───────────────────────────────────────────

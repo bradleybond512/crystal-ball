@@ -159,3 +159,36 @@ test('safety-critical suppression (impossible by design) does not corrupt summar
   assert.equal(summary.dispatched, 0);
   assert.equal(summary.unsafeSuppressions.length, 1); // safetyCritical=true was suppressed
 });
+
+// ── Safety-critical rung escalation (round-3 audit #2) ─────────────────────────
+// The confidence×urgency matrix tops out at 'notify_now' — nothing ever produces
+// 'critical_persistent' — so a REAL emergency reaches the ladder with
+// deliveryPriority 'notify_now'. It must still escalate to a loud DND-bypassing
+// rung, not the same 'banner_sound' as an ordinary notification. The other
+// fixtures hand-set 'critical_persistent', which hid this production gap.
+
+test('emergency tier with PRODUCTION deliveryPriority (notify_now) → loud DND-bypass rung', () => {
+  resetNotificationLadderState();
+  const reg = createNotificationTraceRegistry({ now: () => NOW });
+  const emergencyNotifyNow: BigEventResult = {
+    isBigEvent: true, triggers: [], totalScore: 95, confidence: 'high',
+    urgency: 'high', tier: 'emergency', deliveryPriority: 'notify_now', explanation: '',
+  };
+  const decision = routeBigEventToLadder(reg, emergencyNotifyNow, input(), {
+    domain: 'weather', headline: 'Tornado warning at home', now: () => NOW,
+  });
+  assert.equal(decision.dispatched, true);
+  assert.equal(decision.rung, 'critical', 'a real emergency must reach the DND-bypassing rung, not banner_sound');
+  assert.notEqual(decision.rung, 'banner_sound');
+});
+
+test('non-safety notify_now stays at banner_sound (no over-escalation)', () => {
+  resetNotificationLadderState();
+  const reg = createNotificationTraceRegistry({ now: () => NOW });
+  const ordinary: BigEventResult = {
+    isBigEvent: true, triggers: [], totalScore: 60, confidence: 'high',
+    urgency: 'high', tier: 'watch', deliveryPriority: 'notify_now', explanation: '',
+  };
+  const decision = routeBigEventToLadder(reg, ordinary, input(), { domain: 'market', now: () => NOW });
+  assert.equal(decision.rung, 'banner_sound');
+});

@@ -209,11 +209,14 @@ function confidenceFor(
   // Cap at 0.6 if every contributing provider is degraded.
   const allDegraded = contributions.every((c) => !!c.snap.degraded);
   if (allDegraded) confidence = Math.min(confidence, 0.6);
-  // Linearly decay confidence after 60 s — gone by 5 min.
+  // Linearly decay confidence after 60 s — fully gone (→0) by 5 min, honoring the
+  // "stale data reduces confidence" invariant. (The previous 0.5 coefficient
+  // floored a 5-min-plus-stale track at 50% of base forever, so a long-gone
+  // aircraft kept a meaningful-looking confidence indefinitely.)
   if (ageMs > 60_000) {
     const decayWindow = 4 * 60_000; // 4 min after the 60 s grace period
     const t = Math.min(1, (ageMs - 60_000) / decayWindow);
-    confidence *= 1 - 0.5 * t;
+    confidence *= 1 - t;
   }
   return Math.max(0, Math.min(1, confidence));
 }

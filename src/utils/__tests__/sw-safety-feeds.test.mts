@@ -12,12 +12,14 @@ test('every safety-critical realtime feed is marked NOT cacheable', () => {
   for (const path of [
     '/api/nws-alerts',
     '/api/alerts/active',                 // IPAWS
+    '/api/oref-alerts',                   // Israel rocket sirens (round-5: was missing)
     '/api/volcano-alerts',
     '/api/earthquakes',
     '/api/earthquakes/feed',
     '/api/earthquakes/significant',
     '/api/weather/active-warnings',
     '/api/weather/spc-outlook',
+    '/api/weather/tropical',              // tropical cyclone (round-5: was missing)
   ]) {
     assert.equal(isSafetyFeedPath(path), true, `${path} must NOT be cached by the service worker`);
   }

@@ -20,6 +20,7 @@ import { signatureFor } from './hypothesis-feedback';
 import { entitiesForHypothesis } from './hypothesis-entities';
 import { simulateCascade, getInfraNodes, type CascadeSimResult } from './cascade-simulator';
 import { generateText } from './llm-adapter';
+import { sanitizeForPrompt } from '@/utils/prompt-sanitize';
 import { getMemory, putMemory } from './reasoning-memory';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -99,16 +100,17 @@ function findMatchingCascadeNodeId(h: Hypothesis): string | null {
 
 // ── Prompt ────────────────────────────────────────────────────────────────────
 
-function buildPrompt(h: Hypothesis): string {
+// Exported for the llm-prompt-injection regression test.
+export function buildProjectionPrompt(h: Hypothesis): string {
   const evidenceLines = h.evidence
     .slice(0, 8)
-    .map(e => `- [${e.source}] ${e.label}`)
+    .map(e => `- [${sanitizeForPrompt(e.source, 40)}] ${sanitizeForPrompt(e.label, 200)}`)
     .join('\n');
   return (
     `Project how the following analyst hypothesis could realistically play out ` +
     `over the next 24 to 48 hours.\n\n` +
     `Hypothesis (${h.kind}, ${h.risk} risk, ${(h.confidence * 100).toFixed(0)}% confidence):\n` +
-    `"${h.statement}"\n\n` +
+    `"${sanitizeForPrompt(h.statement, 280)}"\n\n` +
     `Supporting evidence:\n${evidenceLines || '- (none)'}\n\n` +
     `Answer in two short sections:\n` +
     `NEXT 24h: 2-3 bullets of the most likely near-term developments.\n` +
@@ -144,7 +146,7 @@ export async function projectHypothesis(h: Hypothesis): Promise<HypothesisProjec
     catch { cascade = null; }
   }
 
-  const res = await generateText(buildPrompt(h), { maxTokens: 400 });
+  const res = await generateText(buildProjectionPrompt(h), { maxTokens: 400 });
   const projection: HypothesisProjection = {
     signature: sig,
     hypothesisId: h.id,

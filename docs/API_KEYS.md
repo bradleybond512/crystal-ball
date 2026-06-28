@@ -1,6 +1,6 @@
 # Crystal Ball — API Keys & Data Sources
 
-Crystal Ball supports **All 77 secret keys** wired through the Tauri desktop runtime
+Crystal Ball supports **77 secret keys** wired through the Tauri desktop runtime
 (see [`src-tauri/src/main.rs`](../src-tauri/src/main.rs) — `SUPPORTED_SECRET_KEYS`). Most
 features work out of the box with free public APIs; the keys below unlock additional
 sources or higher rate limits. Keys are entered via **Settings (gear icon) → API Keys**

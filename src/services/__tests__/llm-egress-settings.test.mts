@@ -180,7 +180,7 @@ test('disclosed + not local-only allows cloud path to proceed', async () => {
 });
 
 // ── runClaudeAgent() gate tests ───────────────────────────────────────────────
-// These prove that direct callers (ClaudeAgentPanel, intel-provider, etc.) are
+// These prove that direct callers (intel-provider, auto-brief, etc.) are
 // protected by the gate inside runClaudeAgent() itself — not only via
 // generateText(). The gate must throw before any fetch() call.
 

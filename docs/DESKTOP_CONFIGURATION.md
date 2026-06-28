@@ -4,7 +4,7 @@ Crystal Ball desktop uses a runtime configuration schema with per-feature toggle
 
 ## Supported Secret Keys
 
-The desktop vault schema is defined by Rust `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`. It currently supports 46 keys. For a complete list with signup URLs and free/paid status, see [API_KEYS.md](API_KEYS.md).
+The desktop vault schema is defined by Rust `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`. It currently supports 77 keys. For a complete list with signup URLs and free/paid status, see [API_KEYS.md](API_KEYS.md).
 
 **AI & Cloud:** `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `OLLAMA_API_URL`, `OLLAMA_MODEL`, `CRYSTALBALL_API_KEY`
 

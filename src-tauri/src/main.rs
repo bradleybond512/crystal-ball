@@ -16,6 +16,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use keyring::Entry;
 use reqwest::Url;
 use sha2::{Digest, Sha256};
+use aes_gcm::{Aes256Gcm, Nonce, aead::{Aead, KeyInit}};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::menu::{AboutMetadata, Menu, MenuItemKind, MenuItem, PredefinedMenuItem, Submenu};
@@ -680,7 +681,75 @@ fn save_vault(cache: &HashMap<String, String>) -> Result<(), String> {
  Ok(())
 }
 
-/// Write a plaintext shadow copy of the vault to the app data dir (mode 0600).
+/// AES-256-GCM envelope for the at-rest shadow vault. `n` = 12-byte nonce,
+/// `c` = ciphertext+tag. Bytes serialize as JSON arrays so no base64 dep/version
+/// is involved. `v` versions the format for any future migration.
+#[derive(Serialize, serde::Deserialize)]
+struct ShadowEnvelope {
+ v: u8,
+ n: Vec<u8>,
+ c: Vec<u8>,
+}
+
+/// Derive a 32-byte AES key bound to this machine for the shadow vault.
+/// Deliberately NOT keychain-backed: the shadow vault exists to survive keychain
+/// timeouts, so its key must be derivable WITHOUT the keychain. Bind to the macOS
+/// hardware IOPlatformUUID so the at-rest secrets can't be decrypted from a
+/// copied / backed-up / leaked file on another machine. An on-host attacker with
+/// code execution can still re-derive it — the accepted limit absent a
+/// keychain-free secure enclave. None → plaintext fallback (no stable id).
+#[cfg(target_os = "macos")]
+fn vault_shadow_key() -> Option<[u8; 32]> {
+ let out = std::process::Command::new("ioreg")
+     .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+     .output()
+     .ok()?;
+ let text = String::from_utf8_lossy(&out.stdout);
+ let uuid = text
+     .lines()
+     .find(|l| l.contains("IOPlatformUUID"))
+     .and_then(|l| l.split('"').nth(3))?;
+ if uuid.len() < 16 {
+     return None;
+ }
+ let mut hasher = Sha256::new();
+ hasher.update(b"crystalball-vault-shadow-key-v2\0");
+ hasher.update(uuid.as_bytes());
+ Some(hasher.finalize().into())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn vault_shadow_key() -> Option<[u8; 32]> {
+ None
+}
+
+/// Encrypt the shadow-vault JSON with AES-256-GCM under the machine-bound key.
+fn encrypt_vault_shadow(key: &[u8; 32], plaintext: &str) -> Option<String> {
+ let cipher = Aes256Gcm::new_from_slice(key).ok()?;
+ let mut nonce_bytes = [0u8; 12];
+ getrandom::fill(&mut nonce_bytes).ok()?;
+ let ct = cipher
+     .encrypt(Nonce::from_slice(&nonce_bytes), plaintext.as_bytes())
+     .ok()?;
+ serde_json::to_string(&ShadowEnvelope { v: 2, n: nonce_bytes.to_vec(), c: ct }).ok()
+}
+
+/// Decrypt a v2 AES-256-GCM envelope. None if `raw` is not a v2 envelope (e.g. a
+/// legacy plaintext file, or one written on a different machine) or if the GCM
+/// tag fails to authenticate — callers fall back to treating `raw` as plaintext.
+fn decrypt_vault_shadow(key: &[u8; 32], raw: &str) -> Option<String> {
+ let env: ShadowEnvelope = serde_json::from_str(raw).ok()?;
+ if env.v != 2 || env.n.len() != 12 {
+     return None;
+ }
+ let cipher = Aes256Gcm::new_from_slice(key).ok()?;
+ let pt = cipher.decrypt(Nonce::from_slice(&env.n), env.c.as_ref()).ok()?;
+ String::from_utf8(pt).ok()
+}
+
+/// Write an encrypted shadow copy of the vault to the app data dir (mode 0600).
+/// Encrypted at rest under a machine-bound key (AES-256-GCM); falls back to
+/// plaintext only where no stable machine id exists (non-macOS).
 /// Best-effort — failure here is non-fatal; the keychain remains authoritative.
 fn write_vault_shadow(app: &AppHandle, secrets: &HashMap<String, String>) {
  let Ok(path) = vault_shadow_path(app) else { return };
@@ -688,13 +757,16 @@ fn write_vault_shadow(app: &AppHandle, secrets: &HashMap<String, String>) {
      Ok(j) => j,
      Err(_) => return,
  };
+ let payload = vault_shadow_key()
+     .and_then(|k| encrypt_vault_shadow(&k, &json))
+     .unwrap_or(json);
  if let Some(parent) = path.parent() {
      let _ = fs::create_dir_all(parent);
  }
  // Write to a temp file then rename for atomic update.
  let tmp = path.with_extension("tmp");
  let wrote = (|| -> std::io::Result<()> {
-     fs::write(&tmp, json.as_bytes())?;
+     fs::write(&tmp, payload.as_bytes())?;
      #[cfg(unix)]
      {
          use std::os::unix::fs::PermissionsExt;
@@ -725,9 +797,15 @@ fn write_vault_shadow(app: &AppHandle, secrets: &HashMap<String, String>) {
 }
 
 /// Read the shadow vault file if it exists. Returns a filtered map of valid keys.
+/// A v2 AES-256-GCM envelope is decrypted under the machine-bound key; anything
+/// else is treated as a legacy plaintext file so existing installs are never
+/// locked out (the next successful keychain read re-writes it encrypted).
 fn read_vault_shadow(app: &AppHandle) -> Option<HashMap<String, String>> {
  let path = vault_shadow_path(app).ok()?;
- let json = fs::read_to_string(&path).ok()?;
+ let raw = fs::read_to_string(&path).ok()?;
+ let json = vault_shadow_key()
+     .and_then(|k| decrypt_vault_shadow(&k, &raw))
+     .unwrap_or(raw);
  let map: HashMap<String, String> = serde_json::from_str(&json).ok()?;
  let filtered: HashMap<String, String> = map
      .into_iter()
@@ -2531,6 +2609,46 @@ mod sanitize_path_tests {
  sanitize_path_for_node(raw),
  r"C:\Users\alice\sidecar\local-api-server.mjs".to_string()
  );
+ }
+}
+
+#[cfg(test)]
+mod vault_shadow_crypto_tests {
+ use super::{decrypt_vault_shadow, encrypt_vault_shadow};
+
+ #[test]
+ fn roundtrip_recovers_plaintext_and_hides_secret() {
+ let key = [7u8; 32];
+ let plaintext = r#"{"ANTHROPIC_API_KEY":"sk-secret-123","GROQ_API_KEY":"gk-x"}"#;
+ let enc = encrypt_vault_shadow(&key, plaintext).expect("encrypt");
+ // The on-disk envelope must not leak the plaintext secret, and must be v2.
+ assert!(!enc.contains("sk-secret-123"), "ciphertext leaked the secret");
+ assert!(enc.contains("\"v\":2"));
+ assert_eq!(decrypt_vault_shadow(&key, &enc).expect("decrypt"), plaintext);
+ }
+
+ #[test]
+ fn legacy_plaintext_is_not_a_v2_envelope() {
+ // A legacy plaintext map must decrypt to None so the caller falls back to
+ // reading it as-is (no lockout for existing installs).
+ let key = [7u8; 32];
+ assert!(decrypt_vault_shadow(&key, r#"{"ANTHROPIC_API_KEY":"sk-x"}"#).is_none());
+ }
+
+ #[test]
+ fn wrong_key_fails_authentication() {
+ // A file copied to another machine (different derived key) must not decrypt.
+ let enc = encrypt_vault_shadow(&[1u8; 32], r#"{"A":"b"}"#).expect("encrypt");
+ assert!(decrypt_vault_shadow(&[2u8; 32], &enc).is_none());
+ }
+
+ #[test]
+ fn tampered_ciphertext_is_rejected() {
+ let key = [9u8; 32];
+ let enc = encrypt_vault_shadow(&key, r#"{"A":"b"}"#).expect("encrypt");
+ // Flip a byte inside the ciphertext array — GCM auth must reject it.
+ let tampered = enc.replacen("\"c\":[", "\"c\":[255,", 1);
+ assert!(decrypt_vault_shadow(&key, &tampered).is_none());
  }
 }
 

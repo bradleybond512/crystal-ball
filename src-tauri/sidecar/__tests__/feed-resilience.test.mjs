@@ -53,8 +53,8 @@ function makeFetch(responses) {
     return {
       ok: resp.ok,
       status: resp.status ?? (resp.ok ? 200 : 500),
-      json: () => Promise.resolve(data),
-      text: () => Promise.resolve(String(data)),
+      json: () => (resp.jsonThrows ? Promise.reject(new Error('Unexpected token < in JSON')) : Promise.resolve(data)),
+      text: () => Promise.resolve(resp.jsonThrows ? '<html>maintenance</html>' : String(data)),
     };
   };
 
@@ -362,4 +362,29 @@ test('22. trackFailure with Error object → lastError uses message', () => {
   trackFailure('feed-err-obj', new Error('connection refused'));
   const s = getFeedStatus('feed-err-obj');
   assert.equal(s.lastError, 'connection refused');
+});
+
+// ── Unparseable 200 body must not read as success (round-5 audit high) ─────────
+
+test('23. a 200 with an unparseable JSON body is a failed attempt (not cached, not success)', async () => {
+  reset();
+  // Primary returns 200-garbage, no fallback, no cache → must THROW (all sources
+  // exhausted) instead of returning the HTML as fresh data or caching it.
+  const fetchFn = makeFetch([{ ok: true, status: 200, jsonThrows: true }]);
+  await assert.rejects(
+    fetchWithFallback('http://primary.example/json', [], { fetchFn, cacheKey: 'fr-unparseable' }),
+    /All sources exhausted/,
+  );
+});
+
+test('24. an unparseable-200 primary falls through to a valid fallback', async () => {
+  reset();
+  const fetchFn = makeFetch([
+    { ok: true, status: 200, jsonThrows: true },           // primary: 200 garbage
+    { ok: true, status: 200, data: { via: 'fallback' } },  // fallback-0: valid JSON
+  ]);
+  const res = await fetchWithFallback('http://primary.example', ['http://fallback.example'], { fetchFn });
+  assert.equal(res.source, 'fallback-0');
+  assert.equal(res.degraded, true);
+  assert.deepEqual(res.data, { via: 'fallback' });
 });

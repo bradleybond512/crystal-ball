@@ -112,6 +112,14 @@ function checkReadme() {
   return issues;
 }
 
+function secretKeyNames() {
+  const src = read('src-tauri/src/main.rs');
+  if (!src) return [];
+  const block = src.match(/SUPPORTED_SECRET_KEYS[^=]*=\s*\[([\s\S]*?)\];/);
+  if (!block) return [];
+  return [...block[1].matchAll(/"([A-Z0-9_]+)"/g)].map((m) => m[1]);
+}
+
 function checkApiKeysDocs() {
   const issues = [];
   const apiKeysDoc = read('docs/API_KEYS.md');
@@ -125,6 +133,12 @@ function checkApiKeysDocs() {
     if (stated !== actual) {
       issues.push(`docs/API_KEYS.md references ${stated} keys, main.rs has ${actual}`);
     }
+  }
+
+  // Coverage: every SUPPORTED_SECRET_KEYS entry must appear somewhere in the doc.
+  const undocumented = secretKeyNames().filter((k) => !new RegExp(String.raw`\b${k}\b`).test(apiKeysDoc));
+  if (undocumented.length) {
+    issues.push(`docs/API_KEYS.md is missing ${undocumented.length} key(s): ${undocumented.join(', ')}`);
   }
   return issues;
 }

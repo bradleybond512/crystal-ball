@@ -65,7 +65,7 @@ Four panels stitch the foundation services into product surfaces:
 - **`src/components/CommandCenterPanel.ts`** — gameplan's top-of-app surface. Shows current personal risk, top 3 things that matter (sorted by criticality + severity), what to watch next, and recommended actions. Reads from `getFeatureHealthRegistry()` + `getPanelHealthRegistry()` + `getNotificationTraceRegistry()` and feeds them through `aggregateSystemHealth()`.
 - **`src/components/SystemDiagnosticPanel.ts`** — tabbed Overview / Features / Panels / Notifications / Feeds / Self-Test surface. The Self-Test tab fires `runSelfTests(standardSelfTestDefinitions(...))` and renders pass/warn/fail/skipped per probe. Auto-refresh 5 s.
 - **`src/components/AlgorithmDiagnosticPanel.ts`** — per-algorithm hit rate, weighted hit rate, latency, and Safe Adjustment proposal (apply / noop / at_bound / manual_review / no_tunable). Reads from `getAlgorithmEvaluationLedger()` + `getAlgorithmDefinitions()`.
-- **`src/components/ShortageRadarPanel.ts`** — sorted-by-risk view across the 7 commodity models (wheat, corn, diesel, gasoline, sugar, coffee, cocoa). Each card shows tier, confidence, top 3 drivers, data gaps, horizon. Hosts can call `panel.setRequests(...)` to inject live inputs.
+- **`src/components/ShortageRadarPanel.ts`** — sorted-by-risk view across the 8 commodity models (wheat, corn, rice, soybeans, diesel, gasoline, natural-gas, jet-fuel). Each card shows tier, confidence, top 3 drivers, data gaps, horizon. Hosts can call `panel.setRequests(...)` to inject live inputs.
 
 Singleton state lives in `src/services/diagnostics/diagnostics-state.ts` and `src/services/algorithms/algorithms-state.ts` — every panel reads the same registries.
 
@@ -376,7 +376,7 @@ Ghost Mode: polling ×5 (`getGhostRefreshMultiplier()`), analytics suppressed, n
 
 ## Settings / API Keys
 
-API keys entered via gear icon → API Keys tab. Almost all of the 76 supported keys use standard provider env-var names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc); the only app-branded key is `CRYSTALBALL_API_KEY`. The authoritative list is `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`.
+API keys entered via gear icon → API Keys tab. Almost all of the 77 supported keys use standard provider env-var names (ANTHROPIC_API_KEY, GROQ_API_KEY, etc); the only app-branded key is `CRYSTALBALL_API_KEY`. The authoritative list is `SUPPORTED_SECRET_KEYS` in `src-tauri/src/main.rs`.
 
 ## Secret Scan Guardrail
 

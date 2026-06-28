@@ -29,7 +29,9 @@ function resolveRetentionMonths(explicit) {
 }
 
 // Escape SQL LIKE metacharacters (\ % _) so a caller-supplied token matches
-// literally under an `ESCAPE '\'` clause. Backslash is escaped first.
+// literally under an `ESCAPE '\'` clause. A single regex pass prefixes each
+// metacharacter (including backslash itself) with a backslash — independent,
+// no ordering, so an escaped backslash is never double-counted.
 const LIKE_ESCAPE_CHAR = String.fromCodePoint(92); // single backslash
 function escapeLikePattern(s) {
   return String(s).replace(/[\\%_]/g, (c) => LIKE_ESCAPE_CHAR + c);

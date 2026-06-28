@@ -226,6 +226,13 @@ function getOrefApiUrl(endpoint?: string): string {
   return `${base}/api/oref-alerts${suffix}`;
 }
 
+/** True when a parsed /api/oref-alerts payload has the expected shape. The cast
+ *  in fetchOrefAlerts is compile-time only, so this guards against a malformed
+ *  200 (alerts-less object / HTML) being cached + served as a fresh all-clear. */
+export function isValidOrefAlertsResponse(data: unknown): data is OrefAlertsResponse {
+  return !!data && typeof data === 'object' && Array.isArray((data as { alerts?: unknown }).alerts);
+}
+
 export async function fetchOrefAlerts(): Promise<OrefAlertsResponse> {
   await ensureLocationMapLoaded();
   const now = Date.now();
@@ -243,6 +250,13 @@ export async function fetchOrefAlerts(): Promise<OrefAlertsResponse> {
  return { configured: false, alerts: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: `HTTP ${res.status}` };
  }
  const data = (await res.json()) as OrefAlertsResponse;
+ if (!isValidOrefAlertsResponse(data)) {
+ // A 200 with a malformed body (e.g. the relay returned an alerts-less object /
+ // HTML) must not poison the cache and read as a fresh "no sirens" — record the
+ // error and re-fetch next time instead of serving the bad object from cache.
+ dataFreshness.recordError('oref-alerts', 'malformed response (missing alerts array)');
+ return { configured: false, alerts: [], historyCount24h: 0, timestamp: new Date().toISOString(), error: 'malformed response' };
+ }
  cachedResponse = data;
  lastFetchAt = now;
  dataFreshness.recordUpdate('oref-alerts', data.alerts.length);

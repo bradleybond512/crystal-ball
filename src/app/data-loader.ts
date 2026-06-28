@@ -511,7 +511,10 @@ export class DataLoaderManager implements AppModule {
  try {
  const resp = await fetch(
  `/api/news/v1/list-feed-digest?variant=${SITE_VARIANT}&lang=${getCurrentLanguage()}`,
- { signal: AbortSignal.timeout(3000) },
+ // 1.5s (was 3s): on a cold/keyless boot this fetch fails; the breaker + cached
+ // digest take over, so a shorter wait gets the "what changed" view on screen
+ // faster instead of stalling the news load for 3s × 2 attempts.
+ { signal: AbortSignal.timeout(1500) },
  );
  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
  const data = await resp.json() as ListFeedDigestResponse;

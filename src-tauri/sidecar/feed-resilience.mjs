@@ -131,14 +131,18 @@ function _fetchUrl(url, options = {}, timeoutMs = 12_000) {
 // ── Parse response data ──────────────────────────────────────────────────────
 async function _parseData(resp) {
   if ('_parseError' in resp) {
-    // Internal _fetchUrl response: JSON parse already attempted
-    return resp._parseError ? resp._body : resp._parsed;
+    // Internal _fetchUrl response: JSON parse already attempted. A parse failure
+    // (a 200 whose body is NOT valid JSON — an HTML error / captcha / maintenance
+    // page) is NOT usable data. Return undefined so the caller treats it as a
+    // failed attempt instead of caching the garbage as last-good + reporting
+    // success. Every fetchWithFallback caller (NWS / NHC / WHO / USGS) is JSON.
+    return resp._parseError ? undefined : resp._parsed;
   }
-  // Injected fetchFn response: try json(), fall back to text()
+  // Injected fetchFn response: must be valid JSON; a parse failure is not data.
   try {
     return await resp.json();
   } catch {
-    return resp.text ? await resp.text() : null;
+    return undefined;
   }
 }
 
@@ -148,7 +152,11 @@ async function _tryFetch(url, reqOptions, timeoutMs, fetchFn) {
   try {
     const resp = await fetchFn(url, reqOptions, timeoutMs);
     if (!resp.ok) return { ok: false };
-    return { ok: true, data: await _parseData(resp) };
+    const data = await _parseData(resp);
+    // A 200 with an unparseable body yields undefined — treat as a failed attempt
+    // so we fall through to the next source / cache instead of returning garbage.
+    if (data === undefined) return { ok: false };
+    return { ok: true, data };
   } catch {
     return { ok: false };
   }

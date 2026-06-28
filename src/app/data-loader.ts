@@ -189,7 +189,7 @@ import { fetchAllPositiveTopicIntelligence } from '@/services/gdelt-intel';
 import { fetchPositiveGeoEvents, geocodePositiveNewsItems } from '@/services/positive-events-geo';
 import { fetchKindnessData } from '@/services/kindness-data';
 import { getPersistentCache, setPersistentCache } from '@/services/persistent-cache';
-import { withOfflineCache, registerCriticalSources } from '@/services/offline-alert-cache';
+import { withOfflineCache, registerCriticalSources, feedFreshnessFromSnapshot } from '@/services/offline-alert-cache';
 import {
   ingestCyberToIoc, ingestCisaKevToIoc,
   ingestAisToDarkVessel, ingestMilVesselsToDarkVessel,
@@ -1514,12 +1514,22 @@ export class DataLoaderManager implements AppModule {
 
   async loadWeatherAlerts(): Promise<void> {
  try {
- const { data: alerts } = await withOfflineCache('weather-alerts', () => fetchWeatherAlerts(), 1 * 60 * 60 * 1000);
+ const snapshot = await withOfflineCache('weather-alerts', () => fetchWeatherAlerts(), 1 * 60 * 60 * 1000);
+ const alerts = snapshot.data;
  this.ctx.map?.setWeatherAlerts(alerts);
  this.ctx.map?.setLayerReady('weather', alerts.length > 0);
+ const freshness = feedFreshnessFromSnapshot(snapshot);
+ if (freshness.fresh) {
  this.ctx.statusPanel?.updateFeed('Weather', { status: 'ok', itemCount: alerts.length });
  dataFreshness.recordUpdate('weather', alerts.length);
  void import('@/services/offline-staleness').then(({ recordSourceUpdate }) => { recordSourceUpdate('weather', Date.now()); });
+ } else {
+ // Live NWS fetch failed and we're serving the offline cache — do NOT advance
+ // freshness; a stale weather snapshot must never read as a fresh all-clear.
+ this.ctx.statusPanel?.updateFeed('Weather', { status: 'error', itemCount: alerts.length, errorMessage: freshness.staleReason ?? 'offline cache' });
+ dataFreshness.recordError('weather', freshness.staleReason ?? 'offline cache');
+ void import('@/services/offline-staleness').then(({ recordSourceUpdate }) => { recordSourceUpdate('weather', freshness.staleTimestamp ?? Date.now()); });
+ }
  updateStormPreparednessContext({ weatherAlerts: alerts });
 
  // Refresh the survival "Storm Posture" engine on the weather tick. The

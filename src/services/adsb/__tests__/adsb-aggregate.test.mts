@@ -107,6 +107,20 @@ test('confidence decays after 60s of staleness', () => {
   assert.ok((r.tracks[0]?.confidence ?? 1) < 0.55);
 });
 
+test('confidence fully decays to 0 by 5 min stale — no 50% floor (round-1 #28)', () => {
+  const at5min = mergeAdsbProviders(
+    [snap({ aircraft: [{ hex: 'A1', lat: 40, lng: -100, observedAt: NOW - 300 * SEC }] })],
+    { generatedAt: NOW },
+  );
+  assert.ok(Math.abs(at5min.tracks[0]?.confidence ?? 1) < 1e-9, '5-min-stale track must reach 0 confidence');
+  // And it stays at 0 well past 5 min (previously it floored at 50% of base forever).
+  const at12min = mergeAdsbProviders(
+    [snap({ aircraft: [{ hex: 'A1', lat: 40, lng: -100, observedAt: NOW - 720 * SEC }] })],
+    { generatedAt: NOW },
+  );
+  assert.ok(Math.abs(at12min.tracks[0]?.confidence ?? 1) < 1e-9, '12-min-stale track must stay at 0, not 50%');
+});
+
 test('all-degraded providers cap track confidence at 0.6', () => {
   const r = mergeAdsbProviders(
     [

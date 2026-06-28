@@ -15,7 +15,7 @@
  * so the safety set can't silently drift back into the cacheable rule.
  */
 export const SAFETY_FEED_PATH_RE =
-  /^\/api\/(?:nws-alerts|alerts\/active|volcano-alerts|earthquakes|weather\/active-warnings|weather\/spc-outlook)(?:\/|$)/;
+  /^\/api\/(?:nws-alerts|alerts\/active|oref-alerts|volcano-alerts|earthquakes|weather\/active-warnings|weather\/spc-outlook|weather\/tropical)(?:\/|$)/;
 
 /** True when `pathname` is a safety-critical realtime feed that must not be
  *  served from the service-worker cache. */

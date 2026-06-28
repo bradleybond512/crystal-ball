@@ -142,8 +142,12 @@ export function urgencyFor(
   const priority = mapPriority(match);
   const persistentInApp = priority === 'persistent_critical' ||
     priority === 'persistent_critical_with_imessage';
-  const isWarningOrEmergency = match.threatLevel === 'warning' || match.threatLevel === 'emergency';
-  const bypassQuietHours = isWarningOrEmergency && bypassHazards.includes(match.hazardKind);
+  // An emergency-tier alert ALWAYS bypasses quiet hours — a life-threatening
+  // hazard (blizzard, ice storm, …) must never be silenced just because it isn't
+  // on the per-hazard bypass list. Below emergency, a warning bypasses only for
+  // the configured high-risk hazards.
+  const bypassQuietHours = match.threatLevel === 'emergency'
+    || (match.threatLevel === 'warning' && bypassHazards.includes(match.hazardKind));
   const requiresAcknowledgment = match.threatLevel === 'emergency' &&
     (match.hazardKind === 'tornado' || match.hazardKind === 'flash_flood');
 

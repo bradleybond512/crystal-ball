@@ -59,6 +59,23 @@ test('only one provider sees a quake → single source, no corroboration', () =>
   assert.equal(Object.keys(r.providerFingerprints).length, 1);
 });
 
+test('magnitudes within tolerance but across a raw bucket boundary still agree', () => {
+  // 6.2 → round(6.2/0.5)=12, 6.4 → round(6.4/0.5)=13 under naive per-value
+  // bucketing, yet |6.2-6.4|=0.2 <= tolerance 0.5 so fusion treats them as
+  // consensus. The fingerprints MUST still match (no false disagreement).
+  const r = ingestDomain('earthquakes', [
+    obs('usgs-earthquakes', { value: 6.2, lat: 35, lon: 139, occurredAt: NOW }),
+    obs('emsc-seismic',     { value: 6.4, lat: 35, lon: 139, occurredAt: NOW }),
+  ], healthyBoth(), NOW);
+  const f = r.facts[0]!;
+  assert.equal(f.fusion.disagreements.length, 0, 'within tolerance → fusion sees no disagreement');
+  assert.equal(
+    r.providerFingerprints['usgs-earthquakes'],
+    r.providerFingerprints['emsc-seismic'],
+    'consensus providers share one fingerprint regardless of bucket boundary',
+  );
+});
+
 test('quakes far apart in space do NOT match', () => {
   const r = ingestDomain('earthquakes', [
     obs('usgs-earthquakes', { value: 6.0, lat: 35, lon: 139, occurredAt: NOW }),

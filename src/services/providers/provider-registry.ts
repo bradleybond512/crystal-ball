@@ -43,6 +43,9 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // ── Crypto prices (fused by symbol: CoinGecko + Coinbase, both no-key) ──
   { id: 'coingecko', domain: 'markets', displayName: 'CoinGecko', authType: 'none', baseUrl: 'https://api.coingecko.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.85, fallbackPriority: 4, independenceGroup: 'coingecko' },
   { id: 'coinbase', domain: 'markets', displayName: 'Coinbase', authType: 'none', baseUrl: 'https://api.coinbase.com', rateLimitNote: 'public spot prices, no key', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.85, fallbackPriority: 5, independenceGroup: 'coinbase' },
+  // ── Stock prices (fused by ticker: Stooq + Yahoo, both no-key) ──
+  { id: 'stooq', domain: 'markets', displayName: 'Stooq', authType: 'none', baseUrl: 'https://stooq.com', rateLimitNote: 'free CSV, be gentle', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.8, fallbackPriority: 6, independenceGroup: 'stooq' },
+  { id: 'yahoo-finance', domain: 'markets', displayName: 'Yahoo Finance', authType: 'none', baseUrl: 'https://query1.finance.yahoo.com', rateLimitNote: 'unofficial chart API, be gentle', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.8, fallbackPriority: 7, independenceGroup: 'yahoo' },
 ];
 
 const BY_ID = new Map(PROVIDER_DEFINITIONS.map((d) => [d.id, d]));

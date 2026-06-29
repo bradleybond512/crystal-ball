@@ -16,7 +16,15 @@ function healthyCrypto(): ProviderHealthState {
   return s;
 }
 
-/** Crypto observation: matched by `key` (symbol), no geo. */
+function healthyStocks(): ProviderHealthState {
+  let s = emptyProviderHealthState();
+  for (const id of ['stooq', 'yahoo-finance']) {
+    s = recordFetchOutcome(s, id, { ok: true, latencyMs: 50, at: NOW });
+  }
+  return s;
+}
+
+/** Crypto/stock observation: matched by `key` (symbol/ticker), no geo. */
 function px(providerId: string, key: string, value: number): DomainObservation {
   return { providerId, key, value, lat: 0, lon: 0, occurredAt: NOW };
 }
@@ -89,4 +97,32 @@ test('spatial domains are unaffected by the key-mode addition (earthquakes still
   ], s, NOW);
   assert.equal(r.facts.length, 1);
   assert.equal(r.facts[0]!.fusion.independentSourceCount, 2);
+});
+
+test('stocks: same ticker within 1% → corroborated; per-ticker, not cross-ticker', () => {
+  const health = healthyStocks();
+  const r = ingestDomain('stocks', [
+    px('stooq', 'AAPL', 212.00),
+    px('yahoo-finance', 'AAPL', 213.50), // |1.50| < 1% of 213.50 (=2.135) → agree
+    px('stooq', 'MSFT', 450.00),
+    px('yahoo-finance', 'MSFT', 449.00),
+  ], health, NOW);
+  assert.equal(r.facts.length, 2, 'AAPL and MSFT are distinct facts');
+  for (const f of r.facts) {
+    assert.equal(f.fusion.independentSourceCount, 2);
+    assert.equal(f.fusion.disagreements.length, 0);
+  }
+  const snaps = snapshotsFromRegistry(health, NOW, 'markets', r.providerFingerprints)
+    .filter((s) => s.providerId === 'stooq' || s.providerId === 'yahoo-finance');
+  const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
+  assert.equal(report.domains[0]!.verdict, 'redundant_agreement');
+});
+
+test('stocks: a >1% quote gap surfaces as a disagreement', () => {
+  const r = ingestDomain('stocks', [
+    px('stooq', 'TSLA', 250.00),
+    px('yahoo-finance', 'TSLA', 260.00), // |10| > 1% of 260 (=2.6) → disagree
+  ], healthyStocks(), NOW);
+  assert.ok(r.facts[0]!.fusion.disagreements.length >= 1);
+  assert.notEqual(r.providerFingerprints['stooq'], r.providerFingerprints['yahoo-finance']);
 });

@@ -10511,6 +10511,53 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Stock fusion source A: Stooq batch CSV (no key) ──────────────────────
+  if (requestUrl.pathname === '/api/stocks-stooq') {
+ const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
+ try {
+ const stooqSyms = SYMS.map((s) => `${s.toLowerCase()}.us`);
+ const r = await fetchWithTimeout(
+ `https://stooq.com/q/l/?s=${stooqSyms.join('+')}&f=sd2t2ohlcvp&h&e=csv`,
+ { headers: { 'User-Agent': CHROME_UA } }, 10_000,
+ );
+ if (!r.ok) return json({ quotes: [], degraded: true, error: `Stooq ${r.status}` });
+ const map = parseStooqBatchCsv(await r.text());
+ const quotes = [];
+ for (const s of SYMS) {
+ const price = map.get(`${s.toLowerCase()}.us`)?.price;
+ if (Number.isFinite(price) && price > 0) quotes.push({ symbol: s, price });
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'no Stooq prices' });
+ return json({ quotes });
+ } catch (error) {
+ return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
+ }
+  }
+
+  // ── Stock fusion source B: Yahoo Finance chart (no key) ──────────────────
+  if (requestUrl.pathname === '/api/stocks-yahoo') {
+ const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
+ try {
+ const results = await Promise.allSettled(SYMS.map((s) =>
+ fetchWithTimeout(
+ `https://query1.finance.yahoo.com/v8/finance/chart/${s}?interval=1d&range=1d`,
+ { headers: { 'User-Agent': CHROME_UA, 'Accept': 'application/json' } }, 10_000,
+ ).then(async (r) => { if (!r.ok) { throw new Error(`Yahoo ${r.status}`); } return r.json(); })
+ ));
+ const quotes = [];
+ for (const [i, sym] of SYMS.entries()) {
+ const res = results[i];
+ if (res.status !== 'fulfilled') continue;
+ const price = res.value?.chart?.result?.[0]?.meta?.regularMarketPrice;
+ if (Number.isFinite(price) && price > 0) quotes.push({ symbol: sym, price });
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'no Yahoo prices' });
+ return json({ quotes });
+ } catch (error) {
+ return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
+ }
+  }
+
   // ── Crypto quotes via CoinGecko ───────────────────────────────────────────
   if (requestUrl.pathname === '/api/crypto-quotes') {
  const ids = (requestUrl.searchParams.get('ids') || 'bitcoin,ethereum,solana,ripple');

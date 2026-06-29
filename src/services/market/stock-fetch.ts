@@ -1,8 +1,8 @@
 /**
- * Loader-callable fail-closed fetches for the two no-key stock-price sources
- * used in fusion: Stooq (batch CSV) + Yahoo Finance (chart). Both are no-key so
- * the corroboration works without anyone's API key. Returns { ok: false } on
- * non-2xx, sidecar `degraded`, or a thrown error so a dead source records a
+ * Loader-callable fail-closed fetches for the two stock-price sources used in
+ * fusion: Yahoo Finance (no-key chart) + Finnhub (keyed, proven in the market
+ * panel). Returns { ok: false } on non-2xx, sidecar `degraded` (incl. missing
+ * Finnhub key), or a thrown error so a dead/unconfigured source records a
  * failing fetch (provider health drops) instead of looking healthy-but-empty.
  */
 
@@ -29,8 +29,8 @@ async function fetchStockRoute(path: string): Promise<StockFetchResult> {
   }
 }
 
-export function fetchStooqPrices(): Promise<StockFetchResult> {
-  return fetchStockRoute('/api/stocks-stooq');
+export function fetchFinnhubPrices(): Promise<StockFetchResult> {
+  return fetchStockRoute('/api/stocks-finnhub');
 }
 
 export function fetchYahooPrices(): Promise<StockFetchResult> {

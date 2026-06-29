@@ -330,7 +330,7 @@ import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/servi
 import { openMeteoAqToObservations, openaqToObservations } from '@/services/airquality/airquality-fusion-observations';
 import { exchangePricesToObservations } from '@/services/market/crypto-fusion-observations';
 import { fetchCoinbasePrices } from '@/services/market/coinbase-fetch';
-import { fetchStooqPrices, fetchYahooPrices } from '@/services/market/stock-fetch';
+import { fetchFinnhubPrices, fetchYahooPrices } from '@/services/market/stock-fetch';
 import { fetchCoingeckoPrices } from '@/services/market/coingecko-fetch';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
@@ -1370,11 +1370,11 @@ export class DataLoaderManager implements AppModule {
  recordDomainObservations('coingecko', exchangePricesToObservations('coingecko', cg.prices), cg.ok);
  const coinbase = await fetchCoinbasePrices();
  recordDomainObservations('coinbase', exchangePricesToObservations('coinbase', coinbase.prices), coinbase.ok);
- // Stock price fusion: Stooq + Yahoo, matched by ticker. Both no-key, fail-closed.
- const stooq = await fetchStooqPrices();
- recordDomainObservations('stooq', exchangePricesToObservations('stooq', stooq.prices), stooq.ok);
+ // Stock price fusion: Yahoo (no-key) + Finnhub (keyed), matched by ticker. Fail-closed.
  const yahoo = await fetchYahooPrices();
  recordDomainObservations('yahoo-finance', exchangePricesToObservations('yahoo-finance', yahoo.prices), yahoo.ok);
+ const finnhub = await fetchFinnhubPrices();
+ recordDomainObservations('finnhub', exchangePricesToObservations('finnhub', finnhub.prices), finnhub.ok);
   }
 
   async loadPredictions(): Promise<void> {

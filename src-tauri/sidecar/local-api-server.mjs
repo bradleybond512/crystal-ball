@@ -10511,23 +10511,26 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
-  // ── Stock fusion source A: Stooq batch CSV (no key) ──────────────────────
-  if (requestUrl.pathname === '/api/stocks-stooq') {
+  // ── Stock fusion source A: Finnhub (keyed; proven in the market panel) ────
+  if (requestUrl.pathname === '/api/stocks-finnhub') {
  const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
+ const finnhubKey = process.env.FINNHUB_API_KEY;
+ if (!finnhubKey) return json({ quotes: [], degraded: true, error: 'no Finnhub key' });
  try {
- const stooqSyms = SYMS.map((s) => `${s.toLowerCase()}.us`);
- const r = await fetchWithTimeout(
- `https://stooq.com/q/l/?s=${stooqSyms.join('+')}&f=sd2t2ohlcvp&h&e=csv`,
- { headers: { 'User-Agent': CHROME_UA } }, 10_000,
- );
- if (!r.ok) return json({ quotes: [], degraded: true, error: `Stooq ${r.status}` });
- const map = parseStooqBatchCsv(await r.text());
+ const results = await Promise.allSettled(SYMS.map((s) =>
+ fetchWithTimeout(
+ `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${encodeURIComponent(finnhubKey)}`,
+ { headers: { 'User-Agent': CHROME_UA } }, 8000,
+ ).then(async (r) => { if (!r.ok) { throw new Error(`Finnhub ${r.status}`); } return r.json(); })
+ ));
  const quotes = [];
- for (const s of SYMS) {
- const price = map.get(`${s.toLowerCase()}.us`)?.price;
- if (Number.isFinite(price) && price > 0) quotes.push({ symbol: s, price });
+ for (const [i, sym] of SYMS.entries()) {
+ const res = results[i];
+ if (res.status !== 'fulfilled') continue;
+ const price = res.value?.c;
+ if (Number.isFinite(price) && price > 0) quotes.push({ symbol: sym, price });
  }
- if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'no Stooq prices' });
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'no Finnhub prices' });
  return json({ quotes });
  } catch (error) {
  return json({ quotes: [], degraded: true, error: String(error.message ?? error) });

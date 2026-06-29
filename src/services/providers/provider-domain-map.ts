@@ -54,9 +54,10 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
     match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 5 * 60_000 },
   },
   // Stock prices: matched by TICKER, agree within 1% (quotes from different
-  // feeds for the same instant rarely diverge more). Stooq + Yahoo, both no-key.
+  // feeds for the same instant rarely diverge more). Yahoo (no-key) + Finnhub
+  // (keyed) — corroborates when the Finnhub key is set; Yahoo-only otherwise.
   stocks: {
-    providerIds: ['stooq', 'yahoo-finance'],
+    providerIds: ['yahoo-finance', 'finnhub'],
     toleranceMode: 'relative',
     numericTolerance: 0.01,
     match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 3 * 60_000 },

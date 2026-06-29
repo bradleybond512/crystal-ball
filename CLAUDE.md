@@ -294,8 +294,8 @@ src/                        # TypeScript frontend (Vite)
     airquality/airquality-fusion-observations.ts # Open-Meteo + OpenAQ readings → DomainObservation[] (AQI), 2nd fused domain
     market/crypto-fusion-observations.ts     # exchange prices → DomainObservation[] (price, matched by symbol/key, relative tolerance), 3rd fused domain
     market/coingecko-fetch.ts + coinbase-fetch.ts # no-key fail-closed fetches — the 2 crypto sources (Coinbase, not Binance: 451 in US)
-    market/stock-fetch.ts                    # no-key fail-closed Stooq + Yahoo fetches — the 2 stock sources (4th fused domain)
-    # Fused domains: earthquakes (USGS+EMSC, spatial) + air_quality (Open-Meteo+OpenAQ, spatial) + crypto (CoinGecko+Coinbase) + stocks (Stooq+Yahoo), the last two key/relative. data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
+    market/stock-fetch.ts                    # fail-closed Yahoo (no-key) + Finnhub (keyed) fetches — the 2 stock sources (4th fused domain, own 'equities' domain)
+    # Fused domains: earthquakes (USGS+EMSC, spatial) + air_quality (Open-Meteo+OpenAQ, spatial) + crypto (CoinGecko+Coinbase) + stocks (Yahoo+Finnhub), the last two key/relative. data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
     # See docs/superpowers/specs/2026-06-28-redundancy-prediction-enhancement-program-design.md + plans/2026-06-28-phase0-fusion-ingest-earthquakes.md
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes

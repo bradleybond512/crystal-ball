@@ -288,11 +288,13 @@ src/                        # TypeScript frontend (Vite)
     providers/source-fusion.ts               # freshness × reliability × independence-aware corroboration; disagreements surface, capped at 0.6
     providers/provider-bridge.ts             # snapshotsFromRegistry (+ optional fingerprints) → provider-redundancy ProviderSnapshot contract
     providers/providers-state.ts             # singleton: recordProviderFetchOutcome / getProviderHealthState
-    providers/provider-domain-map.ts         # fact-type → provider ids + numeric tolerance + spatiotemporal match window (FUSION_DOMAINS)
+    providers/provider-domain-map.ts         # fact-type → provider ids + tolerance + match window (FUSION_DOMAINS). matchBy: 'spatial'|'key'; toleranceMode: 'absolute'|'relative'
     providers/fusion-ingest.ts               # ingestDomain(): match same-fact observations across providers → fuse + per-provider fingerprint (Phase 0 keystone)
     providers/fusion-publish.ts              # singleton (domain-agnostic): fetchers call recordDomainObservations(providerId,...); domain derived from FUSION_DOMAINS; overlays fingerprinted snapshots for every ACTIVE fused domain onto the redundancy report
-    airquality/airquality-fusion-observations.ts # Open-Meteo + OpenAQ readings → DomainObservation[] (AQI), the 2nd fused domain
-    # Fused domains: earthquakes (USGS+EMSC) + air_quality (Open-Meteo+OpenAQ). data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
+    airquality/airquality-fusion-observations.ts # Open-Meteo + OpenAQ readings → DomainObservation[] (AQI), 2nd fused domain
+    market/crypto-fusion-observations.ts     # CoinGecko + Binance → DomainObservation[] (price, matched by symbol/key, relative tolerance), 3rd fused domain
+    market/binance-fetch.ts                  # no-key Binance public ticker fetch (fail-closed) — 2nd crypto source
+    # Fused domains: earthquakes (USGS+EMSC, spatial) + air_quality (Open-Meteo+OpenAQ, spatial) + crypto (CoinGecko+Binance, key/relative). data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
     # See docs/superpowers/specs/2026-06-28-redundancy-prediction-enhancement-program-design.md + plans/2026-06-28-phase0-fusion-ingest-earthquakes.md
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes

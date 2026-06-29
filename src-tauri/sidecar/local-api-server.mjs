@@ -10536,6 +10536,31 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Binance public spot ticker (no key) — 2nd crypto source for fusion ───
+  if (requestUrl.pathname === '/api/crypto-quotes-binance') {
+ const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
+ try {
+ const symbolsParam = encodeURIComponent(JSON.stringify(SYMBOLS));
+ const r = await fetchWithTimeout(
+ `https://api.binance.com/api/v3/ticker/price?symbols=${symbolsParam}`,
+ { headers: { 'User-Agent': CHROME_UA, 'Accept': 'application/json' } },
+ 12_000
+ );
+ if (!r.ok) return json({ quotes: [], degraded: true, error: `Binance ${r.status}` });
+ const data = await r.json();
+ const rows = Array.isArray(data) ? data : [];
+ const quotes = rows.map((row) => {
+ const sym = String(row?.symbol ?? '');
+ const base = sym.endsWith('USDT') ? sym.slice(0, -4) : sym;
+ const price = Number.parseFloat(row?.price);
+ return Number.isFinite(price) ? { symbol: base, price } : null;
+ }).filter(Boolean);
+ return json({ quotes });
+ } catch (error) {
+ return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
+ }
+  }
+
   // ── FRED economic series — direct API call using stored key ──────────────
   // GET /api/fred-series?ids=WALCL,FEDFUNDS,... → calls api.stlouisfed.org
   if (requestUrl.pathname === '/api/fred-series') {

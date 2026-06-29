@@ -328,6 +328,8 @@ import { earthquakesToObservations } from '@/services/intelligence/adapters/eart
 import { recordDomainObservations } from '@/services/providers/fusion-publish';
 import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
 import { openMeteoAqToObservations, openaqToObservations } from '@/services/airquality/airquality-fusion-observations';
+import { coingeckoToObservations, binanceToObservations } from '@/services/market/crypto-fusion-observations';
+import { fetchBinancePrices } from '@/services/market/binance-fetch';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
@@ -1352,12 +1354,17 @@ export class DataLoaderManager implements AppModule {
  }
  (this.ctx.panels.crypto as CryptoPanel).renderCrypto(crypto);
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: crypto.length > 0 ? 'ok' : 'error' });
+ // Crypto price fusion: CoinGecko + Binance (matched by symbol). Fail-closed.
+ recordDomainObservations('coingecko', coingeckoToObservations(crypto), crypto.length > 0);
+ const binance = await fetchBinancePrices();
+ recordDomainObservations('binance-public', binanceToObservations(binance.prices), binance.ok);
  // Auto-trigger Finance Mode if S&P 500 or BTC makes a significant move
  if (this.ctx.latestMarkets.length > 0 || crypto.length > 0) {
  evaluateFinanceTrigger(this.ctx.latestMarkets, crypto);
  }
  } catch {
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: 'error' });
+ recordDomainObservations('coingecko', [], false);
  }
   }
 

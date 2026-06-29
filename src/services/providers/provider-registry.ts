@@ -40,6 +40,9 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // ── Air quality (fused: Open-Meteo AQ + OpenAQ v3, both no-key) ──
   { id: 'open-meteo-aqi', domain: 'air_quality', displayName: 'Open-Meteo Air Quality', authType: 'none', baseUrl: 'https://air-quality-api.open-meteo.com', rateLimitNote: '10k req/day non-commercial', freshnessTtlMs: HOUR, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'open-meteo' },
   { id: 'openaq-v3', domain: 'air_quality', displayName: 'OpenAQ v3', authType: 'none', baseUrl: 'https://api.openaq.org', rateLimitNote: 'anonymous reads ok; key raises limits', freshnessTtlMs: 2 * HOUR, reliabilityWeight: 0.85, fallbackPriority: 2, independenceGroup: 'openaq' },
+  // ── Crypto prices (fused by symbol: CoinGecko + Binance, both no-key) ──
+  { id: 'coingecko', domain: 'markets', displayName: 'CoinGecko', authType: 'none', baseUrl: 'https://api.coingecko.com', rateLimitNote: 'free tier, be gentle', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.85, fallbackPriority: 4, independenceGroup: 'coingecko' },
+  { id: 'binance-public', domain: 'markets', displayName: 'Binance (public)', authType: 'none', baseUrl: 'https://api.binance.com', rateLimitNote: 'public ticker, no key', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.85, fallbackPriority: 5, independenceGroup: 'binance' },
 ];
 
 const BY_ID = new Map(PROVIDER_DEFINITIONS.map((d) => [d.id, d]));

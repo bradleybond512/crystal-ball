@@ -68,6 +68,16 @@ export function verdictTone(v: RedundancyVerdict): RedundancyTone {
   return VERDICT_TONE[v];
 }
 
+/** A truthful one-liner for a row. Only claims "✓ N independent sources" when
+ *  the verdict is actually agreement — NOT for disagreement (where ≥2 providers
+ *  carry fingerprints, but different ones). */
+export function corroborationSummary(row: RedundancyRowView): string {
+  if (row.verdict === 'redundant_agreement' && row.corroboratingSources >= 2) {
+    return `✓ ${row.corroboratingSources} independent sources`;
+  }
+  return `${row.providersUp}/${row.providersTotal} up`;
+}
+
 export function buildRedundancyView(report: ProviderRedundancyReport): RedundancyViewModel {
   const rows: RedundancyRowView[] = report.domains.map((d) => {
     const tone = VERDICT_TONE[d.verdict];

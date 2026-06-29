@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildRedundancyView, verdictLabel, verdictTone } from '../provider-redundancy-view.ts';
+import { buildRedundancyView, corroborationSummary, verdictLabel, verdictTone } from '../provider-redundancy-view.ts';
 import { assessProviderRedundancy, type ProviderSnapshot } from '../provider-redundancy.ts';
 
 function snap(o: Partial<ProviderSnapshot> & Pick<ProviderSnapshot, 'providerId' | 'domain'>): ProviderSnapshot {
@@ -43,6 +43,32 @@ test('builds rows with corroborating-source counts and sorts worst-first', () =>
 
   assert.equal(vm.healthyCount, 1);
   assert.equal(vm.stressedCount, 1);
+});
+
+test('corroborationSummary claims "verified" ONLY for agreement, not disagreement', () => {
+  // Disagreement: 2 up providers with DIFFERENT fingerprints → corroboratingSources is 2,
+  // but it must NOT read as "✓ 2 independent sources".
+  const disagree = assessProviderRedundancy({
+    generatedAt: 1,
+    snapshots: [
+      snap({ providerId: 'usgs-earthquakes', domain: 'disasters', level: 'healthy', recentFactFingerprint: 'c:1' }),
+      snap({ providerId: 'emsc-seismic', domain: 'disasters', level: 'healthy', recentFactFingerprint: 'd:2' }),
+    ],
+  });
+  const drow = buildRedundancyView(disagree).rows[0]!;
+  assert.equal(drow.verdict, 'redundant_disagreement');
+  assert.equal(drow.corroboratingSources, 2);
+  assert.equal(corroborationSummary(drow), '2/2 up', 'no false ✓ on disagreement');
+
+  const agree = assessProviderRedundancy({
+    generatedAt: 1,
+    snapshots: [
+      snap({ providerId: 'usgs-earthquakes', domain: 'disasters', level: 'healthy', recentFactFingerprint: 'c:1' }),
+      snap({ providerId: 'emsc-seismic', domain: 'disasters', level: 'healthy', recentFactFingerprint: 'c:1' }),
+    ],
+  });
+  const arow = buildRedundancyView(agree).rows[0]!;
+  assert.equal(corroborationSummary(arow), '✓ 2 independent sources');
 });
 
 test('headline reflects the verified/attention split', () => {

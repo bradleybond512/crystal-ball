@@ -35,7 +35,7 @@ import { getSavedPlaces } from '@/services/saved-places';
 import { runNwsPolygonSelfTestFixture } from '@/services/weather/self-test-fixture';
 import { PROVIDER_DEFINITIONS } from '@/services/providers/provider-registry';
 import { getProviderRedundancyReport } from '@/services/insights/insights-state';
-import { buildRedundancyView, type RedundancyTone } from '@/services/diagnostics/provider-redundancy-view';
+import { buildRedundancyView, corroborationSummary, type RedundancyTone } from '@/services/diagnostics/provider-redundancy-view';
 import { getActiveQualityDebt } from '@/services/quality/quality-debt-state';
 import {
   auditFeeds,
@@ -475,9 +475,7 @@ export class SystemDiagnosticPanel extends Panel {
     if (vm.rows.length === 0) return '';
     const rows = vm.rows.map((r) => {
       const color = redundancyToneColor(r.tone);
-      const corro = r.corroboratingSources >= 2
-        ? `✓ ${r.corroboratingSources} independent sources`
-        : `${r.providersUp}/${r.providersTotal} up`;
+      const corro = corroborationSummary(r);
       const remediation = r.remediation
         ? `<div style="font-size:11px;color:var(--accent,#4a9eff);margin-top:3px;">→ ${escapeHtml(r.remediation)}</div>`
         : '';

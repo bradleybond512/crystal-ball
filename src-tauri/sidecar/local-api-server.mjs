@@ -15941,33 +15941,30 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── NOAA coastal/buoy cams (NDBC buoycam, public no-auth) ──
+  // validateWebcamCatalog HEAD-checks each snapshotUrl and drops dead ones.
   if (requestUrl.pathname === '/api/webcams/coastal') {
- const cacheKey = 'webcams-coastal';
- const cached = getCached(cacheKey, 30 * 60 * 1000);
- if (cached) return json(cached);
- const records = [
- { stationId: '44025', name: 'NDBC 44025 — Long Island, NY', lat: 40.251, lon: -73.165, agency: 'NDBC', region: 'Mid-Atlantic' },
- { stationId: '44013', name: 'NDBC 44013 — Boston, MA', lat: 42.346, lon: -70.651, agency: 'NDBC', region: 'Northeast' },
- { stationId: '46042', name: 'NDBC 46042 — Monterey Bay, CA', lat: 36.789, lon: -122.469, agency: 'NDBC', region: 'California' },
- { stationId: '46026', name: 'NDBC 46026 — San Francisco, CA', lat: 37.755, lon: -122.839, agency: 'NDBC', region: 'California' },
- { stationId: '41047', name: 'NDBC 41047 — Northeast Bahamas', lat: 27.467, lon: -71.516, agency: 'NDBC', region: 'Atlantic' },
- { stationId: '46059', name: 'NDBC 46059 — West California', lat: 38.094, lon: -129.951, agency: 'NDBC', region: 'Pacific' },
- { stationId: '42040', name: 'NDBC 42040 — Mobile South, AL', lat: 29.205, lon: -88.205, agency: 'NDBC', region: 'Gulf of Mexico' },
+ const COASTAL_CAMS = [
+ { stationId: '44025', name: 'NDBC 44025 — Long Island, NY', lat: 40.251, lon: -73.165, agency: 'NDBC', region: 'Mid-Atlantic', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=44025' },
+ { stationId: '44013', name: 'NDBC 44013 — Boston, MA', lat: 42.346, lon: -70.651, agency: 'NDBC', region: 'Northeast', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=44013' },
+ { stationId: '46042', name: 'NDBC 46042 — Monterey Bay, CA', lat: 36.789, lon: -122.469, agency: 'NDBC', region: 'California', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=46042' },
+ { stationId: '46026', name: 'NDBC 46026 — San Francisco, CA', lat: 37.755, lon: -122.839, agency: 'NDBC', region: 'California', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=46026' },
+ { stationId: '41047', name: 'NDBC 41047 — Northeast Bahamas', lat: 27.467, lon: -71.516, agency: 'NDBC', region: 'Atlantic', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=41047' },
+ { stationId: '46059', name: 'NDBC 46059 — West California', lat: 38.094, lon: -129.951, agency: 'NDBC', region: 'Pacific', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=46059' },
+ { stationId: '42040', name: 'NDBC 42040 — Mobile South, AL', lat: 29.205, lon: -88.205, agency: 'NDBC', region: 'Gulf of Mexico', snapshotUrl: 'https://www.ndbc.noaa.gov/buoycam.php?station=42040' },
  ];
- const feeds = records.map(r => ({
+ const valid = await validateWebcamCatalog(COASTAL_CAMS, 'webcams:coastal:valid', 30 * 60 * 1000);
+ const feeds = valid.map(r => ({
  id: `NOAA_COASTAL:${r.stationId}`,
  source: 'NOAA_COASTAL',
  name: r.name,
  lat: r.lat,
  lon: r.lon,
- snapshotUrl: `https://www.ndbc.noaa.gov/buoycam.php?station=${encodeURIComponent(r.stationId)}`,
+ snapshotUrl: r.snapshotUrl,
  refreshIntervalSec: 600,
  category: 'coastal',
  metadata: { stationId: r.stationId, agency: r.agency, region: r.region },
  }));
- const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
- setCached(cacheKey, result, 30 * 60 * 1000);
- return json(result);
+ return json({ feeds, updatedAt: Math.floor(Date.now() / 1000) });
   }
 
   // ── Master webcam aggregator (calls all sub-routes, dedupes, filters) ──
@@ -15988,7 +15985,6 @@ async function dispatch(requestUrl, req, routes, context) {
  { source: 'WINDY', path: '/api/webcams/windy', shape: 'feeds' },
  { source: 'NOAA_COASTAL', path: '/api/webcams/coastal', shape: 'feeds' },
  { source: 'DOT511', path: '/api/webcams/dot-extended', shape: 'feeds' },
- { source: 'USFS', path: '/api/webcams/usfs', shape: 'feeds' },
  ];
  const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
  const port = process.env.SIDECAR_PORT ?? '46123';
@@ -16161,45 +16157,40 @@ async function dispatch(requestUrl, req, routes, context) {
   }
 
   // ── USGS stream gauge cams (pinned site list, photo URLs from USGS NWIS) ──
+  // validateWebcamCatalog HEAD-checks each snapshotUrl and drops dead ones.
   if (requestUrl.pathname === '/api/webcams/streamgauge') {
- const cacheKey = 'webcams-streamgauge';
- const cached = getCached(cacheKey, 60 * 60 * 1000);
- if (cached) return json(cached);
- const records = [
- { siteNo: '11447650', name: 'Sacramento River at Freeport, CA', lat: 38.4555, lon: -121.5021, state: 'CA' },
- { siteNo: '01646500', name: 'Potomac River near Wash, DC Little Falls Pump Sta', lat: 38.9498, lon: -77.1278, state: 'DC' },
- { siteNo: '07010000', name: 'Mississippi River at St. Louis, MO', lat: 38.6296, lon: -90.1798, state: 'MO' },
- { siteNo: '02035000', name: 'James River at Cartersville, VA', lat: 37.6712, lon: -78.0867, state: 'VA' },
- { siteNo: '03612600', name: 'Ohio River at Olmsted, IL', lat: 37.18, lon: -89.0567, state: 'IL' },
- { siteNo: '08374550', name: 'Rio Grande at Foster Ranch, TX', lat: 29.6306, lon: -102.0339, state: 'TX' },
- { siteNo: '14211720', name: 'Willamette River at Portland, OR', lat: 45.5167, lon: -122.6692, state: 'OR' },
- { siteNo: '12150800', name: 'Snohomish River near Monroe, WA', lat: 47.83, lon: -121.9967, state: 'WA' },
+ const STREAM_CAMS = [
+ { siteNo: '11447650', name: 'Sacramento River at Freeport, CA', lat: 38.4555, lon: -121.5021, state: 'CA', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=11447650' },
+ { siteNo: '01646500', name: 'Potomac River near Wash, DC Little Falls Pump Sta', lat: 38.9498, lon: -77.1278, state: 'DC', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=01646500' },
+ { siteNo: '07010000', name: 'Mississippi River at St. Louis, MO', lat: 38.6296, lon: -90.1798, state: 'MO', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=07010000' },
+ { siteNo: '02035000', name: 'James River at Cartersville, VA', lat: 37.6712, lon: -78.0867, state: 'VA', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=02035000' },
+ { siteNo: '03612600', name: 'Ohio River at Olmsted, IL', lat: 37.18, lon: -89.0567, state: 'IL', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=03612600' },
+ { siteNo: '08374550', name: 'Rio Grande at Foster Ranch, TX', lat: 29.6306, lon: -102.0339, state: 'TX', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=08374550' },
+ { siteNo: '14211720', name: 'Willamette River at Portland, OR', lat: 45.5167, lon: -122.6692, state: 'OR', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=14211720' },
+ { siteNo: '12150800', name: 'Snohomish River near Monroe, WA', lat: 47.83, lon: -121.9967, state: 'WA', snapshotUrl: 'https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=12150800' },
  ];
- const feeds = records.map(r => ({
+ const valid = await validateWebcamCatalog(STREAM_CAMS, 'webcams:streamgauge:valid', 30 * 60 * 1000);
+ const feeds = valid.map(r => ({
  id: `USGS_STREAM:${r.siteNo}`,
  source: 'USGS_STREAM',
  name: r.name,
  lat: r.lat,
  lon: r.lon,
- snapshotUrl: `https://waterdata.usgs.gov/nwisweb/get_site?format=photo&site_no=${encodeURIComponent(r.siteNo)}`,
+ snapshotUrl: r.snapshotUrl,
  refreshIntervalSec: 3600,
  category: 'stream',
  metadata: { siteNo: r.siteNo, state: r.state },
  }));
- const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
- setCached(cacheKey, result, 60 * 60 * 1000);
- return json(result);
+ return json({ feeds, updatedAt: Math.floor(Date.now() / 1000) });
   }
 
   // ── USGS volcano webcams (static catalog from src/services/webcams/volcano-cam-catalog.ts) ──
   // The catalog is pinned in code rather than scraped because USGS HVO/CVO/AVO/YVO
   // pages don't expose a machine-readable index. Refresh cadence is 60s per cam
   // — the snapshots are served from observatory webservers directly.
+  // validateWebcamCatalog HEAD-checks each URL and drops dead ones before mapping.
   if (requestUrl.pathname === '/api/webcams/volcano') {
- const cacheKey = 'webcams-volcano';
- const cached = getCached(cacheKey, 30 * 60 * 1000);
- if (cached) return json(cached);
- const cams = [
+ const VOLCANO_CAMS = [
  { id: 'kilauea-summit', name: 'Kīlauea — Summit (KW)', volcano: 'Kilauea', observatory: 'HVO', lat: 19.4067, lon: -155.2834, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/kilauea/KWcam.jpg' },
  { id: 'kilauea-east-rift', name: 'Kīlauea — East Rift (PG)', volcano: 'Kilauea', observatory: 'HVO', lat: 19.385, lon: -154.95, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/kilauea/PGcam.jpg' },
  { id: 'mauna-loa-summit', name: 'Mauna Loa — Summit (M1)', volcano: 'Mauna Loa', observatory: 'HVO', lat: 19.475, lon: -155.608, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/mauna_loa/M1cam.jpg' },
@@ -16214,7 +16205,8 @@ async function dispatch(requestUrl, req, routes, context) {
  { id: 'great-sitkin', name: 'Great Sitkin — GSCK', volcano: 'Great Sitkin', observatory: 'AVO', lat: 52.076, lon: -176.13, snapshotUrl: 'https://avo.alaska.edu/webcam/GSCK.jpg' },
  { id: 'yellowstone-old-faithful', name: 'Yellowstone — Old Faithful', volcano: 'Yellowstone', observatory: 'YVO', lat: 44.46, lon: -110.829, snapshotUrl: 'https://www.nps.gov/webcams-yell/oldfaithvc.jpg' },
  ];
- const feeds = cams.map(c => ({
+ const valid = await validateWebcamCatalog(VOLCANO_CAMS, 'webcams:volcano:valid', 30 * 60 * 1000);
+ const feeds = valid.map(c => ({
  id: `USGS_VOLCANO:${c.id}`,
  source: 'USGS_VOLCANO',
  name: c.name,
@@ -16225,9 +16217,7 @@ async function dispatch(requestUrl, req, routes, context) {
  category: 'volcano',
  metadata: { volcano: c.volcano, observatory: c.observatory },
  }));
- const result = { feeds, updatedAt: Math.floor(Date.now() / 1000) };
- setCached(cacheKey, result, 30 * 60 * 1000);
- return json(result);
+ return json({ feeds, updatedAt: Math.floor(Date.now() / 1000) });
   }
 
   // ── Extended DOT adapters: OH, AZ, ID, GA, OR, NC, NSW, UK, ROAD511 ──

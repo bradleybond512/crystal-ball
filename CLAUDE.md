@@ -283,8 +283,13 @@ src/                        # TypeScript frontend (Vite)
     providers/provider-registry.ts           # static catalog (live sources + P0 expansion batch), independence groups
     providers/provider-health.ts             # pure record/derive: ring buffer → healthy/stale/degraded/down + quota detection
     providers/source-fusion.ts               # freshness × reliability × independence-aware corroboration; disagreements surface, capped at 0.6
-    providers/provider-bridge.ts             # snapshotsFromRegistry → provider-redundancy ProviderSnapshot contract
+    providers/provider-bridge.ts             # snapshotsFromRegistry (+ optional fingerprints) → provider-redundancy ProviderSnapshot contract
     providers/providers-state.ts             # singleton: recordProviderFetchOutcome / getProviderHealthState
+    providers/provider-domain-map.ts         # fact-type → provider ids + numeric tolerance + spatiotemporal match window (FUSION_DOMAINS)
+    providers/fusion-ingest.ts               # ingestDomain(): match same-fact observations across providers → fuse + per-provider fingerprint (Phase 0 keystone)
+    providers/fusion-publish.ts              # singleton: fetchers call recordDomainObservations(); overlays fingerprinted snapshots onto the redundancy report
+    # First fused domain: earthquakes (USGS + EMSC). data-loader.ts feeds both; Command Center shows "verified by N independent sources".
+    # See docs/superpowers/specs/2026-06-28-redundancy-prediction-enhancement-program-design.md + plans/2026-06-28-phase0-fusion-ingest-earthquakes.md
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes
                                 # /api/analyst-state + /api/analyst-commands

@@ -739,23 +739,62 @@ export class SystemDiagnosticPanel extends Panel {
         // degradation tick keeps refreshing them. If it stops, they freeze on
         // their last value and read green — so fail loudly when the heartbeat
         // is stale (> 3× the 60s tick).
-        defs.push({
-          id: 'diagnostics_liveness',
-          label: 'Diagnostics liveness',
-          probe: () => {
-            const ageMs = diagnosticsHeartbeatAgeMs();
-            if (!Number.isFinite(ageMs)) {
-              return { status: 'warn' as const, reason: 'Diagnostics tick has not run yet (still booting).' };
-            }
-            if (ageMs > 180_000) {
-              return {
-                status: 'fail' as const,
-                reason: `Diagnostics tick last ran ${Math.round(ageMs / 1000)}s ago — health registries may be frozen (their green is stale).`,
-              };
-            }
-            return { status: 'pass' as const, reason: `Diagnostics tick fresh (${Math.round(ageMs / 1000)}s ago).` };
+        defs.push(
+          {
+            id: 'diagnostics_liveness',
+            label: 'Diagnostics liveness',
+            probe: () => {
+              const ageMs = diagnosticsHeartbeatAgeMs();
+              if (!Number.isFinite(ageMs)) {
+                return { status: 'warn' as const, reason: 'Diagnostics tick has not run yet (still booting).' };
+              }
+              if (ageMs > 180_000) {
+                return {
+                  status: 'fail' as const,
+                  reason: `Diagnostics tick last ran ${Math.round(ageMs / 1000)}s ago — health registries may be frozen (their green is stale).`,
+                };
+              }
+              return { status: 'pass' as const, reason: `Diagnostics tick fresh (${Math.round(ageMs / 1000)}s ago).` };
+            },
           },
-        });
+          {
+            id: 'webcam_sources',
+            label: 'Webcam sources',
+            probe: async () => {
+              let json: { sourceHealth?: { source: string; status: string }[] };
+              try {
+                const res = await fetch(`${getApiBaseUrl()}/api/webcams`);
+                if (!res.ok) {
+                  return { status: 'fail' as const, reason: `/api/webcams returned ${res.status}` };
+                }
+                json = (await res.json()) as typeof json;
+              } catch (error) {
+                return {
+                  status: 'fail' as const,
+                  reason: error instanceof Error ? error.message : String(error),
+                };
+              }
+              const sources = json.sourceHealth ?? [];
+              const ok = sources.filter((s) => s.status === 'ok');
+              const degraded = sources.filter(
+                (s) => s.status === 'missing_key' || s.status === 'down' || s.status === 'rate_limited',
+              );
+              if (ok.length >= 1) {
+                return {
+                  status: 'pass' as const,
+                  reason: `${ok.length} webcam source${ok.length === 1 ? '' : 's'} healthy.`,
+                };
+              }
+              if (degraded.length > 0) {
+                return {
+                  status: 'warn' as const,
+                  reason: `Degraded webcam sources: ${degraded.map((s) => `${s.source}(${s.status})`).join(', ')}.`,
+                };
+              }
+              return { status: 'fail' as const, reason: 'All webcam sources are down or none reported.' };
+            },
+          },
+        );
         this.selfTestReport = await runSelfTests(defs);
       } finally {
         this.selfTestRunning = false;

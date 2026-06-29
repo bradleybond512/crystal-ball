@@ -47,6 +47,21 @@ test('resolveWithProxy resolves a pending prediction when decisive', () => {
   assert.equal(store.get('p1')?.status, 'resolved_true');
 });
 
+test('a NaN strength carries no evidence → unknown, never a false resolution', () => {
+  const r = inferOutcome([{ id: 'x', polarity: 'refuting', strength: Number.NaN, observedAt: NOW }]);
+  assert.equal(r.outcome, 'unknown');
+  assert.equal(r.evidence, 0);
+
+  const store = createForecastCalibrationStore();
+  store.record({
+    id: 'p3', sourceId: 'm', domain: 'weather', claim: 'c', probability: 0.5,
+    predictedAt: NOW, resolveBy: NOW + 3_600_000, status: 'pending',
+  });
+  const res = resolveWithProxy(store, 'p3', [{ id: 'x', polarity: 'refuting', strength: Number.NaN, observedAt: NOW }]);
+  assert.equal(res.resolved, false);
+  assert.equal(store.get('p3')?.status, 'pending');
+});
+
 test('resolveWithProxy leaves the prediction pending when proxies are weak', () => {
   const store = createForecastCalibrationStore();
   store.record({

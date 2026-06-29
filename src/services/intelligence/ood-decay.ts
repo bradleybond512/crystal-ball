@@ -72,11 +72,18 @@ export function oodDecay(
     };
   }
 
-  const pairs = features.slice(0, refs.length);
+  // Every feature must have matching training stats. A feature beyond `refs`
+  // has no coverage at all — treat it as maximally far AND zero-coverage so it
+  // can't be silently dropped into unearned full confidence (fail-closed).
   let distance = 0;
   let minN = Infinity;
-  for (const [i, x] of pairs.entries()) {
-    const ref = refs[i]!;
+  for (const [i, x] of features.entries()) {
+    const ref = refs[i];
+    if (!ref) {
+      distance = Math.max(distance, hardZ);
+      minN = 0;
+      continue;
+    }
     minN = Math.min(minN, ref.n);
     distance = Math.max(distance, featureZ(x, ref, hardZ));
   }

@@ -51,7 +51,9 @@ export function inferOutcome(
   let confirming = 0;
   let refuting = 0;
   for (const s of signals) {
-    const strength = clamp01(s.strength);
+    // Non-finite strengths (NaN/Infinity) carry no evidence — ignore them
+    // rather than letting NaN poison the thresholds into a false resolution.
+    const strength = Number.isFinite(s.strength) ? clamp01(s.strength) : 0;
     if (s.polarity === 'confirming') confirming += strength;
     else refuting += strength;
   }

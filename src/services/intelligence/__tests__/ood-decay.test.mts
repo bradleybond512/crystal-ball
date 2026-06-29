@@ -48,6 +48,16 @@ test('sparse training adds extra decay via coverage', () => {
   assert.ok(sparse.coverage < 1);
 });
 
+test('a feature with no matching training stats is not silently dropped (fail-closed)', () => {
+  // 2 features, only 1 ref. The uncovered 2nd feature must drag confidence down
+  // even though the matched 1st feature is perfectly in-distribution.
+  const r = oodDecay([5, 999], [stats(5, 1, 50)], { coverageFloor: 0.5, hardZ: 5, floor: 0.4 });
+  assert.ok(r.distance >= 5, 'uncovered feature reads as maximally far');
+  assert.equal(r.coverage, 0, 'an uncovered feature zeroes coverage');
+  assert.ok(r.decayMultiplier < 1, `must decay, got ${r.decayMultiplier}`);
+  assert.equal(r.inDistribution, false);
+});
+
 test('empty distribution caps confidence to the coverage floor', () => {
   const r = oodDecay([5], [], { coverageFloor: 0.5 });
   assert.equal(r.decayMultiplier, 0.5);

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { ingestDomain, type DomainObservation } from '../fusion-ingest.ts';
 import { recordFetchOutcome, emptyProviderHealthState } from '../provider-health.ts';
 import type { ProviderHealthState } from '../provider-health.ts';
+import { snapshotsFromRegistry } from '../provider-bridge.ts';
+import { assessProviderRedundancy } from '../../diagnostics/provider-redundancy.ts';
 
 const NOW = 1_745_000_000_000;
 
@@ -69,4 +71,30 @@ test('unknown fact-type returns empty', () => {
   const r = ingestDomain('nope', [obs('usgs-earthquakes')], healthyBoth(), NOW);
   assert.equal(r.facts.length, 0);
   assert.deepEqual(r.providerFingerprints, {});
+});
+
+test('end to end: agreeing quakes → redundant_agreement for disasters', () => {
+  const health = healthyBoth();
+  const r = ingestDomain('earthquakes', [
+    obs('usgs-earthquakes', { value: 6.1, lat: 35, lon: 139, occurredAt: NOW }),
+    obs('emsc-seismic',     { value: 6.0, lat: 35.05, lon: 139.02, occurredAt: NOW + 20_000 }),
+  ], health, NOW);
+
+  const snaps = snapshotsFromRegistry(health, NOW, 'disasters', r.providerFingerprints);
+  const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
+  const disasters = report.domains.find((d) => d.domain === 'disasters')!;
+  assert.equal(disasters.verdict, 'redundant_agreement');
+  assert.equal(disasters.confidenceMultiplier, 1);
+});
+
+test('end to end: disagreeing quakes → redundant_disagreement for disasters', () => {
+  const health = healthyBoth();
+  const r = ingestDomain('earthquakes', [
+    obs('usgs-earthquakes', { value: 6.1, lat: 35, lon: 139, occurredAt: NOW }),
+    obs('emsc-seismic',     { value: 7.6, lat: 35, lon: 139, occurredAt: NOW }),
+  ], health, NOW);
+  const snaps = snapshotsFromRegistry(health, NOW, 'disasters', r.providerFingerprints);
+  const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
+  const disasters = report.domains.find((d) => d.domain === 'disasters')!;
+  assert.equal(disasters.verdict, 'redundant_disagreement');
 });

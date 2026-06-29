@@ -325,6 +325,8 @@ import * as hazardLoaders from '@/app/loaders/hazards';
 import * as diseaseLoaders from '@/app/loaders/disease';
 import * as cyberLoaders from '@/app/loaders/cyber';
 import { earthquakesToObservations } from '@/services/intelligence/adapters/earthquake-adapter';
+import { recordDomainObservations } from '@/services/providers/fusion-publish';
+import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
 import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
@@ -1404,12 +1406,14 @@ export class DataLoaderManager implements AppModule {
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update(earthquakeResult.value);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'ok' });
  dataFreshness.recordUpdate('usgs', earthquakeResult.value.length);
+ recordDomainObservations('usgs-earthquakes', usgsEarthquakesToObservations(earthquakeResult.value), true);
  } else {
  this.ctx.intelligenceCache.earthquakes = [];
  this.ctx.map?.setEarthquakes([]);
  (this.ctx.panels.earthquakes as EarthquakesPanel)?.update([]);
  this.ctx.statusPanel?.updateApi('USGS', { status: 'error' });
  dataFreshness.recordError('usgs', String(earthquakeResult.reason));
+ recordDomainObservations('usgs-earthquakes', [], false);
  }
 
  if (eonetResult.status === 'fulfilled') {
@@ -3803,9 +3807,11 @@ export class DataLoaderManager implements AppModule {
  try {
  const events = await fetchEmscSeismic();
  (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents(events);
+ recordDomainObservations('emsc-seismic', emscEventsToObservations(events), true);
  } catch (error) {
  console.warn('[emsc-seismic] fetch failed', error);
  (this.ctx.panels['emsc-seismic'] as EmscSeismicPanel | undefined)?.updateEvents([]);
+ recordDomainObservations('emsc-seismic', [], false);
  }
   }
 

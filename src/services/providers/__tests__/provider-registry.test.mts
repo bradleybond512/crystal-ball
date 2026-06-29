@@ -48,3 +48,13 @@ test('exactly one primary per domain', () => {
     assert.equal(primaries.length, 1, `${domain} must have exactly one primary`);
   }
 });
+
+test('emsc-seismic is registered as an independent earthquake source', () => {
+  const emsc = getProviderDefinition('emsc-seismic');
+  assert.ok(emsc, 'emsc-seismic must be registered');
+  assert.equal(emsc!.domain, 'disasters');
+  assert.equal(emsc!.independenceGroup, 'emsc');
+  assert.notEqual(emsc!.independenceGroup, getProviderDefinition('usgs-earthquakes')!.independenceGroup);
+  // USGS + EMSC must read as 2 independent groups (drives corroboration 0.8).
+  assert.equal(independentGroupsFor(['usgs-earthquakes', 'emsc-seismic']).size, 2);
+});

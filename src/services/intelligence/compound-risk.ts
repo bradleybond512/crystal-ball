@@ -376,8 +376,28 @@ const CASCADE_PAIRS = new Set<string>([
   'aviation|markets',
 ]);
 
+/** Learned cascade pairs, mined from outcome history (learned-cascades.ts) and
+ *  registered at runtime to AUGMENT — never replace — the deterministic table.
+ *  Empty by default, so behavior is unchanged until something registers pairs. */
+const LEARNED_CASCADE_PAIRS = new Set<string>();
+
+/** Replace the learned-pair set (idempotent). Keys are "fromDomain|toDomain". */
+export function registerLearnedCascadePairs(keys: Iterable<string>): void {
+  LEARNED_CASCADE_PAIRS.clear();
+  for (const k of keys) LEARNED_CASCADE_PAIRS.add(k);
+}
+
+export function clearLearnedCascadePairs(): void {
+  LEARNED_CASCADE_PAIRS.clear();
+}
+
 function cascadePair(a: FactDomain, b: FactDomain): boolean {
-  return CASCADE_PAIRS.has(`${a}|${b}`) || CASCADE_PAIRS.has(`${b}|${a}`);
+  const fwd = `${a}|${b}`;
+  const rev = `${b}|${a}`;
+  return (
+    CASCADE_PAIRS.has(fwd) || CASCADE_PAIRS.has(rev) ||
+    LEARNED_CASCADE_PAIRS.has(fwd) || LEARNED_CASCADE_PAIRS.has(rev)
+  );
 }
 
 // ── Headline ───────────────────────────────────────────────────────────

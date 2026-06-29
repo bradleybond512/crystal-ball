@@ -13912,6 +13912,7 @@ async function dispatch(requestUrl, req, routes, context) {
  return {
  icao,
  callsign: s[1] ? String(s[1]).trim() || null : null,
+ country: s[2] ? String(s[2]).trim() || null : null,
  lat: latV, lon: lonV,
  alt: altMeters != null ? Math.round(Number(altMeters) * 3.28084) : null,  // m → ft
  speed: velMs != null ? Math.round(Number(velMs) * 1.94384) : null,        // m/s → kt
@@ -13932,6 +13933,7 @@ async function dispatch(requestUrl, req, routes, context) {
  return {
  icao,
  callsign: a.flight ? String(a.flight).trim() || null : null,
+ country: null,
  lat: a.lat, lon: a.lon,
  alt: typeof a.alt_baro === 'number' ? a.alt_baro : (typeof a.alt_geom === 'number' ? a.alt_geom : null),
  speed: typeof a.gs === 'number' ? Math.round(a.gs) : null,
@@ -14035,6 +14037,7 @@ async function dispatch(requestUrl, req, routes, context) {
  existing.ts = ac.ts;
  }
  existing.callsign ??= ac.callsign;
+ existing.country ??= ac.country;
  existing.squawk ??= ac.squawk;
  existing.type ??= ac.type;
  if (existing.military !== true && ac.military === true) existing.military = true;

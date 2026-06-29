@@ -325,7 +325,7 @@ import * as hazardLoaders from '@/app/loaders/hazards';
 import * as diseaseLoaders from '@/app/loaders/disease';
 import * as cyberLoaders from '@/app/loaders/cyber';
 import { earthquakesToObservations } from '@/services/intelligence/adapters/earthquake-adapter';
-import { aisDisruptionsToObservations } from '@/services/intelligence/adapters/ais-adapter';
+import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
 import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
 import { riverDischargeToObservations, type OpenMeteoFloodForecast } from '@/services/intelligence/adapters/river-discharge-adapter';
@@ -3669,6 +3669,14 @@ export class DataLoaderManager implements AppModule {
  this.ctx.map?.setAdsbFlights(snapshot.flights);
  this.ctx.map?.setLayerReady?.('adsb', snapshot.flights.length > 0);
  (this.ctx.panels['air-traffic'] as AirTrafficPanel | undefined)?.update(snapshot);
+ // Feed the confidence-scored multi-provider tracks into the intelligence layer
+ // (low-confidence / stale ADS-B tracks become observations). Aggregate path only.
+ if (snapshot.aggregate?.tracks?.length) {
+ const obs = snapshot.aggregate.tracks
+ .map((t) => adsbTrackToObservation(t))
+ .filter((o): o is NonNullable<typeof o> => o != null);
+ if (obs.length > 0) ingestObservations(obs);
+ }
  } catch (error) {
  this.ctx.map?.setLayerReady?.('adsb', false);
  dataFreshness.recordError('adsb', error instanceof Error ? error.message : 'Unknown error');

@@ -69,10 +69,20 @@ export function ingestDomain(
       now,
       numericTolerance: cfg.numericTolerance,
     });
-    // Fingerprint = tolerance-bucketed value so agreeing providers collide.
+    // Fingerprint reflects fusion's consensus decision, NOT each raw value.
+    // All consensus providers share one fingerprint; only providers fusion
+    // flagged as disagreeing get a distinct one. This keeps the redundancy
+    // verdict consistent with fuseObservations — two values within tolerance
+    // that straddle a bucket boundary must NOT read as a disagreement.
+    const disagreeIds = new Set(fusion.disagreements.flatMap((d) => d.providerIds));
+    const consensusObs = cluster.filter((o) => !disagreeIds.has(o.providerId));
+    const consensusValue = (consensusObs[0] ?? cluster[0]!).value;
+    const consensusFp = `c:${bucket(consensusValue, cfg.numericTolerance)}`;
     const fingerprints: Record<string, string> = {};
     for (const o of cluster) {
-      fingerprints[o.providerId] = bucket(o.value, cfg.numericTolerance);
+      fingerprints[o.providerId] = disagreeIds.has(o.providerId)
+        ? `d:${bucket(o.value, cfg.numericTolerance)}:${o.providerId}`
+        : consensusFp;
     }
     const rep = cluster[0]!;
     return {

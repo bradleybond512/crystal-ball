@@ -66,6 +66,16 @@ test('non-finite feature value fails closed (finite multiplier, treated as far)'
   assert.equal(r.inDistribution, false);
 });
 
+test('missing runtime feature (refs longer than features) also fails closed', () => {
+  // 2 trained dimensions, only 1 runtime feature supplied → the missing 2nd
+  // dimension must be treated as uncovered, not silently full-confidence.
+  const r = oodDecay([5], [stats(5, 1, 50), stats(0, 1, 50)], { coverageFloor: 0.5, hardZ: 5, floor: 0.4 });
+  assert.ok(r.distance >= 5, 'the missing dimension reads as maximally far');
+  assert.equal(r.coverage, 0);
+  assert.ok(r.decayMultiplier < 1);
+  assert.equal(r.inDistribution, false);
+});
+
 test('empty distribution caps confidence to the coverage floor', () => {
   const r = oodDecay([5], [], { coverageFloor: 0.5 });
   assert.equal(r.decayMultiplier, 0.5);

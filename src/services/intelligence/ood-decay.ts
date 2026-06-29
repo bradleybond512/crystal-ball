@@ -72,14 +72,17 @@ export function oodDecay(
     };
   }
 
-  // Every feature must have matching training stats. A feature beyond `refs`
-  // has no coverage at all — treat it as maximally far AND zero-coverage so it
-  // can't be silently dropped into unearned full confidence (fail-closed).
+  // Features and training stats must align 1:1. ANY index missing either side
+  // (a runtime feature with no stats, OR a trained dimension the caller could
+  // not compute) is uncovered — maximally far AND zero-coverage — so a
+  // dimension mismatch can never yield unearned full confidence (fail-closed).
+  const len = Math.max(features.length, refs.length);
   let distance = 0;
   let minN = Infinity;
-  for (const [i, x] of features.entries()) {
+  for (const i of Array.from({ length: len }, (_, k) => k)) {
     const ref = refs[i];
-    if (!ref) {
+    const x = features[i];
+    if (ref === undefined || x === undefined) {
       distance = Math.max(distance, hardZ);
       minN = 0;
       continue;

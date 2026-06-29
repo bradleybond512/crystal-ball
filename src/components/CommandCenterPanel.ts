@@ -501,13 +501,27 @@ export class CommandCenterPanel extends Panel {
 
   private renderProviderRedundancy(report: ReturnType<typeof getProviderRedundancyReport>): string {
     if (report.domains.length === 0) return '';
+    // "Verified" = a domain where ≥2 corroborating providers share the same
+    // fact fingerprint (the fusion-ingest path lights this up).
+    const verified = report.domains
+      .filter((d) => d.verdict === 'redundant_agreement')
+      .map((d) => ({
+        domain: d.domain,
+        n: d.providers.filter((p) => p.recentFactFingerprint && (p.level === 'healthy' || p.level === 'degraded')).length,
+      }))
+      .filter((d) => d.n >= 2);
     const stressed = report.domains.filter((d) => d.verdict !== 'redundant_agreement');
-    if (stressed.length === 0) return '';
-    return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:12px;">
-      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Provider stress</div>
-      <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.5;">
+    if (verified.length === 0 && stressed.length === 0) return '';
+    const verifiedMargin = stressed.length > 0 ? '8px' : '0';
+    const verifiedHtml = verified.length === 0 ? '' : `<div style="font-size:12px;color:var(--ok,#3fb950);line-height:1.5;margin-bottom:${verifiedMargin};">
+        ${verified.slice(0, 4).map((d) => `✓ <strong>${escapeHtml(d.domain)}</strong>: verified by ${d.n} independent sources`).join('<br>')}
+      </div>`;
+    const stressedHtml = stressed.length === 0 ? '' : `<ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.5;">
         ${stressed.slice(0, 3).map((d) => `<li><strong>${escapeHtml(d.domain)}</strong>: ${escapeHtml(d.reason)}</li>`).join('')}
-      </ul>
+      </ul>`;
+    return `<div style="border-top:1px solid var(--border-subtle,#333);padding-top:12px;">
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Source corroboration</div>
+      ${verifiedHtml}${stressedHtml}
     </div>`;
   }
 

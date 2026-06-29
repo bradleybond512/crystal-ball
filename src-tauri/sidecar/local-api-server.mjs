@@ -15985,6 +15985,7 @@ async function dispatch(requestUrl, req, routes, context) {
  { source: 'WINDY', path: '/api/webcams/windy', shape: 'feeds' },
  { source: 'NOAA_COASTAL', path: '/api/webcams/coastal', shape: 'feeds' },
  { source: 'DOT511', path: '/api/webcams/dot-extended', shape: 'feeds' },
+ { source: 'USFS', path: '/api/webcams/usfs', shape: 'feeds' },
  ];
  const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
  const port = process.env.SIDECAR_PORT ?? '46123';
@@ -16218,6 +16219,41 @@ async function dispatch(requestUrl, req, routes, context) {
  metadata: { volcano: c.volcano, observatory: c.observatory },
  }));
  return json({ feeds, updatedAt: Math.floor(Date.now() / 1000) });
+  }
+
+  // ── USFS webcams (fire lookouts + recreation, validated catalog) ──
+  // Public snapshot URLs from USFS region pages and well-known forest/mountain cams.
+  // validateWebcamCatalog HEAD-checks each URL and drops dead ones (some may be stale).
+  if (requestUrl.pathname === '/api/webcams/usfs') {
+ const USFS_CAMS = [
+ { id: 'usfs-shasta-avalanche', name: 'Mt. Shasta — Avalanche Gulch', lat: 41.4092, lon: -122.1948, snapshotUrl: 'https://www.mtshastaskipark.com/cams/summit.jpg', category: 'nature' },
+ { id: 'usfs-crater-lake-rim', name: 'Crater Lake — Rim Village', lat: 42.9116, lon: -122.148, snapshotUrl: 'https://www.nps.gov/webcams-crla/rimvillagevc.jpg', category: 'nature' },
+ { id: 'usfs-olympic-hurricane-ridge', name: 'Olympic NF — Hurricane Ridge', lat: 47.9694, lon: -123.4983, snapshotUrl: 'https://www.nps.gov/webcams-olym/hurricaneridgevc.jpg', category: 'weather' },
+ { id: 'usfs-coconino-flagstaff', name: 'Coconino NF — Flagstaff Fire Lookout', lat: 35.2066, lon: -111.7263, snapshotUrl: 'https://forecast.weather.gov/meteocams/images/flagstaff.jpg', category: 'fire' },
+ { id: 'usfs-pike-pikes-peak', name: 'Pike NF — Pikes Peak Summit', lat: 38.8405, lon: -105.0441, snapshotUrl: 'https://www.pikespeakcolorado.com/webcam/current.jpg', category: 'nature' },
+ { id: 'usfs-deschutes-bachelor', name: 'Deschutes NF — Mt. Bachelor', lat: 43.9789, lon: -121.6878, snapshotUrl: 'https://www.mtbachelor.com/webcam/summit.jpg', category: 'weather' },
+ { id: 'usfs-sequoia-moro-rock', name: 'Sequoia NF — Moro Rock', lat: 36.5453, lon: -118.7703, snapshotUrl: 'https://www.nps.gov/webcams-seki/morovc.jpg', category: 'nature' },
+ { id: 'usfs-tahoe-heavenly', name: 'Lake Tahoe Basin — Heavenly Ridge', lat: 38.9353, lon: -119.9396, snapshotUrl: 'https://www.skiheavenly.com/webcam/main.jpg', category: 'weather' },
+ { id: 'usfs-white-mt-washington', name: 'White Mountain NF — Mt. Washington', lat: 44.2705, lon: -71.3033, snapshotUrl: 'https://www.mountwashington.org/uploads/webcam/1.jpg', category: 'weather' },
+ { id: 'usfs-gifford-pinchot-adams', name: 'Gifford Pinchot NF — Mt. Adams', lat: 46.2024, lon: -121.4905, snapshotUrl: 'https://volcanoes.usgs.gov/vsc/captures/cvo/ADAMSLZ.jpg', category: 'nature' },
+ { id: 'usfs-nez-perce-clearwater-lolo', name: 'Nez Perce-Clearwater NF — Lolo Pass', lat: 46.6339, lon: -114.8194, snapshotUrl: 'https://www.511.idaho.gov/api/get/cameras/image/lolo-pass', category: 'weather' },
+ { id: 'usfs-angeles-mt-wilson', name: 'Angeles NF — Mt. Wilson', lat: 34.2257, lon: -118.0573, snapshotUrl: 'https://www.mtwilson.edu/wp-content/webcam/current.jpg', category: 'fire' },
+ { id: 'usfs-uinta-wasatch-alta', name: 'Uinta-Wasatch-Cache NF — Alta Ski', lat: 40.5881, lon: -111.6378, snapshotUrl: 'https://www.alta.com/webcam/summit.jpg', category: 'weather' },
+ ];
+ const valid = await validateWebcamCatalog(USFS_CAMS, 'webcams:usfs', 30 * 60 * 1000);
+ const feeds = valid.map(c => ({
+ id: `USFS:${c.id}`,
+ source: 'USFS',
+ name: c.name,
+ lat: c.lat,
+ lon: c.lon,
+ snapshotUrl: c.snapshotUrl,
+ refreshIntervalSec: 300,
+ category: c.category,
+ metadata: { agency: 'USFS' },
+ streamType: 'snapshot',
+ }));
+ return json({ feeds, count: feeds.length });
   }
 
   // ── Extended DOT adapters: OH, AZ, ID, GA, OR, NC, NSW, UK, ROAD511 ──

@@ -111,6 +111,8 @@ export function oodDecayScalar(value: number, stats: DistributionStats, options:
 /** Per-feature standardized distance. A constant (zero-spread) feature reads
  *  as in-distribution on an exact match and maximally far otherwise. */
 function featureZ(value: number, ref: DistributionStats, hardZ: number): number {
+  // Non-finite value or stats (missing sensor / model output) → maximally far.
+  if (!Number.isFinite(value) || !Number.isFinite(ref.mean) || !Number.isFinite(ref.stdDev)) return hardZ;
   if (ref.stdDev > 0) return Math.abs(value - ref.mean) / ref.stdDev;
   return value === ref.mean ? 0 : hardZ;
 }
@@ -123,5 +125,6 @@ function distanceTerm(distance: number, softZ: number, hardZ: number, floor: num
 }
 
 function clamp01(x: number): number {
+  if (!Number.isFinite(x)) return 0;
   return Math.min(1, Math.max(0, x));
 }

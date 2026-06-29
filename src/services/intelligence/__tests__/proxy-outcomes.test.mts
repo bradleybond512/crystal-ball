@@ -62,6 +62,21 @@ test('a NaN strength carries no evidence → unknown, never a false resolution',
   assert.equal(store.get('p3')?.status, 'pending');
 });
 
+test('resolveWithProxy ignores proxies observed outside the prediction window', () => {
+  const store = createForecastCalibrationStore();
+  store.record({
+    id: 'p4', sourceId: 'm', domain: 'weather', claim: 'c', probability: 0.6,
+    predictedAt: NOW, resolveBy: NOW + 6 * 3_600_000, status: 'pending',
+  });
+  // Strong confirming proxies, but observed a week AFTER the horizon → ignored.
+  const late = [
+    sig('confirming', 0.9, 'late-a'), sig('confirming', 0.8, 'late-b'),
+  ].map((s) => ({ ...s, observedAt: NOW + 7 * 86_400_000 }));
+  const res = resolveWithProxy(store, 'p4', late);
+  assert.equal(res.resolved, false);
+  assert.equal(store.get('p4')?.status, 'pending');
+});
+
 test('resolveWithProxy leaves the prediction pending when proxies are weak', () => {
   const store = createForecastCalibrationStore();
   store.record({

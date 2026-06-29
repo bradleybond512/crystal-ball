@@ -110,7 +110,13 @@ export function resolveWithProxy(
   options: ResolveWithProxyOptions = {},
 ): ProxyResolution {
   const minConfidence = options.minConfidence ?? 0.4;
-  const inference = inferOutcome(signals, options);
+  const record = store.get(predictionId);
+  if (!record) return { resolved: false, inference: inferOutcome([], options) };
+  // Only proxies observed within the prediction's window may resolve it — a
+  // stale prior signal or one after the forecast horizon must not pollute
+  // calibration (Brier / source multipliers).
+  const inWindow = signals.filter((s) => s.observedAt >= record.predictedAt && s.observedAt <= record.resolveBy);
+  const inference = inferOutcome(inWindow, options);
   if (inference.outcome === 'unknown' || inference.confidence < minConfidence) {
     return { resolved: false, inference };
   }

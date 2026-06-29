@@ -58,6 +58,14 @@ test('a feature with no matching training stats is not silently dropped (fail-cl
   assert.equal(r.inDistribution, false);
 });
 
+test('non-finite feature value fails closed (finite multiplier, treated as far)', () => {
+  const r = oodDecayScalar(Number.NaN, stats(5, 1, 50), { hardZ: 5, floor: 0.4 });
+  assert.ok(Number.isFinite(r.decayMultiplier), 'multiplier must stay finite');
+  assert.ok(r.decayMultiplier >= 0 && r.decayMultiplier <= 1);
+  assert.ok(r.distance >= 5, 'NaN feature reads as maximally far');
+  assert.equal(r.inDistribution, false);
+});
+
 test('empty distribution caps confidence to the coverage floor', () => {
   const r = oodDecay([5], [], { coverageFloor: 0.5 });
   assert.equal(r.decayMultiplier, 0.5);

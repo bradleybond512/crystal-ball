@@ -34,6 +34,8 @@ import { getApiBaseUrl } from '@/services/runtime';
 import { getSavedPlaces } from '@/services/saved-places';
 import { runNwsPolygonSelfTestFixture } from '@/services/weather/self-test-fixture';
 import { PROVIDER_DEFINITIONS } from '@/services/providers/provider-registry';
+import { getProviderRedundancyReport } from '@/services/insights/insights-state';
+import { buildRedundancyView, corroborationSummary, type RedundancyTone } from '@/services/diagnostics/provider-redundancy-view';
 import { getActiveQualityDebt } from '@/services/quality/quality-debt-state';
 import {
   auditFeeds,
@@ -451,13 +453,48 @@ export class SystemDiagnosticPanel extends Panel {
   }
 
   private renderFeeds(ctx: DiagnosticContext): string {
+    const corroboration = this.renderSourceCorroboration();
     if (ctx.feedAudit.entries.length === 0) {
-      return `<div style="padding:12px;color:var(--text-secondary,#aaa);">No feeds configured.</div>`;
+      return `${corroboration}<div style="padding:12px;color:var(--text-secondary,#aaa);">No feeds configured.</div>`;
     }
     const rows = [...ctx.feedAudit.entries]
       .sort((a, b) => Number(b.safetyCritical) - Number(a.safetyCritical) || severityRankFeed(b.level) - severityRankFeed(a.level))
       .map((e) => this.renderFeedRow(e));
-    return `<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px;">${rows.join('')}</div>`;
+    return `${corroboration}<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px;">${rows.join('')}</div>`;
+  }
+
+  /** Per-domain source-corroboration verdicts from the provider-redundancy
+   *  report — "verified by N independent sources" vs "single source / disagree". */
+  private renderSourceCorroboration(): string {
+    let vm;
+    try {
+      vm = buildRedundancyView(getProviderRedundancyReport());
+    } catch {
+      return '';
+    }
+    if (vm.rows.length === 0) return '';
+    const rows = vm.rows.map((r) => {
+      const color = redundancyToneColor(r.tone);
+      const corro = corroborationSummary(r);
+      const remediation = r.remediation
+        ? `<div style="font-size:11px;color:var(--accent,#4a9eff);margin-top:3px;">→ ${escapeHtml(r.remediation)}</div>`
+        : '';
+      return `<div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="color:${color};font-weight:600;">${escapeHtml(r.label)}</span>
+            <span style="font-weight:600;">${escapeHtml(r.domain)}</span>
+          </div>
+          <span style="font-size:10px;color:var(--text-secondary,#aaa);">${escapeHtml(corro)} · conf ${r.confidencePct}%</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:4px;">${escapeHtml(r.detail)}</div>
+        ${remediation}
+      </div>`;
+    }).join('');
+    return `<div style="padding:8px 12px;display:flex;flex-direction:column;gap:6px;">
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;">Source corroboration — ${escapeHtml(vm.headline)}</div>
+      ${rows}
+    </div>`;
   }
 
   private renderFeedRow(e: FeedAuditEntry): string {
@@ -769,6 +806,19 @@ function feedColor(level: keyof typeof FEED_RANK): string {
     case 'silent': {  return 'var(--severity-critical)';
     }
     case 'unknown': { return 'var(--severity-info)';
+    }
+  }
+}
+
+function redundancyToneColor(tone: RedundancyTone): string {
+  switch (tone) {
+    case 'good': { return 'var(--severity-ok)';
+    }
+    case 'warn': { return 'var(--severity-high)';
+    }
+    case 'bad': {  return 'var(--severity-critical)';
+    }
+    case 'neutral': { return 'var(--severity-info)';
     }
   }
 }

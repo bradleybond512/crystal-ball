@@ -244,6 +244,8 @@ src/                        # TypeScript frontend (Vite)
     intelligence/watchlist-relevance.ts      # "Should I care?" filter + feedback-adjusted thresholds
     intelligence/momentum.ts                 # rate-of-change / slope / volatility — fast shock scores higher than slow climb
     intelligence/learned-cascades.ts         # mine (domainA→domainB, lag) from event history; registerLearnedCascadePairs() augments compound-risk
+    intelligence/proxy-outcomes.ts           # infer resolved_true/false from downstream proxy signals → resolve calibration where ground truth is scarce
+    intelligence/ood-decay.ts                # out-of-distribution confidence decay (distance-from-training + sparse-coverage penalty)
     shortage/cross-domain-coupling.ts        # active intelligence cascades → shortage cross_domain drivers (war→port-closure boosts grain export risk)
     # ── Weather warning remediation (see docs/WEATHER_WARNING_REMEDIATION_PLAN.md) ──
     weather/weather-threat-types.ts          # 16-hazard taxonomy, AlertPolygon, NwsAlertMinimal, SavedPlace, PolygonMatchResult

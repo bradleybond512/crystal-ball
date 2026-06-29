@@ -1,22 +1,22 @@
 /**
- * Loader-callable fetch for Binance public spot prices (no key) — the 2nd
- * crypto source for fusion alongside CoinGecko. Fail-closed: returns
- * { ok: false } on non-2xx, sidecar `degraded`, or a thrown error, so a dead
- * Binance source records a failing fetch (provider health drops) rather than
- * masquerading as healthy-but-empty.
+ * Loader-callable fail-closed fetch for Coinbase public spot prices (no key) —
+ * the 2nd crypto source for fusion alongside CoinGecko. Coinbase is used
+ * instead of Binance global (HTTP 451 in the US) so the corroboration works
+ * from US/restricted regions. Returns { ok: false } on non-2xx, sidecar
+ * `degraded`, or a thrown error, so a dead source records a failing fetch.
  */
 
 import { getApiBaseUrl } from '@/services/runtime';
 import type { ExchangePrice } from './crypto-fusion-observations';
 
-export interface BinanceFetchResult {
+export interface CoinbaseFetchResult {
   ok: boolean;
   prices: ExchangePrice[];
 }
 
-export async function fetchBinancePrices(): Promise<BinanceFetchResult> {
+export async function fetchCoinbasePrices(): Promise<CoinbaseFetchResult> {
   try {
-    const res = await fetch(`${getApiBaseUrl()}/api/crypto-quotes-binance`, {
+    const res = await fetch(`${getApiBaseUrl()}/api/crypto-quotes-coinbase`, {
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return { ok: false, prices: [] };

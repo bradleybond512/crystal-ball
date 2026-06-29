@@ -10536,25 +10536,27 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
-  // ── Binance public spot ticker (no key) — 2nd crypto source for fusion ───
-  if (requestUrl.pathname === '/api/crypto-quotes-binance') {
- const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
+  // ── Coinbase public spot prices (no key) — 2nd crypto source for fusion.
+  // Coinbase (not Binance global, which returns HTTP 451 in the US) so the
+  // corroboration works from US/restricted regions. ───────────────────────
+  if (requestUrl.pathname === '/api/crypto-quotes-coinbase') {
+ const PAIRS = [['BTC', 'BTC-USD'], ['ETH', 'ETH-USD'], ['SOL', 'SOL-USD'], ['XRP', 'XRP-USD']];
  try {
- const symbolsParam = encodeURIComponent(JSON.stringify(SYMBOLS));
- const r = await fetchWithTimeout(
- `https://api.binance.com/api/v3/ticker/price?symbols=${symbolsParam}`,
+ const results = await Promise.allSettled(PAIRS.map(([, pair]) =>
+ fetchWithTimeout(
+ `https://api.coinbase.com/v2/prices/${pair}/spot`,
  { headers: { 'User-Agent': CHROME_UA, 'Accept': 'application/json' } },
- 12_000
- );
- if (!r.ok) return json({ quotes: [], degraded: true, error: `Binance ${r.status}` });
- const data = await r.json();
- const rows = Array.isArray(data) ? data : [];
- const quotes = rows.map((row) => {
- const sym = String(row?.symbol ?? '');
- const base = sym.endsWith('USDT') ? sym.slice(0, -4) : sym;
- const price = Number.parseFloat(row?.price);
- return Number.isFinite(price) ? { symbol: base, price } : null;
- }).filter(Boolean);
+ 10_000,
+ ).then(async (r) => { if (!r.ok) { throw new Error(`Coinbase ${r.status}`); } return r.json(); })
+ ));
+ const quotes = [];
+ for (const [i, PAIR] of PAIRS.entries()) {
+ const res = results[i];
+ if (res.status !== 'fulfilled') continue;
+ const amount = Number.parseFloat(res.value?.data?.amount);
+ if (Number.isFinite(amount)) quotes.push({ symbol: PAIR[0], price: amount });
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'all Coinbase requests failed' });
  return json({ quotes });
  } catch (error) {
  return json({ quotes: [], degraded: true, error: String(error.message ?? error) });

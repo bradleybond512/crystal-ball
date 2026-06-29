@@ -46,9 +46,9 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
   },
   // Crypto prices: matched by SYMBOL (not geography), agree within 2% (prices
   // span $0.50 to $60k so the band must scale with magnitude). CoinGecko
-  // (aggregator) + Binance (exchange), both no-key.
+  // (aggregator) + Coinbase (exchange), both no-key, both US-reachable.
   crypto: {
-    providerIds: ['coingecko', 'binance-public'],
+    providerIds: ['coingecko', 'coinbase'],
     toleranceMode: 'relative',
     numericTolerance: 0.02,
     match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 5 * 60_000 },

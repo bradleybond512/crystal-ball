@@ -13,9 +13,9 @@ test('maps normalized exchange prices to keyed DomainObservations', () => {
   assert.equal(obs[1]!.key, 'ETH');
 });
 
-test('carries the providerId through (binance-public)', () => {
-  const obs = exchangePricesToObservations('binance-public', [{ symbol: 'BTC', price: 95_400 }], NOW);
-  assert.equal(obs[0]!.providerId, 'binance-public');
+test('carries the providerId through (coinbase)', () => {
+  const obs = exchangePricesToObservations('coinbase', [{ symbol: 'BTC', price: 95_400 }], NOW);
+  assert.equal(obs[0]!.providerId, 'coinbase');
 });
 
 test('skips non-positive / non-finite prices and empty symbols', () => {

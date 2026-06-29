@@ -329,7 +329,7 @@ import { recordDomainObservations } from '@/services/providers/fusion-publish';
 import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
 import { openMeteoAqToObservations, openaqToObservations } from '@/services/airquality/airquality-fusion-observations';
 import { exchangePricesToObservations } from '@/services/market/crypto-fusion-observations';
-import { fetchBinancePrices } from '@/services/market/binance-fetch';
+import { fetchCoinbasePrices } from '@/services/market/coinbase-fetch';
 import { fetchCoingeckoPrices } from '@/services/market/coingecko-fetch';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
@@ -1362,13 +1362,13 @@ export class DataLoaderManager implements AppModule {
  } catch {
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: 'error' });
  }
- // Crypto price fusion: CoinGecko + Binance, matched by symbol. Dedicated
+ // Crypto price fusion: CoinGecko + Coinbase, matched by symbol. Dedicated
  // fail-closed fetches (NOT the panel's cached fetchCrypto) so a down source
  // records a failing outcome instead of corroborating against stale prices.
  const cg = await fetchCoingeckoPrices();
  recordDomainObservations('coingecko', exchangePricesToObservations('coingecko', cg.prices), cg.ok);
- const binance = await fetchBinancePrices();
- recordDomainObservations('binance-public', exchangePricesToObservations('binance-public', binance.prices), binance.ok);
+ const coinbase = await fetchCoinbasePrices();
+ recordDomainObservations('coinbase', exchangePricesToObservations('coinbase', coinbase.prices), coinbase.ok);
   }
 
   async loadPredictions(): Promise<void> {

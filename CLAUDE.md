@@ -292,9 +292,9 @@ src/                        # TypeScript frontend (Vite)
     providers/fusion-ingest.ts               # ingestDomain(): match same-fact observations across providers → fuse + per-provider fingerprint (Phase 0 keystone)
     providers/fusion-publish.ts              # singleton (domain-agnostic): fetchers call recordDomainObservations(providerId,...); domain derived from FUSION_DOMAINS; overlays fingerprinted snapshots for every ACTIVE fused domain onto the redundancy report
     airquality/airquality-fusion-observations.ts # Open-Meteo + OpenAQ readings → DomainObservation[] (AQI), 2nd fused domain
-    market/crypto-fusion-observations.ts     # CoinGecko + Binance → DomainObservation[] (price, matched by symbol/key, relative tolerance), 3rd fused domain
-    market/binance-fetch.ts                  # no-key Binance public ticker fetch (fail-closed) — 2nd crypto source
-    # Fused domains: earthquakes (USGS+EMSC, spatial) + air_quality (Open-Meteo+OpenAQ, spatial) + crypto (CoinGecko+Binance, key/relative). data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
+    market/crypto-fusion-observations.ts     # exchange prices → DomainObservation[] (price, matched by symbol/key, relative tolerance), 3rd fused domain
+    market/coingecko-fetch.ts + coinbase-fetch.ts # no-key fail-closed fetches — the 2 crypto sources (Coinbase, not Binance: 451 in US)
+    # Fused domains: earthquakes (USGS+EMSC, spatial) + air_quality (Open-Meteo+OpenAQ, spatial) + crypto (CoinGecko+Coinbase, key/relative). data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
     # See docs/superpowers/specs/2026-06-28-redundancy-prediction-enhancement-program-design.md + plans/2026-06-28-phase0-fusion-ingest-earthquakes.md
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes

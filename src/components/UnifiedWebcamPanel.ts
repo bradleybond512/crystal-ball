@@ -12,7 +12,8 @@ import {
   type OfflineStatus,
 } from '@/services/webcams/panel-extras';
 import { runSmokeDetection, type SmokeAnalysis } from '@/services/webcams/smoke-detector';
-import type { WebcamCategory, WebcamFeed, WebcamSource } from '@/services/webcams/webcam-types';
+import { healthSummary } from '@/services/webcams/health-view';
+import type { WebcamCategory, WebcamFeed, WebcamSource, WebcamSourceHealth } from '@/services/webcams/webcam-types';
 
 const SMOKE_DETECT_INTERVAL_MS = 10 * 60 * 1000;
 
@@ -42,6 +43,7 @@ const CATEGORY_COLORS: Record<WebcamCategory, string> = {
 
 export class UnifiedWebcamPanel extends Panel {
   private feeds: WebcamFeed[] = [];
+  private sourceHealth: WebcamSourceHealth[] | undefined;
   private viewMode: ViewMode = 'grid';
   private sourceFilter: WebcamSource | 'ALL' | 'FAVORITES' = 'ALL';
   private categoryFilter: WebcamCategory | 'ALL' = 'ALL';
@@ -104,6 +106,7 @@ export class UnifiedWebcamPanel extends Panel {
     try {
       const catalog = await fetchUnifiedWebcams();
       this.feeds = catalog.feeds;
+      this.sourceHealth = catalog.sourceHealth;
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -146,6 +149,8 @@ export class UnifiedWebcamPanel extends Panel {
     el.append(this.buildToolbar());
     el.append(this.buildSourceChips());
     el.append(this.buildCategoryChips());
+    const strip = this.buildHealthStrip();
+    if (strip) el.append(strip);
 
     if (this.loading) {
       const loading = document.createElement('p');
@@ -180,6 +185,45 @@ export class UnifiedWebcamPanel extends Panel {
     if (this.viewMode === 'grid') el.append(this.buildGrid(list));
     else if (this.viewMode === 'list') el.append(this.buildList(list));
     else el.append(this.buildMap(list));
+  }
+
+  private buildHealthStrip(): HTMLElement | null {
+    if (!this.sourceHealth?.length) return null;
+    const summary = healthSummary(this.sourceHealth);
+    const wrap = document.createElement('div');
+    wrap.className = 'webcams-health-strip';
+    wrap.style.padding = '4px 8px';
+    wrap.style.fontSize = '11px';
+
+    const statusLine = document.createElement('div');
+    statusLine.style.opacity = '0.7';
+    const okText = document.createTextNode(`${summary.ok} source${summary.ok === 1 ? '' : 's'} live`);
+    statusLine.append(okText);
+
+    if (summary.degraded.length > 0) {
+      const degradedSpan = document.createElement('span');
+      degradedSpan.style.color = '#f85149';
+      degradedSpan.style.marginLeft = '8px';
+      const parts = summary.degraded.map(d => `${d.source} (${d.status})`).join(', ');
+      degradedSpan.append(document.createTextNode(`— ${parts}`));
+      statusLine.append(degradedSpan);
+    }
+
+    wrap.append(statusLine);
+
+    for (const msg of summary.cta) {
+      const banner = document.createElement('div');
+      banner.style.background = 'rgba(210, 153, 34, 0.15)';
+      banner.style.border = '1px solid #d29922';
+      banner.style.borderRadius = '3px';
+      banner.style.padding = '3px 8px';
+      banner.style.marginTop = '3px';
+      banner.style.color = '#d29922';
+      banner.append(document.createTextNode(msg));
+      wrap.append(banner);
+    }
+
+    return wrap;
   }
 
   private buildToolbar(): HTMLElement {

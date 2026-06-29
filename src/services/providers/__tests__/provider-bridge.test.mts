@@ -61,3 +61,21 @@ test('singleton state records and resets', () => {
   resetProvidersStateForTest();
   assert.deepEqual(getProviderHealthState().outcomes, {});
 });
+
+test('snapshotsFromRegistry attaches fingerprints when provided', () => {
+  let s = emptyProviderHealthState();
+  for (const id of ['usgs-earthquakes', 'emsc-seismic']) {
+    s = recordFetchOutcome(s, id, ok(T0));
+  }
+  const snaps = snapshotsFromRegistry(s, T0 + 1000, 'disasters', {
+    'usgs-earthquakes': 'v:12',
+    'emsc-seismic': 'v:12',
+  });
+  const usgs = snaps.find((x) => x.providerId === 'usgs-earthquakes');
+  const emsc = snaps.find((x) => x.providerId === 'emsc-seismic');
+  assert.equal(usgs?.recentFactFingerprint, 'v:12');
+  assert.equal(emsc?.recentFactFingerprint, 'v:12');
+  // providers without a supplied fingerprint stay undefined
+  const gdacs = snaps.find((x) => x.providerId === 'gdacs');
+  assert.equal(gdacs?.recentFactFingerprint, undefined);
+});

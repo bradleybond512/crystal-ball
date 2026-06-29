@@ -14,7 +14,12 @@ import { ingestDomain, type DomainObservation, type IngestResult } from './fusio
 import { recordProviderFetchOutcome, getProviderHealthState } from './providers-state.ts';
 import { snapshotsFromRegistry } from './provider-bridge.ts';
 
-/** Earthquake providers (disasters domain) that fusion-publish manages. */
+/** Earthquake providers (disasters domain) that fusion-publish manages.
+ *  NOTE: Phase 0 fuses the seismic sub-slice of the broader 'disasters'
+ *  domain only. The other disasters providers (gdacs/open-meteo-flood/
+ *  nasa-eonet) are not yet fused, so the disasters redundancy verdict
+ *  currently reflects seismic corroboration, not the whole domain. Widening
+ *  this is Phase 1 work. */
 const EARTHQUAKE_PROVIDERS = ['usgs-earthquakes', 'emsc-seismic'] as const;
 
 let latestByProvider: Record<string, DomainObservation[]> = {};

@@ -20,13 +20,21 @@ export interface FusionDomainConfig {
   match: FactMatchConfig;
 }
 
-export type FusionDomainKey = 'earthquakes';
+export type FusionDomainKey = 'earthquakes' | 'air_quality';
 
 export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
   earthquakes: {
     providerIds: ['usgs-earthquakes', 'emsc-seismic'],
     numericTolerance: 0.5,
     match: { maxDistanceKm: 50, maxTimeDeltaMs: 120_000 },
+  },
+  // AQI is a bounded 0–500 scale, so an absolute tolerance works; two sources
+  // sampling the same locale (≤25 km) within a few hours should agree within
+  // ~25 AQI points. Open-Meteo (modeled) + OpenAQ v3 (ground stations).
+  air_quality: {
+    providerIds: ['open-meteo-aqi', 'openaq-v3'],
+    numericTolerance: 25,
+    match: { maxDistanceKm: 25, maxTimeDeltaMs: 3 * 60 * 60_000 },
   },
 };
 

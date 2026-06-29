@@ -70,6 +70,7 @@ export type DataSourceId =
     | "faa-nas-status"
     | "phmsa-pipeline"
     | "air-quality"
+    | "openaq-aqi"
     | "radiation-monitoring"
     | "dam-safety"
     | "nrc-nuclear"
@@ -244,6 +245,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   "faa-nas-status": { name: "Faa Nas Status", requiredForRisk: false },
   "phmsa-pipeline": { name: "Phmsa Pipeline", requiredForRisk: false },
   "air-quality": { name: "Air Quality", requiredForRisk: false },
+  "openaq-aqi": { name: "OpenAQ Air Quality", requiredForRisk: false },
   "radiation-monitoring": { name: "Radiation Monitoring", requiredForRisk: false },
   "dam-safety": { name: "Dam Safety", requiredForRisk: false },
   "nrc-nuclear": { name: "Nrc Nuclear", requiredForRisk: false },
@@ -641,6 +643,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   "faa-nas-status": "FAA NAS status unavailable",
   "phmsa-pipeline": "PHMSA pipeline data unavailable",
   "air-quality": "Air-quality data unavailable",
+  "openaq-aqi": "OpenAQ air-quality data unavailable",
   "radiation-monitoring": "Radiation monitoring data unavailable",
   "dam-safety": "Dam-safety data unavailable",
   "nrc-nuclear": "NRC nuclear data unavailable",

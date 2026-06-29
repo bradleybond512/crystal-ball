@@ -52,3 +52,7 @@ test('EMSC adapter skips null magnitude and unparseable time', () => {
   assert.equal(emscEventsToObservations([emsc({ time: null })]).length, 0);
   assert.equal(emscEventsToObservations([emsc({ time: 'not-a-date' })]).length, 0);
 });
+
+test('EMSC adapter skips NaN magnitude (defense-in-depth, mirrors USGS guard)', () => {
+  assert.equal(emscEventsToObservations([emsc({ magnitude: Number.NaN })]).length, 0);
+});

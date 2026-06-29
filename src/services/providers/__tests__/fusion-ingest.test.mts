@@ -76,6 +76,16 @@ test('magnitudes within tolerance but across a raw bucket boundary still agree',
   );
 });
 
+test('clustering is independent of input order', () => {
+  const a = obs('usgs-earthquakes', { value: 6.0, lat: 35.0, lon: 139.0, occurredAt: NOW });
+  const b = obs('emsc-seismic', { value: 6.0, lat: 35.1, lon: 139.0, occurredAt: NOW + 10_000 }); // ~11 km from a
+  const c = obs('usgs-earthquakes', { value: 5.0, lat: 36.0, lon: 139.0, occurredAt: NOW + 5_000 }); // ~111 km from a
+  const r1 = ingestDomain('earthquakes', [a, b, c], healthyBoth(), NOW);
+  const r2 = ingestDomain('earthquakes', [c, b, a], healthyBoth(), NOW);
+  assert.equal(r1.facts.length, 2, '{a,b} cluster + c separate');
+  assert.equal(r2.facts.length, r1.facts.length, 'result independent of input order');
+});
+
 test('quakes far apart in space do NOT match', () => {
   const r = ingestDomain('earthquakes', [
     obs('usgs-earthquakes', { value: 6.0, lat: 35, lon: 139, occurredAt: NOW }),

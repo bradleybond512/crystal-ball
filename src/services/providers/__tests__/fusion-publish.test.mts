@@ -4,6 +4,7 @@ import {
   recordDomainObservations,
   getFusionProviderSnapshots,
   getLatestEarthquakeFusion,
+  getLatestFusion,
   resetFusionPublishForTest,
 } from '../fusion-publish.ts';
 import type { DomainObservation } from '../fusion-ingest.ts';
@@ -49,4 +50,32 @@ test('no observations recorded → no snapshots', () => {
   resetProvidersStateForTest();
   resetFusionPublishForTest();
   assert.equal(getFusionProviderSnapshots(NOW).length, 0);
+});
+
+test('multiple domains fuse independently (earthquakes + air_quality)', () => {
+  resetProvidersStateForTest();
+  resetFusionPublishForTest();
+  recordDomainObservations('usgs-earthquakes', [ob('usgs-earthquakes', 6.1)], true, NOW);
+  recordDomainObservations('emsc-seismic', [ob('emsc-seismic', 6.0)], true, NOW);
+  recordDomainObservations('open-meteo-aqi', [ob('open-meteo-aqi', 120)], true, NOW);
+  recordDomainObservations('openaq-v3', [ob('openaq-v3', 130)], true, NOW); // within ±25 AQI
+
+  const snaps = getFusionProviderSnapshots(NOW);
+  assert.equal(snaps.length, 4, 'both active fused domains surface their providers');
+
+  const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
+  const disasters = report.domains.find((d) => d.domain === 'disasters')!;
+  const aq = report.domains.find((d) => d.domain === 'air_quality')!;
+  assert.equal(disasters.verdict, 'redundant_agreement');
+  assert.equal(aq.verdict, 'redundant_agreement');
+  assert.equal(getLatestFusion('air_quality', NOW).facts[0]!.fusion.independentSourceCount, 2);
+});
+
+test('only active domains surface — air_quality stays hidden until it flows', () => {
+  resetProvidersStateForTest();
+  resetFusionPublishForTest();
+  recordDomainObservations('usgs-earthquakes', [ob('usgs-earthquakes', 6.0)], true, NOW);
+  const domains = new Set(getFusionProviderSnapshots(NOW).map((s) => s.domain));
+  assert.ok(domains.has('disasters'));
+  assert.ok(!domains.has('air_quality'), 'air_quality not surfaced before any of its providers report');
 });

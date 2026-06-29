@@ -37,6 +37,9 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   { id: 'celestrak', domain: 'space', displayName: 'CelesTrak', authType: 'none', baseUrl: 'https://celestrak.org', rateLimitNote: 'cache aggressively', freshnessTtlMs: 12 * HOUR, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'celestrak' },
   { id: 'wikidata', domain: 'infrastructure', displayName: 'Wikidata SPARQL', authType: 'none', baseUrl: 'https://query.wikidata.org', rateLimitNote: '60s query timeout, be gentle', freshnessTtlMs: 7 * 24 * HOUR, reliabilityWeight: 0.8, fallbackPriority: 1, independenceGroup: 'wikimedia' },
   { id: 'overpass', domain: 'infrastructure', displayName: 'Overpass API', authType: 'none', baseUrl: 'https://overpass-api.de', rateLimitNote: 'fair-use policy, cache results', freshnessTtlMs: 7 * 24 * HOUR, reliabilityWeight: 0.75, fallbackPriority: 2, independenceGroup: 'osm' },
+  // ── Air quality (fused: Open-Meteo AQ + OpenAQ v3, both no-key) ──
+  { id: 'open-meteo-aqi', domain: 'air_quality', displayName: 'Open-Meteo Air Quality', authType: 'none', baseUrl: 'https://air-quality-api.open-meteo.com', rateLimitNote: '10k req/day non-commercial', freshnessTtlMs: HOUR, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'open-meteo' },
+  { id: 'openaq-v3', domain: 'air_quality', displayName: 'OpenAQ v3', authType: 'none', baseUrl: 'https://api.openaq.org', rateLimitNote: 'anonymous reads ok; key raises limits', freshnessTtlMs: 2 * HOUR, reliabilityWeight: 0.85, fallbackPriority: 2, independenceGroup: 'openaq' },
 ];
 
 const BY_ID = new Map(PROVIDER_DEFINITIONS.map((d) => [d.id, d]));

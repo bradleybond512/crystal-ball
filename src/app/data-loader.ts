@@ -327,6 +327,7 @@ import * as cyberLoaders from '@/app/loaders/cyber';
 import { earthquakesToObservations } from '@/services/intelligence/adapters/earthquake-adapter';
 import { recordDomainObservations } from '@/services/providers/fusion-publish';
 import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
+import { openMeteoAqToObservations } from '@/services/airquality/airquality-fusion-observations';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
 import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
@@ -2394,11 +2395,14 @@ export class DataLoaderManager implements AppModule {
 
  // Air quality signals — unhealthy or worse
  if (aqReadings.status === 'fulfilled') {
+ recordDomainObservations('open-meteo-aqi', openMeteoAqToObservations(aqReadings.value), true);
  for (const r of aqReadings.value) {
  if (r.aqiLevel === 'good' || r.aqiLevel === 'moderate' || r.aqiLevel === 'sensitive') continue;
  const sev = r.aqiLevel === 'hazardous' ? 'critical' : r.aqiLevel === 'very_unhealthy' ? 'high' : 'medium';
  signals.push(toHazardSignal(`aq-${r.city}`, 'air_quality', sev, r.lat, r.lon, `${r.city} AQI ${r.aqi}`, 'air-quality'));
  }
+ } else {
+ recordDomainObservations('open-meteo-aqi', [], false);
  }
 
  // Hazmat signals

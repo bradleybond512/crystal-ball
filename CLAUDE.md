@@ -290,8 +290,9 @@ src/                        # TypeScript frontend (Vite)
     providers/providers-state.ts             # singleton: recordProviderFetchOutcome / getProviderHealthState
     providers/provider-domain-map.ts         # fact-type → provider ids + numeric tolerance + spatiotemporal match window (FUSION_DOMAINS)
     providers/fusion-ingest.ts               # ingestDomain(): match same-fact observations across providers → fuse + per-provider fingerprint (Phase 0 keystone)
-    providers/fusion-publish.ts              # singleton: fetchers call recordDomainObservations(); overlays fingerprinted snapshots onto the redundancy report
-    # First fused domain: earthquakes (USGS + EMSC). data-loader.ts feeds both; Command Center shows "verified by N independent sources".
+    providers/fusion-publish.ts              # singleton (domain-agnostic): fetchers call recordDomainObservations(providerId,...); domain derived from FUSION_DOMAINS; overlays fingerprinted snapshots for every ACTIVE fused domain onto the redundancy report
+    airquality/airquality-fusion-observations.ts # Open-Meteo + OpenAQ readings → DomainObservation[] (AQI), the 2nd fused domain
+    # Fused domains: earthquakes (USGS+EMSC) + air_quality (Open-Meteo+OpenAQ). data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
     # See docs/superpowers/specs/2026-06-28-redundancy-prediction-enhancement-program-design.md + plans/2026-06-28-phase0-fusion-ingest-earthquakes.md
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes

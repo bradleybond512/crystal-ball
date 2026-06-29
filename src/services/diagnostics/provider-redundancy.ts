@@ -132,22 +132,30 @@ function decideVerdict(providers: readonly ProviderSnapshot[]): RedundancyVerdic
 
   if (upProviders.length === 0) return 'all_down';
   if (upProviders.length === 1) {
-    if (primary && (primary.level === 'healthy' || primary.level === 'degraded')) {
-      return 'single_source';
+    const onlyUp = upProviders[0]!;
+    // Only call it 'primary down' when a DIFFERENT provider is the registry
+    // primary and it isn't up. A lone healthy source where the registry
+    // primary simply isn't represented (e.g. a fused subset of a domain) is
+    // honestly 'single_source', not an alarmist 'primary down'.
+    if (
+      primary && primary.providerId !== onlyUp.providerId &&
+      primary.level !== 'healthy' && primary.level !== 'degraded'
+    ) {
+      return 'primary_down_with_backup';
     }
-    return 'primary_down_with_backup';
+    return 'single_source';
   }
-  // Two or more up — compare fact fingerprints.
-  const fingerprints = new Set<string>();
-  for (const p of upProviders) {
-    if (p.recentFactFingerprint) fingerprints.add(p.recentFactFingerprint);
-  }
+  // Two or more up — judge agreement by fact fingerprints. Only providers that
+  // actually emit a comparable fingerprint count as corroborating; an up
+  // provider reporting unrelated facts (no fingerprint) cannot manufacture
+  // agreement on its own.
+  const fingerprinted = upProviders.filter((p) => p.recentFactFingerprint);
+  const fingerprints = new Set(fingerprinted.map((p) => p.recentFactFingerprint));
   if (fingerprints.size > 1) return 'redundant_disagreement';
-  // size 0 = no provider reported a comparable fingerprint, so we CANNOT claim
-  // the providers agree — don't grant the full-confidence 'redundant_agreement'.
-  // (This is the common case until the bridges populate recentFactFingerprint.)
-  if (fingerprints.size === 0) return 'redundant_unverified';
-  return 'redundant_agreement';
+  // Need ≥2 providers sharing one fingerprint to claim verified agreement.
+  if (fingerprints.size === 1 && fingerprinted.length >= 2) return 'redundant_agreement';
+  // 0 or 1 providers carry a comparable fingerprint — agreement unverified.
+  return 'redundant_unverified';
 }
 
 const LEVEL_RANK: Record<ProviderHealthLevel, number> = {
@@ -185,7 +193,10 @@ function describeVerdict(verdict: RedundancyVerdict, providers: readonly Provide
   const total = providers.length;
   switch (verdict) {
     case 'redundant_agreement': {
-      return `${upCount} of ${total} providers up and agreeing.`;
+      const corroborating = providers.filter(
+        (p) => p.recentFactFingerprint && (p.level === 'healthy' || p.level === 'degraded'),
+      ).length;
+      return `${corroborating} independent source${corroborating === 1 ? '' : 's'} corroborate the latest fact (${upCount} of ${total} providers up).`;
     }
     case 'redundant_unverified': {
       return `${upCount} of ${total} providers up, but agreement is unverified (no comparable fact fingerprints).`;

@@ -29,7 +29,7 @@ export function usgsEarthquakesToObservations(quakes: readonly Earthquake[]): Do
 export function emscEventsToObservations(events: readonly EmscEvent[]): DomainObservation[] {
   const out: DomainObservation[] = [];
   for (const e of events) {
-    if (e.magnitude == null || !Number.isFinite(e.lat) || !Number.isFinite(e.lon)) continue;
+    if (e.magnitude == null || !Number.isFinite(e.magnitude) || !Number.isFinite(e.lat) || !Number.isFinite(e.lon)) continue;
     const occurredAt = e.time ? Date.parse(e.time) : Number.NaN;
     if (!Number.isFinite(occurredAt)) continue;
     out.push({

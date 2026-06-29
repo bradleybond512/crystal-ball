@@ -54,7 +54,11 @@ export function ingestDomain(
   if (!cfg) return { facts: [], providerFingerprints: {} };
 
   const allowed = new Set(cfg.providerIds);
-  const relevant = observations.filter((o) => allowed.has(o.providerId));
+  // Sort to a canonical order (time, then space) so clustering is independent
+  // of provider-concat / input order.
+  const relevant = observations
+    .filter((o) => allowed.has(o.providerId))
+    .sort((a, b) => a.occurredAt - b.occurredAt || a.lat - b.lat || a.lon - b.lon);
   const clusters = clusterObservations(relevant, cfg.match);
 
   const facts: FusedFact[] = clusters.map((cluster) => {
@@ -99,24 +103,31 @@ export function ingestDomain(
   return { facts, providerFingerprints: headlineFingerprints(facts) };
 }
 
-/** Greedy single-link clustering: an observation joins the first cluster
- *  whose seed is within the match window; otherwise it seeds a new one. */
+/** Greedy clustering: each observation joins the NEAREST existing cluster
+ *  whose seed is within the match window; otherwise it seeds a new one.
+ *  Comparing only against the seed prevents transitive chaining; picking the
+ *  nearest qualifying cluster (not the first) keeps membership deterministic. */
 function clusterObservations(
   observations: readonly DomainObservation[],
   match: FactMatchConfig,
 ): DomainObservation[][] {
   const clusters: DomainObservation[][] = [];
   for (const o of observations) {
-    const home = clusters.find((c) => sameFact(c[0]!, o, match));
-    if (home) home.push(o);
+    let best: DomainObservation[] | null = null;
+    let bestDist = Infinity;
+    for (const c of clusters) {
+      const seed = c[0]!;
+      if (Math.abs(seed.occurredAt - o.occurredAt) > match.maxTimeDeltaMs) continue;
+      const d = haversineKm(seed.lat, seed.lon, o.lat, o.lon);
+      if (d <= match.maxDistanceKm && d < bestDist) {
+        best = c;
+        bestDist = d;
+      }
+    }
+    if (best) best.push(o);
     else clusters.push([o]);
   }
   return clusters;
-}
-
-function sameFact(a: DomainObservation, b: DomainObservation, match: FactMatchConfig): boolean {
-  if (Math.abs(a.occurredAt - b.occurredAt) > match.maxTimeDeltaMs) return false;
-  return haversineKm(a.lat, a.lon, b.lat, b.lon) <= match.maxDistanceKm;
 }
 
 /** Pick the fact with the most independent providers, breaking ties by value. */

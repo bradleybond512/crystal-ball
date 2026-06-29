@@ -14,21 +14,33 @@ import {
   type OpenaqLocationRaw,
 } from './openaq-service';
 
-export async function fetchOpenaqWorstReadings(now = Date.now()): Promise<MonitorReading[]> {
+export interface OpenaqFetchResult {
+  /** false on network/timeout error, non-2xx, OR a sidecar `degraded: true`
+   *  response — so the caller records a failing fetch and the provider health
+   *  drops instead of a dead source masquerading as healthy-but-empty. */
+  ok: boolean;
+  readings: MonitorReading[];
+}
+
+export async function fetchOpenaqWorstReadings(now = Date.now()): Promise<OpenaqFetchResult> {
   try {
     const res = await fetch(`${getApiBaseUrl()}/api/airquality/openaq/worst`, {
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) {
       dataFreshness.recordError('openaq-aqi', `HTTP ${res.status}`);
-      return [];
+      return { ok: false, readings: [] };
     }
-    const data = (await res.json()) as { locations?: OpenaqLocationRaw[] } | null;
+    const data = (await res.json()) as { locations?: OpenaqLocationRaw[]; degraded?: boolean } | null;
+    if (data?.degraded) {
+      dataFreshness.recordError('openaq-aqi', 'upstream degraded');
+      return { ok: false, readings: [] };
+    }
     const readings = pickGlobalWorst(parseOpenaqLocations(data?.locations ?? []), now, 100);
     dataFreshness.recordUpdate('openaq-aqi', readings.length);
-    return readings;
+    return { ok: true, readings };
   } catch (error) {
     dataFreshness.recordError('openaq-aqi', String(error));
-    return [];
+    return { ok: false, readings: [] };
   }
 }

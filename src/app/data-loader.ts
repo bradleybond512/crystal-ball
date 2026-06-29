@@ -2384,9 +2384,11 @@ export class DataLoaderManager implements AppModule {
  fetchOpenaqWorstReadings(),
  ]);
 
- // Second air-quality source for fusion (OpenAQ ground stations).
+ // Second air-quality source for fusion (OpenAQ ground stations). Fail-closed:
+ // a degraded/failed fetch records ok=false so the provider health drops.
  if (openaqReadings.status === 'fulfilled') {
- recordDomainObservations('openaq-v3', openaqToObservations(openaqReadings.value), true);
+ const r = openaqReadings.value;
+ recordDomainObservations('openaq-v3', openaqToObservations(r.readings), r.ok);
  } else {
  recordDomainObservations('openaq-v3', [], false);
  }

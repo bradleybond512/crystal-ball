@@ -10536,6 +10536,33 @@ async function dispatch(requestUrl, req, routes, context) {
  }
   }
 
+  // ── Coinbase public spot prices (no key) — 2nd crypto source for fusion.
+  // Coinbase (not Binance global, which returns HTTP 451 in the US) so the
+  // corroboration works from US/restricted regions. ───────────────────────
+  if (requestUrl.pathname === '/api/crypto-quotes-coinbase') {
+ const PAIRS = [['BTC', 'BTC-USD'], ['ETH', 'ETH-USD'], ['SOL', 'SOL-USD'], ['XRP', 'XRP-USD']];
+ try {
+ const results = await Promise.allSettled(PAIRS.map(([, pair]) =>
+ fetchWithTimeout(
+ `https://api.coinbase.com/v2/prices/${pair}/spot`,
+ { headers: { 'User-Agent': CHROME_UA, 'Accept': 'application/json' } },
+ 10_000,
+ ).then(async (r) => { if (!r.ok) { throw new Error(`Coinbase ${r.status}`); } return r.json(); })
+ ));
+ const quotes = [];
+ for (const [i, PAIR] of PAIRS.entries()) {
+ const res = results[i];
+ if (res.status !== 'fulfilled') continue;
+ const amount = Number.parseFloat(res.value?.data?.amount);
+ if (Number.isFinite(amount)) quotes.push({ symbol: PAIR[0], price: amount });
+ }
+ if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'all Coinbase requests failed' });
+ return json({ quotes });
+ } catch (error) {
+ return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
+ }
+  }
+
   // ── FRED economic series — direct API call using stored key ──────────────
   // GET /api/fred-series?ids=WALCL,FEDFUNDS,... → calls api.stlouisfed.org
   if (requestUrl.pathname === '/api/fred-series') {

@@ -14,12 +14,16 @@ import { fusionConfigFor, type FactMatchConfig } from './provider-domain-map.ts'
 
 export interface DomainObservation {
   providerId: string;
-  /** The numeric value to corroborate (e.g. earthquake magnitude). */
+  /** The numeric value to corroborate (e.g. earthquake magnitude, USD price). */
   value: number;
   lat: number;
   lon: number;
   /** When the fact occurred (ms). */
   occurredAt: number;
+  /** Identity key for non-spatial (matchBy:'key') domains — e.g. a crypto
+   *  symbol. Observations sharing a key are the same fact. Ignored for
+   *  spatial domains. */
+  key?: string;
   /** Optional provider-native id, for debugging. */
   externalId?: string;
 }
@@ -54,11 +58,11 @@ export function ingestDomain(
   if (!cfg) return { facts: [], providerFingerprints: {} };
 
   const allowed = new Set(cfg.providerIds);
-  // Sort to a canonical order (time, then space) so clustering is independent
-  // of provider-concat / input order.
+  // Sort to a canonical order (time, then key, then space) so clustering is
+  // independent of provider-concat / input order.
   const relevant = observations
     .filter((o) => allowed.has(o.providerId))
-    .sort((a, b) => a.occurredAt - b.occurredAt || a.lat - b.lat || a.lon - b.lon);
+    .sort((a, b) => a.occurredAt - b.occurredAt || (a.key ?? '').localeCompare(b.key ?? '') || a.lat - b.lat || a.lon - b.lon);
   const clusters = clusterObservations(relevant, cfg.match);
 
   const facts: FusedFact[] = clusters.map((cluster) => {
@@ -67,11 +71,17 @@ export function ingestDomain(
       value: o.value,
       observedAt: o.occurredAt,
     }));
+    // For relative-tolerance domains (e.g. crypto prices that span $0.50 to
+    // $60k) the agreement band scales with the value: tol = pct × the cluster's
+    // largest magnitude. Absolute domains use the configured tolerance as-is.
+    const effectiveTol = cfg.toleranceMode === 'relative'
+      ? cfg.numericTolerance * referenceMagnitude(cluster)
+      : cfg.numericTolerance;
     const fusion = fuseObservations({
       observations: sourceObs,
       healthState,
       now,
-      numericTolerance: cfg.numericTolerance,
+      numericTolerance: effectiveTol,
     });
     // Fingerprint reflects fusion's consensus decision, NOT each raw value.
     // All consensus providers share one fingerprint; only providers fusion
@@ -81,11 +91,11 @@ export function ingestDomain(
     const disagreeIds = new Set(fusion.disagreements.flatMap((d) => d.providerIds));
     const consensusObs = cluster.filter((o) => !disagreeIds.has(o.providerId));
     const consensusValue = (consensusObs[0] ?? cluster[0]!).value;
-    const consensusFp = `c:${bucket(consensusValue, cfg.numericTolerance)}`;
+    const consensusFp = `c:${bucket(consensusValue, effectiveTol)}`;
     const fingerprints: Record<string, string> = {};
     for (const o of cluster) {
       fingerprints[o.providerId] = disagreeIds.has(o.providerId)
-        ? `d:${bucket(o.value, cfg.numericTolerance)}:${o.providerId}`
+        ? `d:${bucket(o.value, effectiveTol)}:${o.providerId}`
         : consensusFp;
     }
     const rep = cluster[0]!;
@@ -103,31 +113,57 @@ export function ingestDomain(
   return { facts, providerFingerprints: headlineFingerprints(facts) };
 }
 
-/** Greedy clustering: each observation joins the NEAREST existing cluster
- *  whose seed is within the match window; otherwise it seeds a new one.
- *  Comparing only against the seed prevents transitive chaining; picking the
- *  nearest qualifying cluster (not the first) keeps membership deterministic. */
+/** Greedy clustering. Spatial domains (default): each observation joins the
+ *  NEAREST existing cluster whose seed is within the distance+time window.
+ *  Key domains (matchBy:'key', e.g. crypto): observations sharing the same
+ *  identity key within the time window are the same fact. Comparing only
+ *  against the seed prevents transitive chaining. */
 function clusterObservations(
   observations: readonly DomainObservation[],
   match: FactMatchConfig,
 ): DomainObservation[][] {
+  const byKey = match.matchBy === 'key';
   const clusters: DomainObservation[][] = [];
   for (const o of observations) {
-    let best: DomainObservation[] | null = null;
-    let bestDist = Infinity;
-    for (const c of clusters) {
-      const seed = c[0]!;
-      if (Math.abs(seed.occurredAt - o.occurredAt) > match.maxTimeDeltaMs) continue;
-      const d = haversineKm(seed.lat, seed.lon, o.lat, o.lon);
-      if (d <= match.maxDistanceKm && d < bestDist) {
-        best = c;
-        bestDist = d;
-      }
-    }
-    if (best) best.push(o);
+    const home = findHomeCluster(clusters, o, match, byKey);
+    if (home) home.push(o);
     else clusters.push([o]);
   }
   return clusters;
+}
+
+/** The cluster `o` belongs to, or null to seed a new one. Key mode: exact
+ *  key + time match. Spatial mode: nearest cluster within distance + time. */
+function findHomeCluster(
+  clusters: readonly DomainObservation[][],
+  o: DomainObservation,
+  match: FactMatchConfig,
+  byKey: boolean,
+): DomainObservation[] | null {
+  let best: DomainObservation[] | null = null;
+  let bestDist = Infinity;
+  for (const c of clusters) {
+    const seed = c[0]!;
+    if (Math.abs(seed.occurredAt - o.occurredAt) > match.maxTimeDeltaMs) continue;
+    if (byKey) {
+      if (o.key !== undefined && seed.key === o.key) return c; // keys unique → first match
+      continue;
+    }
+    const d = haversineKm(seed.lat, seed.lon, o.lat, o.lon);
+    if (d <= match.maxDistanceKm && d < bestDist) {
+      best = c;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+/** Largest absolute value in a cluster — the base for a relative tolerance
+ *  band (|a−b| ≤ pct × max(|a|,|b|)). */
+function referenceMagnitude(cluster: readonly DomainObservation[]): number {
+  let m = 0;
+  for (const o of cluster) m = Math.max(m, Math.abs(o.value));
+  return m;
 }
 
 /** Pick the fact with the most independent providers, breaking ties by value. */

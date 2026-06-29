@@ -6,21 +6,29 @@
  */
 
 export interface FactMatchConfig {
-  /** Two observations are the same fact if within this great-circle distance. */
+  /** How observations are matched into one fact. 'spatial' (default) uses
+   *  distance+time; 'key' uses an identity key (e.g. a crypto symbol)+time. */
+  matchBy?: 'spatial' | 'key';
+  /** Two observations are the same fact if within this great-circle distance
+   *  (spatial mode only). */
   maxDistanceKm: number;
-  /** ...and within this time delta. */
+  /** ...and within this time delta (both modes). */
   maxTimeDeltaMs: number;
 }
 
 export interface FusionDomainConfig {
   /** Registered provider ids that feed this fact-type. */
   providerIds: readonly string[];
-  /** Numeric values within this absolute tolerance agree (passed to fuseObservations). */
+  /** Agreement tolerance mode. 'absolute' (default): values within
+   *  ±numericTolerance agree. 'relative': values within numericTolerance × the
+   *  larger magnitude agree (for values spanning orders of magnitude). */
+  toleranceMode?: 'absolute' | 'relative';
+  /** Absolute tolerance, or the fraction (0..1) when toleranceMode is 'relative'. */
   numericTolerance: number;
   match: FactMatchConfig;
 }
 
-export type FusionDomainKey = 'earthquakes' | 'air_quality';
+export type FusionDomainKey = 'earthquakes' | 'air_quality' | 'crypto';
 
 export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
   earthquakes: {
@@ -35,6 +43,15 @@ export const FUSION_DOMAINS: Record<FusionDomainKey, FusionDomainConfig> = {
     providerIds: ['open-meteo-aqi', 'openaq-v3'],
     numericTolerance: 25,
     match: { maxDistanceKm: 25, maxTimeDeltaMs: 3 * 60 * 60_000 },
+  },
+  // Crypto prices: matched by SYMBOL (not geography), agree within 2% (prices
+  // span $0.50 to $60k so the band must scale with magnitude). CoinGecko
+  // (aggregator) + Coinbase (exchange), both no-key, both US-reachable.
+  crypto: {
+    providerIds: ['coingecko', 'coinbase'],
+    toleranceMode: 'relative',
+    numericTolerance: 0.02,
+    match: { matchBy: 'key', maxDistanceKm: 0, maxTimeDeltaMs: 5 * 60_000 },
   },
 };
 

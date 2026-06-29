@@ -22,7 +22,8 @@ export type ProviderDomain =
   | 'infrastructure'
   | 'transport'
   | 'space'
-  | 'air_quality';
+  | 'air_quality'
+  | 'equities';
 
 export type ProviderAuthType = 'none' | 'free_key' | 'account';
 

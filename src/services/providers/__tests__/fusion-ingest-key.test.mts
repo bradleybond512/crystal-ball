@@ -16,7 +16,15 @@ function healthyCrypto(): ProviderHealthState {
   return s;
 }
 
-/** Crypto observation: matched by `key` (symbol), no geo. */
+function healthyStocks(): ProviderHealthState {
+  let s = emptyProviderHealthState();
+  for (const id of ['finnhub', 'yahoo-finance']) {
+    s = recordFetchOutcome(s, id, { ok: true, latencyMs: 50, at: NOW });
+  }
+  return s;
+}
+
+/** Crypto/stock observation: matched by `key` (symbol/ticker), no geo. */
 function px(providerId: string, key: string, value: number): DomainObservation {
   return { providerId, key, value, lat: 0, lon: 0, occurredAt: NOW };
 }
@@ -89,4 +97,49 @@ test('spatial domains are unaffected by the key-mode addition (earthquakes still
   ], s, NOW);
   assert.equal(r.facts.length, 1);
   assert.equal(r.facts[0]!.fusion.independentSourceCount, 2);
+});
+
+test('stocks: same ticker within 1% → corroborated; per-ticker, not cross-ticker', () => {
+  const health = healthyStocks();
+  const r = ingestDomain('stocks', [
+    px('finnhub', 'AAPL', 212.00),
+    px('yahoo-finance', 'AAPL', 213.50), // |1.50| < 1% of 213.50 (=2.135) → agree
+    px('finnhub', 'MSFT', 450.00),
+    px('yahoo-finance', 'MSFT', 449.00),
+  ], health, NOW);
+  assert.equal(r.facts.length, 2, 'AAPL and MSFT are distinct facts');
+  for (const f of r.facts) {
+    assert.equal(f.fusion.independentSourceCount, 2);
+    assert.equal(f.fusion.disagreements.length, 0);
+  }
+  const snaps = snapshotsFromRegistry(health, NOW, 'equities', r.providerFingerprints);
+  const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
+  assert.equal(report.domains.find((d) => d.domain === 'equities')!.verdict, 'redundant_agreement');
+});
+
+test('crypto and stocks do not cross-contaminate (separate redundancy domains)', () => {
+  // Both fusion domains agree internally; because crypto is registry-domain
+  // 'markets' and stocks is 'equities', their fingerprints must NOT collide
+  // into a false redundant_disagreement.
+  let health = emptyProviderHealthState();
+  for (const id of ['coingecko', 'coinbase', 'finnhub', 'yahoo-finance']) {
+    health = recordFetchOutcome(health, id, { ok: true, latencyMs: 50, at: NOW });
+  }
+  const crypto = ingestDomain('crypto', [px('coingecko', 'BTC', 95_000), px('coinbase', 'BTC', 95_400)], health, NOW);
+  const stocks = ingestDomain('stocks', [px('finnhub', 'AAPL', 212), px('yahoo-finance', 'AAPL', 213.5)], health, NOW);
+
+  const snaps = snapshotsFromRegistry(health, NOW, undefined, { ...crypto.providerFingerprints, ...stocks.providerFingerprints })
+    .filter((s) => ['coingecko', 'coinbase', 'finnhub', 'yahoo-finance'].includes(s.providerId));
+  const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
+  assert.equal(report.domains.find((d) => d.domain === 'markets')!.verdict, 'redundant_agreement');
+  assert.equal(report.domains.find((d) => d.domain === 'equities')!.verdict, 'redundant_agreement');
+});
+
+test('stocks: a >1% quote gap surfaces as a disagreement', () => {
+  const r = ingestDomain('stocks', [
+    px('finnhub', 'TSLA', 250.00),
+    px('yahoo-finance', 'TSLA', 260.00), // |10| > 1% of 260 (=2.6) → disagree
+  ], healthyStocks(), NOW);
+  assert.ok(r.facts[0]!.fusion.disagreements.length >= 1);
+  assert.notEqual(r.providerFingerprints['finnhub'], r.providerFingerprints['yahoo-finance']);
 });

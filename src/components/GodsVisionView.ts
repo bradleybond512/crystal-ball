@@ -185,7 +185,7 @@ export class GodsVisionView {
  const cat = await fetchUnifiedWebcams({ category: 'fire,volcano,coastal' });
  return cat.feeds;
  },
- highSalienceOnly: true,
+ salientOnly: true,
  });
  void this.webcamLayer.mount();
  this.cleanupHandlers.push(() => { this.webcamLayer?.destroy(); this.webcamLayer = null; });

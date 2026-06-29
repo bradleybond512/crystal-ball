@@ -2,6 +2,9 @@
 import { createCircuitBreaker } from '@/utils';
 import { dataFreshness } from './data-freshness';
 import { getApiBaseUrl } from './runtime';
+import { getSavedPlaces } from './saved-places';
+import { snapshotFromAggregateResponse, type AggregateResponse } from './adsb/adsb-aggregate-bridge';
+import type { AdsbAggregate, AdsbTrack } from './adsb/adsb-aggregate';
 
 export interface AdsbFlight {
   icao24: string;
@@ -15,6 +18,10 @@ export interface AdsbFlight {
   heading: number | null;
   verticalRate: number | null;
   squawk: string | null;
+  /** Multi-provider confidence (0..1) from mergeAdsbProviders; undefined on the legacy global feed. */
+  confidence?: number;
+  /** Provider ids that observed this aircraft (aggregate path only). */
+  providers?: readonly string[];
 }
 
 export interface AdsbSnapshot {
@@ -22,6 +29,13 @@ export interface AdsbSnapshot {
   fetchedAt: number;
   totalCount: number;
   rateLimited: boolean;
+  /** Present when served from the multi-provider /api/adsb-aggregate path. */
+  aggregate?: {
+    status: AdsbAggregate['status'];
+    reason: string;
+    providerFreshness: AdsbAggregate['providerFreshness'];
+    tracks: readonly AdsbTrack[];
+  };
 }
 
 export interface AdsbStats {
@@ -72,11 +86,46 @@ function parseStates(states: unknown[][]): AdsbFlight[] {
   return flights;
 }
 
+// Resolve the area center for the multi-provider aggregate query — the free
+// providers (airplanes.live / adsb.fi / adsb.lol) are area-only. Prefer the
+// 'home' saved place, else the first saved place. Null → global OpenSky only.
+function getAdsbCenter(): { lat: number; lon: number } | null {
+  try {
+ const places = getSavedPlaces();
+ const home = places.find((p) => p.tags?.includes('home')) ?? places[0];
+ return home ? { lat: home.lat, lon: home.lon } : null;
+  } catch { return null; }
+}
+
+const ADSB_AREA_DIST_NM = 250;
+
+async function tryFetchAggregate(center: { lat: number; lon: number }): Promise<AdsbSnapshot | null> {
+  const res = await fetch(`${getApiBaseUrl()}/api/adsb-aggregate?lat=${center.lat}&lon=${center.lon}&dist=${ADSB_AREA_DIST_NM}`);
+  if (!res.ok) return null;
+  const resp = await res.json() as AggregateResponse;
+  if (!resp || !Array.isArray(resp.aircraft) || resp.aircraft.length === 0) return null;
+  return snapshotFromAggregateResponse(resp, Date.now());
+}
+
 export async function fetchAdsbSnapshot(): Promise<AdsbSnapshot> {
   const now = Date.now();
   if (_cache && now - _cache.ts < CLIENT_CACHE_TTL) return _cache.snapshot;
 
   return breaker.execute(async () => {
+ // Prefer the multi-provider, confidence-scored aggregate around the user's
+ // area; fall back to the global single-provider OpenSky feed on no-location
+ // or any failure (keeps the panel + map working exactly as before).
+ const center = getAdsbCenter();
+ if (center) {
+ try {
+ const agg = await tryFetchAggregate(center);
+ if (agg) {
+ _cache = { snapshot: agg, ts: now };
+ dataFreshness.recordUpdate('adsb', agg.flights.length);
+ return agg;
+ }
+ } catch { /* fall through to the legacy global feed */ }
+ }
  const res = await fetch(`${getApiBaseUrl()}/api/adsb`);
  if (res.status === 429) {
  return { flights: [], fetchedAt: Date.now(), totalCount: 0, rateLimited: true };

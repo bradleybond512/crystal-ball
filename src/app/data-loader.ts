@@ -327,7 +327,8 @@ import * as cyberLoaders from '@/app/loaders/cyber';
 import { earthquakesToObservations } from '@/services/intelligence/adapters/earthquake-adapter';
 import { recordDomainObservations } from '@/services/providers/fusion-publish';
 import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
-import { openMeteoAqToObservations } from '@/services/airquality/airquality-fusion-observations';
+import { openMeteoAqToObservations, openaqToObservations } from '@/services/airquality/airquality-fusion-observations';
+import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
 import { floodGaugesToObservations, type NOAACoopsResponse } from '@/services/intelligence/adapters/flood-gauge-adapter';
@@ -2373,14 +2374,22 @@ export class DataLoaderManager implements AppModule {
 
   async evaluateCompoundThreats(): Promise<void> {
  try {
- const [wildfires, aqReadings, hazmat, floodGauges, damAlerts, gridAlerts] = await Promise.allSettled([
+ const [wildfires, aqReadings, hazmat, floodGauges, damAlerts, gridAlerts, openaqReadings] = await Promise.allSettled([
  fetchInciwebIncidents(),
  fetchGlobalAirQuality(),
  fetchHazmatIncidents(),
  fetchFloodGauges(),
  fetchDamSafetyAlerts(),
  fetchPowerGridAlerts(),
+ fetchOpenaqWorstReadings(),
  ]);
+
+ // Second air-quality source for fusion (OpenAQ ground stations).
+ if (openaqReadings.status === 'fulfilled') {
+ recordDomainObservations('openaq-v3', openaqToObservations(openaqReadings.value), true);
+ } else {
+ recordDomainObservations('openaq-v3', [], false);
+ }
 
  const signals = [];
 

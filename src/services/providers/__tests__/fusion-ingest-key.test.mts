@@ -112,10 +112,27 @@ test('stocks: same ticker within 1% → corroborated; per-ticker, not cross-tick
     assert.equal(f.fusion.independentSourceCount, 2);
     assert.equal(f.fusion.disagreements.length, 0);
   }
-  const snaps = snapshotsFromRegistry(health, NOW, 'markets', r.providerFingerprints)
-    .filter((s) => s.providerId === 'stooq' || s.providerId === 'yahoo-finance');
+  const snaps = snapshotsFromRegistry(health, NOW, 'equities', r.providerFingerprints);
   const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
-  assert.equal(report.domains[0]!.verdict, 'redundant_agreement');
+  assert.equal(report.domains.find((d) => d.domain === 'equities')!.verdict, 'redundant_agreement');
+});
+
+test('crypto and stocks do not cross-contaminate (separate redundancy domains)', () => {
+  // Both fusion domains agree internally; because crypto is registry-domain
+  // 'markets' and stocks is 'equities', their fingerprints must NOT collide
+  // into a false redundant_disagreement.
+  let health = emptyProviderHealthState();
+  for (const id of ['coingecko', 'coinbase', 'stooq', 'yahoo-finance']) {
+    health = recordFetchOutcome(health, id, { ok: true, latencyMs: 50, at: NOW });
+  }
+  const crypto = ingestDomain('crypto', [px('coingecko', 'BTC', 95_000), px('coinbase', 'BTC', 95_400)], health, NOW);
+  const stocks = ingestDomain('stocks', [px('stooq', 'AAPL', 212), px('yahoo-finance', 'AAPL', 213.5)], health, NOW);
+
+  const snaps = snapshotsFromRegistry(health, NOW, undefined, { ...crypto.providerFingerprints, ...stocks.providerFingerprints })
+    .filter((s) => ['coingecko', 'coinbase', 'stooq', 'yahoo-finance'].includes(s.providerId));
+  const report = assessProviderRedundancy({ generatedAt: NOW, snapshots: snaps });
+  assert.equal(report.domains.find((d) => d.domain === 'markets')!.verdict, 'redundant_agreement');
+  assert.equal(report.domains.find((d) => d.domain === 'equities')!.verdict, 'redundant_agreement');
 });
 
 test('stocks: a >1% quote gap surfaces as a disagreement', () => {

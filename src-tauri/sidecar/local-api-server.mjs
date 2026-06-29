@@ -4143,6 +4143,41 @@ function setCached(key, data, ttlMs) {
   _ensureSidecarCacheSweep();
 }
 
+// ── Webcam helpers (shared by /api/webcams aggregator and sub-handlers) ──
+
+// Pure helper: derive per-source health from Promise.allSettled results.
+// targets: array of { source, path, shape }
+// settled: result of Promise.allSettled(targets.map(...))
+// keyedSources: Set of source names that require an API key
+// now: unix epoch seconds
+export function deriveWebcamSourceHealth(targets, settled, keyedSources, now) {
+  return targets.map((sub, i) => {
+    const r = settled[i];
+    const needsKey = keyedSources.has(sub.source);
+    if (r.status === 'rejected') {
+      const msg = String(r.reason?.message ?? r.reason ?? 'error');
+      const status = needsKey && /401|403|missing|unauthor/i.test(msg) ? 'missing_key'
+        : /429|rate/i.test(msg) ? 'rate_limited' : 'down';
+      return { source: sub.source, status, count: 0, needsKey, error: msg, lastChecked: now };
+    }
+    const feeds = Array.isArray(r.value) ? r.value : [];
+    return { source: sub.source, status: feeds.length > 0 ? 'ok' : 'empty', count: feeds.length, needsKey, lastChecked: now };
+  });
+}
+
+// HEAD-validates snapshot URLs in a static catalog, drops unreachable ones, caches result.
+async function validateWebcamCatalog(cams, cacheKey, ttlMs) {
+  const cached = getCached(cacheKey, ttlMs);
+  if (cached) return cached;
+  const checked = await Promise.all(cams.map(async (c) => {
+    try { const r = await fetchWithTimeout(c.snapshotUrl, { method: 'HEAD' }, 4000); return r.ok ? c : null; }
+    catch { return null; }
+  }));
+  const feeds = checked.filter(Boolean);
+  setCached(cacheKey, feeds, ttlMs);
+  return feeds;
+}
+
 // Single-flight de-duplication for cold-cache fetches. Without this, N callers
 // that all miss the cache for the same key each fire their own upstream fetch.
 // This collapses the concurrent-miss window: the first caller's promise is held
@@ -15953,6 +15988,7 @@ async function dispatch(requestUrl, req, routes, context) {
  { source: 'WINDY', path: '/api/webcams/windy', shape: 'feeds' },
  { source: 'NOAA_COASTAL', path: '/api/webcams/coastal', shape: 'feeds' },
  { source: 'DOT511', path: '/api/webcams/dot-extended', shape: 'feeds' },
+ { source: 'USFS', path: '/api/webcams/usfs', shape: 'feeds' },
  ];
  const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
  const port = process.env.SIDECAR_PORT ?? '46123';
@@ -16000,6 +16036,8 @@ async function dispatch(requestUrl, req, routes, context) {
  return [];
  }
  }));
+ const KEYED_WEBCAM_SOURCES = new Set(['WINDY', 'NPS']);
+ const sourceHealth = deriveWebcamSourceHealth(targets, results, KEYED_WEBCAM_SOURCES, Math.floor(Date.now() / 1000));
  let allFeeds = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
  if (categoryFilter.length > 0) allFeeds = allFeeds.filter(f => categoryFilter.includes(f.category));
  if (bbox) {
@@ -16009,7 +16047,7 @@ async function dispatch(requestUrl, req, routes, context) {
  allFeeds = allFeeds.filter(f => f.lat >= minLat && f.lat <= maxLat && f.lon >= minLon && f.lon <= maxLon);
  }
  }
- const result = { feeds: allFeeds, count: allFeeds.length, updatedAt: Math.floor(Date.now() / 1000) };
+ const result = { feeds: allFeeds, count: allFeeds.length, sourceHealth, updatedAt: Math.floor(Date.now() / 1000) };
  setCached(cacheKey, result, 5 * 60 * 1000);
  return json(result);
   }

@@ -22,10 +22,12 @@ export function snapshotsFromRegistry(
   state: ProviderHealthState,
   now: number,
   domain?: ProviderDomain,
+  fingerprints?: Readonly<Record<string, string>>,
 ): ProviderSnapshot[] {
   const defs = domain ? PROVIDER_DEFINITIONS.filter((d) => d.domain === domain) : PROVIDER_DEFINITIONS;
   return defs.map((def) => {
     const health = deriveProviderHealth(state, def.id, now);
+    const fp = fingerprints?.[def.id];
     return {
       providerId: def.id,
       domain: def.domain,
@@ -35,6 +37,7 @@ export function snapshotsFromRegistry(
       lastSuccessAt: health.lastSuccessAt,
       successRate: health.successRate,
       lastError: health.lastError,
+      ...(fp ? { recentFactFingerprint: fp } : {}),
     };
   });
 }

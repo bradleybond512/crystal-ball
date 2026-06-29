@@ -328,8 +328,9 @@ import { earthquakesToObservations } from '@/services/intelligence/adapters/eart
 import { recordDomainObservations } from '@/services/providers/fusion-publish';
 import { usgsEarthquakesToObservations, emscEventsToObservations } from '@/services/earthquake/earthquake-fusion-observations';
 import { openMeteoAqToObservations, openaqToObservations } from '@/services/airquality/airquality-fusion-observations';
-import { coingeckoToObservations, binanceToObservations } from '@/services/market/crypto-fusion-observations';
+import { exchangePricesToObservations } from '@/services/market/crypto-fusion-observations';
 import { fetchBinancePrices } from '@/services/market/binance-fetch';
+import { fetchCoingeckoPrices } from '@/services/market/coingecko-fetch';
 import { fetchOpenaqWorstReadings } from '@/services/airquality/openaq-worst-fetch';
 import { aisDisruptionsToObservations, adsbTrackToObservation } from '@/services/intelligence/adapters/ais-adapter';
 import { forecastToObservations, type OpenMeteoHourlyForecast } from '@/services/intelligence/adapters/weather-forecast-adapter';
@@ -1354,18 +1355,20 @@ export class DataLoaderManager implements AppModule {
  }
  (this.ctx.panels.crypto as CryptoPanel).renderCrypto(crypto);
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: crypto.length > 0 ? 'ok' : 'error' });
- // Crypto price fusion: CoinGecko + Binance (matched by symbol). Fail-closed.
- recordDomainObservations('coingecko', coingeckoToObservations(crypto), crypto.length > 0);
- const binance = await fetchBinancePrices();
- recordDomainObservations('binance-public', binanceToObservations(binance.prices), binance.ok);
  // Auto-trigger Finance Mode if S&P 500 or BTC makes a significant move
  if (this.ctx.latestMarkets.length > 0 || crypto.length > 0) {
  evaluateFinanceTrigger(this.ctx.latestMarkets, crypto);
  }
  } catch {
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: 'error' });
- recordDomainObservations('coingecko', [], false);
  }
+ // Crypto price fusion: CoinGecko + Binance, matched by symbol. Dedicated
+ // fail-closed fetches (NOT the panel's cached fetchCrypto) so a down source
+ // records a failing outcome instead of corroborating against stale prices.
+ const cg = await fetchCoingeckoPrices();
+ recordDomainObservations('coingecko', exchangePricesToObservations('coingecko', cg.prices), cg.ok);
+ const binance = await fetchBinancePrices();
+ recordDomainObservations('binance-public', exchangePricesToObservations('binance-public', binance.prices), binance.ok);
   }
 
   async loadPredictions(): Promise<void> {

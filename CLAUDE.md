@@ -242,6 +242,9 @@ src/                        # TypeScript frontend (Vite)
     intelligence/compound-risk.ts            # cross-domain compound score with cascade-pair table
     intelligence/forecast-calibration.ts     # Brier scoring + per-domain accuracy + per-source multipliers
     intelligence/watchlist-relevance.ts      # "Should I care?" filter + feedback-adjusted thresholds
+    intelligence/momentum.ts                 # rate-of-change / slope / volatility — fast shock scores higher than slow climb
+    intelligence/learned-cascades.ts         # mine (domainA→domainB, lag) from event history; registerLearnedCascadePairs() augments compound-risk
+    shortage/cross-domain-coupling.ts        # active intelligence cascades → shortage cross_domain drivers (war→port-closure boosts grain export risk)
     # ── Weather warning remediation (see docs/WEATHER_WARNING_REMEDIATION_PLAN.md) ──
     weather/weather-threat-types.ts          # 16-hazard taxonomy, AlertPolygon, NwsAlertMinimal, SavedPlace, PolygonMatchResult
     weather/nws-polygon-match.ts             # ray-casting + UGC zone fallback + threat-level escalation

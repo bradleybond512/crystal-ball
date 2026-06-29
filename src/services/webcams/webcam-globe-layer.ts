@@ -37,7 +37,9 @@ const CATEGORY_GLYPH: Record<string, string> = {
 
 export interface WebcamGlobeLayerOptions {
   fetchFeeds?: () => Promise<WebcamFeed[]>;
-  highSalienceOnly?: boolean;
+  /** When true, only fire/volcano/coastal categories are plotted.
+   *  Defaults to false (all feeds shown). */
+  salientOnly?: boolean;
 }
 
 export class GlobeWebcamLayer {
@@ -48,12 +50,12 @@ export class GlobeWebcamLayer {
   private clickHandler: ScreenSpaceEventHandler | null = null;
   private feedById = new Map<string, WebcamFeed>();
   private fetchFeeds: () => Promise<WebcamFeed[]>;
-  private highSalienceOnly: boolean;
+  private salientOnly: boolean;
 
   constructor(viewer: Viewer, options: WebcamGlobeLayerOptions = {}) {
     this.viewer = viewer;
     this.fetchFeeds = options.fetchFeeds ?? (() => Promise.resolve([]));
-    this.highSalienceOnly = options.highSalienceOnly ?? true;
+    this.salientOnly = options.salientOnly ?? false;
   }
 
   async mount(): Promise<void> {
@@ -94,7 +96,7 @@ export class GlobeWebcamLayer {
   async refresh(): Promise<void> {
     if (!this.dataSource) return;
     const allFeeds = await this.fetchFeeds();
-    const feeds = this.highSalienceOnly
+    const feeds = this.salientOnly
       ? allFeeds.filter((f) => HIGH_SALIENCE_CATEGORIES.includes(f.category as typeof HIGH_SALIENCE_CATEGORIES[number]))
       : allFeeds;
     this.dataSource.entities.removeAll();
@@ -128,8 +130,8 @@ export class GlobeWebcamLayer {
     }
   }
 
-  setHighSalienceOnly(value: boolean): void {
-    this.highSalienceOnly = value;
+  setSalientOnly(value: boolean): void {
+    this.salientOnly = value;
     void this.refresh();
   }
 

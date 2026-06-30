@@ -519,6 +519,88 @@ async function fetchGdeltSummary() {
 // Pre-compiled regex patterns (avoid re-creation in hot paths)
 const RE_HTML_TAGS = /<[^>]+>/g;
 
+// ── Config-driven webcam extractor (shared by Caltrans/TfL/Singapore handlers) ──
+// Mirrors the pure logic from src/services/webcams/webcam-config-loader.ts.
+// Cannot import .ts files from .mjs — small pure helpers replicated here.
+
+function _wcGetPath(obj, path) {
+  const parts = path.split('.');
+  let cur = obj;
+  for (const part of parts) {
+    if (cur == null || typeof cur !== 'object') return undefined;
+    const idx = Number(part);
+    cur = (!Number.isNaN(idx) && Array.isArray(cur)) ? cur[idx] : cur[part];
+  }
+  return cur;
+}
+
+function _wcResolveGetter(getter, row) {
+  if (typeof getter === 'function') return getter(row);
+  return _wcGetPath(row, getter);
+}
+
+function _wcInferStreamType(url) {
+  if (url.endsWith('.m3u8')) return 'hls';
+  if (url.includes('multipart')) return 'mjpeg';
+  return 'snapshot';
+}
+
+export function extractWebcamFeeds(sourceId, arrayPath, map, category, refreshIntervalSec, onlineWhen, metadata, payloads) {
+  const out = [];
+  for (const payload of payloads) {
+    let rows;
+    if (!arrayPath) {
+      rows = Array.isArray(payload) ? payload : [];
+    } else {
+      const val = _wcGetPath(payload, arrayPath);
+      rows = Array.isArray(val) ? val : [];
+    }
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      if (onlineWhen && !onlineWhen(row)) continue;
+
+      const rawId = _wcResolveGetter(map.id, row);
+      const rawName = _wcResolveGetter(map.name, row);
+      const rawLat = _wcResolveGetter(map.lat, row);
+      const rawLon = _wcResolveGetter(map.lon, row);
+      const rawSnap = _wcResolveGetter(map.snapshotUrl, row);
+
+      const lat = (typeof rawLat === 'number' && Number.isFinite(rawLat)) ? rawLat : Number.parseFloat(typeof rawLat === 'string' ? rawLat : '');
+      const lon = (typeof rawLon === 'number' && Number.isFinite(rawLon)) ? rawLon : Number.parseFloat(typeof rawLon === 'string' ? rawLon : '');
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      if (typeof rawSnap !== 'string' || rawSnap.length === 0) continue;
+
+      const idStr = (typeof rawId === 'string' && rawId.length > 0) ? rawId
+        : (typeof rawId === 'number') ? String(rawId) : `${lat}-${lon}`;
+      const id = `${sourceId}:${idStr}`;
+      const nameStr = (typeof rawName === 'string' && rawName.length > 0) ? rawName
+        : (typeof rawName === 'number') ? String(rawName) : 'Camera';
+
+      let streamUrl;
+      if (map.streamUrl) {
+        const rawStream = _wcResolveGetter(map.streamUrl, row);
+        if (typeof rawStream === 'string' && rawStream.length > 0) streamUrl = rawStream;
+      }
+      const streamType = streamUrl ? _wcInferStreamType(streamUrl) : 'snapshot';
+
+      out.push({
+        id,
+        source: sourceId,
+        name: nameStr,
+        lat,
+        lon,
+        snapshotUrl: rawSnap,
+        ...(streamUrl ? { streamUrl } : {}),
+        streamType,
+        refreshIntervalSec,
+        category,
+        metadata: metadata ?? {},
+      });
+    }
+  }
+  return out;
+}
+
 // ── ibi511 platform parser (shared by AZ/ID/GA in /api/webcams/dot-extended) ──
 // Mirrors parseIbi511 in src/services/webcams/adapters/dot-extended.ts.
 function parseIbi511Sidecar(state, raw, buildFeed, pickArray) {
@@ -16012,6 +16094,9 @@ async function dispatch(requestUrl, req, routes, context) {
  { source: 'NOAA_COASTAL', path: '/api/webcams/coastal', shape: 'feeds' },
  { source: 'DOT511', path: '/api/webcams/dot-extended', shape: 'feeds' },
  { source: 'USFS', path: '/api/webcams/usfs', shape: 'feeds' },
+ { source: 'CALTRANS', path: '/api/webcams/caltrans', shape: 'feeds' },
+ { source: 'TFL', path: '/api/webcams/tfl', shape: 'feeds' },
+ { source: 'SINGAPORE', path: '/api/webcams/singapore', shape: 'feeds' },
  ];
  const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
  const port = process.env.SIDECAR_PORT ?? '46123';
@@ -16250,6 +16335,98 @@ async function dispatch(requestUrl, req, routes, context) {
  metadata: { volcano: c.volcano, observatory: c.observatory },
  }));
  return json({ feeds, updatedAt: Math.floor(Date.now() / 1000) });
+  }
+
+  // ── Keyless config-driven sources: Caltrans CWWP2, TfL JamCams, Singapore LTA ──
+  // Uses module-scope extractWebcamFeeds (mirrors webcam-config-loader.ts pure logic).
+
+  // ── Caltrans CWWP2 (d01–d12 fan-out) ──
+  if (requestUrl.pathname === '/api/webcams/caltrans') {
+    const cacheKey = 'webcams-caltrans';
+    const cached = getCached(cacheKey, 5 * 60 * 1000);
+    if (cached) return json(cached);
+
+    const districts = Array.from({ length: 12 }, (_, i) => {
+      const nn = String(i + 1).padStart(2, '0');
+      return `https://cwwp2.dot.ca.gov/data/d${nn}/cctv/cctvStatusD${nn}.json`;
+    });
+
+    const settled = await Promise.allSettled(districts.map(async (url) => {
+      const r = await fetchWithTimeout(url, {}, 15000);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }));
+
+    const payloads = settled.flatMap(r => r.status === 'fulfilled' ? [r.value] : []);
+
+    const CALTRANS_MAP = {
+      id: (row) => {
+        const district = row?.cctv?.location?.district ?? 'UNK';
+        const idx = row?.cctv?.index ?? 'UNK';
+        return `d${district}:${idx}`;
+      },
+      name: 'cctv.location.locationName',
+      lat: 'cctv.location.latitude',
+      lon: 'cctv.location.longitude',
+      snapshotUrl: 'cctv.imageData.static.currentImageURL',
+      streamUrl: 'cctv.imageData.streamingVideoURL',
+    };
+
+    const raw = extractWebcamFeeds('CALTRANS', 'data', CALTRANS_MAP, 'traffic', 60, null, { attribution: 'Caltrans CWWP2', country: 'US', state: 'CA' }, payloads);
+    const feeds = await validateWebcamCatalog(raw, 'webcams:caltrans:valid', 5 * 60 * 1000);
+    const result = { feeds, count: feeds.length };
+    setCached(cacheKey, result);
+    return json(result);
+  }
+
+  // ── TfL JamCams (single GET) ──
+  if (requestUrl.pathname === '/api/webcams/tfl') {
+    const cacheKey = 'webcams-tfl';
+    const cached = getCached(cacheKey, 5 * 60 * 1000);
+    if (cached) return json(cached);
+
+    const r = await fetchWithTimeout('https://api.tfl.gov.uk/Place/Type/JamCam', {}, 20000);
+    if (!r.ok) throw new Error(`TfL HTTP ${r.status}`);
+    const payload = await r.json();
+
+    const TFL_MAP = {
+      id: (row) => row.id ?? '',
+      name: 'commonName',
+      lat: 'lat',
+      lon: 'lon',
+      snapshotUrl: (row) => row.additionalProperties?.find((p) => p.key === 'imageUrl')?.value ?? '',
+    };
+
+    const raw = extractWebcamFeeds('TFL', null, TFL_MAP, 'traffic', 60, null, { attribution: 'Transport for London JamCams', country: 'GB', city: 'London' }, [payload]);
+    const feeds = await validateWebcamCatalog(raw, 'webcams:tfl:valid', 5 * 60 * 1000);
+    const result = { feeds, count: feeds.length };
+    setCached(cacheKey, result);
+    return json(result);
+  }
+
+  // ── Singapore LTA Traffic Images (single GET, images expire ~5 min) ──
+  if (requestUrl.pathname === '/api/webcams/singapore') {
+    const cacheKey = 'webcams-singapore';
+    const cached = getCached(cacheKey, 3 * 60 * 1000);
+    if (cached) return json(cached);
+
+    const r = await fetchWithTimeout('https://api.data.gov.sg/v1/transport/traffic-images', {}, 20000);
+    if (!r.ok) throw new Error(`Singapore LTA HTTP ${r.status}`);
+    const payload = await r.json();
+
+    const SG_MAP = {
+      id: (row) => row.camera_id ?? '',
+      name: (row) => `Singapore Cam ${row.camera_id ?? ''}`,
+      lat: 'location.latitude',
+      lon: 'location.longitude',
+      snapshotUrl: 'image',
+    };
+
+    const raw = extractWebcamFeeds('SINGAPORE', 'items.0.cameras', SG_MAP, 'traffic', 60, null, { attribution: 'Singapore LTA Traffic Images', country: 'SG', city: 'Singapore' }, [payload]);
+    const feeds = await validateWebcamCatalog(raw, 'webcams:singapore:valid', 3 * 60 * 1000);
+    const result = { feeds, count: feeds.length };
+    setCached(cacheKey, result);
+    return json(result);
   }
 
   // ── USFS webcams (fire lookouts + recreation, validated catalog) ──

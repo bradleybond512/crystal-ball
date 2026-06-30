@@ -13,6 +13,7 @@ import {
 } from '@/services/webcams/panel-extras';
 import { runSmokeDetection, type SmokeAnalysis } from '@/services/webcams/smoke-detector';
 import { healthSummary } from '@/services/webcams/health-view';
+import { nextProbeDelay } from '@/services/webcams/probe-backoff';
 import type { WebcamCategory, WebcamFeed, WebcamSource, WebcamSourceHealth } from '@/services/webcams/webcam-types';
 
 const SMOKE_DETECT_INTERVAL_MS = 10 * 60 * 1000;
@@ -53,7 +54,8 @@ export class UnifiedWebcamPanel extends Panel {
   private loading = false;
   private lastError: string | null = null;
   private offlineStatus = new Map<string, { status: OfflineStatus; checkedAt: number }>();
-  private offlineProbeTimer: ReturnType<typeof setInterval> | null = null;
+  private probeTimer: ReturnType<typeof setTimeout> | null = null;
+  private probeFailRounds = 0;
   private smokeDetectTimer: ReturnType<typeof setInterval> | null = null;
   private smokeStatus = new Map<string, { analysis: SmokeAnalysis; ranAt: number }>();
   private smokeDetectEnabled = true;
@@ -63,18 +65,16 @@ export class UnifiedWebcamPanel extends Panel {
     super({ id: 'unified-webcams', title: 'Webcams', className: 'panel-wide' });
     void this.load();
     window.addEventListener('webcam:select', this.handleGlobeSelect as EventListener);
-    this.offlineProbeTimer = setInterval(() => {
-      void this.probeVisibleFeeds();
-    }, OFFLINE_REPROBE_INTERVAL_MS);
+    this.scheduleNextProbe();
     this.smokeDetectTimer = setInterval(() => {
       void this.runSmokeDetectForFireCams();
     }, SMOKE_DETECT_INTERVAL_MS);
   }
 
   public destroy(): void {
-    if (this.offlineProbeTimer != null) {
-      clearInterval(this.offlineProbeTimer);
-      this.offlineProbeTimer = null;
+    if (this.probeTimer != null) {
+      clearTimeout(this.probeTimer);
+      this.probeTimer = null;
     }
     if (this.smokeDetectTimer != null) {
       clearInterval(this.smokeDetectTimer);
@@ -883,15 +883,35 @@ export class UnifiedWebcamPanel extends Panel {
 
   // ── Offline probing ──────────────────────────────────────────────────
 
-  private async probeVisibleFeeds(): Promise<void> {
-    if (this.viewMode === 'map') return; // map view doesn't need per-card status
+  private scheduleNextProbe(): void {
+    const delay = nextProbeDelay(
+      this.probeFailRounds,
+      OFFLINE_REPROBE_INTERVAL_MS,
+      15 * 60 * 1000,
+      // eslint-disable-next-line sonarjs/pseudo-random -- non-crypto jitter to de-sync probe storms
+      Math.random(),
+    );
+    this.probeTimer = setTimeout(() => {
+      void this.runProbeRound();
+    }, delay);
+  }
+
+  private async runProbeRound(): Promise<void> {
+    const offline = await this.probeVisibleFeeds();
+    if (offline > 0) this.probeFailRounds += 1;
+    else this.probeFailRounds = 0;
+    this.scheduleNextProbe();
+  }
+
+  private async probeVisibleFeeds(): Promise<number> {
+    if (this.viewMode === 'map') return 0; // map view doesn't need per-card status
     const list = this.displayed.slice(0, 60);
     const now = Date.now();
     const stale = list.filter((f) => {
       const cached = this.offlineStatus.get(f.id);
       return !cached || now - cached.checkedAt > OFFLINE_REPROBE_INTERVAL_MS;
     });
-    if (stale.length === 0) return;
+    if (stale.length === 0) return 0;
     const promises = stale.map(async (f) => {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), OFFLINE_PROBE_TIMEOUT_MS);
@@ -908,6 +928,11 @@ export class UnifiedWebcamPanel extends Panel {
       }
     });
     await Promise.allSettled(promises);
+    const offlineCount = stale.reduce(
+      (n, f) => n + (this.offlineStatus.get(f.id)?.status === 'offline' ? 1 : 0),
+      0,
+    );
     this.render();
+    return offlineCount;
   }
 }

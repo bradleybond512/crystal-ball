@@ -1,6 +1,9 @@
 import DOMPurify, { type Config } from 'dompurify';
 
-const PURIFY_CONFIG: Config = {
+// Exported so unit tests can assert their local config stays in lockstep with
+// production (happy-dom can't reliably verify element retention, but it can
+// verify the allowlist hasn't silently narrowed).
+export const PURIFY_CONFIG: Config = {
   ALLOWED_TAGS: [
     'strong', 'em', 'b', 'i', 'br', 'p', 'ul', 'ol', 'li',
     'span', 'div', 'a', 'small',

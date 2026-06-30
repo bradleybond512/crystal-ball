@@ -3,6 +3,8 @@ import test from 'node:test';
 import { Window } from 'happy-dom';
 import DOMPurify from 'dompurify';
 
+import { PURIFY_CONFIG as PROD_PURIFY_CONFIG } from '../src/utils/safe-html.ts';
+
 // Provide happy-dom as the DOM environment for DOMPurify (mirrors browser usage)
 const window = new Window();
 const purify = DOMPurify(window);
@@ -20,6 +22,23 @@ const PURIFY_CONFIG = {
 function sanitizeHtml(html) {
   return purify.sanitize(html, PURIFY_CONFIG);
 }
+
+// Allowlist-regression guard. happy-dom can't reliably verify element
+// *retention* (see the passthrough section), but this deterministically fails
+// if production's safe-html.ts ever narrows or drops an allow-listed tag/attr
+// out of step with what these tests exercise.
+test('local config mirrors the production safe-html allowlist', () => {
+  assert.deepEqual(
+    [...PURIFY_CONFIG.ALLOWED_TAGS].sort(),
+    [...(PROD_PURIFY_CONFIG.ALLOWED_TAGS ?? [])].sort(),
+    'ALLOWED_TAGS drifted from src/utils/safe-html.ts',
+  );
+  assert.deepEqual(
+    [...PURIFY_CONFIG.ALLOWED_ATTR].sort(),
+    [...(PROD_PURIFY_CONFIG.ALLOWED_ATTR ?? [])].sort(),
+    'ALLOWED_ATTR drifted from src/utils/safe-html.ts',
+  );
+});
 
 // ==================== XSS payload tests ====================
 

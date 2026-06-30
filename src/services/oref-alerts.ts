@@ -1,24 +1,7 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import { translateText } from '@/services/summarization';
 import { dataFreshness } from '@/services/data-freshness';
-
-export interface OrefAlert {
-  id: string;
-  cat: string;
-  title: string;
-  data: string[];
-  desc: string;
-  alertDate: string;
-}
-
-export interface OrefAlertsResponse {
-  configured: boolean;
-  alerts: OrefAlert[];
-  historyCount24h: number;
-  totalHistoryCount?: number;
-  timestamp: string;
-  error?: string;
-}
+import { isValidOrefAlertsResponse, type OrefAlert, type OrefAlertsResponse } from './oref-validate';
 
 export interface OrefHistoryEntry {
   alerts: OrefAlert[];
@@ -226,13 +209,6 @@ function getOrefApiUrl(endpoint?: string): string {
   return `${base}/api/oref-alerts${suffix}`;
 }
 
-/** True when a parsed /api/oref-alerts payload has the expected shape. The cast
- *  in fetchOrefAlerts is compile-time only, so this guards against a malformed
- *  200 (alerts-less object / HTML) being cached + served as a fresh all-clear. */
-export function isValidOrefAlertsResponse(data: unknown): data is OrefAlertsResponse {
-  return !!data && typeof data === 'object' && Array.isArray((data as { alerts?: unknown }).alerts);
-}
-
 export async function fetchOrefAlerts(): Promise<OrefAlertsResponse> {
   await ensureLocationMapLoaded();
   const now = Date.now();
@@ -332,3 +308,7 @@ export function stopOrefPolling(): void {
   }
   updateCallbacks = [];
 }
+
+// Re-exported so this module's public API (consumed by OrefSirensPanel et al.)
+// is unchanged after the worker-free split into oref-validate.ts.
+export { isValidOrefAlertsResponse, type OrefAlert, type OrefAlertsResponse } from './oref-validate';

@@ -31,6 +31,9 @@ const SOURCE_LABELS: Record<WebcamSource, string> = {
   USFS: 'USFS',
   USGS_STREAM: 'Stream',
   NOAA_COASTAL: 'Coastal',
+  CALTRANS: 'Caltrans',
+  TFL: 'TfL',
+  SINGAPORE: 'Singapore',
 };
 
 const CATEGORY_COLORS: Record<WebcamCategory, string> = {

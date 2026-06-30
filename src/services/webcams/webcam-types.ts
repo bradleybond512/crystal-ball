@@ -7,7 +7,10 @@ export type WebcamSource =
   | 'WINDY'
   | 'USFS'
   | 'USGS_STREAM'
-  | 'NOAA_COASTAL';
+  | 'NOAA_COASTAL'
+  | 'CALTRANS'
+  | 'TFL'
+  | 'SINGAPORE';
 
 export type WebcamCategory =
   | 'weather'

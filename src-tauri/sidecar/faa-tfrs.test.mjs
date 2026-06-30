@@ -1,10 +1,10 @@
-/* eslint-disable unicorn/prefer-event-target */
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import {
   extractNotamIds,
   parseTfrXml,
   tfrColor,
+  detailUrlForId,
   fetchTfrIds,
   fetchTfrDetail,
   fetchAllTfrs,
@@ -201,13 +201,10 @@ test('fetchAllTfrs: combines list fetch and detail fetches', async () => {
   let callCount = 0;
   const mockFetcher = async (url) => {
     callCount++;
-    if (url.includes('list.html')) {
+    if (url.includes('exportTfrList')) {
       return {
         ok: true,
-        text: async () => `
-          <a href="/save_pages/detail_1_0_aaa.xml">A</a>
-          <a href="/save_pages/detail_1_0_bbb.xml">B</a>
-        `,
+        text: async () => JSON.stringify([{ notam_id: '1/0001' }, { notam_id: '1/0002' }]),
       };
     }
     return {
@@ -223,13 +220,10 @@ test('fetchAllTfrs: combines list fetch and detail fetches', async () => {
 test('fetchAllTfrs: tolerates partial detail failures', async () => {
   let first = true;
   const mockFetcher = async (url) => {
-    if (url.includes('list.html')) {
+    if (url.includes('exportTfrList')) {
       return {
         ok: true,
-        text: async () => `
-          <a href="/save_pages/detail_1_0_good.xml">good</a>
-          <a href="/save_pages/detail_1_0_bad.xml">bad</a>
-        `,
+        text: async () => JSON.stringify([{ notam_id: '1/good' }, { notam_id: '1/bad' }]),
       };
     }
     if (url.includes('_bad') && first) { first = false; throw new Error('timeout'); }
@@ -240,4 +234,62 @@ test('fetchAllTfrs: tolerates partial detail failures', async () => {
   };
   const tfrs = await fetchAllTfrs(mockFetcher);
   assert.ok(tfrs.length >= 1, 'should return partial results despite one failure');
+});
+
+// ── TFR3 migration: JSON list + XNOTAM detail schema ─────────────────────────
+
+test('extractNotamIds: parses the TFR3 JSON list', () => {
+  const json = JSON.stringify([
+    { notam_id: '6/1748', type: 'HAZARDS', state: 'WA' },
+    { notam_id: '6/1745', type: 'UAS PUBLIC GATHERING', state: 'CO' },
+  ]);
+  const ids = extractNotamIds(json);
+  assert.deepEqual(ids, ['6/1748', '6/1745']);
+});
+
+test('extractNotamIds: ignores JSON rows without a notam_id', () => {
+  const json = JSON.stringify([{ notam_id: '6/1748' }, { type: 'HAZARDS' }, { notam_id: '' }]);
+  assert.deepEqual(extractNotamIds(json), ['6/1748']);
+});
+
+test('detailUrlForId: maps the TFR3 slash id onto the download path', () => {
+  assert.equal(detailUrlForId('6/1748'), 'https://tfr.faa.gov/download/detail_6_1748.xml');
+  // Legacy underscore ids pass through unchanged.
+  assert.equal(detailUrlForId('1_0_1234567'), 'https://tfr.faa.gov/download/detail_1_0_1234567.xml');
+});
+
+test('parseTfrXml: parses the TFR3 XNOTAM schema (Avx polygon + fields)', () => {
+  const xml = `<XNOTAM-Update>
+    <Not>
+      <NotUid><txtLocalName>6/1748</txtLocalName></NotUid>
+      <dateEffective>2026-06-29T23:44:00</dateEffective>
+      <dateExpire>2026-07-13T04:00:00</dateExpire>
+      <txtDescrPurpose>TO PROVIDE A SAFE ENVIRONMENT FOR FIRE FIGHTING ACFT OPS</txtDescrPurpose>
+      <TfrNot>
+        <codeType>91.137(a)(2)</codeType>
+        <aseTFRArea>
+          <valDistVerUpper>6000</valDistVerUpper>
+          <valDistVerLower>0</valDistVerLower>
+          <Avx><geoLat>46.11666667N</geoLat><geoLong>118.95833333W</geoLong></Avx>
+          <Avx><geoLat>46.16666667N</geoLat><geoLong>118.69166667W</geoLong></Avx>
+          <Avx><geoLat>45.98333333N</geoLat><geoLong>118.68333333W</geoLong></Avx>
+        </aseTFRArea>
+      </TfrNot>
+    </Not>
+  </XNOTAM-Update>`;
+  const tfr = parseTfrXml('6_1748', xml);
+  assert.ok(tfr !== null);
+  assert.equal(tfr.notamNumber, '6/1748');
+  assert.equal(tfr.type, 'Fire'); // from the purpose text
+  assert.equal(tfr.altFloor, 0);
+  assert.equal(tfr.altCeiling, 6000);
+  assert.ok(tfr.effectiveStart?.includes('2026-06-29'));
+  assert.ok(tfr.effectiveEnd?.includes('2026-07-13'));
+  assert.equal(tfr.polygon.length, 3);
+  // N latitudes stay positive; W longitudes become negative.
+  assert.ok(tfr.polygon.every(([lon, lat]) => lon < 0 && lat > 0));
+  const [lon0, lat0] = tfr.polygon[0];
+  assert.ok(lat0 > 46.1 && lat0 < 46.2, `N latitude near 46.12, got ${lat0}`);
+  assert.ok(lon0 > -119 && lon0 < -118.9, `W longitude near -118.96, got ${lon0}`);
+  assert.ok(tfr.center !== null);
 });

@@ -29,9 +29,12 @@ test('vault intro scanner wiring is single-registration and retry-safe', () => {
  'tryAuth should gate on an inFlight flag so rapid retries cannot race',
   );
 
+  // The biometry invoke is wrapped in `await Promise.race([invokeTauri(CMD,…),
+  // timeout])` so `await` is no longer adjacent to the call — match the call
+  // itself, which is the wiring contract we care about.
   assert.match(
  src,
- /const CMD = 'plugin:biometry\|authenticate';[\s\S]*await invokeTauri<void>\(CMD,/m,
+ /const CMD = 'plugin:biometry\|authenticate';[\s\S]*invokeTauri<void>\(CMD,/m,
  'authentication should route through the Tauri biometry plugin, not a custom scanner',
   );
 

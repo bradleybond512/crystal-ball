@@ -1,0 +1,100 @@
+{
+  "data": [
+    {
+      "cctv": {
+        "index": "1",
+        "recordTimestamp": {
+          "recordDate": "2024-04-11",
+          "recordTime": "11:39:15",
+          "recordEpoch": "1712860755"
+        },
+        "location": {
+          "district": "11",
+          "locationName": "(C 348) SR-163 : Friars N/E_B",
+          "nearbyPlace": "San Diego",
+          "longitude": "-117.160577",
+          "latitude": "32.772126",
+          "elevation": "45",
+          "direction": "South",
+          "county": "San Diego",
+          "route": "SR-163",
+          "routeSuffix": "",
+          "postmilePrefix": "",
+          "postmile": "4.409",
+          "alignment": "",
+          "milepost": "3.86"
+        },
+        "inService": "true",
+        "imageData": {
+          "imageDescription": "",
+          "streamingVideoURL": "https://wzmedia.dot.ca.gov/D11/C348_NB_163_at_North_Side_of_Friars_Rd_T.stream/playlist.m3u8",
+          "static": {
+            "currentImageUpdateFrequency": "2",
+            "currentImageURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/c348sr163friarsneb.jpg",
+            "referenceImageUpdateFrequency": "15",
+            "referenceImage1UpdateAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-1.jpg",
+            "referenceImage2UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-2.jpg",
+            "referenceImage3UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-3.jpg",
+            "referenceImage4UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-4.jpg",
+            "referenceImage5UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-5.jpg",
+            "referenceImage6UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-6.jpg",
+            "referenceImage7UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-7.jpg",
+            "referenceImage8UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-8.jpg",
+            "referenceImage9UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-9.jpg",
+            "referenceImage10UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-10.jpg",
+            "referenceImage11UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-11.jpg",
+            "referenceImage12UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c348sr163friarsneb/previous/c348sr163friarsneb-12.jpg"
+          }
+        }
+      }
+    },
+    {
+      "cctv": {
+        "index": "2",
+        "recordTimestamp": {
+          "recordDate": "2023-10-20",
+          "recordTime": "08:42:45",
+          "recordEpoch": "1697816565"
+        },
+        "location": {
+          "district": "11",
+          "locationName": "(C002) SR-163 : Just South Of I-8",
+          "nearbyPlace": "San Diego",
+          "longitude": "-117.16382",
+          "latitude": "32.76076",
+          "elevation": "49",
+          "direction": "South",
+          "county": "San Diego",
+          "route": "SR-163",
+          "routeSuffix": "",
+          "postmilePrefix": "",
+          "postmile": "3.64",
+          "alignment": "",
+          "milepost": "3.09"
+        },
+        "inService": "true",
+        "imageData": {
+          "imageDescription": "",
+          "streamingVideoURL": "https://wzmedia.dot.ca.gov/D11/C002_SB_163_JSO_Rte_8.stream/playlist.m3u8",
+          "static": {
+            "currentImageUpdateFrequency": "2",
+            "currentImageURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/c002sr163justsouthofi8.jpg",
+            "referenceImageUpdateFrequency": "15",
+            "referenceImage1UpdateAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-1.jpg",
+            "referenceImage2UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-2.jpg",
+            "referenceImage3UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-3.jpg",
+            "referenceImage4UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-4.jpg",
+            "referenceImage5UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-5.jpg",
+            "referenceImage6UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-6.jpg",
+            "referenceImage7UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-7.jpg",
+            "referenceImage8UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-8.jpg",
+            "referenceImage9UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-9.jpg",
+            "referenceImage10UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-10.jpg",
+            "referenceImage11UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-11.jpg",
+            "referenceImage12UpdatesAgoURL": "https://cwwp2.dot.ca.gov/data/d11/cctv/image/c002sr163justsouthofi8/previous/c002sr163justsouthofi8-12.jpg"
+          }
+        }
+      }
+    }
+  ]
+}

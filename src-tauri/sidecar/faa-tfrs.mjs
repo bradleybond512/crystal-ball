@@ -162,7 +162,9 @@ function notamIdsFromJson(trimmed) {
   const ids = [];
   for (const row of rows) {
     const id = String(row?.notam_id ?? row?.notamId ?? '').trim();
-    if (id) ids.push(id);
+    // Guard the charset before it becomes part of a fetch URL (the id is only
+    // ever digits / "/" / "_" / "-" in practice — no dots or traversal).
+    if (id && /^[\w/-]+$/.test(id)) ids.push(id);
   }
   return ids;
 }
@@ -287,7 +289,30 @@ export async function fetchTfrIds(fetcher) {
   );
   if (!resp.ok) throw new Error(`TFR list HTTP ${resp.status}`);
   const text = await resp.text();
+  assertParsableTfrList(text);
   return extractNotamIds(text);
+}
+
+/**
+ * The tfr3 list endpoint returns a JSON array. A JSON-shaped body that fails to
+ * parse — or parses to an unexpected shape — is an upstream schema/API break:
+ * throw so `/api/aviation/tfrs` degrades instead of reporting a "healthy" empty
+ * feed. A valid empty array is a legitimate "no active TFRs" response and is
+ * left to {@link extractNotamIds}. Non-JSON bodies use the legacy HTML path.
+ * @param {string} text
+ */
+function assertParsableTfrList(text) {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('[') && !trimmed.startsWith('{')) return;
+  let data;
+  try {
+    data = JSON.parse(trimmed);
+  } catch {
+    throw new Error('TFR list JSON parse error');
+  }
+  if (!Array.isArray(data) && !Array.isArray(data?.tfrList)) {
+    throw new TypeError('TFR list JSON shape unexpected');
+  }
 }
 
 /**

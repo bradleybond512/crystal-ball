@@ -293,3 +293,28 @@ test('parseTfrXml: parses the TFR3 XNOTAM schema (Avx polygon + fields)', () => 
   assert.ok(lon0 > -119 && lon0 < -118.9, `W longitude near -118.96, got ${lon0}`);
   assert.ok(tfr.center !== null);
 });
+
+test('extractNotamIds: drops ids with unsafe URL characters', () => {
+  const json = JSON.stringify([
+    { notam_id: '6/1748' },
+    { notam_id: '../../etc/passwd' },
+    { notam_id: 'a b' },
+    { notam_id: '4/9999' },
+  ]);
+  assert.deepEqual(extractNotamIds(json), ['6/1748', '4/9999']);
+});
+
+const fetcherReturning = (body) => () => Promise.resolve({ ok: true, text: () => Promise.resolve(body) });
+
+test('fetchTfrIds: throws on a JSON-shaped body that does not parse (degrades, not healthy-empty)', async () => {
+  await assert.rejects(() => fetchTfrIds(fetcherReturning('[{ "notam_id": "6/1748" ')), /TFR list JSON parse error/);
+});
+
+test('fetchTfrIds: throws on an unexpected JSON shape', async () => {
+  await assert.rejects(() => fetchTfrIds(fetcherReturning(JSON.stringify({ error: 'upstream changed' }))), /TFR list JSON shape unexpected/);
+});
+
+test('fetchTfrIds: a valid empty array is a healthy "no active TFRs" response', async () => {
+  const ids = await fetchTfrIds(fetcherReturning('[]'));
+  assert.deepEqual(ids, []);
+});

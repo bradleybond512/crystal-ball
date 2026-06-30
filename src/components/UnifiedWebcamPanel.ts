@@ -1,6 +1,7 @@
 /* eslint-disable sonarjs/no-async-constructor */
 import { Panel } from './Panel';
 import { fetchUnifiedWebcams, getFavoriteIds, toggleFavorite } from '@/services/webcams/fetcher';
+import { isPinned, togglePin } from '@/services/webcams/pinned-store';
 import {
   CATEGORY_MARKER_COLOR,
   OFFLINE_PROBE_TIMEOUT_MS,
@@ -440,6 +441,25 @@ export class UnifiedWebcamPanel extends Panel {
       this.render();
     });
 
+    const pin = document.createElement('button');
+    pin.textContent = '📌';
+    pin.title = isPinned(f.id) ? 'Unpin' : 'Pin to Pinned Webcams';
+    pin.style.position = 'absolute';
+    pin.style.top = '4px';
+    pin.style.right = '32px';
+    pin.style.background = 'rgba(0,0,0,0.6)';
+    pin.style.border = 'none';
+    pin.style.borderRadius = '50%';
+    pin.style.width = '24px';
+    pin.style.height = '24px';
+    pin.style.cursor = 'pointer';
+    pin.style.opacity = isPinned(f.id) ? '1' : '0.45';
+    pin.addEventListener('click', (e) => {
+      e.stopPropagation();
+      togglePin(f.id);
+      this.render();
+    });
+
     const info = document.createElement('div');
     info.style.padding = '6px 8px';
     info.style.fontSize = '12px';
@@ -518,6 +538,7 @@ export class UnifiedWebcamPanel extends Panel {
 
     card.append(img);
     card.append(star);
+    card.append(pin);
     card.append(info);
 
     card.addEventListener('click', () => {

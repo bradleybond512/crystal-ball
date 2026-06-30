@@ -15,22 +15,26 @@
 ## File Structure
 
 **Renderer (modify):**
+
 - `src/services/webcams/webcam-types.ts` — add `streamType`, `WebcamSourceHealth`, `SourceStatus`; extend `WebcamCatalog`.
 - `src/services/webcams/fetcher.ts` — parse `sourceHealth` from the API into the catalog.
 - `src/components/UnifiedWebcamPanel.ts` — render the source-health strip + missing-key CTA; add a "Pin" action; offline-probe backoff.
 - `src/services/webcams/webcam-globe-layer.ts:16` — relax the salience filter.
 
 **Renderer (create):**
+
 - `src/services/webcams/youtube-live-registry.ts` — the 27 (+) YouTube channels as data + a validity helper.
 - `src/services/webcams/pinned-store.ts` — feed-id pin store (replaces the one removed in #1314).
 - `src/components/PinnedWebcamsPanel.ts` — re-wired any-source pinboard.
 - `src/services/webcams/__tests__/webcam-health.test.mts`, `pinned-store.test.mts`, `youtube-live-registry.test.mts`.
 
 **Sidecar (modify):**
+
 - `src-tauri/sidecar/local-api-server.mjs` — add the `USFS` subroute + `/api/webcams/usfs` handler; derive + return `sourceHealth`; validate the volcano/stream/coastal catalogs at fetch.
 - `src-tauri/sidecar/__tests__/webcam-source-health.test.mjs` — health derivation.
 
 **Config (modify):**
+
 - `src/config/panels.ts` — register `pinned-webcams` in `FULL_PANELS` + `PANEL_CATEGORY_MAP`.
 - `src/app/panel-layout.ts` — instantiate `PinnedWebcamsPanel`.
 - `src/services/diagnostics/self-test-definitions.ts` (or wherever `standardSelfTestDefinitions` lives) — a webcam-sources probe.
@@ -40,6 +44,7 @@
 ## Task 1: Extend webcam types (health + streamType)
 
 **Files:**
+
 - Modify: `src/services/webcams/webcam-types.ts`
 
 - [ ] **Step 1: Add the health + stream types** (append to the file)
@@ -63,10 +68,13 @@ export type WebcamStreamType = 'hls' | 'mjpeg' | 'youtube' | 'embed' | 'snapshot
 - [ ] **Step 2: Extend `WebcamFeed` and `WebcamCatalog`**
 
 In `WebcamFeed` (after `streamUrl?`):
+
 ```ts
   streamType?: WebcamStreamType;
 ```
+
 In `WebcamCatalog` (after `lastUpdated`):
+
 ```ts
   sourceHealth?: WebcamSourceHealth[];
 ```
@@ -74,6 +82,7 @@ In `WebcamCatalog` (after `lastUpdated`):
 - [ ] **Step 3: Typecheck** — Run: `npm run typecheck:all` — Expected: 0 errors.
 
 - [ ] **Step 4: Commit**
+
 ```bash
 git add src/services/webcams/webcam-types.ts
 git commit -m "feat(webcams): add source-health + stream-type to webcam types"
@@ -86,6 +95,7 @@ git commit -m "feat(webcams): add source-health + stream-type to webcam types"
 The `/api/webcams` route already runs `Promise.allSettled(targets.map(...))`. Derive health per source from those results.
 
 **Files:**
+
 - Modify: `src-tauri/sidecar/local-api-server.mjs` (the `/api/webcams` handler, ~15859–15935)
 - Test: `src-tauri/sidecar/__tests__/webcam-source-health.test.mjs`
 
@@ -110,6 +120,7 @@ function deriveWebcamSourceHealth(targets, settled, keyedSources, now) {
 }
 module.exports.__deriveWebcamSourceHealth = deriveWebcamSourceHealth; // test seam (guard: only if module.exports exists)
 ```
+
 > If the sidecar is ESM (no `module.exports`), instead `export` the helper or place it in a small shared file the test can import. Check the file's module system first (`grep -m1 "module.exports\|export " src-tauri/sidecar/local-api-server.mjs`).
 
 - [ ] **Step 2: Write the failing test**
@@ -148,11 +159,14 @@ test('rate-limited classified', () => {
 - [ ] **Step 3: Run it (fails)** — Run: `node --test src-tauri/sidecar/__tests__/webcam-source-health.test.mjs` — Expected: FAIL (helper not exported / wrong logic).
 
 - [ ] **Step 4: Wire the helper into the route.** After the `const results = await Promise.allSettled(...)` line, build health and add it to the response. Define the keyed set once:
+
 ```js
 const KEYED_WEBCAM_SOURCES = new Set(['WINDY', 'NPS']); // extended-DOT keys handled inside dot-extended
 const sourceHealth = deriveWebcamSourceHealth(targets, results, KEYED_WEBCAM_SOURCES, Math.floor(Date.now() / 1000));
 ```
+
 Then change the response object from `{ feeds: allFeeds, count: allFeeds.length, updatedAt: ... }` to also include `sourceHealth`:
+
 ```js
 const result = { feeds: allFeeds, count: allFeeds.length, sourceHealth, updatedAt: Math.floor(Date.now() / 1000) };
 ```
@@ -160,6 +174,7 @@ const result = { feeds: allFeeds, count: allFeeds.length, sourceHealth, updatedA
 - [ ] **Step 5: Run the test (passes) + sidecar route tests** — `node --test src-tauri/sidecar/__tests__/webcam-source-health.test.mjs` (PASS) and `npm run test:sidecar 2>&1 | tail -3` (no new failures).
 
 - [ ] **Step 6: Commit**
+
 ```bash
 git add src-tauri/sidecar/local-api-server.mjs src-tauri/sidecar/__tests__/webcam-source-health.test.mjs
 git commit -m "feat(webcams): sidecar derives + returns per-source health"
@@ -172,6 +187,7 @@ git commit -m "feat(webcams): sidecar derives + returns per-source health"
 `USFS` is in the enum but has no endpoint. Add a curated-but-validated catalog (same pattern as volcano/coastal), registered as a subroute. (Phase 2 expands it.)
 
 **Files:**
+
 - Modify: `src-tauri/sidecar/local-api-server.mjs` (add `/api/webcams/usfs` handler + subroute entry)
 - Test: extend `src-tauri/sidecar/__tests__/webcam-source-health.test.mjs` or a new `usfs-catalog.test.mjs`
 
@@ -185,6 +201,7 @@ const USFS_CAMS = [
   // ... (curated list; validated at fetch in Step 2)
 ];
 ```
+
 > The exact USFS URLs are a feasibility item — the executing agent should source 10–20 known-public USFS/forest cams (USFS region pages, recreation.gov public cams) and put them here. The validation in Step 2 guarantees dead ones are dropped, so a partially-stale starter list is safe.
 
 - [ ] **Step 2: The handler validates + returns feeds** (drop unreachable URLs via a short HEAD with timeout, cached):
@@ -212,16 +229,19 @@ if (requestUrl.pathname === '/api/webcams/usfs') {
 ```
 
 - [ ] **Step 3: Register the subroute.** In the `/api/webcams` `subroutes` array, add:
+
 ```js
 { source: 'USFS', path: '/api/webcams/usfs', shape: 'feeds' },
 ```
 
 - [ ] **Step 4: Test the handler shape** (fixture: monkeypatch `fetchWithTimeout` to return ok/!ok and assert filtering). Add to the sidecar test file:
+
 ```js
 // asserts USFS_CAMS entries with a failing HEAD are dropped; passing ones map to feeds with source 'USFS'
 ```
 
 - [ ] **Step 5: Run + commit**
+
 ```bash
 node --check src-tauri/sidecar/local-api-server.mjs   # parses
 npm run test:sidecar 2>&1 | tail -3                    # no new failures
@@ -236,9 +256,11 @@ git commit -m "feat(webcams): implement USFS source (validated catalog)"
 Apply the same HEAD-validation to the three hardcoded sidecar catalogs so rotted URLs are dropped + reported (count shrinks honestly rather than showing broken images).
 
 **Files:**
+
 - Modify: `src-tauri/sidecar/local-api-server.mjs` (the `/api/webcams/volcano`, `/streamgauge`, `/coastal` handlers)
 
 - [ ] **Step 1: Extract a shared validator** (DRY) near the webcam handlers:
+
 ```js
 async function validateWebcamCatalog(cams, cacheKey, ttlMs) {
   const cached = getCached(cacheKey, ttlMs);
@@ -258,6 +280,7 @@ async function validateWebcamCatalog(cams, cacheKey, ttlMs) {
 - [ ] **Step 3: Verify** — `node --check ...` parses; `npm run test:sidecar 2>&1 | tail -3` no new failures; manual: `curl -s 127.0.0.1:46123/api/webcams/volcano | node -e "..."` returns feeds.
 
 - [ ] **Step 4: Commit**
+
 ```bash
 git add src-tauri/sidecar/local-api-server.mjs
 git commit -m "feat(webcams): validate volcano/stream/coastal/USFS catalogs at fetch (drop dead URLs)"
@@ -268,10 +291,12 @@ git commit -m "feat(webcams): validate volcano/stream/coastal/USFS catalogs at f
 ## Task 5: Renderer fetcher carries `sourceHealth`
 
 **Files:**
+
 - Modify: `src/services/webcams/fetcher.ts`
 - Test: `src/services/webcams/__tests__/webcam-health.test.mts`
 
 - [ ] **Step 1: Failing test** (parse a response with sourceHealth):
+
 ```ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -295,6 +320,7 @@ test('catalogFromResponse carries sourceHealth + builds bySource', () => {
 - [ ] **Step 4: Run (passes) + typecheck** — test PASS; `npm run typecheck:all` 0 errors.
 
 - [ ] **Step 5: Commit**
+
 ```bash
 git add src/services/webcams/fetcher.ts src/services/webcams/__tests__/webcam-health.test.mts
 git commit -m "feat(webcams): fetcher carries per-source health into the catalog"
@@ -305,9 +331,11 @@ git commit -m "feat(webcams): fetcher carries per-source health into the catalog
 ## Task 6: Source-health strip + missing-key CTA in the panel
 
 **Files:**
+
 - Modify: `src/components/UnifiedWebcamPanel.ts` (render a strip from `this.catalog.sourceHealth`)
 
 - [ ] **Step 1: Add a pure label helper** (testable) — create `src/services/webcams/health-view.ts`:
+
 ```ts
 import type { WebcamSourceHealth } from './webcam-types';
 const ENV_HINT: Partial<Record<string, string>> = { WINDY: 'WINDY_WEBCAMS_API_KEY', NPS: 'NPS_API_KEY' };
@@ -326,6 +354,7 @@ export function healthSummary(health: WebcamSourceHealth[]): { ok: number; degra
 - [ ] **Step 4: typecheck + eslint** — `npm run typecheck:all` (0); `npx eslint --quiet src/components/UnifiedWebcamPanel.ts src/services/webcams/health-view.ts` (0). If the panel trips pre-existing complexity rules, extract the strip HTML into a private `renderHealthStrip()` method.
 
 - [ ] **Step 5: Commit**
+
 ```bash
 git add src/components/UnifiedWebcamPanel.ts src/services/webcams/health-view.ts src/services/webcams/__tests__/health-view.test.mts
 git commit -m "feat(webcams): show source-health strip + missing-key CTA in the panel"
@@ -336,9 +365,11 @@ git commit -m "feat(webcams): show source-health strip + missing-key CTA in the 
 ## Task 7: Offline-probe exponential backoff
 
 **Files:**
+
 - Modify: `src/components/UnifiedWebcamPanel.ts` (the `probeVisibleFeeds` loop / `OFFLINE_REPROBE_INTERVAL_MS`)
 
 - [ ] **Step 1: Pure backoff helper** — create `src/services/webcams/probe-backoff.ts`:
+
 ```ts
 /** Next delay (ms) given consecutive failures: base*2^fails, capped, with ±20% jitter. */
 export function nextProbeDelay(fails: number, baseMs = 60_000, capMs = 15 * 60_000, rand = 0.5): number {
@@ -352,6 +383,7 @@ export function nextProbeDelay(fails: number, baseMs = 60_000, capMs = 15 * 60_0
 - [ ] **Step 3: Wire it** — track a per-host failure count; when a probe round has failures, schedule the next round via `nextProbeDelay(fails)` instead of the fixed interval; reset count on success.
 
 - [ ] **Step 4: typecheck + commit**
+
 ```bash
 git add src/services/webcams/probe-backoff.ts src/services/webcams/__tests__/probe-backoff.test.mts src/components/UnifiedWebcamPanel.ts
 git commit -m "feat(webcams): exponential backoff for offline probes"
@@ -362,6 +394,7 @@ git commit -m "feat(webcams): exponential backoff for offline probes"
 ## Task 8: YouTube live registry + validation
 
 **Files:**
+
 - Create: `src/services/webcams/youtube-live-registry.ts`
 - Modify: `src/components/LiveWebcamsPanel.ts` (import the registry instead of the inline 27 IDs)
 
@@ -372,6 +405,7 @@ git commit -m "feat(webcams): exponential backoff for offline probes"
 - [ ] **Step 3: Point the panel at it** — `LiveWebcamsPanel` imports `YOUTUBE_LIVE_FEEDS`/`feedsForRegion`; behaviour unchanged. (Live validation of channel liveness is a Phase-2 enhancement; this task just makes the list maintainable + testable.)
 
 - [ ] **Step 4: typecheck + commit**
+
 ```bash
 git add src/services/webcams/youtube-live-registry.ts src/services/webcams/__tests__/youtube-live-registry.test.mts src/components/LiveWebcamsPanel.ts
 git commit -m "feat(webcams): extract YouTube live feeds into a maintainable registry"
@@ -382,6 +416,7 @@ git commit -m "feat(webcams): extract YouTube live feeds into a maintainable reg
 ## Task 9: Fix the globe-layer over-filter
 
 **Files:**
+
 - Modify: `src/services/webcams/webcam-globe-layer.ts:16`
 
 - [ ] **Step 1:** Replace the hardcoded `const HIGH_SALIENCE = ['fire','volcano','coastal']` filter with a configurable option defaulting to **show all categories**, and only apply a salience subset when explicitly requested (e.g. an `options.salientOnly` flag, default `false`). Confirm the layer plots all feed categories.
@@ -389,6 +424,7 @@ git commit -m "feat(webcams): extract YouTube live feeds into a maintainable reg
 - [ ] **Step 2: typecheck** — `npm run typecheck:all` 0 errors.
 
 - [ ] **Step 3: Commit**
+
 ```bash
 git add src/services/webcams/webcam-globe-layer.ts
 git commit -m "fix(webcams): globe layer no longer drops 66% of cams by category"
@@ -399,6 +435,7 @@ git commit -m "fix(webcams): globe layer no longer drops 66% of cams by category
 ## Task 10: Restore pinning (any cam)
 
 **Files:**
+
 - Create: `src/services/webcams/pinned-store.ts` (feed-id keyed; NOT Windy-specific)
 - Create: `src/components/PinnedWebcamsPanel.ts`
 - Modify: `src/config/panels.ts` (register `pinned-webcams` + add to a `PANEL_CATEGORY_MAP` category)
@@ -406,6 +443,7 @@ git commit -m "fix(webcams): globe layer no longer drops 66% of cams by category
 - Modify: `src/components/UnifiedWebcamPanel.ts` (a "📌 Pin" action per cam card)
 
 - [ ] **Step 1: pinned-store (TDD).** Test `src/services/webcams/__tests__/pinned-store.test.mts`:
+
 ```ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -429,6 +467,7 @@ test('pin/unpin/isPinned round-trips for any feed id', () => {
 - [ ] **Step 6: Verify** — `npm run typecheck:all` (0); pinned-store test PASS; `npx eslint --quiet` on the new files (0).
 
 - [ ] **Step 7: Commit**
+
 ```bash
 git add src/services/webcams/pinned-store.ts src/components/PinnedWebcamsPanel.ts src/config/panels.ts src/app/panel-layout.ts src/components/UnifiedWebcamPanel.ts src/services/webcams/__tests__/pinned-store.test.mts
 git commit -m "feat(webcams): restore pinning for any cam (store + wired panel + pin action)"
@@ -439,11 +478,13 @@ git commit -m "feat(webcams): restore pinning for any cam (store + wired panel +
 ## Task 11: Webcam-source diagnostic probe
 
 **Files:**
+
 - Modify: wherever `standardSelfTestDefinitions(...)` is defined (grep: `grep -rl standardSelfTestDefinitions src/services`)
 
 - [ ] **Step 1:** Add a self-test probe `webcam-sources` that fetches `/api/webcams`, reads `sourceHealth`, and returns `pass` if ≥1 source is `ok`, `warn` if some are `missing_key`/`down`, `fail` if all down — with a message listing degraded sources. Follow the existing probe signature in that file.
 
 - [ ] **Step 2: typecheck + commit**
+
 ```bash
 git add <self-test-file>
 git commit -m "feat(webcams): add webcam-source health probe to diagnostics self-test"

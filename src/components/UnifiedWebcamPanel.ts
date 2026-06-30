@@ -34,6 +34,7 @@ const SOURCE_LABELS: Record<WebcamSource, string> = {
   CALTRANS: 'Caltrans',
   TFL: 'TfL',
   SINGAPORE: 'Singapore',
+  GEONET: 'GeoNet',
 };
 
 const CATEGORY_COLORS: Record<WebcamCategory, string> = {
@@ -323,6 +324,7 @@ export class UnifiedWebcamPanel extends Panel {
       'CALTRANS',
       'TFL',
       'SINGAPORE',
+      'GEONET',
       'ALERTWILDFIRE',
       'USGS_VOLCANO',
       'NPS',

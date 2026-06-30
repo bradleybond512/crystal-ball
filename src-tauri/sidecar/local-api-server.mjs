@@ -16097,6 +16097,7 @@ async function dispatch(requestUrl, req, routes, context) {
  { source: 'CALTRANS', path: '/api/webcams/caltrans', shape: 'feeds' },
  { source: 'TFL', path: '/api/webcams/tfl', shape: 'feeds' },
  { source: 'SINGAPORE', path: '/api/webcams/singapore', shape: 'feeds' },
+ { source: 'GEONET', path: '/api/webcams/geonet', shape: 'feeds' },
  ];
  const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
  const port = process.env.SIDECAR_PORT ?? '46123';
@@ -16424,6 +16425,39 @@ async function dispatch(requestUrl, req, routes, context) {
 
     const raw = extractWebcamFeeds('SINGAPORE', 'items.0.cameras', SG_MAP, 'traffic', 60, null, { attribution: 'Singapore LTA Traffic Images', country: 'SG', city: 'Singapore' }, [payload]);
     const feeds = await validateWebcamCatalog(raw, 'webcams:singapore:valid', 3 * 60 * 1000);
+    const result = { feeds, count: feeds.length };
+    setCached(cacheKey, result);
+    return json(result);
+  }
+
+  // ── GeoNet NZ volcano cams (all.json = list of FeatureCollections; [lat,lon] order) ──
+  if (requestUrl.pathname === '/api/webcams/geonet') {
+    const cacheKey = 'webcams-geonet';
+    const cached = getCached(cacheKey, 5 * 60 * 1000);
+    if (cached) return json(cached);
+
+    const r = await fetchWithTimeout('https://images.geonet.org.nz/volcano/cameras/all.json', {}, 15000);
+    if (!r.ok) throw new Error(`GeoNet HTTP ${r.status}`);
+    const allJson = await r.json();
+    const payloads = Array.isArray(allJson) ? allJson : [allJson];
+
+    const GEONET_IMAGE_BASE = 'https://images.geonet.org.nz/volcano/cameras/';
+    const GEONET_MAP = {
+      id: (row) => {
+        const img = row?.properties?.['latest-image-large'] ?? '';
+        return img.replace(/^latest\//, '').replace(/\.jpg$/, '') || 'cam';
+      },
+      name: 'properties.title',
+      lat: 'geometry.coordinates.0',
+      lon: 'geometry.coordinates.1',
+      snapshotUrl: (row) => {
+        const img = row?.properties?.['latest-image-large'] ?? '';
+        return img ? `${GEONET_IMAGE_BASE}${img}` : '';
+      },
+    };
+
+    const raw = extractWebcamFeeds('GEONET', 'features', GEONET_MAP, 'volcano', 300, null, { attribution: 'GeoNet NZ (CC-BY 3.0 NZ)', country: 'NZ' }, payloads);
+    const feeds = await validateWebcamCatalog(raw, 'webcams:geonet:valid', 5 * 60 * 1000);
     const result = { feeds, count: feeds.length };
     setCached(cacheKey, result);
     return json(result);

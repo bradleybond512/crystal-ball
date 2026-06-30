@@ -144,6 +144,7 @@
     "test:personal-resilience-panel": "tsx --test tests/components/personal-resilience-panel.test.mts",
     "test:strategic-self-improvement": "tsx --test src/services/diagnostics/__tests__/failure-prediction.test.mts src/services/governance/__tests__/policy-engine.test.mts src/services/governance/__tests__/model-governance.test.mts src/services/experiments/__tests__/experiment-manager.test.mts src/services/ops/__tests__/causal-attribution.test.mts src/services/ops/__tests__/trust-budget.test.mts src/services/ops/__tests__/playbook-engine.test.mts src/services/scenarios/__tests__/scenario-library.test.mts src/services/personal/__tests__/resilience-model.test.mts src/services/quality/__tests__/quality-debt.test.mts src/services/quality/__tests__/self-improvement-scheduler.test.mts",
     "test:feeds": "node scripts/validate-rss-feeds.mjs",
+    "test:tfr": "node --test src-tauri/sidecar/faa-tfrs.test.mjs",
     "test:sms": "node --test src-tauri/sidecar/sms-command-parser.test.mjs src-tauri/sidecar/sms-security.test.mjs src-tauri/sidecar/sms-response-formatter.test.mjs src-tauri/sidecar/__tests__/sms-auth.test.mjs",
     "test:mode": "tsx --test src/app/__tests__/mode-manager.test.mts",
     "test:supplychain": "tsx --test src/services/supplychain/__tests__/supply-chain-service.test.mts src/services/supplychain/__tests__/bdi-parse.test.mts",

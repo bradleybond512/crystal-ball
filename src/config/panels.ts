@@ -132,6 +132,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'nws-alerts': { name: 'NWS Hazard Alerts', enabled: true, priority: 1 },
   'faa-weather-cams': { name: 'FAA Weather Cams', enabled: true, priority: 1 },
   'unified-webcams': { name: 'Webcams', enabled: true, priority: 1 },
+  'pinned-webcams': { name: 'Pinned Webcams', enabled: true, priority: 2 },
   'tsunami-alerts': { name: 'Tsunami Alerts', enabled: true, priority: 2 },
   'tropical-cyclones': { name: 'Tropical Cyclones', enabled: true, priority: 2 },
   'food-insecurity': { name: 'Food Insecurity', enabled: true, priority: 2 },
@@ -1205,7 +1206,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   // All variants — essential panels
   core: {
  labelKey: 'header.panelCatCore',
- panelKeys: ['map', 'insights', 'strategic-posture', 'live-news', 'live-webcams', 'unified-webcams'],
+ panelKeys: ['map', 'insights', 'strategic-posture', 'live-news', 'live-webcams', 'unified-webcams', 'pinned-webcams'],
   },
 
   // Full (geopolitical) variant

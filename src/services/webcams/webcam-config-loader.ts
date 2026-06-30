@@ -16,8 +16,10 @@ export interface WebcamSourceConfig {
     name: Getter;
     lat: Getter;
     lon: Getter;
-    snapshotUrl: Derive<string>;
-    streamUrl?: Derive<string | undefined>;
+    /** Path string or function — always resolved against the row, not used as a literal. */
+    snapshotUrl: Getter;
+    /** Path string or function — always resolved against the row. Omit if no stream. */
+    streamUrl?: Getter;
     streamType?: Derive<WebcamStreamType | undefined>;
   };
   category: Derive<WebcamCategory>;
@@ -87,7 +89,7 @@ function resolveStreamFields(
   let streamType: WebcamStreamType | undefined;
 
   if (map.streamUrl) {
-    const raw = resolveDerive(map.streamUrl, row);
+    const raw = resolveGetter(map.streamUrl, row);
     if (typeof raw === 'string' && raw.length > 0) streamUrl = raw;
   }
 
@@ -113,7 +115,7 @@ function buildRowFeed(
   const rawName = resolveGetter(config.map.name, row);
   const rawLat = resolveGetter(config.map.lat, row);
   const rawLon = resolveGetter(config.map.lon, row);
-  const rawSnapshot = resolveDerive(config.map.snapshotUrl, row);
+  const rawSnapshot = resolveGetter(config.map.snapshotUrl, row);
 
   const lat = toCoord(rawLat);
   const lon = toCoord(rawLon);

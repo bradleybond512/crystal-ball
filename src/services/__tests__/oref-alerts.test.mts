@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isValidOrefAlertsResponse } from '../oref-alerts.ts';
+// Import from the worker-free oref-validate module, not oref-alerts.ts: the
+// latter transitively pulls in ml-worker's Vite-only `?worker` import, which
+// aborts this file at load time under tsx/node:test.
+import { isValidOrefAlertsResponse } from '../oref-validate.ts';
 
 // Round-5 audit: a 200 with a malformed body (alerts-less object / HTML) was cast
 // `as OrefAlertsResponse` and cached before any validation, so the bad object was

@@ -1,0 +1,78 @@
+[
+  {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "geometry": {
+          "crs": {
+            "type": "name",
+            "properties": {
+              "name": "EPSG:4326"
+            }
+          },
+          "type": "Point",
+          "coordinates": [
+            -39.16732,
+            175.48055
+          ]
+        },
+        "volcano-id": [
+          "ngauruhoe"
+        ],
+        "volcano-title": [
+          "Ngauruhoe"
+        ],
+        "properties": {
+          "latest-image-medium": "latest/m-ngauruhoe.jpg",
+          "title": "Ngauruhoe from West",
+          "latest-image-thumb": "latest/t-ngauruhoe.jpg",
+          "latest-timestamp": "11:10 am (NZST) 01 Jul 2026",
+          "height": 881,
+          "latest-image-large": "latest/ngauruhoe.jpg",
+          "azimuth": 84,
+          "ground": 4
+        },
+        "type": "Feature",
+        "id": "ngauruhoe"
+      }
+    ]
+  },
+  {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "geometry": {
+          "crs": {
+            "type": "name",
+            "properties": {
+              "name": "EPSG:4326"
+            }
+          },
+          "type": "Point",
+          "coordinates": [
+            -29.267332,
+            -177.907235
+          ]
+        },
+        "volcano-id": [
+          "kermadecislands"
+        ],
+        "volcano-title": [
+          "Kermadec Islands"
+        ],
+        "properties": {
+          "latest-image-medium": "latest/m-raoulisland.jpg",
+          "title": "Raoul Island",
+          "latest-image-thumb": "latest/t-raoulisland.jpg",
+          "latest-timestamp": "11:10 am (NZST) 01 Jul 2026",
+          "height": 490,
+          "latest-image-large": "latest/raoulisland.jpg",
+          "azimuth": 270,
+          "ground": 1.5
+        },
+        "type": "Feature",
+        "id": "raoulisland"
+      }
+    ]
+  }
+]

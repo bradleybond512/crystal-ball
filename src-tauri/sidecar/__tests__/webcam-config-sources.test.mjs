@@ -168,3 +168,40 @@ test('Singapore sidecar: numeric arrayPath items.0.cameras resolves correctly (c
   assert.equal(singaporeFeeds[1]?.id, 'SINGAPORE:2702');
   assert.equal(singaporeFeeds[2]?.id, 'SINGAPORE:2704');
 });
+
+// ── GeoNet (all.json = list of FeatureCollections; non-standard [lat,lon] order) ──
+
+const geonetFixture = require(path.join(fixturesDir, 'geonet-volcano.sample.json'));
+const GEONET_IMAGE_BASE = 'https://images.geonet.org.nz/volcano/cameras/';
+const GEONET_MAP = {
+  id: (row) => {
+    const img = row?.properties?.['latest-image-large'] ?? '';
+    return img.replace(/^latest\//, '').replace(/\.jpg$/, '') || 'cam';
+  },
+  name: 'properties.title',
+  lat: 'geometry.coordinates.0',
+  lon: 'geometry.coordinates.1',
+  snapshotUrl: (row) => {
+    const img = row?.properties?.['latest-image-large'] ?? '';
+    return img ? `${GEONET_IMAGE_BASE}${img}` : '';
+  },
+};
+// The fixture is itself the list of FeatureCollections → pass it directly as payloads.
+const geonetFeeds = extractWebcamFeeds('GEONET', 'features', GEONET_MAP, 'volcano', 300, null, { country: 'NZ' }, geonetFixture);
+
+test('GeoNet sidecar: 2 feeds across 2 FeatureCollections', () => {
+  assert.equal(geonetFeeds.length, 2);
+});
+
+test('GeoNet sidecar: [lat,lon] order — southern lat, near-antimeridian lon', () => {
+  for (const f of geonetFeeds) {
+    assert.ok(f.lat < -28 && f.lat > -48, `lat ${f.lat}`);
+    assert.ok(Math.abs(f.lon) > 160 && Math.abs(f.lon) <= 180, `lon ${f.lon}`);
+  }
+});
+
+test('GeoNet sidecar: snapshotUrl absolute under images.geonet.org.nz, ends .jpg', () => {
+  for (const f of geonetFeeds) {
+    assert.ok(f.snapshotUrl.startsWith(GEONET_IMAGE_BASE) && f.snapshotUrl.endsWith('.jpg'), f.snapshotUrl);
+  }
+});

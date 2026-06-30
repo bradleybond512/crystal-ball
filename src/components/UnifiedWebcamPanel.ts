@@ -1,7 +1,7 @@
 /* eslint-disable sonarjs/no-async-constructor */
 import { Panel } from './Panel';
 import { fetchUnifiedWebcams, getFavoriteIds, toggleFavorite } from '@/services/webcams/fetcher';
-import { isPinned, togglePin } from '@/services/webcams/pinned-store';
+import { isPinned, togglePin, onPinnedChange } from '@/services/webcams/pinned-store';
 import {
   CATEGORY_MARKER_COLOR,
   OFFLINE_PROBE_TIMEOUT_MS,
@@ -61,6 +61,7 @@ export class UnifiedWebcamPanel extends Panel {
   private smokeStatus = new Map<string, { analysis: SmokeAnalysis; ranAt: number }>();
   private smokeDetectEnabled = true;
   private toastEl: HTMLElement | null = null;
+  private unsubscribePinned: (() => void) | null = null;
 
   constructor() {
     super({ id: 'unified-webcams', title: 'Webcams', className: 'panel-wide' });
@@ -70,6 +71,7 @@ export class UnifiedWebcamPanel extends Panel {
     this.smokeDetectTimer = setInterval(() => {
       void this.runSmokeDetectForFireCams();
     }, SMOKE_DETECT_INTERVAL_MS);
+    this.unsubscribePinned = onPinnedChange(() => this.render());
   }
 
   public destroy(): void {
@@ -81,6 +83,8 @@ export class UnifiedWebcamPanel extends Panel {
       clearInterval(this.smokeDetectTimer);
       this.smokeDetectTimer = null;
     }
+    this.unsubscribePinned?.();
+    this.unsubscribePinned = null;
     window.removeEventListener('webcam:select', this.handleGlobeSelect as EventListener);
     super.destroy();
   }

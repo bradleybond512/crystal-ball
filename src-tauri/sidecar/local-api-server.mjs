@@ -4151,7 +4151,7 @@ function setCached(key, data, ttlMs) {
 // keyedSources: Set of source names that require an API key
 // now: unix epoch seconds
 export function deriveWebcamSourceHealth(targets, settled, keyedSources, now) {
-  return targets.map((sub, i) => {
+  const rows = targets.map((sub, i) => {
     const r = settled[i];
     const needsKey = keyedSources.has(sub.source);
     if (r.status === 'rejected') {
@@ -4163,6 +4163,24 @@ export function deriveWebcamSourceHealth(targets, settled, keyedSources, now) {
     const feeds = Array.isArray(r.value) ? r.value : [];
     return { source: sub.source, status: feeds.length > 0 ? 'ok' : 'empty', count: feeds.length, needsKey, lastChecked: now };
   });
+  // A source can expose multiple subroutes (e.g. DOT511). Merge into one row per
+  // source: feeds win over failures, counts sum, the most actionable failure shows.
+  const SEVERITY = { ok: 0, missing_key: 1, down: 2, rate_limited: 3, empty: 4 };
+  const merged = new Map();
+  for (const row of rows) {
+    const prev = merged.get(row.source);
+    if (!prev) { merged.set(row.source, { ...row }); continue; }
+    const winner = SEVERITY[row.status] < SEVERITY[prev.status] ? row : prev;
+    merged.set(row.source, {
+      source: row.source,
+      status: winner.status,
+      count: prev.count + row.count,
+      needsKey: prev.needsKey || row.needsKey,
+      ...(winner.error ? { error: winner.error } : {}),
+      lastChecked: now,
+    });
+  }
+  return [...merged.values()];
 }
 
 // HEAD-validates snapshot URLs in a static catalog, drops unreachable ones, caches result.
@@ -4170,10 +4188,18 @@ async function validateWebcamCatalog(cams, cacheKey, ttlMs) {
   const cached = getCached(cacheKey, ttlMs);
   if (cached) return cached;
   const checked = await Promise.all(cams.map(async (c) => {
-    try { const r = await fetchWithTimeout(c.snapshotUrl, { method: 'HEAD' }, 4000); return r.ok ? c : null; }
+    try {
+      const r = await fetchWithTimeout(c.snapshotUrl, { method: 'HEAD' }, 4000);
+      // 403/405 usually mean "HEAD not allowed", not a dead cam — keep it.
+      return (r.ok || r.status === 403 || r.status === 405) ? c : null;
+    }
     catch { return null; }
   }));
   const feeds = checked.filter(Boolean);
+  // A transient network blip can make every HEAD fail. Don't poison the cache
+  // with an empty result or blank the source for the full TTL: serve the last
+  // good cache if present, else the raw static catalog, and don't cache it.
+  if (feeds.length === 0) return getCachedStale(cacheKey) ?? cams;
   setCached(cacheKey, feeds, ttlMs);
   return feeds;
 }
@@ -15993,8 +16019,13 @@ async function dispatch(requestUrl, req, routes, context) {
  const results = await Promise.allSettled(targets.map(async (sub) => {
  try {
  const r = await fetchWithTimeout(`${baseUrl}${sub.path}`, { headers: { Accept: 'application/json' } }, 20000);
- if (!r.ok) return [];
- const data = await r.json();
+ let data = null;
+ try { data = await r.json(); } catch { data = null; }
+ // Surface the failure as a rejection so deriveWebcamSourceHealth can classify
+ // it (missing_key / rate_limited / down) instead of it collapsing to "empty".
+ if (!r.ok) {
+ throw new Error(data?.requiresKey === true ? `missing key (HTTP ${r.status})` : `HTTP ${r.status}`);
+ }
  if (sub.shape === 'feeds') return Array.isArray(data?.feeds) ? data.feeds : [];
  if (sub.shape === 'cameras') {
  // DOT/Caltrans: legacy { cameras: [{id, title, state, lat, lon, imageUrl}] }
@@ -16029,8 +16060,8 @@ async function dispatch(requestUrl, req, routes, context) {
  }));
  }
  return [];
- } catch {
- return [];
+ } catch (error) {
+ throw error instanceof Error ? error : new Error(String(error));
  }
  }));
  const KEYED_WEBCAM_SOURCES = new Set(['WINDY', 'NPS']);

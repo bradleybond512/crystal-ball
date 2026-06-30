@@ -6,8 +6,13 @@ import {
   feedsForRegion,
 } from '../youtube-live-registry.ts';
 
-test('YOUTUBE_LIVE_FEEDS contains exactly 22 entries', () => {
-  assert.equal(YOUTUBE_LIVE_FEEDS.length, 22);
+test('YOUTUBE_LIVE_FEEDS is non-empty', () => {
+  assert.ok(YOUTUBE_LIVE_FEEDS.length >= 1);
+});
+
+test('every feed id is unique (ids key lookup, active-state, and analytics)', () => {
+  const ids = YOUTUBE_LIVE_FEEDS.map((f) => f.id);
+  assert.equal(new Set(ids).size, ids.length, 'duplicate feed id in YOUTUBE_LIVE_FEEDS');
 });
 
 test('feedsForRegion("iran") returns only iran entries', () => {

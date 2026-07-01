@@ -58,3 +58,57 @@ test('emsc-seismic is registered as an independent earthquake source', () => {
   // USGS + EMSC must read as 2 independent groups (drives corroboration 0.8).
   assert.equal(independentGroupsFor(['usgs-earthquakes', 'emsc-seismic']).size, 2);
 });
+
+// ── Intel Expansion Cluster 1 ─────────────────────────────────────────────────
+
+test('Intel Cluster 1: all 4 new provider ids are registered', () => {
+  const ids = ['feodo-abuse-ch', 'threatfox-abuse-ch', 'urlhaus-abuse-ch', 'frankfurter-fx'];
+  for (const id of ids) {
+    assert.ok(getProviderDefinition(id), `${id} must be registered`);
+  }
+});
+
+test('Intel Cluster 1: abuse.ch trio share a single independence group', () => {
+  // All three are operated by abuse.ch — one upstream, not three independent votes.
+  const groups = independentGroupsFor(['feodo-abuse-ch', 'threatfox-abuse-ch', 'urlhaus-abuse-ch']);
+  assert.equal(groups.size, 1, 'abuse.ch trio must collapse to 1 independence group');
+  assert.ok(groups.has('abuse-ch'));
+});
+
+test('Intel Cluster 1: abuse.ch trio are all cyber_threat domain', () => {
+  const trio = ['feodo-abuse-ch', 'threatfox-abuse-ch', 'urlhaus-abuse-ch'];
+  for (const id of trio) {
+    const def = getProviderDefinition(id)!;
+    assert.equal(def.domain, 'cyber_threat', `${id} must be domain cyber_threat`);
+    assert.equal(def.authType, 'none', `${id} must be keyless`);
+    assert.equal(def.freshnessTtlMs, 10 * 60 * 1000, `${id} TTL must be 10 min`);
+    assert.ok(def.reliabilityWeight >= 0.7 && def.reliabilityWeight <= 1.0);
+  }
+});
+
+test('Intel Cluster 1: frankfurter-fx is fx domain with ecb-fx independence group', () => {
+  const fx = getProviderDefinition('frankfurter-fx')!;
+  assert.ok(fx, 'frankfurter-fx must be registered');
+  assert.equal(fx.domain, 'fx');
+  assert.equal(fx.independenceGroup, 'ecb-fx');
+  assert.equal(fx.authType, 'none');
+  // ~12h TTL
+  assert.equal(fx.freshnessTtlMs, 12 * 60 * 60 * 1000);
+  assert.ok(fx.reliabilityWeight >= 0.8);
+});
+
+test('Intel Cluster 1: abuse.ch trio independence group is separate from frankfurter', () => {
+  const allFour = independentGroupsFor([
+    'feodo-abuse-ch', 'threatfox-abuse-ch', 'urlhaus-abuse-ch', 'frankfurter-fx',
+  ]);
+  // abuse-ch (1 group) + ecb-fx (1 group) = 2 total
+  assert.equal(allFour.size, 2);
+});
+
+test('Intel Cluster 1: cyber_threat domain providers sort by fallbackPriority', () => {
+  const cyberThreat = providersForDomain('cyber_threat');
+  assert.ok(cyberThreat.length >= 3, 'cyber_threat must have at least 3 providers');
+  for (let i = 1; i < cyberThreat.length; i++) {
+    assert.ok(cyberThreat[i].fallbackPriority >= cyberThreat[i - 1].fallbackPriority);
+  }
+});

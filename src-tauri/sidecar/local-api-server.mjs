@@ -16741,6 +16741,80 @@ async function dispatch(requestUrl, req, routes, context) {
  return json({ active, updatedAt: Math.floor(Date.now() / 1000) });
   }
 
+  // ── Intel Expansion Cluster 1 ─────────────────────────────────────────────
+  // abuse.ch cyber trio + Frankfurter FX — all keyless, loopback-only proxies.
+  // Cache keys are short strings that don't collide with existing entries.
+  // Only successful fetches are cached; error responses are NOT persisted so
+  // the next caller retries rather than serving a stale failure for the TTL.
+
+  // GET /api/cyber-c2 — Feodo Tracker C2 IP blocklist (10 min cache)
+  if (requestUrl.pathname === '/api/cyber-c2' && req.method === 'GET') {
+ const FEODO_TTL = 10 * 60 * 1000;
+ const FEODO_URL = 'https://feodotracker.abuse.ch/downloads/ipblocklist.json';
+ const cached = getCached('feodo-c2', FEODO_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(FEODO_URL, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ entries: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `feodo upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const entries = parseFeodoIpBlocklist(raw);
+ const result = { entries, count: entries.length, fetchedAt: Date.now(), degraded: false };
+ setCached('feodo-c2', result, FEODO_TTL);
+ return json(result);
+  }
+
+  // GET /api/cyber-iocs — ThreatFox recent IOCs (10 min cache)
+  if (requestUrl.pathname === '/api/cyber-iocs' && req.method === 'GET') {
+ const TFOX_TTL = 10 * 60 * 1000;
+ const TFOX_URL = 'https://threatfox.abuse.ch/export/csv/recent/';
+ const cached = getCached('threatfox-iocs', TFOX_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(TFOX_URL, { headers: { Accept: 'text/csv, text/plain', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ entries: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `threatfox upstream ${r.status}` }, 502);
+ const text = await r.text();
+ const entries = parseThreatFoxCsv(text);
+ const result = { entries, count: entries.length, fetchedAt: Date.now(), degraded: false };
+ setCached('threatfox-iocs', result, TFOX_TTL);
+ return json(result);
+  }
+
+  // GET /api/malware-urls — URLhaus recent malware URLs (10 min cache)
+  if (requestUrl.pathname === '/api/malware-urls' && req.method === 'GET') {
+ const URLHAUS_TTL = 10 * 60 * 1000;
+ const URLHAUS_URL = 'https://urlhaus.abuse.ch/downloads/csv_recent/';
+ const cached = getCached('urlhaus-urls', URLHAUS_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(URLHAUS_URL, { headers: { Accept: 'text/csv, text/plain', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ entries: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `urlhaus upstream ${r.status}` }, 502);
+ const text = await r.text();
+ const entries = parseUrlhausCsv(text);
+ const result = { entries, count: entries.length, fetchedAt: Date.now(), degraded: false };
+ setCached('urlhaus-urls', result, URLHAUS_TTL);
+ return json(result);
+  }
+
+  // GET /api/fx-rates — Frankfurter FX latest rates (~12h cache)
+  // Accepts ?base=USD&symbols=EUR,GBP (forwarded to upstream).
+  // Default base is USD when not specified.
+  if (requestUrl.pathname === '/api/fx-rates' && req.method === 'GET') {
+ const FX_TTL = 12 * 60 * 60 * 1000;
+ const base = requestUrl.searchParams.get('base') || 'USD';
+ const symbols = requestUrl.searchParams.get('symbols') || '';
+ // Cache key per base+symbols combo so different callers get their own slot.
+ const cacheKey = `frankfurter-fx:${base}:${symbols}`;
+ const cached = getCached(cacheKey, FX_TTL);
+ if (cached) return json(cached);
+ let upstreamUrl = `https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(base)}`;
+ if (symbols) upstreamUrl += `&symbols=${encodeURIComponent(symbols)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ base, date: null, rates: {}, fetchedAt: Date.now(), degraded: true, reason: `frankfurter upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const parsed = parseFrankfurterRates(raw);
+ if (!parsed) return json({ base, date: null, rates: {}, fetchedAt: Date.now(), degraded: true, reason: 'frankfurter parse error' }, 502);
+ const result = { ...parsed, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, FX_TTL);
+ return json(result);
+  }
+
   if (context.cloudFallback && cloudPreferred.has(requestUrl.pathname)) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context);
  if (cloudResponse) return cloudResponse;
@@ -17036,6 +17110,176 @@ export function shakemapAvailabilityLabelSidecar(hasShakemap) {
 
 export function recentEventsSidecar(features, nowMs, days) {
   return filterRecentM45PlusSidecar(features, nowMs, days);
+}
+
+// ── Intel Expansion Cluster 1: abuse.ch trio + Frankfurter FX ───────────────
+//
+// Shared quoted-CSV parser used by ThreatFox and URLhaus.
+// Handles:
+//   • \r\n and \n line endings.
+//   • Lines beginning with '#' (comment/header) — skipped.
+//   • RFC 4180-style quoted fields: commas inside quotes, doubled quotes.
+//   • Optional whitespace between comma and quote (ThreatFox `, "field"` style).
+//   • Both quoted and unquoted header lines inside # comments (URLhaus uses
+//     unquoted: `# id,dateadded,...`; ThreatFox uses quoted: `# "col","col"`).
+// Returns an array of objects keyed by the column names from the first
+// non-comment line that starts with '#' and contains a comma.
+export function parseAbuseCsv(text) {
+  const lines = text.split(/\r?\n/);
+  const dataLines = [];
+  let headerLine = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('#')) {
+      // The abuse.ch data header is a comment containing the column names.
+      // ThreatFox: # "first_seen_utc","ioc_id",...   (quoted)
+      // URLhaus:   # id,dateadded,...                 (unquoted)
+      // Detect by: starts with '#' AND contains a comma.
+      const inner = trimmed.slice(1).trim();
+      if (inner.includes(',') && headerLine === null) {
+        headerLine = inner;
+      }
+      continue;
+    }
+    dataLines.push(trimmed);
+  }
+
+  if (!headerLine && dataLines.length > 0) {
+    // No comment-header found; treat first data line as the header.
+    headerLine = dataLines.shift();
+  }
+  if (!headerLine) return [];
+
+  const headers = parseCsvRow(headerLine).map(h => h.trim());
+  return dataLines.map(line => {
+    const values = parseCsvRow(line);
+    const obj = {};
+    for (const [i, header] of headers.entries()) {
+      obj[header] = values[i] ?? '';
+    }
+    return obj;
+  });
+}
+
+// Parse one CSV row into an array of field strings, respecting RFC 4180 quoting.
+// Also handles optional whitespace before a quoted field (ThreatFox style: `, "val"`).
+// A trailing comma produces a trailing empty string field.
+export function parseCsvRow(line) {
+  const fields = [];
+  let i = 0;
+  while (i <= line.length) {
+    // Skip optional whitespace before field (handles `, "value"` style)
+    let j = i;
+    while (j < line.length && line[j] === ' ') j++;
+
+    if (j < line.length && line[j] === '"') {
+      // Quoted field — start after opening quote
+      i = j + 1;
+      let val = '';
+      while (i < line.length) {
+        if (line[i] === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            val += '"';
+            i += 2;
+          } else {
+            i++; // skip closing quote
+            break;
+          }
+        } else {
+          val += line[i++];
+        }
+      }
+      fields.push(val);
+      // skip optional whitespace then comma
+      while (i < line.length && line[i] === ' ') i++;
+      if (i < line.length && line[i] === ',') i++;
+      else break; // end of line
+    } else {
+      // Unquoted field (also handles trailing comma → empty field)
+      const end = line.indexOf(',', i);
+      if (end === -1) {
+        fields.push(line.slice(i));
+        break;
+      } else {
+        fields.push(line.slice(i, end));
+        i = end + 1;
+        // If comma was the last char, push trailing empty field
+        if (i === line.length) {
+          fields.push('');
+          break;
+        }
+      }
+    }
+  }
+  return fields;
+}
+
+// ── Feodo Tracker (C2 IP blocklist) parser ───────────────────────────────────
+// Input: parsed JSON array from feodotracker.abuse.ch/downloads/ipblocklist.json
+// Output: normalized array; entries missing ip_address are dropped.
+export function parseFeodoIpBlocklist(rawArray) {
+  if (!Array.isArray(rawArray)) return [];
+  return rawArray
+    .filter(e => typeof e?.ip_address === 'string' && e.ip_address.length > 0)
+    .map(e => ({
+      ip: e.ip_address,
+      port: typeof e.port === 'number' ? e.port : (parseInt(e.port, 10) || null),
+      malware: e.malware ?? null,
+      asn: e.as_number ?? null,
+      asName: e.as_name ?? null,
+      country: e.country ?? null,
+      status: e.status ?? null,
+      firstSeen: e.first_seen ?? null,
+      lastOnline: e.last_online ?? null,
+    }));
+}
+
+// ── ThreatFox (IOC feed) parser ──────────────────────────────────────────────
+// Input: raw CSV text from threatfox.abuse.ch/export/csv/recent/
+// Output: normalized array.
+export function parseThreatFoxCsv(csvText) {
+  const rows = parseAbuseCsv(csvText);
+  return rows.map(r => ({
+    id: r['ioc_id'] ?? r['id'] ?? '',
+    iocValue: r['ioc_value'] ?? '',
+    iocType: r['ioc_type'] ?? '',
+    threatType: r['threat_type'] ?? '',
+    malware: r['malware_printable'] ?? r['fk_malware'] ?? '',
+    confidence: parseInt(r['confidence_level'] ?? '0', 10) || 0,
+    firstSeen: r['first_seen_utc'] ?? '',
+    tags: (r['tags'] ?? '').split(',').map(t => t.trim()).filter(Boolean),
+  }));
+}
+
+// ── URLhaus (malware URL feed) parser ────────────────────────────────────────
+// Input: raw CSV text from urlhaus.abuse.ch/downloads/csv_recent/
+// Output: normalized array.
+export function parseUrlhausCsv(csvText) {
+  const rows = parseAbuseCsv(csvText);
+  return rows.map(r => ({
+    id: r['id'] ?? '',
+    url: r['url'] ?? '',
+    status: r['url_status'] ?? '',
+    threat: r['threat'] ?? '',
+    tags: (r['tags'] ?? '').split(',').map(t => t.trim()).filter(Boolean),
+    dateAdded: r['dateadded'] ?? '',
+    reporter: r['reporter'] ?? '',
+  }));
+}
+
+// ── Frankfurter FX parser ────────────────────────────────────────────────────
+// Input: parsed JSON from api.frankfurter.dev/v1/latest?base=USD
+// Output: normalized { base, date, rates } or null if malformed.
+export function parseFrankfurterRates(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.base !== 'string' || typeof raw.rates !== 'object') return null;
+  return {
+    base: raw.base,
+    date: raw.date ?? null,
+    rates: raw.rates,
+  };
 }
 
 export async function createLocalApiServer(options = {}) {

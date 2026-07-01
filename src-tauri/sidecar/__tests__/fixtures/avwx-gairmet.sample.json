@@ -1,0 +1,194 @@
+[
+  {
+    "tag": "2E",
+    "forecastHour": 6,
+    "validTime": "2026-07-01T15:00:00.000Z",
+    "hazard": "MT_OBSC",
+    "geometryType": "AREA",
+    "latlonpairs": 8,
+    "frequency": null,
+    "severity": null,
+    "due_to": "MTNS OBSC BY CLDS PCPN FG",
+    "status": "AMD",
+    "top": null,
+    "base": null,
+    "fzltop": null,
+    "fzlbase": null,
+    "level": null,
+    "receiptTime": 1782907960,
+    "issueTime": 1782907920,
+    "expireTime": 1782918000,
+    "product": "SIERRA",
+    "geom": "AREA",
+    "coords": [
+      {
+        "lat": "47.57",
+        "lon": "-69.18"
+      },
+      {
+        "lat": "45.47",
+        "lon": "-68.40"
+      },
+      {
+        "lat": "43.72",
+        "lon": "-70.58"
+      },
+      {
+        "lat": "43.89",
+        "lon": "-72.15"
+      },
+      {
+        "lat": "44.37",
+        "lon": "-73.16"
+      },
+      {
+        "lat": "44.95",
+        "lon": "-73.12"
+      },
+      {
+        "lat": "45.36",
+        "lon": "-71.44"
+      },
+      {
+        "lat": "47.57",
+        "lon": "-69.18"
+      }
+    ]
+  },
+  {
+    "tag": "1E",
+    "forecastHour": 6,
+    "validTime": "2026-07-01T15:00:00.000Z",
+    "hazard": "IFR",
+    "geometryType": "AREA",
+    "latlonpairs": 13,
+    "frequency": null,
+    "severity": null,
+    "due_to": "CIG BLW 010 VIS BLW 3SM BR FG",
+    "status": "NRML",
+    "top": null,
+    "base": null,
+    "fzltop": null,
+    "fzlbase": null,
+    "level": null,
+    "receiptTime": 1782907960,
+    "issueTime": 1782907920,
+    "expireTime": 1782918000,
+    "product": "SIERRA",
+    "geom": "AREA",
+    "coords": [
+      {
+        "lat": "37.42",
+        "lon": "-122.44"
+      },
+      {
+        "lat": "36.76",
+        "lon": "-121.53"
+      },
+      {
+        "lat": "35.62",
+        "lon": "-120.82"
+      },
+      {
+        "lat": "34.59",
+        "lon": "-120.54"
+      },
+      {
+        "lat": "34.03",
+        "lon": "-119.50"
+      },
+      {
+        "lat": "33.54",
+        "lon": "-118.70"
+      },
+      {
+        "lat": "32.85",
+        "lon": "-119.40"
+      },
+      {
+        "lat": "32.92",
+        "lon": "-121.14"
+      },
+      {
+        "lat": "33.54",
+        "lon": "-122.26"
+      },
+      {
+        "lat": "34.02",
+        "lon": "-122.68"
+      },
+      {
+        "lat": "36.33",
+        "lon": "-123.81"
+      },
+      {
+        "lat": "37.17",
+        "lon": "-123.43"
+      },
+      {
+        "lat": "37.42",
+        "lon": "-122.44"
+      }
+    ]
+  },
+  {
+    "tag": "4E",
+    "forecastHour": 6,
+    "validTime": "2026-07-01T15:00:00.000Z",
+    "hazard": "MT_OBSC",
+    "geometryType": "AREA",
+    "latlonpairs": 9,
+    "frequency": null,
+    "severity": null,
+    "due_to": "BR FG",
+    "status": "AMD",
+    "top": null,
+    "base": null,
+    "fzltop": null,
+    "fzlbase": null,
+    "level": null,
+    "receiptTime": 1782907960,
+    "issueTime": 1782907920,
+    "expireTime": 1782918000,
+    "product": "SIERRA",
+    "geom": "AREA",
+    "coords": [
+      {
+        "lat": "35.78",
+        "lon": "-120.32"
+      },
+      {
+        "lat": "34.73",
+        "lon": "-119.38"
+      },
+      {
+        "lat": "34.28",
+        "lon": "-117.29"
+      },
+      {
+        "lat": "32.49",
+        "lon": "-116.30"
+      },
+      {
+        "lat": "32.56",
+        "lon": "-117.31"
+      },
+      {
+        "lat": "33.73",
+        "lon": "-118.48"
+      },
+      {
+        "lat": "34.31",
+        "lon": "-120.71"
+      },
+      {
+        "lat": "35.53",
+        "lon": "-121.45"
+      },
+      {
+        "lat": "35.78",
+        "lon": "-120.32"
+      }
+    ]
+  }
+]

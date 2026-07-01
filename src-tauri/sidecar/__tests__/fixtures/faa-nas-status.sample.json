@@ -1,0 +1,119 @@
+[
+  {
+    "airportId": "EWR",
+    "groundStop": null,
+    "groundDelay": null,
+    "airportClosure": null,
+    "freeForm": {
+      "id": "44b8e879-f780-4198-a3f1-3b77102a623b",
+      "airportId": "EWR",
+      "createdAt": null,
+      "updatedAt": "2026-06-03T14:45:25Z",
+      "startTime": "2026-06-06T04:00:00Z",
+      "endTime": "2026-07-20T03:59:00Z",
+      "simpleText": "!EWR 06/034 EWR AD AP CLSD TO TRANSIENT GA ACFT EXC 24HR PPR 973-624-1660 2606060400-2607200359",
+      "text": "TO TRANSIENT GA ACFT EXC 24HR PPR 973-624-1660",
+      "notamNumber": 34,
+      "issuedDate": "2026-06-03T14:42:00Z"
+    },
+    "arrivalDelay": null,
+    "departureDelay": null,
+    "airportConfig": {
+      "id": "4f3ef9f6-da74-4406-a3a4-12b3c27206a4",
+      "createdAt": "2026-07-01T10:40:37Z",
+      "airportId": "EWR",
+      "arrivalRunwayConfig": "22L",
+      "departureRunwayConfig": "22R",
+      "arrivalRate": 36,
+      "sourceTimeStamp": "2026-07-01T10:40:37Z"
+    },
+    "deicing": null,
+    "airportLongName": "Newark International",
+    "latitude": "40.6895",
+    "longitude": "-74.1745"
+  },
+  {
+    "airportId": "MSP",
+    "groundStop": null,
+    "groundDelay": null,
+    "airportClosure": null,
+    "freeForm": null,
+    "arrivalDelay": null,
+    "departureDelay": {
+      "airportId": "MSP",
+      "reason": "WX:Thunderstorms",
+      "arrivalDeparture": {
+        "type": "Departure",
+        "min": "16 minutes",
+        "max": "30 minutes",
+        "trend": "Increasing"
+      },
+      "updateTime": "2026-07-01T12:45:00Z",
+      "averageDelay": "15",
+      "trend": "increasing"
+    },
+    "airportConfig": {
+      "id": "f5f6b9f6-f62f-4b41-9eeb-8584cbba5fd9",
+      "createdAt": "2026-07-01T13:43:20Z",
+      "airportId": "MSP",
+      "arrivalRunwayConfig": "12L/12R",
+      "departureRunwayConfig": "12L/12R/17",
+      "arrivalRate": 62,
+      "sourceTimeStamp": "2026-07-01T13:43:20Z"
+    },
+    "deicing": null,
+    "airportLongName": "Minneapolis-St Paul International/Wold-Chamberlain",
+    "latitude": "44.8848",
+    "longitude": "-93.2223"
+  },
+  {
+    "airportId": "SFO",
+    "groundStop": null,
+    "groundDelay": {
+      "id": "10155254-b4d6-4e3f-a515-9a6cfa9904e0",
+      "createdAt": "2026-07-01T12:40:09Z",
+      "airportId": "SFO",
+      "sourceTimeStamp": "2026-07-01T12:39:06Z",
+      "updatedAt": "2026-07-01T12:40:09Z",
+      "impactingCondition": "low ceilings",
+      "avgDelay": 44.0,
+      "maxDelay": 97,
+      "startTime": "2026-07-01T15:15:00Z",
+      "endTime": "2026-07-01T22:59:00Z",
+      "center": "ZOA",
+      "advisoryUrl": "https://www.fly.faa.gov/adv/adv_otherdis.jsp?advn=27&adv_date=07012026&facId=SFO&title=ATCSCC ADVZY 027 SFO/ZOA 07/01/2026 CDM GROUND DELAY PROGRAM&titleDate=07/01/2026",
+      "departureScope": 1625.0,
+      "includedFacilities": [
+        "CYYJ",
+        "CYVR",
+        "CYLW",
+        "CYYC",
+        "CYEG"
+      ],
+      "fuelFlowAdvisoryDelayTime": null,
+      "includedFlights": ": ALL CONTIGUOUS US DEP",
+      "fadtParamType": "GDP",
+      "gsCancelReceivedTs": null,
+      "gsCancelSourceTs": null,
+      "compression": false,
+      "blanket": false
+    },
+    "airportClosure": null,
+    "freeForm": null,
+    "arrivalDelay": null,
+    "departureDelay": null,
+    "airportConfig": {
+      "id": "7bfd4f11-8dce-415b-91f0-c5481fbb660d",
+      "createdAt": "2026-07-01T12:09:22Z",
+      "airportId": "SFO",
+      "arrivalRunwayConfig": "28L/28R NOISE",
+      "departureRunwayConfig": "28L/28R",
+      "arrivalRate": 30,
+      "sourceTimeStamp": "2026-07-01T12:09:21Z"
+    },
+    "deicing": null,
+    "airportLongName": "San Francisco International",
+    "latitude": "37.6213",
+    "longitude": "-122.3790"
+  }
+]

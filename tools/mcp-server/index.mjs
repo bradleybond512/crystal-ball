@@ -9,6 +9,7 @@ import { makeIntelligenceTools, schemas as intelligenceSchemas } from './tools/i
 import { makeStatefulTools, schemas as statefulSchemas } from './tools/stateful.mjs';
 import { makeAnalystTools, schemas as analystSchemas } from './tools/analyst.mjs';
 import { makeHelpTools, schemas as helpSchemas } from './tools/help.mjs';
+import { makeIntelExpansionTools } from './tools/intel-expansion.mjs';
 import { createStorage } from './storage.mjs';
 
 const client = createSidecarClient();
@@ -20,6 +21,7 @@ const intelligence = makeIntelligenceTools(client, storage);
 const stateful = makeStatefulTools(client, storage);
 const analyst = makeAnalystTools(client);
 const helpTools = makeHelpTools();
+const intelExpansion = makeIntelExpansionTools(client);
 
 const server = new McpServer(
   { name: 'crystalball', version: '0.2.0' },
@@ -228,6 +230,80 @@ server.registerTool('run_skeptic_now', analystSchemas.run_skeptic_now, async (ar
 server.registerTool('get_reasoning_debug_log', analystSchemas.get_reasoning_debug_log, async (args) => textResult(await analyst.get_reasoning_debug_log(args)));
 
 server.registerTool('get_reasoning_metrics', analystSchemas.get_reasoning_metrics, async (args) => textResult(await analyst.get_reasoning_metrics(args)));
+
+// ---- Intel Expansion Tools (16 new sources) ----
+
+server.registerTool('get_cyber_threats', {
+  description: 'Cyber threat feeds: C2 server IPs, IOC indicators, and malware URLs. Use kind to filter to one feed or fetch all three at once.',
+  inputSchema: z.object({
+    kind: z.enum(['c2', 'iocs', 'urls', 'all']).optional().describe('Which feed(s): c2, iocs, urls, or all (default all)'),
+  }),
+}, async (args) => textResult(await intelExpansion.get_cyber_threats(args)));
+
+server.registerTool('get_chokepoint_status', {
+  description: 'Maritime chokepoint transit data and trade-ton flows (Hormuz, Suez, Malacca, etc.).',
+  inputSchema: z.object({}),
+}, async () => textResult(await intelExpansion.get_chokepoint_status()));
+
+server.registerTool('get_internet_outages', {
+  description: 'IODA internet outage alerts. Returns BGP/telescope signals for large-scale connectivity disruptions.',
+  inputSchema: z.object({
+    hours: z.number().optional().describe('Lookback window in hours (default 24)'),
+  }),
+}, async (args) => textResult(await intelExpansion.get_internet_outages(args)));
+
+server.registerTool('get_space_weather_extra', {
+  description: 'Extended space weather: aurora max probability, high-latitude activity flag, and top flare-probability regions.',
+  inputSchema: z.object({}),
+}, async () => textResult(await intelExpansion.get_space_weather_extra()));
+
+server.registerTool('get_pharma_supply', {
+  description: 'Pharmaceutical supply chain: active drug shortages and recent FDA drug recalls.',
+  inputSchema: z.object({}),
+}, async () => textResult(await intelExpansion.get_pharma_supply()));
+
+server.registerTool('get_grid_outages', {
+  description: 'ORNL power grid outages by county. Returns counties sorted by meters affected.',
+  inputSchema: z.object({}),
+}, async () => textResult(await intelExpansion.get_grid_outages()));
+
+server.registerTool('get_disaster_activations', {
+  description: 'Copernicus Emergency Management Service activations for major disasters worldwide.',
+  inputSchema: z.object({}),
+}, async () => textResult(await intelExpansion.get_disaster_activations()));
+
+server.registerTool('lookup_entity', {
+  description: 'GLEIF Legal Entity Identifier (LEI) lookup by company name. Returns official legal name, jurisdiction, LEI code, and status.',
+  inputSchema: z.object({
+    name: z.string().describe('Company or legal entity name to look up (e.g., "Apple Inc", "Deutsche Bank AG")'),
+  }),
+}, async (args) => textResult(await intelExpansion.lookup_entity(args)));
+
+server.registerTool('get_aviation_hazards', {
+  description: 'Aviation hazards: SIGMETs (significant meteorological warnings) and FAA NAS ground-stop programs.',
+  inputSchema: z.object({}),
+}, async () => textResult(await intelExpansion.get_aviation_hazards()));
+
+server.registerTool('get_fx_rates', {
+  description: 'Foreign exchange rates for a base currency. Returns live or recent mid-market rates.',
+  inputSchema: z.object({
+    base: z.string().optional().describe('Base currency code (default USD, e.g. EUR, JPY)'),
+    symbols: z.string().optional().describe('Comma-separated target currency codes (e.g., "EUR,GBP,JPY"); omit for all'),
+  }),
+}, async (args) => textResult(await intelExpansion.get_fx_rates(args)));
+
+server.registerTool('get_geo_events', {
+  description: 'GDELT geocoded media events: returns news events near a query topic, plotted by location.',
+  inputSchema: z.object({
+    query: z.string().describe('Topic or keyword query (e.g., "Taiwan strait", "oil tanker attack")'),
+    timespan: z.number().optional().describe('Lookback in minutes (default 60)'),
+  }),
+}, async (args) => textResult(await intelExpansion.get_geo_events(args)));
+
+server.registerTool('get_radiation', {
+  description: 'BfS German gamma-dose radiation monitoring stations. Returns station readings in nSv/h.',
+  inputSchema: z.object({}),
+}, async () => textResult(await intelExpansion.get_radiation()));
 
 // ---- Help ----
 

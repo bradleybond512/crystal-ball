@@ -16097,6 +16097,7 @@ async function dispatch(requestUrl, req, routes, context) {
  { source: 'CALTRANS', path: '/api/webcams/caltrans', shape: 'feeds' },
  { source: 'TFL', path: '/api/webcams/tfl', shape: 'feeds' },
  { source: 'SINGAPORE', path: '/api/webcams/singapore', shape: 'feeds' },
+ { source: 'GEONET', path: '/api/webcams/geonet', shape: 'feeds' },
  ];
  const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
  const port = process.env.SIDECAR_PORT ?? '46123';
@@ -16429,6 +16430,39 @@ async function dispatch(requestUrl, req, routes, context) {
     return json(result);
   }
 
+  // ── GeoNet NZ volcano cams (all.json = list of FeatureCollections; [lat,lon] order) ──
+  if (requestUrl.pathname === '/api/webcams/geonet') {
+    const cacheKey = 'webcams-geonet';
+    const cached = getCached(cacheKey, 5 * 60 * 1000);
+    if (cached) return json(cached);
+
+    const r = await fetchWithTimeout('https://images.geonet.org.nz/volcano/cameras/all.json', {}, 15000);
+    if (!r.ok) throw new Error(`GeoNet HTTP ${r.status}`);
+    const allJson = await r.json();
+    const payloads = Array.isArray(allJson) ? allJson : [allJson];
+
+    const GEONET_IMAGE_BASE = 'https://images.geonet.org.nz/volcano/cameras/';
+    const GEONET_MAP = {
+      id: (row) => {
+        const img = row?.properties?.['latest-image-large'] ?? '';
+        return img.replace(/^latest\//, '').replace(/\.jpg$/, '') || 'cam';
+      },
+      name: 'properties.title',
+      lat: 'geometry.coordinates.0',
+      lon: 'geometry.coordinates.1',
+      snapshotUrl: (row) => {
+        const img = row?.properties?.['latest-image-large'] ?? '';
+        return img ? `${GEONET_IMAGE_BASE}${img}` : '';
+      },
+    };
+
+    const raw = extractWebcamFeeds('GEONET', 'features', GEONET_MAP, 'volcano', 300, null, { attribution: 'GeoNet NZ (CC-BY 3.0 NZ)', country: 'NZ' }, payloads);
+    const feeds = await validateWebcamCatalog(raw, 'webcams:geonet:valid', 5 * 60 * 1000);
+    const result = { feeds, count: feeds.length };
+    setCached(cacheKey, result);
+    return json(result);
+  }
+
   // ── USFS webcams (fire lookouts + recreation, validated catalog) ──
   // Public snapshot URLs from USFS region pages and well-known forest/mountain cams.
   // validateWebcamCatalog HEAD-checks each URL and drops dead ones (some may be stale).
@@ -16705,6 +16739,304 @@ async function dispatch(requestUrl, req, routes, context) {
  const cutoff = Date.now() - 30 * 60 * 1000;
  const active = events.filter(e => e.triggeredAt >= cutoff);
  return json({ active, updatedAt: Math.floor(Date.now() / 1000) });
+  }
+
+  // ── Intel Expansion Cluster 1 ─────────────────────────────────────────────
+  // abuse.ch cyber trio + Frankfurter FX — all keyless, loopback-only proxies.
+  // Cache keys are short strings that don't collide with existing entries.
+  // Only successful fetches are cached; error responses are NOT persisted so
+  // the next caller retries rather than serving a stale failure for the TTL.
+
+  // GET /api/cyber-c2 — Feodo Tracker C2 IP blocklist (10 min cache)
+  if (requestUrl.pathname === '/api/cyber-c2' && req.method === 'GET') {
+ const FEODO_TTL = 10 * 60 * 1000;
+ const FEODO_URL = 'https://feodotracker.abuse.ch/downloads/ipblocklist.json';
+ const cached = getCached('feodo-c2', FEODO_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(FEODO_URL, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ entries: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `feodo upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const entries = parseFeodoIpBlocklist(raw);
+ const result = { entries, count: entries.length, fetchedAt: Date.now(), degraded: false };
+ setCached('feodo-c2', result, FEODO_TTL);
+ return json(result);
+  }
+
+  // GET /api/cyber-iocs — ThreatFox recent IOCs (10 min cache)
+  if (requestUrl.pathname === '/api/cyber-iocs' && req.method === 'GET') {
+ const TFOX_TTL = 10 * 60 * 1000;
+ const TFOX_URL = 'https://threatfox.abuse.ch/export/csv/recent/';
+ const cached = getCached('threatfox-iocs', TFOX_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(TFOX_URL, { headers: { Accept: 'text/csv, text/plain', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ entries: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `threatfox upstream ${r.status}` }, 502);
+ const text = await r.text();
+ const entries = parseThreatFoxCsv(text);
+ const result = { entries, count: entries.length, fetchedAt: Date.now(), degraded: false };
+ setCached('threatfox-iocs', result, TFOX_TTL);
+ return json(result);
+  }
+
+  // GET /api/malware-urls — URLhaus recent malware URLs (10 min cache)
+  if (requestUrl.pathname === '/api/malware-urls' && req.method === 'GET') {
+ const URLHAUS_TTL = 10 * 60 * 1000;
+ const URLHAUS_URL = 'https://urlhaus.abuse.ch/downloads/csv_recent/';
+ const cached = getCached('urlhaus-urls', URLHAUS_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(URLHAUS_URL, { headers: { Accept: 'text/csv, text/plain', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ entries: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `urlhaus upstream ${r.status}` }, 502);
+ const text = await r.text();
+ const entries = parseUrlhausCsv(text);
+ const result = { entries, count: entries.length, fetchedAt: Date.now(), degraded: false };
+ setCached('urlhaus-urls', result, URLHAUS_TTL);
+ return json(result);
+  }
+
+  // GET /api/fx-rates — Frankfurter FX latest rates (~12h cache)
+  // Accepts ?base=USD&symbols=EUR,GBP (forwarded to upstream).
+  // Default base is USD when not specified.
+  if (requestUrl.pathname === '/api/fx-rates' && req.method === 'GET') {
+ const FX_TTL = 12 * 60 * 60 * 1000;
+ const base = requestUrl.searchParams.get('base') || 'USD';
+ const symbols = requestUrl.searchParams.get('symbols') || '';
+ // Cache key per base+symbols combo so different callers get their own slot.
+ const cacheKey = `frankfurter-fx:${base}:${symbols}`;
+ const cached = getCached(cacheKey, FX_TTL);
+ if (cached) return json(cached);
+ let upstreamUrl = `https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(base)}`;
+ if (symbols) upstreamUrl += `&symbols=${encodeURIComponent(symbols)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 12_000);
+ if (!r.ok) return json({ base, date: null, rates: {}, fetchedAt: Date.now(), degraded: true, reason: `frankfurter upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const parsed = parseFrankfurterRates(raw);
+ if (!parsed) return json({ base, date: null, rates: {}, fetchedAt: Date.now(), degraded: true, reason: 'frankfurter parse error' }, 502);
+ const result = { ...parsed, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, FX_TTL);
+ return json(result);
+  }
+
+  // GET /api/chokepoint-transits — IMF PortWatch daily maritime chokepoint data (~6h cache)
+  // Returns latest row per chokepoint (deduplicated by portid, newest date wins).
+  if (requestUrl.pathname === '/api/chokepoint-transits' && req.method === 'GET') {
+ const PW_TTL = 6 * 60 * 60 * 1000;
+ const PW_URL = 'https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=1%3D1&outFields=*&orderByFields=date%20DESC&resultRecordCount=500&f=json';
+ const cached = getCached('imf-portwatch', PW_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(PW_URL, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ chokepoints: [], updatedAt: null, degraded: true, reason: `portwatch upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const chokepoints = parsePortwatchChokepoints(raw);
+ const result = { chokepoints, updatedAt: new Date().toISOString(), degraded: false };
+ setCached('imf-portwatch', result, PW_TTL);
+ return json(result);
+  }
+
+  // ── Intel Expansion Cluster 3 ─────────────────────────────────────────────
+  // IODA + openFDA + ORNL ODIN + Copernicus EMS + GLEIF — all keyless.
+
+  // GET /api/internet-outages — IODA internet outage alerts (~15 min cache)
+  // Query params: from, until (unix seconds). Defaults to 24h window ending now.
+  if (requestUrl.pathname === '/api/internet-outages' && req.method === 'GET') {
+ const IODA_TTL = 15 * 60 * 1000;
+ const nowSec = Math.floor(Date.now() / 1000);
+ const from = requestUrl.searchParams.get('from') || String(nowSec - 86400);
+ const until = requestUrl.searchParams.get('until') || String(nowSec);
+ const limit = requestUrl.searchParams.get('limit') || '50';
+ const cacheKey = `ioda-outages:${from}:${until}`;
+ const cached = getCached(cacheKey, IODA_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts?from=${encodeURIComponent(from)}&until=${encodeURIComponent(until)}&limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ alerts: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `ioda upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const alerts = parseIodaAlerts(raw);
+ const result = { alerts, count: alerts.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, IODA_TTL);
+ return json(result);
+  }
+
+  // GET /api/pharma-shortages — openFDA drug shortage database (~6h cache)
+  if (requestUrl.pathname === '/api/pharma-shortages' && req.method === 'GET') {
+ const FDA_TTL = 6 * 60 * 60 * 1000;
+ const limit = requestUrl.searchParams.get('limit') || '20';
+ const cacheKey = `openfda-shortages:${limit}`;
+ const cached = getCached(cacheKey, FDA_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.fda.gov/drug/shortages.json?limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ shortages: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `openfda shortages upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const shortages = parseFdaShortages(raw);
+ const result = { shortages, count: shortages.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, FDA_TTL);
+ return json(result);
+  }
+
+  // GET /api/recalls — openFDA enforcement recalls (~6h cache)
+  // Accepts ?type=drug|food (default drug)
+  if (requestUrl.pathname === '/api/recalls' && req.method === 'GET') {
+ const RECALL_TTL = 6 * 60 * 60 * 1000;
+ const type = requestUrl.searchParams.get('type') === 'food' ? 'food' : 'drug';
+ const limit = requestUrl.searchParams.get('limit') || '20';
+ const cacheKey = `openfda-recalls:${type}:${limit}`;
+ const cached = getCached(cacheKey, RECALL_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.fda.gov/${encodeURIComponent(type)}/enforcement.json?limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ recalls: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `openfda recalls upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const recalls = parseFdaRecalls(raw);
+ const result = { recalls, count: recalls.length, type, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, RECALL_TTL);
+ return json(result);
+  }
+
+  // GET /api/grid-outages — ORNL ODIN real-time power outages by county (~15 min cache)
+  if (requestUrl.pathname === '/api/grid-outages' && req.method === 'GET') {
+ const ODIN_TTL = 15 * 60 * 1000;
+ const limit = requestUrl.searchParams.get('limit') || '50';
+ const cacheKey = `ornl-odin:${limit}`;
+ const cached = getCached(cacheKey, ODIN_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://ornl.opendatasoft.com/api/explore/v2.1/catalog/datasets/odin-real-time-outages-county/records?limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ outages: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `ornl-odin upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const outages = parseOdinOutages(raw);
+ const result = { outages, count: outages.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, ODIN_TTL);
+ return json(result);
+  }
+
+  // GET /api/ems-activations — Copernicus Emergency Management Service activations (~30 min cache)
+  if (requestUrl.pathname === '/api/ems-activations' && req.method === 'GET') {
+ const EMS_TTL = 30 * 60 * 1000;
+ const cached = getCached('copernicus-ems', EMS_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = 'https://mapping.emergency.copernicus.eu/activations/api/activations/?format=json';
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ activations: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `copernicus-ems upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const activations = parseCopernicusActivations(raw);
+ const result = { activations, count: activations.length, fetchedAt: Date.now(), degraded: false };
+ setCached('copernicus-ems', result, EMS_TTL);
+ return json(result);
+  }
+
+  // GET /api/entity-lei — GLEIF LEI entity lookup (24h cache, keyed by name)
+  // Accepts ?name= (entity legal name to search)
+  if (requestUrl.pathname === '/api/entity-lei' && req.method === 'GET') {
+ const GLEIF_TTL = 24 * 60 * 60 * 1000;
+ const name = requestUrl.searchParams.get('name') || '';
+ if (!name.trim()) return json({ entities: [], count: 0, fetchedAt: Date.now(), degraded: false, reason: 'name param required' }, 400);
+ const cacheKey = `gleif-lei:${name.trim().toLowerCase()}`;
+ const cached = getCached(cacheKey, GLEIF_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalName%5D=${encodeURIComponent(name.trim())}&page%5Bsize%5D=5`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/vnd.api+json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ entities: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `gleif upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const entities = parseGleifLeiRecords(raw);
+ const result = { entities, count: entities.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, GLEIF_TTL);
+ return json(result);
+  }
+
+  // ── Intel Expansion Cluster 4 ─────────────────────────────────────────────
+  // GDELT GKG + SWPC aurora/solar-regions + AviationWeather hazards
+  // + FAA NAS Status + BfS ODL radiation — all keyless.
+
+  // GET /api/gdelt-geo — GDELT GKG geocoded events (~15 min cache)
+  // Accepts ?query= (default "protest") and ?timespan= (minutes, default 60)
+  if (requestUrl.pathname === '/api/gdelt-geo' && req.method === 'GET') {
+ const GDELT_TTL = 15 * 60 * 1000;
+ const query = requestUrl.searchParams.get('query') || 'protest';
+ const timespan = requestUrl.searchParams.get('timespan') || '60';
+ const cacheKey = `gdelt-geo:${query}:${timespan}`;
+ const cached = getCached(cacheKey, GDELT_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.gdeltproject.org/api/v1/gkg_geojson?QUERY=${encodeURIComponent(query)}&TIMESPAN=${encodeURIComponent(timespan)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 20_000);
+ if (!r.ok) return json({ events: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `gdelt upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const events = parseGdeltGkgEvents(raw);
+ const result = { events, count: events.length, query, timespan, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, GDELT_TTL);
+ return json(result);
+  }
+
+  // GET /api/spaceweather-extra — SWPC OVATION aurora + solar active regions (~15 min cache)
+  if (requestUrl.pathname === '/api/spaceweather-extra' && req.method === 'GET') {
+ const SW_TTL = 15 * 60 * 1000;
+ const cached = getCached('spaceweather-extra', SW_TTL);
+ if (cached) return json(cached);
+ const [auroraRes, solarRes] = await Promise.allSettled([
+   fetchWithTimeout('https://services.swpc.noaa.gov/json/ovation_aurora_latest.json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+   fetchWithTimeout('https://services.swpc.noaa.gov/json/solar_regions.json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+ ]);
+ const auroraRaw = auroraRes.status === 'fulfilled' && auroraRes.value.ok ? await auroraRes.value.json() : null;
+ const solarRaw = solarRes.status === 'fulfilled' && solarRes.value.ok ? await solarRes.value.json() : null;
+ const aurora = parseSwpcAurora(auroraRaw);
+ const solarRegions = parseSwpcSolarRegions(solarRaw);
+ const degraded = !auroraRaw && !solarRaw;
+ const result = { aurora, solarRegions, solarRegionCount: solarRegions.length, fetchedAt: Date.now(), degraded };
+ setCached('spaceweather-extra', result, SW_TTL);
+ return json(result);
+  }
+
+  // GET /api/aviation-hazards — AviationWeather SIGMET/G-AIRMET airspace hazards (~10 min cache)
+  if (requestUrl.pathname === '/api/aviation-hazards' && req.method === 'GET') {
+ const AVHAZ_TTL = 10 * 60 * 1000;
+ const cached = getCached('aviation-hazards', AVHAZ_TTL);
+ if (cached) return json(cached);
+ const [isigmetRes, airsigmetRes, gairmetRes] = await Promise.allSettled([
+   fetchWithTimeout('https://aviationweather.gov/api/data/isigmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+   fetchWithTimeout('https://aviationweather.gov/api/data/airsigmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+   fetchWithTimeout('https://aviationweather.gov/api/data/gairmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+ ]);
+ const isigmetRaw = isigmetRes.status === 'fulfilled' && isigmetRes.value.ok ? await isigmetRes.value.json() : [];
+ const airsigmetRaw = airsigmetRes.status === 'fulfilled' && airsigmetRes.value.ok ? await airsigmetRes.value.json() : [];
+ const gairmetRaw = gairmetRes.status === 'fulfilled' && gairmetRes.value.ok ? await gairmetRes.value.json() : [];
+ const hazards = [
+   ...parseAviationHazards(isigmetRaw, 'isigmet'),
+   ...parseAviationHazards(airsigmetRaw, 'airsigmet'),
+   ...parseAviationHazards(gairmetRaw, 'gairmet'),
+ ];
+ const result = { hazards, count: hazards.length, fetchedAt: Date.now(), degraded: false };
+ setCached('aviation-hazards', result, AVHAZ_TTL);
+ return json(result);
+  }
+
+  // GET /api/faa-nas-status — FAA NAS airport ground stops / delays (~5 min cache)
+  if (requestUrl.pathname === '/api/faa-nas-status' && req.method === 'GET') {
+ const FAA_TTL = 5 * 60 * 1000;
+ const cached = getCached('faa-nas-status', FAA_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = 'https://nasstatus.faa.gov/api/airport-events';
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ events: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `faa-nas upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const events = parseFaaNasEvents(raw);
+ const result = { events, count: events.length, fetchedAt: Date.now(), degraded: false };
+ setCached('faa-nas-status', result, FAA_TTL);
+ return json(result);
+  }
+
+  // GET /api/radiation-grid — BfS ODL German gamma-dose monitoring stations (~60 min cache)
+  if (requestUrl.pathname === '/api/radiation-grid' && req.method === 'GET') {
+ const BFS_TTL = 60 * 60 * 1000;
+ const count = requestUrl.searchParams.get('count') || '50';
+ const cacheKey = `bfs-odl:${count}`;
+ const cached = getCached(cacheKey, BFS_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://www.imis.bfs.de/ogc/opendata/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=opendata:odlinfo_odl_1h_latest&outputFormat=application/json&count=${encodeURIComponent(count)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 20_000);
+ if (!r.ok) return json({ stations: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `bfs-odl upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const stations = parseBfsOdlStations(raw);
+ const result = { stations, count: stations.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, BFS_TTL);
+ return json(result);
   }
 
   if (context.cloudFallback && cloudPreferred.has(requestUrl.pathname)) {
@@ -17002,6 +17334,496 @@ export function shakemapAvailabilityLabelSidecar(hasShakemap) {
 
 export function recentEventsSidecar(features, nowMs, days) {
   return filterRecentM45PlusSidecar(features, nowMs, days);
+}
+
+// ── Intel Expansion Cluster 1: abuse.ch trio + Frankfurter FX ───────────────
+//
+// Shared quoted-CSV parser used by ThreatFox and URLhaus.
+// Handles:
+//   • \r\n and \n line endings.
+//   • Lines beginning with '#' (comment/header) — skipped.
+//   • RFC 4180-style quoted fields: commas inside quotes, doubled quotes.
+//   • Optional whitespace between comma and quote (ThreatFox `, "field"` style).
+//   • Both quoted and unquoted header lines inside # comments (URLhaus uses
+//     unquoted: `# id,dateadded,...`; ThreatFox uses quoted: `# "col","col"`).
+// Returns an array of objects keyed by the column names from the first
+// non-comment line that starts with '#' and contains a comma.
+export function parseAbuseCsv(text) {
+  const lines = text.split(/\r?\n/);
+  const dataLines = [];
+  let headerLine = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('#')) {
+      // The abuse.ch data header is a comment containing the column names.
+      // ThreatFox: # "first_seen_utc","ioc_id",...   (quoted)
+      // URLhaus:   # id,dateadded,...                 (unquoted)
+      // Detect by: starts with '#' AND contains a comma.
+      const inner = trimmed.slice(1).trim();
+      if (inner.includes(',') && headerLine === null) {
+        headerLine = inner;
+      }
+      continue;
+    }
+    dataLines.push(trimmed);
+  }
+
+  if (!headerLine && dataLines.length > 0) {
+    // No comment-header found; treat first data line as the header.
+    headerLine = dataLines.shift();
+  }
+  if (!headerLine) return [];
+
+  const headers = parseCsvRow(headerLine).map(h => h.trim());
+  return dataLines.map(line => {
+    const values = parseCsvRow(line);
+    const obj = {};
+    for (const [i, header] of headers.entries()) {
+      obj[header] = values[i] ?? '';
+    }
+    return obj;
+  });
+}
+
+// Parse one CSV row into an array of field strings, respecting RFC 4180 quoting.
+// Also handles optional whitespace before a quoted field (ThreatFox style: `, "val"`).
+// A trailing comma produces a trailing empty string field.
+export function parseCsvRow(line) {
+  const fields = [];
+  let i = 0;
+  while (i <= line.length) {
+    // Skip optional whitespace before field (handles `, "value"` style)
+    let j = i;
+    while (j < line.length && line[j] === ' ') j++;
+
+    if (j < line.length && line[j] === '"') {
+      // Quoted field — start after opening quote
+      i = j + 1;
+      let val = '';
+      while (i < line.length) {
+        if (line[i] === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            val += '"';
+            i += 2;
+          } else {
+            i++; // skip closing quote
+            break;
+          }
+        } else {
+          val += line[i++];
+        }
+      }
+      fields.push(val);
+      // skip optional whitespace then comma
+      while (i < line.length && line[i] === ' ') i++;
+      if (i < line.length && line[i] === ',') i++;
+      else break; // end of line
+    } else {
+      // Unquoted field (also handles trailing comma → empty field)
+      const end = line.indexOf(',', i);
+      if (end === -1) {
+        fields.push(line.slice(i));
+        break;
+      } else {
+        fields.push(line.slice(i, end));
+        i = end + 1;
+        // If comma was the last char, push trailing empty field
+        if (i === line.length) {
+          fields.push('');
+          break;
+        }
+      }
+    }
+  }
+  return fields;
+}
+
+// ── Feodo Tracker (C2 IP blocklist) parser ───────────────────────────────────
+// Input: parsed JSON array from feodotracker.abuse.ch/downloads/ipblocklist.json
+// Output: normalized array; entries missing ip_address are dropped.
+export function parseFeodoIpBlocklist(rawArray) {
+  if (!Array.isArray(rawArray)) return [];
+  return rawArray
+    .filter(e => typeof e?.ip_address === 'string' && e.ip_address.length > 0)
+    .map(e => ({
+      ip: e.ip_address,
+      port: typeof e.port === 'number' ? e.port : (parseInt(e.port, 10) || null),
+      malware: e.malware ?? null,
+      asn: e.as_number ?? null,
+      asName: e.as_name ?? null,
+      country: e.country ?? null,
+      status: e.status ?? null,
+      firstSeen: e.first_seen ?? null,
+      lastOnline: e.last_online ?? null,
+    }));
+}
+
+// ── ThreatFox (IOC feed) parser ──────────────────────────────────────────────
+// Input: raw CSV text from threatfox.abuse.ch/export/csv/recent/
+// Output: normalized array.
+export function parseThreatFoxCsv(csvText) {
+  const rows = parseAbuseCsv(csvText);
+  return rows.map(r => ({
+    id: r['ioc_id'] ?? r['id'] ?? '',
+    iocValue: r['ioc_value'] ?? '',
+    iocType: r['ioc_type'] ?? '',
+    threatType: r['threat_type'] ?? '',
+    malware: r['malware_printable'] ?? r['fk_malware'] ?? '',
+    confidence: parseInt(r['confidence_level'] ?? '0', 10) || 0,
+    firstSeen: r['first_seen_utc'] ?? '',
+    tags: (r['tags'] ?? '').split(',').map(t => t.trim()).filter(Boolean),
+  }));
+}
+
+// ── URLhaus (malware URL feed) parser ────────────────────────────────────────
+// Input: raw CSV text from urlhaus.abuse.ch/downloads/csv_recent/
+// Output: normalized array.
+export function parseUrlhausCsv(csvText) {
+  const rows = parseAbuseCsv(csvText);
+  return rows.map(r => ({
+    id: r['id'] ?? '',
+    url: r['url'] ?? '',
+    status: r['url_status'] ?? '',
+    threat: r['threat'] ?? '',
+    tags: (r['tags'] ?? '').split(',').map(t => t.trim()).filter(Boolean),
+    dateAdded: r['dateadded'] ?? '',
+    reporter: r['reporter'] ?? '',
+  }));
+}
+
+// ── Frankfurter FX parser ────────────────────────────────────────────────────
+// Input: parsed JSON from api.frankfurter.dev/v1/latest?base=USD
+// Output: normalized { base, date, rates } or null if malformed.
+export function parseFrankfurterRates(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.base !== 'string' || typeof raw.rates !== 'object') return null;
+  return {
+    base: raw.base,
+    date: raw.date ?? null,
+    rates: raw.rates,
+  };
+}
+
+// ── IMF PortWatch parser ──────────────────────────────────────────────────────
+// Input: ArcGIS FeatureServer JSON { features: [{ attributes: {...} }] }
+// Output: latest-per-portid normalized array (drops rows missing portid).
+// Caller orders by date DESC so the first occurrence of each portid is newest.
+export function parsePortwatchChokepoints(arcgisJson) {
+  if (!arcgisJson || !Array.isArray(arcgisJson.features)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const feature of arcgisJson.features) {
+    const a = feature?.attributes;
+    if (!a || typeof a.portid !== 'string' || !a.portid) continue;
+    if (seen.has(a.portid)) continue; // keep first (newest) occurrence
+    seen.add(a.portid);
+    result.push({
+      id: a.portid,
+      name: a.portname ?? null,
+      date: a.date ?? null,
+      vessels: {
+        container: a.n_container ?? null,
+        dryBulk: a.n_dry_bulk ?? null,
+        generalCargo: a.n_general_cargo ?? null,
+        roro: a.n_roro ?? null,
+        tanker: a.n_tanker ?? null,
+        cargo: a.n_cargo ?? null,
+        total: a.n_total ?? null,
+      },
+      capacityTons: {
+        container: a.capacity_container ?? null,
+        dryBulk: a.capacity_dry_bulk ?? null,
+        generalCargo: a.capacity_general_cargo ?? null,
+        roro: a.capacity_roro ?? null,
+        tanker: a.capacity_tanker ?? null,
+        cargo: a.capacity_cargo ?? null,
+        total: a.capacity ?? null,
+      },
+    });
+  }
+  return result;
+}
+
+// ── Intel Expansion Cluster 3: IODA + openFDA + ORNL ODIN + Copernicus EMS + GLEIF ──
+
+// ── IODA internet outage alerts parser ───────────────────────────────────────
+// Input: parsed JSON from api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts
+// Output: normalized array of alert objects.
+export function parseIodaAlerts(raw) {
+  if (!raw || !Array.isArray(raw.data)) return [];
+  return raw.data.map(alert => ({
+    entityType: alert?.entity?.type ?? null,
+    entityCode: alert?.entity?.code ?? null,
+    entityName: alert?.entity?.name ?? null,
+    datasource: alert?.datasource ?? null,
+    score: typeof alert?.value === 'number' ? alert.value : null,
+    historyValue: typeof alert?.historyValue === 'number' ? alert.historyValue : null,
+    from: typeof alert?.time === 'number' ? alert.time : null,
+    until: typeof alert?.time === 'number' ? alert.time : null,
+    level: alert?.level ?? null,
+    condition: alert?.condition ?? null,
+    method: alert?.method ?? null,
+  }));
+}
+
+// ── openFDA drug shortage parser ─────────────────────────────────────────────
+// Input: parsed JSON from api.fda.gov/drug/shortages.json
+// Output: normalized array.
+export function parseFdaShortages(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    genericName: r.generic_name ?? null,
+    status: r.availability ?? null,
+    therapeuticCategory: r.openfda?.product_type?.[0] ?? null,
+    updateDate: r.update_type ?? null,
+    initialPostingDate: r.initial_posting_date ?? null,
+    packageNdc: r.package_ndc ?? null,
+  }));
+}
+
+// ── openFDA enforcement recall parser ────────────────────────────────────────
+// Input: parsed JSON from api.fda.gov/drug/enforcement.json or food/enforcement.json
+// Output: normalized array.
+export function parseFdaRecalls(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    product: r.product_description ?? null,
+    reason: r.reason_for_recall ?? null,
+    classification: r.classification ?? null,
+    state: r.state ?? null,
+    distributionPattern: r.distribution_pattern ?? null,
+    status: r.status ?? null,
+    recallDate: r.recall_initiation_date ?? null,
+    voluntaryMandated: r.voluntary_mandated ?? null,
+  }));
+}
+
+// ── ORNL ODIN power outage parser ────────────────────────────────────────────
+// Input: parsed JSON from ornl.opendatasoft.com API (Socrata-compatible)
+// Real fields: name, county, state, metersaffected, communitydescriptor
+export function parseOdinOutages(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    fips: r.communitydescriptor ?? null,
+    county: r.county ?? null,
+    state: r.state ?? null,
+    customersOut: typeof r.metersaffected === 'number' ? r.metersaffected : null,
+    customersRestored: typeof r.customersrestored === 'number' ? r.customersrestored : null,
+    utilityName: r.name ?? null,
+    utilityId: r.utility_id ?? null,
+    updated: r.reportedstarttime ?? null,
+  }));
+}
+
+// ── Copernicus EMS activation parser ─────────────────────────────────────────
+// Input: parsed JSON from mapping.emergency.copernicus.eu DRF paginated response
+// Real fields: code, name, category.slug, countries, activationTime, centroid
+export function parseCopernicusActivations(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    code: r.code ?? null,
+    title: r.name ?? null,
+    category: r.category?.slug ?? null,
+    categoryName: r.category?.name ?? null,
+    country: r.countries?.[0]?.short_name ?? null,
+    activationTime: r.activationTime ?? null,
+    lastUpdate: r.lastUpdate ?? null,
+    closed: r.closed ?? null,
+    drmPhase: r.drmPhase ?? null,
+    centroid: r.centroid ?? null,
+  }));
+}
+
+// ── GLEIF LEI entity parser ───────────────────────────────────────────────────
+// Input: parsed JSON:API from api.gleif.org/api/v1/lei-records
+// Real fields: id (LEI), attributes.entity.legalName.name, attributes.entity.legalAddress.country,
+//   attributes.entity.status, attributes.entity.legalForm.id, attributes.entity.jurisdiction
+export function parseGleifLeiRecords(raw) {
+  if (!raw || !Array.isArray(raw.data)) return [];
+  return raw.data.map(rec => {
+    const entity = rec?.attributes?.entity ?? {};
+    return {
+      lei: rec?.id ?? null,
+      name: entity?.legalName?.name ?? null,
+      country: entity?.legalAddress?.country ?? null,
+      jurisdiction: entity?.jurisdiction ?? null,
+      status: entity?.status ?? null,
+      legalForm: entity?.legalForm?.id ?? null,
+    };
+  });
+}
+
+// ── Intel Expansion Cluster 4 parsers ────────────────────────────────────────
+
+// ── GDELT GKG geocoded events parser ─────────────────────────────────────────
+// Input: GeoJSON FeatureCollection from api.gdeltproject.org/api/v1/gkg_geojson
+// Real properties: urlpubtimedate, name, urltone, url, mentionedthemes
+export function parseGdeltGkgEvents(raw) {
+  if (!raw || !Array.isArray(raw.features)) return [];
+  return raw.features.map(f => {
+    const coords = f?.geometry?.coordinates;
+    const props = f?.properties ?? {};
+    return {
+      name: props.name ?? null,
+      lat: Array.isArray(coords) ? coords[1] ?? null : null,
+      lon: Array.isArray(coords) ? coords[0] ?? null : null,
+      tone: typeof props.urltone === 'number' ? props.urltone : null,
+      url: props.url ?? null,
+      publishedAt: props.urlpubtimedate ?? null,
+      themes: typeof props.mentionedthemes === 'string'
+        ? props.mentionedthemes.split(';').map(t => t.trim()).filter(Boolean)
+        : [],
+    };
+  });
+}
+
+// ── SWPC OVATION aurora summary parser ───────────────────────────────────────
+// Input: { 'Forecast Time', coordinates:[[lon,lat,aurora%],...] }
+// Output: { forecastTime, maxAuroraPercent, highLatitudeBand } summary.
+export function parseSwpcAurora(raw) {
+  if (!raw || !Array.isArray(raw.coordinates)) {
+    return { forecastTime: null, observationTime: null, maxAuroraPercent: 0, highLatitudeBand: false };
+  }
+  let maxPct = 0;
+  for (const coord of raw.coordinates) {
+    const pct = coord[2];
+    if (typeof pct === 'number' && pct > maxPct) maxPct = pct;
+  }
+  return {
+    forecastTime: raw['Forecast Time'] ?? null,
+    observationTime: raw['Observation Time'] ?? null,
+    maxAuroraPercent: maxPct,
+    highLatitudeBand: maxPct >= 30,
+  };
+}
+
+// ── SWPC solar active regions parser ─────────────────────────────────────────
+// Input: array of active region records with flare probabilities
+// Real fields: region, latitude, longitude, location, mag_class, spot_class,
+//   c_flare_probability, m_flare_probability, x_flare_probability, observed_date
+export function parseSwpcSolarRegions(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(r => ({
+    region: r.region ?? null,
+    location: r.location ?? null,
+    lat: typeof r.latitude === 'number' ? r.latitude : null,
+    lon: typeof r.longitude === 'number' ? r.longitude : null,
+    magClass: r.mag_class ?? null,
+    spotClass: r.spot_class ?? null,
+    cFlareProbability: typeof r.c_flare_probability === 'number' ? r.c_flare_probability : null,
+    mFlareProbability: typeof r.m_flare_probability === 'number' ? r.m_flare_probability : null,
+    xFlareProbability: typeof r.x_flare_probability === 'number' ? r.x_flare_probability : null,
+    observedDate: r.observed_date ?? null,
+  }));
+}
+
+// ── AviationWeather SIGMET / G-AIRMET hazard parser ──────────────────────────
+// Handles isigmet, airsigmet, and gairmet record shapes.
+// isigmet fields: icaoId, firName, hazard, qualifier, validTimeFrom, validTimeTo, coords, rawSigmet
+// airsigmet fields: icaoId, airSigmetType, hazard, severity, validTimeFrom, validTimeTo, coords, rawAirSigmet
+// gairmet fields: tag, hazard, severity, due_to, validTime, expireTime, coords
+export function parseAviationHazards(raw, source) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(r => {
+    let hazardType, rawText, validFrom, validTo, coords;
+    if (source === 'isigmet') {
+      hazardType = r.hazard ?? null;
+      rawText = r.rawSigmet ?? null;
+      validFrom = r.validTimeFrom ?? null;
+      validTo = r.validTimeTo ?? null;
+      coords = r.coords ?? null;
+    } else if (source === 'airsigmet') {
+      hazardType = r.hazard ?? null;
+      rawText = r.rawAirSigmet ?? null;
+      validFrom = r.validTimeFrom ?? null;
+      validTo = r.validTimeTo ?? null;
+      coords = r.coords ?? null;
+    } else {
+      // gairmet
+      hazardType = r.hazard ?? null;
+      rawText = r.product ?? null;
+      validFrom = r.validTime ?? null;
+      validTo = r.expireTime ?? null;
+      coords = r.coords ?? null;
+    }
+    return {
+      hazardType,
+      source,
+      severity: r.severity ?? r.qualifier ?? null,
+      raw: rawText,
+      coords: coords ?? null,
+      validFrom,
+      validTo,
+    };
+  });
+}
+
+// ── FAA NAS airport event parser ─────────────────────────────────────────────
+// Input: array of airport-events records
+// Real fields: airportId, airportLongName, latitude, longitude,
+//   groundStop, groundDelay, arrivalDelay, departureDelay, airportClosure, freeForm
+export function parseFaaNasEvents(raw) {
+  if (!Array.isArray(raw)) return [];
+  const events = [];
+  for (const rec of raw) {
+    const airport = rec.airportId ?? null;
+    const airportName = rec.airportLongName ?? null;
+    const lat = rec.latitude != null ? Number(rec.latitude) : null;
+    const lon = rec.longitude != null ? Number(rec.longitude) : null;
+    const base = { airport, airportName, lat, lon };
+
+    if (rec.groundStop) {
+      events.push({ ...base, eventType: 'ground_stop', reason: rec.groundStop.reason ?? null,
+        start: rec.groundStop.startTime ?? null, end: rec.groundStop.endTime ?? null });
+    }
+    if (rec.groundDelay) {
+      events.push({ ...base, eventType: 'ground_delay', reason: rec.groundDelay.impactingCondition ?? null,
+        start: rec.groundDelay.startTime ?? null, end: rec.groundDelay.endTime ?? null });
+    }
+    if (rec.arrivalDelay) {
+      events.push({ ...base, eventType: 'arrival_delay', reason: rec.arrivalDelay.reason ?? null,
+        start: rec.arrivalDelay.updateTime ?? null, end: null });
+    }
+    if (rec.departureDelay) {
+      events.push({ ...base, eventType: 'departure_delay', reason: rec.departureDelay.reason ?? null,
+        start: rec.departureDelay.updateTime ?? null, end: null });
+    }
+    if (rec.airportClosure) {
+      events.push({ ...base, eventType: 'closure', reason: rec.airportClosure.text ?? null,
+        start: rec.airportClosure.startTime ?? null, end: rec.airportClosure.endTime ?? null });
+    }
+    if (rec.freeForm && !rec.groundStop && !rec.groundDelay && !rec.arrivalDelay && !rec.departureDelay && !rec.airportClosure) {
+      events.push({ ...base, eventType: 'notam', reason: rec.freeForm.text ?? null,
+        start: rec.freeForm.startTime ?? null, end: rec.freeForm.endTime ?? null });
+    }
+  }
+  return events;
+}
+
+// ── BfS ODL radiation station parser ─────────────────────────────────────────
+// Input: GeoJSON FeatureCollection from BfS IMIS WFS
+// Real property names: id, kenn, plz, name, site_status, start_measure, value, unit
+export function parseBfsOdlStations(raw) {
+  if (!raw || !Array.isArray(raw.features)) return [];
+  return raw.features
+    .map(f => {
+      const coords = f?.geometry?.coordinates;
+      const p = f?.properties ?? {};
+      return {
+        id: p.id ?? null,
+        kenn: p.kenn ?? null,
+        name: p.name ?? null,
+        lat: Array.isArray(coords) ? coords[1] ?? null : null,
+        lon: Array.isArray(coords) ? coords[0] ?? null : null,
+        doseRate: typeof p.value === 'number' ? p.value : null,
+        unit: p.unit ?? null,
+        measuredAt: p.start_measure ?? null,
+        siteStatus: p.site_status_text ?? null,
+      };
+    })
+    .filter(s => s.doseRate !== null);
 }
 
 export async function createLocalApiServer(options = {}) {

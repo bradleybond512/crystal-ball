@@ -91,8 +91,42 @@ export const SINGAPORE_CONFIG: WebcamSourceConfig = {
   metadata: { attribution: 'Singapore LTA Traffic Images', country: 'SG', city: 'Singapore' },
 };
 
-export const WEBCAM_SOURCE_CONFIGS: Record<Extract<WebcamSource, 'CALTRANS' | 'TFL' | 'SINGAPORE'>, WebcamSourceConfig> = {
+interface GeoNetFeature {
+  geometry?: { coordinates?: number[] };
+  properties?: { title?: string; 'latest-image-large'?: string };
+}
+
+// GeoNet all.json is a LIST of FeatureCollections (one per volcano); the sidecar
+// spreads that list as payloads and this extracts each FC's `features`.
+// NOTE: GeoNet uses non-standard [lat, lon] coordinate order (verified live).
+const GEONET_IMAGE_BASE = 'https://images.geonet.org.nz/volcano/cameras/';
+
+export const GEONET_CONFIG: WebcamSourceConfig = {
+  id: 'GEONET',
+  mode: 'json',
+  url: 'https://images.geonet.org.nz/volcano/cameras/all.json',
+  arrayPath: 'features',
+  map: {
+    id: (row) => {
+      const img = (row as GeoNetFeature).properties?.['latest-image-large'] ?? '';
+      return img.replace(/^latest\//, '').replace(/\.jpg$/, '') || 'cam';
+    },
+    name: 'properties.title',
+    lat: 'geometry.coordinates.0',
+    lon: 'geometry.coordinates.1',
+    snapshotUrl: (row) => {
+      const img = (row as GeoNetFeature).properties?.['latest-image-large'] ?? '';
+      return img ? `${GEONET_IMAGE_BASE}${img}` : '';
+    },
+  },
+  category: 'volcano',
+  refreshIntervalSec: 300,
+  metadata: { attribution: 'GeoNet NZ (CC-BY 3.0 NZ)', country: 'NZ' },
+};
+
+export const WEBCAM_SOURCE_CONFIGS: Record<Extract<WebcamSource, 'CALTRANS' | 'TFL' | 'SINGAPORE' | 'GEONET'>, WebcamSourceConfig> = {
   CALTRANS: CALTRANS_CONFIG,
   TFL: TFL_CONFIG,
   SINGAPORE: SINGAPORE_CONFIG,
+  GEONET: GEONET_CONFIG,
 };

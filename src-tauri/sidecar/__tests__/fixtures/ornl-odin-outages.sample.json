@@ -1,0 +1,35 @@
+{
+  "total_count": 501,
+  "results": [
+    {
+      "name": "BLUE RIDGE ELEC MEMBER CORP - (NC),1889",
+      "county": "Ashe",
+      "state": "North Carolina",
+      "metersaffected": 3,
+      "communitydescriptor": "37009",
+      "customersrestored": null,
+      "reportedstarttime": null,
+      "utility_id": "1889"
+    },
+    {
+      "name": "DIXIE ELECTRIC MEMBERSHIP CORP,5202",
+      "county": "East Baton Rouge",
+      "state": "Louisiana",
+      "metersaffected": 4,
+      "communitydescriptor": "22033",
+      "customersrestored": null,
+      "reportedstarttime": null,
+      "utility_id": "5202"
+    },
+    {
+      "name": "DUQUESNE LIGHT CO,5487",
+      "county": "Beaver",
+      "state": "Pennsylvania",
+      "metersaffected": 324,
+      "communitydescriptor": "42007",
+      "customersrestored": null,
+      "reportedstarttime": null,
+      "utility_id": "5487"
+    }
+  ]
+}

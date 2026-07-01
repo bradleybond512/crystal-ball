@@ -10,7 +10,8 @@ export type WebcamSource =
   | 'NOAA_COASTAL'
   | 'CALTRANS'
   | 'TFL'
-  | 'SINGAPORE';
+  | 'SINGAPORE'
+  | 'GEONET';
 
 export type WebcamCategory =
   | 'weather'

@@ -1,0 +1,258 @@
+[
+  {
+    "icaoId": "WAAA",
+    "firId": "WAAF",
+    "firName": "WAAF UJUNG PANDANG",
+    "receiptTime": "2026-07-01T08:47:18.720Z",
+    "validTimeFrom": 1782895500,
+    "validTimeTo": 1782917100,
+    "seriesId": "08",
+    "hazard": "VA",
+    "qualifier": "SEMERU",
+    "base": 0,
+    "top": 15000,
+    "geom": "AREA",
+    "coords": [
+      {
+        "lon": 113,
+        "lat": -8.017
+      },
+      {
+        "lon": 113.117,
+        "lat": -8.267
+      },
+      {
+        "lon": 112.817,
+        "lat": -8.35
+      },
+      {
+        "lon": 112.483,
+        "lat": -8.233
+      },
+      {
+        "lon": 112.483,
+        "lat": -8
+      },
+      {
+        "lon": 113,
+        "lat": -8.017
+      }
+    ],
+    "dir": "SW",
+    "spd": "05",
+    "chng": "INTSF",
+    "rawSigmet": "WVID21 WAAA 010845\nWAAF SIGMET 08 VALID 010845/011445 WAAA-\nWAAF UJUNG PANDANG  FIR VA\nERUPTION MT SEMERU PSN S0806 E11255 VA CLD OBS AT 0830Z WI S0801\nE11300 - S0816 E11307 - S0821 E11249 - S0814 E11229 - S0800 E11229 -\nS0801 E11300 SFC/FL150 MOV SW 05KT INTSF="
+  },
+  {
+    "icaoId": "KKCI",
+    "firId": "KZAK",
+    "firName": "OAKLAND OCEANIC",
+    "receiptTime": "2026-07-01T08:51:45.754Z",
+    "validTimeFrom": 1782897000,
+    "validTimeTo": 1782918600,
+    "seriesId": "FOXTROT 1",
+    "hazard": "TC",
+    "qualifier": "FOUR",
+    "base": null,
+    "top": 57000,
+    "geom": "AREA",
+    "coords": [
+      {
+        "lon": -124.383,
+        "lat": 19.083
+      },
+      {
+        "lon": -121.833,
+        "lat": 17.133
+      },
+      {
+        "lon": -122.5,
+        "lat": 10.567
+      },
+      {
+        "lon": -127.133,
+        "lat": 6.883
+      },
+      {
+        "lon": -132.217,
+        "lat": 10.883
+      },
+      {
+        "lon": -124.383,
+        "lat": 19.083
+      }
+    ],
+    "dir": "NNW",
+    "spd": "06",
+    "chng": "NC",
+    "rawSigmet": "WCPN06 KKCI 010910\nWSTP0F\nKZAK SIGMET FOXTROT 1 VALID 010910/011510 KKCI-\nOAKLAND OCEANIC FIR TC FOUR-E OBS AT 0900Z NR N1430 W12654. MOV\nNNW 06KT. NC. FRQ TS TOP FL570 WI N1905 W12423 - N1708 W12150 -\nN1034 W12230 - N0653 W12708 - N1053 W13213 - N1905 W12423.\nFCST 1500Z TC CENTER N1457 W12658."
+  },
+  {
+    "icaoId": "RPLL",
+    "firId": "RPHI",
+    "firName": "RPHI MANILA",
+    "receiptTime": "2026-07-01T09:12:25.599Z",
+    "validTimeFrom": 1782897120,
+    "validTimeTo": 1782918720,
+    "seriesId": "7",
+    "hazard": "VA",
+    "qualifier": "MAYON",
+    "base": null,
+    "top": null,
+    "geom": "AREA",
+    "coords": [
+      {
+        "lon": 123.68,
+        "lat": 14.08
+      },
+      {
+        "lon": 123.83,
+        "lat": 14.07
+      },
+      {
+        "lon": 123.98,
+        "lat": 14.03
+      },
+      {
+        "lon": 124.11,
+        "lat": 13.97
+      },
+      {
+        "lon": 124.23,
+        "lat": 13.89
+      },
+      {
+        "lon": 124.34,
+        "lat": 13.79
+      },
+      {
+        "lon": 124.42,
+        "lat": 13.67
+      },
+      {
+        "lon": 124.49,
+        "lat": 13.54
+      },
+      {
+        "lon": 124.53,
+        "lat": 13.39
+      },
+      {
+        "lon": 124.54,
+        "lat": 13.25
+      },
+      {
+        "lon": 124.53,
+        "lat": 13.11
+      },
+      {
+        "lon": 124.49,
+        "lat": 12.96
+      },
+      {
+        "lon": 124.42,
+        "lat": 12.83
+      },
+      {
+        "lon": 124.34,
+        "lat": 12.71
+      },
+      {
+        "lon": 124.23,
+        "lat": 12.61
+      },
+      {
+        "lon": 124.11,
+        "lat": 12.53
+      },
+      {
+        "lon": 123.98,
+        "lat": 12.47
+      },
+      {
+        "lon": 123.83,
+        "lat": 12.43
+      },
+      {
+        "lon": 123.68,
+        "lat": 12.42
+      },
+      {
+        "lon": 123.53,
+        "lat": 12.43
+      },
+      {
+        "lon": 123.39,
+        "lat": 12.47
+      },
+      {
+        "lon": 123.25,
+        "lat": 12.53
+      },
+      {
+        "lon": 123.13,
+        "lat": 12.61
+      },
+      {
+        "lon": 123.03,
+        "lat": 12.71
+      },
+      {
+        "lon": 122.94,
+        "lat": 12.83
+      },
+      {
+        "lon": 122.88,
+        "lat": 12.96
+      },
+      {
+        "lon": 122.84,
+        "lat": 13.11
+      },
+      {
+        "lon": 122.83,
+        "lat": 13.25
+      },
+      {
+        "lon": 122.84,
+        "lat": 13.39
+      },
+      {
+        "lon": 122.88,
+        "lat": 13.54
+      },
+      {
+        "lon": 122.94,
+        "lat": 13.67
+      },
+      {
+        "lon": 123.03,
+        "lat": 13.79
+      },
+      {
+        "lon": 123.13,
+        "lat": 13.89
+      },
+      {
+        "lon": 123.25,
+        "lat": 13.97
+      },
+      {
+        "lon": 123.39,
+        "lat": 14.03
+      },
+      {
+        "lon": 123.53,
+        "lat": 14.07
+      },
+      {
+        "lon": 123.68,
+        "lat": 14.08
+      }
+    ],
+    "dir": null,
+    "spd": null,
+    "chng": null,
+    "rawSigmet": "WVPH31 RPLL 010912\nRPHI SIGMET 7 VALID 010912/011512 RPLL-\nRPHI MANILA FIR VA ERUPTION MT MAYON PSN N1315 E12341 \nVA CLD OBS AT 0858Z="
+  }
+]

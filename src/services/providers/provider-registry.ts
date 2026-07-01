@@ -48,6 +48,58 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // collide with crypto's in the per-domain redundancy group. ──
   { id: 'yahoo-finance', domain: 'equities', displayName: 'Yahoo Finance', authType: 'none', baseUrl: 'https://query1.finance.yahoo.com', rateLimitNote: 'unofficial chart API, be gentle', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.8, fallbackPriority: 1, independenceGroup: 'yahoo' },
   { id: 'finnhub', domain: 'equities', displayName: 'Finnhub', authType: 'free_key', requiredSecret: 'FINNHUB_API_KEY', baseUrl: 'https://finnhub.io', rateLimitNote: '60 req/min free tier', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'finnhub' },
+  // ── Intel Expansion Cluster 1: abuse.ch cyber trio ───────────────────────
+  // All three share independenceGroup 'abuse-ch' — same operator, same data
+  // pipeline. They MUST NOT count as 3 independent votes in corroboration.
+  // Sidecar routes: /api/cyber-c2 · /api/cyber-iocs · /api/malware-urls
+  { id: 'feodo-abuse-ch', domain: 'cyber_threat', displayName: 'Feodo Tracker (C2)', authType: 'none', baseUrl: 'https://feodotracker.abuse.ch', rateLimitNote: 'bulk JSON, no key', freshnessTtlMs: 10 * MIN, reliabilityWeight: 0.8, fallbackPriority: 1, independenceGroup: 'abuse-ch' },
+  { id: 'threatfox-abuse-ch', domain: 'cyber_threat', displayName: 'ThreatFox IOCs', authType: 'none', baseUrl: 'https://threatfox.abuse.ch', rateLimitNote: 'CSV export, no key', freshnessTtlMs: 10 * MIN, reliabilityWeight: 0.8, fallbackPriority: 2, independenceGroup: 'abuse-ch' },
+  { id: 'urlhaus-abuse-ch', domain: 'cyber_threat', displayName: 'URLhaus Malware URLs', authType: 'none', baseUrl: 'https://urlhaus.abuse.ch', rateLimitNote: 'CSV export, no key', freshnessTtlMs: 10 * MIN, reliabilityWeight: 0.8, fallbackPriority: 3, independenceGroup: 'abuse-ch' },
+  // ── Intel Expansion Cluster 1: Frankfurter FX ────────────────────────────
+  // ECB-sourced FX rates via Frankfurter API. New 'fx' domain.
+  // Sidecar route: /api/fx-rates?base=USD&symbols=EUR,GBP,...
+  { id: 'frankfurter-fx', domain: 'fx', displayName: 'Frankfurter FX (ECB)', authType: 'none', baseUrl: 'https://api.frankfurter.dev', rateLimitNote: 'no key, no published limit', freshnessTtlMs: 12 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'ecb-fx' },
+  // ── Intel Expansion Cluster 2: IMF PortWatch ─────────────────────────────
+  // Daily maritime chokepoint transit counts from IMF PortWatch ArcGIS
+  // FeatureServer. Keyless, ~daily cadence — 6h cache. New 'supply_chain' domain.
+  // Sidecar route: /api/chokepoint-transits
+  { id: 'imf-portwatch', domain: 'supply_chain', displayName: 'IMF PortWatch Chokepoints', authType: 'none', baseUrl: 'https://services9.arcgis.com', rateLimitNote: 'ArcGIS FeatureServer, no key, daily data', freshnessTtlMs: 6 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'imf-portwatch' },
+  // ── Intel Expansion Cluster 3 ─────────────────────────────────────────────
+  // IODA internet outage alerts. New 'internet_health' domain. 15 min cache.
+  // Sidecar route: /api/internet-outages?from=<epoch>&until=<epoch>
+  { id: 'ioda', domain: 'internet_health', displayName: 'IODA Internet Outages (Georgia Tech)', authType: 'none', baseUrl: 'https://api.ioda.inetintel.cc.gatech.edu', rateLimitNote: 'no key required, fair-use', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'ioda' },
+  // openFDA drug shortages + enforcement recalls. New 'health' domain. 6h cache.
+  // Sidecar routes: /api/pharma-shortages · /api/recalls?type=drug|food
+  { id: 'openfda', domain: 'health', displayName: 'openFDA (Shortages + Recalls)', authType: 'none', baseUrl: 'https://api.fda.gov', rateLimitNote: 'no key, 240 req/min per IP', freshnessTtlMs: 6 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'openfda' },
+  // ORNL ODIN real-time power outages by county. New 'grid' domain. 15 min cache.
+  // Sidecar route: /api/grid-outages
+  { id: 'ornl-odin', domain: 'grid', displayName: 'ORNL ODIN Power Outages', authType: 'none', baseUrl: 'https://ornl.opendatasoft.com', rateLimitNote: 'no key, Socrata ODS API', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'ornl-odin' },
+  // Copernicus EMS emergency activations. 'disasters' domain. 30 min cache.
+  // Sidecar route: /api/ems-activations
+  { id: 'copernicus-ems', domain: 'disasters', displayName: 'Copernicus Emergency Management', authType: 'none', baseUrl: 'https://mapping.emergency.copernicus.eu', rateLimitNote: 'no key, DRF public API', freshnessTtlMs: 30 * MIN, reliabilityWeight: 0.9, fallbackPriority: 5, independenceGroup: 'copernicus-ems' },
+  // GLEIF LEI entity lookup (legal entity identifier registry). New 'entities' domain. 24h cache.
+  // Sidecar route: /api/entity-lei?name=<legal name>
+  { id: 'gleif', domain: 'entities', displayName: 'GLEIF LEI Registry', authType: 'none', baseUrl: 'https://api.gleif.org', rateLimitNote: 'no key, JSON:API, fair-use', freshnessTtlMs: 24 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'gleif' },
+
+  // ── Intel Expansion Cluster 4 ─────────────────────────────────────────────
+  // GDELT GKG geocoded events. New 'osint' domain. 15 min cache.
+  // Sidecar route: /api/gdelt-geo?query=&timespan=
+  { id: 'gdelt-gkg', domain: 'osint', displayName: 'GDELT GKG Geocoded Events', authType: 'none', baseUrl: 'https://api.gdeltproject.org', rateLimitNote: 'no key, fair-use, gkg_geojson v1', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.75, fallbackPriority: 1, independenceGroup: 'gdelt' },
+  // SWPC OVATION aurora forecast. New 'space_weather' domain. 15 min cache.
+  // Sidecar route: /api/spaceweather-extra (combined with solar-regions below)
+  { id: 'swpc-ovation', domain: 'space_weather', displayName: 'SWPC OVATION Aurora Forecast', authType: 'none', baseUrl: 'https://services.swpc.noaa.gov', rateLimitNote: 'no key, NOAA SWPC JSON feed', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'noaa-swpc' },
+  // SWPC solar active regions + flare probabilities. Same 'space_weather' domain. 15 min cache.
+  { id: 'swpc-solar-regions', domain: 'space_weather', displayName: 'SWPC Solar Active Regions', authType: 'none', baseUrl: 'https://services.swpc.noaa.gov', rateLimitNote: 'no key, NOAA SWPC JSON feed', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'noaa-swpc' },
+  // AviationWeather SIGMET/G-AIRMET airspace hazard notices. 'aviation' domain. 10 min cache.
+  // Shares independenceGroup with existing aviationweather-gov — same upstream.
+  // Sidecar route: /api/aviation-hazards
+  { id: 'aviationweather-hazards', domain: 'aviation', displayName: 'AviationWeather SIGMET/G-AIRMET', authType: 'none', baseUrl: 'https://aviationweather.gov', rateLimitNote: 'no key, NWS/FAA JSON API', freshnessTtlMs: 10 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'noaa' },
+  // FAA NAS Status — airport ground stops, delays, closures. 'aviation' domain. 5 min cache.
+  // Sidecar route: /api/faa-nas-status
+  { id: 'faa-nas', domain: 'aviation', displayName: 'FAA NAS Status (Airport Events)', authType: 'none', baseUrl: 'https://nasstatus.faa.gov', rateLimitNote: 'no key, FAA public API', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.95, fallbackPriority: 3, independenceGroup: 'faa' },
+  // BfS ODL German gamma-dose monitoring network. New 'nuclear' domain. 60 min cache.
+  // Sidecar route: /api/radiation-grid
+  { id: 'bfs-odl', domain: 'nuclear', displayName: 'BfS ODL Radiation Grid (Germany)', authType: 'none', baseUrl: 'https://www.imis.bfs.de', rateLimitNote: 'no key, WFS GeoJSON, ~1679 stations', freshnessTtlMs: 60 * MIN, reliabilityWeight: 0.95, fallbackPriority: 1, independenceGroup: 'bfs-odl' },
 ];
 
 const BY_ID = new Map(PROVIDER_DEFINITIONS.map((d) => [d.id, d]));

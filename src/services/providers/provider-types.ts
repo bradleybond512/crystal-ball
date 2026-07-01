@@ -17,13 +17,15 @@ export type ProviderDomain =
   | 'food_security'
   | 'conflict'
   | 'cyber'
+  | 'cyber_threat'
   | 'markets'
   | 'maritime'
   | 'infrastructure'
   | 'transport'
   | 'space'
   | 'air_quality'
-  | 'equities';
+  | 'equities'
+  | 'fx';
 
 export type ProviderAuthType = 'none' | 'free_key' | 'account';
 

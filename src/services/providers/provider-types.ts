@@ -25,7 +25,8 @@ export type ProviderDomain =
   | 'space'
   | 'air_quality'
   | 'equities'
-  | 'fx';
+  | 'fx'
+  | 'supply_chain';
 
 export type ProviderAuthType = 'none' | 'free_key' | 'account';
 

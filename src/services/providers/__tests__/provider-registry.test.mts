@@ -112,3 +112,40 @@ test('Intel Cluster 1: cyber_threat domain providers sort by fallbackPriority', 
     assert.ok(cyberThreat[i].fallbackPriority >= cyberThreat[i - 1].fallbackPriority);
   }
 });
+
+// ── Intel Expansion Cluster 2: IMF PortWatch ─────────────────────────────────
+
+test('Intel Cluster 2: imf-portwatch is registered', () => {
+  const def = getProviderDefinition('imf-portwatch');
+  assert.ok(def, 'imf-portwatch must be registered');
+});
+
+test('Intel Cluster 2: imf-portwatch has correct domain and auth', () => {
+  const def = getProviderDefinition('imf-portwatch')!;
+  assert.equal(def.domain, 'supply_chain');
+  assert.equal(def.authType, 'none');
+  assert.equal(def.independenceGroup, 'imf-portwatch');
+  assert.equal(def.baseUrl, 'https://services9.arcgis.com');
+});
+
+test('Intel Cluster 2: imf-portwatch TTL is 6 hours', () => {
+  const def = getProviderDefinition('imf-portwatch')!;
+  assert.equal(def.freshnessTtlMs, 6 * 60 * 60 * 1000);
+});
+
+test('Intel Cluster 2: imf-portwatch reliability is >= 0.85', () => {
+  const def = getProviderDefinition('imf-portwatch')!;
+  assert.ok(def.reliabilityWeight >= 0.85, `reliabilityWeight ${def.reliabilityWeight} must be >= 0.85`);
+});
+
+test('Intel Cluster 2: supply_chain domain has exactly one primary', () => {
+  const primaries = providersForDomain('supply_chain').filter(d => d.fallbackPriority === 1);
+  assert.equal(primaries.length, 1, 'supply_chain must have exactly one primary provider');
+  assert.equal(primaries[0].id, 'imf-portwatch');
+});
+
+test('Intel Cluster 2: imf-portwatch independence group is isolated from cyber and fx', () => {
+  const groups = independentGroupsFor(['feodo-abuse-ch', 'frankfurter-fx', 'imf-portwatch']);
+  // abuse-ch + ecb-fx + imf-portwatch = 3 distinct groups
+  assert.equal(groups.size, 3);
+});

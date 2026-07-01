@@ -59,6 +59,11 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // ECB-sourced FX rates via Frankfurter API. New 'fx' domain.
   // Sidecar route: /api/fx-rates?base=USD&symbols=EUR,GBP,...
   { id: 'frankfurter-fx', domain: 'fx', displayName: 'Frankfurter FX (ECB)', authType: 'none', baseUrl: 'https://api.frankfurter.dev', rateLimitNote: 'no key, no published limit', freshnessTtlMs: 12 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'ecb-fx' },
+  // ── Intel Expansion Cluster 2: IMF PortWatch ─────────────────────────────
+  // Daily maritime chokepoint transit counts from IMF PortWatch ArcGIS
+  // FeatureServer. Keyless, ~daily cadence — 6h cache. New 'supply_chain' domain.
+  // Sidecar route: /api/chokepoint-transits
+  { id: 'imf-portwatch', domain: 'supply_chain', displayName: 'IMF PortWatch Chokepoints', authType: 'none', baseUrl: 'https://services9.arcgis.com', rateLimitNote: 'ArcGIS FeatureServer, no key, daily data', freshnessTtlMs: 6 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'imf-portwatch' },
 ];
 
 const BY_ID = new Map(PROVIDER_DEFINITIONS.map((d) => [d.id, d]));

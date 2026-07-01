@@ -16942,6 +16942,103 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
   }
 
+  // ── Intel Expansion Cluster 4 ─────────────────────────────────────────────
+  // GDELT GKG + SWPC aurora/solar-regions + AviationWeather hazards
+  // + FAA NAS Status + BfS ODL radiation — all keyless.
+
+  // GET /api/gdelt-geo — GDELT GKG geocoded events (~15 min cache)
+  // Accepts ?query= (default "protest") and ?timespan= (minutes, default 60)
+  if (requestUrl.pathname === '/api/gdelt-geo' && req.method === 'GET') {
+ const GDELT_TTL = 15 * 60 * 1000;
+ const query = requestUrl.searchParams.get('query') || 'protest';
+ const timespan = requestUrl.searchParams.get('timespan') || '60';
+ const cacheKey = `gdelt-geo:${query}:${timespan}`;
+ const cached = getCached(cacheKey, GDELT_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.gdeltproject.org/api/v1/gkg_geojson?QUERY=${encodeURIComponent(query)}&TIMESPAN=${encodeURIComponent(timespan)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 20_000);
+ if (!r.ok) return json({ events: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `gdelt upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const events = parseGdeltGkgEvents(raw);
+ const result = { events, count: events.length, query, timespan, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, GDELT_TTL);
+ return json(result);
+  }
+
+  // GET /api/spaceweather-extra — SWPC OVATION aurora + solar active regions (~15 min cache)
+  if (requestUrl.pathname === '/api/spaceweather-extra' && req.method === 'GET') {
+ const SW_TTL = 15 * 60 * 1000;
+ const cached = getCached('spaceweather-extra', SW_TTL);
+ if (cached) return json(cached);
+ const [auroraRes, solarRes] = await Promise.allSettled([
+   fetchWithTimeout('https://services.swpc.noaa.gov/json/ovation_aurora_latest.json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+   fetchWithTimeout('https://services.swpc.noaa.gov/json/solar_regions.json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+ ]);
+ const auroraRaw = auroraRes.status === 'fulfilled' && auroraRes.value.ok ? await auroraRes.value.json() : null;
+ const solarRaw = solarRes.status === 'fulfilled' && solarRes.value.ok ? await solarRes.value.json() : null;
+ const aurora = parseSwpcAurora(auroraRaw);
+ const solarRegions = parseSwpcSolarRegions(solarRaw);
+ const degraded = !auroraRaw && !solarRaw;
+ const result = { aurora, solarRegions, solarRegionCount: solarRegions.length, fetchedAt: Date.now(), degraded };
+ setCached('spaceweather-extra', result, SW_TTL);
+ return json(result);
+  }
+
+  // GET /api/aviation-hazards — AviationWeather SIGMET/G-AIRMET airspace hazards (~10 min cache)
+  if (requestUrl.pathname === '/api/aviation-hazards' && req.method === 'GET') {
+ const AVHAZ_TTL = 10 * 60 * 1000;
+ const cached = getCached('aviation-hazards', AVHAZ_TTL);
+ if (cached) return json(cached);
+ const [isigmetRes, airsigmetRes, gairmetRes] = await Promise.allSettled([
+   fetchWithTimeout('https://aviationweather.gov/api/data/isigmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+   fetchWithTimeout('https://aviationweather.gov/api/data/airsigmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+   fetchWithTimeout('https://aviationweather.gov/api/data/gairmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
+ ]);
+ const isigmetRaw = isigmetRes.status === 'fulfilled' && isigmetRes.value.ok ? await isigmetRes.value.json() : [];
+ const airsigmetRaw = airsigmetRes.status === 'fulfilled' && airsigmetRes.value.ok ? await airsigmetRes.value.json() : [];
+ const gairmetRaw = gairmetRes.status === 'fulfilled' && gairmetRes.value.ok ? await gairmetRes.value.json() : [];
+ const hazards = [
+   ...parseAviationHazards(isigmetRaw, 'isigmet'),
+   ...parseAviationHazards(airsigmetRaw, 'airsigmet'),
+   ...parseAviationHazards(gairmetRaw, 'gairmet'),
+ ];
+ const result = { hazards, count: hazards.length, fetchedAt: Date.now(), degraded: false };
+ setCached('aviation-hazards', result, AVHAZ_TTL);
+ return json(result);
+  }
+
+  // GET /api/faa-nas-status — FAA NAS airport ground stops / delays (~5 min cache)
+  if (requestUrl.pathname === '/api/faa-nas-status' && req.method === 'GET') {
+ const FAA_TTL = 5 * 60 * 1000;
+ const cached = getCached('faa-nas-status', FAA_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = 'https://nasstatus.faa.gov/api/airport-events';
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ events: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `faa-nas upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const events = parseFaaNasEvents(raw);
+ const result = { events, count: events.length, fetchedAt: Date.now(), degraded: false };
+ setCached('faa-nas-status', result, FAA_TTL);
+ return json(result);
+  }
+
+  // GET /api/radiation-grid — BfS ODL German gamma-dose monitoring stations (~60 min cache)
+  if (requestUrl.pathname === '/api/radiation-grid' && req.method === 'GET') {
+ const BFS_TTL = 60 * 60 * 1000;
+ const count = requestUrl.searchParams.get('count') || '50';
+ const cacheKey = `bfs-odl:${count}`;
+ const cached = getCached(cacheKey, BFS_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://www.imis.bfs.de/ogc/opendata/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=opendata:odlinfo_odl_1h_latest&outputFormat=application/json&count=${encodeURIComponent(count)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 20_000);
+ if (!r.ok) return json({ stations: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `bfs-odl upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const stations = parseBfsOdlStations(raw);
+ const result = { stations, count: stations.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, BFS_TTL);
+ return json(result);
+  }
+
   if (context.cloudFallback && cloudPreferred.has(requestUrl.pathname)) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context);
  if (cloudResponse) return cloudResponse;
@@ -17556,6 +17653,177 @@ export function parseGleifLeiRecords(raw) {
       legalForm: entity?.legalForm?.id ?? null,
     };
   });
+}
+
+// ── Intel Expansion Cluster 4 parsers ────────────────────────────────────────
+
+// ── GDELT GKG geocoded events parser ─────────────────────────────────────────
+// Input: GeoJSON FeatureCollection from api.gdeltproject.org/api/v1/gkg_geojson
+// Real properties: urlpubtimedate, name, urltone, url, mentionedthemes
+export function parseGdeltGkgEvents(raw) {
+  if (!raw || !Array.isArray(raw.features)) return [];
+  return raw.features.map(f => {
+    const coords = f?.geometry?.coordinates;
+    const props = f?.properties ?? {};
+    return {
+      name: props.name ?? null,
+      lat: Array.isArray(coords) ? coords[1] ?? null : null,
+      lon: Array.isArray(coords) ? coords[0] ?? null : null,
+      tone: typeof props.urltone === 'number' ? props.urltone : null,
+      url: props.url ?? null,
+      publishedAt: props.urlpubtimedate ?? null,
+      themes: typeof props.mentionedthemes === 'string'
+        ? props.mentionedthemes.split(';').map(t => t.trim()).filter(Boolean)
+        : [],
+    };
+  });
+}
+
+// ── SWPC OVATION aurora summary parser ───────────────────────────────────────
+// Input: { 'Forecast Time', coordinates:[[lon,lat,aurora%],...] }
+// Output: { forecastTime, maxAuroraPercent, highLatitudeBand } summary.
+export function parseSwpcAurora(raw) {
+  if (!raw || !Array.isArray(raw.coordinates)) {
+    return { forecastTime: null, observationTime: null, maxAuroraPercent: 0, highLatitudeBand: false };
+  }
+  let maxPct = 0;
+  for (const coord of raw.coordinates) {
+    const pct = coord[2];
+    if (typeof pct === 'number' && pct > maxPct) maxPct = pct;
+  }
+  return {
+    forecastTime: raw['Forecast Time'] ?? null,
+    observationTime: raw['Observation Time'] ?? null,
+    maxAuroraPercent: maxPct,
+    highLatitudeBand: maxPct >= 30,
+  };
+}
+
+// ── SWPC solar active regions parser ─────────────────────────────────────────
+// Input: array of active region records with flare probabilities
+// Real fields: region, latitude, longitude, location, mag_class, spot_class,
+//   c_flare_probability, m_flare_probability, x_flare_probability, observed_date
+export function parseSwpcSolarRegions(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(r => ({
+    region: r.region ?? null,
+    location: r.location ?? null,
+    lat: typeof r.latitude === 'number' ? r.latitude : null,
+    lon: typeof r.longitude === 'number' ? r.longitude : null,
+    magClass: r.mag_class ?? null,
+    spotClass: r.spot_class ?? null,
+    cFlareProbability: typeof r.c_flare_probability === 'number' ? r.c_flare_probability : null,
+    mFlareProbability: typeof r.m_flare_probability === 'number' ? r.m_flare_probability : null,
+    xFlareProbability: typeof r.x_flare_probability === 'number' ? r.x_flare_probability : null,
+    observedDate: r.observed_date ?? null,
+  }));
+}
+
+// ── AviationWeather SIGMET / G-AIRMET hazard parser ──────────────────────────
+// Handles isigmet, airsigmet, and gairmet record shapes.
+// isigmet fields: icaoId, firName, hazard, qualifier, validTimeFrom, validTimeTo, coords, rawSigmet
+// airsigmet fields: icaoId, airSigmetType, hazard, severity, validTimeFrom, validTimeTo, coords, rawAirSigmet
+// gairmet fields: tag, hazard, severity, due_to, validTime, expireTime, coords
+export function parseAviationHazards(raw, source) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(r => {
+    let hazardType, rawText, validFrom, validTo, coords;
+    if (source === 'isigmet') {
+      hazardType = r.hazard ?? null;
+      rawText = r.rawSigmet ?? null;
+      validFrom = r.validTimeFrom ?? null;
+      validTo = r.validTimeTo ?? null;
+      coords = r.coords ?? null;
+    } else if (source === 'airsigmet') {
+      hazardType = r.hazard ?? null;
+      rawText = r.rawAirSigmet ?? null;
+      validFrom = r.validTimeFrom ?? null;
+      validTo = r.validTimeTo ?? null;
+      coords = r.coords ?? null;
+    } else {
+      // gairmet
+      hazardType = r.hazard ?? null;
+      rawText = r.product ?? null;
+      validFrom = r.validTime ?? null;
+      validTo = r.expireTime ?? null;
+      coords = r.coords ?? null;
+    }
+    return {
+      hazardType,
+      source,
+      severity: r.severity ?? r.qualifier ?? null,
+      raw: rawText,
+      coords: coords ?? null,
+      validFrom,
+      validTo,
+    };
+  });
+}
+
+// ── FAA NAS airport event parser ─────────────────────────────────────────────
+// Input: array of airport-events records
+// Real fields: airportId, airportLongName, latitude, longitude,
+//   groundStop, groundDelay, arrivalDelay, departureDelay, airportClosure, freeForm
+export function parseFaaNasEvents(raw) {
+  if (!Array.isArray(raw)) return [];
+  const events = [];
+  for (const rec of raw) {
+    const airport = rec.airportId ?? null;
+    const airportName = rec.airportLongName ?? null;
+    const lat = rec.latitude != null ? Number(rec.latitude) : null;
+    const lon = rec.longitude != null ? Number(rec.longitude) : null;
+    const base = { airport, airportName, lat, lon };
+
+    if (rec.groundStop) {
+      events.push({ ...base, eventType: 'ground_stop', reason: rec.groundStop.reason ?? null,
+        start: rec.groundStop.startTime ?? null, end: rec.groundStop.endTime ?? null });
+    }
+    if (rec.groundDelay) {
+      events.push({ ...base, eventType: 'ground_delay', reason: rec.groundDelay.impactingCondition ?? null,
+        start: rec.groundDelay.startTime ?? null, end: rec.groundDelay.endTime ?? null });
+    }
+    if (rec.arrivalDelay) {
+      events.push({ ...base, eventType: 'arrival_delay', reason: rec.arrivalDelay.reason ?? null,
+        start: rec.arrivalDelay.updateTime ?? null, end: null });
+    }
+    if (rec.departureDelay) {
+      events.push({ ...base, eventType: 'departure_delay', reason: rec.departureDelay.reason ?? null,
+        start: rec.departureDelay.updateTime ?? null, end: null });
+    }
+    if (rec.airportClosure) {
+      events.push({ ...base, eventType: 'closure', reason: rec.airportClosure.text ?? null,
+        start: rec.airportClosure.startTime ?? null, end: rec.airportClosure.endTime ?? null });
+    }
+    if (rec.freeForm && !rec.groundStop && !rec.groundDelay && !rec.arrivalDelay && !rec.departureDelay && !rec.airportClosure) {
+      events.push({ ...base, eventType: 'notam', reason: rec.freeForm.text ?? null,
+        start: rec.freeForm.startTime ?? null, end: rec.freeForm.endTime ?? null });
+    }
+  }
+  return events;
+}
+
+// ── BfS ODL radiation station parser ─────────────────────────────────────────
+// Input: GeoJSON FeatureCollection from BfS IMIS WFS
+// Real property names: id, kenn, plz, name, site_status, start_measure, value, unit
+export function parseBfsOdlStations(raw) {
+  if (!raw || !Array.isArray(raw.features)) return [];
+  return raw.features
+    .map(f => {
+      const coords = f?.geometry?.coordinates;
+      const p = f?.properties ?? {};
+      return {
+        id: p.id ?? null,
+        kenn: p.kenn ?? null,
+        name: p.name ?? null,
+        lat: Array.isArray(coords) ? coords[1] ?? null : null,
+        lon: Array.isArray(coords) ? coords[0] ?? null : null,
+        doseRate: typeof p.value === 'number' ? p.value : null,
+        unit: p.unit ?? null,
+        measuredAt: p.start_measure ?? null,
+        siteStatus: p.site_status_text ?? null,
+      };
+    })
+    .filter(s => s.doseRate !== null);
 }
 
 export async function createLocalApiServer(options = {}) {

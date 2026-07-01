@@ -80,6 +80,26 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // GLEIF LEI entity lookup (legal entity identifier registry). New 'entities' domain. 24h cache.
   // Sidecar route: /api/entity-lei?name=<legal name>
   { id: 'gleif', domain: 'entities', displayName: 'GLEIF LEI Registry', authType: 'none', baseUrl: 'https://api.gleif.org', rateLimitNote: 'no key, JSON:API, fair-use', freshnessTtlMs: 24 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'gleif' },
+
+  // ── Intel Expansion Cluster 4 ─────────────────────────────────────────────
+  // GDELT GKG geocoded events. New 'osint' domain. 15 min cache.
+  // Sidecar route: /api/gdelt-geo?query=&timespan=
+  { id: 'gdelt-gkg', domain: 'osint', displayName: 'GDELT GKG Geocoded Events', authType: 'none', baseUrl: 'https://api.gdeltproject.org', rateLimitNote: 'no key, fair-use, gkg_geojson v1', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.75, fallbackPriority: 1, independenceGroup: 'gdelt' },
+  // SWPC OVATION aurora forecast. New 'space_weather' domain. 15 min cache.
+  // Sidecar route: /api/spaceweather-extra (combined with solar-regions below)
+  { id: 'swpc-ovation', domain: 'space_weather', displayName: 'SWPC OVATION Aurora Forecast', authType: 'none', baseUrl: 'https://services.swpc.noaa.gov', rateLimitNote: 'no key, NOAA SWPC JSON feed', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'noaa-swpc' },
+  // SWPC solar active regions + flare probabilities. Same 'space_weather' domain. 15 min cache.
+  { id: 'swpc-solar-regions', domain: 'space_weather', displayName: 'SWPC Solar Active Regions', authType: 'none', baseUrl: 'https://services.swpc.noaa.gov', rateLimitNote: 'no key, NOAA SWPC JSON feed', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'noaa-swpc' },
+  // AviationWeather SIGMET/G-AIRMET airspace hazard notices. 'aviation' domain. 10 min cache.
+  // Shares independenceGroup with existing aviationweather-gov — same upstream.
+  // Sidecar route: /api/aviation-hazards
+  { id: 'aviationweather-hazards', domain: 'aviation', displayName: 'AviationWeather SIGMET/G-AIRMET', authType: 'none', baseUrl: 'https://aviationweather.gov', rateLimitNote: 'no key, NWS/FAA JSON API', freshnessTtlMs: 10 * MIN, reliabilityWeight: 0.9, fallbackPriority: 2, independenceGroup: 'noaa' },
+  // FAA NAS Status — airport ground stops, delays, closures. 'aviation' domain. 5 min cache.
+  // Sidecar route: /api/faa-nas-status
+  { id: 'faa-nas', domain: 'aviation', displayName: 'FAA NAS Status (Airport Events)', authType: 'none', baseUrl: 'https://nasstatus.faa.gov', rateLimitNote: 'no key, FAA public API', freshnessTtlMs: 5 * MIN, reliabilityWeight: 0.95, fallbackPriority: 3, independenceGroup: 'faa' },
+  // BfS ODL German gamma-dose monitoring network. New 'nuclear' domain. 60 min cache.
+  // Sidecar route: /api/radiation-grid
+  { id: 'bfs-odl', domain: 'nuclear', displayName: 'BfS ODL Radiation Grid (Germany)', authType: 'none', baseUrl: 'https://www.imis.bfs.de', rateLimitNote: 'no key, WFS GeoJSON, ~1679 stations', freshnessTtlMs: 60 * MIN, reliabilityWeight: 0.95, fallbackPriority: 1, independenceGroup: 'bfs-odl' },
 ];
 
 const BY_ID = new Map(PROVIDER_DEFINITIONS.map((d) => [d.id, d]));

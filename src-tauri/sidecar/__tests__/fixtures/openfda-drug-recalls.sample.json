@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "disclaimer": "Do not rely on openFDA to make decisions regarding medical care.",
+    "terms": "https://open.fda.gov/terms/",
+    "license": "https://open.fda.gov/license/",
+    "last_updated": "2026-07-01",
+    "results": {
+      "skip": 0,
+      "limit": 3,
+      "total": 18924
+    }
+  },
+  "results": [
+    {
+      "product_description": "Progesterone 100 mg/mL in Corn Oil Injection, 2 mL vials, Rx only, Essential Wellness PHARMACY, 4625 N. University, Peoria, IL 61614.",
+      "reason_for_recall": "Lack of Assurance of Sterility: A recall of all compounded sterile preparations within expiry is being initiated due to observations associated with poor sterile production practices resulting in a lack of sterility assurance for their finished drugs.",
+      "classification": "Class II",
+      "state": "IL",
+      "distribution_pattern": "Nationwide",
+      "status": "Terminated",
+      "recall_initiation_date": "20150903",
+      "voluntary_mandated": "Voluntary: Firm initiated"
+    },
+    {
+      "product_description": "Methotrexate Injection, USP, 50 mg/2 mL (25 mg/mL), Single-dose vials",
+      "reason_for_recall": "Presence of visible particulate matter in some vials",
+      "classification": "Class II",
+      "state": "NJ",
+      "distribution_pattern": "US and Puerto Rico",
+      "status": "Ongoing",
+      "recall_initiation_date": "20241105",
+      "voluntary_mandated": "Voluntary: Firm initiated"
+    },
+    {
+      "product_description": "Lidocaine HCl 1% and Epinephrine 1:100,000 Injection, USP, 20 mL Multi-Dose Vials",
+      "reason_for_recall": "Failed sterility testing",
+      "classification": "Class I",
+      "state": "TX",
+      "distribution_pattern": "Nationwide",
+      "status": "Ongoing",
+      "recall_initiation_date": "20250301",
+      "voluntary_mandated": "Voluntary: Firm initiated"
+    }
+  ]
+}

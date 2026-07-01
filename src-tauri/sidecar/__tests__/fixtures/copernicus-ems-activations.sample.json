@@ -1,0 +1,46 @@
+{
+  "count": 1020,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "code": "EMSR886",
+      "countries": [{"short_name": "Germany"}],
+      "category": {"slug": "fire", "name": "Wildfire"},
+      "name": "Wildfire in Rhineland-Palatinate, Germany",
+      "centroid": "POINT (7.826469502837607 49.829754729741964)",
+      "activationTime": "2026-06-27T15:51:00",
+      "lastUpdate": "2026-06-30T20:17:53.546550",
+      "drmPhase": "response",
+      "closed": true,
+      "n_aois": 1,
+      "n_products": 2
+    },
+    {
+      "code": "EMSR885",
+      "countries": [{"short_name": "Spain"}],
+      "category": {"slug": "fire", "name": "Wildfire"},
+      "name": "Wildfire in Aragon, Spain",
+      "centroid": "POINT (0.326735391845018 41.96833064771739)",
+      "activationTime": "2026-06-25T22:29:00",
+      "lastUpdate": "2026-07-01T10:41:05.264674",
+      "drmPhase": "response",
+      "closed": false,
+      "n_aois": 1,
+      "n_products": 1
+    },
+    {
+      "code": "EMSR884",
+      "countries": [{"short_name": "Venezuela"}],
+      "category": {"slug": "earthquake", "name": "Earthquake"},
+      "name": "Earthquake in Venezuela",
+      "centroid": "POINT (-67.80859040143667 10.277062692317687)",
+      "activationTime": "2026-06-25T03:51:00",
+      "lastUpdate": "2026-07-01T06:26:40.228266",
+      "drmPhase": "response",
+      "closed": false,
+      "n_aois": 13,
+      "n_products": 19
+    }
+  ]
+}

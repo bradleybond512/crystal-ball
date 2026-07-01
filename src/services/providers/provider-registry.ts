@@ -64,6 +64,22 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
   // FeatureServer. Keyless, ~daily cadence — 6h cache. New 'supply_chain' domain.
   // Sidecar route: /api/chokepoint-transits
   { id: 'imf-portwatch', domain: 'supply_chain', displayName: 'IMF PortWatch Chokepoints', authType: 'none', baseUrl: 'https://services9.arcgis.com', rateLimitNote: 'ArcGIS FeatureServer, no key, daily data', freshnessTtlMs: 6 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'imf-portwatch' },
+  // ── Intel Expansion Cluster 3 ─────────────────────────────────────────────
+  // IODA internet outage alerts. New 'internet_health' domain. 15 min cache.
+  // Sidecar route: /api/internet-outages?from=<epoch>&until=<epoch>
+  { id: 'ioda', domain: 'internet_health', displayName: 'IODA Internet Outages (Georgia Tech)', authType: 'none', baseUrl: 'https://api.ioda.inetintel.cc.gatech.edu', rateLimitNote: 'no key required, fair-use', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'ioda' },
+  // openFDA drug shortages + enforcement recalls. New 'health' domain. 6h cache.
+  // Sidecar routes: /api/pharma-shortages · /api/recalls?type=drug|food
+  { id: 'openfda', domain: 'health', displayName: 'openFDA (Shortages + Recalls)', authType: 'none', baseUrl: 'https://api.fda.gov', rateLimitNote: 'no key, 240 req/min per IP', freshnessTtlMs: 6 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'openfda' },
+  // ORNL ODIN real-time power outages by county. New 'grid' domain. 15 min cache.
+  // Sidecar route: /api/grid-outages
+  { id: 'ornl-odin', domain: 'grid', displayName: 'ORNL ODIN Power Outages', authType: 'none', baseUrl: 'https://ornl.opendatasoft.com', rateLimitNote: 'no key, Socrata ODS API', freshnessTtlMs: 15 * MIN, reliabilityWeight: 0.85, fallbackPriority: 1, independenceGroup: 'ornl-odin' },
+  // Copernicus EMS emergency activations. 'disasters' domain. 30 min cache.
+  // Sidecar route: /api/ems-activations
+  { id: 'copernicus-ems', domain: 'disasters', displayName: 'Copernicus Emergency Management', authType: 'none', baseUrl: 'https://mapping.emergency.copernicus.eu', rateLimitNote: 'no key, DRF public API', freshnessTtlMs: 30 * MIN, reliabilityWeight: 0.9, fallbackPriority: 5, independenceGroup: 'copernicus-ems' },
+  // GLEIF LEI entity lookup (legal entity identifier registry). New 'entities' domain. 24h cache.
+  // Sidecar route: /api/entity-lei?name=<legal name>
+  { id: 'gleif', domain: 'entities', displayName: 'GLEIF LEI Registry', authType: 'none', baseUrl: 'https://api.gleif.org', rateLimitNote: 'no key, JSON:API, fair-use', freshnessTtlMs: 24 * 60 * MIN, reliabilityWeight: 0.9, fallbackPriority: 1, independenceGroup: 'gleif' },
 ];
 
 const BY_ID = new Map(PROVIDER_DEFINITIONS.map((d) => [d.id, d]));

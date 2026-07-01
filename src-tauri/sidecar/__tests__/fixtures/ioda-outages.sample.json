@@ -1,0 +1,106 @@
+{
+  "type": "outages.alerts",
+  "metadata": {
+    "requestTime": "2026-07-01T13:55:31+00:00",
+    "responseTime": "2026-07-01T13:55:31+00:00"
+  },
+  "requestParameters": {
+    "from": "1782828000",
+    "until": "1782914400",
+    "datasource": null,
+    "limit": 4,
+    "page": null,
+    "relatedTo": null,
+    "entityType": null,
+    "entityCode": null,
+    "ignoreMethods": null,
+    "extendWindow": 0
+  },
+  "error": null,
+  "data": [
+    {
+      "datasource": "ping-slash24",
+      "entity": {
+        "code": "639",
+        "name": "Ningxia",
+        "subnames": [],
+        "type": "region",
+        "attrs": {
+          "fqid": "geo.netacuity.AS.CN.639",
+          "country_code": "CN",
+          "country_name": "China",
+          "ne_region_id": "1803"
+        }
+      },
+      "time": 1782828000,
+      "level": "critical",
+      "condition": "< 0.8",
+      "value": 344,
+      "historyValue": 431,
+      "method": "median"
+    },
+    {
+      "datasource": "ping-slash24",
+      "entity": {
+        "code": "48330",
+        "name": "AS48330 (GIGANET-UA-AS)",
+        "subnames": [],
+        "type": "asn",
+        "attrs": {
+          "fqid": "asn.48330",
+          "ip_count": "20992",
+          "name": "GIGANET-UA-AS",
+          "org": "Sinev Maksim Viktorovich"
+        }
+      },
+      "time": 1782828000,
+      "level": "critical",
+      "condition": "< 0.8",
+      "value": 49,
+      "historyValue": 67,
+      "method": "median"
+    },
+    {
+      "datasource": "ping-slash24",
+      "entity": {
+        "code": "44078",
+        "name": "AS44078 (ICN-AS)",
+        "subnames": [],
+        "type": "asn",
+        "attrs": {
+          "ip_count": "16384",
+          "org": "Skyline Electronics Ltd.",
+          "fqid": "asn.44078",
+          "name": "ICN-AS"
+        }
+      },
+      "time": 1782828000,
+      "level": "normal",
+      "condition": "normal",
+      "value": 40,
+      "historyValue": 50,
+      "method": "median"
+    },
+    {
+      "datasource": "ping-slash24",
+      "entity": {
+        "code": "50923",
+        "name": "AS50923 (METRO-SET-AS)",
+        "subnames": [],
+        "type": "asn",
+        "attrs": {
+          "fqid": "asn.50923",
+          "ip_count": "19456",
+          "name": "METRO-SET-AS",
+          "org": "Metroset Ltd."
+        }
+      },
+      "time": 1782828600,
+      "level": "normal",
+      "condition": "normal",
+      "value": 84,
+      "historyValue": 105,
+      "method": "median"
+    }
+  ]
+}

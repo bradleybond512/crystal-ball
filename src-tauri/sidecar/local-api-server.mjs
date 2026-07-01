@@ -16815,6 +16815,22 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
   }
 
+  // GET /api/chokepoint-transits — IMF PortWatch daily maritime chokepoint data (~6h cache)
+  // Returns latest row per chokepoint (deduplicated by portid, newest date wins).
+  if (requestUrl.pathname === '/api/chokepoint-transits' && req.method === 'GET') {
+ const PW_TTL = 6 * 60 * 60 * 1000;
+ const PW_URL = 'https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query?where=1%3D1&outFields=*&orderByFields=date%20DESC&resultRecordCount=500&f=json';
+ const cached = getCached('imf-portwatch', PW_TTL);
+ if (cached) return json(cached);
+ const r = await fetchWithTimeout(PW_URL, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ chokepoints: [], updatedAt: null, degraded: true, reason: `portwatch upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const chokepoints = parsePortwatchChokepoints(raw);
+ const result = { chokepoints, updatedAt: new Date().toISOString(), degraded: false };
+ setCached('imf-portwatch', result, PW_TTL);
+ return json(result);
+  }
+
   if (context.cloudFallback && cloudPreferred.has(requestUrl.pathname)) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context);
  if (cloudResponse) return cloudResponse;
@@ -17280,6 +17296,46 @@ export function parseFrankfurterRates(raw) {
     date: raw.date ?? null,
     rates: raw.rates,
   };
+}
+
+// ── IMF PortWatch parser ──────────────────────────────────────────────────────
+// Input: ArcGIS FeatureServer JSON { features: [{ attributes: {...} }] }
+// Output: latest-per-portid normalized array (drops rows missing portid).
+// Caller orders by date DESC so the first occurrence of each portid is newest.
+export function parsePortwatchChokepoints(arcgisJson) {
+  if (!arcgisJson || !Array.isArray(arcgisJson.features)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const feature of arcgisJson.features) {
+    const a = feature?.attributes;
+    if (!a || typeof a.portid !== 'string' || !a.portid) continue;
+    if (seen.has(a.portid)) continue; // keep first (newest) occurrence
+    seen.add(a.portid);
+    result.push({
+      id: a.portid,
+      name: a.portname ?? null,
+      date: a.date ?? null,
+      vessels: {
+        container: a.n_container ?? null,
+        dryBulk: a.n_dry_bulk ?? null,
+        generalCargo: a.n_general_cargo ?? null,
+        roro: a.n_roro ?? null,
+        tanker: a.n_tanker ?? null,
+        cargo: a.n_cargo ?? null,
+        total: a.n_total ?? null,
+      },
+      capacityTons: {
+        container: a.capacity_container ?? null,
+        dryBulk: a.capacity_dry_bulk ?? null,
+        generalCargo: a.capacity_general_cargo ?? null,
+        roro: a.capacity_roro ?? null,
+        tanker: a.capacity_tanker ?? null,
+        cargo: a.capacity_cargo ?? null,
+        total: a.capacity ?? null,
+      },
+    });
+  }
+  return result;
 }
 
 export async function createLocalApiServer(options = {}) {

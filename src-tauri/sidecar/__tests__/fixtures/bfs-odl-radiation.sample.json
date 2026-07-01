@@ -1,0 +1,108 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "odlinfo_odl_1h_latest.fid-1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          14.55,
+          52.55
+        ]
+      },
+      "geometry_name": "geom",
+      "properties": {
+        "id": "DEZ2375",
+        "kenn": "120643041",
+        "plz": "15328",
+        "name": "Manschnow",
+        "site_status": 1,
+        "site_status_text": "in Betrieb",
+        "kid": 2,
+        "height_above_sea": 12,
+        "start_measure": "2026-07-01T12:00:00Z",
+        "end_measure": "2026-07-01T13:00:00Z",
+        "value": 0.086,
+        "value_cosmic": 0.042,
+        "value_terrestrial": 0.043,
+        "unit": "\u00b5Sv/h",
+        "validated": 1,
+        "nuclide": "Gamma-ODL-Brutto",
+        "duration": "1h"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "odlinfo_odl_1h_latest.fid-2",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          8.54,
+          50.39
+        ]
+      },
+      "geometry_name": "geom",
+      "properties": {
+        "id": "DEZ3274",
+        "kenn": "064400053",
+        "plz": "35510",
+        "name": "Butzbach-Bodenrod",
+        "site_status": 1,
+        "site_status_text": "in Betrieb",
+        "kid": 1,
+        "height_above_sea": 445,
+        "start_measure": "2026-07-01T09:00:00Z",
+        "end_measure": "2026-07-01T10:00:00Z",
+        "value": 0.139,
+        "value_cosmic": 0.048,
+        "value_terrestrial": 0.091,
+        "unit": "\u00b5Sv/h",
+        "validated": 1,
+        "nuclide": "Gamma-ODL-Brutto",
+        "duration": "1h"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "odlinfo_odl_1h_latest.fid-3",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          8.28,
+          48.61
+        ]
+      },
+      "geometry_name": "geom",
+      "properties": {
+        "id": "DEZ1165",
+        "kenn": "082160131",
+        "plz": "76596",
+        "name": "Forbach OT Hundsbach",
+        "site_status": 3,
+        "site_status_text": "Testbetrieb",
+        "kid": 1,
+        "height_above_sea": 700,
+        "start_measure": null,
+        "end_measure": null,
+        "value": null,
+        "value_cosmic": null,
+        "value_terrestrial": null,
+        "unit": "\u00b5Sv/h",
+        "validated": null,
+        "nuclide": "Gamma-ODL-Brutto",
+        "duration": "1h"
+      }
+    }
+  ],
+  "totalFeatures": 1679,
+  "numberMatched": 1679,
+  "numberReturned": 3,
+  "timeStamp": "2026-07-01T14:06:00.850Z",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:EPSG::4326"
+    }
+  }
+}

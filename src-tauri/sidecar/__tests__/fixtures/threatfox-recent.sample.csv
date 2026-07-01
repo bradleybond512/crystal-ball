@@ -1,0 +1,13 @@
+################################################################
+# ThreatFox IOCs: recent additions - CSV format                #
+# Last updated: 2026-07-01 01:59:05 UTC                        #
+#                                                              #
+# Terms Of Use: https://threatfox.abuse.ch/faq/#tos            #
+# For questions please contact threatfox [at] abuse.ch         #
+################################################################
+#
+# "first_seen_utc","ioc_id","ioc_value","ioc_type","threat_type","fk_malware","malware_alias","malware_printable","last_seen_utc","confidence_level","is_compromised","reference","tags","anonymous","reporter"
+# Number of entries: 4835
+"2026-07-01 01:59:05", "1840679", "podcas-watch.to6varil.in.net", "domain", "botnet_cc", "js.clearfake", "None", "ClearFake", "", "90", "False", "None", "ClearFake,ClickFix,EtherHiding", "1", "m_govcert_ch"
+"2026-07-01 01:59:05", "1840680", "publ1-wave.kymle5rax.in.net", "domain", "botnet_cc", "js.clearfake", "None", "ClearFake", "", "90", "False", "None", "ClearFake,ClickFix,EtherHiding", "1", "m_govcert_ch"
+"2026-07-01 01:59:04", "1840677", "lette-logic.to6varil.in.net", "domain", "botnet_cc", "js.clearfake", "None", "ClearFake", "", "90", "False", "None", "ClearFake,ClickFix,EtherHiding", "1", "m_govcert_ch"

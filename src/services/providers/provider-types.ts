@@ -30,7 +30,10 @@ export type ProviderDomain =
   | 'internet_health'
   | 'health'
   | 'grid'
-  | 'entities';
+  | 'entities'
+  | 'osint'
+  | 'space_weather'
+  | 'nuclear';
 
 export type ProviderAuthType = 'none' | 'free_key' | 'account';
 

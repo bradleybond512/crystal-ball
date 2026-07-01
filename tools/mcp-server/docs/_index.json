@@ -54,6 +54,23 @@
         "get_region_brief": "Everything Crystal Ball knows about a location: security, conflicts, weather, alerts."
       }
     },
+    "Intel Expansion": {
+      "description": "16 newly-added intel sources: cyber feeds, chokepoints, internet outages, space weather, pharma supply, grid outages, disaster activations, entity LEI lookup, aviation hazards, FX rates, geocoded media events, and radiation monitoring.",
+      "tools": {
+        "get_cyber_threats": "Cyber threat feeds: C2 servers, IOC indicators, and malware URLs (filterable by kind).",
+        "get_chokepoint_status": "Maritime chokepoint transit data and trade-ton flows (Hormuz, Suez, Malacca, etc.).",
+        "get_internet_outages": "IODA internet outage alerts for large-scale BGP/telescope disruptions.",
+        "get_space_weather_extra": "Extended space weather: aurora max probability, high-latitude flag, flare-probability regions.",
+        "get_pharma_supply": "Drug shortages and FDA drug recalls.",
+        "get_grid_outages": "ORNL power grid outages by county, sorted by meters affected.",
+        "get_disaster_activations": "Copernicus EMS activations for major disasters worldwide.",
+        "lookup_entity": "GLEIF LEI lookup by company name: legal name, jurisdiction, LEI code, and status.",
+        "get_aviation_hazards": "SIGMETs and FAA NAS ground-stop programs.",
+        "get_fx_rates": "Live foreign exchange rates for a base currency.",
+        "get_geo_events": "GDELT geocoded media events by topic query and time window.",
+        "get_radiation": "BfS German gamma-dose radiation monitoring stations."
+      }
+    },
     "Help": {
       "description": "Built-in documentation and guides.",
       "tools": {

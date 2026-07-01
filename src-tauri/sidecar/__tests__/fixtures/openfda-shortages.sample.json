@@ -1,0 +1,51 @@
+{
+  "meta": {
+    "disclaimer": "Do not rely on openFDA to make decisions regarding medical care.",
+    "terms": "https://open.fda.gov/terms/",
+    "license": "https://open.fda.gov/license/",
+    "last_updated": "2026-07-01",
+    "results": {
+      "skip": 0,
+      "limit": 3,
+      "total": 1639
+    }
+  },
+  "results": [
+    {
+      "update_type": "Reverified",
+      "initial_posting_date": "03/23/2018",
+      "package_ndc": "63323-287-21",
+      "generic_name": "Ropivacaine Hydrochloride Injection",
+      "contact_info": "888-386-1300",
+      "availability": "Available",
+      "related_info": "Check wholesalers for inventory",
+      "openfda": {
+        "product_type": ["HUMAN PRESCRIPTION DRUG"]
+      }
+    },
+    {
+      "update_type": "New",
+      "initial_posting_date": "01/10/2024",
+      "package_ndc": "00409-1205-01",
+      "generic_name": "Sodium Chloride 0.9% Injection",
+      "contact_info": "800-551-7176",
+      "availability": "Unavailable",
+      "related_info": "Currently in shortage",
+      "openfda": {
+        "product_type": ["HUMAN PRESCRIPTION DRUG"]
+      }
+    },
+    {
+      "update_type": "Updated",
+      "initial_posting_date": "06/15/2023",
+      "package_ndc": "00074-3747-01",
+      "generic_name": "Amoxicillin and Clavulanate Potassium",
+      "contact_info": "800-241-1643",
+      "availability": "Available in limited quantities",
+      "related_info": "Contact wholesalers for availability",
+      "openfda": {
+        "product_type": ["HUMAN PRESCRIPTION DRUG"]
+      }
+    }
+  ]
+}

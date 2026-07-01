@@ -26,7 +26,11 @@ export type ProviderDomain =
   | 'air_quality'
   | 'equities'
   | 'fx'
-  | 'supply_chain';
+  | 'supply_chain'
+  | 'internet_health'
+  | 'health'
+  | 'grid'
+  | 'entities';
 
 export type ProviderAuthType = 'none' | 'free_key' | 'account';
 

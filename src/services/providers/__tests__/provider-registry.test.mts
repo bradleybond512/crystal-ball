@@ -149,3 +149,94 @@ test('Intel Cluster 2: imf-portwatch independence group is isolated from cyber a
   // abuse-ch + ecb-fx + imf-portwatch = 3 distinct groups
   assert.equal(groups.size, 3);
 });
+
+// ── Intel Expansion Cluster 3 ─────────────────────────────────────────────────
+
+test('Intel Cluster 3: ioda is registered in internet_health domain', () => {
+  const def = getProviderDefinition('ioda');
+  assert.ok(def, 'ioda must be registered');
+  assert.equal(def.domain, 'internet_health');
+  assert.equal(def.authType, 'none');
+  assert.equal(def.independenceGroup, 'ioda');
+  assert.equal(def.freshnessTtlMs, 15 * 60 * 1000);
+  assert.ok(def.reliabilityWeight >= 0.8);
+});
+
+test('Intel Cluster 3: openfda is registered in health domain', () => {
+  const def = getProviderDefinition('openfda');
+  assert.ok(def, 'openfda must be registered');
+  assert.equal(def.domain, 'health');
+  assert.equal(def.authType, 'none');
+  assert.equal(def.independenceGroup, 'openfda');
+  assert.equal(def.freshnessTtlMs, 6 * 60 * 60 * 1000);
+  assert.ok(def.reliabilityWeight >= 0.85);
+});
+
+test('Intel Cluster 3: ornl-odin is registered in grid domain', () => {
+  const def = getProviderDefinition('ornl-odin');
+  assert.ok(def, 'ornl-odin must be registered');
+  assert.equal(def.domain, 'grid');
+  assert.equal(def.authType, 'none');
+  assert.equal(def.independenceGroup, 'ornl-odin');
+  assert.equal(def.freshnessTtlMs, 15 * 60 * 1000);
+  assert.ok(def.reliabilityWeight >= 0.8);
+});
+
+test('Intel Cluster 3: copernicus-ems is registered in disasters domain', () => {
+  const def = getProviderDefinition('copernicus-ems');
+  assert.ok(def, 'copernicus-ems must be registered');
+  assert.equal(def.domain, 'disasters');
+  assert.equal(def.authType, 'none');
+  assert.equal(def.independenceGroup, 'copernicus-ems');
+  assert.equal(def.freshnessTtlMs, 30 * 60 * 1000);
+  assert.ok(def.reliabilityWeight >= 0.85);
+});
+
+test('Intel Cluster 3: gleif is registered in entities domain', () => {
+  const def = getProviderDefinition('gleif');
+  assert.ok(def, 'gleif must be registered');
+  assert.equal(def.domain, 'entities');
+  assert.equal(def.authType, 'none');
+  assert.equal(def.independenceGroup, 'gleif');
+  assert.equal(def.freshnessTtlMs, 24 * 60 * 60 * 1000);
+  assert.ok(def.reliabilityWeight >= 0.85);
+});
+
+test('Intel Cluster 3: all 5 new providers have isolated independence groups', () => {
+  const newIds = ['ioda', 'openfda', 'ornl-odin', 'copernicus-ems', 'gleif'];
+  const groups = independentGroupsFor(newIds);
+  // Each has a unique independence group → 5 distinct groups
+  assert.equal(groups.size, 5, 'all 5 Cluster 3 providers must have distinct independence groups');
+});
+
+test('Intel Cluster 3: internet_health domain has ioda as primary', () => {
+  const primaries = providersForDomain('internet_health').filter(d => d.fallbackPriority === 1);
+  assert.equal(primaries.length, 1);
+  assert.equal(primaries[0].id, 'ioda');
+});
+
+test('Intel Cluster 3: grid domain has ornl-odin as primary', () => {
+  const primaries = providersForDomain('grid').filter(d => d.fallbackPriority === 1);
+  assert.equal(primaries.length, 1);
+  assert.equal(primaries[0].id, 'ornl-odin');
+});
+
+test('Intel Cluster 3: entities domain has gleif as primary', () => {
+  const primaries = providersForDomain('entities').filter(d => d.fallbackPriority === 1);
+  assert.equal(primaries.length, 1);
+  assert.equal(primaries[0].id, 'gleif');
+});
+
+test('Intel Cluster 3: disasters domain has copernicus-ems as one of its providers', () => {
+  const disasters = providersForDomain('disasters');
+  const ems = disasters.find(d => d.id === 'copernicus-ems');
+  assert.ok(ems, 'copernicus-ems must appear in disasters domain');
+  assert.ok(ems.fallbackPriority > 1, 'copernicus-ems is supplementary (fallbackPriority > 1)');
+});
+
+test('Intel Cluster 3: Cluster 3 independence groups are isolated from Clusters 1 and 2', () => {
+  const allIds = ['feodo-abuse-ch', 'frankfurter-fx', 'imf-portwatch', 'ioda', 'openfda', 'ornl-odin', 'copernicus-ems', 'gleif'];
+  const groups = independentGroupsFor(allIds);
+  // abuse-ch(1) + ecb-fx(1) + imf-portwatch(1) + 5 new = 8 distinct groups
+  assert.equal(groups.size, 8);
+});

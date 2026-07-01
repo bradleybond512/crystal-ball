@@ -16831,6 +16831,117 @@ async function dispatch(requestUrl, req, routes, context) {
  return json(result);
   }
 
+  // ── Intel Expansion Cluster 3 ─────────────────────────────────────────────
+  // IODA + openFDA + ORNL ODIN + Copernicus EMS + GLEIF — all keyless.
+
+  // GET /api/internet-outages — IODA internet outage alerts (~15 min cache)
+  // Query params: from, until (unix seconds). Defaults to 24h window ending now.
+  if (requestUrl.pathname === '/api/internet-outages' && req.method === 'GET') {
+ const IODA_TTL = 15 * 60 * 1000;
+ const nowSec = Math.floor(Date.now() / 1000);
+ const from = requestUrl.searchParams.get('from') || String(nowSec - 86400);
+ const until = requestUrl.searchParams.get('until') || String(nowSec);
+ const limit = requestUrl.searchParams.get('limit') || '50';
+ const cacheKey = `ioda-outages:${from}:${until}`;
+ const cached = getCached(cacheKey, IODA_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts?from=${encodeURIComponent(from)}&until=${encodeURIComponent(until)}&limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ alerts: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `ioda upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const alerts = parseIodaAlerts(raw);
+ const result = { alerts, count: alerts.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, IODA_TTL);
+ return json(result);
+  }
+
+  // GET /api/pharma-shortages — openFDA drug shortage database (~6h cache)
+  if (requestUrl.pathname === '/api/pharma-shortages' && req.method === 'GET') {
+ const FDA_TTL = 6 * 60 * 60 * 1000;
+ const limit = requestUrl.searchParams.get('limit') || '20';
+ const cacheKey = `openfda-shortages:${limit}`;
+ const cached = getCached(cacheKey, FDA_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.fda.gov/drug/shortages.json?limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ shortages: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `openfda shortages upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const shortages = parseFdaShortages(raw);
+ const result = { shortages, count: shortages.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, FDA_TTL);
+ return json(result);
+  }
+
+  // GET /api/recalls — openFDA enforcement recalls (~6h cache)
+  // Accepts ?type=drug|food (default drug)
+  if (requestUrl.pathname === '/api/recalls' && req.method === 'GET') {
+ const RECALL_TTL = 6 * 60 * 60 * 1000;
+ const type = requestUrl.searchParams.get('type') === 'food' ? 'food' : 'drug';
+ const limit = requestUrl.searchParams.get('limit') || '20';
+ const cacheKey = `openfda-recalls:${type}:${limit}`;
+ const cached = getCached(cacheKey, RECALL_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.fda.gov/${encodeURIComponent(type)}/enforcement.json?limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ recalls: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `openfda recalls upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const recalls = parseFdaRecalls(raw);
+ const result = { recalls, count: recalls.length, type, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, RECALL_TTL);
+ return json(result);
+  }
+
+  // GET /api/grid-outages — ORNL ODIN real-time power outages by county (~15 min cache)
+  if (requestUrl.pathname === '/api/grid-outages' && req.method === 'GET') {
+ const ODIN_TTL = 15 * 60 * 1000;
+ const limit = requestUrl.searchParams.get('limit') || '50';
+ const cacheKey = `ornl-odin:${limit}`;
+ const cached = getCached(cacheKey, ODIN_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://ornl.opendatasoft.com/api/explore/v2.1/catalog/datasets/odin-real-time-outages-county/records?limit=${encodeURIComponent(limit)}`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ outages: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `ornl-odin upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const outages = parseOdinOutages(raw);
+ const result = { outages, count: outages.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, ODIN_TTL);
+ return json(result);
+  }
+
+  // GET /api/ems-activations — Copernicus Emergency Management Service activations (~30 min cache)
+  if (requestUrl.pathname === '/api/ems-activations' && req.method === 'GET') {
+ const EMS_TTL = 30 * 60 * 1000;
+ const cached = getCached('copernicus-ems', EMS_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = 'https://mapping.emergency.copernicus.eu/activations/api/activations/?format=json';
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ activations: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `copernicus-ems upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const activations = parseCopernicusActivations(raw);
+ const result = { activations, count: activations.length, fetchedAt: Date.now(), degraded: false };
+ setCached('copernicus-ems', result, EMS_TTL);
+ return json(result);
+  }
+
+  // GET /api/entity-lei — GLEIF LEI entity lookup (24h cache, keyed by name)
+  // Accepts ?name= (entity legal name to search)
+  if (requestUrl.pathname === '/api/entity-lei' && req.method === 'GET') {
+ const GLEIF_TTL = 24 * 60 * 60 * 1000;
+ const name = requestUrl.searchParams.get('name') || '';
+ if (!name.trim()) return json({ entities: [], count: 0, fetchedAt: Date.now(), degraded: false, reason: 'name param required' }, 400);
+ const cacheKey = `gleif-lei:${name.trim().toLowerCase()}`;
+ const cached = getCached(cacheKey, GLEIF_TTL);
+ if (cached) return json(cached);
+ const upstreamUrl = `https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalName%5D=${encodeURIComponent(name.trim())}&page%5Bsize%5D=5`;
+ const r = await fetchWithTimeout(upstreamUrl, { headers: { Accept: 'application/vnd.api+json', 'User-Agent': CHROME_UA } }, 15_000);
+ if (!r.ok) return json({ entities: [], count: 0, fetchedAt: Date.now(), degraded: true, reason: `gleif upstream ${r.status}` }, 502);
+ const raw = await r.json();
+ const entities = parseGleifLeiRecords(raw);
+ const result = { entities, count: entities.length, fetchedAt: Date.now(), degraded: false };
+ setCached(cacheKey, result, GLEIF_TTL);
+ return json(result);
+  }
+
   if (context.cloudFallback && cloudPreferred.has(requestUrl.pathname)) {
  const cloudResponse = await tryCloudFallback(requestUrl, req, context);
  if (cloudResponse) return cloudResponse;
@@ -17336,6 +17447,115 @@ export function parsePortwatchChokepoints(arcgisJson) {
     });
   }
   return result;
+}
+
+// ── Intel Expansion Cluster 3: IODA + openFDA + ORNL ODIN + Copernicus EMS + GLEIF ──
+
+// ── IODA internet outage alerts parser ───────────────────────────────────────
+// Input: parsed JSON from api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts
+// Output: normalized array of alert objects.
+export function parseIodaAlerts(raw) {
+  if (!raw || !Array.isArray(raw.data)) return [];
+  return raw.data.map(alert => ({
+    entityType: alert?.entity?.type ?? null,
+    entityCode: alert?.entity?.code ?? null,
+    entityName: alert?.entity?.name ?? null,
+    datasource: alert?.datasource ?? null,
+    score: typeof alert?.value === 'number' ? alert.value : null,
+    historyValue: typeof alert?.historyValue === 'number' ? alert.historyValue : null,
+    from: typeof alert?.time === 'number' ? alert.time : null,
+    until: typeof alert?.time === 'number' ? alert.time : null,
+    level: alert?.level ?? null,
+    condition: alert?.condition ?? null,
+    method: alert?.method ?? null,
+  }));
+}
+
+// ── openFDA drug shortage parser ─────────────────────────────────────────────
+// Input: parsed JSON from api.fda.gov/drug/shortages.json
+// Output: normalized array.
+export function parseFdaShortages(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    genericName: r.generic_name ?? null,
+    status: r.availability ?? null,
+    therapeuticCategory: r.openfda?.product_type?.[0] ?? null,
+    updateDate: r.update_type ?? null,
+    initialPostingDate: r.initial_posting_date ?? null,
+    packageNdc: r.package_ndc ?? null,
+  }));
+}
+
+// ── openFDA enforcement recall parser ────────────────────────────────────────
+// Input: parsed JSON from api.fda.gov/drug/enforcement.json or food/enforcement.json
+// Output: normalized array.
+export function parseFdaRecalls(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    product: r.product_description ?? null,
+    reason: r.reason_for_recall ?? null,
+    classification: r.classification ?? null,
+    state: r.state ?? null,
+    distributionPattern: r.distribution_pattern ?? null,
+    status: r.status ?? null,
+    recallDate: r.recall_initiation_date ?? null,
+    voluntaryMandated: r.voluntary_mandated ?? null,
+  }));
+}
+
+// ── ORNL ODIN power outage parser ────────────────────────────────────────────
+// Input: parsed JSON from ornl.opendatasoft.com API (Socrata-compatible)
+// Real fields: name, county, state, metersaffected, communitydescriptor
+export function parseOdinOutages(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    fips: r.communitydescriptor ?? null,
+    county: r.county ?? null,
+    state: r.state ?? null,
+    customersOut: typeof r.metersaffected === 'number' ? r.metersaffected : null,
+    customersRestored: typeof r.customersrestored === 'number' ? r.customersrestored : null,
+    utilityName: r.name ?? null,
+    utilityId: r.utility_id ?? null,
+    updated: r.reportedstarttime ?? null,
+  }));
+}
+
+// ── Copernicus EMS activation parser ─────────────────────────────────────────
+// Input: parsed JSON from mapping.emergency.copernicus.eu DRF paginated response
+// Real fields: code, name, category.slug, countries, activationTime, centroid
+export function parseCopernicusActivations(raw) {
+  if (!raw || !Array.isArray(raw.results)) return [];
+  return raw.results.map(r => ({
+    code: r.code ?? null,
+    title: r.name ?? null,
+    category: r.category?.slug ?? null,
+    categoryName: r.category?.name ?? null,
+    country: r.countries?.[0]?.short_name ?? null,
+    activationTime: r.activationTime ?? null,
+    lastUpdate: r.lastUpdate ?? null,
+    closed: r.closed ?? null,
+    drmPhase: r.drmPhase ?? null,
+    centroid: r.centroid ?? null,
+  }));
+}
+
+// ── GLEIF LEI entity parser ───────────────────────────────────────────────────
+// Input: parsed JSON:API from api.gleif.org/api/v1/lei-records
+// Real fields: id (LEI), attributes.entity.legalName.name, attributes.entity.legalAddress.country,
+//   attributes.entity.status, attributes.entity.legalForm.id, attributes.entity.jurisdiction
+export function parseGleifLeiRecords(raw) {
+  if (!raw || !Array.isArray(raw.data)) return [];
+  return raw.data.map(rec => {
+    const entity = rec?.attributes?.entity ?? {};
+    return {
+      lei: rec?.id ?? null,
+      name: entity?.legalName?.name ?? null,
+      country: entity?.legalAddress?.country ?? null,
+      jurisdiction: entity?.jurisdiction ?? null,
+      status: entity?.status ?? null,
+      legalForm: entity?.legalForm?.id ?? null,
+    };
+  });
 }
 
 export async function createLocalApiServer(options = {}) {

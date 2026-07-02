@@ -34,6 +34,7 @@ import { isLlmEgressDisclosed, setLlmEgressDisclosed, isLocalModelOnly, setLocal
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
 import { forecastAll, type HypothesisForecast } from '@/services/intelligence/hypothesis-forecast';
+import { buildForecastProvenanceLines } from './forecast-provenance-view';
 import { getLatestPCI } from '@/services/intelligence/predictive-crisis-index';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
@@ -880,6 +881,20 @@ export class AnalystHUD {
     track.append(fill);
 
     wrap.append(label, track);
+
+    const details = document.createElement('details');
+    details.className = 'analyst-hud-forecast-why';
+    const summary = document.createElement('summary');
+    summary.textContent = 'why';
+    details.append(summary);
+    for (const line of buildForecastProvenanceLines(forecast)) {
+      const row = document.createElement('div');
+      row.className = 'analyst-hud-forecast-why-row';
+      row.textContent = line;
+      details.append(row);
+    }
+    wrap.append(details);
+
     return wrap;
   }
 

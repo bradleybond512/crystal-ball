@@ -28,6 +28,14 @@ import {
 } from './belief-helpers';
 import type { BeliefValue, ProbabilityLabel } from '@/types/belief';
 import { escapeHtml } from '@/utils/sanitize';
+import { buildCalibrationReport } from './calibration-report-view';
+import type { CalibrationReportView } from './calibration-report-view';
+import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
+import { brierScore } from '@/services/intelligence/forecast-calibration';
+import { buildCurve } from '@/services/cognition/recalibration';
+import { conformalInterval } from '@/services/cognition/conformal';
+import { getOperatorBrier, getOperatorCurve } from '@/services/cognition/forecast-journal';
+import type { CalibrationComparison } from '@/services/cognition/forecast-journal';
 
 interface LabelBand {
   label: ProbabilityLabel;
@@ -53,6 +61,17 @@ interface MigratedComponent {
   note: string;
 }
 
+function stalenessRow(caption: string, b: BeliefValue): string {
+  return `
+      <tr>
+        <td style="font-weight:600;white-space:nowrap;">${escapeHtml(caption)}</td>
+        <td>${escapeHtml(formatBelief(b))}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">
+          width ${(intervalWidth(b) * 100).toFixed(0)}%
+        </td>
+      </tr>`;
+}
+
 export class BeliefCalibrationPanel extends Panel {
   constructor() {
     super({
@@ -70,10 +89,80 @@ export class BeliefCalibrationPanel extends Panel {
     this.setContent(
       [
         this.buildLexiconSection(),
+        this.buildCalibrationReportSection(),
         this.buildMigratedSection(),
         this.buildStalenessSection(),
       ].join(''),
     );
+  }
+
+  private buildCalibrationReportSection(): string {
+    let view: CalibrationReportView;
+    try {
+      const records = getCalibrationStore().all();
+      const curve = buildCurve(records);
+      const interval = conformalInterval(0.5, 'global', records);
+      const coveragePct = Math.round((1 - interval.alpha) * 100);
+
+      let comparison: CalibrationComparison | null = null;
+      try {
+        const operator = getOperatorBrier();
+        if (operator.n > 0) {
+          const system = brierScore(records);
+          comparison = {
+            domain: 'global',
+            operator: { brier: operator.brier, n: operator.n, curve: getOperatorCurve() },
+            system: { brier: system.score, n: system.resolvedCount, curve },
+            humanEdge: null,
+            explanation: '',
+          };
+        }
+      } catch { /* operator journal unavailable — fall back to system-only */ }
+
+      view = buildCalibrationReport({ curve, coveragePct, comparison });
+    } catch {
+      view = { headline: 'Calibration report unavailable', rows: [], hasOperatorData: false };
+    }
+
+    const rows = view.rows
+      .map(
+        (r) => `
+        <tr>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${Math.round(r.predicted * 100)}%</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${Math.round(r.observed * 100)}%</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${escapeHtml(String(r.count))}</td>
+        </tr>`,
+      )
+      .join('');
+
+    const rowsTable = view.rows.length > 0
+      ? `
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="opacity:0.6;text-align:left;">
+              <th style="text-align:right;">Predicted</th>
+              <th style="text-align:right;">Observed</th>
+              <th style="text-align:right;">Count</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`
+      : `<p style="margin:0;font-size:11px;opacity:0.6;">No resolved forecasts yet.</p>`;
+
+    const operatorRow = view.hasOperatorData
+      ? `<p style="margin:8px 0 0;font-size:11px;opacity:0.8;">${escapeHtml(view.operatorLine!)}</p>`
+      : `<p style="margin:8px 0 0;font-size:11px;opacity:0.6;">Log your own forecasts to compare (coming soon).</p>`;
+
+    return `
+      <section style="margin-bottom:18px;">
+        <h3 style="margin:0 0 6px;font-size:13px;">${escapeHtml(view.headline)}</h3>
+        <p style="margin:0 0 8px;font-size:11px;opacity:0.7;">
+          Live per-domain reliability curve: for forecasts predicted at each band,
+          how often did they actually happen?
+        </p>
+        ${rowsTable}
+        ${operatorRow}
+      </section>`;
   }
 
   private buildLexiconSection(): string {
@@ -163,15 +252,6 @@ export class BeliefCalibrationPanel extends Panel {
     const stale = applyStalenessDegradation(fresh, '2026-06-10T12:00:00.000Z');
     const legacy = fromLegacySeverity(7, 'nws');
 
-    const row = (caption: string, b: BeliefValue): string => `
-      <tr>
-        <td style="font-weight:600;white-space:nowrap;">${escapeHtml(caption)}</td>
-        <td>${escapeHtml(formatBelief(b))}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;">
-          width ${(intervalWidth(b) * 100).toFixed(0)}%
-        </td>
-      </tr>`;
-
     return `
       <section>
         <h3 style="margin:0 0 6px;font-size:13px;">Staleness &amp; legacy adapters</h3>
@@ -182,9 +262,9 @@ export class BeliefCalibrationPanel extends Panel {
         </p>
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
           <tbody>
-            ${row('Fresh', fresh)}
-            ${row('After staleAt (+36h)', stale)}
-            ${row('Legacy severity 7 → belief', legacy)}
+            ${stalenessRow('Fresh', fresh)}
+            ${stalenessRow('After staleAt (+36h)', stale)}
+            ${stalenessRow('Legacy severity 7 → belief', legacy)}
           </tbody>
         </table>
       </section>`;

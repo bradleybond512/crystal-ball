@@ -42,6 +42,7 @@ const {
   attentionWeight,
   nextActiveHour,
   recordEngagement,
+  seedInterests,
   resetOperatorModel,
   decayWeight,
   hourOfWeekIndex,
@@ -135,6 +136,54 @@ describe('interestScore — basic term matching', () => {
     const r = interestScore('cyber breach unknown');
     assert.ok(r.matched.includes('cyber') || r.matched.includes('breach'),
       `Expected cyber or breach in matched, got ${JSON.stringify(r.matched)}`);
+  });
+});
+
+describe('seedInterests — onboarding seed', () => {
+  beforeEach(freshModel);
+
+  it('raises interestScore for seeded terms', () => {
+    const before = interestScore('geopolitical conflict tension');
+    seedInterests(['geopolitical']);
+    const after = interestScore('geopolitical conflict tension');
+    assert.ok(after.score > before.score, `Expected score to rise, got ${before.score} -> ${after.score}`);
+  });
+
+  it('seeds a stronger weight than a single engagement', () => {
+    seedInterests(['weather']);
+    const seeded = interestScore('weather forecast storm');
+
+    freshModel();
+    recordEngagement({ kind: 'pin', text: 'weather forecast storm', domain: 'weather' });
+    const engaged = interestScore('weather forecast storm');
+
+    assert.ok(seeded.score > engaged.score,
+      `Expected seed score > single-engagement score, got ${seeded.score} vs ${engaged.score}`);
+  });
+
+  it('re-seeding the same term does not exceed WEIGHT_CLAMP (idempotent-ish)', () => {
+    for (let i = 0; i < 20; i++) seedInterests(['markets']);
+    const model = getOperatorModel();
+    const term = model.interests.find(t => t.term === 'markets');
+    assert.ok(term, 'expected markets term to exist');
+    assert.ok(term!.weight <= 5, `Expected weight <= WEIGHT_CLAMP(5), got ${term!.weight}`);
+  });
+
+  it('respects MAX_INTERESTS when seeding many distinct terms', () => {
+    const terms = Array.from({ length: 250 }, (_, i) => `seedterm${i}`);
+    seedInterests(terms);
+    const model = getOperatorModel();
+    assert.ok(model.interests.length <= 200, `Expected <= 200 interests, got ${model.interests.length}`);
+  });
+
+  it('ignores terms shorter than MIN_TERM_LEN and no-ops on empty input', () => {
+    seedInterests(['ai', 'ux']);
+    const model = getOperatorModel();
+    assert.deepEqual(model.interests, []);
+
+    seedInterests([]);
+    const model2 = getOperatorModel();
+    assert.deepEqual(model2.interests, []);
   });
 });
 
@@ -368,6 +417,7 @@ describe('Ghost Mode write suppression', () => {
     assert.equal(r.score, 0);
     assert.deepEqual(r.matched, []);
   });
+
 
   it('interestMultiplier defaults to 0.8 with no model state', () => {
     freshModel();

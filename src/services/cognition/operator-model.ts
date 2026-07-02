@@ -111,6 +111,9 @@ const POSITIVE_STEP = 0.3;
 const NEGATIVE_STEP = 0.15;
 const WEIGHT_CLAMP = 5;
 
+/** Onboarding seed step: stronger than a single engagement, still well inside WEIGHT_CLAMP. */
+const SEED_STEP = POSITIVE_STEP * 2.5;
+
 /** EWMA alpha for domain affinity updates (recent engagement weighted at ~10%). */
 const AFFINITY_ALPHA = 0.1;
 
@@ -409,15 +412,15 @@ export function interestMultiplier(text: string, domain?: string): number {
   // Blend in humanEdge if available for this domain.
   // humanEdge ∈ [-1, 1] (systemBrier − operatorBrier); normalize to [0, 1].
   // Positive humanEdge (operator better) → boost; negative → pull back.
-  const edge = domain !== undefined ? (_model.humanEdge?.[domain] ?? null) : null;
+  const edge = domain === undefined ? null : (_model.humanEdge?.[domain] ?? null);
   let combinedScore: number;
-  if (edge !== null) {
+  if (edge === null) {
+    combinedScore = interestScoreVal;
+  } else {
     // Normalize: edge of +0.25 (operator quite a bit better) → edgeNorm ≈ 1.0
     // edge of -0.25 (system better) → edgeNorm ≈ 0.0; clamp to [0, 1].
     const edgeNorm = Math.max(0, Math.min(1, (edge + 0.25) / 0.5));
     combinedScore = 0.7 * interestScoreVal + 0.3 * edgeNorm;
-  } else {
-    combinedScore = interestScoreVal;
   }
 
   // Hard clamp to [0.8, 1.2] — the ±20% personalization bound is inviolable.
@@ -436,7 +439,7 @@ export function interestMultiplier(text: string, domain?: string): number {
 export function updateHumanEdge(edge: Record<string, number>): void {
   if (isGhostMode()) return;
   ensureLoaded();
-  _model.humanEdge = { ...(_model.humanEdge ?? {}), ...edge };
+  _model.humanEdge = { ..._model.humanEdge, ...edge };
   save();
 }
 
@@ -496,6 +499,26 @@ export function nextActiveHour(
     if (w >= threshold) return candidateTs;
   }
   return undefined;
+}
+
+/**
+ * Seed initial interest weights from explicit user input (onboarding).
+ *
+ * Applies each term at SEED_STEP — stronger than a single engagement so a
+ * fresh interest immediately tilts ranking, but still far inside WEIGHT_CLAMP
+ * so it decays and blends with organic engagement over time rather than
+ * pinning the model. Re-seeding the same term is bounded by the same clamp
+ * bumpInterest already enforces, so it can't be used to force weight past 5.
+ *
+ * Ghost Mode: no-op, matching recordEngagement.
+ */
+export function seedInterests(terms: string[]): void {
+  if (isGhostMode()) return;
+  ensureLoaded();
+  const cleaned = terms.map(t => t.toLowerCase().trim()).filter(t => t.length >= MIN_TERM_LEN);
+  if (cleaned.length === 0) return;
+  bumpInterest(cleaned, SEED_STEP, Date.now());
+  save();
 }
 
 /**

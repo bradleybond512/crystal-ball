@@ -15,6 +15,7 @@ import {
   type NotificationChannel,
   type Severity,
 } from '@/services/notifications/notification-preferences';
+import { getVoiceSettings, saveVoiceSettings } from '@/services/notifications/voice-alerter';
 import { escapeHtml } from '@/utils/sanitize';
 
 const CHANNELS: NotificationChannel[] = ['system', 'sms', 'email', 'menubar'];
@@ -74,6 +75,7 @@ export class NotificationPreferencesPanel extends Panel {
     const svc = getNotificationPreferencesService();
     const prefs = svc.getPreferences();
 
+    const voiceSettings = getVoiceSettings();
     const globalBlock = `
       <section style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.08);">
         <div style="font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Global</div>
@@ -88,6 +90,11 @@ export class NotificationPreferencesPanel extends Panel {
             <input type="number" id="np-rate-limit" min="1" max="100" step="1"
               value="${prefs.rateLimitPerHour}"
               style="width:60px;background:#222;color:#ddd;border:1px solid rgba(255,255,255,0.15);border-radius:3px;padding:2px 4px;font-size:12px;">
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="np-voice-enabled" ${voiceSettings.enabled ? 'checked' : ''}
+              style="accent-color:#4a9eff;width:14px;height:14px;cursor:pointer;">
+            Speak critical alerts aloud
           </label>
         </div>
       </section>`;
@@ -185,6 +192,11 @@ export class NotificationPreferencesPanel extends Panel {
     const rateLimitEl = root.querySelector<HTMLInputElement>('#np-rate-limit');
     rateLimitEl?.addEventListener('change', () => {
       svc.setRateLimitPerHour(Number(rateLimitEl.value));
+    });
+
+    const voiceEnabledEl = root.querySelector<HTMLInputElement>('#np-voice-enabled');
+    voiceEnabledEl?.addEventListener('change', () => {
+      saveVoiceSettings({ ...getVoiceSettings(), enabled: voiceEnabledEl.checked });
     });
 
     const qhEnabledEl = root.querySelector<HTMLInputElement>('#np-qh-enabled');

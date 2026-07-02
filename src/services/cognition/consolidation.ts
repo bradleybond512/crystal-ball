@@ -54,27 +54,22 @@
  */
 
 import { cosineSimilarity } from './vector-index';
+import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
+import { getAllEpisodes } from './episodic-memory';
 import type { Episode } from './episodic-memory';
-import type { CrisisSignature,  } from '../intelligence/crisis-signature-library';
+import { getCrisisSignatureLibrary } from '../intelligence/crisis-signature-library';
+import type { CrisisSignature } from '../intelligence/crisis-signature-library';
 
-// getMemory/putMemory are IDB-backed; lazy-loaded so pure Node tests run fine.
+// getMemory/putMemory are IDB-backed. Statically imported (not require()) so
+// the persistence path survives the Vite browser bundle; reasoning-memory
+// degrades to no-op when IndexedDB is unavailable (pure Node tests).
 let _getMemory: (<T>(key: string) => Promise<T | null>) | null = null;
 let _putMemory: (<T>(key: string, value: T) => Promise<void>) | null = null;
 
 function lazyLoadIdb(): void {
   if (_getMemory !== null) return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('@/services/reasoning-memory') as {
-      getMemory: <T>(key: string) => Promise<T | null>;
-      putMemory: <T>(key: string, value: T) => Promise<void>;
-    };
-    _getMemory = mod.getMemory;
-    _putMemory = mod.putMemory;
-  } catch {
-    _getMemory = () => Promise.resolve(null);
-    _putMemory = () => Promise.resolve();
-  }
+  _getMemory = idbGetMemory;
+  _putMemory = idbPutMemory;
 }
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -524,26 +519,14 @@ export function getSchemaById(id: string): LearnedSchema | undefined {
 
 function getDefaultRegistrar(): SchemaRegistrar | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('../intelligence/crisis-signature-library') as {
-      getCrisisSignatureLibrary: () => SchemaRegistrar;
-    };
-    return mod.getCrisisSignatureLibrary();
+    return getCrisisSignatureLibrary();
   } catch {
     return null;
   }
 }
 
-const emptyEpisodeSource: EpisodeSource = () => [];
-
 function getDefaultEpisodeSource(): EpisodeSource {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('./episodic-memory') as { getAllEpisodes: () => readonly Episode[] };
-    return mod.getAllEpisodes;
-  } catch {
-    return emptyEpisodeSource;
-  }
+  return getAllEpisodes;
 }
 
 // ── Core consolidation pass ───────────────────────────────────────────────────

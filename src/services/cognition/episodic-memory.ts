@@ -29,30 +29,18 @@ import { embed, maybeUpgradeEmbedding } from './embedding-provider';
 import { topK } from './vector-index';
 import type { IndexedVector } from './vector-index';
 import { isGhostMode } from '@/services/mode-manager';
+import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
 
-// getMemory/putMemory are IDB-backed and may not be available in pure Node.js
-// tests. The injectible storage option below lets tests bypass them.
+// getMemory/putMemory are IDB-backed. Statically imported (not require()) so the
+// persistence path survives the Vite browser bundle; reasoning-memory itself
+// degrades to no-op when IndexedDB is unavailable (pure Node tests).
 let _getMemory: (<T>(key: string) => Promise<T | null>) | null = null;
 let _putMemory: (<T>(key: string, value: T) => Promise<void>) | null = null;
 
 function lazyLoadIdb(): void {
   if (_getMemory !== null) return;
-  // Dynamic import so tests can run without IDB globals.
-  try {
-    // This is a synchronous require in practice because the module is already
-    // bundled — but we wrap in try/catch so pure Node tests don't crash.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('@/services/reasoning-memory') as {
-      getMemory: <T>(key: string) => Promise<T | null>;
-      putMemory: <T>(key: string, value: T) => Promise<void>;
-    };
-    _getMemory = mod.getMemory;
-    _putMemory = mod.putMemory;
-  } catch {
-    // In test environments without IDB, fall back to no-op implementations.
-    _getMemory = () => Promise.resolve(null);
-    _putMemory = () => Promise.resolve();
-  }
+  _getMemory = idbGetMemory;
+  _putMemory = idbPutMemory;
 }
 
 // ── Public types ──────────────────────────────────────────────────────────────

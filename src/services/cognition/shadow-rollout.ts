@@ -52,7 +52,10 @@
  */
 
 import type { ShadowModeAlgorithmService, ShadowRunConfig } from '@/services/intelligence/shadow-mode';
+import { getShadowModeAlgorithmService } from '@/services/intelligence/shadow-mode';
 import type { ForecastCalibrationStore } from '@/services/intelligence/forecast-calibration';
+import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
+import { putMemory as idbPutMemory } from '@/services/reasoning-memory';
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -155,11 +158,7 @@ let _deps: ShadowRolloutDeps = {};
 function getShadowService(): ShadowModeAlgorithmService | null {
   if (_deps.shadowService) return _deps.shadowService;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('@/services/intelligence/shadow-mode') as {
-      getShadowModeAlgorithmService: () => ShadowModeAlgorithmService;
-    };
-    return mod.getShadowModeAlgorithmService();
+    return getShadowModeAlgorithmService();
   } catch {
     return null;
   }
@@ -168,11 +167,7 @@ function getShadowService(): ShadowModeAlgorithmService | null {
 function getCalStore(): ForecastCalibrationStore | null {
   if (_deps.calibrationStore) return _deps.calibrationStore;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('@/services/intelligence/forecast-calibration-adapter') as {
-      getCalibrationStore: () => ForecastCalibrationStore;
-    };
-    return mod.getCalibrationStore();
+    return getCalibrationStore();
   } catch {
     return null;
   }
@@ -190,15 +185,7 @@ function getStorage(): StorageLike | null {
 
 function getPutMemory(): ((key: string, value: unknown) => Promise<void>) | null {
   if (_deps.putMemoryFn) return _deps.putMemoryFn;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('@/services/reasoning-memory') as {
-      putMemory: <T>(key: string, value: T) => Promise<void>;
-    };
-    return mod.putMemory;
-  } catch {
-    return null;
-  }
+  return idbPutMemory;
 }
 
 function now(): number {
@@ -363,6 +350,7 @@ function brierScore(pairs: { p: number; outcome: boolean }[]): number | null {
  * @param runId    One of the three RUN_IDS values.
  * @param deps     Optional overrides (same as initShadowRollout).
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing complexity surfaced by the changed-file linter when this file was restaged for the require()→import fix; not introduced here, refactor out of scope.
 export function shadowVerdict(
   runId: RunId,
   deps?: ShadowRolloutDeps,

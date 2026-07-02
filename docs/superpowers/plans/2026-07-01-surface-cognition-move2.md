@@ -51,6 +51,7 @@
 ### Task A1: Pure provenance-line builder
 
 **Files:**
+
 - Create: `src/components/forecast-provenance-view.ts`
 - Test: `src/components/__tests__/forecast-provenance-view.test.mts`
 
@@ -127,6 +128,7 @@ git commit -m "feat(cognition-ui): pure forecast-provenance line builder"
 ### Task A2: Render provenance in the AnalystHUD forecast bar
 
 **Files:**
+
 - Modify: `src/components/AnalystHUD.ts` (the `buildForecastBar` method at ~:839)
 
 - [ ] **Step 1: Read `buildForecastBar` fully** (from `:839` to its `return wrap`) to see how `wrap`/`label`/`track` are appended and what CSS classes exist.
@@ -172,6 +174,7 @@ git commit -m "feat(cognition-ui): surface forecast provenance in AnalystHUD"
 ### Task B1: Pure calibration-report view-model
 
 **Files:**
+
 - Create: `src/components/calibration-report-view.ts`
 - Test: `src/components/__tests__/calibration-report-view.test.mts`
 
@@ -223,6 +226,7 @@ git commit -m "feat(cognition-ui): pure calibration-report view-model"
 ### Task B2: Render the report in BeliefCalibrationPanel
 
 **Files:**
+
 - Modify: `src/components/BeliefCalibrationPanel.ts` (192 LOC; `render()` at `:69`)
 
 - [ ] **Step 1: Read `BeliefCalibrationPanel.render()`** to match its section/HTML-string style + `escapeHtml` usage.
@@ -247,6 +251,7 @@ git commit -m "feat(cognition-ui): render live calibration report in BeliefCalib
 ### Task C1: Consolidation cadence
 
 **Files:**
+
 - Create: `src/services/cognition/consolidation-cadence.ts`
 - Test: `src/services/cognition/__tests__/consolidation-cadence.test.mts`
 
@@ -279,6 +284,7 @@ test('runs after the 6h interval', () => {
 ### Task C2: Learned-cascade registration
 
 **Files:**
+
 - Create: `src/services/intelligence/cascade-registration.ts`
 - Test: `src/services/intelligence/__tests__/cascade-registration.test.mts`
 
@@ -295,6 +301,7 @@ test('runs after the 6h interval', () => {
 ### Task C3: Boot both loops
 
 **Files:**
+
 - Modify: `src/app/panel-layout.ts:924` (right after `startBiasScanCadence();`)
 
 - [ ] **Step 1: Import** `startConsolidationCadence` and `refreshLearnedCascades` at the top of `panel-layout.ts`. Import the analyst event-history accessor the analyst-loop already uses (find how `mineCascades` would get history — likely `snapshot-archive` or the analyst-loop's history; if `refreshLearnedCascades` needs live history, call it inside the existing analyst-loop cadence instead, wherever `recordEpisode` is called at `analyst-loop.ts:364`, rather than at boot).
@@ -308,6 +315,7 @@ test('runs after the 6h interval', () => {
 ### Task C4: Wire tests into scripts + full verify
 
 **Files:**
+
 - Modify: `package.json` (`test:cognition` and the intelligence test script)
 
 - [ ] **Step 1: Add** the 4 new test files to the matching `test:*` scripts.

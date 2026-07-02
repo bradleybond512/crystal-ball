@@ -8,6 +8,7 @@
 The app's problem is **not** missing capability — it's that its deepest capabilities are invisible. The plan-driven engine machinery reliably ships tested, deterministic service code and marks it "done"; the *wire-it-to-a-surface* step is the first casualty whenever a plan defers all UI to a final PR that never lands.
 
 Evidence:
+
 - `src/services/cognition/` (~7,555 LOC / 20 modules) has **zero imports from any component**. `superforecast()`, `evoi-planner`, `consolidation`, `forecast-journal`, `regime-detection`, `shadow-rollout` are built + fully tested + called by nobody. `COGNITIVE_ENHANCEMENT_PLAN.md` PR-6 ("UI wiring") is the single unchecked box behind 14 done engine PRs.
 - `AnalystHUD.ts:843` renders a bare `probability %` and discards `forecast.components` (episodic analogs + recalibration provenance computed at `hypothesis-forecast.ts:88`).
 - `WelcomeFlow.ts` (finished location+interests onboarding) is **never instantiated** → new users hit a 476-panel firehose (261 shown by default) and `operator-model` (which every ranking surface consults) boots cold + unseeded.

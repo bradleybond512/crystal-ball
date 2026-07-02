@@ -2354,6 +2354,30 @@ export class PanelLayoutManager implements AppModule {
  this.applyInitialUrlState();
  this.restoreLastViewedPanel();
  this.startLastViewedTracker();
+ this.maybeShowOnboarding();
+  }
+
+  /** Mount the WelcomeFlow on first run and seed operator-model from the user's choices. */
+  private maybeShowOnboarding(): void {
+ void import('@/components/WelcomeFlow').then(({ WelcomeFlow }) => {
+ if (!WelcomeFlow.shouldShow()) return;
+ const flow = new WelcomeFlow({
+ onLocationSet: (lat, lng) => {
+ void import('@/services/saved-places').then(({ addSavedPlace }) => {
+ addSavedPlace({ name: 'My Location', lat, lon: lng, tags: ['home'], source: 'gps' });
+ }).catch((error) => { console.error('[boot] onboarding location save failed:', error); });
+ },
+ onInterestsSet: (interests) => {
+ Promise.all([
+ import('@/services/cognition/operator-model'),
+ import('@/app/onboarding-interests'),
+ ]).then(([{ seedInterests }, { mapInterestsToTerms }]) => {
+ seedInterests(mapInterestsToTerms(interests));
+ }).catch((error) => { console.error('[boot] onboarding interest seed failed:', error); });
+ },
+ });
+ flow.show();
+ }).catch((error) => { console.error('[boot] WelcomeFlow failed to mount:', error); });
   }
 
   /** Scroll to the last-viewed panel on boot, defaulting to command-center. */

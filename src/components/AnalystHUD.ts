@@ -34,6 +34,7 @@ import { isLlmEgressDisclosed, setLlmEgressDisclosed, isLocalModelOnly, setLocal
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
 import { forecastAll, type HypothesisForecast } from '@/services/intelligence/hypothesis-forecast';
+import { buildForecastProvenanceLines } from './forecast-provenance-view';
 import { getLatestPCI } from '@/services/intelligence/predictive-crisis-index';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
@@ -103,7 +104,26 @@ export class AnalystHUD {
   private selectedHypothesisIndex = 0;
   private settingsOpen = false;
   private renderScheduled = false;
-  private readonly _cleanups: Array<() => void> = [];
+  private readonly _cleanups: (() => void)[] = [];
+
+  private readonly onExportCopied = (e: Event): void => {
+    const ce = e as CustomEvent<{ hypothesisId: string }>;
+    this.exportedFlash = { id: ce.detail.hypothesisId, at: Date.now() };
+    this.scheduleRender();
+  };
+
+  // When llm-adapter blocks a cloud call because disclosure hasn't been
+  // acknowledged yet, show the disclosure banner in the HUD.
+  private readonly onEgressDisclosure = (): void => {
+    if (this.visible) this.scheduleRender();
+    else this.show();
+  };
+
+  private readonly onToggle = (): void => this.toggle();
+
+  private readonly onFeedback = (): void => { if (this.visible) this.render(); };
+
+  private readonly onKeydown = (e: KeyboardEvent): void => this.handleKeydown(e);
 
   constructor() {
     this.root = document.createElement('div');
@@ -123,69 +143,71 @@ export class AnalystHUD {
     // All event-driven re-renders go through scheduleRender() to coalesce
     // bursts (e.g. analyst-hypotheses + auto-brief + question-answered all
     // arriving in the same tick) into a single rAF-aligned render.
-    this._cleanups.push(subscribeAnalyst((snap) => {
+    const unsubAnalyst = subscribeAnalyst((snap) => {
       this.snapshot = snap;
       // Record recurrence ONCE per snapshot (not once per render) —
       // otherwise event bursts cause recurrenceCount to balloon by 10-30×
       // per actual cycle, polluting playbooks + hammering IDB writes.
       for (const h of snap.hypotheses.slice(0, MAX_VISIBLE)) noteRecurrence(h);
       this.scheduleRender();
-    }));
-    this._cleanups.push(subscribeModeAdvisory((f) => {
+    });
+    const unsubModeAdvisory = subscribeModeAdvisory((f) => {
       this.forecast = f;
       this.scheduleRender();
-    }));
-    this._cleanups.push(subscribeAutoBrief((brief) => {
+    });
+    const unsubAutoBrief = subscribeAutoBrief((brief) => {
       this.briefs[brief.domain] = brief;
       this.scheduleRender();
-    }));
-    this._cleanups.push(subscribePressureHistory((h) => {
+    });
+    const unsubPressureHistory = subscribePressureHistory((h) => {
       this.pressure = h;
       this.scheduleRender();
-    }));
-    this._cleanups.push(subscribeSkeptic(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeAlternatives(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeQuestionAnswered(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeBriefingArchive(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeProjection(() => { this.scheduleRender(); }));
-    const onExportCopied = (e: Event) => {
-      const ce = e as CustomEvent<{ hypothesisId: string }>;
-      this.exportedFlash = { id: ce.detail.hypothesisId, at: Date.now() };
-      this.scheduleRender();
-    };
-    document.addEventListener('cb:hypothesis-export-copied', onExportCopied);
-    this._cleanups.push(() => document.removeEventListener('cb:hypothesis-export-copied', onExportCopied));
-    this._cleanups.push(subscribeBudget(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeDebug((entry) => {
+    });
+    const unsubSkeptic = subscribeSkeptic(() => { this.scheduleRender(); });
+    const unsubAlternatives = subscribeAlternatives(() => { this.scheduleRender(); });
+    const unsubQuestionAnswered = subscribeQuestionAnswered(() => { this.scheduleRender(); });
+    const unsubBriefingArchive = subscribeBriefingArchive(() => { this.scheduleRender(); });
+    const unsubProjection = subscribeProjection(() => { this.scheduleRender(); });
+    document.addEventListener('cb:hypothesis-export-copied', this.onExportCopied);
+    const unsubBudget = subscribeBudget(() => { this.scheduleRender(); });
+    const unsubDebug = subscribeDebug((entry) => {
       // Only re-render on errors (to refresh the footer counter) — info
       // and warn entries are too chatty.
       if (entry.level === 'error') this.scheduleRender();
-    }));
-    this._cleanups.push(subscribeSnapshotArchive(() => {
+    });
+    const unsubSnapshotArchive = subscribeSnapshotArchive(() => {
       // Only scroll the view on new archived snapshots when we're live.
       // When replayed, the user's anchor timestamp resolves to the same
       // snapshot regardless, so no re-render is needed.
       if (this.replayAtTimestamp === null) this.scheduleRender();
-    }));
-    this._cleanups.push(subscribeEnsemble(() => { this.scheduleRender(); }));
-    this._cleanups.push(subscribeLlmEgressChange(() => { this.scheduleRender(); }));
-    // When llm-adapter blocks a cloud call because disclosure hasn't been
-    // acknowledged yet, show the disclosure banner in the HUD.
-    const onEgressDisclosure = () => {
-      if (this.visible) this.scheduleRender();
-      else this.show();
-    };
-    document.addEventListener('cb:llm-egress-disclosure-needed', onEgressDisclosure);
-    this._cleanups.push(() => document.removeEventListener('cb:llm-egress-disclosure-needed', onEgressDisclosure));
-    const onToggle = () => this.toggle();
-    document.addEventListener('cb:toggle-analyst-hud', onToggle);
-    this._cleanups.push(() => document.removeEventListener('cb:toggle-analyst-hud', onToggle));
-    const onFeedback = () => { if (this.visible) this.render(); };
-    document.addEventListener('cb:hypothesis-feedback', onFeedback);
-    this._cleanups.push(() => document.removeEventListener('cb:hypothesis-feedback', onFeedback));
-    const onKeydown = (e: KeyboardEvent) => this.handleKeydown(e);
-    document.addEventListener('keydown', onKeydown);
-    this._cleanups.push(() => document.removeEventListener('keydown', onKeydown));
+    });
+    const unsubEnsemble = subscribeEnsemble(() => { this.scheduleRender(); });
+    const unsubLlmEgressChange = subscribeLlmEgressChange(() => { this.scheduleRender(); });
+    document.addEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure);
+    document.addEventListener('cb:toggle-analyst-hud', this.onToggle);
+    document.addEventListener('cb:hypothesis-feedback', this.onFeedback);
+    document.addEventListener('keydown', this.onKeydown);
+    this._cleanups.push(
+      unsubAnalyst,
+      unsubModeAdvisory,
+      unsubAutoBrief,
+      unsubPressureHistory,
+      unsubSkeptic,
+      unsubAlternatives,
+      unsubQuestionAnswered,
+      unsubBriefingArchive,
+      unsubProjection,
+      () => document.removeEventListener('cb:hypothesis-export-copied', this.onExportCopied),
+      unsubBudget,
+      unsubDebug,
+      unsubSnapshotArchive,
+      unsubEnsemble,
+      unsubLlmEgressChange,
+      () => document.removeEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure),
+      () => document.removeEventListener('cb:toggle-analyst-hud', this.onToggle),
+      () => document.removeEventListener('cb:hypothesis-feedback', this.onFeedback),
+      () => document.removeEventListener('keydown', this.onKeydown),
+    );
   }
 
   destroy(): void {
@@ -859,6 +881,20 @@ export class AnalystHUD {
     track.append(fill);
 
     wrap.append(label, track);
+
+    const details = document.createElement('details');
+    details.className = 'analyst-hud-forecast-why';
+    const summary = document.createElement('summary');
+    summary.textContent = 'why';
+    details.append(summary);
+    for (const line of buildForecastProvenanceLines(forecast)) {
+      const row = document.createElement('div');
+      row.className = 'analyst-hud-forecast-why-row';
+      row.textContent = line;
+      details.append(row);
+    }
+    wrap.append(details);
+
     return wrap;
   }
 

@@ -91,6 +91,8 @@ import { startOutcomeGradingCadence } from '@/services/algorithms/outcome-gradin
 import { startTuningApplyCadence } from '@/services/algorithms/tuning-apply-runner';
 import { startLlmGradingCadence } from '@/services/algorithms/llm-grading-pass';
 import { startBiasScanCadence } from '@/services/intelligence/bias-scan-cadence';
+import { startLearnedCascadeCadence } from '@/services/intelligence/cascade-registration';
+import { startConsolidationCadence } from '@/services/cognition/consolidation-cadence';
 import { startEpistemicCalibration } from '@/services/intelligence/epistemic-calibration';
 import { startAssumptionExpirySweep } from '@/services/intelligence/assumption-producers';
 import { expirePendingPredictions } from '@/services/intelligence/forecast-calibration-adapter';
@@ -922,6 +924,8 @@ export class PanelLayoutManager implements AppModule {
  startTuningApplyCadence();
  startLlmGradingCadence();
  startBiasScanCadence();
+ startLearnedCascadeCadence();
+ startConsolidationCadence();
  startEpistemicCalibration();
  startAssumptionExpirySweep();
  setInterval(() => { try { expirePendingPredictions(); } catch { /* noop */ } }, 60 * 60 * 1000);

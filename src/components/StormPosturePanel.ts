@@ -12,7 +12,7 @@
  * Layout (top → bottom):
  *   1. Grid-down banner when the underlying weather feed is stale.
  *   2. Overall posture card (band label + headline), tinted by band.
- *   3. Physical-safety axis card with one row per active threat.
+ *   3. One card per active posture axis (physical safety, supply, …).
  *   4. Recommended moves with a Commit button (or "planned" status).
  */
 
@@ -34,6 +34,8 @@ import type {
   SurvivalPosture,
   WorldSnapshot,
 } from '@/services/survival/survival-types.ts';
+import { axisLabel } from '@/services/survival/survival-types.ts';
+import { selectPostureCards } from './storm-posture-view.ts';
 import { escapeHtml } from '@/utils/sanitize.ts';
 
 const REFRESH_MS = 120_000;
@@ -65,7 +67,7 @@ export class StormPosturePanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Your survival posture from severe-weather threats near your saved places.',
+        'Your survival posture across weather, supply, and other domains near your saved places.',
     });
 
     this.unsubscribe = subscribeStormPosture(() => this.render());
@@ -99,8 +101,7 @@ export class StormPosturePanel extends Panel {
     const now = Date.now();
     const view = projectView(snap, { now });
     const moves = availableMoves(snap.posture, snap, { now });
-    const physical = snap.posture.axes.find((a) => a.axis === 'physical_safety');
-    this.setCount(physical ? physical.threats.length : 0);
+    this.setCount(snap.posture.axes.reduce((n, a) => n + a.threats.length, 0));
     this.setContent(this.buildHtml(snap, view.posture, moves, view.isStale, view.weatherAgeMs));
     this.markFresh();
   }
@@ -114,10 +115,9 @@ export class StormPosturePanel extends Panel {
   ): string {
     const banner = isStale ? this.buildStaleBanner(weatherAgeMs) : '';
     const overall = this.buildOverallCard(posture);
-    const physical = posture.axes.find((a) => a.axis === 'physical_safety');
-    const physicalCard = physical ? this.buildPhysicalCard(physical) : '';
+    const cards = selectPostureCards(posture).map((a) => this.buildAxisCard(a)).join('');
     const movesCard = this.buildMovesCard(snap, moves);
-    return `${banner}${overall}${physicalCard}${movesCard}`;
+    return `${banner}${overall}${cards}${movesCard}`;
   }
 
   private buildStaleBanner(weatherAgeMs: number): string {
@@ -135,15 +135,18 @@ export class StormPosturePanel extends Panel {
     </div>`;
   }
 
-  private buildPhysicalCard(axis: AxisState): string {
+  private buildAxisCard(axis: AxisState): string {
     const color = bandColor(axis.band);
     const header = `<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;">
-      <span style="font-size:13px;font-weight:600;color:var(--text-primary,#ddd);">Physical safety</span>
+      <span style="font-size:13px;font-weight:600;color:var(--text-primary,#ddd);">${escapeHtml(axisLabel(axis.axis))}</span>
       <span style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(axis.band)} · ${Math.round(axis.level)}</span>
     </div>`;
 
+    const emptyCopy = axis.axis === 'physical_safety'
+      ? 'Secure — no active severe-weather threats near your saved places.'
+      : 'Secure — no active threats.';
     const body = axis.threats.length === 0
-      ? `<div style="font-size:12px;color:var(--text-secondary,#888);">Secure — no active severe-weather threats near your saved places.</div>`
+      ? `<div style="font-size:12px;color:var(--text-secondary,#888);">${emptyCopy}</div>`
       : axis.threats.map((t) => this.buildThreatRow(t)).join('');
 
     return `<div style="margin:0 10px 10px;padding:10px 12px;border:1px solid var(--border-subtle,#2a2a2a);border-radius:6px;background:var(--bg-elevated,rgba(255,255,255,0.02));">

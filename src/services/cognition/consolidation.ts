@@ -37,10 +37,9 @@
  *
  * Scheduling:
  *   runConsolidation() is the pure exported entry point (injectable episode
- *   source / clock / registrar for tests). The thin wrapper
- *   scheduleConsolidation() wires the 24 h idle-time trigger
- *   (requestIdleCallback + setTimeout fallback, visibility-guarded, Ghost-Mode-
- *   suppressed). consolidation.ts itself has no globals at import time.
+ *   source / clock / registrar for tests). The live cadence wrapper lives in
+ *   consolidation-cadence.ts (startConsolidationCadence(), 6 h, booted from
+ *   panel-layout.ts). consolidation.ts itself has no globals at import time.
  *
  * Persistence:
  *   IDB key  : crystalball-cognition-schemas-v1
@@ -257,6 +256,7 @@ interface Cluster {
  * Assignment: all unassigned episodes within simThreshold of the seed join.
  * Repeat until all assigned.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing complexity surfaced by the changed-file linter when this PR removed dead scheduleConsolidation(); not introduced here, refactor out of scope.
 function clusterEpisodes(episodes: readonly Episode[], simThreshold: number): Cluster[] {
   if (episodes.length === 0) return [];
 
@@ -556,6 +556,7 @@ function getDefaultEpisodeSource(): EpisodeSource {
  *
  * Returns a ConsolidationReport summarising what changed.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- pre-existing complexity surfaced by the changed-file linter when this PR removed dead scheduleConsolidation(); not introduced here, refactor out of scope.
 export function runConsolidation(opts: ConsolidationOptions = {}): Promise<ConsolidationReport> {
   const nowFn = opts.now ?? (() => Date.now());
   const storage = resolveStorage(opts.storage);
@@ -710,66 +711,6 @@ export function configureConsolidationForTests(opts: {
   if (opts.storage !== undefined) _storageOverride = opts.storage;
   if (opts.getMemoryFn !== undefined) _getMemoryOverride = opts.getMemoryFn;
   if (opts.putMemoryFn !== undefined) _putMemoryOverride = opts.putMemoryFn;
-}
-
-// ── Scheduling (thin non-pure wrapper; not imported by pure tests) ────────────
-
-/**
- * Wire a 24 h idle-time consolidation trigger.
- *
- * - requestIdleCallback (with setTimeout fallback) ensures consolidation
- *   runs when the main thread is idle.
- * - Visibility guard: skips if document is hidden (user left the tab).
- * - Ghost Mode guard: skips if isGhostMode() is true.
- * - Subsequent consolidations are re-scheduled after each run.
- *
- * Call once at boot from panel-layout.ts or data-loader.ts.
- * The function is a no-op in Node.js environments (test runner).
- */
-export function scheduleConsolidation(): void {
-  if (typeof globalThis === 'undefined') return;
-  const g = globalThis as Record<string, unknown>;
-  if (g.document === undefined) return; // Node.js — skip
-
-  const INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 h
-
-  function runWhenIdle(): void {
-    const doc = (globalThis as unknown as { document?: { visibilityState?: string } }).document;
-    if (doc?.visibilityState === 'hidden') {
-      // Re-schedule for next interval.
-      scheduleNextRun();
-      return;
-    }
-
-    // Ghost Mode check — lazy import to avoid global at module load.
-    let ghostMode = false;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const mm = require('@/services/mode-manager') as { isGhostMode: () => boolean };
-      ghostMode = mm.isGhostMode();
-    } catch { /* ignore */ }
-
-    if (ghostMode) {
-      scheduleNextRun();
-      return;
-    }
-
-    void runConsolidation().then(scheduleNextRun).catch(scheduleNextRun);
-  }
-
-  function scheduleNextRun(): void {
-    const w = globalThis as unknown as {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void;
-      setTimeout: (cb: () => void, ms: number) => void;
-    };
-    if (typeof w.requestIdleCallback === 'function') {
-      w.requestIdleCallback(runWhenIdle, { timeout: INTERVAL_MS });
-    } else {
-      w.setTimeout(runWhenIdle, INTERVAL_MS);
-    }
-  }
-
-  scheduleNextRun();
 }
 
 // ── Re-export CrisisSignatureLibraryOptions for convenience (used by registrar type) ──

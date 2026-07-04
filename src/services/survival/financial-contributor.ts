@@ -9,17 +9,9 @@
  * no sidecar), wired in storm-posture-state.ts.
  */
 import type { ForecastSnapshot } from '../mode-forecast.ts';
-import type { ThreatLevel } from '../weather/weather-threat-types.ts';
 import type { PostureThreat } from './survival-types.ts';
+import { severityToThreatLevel } from './survival-types.ts';
 import type { PostureContributor } from './posture-contributor.ts';
-
-function severityToThreatLevel(severity: number): ThreatLevel {
-  if (severity >= 95) return 'emergency';
-  if (severity >= 75) return 'warning';
-  if (severity >= 50) return 'advisory';
-  if (severity >= 30) return 'watch';
-  return 'none';
-}
 
 export function makeFinancialContributor(snapshot: ForecastSnapshot): PostureContributor {
   return {

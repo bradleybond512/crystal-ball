@@ -15,6 +15,7 @@ import { computeMultiAxisPosture } from './survival-posture.ts';
 import { makeWeatherContributor } from './weather-contributor.ts';
 import { makeSupplyContributor } from './supply-contributor.ts';
 import { makeFinancialContributor } from './financial-contributor.ts';
+import { makeSecurityContributor } from './security-contributor.ts';
 import { getForecastSnapshot } from '../mode-forecast';
 import { availableMovesFrom } from './survival-moves.ts';
 import { makeWeatherMoveProvider } from './weather-move-provider.ts';
@@ -137,8 +138,8 @@ export function supplyContributorForBase(base: WorldSnapshot | null): PostureCon
 /** Re-derive posture across weather + supply contributors, then re-apply the
  *  committed plan once on the fresh base. Weather behavior is unchanged: the
  *  same weather contributor + weather moves feed in; supply is additive. It also
- *  adds the financial contributor (from mode-forecast) when a forecast snapshot
- *  is present. The base is computed without the plan and the plan is applied
+ *  adds the financial and security contributors (from mode-forecast) when a
+ *  forecast snapshot is present. The base is computed without the plan and the plan is applied
  *  exactly once, so this never double-counts the committed move effects. The
  *  supply contributor is built from `supplyBase` (the snapshot whose persisted
  *  supply threats are the cold-cache fallback). */
@@ -148,7 +149,7 @@ function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyBase: Wor
     contributors: [
       makeWeatherContributor(snapshot.weatherAlerts, snapshot.savedPlaces),
       supplyContributorForBase(supplyBase),
-      ...(forecast ? [makeFinancialContributor(forecast)] : []),
+      ...(forecast ? [makeFinancialContributor(forecast), makeSecurityContributor(forecast)] : []),
     ],
     freshness: snapshot.freshness,
     capturedAtMs: snapshot.capturedAtMs,

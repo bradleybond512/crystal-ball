@@ -762,8 +762,11 @@ fn write_vault_shadow(app: &AppHandle, secrets: &HashMap<String, String>) {
  // Never persist secrets to disk in plaintext. If there is no machine-bound
  // key (non-macOS) or encryption fails, skip the shadow copy entirely — the
  // OS keychain / credential manager remains authoritative; we only forgo the
- // keychain-timeout fallback cache here.
+ // keychain-timeout fallback cache here. Also delete any pre-existing shadow
+ // file (e.g. a legacy plaintext copy from an older build) so read_vault_shadow
+ // can't load it back as stale secrets during keychain fallback.
  let Some(payload) = vault_shadow_key().and_then(|k| encrypt_vault_shadow(&k, &json)) else {
+     let _ = fs::remove_file(&path);
      return;
  };
  if let Some(parent) = path.parent() {
@@ -809,9 +812,12 @@ fn write_vault_shadow(app: &AppHandle, secrets: &HashMap<String, String>) {
 fn read_vault_shadow(app: &AppHandle) -> Option<HashMap<String, String>> {
  let path = vault_shadow_path(app).ok()?;
  let raw = fs::read_to_string(&path).ok()?;
- let json = vault_shadow_key()
-     .and_then(|k| decrypt_vault_shadow(&k, &raw))
-     .unwrap_or(raw);
+ // Only accept an authenticated AES-256-GCM envelope. Never fall back to
+ // parsing the file as raw plaintext — a legacy or tampered plaintext shadow
+ // must not be trusted as secrets. Pairs with write_vault_shadow, which now
+ // only ever writes encrypted (and deletes the file when it cannot).
+ let key = vault_shadow_key()?;
+ let json = decrypt_vault_shadow(&key, &raw)?;
  let map: HashMap<String, String> = serde_json::from_str(&json).ok()?;
  let filtered: HashMap<String, String> = map
      .into_iter()

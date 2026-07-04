@@ -58,6 +58,14 @@ export function threatLevelToSeverity(level: ThreatLevel): number {
   }
 }
 
+export function severityToThreatLevel(severity: number): ThreatLevel {
+  if (severity >= 95) return 'emergency';
+  if (severity >= 75) return 'warning';
+  if (severity >= 50) return 'advisory';
+  if (severity >= 30) return 'watch';
+  return 'none';
+}
+
 // ── Posture data ────────────────────────────────────────────────────────────
 export interface PostureThreat {
   /** Alert id this threat came from. */

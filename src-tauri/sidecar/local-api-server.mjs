@@ -250,6 +250,20 @@ function isValidToken(authHeader) {
   if (expected.length !== actual.length) return false;
   return timingSafeEqual(expected, actual);
 }
+
+// DNS-rebinding defense. The server binds loopback only, but a browser page at
+// evil.com whose DNS is rebound to 127.0.0.1 would issue same-origin requests
+// (bypassing CORS) carrying a `Host: evil.com:<port>` header. Requiring the
+// Host to name loopback on our own port rejects those before any routing —
+// including the deliberately unauthenticated loopback-only routes (analyst
+// state/commands, shortage/seismic mirrors). Legitimate callers (renderer, MCP
+// server, curl) always target 127.0.0.1/localhost on the sidecar port.
+function isAllowedHost(hostHeader, port) {
+  if (!hostHeader) return false;
+  return hostHeader === `127.0.0.1:${port}`
+    || hostHeader === `localhost:${port}`
+    || hostHeader === `[::1]:${port}`;
+}
 // Node 22 ships a built-in WebSocket global (WHATWG API) — no external dep needed.
 const AisWebSocket = WebSocket;
 
@@ -6354,8 +6368,8 @@ async function dispatch(requestUrl, req, routes, context) {
   // Renderer runs the globe-overlay-emitter (Layer 4) and POSTs the
   // resulting `GlobeSeismicOverlay[]` here every 5s. The God's Eye Cesium
   // panel (Layer 6) reads from GET. Read-only mirror — same shape as
-  // /api/analyst-state. No bearer auth: route is loopback-only and the
-  // payload is non-sensitive (positions/magnitudes already public).
+  // /api/analyst-state. Sits below the global auth gate, so a valid
+  // LOCAL_API_TOKEN is required (renderer and MCP client both send it).
   if (requestUrl.pathname === '/api/seismic-globe-overlays') {
     if (req.method === 'POST') {
       try {
@@ -6398,7 +6412,8 @@ async function dispatch(requestUrl, req, routes, context) {
   // POSTs the results here after each render cycle. GET /api/shortage/summary
   // returns the summary array; GET /api/shortage/:commodity returns the full
   // forecast for a single commodity. 30-minute cache controlled by the
-  // renderer's ttlMs field. No bearer auth: loopback-only, non-sensitive.
+  // renderer's ttlMs field. Sits below the global auth gate, so a valid
+  // LOCAL_API_TOKEN is required (renderer and MCP client both send it).
   if (requestUrl.pathname === '/api/shortage/state') {
     if (req.method === 'POST') {
       try {
@@ -17860,6 +17875,14 @@ export async function createLocalApiServer(options = {}) {
 
   const server = createServer(async (req, res) => {
  const requestUrl = new URL(req.url || '/', `http://127.0.0.1:${context.port}`);
+ // DNS-rebinding guard: reject any request whose Host header doesn't name
+ // loopback on our own port, before routing or auth. Closes the rebinding
+ // path to every route, including the unauthenticated loopback-only mirrors.
+ if (!isAllowedHost(req.headers.host, context.port)) {
+ res.writeHead(403, { 'content-type': 'application/json' });
+ res.end(JSON.stringify({ error: 'Forbidden host' }));
+ return;
+ }
  // Rewrite alias paths to their canonical handlers (see ROUTE_ALIASES).
  const aliasTarget = ROUTE_ALIASES[requestUrl.pathname];
  if (aliasTarget) requestUrl.pathname = aliasTarget;

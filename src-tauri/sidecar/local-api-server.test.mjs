@@ -633,6 +633,64 @@ test('inline /api routes: gated route requires auth, public route does not', asy
   }
 });
 
+test('DNS-rebinding guard: a foreign Host header is rejected with 403', async () => {
+  // A rebound page (evil.com → 127.0.0.1) sends same-origin requests carrying
+  // `Host: evil.com:<port>`; requiring loopback Host closes that path even for
+  // the public routes. undici forbids overriding Host, so use raw http.request.
+  const localApi = await setupApiDir({});
+  const app = await createLocalApiServer({
+ port: 0,
+ apiDir: localApi.apiDir,
+ logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+  try {
+ const status = await new Promise((resolve, reject) => {
+ const r = httpRequest(
+ { host: '127.0.0.1', port, path: '/api/health', method: 'GET', headers: { host: `evil.com:${port}` } },
+ (res) => { res.resume(); resolve(res.statusCode); },
+ );
+ r.on('error', reject);
+ r.end();
+ });
+ assert.equal(status, 403, 'foreign Host must be rejected before routing');
+
+ // A legitimate loopback Host on the same port still works.
+ const ok = await fetch(`http://127.0.0.1:${port}/api/health`);
+ assert.notEqual(ok.status, 403, 'loopback Host must pass the guard');
+  } finally {
+ await app.close();
+ await localApi.cleanup();
+  }
+});
+
+test('state mirror routes require the local API token (not loopback-only)', async () => {
+  // Guards against a refactor moving these routes above the global auth gate:
+  // an unauthenticated cross-site POST must not reach the analyst/shortage/
+  // seismic mirrors. All real callers (renderer, MCP client) send the token.
+  const localApi = await setupApiDir({});
+  const originalToken = process.env.LOCAL_API_TOKEN;
+  process.env.LOCAL_API_TOKEN = 'secret-mirror-token';
+  const app = await createLocalApiServer({
+ port: 0,
+ apiDir: localApi.apiDir,
+ logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+  try {
+ for (const route of ['/api/analyst-commands', '/api/analyst-state', '/api/shortage/state', '/api/seismic-globe-overlays']) {
+ const unauth = await fetch(`http://127.0.0.1:${port}${route}`, {
+ method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+ });
+ assert.equal(unauth.status, 401, `${route} must require auth`);
+ }
+  } finally {
+ process.env.LOCAL_API_TOKEN = originalToken;
+ await app.close();
+ await localApi.cleanup();
+  }
+});
+
 test('preserves Origin in Vary when gzip compression is applied', async () => {
   const localApi = await setupApiDir({
  'large.js': `

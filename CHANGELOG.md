@@ -6,6 +6,8 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Surfacing Move 2 — cognition layer visibility**: forecast provenance,
+  calibration report, and booting the learning loops (PR #1339).
 - **Ask the data in Command Center**: the deterministic ask-the-data engine is
   now user-reachable — question input, grounded answer packet, evidence rows,
   and follow-up chips, fed by the live feature/panel/mission registries

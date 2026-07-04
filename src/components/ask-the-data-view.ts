@@ -28,7 +28,7 @@ export function buildAskAnswerHtml(packet: AnswerPacket): string {
         ${packet.evidence.slice(0, 6).map((row) => `<li style="font-size:11px;display:flex;gap:6px;align-items:baseline;">
           <strong style="flex:0 0 auto;">${escapeHtml(row.label)}</strong>
           <span style="color:var(--text-secondary,#aaa);">${escapeHtml(row.fact)}</span>
-          ${row.confidence !== undefined ? `<span style="margin-left:auto;flex:0 0 auto;font-size:10px;color:var(--text-secondary,#aaa);">${Math.round(row.confidence * 100)}%</span>` : ''}
+          ${row.confidence === undefined ? '' : `<span style="margin-left:auto;flex:0 0 auto;font-size:10px;color:var(--text-secondary,#aaa);">${Math.round(row.confidence * 100)}%</span>`}
         </li>`).join('')}
       </ul>`;
   const followUps = packet.followUps.length === 0

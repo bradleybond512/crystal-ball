@@ -30,6 +30,13 @@ import {
   getRecentEvents,
 } from '@/services/insights/insights-state';
 import type { ActionBrief } from '@/services/insights/action-briefs';
+import { askLive } from '@/services/insights/ask-context';
+import type { AnswerPacket } from '@/services/insights/ask-the-data';
+import {
+  ASK_SUGGESTED_QUESTIONS,
+  buildAskAnswerHtml,
+  buildAskFollowupChipHtml,
+} from './ask-the-data-view';
 import type { PersonalImpact } from '@/services/personal/personal-impact';
 import type { FeatureHealth, HealthStatus } from '@/services/diagnostics/system-health-types';
 import { escapeHtml } from '@/utils/sanitize';
@@ -125,6 +132,10 @@ export class CommandCenterPanel extends Panel {
   private unsubscribeDisclosure: (() => void) | null = null;
   private detachLensBanner: (() => void) | null = null;
   private unsubscribeLens: (() => void) | null = null;
+  // Ask-the-data state lives in class fields so the 10 s re-render
+  // doesn't wipe the typed question or the last answer.
+  private askDraft = '';
+  private askPacket: AnswerPacket | null = null;
 
   constructor() {
     super({
@@ -173,8 +184,19 @@ export class CommandCenterPanel extends Panel {
 
   private render(): void {
     if (this.isDragging) return;
+    // setContent replaces the DOM — remember whether the ask input held
+    // focus so the periodic refresh doesn't steal the caret mid-typing.
+    const active = document.activeElement as HTMLInputElement | null;
+    const askHadFocus = active?.dataset?.askInput !== undefined;
     const html = this.buildHtml();
     this.setContent(html);
+    if (askHadFocus) {
+      const input = this.content.querySelector<HTMLInputElement>('[data-ask-input]');
+      if (input) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    }
   }
 
   private buildHtml(): string {
@@ -246,6 +268,7 @@ export class CommandCenterPanel extends Panel {
         ${this.renderGlobeNav()}
         ${this.renderChangeTape()}
         ${this.renderFiveQuestionSpine(spineSummary)}
+        ${this.renderAskTheData()}
         ${this.renderSavedPlacesTiles()}
         ${this.renderRiskHeadline(report.status, report.summary)}
         ${this.renderActionBrief(actionBrief)}
@@ -390,6 +413,35 @@ export class CommandCenterPanel extends Panel {
       ${a.automated ? '<span style="font-size:10px;color:var(--severity-ok);">·auto</span>' : ''}
     </li>`).join('');
     return spineSection('5. What should I do next?', `<ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:3px;">${rows}</ul>`);
+  }
+
+  // ── Ask the data (deterministic structured query, gap #5) ───────────────
+
+  private renderAskTheData(): string {
+    const answerHtml = this.askPacket
+      ? buildAskAnswerHtml(this.askPacket)
+      : `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
+          ${ASK_SUGGESTED_QUESTIONS.map((q) => buildAskFollowupChipHtml(q)).join('')}
+        </div>`;
+    return `<div style="border:1px solid var(--border-subtle,#333);border-radius:6px;padding:10px;background:rgba(255,255,255,0.02);">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-secondary,#aaa);margin-bottom:6px;">Ask the data</div>
+      <div style="display:flex;gap:6px;">
+        <input type="text" data-ask-input placeholder="Why is risk high? What changed? What should I watch?"
+          value="${escapeHtml(this.askDraft)}"
+          style="flex:1;font-size:12px;padding:5px 8px;border:1px solid var(--border-subtle,#444);border-radius:4px;background:rgba(0,0,0,0.25);color:inherit;" />
+        <button type="button" data-action="ask-submit"
+          style="font-size:11px;padding:5px 12px;border:1px solid var(--border-subtle,#444);border-radius:4px;background:rgba(74,158,255,0.16);color:inherit;cursor:pointer;">Ask</button>
+      </div>
+      ${answerHtml}
+    </div>`;
+  }
+
+  private submitAsk(question: string): void {
+    const trimmed = question.trim();
+    if (trimmed.length === 0) return;
+    this.askDraft = trimmed;
+    this.askPacket = askLive(trimmed);
+    this.render();
   }
 
   private renderGlobeNav(): string {
@@ -635,6 +687,17 @@ export class CommandCenterPanel extends Panel {
   private attachInteractionListeners(): void {
     this.content.addEventListener('mousedown', (e) => this.onMouseDown(e));
     this.content.addEventListener('click', (e) => this.onContentClick(e));
+    // Keep the ask draft in sync so the 10 s re-render can restore it.
+    this.content.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement | null;
+      if (target?.dataset?.askInput !== undefined) this.askDraft = target.value;
+    });
+    this.content.addEventListener('keydown', (e) => {
+      const target = e.target as HTMLInputElement | null;
+      if (target?.dataset?.askInput !== undefined && e.key === 'Enter') {
+        this.submitAsk(target.value);
+      }
+    });
   }
 
   private onMouseDown(e: MouseEvent): void {
@@ -721,6 +784,16 @@ export class CommandCenterPanel extends Panel {
     }
     if (target.closest<HTMLElement>('[data-action="reset-layout"]')) {
       this.handleResetLayout();
+      return;
+    }
+    if (target.closest<HTMLElement>('[data-action="ask-submit"]')) {
+      const input = this.content.querySelector<HTMLInputElement>('[data-ask-input]');
+      this.submitAsk(input?.value ?? this.askDraft);
+      return;
+    }
+    const followUp = target.closest<HTMLElement>('[data-ask-followup]');
+    if (followUp) {
+      this.submitAsk(followUp.dataset.askFollowup ?? '');
       return;
     }
     const tapeChip = target.closest<HTMLElement>('[data-tape-event-id]');

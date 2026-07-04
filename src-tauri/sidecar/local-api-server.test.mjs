@@ -633,6 +633,29 @@ test('inline /api routes: gated route requires auth, public route does not', asy
   }
 });
 
+test('Patreon OAuth callback is reachable (not 404 by the non-/api gate)', async () => {
+  // Regression: the callback is a non-/api browser redirect handled in
+  // dispatch(); the createServer 404 gate must exempt it or the connect flow
+  // can never complete. A bad-state callback returns the HTML close-page (200),
+  // not the {"error":"Not found"} 404.
+  const localApi = await setupApiDir({});
+  const app = await createLocalApiServer({
+ port: 0,
+ apiDir: localApi.apiDir,
+ logger: { log() {}, warn() {}, error() {} },
+  });
+  const { port } = await app.start();
+  try {
+ const res = await fetch(`http://127.0.0.1:${port}/oauth/patreon/callback?code=x&state=bogus`);
+ assert.notEqual(res.status, 404, 'callback must not be 404ed before dispatch');
+ assert.equal(res.status, 200);
+ assert.match(res.headers.get('content-type') || '', /text\/html/);
+  } finally {
+ await app.close();
+ await localApi.cleanup();
+  }
+});
+
 test('DNS-rebinding guard: a foreign Host header is rejected with 403', async () => {
   // A rebound page (evil.com → 127.0.0.1) sends same-origin requests carrying
   // `Host: evil.com:<port>`; requiring loopback Host closes that path even for

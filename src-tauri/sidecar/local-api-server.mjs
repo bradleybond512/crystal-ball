@@ -17952,7 +17952,11 @@ export async function createLocalApiServer(options = {}) {
  return;
  }
 
- if (!requestUrl.pathname.startsWith('/api/')) {
+ // The Patreon OAuth callback is a non-/api browser redirect handled inside
+ // dispatch() (pre-auth, above the global gate). Let it through the 404 gate
+ // like /gps/nmea; without this exemption the connect flow 404s and can never
+ // complete despite /api/patreon/authorize-url handing out the redirect URI.
+ if (!requestUrl.pathname.startsWith('/api/') && requestUrl.pathname !== '/oauth/patreon/callback') {
  res.writeHead(404, { 'content-type': 'application/json', ...makeCorsHeaders(req) });
  res.end(JSON.stringify({ error: 'Not found' }));
  return;
@@ -17975,6 +17979,7 @@ export async function createLocalApiServer(options = {}) {
  '/api/youtube-embed',
  '/api/patreon/authorize-url',
  '/api/sms/command',
+ '/oauth/patreon/callback',
  ]);
  // Answer CORS preflight for every inline /api/ route here. Preflight
  // (OPTIONS) carries no Authorization header, and the inline handlers below

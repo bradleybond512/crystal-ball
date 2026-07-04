@@ -1,11 +1,13 @@
 # cargo-audit configuration — read by `cargo audit` in CI
 # (.github/workflows/security-audit.yml).
 #
-# All ignores below are *unmaintained / unsound advisories* against
-# transitive deps pulled in by Tauri 2.x + wry on Linux (GTK3 stack).
-# No vulnerabilities (i.e. exploitable RCE / data-disclosure) are
-# ignored — only RustSec advisories whose `informational` kind is
-# `unmaintained` or `unsound`.
+# Ignores below are *unmaintained / unsound advisories* against
+# transitive deps pulled in by Tauri 2.x + wry on Linux (GTK3 stack),
+# PLUS one explicitly documented policy deviation (the quick-xml
+# section at the bottom): two real DoS advisories ignored temporarily
+# because no upstream upgrade path exists yet and the affected parsing
+# is local/build-time only. No RCE / data-disclosure vulnerability is
+# ignored.
 #
 # The fixes for every entry below land at the Tauri/wry layer when
 # upstream migrates to gtk4 / replaces the GTK3 bindings. Holding
@@ -41,4 +43,20 @@ ignore = [
     "RUSTSEC-2025-0098",  # unic-ucd-version unmaintained
     "RUSTSEC-2025-0100",  # unic-ucd-ident unmaintained
     "RUSTSEC-2026-0097",  # rand 0.7.3 unsound — phf-codegen → selectors → kuchikiki (build-time only)
+
+    # ── quick-xml memory-exhaustion DoS (POLICY DEVIATION — temporary) ──
+    # These two ARE real vulnerabilities (not unsound/unmaintained), ignored
+    # deliberately and temporarily (accepted 2026-07-04):
+    #   - quick-xml < 0.41 unbounded-allocation DoS; fix requires >= 0.41.
+    #   - Reached only transitively: plist 1.8.0 (semver-pins quick-xml 0.38,
+    #     parses LOCAL .plist files only) and wayland-scanner 0.31.10
+    #     (semver-pins 0.39, BUILD-TIME codegen only). Neither parses
+    #     network-supplied XML, so the memory-exhaustion vector is not
+    #     attacker-reachable in this app.
+    #   - No upstream release allows quick-xml >= 0.41 yet.
+    # DROP both entries as soon as plist / wayland-scanner (or the Tauri
+    # stack pinning them) adopt quick-xml >= 0.41 — check on every Tauri
+    # bump alongside the GTK3 review cadence above.
+    "RUSTSEC-2026-0194",  # quick-xml Reader DoS — plist (local files) / wayland-scanner (build-time)
+    "RUSTSEC-2026-0195",  # quick-xml NsReader DoS — same transitive paths as above
 ]

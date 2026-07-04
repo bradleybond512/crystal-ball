@@ -205,9 +205,10 @@ const KEYCHAIN_PER_CALL_TIMEOUT: Duration = Duration::from_secs(3);
 /// returns cached secrets instantly so the sidecar boots with keys regardless.
 const KEYCHAIN_VAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Filename for the plaintext shadow copy of the secrets vault written to the
-/// app data directory (mode 0600). Read as a fallback when the keychain prompt
-/// is dismissed or times out.
+/// Filename for the encrypted (AES-256-GCM) shadow copy of the secrets vault
+/// written to the app data directory (mode 0600). Read as a fallback when the
+/// keychain prompt is dismissed or times out. Written only when a machine-bound
+/// key is derivable; never persisted in plaintext.
 const VAULT_SHADOW_FILE: &str = "secrets-vault-shadow.json";
 
 /// Run a single keychain `get_password()` call on a worker thread
@@ -697,7 +698,8 @@ struct ShadowEnvelope {
 /// hardware IOPlatformUUID so the at-rest secrets can't be decrypted from a
 /// copied / backed-up / leaked file on another machine. An on-host attacker with
 /// code execution can still re-derive it — the accepted limit absent a
-/// keychain-free secure enclave. None → plaintext fallback (no stable id).
+/// keychain-free secure enclave. None → the shadow copy is skipped entirely
+/// (no stable id); secrets are never written to disk in plaintext.
 #[cfg(target_os = "macos")]
 fn vault_shadow_key() -> Option<[u8; 32]> {
  let out = std::process::Command::new("ioreg")
@@ -748,18 +750,22 @@ fn decrypt_vault_shadow(key: &[u8; 32], raw: &str) -> Option<String> {
 }
 
 /// Write an encrypted shadow copy of the vault to the app data dir (mode 0600).
-/// Encrypted at rest under a machine-bound key (AES-256-GCM); falls back to
-/// plaintext only where no stable machine id exists (non-macOS).
-/// Best-effort — failure here is non-fatal; the keychain remains authoritative.
+/// Encrypted at rest under a machine-bound key (AES-256-GCM). Where no stable
+/// machine id exists (non-macOS) the shadow copy is skipped rather than written
+/// in plaintext. Best-effort — non-fatal; the keychain remains authoritative.
 fn write_vault_shadow(app: &AppHandle, secrets: &HashMap<String, String>) {
  let Ok(path) = vault_shadow_path(app) else { return };
  let json = match serde_json::to_string(secrets) {
      Ok(j) => j,
      Err(_) => return,
  };
- let payload = vault_shadow_key()
-     .and_then(|k| encrypt_vault_shadow(&k, &json))
-     .unwrap_or(json);
+ // Never persist secrets to disk in plaintext. If there is no machine-bound
+ // key (non-macOS) or encryption fails, skip the shadow copy entirely — the
+ // OS keychain / credential manager remains authoritative; we only forgo the
+ // keychain-timeout fallback cache here.
+ let Some(payload) = vault_shadow_key().and_then(|k| encrypt_vault_shadow(&k, &json)) else {
+     return;
+ };
  if let Some(parent) = path.parent() {
      let _ = fs::create_dir_all(parent);
  }

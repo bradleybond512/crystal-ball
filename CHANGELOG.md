@@ -29,6 +29,15 @@ All notable changes to Crystal Ball are documented here.
 
 ### Security
 
+- **AppImage WebKit sandbox posture (R2-SEC-008)**: disabling the bubblewrap
+  sandbox inside an AppImage now logs a loud stderr warning and can be refused
+  with `CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1`.
+- **cargo-deny in CI (R2-SEC-001)**: new `cargo-deny` job enforcing a
+  crates.io-only source policy and duplicate-version visibility
+  (`src-tauri/deny.toml`); advisories remain owned by cargo-audit.
+- **Wildcard-CORS policy test (R2-SEC-010)**: any literal
+  `Access-Control-Allow-Origin: *` in `api/` without a `PUBLIC_WILDCARD_CORS`
+  justification comment now fails CI.
 - **Security sprint (2026-06-12)**: Privacy Fix 1 — secret-in-query tripwire that
   warns when an API key would be sent in a query string to a non-allowlisted host
   — and removal of the `RELAY_ALLOW_ANON` anonymous-relay bypass (PRs #1138, #1144).

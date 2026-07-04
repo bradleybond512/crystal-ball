@@ -3676,13 +3676,25 @@ fn main() {
  // WebKit2GTK's bubblewrap sandbox can fail inside an AppImage FUSE
  // mount, causing blank white screens. Disable it when running as
  // AppImage — the AppImage itself already provides isolation.
+ //
+ // R2-SEC-008: this weakens renderer isolation, so (a) users who know
+ // their distro runs bubblewrap fine inside FUSE can opt out with
+ // CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1, and (b) whenever the sandbox is
+ // disabled we say so loudly on stderr (journal) instead of silently.
  if env::var_os("APPIMAGE").is_some() {
  // WebKitGTK 2.39.3+ deprecated WEBKIT_FORCE_SANDBOX and now expects
  // WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 instead.  Setting the
  // old variable on newer WebKitGTK triggers a noisy deprecation
  // warning in the system journal, so only set the new one.
- if env::var_os("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS").is_none() {
+ if env::var_os("CRYSTALBALL_KEEP_WEBKIT_SANDBOX").is_some() {
+ eprintln!(
+ "[tauri] CRYSTALBALL_KEEP_WEBKIT_SANDBOX set; leaving the WebKit bubblewrap sandbox enabled inside the AppImage"
+ );
+ } else if env::var_os("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS").is_none() {
  unsafe { env::set_var("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1") };
+ eprintln!(
+ "[tauri] APPIMAGE detected: WebKit bubblewrap sandbox disabled (blank-screen workaround). Set CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1 to keep it enabled."
+ );
  }
  // Prevent GTK from loading host input-method modules that may
  // link against incompatible library versions.

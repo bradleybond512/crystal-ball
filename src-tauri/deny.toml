@@ -1,0 +1,29 @@
+# cargo-deny configuration — read by the `cargo-deny` job in
+# .github/workflows/security-audit.yml (R2-SEC-001 second half).
+#
+# Scope decisions:
+#   - `sources` + `bans` are enforced here.
+#   - `advisories` is intentionally NOT run via cargo-deny: the cargo-audit
+#     job owns vulnerability scanning with its documented ignore list in
+#     .cargo/audit.toml. Running both would mean maintaining the same
+#     ignore list twice.
+#   - `licenses` enforcement is deferred until a license allowlist is
+#     agreed; see the tracking note in docs/SECURITY_SCAN_ROUND_2_FOR_CLAUDE.md.
+
+[graph]
+all-features = false
+
+# Supply-chain source policy: every crate must come from crates.io.
+# Git dependencies and alternate registries are denied — adding one is a
+# deliberate, reviewed decision, not a drive-by.
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+[bans]
+# The Tauri/GTK tree legitimately carries duplicate transitive versions;
+# warn (visible in CI logs) rather than deny so the signal exists without
+# blocking merges on upstream version skew.
+multiple-versions = "warn"
+wildcards = "deny"

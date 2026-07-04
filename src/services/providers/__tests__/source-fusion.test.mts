@@ -134,3 +134,17 @@ test('two providers from one group do NOT outvote two providers from two groups'
   assert.equal(r.disagreements[0]!.value, 99,
     `expected 99 (single-group cluster) to be the disagreement, not the consensus`);
 });
+
+test('NaN observedAt fails safe to very_low, not very_high', () => {
+  // A NaN timestamp poisons freshness → multiplier; it must not slip past the
+  // labelFor comparisons and display as maximum trust.
+  const state = healthyState(['wingbits', 'opensky']);
+  const r = fuseObservations({
+    observations: [obs('wingbits', 42, NaN), obs('opensky', 42, NaN)],
+    healthState: state, now: T0, numericTolerance: 1,
+  });
+  assert.ok(Number.isFinite(r.confidenceMultiplier),
+    `confidenceMultiplier must be finite, got ${r.confidenceMultiplier}`);
+  assert.equal(r.confidenceMultiplier, 0);
+  assert.equal(r.label, 'very_low');
+});

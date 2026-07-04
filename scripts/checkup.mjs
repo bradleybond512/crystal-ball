@@ -224,7 +224,7 @@ try {
 // Inline compare: mirrors compareReplayBaseline() from scripts/smoke.mts
 // to avoid cross-extension dynamic import (.mts from .mjs).
 process.stdout.write(dim('  replay baseline... '));
-const BASELINE_FILE = resolve(root, 'scripts', 'smoke-replay-baseline.json');
+const BASELINE_FILE = resolve(root, 'src', 'services', 'ops', 'replay-baseline.json');
 try {
   if (existsSync(BASELINE_FILE)) {
     const baseline = JSON.parse(readFileSync(BASELINE_FILE, 'utf8'));

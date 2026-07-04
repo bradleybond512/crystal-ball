@@ -732,10 +732,44 @@ export class PanelLayoutManager implements AppModule {
  if (this.ctx.isDesktopApp) {
  document.title = `Crystal Ball v${__APP_VERSION__}`;
  }
+ // A throwing panel/bootstrap constructor must not abort the whole boot.
+ // Without this guard the error unwinds through init() and is swallowed by
+ // main.ts's .catch behind the vault intro — the user sees a half-rendered
+ // grid with no map, no data, and no error. Catching here keeps the map
+ // (created early in createPanels) and lets init() reach Phase 6 data
+ // loading. Per-panel isolation of the ~450 constructors is a follow-up.
+ try {
  this.createPanels();
+ } catch (error) {
+ console.error('[panel-layout] createPanels failed — booting in degraded mode', error); // eslint-disable-line no-console
+ this.showBootDegradedBanner(error);
+ }
  if (this.ctx.isDesktopApp) {
  this.renderSidebarUpdateBtn();
  }
+  }
+
+  /** Visible, dismissible banner shown when panel construction partially fails
+   *  during boot — so a degraded boot is never silent behind the vault intro. */
+  private showBootDegradedBanner(error: unknown): void {
+ if (document.getElementById('cb-boot-degraded')) return;
+ const banner = document.createElement('div');
+ banner.id = 'cb-boot-degraded';
+ banner.setAttribute('role', 'alert');
+ banner.style.cssText =
+ 'position:fixed;top:0;left:0;right:0;z-index:99999;padding:8px 40px 8px 12px;'
+ + 'background:#7f1d1d;color:#fff;font:13px/1.4 system-ui,sans-serif;text-align:center;';
+ const msg = error instanceof Error ? error.message : String(error);
+ banner.textContent = `Some panels failed to load — running in degraded mode. ${msg}`;
+ const close = document.createElement('button');
+ close.textContent = '×';
+ close.setAttribute('aria-label', 'Dismiss');
+ close.style.cssText =
+ 'position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;'
+ + 'border:none;color:#fff;font-size:18px;cursor:pointer;';
+ close.addEventListener('click', () => banner.remove());
+ banner.appendChild(close);
+ document.body.appendChild(banner);
   }
 
   renderSidebarUpdateBtn(): void {

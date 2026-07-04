@@ -34,7 +34,8 @@ import { isLlmEgressDisclosed, setLlmEgressDisclosed, isLocalModelOnly, setLocal
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
 import { forecastAll, type HypothesisForecast } from '@/services/intelligence/hypothesis-forecast';
-import { buildForecastProvenanceLines } from './forecast-provenance-view';
+import { requestSuperforecast, getCachedSuperforecast } from '@/services/cognition/superforecast-state';
+import { buildForecastProvenanceLines, buildSuperforecastLines } from './forecast-provenance-view';
 import { getLatestPCI } from '@/services/intelligence/predictive-crisis-index';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
@@ -71,6 +72,12 @@ function ensembleButtonLabel(loading: boolean, cached: boolean, expanded: boolea
   return expanded ? 'hide ▾' : 'perspectives ▾';
 }
 
+function superforecastButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {
+  if (loading) return 'Forecasting…';
+  if (!cached) return '∑ Superforecast';
+  return expanded ? '∑ hide ▾' : '∑ Superforecast ▸';
+}
+
 function shouldIgnoreKey(e: KeyboardEvent): boolean {
   const target = e.target as HTMLElement | null;
   if (!target) return false;
@@ -92,6 +99,8 @@ export class AnalystHUD {
   private expandedProjection = new Set<string>();
   private loadingEnsemble = new Set<string>();
   private expandedEnsemble = new Set<string>();
+  private loadingSuperforecast = new Set<string>();
+  private expandedSuperforecast = new Set<string>();
   private exportedFlash: { id: string; at: number } | null = null;
   private outcomeSubmitted = new Set<string>();
   // Anchor the replay position to a SNAPSHOT TIMESTAMP, not an index.
@@ -664,6 +673,7 @@ export class AnalystHUD {
       this.buildHypSkeptic(h),
       this.buildHypAlternatives(h),
       this.buildHypProjection(h),
+      this.buildHypSuperforecast(h),
       this.buildHypEnsemble(h),
       this.buildHypActions(h),
     );
@@ -711,6 +721,20 @@ export class AnalystHUD {
         `Cascade sim: ${projection.cascade.triggerName} — ${projection.cascade.effects.length} effects, ` +
         `~${projection.cascade.estimatedRecoveryHours}h recovery, risk ${projection.cascade.riskScore}/100.`;
       wrap.append(cas);
+    }
+    return wrap;
+  }
+
+  private buildHypSuperforecast(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-superforecast';
+    const sf = getCachedSuperforecast(h);
+    if (!sf || !this.expandedSuperforecast.has(h.id)) return wrap;
+    for (const text of buildSuperforecastLines(sf)) {
+      const line = document.createElement('p');
+      line.className = 'analyst-hud-superforecast-line';
+      line.textContent = text;
+      wrap.append(line);
     }
     return wrap;
   }
@@ -1005,11 +1029,12 @@ export class AnalystHUD {
     });
 
     const simulate = this.buildSimulateButton(h);
+    const superforecastBtn = this.buildSuperforecastButton(h);
     const perspectives = this.buildEnsembleButton(h);
     const copy = this.buildCopyButton(h);
 
     const outcomeButtons = this.buildOutcomeButtons(h);
-    actions.append(up, down, ...outcomeButtons, simulate, perspectives, copy);
+    actions.append(up, down, ...outcomeButtons, simulate, superforecastBtn, perspectives, copy);
     return actions;
   }
 
@@ -1099,6 +1124,38 @@ export class AnalystHUD {
       void projectHypothesis(h).finally(() => {
         this.loadingProjection.delete(h.id);
         this.expandedProjection.add(h.id);
+        this.render();
+      });
+    });
+    return btn;
+  }
+
+  private buildSuperforecastButton(h: Hypothesis): HTMLElement {
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-superforecast-btn';
+    if (isGhostMode()) {
+      btn.style.display = 'none';
+    }
+    const loading = this.loadingSuperforecast.has(h.id);
+    const cached = getCachedSuperforecast(h);
+    const expanded = this.expandedSuperforecast.has(h.id);
+    btn.textContent = superforecastButtonLabel(loading, Boolean(cached), expanded);
+    btn.title = cached
+      ? 'Toggle the stored superforecast'
+      : 'Run the superforecaster pipeline (base rate + decomposition + personas, budget-gated)';
+    btn.disabled = loading;
+    btn.addEventListener('click', () => {
+      if (cached) {
+        if (expanded) this.expandedSuperforecast.delete(h.id);
+        else this.expandedSuperforecast.add(h.id);
+        this.render();
+        return;
+      }
+      this.loadingSuperforecast.add(h.id);
+      this.render();
+      void requestSuperforecast(h).finally(() => {
+        this.loadingSuperforecast.delete(h.id);
+        this.expandedSuperforecast.add(h.id);
         this.render();
       });
     });

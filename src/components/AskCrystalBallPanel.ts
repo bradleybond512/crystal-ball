@@ -2,7 +2,9 @@
  * Ask Crystal Ball — Conversational AI Intelligence Panel
  *
  * Chat-style panel that lets users ask questions about the current
- * global situation. Uses Claude Agent (primary) with Ollama fallback.
+ * global situation. Recognized diagnostic questions are answered
+ * deterministically (via ask-the-data) before falling back to Claude
+ * Agent (primary) with Ollama fallback for unknown-intent questions.
  */
 
 import { Panel } from './Panel';
@@ -12,6 +14,12 @@ import {
   QUICK_ASK_PRESETS,
 } from '@/services/crystal-ball-chat';
 import { escapeHtml as esc } from '@/utils/sanitize';
+import { answer, classifyIntent } from '@/services/insights/ask-the-data';
+import type { AskContext } from '@/services/insights/ask-the-data';
+import { getLiveDiagnosticsSnapshot } from '@/services/diagnostics/live-diagnostics-snapshot';
+import { contextFromSnapshots } from '@/services/diagnostics/system-health';
+import { getFeatureHealthRegistry } from '@/services/diagnostics/diagnostics-state';
+import { formatAnswerForChat } from './ask-crystal-ball-format';
 
 const BUBBLE_BASE = 'max-width:85%;padding:0.45rem 0.65rem;border-radius:10px;font-size:0.73rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;';
 const BUBBLE_USER = `${BUBBLE_BASE}background:rgba(59,130,246,0.25);color:rgba(200,220,255,0.95);border-bottom-right-radius:3px;`;
@@ -164,6 +172,14 @@ export class AskCrystalBallPanel extends Panel {
 
   // ── Send handling ─────────────────────────────────────────────────────
 
+  private _buildAskContext(): AskContext {
+ const snapshot = getLiveDiagnosticsSnapshot();
+ const panels = snapshot.panels;
+ const ctx = contextFromSnapshots({ panels, sources: snapshot.sources, providers: snapshot.providers });
+ const features = getFeatureHealthRegistry().all(ctx);
+ return { features, panels };
+  }
+
   private async _handleSend(): Promise<void> {
  if (!this.inputEl || this.isGenerating) return;
 
@@ -175,6 +191,18 @@ export class AskCrystalBallPanel extends Panel {
  this._hidePresets();
  this._appendMessageBubble('user', text);
  this._scrollToBottom();
+
+ const intent = classifyIntent(text);
+ if (intent !== 'unknown') {
+ try {
+ const packet = answer(text, this._buildAskContext());
+ this._appendMessageBubble('assistant', formatAnswerForChat(packet));
+ this._scrollToBottom();
+ return;
+ } catch {
+ // fall through to the LLM path if the deterministic answer can't be built
+ }
+ }
 
  const { wrapper: thinkingWrapper } = this._appendThinkingIndicator();
  this._startGenerating();

@@ -19994,6 +19994,30 @@ body.is-desktop-macos .replay-scrubber { left: var(--mac-sidebar-width); }
 }
 .analyst-hud-ensemble-btn:hover:not(:disabled) { background: rgba(180, 140, 220, 0.25); }
 .analyst-hud-ensemble-btn:disabled { opacity: 0.6; cursor: wait; }
+.analyst-hud-superforecast-btn {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(110, 200, 210, 0.15);
+  border: 1px solid rgba(110, 200, 210, 0.3);
+  color: #b8ecf2;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.analyst-hud-superforecast-btn:hover:not(:disabled) { background: rgba(110, 200, 210, 0.25); }
+.analyst-hud-superforecast-btn:disabled { opacity: 0.6; cursor: wait; }
+.analyst-hud-hyp-superforecast {
+  margin: 4px 0 6px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(110, 200, 210, 0.35);
+}
+.analyst-hud-superforecast-line {
+  margin: 0 0 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: pre-wrap;
+}
 .analyst-hud-hyp-ensemble {
   margin: 4px 0 6px;
   padding-left: 8px;

@@ -3679,14 +3679,21 @@ fn main() {
  //
  // R2-SEC-008: this weakens renderer isolation, so (a) users who know
  // their distro runs bubblewrap fine inside FUSE can opt out with
- // CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1, and (b) whenever the sandbox is
- // disabled we say so loudly on stderr (journal) instead of silently.
+ // CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1 (which also clears any inherited
+ // disable variable so the opt-out actually holds), and (b) whenever
+ // the sandbox ends up disabled we say so loudly on stderr (journal)
+ // instead of silently.
  if env::var_os("APPIMAGE").is_some() {
  // WebKitGTK 2.39.3+ deprecated WEBKIT_FORCE_SANDBOX and now expects
  // WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 instead.  Setting the
  // old variable on newer WebKitGTK triggers a noisy deprecation
  // warning in the system journal, so only set the new one.
  if env::var_os("CRYSTALBALL_KEEP_WEBKIT_SANDBOX").is_some() {
+ // An inherited disable var (e.g. from an old wrapper script) would
+ // silently override the opt-out — clear it so KEEP means KEEP.
+ if env::var_os("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS").is_some() {
+ unsafe { env::remove_var("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS") };
+ }
  eprintln!(
  "[tauri] CRYSTALBALL_KEEP_WEBKIT_SANDBOX set; leaving the WebKit bubblewrap sandbox enabled inside the AppImage"
  );
@@ -3694,6 +3701,13 @@ fn main() {
  unsafe { env::set_var("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1") };
  eprintln!(
  "[tauri] APPIMAGE detected: WebKit bubblewrap sandbox disabled (blank-screen workaround). Set CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1 to keep it enabled."
+ );
+ } else {
+ // Disable var was already present in the environment — the sandbox
+ // is off because of it, not us, but the warning invariant still
+ // applies: never disable silently.
+ eprintln!(
+ "[tauri] WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS inherited from environment: WebKit bubblewrap sandbox is disabled. Set CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1 to clear it."
  );
  }
  // Prevent GTK from loading host input-method modules that may

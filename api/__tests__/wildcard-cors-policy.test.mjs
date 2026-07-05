@@ -16,6 +16,10 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const API_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+// server/ hosts the shared CORS helper the sebuf endpoints import — a
+// wildcard introduced there would flow into every RPC response, so it is
+// scanned under the same policy.
+const SERVER_ROOT = join(API_ROOT, '..', 'server');
 const SOURCE_EXT = new Set(['.js', '.mjs', '.cjs', '.ts']);
 const ANNOTATION = 'PUBLIC_WILDCARD_CORS';
 
@@ -39,18 +43,48 @@ function sourceFiles(dir) {
 // Matches a literal wildcard assignment to the CORS origin header, e.g.
 //   'Access-Control-Allow-Origin': '*'
 //   setHeader('Access-Control-Allow-Origin', '*')
-//   headers.set('Access-Control-Allow-Origin', "*")
-const WILDCARD_ORIGIN = /Access-Control-Allow-Origin['"]?\s*[,:]\s*['"`]\*['"`]/;
+//   headers.set('access-control-allow-origin', "*")   (Headers normalizes case)
+//   ["Access-Control-Allow-Origin"]: '*'              (computed property)
+//   headers["Access-Control-Allow-Origin"] = '*'      (direct assignment)
+const WILDCARD_ORIGIN = /access-control-allow-origin['"`]?\]?\s*[,:=]+\s*['"`]\*['"`]/i;
 
-test('every literal wildcard CORS origin in api/ carries a PUBLIC_WILDCARD_CORS annotation', () => {
+test('the wildcard-origin regex catches realistic header-setting variants', () => {
+  const shouldMatch = [
+    `'Access-Control-Allow-Origin': '*'`,
+    `"Access-Control-Allow-Origin":"*"`,
+    `setHeader('Access-Control-Allow-Origin', '*')`,
+    `headers.set('access-control-allow-origin', "*")`,
+    `["Access-Control-Allow-Origin"]: '*'`,
+    `headers["Access-Control-Allow-Origin"] = '*'`,
+    `headers[\`Access-Control-Allow-Origin\`] = \`*\``,
+  ];
+  const shouldNotMatch = [
+    `'Access-Control-Allow-Origin': allowOrigin`,
+    `setHeader('Access-Control-Allow-Origin', origin)`,
+    `'Access-Control-Allow-Methods': '*'`,
+  ];
+  for (const s of shouldMatch) assert.match(s, WILDCARD_ORIGIN, `should match: ${s}`);
+  for (const s of shouldNotMatch) assert.doesNotMatch(s, WILDCARD_ORIGIN, `should not match: ${s}`);
+});
+
+test('every literal wildcard CORS origin in api/ + server/ carries a PUBLIC_WILDCARD_CORS annotation', () => {
   const offenders = [];
   const annotated = [];
-  for (const file of sourceFiles(API_ROOT)) {
-    const text = readFileSync(file, 'utf8');
-    if (!WILDCARD_ORIGIN.test(text)) continue;
-    const rel = relative(API_ROOT, file);
-    if (text.includes(ANNOTATION)) annotated.push(rel);
-    else offenders.push(rel);
+  const roots = [API_ROOT, SERVER_ROOT];
+  for (const root of roots) {
+    let files;
+    try {
+      files = sourceFiles(root);
+    } catch {
+      continue; // root absent in some checkouts — nothing to scan
+    }
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8');
+      if (!WILDCARD_ORIGIN.test(text)) continue;
+      const rel = relative(API_ROOT, file);
+      if (text.includes(ANNOTATION)) annotated.push(rel);
+      else offenders.push(rel);
+    }
   }
   assert.deepEqual(
     offenders,

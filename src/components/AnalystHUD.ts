@@ -1155,7 +1155,7 @@ export class AnalystHUD {
       this.render();
       // Swallow pipeline rejections: the finally-block resets the loading
       // state and the un-cached button lets the user retry.
-      void requestSuperforecast(h).catch(() => {}).finally(() => {
+      void requestSuperforecast(h).catch(() => { /* retry via re-click */ }).finally(() => {
         this.loadingSuperforecast.delete(h.id);
         this.expandedSuperforecast.add(h.id);
         this.render();

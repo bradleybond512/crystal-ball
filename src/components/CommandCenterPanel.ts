@@ -76,6 +76,8 @@ import {
 } from '@/services/intelligence/command-center-summary';
 import { mountLensBanner } from '@/services/intelligence/panel-lens-adapter';
 import { getLensContextService } from '@/services/intelligence/lens-context';
+import { buildShareBriefing, type ShareBriefingInput } from './share-briefing';
+import { buildSharePacket, selectFormat } from '@/services/insights/share-packet';
 
 const REFRESH_MS = 10_000;
 
@@ -136,6 +138,7 @@ export class CommandCenterPanel extends Panel {
   // doesn't wipe the typed question or the last answer.
   private askDraft = '';
   private askPacket: AnswerPacket | null = null;
+  private _briefingInput: ShareBriefingInput | null = null;
 
   constructor() {
     super({
@@ -231,6 +234,14 @@ export class CommandCenterPanel extends Panel {
     const actionBrief = getActiveActionBrief();
     const personalImpact = getPersonalImpactReport();
     const redundancy = getProviderRedundancyReport();
+
+    this._briefingInput = {
+      headline: `${RISK_LABEL[report.status]} — ${report.summary}`,
+      concerns: concerning.slice(0, 5).map((f) => f.userImpact ? `${f.label}: ${f.userImpact}` : `${f.label} (${f.status})`),
+      watch: actionBrief ? [...actionBrief.confirmingSources] : [],
+      actions: actionBrief ? [...actionBrief.recommendedActions] : [],
+      generatedAt: Date.now(),
+    };
 
     const spineSummary = this.buildSpineSummary(sentinels, snapshot);
     const switcher = renderDisclosureSwitcherHtml('command-center', { showRaw: true });
@@ -445,7 +456,8 @@ export class CommandCenterPanel extends Panel {
   }
 
   private renderGlobeNav(): string {
-    return `<div style="display:flex;justify-content:flex-end;">
+    return `<div style="display:flex;justify-content:flex-end;gap:6px;">
+      <button data-cc-action="copy-briefing" style="font-size:10px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;" title="Copy this briefing to the clipboard">📋 Copy briefing</button>
       <button onclick="document.getElementById('godsVisionBtn')?.click()" style="font-size:10px;padding:3px 8px;background:transparent;color:var(--text-secondary,#aaa);border:1px solid var(--border-subtle,#333);border-radius:3px;cursor:pointer;" title="Open God's Vision 3D globe">🌍 Globe</button>
     </div>`;
   }
@@ -778,6 +790,10 @@ export class CommandCenterPanel extends Panel {
 
   private onContentClick(e: MouseEvent): void {
     const target = e.target as HTMLElement;
+    if (target.closest<HTMLElement>('[data-cc-action="copy-briefing"]')) {
+      this._copyBriefing();
+      return;
+    }
     if (target.closest<HTMLElement>('[data-action="add-place"]')) {
       document.querySelector<HTMLElement>('[data-panel-id="saved-places"]')?.click();
       return;
@@ -802,6 +818,16 @@ export class CommandCenterPanel extends Panel {
       this.expandedTapeEventId = this.expandedTapeEventId === id ? null : id;
       this.render();
     }
+  }
+
+  private _copyBriefing(): void {
+    if (!this._briefingInput) return;
+    try {
+      const briefing = buildShareBriefing(this._briefingInput);
+      const packet = buildSharePacket({ shareId: 'command-center-briefing', briefing });
+      const text = selectFormat(packet, 'markdown');
+      void navigator.clipboard?.writeText(text);
+    } catch { /* copy is best-effort; never break the panel */ }
   }
 
   private handleResetLayout(): void {

@@ -13,7 +13,7 @@ export interface PowerPostureInput {
   nearbyOutageCount: number | null;
 }
 
-function levelForAlert(severity: GridAlert['severity']): DcLevel {
+export function levelForAlert(severity: GridAlert['severity']): DcLevel {
   switch (severity) {
     case 'emergency': { return 'critical';
     }
@@ -26,14 +26,14 @@ function levelForAlert(severity: GridAlert['severity']): DcLevel {
   }
 }
 
-function levelForUtil(pct: number | null): DcLevel {
+export function levelForUtil(pct: number | null): DcLevel {
   if (pct === null) return 'normal';
   if (pct >= POWER_UTIL_WARNING_PCT) return 'warning';
   if (pct >= POWER_UTIL_ADVISORY_PCT) return 'advisory';
   return 'normal';
 }
 
-function levelForOutage(count: number | null): DcLevel {
+export function levelForOutage(count: number | null): DcLevel {
   if (count === null) return 'normal';
   if (count >= NEARBY_OUTAGE_CRITICAL) return 'critical';
   if (count >= NEARBY_OUTAGE_WARNING) return 'warning';

@@ -73,9 +73,9 @@ function ensembleButtonLabel(loading: boolean, cached: boolean, expanded: boolea
 }
 
 function superforecastButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {
-  if (loading) return 'Forecasting…';
-  if (!cached) return '∑ Superforecast';
-  return expanded ? '∑ hide ▾' : '∑ Superforecast ▸';
+  if (loading) return 'forecasting…';
+  if (!cached) return 'deep forecast ▸';
+  return expanded ? 'hide ▾' : 'deep forecast ▾';
 }
 
 function shouldIgnoreKey(e: KeyboardEvent): boolean {
@@ -1029,12 +1029,12 @@ export class AnalystHUD {
     });
 
     const simulate = this.buildSimulateButton(h);
-    const superforecastBtn = this.buildSuperforecastButton(h);
     const perspectives = this.buildEnsembleButton(h);
+    const deepForecast = this.buildSuperforecastButton(h);
     const copy = this.buildCopyButton(h);
 
     const outcomeButtons = this.buildOutcomeButtons(h);
-    actions.append(up, down, ...outcomeButtons, simulate, superforecastBtn, perspectives, copy);
+    actions.append(up, down, ...outcomeButtons, simulate, perspectives, deepForecast, copy);
     return actions;
   }
 
@@ -1141,8 +1141,8 @@ export class AnalystHUD {
     const expanded = this.expandedSuperforecast.has(h.id);
     btn.textContent = superforecastButtonLabel(loading, Boolean(cached), expanded);
     btn.title = cached
-      ? 'Toggle the stored superforecast'
-      : 'Run the superforecaster pipeline (base rate + decomposition + personas, budget-gated)';
+      ? 'Toggle the stored deep forecast'
+      : 'Run the calibrated superforecaster pipeline on this hypothesis';
     btn.disabled = loading;
     btn.addEventListener('click', () => {
       if (cached) {

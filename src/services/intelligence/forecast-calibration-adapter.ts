@@ -36,6 +36,7 @@ import {
 } from '@/services/cognition/recalibration';
 import type { ReliabilityCurve, RecalibrationResult } from '@/services/cognition/recalibration';
 import type { FactDomain } from './types';
+import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
 
 // ── Calibration store singleton ───────────────────────────────────────────────
 
@@ -151,18 +152,8 @@ let _putMemory: (<T>(key: string, value: T) => Promise<void>) | null = null;
 
 function lazyLoadIdb(): void {
   if (_getMemory !== null) return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('@/services/reasoning-memory') as {
-      getMemory: <T>(key: string) => Promise<T | null>;
-      putMemory: <T>(key: string, value: T) => Promise<void>;
-    };
-    _getMemory = mod.getMemory;
-    _putMemory = mod.putMemory;
-  } catch {
-    _getMemory = () => Promise.resolve(null);
-    _putMemory = () => Promise.resolve();
-  }
+  _getMemory = idbGetMemory;
+  _putMemory = idbPutMemory;
 }
 
 /** Persist the current curve cache to IDB. Fire-and-forget. */

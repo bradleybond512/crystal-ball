@@ -20532,3 +20532,32 @@ body.is-desktop-macos .mac-sidebar-panel-item {
 
 .dc-seismic-icon { font-size: 12px; }
 .dc-seismic-text { flex: 1; }
+
+.dc-grid-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 6px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  background: rgba(100, 210, 255, 0.08);
+  border-left: 2px solid #64d2ff;
+}
+
+.dc-grid-icon { font-size: 12px; }
+.dc-grid-detail { flex: 1; }
+
+/* Healthy grid tie — a substation is mapped within range. */
+.dc-grid--ok {
+  background: rgba(48, 209, 88, 0.08);
+  border-left-color: #30d158;
+}
+
+/* Weak / uncertain grid tie — no substation mapped in range. */
+.dc-grid--weak {
+  background: rgba(255, 159, 10, 0.1);
+  border-left-color: #ff9f0a;
+  color: rgba(255, 255, 255, 0.78);
+}

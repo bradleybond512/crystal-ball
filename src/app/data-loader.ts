@@ -2678,7 +2678,8 @@ export class DataLoaderManager implements AppModule {
  excessiveRainfallOutlooks,
  winterWeatherOutlooks,
  marineHazards,
- }); } catch (error) {
+ });
+ } catch (error) {
  console.warn('[nws-alerts] fetch failed', error);
  (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update([]);
  }
@@ -3635,7 +3636,8 @@ export class DataLoaderManager implements AppModule {
  tropicalCyclones: data,
  buoyAlerts,
  reconFixes,
- }); } catch (error) {
+ });
+ } catch (error) {
  console.error('[App] Tropical cyclones fetch failed:', error);
  }
   }

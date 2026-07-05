@@ -1153,7 +1153,9 @@ export class AnalystHUD {
       }
       this.loadingSuperforecast.add(h.id);
       this.render();
-      void requestSuperforecast(h).finally(() => {
+      // Swallow pipeline rejections: the finally-block resets the loading
+      // state and the un-cached button lets the user retry.
+      void requestSuperforecast(h).catch(() => {}).finally(() => {
         this.loadingSuperforecast.delete(h.id);
         this.expandedSuperforecast.add(h.id);
         this.render();

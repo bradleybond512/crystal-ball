@@ -36,6 +36,9 @@ export interface SuperforecastStateDeps {
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
+/** Cap matches hypothesis-projection's MAX_CACHE — evict oldest beyond this. */
+const MAX_CACHE = 80;
+
 interface CacheEntry {
   forecast: SuperForecast;
   generatedAt: number;
@@ -43,6 +46,12 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<SuperForecast>>();
+
+function evictBeyondCap(): void {
+  if (cache.size <= MAX_CACHE) return;
+  const entries = [...cache.entries()].sort((a, b) => a[1].generatedAt - b[1].generatedAt);
+  for (const [key] of entries.slice(0, cache.size - MAX_CACHE)) cache.delete(key);
+}
 
 async function defaultLiveForecast(h: Hypothesis): Promise<number | undefined> {
   try {
@@ -92,6 +101,7 @@ export function requestSuperforecast(
   const promise = (async () => {
     const forecast = await run(h);
     cache.set(sig, { forecast, generatedAt: now() });
+    evictBeyondCap();
 
     // PR 13 activation: shadow-compare the pipeline against the live system.
     // Fire-and-forget — pair recording must never fail the caller.

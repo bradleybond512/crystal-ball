@@ -11,6 +11,7 @@ import { Panel } from './Panel';
 import {
   sendMessage,
   getHistory,
+  recordExchange,
   QUICK_ASK_PRESETS,
 } from '@/services/crystal-ball-chat';
 import { escapeHtml as esc } from '@/utils/sanitize';
@@ -196,7 +197,9 @@ export class AskCrystalBallPanel extends Panel {
  if (intent !== 'unknown') {
  try {
  const packet = answer(text, this._buildAskContext());
- this._appendMessageBubble('assistant', formatAnswerForChat(packet));
+ const formatted = formatAnswerForChat(packet);
+ this._appendMessageBubble('assistant', formatted);
+ recordExchange(text, formatted);
  this._scrollToBottom();
  return;
  } catch {

@@ -42,7 +42,7 @@ const STYLE_CSS = `
 }
 .cb-offline-staleness-banner[data-status="offline"] {
   background: rgba(180, 20, 20, 0.88);
-  color: #fff;
+  color: var(--text-primary, #fff);
   border-bottom: 1px solid rgba(255, 80, 80, 0.35);
 }
 .cb-osb-icon {

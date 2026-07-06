@@ -175,7 +175,7 @@ body.has-staleness-banner .mac-sidebar-nav {
 
 .mac-sidebar-item.active {
   background: var(--mac-accent);
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .mac-sidebar-item-icon {
@@ -276,7 +276,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   top: -4px;
   right: -4px;
   background: var(--mac-red);
-  color: #fff;
+  color: var(--text-primary);
   font-size: 8px;
   font-weight: 700;
   line-height: 1;
@@ -703,7 +703,7 @@ button.mac-sidebar-version {
   padding: 2px 8px;
   border-radius: 10px;
   background: var(--mac-accent);
-  color: #fff;
+  color: var(--text-primary);
   border: none;
   cursor: pointer;
   font-variant-numeric: tabular-nums;
@@ -1397,7 +1397,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .godsvision-time-machine .gtm-pill-active {
   background: rgba(96, 165, 250, 0.25);
   border-color: rgba(96, 165, 250, 0.60);
-  color: #fff;
+  color: var(--text-primary);
 }
 .godsvision-time-machine .gtm-slider {
   flex: 1;
@@ -1480,7 +1480,7 @@ body.is-desktop-macos #unifiedSettingsMount {
   letter-spacing: 1px;
   padding: 3px 7px;
   background: rgba(239, 68, 68, 0.85);
-  color: #fff;
+  color: var(--text-primary);
   border-radius: 999px;
   flex-shrink: 0;
 }
@@ -1655,7 +1655,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .setup-wizard-footer button.primary {
   background: var(--mac-accent, #0a84ff);
   border-color: var(--mac-accent, #0a84ff);
-  color: #fff;
+  color: var(--text-primary);
 }
 .setup-wizard-footer button.primary:hover {
   background: var(--mac-accent-hover, #409cff);
@@ -1744,7 +1744,7 @@ body.is-desktop-macos .syd-self-test:not([disabled]):hover {
 body.is-desktop-macos .syd-self-test:not([disabled]) {
   background: var(--mac-accent) !important;
   border-color: var(--mac-accent) !important;
-  color: #fff !important;
+  color: var(--text-primary) !important;
 }
 
 body.is-desktop-macos .syd-self-test:not([disabled]):hover {

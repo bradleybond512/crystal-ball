@@ -179,7 +179,7 @@ export class StatusOverlay {
     const trustBar = document.createElement('div'); trustBar.className = 'status-trust-bar';
     const trustFill = document.createElement('div'); trustFill.className = 'status-trust-fill';
     trustFill.style.width = `${Math.round(effectiveTrust * 100)}%`;
-    let trustColor = '#ff4444';
+    let trustColor = 'var(--semantic-critical, #ff4444)';
     if (effectiveTrust >= 0.8) trustColor = '#44cc88';
     else if (effectiveTrust >= 0.5) trustColor = '#ffcc00';
     trustFill.style.background = trustColor;
@@ -245,7 +245,7 @@ export class StatusOverlay {
       circle.setAttribute('cx', pos.x.toFixed(1));
       circle.setAttribute('cy', pos.y.toFixed(1));
       circle.setAttribute('r', nodeR.toFixed(1));
-      circle.setAttribute('fill', '#60a5fa');
+      circle.setAttribute('fill', 'var(--sev-info, #60a5fa)');
       circle.setAttribute('opacity', '0.8');
       svg.append(circle);
 

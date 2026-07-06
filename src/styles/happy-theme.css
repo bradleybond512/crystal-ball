@@ -381,7 +381,7 @@
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 11px;
   white-space: nowrap;
   cursor: pointer;
   transition: background 0.2s, color 0.2s, border-color 0.2s;
@@ -435,7 +435,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
+  font-size: 11px;
 }
 [data-variant="happy"] .positive-card-source {
   color: var(--text-dim);
@@ -446,7 +446,7 @@
 [data-variant="happy"] .positive-card-category {
   padding: 1px 6px;
   border-radius: 8px;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   background: var(--green);
   color: white;
@@ -470,7 +470,7 @@
   overflow: hidden;
 }
 [data-variant="happy"] .positive-card-time {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
 }
 
@@ -978,7 +978,7 @@
 }
 
 [data-variant='happy'] .species-badge {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 10px;
@@ -1023,7 +1023,7 @@
 }
 
 [data-variant='happy'] .species-sparkline text {
-  font-size: 9px;
+  font-size: 11px;
   fill: var(--text-dim);
 }
 
@@ -1043,7 +1043,7 @@
 }
 
 [data-variant='happy'] .species-source {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
   font-style: normal;
 }
@@ -1167,7 +1167,7 @@
   justify-content: center;
   gap: 12px;
   margin-top: 6px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
 }
 

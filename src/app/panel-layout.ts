@@ -608,6 +608,7 @@ import { GlobalHealthSecurityPanel } from '@/components/GlobalHealthSecurityPane
 import { FoodSecuritySuperpowerPanel } from '@/components/FoodSecuritySuperpowerPanel';
 // HTML builders (app shell + map + sidebar) live in a sibling module.
 import * as htmlBuilders from '@/app/layout/html';
+import { icon } from '@/components/ui/icons';
 
 /**
  * Gather the non-EEW inputs for the title-bar composite status chip.
@@ -2612,10 +2613,11 @@ export class PanelLayoutManager implements AppModule {
  if (!btn) return;
  const ctx = getSavedPlacesFilterService().getContext();
  if (ctx.isActive && ctx.activePlaceName) {
- btn.textContent = `📍 ${ctx.activePlaceName}`;
+ // safe-html: icon() is a static SVG string; the place name is escaped.
+ btn.innerHTML = `${icon('pin', { size: 14 })} ${escapeHtml(ctx.activePlaceName)}`;
  btn.classList.add('mac-ghost-mode-active');
  } else {
- btn.textContent = '📍 Proximity: OFF';
+ btn.innerHTML = `${icon('pin', { size: 14 })} Proximity: OFF`;
  btn.classList.remove('mac-ghost-mode-active');
  }
  };

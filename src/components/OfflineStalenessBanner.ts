@@ -164,7 +164,7 @@ function buildRow(label: string, subtext: string, icon: string, canDismiss: bool
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'cb-osb-dismiss';
     dismissBtn.dataset.action = 'dismiss';
-    dismissBtn.setAttribute('aria-label', 'Dismiss');
+    dismissBtn.setAttribute('aria-label', 'Dismiss staleness notice');
     dismissBtn.textContent = '×';
     actionsEl.append(dismissBtn);
   }

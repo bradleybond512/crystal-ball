@@ -19,8 +19,16 @@ import { estimateEscalation } from '@/services/escalation-predictor';
 import { getAnnotation, setAnnotation } from '@/services/alert-annotations';
 import { getCollections, addToCollection, createCollection } from '@/services/alert-bookmarks';
 import { formatDurationMinutes } from '@/utils/format-duration';
+import { icon, type IconName } from '@/components/ui/icons';
 
 const MAX_VISIBLE = 5;
+
+const PRESET_META: Record<AlertingPreset, { label: string; icon: IconName; desc: string }> = {
+  loud:   { label: 'Loud',   icon: 'bell',       desc: 'Sound, banner flashes and notifications' },
+  visual: { label: 'Visual', icon: 'eye',        desc: 'Flashes and notifications, no sound' },
+  silent: { label: 'Silent', icon: 'bell-slash', desc: 'Panel and map cues only' },
+};
+const PRESET_ORDER: AlertingPreset[] = ['loud', 'visual', 'silent'];
 
 type Domain = 'all' | 'weather' | 'conflict' | 'cyber' | 'health' | 'infra' | 'space';
 const DOMAIN_LABELS: Record<Domain, string> = {
@@ -50,6 +58,8 @@ export class TriageBar {
   private unsubscribe: (() => void) | null = null;
   private refreshTimer: number | null = null;
   private facet: Domain = loadFacet();
+  /** Non-null while the preset popover is open; call to close + unhook. */
+  private presetMenuCleanup: (() => void) | null = null;
 
   constructor() {
     this.element = document.createElement('div');
@@ -68,12 +78,16 @@ export class TriageBar {
   destroy(): void {
     this.unsubscribe?.();
     if (this.refreshTimer != null) window.clearInterval(this.refreshTimer);
+    this.presetMenuCleanup?.();
     this.element.remove();
   }
 
   getElement(): HTMLElement { return this.element; }
 
   private render(): void {
+    // Any open preset popover belongs to the DOM we're about to replace —
+    // close it first so its document-level listeners don't leak.
+    this.presetMenuCleanup?.();
     const all = rankAlerts(unifiedAlertStore.getAll());
     const ranked = this.facet === 'all'
       ? all
@@ -124,17 +138,99 @@ export class TriageBar {
       }
       unifiedAlertStore.acknowledgeMany(ids);
     });
-    const presetBtn = document.createElement('button');
-    presetBtn.className = 'triage-bar-preset';
-    presetBtn.title = 'Cycle alerting preset (Loud → Visual → Silent)';
-    const PRESET_LABEL: Record<AlertingPreset, string> = { loud: '🔊 Loud', visual: '👁 Visual', silent: '🤫 Silent' };
-    const PRESET_NEXT: Record<AlertingPreset, AlertingPreset> = { loud: 'visual', visual: 'silent', silent: 'loud' };
-    presetBtn.textContent = PRESET_LABEL[getPreset()];
-    presetBtn.addEventListener('click', () => {
-      setPreset(PRESET_NEXT[getPreset()]);
-      presetBtn.textContent = PRESET_LABEL[getPreset()];
+    this.element.replaceChildren(label, facets, items, ack, this.buildPresetControl());
+  }
+
+  /**
+   * Alerting-preset control: an anchored popover menu listing all three
+   * presets with a checkmark on the active one (replaces the old blind
+   * cycle button). Esc / outside-click closes; arrow keys rove.
+   */
+  private buildPresetControl(): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'triage-preset-wrap';
+
+    const btn = document.createElement('button');
+    btn.className = 'triage-bar-preset';
+    btn.title = 'Alerting preset';
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-expanded', 'false');
+    const syncBtn = (): void => {
+      const meta = PRESET_META[getPreset()];
+      // safe-html: icon() output and preset labels are static strings.
+      btn.innerHTML = `${icon(meta.icon, { size: 14 })} ${meta.label}`;
+    };
+    syncBtn();
+
+    const openMenu = (): void => {
+      const menu = document.createElement('div');
+      menu.className = 'triage-preset-menu';
+      menu.setAttribute('role', 'menu');
+      menu.setAttribute('aria-label', 'Alerting preset');
+
+      const items: HTMLButtonElement[] = PRESET_ORDER.map((preset) => {
+        const meta = PRESET_META[preset];
+        const item = document.createElement('button');
+        item.className = 'triage-preset-item';
+        item.setAttribute('role', 'menuitemradio');
+        const active = getPreset() === preset;
+        item.setAttribute('aria-checked', String(active));
+        item.tabIndex = -1;
+        item.title = meta.desc;
+        // safe-html: static icon/label strings only.
+        item.innerHTML =
+          `<span class="triage-preset-check" aria-hidden="true">${active ? '✓' : ''}</span>` +
+          `${icon(meta.icon, { size: 14 })}<span>${meta.label}</span>`;
+        item.addEventListener('click', () => {
+          setPreset(preset);
+          syncBtn();
+          this.closePresetMenu();
+          btn.focus();
+        });
+        menu.append(item);
+        return item;
+      });
+
+      let focusIdx = Math.max(0, PRESET_ORDER.indexOf(getPreset()));
+      const focusItem = (i: number): void => {
+        focusIdx = (i + items.length) % items.length;
+        items[focusIdx]?.focus();
+      };
+      const onKey = (e: KeyboardEvent): void => {
+        if (e.key === 'Escape') { e.preventDefault(); this.closePresetMenu(); btn.focus(); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); focusItem(focusIdx + 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); focusItem(focusIdx - 1); }
+        else if (e.key === 'Home') { e.preventDefault(); focusItem(0); }
+        else if (e.key === 'End') { e.preventDefault(); focusItem(items.length - 1); }
+        else if (e.key === 'Tab') { this.closePresetMenu(); }
+      };
+      const onOutside = (e: MouseEvent): void => {
+        if (!wrap.contains(e.target as Node)) this.closePresetMenu();
+      };
+      menu.addEventListener('keydown', onKey);
+      document.addEventListener('mousedown', onOutside);
+      wrap.append(menu);
+      btn.setAttribute('aria-expanded', 'true');
+      this.presetMenuCleanup = () => {
+        document.removeEventListener('mousedown', onOutside);
+        menu.remove();
+        btn.setAttribute('aria-expanded', 'false');
+        this.presetMenuCleanup = null;
+      };
+      focusItem(focusIdx);
+    };
+
+    btn.addEventListener('click', () => {
+      if (this.presetMenuCleanup) this.closePresetMenu();
+      else openMenu();
     });
-    this.element.replaceChildren(label, facets, items, ack, presetBtn);
+
+    wrap.append(btn);
+    return wrap;
+  }
+
+  private closePresetMenu(): void {
+    this.presetMenuCleanup?.();
   }
 
   private makeStoryItem(story: AlertStory): HTMLElement {

@@ -67,13 +67,13 @@
 .triage-sev-info .triage-sev-dot { background: #5ac8fa; }
 
 .triage-source {
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   opacity: 0.7;
   letter-spacing: 0.04em;
 }
 .triage-title { font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
-.triage-age { font-size: 10px; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.triage-age { font-size: 11px; opacity: 0.6; font-variant-numeric: tabular-nums; }
 .triage-dismiss-btn {
   background: none;
   border: none;
@@ -237,7 +237,7 @@
 }
 .today-activity-kind {
   font-weight: 700;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.05em;
   min-width: 60px;
 }
@@ -247,7 +247,7 @@
 .today-activity-ack   { border-left-color: rgba(52, 199, 89, 0.6); opacity: 0.6; }
 .today-activity-snooze { border-left-color: rgba(255, 255, 255, 0.3); opacity: 0.5; }
 .today-activity-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.today-activity-meta { font-size: 9px; opacity: 0.5; font-variant-numeric: tabular-nums; }
+.today-activity-meta { font-size: 11px; opacity: 0.5; font-variant-numeric: tabular-nums; }
 
 /* Snooze context menu */
 .triage-snooze-menu {
@@ -274,8 +274,15 @@
 }
 .triage-snooze-menu button:hover { background: rgba(255, 255, 255, 0.12); }
 
-/* Triage preset cycle button */
+/* Triage preset button + anchored popover menu */
+.triage-preset-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
 .triage-bar-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #f5f5f7;
@@ -286,6 +293,44 @@
   flex-shrink: 0;
 }
 .triage-bar-preset:hover { background: rgba(255, 255, 255, 0.14); }
+.triage-preset-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 200;
+  min-width: 160px;
+  padding: 4px;
+  background: rgba(28, 28, 32, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.triage-preset-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #f5f5f7;
+  font: 12px/1.2 -apple-system, system-ui, sans-serif;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.triage-preset-item:hover,
+.triage-preset-item:focus-visible { background: rgba(255, 255, 255, 0.12); }
+.triage-preset-item[aria-checked="true"] { color: #fff; font-weight: 600; }
+.triage-preset-check {
+  width: 12px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--mac-blue, #0a84ff);
+}
 
 /* Watchlist editor */
 .watchlist-editor {
@@ -333,7 +378,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .watchlist-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.watchlist-field span { font-size: 10px; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.05em; }
+.watchlist-field span { font-size: 11px; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.05em; }
 .watchlist-field input {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -424,7 +469,7 @@
 .cmdk-row.is-active, .cmdk-row:hover { background: rgba(255, 255, 255, 0.1); }
 .cmdk-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmdk-section {
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.4);
@@ -473,7 +518,7 @@
 }
 .corr-row:hover { background: rgba(150, 180, 255, 0.08); border-color: rgba(150, 180, 255, 0.3); }
 .corr-row-src {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
   color: rgba(150, 180, 255, 0.85); min-width: 90px;
 }
 .corr-row-title { flex: 1; }
@@ -584,7 +629,7 @@
 .help-section { display: flex; flex-direction: column; gap: 6px; }
 .help-section-title {
   margin: 0;
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.4);
@@ -668,7 +713,7 @@
   line-height: 1.35;
 }
 .cb-storm-mode__tier {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;

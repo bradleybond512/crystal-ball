@@ -9,8 +9,11 @@ body.is-desktop-macos {
   --mac-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
   --mac-font-mono: "SF Mono", ui-monospace, "Cascadia Code", monospace;
 
-  /* Sidebar dimensions */
-  --mac-sidebar-width: 155px;
+  /* Sidebar dimensions — 180px so panel labels ("Improvement Schedule",
+     "Cross-Domain Conflict") stop hard-clipping at the ellipsis. Everything
+     keyed to the sidebar edge (replay scrubber, notification stack) reads
+     this variable, so no other layout math changes. */
+  --mac-sidebar-width: 180px;
   --mac-toolbar-height: 44px;
   --mac-traffic-lights-height: 44px; /* safe area below traffic lights */
 
@@ -191,7 +194,7 @@ body.has-staleness-banner .mac-sidebar-nav {
 }
 
 .mac-mode-label {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--mac-tertiary-label);
@@ -211,7 +214,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   border-radius: 5px;
   background: transparent;
   color: var(--mac-secondary-label);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   font-family: var(--mac-font);
   cursor: pointer;
@@ -293,7 +296,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   border-radius: 5px;
   background: rgba(255, 159, 10, 0.12);
   color: var(--mac-orange);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   font-family: var(--mac-font);
   cursor: pointer;
@@ -554,7 +557,7 @@ body.is-desktop-macos[data-app-mode="peace"] .mac-toolbar-title {
   border-radius: 5px;
   background: transparent;
   color: var(--mac-secondary-label);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   font-family: var(--mac-font);
   cursor: pointer;
@@ -757,7 +760,7 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   cursor: pointer;
   color: var(--mac-secondary-label);
-  font-size: 10px;
+  font-size: 11px;
   align-items: center;
   justify-content: center;
   transition: background 0.12s ease, color 0.12s ease, width 0.12s ease;
@@ -932,7 +935,7 @@ body.is-desktop-macos[data-theme="light"] .mac-content-toolbar {
 }
 
 .mac-toolbar-version {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--mac-secondary-label);
   letter-spacing: 0.02em;
@@ -1309,8 +1312,8 @@ body.is-desktop-macos #unifiedSettingsMount {
 /* MacBook Pro 14" (1512×982 logical @ 2× Retina, default scale) */
 /* ============================================================ */
 @media screen and (max-width: 1520px) and (min-width: 1400px) {
-  :root { --mac-sidebar-width: 148px; }
-  .mac-sidebar-panel-item { font-size: 10.5px; padding: 3px 6px; }
+  :root { --mac-sidebar-width: 172px; }
+  .mac-sidebar-panel-item { font-size: 11px; padding: 3px 6px; }
 }
 
 /* ── God's Eye Time Machine ─────────────────────────────── */

@@ -163,5 +163,6 @@ export type { Theme } from './theme-manager';
 export { createConcurrencyLimiter } from './concurrency-limiter';
 export type { ConcurrencyLimiter } from './concurrency-limiter';
 export { escapeHtml, sanitizeUrl, escapeAttr } from './sanitize';
+export { formatDurationMinutes, formatDurationMs } from './format-duration';
 
 import { getCurrentLanguage } from '../services/i18n';

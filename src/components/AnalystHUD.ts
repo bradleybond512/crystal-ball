@@ -11,6 +11,7 @@
  */
 
 import { replaceChildren } from '@/utils/dom-utils';
+import { formatDurationMinutes } from '@/utils/format-duration';
 import { isGhostMode } from '@/services/mode-manager';
 import { jumpToPanel, flashPanel } from '@/services/alert-reactions';
 import { subscribeAnalyst, getAnalystSnapshot, type Hypothesis, type HypothesisEvidence, type AnalystSnapshot } from '@/services/analyst-loop';
@@ -56,8 +57,7 @@ const DOMAIN_GLYPH = {
 function ageLabel(ms: number): string {
   const mins = Math.max(0, Math.round(ms / 60_000));
   if (mins < 1) return 'now';
-  if (mins < 60) return `${mins}m`;
-  return `${Math.floor(mins / 60)}h`;
+  return formatDurationMinutes(mins);
 }
 
 function simButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {

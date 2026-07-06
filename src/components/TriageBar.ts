@@ -6,7 +6,7 @@
  * Auto-hides when there's nothing hot.
  */
 
-/* eslint-disable sonarjs/no-nested-conditional, sonarjs/no-nested-template-literals */
+/* eslint-disable sonarjs/no-nested-template-literals */
 import { unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
 import { rankAlerts, panelForAlert, scoreBreakdown } from '@/services/alert-routing';
 import { flashPanel, jumpToPanel, pulseAlertOnMap } from '@/services/alert-reactions';
@@ -18,6 +18,7 @@ import { recordSnooze, getSnoozeSuggestion, formatSnoozeDuration } from '@/servi
 import { estimateEscalation } from '@/services/escalation-predictor';
 import { getAnnotation, setAnnotation } from '@/services/alert-annotations';
 import { getCollections, addToCollection, createCollection } from '@/services/alert-bookmarks';
+import { formatDurationMinutes } from '@/utils/format-duration';
 
 const MAX_VISIBLE = 5;
 
@@ -149,7 +150,7 @@ export class TriageBar {
     el.title =
       `${a.body}\n\nscore ${sb.total.toFixed(1)}\nlifecycle: ${phase}\n(right-click to snooze)`;
     const ageMin = Math.max(0, Math.round((Date.now() - a.timestamp) / 60_000));
-    const ageLabel = ageMin < 1 ? 'now' : (ageMin < 60 ? `${ageMin}m` : `${Math.floor(ageMin / 60)}h`);
+    const ageLabel = ageMin < 1 ? 'now' : formatDurationMinutes(ageMin);
     const dot = document.createElement('span'); dot.className = 'triage-sev-dot';
     const lc = document.createElement('span'); lc.className = `triage-lifecycle triage-lc-${phase}`;
     lc.textContent = PHASE_ICON[phase];

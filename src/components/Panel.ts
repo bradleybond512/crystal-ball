@@ -1,9 +1,10 @@
-/* eslint-disable unicorn/consistent-function-scoping, @typescript-eslint/no-empty-function, sonarjs/void-use, sonarjs/no-nested-conditional, sonarjs/no-selector-parameter, sonarjs/cognitive-complexity, @typescript-eslint/no-floating-promises, sonarjs/no-try-promise, @typescript-eslint/no-unsafe-return, @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable unicorn/consistent-function-scoping, @typescript-eslint/no-empty-function, sonarjs/no-selector-parameter, sonarjs/cognitive-complexity, @typescript-eslint/no-floating-promises, sonarjs/no-try-promise, @typescript-eslint/no-unsafe-return, @typescript-eslint/prefer-nullish-coalescing */
 import { isDesktopRuntime, getApiBaseUrl } from '../services/runtime';
 import { invokeTauri } from '../services/tauri-bridge';
 import { t } from '../services/i18n';
 import { h, replaceChildren, safeHtml } from '../utils/dom-utils';
 import { safeSetItem } from '@/utils';
+import { formatDurationMinutes } from '@/utils/format-duration';
 import { trackPanelResized } from '@/services/analytics';
 // `summarization` is statically imported by other panels (GoodThingsDigest,
 // Insights, etc.), so it always lands in the panels chunk regardless of
@@ -894,7 +895,8 @@ export class Panel {
  return;
  }
  const ago = Math.max(0, Math.round((Date.now() - this.lastTickAt) / 1000));
- const label = ago < 60 ? `${ago}s` : (ago < 3600 ? `${Math.floor(ago / 60)}m` : `${Math.floor(ago / 3600)}h`);
+ // "45m", "3h 20m", "5d 7h" — never a raw unit dump like "120h".
+ const label = ago < 60 ? `${ago}s` : formatDurationMinutes(ago / 60);
  // Only mutate the DOM when the label actually changes to avoid triggering
  // unnecessary text layout on every 5-second heartbeat tick.
  if (this.heartbeatTextEl.textContent !== label) this.heartbeatTextEl.textContent = label;

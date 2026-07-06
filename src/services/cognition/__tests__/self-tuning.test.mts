@@ -9,10 +9,14 @@
  *   3. The 5 registered cognition algorithms.
  *   4. The episodic-analog:minSim safety-fixture suite (set-wise
  *      non-regression discriminates in both directions).
- *   5. The deterministic grading pass (episodic-analog, recalibration,
- *      superforecast, entity-trajectory) with watermarks.
- *   6. Operator-ranking grading at hypothesis resolution.
- *   7. The drift watch over the graded ledger.
+ *   5. The deterministic grading pass (recalibration, superforecast,
+ *      entity-trajectory) with success-only watermark advancement.
+ *   6. Resolution-time grading from EMIT-TIME stamped values
+ *      (episodic-analog + operator-ranking).
+ *   7. The drift watch under its PRODUCTION options (reachable λ,
+ *      count-based buckets immune to sparse grading) + alert dedupe.
+ *   8. A suite-less cognition knob lands held_for_approval end-to-end
+ *      through runTuningApply (operator approves; nothing self-applies).
  */
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
@@ -31,6 +35,10 @@ import {
   hasTuningSafetyFixtures,
 } from '../../algorithms/tuning-safety-fixtures.js';
 import type { EvaluationRecord, EvaluationOutcome } from '../../algorithms/algorithm-evaluation-ledger.js';
+import { createAlgorithmEvaluationLedger } from '../../algorithms/algorithm-evaluation-ledger.js';
+import { runTuningApply } from '../../algorithms/tuning-apply-runner.js';
+import type { AlgorithmDefinition } from '../../algorithms/algorithm-health.js';
+import type { AlgorithmAdjustmentTuning } from '../../algorithms/safe-adjustment.js';
 
 import { blendWithEpisodic, type ReferenceClass } from '../base-rates.js';
 import { extremize, DEFAULT_K } from '../probability-aggregation.js';
@@ -43,10 +51,12 @@ import { decayWeight } from '../operator-model.js';
 import {
   COGNITION_ALGORITHM_IDS,
   runCognitionGradingPass,
+  gradeEpisodicAnalogOnResolution,
   gradeOperatorRankingOnResolution,
   runCognitionDriftWatch,
   shouldRunSelfTuning,
   SELF_TUNING_INTERVAL_MS,
+  DRIFT_MIN_GRADED,
   type SelfTuningStorageLike,
 } from '../self-tuning.js';
 
@@ -334,57 +344,6 @@ describe('episodic-analog minSim safety fixtures', () => {
 // ── 5. Grading pass ───────────────────────────────────────────────────────────
 
 describe('runCognitionGradingPass', () => {
-  it('grades resolved episodes against their analog score (hit/miss/partial, skips)', () => {
-    const rec = makeRecorder();
-    const episodes: Episode[] = [
-      // Elevated analog + materialized → hit.
-      makeEpisode({ id: 'e1', signature: 's1', outcome: 'materialized', resolvedAt: 100 }),
-      // Elevated analog + fizzled → miss.
-      makeEpisode({ id: 'e2', signature: 's2', outcome: 'fizzled', resolvedAt: 200 }),
-      // Partial outcome → partial.
-      makeEpisode({ id: 'e3', signature: 's3', outcome: 'partial', resolvedAt: 300 }),
-      // No analog score attached → skipped.
-      makeEpisode({ id: 'e4', signature: 's4', outcome: 'materialized', resolvedAt: 400 }),
-      // Unknown outcome → skipped.
-      makeEpisode({ id: 'e5', signature: 's5', outcome: 'unknown', resolvedAt: 500 }),
-      // Unresolved → skipped.
-      makeEpisode({ id: 'e6', signature: 's6' }),
-    ];
-    const analogs = new Map<string, number>([['s1', 0.8], ['s2', 0.7], ['s3', 0.6]]);
-    const result = runCognitionGradingPass({
-      episodes,
-      analogScoreForSignature: (sig) => analogs.get(sig) ?? null,
-      calibrationRecords: [],
-      dossiers: [],
-      recordEvaluation: rec.recordEvaluation,
-      recordOutcome: rec.recordOutcome,
-      storage: makeStorage(),
-      now: () => 1_000_000,
-    });
-    assert.equal(result.graded['episodic-analog'], 3);
-    assert.deepEqual(rec.outcomes.map((o) => o.outcome), ['hit', 'miss', 'partial']);
-    assert.ok(rec.evaluations.every((e) => e.algorithmId === 'episodic-analog'));
-    assert.ok(rec.outcomes[0]!.reason.includes('elevated'));
-  });
-
-  it('does not double-grade across passes (episodic watermark)', () => {
-    const rec = makeRecorder();
-    const storage = makeStorage();
-    const deps = {
-      episodes: [makeEpisode({ id: 'e1', signature: 's1', outcome: 'materialized' as const, resolvedAt: 100 })],
-      analogScoreForSignature: () => 0.9,
-      calibrationRecords: [] as PredictionRecord[],
-      dossiers: [],
-      recordEvaluation: rec.recordEvaluation,
-      recordOutcome: rec.recordOutcome,
-      storage,
-      now: () => 1_000_000,
-    };
-    assert.equal(runCognitionGradingPass(deps).graded['episodic-analog'], 1);
-    assert.equal(runCognitionGradingPass(deps).graded['episodic-analog'], 0, 'second pass grades nothing');
-    assert.equal(rec.evaluations.length, 1);
-  });
-
   it('routes resolved calibration records to recalibration vs superforecast by sourceId', () => {
     const rec = makeRecorder();
     const records: PredictionRecord[] = [
@@ -398,8 +357,6 @@ describe('runCognitionGradingPass', () => {
       makePrediction({ id: 'p3', status: 'pending', resolvedAt: undefined }),
     ];
     const result = runCognitionGradingPass({
-      episodes: [],
-      analogScoreForSignature: () => null,
       calibrationRecords: records,
       recalibratorFor: () => (p: number) => ({ p: p - 0.3 }),
       dossiers: [],
@@ -410,6 +367,9 @@ describe('runCognitionGradingPass', () => {
     });
     assert.equal(result.graded['recalibration'], 1);
     assert.equal(result.graded['superforecast'], 1);
+    // Resolution-graded algorithms are named in the map with count 0.
+    assert.equal(result.graded['episodic-analog'], 0);
+    assert.equal(result.graded['operator-ranking'], 0);
     const recal = rec.evaluations.find((e) => e.algorithmId === 'recalibration');
     const sf = rec.evaluations.find((e) => e.algorithmId === 'superforecast');
     assert.ok(Math.abs(recal!.score! - 0.4) < 1e-9, 'recalibrated probability recorded');
@@ -417,6 +377,51 @@ describe('runCognitionGradingPass', () => {
     const outcomeByIdx = new Map(rec.outcomes.map((o) => [o.recordId, o.outcome]));
     assert.equal(outcomeByIdx.get('r-1'), 'miss');
     assert.equal(outcomeByIdx.get('r-2'), 'hit');
+  });
+
+  it('does not double-grade across passes (calibration watermark)', () => {
+    const rec = makeRecorder();
+    const storage = makeStorage();
+    const deps = {
+      calibrationRecords: [makePrediction({ id: 'p1', probability: 0.8, status: 'resolved_true' as const, resolvedAt: 100 })],
+      recalibratorFor: () => (p: number) => ({ p }),
+      dossiers: [],
+      recordEvaluation: rec.recordEvaluation,
+      recordOutcome: rec.recordOutcome,
+      storage,
+      now: () => 1_000_000,
+    };
+    assert.equal(runCognitionGradingPass(deps).graded['recalibration'], 1);
+    assert.equal(runCognitionGradingPass(deps).graded['recalibration'], 0, 'second pass grades nothing');
+    assert.equal(rec.evaluations.length, 1);
+  });
+
+  it('retries failed grades: the watermark only advances past recorded samples', () => {
+    const storage = makeStorage();
+    const records = [makePrediction({ id: 'p1', probability: 0.8, status: 'resolved_true' as const, resolvedAt: 100 })];
+    // First pass: the ledger throws → nothing recorded, watermark must NOT advance.
+    const failing = runCognitionGradingPass({
+      calibrationRecords: records,
+      recalibratorFor: () => (p: number) => ({ p }),
+      dossiers: [],
+      recordEvaluation: () => { throw new Error('ledger unavailable'); },
+      recordOutcome: () => { /* unreachable */ },
+      storage,
+      now: () => 1_000_000,
+    });
+    assert.equal(failing.graded['recalibration'], 0);
+    // Second pass with a working ledger: the same record is graded now.
+    const rec = makeRecorder();
+    const retried = runCognitionGradingPass({
+      calibrationRecords: records,
+      recalibratorFor: () => (p: number) => ({ p }),
+      dossiers: [],
+      recordEvaluation: rec.recordEvaluation,
+      recordOutcome: rec.recordOutcome,
+      storage,
+      now: () => 1_000_000,
+    });
+    assert.equal(retried.graded['recalibration'], 1, 'failed grade retried on the next pass');
   });
 
   it('grades entity trajectories retrospectively and skips stable predictions', () => {
@@ -453,8 +458,6 @@ describe('runCognitionGradingPass', () => {
     const rec = makeRecorder();
     const storage = makeStorage();
     const deps = {
-      episodes: [] as Episode[],
-      analogScoreForSignature: () => null,
       calibrationRecords: [] as PredictionRecord[],
       dossiers: [heatingHit, heatingMiss, stable],
       recordEvaluation: rec.recordEvaluation,
@@ -473,28 +476,58 @@ describe('runCognitionGradingPass', () => {
   });
 });
 
-// ── 6. Operator-ranking grading ───────────────────────────────────────────────
+// ── 6. Resolution-time grading from emit-time stamped values ──────────────────
 
-describe('gradeOperatorRankingOnResolution', () => {
-  it('boost on a hypothesis that panned out is a hit; on a fizzle, a miss', () => {
+describe('gradeEpisodicAnalogOnResolution', () => {
+  it('grades the stamped emit-time analog against the resolution', () => {
     const rec = makeRecorder();
     const deps = {
-      interestMultiplierFn: () => 1.15,
       recordEvaluation: rec.recordEvaluation,
       recordOutcome: rec.recordOutcome,
       now: () => 42,
     };
-    assert.equal(gradeOperatorRankingOnResolution('wheat escalation', true, deps), 'hit');
-    assert.equal(gradeOperatorRankingOnResolution('wheat escalation', false, deps), 'miss');
+    // Elevated analog (0.8) + hypothesis panned out → hit.
+    assert.equal(gradeEpisodicAnalogOnResolution(0.8, true, deps), 'hit');
+    // Elevated analog + fizzle → miss.
+    assert.equal(gradeEpisodicAnalogOnResolution(0.8, false, deps), 'miss');
+    // Quiet analog (0.2) + fizzle → hit (the quiet read was right).
+    assert.equal(gradeEpisodicAnalogOnResolution(0.2, false, deps), 'hit');
+    assert.equal(rec.evaluations.length, 3);
+    assert.ok(rec.evaluations.every((e) => e.algorithmId === 'episodic-analog'));
+    assert.equal(rec.evaluations[0]!.label, 'analog-elevated');
+    assert.equal(rec.evaluations[2]!.label, 'analog-quiet');
+    assert.ok(rec.outcomes[0]!.reason.includes('emit-time analog score 0.80'));
+  });
+
+  it('unstamped legacy pendings (null/undefined analog) are skipped', () => {
+    const rec = makeRecorder();
+    const deps = { recordEvaluation: rec.recordEvaluation, recordOutcome: rec.recordOutcome };
+    assert.equal(gradeEpisodicAnalogOnResolution(null, true, deps), null);
+    assert.equal(gradeEpisodicAnalogOnResolution(undefined, true, deps), null);
+    assert.equal(gradeEpisodicAnalogOnResolution(Number.NaN, true, deps), null);
+    assert.equal(rec.evaluations.length, 0, 'nothing recorded');
+  });
+});
+
+describe('gradeOperatorRankingOnResolution', () => {
+  it('stamped boost on a hypothesis that panned out is a hit; on a fizzle, a miss', () => {
+    const rec = makeRecorder();
+    const deps = {
+      recordEvaluation: rec.recordEvaluation,
+      recordOutcome: rec.recordOutcome,
+      now: () => 42,
+    };
+    assert.equal(gradeOperatorRankingOnResolution(1.15, true, deps), 'hit');
+    assert.equal(gradeOperatorRankingOnResolution(1.15, false, deps), 'miss');
     assert.equal(rec.evaluations.length, 2);
     assert.ok(rec.evaluations.every((e) => e.algorithmId === 'operator-ranking'));
     assert.equal(rec.evaluations[0]!.label, 'boosted');
+    assert.ok(rec.outcomes[0]!.reason.includes('at emit time'));
   });
 
-  it('demotion on a fizzle is a hit', () => {
+  it('stamped demotion on a fizzle is a hit', () => {
     const rec = makeRecorder();
-    const outcome = gradeOperatorRankingOnResolution('noise topic', false, {
-      interestMultiplierFn: () => 0.85,
+    const outcome = gradeOperatorRankingOnResolution(0.85, false, {
       recordEvaluation: rec.recordEvaluation,
       recordOutcome: rec.recordOutcome,
     });
@@ -502,20 +535,17 @@ describe('gradeOperatorRankingOnResolution', () => {
     assert.equal(rec.evaluations[0]!.label, 'demoted');
   });
 
-  it('neutral multipliers and missing statements carry no signal', () => {
+  it('neutral multipliers and unstamped legacy pendings carry no signal', () => {
     const rec = makeRecorder();
-    const deps = {
-      interestMultiplierFn: () => 1.0,
-      recordEvaluation: rec.recordEvaluation,
-      recordOutcome: rec.recordOutcome,
-    };
-    assert.equal(gradeOperatorRankingOnResolution('anything', true, deps), null);
+    const deps = { recordEvaluation: rec.recordEvaluation, recordOutcome: rec.recordOutcome };
+    assert.equal(gradeOperatorRankingOnResolution(1.0, true, deps), null);
+    assert.equal(gradeOperatorRankingOnResolution(1.01, true, deps), null, 'inside the ±2% neutral band');
     assert.equal(gradeOperatorRankingOnResolution(undefined, true, deps), null);
     assert.equal(rec.evaluations.length, 0, 'nothing recorded');
   });
 });
 
-// ── 7. Drift watch ────────────────────────────────────────────────────────────
+// ── 7. Drift watch (PRODUCTION options) ───────────────────────────────────────
 
 describe('runCognitionDriftWatch', () => {
   function gradedRecord(algorithmId: string, at: number, outcome: EvaluationOutcome): EvaluationRecord {
@@ -531,37 +561,155 @@ describe('runCognitionDriftWatch', () => {
     };
   }
 
-  it('returns a status per cognition algorithm and alerts on sustained degradation', () => {
-    // 5 one-second buckets ending at t=10000: hits early, misses late.
-    // buildF1Buckets windows are lower-bounded (each bucket sees records
-    // from its cutoff onward), giving the series [0.75, 0.667, 0.5, 0, 0]
-    // with rolling threshold ≈0.479 → Page-Hinkley statistic ≈0.958 > λ=0.5
-    // → sustained-degradation alert.
-    const superforecastRecords = [
-      gradedRecord('superforecast', 5_500, 'hit'),
-      gradedRecord('superforecast', 6_500, 'hit'),
-      gradedRecord('superforecast', 7_500, 'hit'),
-      gradedRecord('superforecast', 8_500, 'miss'),
-      gradedRecord('superforecast', 9_500, 'miss'),
-    ];
+  const HOUR = 60 * 60 * 1000;
+
+  /** 35 hits then 25 consecutive misses, one grade per hour — ≈5 fully
+   *  degraded count-buckets, which must trip the production λ. */
+  function degradedStream(algorithmId: string): EvaluationRecord[] {
+    const out: EvaluationRecord[] = [];
+    for (let i = 0; i < 60; i += 1) {
+      out.push(gradedRecord(algorithmId, (i + 1) * HOUR, i < 35 ? 'hit' : 'miss'));
+    }
+    return out;
+  }
+
+  it('alerts on sustained degradation with the PRODUCTION options (reachable λ)', () => {
     const alerts: string[] = [];
+    // No `options` injected — this pins that the real defaults alert.
     const statuses = runCognitionDriftWatch({
       ledger: {
-        byAlgorithm: (id: string) => (id === 'superforecast' ? superforecastRecords : []),
+        byAlgorithm: (id: string) => (id === 'superforecast' ? degradedStream('superforecast') : []),
       },
-      options: { lambda: 0.5, bucketMs: 1_000, windowBuckets: 5, now: () => 10_000 },
+      storage: makeStorage(),
+      now: () => 100 * HOUR,
       onAlert: (a) => alerts.push(a.algorithmId),
     });
     assert.equal(statuses.length, COGNITION_ALGORITHM_IDS.length);
     const sf = statuses.find((s) => s.algorithmId === 'superforecast');
-    assert.ok(sf!.alerting, 'superforecast drift detected');
+    assert.ok(sf!.alerting, 'sustained degradation alerts under production defaults');
     assert.deepEqual(alerts, ['superforecast'], 'only the degraded algorithm alerts');
     const others = statuses.filter((s) => s.algorithmId !== 'superforecast');
-    assert.ok(others.every((s) => !s.alerting), 'ungraded algorithms do not alert');
+    assert.ok(others.every((s) => !s.alerting), 'thin-data algorithms do not alert');
+  });
+
+  it('sparse-but-healthy grading does NOT alert (count-based buckets)', () => {
+    // 25 hits spread one per 3.5 days over ~3 months — calendar-time
+    // bucketing would read the gaps as F1=0 degradation; the count-based
+    // compaction must not.
+    const DAY = 24 * HOUR;
+    const sparseHits = Array.from({ length: 25 }, (_, i) =>
+      gradedRecord('recalibration', (i + 1) * 3.5 * DAY, 'hit'));
+    const alerts: string[] = [];
+    const statuses = runCognitionDriftWatch({
+      ledger: { byAlgorithm: (id: string) => (id === 'recalibration' ? sparseHits : []) },
+      storage: makeStorage(),
+      now: () => 100 * DAY,
+      onAlert: (a) => alerts.push(a.algorithmId),
+    });
+    assert.ok(statuses.every((s) => !s.alerting), 'no algorithm alerts');
+    assert.deepEqual(alerts, []);
+  });
+
+  it('below DRIFT_MIN_GRADED records the algorithm reports a non-alerting status', () => {
+    // Even an all-miss stream is too thin to trust below the floor.
+    const fewMisses = Array.from({ length: DRIFT_MIN_GRADED - 1 }, (_, i) =>
+      gradedRecord('superforecast', (i + 1) * HOUR, 'miss'));
+    const statuses = runCognitionDriftWatch({
+      ledger: { byAlgorithm: (id: string) => (id === 'superforecast' ? fewMisses : []) },
+      storage: makeStorage(),
+      now: () => 100 * HOUR,
+      onAlert: () => { assert.fail('must not alert on thin data'); },
+    });
+    const sf = statuses.find((s) => s.algorithmId === 'superforecast');
+    assert.equal(sf!.alerting, false);
+  });
+
+  it('dedupes: a persistent degradation alerts once, and recovery re-arms', () => {
+    const storage = makeStorage();
+    const alerts: string[] = [];
+    const degradedLedger = {
+      byAlgorithm: (id: string) => (id === 'superforecast' ? degradedStream('superforecast') : []),
+    };
+    const deps = {
+      ledger: degradedLedger,
+      storage,
+      now: () => 100 * HOUR,
+      onAlert: (a: { algorithmId: string }) => alerts.push(a.algorithmId),
+    };
+    runCognitionDriftWatch(deps);
+    assert.deepEqual(alerts, ['superforecast'], 'first pass alerts');
+    runCognitionDriftWatch(deps);
+    runCognitionDriftWatch(deps);
+    assert.deepEqual(alerts, ['superforecast'], 'still-degraded passes do not re-alert');
+    // Recovery: a healthy stream clears the dedupe flag…
+    const healthy = Array.from({ length: 60 }, (_, i) =>
+      gradedRecord('superforecast', (i + 1) * HOUR, 'hit'));
+    runCognitionDriftWatch({ ...deps, ledger: { byAlgorithm: (id: string) => (id === 'superforecast' ? healthy : []) } });
+    // …so a later degradation alerts again.
+    runCognitionDriftWatch(deps);
+    assert.deepEqual(alerts, ['superforecast', 'superforecast'], 'post-recovery degradation re-alerts');
   });
 });
 
-// ── 8. Cadence gate ───────────────────────────────────────────────────────────
+// ── 8. Suite-less knob is held for operator approval ──────────────────────────
+
+describe('safe-adjustment loop on a suite-less cognition knob', () => {
+  let uninstall: () => void;
+  beforeEach(() => { uninstall = installLocalStorage(); });
+  afterEach(() => { uninstall(); });
+
+  it('episodic-analog:analogBlendK lands held_for_approval through runTuningApply', () => {
+    // Degraded health: 20 graded, 17 hits / 3 misses → weightedHitRate 0.85
+    // under a 0.9 floor.
+    const ledger = createAlgorithmEvaluationLedger({ now: () => 1 });
+    for (let i = 0; i < 20; i += 1) {
+      const rec = ledger.recordEvaluation({
+        algorithmId: 'episodic-analog',
+        domain: 'reasoning_hypothesis',
+        at: i,
+        durationMs: 1,
+      });
+      ledger.recordOutcome(rec.id, i < 17 ? 'hit' : 'miss', 'test', i);
+    }
+    const def: AlgorithmDefinition = {
+      algorithmId: 'episodic-analog',
+      label: 'Episodic analog scoring',
+      domain: 'reasoning_hypothesis',
+      criticality: 'medium',
+      minWeightedHitRate: 0.9,
+      minGradedSamples: 20,
+    };
+    // Only the suite-less knob is offered (parameters[0] is what the engine
+    // proposes), so the proposal must fail closed on safety + backtest and
+    // be held for the operator — never auto-applied.
+    const tuning: AlgorithmAdjustmentTuning = {
+      algorithmId: 'episodic-analog',
+      parameters: [{
+        parameterId: 'analogBlendK',
+        current: 5,
+        min: 3,
+        max: 10,
+        step: 1,
+        fixDirection: 'increase',
+        description: 'episodic blend pseudo-count',
+      }],
+    };
+    const applied: unknown[] = [];
+    const result = runTuningApply({
+      ledger,
+      definitions: [def],
+      tunings: [tuning],
+      apply: (...args) => applied.push(args),
+      now: () => 1_000,
+    });
+    assert.equal(result.proposed, 1, 'a bounded proposal was generated');
+    assert.equal(result.applied, 0, 'nothing self-applies');
+    assert.equal(result.heldForApproval, 1, 'held for operator approval');
+    assert.equal(applied.length, 0);
+  });
+});
+
+// ── 9. Cadence gate ───────────────────────────────────────────────────────────
 
 describe('shouldRunSelfTuning', () => {
   it('runs when never run, waits inside the interval, runs after it', () => {

@@ -9,28 +9,29 @@
  *   2. The five cognition outputs (episodic-analog, recalibration,
  *      superforecast, operator-ranking, entity-trajectory) are registered
  *      algorithms (`algorithms/algorithm-registry.ts`).
- *   3. THIS MODULE grades them: a deterministic grading pass derives
- *      hit/miss/partial evaluation-ledger records from ground truth the app
- *      already collects (resolved episodes, resolved calibration-store
- *      predictions, dossier timelines, hypothesis-accuracy resolutions) —
- *      no LLM, no fabricated outcomes.
+ *   3. THIS MODULE grades them: deterministic hit/miss/partial
+ *      evaluation-ledger records derived from ground truth the app already
+ *      collects (resolved calibration-store predictions, dossier timelines,
+ *      hypothesis-accuracy resolutions) — no LLM, no fabricated outcomes.
  *   4. THIS MODULE watches for drift: once graded, `evaluateDrift`
  *      (Page-Hinkley on rolling F1) runs over each cognition algorithm's
- *      ledger records; sustained degradation records a DriftAlert and emits
+ *      ledger records with reachable production options; a sustained
+ *      degradation transition records a DriftAlert and emits
  *      `cb:cognition-drift`. Below-floor algorithms then flow through the
  *      existing safe-adjustment → policy-gate loop, whose fail-closed
  *      safety/backtest signals hold cognition proposals for OPERATOR
  *      APPROVAL (plan: "the operator approves; nothing self-applies").
  *
  * Grading semantics (all deterministic, all explained):
- *   - episodic-analog: an episode that resolves is a graded sample when an
- *     analog score was attached to its signature. Elevated (≥ 0.5) analog +
- *     materialized outcome = hit; partial outcomes grade 'partial'.
+ *   - episodic-analog: graded at hypothesis resolution time from the
+ *     EMIT-TIME analog score stamped onto the pending hypothesis by
+ *     hypothesis-accuracy (`gradeEpisodicAnalogOnResolution`). Grading from
+ *     the stamped value — never the live cache — avoids outcome leakage:
+ *     post-resolution cache refreshes would include the resolved episode
+ *     itself (self-similarity ≈ 1).
  *   - recalibration: each resolved (non-superforecast) calibration record
  *     is replayed through the CURRENT per-domain recalibrator; hit when the
- *     recalibrated probability lands on the correct side of 50%. Grades the
- *     curve in force against recent resolved reality — exactly the signal
- *     drift detection needs.
+ *     recalibrated probability lands on the correct side of 50%.
  *   - superforecast: resolved calibration records with sourceId
  *     'superforecast' (their probability IS the pipeline output); hit when
  *     the forecast lands on the correct side of 50%.
@@ -38,23 +39,24 @@
  *     of 7 days ago from the timeline events known THEN, and check whether
  *     activity in the 7 days since actually rose (heating) or fell
  *     (cooling). 'stable' predictions are uninformative and skipped.
- *   - operator-ranking: graded at hypothesis resolution time
- *     (hypothesis-accuracy calls `gradeOperatorRankingOnResolution`): a
- *     personalization boost pointing at a hypothesis that panned out = hit;
- *     a boost on a fizzle (or a demotion on a hit) = miss. Neutral
- *     multipliers (±2%) carry no signal and are skipped.
+ *   - operator-ranking: graded at hypothesis resolution time from the
+ *     EMIT-TIME interest multiplier stamped onto the pending hypothesis
+ *     (`gradeOperatorRankingOnResolution`); a boost pointing at a
+ *     hypothesis that panned out = hit, a boost on a fizzle (or a demotion
+ *     on a hit) = miss. Stamping avoids the bias where in-window engagement
+ *     reinforcement would tilt a grade-time recomputation toward hit.
  *
- * Watermarks prevent double-grading across passes and are persisted to
- * localStorage under `crystalball-cognition-selftune-v1`.
+ * Pass-based graders advance their persisted watermarks ONLY for samples
+ * that were actually recorded, so a transient ledger failure retries on
+ * the next pass instead of silently losing the grade. State (watermarks +
+ * drift-alert dedupe) persists to localStorage under
+ * `crystalball-cognition-selftune-v1`.
  *
- * Pure deterministic with injectable deps (episodes / records / dossiers /
- * recorder / storage / clock). No DOM, no fetch, no globals at import time.
+ * Pure deterministic with injectable deps (records / dossiers / recorder /
+ * storage / clock). No DOM, no fetch, no globals at import time.
  */
 
-import type { Episode } from './episodic-memory';
-import { getAllEpisodes, getCachedAnalogScore } from './episodic-memory';
 import { getAllDossiers, computeTrajectory, type EntityDossier } from './entity-dossier';
-import { interestMultiplier } from './operator-model';
 import type { PredictionRecord } from '@/services/intelligence/forecast-calibration';
 import { getCalibrationStore, getRecalibrator } from '@/services/intelligence/forecast-calibration-adapter';
 import type { FactDomain } from '@/services/intelligence/types';
@@ -87,7 +89,7 @@ export const COGNITION_ALGORITHM_IDS = [
 
 export type CognitionAlgorithmId = (typeof COGNITION_ALGORITHM_IDS)[number];
 
-const WATERMARK_STORAGE_KEY = 'crystalball-cognition-selftune-v1';
+const STATE_STORAGE_KEY = 'crystalball-cognition-selftune-v1';
 
 /** Elevated-analog decision bar (matches the analog-score semantics: the
  *  similarity-weighted materialization rate of past analogs). */
@@ -110,28 +112,29 @@ const TRAJECTORY_MIN_GAP_MS = 7 * MS_PER_DAY;
 /** Cap on the per-entity watermark map (matches MAX_DOSSIERS). */
 const MAX_TRAJECTORY_WATERMARKS = 500;
 
-// ── Watermark persistence ─────────────────────────────────────────────────────
+// ── Persistent state (watermarks + drift dedupe) ──────────────────────────────
 
 export interface SelfTuningStorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
 }
 
-interface GradingWatermarks {
-  /** Newest episode `resolvedAt` already graded (episodic-analog). */
-  episodicResolvedThrough: number;
-  /** Newest calibration-record `resolvedAt` already graded
+interface SelfTuningState {
+  /** Newest calibration-record `resolvedAt` successfully graded
    *  (recalibration + superforecast share the store). */
   calibrationResolvedThrough: number;
-  /** entity → last graded trajectory cutoff (ms). */
+  /** entity → last successfully graded trajectory cutoff (ms). */
   trajectoryGradedThrough: Record<string, number>;
+  /** algorithmId → currently in an alerting drift state. Dedupe: the alert
+   *  sink fires only on the false→true transition, not on every pass. */
+  driftAlerting: Record<string, boolean>;
 }
 
-function emptyWatermarks(): GradingWatermarks {
+function emptyState(): SelfTuningState {
   return {
-    episodicResolvedThrough: 0,
     calibrationResolvedThrough: 0,
     trajectoryGradedThrough: {},
+    driftAlerting: {},
   };
 }
 
@@ -144,37 +147,42 @@ function resolveStorage(injected: SelfTuningStorageLike | null | undefined): Sel
   return null;
 }
 
-function loadWatermarks(storage: SelfTuningStorageLike | null): GradingWatermarks {
-  if (!storage) return emptyWatermarks();
+function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function loadState(storage: SelfTuningStorageLike | null): SelfTuningState {
+  if (!storage) return emptyState();
   try {
-    const raw = storage.getItem(WATERMARK_STORAGE_KEY);
-    if (!raw) return emptyWatermarks();
+    const raw = storage.getItem(STATE_STORAGE_KEY);
+    if (!raw) return emptyState();
     const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return emptyWatermarks();
-    const p = parsed as Partial<GradingWatermarks>;
+    if (!isPlainRecord(parsed)) return emptyState();
+    const p = parsed as Partial<SelfTuningState>;
     return {
-      episodicResolvedThrough: typeof p.episodicResolvedThrough === 'number' ? p.episodicResolvedThrough : 0,
       calibrationResolvedThrough: typeof p.calibrationResolvedThrough === 'number' ? p.calibrationResolvedThrough : 0,
-      trajectoryGradedThrough:
-        p.trajectoryGradedThrough && typeof p.trajectoryGradedThrough === 'object' && !Array.isArray(p.trajectoryGradedThrough)
-          ? (p.trajectoryGradedThrough as Record<string, number>)
-          : {},
+      trajectoryGradedThrough: isPlainRecord(p.trajectoryGradedThrough)
+        ? (p.trajectoryGradedThrough as Record<string, number>)
+        : {},
+      driftAlerting: isPlainRecord(p.driftAlerting)
+        ? (p.driftAlerting as Record<string, boolean>)
+        : {},
     };
   } catch {
-    return emptyWatermarks();
+    return emptyState();
   }
 }
 
-function saveWatermarks(storage: SelfTuningStorageLike | null, wm: GradingWatermarks): void {
+function saveState(storage: SelfTuningStorageLike | null, state: SelfTuningState): void {
   if (!storage) return;
   // Cap the per-entity map — drop the oldest cutoffs first.
-  const entries = Object.entries(wm.trajectoryGradedThrough);
+  const entries = Object.entries(state.trajectoryGradedThrough);
   if (entries.length > MAX_TRAJECTORY_WATERMARKS) {
     entries.sort((a, b) => b[1] - a[1]);
-    wm.trajectoryGradedThrough = Object.fromEntries(entries.slice(0, MAX_TRAJECTORY_WATERMARKS));
+    state.trajectoryGradedThrough = Object.fromEntries(entries.slice(0, MAX_TRAJECTORY_WATERMARKS));
   }
   try {
-    storage.setItem(WATERMARK_STORAGE_KEY, JSON.stringify(wm));
+    storage.setItem(STATE_STORAGE_KEY, JSON.stringify(state));
   } catch {
     /* quota — next pass may re-grade; the ledger tolerates duplicates */
   }
@@ -186,10 +194,6 @@ type RecordEvaluationFn = (algorithmId: string, input: RecordEvaluationInput) =>
 type RecordOutcomeFn = (recordId: string, outcome: EvaluationOutcome, reason: string, at?: number) => unknown;
 
 export interface CognitionGradingDeps {
-  /** Episode source (default: episodic-memory singleton). */
-  episodes?: readonly Episode[];
-  /** Analog score lookup by signature (default: the analyst-cycle cache). */
-  analogScoreForSignature?: (signature: string) => number | null;
   /** Calibration records (default: the calibration-store singleton). */
   calibrationRecords?: readonly PredictionRecord[];
   /** Recalibrator factory (default: the live per-domain curve cache). */
@@ -200,13 +204,16 @@ export interface CognitionGradingDeps {
   recordEvaluation?: RecordEvaluationFn;
   /** Outcome recorder (default: the singleton evaluation ledger). */
   recordOutcome?: RecordOutcomeFn;
-  /** Watermark storage (default: localStorage; pass null to disable). */
+  /** State storage (default: localStorage; pass null to disable). */
   storage?: SelfTuningStorageLike | null;
   now?: () => number;
 }
 
 export interface CognitionGradingResult {
-  /** Graded sample count per cognition algorithm this pass. */
+  /** Graded sample count per cognition algorithm this pass. episodic-analog
+   *  and operator-ranking are graded at hypothesis resolution time (see the
+   *  `*OnResolution` helpers), so their pass counts are always 0 — the keys
+   *  are present so the result shape names every cognition algorithm. */
   graded: Record<string, number>;
 }
 
@@ -218,7 +225,8 @@ interface GradingContext {
 }
 
 /** Record one evaluation + its outcome. Best-effort: a ledger failure never
- *  aborts the pass. Returns true when the sample was recorded. */
+ *  aborts the pass. Returns true when the sample was recorded — callers
+ *  advance their watermark only on true, so failed grades retry next pass. */
 function recordGrade(
   ctx: GradingContext,
   algorithmId: string,
@@ -237,56 +245,19 @@ function recordGrade(
   }
 }
 
-/** Grade decision for one resolved episode with an attached analog score. */
-function episodicGradeFor(
-  ep: Episode,
-  analog: number,
-): { outcome: EvaluationOutcome; reason: string; elevated: boolean } {
-  const elevated = analog >= ELEVATED_BAR;
-  const read = elevated ? 'elevated' : 'quiet';
-  if (ep.outcome === 'partial') {
-    return { outcome: 'partial', reason: `analog score ${analog.toFixed(2)} (${read}); episode partially materialized`, elevated };
-  }
-  const materialized = ep.outcome === 'materialized';
-  return {
-    outcome: elevated === materialized ? 'hit' : 'miss',
-    reason: `analog score ${analog.toFixed(2)} read ${read}; episode ${String(ep.outcome)}`,
-    elevated,
-  };
-}
-
-/** episodic-analog: resolved episodes vs their attached analog score.
- *  Returns the new episodic watermark. */
-function gradeEpisodicAnalog(
-  ctx: GradingContext,
-  episodes: readonly Episode[],
-  analogFor: (signature: string) => number | null,
-  resolvedThrough: number,
-): number {
-  let maxResolved = resolvedThrough;
-  for (const ep of episodes) {
-    if (ep.resolvedAt === undefined || ep.resolvedAt <= resolvedThrough) continue;
-    maxResolved = Math.max(maxResolved, ep.resolvedAt);
-    if (ep.outcome === undefined || ep.outcome === 'unknown') continue;
-    const analog = analogFor(ep.signature);
-    if (analog === null || !Number.isFinite(analog)) continue; // no analog decision was attached — nothing to grade
-    const { outcome, reason, elevated } = episodicGradeFor(ep, analog);
-    recordGrade(ctx, 'episodic-analog', {
-      durationMs: 0,
-      at: ep.resolvedAt,
-      score: analog,
-      label: elevated ? 'analog-elevated' : 'analog-quiet',
-      inputHash: ep.signature.slice(0, 120),
-    }, outcome, reason, ep.resolvedAt);
-  }
-  return maxResolved;
-}
-
 /** Which algorithm a calibration record grades, and with what probability.
  *  Superforecast records already carry the pipeline's final output; every
  *  other record is replayed through the recalibration curve currently in
  *  force (grades the live curve against recent resolved reality). Returns
- *  null when the recalibrator is unavailable for the record's domain. */
+ *  null when the recalibrator is unavailable for the record's domain.
+ *
+ *  KNOWN BIAS (accepted for now): the current curve was built partly from
+ *  the very records being graded, so this replay is in-sample and the
+ *  resulting hit rate is OPTIMISTIC — the curve has already "seen" these
+ *  outcomes. The bias direction is stable (never pessimistic), and drift
+ *  detection compares the series against its own rolling baseline, so a
+ *  real degradation still surfaces; out-of-sample grading would require
+ *  persisting the curve generation used at prediction time. */
 function forecastGradeTarget(
   r: PredictionRecord,
   recalibratorFor: (domain: FactDomain) => (p: number) => { p: number },
@@ -301,19 +272,27 @@ function forecastGradeTarget(
   }
 }
 
+/** The record's resolvedAt when it is resolved AND newer than the
+ *  watermark; null otherwise. */
+function resolvedAfter(r: PredictionRecord, through: number): number | null {
+  if (r.status !== 'resolved_true' && r.status !== 'resolved_false') return null;
+  if (typeof r.resolvedAt !== 'number' || r.resolvedAt <= through) return null;
+  return r.resolvedAt;
+}
+
 /** recalibration + superforecast: resolved calibration-store records,
- *  routed by sourceId. Returns the new calibration watermark. */
+ *  routed by sourceId. Returns the new calibration watermark — advanced
+ *  only past records whose grade was actually recorded. */
 function gradeCalibrationForecasts(
   ctx: GradingContext,
   records: readonly PredictionRecord[],
   recalibratorFor: (domain: FactDomain) => (p: number) => { p: number },
   resolvedThrough: number,
 ): number {
-  let maxResolved = resolvedThrough;
+  let maxRecorded = resolvedThrough;
   for (const r of records) {
-    if (r.status !== 'resolved_true' && r.status !== 'resolved_false') continue;
-    if (typeof r.resolvedAt !== 'number' || r.resolvedAt <= resolvedThrough) continue;
-    maxResolved = Math.max(maxResolved, r.resolvedAt);
+    const resolvedAt = resolvedAfter(r, resolvedThrough);
+    if (resolvedAt === null) continue;
     const materialized = r.status === 'resolved_true';
 
     const target = forecastGradeTarget(r, recalibratorFor);
@@ -322,16 +301,17 @@ function gradeCalibrationForecasts(
     const fires = p >= 0.5;
     const outcome: EvaluationOutcome = fires === materialized ? 'hit' : 'miss';
     const reason = `${algorithmId} said ${(p * 100).toFixed(0)}% (raw ${(r.probability * 100).toFixed(0)}%); claim ${materialized ? 'materialized' : 'did not materialize'}`;
-    recordGrade(ctx, algorithmId, {
+    const recorded = recordGrade(ctx, algorithmId, {
       durationMs: 0,
-      at: r.resolvedAt,
+      at: resolvedAt,
       score: p,
       label: fires ? 'forecast-likely' : 'forecast-unlikely',
       inputHash: r.id.slice(0, 120),
       detail: { domain: r.domain, rawP: Math.round(r.probability * 1000) / 1000 },
-    }, outcome, reason, r.resolvedAt);
+    }, outcome, reason, resolvedAt);
+    if (recorded) maxRecorded = Math.max(maxRecorded, resolvedAt);
   }
-  return maxResolved;
+  return maxRecorded;
 }
 
 /** entity-trajectory outcome vs what actually happened after the cutoff. */
@@ -346,7 +326,7 @@ function trajectoryOutcome(
 }
 
 /** entity-trajectory: retrospective replay 7 days back. Mutates the
- *  per-entity watermark map for entities it grades. */
+ *  per-entity watermark map only for entities whose grade was recorded. */
 function gradeEntityTrajectories(
   ctx: GradingContext,
   dossiers: readonly Pick<EntityDossier, 'entity' | 'timeline'>[],
@@ -379,19 +359,20 @@ function gradeEntityTrajectories(
 
 /**
  * Run one deterministic grading pass: derive hit/miss/partial evaluation
- * records for the cognition algorithms from already-resolved ground truth.
- * Safe to call repeatedly — watermarks prevent double-grading. Synchronous.
+ * records for the pass-graded cognition algorithms (recalibration,
+ * superforecast, entity-trajectory) from already-resolved ground truth.
+ * episodic-analog and operator-ranking grade at hypothesis resolution time
+ * instead (see the `*OnResolution` helpers). Safe to call repeatedly —
+ * watermarks prevent double-grading. Synchronous.
  */
 export function runCognitionGradingPass(deps: CognitionGradingDeps = {}): CognitionGradingResult {
-  const episodes = deps.episodes ?? getAllEpisodes();
-  const analogFor = deps.analogScoreForSignature ?? getCachedAnalogScore;
   const records = deps.calibrationRecords ?? getCalibrationStore().all();
   const recalibratorFor = deps.recalibratorFor ?? ((domain: FactDomain) => getRecalibrator(domain));
   const dossiers = deps.dossiers ?? getAllDossiers();
   const storage = resolveStorage(deps.storage);
   const now = deps.now ?? Date.now;
 
-  const wm = loadWatermarks(storage);
+  const state = loadState(storage);
   const ctx: GradingContext = {
     record: deps.recordEvaluation ?? (recordAlgorithmEvaluation as RecordEvaluationFn),
     recordOutcome: deps.recordOutcome ?? (recordAlgorithmOutcome as RecordOutcomeFn),
@@ -399,60 +380,89 @@ export function runCognitionGradingPass(deps: CognitionGradingDeps = {}): Cognit
       'episodic-analog': 0,
       'recalibration': 0,
       'superforecast': 0,
+      'operator-ranking': 0,
       'entity-trajectory': 0,
     },
   };
 
-  wm.episodicResolvedThrough = gradeEpisodicAnalog(ctx, episodes, analogFor, wm.episodicResolvedThrough);
-  wm.calibrationResolvedThrough = gradeCalibrationForecasts(ctx, records, recalibratorFor, wm.calibrationResolvedThrough);
-  gradeEntityTrajectories(ctx, dossiers, wm.trajectoryGradedThrough, now());
+  state.calibrationResolvedThrough = gradeCalibrationForecasts(ctx, records, recalibratorFor, state.calibrationResolvedThrough);
+  gradeEntityTrajectories(ctx, dossiers, state.trajectoryGradedThrough, now());
 
-  saveWatermarks(storage, wm);
+  saveState(storage, state);
   return { graded: ctx.graded };
 }
 
-// ── Operator-ranking grading (resolution-driven) ──────────────────────────────
+// ── Resolution-time grading (called from hypothesis-accuracy.gradeOne) ────────
 
-export interface OperatorRankingGradeDeps {
-  interestMultiplierFn?: (text: string) => number;
+export interface ResolutionGradeDeps {
   recordEvaluation?: RecordEvaluationFn;
   recordOutcome?: RecordOutcomeFn;
   now?: () => number;
 }
 
 /**
- * Grade the operator-model's ranking personalization when a hypothesis
- * resolves (called from hypothesis-accuracy.gradeOne, fire-and-forget).
- *
- * A boost (multiplier > 1) pointing at a hypothesis that panned out is a
- * hit; a boost on a fizzle — or a demotion on a hit — is a miss. Neutral
- * multipliers (within ±2% of 1.0) carry no ranking signal → null.
- *
- * NOTE: the multiplier is recomputed at grade time (the value applied at
- * ranking time is not retained); interests decay on a half-life ≥ 3 days
- * while the grading window is 2 h, so the drift between the two is small.
+ * Grade the episodic analog engine when a hypothesis resolves. `analogScore`
+ * MUST be the EMIT-TIME value stamped onto the pending hypothesis (not a
+ * grade-time cache read — the post-resolution cache includes the resolved
+ * episode itself, which would leak the outcome into the grade). Legacy
+ * pendings without a stamped score return null (no grade). Outcomes here
+ * are binary (hypothesis-accuracy grades hit/fizzle), so no 'partial'.
  */
-export function gradeOperatorRankingOnResolution(
-  statement: string | undefined,
+export function gradeEpisodicAnalogOnResolution(
+  analogScore: number | null | undefined,
   hypothesisHit: boolean,
-  deps: OperatorRankingGradeDeps = {},
+  deps: ResolutionGradeDeps = {},
 ): EvaluationOutcome | null {
-  if (!statement) return null;
-  const multFn = deps.interestMultiplierFn ?? interestMultiplier;
+  if (analogScore === null || analogScore === undefined || !Number.isFinite(analogScore)) return null;
   const record = deps.recordEvaluation ?? (recordAlgorithmEvaluation as RecordEvaluationFn);
   const recordOutcome = deps.recordOutcome ?? (recordAlgorithmOutcome as RecordOutcomeFn);
   const now = deps.now ?? Date.now;
 
-  const mult = multFn(statement);
-  if (!Number.isFinite(mult) || Math.abs(mult - 1) <= NEUTRAL_BAND) return null;
-  const boosted = mult > 1;
+  const elevated = analogScore >= ELEVATED_BAR;
+  const outcome: EvaluationOutcome = elevated === hypothesisHit ? 'hit' : 'miss';
+  const reason = `emit-time analog score ${analogScore.toFixed(2)} read ${elevated ? 'elevated' : 'quiet'}; hypothesis ${hypothesisHit ? 'panned out' : 'fizzled'}`;
+  const at = now();
+  const rec = record('episodic-analog', {
+    durationMs: 0,
+    at,
+    score: analogScore,
+    label: elevated ? 'analog-elevated' : 'analog-quiet',
+  });
+  recordOutcome(rec.id, outcome, reason, at);
+  return outcome;
+}
+
+/**
+ * Grade the operator-model's ranking personalization when a hypothesis
+ * resolves. `operatorMult` MUST be the EMIT-TIME interest multiplier
+ * stamped onto the pending hypothesis — recomputing at grade time would
+ * bias toward hit, because engagement with the hypothesis inside the
+ * grading window reinforces the very interests being graded.
+ *
+ * A boost (multiplier > 1) pointing at a hypothesis that panned out is a
+ * hit; a boost on a fizzle — or a demotion on a hit — is a miss. Neutral
+ * multipliers (within ±2% of 1.0) and unstamped legacy pendings carry no
+ * ranking signal → null.
+ */
+export function gradeOperatorRankingOnResolution(
+  operatorMult: number | undefined,
+  hypothesisHit: boolean,
+  deps: ResolutionGradeDeps = {},
+): EvaluationOutcome | null {
+  if (operatorMult === undefined || !Number.isFinite(operatorMult)) return null;
+  if (Math.abs(operatorMult - 1) <= NEUTRAL_BAND) return null;
+  const record = deps.recordEvaluation ?? (recordAlgorithmEvaluation as RecordEvaluationFn);
+  const recordOutcome = deps.recordOutcome ?? (recordAlgorithmOutcome as RecordOutcomeFn);
+  const now = deps.now ?? Date.now;
+
+  const boosted = operatorMult > 1;
   const outcome: EvaluationOutcome = boosted === hypothesisHit ? 'hit' : 'miss';
-  const reason = `operator model ${boosted ? 'boosted' : 'demoted'} (×${mult.toFixed(2)}); hypothesis ${hypothesisHit ? 'panned out' : 'fizzled'}`;
+  const reason = `operator model ${boosted ? 'boosted' : 'demoted'} at emit time (×${operatorMult.toFixed(2)}); hypothesis ${hypothesisHit ? 'panned out' : 'fizzled'}`;
   const at = now();
   const rec = record('operator-ranking', {
     durationMs: 0,
     at,
-    score: mult,
+    score: operatorMult,
     label: boosted ? 'boosted' : 'demoted',
   });
   recordOutcome(rec.id, outcome, reason, at);
@@ -461,11 +471,66 @@ export function gradeOperatorRankingOnResolution(
 
 // ── Drift watch ───────────────────────────────────────────────────────────────
 
+/** Fixed acceptable-F1 floor used as the Page-Hinkley reference. A rolling
+ *  mean self-lowers as degradation fills the window (total degradation would
+ *  never alert), so the reference is explicit: sustained F1 below 0.5 is
+ *  degradation regardless of history. */
+export const DRIFT_F1_FLOOR = 0.5;
+
+/** Grading is sparse and irregular, so drift buckets are COUNT-based, not
+ *  calendar-based: the algorithm's graded records are compacted onto a
+ *  synthetic timeline with DRIFT_RECORDS_PER_BUCKET per bucket. A quiet
+ *  week therefore never reads as an F1=0 bucket (which would fake
+ *  degradation), and the newest bucket always contains the newest grades. */
+const DRIFT_RECORDS_PER_BUCKET = 5;
+const DRIFT_WINDOW_BUCKETS = 12;
+const DRIFT_BUCKET_MS = 60_000; // synthetic spacing — any positive value works
+
+/** Below this many graded records the F1 series is too thin for Page-
+ *  Hinkley; the algorithm reports a non-alerting status instead. */
+export const DRIFT_MIN_GRADED = 20;
+
+/**
+ * Production drift options. λ is deliberately reachable: with the fixed
+ * 0.5 floor and δ=0.05, one fully-degraded bucket (F1=0) contributes 0.45,
+ * so λ=2 trips after ~5 sustained fully-degraded buckets (≈25 consecutive
+ * miss-grades) and cannot trip on 4 or fewer. (The stock evaluateDrift
+ * default λ=50 is UNREACHABLE here — the statistic is bounded by
+ * windowBuckets × 1.)
+ */
+export const COGNITION_DRIFT_OPTIONS: DriftDetectorOptions = {
+  lambda: 2,
+  delta: 0.05,
+  threshold: DRIFT_F1_FLOOR,
+  bucketMs: DRIFT_BUCKET_MS,
+  windowBuckets: DRIFT_WINDOW_BUCKETS,
+};
+
+/** Compact an algorithm's graded records onto the synthetic count-based
+ *  bucket timeline (newest record → newest bucket). */
+function compactForDrift(records: readonly EvaluationRecord[], nowMs: number): EvaluationRecord[] {
+  const graded = records.filter((r) => r.outcome !== undefined);
+  graded.sort((a, b) => b.at - a.at);
+  return graded
+    .slice(0, DRIFT_RECORDS_PER_BUCKET * DRIFT_WINDOW_BUCKETS)
+    .map((r, j) => ({
+      ...r,
+      at: nowMs - Math.floor(j / DRIFT_RECORDS_PER_BUCKET) * DRIFT_BUCKET_MS - DRIFT_BUCKET_MS / 2,
+    }));
+}
+
 export interface CognitionDriftDeps {
   ledger?: Pick<AlgorithmEvaluationLedger, 'byAlgorithm'>;
+  /** Drift options (default: COGNITION_DRIFT_OPTIONS). Merged over the
+   *  production defaults, so a test can override just λ or `now`. */
   options?: DriftDetectorOptions;
-  /** Alert sink (default: recordDriftAlert + cb:cognition-drift event). */
+  /** Alert sink (default: recordDriftAlert + cb:cognition-drift event).
+   *  Fired only on the not-alerting → alerting TRANSITION per algorithm
+   *  (deduped via persisted state), not on every pass while degraded. */
   onAlert?: (alert: DriftAlert) => void;
+  /** Dedupe-state storage (default: localStorage; pass null to disable). */
+  storage?: SelfTuningStorageLike | null;
+  now?: () => number;
 }
 
 /** Default alert sink: drift history + `cb:cognition-drift` + desktop log. */
@@ -483,15 +548,33 @@ function defaultDriftAlertSink(alert: DriftAlert): void {
   );
 }
 
+/** Non-alerting placeholder status for algorithms below DRIFT_MIN_GRADED. */
+function thinDataStatus(algorithmId: string): DriftStatus {
+  return {
+    algorithmId,
+    statistic: 0,
+    threshold: DRIFT_F1_FLOOR,
+    currentF1: Number.NaN,
+    alerting: false,
+  };
+}
+
 /**
  * Evaluate Page-Hinkley drift for every cognition algorithm over its graded
- * ledger records. Alerting algorithms get a DriftAlert recorded in the
- * drift history and a `cb:cognition-drift` window event so the diagnostics
- * surface can pick it up. Returns all statuses (alerting or not).
+ * ledger records (count-compacted; see compactForDrift). An algorithm
+ * TRANSITIONING into sustained degradation gets a DriftAlert recorded in
+ * the drift history and a `cb:cognition-drift` window event; while it stays
+ * degraded, subsequent passes do not re-alert. Recovery clears the dedupe
+ * flag so a later degradation alerts again. Returns all statuses.
  */
 export function runCognitionDriftWatch(deps: CognitionDriftDeps = {}): DriftStatus[] {
   const ledger = deps.ledger ?? getAlgorithmEvaluationLedger();
   const onAlert = deps.onAlert ?? defaultDriftAlertSink;
+  const storage = resolveStorage(deps.storage);
+  const state = loadState(storage);
+  const nowMs = deps.options?.now ? deps.options.now() : (deps.now ?? Date.now)();
+  const options: DriftDetectorOptions = { ...COGNITION_DRIFT_OPTIONS, ...deps.options, now: () => nowMs };
+
   const out: DriftStatus[] = [];
   for (const id of COGNITION_ALGORITHM_IDS) {
     let records: readonly EvaluationRecord[];
@@ -500,10 +583,21 @@ export function runCognitionDriftWatch(deps: CognitionDriftDeps = {}): DriftStat
     } catch {
       continue;
     }
-    const status = evaluateDrift(records, id, deps.options ?? {});
+    const compacted = compactForDrift(records, nowMs);
+    const status = compacted.length < DRIFT_MIN_GRADED
+      ? thinDataStatus(id)
+      : evaluateDrift(compacted, id, options);
     out.push(status);
-    if (status.alerting && status.alert) onAlert(status.alert);
+
+    const wasAlerting = state.driftAlerting[id] === true;
+    if (status.alerting && status.alert) {
+      if (!wasAlerting) onAlert(status.alert);
+      state.driftAlerting[id] = true;
+    } else {
+      state.driftAlerting[id] = false;
+    }
   }
+  saveState(storage, state);
   return out;
 }
 

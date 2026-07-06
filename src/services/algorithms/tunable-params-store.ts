@@ -246,6 +246,12 @@ const DECLARATIONS: readonly TunableDeclaration[] = [
     affectsNotifications: false,
   },
   {
+    // MANUAL-ONLY knob: 'consolidation' is not a registered algorithm (it
+    // is not one of the five graded cognition outputs), so the safe-
+    // adjustment loop never proposes for it, and it has no safety-fixture
+    // suite (fail-closed if that ever changes). It is declared here so the
+    // consolidation module reads a bounded, operator-editable value instead
+    // of a hardcoded constant.
     algorithmId: 'consolidation',
     parameterId: 'clusterSimThreshold',
     default: 0.6,
@@ -276,7 +282,26 @@ function clampToBound(decl: TunableDeclaration | undefined, value: number, fallb
   return Math.min(decl.max, Math.max(decl.min, value));
 }
 
+/**
+ * Short-TTL parsed-store memo. PR 12 put `getTunedParam` on hot paths
+ * (per-term interest decay, heat computation, analog recall), and each
+ * uncached call re-parses localStorage JSON. The memo caches the parsed
+ * store for a few seconds; any write THROUGH THIS MODULE invalidates it
+ * immediately, so the only staleness window is an out-of-band
+ * localStorage edit (another tab), bounded by the TTL.
+ */
+const LOAD_MEMO_TTL_MS = 5000;
+let _loadMemo: { store: Store; at: number } | null = null;
+
 function load(): Store {
+  const nowMs = Date.now();
+  if (_loadMemo !== null && nowMs - _loadMemo.at < LOAD_MEMO_TTL_MS) return _loadMemo.store;
+  const store = loadUncached();
+  _loadMemo = { store, at: nowMs };
+  return store;
+}
+
+function loadUncached(): Store {
   try {
     if (typeof localStorage === 'undefined') return {};
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -294,6 +319,9 @@ function load(): Store {
 }
 
 function save(store: Store): void {
+  // Invalidate before the write so a storage failure can never leave a
+  // stale memo claiming the old value.
+  _loadMemo = null;
   try {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));

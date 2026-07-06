@@ -162,6 +162,13 @@ The app should feel like a professional macOS command instrument.
 
 ### 5. Ask-The-Data Mode
 
+> **STATUS 2026-07-04 — WIRED.** The deterministic engine
+> (`src/services/insights/ask-the-data.ts`) is now connected to the running
+> app: `src/services/insights/ask-context.ts` snapshots the live feature /
+> panel / mission registries and the Command Center renders an "Ask the data"
+> input with answer packet, evidence rows, and follow-up chips. LLM prose
+> remains optional and un-wired (deterministic packet first, per this doc).
+
 Missing: a local structured query mode over Crystal Ball's normalized data.
 
 Add an "Ask Crystal Ball" path that can answer:
@@ -214,6 +221,13 @@ Algorithms may recommend threshold changes, but the system should retain
 explainability and rollback.
 
 ### 8. Replay And Scenario Harness
+
+> **STATUS 2026-07-04 — BUILT + VISIBLE.** `replay-harness.ts` +
+> `replay-fixtures-catalog.ts` run in CI (smoke tier 1) against the committed
+> baseline (`src/services/ops/replay-baseline.json`), and the System
+> Diagnostic Self-Test tab now has a `replay_baseline` probe running the same
+> check in-app. Remaining from the fixture wishlist below: crop failure,
+> contradictory geopolitical sources, stale provider failure.
 
 Missing: a way to replay historical or synthetic events through the full stack.
 

@@ -221,10 +221,12 @@ try {
 }
 
 // ── 7. Replay baseline ────────────────────────────────────────────────────
-// Inline compare: mirrors compareReplayBaseline() from scripts/smoke.mts
-// to avoid cross-extension dynamic import (.mts from .mjs).
+// Shape-only check: the canonical comparison logic lives in
+// src/services/ops/replay-baseline.ts (compareReplayReportToBaseline);
+// this .mjs script cannot import .ts, so it only validates the JSON shape
+// and defers the full replay run to npm run smoke:offline / CI.
 process.stdout.write(dim('  replay baseline... '));
-const BASELINE_FILE = resolve(root, 'scripts', 'smoke-replay-baseline.json');
+const BASELINE_FILE = resolve(root, 'src', 'services', 'ops', 'replay-baseline.json');
 try {
   if (existsSync(BASELINE_FILE)) {
     const baseline = JSON.parse(readFileSync(BASELINE_FILE, 'utf8'));

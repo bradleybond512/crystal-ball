@@ -33,10 +33,9 @@ import { getTotalErrorCount, subscribeDebug } from '@/services/reasoning-debug';
 import { isLlmEgressDisclosed, setLlmEgressDisclosed, isLocalModelOnly, setLocalModelOnly, subscribeLlmEgressChange } from '@/services/ai-flow-settings';
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
-import { runSuperforecast, getCachedSuperforecast, subscribeSuperforecast } from '@/services/cognition/superforecast-runner';
-import { formatSuperForecast } from './format-superforecast';
 import { forecastAll, type HypothesisForecast } from '@/services/intelligence/hypothesis-forecast';
-import { buildForecastProvenanceLines } from './forecast-provenance-view';
+import { requestSuperforecast, getCachedSuperforecast } from '@/services/cognition/superforecast-state';
+import { buildForecastProvenanceLines, buildSuperforecastLines } from './forecast-provenance-view';
 import { getLatestPCI } from '@/services/intelligence/predictive-crisis-index';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
@@ -192,7 +191,6 @@ export class AnalystHUD {
       if (this.replayAtTimestamp === null) this.scheduleRender();
     });
     const unsubEnsemble = subscribeEnsemble(() => { this.scheduleRender(); });
-    const unsubSuperforecast = subscribeSuperforecast(() => { this.scheduleRender(); });
     const unsubLlmEgressChange = subscribeLlmEgressChange(() => { this.scheduleRender(); });
     document.addEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure);
     document.addEventListener('cb:toggle-analyst-hud', this.onToggle);
@@ -213,7 +211,6 @@ export class AnalystHUD {
       unsubDebug,
       unsubSnapshotArchive,
       unsubEnsemble,
-      unsubSuperforecast,
       unsubLlmEgressChange,
       () => document.removeEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure),
       () => document.removeEventListener('cb:toggle-analyst-hud', this.onToggle),
@@ -676,8 +673,8 @@ export class AnalystHUD {
       this.buildHypSkeptic(h),
       this.buildHypAlternatives(h),
       this.buildHypProjection(h),
-      this.buildHypEnsemble(h),
       this.buildHypSuperforecast(h),
+      this.buildHypEnsemble(h),
       this.buildHypActions(h),
     );
     return row;
@@ -708,20 +705,6 @@ export class AnalystHUD {
     return wrap;
   }
 
-  private buildHypSuperforecast(h: Hypothesis): HTMLElement {
-    const wrap = document.createElement('div');
-    wrap.className = 'analyst-hud-hyp-superforecast';
-    const cached = getCachedSuperforecast(h);
-    if (!cached || !this.expandedSuperforecast.has(h.id)) return wrap;
-    for (const text of formatSuperForecast(cached)) {
-      const line = document.createElement('p');
-      line.className = 'analyst-hud-superforecast-line';
-      line.textContent = text;
-      wrap.append(line);
-    }
-    return wrap;
-  }
-
   private buildHypProjection(h: Hypothesis): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'analyst-hud-hyp-projection';
@@ -738,6 +721,20 @@ export class AnalystHUD {
         `Cascade sim: ${projection.cascade.triggerName} — ${projection.cascade.effects.length} effects, ` +
         `~${projection.cascade.estimatedRecoveryHours}h recovery, risk ${projection.cascade.riskScore}/100.`;
       wrap.append(cas);
+    }
+    return wrap;
+  }
+
+  private buildHypSuperforecast(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-superforecast';
+    const sf = getCachedSuperforecast(h);
+    if (!sf || !this.expandedSuperforecast.has(h.id)) return wrap;
+    for (const text of buildSuperforecastLines(sf)) {
+      const line = document.createElement('p');
+      line.className = 'analyst-hud-superforecast-line';
+      line.textContent = text;
+      wrap.append(line);
     }
     return wrap;
   }
@@ -1101,35 +1098,6 @@ export class AnalystHUD {
     return btn;
   }
 
-  private buildSuperforecastButton(h: Hypothesis): HTMLElement {
-    const btn = document.createElement('button');
-    btn.className = 'analyst-hud-superforecast-btn';
-    const cached = getCachedSuperforecast(h);
-    const loading = this.loadingSuperforecast.has(h.id);
-    const expanded = this.expandedSuperforecast.has(h.id);
-    btn.textContent = superforecastButtonLabel(loading, Boolean(cached), expanded);
-    btn.title = cached
-      ? 'Toggle the stored deep forecast'
-      : 'Run the calibrated superforecaster pipeline on this hypothesis';
-    btn.disabled = loading;
-    btn.addEventListener('click', () => {
-      if (cached) {
-        if (expanded) this.expandedSuperforecast.delete(h.id);
-        else this.expandedSuperforecast.add(h.id);
-        this.render();
-        return;
-      }
-      this.loadingSuperforecast.add(h.id);
-      this.render();
-      void runSuperforecast(h).finally(() => {
-        this.loadingSuperforecast.delete(h.id);
-        this.expandedSuperforecast.add(h.id);
-        this.render();
-      });
-    });
-    return btn;
-  }
-
   private buildSimulateButton(h: Hypothesis): HTMLElement {
     const btn = document.createElement('button');
     btn.className = 'analyst-hud-sim-btn';
@@ -1156,6 +1124,40 @@ export class AnalystHUD {
       void projectHypothesis(h).finally(() => {
         this.loadingProjection.delete(h.id);
         this.expandedProjection.add(h.id);
+        this.render();
+      });
+    });
+    return btn;
+  }
+
+  private buildSuperforecastButton(h: Hypothesis): HTMLElement {
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-superforecast-btn';
+    if (isGhostMode()) {
+      btn.style.display = 'none';
+    }
+    const loading = this.loadingSuperforecast.has(h.id);
+    const cached = getCachedSuperforecast(h);
+    const expanded = this.expandedSuperforecast.has(h.id);
+    btn.textContent = superforecastButtonLabel(loading, Boolean(cached), expanded);
+    btn.title = cached
+      ? 'Toggle the stored deep forecast'
+      : 'Run the calibrated superforecaster pipeline on this hypothesis';
+    btn.disabled = loading;
+    btn.addEventListener('click', () => {
+      if (cached) {
+        if (expanded) this.expandedSuperforecast.delete(h.id);
+        else this.expandedSuperforecast.add(h.id);
+        this.render();
+        return;
+      }
+      this.loadingSuperforecast.add(h.id);
+      this.render();
+      // Swallow pipeline rejections: the finally-block resets the loading
+      // state and the un-cached button lets the user retry.
+      void requestSuperforecast(h).catch(() => { /* retry via re-click */ }).finally(() => {
+        this.loadingSuperforecast.delete(h.id);
+        this.expandedSuperforecast.add(h.id);
         this.render();
       });
     });

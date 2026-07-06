@@ -46,6 +46,10 @@ import {
   standardSelfTestDefinitions,
   type SelfTestReport,
 } from '@/services/diagnostics/self-test';
+import { runReplay } from '@/services/ops/replay-harness';
+import { buildCatalogReplayFixtures } from '@/services/ops/replay-fixtures-catalog';
+import { compareReplayReportToBaseline } from '@/services/ops/replay-baseline';
+import replayBaseline from '@/services/ops/replay-baseline.json';
 import {
   VERDICT_BADGE,
   fetchSidecarSelfTest,
@@ -792,6 +796,29 @@ export class SystemDiagnosticPanel extends Panel {
                 };
               }
               return { status: 'fail' as const, reason: 'All webcam sources are down or none reported.' };
+            },
+          },
+          // Replay baseline: run the committed missed-event fixture catalog
+          // through the replay harness and compare against the committed
+          // baseline (the same check CI's smoke tier 1 makes). The catalog
+          // fixtures are intentionally-failing regression cases, so baseline
+          // equality — not a pass verdict — is the honest check.
+          {
+            id: 'replay_baseline',
+            label: 'Replay baseline',
+            probe: () => {
+              const report = runReplay({ fixtures: buildCatalogReplayFixtures(), generatedAt: 0 });
+              const { ok, mismatches, fixtureCount } = compareReplayReportToBaseline(report, replayBaseline);
+              if (ok) {
+                return {
+                  status: 'pass' as const,
+                  reason: `${fixtureCount} replay fixture${fixtureCount === 1 ? '' : 's'} match the committed baseline.`,
+                };
+              }
+              return {
+                status: 'fail' as const,
+                reason: `${mismatches.length} baseline mismatch(es): ${mismatches.join('; ')}`,
+              };
             },
           },
         );

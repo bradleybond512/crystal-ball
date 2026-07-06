@@ -67,12 +67,10 @@ import {
   fetchBuoyAlerts,
   fetchHurricaneRecon,
   getStormPreparednessContext,
-  getStormPreparednessSummary,
   updateStormPreparednessContext,
 } from '@/services';
 import { refreshStormPosture } from '@/services/survival/storm-posture-state';
 import { checkBatchForBreakingAlerts } from '@/services/breaking-news-alerts';
-import { evaluateWarThreat, evaluateFinanceTrigger, evaluateCommodityTrigger, evaluateDisasterTrigger, checkFinanceAutoTriggerTimeout } from '@/services/mode-manager';
 import { reportElevatedPanel } from '@/services/panel-correlation';
 import { fetchGDACSEvents } from '@/services/gdacs';
 import { normalizeNaturalEventToAlert } from '@/services/eonet';
@@ -1332,8 +1330,6 @@ export class DataLoaderManager implements AppModule {
  if (mapped.some(d => d.price !== null)) {
  commoditiesPanel.renderCommodities(mapped);
  commoditiesLoaded = true;
- // Auto-trigger Finance Mode on large Oil or Gold moves
- evaluateCommodityTrigger(commoditiesResult.data);
  }
  }
  if (!commoditiesLoaded) {
@@ -1341,10 +1337,6 @@ export class DataLoaderManager implements AppModule {
  }
  } catch {
  this.ctx.statusPanel?.updateApi('Finnhub', { status: 'error' });
- // Finnhub is down — market data unavailable. Still check whether an
- // auto-triggered Finance Mode has exceeded its quiet window so it can
- // de-escalate back to Peace without needing live market data.
- checkFinanceAutoTriggerTimeout();
  }
 
  try {
@@ -1356,10 +1348,6 @@ export class DataLoaderManager implements AppModule {
  }
  (this.ctx.panels.crypto as CryptoPanel).renderCrypto(crypto);
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: crypto.length > 0 ? 'ok' : 'error' });
- // Auto-trigger Finance Mode if S&P 500 or BTC makes a significant move
- if (this.ctx.latestMarkets.length > 0 || crypto.length > 0) {
- evaluateFinanceTrigger(this.ctx.latestMarkets, crypto);
- }
  } catch {
  this.ctx.statusPanel?.updateApi('CoinGecko', { status: 'error' });
  }
@@ -1470,7 +1458,6 @@ export class DataLoaderManager implements AppModule {
  }
 
  withOfflineCache('gdacs-events', () => fetchGDACSEvents(), 1 * 60 * 60 * 1000).then(({ data: gdacs }) => {
- evaluateDisasterTrigger(gdacs, earthquakes);
  if (gdacs.some(e => e.alertLevel === 'Red')) {
  reportElevatedPanel('gdacs-alerts', 'GDACS Disaster Alerts');
  }
@@ -1867,12 +1854,6 @@ export class DataLoaderManager implements AppModule {
  // Feed correlation matrix global score into anomaly detection for trend monitoring
  ingestMatrixScoreSignal(getMatrixGlobalScore());
 
- void evaluateDisasterTrigger(
- this.ctx.intelligenceCache.gdacsAlerts ?? [],
- this.ctx.intelligenceCache.earthquakes ?? [],
- getStormPreparednessSummary(),
- );
-
  // Multi-source weather intelligence: fetch Open-Meteo hourly forecast
  // for each saved place and ingest as observations alongside NWS alerts.
  // When both sources flag the same area, truth-score corroboration applies.
@@ -2063,7 +2044,6 @@ export class DataLoaderManager implements AppModule {
  const surgeSignals = surgeAlerts.map(surgeAlertToSignal);
  addToSignalHistory(surgeSignals);
  situationEngine.observeSignals(surgeSignals);
- evaluateWarThreat(surgeSignals);
  (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(surgeSignals);
  if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(surgeSignals);
  }
@@ -2072,7 +2052,6 @@ export class DataLoaderManager implements AppModule {
  const foreignSignals = foreignAlerts.map(foreignPresenceToSignal);
  addToSignalHistory(foreignSignals);
  situationEngine.observeSignals(foreignSignals);
- evaluateWarThreat(foreignSignals);
  (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(foreignSignals);
  if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(foreignSignals);
  }
@@ -2537,17 +2516,6 @@ export class DataLoaderManager implements AppModule {
  const domain = (event.eventType === 'TC' || event.eventType === 'FL' || event.eventType === 'DR') ? 'weather' : 'infrastructure';
  ingestCorrelationMatrix(lat, lon, domain, severity);
  }
- // Note: intelligenceCache.earthquakes is only populated when the natural
- // events map layer is enabled. When that layer is disabled the array will
- // be empty, so the M≥6.5 earthquake trigger path is unavailable — the
- // GDACS Red/Orange alert path (first argument) still works normally.
- // The earthquake trigger remains reachable via loadNatural() when the
- // natural layer is active.
- void evaluateDisasterTrigger(
- events,
- this.ctx.intelligenceCache?.earthquakes ?? [],
- getStormPreparednessSummary(),
- );
  } catch (error) {
  console.warn('[gdacs-alerts] fetch failed', error);
  (this.ctx.panels['gdacs-alerts'] as GDACSAlertsPanel)?.update([]);
@@ -2711,11 +2679,6 @@ export class DataLoaderManager implements AppModule {
  winterWeatherOutlooks,
  marineHazards,
  });
- void evaluateDisasterTrigger(
- this.ctx.intelligenceCache.gdacsAlerts ?? [],
- this.ctx.intelligenceCache.earthquakes ?? [],
- getStormPreparednessSummary(),
- );
  } catch (error) {
  console.warn('[nws-alerts] fetch failed', error);
  (this.ctx.panels['nws-alerts'] as NWSAlertsPanel)?.update([]);
@@ -2792,7 +2755,6 @@ export class DataLoaderManager implements AppModule {
  }));
  addToSignalHistory(signals);
  situationEngine.observeSignals(signals);
- evaluateWarThreat(signals);
  }
   }
 
@@ -3055,7 +3017,6 @@ export class DataLoaderManager implements AppModule {
  const surgeSignals = surgeAlerts.map(surgeAlertToSignal);
  addToSignalHistory(surgeSignals);
  situationEngine.observeSignals(surgeSignals);
- evaluateWarThreat(surgeSignals);
  (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(surgeSignals);
  if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(surgeSignals);
  }
@@ -3064,7 +3025,6 @@ export class DataLoaderManager implements AppModule {
  const foreignSignals = foreignAlerts.map(foreignPresenceToSignal);
  addToSignalHistory(foreignSignals);
  situationEngine.observeSignals(foreignSignals);
- evaluateWarThreat(foreignSignals);
  (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(foreignSignals);
  if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(foreignSignals);
  }
@@ -3366,7 +3326,6 @@ export class DataLoaderManager implements AppModule {
  if (allSignals.length > 0) {
  addToSignalHistory(allSignals);
  situationEngine.observeSignals(allSignals);
- evaluateWarThreat(allSignals);
  (this.ctx.panels['alert-center'] as AlertCenterPanel)?.addSignals(allSignals);
  if (this.shouldShowIntelligenceNotifications()) this.ctx.signalModal?.show(allSignals);
  }
@@ -3678,11 +3637,6 @@ export class DataLoaderManager implements AppModule {
  buoyAlerts,
  reconFixes,
  });
- void evaluateDisasterTrigger(
- this.ctx.intelligenceCache.gdacsAlerts ?? [],
- this.ctx.intelligenceCache.earthquakes ?? [],
- getStormPreparednessSummary(),
- );
  } catch (error) {
  console.error('[App] Tropical cyclones fetch failed:', error);
  }

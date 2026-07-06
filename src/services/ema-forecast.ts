@@ -7,7 +7,7 @@
  *
  * Integration: called from data-loader after each conflict data refresh.
  * High-risk regions produce 'velocity_spike' correlation signals that feed
- * into evaluateWarThreat().
+ * the signal history, situation engine, and alert center.
  */
 
 export interface ForecastResult {

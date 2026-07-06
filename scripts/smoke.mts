@@ -18,12 +18,13 @@ import assert from 'node:assert/strict';
 
 import { runReplay } from '../src/services/ops/replay-harness.ts';
 import { buildCatalogReplayFixtures } from '../src/services/ops/replay-fixtures-catalog.ts';
+import { compareReplayReportToBaseline, type ReplayBaseline } from '../src/services/ops/replay-baseline.ts';
 import { detectBigEvent } from '../src/services/insights/big-event-detector.ts';
 import { routeBigEventToLadder, resetNotificationLadderState } from '../src/services/insights/notification-ladder.ts';
 import { createNotificationTraceRegistry } from '../src/services/diagnostics/notification-trace.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const BASELINE_PATH = path.join(root, 'scripts', 'smoke-replay-baseline.json');
+const BASELINE_PATH = path.join(root, 'src', 'services', 'ops', 'replay-baseline.json');
 const SIDECAR_URL = 'http://127.0.0.1:46123/api/health';
 
 interface HealthFeedSnapshot { key?: string; lastError?: string | null }
@@ -68,31 +69,15 @@ if (isMain) {
       addFail('smoke:replay', `Baseline file not found: ${BASELINE_PATH}`);
       process.stdout.write(`${RED}✗ (no baseline)${RESET}\n`);
     } else {
-      const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as {
-        fixtures: Record<string, string>;
-      };
+      const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as ReplayBaseline;
       const result = runReplay({ fixtures: buildCatalogReplayFixtures(), generatedAt: 0 });
-      const mismatches: string[] = [];
-      for (const r of result.results) {
-        const expected = baseline.fixtures[r.fixtureId];
-        if (expected === undefined) {
-          mismatches.push(`${r.fixtureId}: new fixture not in baseline (expected missing)`);
-        } else if (r.outcome !== expected) {
-          mismatches.push(`${r.fixtureId}: expected ${expected}, got ${r.outcome}`);
-        }
-      }
-      // Also flag baselines that no longer have a matching fixture
-      for (const id of Object.keys(baseline.fixtures)) {
-        if (!result.results.some(r => r.fixtureId === id)) {
-          mismatches.push(`${id}: in baseline but no matching fixture`);
-        }
-      }
-      if (mismatches.length > 0) {
-        addFail('smoke:replay', `${mismatches.length} baseline mismatch(es):\n    ${mismatches.join('\n    ')}\nUpdate scripts/smoke-replay-baseline.json to acknowledge intentional changes.`);
+      const { ok, mismatches, fixtureCount } = compareReplayReportToBaseline(result, baseline);
+      if (!ok) {
+        addFail('smoke:replay', `${mismatches.length} baseline mismatch(es):\n    ${mismatches.join('\n    ')}\nUpdate src/services/ops/replay-baseline.json to acknowledge intentional changes.`);
         process.stdout.write(`${RED}✗ (${mismatches.length} mismatch)${RESET}\n`);
       } else {
-        addOk('smoke:replay', `${result.results.length} fixture(s) match baseline`);
-        process.stdout.write(`${GREEN}✓ (${result.results.length} fixtures)${RESET}\n`);
+        addOk('smoke:replay', `${fixtureCount} fixture(s) match baseline`);
+        process.stdout.write(`${GREEN}✓ (${fixtureCount} fixtures)${RESET}\n`);
       }
     }
   } catch (err) {
@@ -240,18 +225,8 @@ export function compareReplayBaseline(): { ok: boolean; mismatches: string[] } {
   if (!existsSync(BASELINE_PATH)) {
     return { ok: false, mismatches: ['Baseline file not found'] };
   }
-  const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as {
-    fixtures: Record<string, string>;
-  };
+  const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as ReplayBaseline;
   const result = runReplay({ fixtures: buildCatalogReplayFixtures(), generatedAt: 0 });
-  const mismatches: string[] = [];
-  for (const r of result.results) {
-    const expected = baseline.fixtures[r.fixtureId];
-    if (expected === undefined) {
-      mismatches.push(`${r.fixtureId}: new fixture (add to baseline)`);
-    } else if (r.outcome !== expected) {
-      mismatches.push(`${r.fixtureId}: expected ${expected}, got ${r.outcome}`);
-    }
-  }
-  return { ok: mismatches.length === 0, mismatches };
+  const { ok, mismatches } = compareReplayReportToBaseline(result, baseline);
+  return { ok, mismatches };
 }

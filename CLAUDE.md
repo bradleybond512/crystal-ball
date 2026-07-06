@@ -358,10 +358,9 @@ Four basemaps (`dark | light | satellite | terrain`) selected by the `wm-basemap
 Mode is **manual only**. `AppMode` is `'ghost' | 'gods-vision'`; `null` is the
 default (no special mode) state. The former auto-triggered modes
 (peace/finance/war/disaster) have been removed — their behaviors are inlined
-into the default state. The old evaluators (`evaluateWarThreat`,
-`evaluateFinanceTrigger`, `evaluateDisasterTrigger`, etc.) remain as **no-ops**
-for call-site compatibility; data feeds still flow but no longer drive mode
-transitions.
+into the default state. The old no-op evaluators (`evaluateWarThreat`,
+`evaluateFinanceTrigger`, `evaluateDisasterTrigger`, etc.) have been deleted
+entirely; data feeds still flow but no longer drive mode transitions.
 
 | Mode | Trigger |
 |------|---------|

@@ -6,6 +6,27 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Surfacing Move 2 — cognition layer visibility**: forecast provenance,
+  calibration report, and booting the learning loops (PR #1339).
+- **Ask the data in Command Center**: the deterministic ask-the-data engine is
+  now user-reachable — question input, grounded answer packet, evidence rows,
+  and follow-up chips, fed by the live feature/panel/mission registries
+  (`insights/ask-context.ts`).
+- **Superforecast on demand in AnalystHUD**: "∑ Superforecast" runs the
+  superforecaster pipeline per hypothesis (budget-gated, hidden in Ghost Mode)
+  and shows probability, conformal interval, and estimate provenance; each run
+  pushes a live-vs-shadow pair so `cognition:shadow-report` gets real data.
+- **Replay baseline self-test probe**: the System Diagnostic Self-Test tab now
+  runs the missed-event replay catalog against the committed baseline — the
+  same guarantee CI's smoke tier 1 gives, now visible in-app.
+
+### Removed
+
+- **No-op mode evaluators**: deleted the six dead auto-trigger evaluator stubs
+  (`evaluateWarThreat`, `evaluateFinanceTrigger`, `evaluateCommodityTrigger`,
+  `evaluateDisasterTrigger`, `checkFinanceAutoTriggerTimeout`,
+  `reloadConflictBaselines`) and their 14 dead call sites in the data loader.
+
 - **Phase 4B — Epistemic intelligence wiring**: bias scan cadence, the epistemic
   calibration loop (outcome-graded, wired to boot), and the epistemic bridge
   connecting meta-confidence, counterfactuals, and the bias detector to the live

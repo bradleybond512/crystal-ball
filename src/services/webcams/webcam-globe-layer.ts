@@ -66,6 +66,26 @@ export class GlobeWebcamLayer {
     this.dataSource = new CustomDataSource('webcam-pins');
     await this.viewer.dataSources.add(this.dataSource);
 
+    // With all categories plotted this can be thousands of pins — cluster
+    // nearby ones into a counted bubble so the globe stays legible/performant.
+    // Zooming in declusters down to the individually-clickable pins.
+    const clustering = this.dataSource.clustering;
+    clustering.enabled = true;
+    clustering.pixelRange = 42;
+    clustering.minimumClusterSize = 4;
+    clustering.clusterEvent.addEventListener((clustered, cluster) => {
+      cluster.billboard.show = false;
+      cluster.point.show = true;
+      cluster.point.color = Color.fromCssColorString('#1f6feb');
+      cluster.point.outlineColor = Color.BLACK;
+      cluster.point.outlineWidth = 1;
+      cluster.point.pixelSize = Math.min(30, 14 + String(clustered.length).length * 5);
+      cluster.label.show = true;
+      cluster.label.text = String(clustered.length);
+      cluster.label.font = 'bold 12px sans-serif';
+      cluster.label.fillColor = Color.WHITE;
+    });
+
     this.clickHandler = new ScreenSpaceEventHandler(this.viewer.scene.canvas);
     this.clickHandler.setInputAction((event: { position: Cartesian2 }) => {
       const picked: unknown = this.viewer.scene.pick(event.position);

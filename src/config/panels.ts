@@ -23,7 +23,10 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'strategic-risk': { name: 'Strategic Risk Overview', enabled: true, priority: 1 },
   'strategic-posture': { name: 'AI Strategic Posture', enabled: true, priority: 1 },
   insights: { name: 'AI Insights', enabled: true, priority: 1 },
-  'maritime-intel': { name: 'Maritime Intel', enabled: true, priority: 1 },
+  // Out of the default layout: overlaps 'maritime-superpower' (Maritime
+  // Intelligence), which now hosts the freight-stress section. The component
+  // stays registered so saved user layouts and the Settings toggle keep working.
+  'maritime-intel': { name: 'Maritime Intel', enabled: false, priority: 1 },
   'maritime-superpower': { name: 'Maritime Intelligence', enabled: true, priority: 1 },
   'health-superpower': { name: 'Health Intelligence', enabled: true, priority: 1 },
   'personal-resilience': { name: 'Personal Resilience', enabled: true, priority: 1 },

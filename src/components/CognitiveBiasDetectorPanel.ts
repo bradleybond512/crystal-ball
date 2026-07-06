@@ -49,10 +49,17 @@ const ALL_BIAS_TYPES: readonly BiasType[] = [
   'anchoring', 'availability', 'confirmation', 'recency', 'overconfidence', 'groupthink',
 ];
 
+/** Count badges cap at "99+" so a runaway ledger can't blow out the layout. */
+function formatBadgeCount(count: number): string {
+  return count > 99 ? '99+' : String(count);
+}
+
 export class CognitiveBiasDetectorPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private unsubscribe: (() => void) | null = null;
   private filterBiasType: BiasType | 'all' = 'all';
+  /** True while an Ack-all batch runs, so per-ack notifications don't re-render 1000×. */
+  private bulkAcking = false;
 
   constructor() {
     super({
@@ -65,7 +72,9 @@ export class CognitiveBiasDetectorPanel extends Panel {
     });
     this.render();
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
-    this.unsubscribe = getCognitiveBiasDetectorService().subscribe(() => this.render());
+    this.unsubscribe = getCognitiveBiasDetectorService().subscribe(() => {
+      if (!this.bulkAcking) this.render();
+    });
     this.attachHandlers();
   }
 
@@ -77,6 +86,13 @@ export class CognitiveBiasDetectorPanel extends Panel {
     this.unsubscribe?.();
     this.unsubscribe = null;
     super.destroy();
+  }
+
+  /** Panel-header badge caps at "99+" like every other count in this panel. */
+  public override setCount(count: number): void {
+    if (this.countEl) {
+      this.countEl.textContent = formatBadgeCount(count);
+    }
   }
 
   // ── Rendering ──────────────────────────────────────────────────────
@@ -107,14 +123,17 @@ export class CognitiveBiasDetectorPanel extends Panel {
 
   private renderSummary(report: BiasReport): string {
     const topLabel = report.topBiasType ? BIAS_LABEL[report.topBiasType] : '—';
-    return `<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:baseline;font-size:11px;color:var(--text-secondary,#aaa);">
+    const sep = '<span aria-hidden="true" style="opacity:0.45;">·</span>';
+    return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;font-size:11px;color:var(--text-secondary,#aaa);">
       <span><strong style="color:var(--text-primary,#fff);font-size:14px;">${report.totalDetections}</strong> total</span>
+      ${sep}
       <span><strong style="color:var(--severity-high,#f87171);font-size:14px;">${report.unacknowledgedCount}</strong> unack</span>
+      ${sep}
       <span>top: <strong style="color:var(--text-primary,#fff);">${escapeHtml(topLabel)}</strong></span>
       <span style="margin-left:auto;display:flex;gap:8px;">
-        <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${SEVERITY_COLOR.high};margin-right:4px;"></span>${report.bySeverity.high}</span>
-        <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${SEVERITY_COLOR.medium};margin-right:4px;"></span>${report.bySeverity.medium}</span>
-        <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${SEVERITY_COLOR.low};margin-right:4px;"></span>${report.bySeverity.low}</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${SEVERITY_COLOR.high};margin-right:4px;"></span>${formatBadgeCount(report.bySeverity.high)}</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${SEVERITY_COLOR.medium};margin-right:4px;"></span>${formatBadgeCount(report.bySeverity.medium)}</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${SEVERITY_COLOR.low};margin-right:4px;"></span>${formatBadgeCount(report.bySeverity.low)}</span>
       </span>
     </div>`;
   }
@@ -130,7 +149,7 @@ export class CognitiveBiasDetectorPanel extends Panel {
         <div style="flex:1;height:10px;background:rgba(255,255,255,0.04);border-radius:2px;overflow:hidden;">
           <div style="width:${pct.toFixed(1)}%;height:100%;background:${color};"></div>
         </div>
-        <span style="width:24px;text-align:right;color:var(--text-primary,#fff);font-weight:600;">${count}</span>
+        <span style="width:30px;text-align:right;color:var(--text-primary,#fff);font-weight:600;" title="${count}">${formatBadgeCount(count)}</span>
       </div>`;
     }).join('');
     return `<div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--border-subtle,#333);padding-top:10px;">${rows}</div>`;
@@ -138,12 +157,24 @@ export class CognitiveBiasDetectorPanel extends Panel {
 
   private renderFilterBar(report: BiasReport): string {
     const chips = [
-      { value: 'all' as const, label: `All (${report.totalDetections})` },
-      ...ALL_BIAS_TYPES.map((t) => ({ value: t, label: `${BIAS_LABEL[t]} (${report.byType[t]})` })),
+      { value: 'all' as const, label: `All (${formatBadgeCount(report.totalDetections)})` },
+      ...ALL_BIAS_TYPES.map((t) => ({ value: t, label: `${BIAS_LABEL[t]} (${formatBadgeCount(report.byType[t])})` })),
     ];
-    return `<div style="display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border-subtle,#333);padding-top:10px;">
+    return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--border-subtle,#333);padding-top:10px;">
       ${chips.map((c) => this.renderFilterChip(c.value, c.label)).join('')}
+      ${this.renderAckAllButton()}
     </div>`;
+  }
+
+  private renderAckAllButton(): string {
+    const svc = getCognitiveBiasDetectorService();
+    const filter = this.filterBiasType === 'all'
+      ? { acknowledged: false as const }
+      : { biasType: this.filterBiasType, acknowledged: false as const };
+    const pendingCount = svc.getDetections(filter).length;
+    if (pendingCount === 0) return '';
+    const scope = this.filterBiasType === 'all' ? 'all' : BIAS_LABEL[this.filterBiasType];
+    return `<button class="bias-ack-all" title="Acknowledge every unacknowledged ${escapeHtml(scope)} detection" style="margin-left:auto;padding:3px 8px;font-size:10px;border:1px solid var(--border-subtle,#333);background:rgba(34,197,94,0.10);color:#22c55e;border-radius:3px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">Ack all (${formatBadgeCount(pendingCount)})</button>`;
   }
 
   private renderFilterChip(value: BiasType | 'all', label: string): string {
@@ -201,6 +232,12 @@ export class CognitiveBiasDetectorPanel extends Panel {
       }
       return;
     }
+    const ackAllBtn = target.closest<HTMLElement>('.bias-ack-all');
+    if (ackAllBtn) {
+      event.stopPropagation();
+      this.acknowledgeAllFiltered();
+      return;
+    }
     const filterBtn = target.closest<HTMLElement>('.bias-filter');
     if (filterBtn) {
       event.stopPropagation();
@@ -210,5 +247,23 @@ export class CognitiveBiasDetectorPanel extends Panel {
         this.render();
       }
     }
+  }
+
+  /** Acknowledge every unacknowledged detection in the current filter, batched into one re-render. */
+  private acknowledgeAllFiltered(): void {
+    const svc = getCognitiveBiasDetectorService();
+    const filter = this.filterBiasType === 'all'
+      ? { acknowledged: false as const }
+      : { biasType: this.filterBiasType, acknowledged: false as const };
+    const pending = svc.getDetections(filter);
+    this.bulkAcking = true;
+    try {
+      for (const detection of pending) {
+        svc.acknowledge(detection.id);
+      }
+    } finally {
+      this.bulkAcking = false;
+    }
+    this.render();
   }
 }

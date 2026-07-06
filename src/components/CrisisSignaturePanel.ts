@@ -6,6 +6,7 @@
 
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
+import { renderPanelEmpty } from './ui/PanelStates';
 import {
   getCrisisSignatureLibrary,
   type CrisisSignature,
@@ -97,7 +98,10 @@ export class CrisisSignaturePanel extends Panel {
 
   private renderMatches(matches: readonly SignatureMatch[]): string {
     if (matches.length === 0) {
-      return '<div style="font-size:11px;color:var(--text-secondary,#aaa);">No active matches. Call <code>matchObservations()</code> with a recent observation cluster to populate this view.</div>';
+      return renderPanelEmpty({
+        message: 'No active signature matches',
+        hint: 'Matches appear when recent observations resemble a known crisis pattern',
+      });
     }
     const rows = matches.map((m) => this.renderMatchRow(m)).join('');
     return `<div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>`;

@@ -1,11 +1,16 @@
 # cargo-audit configuration — read by `cargo audit` in CI
 # (.github/workflows/security-audit.yml).
 #
-# All ignores below are *unmaintained / unsound advisories* against
-# transitive deps pulled in by Tauri 2.x + wry on Linux (GTK3 stack).
-# No vulnerabilities (i.e. exploitable RCE / data-disclosure) are
-# ignored — only RustSec advisories whose `informational` kind is
-# `unmaintained` or `unsound`.
+# Most ignores below are *unmaintained / unsound advisories* against
+# transitive deps pulled in by Tauri 2.x + wry on Linux (GTK3 stack) —
+# RustSec advisories whose `informational` kind is `unmaintained` or
+# `unsound`, i.e. no exploitable RCE / data-disclosure.
+#
+# EXCEPTION: the quick-xml pair at the end of the list (RUSTSEC-2026-0194
+# / -0195) are actual DoS *vulnerabilities*, accepted temporarily by an
+# explicit owner decision on 2026-07-05 because the fix is not selectable
+# without a Tauri upgrade and the code path is not adversary-reachable
+# here. See the inline justification + review cadence at that entry.
 #
 # The fixes for every entry below land at the Tauri/wry layer when
 # upstream migrates to gtk4 / replaces the GTK3 bindings. Holding
@@ -41,4 +46,22 @@ ignore = [
     "RUSTSEC-2025-0098",  # unic-ucd-version unmaintained
     "RUSTSEC-2025-0100",  # unic-ucd-ident unmaintained
     "RUSTSEC-2026-0097",  # rand 0.7.3 unsound — phf-codegen → selectors → kuchikiki (build-time only)
+
+    # ── quick-xml DoS — TEMPORARY EXCEPTION (owner-approved 2026-07-05) ──
+    # Unlike everything above, these are actual vulnerabilities (DoS), so they
+    # fall outside this file's default "no vulnerabilities ignored" policy.
+    # Justification for the exception:
+    #  - Hard-pinned transitive dep, not directly upgradable: quick-xml 0.39.2
+    #    comes via wayland-scanner (Linux wl-clipboard/GTK stack under wry) and
+    #    0.38.4 via plist (tauri bundler / macOS). Both parents cap at ^0.39 /
+    #    ^0.38, so the fixed 0.41.0 cannot be selected without upgrading Tauri +
+    #    tauri-plugin-clipboard-manager.
+    #  - Not adversary-reachable here: quick-xml only parses TRUSTED build/
+    #    bundle-time XML — Wayland protocol definition files and macOS Info.plist
+    #    bundles — never attacker-controlled runtime input, so the quadratic /
+    #    unbounded-allocation DoS cannot be triggered by an external actor.
+    #  - Review cadence: drop these on the next Tauri minor bump once quick-xml
+    #    ≥0.41 is resolvable; prefer that real fix over this ignore.
+    "RUSTSEC-2026-0194",  # quick-xml quadratic duplicate-attribute-name scan (DoS)
+    "RUSTSEC-2026-0195",  # quick-xml unbounded NsReader namespace-decl allocation (DoS)
 ]

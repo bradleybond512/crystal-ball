@@ -174,14 +174,14 @@ export class CognitiveBiasDetectorPanel extends Panel {
     const pendingCount = svc.getDetections(filter).length;
     if (pendingCount === 0) return '';
     const scope = this.filterBiasType === 'all' ? 'all' : BIAS_LABEL[this.filterBiasType];
-    return `<button class="bias-ack-all" title="Acknowledge every unacknowledged ${escapeHtml(scope)} detection" style="margin-left:auto;padding:3px 8px;font-size:10px;border:1px solid var(--border-subtle,#333);background:var(--sev-low-bg,rgba(34,197,94,0.10));color:var(--sev-low,#22c55e);border-radius:3px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">Ack all (${formatBadgeCount(pendingCount)})</button>`;
+    return `<button class="bias-ack-all" title="Acknowledge every unacknowledged ${escapeHtml(scope)} detection" style="margin-left:auto;padding:3px 8px;font-size:11px;border:1px solid var(--border-subtle,#333);background:var(--sev-low-bg,rgba(34,197,94,0.10));color:var(--sev-low,#22c55e);border-radius:3px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">Ack all (${formatBadgeCount(pendingCount)})</button>`;
   }
 
   private renderFilterChip(value: BiasType | 'all', label: string): string {
     const active = this.filterBiasType === value;
-    const bg = active ? 'var(--accent,#4a9eff)' : 'rgba(255,255,255,0.04)';
+    const bg = active ? 'var(--mac-accent,#4a9eff)' : 'rgba(255,255,255,0.04)';
     const fg = active ? '#fff' : 'var(--text-secondary,#aaa)';
-    return `<button class="bias-filter" data-value="${escapeHtml(value)}" style="padding:3px 8px;font-size:10px;border:1px solid var(--border-subtle,#333);background:${bg};color:${fg};border-radius:3px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escapeHtml(label)}</button>`;
+    return `<button class="bias-filter" data-value="${escapeHtml(value)}" style="padding:3px 8px;font-size:11px;border:1px solid var(--border-subtle,#333);background:${bg};color:${fg};border-radius:3px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escapeHtml(label)}</button>`;
   }
 
   private renderDetectionList(detections: readonly BiasDetection[]): string {

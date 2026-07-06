@@ -687,6 +687,7 @@ export class PanelLayoutManager implements AppModule {
   private criticalBannerEl: HTMLElement | null = null;
   private dcStrip: DataCenterPinnedStrip | null = null;
   private unsubDcPlaces: (() => void) | null = null;
+  private safetyCaseUnsub: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
   private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
@@ -757,6 +758,8 @@ export class PanelLayoutManager implements AppModule {
  document.removeEventListener('wm:update-state', this._onUpdateState);
  this.panelDragCleanupHandlers.forEach((cleanup) => cleanup());
  this.panelDragCleanupHandlers = [];
+ this.safetyCaseUnsub?.();
+ this.safetyCaseUnsub = null;
  if (this.criticalBannerEl) {
  this.criticalBannerEl.remove();
  this.criticalBannerEl = null;
@@ -986,7 +989,7 @@ export class PanelLayoutManager implements AppModule {
  // Safety-case re-evaluations should update the chip immediately rather
  // than waiting for the next 30 s EEW poll.
  try {
- getSafetyCaseService().subscribe(() => eewStatusBar.refreshCompositeStatus());
+ this.safetyCaseUnsub = getSafetyCaseService().subscribe(() => eewStatusBar.refreshCompositeStatus());
  } catch { /* diagnostics optional */ }
  startSpaceWeatherStatusBarPoller(eewStatusBar);
 
@@ -2517,10 +2520,22 @@ export class PanelLayoutManager implements AppModule {
     opts: { behavior?: ScrollBehavior; flash?: boolean; toastOnFail?: boolean } = {},
   ): Promise<boolean> {
  const { behavior = 'smooth', flash = true, toastOnFail = true } = opts;
- let panel = this.ctx.panels[key] ?? null;
- if (!panel) panel = await this.mountLazyPanel(key);
- const el = panel?.getElement() ?? null;
  const panelName = DEFAULT_PANELS[key]?.name ?? key;
+ let panel = this.ctx.panels[key] ?? null;
+ if (!panel) {
+ // Don't construct a disabled panel just to navigate to it — constructing it
+ // starts its background work (e.g. retired maritime-intel's 60s poll loop),
+ // which would resurrect the very double-fetch this retirement removed.
+ // Already-constructed panels fall through and scroll/toast as before.
+ if (!(this.ctx.panelSettings[key]?.enabled ?? true)) {
+ if (toastOnFail) {
+ showToast({ title: `${panelName} is turned off`, message: 'Enable it in Settings → Panels to view it.', severity: 'normal' });
+ }
+ return false;
+ }
+ panel = await this.mountLazyPanel(key);
+ }
+ const el = panel?.getElement() ?? null;
 
  if (el) {
  if (!el.isConnected) {

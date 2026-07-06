@@ -305,7 +305,10 @@ export class AnalystHUD {
     const first = focusables[0]!;
     const last = focusables[focusables.length - 1]!;
     const active = document.activeElement as HTMLElement | null;
-    const inside = active !== null && this.root.contains(active);
+    // Treat focus on the dialog root itself (show() parks focus there) as
+    // "not inside a control", so the first Tab / Shift+Tab wraps to first/last
+    // instead of escaping behind the modal.
+    const inside = active !== null && active !== this.root && this.root.contains(active);
     if (e.shiftKey) {
       if (!inside || active === first) { last.focus(); e.preventDefault(); }
     } else if (!inside || active === last) {

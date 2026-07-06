@@ -166,6 +166,10 @@ export class App {
  const FULL_PANEL_VISIBILITY_MIGRATION_KEY = 'crystalball-full-panels-visible-v2.7.6';
  if (currentVariant === 'full' && !localStorage.getItem(FULL_PANEL_VISIBILITY_MIGRATION_KEY)) {
  for (const [key, config] of Object.entries(DEFAULT_PANELS)) {
+ // Panels that default to disabled (e.g. 'maritime-intel', superseded by
+ // 'maritime-superpower') must not be force-enabled; a user's saved
+ // enabled state for them is preserved as-is.
+ if (!config.enabled) continue;
  if (panelSettings[key]) {
  panelSettings[key].name = config.name;
  panelSettings[key].priority = config.priority;

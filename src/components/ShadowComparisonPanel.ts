@@ -11,6 +11,7 @@
 
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
+import { renderPanelEmpty } from './ui/PanelStates';
 import {
   getShadowModeAlgorithmService,
   type ShadowComparison,
@@ -116,7 +117,10 @@ export class ShadowComparisonPanel extends Panel {
 
   private renderRuns(runs: readonly ShadowRunConfig[]): string {
     if (runs.length === 0) {
-      return '<div style="font-size:11px;color:var(--text-secondary,#aaa);">No shadow runs registered. Call <code>register()</code> to start an A/B comparison.</div>';
+      return renderPanelEmpty({
+        message: 'No shadow runs yet',
+        hint: 'Enable a shadow algorithm to start an A/B comparison',
+      });
     }
     const svc = getShadowModeAlgorithmService();
     const rows = runs.map((r) => {

@@ -460,7 +460,6 @@ import { MaritimePiracyPanel } from '@/components/MaritimePiracyPanel';
 import { TechCompetitionPanel } from '@/components/TechCompetitionPanel';
 import { ShortageDetailPanel } from '@/components/ShortageDetailPanel';
 import { WeatherHazardPanel } from '@/components/WeatherHazardPanel';
-import { MaritimeIntelPanel } from '@/components/MaritimeIntelPanel';
 import { MaritimeSuperpowerPanel } from '@/components/MaritimeSuperpowerPanel';
 import { HealthSuperpowerPanel } from '@/components/HealthSuperpowerPanel';
 
@@ -1552,6 +1551,14 @@ export class PanelLayoutManager implements AppModule {
  // dynamic import, and mountLazyPanel inserts them at their canonical grid
  // position once resolved (fixing the prior orphaned-off-DOM bug).
  this.registerOsintPanels();
+ // 'maritime-intel' is retired (superseded by 'maritime-superpower', which now
+ // owns the freight-stress section). Register it lazily like the OSINT panels
+ // so it is never constructed while it ships disabled: a constructed
+ // MaritimeIntelPanel starts a 60s poll loop (dark-vessels, freight-stress,
+ // acled, ais) with no visibility guard, which otherwise ran invisibly forever
+ // and double-fetched /api/freight-stress. Enabling it in settings mounts it on
+ // demand at its canonical grid slot via mountLazyPanel.
+ this.lazyFactories.set('maritime-intel', () => import('@/components/MaritimeIntelPanel').then((m) => new m.MaritimeIntelPanel()));
  for (const id of this.lazyFactories.keys()) {
  if (this.ctx.panelSettings[id]?.enabled ?? true) void this.mountLazyPanel(id);
  }
@@ -1924,7 +1931,6 @@ export class PanelLayoutManager implements AppModule {
  );
  });
  this.ctx.panels['weather-hazard'] = new WeatherHazardPanel();
- this.ctx.panels['maritime-intel'] = new MaritimeIntelPanel();
  this.ctx.panels['maritime-superpower'] = new MaritimeSuperpowerPanel();
  this.ctx.panels['health-superpower'] = new HealthSuperpowerPanel();
 

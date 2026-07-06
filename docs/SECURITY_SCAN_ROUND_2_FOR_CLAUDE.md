@@ -1,6 +1,22 @@
 # Security Scan Round 2 For Claude
 
-Checked: April 28, 2026.
+Checked: April 28, 2026. **Reconciled against the codebase: July 4, 2026** —
+most findings below have since been fixed; per-finding status:
+
+| Finding | Status (2026-07-04) |
+|---------|---------------------|
+| R2-SEC-001 Rust audit tooling | ✅ cargo-audit + ✅ cargo-deny (sources/bans, `src-tauri/deny.toml`) in `security-audit.yml`. License allowlist enforcement still deferred. |
+| R2-SEC-002 Semgrep SAST | ✅ `.github/workflows/sast.yml` (`p/typescript` + `p/secrets`, SHA-pinned action) |
+| R2-SEC-003 auto-PR `contents: write` | ✅ top-level `contents: read`; single job re-elevates with documented justification (`enablePullRequestAutoMerge` requirement) |
+| R2-SEC-004 cleanup workflow writes | 🟢 Accepted — `deleteRef`/PR-close genuinely need write; mitigated by dry-run default, deletion allowlist, merged-only + open-PR guards, audit log |
+| R2-SEC-005 sebuf wildcard CORS fallback | ✅ fail-closed 403 (`api/[domain]/v1/[rpc].ts`) |
+| R2-SEC-006 relay trusts any `.vercel.app` | ✅ owner-anchored preview patterns behind `ALLOW_VERCEL_PREVIEW_ORIGINS` (`scripts/ais-relay.cjs`) |
+| R2-SEC-007 unauthenticated relay bypass | ✅ flag removed entirely; relay hard-exits without `RELAY_SHARED_SECRET`; timing-safe compare |
+| R2-SEC-008 AppImage disables WebKit sandbox | ✅ loud stderr warning on disable + `CRYSTALBALL_KEEP_WEBKIT_SANDBOX=1` opt-out (`src-tauri/src/main.rs`). AppImage-level isolation rationale documented inline |
+| R2-SEC-009 DMG mounted before verification | ✅ SHA-256 verified before write/mount; URL host allowlist; post-mount codesign verify |
+| R2-SEC-010 version endpoint wildcard CORS | 🟢 Accepted exception — `PUBLIC_WILDCARD_CORS` annotation documented in `api/version.js`, now ENFORCED by `api/__tests__/wildcard-cors-policy.test.mjs` (unannotated wildcard = CI failure) |
+| R2-SEC-011 scripted downloads need hash checks | ✅ `scripts/download-node.sh` verifies SHASUMS256 fail-closed; updater hash mandatory |
+| R2-SEC-012 placeholder API tests | 🔴 Open — scaffolds under `api/__tests__/` still need real assertions |
 
 This is an additional security scan pass after
 `docs/SECURITY_SCAN_FINDINGS_FOR_CLAUDE.md`. Treat this as additive, not a

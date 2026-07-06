@@ -120,6 +120,27 @@ test('buildFeedsFromConfig: .m3u8 streamUrl → streamType hls', () => {
   assert.equal(f.streamType, 'hls');
 });
 
+test('buildFeedsFromConfig: tokenised .m3u8?query streamUrl → streamType hls', () => {
+  const payload = {
+    data: [
+      {
+        cctv: {
+          index: '9',
+          location: { locationName: 'Tokenised HLS', latitude: '34.0', longitude: '-118.0' },
+          imageData: {
+            streamingVideoURL: 'https://cdn.example.com/live/stream.m3u8?token=abc123&exp=999',
+            static: { currentImageURL: 'https://example.com/img.jpg' },
+          },
+        },
+      },
+    ],
+  };
+  const feeds = buildFeedsFromConfig(BASIC_CONFIG, [payload]);
+  const [f] = feeds;
+  assert.ok(f);
+  assert.equal(f.streamType, 'hls');
+});
+
 test('buildFeedsFromConfig: no streamUrl → streamType snapshot', () => {
   const payload = {
     data: [

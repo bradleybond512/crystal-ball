@@ -554,8 +554,11 @@ function _wcResolveGetter(getter, row) {
 }
 
 function _wcInferStreamType(url) {
-  if (url.endsWith('.m3u8')) return 'hls';
-  if (url.includes('multipart')) return 'mjpeg';
+  // Strip query/hash so tokenised stream URLs (…/stream.m3u8?token=…) still
+  // classify by their real extension instead of falling back to snapshot.
+  const path = url.split(/[?#]/, 1)[0] ?? url;
+  if (path.endsWith('.m3u8')) return 'hls';
+  if (url.includes('multipart') || path.endsWith('.mjpg') || path.endsWith('.mjpeg')) return 'mjpeg';
   return 'snapshot';
 }
 

@@ -1,4 +1,5 @@
 import {
+  BoundingSphere,
   Cartesian2,
   Cartesian3,
   Color,
@@ -7,11 +8,13 @@ import {
   DistanceDisplayCondition,
   Entity,
   HeightReference,
+  JulianDate,
   NearFarScalar,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   type Viewer,
 } from 'cesium';
+import { escapeHtml } from '@/utils/sanitize';
 import type { WebcamFeed } from './webcam-types';
 import { resolveFrameUrl, needsFrameResolve } from './frame-resolver';
 
@@ -91,6 +94,12 @@ export class GlobeWebcamLayer {
       const picked: unknown = this.viewer.scene.pick(event.position);
       if (!picked || typeof picked !== 'object') return;
       const entityId = (picked as { id?: unknown }).id;
+      // A clustered pin picks as an array of its entities — zoom in to expand it
+      // instead of dead-clicking, so the individual cams become reachable.
+      if (Array.isArray(entityId)) {
+        this.zoomToCluster(entityId);
+        return;
+      }
       if (entityId instanceof Entity && typeof entityId.id === 'string') {
         const feed = this.feedById.get(entityId.id);
         if (feed) this.dispatchSelect(feed);
@@ -171,13 +180,30 @@ export class GlobeWebcamLayer {
     // would render as a broken image (it returns JSON, not bytes). FAA feeds get
     // their real image swapped in asynchronously after resolveFrameUrl().
     const imgTag = imageUrl && !needsFrameResolve(imageUrl)
-      ? `<img src="${imageUrl}" style="max-width:200px;margin-top:4px;border-radius:3px;"/>`
+      ? `<img src="${escapeHtml(imageUrl)}" style="max-width:200px;margin-top:4px;border-radius:3px;"/>`
       : '';
     return `<div style="font-family:sans-serif;padding:6px;">
-      <strong>${feed.name}</strong><br/>
-      <small>${feed.source} · ${feed.category}</small><br/>
+      <strong>${escapeHtml(feed.name)}</strong><br/>
+      <small>${escapeHtml(feed.source)} · ${escapeHtml(feed.category)}</small><br/>
       ${imgTag}
     </div>`;
+  }
+
+  /** Fly the camera to frame a clicked cluster so it declusters into its
+   *  individually-clickable pins. */
+  private zoomToCluster(entities: readonly unknown[]): void {
+    const now = JulianDate.now();
+    const positions: Cartesian3[] = [];
+    for (const e of entities) {
+      if (e instanceof Entity && e.position) {
+        const p = e.position.getValue(now);
+        if (p) positions.push(p);
+      }
+    }
+    if (positions.length === 0) return;
+    this.viewer.camera.flyToBoundingSphere(BoundingSphere.fromPoints(positions), {
+      duration: 0.8,
+    });
   }
 
   private dispatchSelect(feed: WebcamFeed): void {

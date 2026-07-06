@@ -9,6 +9,7 @@
  */
 
 import { getSourceHealth, type SourceHealth } from '@/services/source-health';
+import { formatDurationMinutes } from '@/utils/format-duration';
 import { getWatchlist, saveWatchlist, type WatchlistEntry } from '@/services/watchlist';
 import { getForecastAccuracy } from '@/services/forecast-accuracy';
 import { getSourceTrust } from '@/services/source-trust';
@@ -497,9 +498,9 @@ export class StatusOverlay {
       row.className = `status-reliability-row${p.overdue ? ' status-overdue' : ''}`;
       const name = document.createElement('span'); name.className = 'status-rel-name'; name.textContent = p.source;
       const interval = document.createElement('span'); interval.className = 'status-rel-acc';
-      interval.textContent = `~${p.meanIntervalMin}m`;
+      interval.textContent = `~${formatDurationMinutes(p.meanIntervalMin)}`;
       const last = document.createElement('span'); last.className = 'status-rel-ct';
-      last.textContent = `${p.lastSeenAgoMin}m ago`;
+      last.textContent = `${formatDurationMinutes(p.lastSeenAgoMin)} ago`;
       const badge = document.createElement('span');
       badge.className = p.overdue ? 'status-rel-down' : 'status-rel-up';
       badge.textContent = p.overdue ? 'OVERDUE' : 'OK';

@@ -18745,6 +18745,19 @@ body.has-breaking-alert .panels-grid {
   100% { box-shadow: inset 0 0 0 1px transparent; background-color: transparent; }
 }
 
+/* ── Navigation flash — pulses the target panel border twice after a
+      sidebar/strip navigation so the landing spot is unmistakable ──── */
+.panel-nav-flash {
+  animation: panel-nav-flash 0.7s ease-out 2;
+}
+@keyframes panel-nav-flash {
+  0% { box-shadow: 0 0 0 2px var(--accent-blue, #0a84ff), 0 0 14px rgba(10, 132, 255, 0.35); }
+  100% { box-shadow: 0 0 0 2px transparent, 0 0 14px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-nav-flash { animation: none; }
+}
+
 /* ── LLM narrative line ────────────────────────────────────────────── */
 .panel-narrative {
   padding: 6px 12px 8px;

@@ -12,6 +12,7 @@ import type { ForecastSnapshot } from '../mode-forecast.ts';
 import type { PostureThreat } from './survival-types.ts';
 import { severityToThreatLevel } from './survival-types.ts';
 import type { PostureContributor } from './posture-contributor.ts';
+import { formatDurationMinutes } from '../../utils/format-duration.ts';
 
 export function makeFinancialContributor(snapshot: ForecastSnapshot): PostureContributor {
   return {
@@ -29,7 +30,7 @@ export function makeFinancialContributor(snapshot: ForecastSnapshot): PostureCon
         hazardKind: 'other',
         hazardLabel: 'Financial pressure elevated',
         timeToImpactMins: adv.etaMin,
-        arrivalLabel: adv.etaMin === null ? null : `~${adv.etaMin}m to threshold`,
+        arrivalLabel: adv.etaMin === null ? null : `~${formatDurationMinutes(adv.etaMin)} to threshold`,
         why: adv.statement,
         confidenceLabel: adv.pressure >= 0.75 ? 'high' : 'medium',
       }];

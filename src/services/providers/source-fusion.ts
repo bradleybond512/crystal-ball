@@ -145,7 +145,7 @@ function agrees(a: number | string, b: number | string, tolerance: number): bool
 }
 
 function labelFor(m: number): FusionLabel {
-  if (m < 0.2) return 'very_low';
+  if (!Number.isFinite(m) || m < 0.2) return 'very_low';
   if (m < 0.4) return 'low';
   if (m < 0.6) return 'moderate';
   if (m < 0.8) return 'high';
@@ -157,5 +157,9 @@ function mean(xs: readonly number[]): number {
 }
 
 function clamp01(x: number): number {
+  // NaN/Infinity (e.g. a NaN observedAt propagating through freshness) must
+  // fail safe to 0, not slip past the `<` comparisons in labelFor and display
+  // as maximum trust.
+  if (!Number.isFinite(x)) return 0;
   return Math.min(1, Math.max(0, x));
 }

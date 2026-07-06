@@ -33,6 +33,8 @@ import { getTotalErrorCount, subscribeDebug } from '@/services/reasoning-debug';
 import { isLlmEgressDisclosed, setLlmEgressDisclosed, isLocalModelOnly, setLocalModelOnly, subscribeLlmEgressChange } from '@/services/ai-flow-settings';
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
+import { runSuperforecast, getCachedSuperforecast, subscribeSuperforecast } from '@/services/cognition/superforecast-runner';
+import { formatSuperForecast } from './format-superforecast';
 import { forecastAll, type HypothesisForecast } from '@/services/intelligence/hypothesis-forecast';
 import { buildForecastProvenanceLines } from './forecast-provenance-view';
 import { getLatestPCI } from '@/services/intelligence/predictive-crisis-index';
@@ -71,6 +73,12 @@ function ensembleButtonLabel(loading: boolean, cached: boolean, expanded: boolea
   return expanded ? 'hide ▾' : 'perspectives ▾';
 }
 
+function superforecastButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {
+  if (loading) return 'forecasting…';
+  if (!cached) return 'deep forecast ▸';
+  return expanded ? 'hide ▾' : 'deep forecast ▾';
+}
+
 function shouldIgnoreKey(e: KeyboardEvent): boolean {
   const target = e.target as HTMLElement | null;
   if (!target) return false;
@@ -92,6 +100,8 @@ export class AnalystHUD {
   private expandedProjection = new Set<string>();
   private loadingEnsemble = new Set<string>();
   private expandedEnsemble = new Set<string>();
+  private loadingSuperforecast = new Set<string>();
+  private expandedSuperforecast = new Set<string>();
   private exportedFlash: { id: string; at: number } | null = null;
   private outcomeSubmitted = new Set<string>();
   // Anchor the replay position to a SNAPSHOT TIMESTAMP, not an index.
@@ -182,6 +192,7 @@ export class AnalystHUD {
       if (this.replayAtTimestamp === null) this.scheduleRender();
     });
     const unsubEnsemble = subscribeEnsemble(() => { this.scheduleRender(); });
+    const unsubSuperforecast = subscribeSuperforecast(() => { this.scheduleRender(); });
     const unsubLlmEgressChange = subscribeLlmEgressChange(() => { this.scheduleRender(); });
     document.addEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure);
     document.addEventListener('cb:toggle-analyst-hud', this.onToggle);
@@ -202,6 +213,7 @@ export class AnalystHUD {
       unsubDebug,
       unsubSnapshotArchive,
       unsubEnsemble,
+      unsubSuperforecast,
       unsubLlmEgressChange,
       () => document.removeEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure),
       () => document.removeEventListener('cb:toggle-analyst-hud', this.onToggle),
@@ -665,6 +677,7 @@ export class AnalystHUD {
       this.buildHypAlternatives(h),
       this.buildHypProjection(h),
       this.buildHypEnsemble(h),
+      this.buildHypSuperforecast(h),
       this.buildHypActions(h),
     );
     return row;
@@ -690,6 +703,20 @@ export class AnalystHUD {
       const label = document.createElement('strong');
       label.textContent = `${take.persona}: `;
       line.append(label, document.createTextNode(take.text));
+      wrap.append(line);
+    }
+    return wrap;
+  }
+
+  private buildHypSuperforecast(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-superforecast';
+    const cached = getCachedSuperforecast(h);
+    if (!cached || !this.expandedSuperforecast.has(h.id)) return wrap;
+    for (const text of formatSuperForecast(cached)) {
+      const line = document.createElement('p');
+      line.className = 'analyst-hud-superforecast-line';
+      line.textContent = text;
       wrap.append(line);
     }
     return wrap;
@@ -1006,10 +1033,11 @@ export class AnalystHUD {
 
     const simulate = this.buildSimulateButton(h);
     const perspectives = this.buildEnsembleButton(h);
+    const deepForecast = this.buildSuperforecastButton(h);
     const copy = this.buildCopyButton(h);
 
     const outcomeButtons = this.buildOutcomeButtons(h);
-    actions.append(up, down, ...outcomeButtons, simulate, perspectives, copy);
+    actions.append(up, down, ...outcomeButtons, simulate, perspectives, deepForecast, copy);
     return actions;
   }
 
@@ -1067,6 +1095,35 @@ export class AnalystHUD {
       void runEnsemble(h).finally(() => {
         this.loadingEnsemble.delete(h.id);
         this.expandedEnsemble.add(h.id);
+        this.render();
+      });
+    });
+    return btn;
+  }
+
+  private buildSuperforecastButton(h: Hypothesis): HTMLElement {
+    const btn = document.createElement('button');
+    btn.className = 'analyst-hud-superforecast-btn';
+    const cached = getCachedSuperforecast(h);
+    const loading = this.loadingSuperforecast.has(h.id);
+    const expanded = this.expandedSuperforecast.has(h.id);
+    btn.textContent = superforecastButtonLabel(loading, Boolean(cached), expanded);
+    btn.title = cached
+      ? 'Toggle the stored deep forecast'
+      : 'Run the calibrated superforecaster pipeline on this hypothesis';
+    btn.disabled = loading;
+    btn.addEventListener('click', () => {
+      if (cached) {
+        if (expanded) this.expandedSuperforecast.delete(h.id);
+        else this.expandedSuperforecast.add(h.id);
+        this.render();
+        return;
+      }
+      this.loadingSuperforecast.add(h.id);
+      this.render();
+      void runSuperforecast(h).finally(() => {
+        this.loadingSuperforecast.delete(h.id);
+        this.expandedSuperforecast.add(h.id);
         this.render();
       });
     });

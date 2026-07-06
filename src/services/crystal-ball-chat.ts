@@ -73,6 +73,15 @@ export function clearHistory(): void {
   saveHistory();
 }
 
+/** Persist a complete question/answer exchange (both roles) to history, so
+ *  deterministic (non-LLM) answers survive reload and stay in the transcript
+ *  the LLM path reads for continuity. Mirrors what sendMessage() records. */
+export function recordExchange(userText: string, assistantText: string): void {
+  addToHistory('user', userText);
+  addToHistory('assistant', assistantText);
+  saveHistory();
+}
+
 // ── Context builder ──────────────────────────────────────────────────────────
 
 function buildSituationContext(): string {

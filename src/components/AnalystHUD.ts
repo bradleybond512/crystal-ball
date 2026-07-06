@@ -30,7 +30,7 @@ import { getArchive, subscribeBriefingArchive } from '@/services/briefing-archiv
 import { projectHypothesis, getCachedProjection, subscribeProjection } from '@/services/hypothesis-projection';
 import { exportHypothesisToClipboard } from '@/services/hypothesis-export';
 import { getBudgetStatus, subscribeBudget, setCloudCap, resetBudget } from '@/services/llm-budget';
-import { getTotalErrorCount, subscribeDebug } from '@/services/reasoning-debug';
+import { getTotalErrorCount, subscribeDebug, logDebug } from '@/services/reasoning-debug';
 import { isLlmEgressDisclosed, setLlmEgressDisclosed, isLocalModelOnly, setLocalModelOnly, subscribeLlmEgressChange } from '@/services/ai-flow-settings';
 import { getAllSnapshots, subscribeSnapshotArchive } from '@/services/snapshot-archive';
 import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hypothesis-ensemble';
@@ -78,6 +78,12 @@ function superforecastButtonLabel(loading: boolean, cached: boolean, expanded: b
   return expanded ? 'hide ▾' : 'deep forecast ▾';
 }
 
+/**
+ * True when a non-global key should be swallowed because the user is typing
+ * in a field. Escape and Tab never route through this — they must work even
+ * when focus sits on the replay-scrubber range input or a settings checkbox
+ * (the live-repro cause of "Esc sometimes doesn't close the HUD").
+ */
 function shouldIgnoreKey(e: KeyboardEvent): boolean {
   const target = e.target as HTMLElement | null;
   if (!target) return false;
@@ -113,6 +119,11 @@ export class AnalystHUD {
   private selectedHypothesisIndex = 0;
   private settingsOpen = false;
   private renderScheduled = false;
+  /** Wall-clock ms of the last show/hide transition — used to debounce
+   *  double-fired toggle events that would re-open right after a close. */
+  private lastVisibilityChangeAt = 0;
+  /** Element focused before the HUD opened; restored on close. */
+  private previouslyFocused: HTMLElement | null = null;
   private readonly _cleanups: (() => void)[] = [];
 
   private readonly onExportCopied = (e: Event): void => {
@@ -128,7 +139,24 @@ export class AnalystHUD {
     else this.show();
   };
 
-  private readonly onToggle = (): void => this.toggle();
+  private readonly onToggle = (e: Event): void => {
+    // Guard against double-fire re-open races: a second toggle landing
+    // within 250ms of an open/close transition would instantly undo it
+    // (user closes HUD → stray duplicate event re-opens it).
+    const sinceTransition = Date.now() - this.lastVisibilityChangeAt;
+    if (sinceTransition < 250) {
+      const source = (e as CustomEvent<{ source?: string }>).detail?.source ?? 'unknown';
+      logDebug({
+        level: 'warn',
+        category: 'hud',
+        source: 'AnalystHUD',
+        message: `ignored toggle ${sinceTransition}ms after last visibility transition`,
+        data: { source },
+      });
+      return;
+    }
+    this.toggle();
+  };
 
   private readonly onFeedback = (): void => { if (this.visible) this.render(); };
 
@@ -138,8 +166,17 @@ export class AnalystHUD {
     this.root = document.createElement('div');
     this.root.className = 'analyst-hud';
     this.root.hidden = true;
+    // Dialog semantics + focusable container so Esc lands here after open.
+    this.root.tabIndex = -1;
+    this.root.setAttribute('role', 'dialog');
+    this.root.setAttribute('aria-modal', 'true');
+    this.root.setAttribute('aria-label', 'Analyst HUD');
     this.root.addEventListener('click', (e) => {
-      if (e.target === this.root) this.hide();
+      if (e.target === this.root) { this.hide(); return; }
+      // Delegated close: the header is rebuilt on every render, and a
+      // re-render between pointerdown and pointerup swallows clicks bound
+      // directly to the (replaced) button. The root element persists.
+      if ((e.target as HTMLElement).closest?.('.analyst-hud-close')) this.hide();
     });
     this.snapshot = getAnalystSnapshot();
     this.forecast = getForecastSnapshot();
@@ -228,6 +265,12 @@ export class AnalystHUD {
 
   private handleKeydown(e: KeyboardEvent): void {
     if (!this.visible) return;
+    // Escape + Tab are global while the HUD is open — they must work even
+    // when focus sits inside an input (scrubber slider, settings toggles).
+    if (e.key === 'Escape' || e.key === 'Tab') {
+      this.handleGlobalKey(e);
+      return;
+    }
     if (shouldIgnoreKey(e)) return;
     if (this.handleGlobalKey(e)) return;
     this.handleNavigationKey(e);
@@ -240,6 +283,10 @@ export class AnalystHUD {
       e.preventDefault();
       return true;
     }
+    if (e.key === 'Tab') {
+      this.trapFocus(e);
+      return true;
+    }
     if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
       this.settingsOpen = !this.settingsOpen;
       this.render();
@@ -247,6 +294,24 @@ export class AnalystHUD {
       return true;
     }
     return false;
+  }
+
+  /** Minimal focus trap: Tab cycles within the HUD while it's open. */
+  private trapFocus(e: KeyboardEvent): void {
+    const focusables = [...this.root.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select, textarea, [href], [tabindex]:not([tabindex="-1"])',
+    )].filter((el) => el.offsetParent !== null);
+    if (focusables.length === 0) return;
+    const first = focusables[0]!;
+    const last = focusables[focusables.length - 1]!;
+    const active = document.activeElement as HTMLElement | null;
+    const inside = active !== null && this.root.contains(active);
+    if (e.shiftKey) {
+      if (!inside || active === first) { last.focus(); e.preventDefault(); }
+    } else if (!inside || active === last) {
+      first.focus();
+      e.preventDefault();
+    }
   }
 
   private handleNavigationKey(e: KeyboardEvent): void {
@@ -301,16 +366,29 @@ export class AnalystHUD {
   }
 
   show(): void {
+    if (this.visible) return;
     this.visible = true;
+    this.lastVisibilityChangeAt = Date.now();
+    this.previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     this.root.hidden = false;
     this.render();
+    // Focus the dialog container (tabindex=-1) so Esc/Tab land inside it
+    // immediately, regardless of what was focused before.
+    this.root.focus({ preventScroll: true });
     document.dispatchEvent(new CustomEvent<{ visible: boolean }>('cb:analyst-hud-visibility', { detail: { visible: true } }));
   }
 
   hide(): void {
+    if (!this.visible) return;
     this.visible = false;
+    this.lastVisibilityChangeAt = Date.now();
     this.root.hidden = true;
     document.dispatchEvent(new CustomEvent<{ visible: boolean }>('cb:analyst-hud-visibility', { detail: { visible: false } }));
+    // Restore focus to wherever the user was before opening.
+    if (this.previouslyFocused?.isConnected) {
+      this.previouslyFocused.focus({ preventScroll: true });
+    }
+    this.previouslyFocused = null;
   }
 
   // ── Rendering ─────────────────────────────────────────────────────────────
@@ -358,9 +436,11 @@ export class AnalystHUD {
 
     const close = document.createElement('button');
     close.className = 'analyst-hud-close';
-    close.textContent = 'x';
+    close.type = 'button';
+    close.textContent = '×';
     close.title = 'Close (Esc)';
-    close.addEventListener('click', () => this.hide());
+    close.setAttribute('aria-label', 'Close');
+    // Click handling is delegated on this.root (survives re-renders).
 
     header.append(title, aiBadge, settings, close);
     return header;

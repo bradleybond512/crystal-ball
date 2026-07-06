@@ -15,6 +15,7 @@ import { t } from '@/services/i18n';
 import { getMode } from '@/services/mode-manager';
 import { getCurrentTheme } from '@/utils/theme-manager';
 import { escapeHtml } from '@/utils/sanitize';
+import { icon } from '@/components/ui/icons';
 
 function getMapLabel(): string {
   if (SITE_VARIANT === 'tech') return t('panels.techMap');
@@ -87,7 +88,9 @@ export function buildSidebarNav(ctx: AppContext): string {
  const cfg = ctx.panelSettings[key];
  if (!cfg) continue;
  const disabled = cfg.enabled ? '' : ' is-disabled';
- html += `<button class="mac-sidebar-panel-item${disabled}" data-panel-key="${key}"><span class="mac-sidebar-panel-dot"></span>${cfg.name}</button>`;
+ // title tooltip: labels ellipsize at the sidebar width, so always expose
+ // the full name on hover (harmless when it fits, essential when it clips).
+ html += `<button class="mac-sidebar-panel-item${disabled}" data-panel-key="${key}" title="${escapeHtml(cfg.name)}"><span class="mac-sidebar-panel-dot"></span>${cfg.name}</button>`;
  }
  html += `</div>`;
   }
@@ -140,10 +143,10 @@ export function buildDesktopLayout(ctx: AppContext): string {
 
  <!-- Mode Selector: Ghost + God's Vision only -->
  ${SITE_VARIANT === 'happy' ? '' : `<div class="mac-mode-section" id="modeSelectorSection">
- <button class="mac-alert-family-btn" id="alertFamilyBtn">⚠ Alert Family</button>
- <button class="mac-ghost-mode-btn${ghostActive}" id="ghostModeBtn" title="Ghost Mode — Reduce polling, suppress notifications (⌘⇧G)">👻 Ghost Mode</button>
- <button class="mac-ghost-mode-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)">🌍 God's Vision</button>
- <button class="mac-ghost-mode-btn" id="savedPlacesFilterBtn" title="Filter all panels by saved place proximity">📍 Proximity: OFF</button>
+ <button class="mac-alert-family-btn" id="alertFamilyBtn">${icon('alert-triangle', { size: 14 })} Alert Family</button>
+ <button class="mac-ghost-mode-btn${ghostActive}" id="ghostModeBtn" title="Ghost Mode — Reduce polling, suppress notifications (⌘⇧G)">${icon('ghost', { size: 14 })} Ghost Mode</button>
+ <button class="mac-ghost-mode-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)">${icon('globe', { size: 14 })} God's Vision</button>
+ <button class="mac-ghost-mode-btn" id="savedPlacesFilterBtn" title="Filter all panels by saved place proximity">${icon('pin', { size: 14 })} Proximity: OFF</button>
  </div>
  <div class="mac-situational-mode-section" id="situationalModeSwitcherSection">
  <div class="mac-situational-mode-label">
@@ -151,10 +154,10 @@ export function buildDesktopLayout(ctx: AppContext): string {
  <span class="mac-situational-mode-auto" id="situationalModeAutoIndicator" title="System is auto-selecting mode based on active alerts">Auto</span>
  </div>
  <div class="mac-situational-mode-btns">
- <button class="mac-situational-mode-btn" data-mode-key="monitoring" title="Monitoring — normal operations, all panels visible">📡 Monitor</button>
- <button class="mac-situational-mode-btn" data-mode-key="alert" title="Alert — active threats, red accents, critical items pinned">🚨 Alert</button>
- <button class="mac-situational-mode-btn" data-mode-key="investigation" title="Investigation — focus evidence chain, de-emphasise noise">🔍 Investigate</button>
- <button class="mac-situational-mode-btn" data-mode-key="briefing" title="Briefing — quiet palette, intel feeds emphasised">📋 Brief</button>
+ <button class="mac-situational-mode-btn" data-mode-key="monitoring" title="Monitoring — normal operations, all panels visible">${icon('antenna', { size: 14 })} Monitor</button>
+ <button class="mac-situational-mode-btn" data-mode-key="alert" title="Alert — active threats, red accents, critical items pinned">${icon('alert-triangle', { size: 14 })} Alert</button>
+ <button class="mac-situational-mode-btn" data-mode-key="investigation" title="Investigation — focus evidence chain, de-emphasise noise">${icon('magnifier', { size: 14 })} Investigate</button>
+ <button class="mac-situational-mode-btn" data-mode-key="briefing" title="Briefing — quiet palette, intel feeds emphasised">${icon('clipboard', { size: 14 })} Brief</button>
  </div>
  </div>`}
 

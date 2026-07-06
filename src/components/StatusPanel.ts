@@ -42,6 +42,25 @@ const WORLD_APIS = new Set([
   'Cyber Threats API', 'BIS', 'WTO', 'SupplyChain'
 ]);
 
+/**
+ * Human display names for feed keys whose canonical id doesn't read well.
+ * Keys stay untouched — the allowlists above, updateFeed(name) callers and
+ * all source logic keep using the canonical key; this map is applied at
+ * render time only.
+ */
+export const FEED_DISPLAY_NAMES: Record<string, string> = {
+  Middleeast: 'Middle East',
+  Ai: 'AI',
+  Vcblogs: 'VC Blogs',
+  RegionalStartups: 'Regional Startups',
+  Producthunt: 'Product Hunt',
+  Thinktanks: 'Think Tanks',
+};
+
+export function feedDisplayName(key: string): string {
+  return FEED_DISPLAY_NAMES[key] ?? key;
+}
+
 import { t } from '../services/i18n';
 import { Panel } from './Panel';
 

@@ -223,7 +223,8 @@ export class IntelligenceTimelinePanel extends Panel {
       const list = recent.length === 0
         ? '<div class="panel-empty" style="padding:16px 0;text-align:center;opacity:0.7;">No events.</div>'
         : `<div style="display:flex;flex-direction:column;gap:4px;">${recent.map((e) => this.renderEventRow(e)).join('')}</div>`;
-      this.setContent(`<div style="padding:8px;">${switcherRow}${list}<div style="opacity:0.5;font-size:11px;margin-top:6px;">5 most recent of ${events.length} · switch to Detail for filters</div></div>`, () => this.wireHandlers());
+      const counter = this.buildSummaryCounterHtml(events.length, recent.length);
+      this.setContent(`<div style="padding:8px;">${switcherRow}${list}${counter}</div>`, () => this.wireHandlers());
       return;
     }
 
@@ -231,6 +232,20 @@ export class IntelligenceTimelinePanel extends Panel {
       ? '<div class="panel-empty" style="padding:16px 0;text-align:center;opacity:0.7;">No events in this time range. Adjust filters or wait for new data.</div>'
       : `<div style="display:flex;flex-direction:column;gap:4px;max-height:520px;overflow-y:auto;">${events.map((e) => this.renderEventRow(e)).join('')}</div>`;
     this.setContent(`<div style="padding:8px;">${switcherRow}${this.renderFilterBar(domains)}${list}</div>`, () => this.wireHandlers());
+  }
+
+  /**
+   * Counter line under the summary list. Never claims "5 most recent of 1":
+   * when everything is already visible it says "All N events"; when the
+   * list is empty the "No events." state carries the message alone.
+   */
+  private buildSummaryCounterHtml(total: number, shown: number): string {
+    if (total === 0) return '';
+    if (total > 5) {
+      return `<div style="opacity:0.5;font-size:11px;margin-top:6px;">${shown} most recent of ${total} · switch to Detail for filters</div>`;
+    }
+    const noun = total === 1 ? 'event' : 'events';
+    return `<div style="opacity:0.5;font-size:11px;margin-top:6px;">All ${total} ${noun} · switch to Detail for filters</div>`;
   }
 
   private wireHandlers(): void {

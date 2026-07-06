@@ -18,6 +18,7 @@ import {
   type ThresholdConfig,
 } from '@/services/config/alert-thresholds';
 import type { StatusPanel } from './StatusPanel';
+import { feedDisplayName } from './StatusPanel';
 import { isYouTubeConnected, signInToYouTube, signOutOfYouTube, initYouTubeAccountListeners } from '@/services/youtube-account';
 import { getImessageSettings, saveImessageSettings, sendImessage, type ImessageThreshold } from '@/services/imessage-bridge';
 import { getApiBaseUrl } from '@/services/runtime';
@@ -222,8 +223,18 @@ export class UnifiedSettings {
  const latInput = this.overlay.querySelector<HTMLInputElement>('#us-home-lat');
  const lonInput = this.overlay.querySelector<HTMLInputElement>('#us-home-lon');
  const labelInput = this.overlay.querySelector<HTMLInputElement>('#us-home-label');
- const lat = Number.parseFloat(latInput?.value ?? '');
- const lon = Number.parseFloat(lonInput?.value ?? '');
+ // Fields render rounded to 5 decimals; when a field is unedited, prefer
+ // the full-precision stored value so saving doesn't quantize it.
+ const readCoord = (input: HTMLInputElement | null): number => {
+ const raw = input?.value ?? '';
+ const full = input?.dataset.fullPrecision;
+ if (full && raw !== '' && Number.parseFloat(full).toFixed(5) === raw) {
+ return Number.parseFloat(full);
+ }
+ return Number.parseFloat(raw);
+ };
+ const lat = readCoord(latInput);
+ const lon = readCoord(lonInput);
  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
  const label = labelInput?.value.trim() || `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
  if (!Number.isNaN(lat) && !Number.isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
@@ -488,7 +499,6 @@ export class UnifiedSettings {
  return `unified-settings-tab${this.activeTab === id ? ' active' : ''}`;
   }
 
-  // eslint-disable-next-line sonarjs/cognitive-complexity
   private render(): void {
  const apiKeyPanelClass = `unified-settings-tab-panel${this.activeTab === 'api-keys' ? ' active' : ''}`;
  const debugPanelClass = `unified-settings-tab-panel${this.activeTab === 'debug' ? ' active' : ''}`;
@@ -579,6 +589,13 @@ export class UnifiedSettings {
  this.renderStatusTab();
  this.renderPlacesTab();
  if (!this.config.isDesktopApp) this.updateAiStatus();
+ this.scrollActiveTabIntoView();
+  }
+
+  private scrollActiveTabIntoView(): void {
+ const active = this.overlay.querySelector<HTMLElement>('.unified-settings-tab.active');
+ // Optional call: jsdom has no scrollIntoView.
+ active?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }
 
   private switchTab(tab: TabId): void {
@@ -596,6 +613,9 @@ export class UnifiedSettings {
  this.overlay.querySelectorAll('.unified-settings-tab-panel').forEach(el => {
  el.classList.toggle('active', (el as HTMLElement).dataset.panelId === tab);
  });
+
+ // Tab strip scrolls horizontally on narrow modals — keep the active tab visible.
+ this.scrollActiveTabIntoView();
 
  if (tab === 'debug') {
  if (this.config.isDesktopApp) {
@@ -667,8 +687,13 @@ export class UnifiedSettings {
  const loc = proxConfig.location;
  const locLabel = loc ? escapeHtml(loc.label) : 'Not set';
  const locSource = loc ? ` (${escapeHtml(loc.source)})` : '';
- const latVal = loc ? escapeHtml(String(loc.lat)) : '';
- const lonVal = loc ? escapeHtml(String(loc.lon)) : '';
+ // Display at 5 decimals (≈1 m). The full-precision stored value rides
+ // along in data-full-precision so re-saving an unedited field doesn't
+ // quantize what's persisted.
+ const latVal = loc ? escapeHtml(loc.lat.toFixed(5)) : '';
+ const lonVal = loc ? escapeHtml(loc.lon.toFixed(5)) : '';
+ const latFull = loc ? escapeHtml(String(loc.lat)) : '';
+ const lonFull = loc ? escapeHtml(String(loc.lon)) : '';
  const labelVal = loc ? escapeHtml(loc.label) : '';
  let deniedHtml = '';
  if (this._gpsPermissionDenied) {
@@ -701,8 +726,8 @@ export class UnifiedSettings {
  </div>
  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
  <span style="font-size:11px;color:var(--text-muted);">or coordinates:</span>
- <input id="us-home-lat" type="number" step="any" placeholder="Latitude" value="${latVal}" style="width:100px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
- <input id="us-home-lon" type="number" step="any" placeholder="Longitude" value="${lonVal}" style="width:110px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <input id="us-home-lat" class="us-coord-input" type="number" inputmode="decimal" step="0.00001" min="-90" max="90" autocomplete="off" placeholder="Latitude" value="${latVal}" data-full-precision="${latFull}" style="width:100px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
+ <input id="us-home-lon" class="us-coord-input" type="number" inputmode="decimal" step="0.00001" min="-180" max="180" autocomplete="off" placeholder="Longitude" value="${lonVal}" data-full-precision="${lonFull}" style="width:110px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
  <input id="us-home-label" type="text" placeholder="Label (optional)" value="${labelVal}" style="width:130px;padding:4px 6px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary)">
  <button id="us-manual-location" class="spm-btn spm-btn--primary spm-btn--sm" style="min-width:50px">Set</button>
  ${loc ? `<button id="us-clear-location" class="spm-btn spm-btn--ghost spm-btn--sm" style="min-width:55px">Clear</button>` : ''}
@@ -1037,7 +1062,7 @@ export class UnifiedSettings {
  for (const feed of feeds.values()) {
  html += `<div class="status-row">
  <span class="status-dot ${feed.status}"></span>
- <span class="status-name">${escapeHtml(feed.name)}</span>
+ <span class="status-name">${escapeHtml(feedDisplayName(feed.name))}</span>
  <span class="status-detail">${feed.itemCount} items</span>
  <span class="status-time">${feed.lastUpdate ? sp.formatTime(feed.lastUpdate) : 'Never'}</span>
  </div>`;
@@ -1473,7 +1498,6 @@ export class UnifiedSettings {
  logEl.innerHTML = '<p class="us-debug-empty">No traffic recorded.</p>';
  return;
  }
- // eslint-disable-next-line unicorn/no-array-reverse
  const rows = [...entries].reverse().map(e => {
  const ts = e.timestamp.split('T')[1]?.replace('Z', '') ?? e.timestamp;
  let cls: string;

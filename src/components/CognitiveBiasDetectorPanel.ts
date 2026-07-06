@@ -174,7 +174,7 @@ export class CognitiveBiasDetectorPanel extends Panel {
     const pendingCount = svc.getDetections(filter).length;
     if (pendingCount === 0) return '';
     const scope = this.filterBiasType === 'all' ? 'all' : BIAS_LABEL[this.filterBiasType];
-    return `<button class="bias-ack-all" title="Acknowledge every unacknowledged ${escapeHtml(scope)} detection" style="margin-left:auto;padding:3px 8px;font-size:10px;border:1px solid var(--border-subtle,#333);background:rgba(34,197,94,0.10);color:#22c55e;border-radius:3px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">Ack all (${formatBadgeCount(pendingCount)})</button>`;
+    return `<button class="bias-ack-all" title="Acknowledge every unacknowledged ${escapeHtml(scope)} detection" style="margin-left:auto;padding:3px 8px;font-size:10px;border:1px solid var(--border-subtle,#333);background:var(--sev-low-bg,rgba(34,197,94,0.10));color:var(--sev-low,#22c55e);border-radius:3px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">Ack all (${formatBadgeCount(pendingCount)})</button>`;
   }
 
   private renderFilterChip(value: BiasType | 'all', label: string): string {
@@ -199,7 +199,7 @@ export class CognitiveBiasDetectorPanel extends Panel {
     const sevColor = SEVERITY_COLOR[d.severity];
     const ackButton = d.acknowledged
       ? `<span style="font-size:10px;color:var(--severity-info,#22c55e);text-transform:uppercase;letter-spacing:0.04em;font-weight:700;">ACK</span>`
-      : `<button class="bias-ack" data-id="${escapeHtml(d.id)}" style="padding:2px 8px;font-size:10px;border:1px solid var(--border-subtle,#333);background:rgba(34,197,94,0.10);color:#22c55e;border-radius:3px;cursor:pointer;">Ack</button>`;
+      : `<button class="bias-ack" data-id="${escapeHtml(d.id)}" style="padding:2px 8px;font-size:10px;border:1px solid var(--border-subtle,#333);background:var(--sev-low-bg,rgba(34,197,94,0.10));color:var(--sev-low,#22c55e);border-radius:3px;cursor:pointer;">Ack</button>`;
     const when = new Date(d.detectedAt).toLocaleTimeString();
     return `<div style="padding:8px 10px;border:1px solid var(--border-subtle,#333);border-radius:4px;background:rgba(255,255,255,0.02);${d.acknowledged ? 'opacity:0.55;' : ''}">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">

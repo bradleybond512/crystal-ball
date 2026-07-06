@@ -29,9 +29,9 @@ const TREND_LABEL: Record<TrendDirection, string> = {
 };
 
 const TREND_COLOR: Record<TrendDirection, string> = {
-  improving: '#4caf50',
-  stable: '#9e9e9e',
-  degrading: '#f44336',
+  improving: 'var(--status-ok, #4caf50)',
+  stable: 'var(--text-tertiary, #9e9e9e)',
+  degrading: 'var(--status-error, #f44336)',
 };
 
 export class AlgoEvalPanel extends Panel {

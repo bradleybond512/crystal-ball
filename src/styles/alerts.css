@@ -324,7 +324,7 @@
 }
 .triage-preset-item:hover,
 .triage-preset-item:focus-visible { background: rgba(255, 255, 255, 0.12); }
-.triage-preset-item[aria-checked="true"] { color: #fff; font-weight: 600; }
+.triage-preset-item[aria-checked="true"] { color: var(--text-primary); font-weight: 600; }
 .triage-preset-check {
   width: 12px;
   flex-shrink: 0;

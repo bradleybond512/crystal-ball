@@ -43,7 +43,15 @@
  *   - Output clamped to [0.02, 0.98]: the app never claims certainty.
  *
  * Per docs/COGNITIVE_ENHANCEMENT_PLAN.md PR 3.
+ *
+ * PR 12 (self-tuning): the extremization exponent and the spread-skip
+ * threshold are declared tunables ('superforecast:extremizeK' bounds
+ * [1.0, 1.8]; 'superforecast:spreadSkipThreshold' bounds [0.15, 0.40]).
+ * The exported constants below remain the get-with-default fallbacks, so
+ * an empty tunable store reproduces the pre-PR-12 behavior exactly.
  */
+
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -52,6 +60,16 @@ export const DEFAULT_K = 1.3;
 
 /** Skip extremization when spread exceeds this threshold. */
 export const SPREAD_SKIP_THRESHOLD = 0.25;
+
+/** Tuned extremization exponent (PR 12), falling back to DEFAULT_K. */
+function tunedK(): number {
+  return getTunedParam('superforecast', 'extremizeK', DEFAULT_K);
+}
+
+/** Tuned spread-skip threshold (PR 12), falling back to SPREAD_SKIP_THRESHOLD. */
+function tunedSpreadSkip(): number {
+  return getTunedParam('superforecast', 'spreadSkipThreshold', SPREAD_SKIP_THRESHOLD);
+}
 
 /** Minimum number of estimates required for extremization to apply. */
 export const MIN_ESTIMATES_FOR_EXTREMIZE = 3;
@@ -184,27 +202,34 @@ export function geoMeanOfOdds(estimates: readonly Estimate[]): number {
  *
  * Skip conditions: returns p unchanged when:
  *   - estimates.length < MIN_ESTIMATES_FOR_EXTREMIZE (3): too few forecasters
- *   - spread > SPREAD_SKIP_THRESHOLD (0.25): high disagreement — don't sharpen
+ *   - spread > spreadSkipThreshold (tuned; default 0.25): high disagreement —
+ *     don't sharpen
  *
  * @param p          The probability to extremize (should be pre-aggregated GMO).
- * @param k          Sharpening exponent (default 1.3).
+ * @param k          Sharpening exponent. Omitted → the PR 12 tunable
+ *                   'superforecast:extremizeK' (default 1.3).
  * @param spread     max − min across all estimates (for skip condition).
  * @param nEstimates Number of estimates that produced p (for skip condition).
+ * @param spreadSkipThreshold Skip bar for the spread condition. Omitted → the
+ *                   PR 12 tunable 'superforecast:spreadSkipThreshold' (0.25).
  */
 export function extremize(
   p: number,
-  k: number = DEFAULT_K,
-  spread: number = 0,
-  nEstimates: number = 999,
+  k?: number,
+  spread = 0,
+  nEstimates = 999,
+  spreadSkipThreshold?: number,
 ): number {
+  const kEff = k ?? tunedK();
+  const skipAt = spreadSkipThreshold ?? tunedSpreadSkip();
   const pc = clamp(p, CLAMP_LO, CLAMP_HI);
 
   // Skip conditions.
   if (nEstimates < MIN_ESTIMATES_FOR_EXTREMIZE) return pc;
-  if (spread > SPREAD_SKIP_THRESHOLD) return pc;
+  if (spread > skipAt) return pc;
 
-  const pk = Math.pow(pc, k);
-  const qk = Math.pow(1 - pc, k);
+  const pk = Math.pow(pc, kEff);
+  const qk = Math.pow(1 - pc, kEff);
   const extremized = pk / (pk + qk);
   return clamp(extremized, CLAMP_LO, CLAMP_HI);
 }
@@ -229,7 +254,7 @@ export function aggregate(estimates: readonly Estimate[]): AggregationResult {
   if (estimates.length === 0) {
     // Degenerate case: no estimates → return the baseline prior with explanation.
     return {
-      p: 0.30,
+      p: 0.3,
       spread: 0,
       explanation: 'no estimates available — defaulting to 30% uninformative prior',
     };
@@ -251,7 +276,10 @@ export function aggregate(estimates: readonly Estimate[]): AggregationResult {
   const gmo = geoMeanOfOdds(safeEstimates);
 
   // Step 2: Extremize (may be a no-op depending on spread/n conditions).
-  const extremized = extremize(gmo, DEFAULT_K, spread, safeEstimates.length);
+  // k and the spread-skip threshold are PR 12 tunables (defaults 1.3 / 0.25).
+  const kEff = tunedK();
+  const spreadSkip = tunedSpreadSkip();
+  const extremized = extremize(gmo, kEff, spread, safeEstimates.length, spreadSkip);
   const wasExtremized = Math.abs(extremized - gmo) > 0.001;
 
   // Step 3: Clamp.
@@ -265,19 +293,22 @@ export function aggregate(estimates: readonly Estimate[]): AggregationResult {
   let extremizeNote: string;
   if (safeEstimates.length < MIN_ESTIMATES_FOR_EXTREMIZE) {
     extremizeNote = `extremization skipped (only ${safeEstimates.length} estimate(s) — need ≥${MIN_ESTIMATES_FOR_EXTREMIZE})`;
-  } else if (spread > SPREAD_SKIP_THRESHOLD) {
-    extremizeNote = `extremization skipped (spread=${pct(spread)} > ${pct(SPREAD_SKIP_THRESHOLD)} threshold — high disagreement)`;
+  } else if (spread > spreadSkip) {
+    extremizeNote = `extremization skipped (spread=${pct(spread)} > ${pct(spreadSkip)} threshold — high disagreement)`;
   } else if (wasExtremized) {
-    extremizeNote = `extremized ${pct(gmo)} → ${pct(extremized)} (k=${DEFAULT_K})`;
+    extremizeNote = `extremized ${pct(gmo)} → ${pct(extremized)} (k=${kEff})`;
   } else {
     extremizeNote = `extremized ${pct(gmo)} (no movement, already near center)`;
   }
 
-  const disagreementNote = spread > SPREAD_SKIP_THRESHOLD
-    ? `⚠ high spread (${pct(spread)}) — estimates disagree significantly`
-    : spread > 0.15
-      ? `moderate spread (${pct(spread)})`
-      : `low spread (${pct(spread)})`;
+  let disagreementNote: string;
+  if (spread > spreadSkip) {
+    disagreementNote = `⚠ high spread (${pct(spread)}) — estimates disagree significantly`;
+  } else if (spread > 0.15) {
+    disagreementNote = `moderate spread (${pct(spread)})`;
+  } else {
+    disagreementNote = `low spread (${pct(spread)})`;
+  }
 
   const explanation =
     `aggregated ${safeEstimates.length} estimate(s) [${sourceList}]; ` +

@@ -148,6 +148,116 @@ const DECLARATIONS: readonly TunableDeclaration[] = [
     description: 'Number of self-consistency samples per persona probability elicitation (k=1 = legacy, k=3 = default).',
     affectsNotifications: false,
   },
+
+  // ── PR 12: Self-tuning cognition ──────────────────────────────────────
+  // Every cognition constant becomes a declared tunable with bounds
+  // (docs/COGNITIVE_ENHANCEMENT_PLAN.md Part D PR 12). The cognition
+  // modules read these via getTunedParam with the old hardcoded value as
+  // the fallback default, so an empty store is byte-identical to the
+  // pre-PR-12 behavior.
+  {
+    algorithmId: 'episodic-analog',
+    parameterId: 'minSim',
+    default: 0.45,
+    min: 0.3,
+    max: 0.6,
+    step: 0.05,
+    // Misses mean noisy analogs are qualifying (weak matches driving the
+    // analog score the wrong way) → raise the similarity bar.
+    fixDirection: 'increase',
+    description: 'Minimum cosine similarity for a past episode to qualify as an analog.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'episodic-analog',
+    parameterId: 'analogBlendK',
+    default: 5,
+    min: 3,
+    max: 10,
+    step: 1,
+    // Misses mean thin episodic history is moving the blended base rate
+    // too far → require more analogs before episodic evidence dominates.
+    fixDirection: 'increase',
+    description: 'Bayesian pseudo-count in the episodic blend weight analogN/(analogN+k).',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'recalibration',
+    parameterId: 'shrinkPrior',
+    default: 10,
+    min: 5,
+    max: 20,
+    step: 1,
+    // Misses mean the reliability curve is overcorrecting on thin bins →
+    // shrink corrections harder toward identity.
+    fixDirection: 'increase',
+    description: 'Laplace shrinkage pseudo-count pulling per-bin calibration corrections toward 0.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'superforecast',
+    parameterId: 'extremizeK',
+    default: 1.3,
+    min: 1,
+    max: 1.8,
+    step: 0.1,
+    // Misses mean the aggregate is over-sharpened → move k back toward
+    // the identity (k=1, no extremization).
+    fixDirection: 'decrease',
+    description: 'Satopää extremization exponent applied to the geometric-mean-of-odds aggregate.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'superforecast',
+    parameterId: 'spreadSkipThreshold',
+    default: 0.25,
+    min: 0.15,
+    max: 0.4,
+    step: 0.05,
+    // Misses mean contested estimates are still being sharpened → skip
+    // extremization at lower disagreement.
+    fixDirection: 'decrease',
+    description: 'Persona-estimate spread above which extremization is skipped (disagreement guard).',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'entity-trajectory',
+    parameterId: 'heatHalfLifeHours',
+    default: 72,
+    min: 24,
+    max: 168,
+    step: 12,
+    // Misses mean stale entities still read as hot → decay heat faster.
+    fixDirection: 'decrease',
+    description: 'Exponential half-life (hours) of the entity dossier heat score.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'operator-ranking',
+    parameterId: 'interestHalfLifeHours',
+    default: 168,
+    min: 72,
+    max: 336,
+    step: 24,
+    // Misses mean stale interests are still boosting rankings → forget
+    // unreinforced interest terms faster.
+    fixDirection: 'decrease',
+    description: 'Half-life (hours) of operator interest-term weights without reinforcement.',
+    affectsNotifications: false,
+  },
+  {
+    algorithmId: 'consolidation',
+    parameterId: 'clusterSimThreshold',
+    default: 0.6,
+    min: 0.5,
+    max: 0.75,
+    step: 0.05,
+    // Bad learned schemas mean clusters are too loose → require tighter
+    // cosine similarity before episodes consolidate into a schema.
+    fixDirection: 'increase',
+    description: 'Cosine similarity threshold for episode clustering during memory consolidation.',
+    affectsNotifications: false,
+  },
 ];
 
 type Store = Record<string, number>; // `${algorithmId}:${parameterId}` -> value

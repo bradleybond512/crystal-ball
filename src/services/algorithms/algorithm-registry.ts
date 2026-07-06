@@ -307,6 +307,66 @@ const REGISTRY_INITIAL: readonly AlgorithmDefinition[] = [
     outputs: ['risk_score'],
     criticality: 'low',
   },
+
+  // Cognition layer (docs/COGNITIVE_ENHANCEMENT_PLAN.md Part D PR 12).
+  // Registering these plugs the cognition outputs into evaluation-ledger
+  // grading, hit-rate tracking, drift watch, and the diagnostics panel.
+  // Grading is deterministic (cognition/self-tuning.ts), not LLM-based.
+  {
+    id: 'episodic-analog',
+    label: 'Episodic analog scoring',
+    version: '1.0.0',
+    domain: 'cognition',
+    healthDomain: 'reasoning_hypothesis',
+    ownerFeature: 'analyst',
+    dependencies: { sources: [], providers: [], services: ['episodic-memory'] },
+    outputs: ['risk_score'],
+    criticality: 'medium',
+  },
+  {
+    id: 'recalibration',
+    label: 'Closed-loop recalibration',
+    version: '1.0.0',
+    domain: 'cognition',
+    healthDomain: 'forecast_calibration',
+    ownerFeature: 'analyst',
+    dependencies: { sources: [], providers: [], services: ['forecast-calibration'] },
+    outputs: ['forecast'],
+    criticality: 'medium',
+  },
+  {
+    id: 'superforecast',
+    label: 'Superforecaster pipeline',
+    version: '1.0.0',
+    domain: 'cognition',
+    healthDomain: 'forecast_calibration',
+    ownerFeature: 'analyst',
+    dependencies: { sources: [], providers: ['anthropic', 'groq', 'openrouter'], services: ['recalibration', 'episodic-analog'] },
+    outputs: ['forecast'],
+    criticality: 'medium',
+  },
+  {
+    id: 'operator-ranking',
+    label: 'Operator-model ranking personalization',
+    version: '1.0.0',
+    domain: 'cognition',
+    healthDomain: 'reasoning_hypothesis',
+    ownerFeature: 'analyst',
+    dependencies: { sources: [], providers: [], services: ['operator-model'] },
+    outputs: ['ranking'],
+    criticality: 'low',
+  },
+  {
+    id: 'entity-trajectory',
+    label: 'Entity trajectory detection',
+    version: '1.0.0',
+    domain: 'cognition',
+    healthDomain: 'reasoning_hypothesis',
+    ownerFeature: 'analyst',
+    dependencies: { sources: [], providers: [], services: ['entity-dossier'] },
+    outputs: ['risk_score'],
+    criticality: 'medium',
+  },
 ];
 
 const registry = new Map<string, AlgorithmDefinition>(

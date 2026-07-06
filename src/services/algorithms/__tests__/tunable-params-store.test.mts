@@ -95,7 +95,13 @@ test('getTunings exposes all declared algorithms', () => {
   _resetTunedParamsForTests();
   const tunings = getTunings();
   const ids = tunings.map((t) => t.algorithmId).sort();
-  assert.deepEqual(ids, ['big-event-detector', 'correlation-feedback', 'hypothesis-feedback', 'negative-evidence', 'superforecast']);
+  // Cognition PR 12 declared knobs for: consolidation, entity-trajectory,
+  // episodic-analog, operator-ranking, recalibration (+ 2 more on superforecast).
+  assert.deepEqual(ids, [
+    'big-event-detector', 'consolidation', 'correlation-feedback', 'entity-trajectory',
+    'episodic-analog', 'hypothesis-feedback', 'negative-evidence', 'operator-ranking',
+    'recalibration', 'superforecast',
+  ]);
   const negEv = tunings.find((t) => t.algorithmId === 'negative-evidence');
   const maxPenalty = negEv!.parameters.find((p) => p.parameterId === 'maxPenalty');
   assert.equal(maxPenalty!.current, 0.6);

@@ -20,6 +20,7 @@ import { getMemory, putMemory } from './reasoning-memory';
 import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
 import { resolveHypothesisPredictionBySig } from './intelligence/hypothesis-prediction-bridge';
 import { resolveEpisodeForSignature } from '@/services/cognition/episodic-memory-bridge';
+import { gradeOperatorRankingOnResolution } from '@/services/cognition/self-tuning';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,9 @@ interface PendingHypothesis {
   situationIds: string[];
   alertIds: string[];
   initialConfidence: number;
+  /** Hypothesis statement captured at emit time (optional: entries persisted
+   *  before cognition PR 12 lack it). Feeds operator-ranking grading. */
+  statement?: string;
 }
 
 interface AccuracyStats {
@@ -116,6 +120,7 @@ function stamp(snapshot: AnalystSnapshot): void {
       situationIds: h.evidence.filter(e => e.source === 'situation-engine').map(e => e.id),
       alertIds: h.evidence.filter(e => e.source === 'unified-alerts').map(e => e.id),
       initialConfidence: h.confidence,
+      statement: h.statement.slice(0, 280),
     });
   }
   // Cap the pending queue to keep localStorage footprint bounded.
@@ -203,6 +208,13 @@ function gradeOne(p: PendingHypothesis): void {
       hit ? 'materialized' : 'fizzled',
     );
   } catch { /* episodic memory unavailable */ }
+
+  // Cognition PR 12: grade the operator-model's ranking personalization
+  // against this resolution (boost-on-hit = hit, boost-on-fizzle = miss;
+  // neutral multipliers skipped). Fire-and-forget; never throws here.
+  try {
+    gradeOperatorRankingOnResolution(p.statement, hit);
+  } catch { /* evaluation ledger unavailable */ }
 }
 
 function gradeDue(): void {

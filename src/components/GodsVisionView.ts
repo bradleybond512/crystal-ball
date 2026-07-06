@@ -182,10 +182,10 @@ export class GodsVisionView {
  this.seismicWaves.mount();
  this.webcamLayer = new GlobeWebcamLayer(viewer, {
  fetchFeeds: async () => {
- const cat = await fetchUnifiedWebcams({ category: 'fire,volcano,coastal' });
+ const cat = await fetchUnifiedWebcams();
  return cat.feeds;
  },
- salientOnly: true,
+ salientOnly: false,
  });
  void this.webcamLayer.mount();
  this.cleanupHandlers.push(() => { this.webcamLayer?.destroy(); this.webcamLayer = null; });

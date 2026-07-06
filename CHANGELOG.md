@@ -6,6 +6,16 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Weather PR 5 — Personal Storm Mode UI**: the persistent severe-weather
+  strip + Storm Mode card now honors the full plan contract — acknowledge and
+  snooze persist to localStorage (`crystalball-storm-mode-ui-v1`) so an acked
+  threat stays dismissed across reloads until it materially changes
+  (escalation, outside → inside polygon, or polygon edge ≥ 5 km closer,
+  mirroring `weather-urgency.ts`), the strip self-clears at alert expiry, and
+  only payload-bearing (banner+) decisions activate it. Pure show/hide +
+  display logic extracted to `src/components/personal-storm-mode-view.ts`
+  (24 tests, wired into `npm run test:weather`), with a desktop-native
+  restyle in `macos-native.css` under `body.is-desktop-macos`.
 - **Surfacing Move 2 — cognition layer visibility**: forecast provenance,
   calibration report, and booting the learning loops (PR #1339).
 - **Ask the data in Command Center**: the deterministic ask-the-data engine is

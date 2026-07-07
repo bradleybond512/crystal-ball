@@ -1,7 +1,8 @@
-/* eslint-disable sonarjs/no-nested-template-literals, sonarjs/no-nested-conditional */
+/* eslint-disable sonarjs/no-nested-conditional */
 
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
+import { renderPanelEmpty, renderPanelError } from './ui/PanelStates';
 import { situationEngine } from '@/services/situation-engine';
 import { queryEntities, type LegacyEntity } from '@/services/intelligence/entity-registry';
 import {
@@ -10,6 +11,7 @@ import {
   type RiskLevel,
 } from '@/services/intelligence/trade-route-risk-scorer';
 import type { Situation } from '@/services/situation-types';
+import type { FreightStressComponent, FreightStressResponse } from './MaritimeIntelPanel';
 
 // ── Local safe wrapper ────────────────────────────────────────────────────────
 
@@ -46,7 +48,35 @@ const CHOKEPOINTS: { name: string; keywords: string[] }[] = [
 
 type ChokepointName = 'Suez Canal' | 'Strait of Hormuz' | 'Strait of Malacca' | 'Bab-el-Mandeb' | 'Panama Canal';
 
+const FREIGHT_REFRESH_MS = 60_000;
+
+const STRESS_COLOR: Record<FreightStressComponent['stressLevel'], string> = {
+  low: '#4caf50',
+  medium: '#ffeb3b',
+  high: '#ff9800',
+  critical: '#d50000',
+};
+
 // ── Exported pure helpers (tested without DOM) ────────────────────────────────
+
+/**
+ * Unified chokepoint status vocabulary: the trade-route scorer's 4-level
+ * scale (minimal / elevated / high / critical) collapses to one 3-level
+ * user-facing scale. The source term stays available for tooltips.
+ */
+export function displayRiskLabel(level: string): 'calm' | 'elevated' | 'severe' {
+  switch (level) {
+    case 'minimal': { return 'calm';
+    }
+    case 'elevated': { return 'elevated';
+    }
+    case 'high':
+    case 'critical': { return 'severe';
+    }
+    default: { return 'calm';
+    }
+  }
+}
 
 export function waitTimeForRisk(level: string): string {
   switch (level) {
@@ -118,8 +148,47 @@ export function derivePortDisruptions(situations: Situation[]): { name: string; 
 // ── Panel ─────────────────────────────────────────────────────────────────────
 
 export class MaritimeSuperpowerPanel extends Panel {
+  private freightStress: FreightStressResponse | null = null;
+  /** Technical failure detail for the last freight fetch (tooltip/console only). */
+  private freightError: string | null = null;
+  private freightTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor() {
     super({ id: 'maritime-superpower', title: 'Maritime Intelligence' });
+    this.refresh();
+    this.startFreight();
+  }
+
+  private startFreight(): void {
+    // Retry button in the freight error state (see renderFreightSection).
+    this.content.addEventListener('maritime-superpower:freight-retry', () => void this.refreshFreight());
+    void this.refreshFreight();
+    this.freightTimer = setInterval(() => void this.refreshFreight(), FREIGHT_REFRESH_MS);
+  }
+
+  public destroy(): void {
+    super.destroy();
+    if (this.freightTimer !== null) {
+      clearInterval(this.freightTimer);
+      this.freightTimer = null;
+    }
+  }
+
+  /** Freight cost stress ported from the retired-by-default Maritime Intel panel. */
+  private async refreshFreight(): Promise<void> {
+    try {
+      const resp = await fetch('/api/freight-stress', { headers: { Accept: 'application/json' } });
+      if (resp.ok) {
+        this.freightStress = (await resp.json()) as FreightStressResponse;
+        this.freightError = null;
+      } else {
+        // Status codes stay in the tooltip detail, never in visible copy.
+        this.freightError = `HTTP ${resp.status}`;
+      }
+    } catch {
+      this.freightStress = null;
+      this.freightError = 'network unreachable';
+    }
     this.refresh();
   }
 
@@ -160,10 +229,11 @@ export class MaritimeSuperpowerPanel extends Panel {
     <h3 class="ms-section-title">Chokepoint Status</h3>
     ${chokepoints.map((cp) => `<div class="ms-chokepoint" data-risk="${escapeHtml(cp.risk)}">
       <span class="ms-chokepoint-name">${escapeHtml(cp.name)}</span>
-      <span class="ms-risk-badge ms-risk-${escapeHtml(cp.risk)}">${escapeHtml(cp.risk)}</span>
+      <span class="ms-risk-badge ms-risk-${escapeHtml(cp.risk)}" title="Trade-route scorer level: ${escapeHtml(cp.risk)}">${escapeHtml(displayRiskLabel(cp.risk))}</span>
       <span class="ms-wait-time">${escapeHtml(cp.waitTime)}</span>
     </div>`).join('\n    ')}
   </section>
+  ${this.renderFreightSection()}
   <section class="ms-section">
     <h3 class="ms-section-title">Piracy &amp; Incident Map</h3>
     ${piracy.length === 0
@@ -194,4 +264,50 @@ export class MaritimeSuperpowerPanel extends Panel {
 </div>`;
   }
 
+  private renderFreightSection(): string {
+    return `<section class="ms-section">
+    <h3 class="ms-section-title">Freight Cost Stress</h3>
+    ${this.renderFreightBody()}
+  </section>`;
+  }
+
+  private renderFreightBody(): string {
+    if (this.freightError !== null) {
+      return renderPanelError({
+        title: 'Freight data temporarily unavailable',
+        detail: `${this.freightError} from the freight-stress endpoint`,
+        onRetryEventName: 'maritime-superpower:freight-retry',
+      });
+    }
+    const fs = this.freightStress;
+    if (!fs?.components || fs.components.length === 0) {
+      return renderPanelEmpty({
+        message: 'No freight-stress data yet',
+        hint: 'The freight monitor may still be warming up',
+      });
+    }
+    const overallLevel = fs.overallLevel ?? 'low';
+    const overallColor = STRESS_COLOR[overallLevel];
+    const overallScore = fs.overallScore ?? 0;
+    const rows = fs.components.map((c) => this.renderFreightRow(c)).join('');
+    return `<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">
+      <span style="font-size:11px;font-weight:700;color:${overallColor};text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(overallLevel)} · ${overallScore}</span>
+    </div>
+    <div>${rows}</div>`;
+  }
+
+  private renderFreightRow(c: FreightStressComponent): string {
+    const trendArrow = c.trend === 'rising' ? '↑' : (c.trend === 'falling' ? '↓' : '→');
+    const dev = c.deviationPct == null ? '—' : `${c.deviationPct >= 0 ? '+' : ''}${c.deviationPct.toFixed(1)}%`;
+    const cur = c.current == null ? '—' : c.current.toFixed(1);
+    const lvlColor = STRESS_COLOR[c.stressLevel];
+    return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:4px 0;border-bottom:1px solid var(--border-subtle,#222);gap:8px;">
+      <div>
+        <span style="font-family:ui-monospace,monospace;font-weight:600;">${escapeHtml(c.series)}</span>
+        <span style="margin-left:8px;color:var(--text-secondary,#aaa);">${trendArrow} ${escapeHtml(cur)}</span>
+        <span style="margin-left:8px;color:var(--text-secondary,#aaa);">Δ ${escapeHtml(dev)}</span>
+      </div>
+      <span style="font-weight:600;color:${lvlColor};text-transform:uppercase;letter-spacing:0.05em;font-size:10px;">${escapeHtml(c.stressLevel)} · ${c.stressScore}</span>
+    </div>`;
+  }
 }

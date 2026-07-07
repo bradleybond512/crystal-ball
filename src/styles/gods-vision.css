@@ -83,7 +83,7 @@ body.gods-vision-lock {
 /* ── Micro label ─────────────────────────────────── */
 .ge-hud-micro-label {
   font-family: var(--ge-font);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -103,7 +103,7 @@ body.gods-vision-lock {
 
 .ge-hud-threat-detail {
   font-family: var(--ge-font);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.5px;
   color: rgba(var(--ge-white), 0.55);
@@ -174,7 +174,7 @@ body.gods-vision-lock {
 /* ── Coordinates ─────────────────────────────────── */
 .ge-hud-coord {
   font-family: var(--ge-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.5px;
   color: rgba(var(--ge-white), 0.35);
 }
@@ -232,7 +232,7 @@ body.gods-vision-lock {
   gap: 8px;
   padding: 2px 0;
   font-family: var(--ge-font);
-  font-size: 10px;
+  font-size: 11px;
   color: rgba(var(--ge-white), 0.4);
   letter-spacing: 0.3px;
 }
@@ -244,7 +244,7 @@ body.gods-vision-lock {
   min-width: 22px;
   height: 20px;
   font-family: var(--ge-mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
   color: rgba(var(--ge-blue), 0.8);
@@ -285,7 +285,7 @@ body.gods-vision-lock {
   align-items: center;
   gap: 4px;
   font-family: var(--ge-font);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   color: rgba(var(--ge-white), 0.3);
   background: transparent;
@@ -320,7 +320,7 @@ body.gods-vision-lock {
 
 .ge-layer-count {
   font-family: var(--ge-mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   color: rgba(var(--ge-cyan), 0.8);
   min-width: 0;
@@ -407,7 +407,7 @@ body.gods-vision-lock {
 .ge-mode-badge {
   display: inline-block;
   font-family: var(--ge-font);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 2px;
   padding: 3px 10px;
@@ -510,14 +510,14 @@ body.gods-vision-lock {
 
 .ge-autofollow-counter {
   font-family: var(--ge-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: rgba(var(--ge-cyan), 0.8);
 }
 
 .ge-autofollow-target {
   font-family: var(--ge-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: rgba(var(--ge-white), 0.7);
   line-height: 1.4;
   margin-bottom: 8px;
@@ -526,7 +526,7 @@ body.gods-vision-lock {
 
 .ge-autofollow-skip {
   font-family: var(--ge-font);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 1.5px;
   color: rgba(var(--ge-blue), 0.7);
@@ -571,7 +571,7 @@ body.gods-vision-lock {
   max-height: 120px;
   overflow-y: auto;
   scrollbar-width: none;
-  font-size: 10px;
+  font-size: 11px;
   color: rgba(var(--ge-white), 0.8);
 }
 
@@ -698,7 +698,7 @@ body.gods-vision-lock {
 }
 
 .ge-flymode-label {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.2em;
   color: rgba(var(--ge-cyan), 0.6);
@@ -714,7 +714,7 @@ body.gods-vision-lock {
 }
 
 .ge-flymode-hint {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   color: rgba(var(--ge-white), 0.45);
   white-space: nowrap;

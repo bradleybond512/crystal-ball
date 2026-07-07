@@ -27,6 +27,7 @@ import type { Situation, SituationDomain } from './situation-types';
 import { isAboveNormal, deviationSigma, getBaseline } from './pressure-baselines';
 import { logDebug } from './reasoning-debug';
 import { recordLatency, incrementCounter } from './reasoning-metrics';
+import { formatDurationMinutes } from '../utils/format-duration';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -210,7 +211,7 @@ function buildStatement(
   const name = DOMAIN_LABELS[domain];
   const pct = (level * 100).toFixed(0);
   if (etaMin !== null) {
-    return `${name} pressure rising (${pct}%, +${(slope * 100).toFixed(0)} pts/cycle) — threshold in ~${etaMin}m.`;
+    return `${name} pressure rising (${pct}%, +${(slope * 100).toFixed(0)} pts/cycle) — threshold in ~${formatDurationMinutes(etaMin)}.`;
   }
   return `${name} pressure elevated at ${pct}% — ${trendLabel(slope)}.`;
 }

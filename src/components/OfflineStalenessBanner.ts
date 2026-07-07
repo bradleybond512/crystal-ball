@@ -42,7 +42,7 @@ const STYLE_CSS = `
 }
 .cb-offline-staleness-banner[data-status="offline"] {
   background: rgba(180, 20, 20, 0.88);
-  color: #fff;
+  color: var(--text-primary, #fff);
   border-bottom: 1px solid rgba(255, 80, 80, 0.35);
 }
 .cb-osb-icon {
@@ -55,7 +55,7 @@ const STYLE_CSS = `
   min-width: 0;
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   overflow: hidden;
 }
 .cb-osb-label {
@@ -74,7 +74,7 @@ const STYLE_CSS = `
 .cb-osb-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 .cb-osb-btn {
@@ -99,8 +99,14 @@ const STYLE_CSS = `
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
+  /* ≥24px square hit target (HIG minimum) — the glyph stays small. */
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 6px;
   transition: opacity 0.12s;
 }
 .cb-osb-dismiss:hover { opacity: 1; }
@@ -132,13 +138,18 @@ function buildRow(label: string, subtext: string, icon: string, canDismiss: bool
 
   const labelEl = document.createElement('span');
   labelEl.className = 'cb-osb-label';
-  labelEl.textContent = label;
+  // Terminal period so label + subtext always read as two sentences
+  // ("Data is very old. Last updated 5d ago…"), never one run-on blob.
+  labelEl.textContent = /[.!?…]$/.test(label) ? label : `${label}.`;
 
   const subtextEl = document.createElement('span');
   subtextEl.className = 'cb-osb-subtext';
   subtextEl.textContent = subtext;
 
-  textEl.append(labelEl, subtextEl);
+  // Whitespace text nodes are ignored by flex layout (the gap rule
+  // handles visual spacing) but keep the accessible/plain-text reading
+  // separated even if the injected stylesheet ever fails to apply.
+  textEl.append(labelEl, document.createTextNode(' '), subtextEl);
 
   const actionsEl = document.createElement('span');
   actionsEl.className = 'cb-osb-actions';
@@ -153,12 +164,12 @@ function buildRow(label: string, subtext: string, icon: string, canDismiss: bool
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'cb-osb-dismiss';
     dismissBtn.dataset.action = 'dismiss';
-    dismissBtn.setAttribute('aria-label', 'Dismiss');
+    dismissBtn.setAttribute('aria-label', 'Dismiss staleness notice');
     dismissBtn.textContent = '×';
     actionsEl.append(dismissBtn);
   }
 
-  frag.append(iconEl, textEl, actionsEl);
+  frag.append(iconEl, document.createTextNode(' '), textEl, document.createTextNode(' '), actionsEl);
   return frag;
 }
 

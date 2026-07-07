@@ -9,8 +9,11 @@ body.is-desktop-macos {
   --mac-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
   --mac-font-mono: "SF Mono", ui-monospace, "Cascadia Code", monospace;
 
-  /* Sidebar dimensions */
-  --mac-sidebar-width: 155px;
+  /* Sidebar dimensions — 180px so panel labels ("Improvement Schedule",
+     "Cross-Domain Conflict") stop hard-clipping at the ellipsis. Everything
+     keyed to the sidebar edge (replay scrubber, notification stack) reads
+     this variable, so no other layout math changes. */
+  --mac-sidebar-width: 180px;
   --mac-toolbar-height: 44px;
   --mac-traffic-lights-height: 44px; /* safe area below traffic lights */
 
@@ -172,7 +175,7 @@ body.has-staleness-banner .mac-sidebar-nav {
 
 .mac-sidebar-item.active {
   background: var(--mac-accent);
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .mac-sidebar-item-icon {
@@ -191,7 +194,7 @@ body.has-staleness-banner .mac-sidebar-nav {
 }
 
 .mac-mode-label {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--mac-tertiary-label);
@@ -211,7 +214,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   border-radius: 5px;
   background: transparent;
   color: var(--mac-secondary-label);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   font-family: var(--mac-font);
   cursor: pointer;
@@ -273,7 +276,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   top: -4px;
   right: -4px;
   background: var(--mac-red);
-  color: #fff;
+  color: var(--text-primary);
   font-size: 8px;
   font-weight: 700;
   line-height: 1;
@@ -293,7 +296,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   border-radius: 5px;
   background: rgba(255, 159, 10, 0.12);
   color: var(--mac-orange);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   font-family: var(--mac-font);
   cursor: pointer;
@@ -554,7 +557,7 @@ body.is-desktop-macos[data-app-mode="peace"] .mac-toolbar-title {
   border-radius: 5px;
   background: transparent;
   color: var(--mac-secondary-label);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   font-family: var(--mac-font);
   cursor: pointer;
@@ -700,7 +703,7 @@ button.mac-sidebar-version {
   padding: 2px 8px;
   border-radius: 10px;
   background: var(--mac-accent);
-  color: #fff;
+  color: var(--text-primary);
   border: none;
   cursor: pointer;
   font-variant-numeric: tabular-nums;
@@ -757,7 +760,7 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   cursor: pointer;
   color: var(--mac-secondary-label);
-  font-size: 10px;
+  font-size: 11px;
   align-items: center;
   justify-content: center;
   transition: background 0.12s ease, color 0.12s ease, width 0.12s ease;
@@ -932,7 +935,7 @@ body.is-desktop-macos[data-theme="light"] .mac-content-toolbar {
 }
 
 .mac-toolbar-version {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--mac-secondary-label);
   letter-spacing: 0.02em;
@@ -1309,8 +1312,8 @@ body.is-desktop-macos #unifiedSettingsMount {
 /* MacBook Pro 14" (1512×982 logical @ 2× Retina, default scale) */
 /* ============================================================ */
 @media screen and (max-width: 1520px) and (min-width: 1400px) {
-  :root { --mac-sidebar-width: 148px; }
-  .mac-sidebar-panel-item { font-size: 10.5px; padding: 3px 6px; }
+  :root { --mac-sidebar-width: 172px; }
+  .mac-sidebar-panel-item { font-size: 11px; padding: 3px 6px; }
 }
 
 /* ── God's Eye Time Machine ─────────────────────────────── */
@@ -1394,7 +1397,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .godsvision-time-machine .gtm-pill-active {
   background: rgba(96, 165, 250, 0.25);
   border-color: rgba(96, 165, 250, 0.60);
-  color: #fff;
+  color: var(--text-primary);
 }
 .godsvision-time-machine .gtm-slider {
   flex: 1;
@@ -1432,12 +1435,12 @@ body.is-desktop-macos #unifiedSettingsMount {
 
 /* ── GlobeHUD enhancements ──────────────────────────────── */
 .ge-hud-ctx {
-  font: 10px/1 'SF Mono', monospace;
+  font: 11px/1 'SF Mono', monospace;
   color: rgba(230, 237, 243, 0.78);
   letter-spacing: 0.5px;
 }
 .ge-hud-sun {
-  font: 9px/1 'SF Mono', monospace;
+  font: 11px/1 'SF Mono', monospace;
   padding: 2px 6px;
   border-radius: 999px;
   letter-spacing: 0.6px;
@@ -1448,7 +1451,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .ge-sun-twilight { background: rgba(99,  102, 241, 0.20); color: #c7d2fe; }
 .ge-sun-night { background: rgba(30,  41,  59, 0.55); color: #94a3b8; }
 .ge-hud-nearest {
-  font: 10px/1.3 'SF Mono', monospace;
+  font: 11px/1.3 'SF Mono', monospace;
   color: rgba(230, 237, 243, 0.85);
   margin-top: 4px;
   padding: 3px 6px;
@@ -1473,11 +1476,11 @@ body.is-desktop-macos #unifiedSettingsMount {
   max-width: 100%;
 }
 .ge-hud-ticker-label {
-  font: 9px/1 'SF Mono', monospace;
+  font: 11px/1 'SF Mono', monospace;
   letter-spacing: 1px;
   padding: 3px 7px;
   background: rgba(239, 68, 68, 0.85);
-  color: #fff;
+  color: var(--text-primary);
   border-radius: 999px;
   flex-shrink: 0;
 }
@@ -1652,7 +1655,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .setup-wizard-footer button.primary {
   background: var(--mac-accent, #0a84ff);
   border-color: var(--mac-accent, #0a84ff);
-  color: #fff;
+  color: var(--text-primary);
 }
 .setup-wizard-footer button.primary:hover {
   background: var(--mac-accent-hover, #409cff);
@@ -1741,7 +1744,7 @@ body.is-desktop-macos .syd-self-test:not([disabled]):hover {
 body.is-desktop-macos .syd-self-test:not([disabled]) {
   background: var(--mac-accent) !important;
   border-color: var(--mac-accent) !important;
-  color: #fff !important;
+  color: var(--text-primary) !important;
 }
 
 body.is-desktop-macos .syd-self-test:not([disabled]):hover {

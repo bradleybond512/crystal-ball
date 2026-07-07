@@ -16,6 +16,7 @@
 import {
   deriveStatusBarState,
   formatTimeAgo,
+  type CompositeStatusInputs,
   type EewStatusPayload,
   type StatusBarState,
 } from '../services/seismic/eew-status-bar-helpers';
@@ -57,7 +58,12 @@ export class EEWStatusBar {
   private mounted = false;
   private expanded = false;
   private currentPayload: EewStatusPayload | null = null;
+  /** Supplies safety-case + readiness state for the composite chip.
+   *  Wired by the layout layer; the bar itself never imports singletons. */
+  private compositeProvider: (() => CompositeStatusInputs) | null = null;
   private currentState: StatusBarState = deriveStatusBarState(null);
+  /** Listeners fed the derived composite state on every re-derive (SummaryStrip). */
+  private readonly stateListeners = new Set<(state: StatusBarState) => void>();
   private currentSpaceWx: SpaceWxBanner = { severity: 'none', label: '', subtitle: '' };
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private subtitleTimer: ReturnType<typeof setInterval> | null = null;
@@ -96,6 +102,9 @@ export class EEWStatusBar {
     this.root.append(main, this.expandedEl);
     parent.prepend(this.root);
 
+    // Apply composite (safety/readiness) state immediately — don't wait
+    // for the first EEW poll round-trip.
+    this.refreshCompositeStatus();
     this.startPolling();
     // Tick the subtitle every second so countdowns / time-ago refresh.
     this.subtitleTimer = setInterval(() => this.refreshSubtitle(), 1000);
@@ -134,17 +143,68 @@ export class EEWStatusBar {
   }
 
   /**
+   * Register the callback that supplies safety-case + readiness inputs
+   * for the composite worst-of chip, then re-derive immediately.
+   */
+  setCompositeStatusProvider(provider: (() => CompositeStatusInputs) | null): void {
+    this.compositeProvider = provider;
+    this.refreshCompositeStatus();
+  }
+
+  /** Re-derive the chip from the current payload + fresh composite inputs.
+   *  Called by subscriptions (e.g. safety-case re-evaluations) so the chip
+   *  reacts without waiting for the next EEW poll. */
+  refreshCompositeStatus(): void {
+    if (!this.mounted) return;
+    this.currentState = deriveStatusBarState(this.currentPayload, this.readCompositeInputs());
+    this.render();
+  }
+
+  /**
    * Public for tests — apply a status payload directly.
    */
   applyPayload(payload: EewStatusPayload | null): void {
     this.currentPayload = payload;
-    this.currentState = deriveStatusBarState(payload);
+    this.currentState = deriveStatusBarState(payload, this.readCompositeInputs());
     this.render();
+  }
+
+  private readCompositeInputs(): CompositeStatusInputs | undefined {
+    if (!this.compositeProvider) return undefined;
+    try {
+      return this.compositeProvider();
+    } catch {
+      // Provider reads live singletons — never let a diagnostics hiccup
+      // take down the status bar.
+      return undefined;
+    }
   }
 
   /** @internal */
   __getState(): StatusBarState {
     return this.currentState;
+  }
+
+  /**
+   * Subscribe to the derived composite status (EEW ∪ Safety Case ∪
+   * readiness). Fires immediately with the current state and again after
+   * every re-derive — lets the SummaryStrip reuse this bar's worst-of
+   * output instead of re-deriving its own.
+   */
+  subscribeState(cb: (state: StatusBarState) => void): () => void {
+    this.stateListeners.add(cb);
+    try {
+      cb(this.currentState);
+    } catch { /* listener errors must not break the bar */ }
+    return () => this.stateListeners.delete(cb);
+  }
+
+  private notifyStateListeners(): void {
+    for (const cb of this.stateListeners) {
+      try {
+        cb(this.currentState);
+      } catch { /* listener errors must not break the bar */ }
+    }
   }
 
   // ── Polling ──────────────────────────────────────────────────────────
@@ -163,24 +223,35 @@ export class EEWStatusBar {
   }
 
   private async fetchAndApply(): Promise<void> {
+    let payload: EewStatusPayload | null = null;
     try {
       const res = await fetch(ENDPOINT);
-      if (!res.ok) return;
-      const body = (await res.json()) as Partial<EewStatusPayload>;
-      if (!body) return;
-      const payload: EewStatusPayload = {
-        activeAlerts: Array.isArray(body.activeAlerts) ? body.activeAlerts : [],
-        highestTier: body.highestTier ?? null,
-        lastEventId: body.lastEventId ?? null,
-        asOf: typeof body.asOf === 'number' ? body.asOf : Date.now(),
-      };
+      if (res.ok) {
+        const body = (await res.json()) as Partial<EewStatusPayload> | null;
+        if (body) {
+          payload = {
+            activeAlerts: Array.isArray(body.activeAlerts) ? body.activeAlerts : [],
+            highestTier: body.highestTier ?? null,
+            lastEventId: body.lastEventId ?? null,
+            asOf: typeof body.asOf === 'number' ? body.asOf : Date.now(),
+          };
+        }
+      }
+    } catch { /* endpoint unreachable — fall through */ }
+    if (payload) {
       this.applyPayload(payload);
-    } catch { /* silent */ }
+    } else {
+      // No usable EEW payload this tick. Keep the previous alerts on
+      // screen but still re-derive so safety/readiness state is never
+      // masked by a dead EEW feed.
+      this.refreshCompositeStatus();
+    }
   }
 
   // ── Rendering ────────────────────────────────────────────────────────
 
   private render(): void {
+    this.notifyStateListeners();
     if (!this.root || !this.labelEl) return;
     this.root.className = `eew-status-bar ${COLOR_CLASSES[this.currentState.color]}`;
     this.labelEl.textContent = this.currentState.label;
@@ -211,11 +282,25 @@ export class EEWStatusBar {
     if (!this.subtitleEl) return;
     const lead = this.currentState.lastAlert;
     if (!lead) {
-      this.subtitleEl.textContent = '';
+      const fallback = this.compositeSubtitle();
+      if (this.subtitleEl.textContent !== fallback) {
+        this.subtitleEl.textContent = fallback;
+      }
       return;
     }
     const ago = formatTimeAgo(lead.triggeredAt, Date.now());
     this.subtitleEl.textContent = `${lead.reason} (${ago})`;
+  }
+
+  /** Subtitle when a non-EEW source drives the chip. */
+  private compositeSubtitle(): string {
+    if (this.currentState.source === 'safety') {
+      return 'Safety Case: a safety property is failing — see Safety Case panel';
+    }
+    if (this.currentState.source === 'readiness') {
+      return 'System readiness critical — see Command Center';
+    }
+    return '';
   }
 
   private renderImessageBadge(): void {

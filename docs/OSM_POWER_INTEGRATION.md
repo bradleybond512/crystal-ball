@@ -40,6 +40,9 @@ const rows = powerAssetsToOverlayRows(await fetchSitePowerAssets(site.lat, site.
 - ✅ **Attribution** — the map already credits "© OpenStreetMap" (basemap is
   OSM-derived; see `DeckGLMap` + `public/map-styles/*.json`), which covers the
   ODbL requirement for these layers.
+- ✅ **Panel CSS** — `.dc-grid-line` + `.dc-grid--ok` / `.dc-grid--weak` are
+  styled next to the `.dc-seismic-line` rules in `src/styles/main.css` (cyan ⚡
+  base; green healthy tie; amber weak-tie warning).
 
 ## Wired in (globe overlay)
 
@@ -66,8 +69,6 @@ const rows = powerAssetsToOverlayRows(await fetchSitePowerAssets(site.lat, site.
 1. **Visual pass** — the globe layer is wired and type/lint/unit-clean, but the
    billboard scale ramp and icon legibility at altitude want a quick in-app
    eyeball in a runnable build env (Cesium has no headless render here).
-2. **Panel CSS (cosmetic)** — `.dc-grid-line` / `.dc-grid--weak` render unstyled
-   today; add styling next to the existing `.dc-seismic-line` rules.
 
 ## Optional future sources (the rest of what OpenGridWorks aggregates)
 

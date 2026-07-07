@@ -11,7 +11,6 @@
  * Kept thin: this is glue, not logic. All logic lives in shortcut-registry.ts.
  */
 
-import { flashPanel, jumpToPanel } from '@/services/alert-reactions';
 import {
   createShortcutRegistry,
   parseChord,
@@ -71,8 +70,11 @@ export function installShortcuts(): BootstrapHandles {
       if (b.id.startsWith('panel-focus-')) reg.unregister(b.id);
     }
     const bindings = buildPanelFocusBindings(keys, (key) => {
-      jumpToPanel(key);
-      flashPanel(key);
+      // Route through cb:navigate-panel → navigateToPanel (lazy-mounts + always
+      // gives visible feedback) instead of the silent jumpToPanel/flashPanel,
+      // which no-op on unmounted/disabled panels — the cause of "dead" ⌘-number
+      // keys while sidebar clicks worked (Defect B2).
+      document.dispatchEvent(new CustomEvent('cb:navigate-panel', { detail: { panelKey: key } }));
     });
     for (const b of bindings) reg.register(b);
     paintHintBadges(keys.slice(0, 9));

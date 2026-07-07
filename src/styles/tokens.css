@@ -23,3 +23,64 @@
   --domain-geopolitical:    #7f1d1d;
   --domain-infrastructure:  #374151;
 }
+
+/* ============================================================
+ * Semantic token layer (Wave 4 of the 2026-07 design review).
+ * Values are derived from a frequency analysis of the hardcoded
+ * colors already shipping in src/components + src/styles, so
+ * adopting a token is always pixel-identical to the literal it
+ * replaces. All values are FIXED (not theme-flipped) to match the
+ * existing tokens above; theme-aware cousins live in main.css
+ * (--bg/--surface/--border/--text/--text-secondary/--overlay-*).
+ * Full reference: docs/DESIGN_SYSTEM.md.
+ * New code must use these instead of raw hex/rgba —
+ * scripts/lint-colors.mjs enforces no regressions per file.
+ * ============================================================ */
+:root {
+  /* ── Severity scale (calm → severe) ─────────────────────────
+   * One vocabulary for event/alert severity everywhere:
+   * info → low → moderate → elevated → high → critical.
+   * Each has a translucent -bg twin for chips and badges; twins
+   * keep the alpha most used in the wild for that hue. */
+  --sev-info:     #60a5fa; /* advisory / informational (blue-400) */
+  --sev-low:      #22c55e; /* minor, no action (green-500) */
+  --sev-moderate: #facc15; /* worth watching (yellow-400) */
+  --sev-elevated: #fb923c; /* prepare / degraded (orange-400) */
+  --sev-high:     #ef4444; /* act now (red-500) */
+  --sev-critical: #d50000; /* life-safety / extreme (crimson) */
+  --sev-info-bg:     rgba(96, 165, 250, 0.18);
+  --sev-low-bg:      rgba(34, 197, 94, 0.10);
+  --sev-moderate-bg: rgba(250, 204, 21, 0.15);
+  --sev-elevated-bg: rgba(251, 146, 60, 0.15);
+  --sev-high-bg:     rgba(239, 68, 68, 0.12);
+  --sev-critical-bg: rgba(213, 0, 0, 0.12);
+
+  /* ── Surface tiers (window → overlay) ───────────────────────
+   * Dark-first fixed values matching the de-facto literals. */
+  --surface-0: #0a0a0a; /* window / app background */
+  --surface-1: #141414; /* panel / card */
+  --surface-2: #1a1a1a; /* inset: inputs, wells, nested cards */
+  --surface-3: #222222; /* overlay: menus, popovers, modals */
+  --surface-border:        #333333; /* default hairline */
+  --surface-border-strong: #444444; /* emphasized / hover border */
+
+  /* ── Text tiers ──────────────────────────────────────────────
+   * --text-secondary (#ccc) already exists in main.css and stays
+   * the second tier; these complete the ladder. */
+  --text-primary:  #ffffff; /* headline numbers, strong values */
+  --text-tertiary: #9e9e9e; /* supporting labels, meta rows */
+  --text-disabled: #666666; /* disabled / resolved / inert */
+
+  /* ── Status (feed dots, staleness chips, source health) ─────
+   * stale intentionally shares the warn hue today; keep the
+   * semantic distinction in markup so the values can diverge. */
+  --status-ok:    #4caf50;
+  --status-warn:  #ff9800;
+  --status-stale: #ff9800;
+  --status-error: #f44336;
+
+  /* ── Accent ──────────────────────────────────────────────────
+   * --accent itself is theme-owned (main.css / happy-theme.css);
+   * --accent-muted derives from it for secondary emphasis. */
+  --accent-muted: color-mix(in srgb, var(--accent, #fff) 55%, transparent);
+}

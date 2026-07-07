@@ -56,6 +56,7 @@ import { getShadowModeAlgorithmService } from '@/services/intelligence/shadow-mo
 import type { ForecastCalibrationStore } from '@/services/intelligence/forecast-calibration';
 import { getCalibrationStore } from '@/services/intelligence/forecast-calibration-adapter';
 import { putMemory as idbPutMemory } from '@/services/reasoning-memory';
+import { isCognitionEnabled } from './cognition-settings';
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -239,6 +240,7 @@ export function pushRecalibrationPair(
   shadowP: number,
 ): void {
   try {
+    if (!isCognitionEnabled('shadow-algorithms')) return;
     if (!_initialized) initShadowRollout();
     const svc = getShadowService();
     if (!svc) return;
@@ -268,6 +270,7 @@ export function pushSuperforecastPair(
   shadowP: number,
 ): void {
   try {
+    if (!isCognitionEnabled('shadow-algorithms')) return;
     if (!_initialized) initShadowRollout();
     const svc = getShadowService();
     if (!svc) return;
@@ -299,6 +302,7 @@ export function pushSchemaPair(
   learnedCount: number,
 ): void {
   try {
+    if (!isCognitionEnabled('shadow-algorithms')) return;
     if (!_initialized) initShadowRollout();
     const svc = getShadowService();
     if (!svc) return;

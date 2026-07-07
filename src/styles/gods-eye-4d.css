@@ -21,7 +21,7 @@
   border-radius: 9999px;
   background: linear-gradient(135deg, rgba(140, 90, 255, 0.95), rgba(96, 60, 200, 0.95));
   color: #fff;
-  font: 600 10px/1 "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
+  font: 600 11px/1 "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   box-shadow: 0 0 0 1px rgba(180, 140, 255, 0.45), 0 4px 12px rgba(120, 80, 220, 0.35);
@@ -44,7 +44,7 @@
   border-radius: 4px;
   background: rgba(140, 90, 255, 0.18);
   color: rgba(220, 200, 255, 0.95);
-  font: 500 10px/1.2 "SF Mono", ui-monospace, monospace;
+  font: 500 11px/1.2 "SF Mono", ui-monospace, monospace;
   letter-spacing: 0.04em;
 }
 
@@ -102,7 +102,7 @@ body.gods-eye-4d-active .gods-eye-time-machine {
 }
 
 .ge-swimlane-title {
-  font: 600 10px/1 "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
+  font: 600 11px/1 "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
   letter-spacing: 0.12em;
   color: rgba(200, 180, 255, 0.85);
 }
@@ -129,7 +129,7 @@ body.gods-eye-4d-active .gods-eye-time-machine {
   border: none;
   padding: 2px 8px;
   border-radius: 4px;
-  font: 500 10px/1.4 "SF Mono", ui-monospace, monospace;
+  font: 500 11px/1.4 "SF Mono", ui-monospace, monospace;
   color: rgba(200, 200, 220, 0.65);
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
@@ -163,7 +163,7 @@ body.gods-eye-4d-active .gods-eye-time-machine {
 .ge-lane-label {
   width: 70px;
   flex-shrink: 0;
-  font: 600 9px/1 "SF Mono", ui-monospace, monospace;
+  font: 600 11px/1 "SF Mono", ui-monospace, monospace;
   letter-spacing: 0.08em;
   color: var(--ge-lane-color, rgba(220, 220, 240, 0.85));
   cursor: pointer;
@@ -251,7 +251,7 @@ body.gods-eye-4d-active .gods-eye-time-machine {
   background: rgba(0, 229, 255, 0.95);
   color: #001018;
   border-radius: 3px;
-  font: 700 9px/1 "SF Mono", ui-monospace, monospace;
+  font: 700 11px/1 "SF Mono", ui-monospace, monospace;
   letter-spacing: 0.1em;
   white-space: nowrap;
   pointer-events: none;

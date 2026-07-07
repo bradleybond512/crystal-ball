@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/no-nested-template-literals */
 /**
  * Threat Dashboard — pinned home panel.
  *
@@ -38,7 +37,7 @@ const DOMAINS: readonly DomainMeta[] = [
   { domain: 'weather', label: 'Weather Hazards', icon: '⛈', targetPanel: 'hazard-alerts' },
   { domain: 'aviation', label: 'Aviation', icon: '✈', targetPanel: 'aviation-intel' },
   { domain: 'infrastructure', label: 'Infrastructure', icon: '⚙', targetPanel: 'monitors' },
-  { domain: 'maritime', label: 'Maritime', icon: '⚓', targetPanel: 'maritime-intel' },
+  { domain: 'maritime', label: 'Maritime', icon: '⚓', targetPanel: 'maritime-superpower' },
   { domain: 'biosurveillance', label: 'Biosurveillance', icon: '🧬', targetPanel: 'disease-outbreak' },
   { domain: 'economic', label: 'Economic', icon: '$', targetPanel: 'economic' },
   { domain: 'cyber', label: 'Cyber', icon: '☣', targetPanel: 'cyber-threats' },
@@ -94,6 +93,8 @@ function ensureCssInjected(): void {
 export class ThreatDashboard extends Panel {
   private latest: AggregatedThreats = emptyAggregatedThreats();
   private listener: ((event: Event) => void) | null = null;
+  /** Whether the user has expanded the all-quiet disclosure. Survives re-renders. */
+  private quietExpanded = false;
 
   constructor() {
     super({
@@ -132,22 +133,46 @@ export class ThreatDashboard extends Panel {
     const elevatedOrHigher = countElevatedOrHigher(this.latest);
     this.setCount(elevatedOrHigher);
     const cards = DOMAINS.map((meta) => this.renderCard(meta, this.latest[meta.domain]));
-    const html = `
-      <div style="padding:8px;">
-        <div style="
+    const grid = `<div style="
           display:grid;
           grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
           gap:8px;
         ">
           ${cards.join('')}
-        </div>
+        </div>`;
+    const allQuiet = DOMAINS.every((meta) => this.latest[meta.domain].level === 'NONE');
+    const domainsWord = elevatedOrHigher === 1 ? 'domain' : 'domains';
+    const expandedHtml = `
+      <div style="padding:8px;">
+        ${grid}
         <div style="margin-top:10px;font-size:11px;opacity:0.6;">
-          ${elevatedOrHigher} domain${elevatedOrHigher === 1 ? '' : 's'} above baseline. Click a card to jump.
+          ${elevatedOrHigher} ${domainsWord} above baseline. Click a card to jump.
         </div>
       </div>
     `;
-    this.setContent(html);
-    this.wireClickHandlers();
+    const html = allQuiet ? this.renderAllQuiet(grid) : expandedHtml;
+    this.setContent(html, () => this.wireClickHandlers());
+  }
+
+  /** Every sensor reports NONE — collapse the grid behind one quiet line. */
+  private renderAllQuiet(grid: string): string {
+    const lastChecked = Math.max(0, ...DOMAINS.map((meta) => this.latest[meta.domain].lastUpdatedMs || 0));
+    const checkedLabel = lastChecked > 0
+      ? `checked ${formatRelativeTime(lastChecked)}`
+      : 'awaiting first check';
+    return `
+      <div style="padding:8px;">
+        <details class="threat-dashboard-quiet"${this.quietExpanded ? ' open' : ''}>
+          <summary style="cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 2px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${LEVEL_COLOR.LOW};flex:none;"></span>
+            <span style="font-weight:600;">All sensors quiet</span>
+            <span style="opacity:0.6;">· ${escapeHtml(checkedLabel)}</span>
+            <span style="margin-left:auto;font-size:10px;opacity:0.5;text-transform:uppercase;letter-spacing:0.04em;">${DOMAINS.length} sensors</span>
+          </summary>
+          <div style="margin-top:8px;">${grid}</div>
+        </details>
+      </div>
+    `;
   }
 
   private renderCard(meta: DomainMeta, threat: DomainThreat): string {
@@ -198,6 +223,10 @@ export class ThreatDashboard extends Panel {
 
   private wireClickHandlers(): void {
     const root = this.getContentElement();
+    const quiet = root.querySelector<HTMLDetailsElement>('details.threat-dashboard-quiet');
+    quiet?.addEventListener('toggle', () => {
+      this.quietExpanded = quiet.open;
+    });
     for (const card of root.querySelectorAll<HTMLElement>('.threat-dashboard-card')) {
       card.addEventListener('click', () => navigateToPanel(card.dataset.targetPanel));
       card.addEventListener('keydown', (event) => {

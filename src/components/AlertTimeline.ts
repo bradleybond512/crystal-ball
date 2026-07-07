@@ -7,6 +7,7 @@
 
 import { unifiedAlertStore, type UnifiedAlert } from '@/services/unified-alerts';
 import { panelForAlert } from '@/services/alert-routing';
+import { formatDurationMinutes } from '@/utils/format-duration';
 import { jumpToPanel, flashPanel, pulseAlertOnMap } from '@/services/alert-reactions';
 
 const WINDOW_MS = 6 * 60 * 60_000;
@@ -73,7 +74,8 @@ export class AlertTimeline {
       bar.style.height = `${h}%`;
       const bucketStart = cutoff + (i * BUCKET_MS);
       const agoMin = Math.round((now - bucketStart) / 60_000);
-      bar.title = b.count === 0 ? `${agoMin}m ago: quiet` : `${agoMin}m ago: ${b.count} alerts`;
+      const agoLabel = `${formatDurationMinutes(agoMin)} ago`;
+      bar.title = b.count === 0 ? `${agoLabel}: quiet` : `${agoLabel}: ${b.count} alerts`;
       if (b.count > 0) {
         bar.addEventListener('click', (ev) => { ev.stopPropagation(); this.showDropdown(bar, b.items); });
       }

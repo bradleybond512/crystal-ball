@@ -80,6 +80,15 @@ export class RefreshScheduler implements AppModule {
  const run = async () => {
  if (this.ctx.isDestroyed) return;
  const isHidden = document.visibilityState === 'hidden';
+ // Pause network refreshes while the window is hidden. WKWebView suspends the
+ // underlying fetch regardless, so running them just accumulates in-flight
+ // awaits that ALL settle in one burst on resume — the stampede that pegged
+ // the main thread into a freeze (Defect A). flushStaleRefreshes() catches up
+ // on resume with bounded concurrency (6 at a time, staggered).
+ if (isHidden) {
+ scheduleNext(computeDelay(intervalMs * currentMultiplier, true));
+ return;
+ }
  if (condition && !condition()) {
  scheduleNext(computeDelay(intervalMs * currentMultiplier, isHidden));
  return;
@@ -91,6 +100,11 @@ export class RefreshScheduler implements AppModule {
  this.ctx.inFlight.add(name);
  const refreshStart = performance.now();
  try {
+ // No artificial race-timeout here: pause-while-hidden (above) already
+ // prevents the mass hidden-suspension stampede, and a wrapping timeout only
+ // orphans fn()'s side effects and leaks timers without being able to cancel
+ // the underlying fetch (per cross-agent review). Runners self-heal on resume
+ // when the suspended fetch settles.
  const changed = await fn();
  const elapsed = performance.now() - refreshStart;
  if (elapsed >= SLOW_REFRESH_THRESHOLD_MS) {

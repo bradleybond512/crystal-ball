@@ -7,6 +7,14 @@ const DURATION_CRITICAL = 15_000;
 
 type Severity = 'critical' | 'high' | 'elevated' | 'normal';
 
+/** Escalation order — an absorbed duplicate can only raise the visible severity. */
+const SEVERITY_RANK: Record<Severity, number> = {
+  normal: 0,
+  elevated: 1,
+  high: 2,
+  critical: 3,
+};
+
 interface ToastOptions {
   title: string;
   message?: string;
@@ -50,23 +58,29 @@ const activeToasts: Toast[] = [];
 export class Toast {
   private el: HTMLElement;
   private progress: HTMLElement;
+  private titleEl: HTMLElement | null = null;
+  private counterEl: HTMLElement | null = null;
   private timerId: ReturnType<typeof setTimeout> | null = null;
   private startTime = 0;
   private remaining: number;
   private duration: number;
   private dismissed = false;
+  private severity: Severity;
+  /** How many identical (title+message) toasts this one represents. */
+  private occurrences = 1;
   private readonly key: string;
 
   constructor(private options: ToastOptions) {
-    const severity = options.severity ?? 'normal';
-    this.duration = severity === 'critical' ? DURATION_CRITICAL : DURATION_NORMAL;
+    this.severity = options.severity ?? 'normal';
+    this.duration = this.severity === 'critical' ? DURATION_CRITICAL : DURATION_NORMAL;
     this.remaining = this.duration;
-    // Include severity and the "why" text in the dedupe key so an escalation
-    // (same text, higher severity) or a changed explanation surfaces as a new
-    // toast instead of being suppressed behind the stale lower-severity one.
-    this.key = `${options.title}\u0000${options.message ?? ''}\u0000${severity}\u0000${options.why ?? ''}`;
+    // Dedupe on the visible string only (title+message): two alerts that
+    // map to the same on-screen text must never stack twice. A severity
+    // escalation or changed "why" restyles the existing toast in place
+    // (see absorb()) instead of spawning an identical-looking duplicate.
+    this.key = `${options.title}\u0000${options.message ?? ''}`;
 
-    this.el = this.build(severity);
+    this.el = this.build(this.severity);
     this.progress = this.el.querySelector('.cb-toast-progress') as HTMLElement;
   }
 
@@ -108,6 +122,7 @@ export class Toast {
       color: color,
       lineHeight: '1.3',
     });
+    this.titleEl = title;
 
     body.append(title);
 
@@ -205,11 +220,12 @@ export class Toast {
   show(): void {
     if (isGhostMode()) return;
 
-    // Suppress exact duplicates already on screen — refresh the existing
-    // toast's countdown instead of stacking an identical one.
+    // Suppress duplicates already on screen — the existing toast absorbs
+    // this one (×N counter + refreshed countdown + severity escalation)
+    // instead of stacking an identical copy.
     const dup = activeToasts.find((t) => t.key === this.key && !t.dismissed);
     if (dup) {
-      dup.refresh();
+      dup.absorb(this.options);
       return;
     }
 
@@ -276,6 +292,54 @@ export class Toast {
       this.progress.style.transform = 'scaleX(0)';
     });
     this.startTimer();
+  }
+
+  /**
+   * Merge a duplicate (same title+message) into this on-screen toast:
+   * bump the "×N" counter, restart the countdown, and — when the new copy
+   * carries a higher severity — escalate the accent styling in place so a
+   * repeat at critical is never hidden behind a stale lower tier.
+   */
+  absorb(options: ToastOptions): void {
+    if (this.dismissed) return;
+    this.occurrences += 1;
+    this.renderCounter();
+
+    const incoming = options.severity ?? 'normal';
+    if (SEVERITY_RANK[incoming] > SEVERITY_RANK[this.severity]) {
+      this.severity = incoming;
+      const color = SEVERITY_COLORS[incoming];
+      this.el.style.borderLeft = `3px solid ${color}`;
+      if (this.titleEl) this.titleEl.style.color = color;
+      this.progress.style.background = color;
+      if (incoming === 'critical') this.duration = DURATION_CRITICAL;
+    }
+    this.refresh();
+  }
+
+  /** Small "×N" pill next to the title (created on the first duplicate). */
+  private renderCounter(): void {
+    if (!this.titleEl) return;
+    if (!this.counterEl) {
+      this.counterEl = document.createElement('span');
+      Object.assign(this.counterEl.style, {
+        display: 'inline-block',
+        marginLeft: '6px',
+        padding: '0 5px',
+        borderRadius: '8px',
+        background: 'var(--overlay-medium, rgba(255,255,255,0.1))',
+        color: 'inherit',
+        opacity: '0.85',
+        fontSize: 'var(--text-xs, 11px)',
+        fontWeight: '600',
+        fontVariantNumeric: 'tabular-nums',
+        verticalAlign: '1px',
+      });
+      this.titleEl.append(this.counterEl);
+    }
+    this.counterEl.textContent = `×${this.occurrences}`;
+    this.counterEl.setAttribute('aria-label', `${this.occurrences} occurrences`);
+    this.counterEl.title = `${this.occurrences} identical notifications merged`;
   }
 
   dismiss(): void {

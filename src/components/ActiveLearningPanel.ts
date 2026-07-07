@@ -7,7 +7,6 @@
  * actions. "Correct" reveals a corrected-severity dropdown + note
  * textarea so the reviewer can capture the right answer in one pass.
  */
-/* eslint-disable sonarjs/no-nested-template-literals */
 
 import { Panel } from './Panel';
 import {
@@ -18,6 +17,7 @@ import {
   type UncertaintySource,
 } from '@/services/intelligence/active-learning-queue';
 import { escapeHtml } from '@/utils/sanitize';
+import { statLine } from './ui/statLine';
 
 const REFRESH_MS = 30_000;
 const REVIEW_HISTORY_LIMIT = 20;
@@ -99,11 +99,13 @@ export class ActiveLearningPanel extends Panel {
     const topSourceEntry = Object.entries(stats.bySource).sort((a, b) => b[1] - a[1])[0];
     const topSource = topSourceEntry ? `${topSourceEntry[0]} (${topSourceEntry[1]})` : '—';
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#bbb;">
-        <span><strong style="color:#4a9eff;">${pendingCount}</strong> pending</span>
-        <span><strong>${stats.reviewed}</strong> reviewed</span>
-        <span>avg score <strong>${stats.avgUncertaintyScore.toFixed(2)}</strong></span>
-        <span>top: ${escapeHtml(topSource)}</span>
+      <div style="font-size:11px;color:var(--text-secondary,#bbb);">
+        ${statLine([
+          { value: pendingCount, label: 'pending', valueColor: 'var(--accent,#4a9eff)' },
+          { value: stats.reviewed, label: 'reviewed' },
+          { value: stats.avgUncertaintyScore.toFixed(2), label: 'avg score', labelFirst: true },
+          { value: topSource, label: 'top:', labelFirst: true },
+        ])}
       </div>
       <button class="al-purge" type="button" style="padding:3px 8px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,0.15);border-radius:3px;cursor:pointer;font-size:11px;">Purge expired</button>
     </div>`;

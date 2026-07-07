@@ -169,4 +169,53 @@ describe('EVICTABLE_CACHE_PREFIXES', () => {
     assert.equal(ok, false);
     assert.equal(localStorage.getItem('web-secret-vault/v1'), 'v'.repeat(200));
   });
+
+  it('covers the large re-derivable reasoning/cognition stores (the quota hogs)', () => {
+    // These are the keys that grew to 4.9 MB and exhausted the localStorage
+    // quota, seizing the renderer. They must be evictable so the boot-wired
+    // localStorage patch can reclaim them under pressure.
+    for (const key of [
+      'wm-assumption-annotations', 'wm-quality-debt', 'wm-cognitive-bias-detections',
+      'wm-safety-case', 'wm-intelligence-health', 'wm-mission-control',
+      'wm-situation-store-v2', 'wm-counterfactuals', 'wm-meta-confidence',
+      'wm-world-narrative', 'wm-hypothesis-sets', 'wm-unified-alerts-v1',
+    ]) {
+      assert.ok(
+        EVICTABLE_CACHE_PREFIXES.some((p) => key.startsWith(p)),
+        `${key} must be evictable`,
+      );
+    }
+  });
+
+  it('evicts a large reasoning store to make room, sparing precious user data', () => {
+    // A bloated reasoning cache alongside the user's saved places + watchlist.
+    store.set('wm-assumption-annotations', 'a'.repeat(400)); // evictable hog
+    store.set('wm_saved_places_v1', 'p'.repeat(50));         // PRECIOUS
+    store.set('wm-country-watchlist-v1', 'w'.repeat(50));    // PRECIOUS
+    store.set('wm-basemap', 'satellite');                    // PRECIOUS
+    budget = 600; // full enough that the new write needs the hog gone
+
+    const ok = safeSetItem('wm-situation-store-v2', 's'.repeat(100));
+    assert.equal(ok, true);
+    // The re-derivable reasoning cache was dropped…
+    assert.equal(localStorage.getItem('wm-assumption-annotations'), null);
+    // …but every precious user key survived.
+    assert.equal(localStorage.getItem('wm_saved_places_v1'), 'p'.repeat(50));
+    assert.equal(localStorage.getItem('wm-country-watchlist-v1'), 'w'.repeat(50));
+    assert.equal(localStorage.getItem('wm-basemap'), 'satellite');
+  });
+
+  it('never evicts precious small wm-* keys even when nothing else can free space', () => {
+    // No evictable entries present — only precious wm-* config/identity keys.
+    store.set('wm_saved_places_v1', 'p'.repeat(200));
+    store.set('wm-basemap', 'terrain');
+    store.set('wm_proximity_config', 'c'.repeat(100));
+    budget = totalBytes(); // exactly full — no room for any new write
+
+    const ok = safeSetItem('wm-new', 'n'.repeat(30));
+    assert.equal(ok, false); // can't free space without touching precious keys
+    assert.equal(localStorage.getItem('wm_saved_places_v1'), 'p'.repeat(200));
+    assert.equal(localStorage.getItem('wm-basemap'), 'terrain');
+    assert.equal(localStorage.getItem('wm_proximity_config'), 'c'.repeat(100));
+  });
 });

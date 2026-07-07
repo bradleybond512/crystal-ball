@@ -208,16 +208,22 @@ function installFrameStallDetector(): void {
   // rAF is throttled to ~0 while hidden, so the first frame after unhide shows
   // a gap == the entire hidden duration. Skip that one frame to avoid a false
   // "stall" on every resume.
+  // rAF is ALSO throttled while the window is merely unfocused (backgrounded but
+  // still visible), so a gap while blurred is a WebKit throttle artifact, not a
+  // main-thread stall. Rebaseline on both unhide and refocus, and only log when
+  // the window is visible AND focused.
   let skipNext = false;
+  const rebaseline = (): void => { skipNext = true; last = performance.now(); };
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') { skipNext = true; last = performance.now(); }
+    if (document.visibilityState === 'visible') rebaseline();
   });
+  window.addEventListener('focus', rebaseline);
   const tick = (): void => {
     const now = performance.now();
     const gap = now - last;
     last = now;
     if (skipNext) { skipNext = false; requestAnimationFrame(tick); return; }
-    if (gap >= FRAME_STALL_THRESHOLD_MS && document.visibilityState === 'visible') {
+    if (gap >= FRAME_STALL_THRESHOLD_MS && document.visibilityState === 'visible' && document.hasFocus()) {
       recordBreadcrumb('PERF', 'frame-stall', `${Math.round(gap)}ms main-thread stall`, {});
       logToDesktop('WARN', `frame stall ${Math.round(gap)}ms — main thread blocked between frames`);
     }

@@ -124,6 +124,19 @@ interface SituationTrackingState {
   evaluated: boolean;
 }
 
+/** Fired once per non-leading hypothesis when a set resolves (PR 14 memory
+ *  hygiene hook). Intentionally decoupled from cognition/episodic-memory —
+ *  this module stays a pure intelligence-layer bridge with no dependency on
+ *  the cognition layer built on top of it; callers (panel-layout.ts) wire
+ *  the two together. */
+export interface RefutedHypothesisEvent {
+  situationId: string;
+  domain: string;
+  entityIds: string[];
+  claim: string;
+  hypothesisType: HypothesisType;
+}
+
 export interface BridgeOptions {
   store?: SituationStoreV2;
   engine?: CompetitiveHypothesisEngine;
@@ -132,6 +145,8 @@ export interface BridgeOptions {
   recorder?: typeof recordAlgorithmEvaluation;
   /** Injected observation bus; defaults to `onIngest` from observation-store. */
   observationBus?: (listener: (event: ObservationEvent) => void) => (() => void);
+  /** Called once per refuted (non-leading) hypothesis when a set resolves. */
+  onHypothesisRefuted?: (event: RefutedHypothesisEvent) => void;
 }
 
 function seedSituation(
@@ -173,8 +188,10 @@ function maybeEmitEvaluation(
   state: SituationTrackingState,
   sitId: string,
   sitDomain: string,
+  sitEntityIds: readonly string[],
   sitStatus: string,
   nowMs: number,
+  onHypothesisRefuted?: (event: RefutedHypothesisEvent) => void,
 ): void {
   const updatedSet = engine.getSet(sitId);
   if (!updatedSet) return;
@@ -186,7 +203,19 @@ function maybeEmitEvaluation(
 
   state.evaluated = true;
   for (const h of updatedSet.hypotheses) {
-    engine.updateStatus(h.id, h.id === leader.id ? 'supported' : 'refuted');
+    const isLeader = h.id === leader.id;
+    engine.updateStatus(h.id, isLeader ? 'supported' : 'refuted');
+    if (!isLeader && onHypothesisRefuted) {
+      try {
+        onHypothesisRefuted({
+          situationId: sitId,
+          domain: sitDomain,
+          entityIds: [...sitEntityIds],
+          claim: h.claim,
+          hypothesisType: h.type,
+        });
+      } catch { /* hygiene hook is best-effort — never break the bridge */ }
+    }
   }
 
   try {
@@ -219,6 +248,7 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
   const clock = options.clock ?? (() => Date.now());
   const recorder = options.recorder ?? recordAlgorithmEvaluation;
   const bus = options.observationBus ?? onIngest;
+  const onHypothesisRefuted = options.onHypothesisRefuted;
 
   const tracked = new Map<string, SituationTrackingState>();
 
@@ -253,7 +283,10 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
         state.obsCount += 1;
 
         if (!state.evaluated) {
-          maybeEmitEvaluation(engine, recorder, state, sit.id, sit.domain, sit.status, now);
+          maybeEmitEvaluation(
+            engine, recorder, state, sit.id, sit.domain, sit.entityIds, sit.status, now,
+            onHypothesisRefuted,
+          );
         }
       }
     }

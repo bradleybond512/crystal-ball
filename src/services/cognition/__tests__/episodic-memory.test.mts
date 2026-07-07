@@ -61,6 +61,8 @@ const {
   getCachedAnalogScore,
   updateAnalogCache,
   _clearAnalogCacheForTests,
+  markEpisodeContradictory,
+  contradictEpisodesForRefutation,
 } = await import('../episodic-memory.ts');
 
 // ── Patch isGhostMode so it's never ghost in tests ───────────────────────────
@@ -421,4 +423,162 @@ test('recall: explanation string is never empty', async () => {
     // Explanation should contain a similarity percentage
     assert.ok(r.explanation.includes('%'), 'explanation should include similarity %');
   }
+});
+
+// ── Contradiction flagging tests (PR 14 memory hygiene) ────────────────────────
+
+test('markEpisodeContradictory: flags an episode and is idempotent (first reason wins)', async () => {
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({ signature: 'flag-1' }));
+
+  const first = markEpisodeContradictory(ep.id, 'reason A');
+  assert.equal(first, true);
+
+  const second = markEpisodeContradictory(ep.id, 'reason B');
+  assert.equal(second, false, 'already-flagged episode should not be re-flagged');
+
+  const found = getAllEpisodes().find(e => e.id === ep.id);
+  assert.equal(found!.contradicted?.reason, 'reason A');
+});
+
+test('markEpisodeContradictory: returns false for unknown episode id', async () => {
+  setupTests();
+  const result = markEpisodeContradictory('nonexistent', 'reason');
+  assert.equal(result, false);
+});
+
+test('recall: contradicted episodes remain retrievable with the flag surfaced in the explanation', async () => {
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({
+    summary: 'Black Sea wheat shipment disruption near Bosphorus.',
+    entities: ['Black Sea', 'wheat'],
+    domains: ['shortage'],
+    signature: 'contradict-recall-1',
+  }));
+  markEpisodeContradictory(ep.id, 'competitive-hypothesis refuted the primary explanation');
+
+  const results = await recall('Black Sea wheat shortage due to Bosphorus conflict');
+  const match = results.find(r => r.episode.id === ep.id);
+  assert.ok(match, 'contradicted episode must still be retrievable — contradictions surface, never dropped');
+  assert.ok(
+    match!.explanation.includes('flagged contradictory'),
+    `explanation should surface the contradiction, got: ${match!.explanation}`,
+  );
+});
+
+test('analogScoreFor: contradicted episodes are excluded from the supportive weighted average', () => {
+  // 3 materialized recalls, one of which is flagged contradicted — without
+  // exclusion this would still score ~1.0; with exclusion, only 2 qualify
+  // (still ≥ MIN_RECALLS_FOR_ANALOG=3 requires the contradicted one to not
+  // count toward the minimum either, so the score must fall back to null).
+  const makeRecall = (id: string, contradicted: boolean) => ({
+    episode: {
+      outcome: 'materialized' as const, entities: [], domains: [], vector: [],
+      tier: 'hashed' as const, id, kind: 'hypothesis' as const, signature: `s${id}`,
+      summary: 'a', createdAt: 0, resolvedAt: 1,
+      ...(contradicted ? { contradicted: { reason: 'refuted', markedAt: 1 } } : {}),
+    },
+    similarity: 0.8, ageDays: 1, explanation: 'matched on: test',
+  });
+
+  const recalls = [makeRecall('1', false), makeRecall('2', false), makeRecall('3', true)];
+  const score = analogScoreFor(recalls);
+  assert.equal(score, null, 'only 2 non-contradicted qualified recalls — below MIN_RECALLS_FOR_ANALOG');
+});
+
+test('analogScoreFor: contradicted episode is excluded even when enough recalls remain', () => {
+  const makeRecall = (id: string, outcome: 'materialized' | 'fizzled', contradicted: boolean) => ({
+    episode: {
+      outcome, entities: [], domains: [], vector: [],
+      tier: 'hashed' as const, id, kind: 'hypothesis' as const, signature: `s${id}`,
+      summary: 'a', createdAt: 0, resolvedAt: 1,
+      ...(contradicted ? { contradicted: { reason: 'refuted', markedAt: 1 } } : {}),
+    },
+    similarity: 0.8, ageDays: 1, explanation: 'matched on: test',
+  });
+
+  // 4 recalls: 3 materialized (non-contradicted) + 1 fizzled-but-contradicted.
+  // The contradicted fizzled one must NOT drag the average down.
+  const recalls = [
+    makeRecall('1', 'materialized', false),
+    makeRecall('2', 'materialized', false),
+    makeRecall('3', 'materialized', false),
+    makeRecall('4', 'fizzled', true),
+  ];
+  const score = analogScoreFor(recalls);
+  assert.ok(score !== null);
+  assert.ok(score! > 0.9, `expected the contradicted fizzled recall to be excluded, got ${score}`);
+});
+
+test('contradictEpisodesForRefutation: flags episodes sharing an entity (case-insensitive) with the refuted situation', async () => {
+  setupTests();
+  const ep1 = await recordEpisode(makeEpisodeInput({
+    signature: 'ref-1', entities: ['Suez Canal', 'Egypt'], domains: ['maritime'],
+  }));
+  const ep2 = await recordEpisode(makeEpisodeInput({
+    signature: 'ref-2', entities: ['Bitcoin'], domains: ['finance'],
+  }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-1',
+    domain: 'maritime',
+    entityIds: ['suez canal'], // lowercase — exercises the case-insensitive match
+    claim: 'Vessel is engaging in evasive behavior',
+    hypothesisType: 'alternative',
+  });
+
+  assert.deepEqual(flagged, [ep1.id], 'only the entity-overlapping episode should be flagged');
+  const all = getAllEpisodes();
+  assert.ok(all.find(e => e.id === ep1.id)!.contradicted !== undefined);
+  assert.equal(all.find(e => e.id === ep2.id)!.contradicted, undefined);
+});
+
+test('contradictEpisodesForRefutation: no-op when there is no entity overlap', async () => {
+  setupTests();
+  await recordEpisode(makeEpisodeInput({ signature: 'no-match-1', entities: ['Bitcoin'], domains: ['finance'] }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-2',
+    domain: 'maritime',
+    entityIds: ['suez-canal'],
+    claim: 'claim',
+    hypothesisType: 'primary',
+  });
+
+  assert.deepEqual(flagged, []);
+});
+
+test('contradictEpisodesForRefutation: caps the number of episodes flagged per event', async () => {
+  setupTests();
+  for (let i = 0; i < 15; i++) {
+    await recordEpisode(makeEpisodeInput({ signature: `cap-${i}`, entities: ['Suez Canal'], domains: ['maritime'] }));
+  }
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-3',
+    domain: 'maritime',
+    entityIds: ['Suez Canal'],
+    claim: 'claim',
+    hypothesisType: 'primary',
+  });
+
+  assert.ok(flagged.length <= 10, `expected cap of 10, got ${flagged.length}`);
+});
+
+test('contradictEpisodesForRefutation: does not re-flag already-contradicted episodes', async () => {
+  setupTests();
+  const ep = await recordEpisode(makeEpisodeInput({ signature: 'already-1', entities: ['Suez Canal'], domains: ['maritime'] }));
+  markEpisodeContradictory(ep.id, 'earlier reason');
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-4',
+    domain: 'maritime',
+    entityIds: ['Suez Canal'],
+    claim: 'claim',
+    hypothesisType: 'primary',
+  });
+
+  assert.deepEqual(flagged, [], 'already-contradicted episode should not be counted as newly flagged');
+  const found = getAllEpisodes().find(e => e.id === ep.id);
+  assert.equal(found!.contradicted?.reason, 'earlier reason', 'original reason should be preserved');
 });

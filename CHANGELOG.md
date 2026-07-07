@@ -36,6 +36,26 @@ All notable changes to Crystal Ball are documented here.
   runs the missed-event replay catalog against the committed baseline — the
   same guarantee CI's smoke tier 1 gives, now visible in-app.
 
+### Performance
+
+- **Cognition compute placement + memory hygiene (Cognitive Enhancement
+  PR 14)**: consolidation's periodic clustering pass now runs via
+  `requestIdleCallback` with a visibility guard (`cognition/idle-scheduler.ts`)
+  instead of synchronously on its cadence timer, so it never competes with a
+  rendered frame and is skipped outright while the tab is hidden. A new
+  content-hash embedding memo (`cognition/embedding-cache.ts`, cap 5,000,
+  persisted to `reasoning_memory`) means episodic-memory's `recall()` and
+  `recordEpisode()` no longer re-embed identical text every analyst cycle —
+  including a real pre-existing waste where a standing pending hypothesis
+  was re-embedding its own summary every ~5 minutes only to be discarded by
+  the signature-dedupe check. Episodic memory also gained contradiction
+  flagging: episodes whose backing explanation is refuted by
+  competitive-hypothesis resolution are excluded from *supportive* analog
+  scoring while remaining fully retrievable with the contradiction surfaced
+  in their explanation string (`markEpisodeContradictory`,
+  `contradictEpisodesForRefutation`, wired via a new injectable
+  `onHypothesisRefuted` hook on `situation-hypothesis-bridge.ts`).
+
 ### Removed
 
 - **No-op mode evaluators**: deleted the six dead auto-trigger evaluator stubs

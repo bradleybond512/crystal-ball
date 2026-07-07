@@ -889,6 +889,14 @@ canvas,
   overflow-x: hidden;
   background: var(--bg);
   width: 100%;
+  /* The fixed NotificationStack (staleness / critical / offline / breaking
+     banners) floats over the top of this scroll container, whose first child
+     is .map-section. Offset the scroll content by the stack's live height so
+     no banner state occludes the first row. --notification-stack-h is 0px when
+     the stack is empty (published by NotificationStack's ResizeObserver), so
+     there is no gap at rest. Replaces the old per-banner .panels-grid rules,
+     which offset the wrong (lower, nested) element and left the map occluded. */
+  padding-top: var(--notification-stack-h);
 }
 
 .map-section {
@@ -14954,12 +14962,10 @@ a.prediction-link:hover {
   to   { opacity: 1; }
 }
 
-/* Push content down when critical banner is visible — kept for JS that only
-   adds this class without the has-staleness-banner class; ResizeObserver on
-   the NotificationStack handles the common case automatically. */
-body.has-critical-banner .panels-grid {
-  padding-top: var(--notification-stack-h);
-}
+/* Banner offset now lives on .main-content (the scroll container) so the
+   map-section — the first child, previously occluded — shifts too. See the
+   padding-top on .main-content. The old body.has-*-banner .panels-grid rules
+   are retired to avoid double-offsetting the (lower, nested) panels grid. */
 
 /* ============ Data Staleness Banner ============ */
 
@@ -15109,14 +15115,8 @@ body.has-critical-banner .panels-grid {
   background: var(--surface-hover);
 }
 
-body.has-staleness-banner .panels-grid {
-  /* --below-banners = eew-bar-h + notification-stack-h, updated by ResizeObserver. */
-  padding-top: var(--below-banners);
-}
-
-body.has-staleness-banner.has-critical-banner .panels-grid {
-  padding-top: var(--below-banners);
-}
+/* Retired: banner offset moved to .main-content padding-top (see above) so the
+   map-section shifts with the panels instead of being occluded. */
 
 /* ============ Breaking News Alert Banner ============ */
 

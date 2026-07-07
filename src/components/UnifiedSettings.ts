@@ -3,6 +3,7 @@ import { PANEL_CATEGORY_MAP } from '@/config/panels';
 import { SITE_VARIANT } from '@/config/variant';
 import { LANGUAGES, changeLanguage, getCurrentLanguage, t } from '@/services/i18n';
 import { getAiFlowSettings, setAiFlowSetting, getStreamQuality, setStreamQuality, STREAM_QUALITY_OPTIONS } from '@/services/ai-flow-settings';
+import { isCognitionEnabled, setCognitionEnabled, type CognitionSwitchKey } from '@/services/cognition/cognition-settings';
 import { isAlwaysOn, setAlwaysOn } from '@/services/always-on';
 import type { StreamQuality } from '@/services/ai-flow-settings';
 import { escapeHtml } from '@/utils/sanitize';
@@ -41,6 +42,45 @@ import { geocodeCityStateCountry } from '@/services/geonames';
 const GEAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
 
 const DESKTOP_RELEASES_URL = 'https://github.com/bradleybond512/crystal-ball/releases';
+
+/**
+ * Cognition kill-switches (Settings → General → Cognition). Fail-safe ON:
+ * every switch defaults to enabled and a broken settings read keeps the
+ * learning layer running (see cognition-settings.ts). Descriptions state
+ * what turning the switch OFF does.
+ */
+const COGNITION_TOGGLES: readonly { id: string; key: CognitionSwitchKey; label: string; desc: string }[] = [
+  {
+    id: 'us-cog-evoi',
+    key: 'evoi-planner',
+    label: 'EVOI collection planner',
+    desc: 'Off hides the "What to check next" suggestions in the Analyst HUD (⌘⇧A).',
+  },
+  {
+    id: 'us-cog-episodic',
+    key: 'episodic-recall',
+    label: 'Episodic memory & historical analogs',
+    desc: 'Off stops recording new episodes and hides "Historical analogs" on hypotheses; forecasts lose the analog boost.',
+  },
+  {
+    id: 'us-cog-bocpd',
+    key: 'bocpd',
+    label: 'Regime-shift detection (BOCPD)',
+    desc: 'Off stops change-point scanning — no amber "Regime shift" chip in the triage bar and no detection toasts.',
+  },
+  {
+    id: 'us-cog-consolidation',
+    key: 'consolidation',
+    label: 'Schema consolidation',
+    desc: 'Off pauses the 6-hour episodic→schema consolidation runs; the Crisis Signature Library stops learning new schemas.',
+  },
+  {
+    id: 'us-cog-shadow',
+    key: 'shadow-algorithms',
+    label: 'Shadow algorithm comparison',
+    desc: 'Off stops recording shadow A/B pairs — the Shadow Comparison panel receives no new data.',
+  },
+];
 
 export interface UnifiedSettingsConfig {
   getPanelSettings: () => Record<string, PanelConfig>;
@@ -396,6 +436,13 @@ export class UnifiedSettings {
  return;
  }
 
+ // Cognition kill-switches (Settings → General → Cognition)
+ const cognitionToggle = COGNITION_TOGGLES.find((c) => c.id === target.id);
+ if (cognitionToggle) {
+ setCognitionEnabled(cognitionToggle.key, target.checked);
+ return;
+ }
+
  // Language select
  if (target.closest('.unified-settings-lang-select')) {
  trackLanguageChange(target.value);
@@ -646,6 +693,13 @@ export class UnifiedSettings {
  // 24/7 operation section
  html += `<div class="ai-flow-section-label">24/7 Operation</div>`;
  html += this.toggleRowHtml('us-always-on', '24/7 background operation', 'Keep the algorithms running at full speed when the window is hidden (macOS; uses more battery).', isAlwaysOn());
+
+ // Cognition kill-switches (learning layer). Fail-safe ON — see
+ // cognition-settings.ts for the read-error posture.
+ html += `<div class="ai-flow-section-label">Cognition (learning features)</div>`;
+ for (const toggle of COGNITION_TOGGLES) {
+ html += this.toggleRowHtml(toggle.id, toggle.label, toggle.desc, isCognitionEnabled(toggle.key));
+ }
 
  // AI Analysis section (web-only)
  if (!this.config.isDesktopApp) {

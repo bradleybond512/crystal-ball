@@ -1,4 +1,6 @@
 import { runConsolidation } from './consolidation';
+import { recordConsolidationReport } from './consolidation-state';
+import { isCognitionEnabled } from './cognition-settings';
 import { isGhostMode } from '@/services/mode-manager';
 
 export const CONSOLIDATION_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -15,11 +17,17 @@ export function startConsolidationCadence(): void {
   setInterval(() => {
     try {
       if (isGhostMode()) return;
+      // Kill-switch (Settings → Cognition). Fail-safe ON: a settings read
+      // error keeps the cadence running (current behavior unchanged).
+      if (!isCognitionEnabled('consolidation')) return;
       const raw = localStorage.getItem(LAST_RUN_KEY);
       const lastRunMs = raw === null ? null : Number(raw);
       if (!shouldRunConsolidation(Number.isFinite(lastRunMs) ? lastRunMs : null, Date.now())) return;
       void runConsolidation()
-        .then(() => localStorage.setItem(LAST_RUN_KEY, String(Date.now())))
+        .then((report) => {
+          localStorage.setItem(LAST_RUN_KEY, String(Date.now()));
+          recordConsolidationReport(report);
+        })
         .catch(() => {
           // Never let a failed consolidation pass crash the cadence timer.
         });

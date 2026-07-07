@@ -393,10 +393,14 @@ const MAX_CONTRADICTED_PER_REFUTATION = 10;
 
 /**
  * Best-effort contradiction marking driven by a competitive-hypothesis
- * refutation. Matches episodes that share at least one entity with the
- * refuted explanation's situation (case-insensitive) and have not already
- * been flagged; the most recently created matches are preferred when more
- * than MAX_CONTRADICTED_PER_REFUTATION qualify.
+ * refutation. Matches episodes that share at least one entity AND at least
+ * one domain with the refuted explanation's situation (case-insensitive
+ * entities; the domain check guards against an entity name that happens to
+ * be shared across unrelated domains — e.g. a country appearing in both a
+ * weather episode and an unrelated finance episode — from cross-flagging
+ * each other) and have not already been flagged; the most recently created
+ * matches are preferred when more than MAX_CONTRADICTED_PER_REFUTATION
+ * qualify.
  *
  * Known limitation (documented, not hidden): situation-store-v2's
  * `entityIds` (free-form slugs like 'suez-canal') and the entities recorded
@@ -416,10 +420,12 @@ export function contradictEpisodesForRefutation(ctx: RefutedHypothesisContext): 
 
   const wantedEntities = new Set(ctx.entityIds.map(e => e.toLowerCase()));
   if (wantedEntities.size === 0) return [];
+  const wantedDomain = ctx.domain.toLowerCase();
 
   const candidates = episodes
     .filter(ep =>
       ep.contradicted === undefined &&
+      ep.domains.some(d => d.toLowerCase() === wantedDomain) &&
       ep.entities.some(e => wantedEntities.has(e.toLowerCase())),
     )
     .sort((a, b) => b.createdAt - a.createdAt)

@@ -19,7 +19,14 @@
  * Persistence: getMemory/putMemory (IDB reasoning_memory store) with a
  * localStorage bootstrap mirror, following the loaded/writtenSinceLoad
  * guard pattern used across cognition/ (episodic-memory.ts, consolidation.ts).
+ * The actual write is a full-cache JSON.stringify (O(cache size), can run
+ * into the hundreds of milliseconds near the 5,000-entry cap at real
+ * embedding dimensions), so it is never called synchronously from
+ * cachedEmbed() — scheduleSave() defers it through idle-scheduler.ts and
+ * coalesces any misses that land before the deferred flush actually runs
+ * into that single write, so a burst of misses costs one serialize, not N.
  *
+
  * Trade-off (documented, not hidden): a cache hit freezes whichever tier
  * resolved at write time. If Ollama comes online after a hashed-tier entry
  * is cached, repeat queries of that exact text keep serving the hashed
@@ -35,6 +42,8 @@
 import { embed } from './embedding-provider';
 import type { EmbeddingResult } from './embedding-provider';
 import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
+import { scheduleIdleWork } from './idle-scheduler';
+import type { ScheduleIdleWorkOptions } from './idle-scheduler';
 
 // getMemory/putMemory are IDB-backed. Statically imported (not require()) so
 // the persistence path survives the Vite browser bundle; reasoning-memory
@@ -64,6 +73,13 @@ export interface EmbeddingCacheOptions {
   putMemoryFn?: <T>(key: string, value: T) => Promise<void>;
   /** Override the underlying embed() call for tests. */
   embedFn?: (text: string) => Promise<EmbeddingResult>;
+  /**
+   * Override the deferred-save scheduler for tests. Defaults to the real
+   * scheduleIdleWork() (idle-time / setTimeout(0) fallback). Tests pass a
+   * synchronous `(task) => task()` to make persistence assertions
+   * deterministic without waiting on a real tick.
+   */
+  scheduleIdleWorkFn?: (task: () => void, opts?: ScheduleIdleWorkOptions) => void;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -84,6 +100,17 @@ let _writtenSinceLoad = false;
 let _storageOverride: EmbeddingCacheStorageLike | null | undefined;
 let _getMemoryOverride: (<T>(key: string) => Promise<T | null>) | null = null;
 let _putMemoryOverride: (<T>(key: string, value: T) => Promise<void>) | null = null;
+let _scheduleOverride: ((task: () => void, opts?: ScheduleIdleWorkOptions) => void) | null = null;
+
+// Coalesce every miss in a burst into a single deferred full-cache
+// serialize: save() is O(cache size) (a full JSON.stringify), so calling it
+// synchronously on every miss would reintroduce exactly the main-thread-
+// blocking cost this PR's idle-scheduler exists to eliminate. `_dirty`
+// tracks whether the in-memory cache has changed since the last flush;
+// only the first scheduled flush to actually run performs the write, and
+// it always reads the *current* live cache (never a stale snapshot), so
+// any misses that land between scheduling and flushing are captured too.
+let _dirty = false;
 
 // ── Content hash (fast, non-cryptographic — collisions serve a plausible
 //    wrong vector, never crash; same acceptance as the djb2 bucket hashing
@@ -157,6 +184,22 @@ function save(storage: EmbeddingCacheStorageLike | null): void {
   void putMemFn(STORAGE_KEY, obj);
 }
 
+/**
+ * Defer the full-cache serialize to idle time, coalescing any number of
+ * misses that land before the flush actually runs into one write.
+ */
+function scheduleSave(
+  storage: EmbeddingCacheStorageLike | null,
+  scheduleFn: (task: () => void, opts?: ScheduleIdleWorkOptions) => void,
+): void {
+  _dirty = true;
+  scheduleFn(() => {
+    if (!_dirty) return; // an earlier-scheduled flush already wrote this state
+    _dirty = false;
+    save(storage);
+  });
+}
+
 function touch(key: string, entry: SerializedEntry): void {
   _cache.delete(key);
   _cache.set(key, entry);
@@ -188,6 +231,7 @@ export async function cachedEmbed(
   const storage = resolveStorage(opts.storage);
   if (opts.getMemoryFn !== undefined) _getMemoryOverride = opts.getMemoryFn;
   if (opts.putMemoryFn !== undefined) _putMemoryOverride = opts.putMemoryFn;
+  if (opts.scheduleIdleWorkFn !== undefined) _scheduleOverride = opts.scheduleIdleWorkFn;
   load(storage);
 
   const key = hashText(text);
@@ -202,7 +246,7 @@ export async function cachedEmbed(
   const entry: SerializedEntry = { vector: [...result.vector], tier: result.tier, dim: result.dim };
   _cache.set(key, entry);
   evictOverCap();
-  save(storage);
+  scheduleSave(storage, _scheduleOverride ?? scheduleIdleWork);
   return result;
 }
 
@@ -216,6 +260,7 @@ export function configureEmbeddingCacheForTests(opts: EmbeddingCacheOptions): vo
   _storageOverride = opts.storage === undefined ? undefined : opts.storage;
   _getMemoryOverride = opts.getMemoryFn ?? null;
   _putMemoryOverride = opts.putMemoryFn ?? null;
+  _scheduleOverride = opts.scheduleIdleWorkFn ?? null;
 }
 
 /** Reset module state for test isolation. */
@@ -223,9 +268,11 @@ export function resetEmbeddingCacheForTests(): void {
   _cache.clear();
   _loaded = false;
   _writtenSinceLoad = false;
+  _dirty = false;
   _storageOverride = undefined;
   _getMemoryOverride = null;
   _putMemoryOverride = null;
+  _scheduleOverride = null;
 }
 
 export const __internals = { hashText, MAX_CACHE_ENTRIES };

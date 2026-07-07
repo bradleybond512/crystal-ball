@@ -24,6 +24,9 @@ const {
 
 const noopGetMemory = async <T>(_key: string): Promise<T | null> => null;
 const noopPutMemory = async <T>(_key: string, _val: T): Promise<void> => undefined;
+/** Run the deferred save immediately so persistence assertions don't need
+ *  to wait on a real idle-callback/setTimeout tick. */
+const syncSchedule = (task: () => void): void => task();
 
 function setupTests(): void {
   for (const k of Object.keys(_store)) delete _store[k];
@@ -32,6 +35,7 @@ function setupTests(): void {
     storage: stubStorage,
     getMemoryFn: noopGetMemory,
     putMemoryFn: noopPutMemory,
+    scheduleIdleWorkFn: syncSchedule,
   });
 }
 
@@ -94,27 +98,75 @@ test('cachedEmbed: returned vector is a fresh copy (mutating it does not corrupt
   assert.equal(r2.vector[0], 1, 'mutating a returned vector must not affect the cached entry');
 });
 
-test('cachedEmbed: evicts least-recently-used entries over the 5,000 cap', async () => {
+test('cachedEmbed: evicts the true least-recently-used entry at the real 5,000 cap', async () => {
   setupTests();
+  // Bulk-fill without persisting on every miss (irrelevant to this test,
+  // and would be redundant given scheduleSave's own coalescing) — use a
+  // no-op scheduler so the fill isn't paying for 5,000 individual flushes.
+  configureEmbeddingCacheForTests({
+    storage: stubStorage, getMemoryFn: noopGetMemory, putMemoryFn: noopPutMemory,
+    scheduleIdleWorkFn: () => { /* never flush during the bulk fill */ },
+  });
   let calls = 0;
   const embedFn = async (_text: string) => {
     calls += 1;
     return { vector: fakeVector(calls), tier: 'hashed' as const, dim: 3 };
   };
 
-  // Use a small effective cap via direct internal check instead of filling
-  // 5,000 real entries (too slow for a unit test) — verify the constant and
-  // exercise the eviction path at a manageable scale by re-implementing the
-  // same insertion-order LRU with a handful of entries and confirming the
-  // oldest untouched entry is the one that would be evicted first.
   assert.equal(MAX_CACHE_ENTRIES, 5000);
+  for (let i = 0; i < MAX_CACHE_ENTRIES; i++) await cachedEmbed(`key-${i}`, { embedFn });
+  assert.equal(getEmbeddingCacheSize(), MAX_CACHE_ENTRIES);
 
-  const keys = ['k1', 'k2', 'k3'];
-  for (const k of keys) await cachedEmbed(k, { embedFn });
-  // Touch k1 again so it becomes most-recently-used.
-  await cachedEmbed('k1', { embedFn });
-  assert.equal(calls, 3, 'k1 should be served from cache on the second call');
-  assert.equal(getEmbeddingCacheSize(), 3);
+  // Touch key-0 so it becomes most-recently-used; key-1 is now the true LRU.
+  await cachedEmbed('key-0', { embedFn });
+  assert.equal(calls, MAX_CACHE_ENTRIES, 'key-0 should be served from cache, not re-embedded');
+
+  // One more distinct entry pushes the cache 1 over cap, evicting exactly one.
+  await cachedEmbed('key-new', { embedFn });
+  assert.equal(getEmbeddingCacheSize(), MAX_CACHE_ENTRIES, 'cache stays at cap after eviction');
+
+  // key-0 (touched) must survive; key-1 (true LRU) must be gone.
+  const beforeKey0Calls = calls;
+  await cachedEmbed('key-0', { embedFn });
+  assert.equal(calls, beforeKey0Calls, 'key-0 (touched) should still be cached, not re-embedded');
+
+  const beforeKey1Calls = calls;
+  await cachedEmbed('key-1', { embedFn });
+  assert.equal(calls, beforeKey1Calls + 1, 'key-1 (true LRU) should have been evicted and re-embedded');
+});
+
+test('cachedEmbed: coalesces multiple misses in a burst into a single deferred save', async () => {
+  setupTests();
+  const scheduled: (() => void)[] = [];
+  let putMemCalls = 0;
+  configureEmbeddingCacheForTests({
+    storage: stubStorage,
+    getMemoryFn: noopGetMemory,
+    putMemoryFn: async () => { putMemCalls += 1; },
+    // Capture instead of running — simulates several misses landing before
+    // the browser/Node idle callback actually fires.
+    scheduleIdleWorkFn: (task) => { scheduled.push(task); },
+  });
+  let calls = 0;
+  const embedFn = async (_text: string) => {
+    calls += 1;
+    return { vector: fakeVector(calls), tier: 'hashed' as const, dim: 3 };
+  };
+
+  await cachedEmbed('burst-a', { embedFn });
+  await cachedEmbed('burst-b', { embedFn });
+  await cachedEmbed('burst-c', { embedFn });
+
+  assert.equal(scheduled.length, 3, 'each miss schedules a flush attempt');
+  assert.equal(putMemCalls, 0, 'nothing should be written until a scheduled flush actually runs');
+
+  // Run every scheduled task, simulating all 3 idle callbacks eventually firing.
+  for (const task of scheduled) task();
+
+  assert.equal(putMemCalls, 1, 'only the first scheduled flush to run should perform the write — the dirty flag short-circuits the rest');
+  const raw = stubStorage.getItem('crystalball-cognition-embed-cache-v1');
+  const parsed = JSON.parse(raw!) as Record<string, unknown>;
+  assert.equal(Object.keys(parsed).length, 3, 'the single flush must capture all 3 misses, not just the first');
 });
 
 test('cachedEmbed: persists to storage on a miss', async () => {

@@ -533,6 +533,28 @@ test('contradictEpisodesForRefutation: flags episodes sharing an entity (case-in
   assert.equal(all.find(e => e.id === ep2.id)!.contradicted, undefined);
 });
 
+test('contradictEpisodesForRefutation: does not flag an entity match across unrelated domains', async () => {
+  setupTests();
+  // Same entity name ("Iran"), unrelated domain — a weather refutation must
+  // not contradict a finance episode just because they mention the same
+  // country.
+  const financeEp = await recordEpisode(makeEpisodeInput({
+    signature: 'cross-domain-1', entities: ['Iran'], domains: ['finance'],
+  }));
+
+  const flagged = contradictEpisodesForRefutation({
+    situationId: 'sit-cross',
+    domain: 'weather',
+    entityIds: ['Iran'],
+    claim: 'Storm system will make landfall near the coast',
+    hypothesisType: 'alternative',
+  });
+
+  assert.deepEqual(flagged, [], 'entity overlap alone must not cross domains');
+  const found = getAllEpisodes().find(e => e.id === financeEp.id);
+  assert.equal(found!.contradicted, undefined);
+});
+
 test('contradictEpisodesForRefutation: no-op when there is no entity overlap', async () => {
   setupTests();
   await recordEpisode(makeEpisodeInput({ signature: 'no-match-1', entities: ['Bitcoin'], domains: ['finance'] }));

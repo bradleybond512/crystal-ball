@@ -27,6 +27,7 @@
 
 import { getMemory, putMemory } from '@/services/reasoning-memory';
 import { isGhostMode } from '@/services/mode-manager';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -103,8 +104,17 @@ const MAX_INTERESTS = 200;
 const MIN_TERM_LEN = 4;
 const TOP_TERMS_PER_CONTENT = 8;
 
-/** Weekly half-life: weight halves after 7 days without reinforcement. */
+/** Weekly half-life: weight halves after 7 days without reinforcement.
+ *  PR 12 (self-tuning): the live value is the declared tunable
+ *  'operator-ranking:interestHalfLifeHours' (bounds [72, 336]); this
+ *  constant (168h) is the get-with-default fallback. */
 const INTEREST_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
+
+/** Tuned interest half-life in ms, read at decay time. */
+function interestHalfLifeMs(): number {
+  return getTunedParam('operator-ranking', 'interestHalfLifeHours', INTEREST_HALF_LIFE_MS / MS_PER_HOUR) * MS_PER_HOUR;
+}
 
 /** Interest weight step sizes. */
 const POSITIVE_STEP = 0.3;
@@ -234,7 +244,7 @@ function extractTerms(text: string): string[] {
  */
 export function decayWeight(weight: number, lastReinforced: number, nowMs: number): number {
   const ageMs = Math.max(0, nowMs - lastReinforced);
-  const halfLives = ageMs / INTEREST_HALF_LIFE_MS;
+  const halfLives = ageMs / interestHalfLifeMs();
   return weight * Math.pow(0.5, halfLives);
 }
 

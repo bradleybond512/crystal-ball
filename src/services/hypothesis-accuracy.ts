@@ -20,6 +20,12 @@ import { getMemory, putMemory } from './reasoning-memory';
 import { recordAlgorithmEvaluation } from '@/services/algorithms/record-evaluation';
 import { resolveHypothesisPredictionBySig } from './intelligence/hypothesis-prediction-bridge';
 import { resolveEpisodeForSignature } from '@/services/cognition/episodic-memory-bridge';
+import { getCachedAnalogScore } from '@/services/cognition/episodic-memory';
+import { interestMultiplier } from '@/services/cognition/operator-model';
+import {
+  gradeEpisodicAnalogOnResolution,
+  gradeOperatorRankingOnResolution,
+} from '@/services/cognition/self-tuning';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -39,6 +45,15 @@ interface PendingHypothesis {
   situationIds: string[];
   alertIds: string[];
   initialConfidence: number;
+  /** EMIT-TIME episodic analog score for this signature (cognition PR 12).
+   *  Stamped so grading never reads the post-resolution cache, which would
+   *  include the resolved episode itself (outcome leakage). Optional:
+   *  entries persisted before PR 12 lack it and are skipped by the grader. */
+  analogScore?: number | null;
+  /** EMIT-TIME operator interest multiplier (cognition PR 12). Stamped so
+   *  grading is not biased by in-window engagement reinforcement. Optional:
+   *  legacy entries lack it and are skipped by the grader. */
+  operatorMult?: number;
 }
 
 interface AccuracyStats {
@@ -106,16 +121,32 @@ function save(): void {
 
 // ── Stamping ─────────────────────────────────────────────────────────────────
 
+/** Cognition PR 12: capture the EMIT-TIME analog score + operator interest
+ *  multiplier so resolution-time grading uses the values that actually
+ *  influenced this cycle's ranking (never a post-resolution recomputation).
+ *  Guarded: a cognition failure must never break hypothesis stamping. */
+function cognitionStamps(h: Hypothesis, signature: string): { analogScore: number | null; operatorMult: number | undefined } {
+  let analogScore: number | null = null;
+  let operatorMult: number | undefined;
+  try { analogScore = getCachedAnalogScore(signature); } catch { /* cache unavailable */ }
+  try { operatorMult = interestMultiplier(h.statement); } catch { /* operator model unavailable */ }
+  return { analogScore, operatorMult };
+}
+
 function stamp(snapshot: AnalystSnapshot): void {
   for (const h of snapshot.hypotheses) {
+    const signature = signatureFor(h);
+    const { analogScore, operatorMult } = cognitionStamps(h, signature);
     pending.push({
       id: h.id,
-      signature: signatureFor(h),
+      signature,
       kind: h.kind,
       emittedAt: h.timestamp,
       situationIds: h.evidence.filter(e => e.source === 'situation-engine').map(e => e.id),
       alertIds: h.evidence.filter(e => e.source === 'unified-alerts').map(e => e.id),
       initialConfidence: h.confidence,
+      analogScore,
+      operatorMult,
     });
   }
   // Cap the pending queue to keep localStorage footprint bounded.
@@ -203,6 +234,17 @@ function gradeOne(p: PendingHypothesis): void {
       hit ? 'materialized' : 'fizzled',
     );
   } catch { /* episodic memory unavailable */ }
+
+  // Cognition PR 12: grade the analog engine + the operator-model's
+  // ranking personalization against this resolution, from the EMIT-TIME
+  // values stamped on the pending hypothesis (unstamped legacy entries are
+  // skipped). Fire-and-forget; never throws into this grading path.
+  try {
+    gradeEpisodicAnalogOnResolution(p.analogScore, hit);
+  } catch { /* evaluation ledger unavailable */ }
+  try {
+    gradeOperatorRankingOnResolution(p.operatorMult, hit);
+  } catch { /* evaluation ledger unavailable */ }
 }
 
 function gradeDue(): void {

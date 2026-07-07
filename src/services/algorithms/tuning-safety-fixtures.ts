@@ -27,6 +27,7 @@ import { evaluateNegativeEvidence, type ExpectedSignal } from '@/services/intell
 import type { NormalizedFact } from '@/services/intelligence/types';
 import { detectBigEvent, type BigEventInput } from '@/services/insights/big-event-detector';
 import { feedbackMultiplier } from '@/services/hypothesis-feedback';
+import { analogScoreFor, type Episode, type Recall } from '@/services/cognition/episodic-memory';
 
 export interface TuningSafetyScore {
   /** Fraction of fixtures whose suppress/keep decision matched ground truth. */
@@ -316,7 +317,7 @@ function scoreBigEventExposureFloor(exposureFloor: number): TuningSafetyScore {
  * stops being demoted at very low penalties (< 0.35). Both extremes regress
  * different subsets — the fixture peaks in [0.4, 0.6].
  */
-const FEEDBACK_DEMOTE_THRESHOLD = 1.0; // mult strictly below 1.0 → demoted
+const FEEDBACK_DEMOTE_THRESHOLD = 1; // mult strictly below 1.0 → demoted
 
 interface FeedbackCase {
   id: string;
@@ -357,6 +358,83 @@ function scoreFeedbackDownPenalty(downPenalty: number): TuningSafetyScore {
   };
 }
 
+// ── episodic-analog.minSim fixtures (cognition PR 12) ────────────────────
+
+/**
+ * Downstream decision modeled: does the analog engine emit an ELEVATED
+ * signal (analogScoreFor returns non-null AND ≥ 0.5) for a hypothesis?
+ *
+ * T* cases are genuine recurring patterns — three close analogs (sim
+ * ≥ 0.50) that all materialized SHOULD produce an elevated signal. A
+ * minSim too HIGH disqualifies them (analog count < 3 → null → no signal).
+ *
+ * F* cases are spurious weak matches — three low-similarity "analogs"
+ * that happened to materialize should NOT drive an elevated signal. A
+ * minSim too LOW lets them qualify and fires wrongly.
+ *
+ * N1 is a sanity guard: strong analogs that all fizzled must never read
+ * as elevated at any valid minSim (score 0 either way).
+ *
+ * The optimum sits around the default (0.45): one step up (0.50) keeps
+ * every passing case; larger increases break T1, decreases toward 0.40
+ * break F3. Calls the REAL analogScoreFor with an explicit minSim.
+ */
+interface AnalogSafetyCase {
+  id: string;
+  /** Similarities of the three candidate analogs. */
+  sims: readonly [number, number, number];
+  outcome: 'materialized' | 'fizzled';
+  /** Ground truth: should the analog signal read "elevated"? */
+  expectElevated: boolean;
+}
+
+const ANALOG_CASES: readonly AnalogSafetyCase[] = [
+  // Genuine pattern at sim ≥ 0.50 — breaks when minSim rises above 0.50.
+  { id: 'T1-recurring-pattern', sims: [0.5, 0.52, 0.55], outcome: 'materialized', expectElevated: true },
+  // Spurious matches: progressively higher weak-similarity bands. Each
+  // blocks a deeper decrease (F1 blocks ≤0.31, F2 ≤0.36, F3 ≤0.40).
+  { id: 'F1-noise-low', sims: [0.31, 0.33, 0.35], outcome: 'materialized', expectElevated: false },
+  { id: 'F2-noise-mid', sims: [0.36, 0.37, 0.39], outcome: 'materialized', expectElevated: false },
+  { id: 'F3-noise-high', sims: [0.4, 0.41, 0.43], outcome: 'materialized', expectElevated: false },
+  // Sanity: strong analogs that fizzled are never "elevated".
+  { id: 'N1-fizzled-strong', sims: [0.5, 0.55, 0.58], outcome: 'fizzled', expectElevated: false },
+];
+
+function analogCaseRecalls(c: AnalogSafetyCase): Recall[] {
+  return c.sims.map((similarity, i): Recall => {
+    const episode: Episode = {
+      id: `safety-${c.id}-${i}`,
+      kind: 'hypothesis',
+      signature: `safety-${c.id}`,
+      summary: 'safety fixture episode',
+      domains: ['conflict'],
+      entities: ['XX'],
+      createdAt: 0,
+      resolvedAt: 1000,
+      outcome: c.outcome,
+      vector: [],
+      tier: 'hashed',
+    };
+    return { episode, similarity, ageDays: 1, explanation: 'safety fixture' };
+  });
+}
+
+/** Run the REAL analog scorer at `minSim` across the fixtures and return
+ *  the elevated/quiet hit rate. */
+function scoreEpisodicAnalogMinSim(minSim: number): TuningSafetyScore {
+  const passingCaseIds: string[] = [];
+  for (const c of ANALOG_CASES) {
+    const score = analogScoreFor(analogCaseRecalls(c), { minSim });
+    const elevated = score !== null && score >= 0.5;
+    if (elevated === c.expectElevated) passingCaseIds.push(c.id);
+  }
+  return {
+    hitRate: passingCaseIds.length / ANALOG_CASES.length,
+    cases: ANALOG_CASES.length,
+    passingCaseIds,
+  };
+}
+
 // ── Registry + public API ────────────────────────────────────────────────
 
 type SafetyScorer = (candidateValue: number) => TuningSafetyScore;
@@ -367,6 +445,7 @@ const SCORERS: Record<string, SafetyScorer> = {
   'big-event-detector:rapidJumpDelta': scoreBigEventRapidJumpDelta,
   'big-event-detector:exposureFloor': scoreBigEventExposureFloor,
   'hypothesis-feedback:downPenalty': scoreFeedbackDownPenalty,
+  'episodic-analog:minSim': scoreEpisodicAnalogMinSim,
 };
 
 function scorerKey(algorithmId: string, parameterId: string): string {

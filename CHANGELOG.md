@@ -6,6 +6,22 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Self-tuning cognition (Cognitive Enhancement PR 12)**: the cognition
+  layer is now plugged into the self-improvement machinery. Eight cognition
+  constants became bounded tunables (episodic minSim, analog blend
+  pseudo-count, calibration shrinkage prior, extremization k, spread-skip
+  threshold, entity heat half-life, interest decay half-life, consolidation
+  cluster threshold) read via the tunable-params store with the historical
+  values as defaults. Five cognition outputs (episodic-analog,
+  recalibration, superforecast, operator-ranking, entity-trajectory) are
+  registered algorithms with deterministic outcome grading
+  (`cognition/self-tuning.ts`: resolved episodes, resolved calibration
+  records, retrospective trajectory replay, hypothesis-resolution operator
+  grading) and a Page-Hinkley drift watch (`cb:cognition-drift`) on a
+  6-hour cadence. Below-floor cognition algorithms get bounded
+  safe-adjustment proposals gated by a new episodic-analog minSim
+  safety-fixture suite; every other cognition knob fails closed to
+  operator approval.
 - **Surfacing Move 2 — cognition layer visibility**: forecast provenance,
   calibration report, and booting the learning loops (PR #1339).
 - **Ask the data in Command Center**: the deterministic ask-the-data engine is

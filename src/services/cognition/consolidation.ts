@@ -59,6 +59,7 @@ import { getAllEpisodes } from './episodic-memory';
 import type { Episode } from './episodic-memory';
 import { getCrisisSignatureLibrary } from '../intelligence/crisis-signature-library';
 import type { CrisisSignature } from '../intelligence/crisis-signature-library';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // getMemory/putMemory are IDB-backed. Statically imported (not require()) so
 // the persistence path survives the Vite browser bundle; reasoning-memory
@@ -549,7 +550,11 @@ export function runConsolidation(opts: ConsolidationOptions = {}): Promise<Conso
   if (opts.getMemoryFn !== undefined) _getMemoryOverride = opts.getMemoryFn;
   if (opts.putMemoryFn !== undefined) _putMemoryOverride = opts.putMemoryFn;
 
-  const simThreshold = opts.clusterSimThreshold ?? DEFAULT_CLUSTER_SIM;
+  // PR 12 (self-tuning): the cluster threshold is the declared tunable
+  // 'consolidation:clusterSimThreshold' (bounds [0.5, 0.75], default 0.6);
+  // an explicit opts value (tests) still wins.
+  const simThreshold = opts.clusterSimThreshold
+    ?? getTunedParam('consolidation', 'clusterSimThreshold', DEFAULT_CLUSTER_SIM);
   const minClusterSize = opts.minClusterSize ?? DEFAULT_MIN_CLUSTER_SIZE;
   const registerMinN = opts.registerMinN ?? DEFAULT_REGISTER_MIN_N;
   const highRate = opts.highRateThreshold ?? DEFAULT_HIGH_RATE;

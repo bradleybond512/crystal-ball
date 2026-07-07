@@ -20,6 +20,10 @@
  */
 
 import type { HypothesisKind } from '@/services/analyst-loop';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
+
+/** Historical hardcoded episodic-blend pseudo-count (pre-PR-12 default). */
+export const DEFAULT_ANALOG_BLEND_K = 5;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -133,7 +137,7 @@ export const REFERENCE_CLASSES: readonly ReferenceClass[] = [
   {
     id: 'sovereign-debt-stress-90d',
     description: 'Sovereign credit rating is downgraded or placed on watch within 90 days of fiscal stress signals',
-    baseRate: 0.20,
+    baseRate: 0.2,
     horizon: '90d',
     source: "Moody's/S&P/Fitch downgrade history 2010–2024; ~20% of sovereign fiscal-stress episodes produced a rating action within 90 days",
     matchers: {
@@ -148,7 +152,7 @@ export const REFERENCE_CLASSES: readonly ReferenceClass[] = [
   {
     id: 'critical-infrastructure-cyber-7d',
     description: 'Confirmed critical-infrastructure cyber intrusion causes operational disruption within 7 days of first detection',
-    baseRate: 0.30,
+    baseRate: 0.3,
     horizon: '7d',
     source: 'CISA ICS-CERT advisories 2018–2024; ~30% of confirmed OT/ICS intrusions caused operational disruption within 7 days',
     matchers: {
@@ -226,7 +230,7 @@ export const REFERENCE_CLASSES: readonly ReferenceClass[] = [
   {
     id: 'port-disruption-shipping-7d',
     description: 'A major port disruption causes measurable shipping delays within 7 days',
-    baseRate: 0.60,
+    baseRate: 0.6,
     horizon: '7d',
     source: 'Lloyd\'s List port disruption database 2015–2024; ~60% of port closure or labor action events caused ≥24h routing delays within 7 days',
     matchers: {
@@ -241,7 +245,7 @@ export const REFERENCE_CLASSES: readonly ReferenceClass[] = [
   {
     id: 'airspace-closure-24h',
     description: 'A significant airspace closure or NOTAM restriction materializes within 24 hours of a threat signal',
-    baseRate: 0.40,
+    baseRate: 0.4,
     horizon: '24h',
     source: 'EUROCONTROL + FAA NOTAM data 2018–2024; ~40% of airspace threat signals produced active restrictions within 24 hours',
     matchers: {
@@ -296,31 +300,7 @@ export function matchReferenceClass(h: HypothesisLike): ReferenceClass | null {
   let bestScore = -1;
 
   for (const rc of REFERENCE_CLASSES) {
-    let score = 0;
-
-    // Kind match.
-    if (rc.matchers.kinds && rc.matchers.kinds.length > 0) {
-      if (rc.matchers.kinds.includes(h.kind)) score += 1;
-    }
-
-    // Domain match (hypothesis domains or kind substring).
-    if (rc.matchers.domains && rc.matchers.domains.length > 0) {
-      const hitsDomain = rc.matchers.domains.some(d => {
-        const dl = d.toLowerCase();
-        return domainStrs.some(hd => hd.includes(dl) || dl.includes(hd)) ||
-          kindStr.includes(dl) ||
-          statementLower.includes(dl);
-      });
-      if (hitsDomain) score += 1;
-    }
-
-    // Entity pattern match (against statement).
-    if (rc.matchers.entityPatterns && rc.matchers.entityPatterns.length > 0) {
-      for (const pat of rc.matchers.entityPatterns) {
-        if (pat.test(h.statement)) score += 1;
-      }
-    }
-
+    const score = scoreReferenceClass(rc, h, kindStr, statementLower, domainStrs);
     if (score > bestScore) {
       bestScore = score;
       best = rc;
@@ -331,15 +311,50 @@ export function matchReferenceClass(h: HypothesisLike): ReferenceClass | null {
   return bestScore > 0 ? best : null;
 }
 
+/** Matcher score for one reference class (extracted for readability). */
+function scoreReferenceClass(
+  rc: ReferenceClass,
+  h: HypothesisLike,
+  kindStr: string,
+  statementLower: string,
+  domainStrs: readonly string[],
+): number {
+  let score = 0;
+
+  // Kind match.
+  if (rc.matchers.kinds && rc.matchers.kinds.length > 0 && rc.matchers.kinds.includes(h.kind)) score += 1;
+
+  // Domain match (hypothesis domains or kind substring).
+  if (rc.matchers.domains && rc.matchers.domains.length > 0) {
+    const hitsDomain = rc.matchers.domains.some(d => {
+      const dl = d.toLowerCase();
+      return domainStrs.some(hd => hd.includes(dl) || dl.includes(hd)) ||
+        kindStr.includes(dl) ||
+        statementLower.includes(dl);
+    });
+    if (hitsDomain) score += 1;
+  }
+
+  // Entity pattern match (against statement).
+  if (rc.matchers.entityPatterns && rc.matchers.entityPatterns.length > 0) {
+    for (const pat of rc.matchers.entityPatterns) {
+      if (pat.test(h.statement)) score += 1;
+    }
+  }
+
+  return score;
+}
+
 // ── blendWithEpisodic ──────────────────────────────────────────────────────────
 
 /**
  * Blend the static reference-class base rate with the episodic analog score.
  *
  * Formula: blended = static × (1 − episodicWeight) + episodic × episodicWeight
- *   where episodicWeight = analogN / (analogN + 5)
+ *   where episodicWeight = analogN / (analogN + k), k = tunable
+ *   'episodic-analog:analogBlendK' (default 5, bounds [3, 10] — PR 12)
  *
- * Rationale: the denominator constant 5 is a Bayesian pseudo-count —
+ * Rationale: the denominator constant k is a Bayesian pseudo-count (at k=5) —
  *   0 analogs → 0% episodic weight (pure static rate)
  *   5 analogs → 50% episodic weight (equal blend)
  *   10 analogs → 67% episodic weight
@@ -370,11 +385,17 @@ export function blendWithEpisodic(
     };
   }
 
-  // Episodic weight: analogN / (analogN + 5).
-  const episodicWeight = analogN / (analogN + 5);
+  // Episodic weight: analogN / (analogN + k). k is the PR 12 tunable
+  // 'episodic-analog:analogBlendK' (bounds [3, 10], default 5 — the
+  // historical hardcoded pseudo-count).
+  const blendK = getTunedParam('episodic-analog', 'analogBlendK', DEFAULT_ANALOG_BLEND_K);
+  const episodicWeight = analogN / (analogN + blendK);
   const blended = staticRate * (1 - episodicWeight) + analogScore * episodicWeight;
 
-  const direction = blended > staticRate ? 'elevated' : blended < staticRate ? 'reduced' : 'unchanged';
+  let direction: 'elevated' | 'reduced' | 'unchanged';
+  if (blended > staticRate) direction = 'elevated';
+  else if (blended < staticRate) direction = 'reduced';
+  else direction = 'unchanged';
 
   return {
     rate: blended,

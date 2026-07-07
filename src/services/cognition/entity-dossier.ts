@@ -40,6 +40,7 @@ import {
 } from './entity-graph';
 import { isGhostMode } from '@/services/mode-manager';
 import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // ── IDB lazy loader (same pattern as episodic-memory.ts) ─────────────────────
 
@@ -152,9 +153,21 @@ const MAX_ASSOCIATES = 5;
 /**
  * 72-hour exponential half-life for heat decay.
  * λ = ln(2) / halfLifeMs
+ *
+ * PR 12 (self-tuning): the heat half-life is the declared tunable
+ * 'entity-trajectory:heatHalfLifeHours' (bounds [24, 168]); the 72h
+ * constant below is the get-with-default fallback. The associate-strength
+ * normalization intentionally keeps the fixed 72h constant so it stays in
+ * lockstep with entity-graph's edge half-life.
  */
 const HALF_LIFE_MS = 72 * 60 * 60 * 1000;
-const DECAY_LAMBDA = Math.LN2 / HALF_LIFE_MS;
+const MS_PER_HOUR = 60 * 60 * 1000;
+
+/** Tuned heat-decay λ, recomputed at call time from the tunable store. */
+function heatDecayLambda(): number {
+  const halfLifeHours = getTunedParam('entity-trajectory', 'heatHalfLifeHours', HALF_LIFE_MS / MS_PER_HOUR);
+  return Math.LN2 / (halfLifeHours * MS_PER_HOUR);
+}
 
 /**
  * Normalization ceiling: sum of weights for a perfectly-fresh entity with
@@ -295,10 +308,11 @@ function save(): void {
  * Exported for tests to verify the half-life math.
  */
 export function computeHeat(timeline: readonly DossierEvent[], nowMs: number): number {
+  const lambda = heatDecayLambda();
   let sum = 0;
   for (const ev of timeline) {
     const ageMs = Math.max(0, nowMs - ev.ts);
-    sum += Math.exp(-DECAY_LAMBDA * ageMs);
+    sum += Math.exp(-lambda * ageMs);
   }
   return Math.min(1, sum / MAX_HEAT);
 }

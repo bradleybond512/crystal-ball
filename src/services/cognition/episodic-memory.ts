@@ -31,6 +31,7 @@ import type { IndexedVector } from './vector-index';
 import { isCognitionEnabled } from './cognition-settings';
 import { isGhostMode } from '@/services/mode-manager';
 import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
+import { getTunedParam } from '@/services/algorithms/tunable-params-store';
 
 // getMemory/putMemory are IDB-backed. Statically imported (not require()) so the
 // persistence path survives the Vite browser bundle; reasoning-memory itself
@@ -100,6 +101,13 @@ const MAX_EPISODES = 2000;
 const DEFAULT_K = 5;
 const MIN_SIM = 0.45;
 const MIN_RECALLS_FOR_ANALOG = 3;
+
+/** Tuned minimum analog similarity (PR 12 self-tuning): reads the declared
+ *  'episodic-analog:minSim' knob, falling back to the historical hardcoded
+ *  MIN_SIM = 0.45. Bounds [0.30, 0.60] are enforced by the store. */
+function tunedMinSim(): number {
+  return getTunedParam('episodic-analog', 'minSim', MIN_SIM);
+}
 const EVENT_NAME = 'cb:episodic-recall';
 
 // ── Module-level singleton state ──────────────────────────────────────────────
@@ -370,7 +378,7 @@ export async function recall(
     tier: ep.tier,
   }));
 
-  const results = topK(queryVec, corpusVecs, k, MIN_SIM);
+  const results = topK(queryVec, corpusVecs, k, tunedMinSim());
 
   // Extract query entities/domains for explanation (heuristic: parse from text).
   // In real wiring these come from hypothesis-entities; here we approximate.
@@ -430,7 +438,7 @@ export async function recallWithContext(
     tier: ep.tier,
   }));
 
-  const results = topK(queryVec, corpusVecs, k, MIN_SIM);
+  const results = topK(queryVec, corpusVecs, k, tunedMinSim());
 
   const recalls: Recall[] = results.flatMap(({ id, similarity }) => {
     const ep = episodes.find(e => e.id === id);
@@ -470,8 +478,12 @@ function materializationWeight(outcome: Episode['outcome']): number {
   return 0; // fizzled | unknown → 0
 }
 
-export function analogScoreFor(recalls: readonly Recall[]): number | null {
-  const qualified = recalls.filter(r => r.similarity >= MIN_SIM && r.episode.outcome !== undefined);
+export function analogScoreFor(
+  recalls: readonly Recall[],
+  opts?: { minSim?: number },
+): number | null {
+  const minSim = opts?.minSim ?? tunedMinSim();
+  const qualified = recalls.filter(r => r.similarity >= minSim && r.episode.outcome !== undefined);
   if (qualified.length < MIN_RECALLS_FOR_ANALOG) return null;
 
   let weightedSum = 0;

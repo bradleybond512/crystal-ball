@@ -68,7 +68,10 @@ export const EVICTABLE_CACHE_PREFIXES: readonly string[] = [
   'wm-model-governance',             // model-governance cache
   'wm-collection-gaps',              // collection-gap analysis cache
   'wm-bias-signals',                 // bias-signal cache
-  'wm-algo-eval-ledger',             // algorithm evaluation ledger (re-graded)
+  // NB: wm-algo-eval-ledger is deliberately NOT evictable — it's the
+  // self-improvement tuning loop's evaluation history (small, ~50 KB) and worth
+  // preserving for diagnostic continuity; it never meaningfully moves the quota
+  // needle vs the MB-scale reasoning caches above (eviction is largest-first).
   'wm-intelligence-briefing-v1',     // derived intelligence briefing
   'wm-unified-alerts-v1',            // unified-alerts.ts derived alert cache
 ];

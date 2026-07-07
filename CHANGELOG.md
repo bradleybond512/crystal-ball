@@ -20,7 +20,7 @@ All notable changes to Crystal Ball are documented here.
   below target (`cognition/bench-baseline.ts`). Wired as a new step in
   `.github/workflows/smoke.yml`, fully offline and fixed-seed — runs in
   single-digit milliseconds, so it cannot become a slow or hanging CI step.
-  17 new tests in `bench-cognition.test.mts`.
+  17 new tests in `bench-cognition.test.mts`. (PR #1373)
 - **Self-tuning cognition (Cognitive Enhancement PR 12)**: the cognition
   layer is now plugged into the self-improvement machinery. Eight cognition
   constants became bounded tunables (episodic minSim, analog blend
@@ -36,7 +36,18 @@ All notable changes to Crystal Ball are documented here.
   6-hour cadence. Below-floor cognition algorithms get bounded
   safe-adjustment proposals gated by a new episodic-analog minSim
   safety-fixture suite; every other cognition knob fails closed to
-  operator approval.
+  operator approval. (PR #1357; compute-placement/hygiene follow-up
+  landed as PR #1372)
+- **Weather PR 5 — Personal Storm Mode UI**: the persistent severe-weather
+  strip + Storm Mode card now honors the full plan contract — acknowledge and
+  snooze persist to localStorage (`crystalball-storm-mode-ui-v1`) so an acked
+  threat stays dismissed across reloads until it materially changes
+  (escalation, outside → inside polygon, or polygon edge ≥ 5 km closer,
+  mirroring `weather-urgency.ts`), the strip self-clears at alert expiry, and
+  only payload-bearing (banner+) decisions activate it. Pure show/hide +
+  display logic extracted to `src/components/personal-storm-mode-view.ts`
+  (24 tests, wired into `npm run test:weather`), with a desktop-native
+  restyle in `macos-native.css` under `body.is-desktop-macos`.
 - **Surfacing Move 2 — cognition layer visibility**: forecast provenance,
   calibration report, and booting the learning loops (PR #1339).
 - **Ask the data in Command Center**: the deterministic ask-the-data engine is
@@ -69,7 +80,15 @@ All notable changes to Crystal Ball are documented here.
   scoring while remaining fully retrievable with the contradiction surfaced
   in their explanation string (`markEpisodeContradictory`,
   `contradictEpisodesForRefutation`, wired via a new injectable
-  `onHypothesisRefuted` hook on `situation-hypothesis-bridge.ts`).
+  `onHypothesisRefuted` hook on `situation-hypothesis-bridge.ts`). (PR #1372)
+- **CI: unref the multi-theater dedupe timer** — `military-surge.ts` scheduled
+  a dedupe-cache cleanup via a 4-hour `setTimeout` that was never unrefed,
+  keeping any Node test process alive for the full 4 hours once a test
+  exercised that path. This had been silently hanging the `Smoke` workflow's
+  `test:renderer` step for weeks (~4h/run, ~40% failure rate). Fixed with the
+  same typeof-guarded unref pattern used elsewhere in the codebase; the full
+  536-file/11,900+-test `test:renderer` suite now completes in under a
+  minute. (PR #1371)
 
 ### Removed
 

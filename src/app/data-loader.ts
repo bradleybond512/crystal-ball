@@ -2662,7 +2662,10 @@ export class DataLoaderManager implements AppModule {
  headline: raw.headline,
  };
  const decision = routeWeatherAlert(minimal, weatherPlaces);
- if (decision.payload?.activation !== 'inactive' && (!bestDecision ||
+ // Require a real Storm Mode payload (the router only builds one at
+ // banner+ priority) — `payload?.activation !== 'inactive'` alone would
+ // let payload-less digest/watch decisions activate the strip.
+ if (decision.payload && decision.payload.activation !== 'inactive' && (!bestDecision ||
  deliveryPriorityRank(decision.urgency?.priority ?? 'background')
  > deliveryPriorityRank(bestDecision.urgency?.priority ?? 'background'))) {
  bestDecision = decision;

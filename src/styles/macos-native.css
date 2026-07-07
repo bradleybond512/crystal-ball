@@ -2169,6 +2169,82 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
   box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1);
 }
 
+/* ── Personal Storm Mode strip (src/components/PersonalStormMode.ts) ──
+ * Weather Remediation PR 5: retreat the persistent severe-weather strip
+ * to the native toolbar language when the desktop chrome is active —
+ * window-tinted backdrop-blur surface, aid tokens for text/borders, and
+ * accent chips per threat tier. Base (web) styling lives in alerts.css.
+ */
+
+body.is-desktop-macos .cb-storm-mode {
+  font-family: var(--aid-font);
+  color: var(--aid-text);
+  background: color-mix(in srgb, var(--aid-window) 82%, transparent);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border-bottom: 1px solid var(--aid-border-strong);
+  box-shadow: var(--aid-shadow-elevated);
+}
+body.is-desktop-macos .cb-storm-mode__strip {
+  padding: var(--aid-space-2) var(--aid-space-4);
+  font-size: var(--aid-text-size-md);
+}
+body.is-desktop-macos .cb-storm-mode__tier {
+  border-radius: var(--aid-radius-sm);
+  font-size: var(--aid-text-size-xs);
+}
+body.is-desktop-macos .cb-storm-mode--warning   { border-bottom-color: rgba(255, 159, 10, 0.55); }
+body.is-desktop-macos .cb-storm-mode--emergency { border-bottom-color: rgba(255, 69, 58, 0.7); }
+body.is-desktop-macos .cb-storm-mode--warning   .cb-storm-mode__tier { background: rgba(255, 159, 10, 0.16); color: var(--aid-amber); }
+body.is-desktop-macos .cb-storm-mode--emergency .cb-storm-mode__tier { background: rgba(255, 69, 58, 0.18); color: var(--aid-red); }
+body.is-desktop-macos .cb-storm-mode__btn {
+  border: 1px solid var(--aid-border);
+  border-radius: var(--aid-radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: var(--aid-text-size-sm);
+  transition: background var(--aid-motion-fast) ease;
+}
+body.is-desktop-macos .cb-storm-mode__btn:hover { background: rgba(255, 255, 255, 0.10); }
+body.is-desktop-macos .cb-storm-mode__btn--ack {
+  background: var(--aid-blue);
+  border-color: var(--aid-blue);
+  color: #fff;
+}
+body.is-desktop-macos .cb-storm-mode__btn--ack:hover {
+  background: color-mix(in srgb, var(--aid-blue) 85%, #fff);
+}
+body.is-desktop-macos .cb-storm-mode__card {
+  padding: var(--aid-space-1) var(--aid-space-4) var(--aid-space-4);
+  font-size: var(--aid-text-size-md);
+}
+body.is-desktop-macos .cb-storm-mode__reason {
+  background: var(--aid-surface);
+  border-left: 2px solid var(--aid-border-strong);
+  border-radius: 0 var(--aid-radius-md) var(--aid-radius-md) 0;
+  color: var(--aid-text-secondary);
+  font-size: var(--aid-text-size-sm);
+}
+body.is-desktop-macos .cb-storm-mode__meta dt {
+  color: var(--aid-text-tertiary);
+  font-size: var(--aid-text-size-xs);
+}
+body.is-desktop-macos .cb-storm-mode__actions-heading,
+body.is-desktop-macos .cb-storm-mode__watch-heading {
+  color: var(--aid-text-secondary);
+  font-size: var(--aid-text-size-xs);
+}
+body.is-desktop-macos .cb-storm-mode__action {
+  background: var(--aid-surface);
+  border-radius: 0 var(--aid-radius-md) var(--aid-radius-md) 0;
+}
+body.is-desktop-macos .cb-storm-mode__action--p1 { border-left-color: var(--aid-red);   background: rgba(255, 69, 58, 0.08); }
+body.is-desktop-macos .cb-storm-mode__action--p2 { border-left-color: var(--aid-amber); }
+body.is-desktop-macos .cb-storm-mode__action-time,
+body.is-desktop-macos .cb-storm-mode__action-rationale { color: var(--aid-text-tertiary); }
+body.is-desktop-macos .cb-storm-mode__watch-list { color: var(--aid-text-secondary); }
+body.is-desktop-macos .cb-storm-mode__footer { border-top-color: var(--aid-border); }
+body.is-desktop-macos .cb-storm-mode__why { color: var(--aid-blue); }
+
 /* ── Reduced motion ──────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -2178,7 +2254,9 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
   .mac-inspector-drawer,
   .mac-status-pill,
   .mac-segmented-control,
-  .mac-segmented-control__option {
+  .mac-segmented-control__option,
+  body.is-desktop-macos .cb-storm-mode,
+  body.is-desktop-macos .cb-storm-mode__btn {
     animation: none !important;
     transition: none !important;
     transform: none !important;

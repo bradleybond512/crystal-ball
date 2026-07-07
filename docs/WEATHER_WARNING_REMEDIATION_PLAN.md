@@ -323,6 +323,24 @@ Weather warning diagnostic:
 
 Prioritize direct remediation over broad weather expansion.
 
+Status (2026-07-07): PRs 1-5 shipped.
+
+- PR 1 — shipped: `src/services/weather/nws-polygon-match.ts` + `weather-threat-types.ts` + tests
+- PR 2 — shipped: `src/services/weather/weather-urgency.ts` + tests
+- PR 3 — shipped: `src/services/weather/personal-storm-mode.ts` + `preparedness-actions.ts` + tests
+- PR 4 — shipped: `src/services/weather/weather-warning-diagnostics.ts` + tests
+- PR 5 — shipped: `src/components/PersonalStormMode.ts` (persistent strip + card) with pure
+  show/hide + display helpers in `src/components/personal-storm-mode-view.ts`
+  (tested under `src/components/__tests__/`, registered in `npm run test:weather`).
+  Fed live from `data-loader.loadNWSAlerts()` → `routeWeatherAlert()` per saved place →
+  highest-priority payload-bearing decision dispatched as the `cb:storm-decision` event →
+  component mounted at boot in `panel-layout.createPanels()`. Acknowledge/snooze persist to
+  localStorage (`crystalball-storm-mode-ui-v1`); an acked threat stays dismissed until it
+  materially changes (escalation, outside → inside polygon, or edge ≥ 5 km closer — the
+  same meaningful-change rules as `weather-urgency.ts`), and the strip self-clears at alert
+  expiry. Styling: base in `src/styles/alerts.css`, desktop-native retreat in
+  `src/styles/macos-native.css` under `body.is-desktop-macos`.
+
 ### PR 1: Saved-Place NWS Polygon Matching
 
 Add deterministic polygon/location matching for NWS alerts.
@@ -372,6 +390,10 @@ Suggested files:
 - `src/components/PersonalStormMode.ts`
 - `src/styles/macos-native.css`
 - `src/styles/alerts.css`
+
+Shipped 2026-07-07 — see the Status list above for the wiring + acknowledgment/expiry
+behavior. Additional file beyond the suggested set:
+`src/components/personal-storm-mode-view.ts` (pure, testable view/decision helpers).
 
 ## Guardrails
 

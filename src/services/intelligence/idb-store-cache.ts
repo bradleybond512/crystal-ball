@@ -142,7 +142,10 @@ async function persistThenDrain(key: string, ls: Storage | null, legacy: string)
     persisted = (await backend.getMemory(CACHE_PREFIX + key)) === legacy;
   } catch { persisted = false; }
   if (persisted) {
-    try { ls?.removeItem(key); } catch { /* best effort */ }
+    // TOCTOU guard (Codex review P2): only free the slot if localStorage still
+    // holds the exact value we migrated — a concurrent writer could have put a
+    // newer value there since readLegacy(), which we must not drop.
+    try { if (ls?.getItem(key) === legacy) ls.removeItem(key); } catch { /* best effort */ }
   }
   return legacy;
 }

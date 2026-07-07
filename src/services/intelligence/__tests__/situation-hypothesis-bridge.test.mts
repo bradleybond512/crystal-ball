@@ -7,6 +7,7 @@ import {
   __internals,
   type AlignmentContext,
   type BridgeOptions,
+  type RefutedHypothesisEvent,
 } from '../situation-hypothesis-bridge.ts';
 import { SituationStoreV2 } from '../situation-store-v2.ts';
 import {
@@ -194,6 +195,81 @@ test('consensus flips statuses and emits exactly one recordAlgorithmEvaluation',
     1,
     'should not emit a second evaluation after consensus',
   );
+});
+
+// ── onHypothesisRefuted hook (PR 14 memory hygiene) ───────────────────────
+
+test('onHypothesisRefuted fires once per refuted (non-leading) hypothesis on consensus', () => {
+  __internals.reset();
+  const { store, engine, opts, fireEvent } = makeDeps();
+  const refutedEvents: RefutedHypothesisEvent[] = [];
+  startSituationHypothesisBridge({
+    ...opts,
+    onHypothesisRefuted: (event) => { refutedEvents.push(event); },
+  });
+
+  fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'src-1' }));
+  const sitId = store.list()[0]!.id;
+
+  for (let i = 2; i <= 20; i++) {
+    if (engine.getSet(sitId)?.consensusReached) break;
+    fireEvent(makeEvent({
+      id: `eq-${i}`, severity: 'HIGH', sourceId: `src-corroborate-${i}`,
+      timestamp: BASE_TIME + i * 60_000,
+    }));
+  }
+
+  const finalSet = engine.getSet(sitId)!;
+  assert.ok(finalSet.consensusReached, 'consensus should be reached');
+
+  // Exactly the non-leader hypotheses (2 of the 3) should have fired the hook.
+  assert.equal(refutedEvents.length, 2, `expected 2 refuted events, got ${refutedEvents.length}`);
+  for (const event of refutedEvents) {
+    assert.equal(event.situationId, sitId);
+    assert.equal(event.domain, 'earthquake');
+    assert.deepEqual(event.entityIds, ['JP']);
+    assert.ok(typeof event.claim === 'string' && event.claim.length > 0);
+    assert.notEqual(event.hypothesisType, finalSet.leadingHypothesis!.type);
+  }
+
+  // Further events must not fire the hook again (single evaluation per set).
+  fireEvent(makeEvent({ id: 'eq-late', severity: 'HIGH', sourceId: 'src-late', timestamp: BASE_TIME + 30 * 60_000 }));
+  assert.equal(refutedEvents.length, 2, 'no additional refutation events after consensus');
+});
+
+test('onHypothesisRefuted: a throwing callback does not break the bridge or the ledger recorder', () => {
+  __internals.reset();
+  const { store, engine, opts, fireEvent, recorderCalls } = makeDeps();
+  startSituationHypothesisBridge({
+    ...opts,
+    onHypothesisRefuted: () => { throw new Error('boom'); },
+  });
+
+  fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'src-1' }));
+  const sitId = store.list()[0]!.id;
+
+  for (let i = 2; i <= 20; i++) {
+    if (engine.getSet(sitId)?.consensusReached) break;
+    fireEvent(makeEvent({
+      id: `eq-${i}`, severity: 'HIGH', sourceId: `src-corroborate-${i}`,
+      timestamp: BASE_TIME + i * 60_000,
+    }));
+  }
+
+  assert.ok(engine.getSet(sitId)!.consensusReached, 'consensus should still be reached');
+  const evalCalls = recorderCalls.filter((c) => c.algorithmId === 'competitive-hypothesis');
+  assert.equal(evalCalls.length, 1, 'ledger evaluation should still fire despite the throwing hook');
+});
+
+test('bridge with no onHypothesisRefuted option works exactly as before', () => {
+  __internals.reset();
+  const { store, engine, opts, fireEvent } = makeDeps();
+  startSituationHypothesisBridge(opts); // no onHypothesisRefuted
+
+  fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'src-1' }));
+  const situations = store.list();
+  assert.ok(situations.length >= 1);
+  assert.equal(engine.getSet(situations[0]!.id)!.hypotheses.length, 3);
 });
 
 // ── classifyAlignment — table-driven ─────────────────────────────────────

@@ -93,6 +93,7 @@ import { startPredictiveCrisisIndex } from '@/services/intelligence/predictive-c
 import { startCrisisTrajectory } from '@/services/intelligence/crisis-trajectory';
 import { startActiveLearningQueue } from '@/services/intelligence/active-learning-queue';
 import { startSituationHypothesisBridge } from '@/services/intelligence/situation-hypothesis-bridge';
+import { contradictEpisodesForRefutation } from '@/services/cognition/episodic-memory';
 import { startEpistemicBridge } from '@/services/intelligence/epistemic-bridge';
 import { startOutcomeGradingCadence } from '@/services/algorithms/outcome-grading-runner';
 import { startTuningApplyCadence } from '@/services/algorithms/tuning-apply-runner';
@@ -1075,7 +1076,15 @@ export class PanelLayoutManager implements AppModule {
  startEpistemicCalibration();
  startAssumptionExpirySweep();
  setInterval(() => { try { expirePendingPredictions(); } catch { /* noop */ } }, 60 * 60 * 1000);
- startSituationHypothesisBridge();
+ // PR 14 memory hygiene: flag episodic-memory episodes whose backing
+ // explanation was refuted by competitive-hypothesis resolution. Best-effort
+ // entity-overlap match (see contradictEpisodesForRefutation doc) — never
+ // throws into the bridge.
+ startSituationHypothesisBridge({
+ onHypothesisRefuted: (event) => {
+ try { contradictEpisodesForRefutation(event); } catch { /* hygiene is best-effort */ }
+ },
+ });
  startEpistemicBridge();
  startNotificationRouter();
  startSilenceDetector();

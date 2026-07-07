@@ -3825,14 +3825,17 @@ fn main() {
 
  // ── Renderer watchdog ──────────────────────────────────────────────────
  // The renderer beats every 3s (log-bridge installRendererHeartbeat). If a
- // FOCUSED window stops beating for >10s the JS main thread is hung — Defect
- // A's infinite-loop freeze, where native menus still work but nothing inside
- // JS can recover — so log it and reload the webview. Hidden/unfocused
- // windows are exempt (WKWebView throttles the heartbeat timer there).
+ // FOCUSED window stops beating for >60s the JS main thread is wedged — Defect
+ // A's infinite-loop freeze (which ran 84 min, so 60s catches it easily) — so
+ // log it and reload the webview. The threshold is deliberately well above
+ // transient stalls: a heavy boot / data storm can block the main thread ~25s
+ // and recovers on its own (the rAF-gap detector logs those), so a tight
+ // threshold would false-reload during startup. Hidden/unfocused windows are
+ // exempt (WKWebView throttles the heartbeat timer there).
  {
  let app_handle = app.handle().clone();
  std::thread::spawn(move || {
- std::thread::sleep(Duration::from_secs(30)); // let the renderer boot
+ std::thread::sleep(Duration::from_secs(60)); // let the renderer finish its heavy boot
  LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
  let mut focused_since: Option<Instant> = None;
  let mut last_reload = Instant::now() - Duration::from_secs(600);
@@ -3849,8 +3852,8 @@ fn main() {
  }
  if focused_since.map(|t| t.elapsed()).unwrap_or_default() < Duration::from_secs(12) { continue; }
  let age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
- if age > 10_000 {
- if last_reload.elapsed() < Duration::from_secs(60) { continue; } // no reload loop
+ if age > 60_000 {
+ if last_reload.elapsed() < Duration::from_secs(120) { continue; } // no reload loop
  append_desktop_log(&app_handle, "ERROR", &format!(
  "renderer watchdog: no heartbeat for {age}ms while focused — reloading webview (hung main thread)"));
  let _ = win.reload();

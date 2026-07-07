@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/no-nested-template-literals */
 /**
  * Backtest Panel — Phase 4 backtest-before-apply gate UI.
  *
@@ -40,6 +39,25 @@ interface RunFormState {
   minAccuracyDelta: number;
   lastError: string | null;
   lastResultId: string | null;
+  /** Whether the "Advanced: parameter overrides" disclosure is open (survives re-renders). */
+  advancedOpen: boolean;
+}
+
+/**
+ * Validation message for the overrides textarea, or null when parseable.
+ * Empty input is valid (= no overrides).
+ */
+function overridesJsonError(text: string): string | null {
+  if (text.trim().length === 0) return null;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return 'Invalid JSON — overrides must be an object like { "driverWeights": { … } }.';
+    }
+    return null;
+  } catch {
+    return 'Invalid JSON — fix the overrides to run.';
+  }
 }
 
 export class BacktestPanel extends Panel {
@@ -51,6 +69,7 @@ export class BacktestPanel extends Panel {
     minAccuracyDelta: 0,
     lastError: null,
     lastResultId: null,
+    advancedOpen: false,
   };
 
   constructor() {
@@ -87,7 +106,6 @@ export class BacktestPanel extends Panel {
     const engine = getBacktestEngine();
     const history = engine.getHistory();
     // Newest first. tsc target lib is es2020 → no Array#toReversed.
-    // eslint-disable-next-line unicorn/no-array-reverse
     const recent = history.slice(-HISTORY_LIMIT).reverse();
     const latest = this.form.lastResultId
       ? history.find((r) => r.id === this.form.lastResultId)
@@ -109,6 +127,9 @@ export class BacktestPanel extends Panel {
       ? `<div style="color:#f44336;font-size:11px;margin-top:6px;">${escapeHtml(this.form.lastError)}</div>`
       : '';
     const minPct = (this.form.minAccuracyDelta * 100).toFixed(1);
+    const jsonError = overridesJsonError(this.form.parameterChangesText);
+    const invalid = jsonError !== null;
+    const textareaBorder = invalid ? 'var(--sev-high,#ef4444)' : 'var(--border-subtle,#333)';
     return `<div>
       <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;margin-bottom:6px;">Run backtest</div>
       <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
@@ -118,17 +139,22 @@ export class BacktestPanel extends Panel {
             <option value="driver-scorer"${this.form.algorithmId === 'driver-scorer' ? ' selected' : ''}>driver-scorer</option>
           </select>
         </label>
-        <label style="display:flex;flex-direction:column;gap:4px;">
-          <span style="color:var(--text-secondary,#aaa);">Parameter overrides (JSON)</span>
-          <textarea id="backtestParamsText" rows="5" style="font-family:ui-monospace,monospace;font-size:11px;padding:6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;">${escapeHtml(this.form.parameterChangesText)}</textarea>
-        </label>
+        <details id="backtestParamsDetails"${this.form.advancedOpen ? ' open' : ''}>
+          <summary style="cursor:pointer;color:var(--text-secondary,#aaa);font-size:11px;">Advanced: parameter overrides (JSON)</summary>
+          <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;">
+            <textarea id="backtestParamsText" rows="5" aria-label="Parameter overrides (JSON)" aria-invalid="${invalid}"
+              placeholder='{ "driverWeights": { "weather": 1.2 } }'
+              style="font-family:ui-monospace,monospace;font-size:11px;padding:6px;background:var(--surface-2,#1a1a1a);color:inherit;border:1px solid ${textareaBorder};border-radius:3px;">${escapeHtml(this.form.parameterChangesText)}</textarea>
+            <div id="backtestParamsError" role="status" style="font-size:11px;color:var(--sev-high,#ef4444);${invalid ? '' : 'display:none;'}">${escapeHtml(jsonError ?? 'Invalid JSON — fix the overrides to run.')}</div>
+          </div>
+        </details>
         <label style="display:flex;align-items:center;gap:8px;">
           <span style="width:120px;color:var(--text-secondary,#aaa);">Min Δ accuracy</span>
           <input type="range" id="backtestMinDelta" min="0" max="0.1" step="0.005" value="${this.form.minAccuracyDelta}" style="flex:1;">
           <span style="width:48px;text-align:right;font-family:ui-monospace,monospace;">+${minPct}%</span>
         </label>
         <div>
-          <button id="backtestRunBtn" style="padding:6px 12px;background:var(--accent,#4a9eff);color:#fff;border:0;border-radius:3px;cursor:pointer;font-weight:600;">Run backtest</button>
+          <button id="backtestRunBtn"${invalid ? ' disabled' : ''} style="padding:6px 12px;background:var(--accent,#4a9eff);color:#fff;border:0;border-radius:3px;cursor:pointer;font-weight:600;${invalid ? 'opacity:0.5;cursor:not-allowed;' : ''}">Run backtest</button>
         </div>
       </div>
       ${errorBlock}
@@ -144,11 +170,31 @@ export class BacktestPanel extends Panel {
       const minDeltaEl = root.querySelector<HTMLInputElement>('#backtestMinDelta');
       const runBtn = root.querySelector<HTMLButtonElement>('#backtestRunBtn');
 
+      const detailsEl = root.querySelector<HTMLDetailsElement>('#backtestParamsDetails');
+      const errorEl = root.querySelector<HTMLElement>('#backtestParamsError');
+
       algoSel?.addEventListener('change', () => {
         this.form.algorithmId = algoSel.value;
       });
+      detailsEl?.addEventListener('toggle', () => {
+        this.form.advancedOpen = detailsEl.open;
+      });
       paramsEl?.addEventListener('input', () => {
         this.form.parameterChangesText = paramsEl.value;
+        // Live-validate without re-rendering so the textarea keeps focus.
+        const message = overridesJsonError(paramsEl.value);
+        const invalid = message !== null;
+        paramsEl.style.borderColor = invalid ? 'var(--sev-high,#ef4444)' : 'var(--border-subtle,#333)';
+        paramsEl.setAttribute('aria-invalid', String(invalid));
+        if (errorEl) {
+          errorEl.style.display = invalid ? '' : 'none';
+          if (message) errorEl.textContent = message;
+        }
+        if (runBtn) {
+          runBtn.disabled = invalid;
+          runBtn.style.opacity = invalid ? '0.5' : '';
+          runBtn.style.cursor = invalid ? 'not-allowed' : 'pointer';
+        }
       });
       minDeltaEl?.addEventListener('input', () => {
         const v = Number(minDeltaEl.value);
@@ -159,6 +205,8 @@ export class BacktestPanel extends Panel {
   }
 
   private handleRun(): void {
+    // Backstop for the disabled-button guard — never run with unparseable overrides.
+    if (overridesJsonError(this.form.parameterChangesText) !== null) return;
     let parsed: BacktestParameterChanges & Record<string, unknown>;
     try {
       const parsedRaw: unknown = JSON.parse(this.form.parameterChangesText || '{}');

@@ -166,7 +166,7 @@ export class GlobeHUD {
  this.threatDetailEl = this.el('div', 'ge-hud-threat-detail', '');
  card.append(this.threatDetailEl);
  this.fusionEl = this.el('div', 'ge-hud-fusion', 'FUSION — / —');
- this.fusionEl.style.cssText = 'font:600 10px/1.3 -apple-system,system-ui;letter-spacing:0.06em;color:rgba(255,200,120,0.85);margin-top:4px;';
+ this.fusionEl.style.cssText = 'font:600 11px/1.3 -apple-system,system-ui;letter-spacing:0.06em;color:rgba(255,200,120,0.85);margin-top:4px;';
  card.append(this.fusionEl);
  const sparkCanvas = document.createElement('canvas');
  sparkCanvas.className = 'ge-hud-sparkline';

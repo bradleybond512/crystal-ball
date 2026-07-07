@@ -62,6 +62,8 @@ export class EEWStatusBar {
    *  Wired by the layout layer; the bar itself never imports singletons. */
   private compositeProvider: (() => CompositeStatusInputs) | null = null;
   private currentState: StatusBarState = deriveStatusBarState(null);
+  /** Listeners fed the derived composite state on every re-derive (SummaryStrip). */
+  private readonly stateListeners = new Set<(state: StatusBarState) => void>();
   private currentSpaceWx: SpaceWxBanner = { severity: 'none', label: '', subtitle: '' };
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private subtitleTimer: ReturnType<typeof setInterval> | null = null;
@@ -183,6 +185,28 @@ export class EEWStatusBar {
     return this.currentState;
   }
 
+  /**
+   * Subscribe to the derived composite status (EEW ∪ Safety Case ∪
+   * readiness). Fires immediately with the current state and again after
+   * every re-derive — lets the SummaryStrip reuse this bar's worst-of
+   * output instead of re-deriving its own.
+   */
+  subscribeState(cb: (state: StatusBarState) => void): () => void {
+    this.stateListeners.add(cb);
+    try {
+      cb(this.currentState);
+    } catch { /* listener errors must not break the bar */ }
+    return () => this.stateListeners.delete(cb);
+  }
+
+  private notifyStateListeners(): void {
+    for (const cb of this.stateListeners) {
+      try {
+        cb(this.currentState);
+      } catch { /* listener errors must not break the bar */ }
+    }
+  }
+
   // ── Polling ──────────────────────────────────────────────────────────
 
   private startPolling(): void {
@@ -227,6 +251,7 @@ export class EEWStatusBar {
   // ── Rendering ────────────────────────────────────────────────────────
 
   private render(): void {
+    this.notifyStateListeners();
     if (!this.root || !this.labelEl) return;
     this.root.className = `eew-status-bar ${COLOR_CLASSES[this.currentState.color]}`;
     this.labelEl.textContent = this.currentState.label;

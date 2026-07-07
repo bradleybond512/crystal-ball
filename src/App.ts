@@ -32,6 +32,7 @@ import { preloadCountryGeometry, getCountryNameByCode } from '@/services/country
 import { initI18n } from '@/services/i18n';
 
 import { fetchBootstrapData } from '@/services/bootstrap';
+import { preloadIdbBackedStores, installIdbStorageRouting } from '@/services/intelligence/idb-store-cache';
 import { DesktopUpdater } from '@/app/desktop-updater';
 import { DesktopNotifications } from '@/app/desktop-notifications';
 import { CountryIntelManager } from '@/app/country-intel';
@@ -386,6 +387,15 @@ export class App {
 
  const resolvedRegion = await resolveUserRegion();
  this.state.resolvedLocation = resolvedRegion;
+
+ // Relocate the large reasoning stores from localStorage to IndexedDB and warm
+ // their in-memory mirror BEFORE panels/reasoning construct, so their sync
+ // hydration reads warm data (and one-time-migrates any localStorage copy).
+ // Fail-open: a preload error just leaves the stores to rebuild from live data.
+ try {
+ await preloadIdbBackedStores();
+ installIdbStorageRouting();
+ } catch { /* non-fatal */ }
 
  // Phase 1: Layout (creates map + panels — they'll find hydrated data)
  this.panelLayout.init();

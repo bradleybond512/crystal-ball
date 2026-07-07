@@ -267,7 +267,7 @@ export class CognitiveBiasDetectorService {
     if (current.acknowledged) return cloneDetection(current);
     const next: BiasDetection = { ...current, acknowledged: true };
     this.detections[idx] = next;
-    this.persist();
+    this.schedulePersist();
     return cloneDetection(next);
   }
 
@@ -354,7 +354,7 @@ export class CognitiveBiasDetectorService {
     if (this.detections.length > MAX_DETECTIONS) {
       this.detections.splice(0, this.detections.length - MAX_DETECTIONS);
     }
-    this.persist();
+    this.schedulePersist();
     const snapshot = cloneDetection(detection);
     for (const l of this.listeners) {
       try { l(snapshot); } catch { /* isolate */ }
@@ -388,6 +388,16 @@ export class CognitiveBiasDetectorService {
     } catch {
       // corrupt — leave empty
     }
+  }
+
+  // Coalesces a burst of mutations into one JSON.stringify write on the next
+  // microtask (in-memory state stays synchronous); fixes the renderer-hang
+  // stringify storm.
+  private persistScheduled = false;
+  private schedulePersist(): void {
+    if (this.persistScheduled) return;
+    this.persistScheduled = true;
+    queueMicrotask(() => { this.persistScheduled = false; this.persist(); });
   }
 
   private persist(): void {

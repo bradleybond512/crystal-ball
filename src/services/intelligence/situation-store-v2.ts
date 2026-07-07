@@ -516,6 +516,16 @@ export class SituationStoreV2 {
     }
   }
 
+  // Coalesces a burst of mutations into one JSON.stringify write on the next
+  // microtask (in-memory state stays synchronous); fixes the renderer-hang
+  // stringify storm.
+  private persistScheduled = false;
+  private schedulePersist(): void {
+    if (this.persistScheduled) return;
+    this.persistScheduled = true;
+    queueMicrotask(() => { this.persistScheduled = false; this.persist(); });
+  }
+
   private persist(): void {
     const store = safeStorage();
     if (!store) return;
@@ -545,7 +555,7 @@ export class SituationStoreV2 {
     this.ensureHydrated();
     if (observations.length === 0) {
       this.autoResolveStale();
-      this.persist();
+      this.schedulePersist();
       this.notify();
       return;
     }
@@ -554,7 +564,7 @@ export class SituationStoreV2 {
     for (const draft of drafts) this.mergeOrCreate(draft);
     this.autoResolveStale();
     this.enforceCapacity();
-    this.persist();
+    this.schedulePersist();
     this.notify();
   }
 

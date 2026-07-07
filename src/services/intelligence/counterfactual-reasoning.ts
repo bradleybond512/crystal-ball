@@ -239,6 +239,16 @@ export class CounterfactualReasoningService {
     }
   }
 
+  // Coalesces a burst of mutations into one JSON.stringify write on the next
+  // microtask (in-memory state stays synchronous); fixes the renderer-hang
+  // stringify storm.
+  private persistScheduled = false;
+  private schedulePersist(): void {
+    if (this.persistScheduled) return;
+    this.persistScheduled = true;
+    queueMicrotask(() => { this.persistScheduled = false; this.persist(); });
+  }
+
   private persist(): void {
     if (!this.storage) return;
     try {
@@ -289,7 +299,7 @@ export class CounterfactualReasoningService {
     }));
     this.counterfactuals.push(...fresh);
     this.enforceCapacity();
-    this.persist();
+    this.schedulePersist();
     this.notify();
     return buildSet(assessmentId, fresh);
   }
@@ -301,7 +311,7 @@ export class CounterfactualReasoningService {
     const target = this.counterfactuals.find((c) => c.id === id);
     if (target?.status !== 'open') return;
     target.status = 'investigated';
-    this.persist();
+    this.schedulePersist();
     this.notify();
   }
 
@@ -327,7 +337,7 @@ export class CounterfactualReasoningService {
     target.status = status;
     target.resolvedAt = this.clock();
     target.resolutionNote = note;
-    this.persist();
+    this.schedulePersist();
     this.notify();
   }
 
@@ -337,7 +347,7 @@ export class CounterfactualReasoningService {
     const target = this.counterfactuals.find((c) => c.id === id);
     if (!target) return;
     target.plausibility = clamp01(target.plausibility + delta);
-    this.persist();
+    this.schedulePersist();
     this.notify();
   }
 

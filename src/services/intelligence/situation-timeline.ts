@@ -211,6 +211,16 @@ export class SituationTimelineService {
     }
   }
 
+  // Coalesces a burst of mutations into one JSON.stringify write on the next
+  // microtask (in-memory state stays synchronous); fixes the renderer-hang
+  // stringify storm.
+  private persistScheduled = false;
+  private schedulePersist(): void {
+    if (this.persistScheduled) return;
+    this.persistScheduled = true;
+    queueMicrotask(() => { this.persistScheduled = false; this.persist(); });
+  }
+
   private persist(): void {
     const store = safeStorage();
     if (!store) return;
@@ -242,7 +252,7 @@ export class SituationTimelineService {
     // `getStats` / `getDomainBreakdown` calls see the full picture even
     // if the caller asked for a narrow filter slice.
     this.cache = built.slice(0, MAX_ENTRIES).map((e) => ({ ...e }));
-    this.persist();
+    this.schedulePersist();
     this.notify();
     return built.filter((e) => matchesFilter(e, filter)).map((e) => ({ ...e }));
   }

@@ -39,6 +39,38 @@ export const EVICTABLE_CACHE_PREFIXES: readonly string[] = [
   'crystalball-pressure-history-v1', // pressure-history.ts sparkline samples
   'crystalball-snapshot-archive-v1', // snapshot-archive.ts 120-entry ring
   'crystalball-briefing-archive-v1', // briefing-archive.ts 200-entry ring
+  // Re-derivable reasoning/cognition stores. These grow the FASTEST and LARGEST
+  // (observed: a single session accumulated 4.9 MB across these, exhausting the
+  // ~5 MB localStorage quota and seizing the renderer). Every one is recomputed
+  // from live feeds + IndexedDB on the next analyst pass, so dropping them under
+  // pressure loses nothing durable. Listed explicitly (not a blanket `wm-`
+  // prefix) so the precious small wm-* keys — wm_saved_places_v1,
+  // wm-country-watchlist-v1, wm_proximity_config, wm-basemap, wm-situational-mode,
+  // consent flags — are NEVER evicted.
+  'wm-assumption-annotations',       // assumption-tracker.ts (largest single hog)
+  'wm-assumptions',                  // assumption-tracker-v2.ts
+  'wm-quality-debt',                 // quality-debt.ts (+ wm-quality-debt-tracker)
+  'wm-cognitive-bias-detections',    // cognitive-bias detector cache
+  'wm-safety-case',                  // safety-case store
+  'wm-intelligence-health',          // intelligence-health snapshot
+  'wm-mission-control',              // mission-control derived state
+  'wm-situation-store-v2',           // situation-store-v2.ts
+  'wm-situation-timeline',           // situation timeline
+  'wm-situations-v1',                // legacy situations cache
+  'wm-counterfactuals',              // counterfactual reasoning cache
+  'wm-meta-confidence',              // meta-confidence store
+  'wm-world-narrative',              // world-narrative cache
+  'wm-crisis-trajectories',          // crisis-trajectory projections
+  'wm-multi-agent-review',           // multi-agent review cache
+  'wm-hypothesis-sets',              // competitive-hypothesis.ts
+  'wm-domain-dependency',            // domain-dependency graph cache
+  'wm-domain-scorecard',             // wm-domain-scorecards + -snapshots
+  'wm-model-governance',             // model-governance cache
+  'wm-collection-gaps',              // collection-gap analysis cache
+  'wm-bias-signals',                 // bias-signal cache
+  'wm-algo-eval-ledger',             // algorithm evaluation ledger (re-graded)
+  'wm-intelligence-briefing-v1',     // derived intelligence briefing
+  'wm-unified-alerts-v1',            // unified-alerts.ts derived alert cache
 ];
 
 function isEvictable(key: string): boolean {

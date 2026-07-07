@@ -140,7 +140,7 @@ import { StatusOverlay } from '@/components/StatusOverlay';
 import { startBlackoutSignature } from '@/services/blackout-signature';
 import { DigestOverlay } from '@/components/DigestOverlay';
 import { shouldShowDigest, markDigestShown, generateDigest } from '@/services/crystal-ball-chat';
-import { startAlertReactions, flashPanel, jumpToPanel } from '@/services/alert-reactions';
+import { startAlertReactions } from '@/services/alert-reactions';
 import { startAnalystLoop } from '@/services/analyst-loop';
 import { startModeForecast } from '@/services/mode-forecast';
 import { startRelevanceLearner } from '@/services/relevance-learner';
@@ -1178,8 +1178,11 @@ export class PanelLayoutManager implements AppModule {
    const detail = (e as CustomEvent<{ panelKey?: string }>).detail;
    const key = detail?.panelKey;
    if (!key) return;
-   jumpToPanel(key);
-   flashPanel(key);
+   // Route through navigateToPanel (lazy-mounts + always gives visible
+   // feedback) rather than jumpToPanel/flashPanel, which silently no-op on an
+   // unmounted or disabled panel — the "dead ⌘-number / palette nav" cause
+   // even though sidebar clicks worked (Defect B2).
+   void this.navigateToPanel(key);
  });
 
  // Install the centralized shortcut registry (⌘K, ⌘/, ⌘1–9 + sidebar badges)
@@ -2433,16 +2436,18 @@ export class PanelLayoutManager implements AppModule {
  }
  });
 
- // Wire sidebar panel items → scroll to panel
+ // Wire sidebar panel items → scroll to panel.
  if (this.ctx.isDesktopApp) {
- document.querySelectorAll<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]').forEach(item => {
- item.addEventListener('click', () => {
- const key = item.dataset.panelKey;
- if (!key) return;
- // Mounts the panel on demand if needed and always gives visible
- // feedback (scroll + flash, or a toast when unavailable).
- void this.navigateToPanel(key);
- });
+ // Delegate on the persistent .mac-sidebar-nav so nav clicks survive any
+ // later sidebar re-render — the old per-node listeners were orphaned the
+ // moment the sidebar was rebuilt (Defect B2). closest() also resolves
+ // clicks on an item's inner dot / ⌘-hint children. navigateToPanel mounts
+ // on demand and always gives visible feedback (scroll + flash, or a toast).
+ const sidebarNav = document.querySelector('.mac-sidebar-nav');
+ sidebarNav?.addEventListener('click', (e) => {
+ const item = (e.target as HTMLElement).closest<HTMLElement>('.mac-sidebar-panel-item[data-panel-key]');
+ const key = item?.dataset.panelKey;
+ if (key) void this.navigateToPanel(key);
  });
 
  // Wire mode selector buttons
@@ -2809,6 +2814,10 @@ export class PanelLayoutManager implements AppModule {
  const target = e.target as Element | null;
  if (target?.closest(NO_DRAG_SELECTOR)) return;
  }
+ // Suppress the native text selection the browser starts on this mousedown
+ // before the OS window-drag takes over — that half-formed selection is what
+ // froze on screen as a page-wide highlight (Defect C).
+ e.preventDefault();
  tryInvokeTauri('plugin:window|start_dragging').catch(() => {/* silent */});
  });
  };

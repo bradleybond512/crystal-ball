@@ -112,8 +112,15 @@ async function resolveStoreValue(key: string, ls: Storage | null): Promise<strin
 
   const legacy = readLegacy(ls, key);
   if (legacy === null) return null;
-  try { await putMemory(CACHE_PREFIX + key, legacy); } catch { /* keep in mirror */ }
-  try { ls?.removeItem(key); } catch { /* best effort */ }
+  // Only free the localStorage slot once the IDB copy is durably written — else
+  // an IDB write failure would delete the only durable copy (Codex review P1).
+  // If the put fails, the value still populates the mirror for this session and
+  // the migration retries from localStorage on the next boot.
+  let persisted = false;
+  try { await putMemory(CACHE_PREFIX + key, legacy); persisted = true; } catch { persisted = false; }
+  if (persisted) {
+    try { ls?.removeItem(key); } catch { /* best effort */ }
+  }
   return legacy;
 }
 

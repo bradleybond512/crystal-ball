@@ -41,13 +41,18 @@ describe('idb-store-cache — key set', () => {
 });
 
 describe('preloadIdbBackedStores — migration', () => {
-  it('adopts a localStorage copy into the mirror and frees the localStorage slot', async () => {
+  it('adopts a localStorage copy into the mirror', async () => {
     store.set(BACKED, 'SITUATION-DATA');
     await preloadIdbBackedStores();
-    // Mirror now holds it…
     assert.equal(_mirrorGetForTest(BACKED), 'SITUATION-DATA');
-    // …and the localStorage slot is freed (before routing patches getItem).
-    assert.equal(store.has(BACKED), false);
+  });
+
+  it('preserves the localStorage copy when the IDB write fails (P1 fallback)', async () => {
+    // node has no IndexedDB, so putMemory fails → the durable localStorage copy
+    // MUST NOT be deleted (else the only copy is lost across restart).
+    store.set(BACKED, 'DURABLE');
+    await preloadIdbBackedStores();
+    assert.equal(store.get(BACKED), 'DURABLE');
   });
 
   it('is idempotent + concurrency-safe (one preload)', async () => {
@@ -58,17 +63,18 @@ describe('preloadIdbBackedStores — migration', () => {
 });
 
 describe('installIdbStorageRouting', () => {
-  it('routes backed-key reads/writes to the mirror, leaving localStorage untouched', async () => {
+  it('routes backed-key reads/writes through the mirror, not native localStorage', async () => {
     store.set(BACKED, 'ORIG');
     await preloadIdbBackedStores();
     installIdbStorageRouting();
 
     // Read comes from the mirror.
     assert.equal(localStorage.getItem(BACKED), 'ORIG');
-    // Write updates the mirror, NOT native localStorage (no quota consumed).
+    // Write updates the mirror and is reflected on read…
     localStorage.setItem(BACKED, 'UPDATED');
     assert.equal(localStorage.getItem(BACKED), 'UPDATED');
-    assert.equal(store.has(BACKED), false);
+    // …but the routed write never lands the NEW value in native localStorage.
+    assert.notEqual(store.get(BACKED), 'UPDATED');
     // Remove clears the mirror.
     localStorage.removeItem(BACKED);
     assert.equal(localStorage.getItem(BACKED), null);

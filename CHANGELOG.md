@@ -6,6 +6,21 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Cognition benchmark + CI gate (Cognitive Enhancement PR 16 — final PR of
+  the 16-PR stack)**: `npm run bench:cognition` replays a frozen 12-window
+  fixture corpus (`cognition/__bench__/golden-windows.ts`, spanning conflict /
+  markets / cyber / weather / shortage / maritime / aviation / general) through
+  the full deterministic pipeline — episodic recall → base rate → aggregation
+  → recalibration → conformal interval, plus a held-out schema-matching stage
+  reusing PR 8's consolidation clustering — and prints Brier score, conformal
+  coverage, analog-recall precision@5, schema true-positive rate, and p50/p95
+  latency (`cognition/bench-cognition.ts`). A committed baseline
+  (`cognition/bench-baseline.json`) gates regressions: fails on Brier
+  regression > 0.02 absolute or conformal coverage dropping more than 5 points
+  below target (`cognition/bench-baseline.ts`). Wired as a new step in
+  `.github/workflows/smoke.yml`, fully offline and fixed-seed — runs in
+  single-digit milliseconds, so it cannot become a slow or hanging CI step.
+  17 new tests in `bench-cognition.test.mts`.
 - **Self-tuning cognition (Cognitive Enhancement PR 12)**: the cognition
   layer is now plugged into the self-improvement machinery. Eight cognition
   constants became bounded tunables (episodic minSim, analog blend

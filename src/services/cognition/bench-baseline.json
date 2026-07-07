@@ -1,0 +1,8 @@
+{
+  "windowCount": 12,
+  "brier": 0.1681,
+  "coverageRate": 1,
+  "targetCoverage": 0.8,
+  "analogPrecisionAt5": 0.75,
+  "schemaTruePositiveRate": 0.75
+}

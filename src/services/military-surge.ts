@@ -1289,7 +1289,10 @@ export function detectMultiTheaterCoordination(surges: SurgeAlert[]): MultiTheat
   const dedupeKey = theaterIds.join('+');
   if (seenMultiTheaterAlerts.has(dedupeKey)) return [];
   seenMultiTheaterAlerts.add(dedupeKey);
-  setTimeout(() => seenMultiTheaterAlerts.delete(dedupeKey), COORDINATION_WINDOW_MS);
+  const dedupeTimer = setTimeout(() => seenMultiTheaterAlerts.delete(dedupeKey), COORDINATION_WINDOW_MS);
+  // Don't hold the Node event loop open in tests (4h delay would hang the process).
+  const t = dedupeTimer as unknown as { unref?: () => void };
+  if (typeof t?.unref === 'function') t.unref();
 
   let score = 50;
   score += Math.min(20, (theaterIds.length - 2) * 10);

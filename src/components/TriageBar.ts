@@ -318,8 +318,9 @@ export class TriageBar {
   private onClick(e: MouseEvent): void {
     const t = e.target as HTMLElement | null;
     if (!t) return;
-    // Dismiss handled before the item branch so it doesn't also navigate.
-    if (t.closest('.triage-dismiss-btn')) { this.dismissStory(t.closest<HTMLElement>('.triage-bar-item')); return; }
+    // Dismiss handled before the item branch so it doesn't also navigate;
+    // stopPropagation preserves the prior per-node behavior.
+    if (t.closest('.triage-dismiss-btn')) { e.stopPropagation(); this.dismissStory(t.closest<HTMLElement>('.triage-bar-item')); return; }
     const facet = t.closest<HTMLElement>('.triage-facet[data-facet]');
     if (facet) { this.selectFacet(facet.dataset.facet as Domain); return; }
     if (t.closest('.triage-bar-ack')) { this.ackAllVisible(); return; }

@@ -9,7 +9,7 @@ use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -3303,6 +3303,26 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
 /// Frontend → desktop log bridge. JS calls this from window.onerror,
 /// unhandledrejection, and key event handlers so renderer-side errors land
 /// in desktop.log instead of dying in WebInspector.
+/// Wall-clock millis since the UNIX epoch — renderer-watchdog timestamps.
+fn renderer_now_ms() -> u64 {
+ SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+/// Last time the renderer's 3s heartbeat reached us (ms since epoch). A hung
+/// renderer main thread (Defect A's infinite JS loop) stops updating this; the
+/// watchdog thread below notices the silence and reloads the webview.
+static LAST_RENDERER_HEARTBEAT_MS: AtomicU64 = AtomicU64::new(0);
+
+/// Renderer heartbeat sink. The paired renderer beats every 3s via log-bridge's
+/// installRendererHeartbeat(); a wedged main thread simply stops calling this.
+#[tauri::command]
+fn renderer_heartbeat(webview: Webview, visible: bool) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
+ let _ = visible; // reserved for future hidden-window policy
+ LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
+ Ok(())
+}
+
 #[tauri::command]
 fn log_frontend(webview: Webview, app: AppHandle, level: String, message: String, context: Option<String>) -> Result<(), String> {
  require_trusted_window(webview.label())?;
@@ -3778,6 +3798,7 @@ fn main() {
  open_logs_folder,
  open_sidecar_log_file,
  log_frontend,
+ renderer_heartbeat,
  copy_diagnostics,
  open_settings_window_command,
  close_settings_window,
@@ -3801,6 +3822,46 @@ fn main() {
  // Load persistent cache into memory (avoids 14MB file I/O on every IPC call)
  let cache_path = cache_file_path(&app.handle()).unwrap_or_default();
  app.manage(PersistentCache::load(&cache_path));
+
+ // ── Renderer watchdog ──────────────────────────────────────────────────
+ // The renderer beats every 3s (log-bridge installRendererHeartbeat). If a
+ // FOCUSED window stops beating for >10s the JS main thread is hung — Defect
+ // A's infinite-loop freeze, where native menus still work but nothing inside
+ // JS can recover — so log it and reload the webview. Hidden/unfocused
+ // windows are exempt (WKWebView throttles the heartbeat timer there).
+ {
+ let app_handle = app.handle().clone();
+ std::thread::spawn(move || {
+ std::thread::sleep(Duration::from_secs(30)); // let the renderer boot
+ LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
+ let mut focused_since: Option<Instant> = None;
+ let mut last_reload = Instant::now() - Duration::from_secs(600);
+ loop {
+ std::thread::sleep(Duration::from_secs(3));
+ let win = match app_handle.get_webview_window("main") { Some(w) => w, None => continue };
+ if !win.is_focused().unwrap_or(false) { focused_since = None; continue; }
+ // Just gained focus: re-baseline so a resume isn't flagged before the
+ // renderer's throttled heartbeat timer wakes back up.
+ if focused_since.is_none() {
+ focused_since = Some(Instant::now());
+ LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
+ continue;
+ }
+ if focused_since.map(|t| t.elapsed()).unwrap_or_default() < Duration::from_secs(12) { continue; }
+ let age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
+ if age > 10_000 {
+ if last_reload.elapsed() < Duration::from_secs(60) { continue; } // no reload loop
+ append_desktop_log(&app_handle, "ERROR", &format!(
+ "renderer watchdog: no heartbeat for {age}ms while focused — reloading webview (hung main thread)"));
+ let _ = win.reload();
+ last_reload = Instant::now();
+ LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
+ focused_since = Some(Instant::now());
+ }
+ }
+ });
+ }
+
  // Mark the app data dir as excluded from Time Machine / iCloud so
  // persistent-cache.json (plaintext intelligence data) doesn't leave the machine.
  if let Ok(data_dir) = app.handle().path().app_data_dir() {

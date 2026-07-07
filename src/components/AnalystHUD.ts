@@ -37,11 +37,20 @@ import { runEnsemble, getCachedEnsemble, subscribeEnsemble } from '@/services/hy
 import { forecastAll, type HypothesisForecast } from '@/services/intelligence/hypothesis-forecast';
 import { requestSuperforecast, getCachedSuperforecast } from '@/services/cognition/superforecast-state';
 import { buildForecastProvenanceLines, buildSuperforecastLines } from './forecast-provenance-view';
+import { buildCheckNextItems } from '@/services/cognition/evoi-surface';
+import type { CollectionAction } from '@/services/cognition/evoi-planner';
+import { recall, type Recall } from '@/services/cognition/episodic-memory';
+import { subscribeCognitionFlags } from '@/services/cognition/cognition-settings';
 import { getLatestPCI } from '@/services/intelligence/predictive-crisis-index';
 import type { ForecastDomain } from '@/services/mode-forecast';
 import type { PressureSample } from '@/services/pressure-history';
 
 const MAX_VISIBLE = 5;
+
+/** Re-run episodic recall for a hypothesis at most every 5 minutes. */
+const ANALOG_CACHE_TTL_MS = 5 * 60_000;
+/** Hard cap on cached analog recalls (hypothesis ids churn across cycles). */
+const ANALOG_CACHE_MAX = 40;
 
 const RISK_COLORS: Record<Hypothesis['risk'], string> = {
   critical: '#c0392b',
@@ -109,6 +118,15 @@ export class AnalystHUD {
   private expandedSuperforecast = new Set<string>();
   private exportedFlash: { id: string; at: number } | null = null;
   private outcomeSubmitted = new Set<string>();
+  // ── Cognition surfacing (Wave 5a) ─────────────────────────────────────────
+  /** EVOI "What to check next" memo — recomputed when the snapshot changes. */
+  private evoiMemo: { key: string; items: CollectionAction[] } | null = null;
+  /** Episodic analog recalls keyed by hypothesis id (async, size-capped). */
+  private readonly analogCache = new Map<string, { recalls: Recall[]; loadedAt: number }>();
+  private readonly loadingAnalogs = new Set<string>();
+  private readonly expandedAnalogs = new Set<string>();
+  /** `${hypId}||${episodeId}` keys with the detail disclosure open. */
+  private readonly expandedAnalogDetail = new Set<string>();
   // Anchor the replay position to a SNAPSHOT TIMESTAMP, not an index.
   // Index-based replay drifts silently when the archive evicts the oldest
   // snapshots (120-slot ring buffer): what the user had as index 5 before
@@ -176,7 +194,31 @@ export class AnalystHUD {
       // Delegated close: the header is rebuilt on every render, and a
       // re-render between pointerdown and pointerup swallows clicks bound
       // directly to the (replaced) button. The root element persists.
-      if ((e.target as HTMLElement).closest?.('.analyst-hud-close')) this.hide();
+      const target = e.target as HTMLElement;
+      if (target.closest?.('.analyst-hud-close')) { this.hide(); return; }
+      // Cognition surfaces (Wave 5a) — delegated on the stable root so the
+      // per-render replaceChildren never orphans a click in flight.
+      const evoiRow = target.closest?.<HTMLElement>('[data-evoi-panel]');
+      if (evoiRow?.dataset.evoiPanel) {
+        jumpToPanel(evoiRow.dataset.evoiPanel);
+        this.hide();
+        return;
+      }
+      const analogToggle = target.closest?.<HTMLElement>('[data-analog-toggle]');
+      if (analogToggle?.dataset.analogToggle) {
+        const id = analogToggle.dataset.analogToggle;
+        if (this.expandedAnalogs.has(id)) this.expandedAnalogs.delete(id);
+        else this.expandedAnalogs.add(id);
+        this.render();
+        return;
+      }
+      const analogDetail = target.closest?.<HTMLElement>('[data-analog-detail]');
+      if (analogDetail?.dataset.analogDetail) {
+        const key = analogDetail.dataset.analogDetail;
+        if (this.expandedAnalogDetail.has(key)) this.expandedAnalogDetail.delete(key);
+        else this.expandedAnalogDetail.add(key);
+        this.render();
+      }
     });
     this.snapshot = getAnalystSnapshot();
     this.forecast = getForecastSnapshot();
@@ -228,6 +270,13 @@ export class AnalystHUD {
       if (this.replayAtTimestamp === null) this.scheduleRender();
     });
     const unsubEnsemble = subscribeEnsemble(() => { this.scheduleRender(); });
+    const unsubCognitionFlags = subscribeCognitionFlags(() => {
+      // Kill-switch flips must reflect immediately: drop the EVOI memo and
+      // analog caches so disabled surfaces empty on the next render.
+      this.evoiMemo = null;
+      this.analogCache.clear();
+      this.scheduleRender();
+    });
     const unsubLlmEgressChange = subscribeLlmEgressChange(() => { this.scheduleRender(); });
     document.addEventListener('cb:llm-egress-disclosure-needed', this.onEgressDisclosure);
     document.addEventListener('cb:toggle-analyst-hud', this.onToggle);
@@ -243,6 +292,7 @@ export class AnalystHUD {
       unsubQuestionAnswered,
       unsubBriefingArchive,
       unsubProjection,
+      unsubCognitionFlags,
       () => document.removeEventListener('cb:hypothesis-export-copied', this.onExportCopied),
       unsubBudget,
       unsubDebug,
@@ -404,6 +454,7 @@ export class AnalystHUD {
       this.buildAdvisorySection(),
       this.buildHotEntitiesSection(),
       this.buildHypothesesSection(),
+      this.buildCheckNextSection(),
       this.buildBriefsSection(),
       this.buildTimelineSection(),
       this.buildFooter(),
@@ -593,6 +644,73 @@ export class AnalystHUD {
     return sec;
   }
 
+  /**
+   * "What to check next" — top EVOI-ranked collection actions across the
+   * visible hypotheses. Rows navigate to the relevant panel when the action
+   * carries a panelId (delegated on this.root via data-evoi-panel).
+   */
+  private buildCheckNextSection(): HTMLElement {
+    const sec = document.createElement('section');
+    sec.className = 'analyst-hud-section';
+
+    const h = document.createElement('h3');
+    h.textContent = 'What to check next';
+    sec.append(h);
+
+    const items = this.checkNextItems();
+    if (items.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'analyst-hud-empty';
+      empty.textContent = 'No high-value checks right now.';
+      sec.append(empty);
+      return sec;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'analyst-hud-evoi-list';
+    for (const action of items) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'analyst-hud-evoi-row';
+      row.title = action.explanation;
+      const bits = action.expectedInfoGainBits.toFixed(2);
+      row.setAttribute('aria-label', `${action.label} — expected gain ${bits} bits`);
+      if (action.panelId) {
+        row.dataset.evoiPanel = action.panelId;
+      } else {
+        row.disabled = true;
+        row.classList.add('analyst-hud-evoi-row-static');
+      }
+      const label = document.createElement('span');
+      label.className = 'analyst-hud-evoi-label';
+      label.textContent = action.label;
+      const badge = document.createElement('span');
+      badge.className = 'analyst-hud-evoi-badge';
+      badge.textContent = `+${bits} bits`;
+      row.append(label, badge);
+      list.append(row);
+    }
+    sec.append(list);
+    return sec;
+  }
+
+  /** Memoized EVOI items for the currently displayed snapshot. */
+  private checkNextItems(): CollectionAction[] {
+    const snap = this.effectiveSnapshot();
+    const visible = (snap?.hypotheses ?? []).slice(0, MAX_VISIBLE);
+    const key = `${snap?.timestamp ?? 0}|${visible.length}`;
+    if (this.evoiMemo?.key === key) return this.evoiMemo.items;
+    const forecasts = visible.length > 0 ? forecastAll(visible, getLatestPCI()) : [];
+    const byId = new Map(forecasts.map(f => [f.hypothesisId, f] as const));
+    const items = buildCheckNextItems(visible.map(h => ({
+      kind: h.kind,
+      statement: h.statement,
+      probability: byId.get(h.id)?.probability ?? h.confidence,
+    })));
+    this.evoiMemo = { key, items };
+    return items;
+  }
+
   private buildSettingsOverlay(): HTMLElement {
     const overlay = document.createElement('div');
     overlay.className = 'analyst-hud-settings';
@@ -752,6 +870,7 @@ export class AnalystHUD {
       this.buildHypPlaybook(h),
       this.buildHypEntities(h),
       this.buildHypEvidence(h),
+      this.buildHypAnalogs(h),
       this.buildHypQuestions(h),
       this.buildHypSkeptic(h),
       this.buildHypAlternatives(h),
@@ -1087,6 +1206,126 @@ export class AnalystHUD {
       wrap.append(altRow, premortRow);
     }
     return wrap;
+  }
+
+  /**
+   * "Historical analogs" — up to 3 episodic-memory recalls for this
+   * hypothesis (title/date + similarity %), each with a details disclosure.
+   * Loads async on first render; hidden entirely when there are no analogs
+   * (episodic recall off → recall() returns [] → nothing renders).
+   * All clicks are delegated on this.root via data-analog-* attributes.
+   */
+  private buildHypAnalogs(h: Hypothesis): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'analyst-hud-hyp-analogs';
+
+    const cached = this.analogCache.get(h.id);
+    const stale = cached !== undefined && Date.now() - cached.loadedAt > ANALOG_CACHE_TTL_MS;
+    if ((!cached || stale) && !this.loadingAnalogs.has(h.id)) {
+      this.loadingAnalogs.add(h.id);
+      this.pruneAnalogCache();
+      void recall(h.statement, { k: 3, kinds: ['hypothesis', 'situation'] })
+        .then((recalls) => { this.analogCache.set(h.id, { recalls, loadedAt: Date.now() }); })
+        .catch(() => {
+          // Cache the miss so a failing recall isn't retried every render.
+          this.analogCache.set(h.id, { recalls: [], loadedAt: Date.now() });
+        })
+        .finally(() => {
+          this.loadingAnalogs.delete(h.id);
+          this.scheduleRender();
+        });
+    }
+
+    if (!cached) {
+      if (this.loadingAnalogs.has(h.id)) {
+        const loading = document.createElement('span');
+        loading.className = 'analyst-hud-analogs-loading';
+        loading.textContent = 'analogs…';
+        wrap.append(loading);
+      }
+      return wrap;
+    }
+    const recalls = cached.recalls.slice(0, 3);
+    if (recalls.length === 0) return wrap;
+
+    const expanded = this.expandedAnalogs.has(h.id);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'analyst-hud-analogs-toggle';
+    toggle.dataset.analogToggle = h.id;
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.setAttribute('aria-label', `Historical analogs for this hypothesis (${recalls.length})`);
+    toggle.textContent = expanded
+      ? `Historical analogs (${recalls.length}) ▾`
+      : `Historical analogs (${recalls.length}) ▸`;
+    wrap.append(toggle);
+
+    if (!expanded) return wrap;
+
+    const list = document.createElement('div');
+    list.className = 'analyst-hud-analog-list';
+    for (const r of recalls) {
+      list.append(this.buildAnalogItem(h.id, r));
+    }
+    wrap.append(list);
+    return wrap;
+  }
+
+  private buildAnalogItem(hypId: string, r: Recall): HTMLElement {
+    const item = document.createElement('div');
+    item.className = 'analyst-hud-analog-item';
+    const key = `${hypId}||${r.episode.id}`;
+    const detailOpen = this.expandedAnalogDetail.has(key);
+
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'analyst-hud-analog-head';
+    head.dataset.analogDetail = key;
+    head.setAttribute('aria-expanded', String(detailOpen));
+    const summary = r.episode.summary.length > 90
+      ? `${r.episode.summary.slice(0, 90)}…`
+      : r.episode.summary;
+    const date = new Date(r.episode.createdAt).toLocaleDateString();
+    const simPct = `${Math.round(r.similarity * 100)}%`;
+    head.setAttribute('aria-label', `Analog episode from ${date}, similarity ${simPct}`);
+    head.title = detailOpen ? 'Hide details' : 'Show details';
+
+    const title = document.createElement('span');
+    title.className = 'analyst-hud-analog-title';
+    title.textContent = summary;
+    const meta = document.createElement('span');
+    meta.className = 'analyst-hud-analog-meta';
+    meta.textContent = `${date} · ${simPct}`;
+    head.append(title, meta);
+    item.append(head);
+
+    if (detailOpen) {
+      const detail = document.createElement('div');
+      detail.className = 'analyst-hud-analog-detail';
+      const age = ageLabel(Date.now() - r.episode.createdAt);
+      const outcome = r.episode.outcome ?? 'pending';
+      const lines = [
+        `${r.explanation} · ${age} ago · outcome: ${outcome}`,
+        ...(r.episode.outcomeNote ? [`→ ${r.episode.outcomeNote}`] : []),
+      ];
+      for (const text of lines) {
+        const p = document.createElement('p');
+        p.className = 'analyst-hud-analog-detail-line';
+        p.textContent = text;
+        detail.append(p);
+      }
+      item.append(detail);
+    }
+    return item;
+  }
+
+  /** Keep the analog cache bounded — evict the oldest loads beyond the cap. */
+  private pruneAnalogCache(): void {
+    if (this.analogCache.size < ANALOG_CACHE_MAX) return;
+    const entries = [...this.analogCache.entries()].sort((a, b) => a[1].loadedAt - b[1].loadedAt);
+    for (const [id] of entries.slice(0, entries.length - ANALOG_CACHE_MAX + 1)) {
+      this.analogCache.delete(id);
+    }
   }
 
   private buildHypActions(h: Hypothesis): HTMLElement {

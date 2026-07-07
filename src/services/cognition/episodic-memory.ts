@@ -28,6 +28,7 @@
 import { embed, maybeUpgradeEmbedding } from './embedding-provider';
 import { topK } from './vector-index';
 import type { IndexedVector } from './vector-index';
+import { isCognitionEnabled } from './cognition-settings';
 import { isGhostMode } from '@/services/mode-manager';
 import { getMemory as idbGetMemory, putMemory as idbPutMemory } from '@/services/reasoning-memory';
 
@@ -258,7 +259,9 @@ function buildExplanation(
 export async function recordEpisode(
   input: Omit<Episode, 'id' | 'vector' | 'tier'>,
 ): Promise<Episode> {
-  if (isGhostMode()) {
+  // Kill-switch (Settings → Cognition): same non-persisted stub as Ghost
+  // Mode so callers don't crash. Fail-safe ON when the setting is unreadable.
+  if (isGhostMode() || !isCognitionEnabled('episodic-recall')) {
     // Return a non-persisted stub so callers don't crash.
     return {
       ...input,
@@ -341,6 +344,9 @@ export async function recall(
   text: string,
   opts?: { k?: number; kinds?: Episode['kind'][] },
 ): Promise<Recall[]> {
+  // Kill-switch (Settings → Cognition): no recalls while episodic recall is
+  // off. Downstream analog scores resolve to null (analog boost disabled).
+  if (!isCognitionEnabled('episodic-recall')) return [];
   load();
 
   const k = opts?.k ?? DEFAULT_K;
@@ -399,6 +405,8 @@ export async function recallWithContext(
   queryDomains: string[],
   opts?: { k?: number; kinds?: Episode['kind'][] },
 ): Promise<Recall[]> {
+  // Kill-switch (Settings → Cognition) — see recall().
+  if (!isCognitionEnabled('episodic-recall')) return [];
   load();
 
   const k = opts?.k ?? DEFAULT_K;

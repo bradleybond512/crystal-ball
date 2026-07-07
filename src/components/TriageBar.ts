@@ -20,6 +20,8 @@ import { getAnnotation, setAnnotation } from '@/services/alert-annotations';
 import { getCollections, addToCollection, createCollection } from '@/services/alert-bookmarks';
 import { formatDurationMinutes } from '@/utils/format-duration';
 import { icon, type IconName } from '@/components/ui/icons';
+import { getActiveRegimeShifts, REGIME_SHIFT_EVENT } from '@/services/cognition/regime-monitor';
+import type { ForecastDomain } from '@/services/mode-forecast';
 
 const MAX_VISIBLE = 5;
 
@@ -78,16 +80,21 @@ export class TriageBar {
     this.element.addEventListener('contextmenu', (e) => this.onContextMenu(e as MouseEvent));
   }
 
+  /** Re-render on new BOCPD detections so the regime chip appears promptly. */
+  private readonly onRegimeShift = (): void => this.render();
+
   mount(parent: HTMLElement): void {
     parent.prepend(this.element);
     this.unsubscribe = unifiedAlertStore.subscribe(() => this.render());
     this.refreshTimer = window.setInterval(() => this.render(), 30_000);
+    document.addEventListener(REGIME_SHIFT_EVENT, this.onRegimeShift);
     this.render();
   }
 
   destroy(): void {
     this.unsubscribe?.();
     if (this.refreshTimer != null) window.clearInterval(this.refreshTimer);
+    document.removeEventListener(REGIME_SHIFT_EVENT, this.onRegimeShift);
     this.presetMenuCleanup?.();
     this.element.remove();
   }
@@ -106,7 +113,13 @@ export class TriageBar {
     // Story-based grouping: cluster related alerts into narratives.
     const stories = groupIntoStories(ranked).slice(0, MAX_VISIBLE);
 
-    if (stories.length === 0 && this.facet === 'all') {
+    // Active BOCPD change-points (empty when quiet or kill-switched off).
+    // A live regime shift keeps the bar visible even with no hot alerts —
+    // it is exactly the "something changed" condition the bar exists for.
+    const regimeShifts = getActiveRegimeShifts();
+    const regimeDomains = Object.keys(regimeShifts) as ForecastDomain[];
+
+    if (stories.length === 0 && this.facet === 'all' && regimeDomains.length === 0) {
       this.element.hidden = true;
       this.element.replaceChildren();
       document.body.classList.remove('has-triage-bar');
@@ -127,6 +140,19 @@ export class TriageBar {
       pill.textContent = DOMAIN_LABELS[d];
       facets.append(pill);
     }
+    // Amber regime-shift chips after the facet pills; absent when quiet.
+    for (const domain of regimeDomains) {
+      const shift = regimeShifts[domain];
+      if (!shift) continue;
+      const chip = document.createElement('button');
+      chip.className = 'triage-regime-chip';
+      chip.type = 'button';
+      const pct = Math.round(shift.changeProbability * 100);
+      chip.textContent = `Regime shift: ${domain} (${pct}%)`;
+      chip.title = `${shift.explanation}\n\nClick to open the Analyst HUD posture advisories.`;
+      chip.setAttribute('aria-label', `Regime shift detected in ${domain}, confidence ${pct} percent. Open Analyst HUD.`);
+      facets.append(chip);
+    }
     const items = document.createElement('div');
     items.className = 'triage-bar-items';
     for (const story of stories) {
@@ -138,7 +164,9 @@ export class TriageBar {
     ack.title = 'Acknowledge all visible';
     ack.textContent = 'Ack all';
     this.visibleStories = stories;
-    this.element.replaceChildren(label, facets, items, ack, this.buildPresetControl());
+    // No "Ack all" when only a regime chip is showing — nothing to ack.
+    const tail = stories.length > 0 ? [ack] : [];
+    this.element.replaceChildren(label, facets, items, ...tail, this.buildPresetControl());
   }
 
   /**
@@ -324,6 +352,11 @@ export class TriageBar {
     const facet = t.closest<HTMLElement>('.triage-facet[data-facet]');
     if (facet) { this.selectFacet(facet.dataset.facet as Domain); return; }
     if (t.closest('.triage-bar-ack')) { this.ackAllVisible(); return; }
+    if (t.closest('.triage-regime-chip')) {
+      // The regime detail lives in the Analyst HUD posture advisories.
+      document.dispatchEvent(new CustomEvent('cb:toggle-analyst-hud'));
+      return;
+    }
     if (t.closest('.triage-bar-preset')) { this.togglePresetMenu(); return; }
     const story = this.storyFor(t.closest<HTMLElement>('.triage-bar-item'));
     if (story) this.activateStory(story);

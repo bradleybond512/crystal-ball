@@ -7,12 +7,19 @@
 import { Panel } from './Panel';
 import { escapeHtml } from '@/utils/sanitize';
 import { renderPanelEmpty } from './ui/PanelStates';
+import { formatDurationMinutes } from '@/utils/format-duration';
 import {
   getCrisisSignatureLibrary,
   type CrisisSignature,
   type MatchConfidence,
   type SignatureMatch,
 } from '@/services/intelligence/crisis-signature';
+import {
+  getLastConsolidationReport,
+  runConsolidationNow,
+  subscribeConsolidationReport,
+} from '@/services/cognition/consolidation-state';
+import { isCognitionEnabled, subscribeCognitionFlags } from '@/services/cognition/cognition-settings';
 
 const CONFIDENCE_COLOR: Record<MatchConfidence, string> = {
   high: 'var(--severity-high,#f87171)',
@@ -38,6 +45,9 @@ interface PanelState {
 export class CrisisSignaturePanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private unsubscribe: (() => void) | null = null;
+  private unsubConsolidation: (() => void) | null = null;
+  private unsubCognitionFlags: (() => void) | null = null;
+  private consolidationRunning = false;
   private state: PanelState = { expandedMatchId: null, expandedSignatureId: null, view: 'matches' };
 
   constructor() {
@@ -47,11 +57,16 @@ export class CrisisSignaturePanel extends Panel {
       showCount: true,
       trackActivity: true,
       infoTooltip:
-        'Fingerprints recurring crisis patterns. Matches incoming observation clusters against 8 historical signatures and ranks them by weighted feature score.',
+        'Fingerprints recurring crisis patterns. Matches incoming observation clusters against 8 historical signatures and ranks them by weighted feature score. The consolidation loop distills recurring episodes into new schemas every 6 hours.',
     });
     this.render();
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
     this.unsubscribe = getCrisisSignatureLibrary().subscribe(() => this.render());
+    this.unsubConsolidation = subscribeConsolidationReport(() => {
+      this.markFresh();
+      this.render();
+    });
+    this.unsubCognitionFlags = subscribeCognitionFlags(() => this.render());
     this.attachHandlers();
   }
 
@@ -62,6 +77,10 @@ export class CrisisSignaturePanel extends Panel {
     }
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.unsubConsolidation?.();
+    this.unsubConsolidation = null;
+    this.unsubCognitionFlags?.();
+    this.unsubCognitionFlags = null;
     super.destroy();
   }
 
@@ -86,8 +105,37 @@ export class CrisisSignaturePanel extends Panel {
     signatures: readonly CrisisSignature[],
   ): string {
     return `<div style="padding:12px;display:flex;flex-direction:column;gap:12px;font-size:12px;">
+      ${this.renderConsolidationStatus()}
       ${this.renderTabs()}
       ${this.state.view === 'matches' ? this.renderMatches(matches) : this.renderCatalog(signatures)}
+    </div>`;
+  }
+
+  /**
+   * Compact status block for the episodic→schema consolidation loop:
+   * "Consolidation: N episodes → M schemas · last run <age> · X retired".
+   * Reads the persisted report from the last cadence tick / manual run.
+   */
+  private renderConsolidationStatus(): string {
+    const enabled = isCognitionEnabled('consolidation');
+    const report = getLastConsolidationReport();
+    let line: string;
+    if (!enabled) {
+      line = 'Consolidation: off — enable in Settings → General → Cognition';
+    } else if (!report) {
+      line = 'Consolidation: not run yet — runs every 6 h while the app is open';
+    } else {
+      const ageMin = Math.max(0, Math.round((Date.now() - report.ranAt) / 60_000));
+      const age = ageMin < 1 ? 'just now' : `${formatDurationMinutes(ageMin)} ago`;
+      line = `Consolidation: ${report.episodesProcessed} episodes → ${report.schemasRegistered} schemas · last run ${age} · ${report.schemasRetired} retired`;
+    }
+    const runLabel = this.consolidationRunning ? 'Running…' : 'Run now';
+    const runBtn = enabled
+      ? `<button class="cs-consolidate-now" ${this.consolidationRunning ? 'disabled' : ''} aria-label="Run consolidation now" style="margin-left:auto;padding:2px 10px;font-size:11px;border:1px solid var(--border-subtle,#333);background:transparent;color:var(--text-secondary,#aaa);border-radius:3px;cursor:pointer;flex-shrink:0;">${runLabel}</button>`
+      : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border-subtle,#333);border-radius:4px;background:var(--surface-2,#1a1a1a);">
+      <span style="font-size:11px;color:var(--text-secondary,#aaa);">${escapeHtml(line)}</span>
+      ${runBtn}
     </div>`;
   }
 
@@ -197,6 +245,18 @@ export class CrisisSignaturePanel extends Panel {
   private onClick(event: MouseEvent): void {
     const target = event.target as HTMLElement | null;
     if (!target) return;
+    if (target.closest('.cs-consolidate-now')) {
+      if (this.consolidationRunning) return;
+      this.consolidationRunning = true;
+      this.render();
+      void runConsolidationNow().finally(() => {
+        this.consolidationRunning = false;
+        // subscribeConsolidationReport re-renders on success; this covers
+        // the disabled/failed path so the button doesn't stick on Running….
+        this.render();
+      });
+      return;
+    }
     const tab = target.closest<HTMLElement>('.cs-tab');
     if (tab) {
       const view = tab.dataset.tab;

@@ -20632,3 +20632,124 @@ summary:focus-visible,
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ─── Cognition surfacing (Wave 5a): EVOI checks, analogs, regime chip ───
+   New rules use the tokens.css vocabulary (lint-colors ratchet). */
+
+/* TriageBar: amber regime-shift chip in the facet row. Absent when quiet. */
+.triage-regime-chip {
+  background: var(--sev-elevated-bg, rgba(251, 146, 60, 0.15));
+  border: 1px solid var(--sev-elevated, #fb923c);
+  color: var(--sev-elevated, #fb923c);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.triage-regime-chip:hover {
+  background: var(--sev-elevated, #fb923c);
+  color: var(--surface-0, #0a0a0a);
+}
+
+/* AnalystHUD: "What to check next" (EVOI planner) section. */
+.analyst-hud-evoi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.analyst-hud-evoi-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--surface-2, #1a1a1a);
+  border: 1px solid var(--surface-border, #333333);
+  color: var(--text-secondary, #cccccc);
+  cursor: pointer;
+}
+.analyst-hud-evoi-row:hover:not(:disabled) {
+  border-color: var(--surface-border-strong, #444444);
+  color: var(--text-primary, #ffffff);
+}
+.analyst-hud-evoi-row-static { cursor: default; }
+.analyst-hud-evoi-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.analyst-hud-evoi-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--sev-info-bg, rgba(96, 165, 250, 0.18));
+  color: var(--sev-info, #60a5fa);
+}
+
+/* AnalystHUD: per-hypothesis "Historical analogs" disclosure. */
+.analyst-hud-hyp-analogs { margin-bottom: 4px; }
+.analyst-hud-analogs-loading {
+  font-size: 11px;
+  color: var(--text-tertiary, #9e9e9e);
+}
+.analyst-hud-analogs-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary, #9e9e9e);
+  font-size: 11px;
+  padding: 2px 0;
+  cursor: pointer;
+  text-align: left;
+}
+.analyst-hud-analogs-toggle:hover { color: var(--text-primary, #ffffff); }
+.analyst-hud-analog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 2px;
+  padding-left: 8px;
+  border-left: 2px solid var(--surface-border, #333333);
+}
+.analyst-hud-analog-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  font-size: 11px;
+  color: var(--text-secondary, #cccccc);
+  cursor: pointer;
+}
+.analyst-hud-analog-head:hover { color: var(--text-primary, #ffffff); }
+.analyst-hud-analog-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.analyst-hud-analog-meta {
+  flex-shrink: 0;
+  color: var(--text-tertiary, #9e9e9e);
+  font-variant-numeric: tabular-nums;
+}
+.analyst-hud-analog-detail { margin: 2px 0 4px; }
+.analyst-hud-analog-detail-line {
+  margin: 0 0 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-tertiary, #9e9e9e);
+}

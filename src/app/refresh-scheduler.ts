@@ -18,6 +18,12 @@ export interface RefreshRegistration {
 // Anything slower than this gets a console.warn that log-bridge captures as a
 // perf breadcrumb. Chosen to trip on clear regressions, not noisy batch work.
 const SLOW_REFRESH_THRESHOLD_MS = 15_000;
+// Hard ceiling on a single refresh. WKWebView suspends a hidden window's fetch
+// (and its abort timer) for the whole hidden period; without this cap a refresh
+// could stay "in-flight" for 40+ minutes and then settle in a resume stampede
+// that pegged the main thread into a freeze (Defect A). Time-boxing guarantees
+// the runner reschedules cleanly instead of waiting on a suspended fetch.
+const REFRESH_TIMEOUT_MS = 45_000;
 
 export class RefreshScheduler implements AppModule {
   private ctx: AppContext;
@@ -80,6 +86,15 @@ export class RefreshScheduler implements AppModule {
  const run = async () => {
  if (this.ctx.isDestroyed) return;
  const isHidden = document.visibilityState === 'hidden';
+ // Pause network refreshes while the window is hidden. WKWebView suspends the
+ // underlying fetch regardless, so running them just accumulates in-flight
+ // awaits that ALL settle in one burst on resume — the stampede that pegged
+ // the main thread into a freeze (Defect A). flushStaleRefreshes() catches up
+ // on resume with bounded concurrency (6 at a time, staggered).
+ if (isHidden) {
+ scheduleNext(computeDelay(intervalMs * currentMultiplier, true));
+ return;
+ }
  if (condition && !condition()) {
  scheduleNext(computeDelay(intervalMs * currentMultiplier, isHidden));
  return;
@@ -91,7 +106,14 @@ export class RefreshScheduler implements AppModule {
  this.ctx.inFlight.add(name);
  const refreshStart = performance.now();
  try {
- const changed = await fn();
+ // Time-box the refresh so a single slow/suspended fetch can never hold the
+ // runner in-flight indefinitely (a 40-minute await was the freeze trigger).
+ const changed = await Promise.race([
+ fn(),
+ new Promise<never>((_, reject) =>
+ setTimeout(() => reject(new Error(`refresh timed out after ${REFRESH_TIMEOUT_MS}ms`)), REFRESH_TIMEOUT_MS),
+ ),
+ ]);
  const elapsed = performance.now() - refreshStart;
  if (elapsed >= SLOW_REFRESH_THRESHOLD_MS) {
  // console.warn is intercepted by log-bridge so this reaches ~/Library/Logs

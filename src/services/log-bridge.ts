@@ -193,6 +193,56 @@ function installMemoryWatchdog(): void {
   }, intervalMs + jitter);
 }
 
+// ─── Frame-stall detector (WebKit-viable long-task substitute) ──────────────
+// WKWebView doesn't support the 'longtask' PerformanceObserver, so
+// installLongTaskObserver() no-ops on desktop. A requestAnimationFrame loop
+// works everywhere: an oversized gap between frames means the main thread was
+// blocked (a long task / stall). This won't fire DURING a total hang (rAF
+// stops too — that's the Rust renderer watchdog's job), but it leaves a
+// breadcrumb + log line for recoverable jank and the leading edge of a stall.
+const FRAME_STALL_THRESHOLD_MS = 5000;
+
+function installFrameStallDetector(): void {
+  if (typeof requestAnimationFrame !== 'function') return;
+  let last = performance.now();
+  // rAF is throttled to ~0 while hidden, so the first frame after unhide shows
+  // a gap == the entire hidden duration. Skip that one frame to avoid a false
+  // "stall" on every resume.
+  let skipNext = false;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { skipNext = true; last = performance.now(); }
+  });
+  const tick = (): void => {
+    const now = performance.now();
+    const gap = now - last;
+    last = now;
+    if (skipNext) { skipNext = false; requestAnimationFrame(tick); return; }
+    if (gap >= FRAME_STALL_THRESHOLD_MS && document.visibilityState === 'visible') {
+      recordBreadcrumb('PERF', 'frame-stall', `${Math.round(gap)}ms main-thread stall`, {});
+      logToDesktop('WARN', `frame stall ${Math.round(gap)}ms — main thread blocked between frames`);
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+// ─── Renderer heartbeat (paired with the Rust-side renderer watchdog) ───────
+// Beat every 3s. A hung main thread (e.g. the Defect-A infinite JS loop) stops
+// these beats; the Rust watchdog notices the silence, logs it, and reloads the
+// webview to recover — the only thing that helps when JS itself is wedged, and
+// exactly the freeze that previously required a manual kill -9.
+function beatRendererHeartbeat(): void {
+  void invokeTauri<void>('renderer_heartbeat', {
+    visible: document.visibilityState === 'visible',
+  }).catch(noop);
+}
+
+function installRendererHeartbeat(): void {
+  if (!isDesktopRuntime()) return;
+  beatRendererHeartbeat();
+  setInterval(beatRendererHeartbeat, 3000);
+}
+
 function installVisibilityBreadcrumbs(): void {
   document.addEventListener('visibilitychange', () => {
  recordBreadcrumb('INFO', 'visibility', `document.visibilityState=${document.visibilityState}`);
@@ -348,6 +398,8 @@ export function installLogBridge(): void {
   };
 
   installLongTaskObserver();
+  installFrameStallDetector();
+  installRendererHeartbeat();
   installInteractionLatencyObserver();
   installMemoryWatchdog();
   installVisibilityBreadcrumbs();

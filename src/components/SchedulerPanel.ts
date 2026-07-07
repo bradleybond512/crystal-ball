@@ -6,7 +6,6 @@
  * table. Header has a Start / Stop toggle for the underlying interval
  * timer.
  */
-/* eslint-disable sonarjs/no-nested-template-literals */
 
 import { Panel } from './Panel';
 import {
@@ -17,6 +16,7 @@ import {
   type SchedulerRun,
 } from '@/services/intelligence/improvement-scheduler';
 import { escapeHtml } from '@/utils/sanitize';
+import { statLine } from './ui/statLine';
 
 const REFRESH_MS = 15_000;
 const HISTORY_DISPLAY_LIMIT = 20;
@@ -80,11 +80,13 @@ export class SchedulerPanel extends Panel {
     const stateColor = running ? '#2ec27e' : '#9ca3af';
     const btnLabel = running ? 'Stop' : 'Start';
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#bbb;">
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary,#bbb);">
         <span style="background:${stateColor};color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">${stateLabel}</span>
-        <span><strong>${stats.totalRuns}</strong> runs</span>
-        <span><strong>${(stats.successRate * 100).toFixed(0)}%</strong> success</span>
-        <span>avg <strong>${stats.avgDurationMs.toFixed(0)}ms</strong></span>
+        <span>${statLine([
+          { value: stats.totalRuns, label: 'runs' },
+          { value: `${(stats.successRate * 100).toFixed(0)}%`, label: 'success' },
+          { value: `${stats.avgDurationMs.toFixed(0)}ms`, label: 'avg', labelFirst: true },
+        ])}</span>
       </div>
       <button class="sch-toggle" type="button" style="padding:3px 10px;background:rgba(74,158,255,0.18);color:inherit;border:1px solid rgba(74,158,255,0.4);border-radius:3px;cursor:pointer;font-size:11px;">${btnLabel}</button>
     </div>`;

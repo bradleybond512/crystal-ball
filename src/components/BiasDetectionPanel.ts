@@ -6,7 +6,6 @@
  * with severity badge, time-ago, evidence, and an Acknowledge button.
  * A history tab lists previously-acknowledged signals.
  */
-/* eslint-disable sonarjs/no-nested-template-literals */
 
 import { Panel } from './Panel';
 import {
@@ -19,6 +18,7 @@ import {
   type BiasRisk,
 } from '@/services/intelligence/bias-detector';
 import { escapeHtml } from '@/utils/sanitize';
+import { dejargonProse, installEntityIdCopyHandler } from './ui/entityRef';
 
 const REFRESH_MS = 30_000;
 
@@ -83,6 +83,7 @@ export class BiasDetectionPanel extends Panel {
     this.render();
     this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
     this.unsubscribe = getBiasDetectorService().subscribe(() => this.render());
+    installEntityIdCopyHandler();
   }
 
   public override destroy(): void {
@@ -163,9 +164,9 @@ export class BiasDetectionPanel extends Panel {
             <span style="background:rgba(74,158,255,0.18);color:#4a9eff;font-size:9px;padding:1px 5px;border-radius:2px;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(s.domain)}</span>
             <span style="font-size:10px;opacity:0.55;">${ts}</span>
           </div>
-          <div style="font-size:12px;color:#ddd;margin-top:3px;">${escapeHtml(s.description)}</div>
-          <div style="font-size:10px;opacity:0.6;margin-top:2px;">${escapeHtml(s.evidence)}</div>
-          <div style="font-size:10px;opacity:0.75;margin-top:2px;color:#9b59b6;">${escapeHtml(s.recommendation)}</div>
+          <div style="font-size:12px;color:#ddd;margin-top:3px;">${dejargonProse(s.description)}</div>
+          <div style="font-size:11px;opacity:0.6;margin-top:2px;">${dejargonProse(s.evidence)}</div>
+          <div style="font-size:11px;opacity:0.75;margin-top:2px;color:#9b59b6;">${escapeHtml(s.recommendation)}</div>
         </div>
         ${ackBtn}
       </div>

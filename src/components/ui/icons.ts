@@ -23,7 +23,10 @@ export type IconName =
   | 'alert-triangle'
   | 'pencil'
   | 'clipboard'
-  | 'magnifier';
+  | 'magnifier'
+  | 'doc'
+  | 'brain'
+  | 'chevron-down';
 
 const PATHS: Record<IconName, string> = {
   bell:
@@ -66,6 +69,18 @@ const PATHS: Record<IconName, string> = {
   magnifier:
     '<circle cx="7.2" cy="7.2" r="4.4"/>' +
     '<path d="M10.4 10.4 14 14"/>',
+  doc:
+    '<path d="M4.2 1.8h4.9l3.1 3.1v9.3H4.2z"/>' +
+    '<path d="M9.1 1.8v3.1h3.1"/>' +
+    '<path d="M6.2 8.2h3.6"/>' +
+    '<path d="M6.2 10.6h3.6"/>',
+  brain:
+    '<path d="M8 2.4a2.6 2.6 0 0 0-2.6 2.5 2.4 2.4 0 0 0-1.6 4A2.4 2.4 0 0 0 5.3 12c.2 1 1.3 1.8 2.7 1.8s2.5-.8 2.7-1.8a2.4 2.4 0 0 0 1.5-3.1 2.4 2.4 0 0 0-1.6-4A2.6 2.6 0 0 0 8 2.4z"/>' +
+    '<path d="M8 2.4v11.4"/>' +
+    '<path d="M5.4 7.4a1.8 1.8 0 0 0 1.4.7"/>' +
+    '<path d="M10.6 9.4a1.8 1.8 0 0 1-1.4.7"/>',
+  'chevron-down':
+    '<path d="M4 6l4 4 4-4"/>',
 };
 
 export interface IconOptions {

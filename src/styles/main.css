@@ -899,6 +899,132 @@ canvas,
   padding-top: var(--notification-stack-h);
 }
 
+/* ── At-a-glance summary strip (Wave 5b) ─────────────────────────────────
+   One slim row docked above the panels grid, inside the .main-content
+   scroll container (so at rest it sits below the container's
+   --notification-stack-h padding, exactly like the grid). Sticky at the
+   stack height so scrolling pins it just below the fixed banners. */
+.cb-summary-strip {
+  position: sticky;
+  top: var(--notification-stack-h, 0px);
+  z-index: 40; /* over panel cards, under the fixed banner stack */
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 30px;
+  min-height: 30px;
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.cb-summary-strip-segs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cb-summary-strip-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cb-summary-strip-seg:hover {
+  background: var(--overlay-subtle);
+}
+
+.cb-summary-strip-seg .cb-stat-sep {
+  margin: 0 5px;
+}
+
+.cb-summary-strip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cb-summary-strip-status {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.cb-summary-strip-muted {
+  opacity: 0.55;
+}
+
+.cb-summary-strip-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  margin-left: auto;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.cb-summary-strip-chevron:hover {
+  background: var(--overlay-subtle);
+  color: var(--text-secondary);
+}
+
+.cb-summary-strip.is-collapsed .cb-summary-strip-chevron .cb-icon {
+  transform: rotate(-90deg);
+}
+
+/* ── Shared stat-pair line (statLine.ts) ───────────────────────────────── */
+.cb-stat-value {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cb-stat-sep {
+  margin: 0 6px;
+  opacity: 0.45;
+}
+
+/* ── Entity ID chip (entityRef.ts) — muted monospace, click-to-copy ────── */
+.cb-entity-id {
+  display: inline-block;
+  padding: 0 4px;
+  background: var(--overlay-subtle);
+  border: none;
+  border-radius: 3px;
+  color: var(--text-tertiary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: copy;
+  vertical-align: baseline;
+}
+
+.cb-entity-id:hover {
+  color: var(--text-secondary);
+}
+
+.cb-entity-id--copied {
+  color: var(--sev-low);
+}
+
 .map-section {
   height: 50vh;
   min-height: 350px;

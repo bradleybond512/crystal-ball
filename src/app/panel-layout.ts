@@ -534,6 +534,7 @@ import { getPrimarySavedPlace, getSavedPlace, getSavedPlaces, subscribeSavedPlac
 import { getSavedPlacesFilterService } from '@/services/intelligence/saved-places-filter';
 import { DataCenterReadinessPanel } from '@/components/DataCenterReadinessPanel';
 import { DataCenterPinnedStrip } from '@/components/DataCenterPinnedStrip';
+import { SummaryStrip } from '@/components/SummaryStrip';
 import { setDatacenterSite } from '@/services/datacenter/datacenter-state';
 import { resolveSiteConfig } from '@/services/datacenter/site-resolver';
 import { SavedPlaceModal } from '@/components/SavedPlaceModal';
@@ -687,6 +688,7 @@ export class PanelLayoutManager implements AppModule {
   private panelDragCleanupHandlers: (() => void)[] = [];
   private criticalBannerEl: HTMLElement | null = null;
   private dcStrip: DataCenterPinnedStrip | null = null;
+  private summaryStrip: SummaryStrip | null = null;
   private unsubDcPlaces: (() => void) | null = null;
   private safetyCaseUnsub: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
@@ -776,6 +778,7 @@ export class PanelLayoutManager implements AppModule {
  // Clean up datacenter strip + saved-places subscription
  if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
+ if (this.summaryStrip) { this.summaryStrip.destroy(); this.summaryStrip = null; }
  // Clean up happy variant panels
  this.ctx.tvMode?.destroy();
  this.ctx.tvMode = null;
@@ -1019,6 +1022,21 @@ export class PanelLayoutManager implements AppModule {
  // Mount the triage bar into the notification stack (last row — below staleness).
  const triageBar = new TriageBar();
  triageBar.mount(notificationStack.element);
+
+ // "At a glance" summary strip — one sticky line above the panels grid
+ // (inside the scroll container, so it inherits the same
+ // --notification-stack-h offset as the grid). Reuses the EEW status
+ // bar's derived composite state; every segment clicks through to its
+ // owning surface. Settings → General → Overview can turn it off.
+ this.summaryStrip = new SummaryStrip({
+ subscribeStatus: (cb) => eewStatusBar.subscribeState(cb),
+ onStatusClick: () => { void this.navigateToPanel('safety-case'); },
+ onAlertsClick: () => { void this.navigateToPanel('unified-alert-inbox'); },
+ onFreshnessClick: () => this.ctx.unifiedSettings?.open('status'),
+ onRegimeClick: () => document.dispatchEvent(new CustomEvent('cb:toggle-analyst-hud')),
+ });
+ const gridForSummary = document.getElementById('panelsGrid');
+ gridForSummary?.parentElement?.insertBefore(this.summaryStrip.getElement(), gridForSummary);
  const justInRail = new JustInRail();
  justInRail.mount(document.body);
  startPanelNarrator();

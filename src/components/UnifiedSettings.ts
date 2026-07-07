@@ -4,6 +4,7 @@ import { SITE_VARIANT } from '@/config/variant';
 import { LANGUAGES, changeLanguage, getCurrentLanguage, t } from '@/services/i18n';
 import { getAiFlowSettings, setAiFlowSetting, getStreamQuality, setStreamQuality, STREAM_QUALITY_OPTIONS } from '@/services/ai-flow-settings';
 import { isCognitionEnabled, setCognitionEnabled, type CognitionSwitchKey } from '@/services/cognition/cognition-settings';
+import { isSummaryStripEnabled, setSummaryStripEnabled } from '@/components/SummaryStrip';
 import { isAlwaysOn, setAlwaysOn } from '@/services/always-on';
 import type { StreamQuality } from '@/services/ai-flow-settings';
 import { escapeHtml } from '@/utils/sanitize';
@@ -443,6 +444,12 @@ export class UnifiedSettings {
  return;
  }
 
+ // At-a-glance summary strip (Settings → General → Overview)
+ if (target.id === 'us-summary-strip') {
+ setSummaryStripEnabled(target.checked);
+ return;
+ }
+
  // Language select
  if (target.closest('.unified-settings-lang-select')) {
  trackLanguageChange(target.value);
@@ -700,6 +707,10 @@ export class UnifiedSettings {
  for (const toggle of COGNITION_TOGGLES) {
  html += this.toggleRowHtml(toggle.id, toggle.label, toggle.desc, isCognitionEnabled(toggle.key));
  }
+
+ // Overview strip (default ON).
+ html += `<div class="ai-flow-section-label">Overview</div>`;
+ html += this.toggleRowHtml('us-summary-strip', 'At-a-glance summary strip', 'Off hides the one-line status / alerts / data-freshness strip above the panel grid.', isSummaryStripEnabled());
 
  // AI Analysis section (web-only)
  if (!this.config.isDesktopApp) {

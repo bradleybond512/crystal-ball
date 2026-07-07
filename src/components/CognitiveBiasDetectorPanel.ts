@@ -17,6 +17,8 @@ import {
   type BiasSeverity,
   type BiasType,
 } from '@/services/intelligence/cognitive-bias-detector';
+import { statLine } from './ui/statLine';
+import { dejargonProse, entityRefHtml, installEntityIdCopyHandler } from './ui/entityRef';
 
 const REFRESH_MS = 10_000;
 const RECENT_LIMIT = 50;
@@ -76,6 +78,7 @@ export class CognitiveBiasDetectorPanel extends Panel {
       if (!this.bulkAcking) this.render();
     });
     this.attachHandlers();
+    installEntityIdCopyHandler();
   }
 
   public override destroy(): void {
@@ -123,13 +126,13 @@ export class CognitiveBiasDetectorPanel extends Panel {
 
   private renderSummary(report: BiasReport): string {
     const topLabel = report.topBiasType ? BIAS_LABEL[report.topBiasType] : '—';
-    const sep = '<span aria-hidden="true" style="opacity:0.45;">·</span>';
+    const stats = statLine([
+      { value: report.totalDetections, label: 'total' },
+      { value: formatBadgeCount(report.unacknowledgedCount), label: 'unack', valueColor: 'var(--severity-high,#f87171)', title: `${report.unacknowledgedCount} unacknowledged` },
+      { value: topLabel, label: 'top:', labelFirst: true },
+    ]);
     return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;font-size:11px;color:var(--text-secondary,#aaa);">
-      <span><strong style="color:var(--text-primary,#fff);font-size:14px;">${report.totalDetections}</strong> total</span>
-      ${sep}
-      <span><strong style="color:var(--severity-high,#f87171);font-size:14px;">${report.unacknowledgedCount}</strong> unack</span>
-      ${sep}
-      <span>top: <strong style="color:var(--text-primary,#fff);">${escapeHtml(topLabel)}</strong></span>
+      <span>${stats}</span>
       <span style="margin-left:auto;display:flex;gap:8px;">
         <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${SEVERITY_COLOR.high};margin-right:4px;"></span>${formatBadgeCount(report.bySeverity.high)}</span>
         <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${SEVERITY_COLOR.medium};margin-right:4px;"></span>${formatBadgeCount(report.bySeverity.medium)}</span>
@@ -205,11 +208,11 @@ export class CognitiveBiasDetectorPanel extends Panel {
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${sevColor}22;color:${sevColor};font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">${escapeHtml(d.severity)}</span>
         <strong style="font-size:12px;">${escapeHtml(BIAS_LABEL[d.biasType])}</strong>
-        <span style="font-family:ui-monospace,monospace;font-size:10px;color:var(--text-secondary,#aaa);">${escapeHtml(d.targetType)}:${escapeHtml(d.targetId)}</span>
-        <span style="margin-left:auto;font-size:10px;color:var(--text-secondary,#aaa);">${escapeHtml(when)}</span>
+        <span style="font-size:11px;color:var(--text-secondary,#aaa);">${escapeHtml(d.targetType)} ${entityRefHtml(d.targetId)}</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text-secondary,#aaa);">${escapeHtml(when)}</span>
         ${ackButton}
       </div>
-      <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:4px;">${escapeHtml(d.evidence)}</div>
+      <div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:4px;">${dejargonProse(d.evidence)}</div>
     </div>`;
   }
 

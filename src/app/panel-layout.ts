@@ -689,6 +689,7 @@ export class PanelLayoutManager implements AppModule {
   private criticalBannerEl: HTMLElement | null = null;
   private dcStrip: DataCenterPinnedStrip | null = null;
   private summaryStrip: SummaryStrip | null = null;
+  private triageBar: TriageBar | null = null;
   private unsubDcPlaces: (() => void) | null = null;
   private safetyCaseUnsub: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
@@ -779,6 +780,7 @@ export class PanelLayoutManager implements AppModule {
  if (this.unsubDcPlaces) { this.unsubDcPlaces(); this.unsubDcPlaces = null; }
  if (this.dcStrip) { this.dcStrip.destroy(); this.dcStrip = null; }
  if (this.summaryStrip) { this.summaryStrip.destroy(); this.summaryStrip = null; }
+ if (this.triageBar) { this.triageBar.destroy(); this.triageBar = null; }
  // Clean up happy variant panels
  this.ctx.tvMode?.destroy();
  this.ctx.tvMode = null;
@@ -1020,8 +1022,8 @@ export class PanelLayoutManager implements AppModule {
  correlationBanner.mount(document.body);
 
  // Mount the triage bar into the notification stack (last row — below staleness).
- const triageBar = new TriageBar();
- triageBar.mount(notificationStack.element);
+ this.triageBar = new TriageBar();
+ this.triageBar.mount(notificationStack.element);
 
  // "At a glance" summary strip — one sticky line above the panels grid
  // (inside the scroll container, so it inherits the same

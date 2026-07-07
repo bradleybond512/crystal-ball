@@ -349,12 +349,12 @@ if (urlParams.get('settings') === '1') {
  const unlocked = await runVaultIntro(appInitPromise.catch(() => {}));
  if (!unlocked) return;
  appInitPromise
- .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); })
+ .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); try { window.getSelection()?.removeAllRanges(); } catch { /* clear any stray boot text-selection (Defect C) */ } })
  .catch(console.error);
  } else {
  app
  .init()
- .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); })
+ .then(() => { clearChunkReloadGuard(chunkReloadStorageKey); try { window.getSelection()?.removeAllRanges(); } catch { /* clear any stray boot text-selection (Defect C) */ } })
  .catch(console.error);
  }
   };

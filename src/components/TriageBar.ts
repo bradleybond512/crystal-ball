@@ -60,12 +60,22 @@ export class TriageBar {
   private facet: Domain = loadFacet();
   /** Non-null while the preset popover is open; call to close + unhook. */
   private presetMenuCleanup: (() => void) | null = null;
+  /** Visible stories from the last render — resolved by delegated handlers. */
+  private visibleStories: AlertStory[] = [];
+  /** Opens the current render's preset popover (delegated preset-toggle). */
+  private openPresetMenu: (() => void) | null = null;
 
   constructor() {
     this.element = document.createElement('div');
     this.element.className = 'triage-bar';
     this.element.id = 'triageBar';
     this.element.hidden = true;
+    // Delegate on the stable root. render() calls replaceChildren() ~1/s on
+    // alert-store churn, orphaning any per-node listener a click gesture
+    // straddles (Defect B1). One listener on this.element — which is never
+    // replaced — survives every re-render (same pattern as AnalystHUD.ts).
+    this.element.addEventListener('click', (e) => this.onClick(e as MouseEvent));
+    this.element.addEventListener('contextmenu', (e) => this.onContextMenu(e as MouseEvent));
   }
 
   mount(parent: HTMLElement): void {
@@ -113,12 +123,8 @@ export class TriageBar {
     for (const d of Object.keys(DOMAIN_LABELS) as Domain[]) {
       const pill = document.createElement('button');
       pill.className = `triage-facet${this.facet === d ? ' active' : ''}`;
+      pill.dataset.facet = d;
       pill.textContent = DOMAIN_LABELS[d];
-      pill.addEventListener('click', () => {
-        this.facet = d;
-        saveFacet(d);
-        this.render();
-      });
       facets.append(pill);
     }
     const items = document.createElement('div');
@@ -131,13 +137,7 @@ export class TriageBar {
     ack.id = 'triageAckAll';
     ack.title = 'Acknowledge all visible';
     ack.textContent = 'Ack all';
-    ack.addEventListener('click', () => {
-      const ids: string[] = [];
-      for (const story of stories) {
-        for (const a of story.alerts) ids.push(a.id);
-      }
-      unifiedAlertStore.acknowledgeMany(ids);
-    });
+    this.visibleStories = stories;
     this.element.replaceChildren(label, facets, items, ack, this.buildPresetControl());
   }
 
@@ -152,6 +152,7 @@ export class TriageBar {
 
     const btn = document.createElement('button');
     btn.className = 'triage-bar-preset';
+    btn.dataset.action = 'preset-toggle';
     btn.title = 'Alerting preset';
     btn.setAttribute('aria-haspopup', 'menu');
     btn.setAttribute('aria-expanded', 'false');
@@ -220,10 +221,9 @@ export class TriageBar {
       focusItem(focusIdx);
     };
 
-    btn.addEventListener('click', () => {
-      if (this.presetMenuCleanup) this.closePresetMenu();
-      else openMenu();
-    });
+    // Opened via the delegated preset-toggle branch in onClick (the btn lives
+    // inside replaceChildren, so a per-node listener would be orphaned).
+    this.openPresetMenu = openMenu;
 
     wrap.append(btn);
     return wrap;
@@ -270,42 +270,92 @@ export class TriageBar {
     // Dismiss button — acknowledges all alerts in the story
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'triage-dismiss-btn';
+    dismissBtn.dataset.action = 'dismiss';
     dismissBtn.textContent = '×';
     dismissBtn.title = 'Dismiss';
-    dismissBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      unifiedAlertStore.acknowledgeMany(story.alerts.map(sa => sa.id));
-    });
     elements.push(dismissBtn);
 
     el.append(...elements);
-    el.addEventListener('click', () => {
-      if (story.alerts.length > 1 && story.entityName) {
-        document.dispatchEvent(new CustomEvent('cb:entity-filter', {
-          detail: { entity: story.entityName, alertIds: story.alerts.map(sa => sa.id) },
-        }));
-        return;
-      }
-      if (a.source === 'correlation' && a.correlationMembers && a.correlationMembers.length > 0) {
-        this.showCorrelationDetails(a);
-        return;
-      }
-      const panelId = panelForAlert(a);
-      jumpToPanel(panelId);
-      flashPanel(panelId);
-      document.dispatchEvent(new CustomEvent('cb:show-related', { detail: { alertId: a.id, title: a.title } }));
-      if (a.location) {
-        document.dispatchEvent(new CustomEvent('cb:focus-map', {
-          detail: { lat: a.location.lat, lon: a.location.lon, zoom: 5 },
-        }));
-        pulseAlertOnMap(a);
-      }
-    });
-    el.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      this.showContextMenu(e as MouseEvent, a);
-    });
+    // Click / contextmenu are handled by the delegated listeners on
+    // this.element (see onClick / onContextMenu); the item carries its identity
+    // via el.dataset.alertId so the handler resolves the story from
+    // this.visibleStories. This survives the ~1/s replaceChildren re-render.
     return el;
+  }
+
+  /** Resolve the story a delegated event landed on, via the item's alertId. */
+  private storyFor(item: HTMLElement | null): AlertStory | undefined {
+    const id = item?.dataset.alertId;
+    return id ? this.visibleStories.find(s => s.leadAlert.id === id) : undefined;
+  }
+
+  /** Navigate / entity-filter / correlation for a clicked story item. */
+  private activateStory(story: AlertStory): void {
+    const a = story.leadAlert;
+    if (story.alerts.length > 1 && story.entityName) {
+      document.dispatchEvent(new CustomEvent('cb:entity-filter', {
+        detail: { entity: story.entityName, alertIds: story.alerts.map(sa => sa.id) },
+      }));
+      return;
+    }
+    if (a.source === 'correlation' && a.correlationMembers && a.correlationMembers.length > 0) {
+      this.showCorrelationDetails(a);
+      return;
+    }
+    const panelId = panelForAlert(a);
+    jumpToPanel(panelId);
+    flashPanel(panelId);
+    document.dispatchEvent(new CustomEvent('cb:show-related', { detail: { alertId: a.id, title: a.title } }));
+    if (a.location) {
+      document.dispatchEvent(new CustomEvent('cb:focus-map', {
+        detail: { lat: a.location.lat, lon: a.location.lon, zoom: 5 },
+      }));
+      pulseAlertOnMap(a);
+    }
+  }
+
+  /** Single delegated click handler on the stable root (Defect B1). */
+  private onClick(e: MouseEvent): void {
+    const t = e.target as HTMLElement | null;
+    if (!t) return;
+    // Dismiss handled before the item branch so it doesn't also navigate.
+    if (t.closest('.triage-dismiss-btn')) { this.dismissStory(t.closest<HTMLElement>('.triage-bar-item')); return; }
+    const facet = t.closest<HTMLElement>('.triage-facet[data-facet]');
+    if (facet) { this.selectFacet(facet.dataset.facet as Domain); return; }
+    if (t.closest('.triage-bar-ack')) { this.ackAllVisible(); return; }
+    if (t.closest('.triage-bar-preset')) { this.togglePresetMenu(); return; }
+    const story = this.storyFor(t.closest<HTMLElement>('.triage-bar-item'));
+    if (story) this.activateStory(story);
+  }
+
+  private dismissStory(item: HTMLElement | null): void {
+    const story = this.storyFor(item);
+    if (story) unifiedAlertStore.acknowledgeMany(story.alerts.map(a => a.id));
+  }
+
+  private selectFacet(facet: Domain): void {
+    this.facet = facet;
+    saveFacet(facet);
+    this.render();
+  }
+
+  private ackAllVisible(): void {
+    const ids: string[] = [];
+    for (const story of this.visibleStories) for (const a of story.alerts) ids.push(a.id);
+    unifiedAlertStore.acknowledgeMany(ids);
+  }
+
+  private togglePresetMenu(): void {
+    if (this.presetMenuCleanup) this.closePresetMenu();
+    else this.openPresetMenu?.();
+  }
+
+  /** Delegated contextmenu (snooze) for story items (Defect B1). */
+  private onContextMenu(e: MouseEvent): void {
+    const story = this.storyFor((e.target as HTMLElement | null)?.closest<HTMLElement>('.triage-bar-item') ?? null);
+    if (!story) return;
+    e.preventDefault();
+    this.showContextMenu(e, story.leadAlert);
   }
 
   private buildSparkline(alertId: string): SVGSVGElement {

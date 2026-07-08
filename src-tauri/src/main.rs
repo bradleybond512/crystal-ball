@@ -3323,6 +3323,104 @@ fn renderer_heartbeat(webview: Webview, visible: bool) -> Result<(), String> {
  Ok(())
 }
 
+/// Set true by the renderer watchdog after it reloads a wedged webview. The
+/// renderer consumes it once on the next boot (take_watchdog_recovery) to toast
+/// "recovered". An atomic flag survives the reload race that an emit() to a
+/// tearing-down webview would lose.
+static WATCHDOG_RECOVERY_PENDING: AtomicBool = AtomicBool::new(false);
+
+/// ~/Library/Logs/CrystalBall — the human-facing dated log the watchdog writes
+/// heartbeats + stall/recovery evidence to (sibling of the app_log_dir bundle
+/// folder that holds desktop.log). Created 0700 if missing.
+fn crystalball_log_dir(app: &AppHandle) -> Option<PathBuf> {
+ let dir = app.path().app_log_dir().ok()?.parent()?.join("CrystalBall");
+ fs::create_dir_all(&dir).ok()?;
+ #[cfg(unix)]
+ {
+  use std::os::unix::fs::PermissionsExt;
+  let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o700));
+ }
+ Some(dir)
+}
+
+/// Civil (UTC) date + time-of-day from a Unix timestamp — pure, no chrono dep.
+/// Howard Hinnant's civil_from_days algorithm; drives the dated log filename.
+fn epoch_to_utc(secs: i64) -> (i64, u32, u32, u32, u32, u32) {
+ let days = secs.div_euclid(86_400);
+ let rem = secs.rem_euclid(86_400);
+ let (hh, mm, ss) = ((rem / 3600) as u32, ((rem % 3600) / 60) as u32, (rem % 60) as u32);
+ let z = days + 719_468;
+ let era = (if z >= 0 { z } else { z - 146_096 }) / 146_097;
+ let doe = z - era * 146_097;
+ let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+ let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+ let mp = (5 * doy + 2) / 153;
+ let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+ let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+ let mut y = yoe + era * 400;
+ if m <= 2 { y += 1; }
+ (y, m, d, hh, mm, ss)
+}
+
+/// Append one line to ~/Library/Logs/CrystalBall/crystal-ball.<YYYY-MM-DD>.log.
+/// Purpose-built for watchdog heartbeats + stall/recovery evidence so the file
+/// ticks as proof-of-life independent of the com.bradleybond desktop log.
+fn append_watchdog_log(app: &AppHandle, level: &str, message: &str) {
+ let Some(dir) = crystalball_log_dir(app) else { return };
+ let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+ let (y, mo, d, h, mi, s) = epoch_to_utc(secs);
+ let path = dir.join(format!("crystal-ball.{y:04}-{mo:02}-{d:02}.log"));
+ let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) else { return };
+ #[cfg(unix)]
+ {
+  use std::os::unix::fs::PermissionsExt;
+  let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+ }
+ let sanitized: String = message.chars().map(|c| if c == '\n' || c == '\r' { ' ' } else { c }).collect();
+ let _ = writeln!(file, "{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}Z [{level}] {sanitized}");
+}
+
+/// Best-effort forensic capture for a renderer stall, on its OWN thread so it
+/// can never delay the reload (a wedged `sample`/`ps` must not block recovery).
+/// We `sample` our OWN process — identity-certain and safe. We deliberately do
+/// NOT sample "the busiest WebKit.WebContent" process: that XPC service is
+/// re-parented to launchd and shared across every WebKit app, so it can't be
+/// attributed to us — sampling it risks dumping an unrelated app's memory into
+/// our logs and may miss our actual renderer. Instead we log a non-invasive `ps`
+/// CPU snapshot of the WebContent processes so the hot renderer is still evident.
+fn spawn_stall_capture(app: AppHandle) {
+ std::thread::spawn(move || {
+  if let Ok(ps) = Command::new("/bin/ps").args(["-axo", "pid,pcpu,pmem,comm"]).output() {
+   let text = String::from_utf8_lossy(&ps.stdout);
+   for line in text.lines().filter(|l| l.contains("WebKit.WebContent")) {
+    append_watchdog_log(&app, "INFO", &format!("stall: WebContent {}", line.trim()));
+   }
+  }
+  let Some(dir) = crystalball_log_dir(&app) else { return };
+  let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+  let out = dir.join(format!("crystal-ball-sample-{secs}.txt"));
+  let out_str = out.to_string_lossy().to_string();
+  let ok = Command::new("/usr/bin/sample")
+   .args([&std::process::id().to_string(), "2", "-file", &out_str, "-mayDie"])
+   .output()
+   .map(|o| o.status.success())
+   .unwrap_or(false);
+  if ok {
+   append_watchdog_log(&app, "INFO", &format!("stall: app-process sample captured: {out_str}"));
+  } else {
+   append_watchdog_log(&app, "WARN", "stall: app-process sample capture failed");
+  }
+ });
+}
+
+/// Consumed once by the renderer on boot: true iff the watchdog reloaded a
+/// wedged webview since the last check, so the renderer can toast "recovered".
+#[tauri::command]
+fn take_watchdog_recovery(webview: Webview) -> Result<bool, String> {
+ require_trusted_window(webview.label())?;
+ Ok(WATCHDOG_RECOVERY_PENDING.swap(false, Ordering::Relaxed))
+}
+
 #[tauri::command]
 fn log_frontend(webview: Webview, app: AppHandle, level: String, message: String, context: Option<String>) -> Result<(), String> {
  require_trusted_window(webview.label())?;
@@ -3799,6 +3897,7 @@ fn main() {
  open_sidecar_log_file,
  log_frontend,
  renderer_heartbeat,
+ take_watchdog_recovery,
  copy_diagnostics,
  open_settings_window_command,
  close_settings_window,
@@ -3839,8 +3938,19 @@ fn main() {
  LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
  let mut focused_since: Option<Instant> = None;
  let mut last_reload = Instant::now() - Duration::from_secs(600);
+ let mut tick: u32 = 0;
+ append_watchdog_log(&app_handle, "INFO", "renderer watchdog armed — dated log active");
  loop {
  std::thread::sleep(Duration::from_secs(3));
+ tick = tick.wrapping_add(1);
+ // Heartbeat tick to the dated log (~every 30s) — steady proof-of-life
+ // that both the watchdog thread and the renderer's beat are alive,
+ // regardless of focus.
+ if tick % 10 == 0 {
+ let beat_age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
+ let focused = app_handle.get_webview_window("main").and_then(|w| w.is_focused().ok()).unwrap_or(false);
+ append_watchdog_log(&app_handle, "INFO", &format!("heartbeat: renderer last beat {beat_age}ms ago, focused={focused}"));
+ }
  let win = match app_handle.get_webview_window("main") { Some(w) => w, None => continue };
  if !win.is_focused().unwrap_or(false) { focused_since = None; continue; }
  // Just gained focus: re-baseline so a resume isn't flagged before the
@@ -3854,9 +3964,20 @@ fn main() {
  let age = renderer_now_ms().saturating_sub(LAST_RENDERER_HEARTBEAT_MS.load(Ordering::Relaxed));
  if age > 60_000 {
  if last_reload.elapsed() < Duration::from_secs(120) { continue; } // no reload loop
- append_desktop_log(&app_handle, "ERROR", &format!(
- "renderer watchdog: no heartbeat for {age}ms while focused — reloading webview (hung main thread)"));
+ // Recovery path: log the stall, kick off forensic capture on its own
+ // thread (so a slow sample can't delay recovery), then reload the webview.
+ // We NEVER exit the app — a wedged renderer is recoverable, and exiting
+ // would lose the session with no crash report.
+ let msg = format!("renderer watchdog: no heartbeat for {age}ms while focused — capturing diagnostics + reloading webview (hung main thread)");
+ append_desktop_log(&app_handle, "ERROR", &msg);
+ append_watchdog_log(&app_handle, "ERROR", &msg);
+ // Set the recovery flag BEFORE reload so the freshly-booted renderer can't
+ // race ahead and consume a not-yet-set flag (which would strand a stale
+ // toast for a later normal boot).
+ WATCHDOG_RECOVERY_PENDING.store(true, Ordering::Relaxed);
+ spawn_stall_capture(app_handle.clone());
  let _ = win.reload();
+ append_watchdog_log(&app_handle, "INFO", "webview reloaded after stall — recovery toast pending; app NOT exited");
  last_reload = Instant::now();
  LAST_RENDERER_HEARTBEAT_MS.store(renderer_now_ms(), Ordering::Relaxed);
  focused_since = Some(Instant::now());
@@ -4202,5 +4323,22 @@ mod navigation_guard_tests {
  fn trusted_window_allows_loopback_dev_only_in_debug() {
   assert!(is_trusted_window_navigation(&url("http://127.0.0.1:46123/live-channels.html")));
   assert!(is_trusted_window_navigation(&url("http://localhost:3001/live-channels.html")));
+ }
+}
+
+#[cfg(test)]
+mod watchdog_log_tests {
+ use super::epoch_to_utc;
+
+ #[test]
+ fn epoch_to_utc_known_instants() {
+  assert_eq!(epoch_to_utc(0), (1970, 1, 1, 0, 0, 0));
+  assert_eq!(epoch_to_utc(86_400), (1970, 1, 2, 0, 0, 0));
+  // 2024-01-01T00:00:00Z (post-leap boundary)
+  assert_eq!(epoch_to_utc(1_704_067_200), (2024, 1, 1, 0, 0, 0));
+  // 2025-01-01T00:00:00Z (2024 was a 366-day leap year)
+  assert_eq!(epoch_to_utc(1_735_689_600), (2025, 1, 1, 0, 0, 0));
+  // time-of-day extraction: +1h1m1s
+  assert_eq!(epoch_to_utc(1_704_070_861), (2024, 1, 1, 1, 1, 1));
  }
 }

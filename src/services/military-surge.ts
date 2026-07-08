@@ -81,6 +81,10 @@ const seenForeignAlerts = new Set<string>();
 // When the bucket rolls over we clear the set so stale buckets aren't retained
 // for the whole session (the keys embed the bucket index and were never pruned).
 let seenForeignAlertsBucket = -1;
+// Evict a foreign-presence entry once its operator/region pair hasn't been
+// re-detected within this window (firstDetected is refreshed on every
+// re-detection), so the map doesn't retain stale pairs + flight arrays.
+const FOREIGN_PRESENCE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface MilitaryTheater {
   id: string;
@@ -515,6 +519,15 @@ function getOperatorCountry(operator: MilitaryOperator): string {
   return config?.country ?? 'Unknown';
 }
 
+// Drop foreign-presence entries whose operator/region pair hasn't been
+// re-detected within the TTL, so the map doesn't retain stale flight arrays.
+function pruneStaleForeignPresence(): void {
+  const cutoff = Date.now() - FOREIGN_PRESENCE_TTL_MS;
+  for (const [key, alert] of activeForeignPresence) {
+ if (alert.firstDetected.getTime() < cutoff) activeForeignPresence.delete(key);
+  }
+}
+
 export function detectForeignMilitaryPresence(flights: MilitaryFlight[]): ForeignPresenceAlert[] {
   const newAlerts: ForeignPresenceAlert[] = [];
 
@@ -544,6 +557,8 @@ export function detectForeignMilitaryPresence(flights: MilitaryFlight[]): Foreig
  seenForeignAlerts.clear();
  seenForeignAlertsBucket = currentBucket;
   }
+
+  pruneStaleForeignPresence();
 
   // Check for concentrations above threshold
   for (const [key, presence] of presenceMap) {

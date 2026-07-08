@@ -693,6 +693,7 @@ export class PanelLayoutManager implements AppModule {
   private dcStrip: DataCenterPinnedStrip | null = null;
   private summaryStrip: SummaryStrip | null = null;
   private triageBar: TriageBar | null = null;
+  private expirePredictionsTimer: ReturnType<typeof setInterval> | null = null;
   private unsubDcPlaces: (() => void) | null = null;
   private safetyCaseUnsub: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
@@ -794,6 +795,14 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.digestPanel?.destroy();
  this.ctx.speciesPanel?.destroy();
  this.ctx.renewablePanel?.destroy();
+ // The map owns a MapLibre + deck.gl GPU context; without an explicit
+ // destroy it (and its ResizeObserver) outlive teardown and can't be GC'd.
+ this.ctx.map?.destroy();
+ this.ctx.map = null;
+ if (this.expirePredictionsTimer) {
+ clearInterval(this.expirePredictionsTimer);
+ this.expirePredictionsTimer = null;
+ }
   }
 
   renderLayout(): void {
@@ -1076,7 +1085,7 @@ export class PanelLayoutManager implements AppModule {
  });
  startEpistemicCalibration();
  startAssumptionExpirySweep();
- setInterval(() => { try { expirePendingPredictions(); } catch { /* noop */ } }, 60 * 60 * 1000);
+ this.expirePredictionsTimer = setInterval(() => { try { expirePendingPredictions(); } catch { /* noop */ } }, 60 * 60 * 1000);
  // PR 14 memory hygiene: flag episodic-memory episodes whose backing
  // explanation was refuted by competitive-hypothesis resolution. Best-effort
  // entity-overlap match (see contradictEpisodesForRefutation doc) — never

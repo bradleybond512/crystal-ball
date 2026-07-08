@@ -20,6 +20,7 @@ Crystal Ball's mission is **redundant data sources that tie together to predict 
 ## 2. Current State
 
 **Already complete — DO NOT rebuild or replan:**
+
 - The deterministic foundation layers (`intelligence/`, `weather/`, `insights/`, `shortage/`, `datacenter/`, `providers/`) — 600+ fixture tests. Includes truth-scoring, situation clustering, compound-risk, the 8 commodity models, NWS polygon matching, the weather urgency ladder, `proper-scoring.ts` (Brier/CRPS/Murphy/ECE), and the **fusion math itself**.
 - The self-tuning / evaluation loop is **wired and live** (`recordAlgorithmEvaluation` → ledger → `startOutcomeGradingCadence()` + `startTuningApplyCadence()` at boot). Do not "wire the dormant loop." (Open lever: only 3 knobs are declared tunable; adding knobs needs a per-knob safety-fixtures suite. Backtest-engine does not model algo knobs.)
 - Cognition PRs 1–11, 13, 15 (episodic memory, closed-loop calibration, superforecaster pipeline, operator model, entity dossiers, conformal intervals, consolidation, EVOI, BOCPD, shadow rollout). Only PR12 (self-tuning cognition) + PR6 (UI) remain — out of scope here.

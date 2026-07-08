@@ -352,7 +352,7 @@ export class CompetitiveHypothesisEngine {
     this.state.sets.set(situationId, set);
     this.state.order.unshift(situationId);
     this.enforceCapacity();
-    this.persist();
+    this.schedulePersist();
     this.notify(set);
     return cloneSet(set);
   }
@@ -380,7 +380,7 @@ export class CompetitiveHypothesisEngine {
     normalizeConfidences(set.hypotheses);
     recomputeDerived(set);
     this.bumpOrder(set.situationId);
-    this.persist();
+    this.schedulePersist();
     this.notify(set);
     return cloneHypothesis(hypothesis);
   }
@@ -395,7 +395,7 @@ export class CompetitiveHypothesisEngine {
     hypothesis.updatedAt = this.clock();
     recomputeDerived(set);
     this.bumpOrder(set.situationId);
-    this.persist();
+    this.schedulePersist();
     this.notify(set);
     return cloneHypothesis(hypothesis);
   }
@@ -489,6 +489,16 @@ export class CompetitiveHypothesisEngine {
     } catch {
       // corrupt — leave empty
     }
+  }
+
+  // Coalesces a burst of mutations into one JSON.stringify write on the next
+  // microtask (in-memory state stays synchronous); fixes the renderer-hang
+  // stringify storm.
+  private persistScheduled = false;
+  private schedulePersist(): void {
+    if (this.persistScheduled) return;
+    this.persistScheduled = true;
+    queueMicrotask(() => { this.persistScheduled = false; this.persist(); });
   }
 
   private persist(): void {

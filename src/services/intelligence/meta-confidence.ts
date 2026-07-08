@@ -19,6 +19,19 @@
 import type { ObservationEvent, ObservationSeverity } from './observation-adapters';
 import type { Assumption } from './assumption-tracker';
 
+/** Microtask-coalescing persist scheduler: many calls within one synchronous
+ *  task collapse into a single `persist` on the next microtask. Stored as a
+ *  per-instance field so the two services in this module share the logic
+ *  without duplicating the method body. */
+function makeCoalescedPersist(persist: () => void): () => void {
+  let scheduled = false;
+  return () => {
+    if (scheduled) return;
+    scheduled = true;
+    queueMicrotask(() => { scheduled = false; persist(); });
+  };
+}
+
 // ── Public types ──────────────────────────────────────────────────────
 
 export type ConfidenceReliability =
@@ -289,7 +302,7 @@ export class MetaConfidenceService {
       computedAt: new Date(this.clock()),
     };
     this.store(estimate);
-    this.persist();
+    this.schedulePersist();
     this.notify(estimate);
     return cloneEstimate(estimate);
   }
@@ -409,6 +422,11 @@ export class MetaConfidenceService {
       // corrupt — leave empty
     }
   }
+
+  // Coalesces a burst of mutations into one JSON.stringify write on the next
+  // microtask (in-memory state stays synchronous); fixes the renderer-hang
+  // stringify storm.
+  private schedulePersist = makeCoalescedPersist(this.persist.bind(this));
 
   private persist(): void {
     const store = safeStorage();
@@ -602,7 +620,7 @@ export class MetaConfidenceCalibrationService {
     };
     this.records.push(persisted);
     while (this.records.length > this.capacity) this.records.shift();
-    this.persist();
+    this.schedulePersist();
     for (const cb of this.subscribers) cb(persisted);
     return persisted;
   }
@@ -681,6 +699,11 @@ export class MetaConfidenceCalibrationService {
       this.records.length = 0;
     }
   }
+
+  // Coalesces a burst of mutations into one JSON.stringify write on the next
+  // microtask (in-memory state stays synchronous); fixes the renderer-hang
+  // stringify storm.
+  private schedulePersist = makeCoalescedPersist(this.persist.bind(this));
 
   private persist(): void {
     if (!this.storage) return;

@@ -162,6 +162,7 @@ export class MapComponent {
   private lastRenderTime = 0;
   private readonly MIN_RENDER_INTERVAL_MS = 100;
   private healthCheckIntervalId: ReturnType<typeof setInterval> | null = null;
+  private resizeObserver: ResizeObserver | null = null;
   private boundThemeChange!: () => void;
   private boundPanMouseMove: ((e: MouseEvent) => void) | null = null;
   private boundPanMouseUp: (() => void) | null = null;
@@ -218,7 +219,7 @@ export class MapComponent {
   private setupResizeObserver(): void {
  let lastWidth = 0;
  let lastHeight = 0;
- const resizeObserver = new ResizeObserver((entries) => {
+ this.resizeObserver = new ResizeObserver((entries) => {
  if (this.isResizing) return;
  for (const entry of entries) {
  const { width, height } = entry.contentRect;
@@ -229,7 +230,7 @@ export class MapComponent {
  }
  }
  });
- resizeObserver.observe(this.container);
+ this.resizeObserver.observe(this.container);
 
  // Re-render when page becomes visible again (after browser throttling)
  this.boundVisibilityHandler = () => {
@@ -264,6 +265,8 @@ export class MapComponent {
  clearInterval(this.healthCheckIntervalId);
  this.healthCheckIntervalId = null;
  }
+ this.resizeObserver?.disconnect();
+ this.resizeObserver = null;
   }
 
   private createControls(): HTMLElement {

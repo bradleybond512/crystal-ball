@@ -160,6 +160,16 @@ export class AssumptionTrackerService {
     }
   }
 
+  // Coalesces a burst of mutations into one JSON.stringify write on the next
+  // microtask (in-memory state stays synchronous); fixes the renderer-hang
+  // stringify storm.
+  private persistScheduled = false;
+  private schedulePersist(): void {
+    if (this.persistScheduled) return;
+    this.persistScheduled = true;
+    queueMicrotask(() => { this.persistScheduled = false; this.persist(); });
+  }
+
   private persist(): void {
     if (!this.storage) return;
     try {
@@ -196,7 +206,7 @@ export class AssumptionTrackerService {
     };
     this.assumptions.push(stamped);
     this.enforceAssumptionCapacity();
-    this.persist();
+    this.schedulePersist();
     this.notify();
     return { ...stamped };
   }
@@ -210,7 +220,7 @@ export class AssumptionTrackerService {
     if (!target || TERMINAL_STATUSES.has(target.status)) return;
     target.status = 'confirmed';
     target.validatedAt = this.clock();
-    this.persist();
+    this.schedulePersist();
     this.notify();
   }
 
@@ -233,7 +243,7 @@ export class AssumptionTrackerService {
     };
     this.violations.push(violation);
     this.enforceViolationCapacity();
-    this.persist();
+    this.schedulePersist();
     this.notify();
   }
 
@@ -252,7 +262,7 @@ export class AssumptionTrackerService {
       }
     }
     if (changed) {
-      this.persist();
+      this.schedulePersist();
       this.notify();
     }
   }

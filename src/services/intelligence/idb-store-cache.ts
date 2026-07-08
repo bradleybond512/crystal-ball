@@ -26,7 +26,28 @@
  * a `store-cache/` key namespace so it never collides with reasoning memory.
  */
 
-import { getMemory, putMemory, deleteMemory } from '@/services/reasoning-memory';
+import {
+  getMemory as realGetMemory,
+  putMemory as realPutMemory,
+  deleteMemory as realDeleteMemory,
+} from '@/services/reasoning-memory';
+
+/**
+ * The IndexedDB KV operations this module depends on, behind an indirection so
+ * tests can inject an in-memory backend (node has no IndexedDB, so the real
+ * ones fail — which otherwise makes the IDB-hit code paths untestable).
+ */
+interface MemoryBackend {
+  getMemory: (key: string) => Promise<unknown>;
+  putMemory: (key: string, value: unknown) => Promise<void>;
+  deleteMemory: (key: string) => Promise<void>;
+}
+const defaultBackend: MemoryBackend = {
+  getMemory: (k) => realGetMemory<string>(k),
+  putMemory: (k, v) => realPutMemory(k, v),
+  deleteMemory: (k) => realDeleteMemory(k),
+};
+let backend: MemoryBackend = defaultBackend;
 
 /** Minimal synchronous storage contract the reasoning stores depend on. */
 export interface SyncStorageLike {
@@ -61,6 +82,12 @@ export const IDB_BACKED_STORE_KEYS: readonly string[] = [
   'wm-multi-agent-review',
   'wm-situation-timeline',
   'wm-domain-dependency',
+  // Large, still-growing, lazily-hydrated caches that also crossed the budget.
+  // Safe to route: each reads localStorage on first *access* (after routing is
+  // installed), not eagerly at module import, so it hydrates from the mirror.
+  'wm-algo-eval-ledger',
+  'crystalball-notification-digests',
+  'crystalball-alert-lifecycle-v1',
 ];
 
 const mirror = new Map<string, string>();
@@ -81,7 +108,7 @@ async function flushPending(): Promise<void> {
   for (const [key, value] of batch) {
     // Best effort — the mirror stays authoritative this session on any failure.
     try {
-      await (value === null ? deleteMemory(CACHE_PREFIX + key) : putMemory(CACHE_PREFIX + key, value));
+      await (value === null ? backend.deleteMemory(CACHE_PREFIX + key) : backend.putMemory(CACHE_PREFIX + key, value));
     } catch { /* ignore */ }
   }
 }
@@ -101,31 +128,59 @@ function readLegacy(ls: Storage | null, key: string): string | null {
 }
 
 /**
- * Resolve one store's value: prefer the IDB copy; otherwise adopt the
- * localStorage copy (one-time migration — persist to IDB, free the localStorage
- * slot). Returns null when neither source has it.
+ * Persist a localStorage value into IDB and, only once the write is CONFIRMED
+ * durable, free the localStorage slot. Never deletes the copy on failure — else
+ * an IDB write error would drop the only durable copy (Codex review P1).
+ * putMemory swallows its own errors, so confirm with a read-back rather than
+ * trusting it not to throw; on failure the mirror still serves it this session
+ * and the drain retries next boot. Returns the (now-durable) value.
  */
-async function resolveStoreValue(key: string, ls: Storage | null): Promise<string | null> {
-  let value: string | null = null;
-  try { value = await getMemory<string>(CACHE_PREFIX + key); } catch { value = null; }
-  if (value !== null) return value;
-
-  const legacy = readLegacy(ls, key);
-  if (legacy === null) return null;
-  // Only free the localStorage slot once the IDB copy is CONFIRMED durable — else
-  // an IDB write failure would delete the only durable copy (Codex review P1).
-  // putMemory swallows its own errors, so confirm with a read-back rather than
-  // trusting it not to throw. On failure the value still populates the mirror
-  // this session and migration retries from localStorage on the next boot.
+async function persistThenDrain(key: string, ls: Storage | null, legacy: string): Promise<string> {
   let persisted = false;
   try {
-    await putMemory(CACHE_PREFIX + key, legacy);
-    persisted = (await getMemory<string>(CACHE_PREFIX + key)) === legacy;
+    await backend.putMemory(CACHE_PREFIX + key, legacy);
+    persisted = (await backend.getMemory(CACHE_PREFIX + key)) === legacy;
   } catch { persisted = false; }
   if (persisted) {
     try { ls?.removeItem(key); } catch { /* best effort */ }
   }
   return legacy;
+}
+
+/**
+ * Resolve one store's value: prefer the IDB copy; otherwise adopt the
+ * localStorage copy (one-time migration — persist to IDB, free the localStorage
+ * slot). Returns null when neither source has it.
+ *
+ * When the IDB copy exists, a lingering localStorage copy is drained on EVERY
+ * boot (not just the migration boot) — the one-shot migration removeItem can be
+ * skipped when its read-back gate races the shared-`crystalball_db`
+ * versionchange churn, orphaning the copy forever. Left in place, the orphan
+ * keeps localStorage over WebKit's ~5 MB quota and every synchronous
+ * localStorage call wedges the renderer main thread (the 60–120 s watchdog
+ * stall/reload loop).
+ */
+async function resolveStoreValue(key: string, ls: Storage | null): Promise<string | null> {
+  let value: string | null = null;
+  try { value = (await backend.getMemory(CACHE_PREFIX + key)) as string | null; } catch { value = null; }
+
+  if (value !== null) {
+    const orphan = readLegacy(ls, key);
+    // Byte-identical (or absent) copy → safe to drop immediately.
+    if (orphan === null || orphan === value) {
+      if (orphan !== null) { try { ls?.removeItem(key); } catch { /* best effort */ } }
+      return value;
+    }
+    // The localStorage copy DIVERGES — it may hold a value that never reached
+    // IDB (e.g. a write before routing installed). Persist it before removal so
+    // nothing is lost; next boot it is byte-identical and drains above. (These
+    // are re-derivable caches, so a rare regression self-heals from live data.)
+    return persistThenDrain(key, ls, orphan);
+  }
+
+  const legacy = readLegacy(ls, key);
+  if (legacy === null) return null;
+  return persistThenDrain(key, ls, legacy);
 }
 
 /**
@@ -219,7 +274,13 @@ export function _resetIdbStoreCacheForTest(): void {
   if (flushTimer !== null) { clearTimeout(flushTimer); flushTimer = null; }
   preloaded = false;
   preloadPromise = null;
+  backend = defaultBackend;
   delete (globalThis as Record<string, unknown>).__idbStoreRoutingInstalled;
+}
+
+/** Test seam — inject an in-memory IDB backend (pass null to restore the real one). */
+export function _setMemoryBackendForTest(b: MemoryBackend | null): void {
+  backend = b ?? defaultBackend;
 }
 
 /** Test seam — read the current mirror value for a key. */

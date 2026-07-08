@@ -14,7 +14,7 @@ const store = new Map<string, string>();
 
 const {
   preloadIdbBackedStores, installIdbStorageRouting, IDB_BACKED_STORE_KEYS,
-  _resetIdbStoreCacheForTest, _mirrorGetForTest,
+  _resetIdbStoreCacheForTest, _mirrorGetForTest, _setMemoryBackendForTest,
 } = await import('../idb-store-cache.ts');
 
 // A representative IDB-backed key and a non-backed one.
@@ -97,5 +97,72 @@ describe('installIdbStorageRouting', () => {
     installIdbStorageRouting();
     localStorage.setItem(BACKED, 'X');
     assert.equal(localStorage.getItem(BACKED), 'X');
+  });
+});
+
+describe('preloadIdbBackedStores — orphaned localStorage cleanup (quota drain)', () => {
+  it('removes a localStorage copy already durable in IDB (drains the orphan)', async () => {
+    // Reproduces the field bug: an earlier boot persisted the store to IDB but
+    // its one-shot removeItem was skipped, so the localStorage copy is orphaned.
+    // On any later boot getMemory() returns the value and the function must
+    // still free the redundant localStorage slot — else localStorage never
+    // drops below WebKit's quota and the renderer wedges on sync-localStorage.
+    const idb = new Map<string, unknown>([['store-cache/' + BACKED, 'DURABLE-IN-IDB']]);
+    _setMemoryBackendForTest({
+      getMemory: async (k: string) => (idb.has(k) ? idb.get(k) : null),
+      putMemory: async (k: string, v: unknown) => { idb.set(k, v); },
+      deleteMemory: async (k: string) => { idb.delete(k); },
+    });
+    store.set(BACKED, 'DURABLE-IN-IDB'); // orphaned legacy copy lingering
+
+    await preloadIdbBackedStores();
+
+    assert.equal(store.has(BACKED), false, 'orphaned localStorage copy must be removed');
+    assert.equal(_mirrorGetForTest(BACKED), 'DURABLE-IN-IDB', 'value stays available via the mirror');
+  });
+
+  it('persists a DIVERGENT localStorage copy to IDB before draining it (no data loss)', async () => {
+    // localStorage holds a value that never reached IDB (e.g. a pre-routing
+    // write). The drain must NOT discard it — it migrates it to IDB first.
+    const idb = new Map<string, unknown>([['store-cache/' + BACKED, 'STALE-IN-IDB']]);
+    _setMemoryBackendForTest({
+      getMemory: async (k: string) => (idb.has(k) ? idb.get(k) : null),
+      putMemory: async (k: string, v: unknown) => { idb.set(k, v); },
+      deleteMemory: async (k: string) => { idb.delete(k); },
+    });
+    store.set(BACKED, 'NEWER-ONLY-IN-LOCALSTORAGE');
+
+    await preloadIdbBackedStores();
+
+    assert.equal(store.has(BACKED), false, 'localStorage slot is freed');
+    assert.equal(idb.get('store-cache/' + BACKED), 'NEWER-ONLY-IN-LOCALSTORAGE', 'divergent value migrated to IDB, not lost');
+  });
+
+  it('keeps the localStorage copy when IDB has no durable value (P1 durability)', async () => {
+    // IDB miss AND write failure — the localStorage copy is the only durable one
+    // and must never be deleted.
+    _setMemoryBackendForTest({
+      getMemory: async () => null,
+      putMemory: async () => { throw new Error('idb down'); },
+      deleteMemory: async () => {},
+    });
+    store.set(BACKED, 'ONLY-COPY');
+    await preloadIdbBackedStores();
+    assert.equal(store.get(BACKED), 'ONLY-COPY', 'must preserve the sole durable copy');
+  });
+});
+
+describe('idb-store-cache — extension keys (quota headroom)', () => {
+  it('backs the large, still-growing, lazily-hydrated stores', () => {
+    for (const k of ['wm-algo-eval-ledger', 'crystalball-notification-digests', 'crystalball-alert-lifecycle-v1']) {
+      assert.ok(IDB_BACKED_STORE_KEYS.includes(k), `${k} should be IDB-backed`);
+    }
+  });
+  it('leaves eager module-load stores in localStorage (hydration-order safety)', () => {
+    // These construct + read localStorage at import, before the mirror is warm;
+    // routing them would hydrate them empty after migration. Keep until refactored.
+    for (const k of ['wm-situations-v1', 'wm-unified-alerts-v1']) {
+      assert.ok(!IDB_BACKED_STORE_KEYS.includes(k), `${k} must stay in localStorage`);
+    }
   });
 });

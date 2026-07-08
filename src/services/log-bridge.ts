@@ -249,6 +249,17 @@ function installRendererHeartbeat(): void {
   setInterval(beatRendererHeartbeat, 3000);
 }
 
+// After a watchdog reload the renderer boots fresh; ask the Rust side once
+// whether this boot followed a stall reload and, if so, surface a recovery
+// toast. The flag is consumed atomically so the toast shows exactly once.
+async function checkWatchdogRecovery(): Promise<void> {
+  if (!isDesktopRuntime()) return;
+  try {
+    const recovered = await invokeTauri<boolean>('take_watchdog_recovery');
+    if (recovered) showToast('Renderer recovered — reloaded after a stall');
+  } catch { /* command unavailable — ignore */ }
+}
+
 function installVisibilityBreadcrumbs(): void {
   document.addEventListener('visibilitychange', () => {
  recordBreadcrumb('INFO', 'visibility', `document.visibilityState=${document.visibilityState}`);
@@ -406,6 +417,7 @@ export function installLogBridge(): void {
   installLongTaskObserver();
   installFrameStallDetector();
   installRendererHeartbeat();
+  void checkWatchdogRecovery();
   installInteractionLatencyObserver();
   installMemoryWatchdog();
   installVisibilityBreadcrumbs();

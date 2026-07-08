@@ -73,6 +73,43 @@ test('disagreement domain: the minority-fingerprint provider is flagged disagree
   assert.equal(view.summary.disagreementCount, 1);
 });
 
+test('disagreement domain with no strict majority (3-way split): every fingerprinted provider is flagged', () => {
+  const report = assessProviderRedundancy({
+    generatedAt: NOW,
+    snapshots: [
+      snap({ providerId: 'usgs-earthquakes', recentFactFingerprint: 'v:1' }),
+      snap({ providerId: 'other-source', primary: false, recentFactFingerprint: 'v:2', label: 'Other' }),
+      snap({ providerId: 'emsc-seismic', primary: false, recentFactFingerprint: 'v:3', label: 'EMSC Seismic' }),
+    ],
+  });
+  const view = buildSourceConfidenceView(report);
+  const quakes = view.domains.find((d) => d.domain === 'disasters')!;
+  assert.equal(quakes.verdict, 'redundant_disagreement');
+  assert.ok(
+    quakes.providers.every((p) => p.disagreeing),
+    'with no strict majority, no provider should be exempted as "correct"',
+  );
+});
+
+test('disagreement domain with an even 2-vs-2 tie: every fingerprinted provider is flagged', () => {
+  const report = assessProviderRedundancy({
+    generatedAt: NOW,
+    snapshots: [
+      snap({ providerId: 'a', recentFactFingerprint: 'v:1' }),
+      snap({ providerId: 'b', primary: false, recentFactFingerprint: 'v:1', label: 'B' }),
+      snap({ providerId: 'c', primary: false, recentFactFingerprint: 'v:2', label: 'C' }),
+      snap({ providerId: 'd', primary: false, recentFactFingerprint: 'v:2', label: 'D' }),
+    ],
+  });
+  const view = buildSourceConfidenceView(report);
+  const quakes = view.domains.find((d) => d.domain === 'disasters')!;
+  assert.equal(quakes.verdict, 'redundant_disagreement');
+  assert.ok(
+    quakes.providers.every((p) => p.disagreeing),
+    'a 50/50 split has no strict majority, so no provider should be exempted',
+  );
+});
+
 test('single-source domain: fusionActive false, one provider, singleSourceCount tallied', () => {
   const report = assessProviderRedundancy({
     generatedAt: NOW,

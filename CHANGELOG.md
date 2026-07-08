@@ -19,9 +19,12 @@ All notable changes to Crystal Ball are documented here.
   and `src/services/diagnostics/source-confidence-view.ts` (composes the
   existing `assessProviderRedundancy()` engine + the timeline view into the
   panel's exact shape, flagging the odd-fingerprint-out provider in a live
-  disagreement). No new scoring math — both modules reshape the
-  already-tested `provider-redundancy.ts` / `provider-health.ts` /
-  `fusion-publish.ts` engines. 12 new fixture tests. Registered in
+  disagreement — only when a fingerprint holds a strict majority; a 3-way
+  split or an even tie has no verified "correct" provider to exempt, so
+  every fingerprinted provider is flagged instead). No new scoring math —
+  both modules reshape the already-tested `provider-redundancy.ts` /
+  `provider-health.ts` / `fusion-publish.ts` engines. 14 new fixture tests.
+  Registered in
   `panels.ts` and instantiated in `panel-layout.ts` under the `intelligence`
   category. Workstream A widening (fusion beyond the current 4 domains) and
   Workstream B (closing the cataloged single-source-of-failure domains) are

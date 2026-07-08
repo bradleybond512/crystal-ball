@@ -41,8 +41,11 @@ export interface ProviderRowView {
   successRatePct?: number;
   lastSuccessAt?: number;
   fingerprint?: string;
-  /** True when this provider's fingerprint differs from the domain's
-   *  majority fingerprint — i.e. it's the odd one out in a disagreement. */
+  /** True when this provider's fingerprint differs from a verified
+   *  strict-majority fingerprint in the domain, OR no fingerprint holds a
+   *  strict majority at all (a 3-way split, an even tie) — in that case
+   *  every fingerprinted provider is flagged, since there is no "correct"
+   *  one to exempt. */
   disagreeing: boolean;
   timeline?: ProviderTimelineView;
 }
@@ -72,7 +75,9 @@ export interface SourceConfidenceSummary {
   disagreementCount: number;
   /** Domains with only one working provider — a silent point of failure. */
   singleSourceCount: number;
-  /** Domains where every provider is down. */
+  /** Domains needing attention because a provider is down — either every
+   *  provider (`all_down`) or the primary with a backup covering it
+   *  (`primary_down_with_backup`). */
   downCount: number;
   headline: string;
 }
@@ -157,19 +162,28 @@ function buildProviderRows(
     disagreeing:
       d.verdict === 'redundant_disagreement' &&
       Boolean(p.recentFactFingerprint) &&
+      // When no fingerprint holds a strict majority (a 3-way split, a
+      // 2-vs-2 tie), there's no verified "correct" provider to exempt —
+      // flag every fingerprinted provider rather than arbitrarily
+      // crediting whichever fingerprint was first-seen.
       p.recentFactFingerprint !== majorityFingerprint,
     timeline: timelines[p.providerId],
   }));
 }
 
-/** The fingerprint value shared by the most providers (ties broken by
- *  first-seen) — used only to flag which provider(s) are the odd one out
- *  in a disagreement; the underlying disagreement verdict itself comes
- *  from `assessProviderRedundancy()`, not from this tie-break. */
+/** The fingerprint held by a strict majority (>50%) of fingerprinted
+ *  providers — used only to flag which provider(s) are the odd one out in
+ *  a disagreement; the underlying disagreement verdict itself comes from
+ *  `assessProviderRedundancy()`, not from this tie-break. Returns
+ *  `undefined` when no fingerprint reaches a strict majority (a 3-way
+ *  split or an even tie), so every fingerprinted provider gets flagged
+ *  instead of crediting an arbitrary first-seen fingerprint as "correct". */
 function pickMajorityFingerprint(d: DomainRedundancy): string | undefined {
   const counts = new Map<string, number>();
+  let fingerprinted = 0;
   for (const p of d.providers) {
     if (!p.recentFactFingerprint) continue;
+    fingerprinted += 1;
     counts.set(p.recentFactFingerprint, (counts.get(p.recentFactFingerprint) ?? 0) + 1);
   }
   let best: string | undefined;
@@ -180,7 +194,7 @@ function pickMajorityFingerprint(d: DomainRedundancy): string | undefined {
       bestCount = count;
     }
   }
-  return best;
+  return bestCount > fingerprinted / 2 ? best : undefined;
 }
 
 function buildSummaryHeadline(

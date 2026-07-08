@@ -20,6 +20,7 @@ Crystal Ball's mission is **redundant data sources that tie together to predict 
 ## 2. Current State
 
 **Already complete — DO NOT rebuild or replan:**
+
 - The deterministic foundation layers (`intelligence/`, `weather/`, `insights/`, `shortage/`, `datacenter/`, `providers/`) — 600+ fixture tests. Includes truth-scoring, situation clustering, compound-risk, the 8 commodity models, NWS polygon matching, the weather urgency ladder, `proper-scoring.ts` (Brier/CRPS/Murphy/ECE), and the **fusion math itself**.
 - The self-tuning / evaluation loop is **wired and live** (`recordAlgorithmEvaluation` → ledger → `startOutcomeGradingCadence()` + `startTuningApplyCadence()` at boot). Do not "wire the dormant loop." (Open lever: only 3 knobs are declared tunable; adding knobs needs a per-knob safety-fixtures suite. Backtest-engine does not model algo knobs.)
 - Cognition PRs 1–11, 13, 15 (episodic memory, closed-loop calibration, superforecaster pipeline, operator model, entity dossiers, conformal intervals, consolidation, EVOI, BOCPD, shadow rollout). Only PR12 (self-tuning cognition) + PR6 (UI) remain — out of scope here.
@@ -129,6 +130,30 @@ surfaces: Command Center · SystemDiagnostic · analyst HUD · MCP
 | **Phase 3** | Workstream D (proxy-signal outcomes, OOD decay) + calibration surfacing. | Plan 4 |
 
 Each phase: branch off fresh `origin/main` in its own worktree, fixture tests + `typecheck:all` at zero + `smoke` green, cross-agent review, PR.
+
+### Phase 1 status (UI slice landed; SPOF-closing deferred)
+
+- **Done**: `SourceConfidencePanel` (§6.E) shipped as a dedicated diagnostics
+  surface — `src/components/SourceConfidencePanel.ts`, backed by two new
+  pure view-model modules: `src/services/providers/provider-health-timeline-view.ts`
+  (per-provider fetch-outcome ring buffer → renderable timeline) and
+  `src/services/diagnostics/source-confidence-view.ts` (composes
+  `assessProviderRedundancy()` + the timeline view into per-domain cards:
+  fusion-active vs SPOF tag, live disagreement flags, per-provider health).
+  Both reuse the existing engines verbatim — no new scoring math. Registered
+  in `panels.ts` / instantiated in `panel-layout.ts` under the `intelligence`
+  category, refreshing every 15s off the already-wired
+  `getProviderRedundancyReport()` singleton.
+- **Deferred (out of scope for the UI-focused session that shipped the
+  panel)**: "Widen A across all domains" (wiring `FUSION_DOMAINS` /
+  `fusion-publish.ts` for domains beyond the current 4 — earthquakes,
+  air_quality, crypto, stocks) and all of Workstream B (closing the 20
+  cataloged SPOFs in §12 with free fallback sources + sidecar fallback
+  orchestration). The panel is honest about this today: any domain with
+  only one registered provider surfaces as `single_source` / "SPOF" and any
+  domain with 2+ providers but no fingerprint pipeline wired surfaces as
+  `redundant_unverified` (not yet "FUSED") — both are visible signals for
+  the next session to act on, not fabricated coverage.
 
 ## 8. Data flow (end to end, earthquake example)
 

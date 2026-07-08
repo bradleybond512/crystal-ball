@@ -350,6 +350,7 @@ import { CollectionGapPanel } from '@/components/CollectionGapPanel';
 import { getShadowRunner } from '@/services/intelligence/shadow-runner';
 import { builtInShadowAlgorithms } from '@/services/intelligence/built-in-shadow-algorithms';
 import { AlgorithmDiagnosticPanel } from '@/components/AlgorithmDiagnosticPanel';
+import { SourceConfidencePanel } from '@/components/SourceConfidencePanel';
 import { EventStorePanel } from '@/components/EventStorePanel';
 import { BeliefCalibrationPanel } from '@/components/BeliefCalibrationPanel';
 import { WatchboardPanel } from '@/components/WatchboardPanel';
@@ -1829,6 +1830,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['meta-confidence'] = new MetaConfidencePanel();
  this.ctx.panels['meta-confidence-calibration'] = new MetaConfidenceCalibrationPanel();
  this.ctx.panels['algorithm-diagnostic'] = new AlgorithmDiagnosticPanel();
+ this.ctx.panels['source-confidence'] = new SourceConfidencePanel();
  this.ctx.panels['event-store'] = new EventStorePanel();
  this.ctx.panels['belief-calibration'] = new BeliefCalibrationPanel();
  this.ctx.panels['watchboards'] = new WatchboardPanel();

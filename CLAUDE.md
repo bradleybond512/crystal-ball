@@ -293,11 +293,14 @@ src/                        # TypeScript frontend (Vite)
     providers/provider-domain-map.ts         # fact-type → provider ids + tolerance + match window (FUSION_DOMAINS). matchBy: 'spatial'|'key'; toleranceMode: 'absolute'|'relative'
     providers/fusion-ingest.ts               # ingestDomain(): match same-fact observations across providers → fuse + per-provider fingerprint (Phase 0 keystone)
     providers/fusion-publish.ts              # singleton (domain-agnostic): fetchers call recordDomainObservations(providerId,...); domain derived from FUSION_DOMAINS; overlays fingerprinted snapshots for every ACTIVE fused domain onto the redundancy report
+    providers/provider-health-timeline-view.ts # pure: ProviderHealthState.outcomes[id] ring buffer → windowed timeline (dots + windowed success rate) for the SourceConfidencePanel provider-health strip
     airquality/airquality-fusion-observations.ts # Open-Meteo + OpenAQ readings → DomainObservation[] (AQI), 2nd fused domain
     market/crypto-fusion-observations.ts     # exchange prices → DomainObservation[] (price, matched by symbol/key, relative tolerance), 3rd fused domain
     market/coingecko-fetch.ts + coinbase-fetch.ts # no-key fail-closed fetches — the 2 crypto sources (Coinbase, not Binance: 451 in US)
     market/stock-fetch.ts                    # fail-closed Yahoo (no-key) + Finnhub (keyed) fetches — the 2 stock sources (4th fused domain, own 'equities' domain)
+    diagnostics/source-confidence-view.ts    # pure: composes assessProviderRedundancy() + provider-health-timeline-view into per-domain cards (fusion-active vs SPOF, live disagreement flags, per-provider health) for SourceConfidencePanel
     # Fused domains: earthquakes (USGS+EMSC, spatial) + air_quality (Open-Meteo+OpenAQ, spatial) + crypto (CoinGecko+Coinbase) + stocks (Yahoo+Finnhub), the last two key/relative. data-loader feeds them; Command Center / System Diagnostic show "verified by N independent sources".
+    # `src/components/SourceConfidencePanel.ts` (Phase 1 UI, panel id `source-confidence`) is the dedicated per-domain redundancy surface — SystemDiagnostic's Feeds tab still shows the compact "Source corroboration" summary, this panel is the full drill-down (per-provider health timeline + live disagreement flags + FUSED/SPOF tags). Widening fusion to more domains + closing the cataloged SPOFs (Workstream B) is still open — see the spec's "Phase 1 status" note.
     # See docs/superpowers/specs/2026-06-28-redundancy-prediction-enhancement-program-design.md + plans/2026-06-28-phase0-fusion-ingest-earthquakes.md
 src-tauri/
   sidecar/local-api-server.mjs  # Node.js API proxy, port 46123 — exposes

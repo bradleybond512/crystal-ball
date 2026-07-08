@@ -6,6 +6,28 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Source Confidence Panel (Redundancy + Prediction Enhancement Program,
+  Phase 1 UI slice)**: a new dedicated diagnostics surface
+  (`src/components/SourceConfidencePanel.ts`, panel id `source-confidence`)
+  showing per-domain source redundancy at a glance — which domains are
+  multi-source "FUSED" and agreeing, which are actively disagreeing, which
+  are single-provider "SPOF"s, and which are fully down — plus a per-provider
+  drill-down (health level, rolling success rate, last-success age, fact
+  fingerprint, and a fetch-outcome timeline sparkline). Built on two new pure
+  view-model modules: `src/services/providers/provider-health-timeline-view.ts`
+  (windows a provider's fetch-outcome ring buffer into a renderable timeline)
+  and `src/services/diagnostics/source-confidence-view.ts` (composes the
+  existing `assessProviderRedundancy()` engine + the timeline view into the
+  panel's exact shape, flagging the odd-fingerprint-out provider in a live
+  disagreement). No new scoring math — both modules reshape the
+  already-tested `provider-redundancy.ts` / `provider-health.ts` /
+  `fusion-publish.ts` engines. 12 new fixture tests. Registered in
+  `panels.ts` and instantiated in `panel-layout.ts` under the `intelligence`
+  category. Workstream A widening (fusion beyond the current 4 domains) and
+  Workstream B (closing the cataloged single-source-of-failure domains) are
+  explicitly out of scope for this UI-focused slice — the panel surfaces
+  today's real gaps (`single_source` / `redundant_unverified`) rather than
+  papering over them.
 - **Cognition benchmark + CI gate (Cognitive Enhancement PR 16 — final PR of
   the 16-PR stack)**: `npm run bench:cognition` replays a frozen 12-window
   fixture corpus (`cognition/__bench__/golden-windows.ts`, spanning conflict /
@@ -47,7 +69,7 @@ All notable changes to Crystal Ball are documented here.
   only payload-bearing (banner+) decisions activate it. Pure show/hide +
   display logic extracted to `src/components/personal-storm-mode-view.ts`
   (24 tests, wired into `npm run test:weather`), with a desktop-native
-  restyle in `macos-native.css` under `body.is-desktop-macos`.
+  restyle in `macos-native.css` under `body.is-desktop-macos`. (PR #1374)
 - **Surfacing Move 2 — cognition layer visibility**: forecast provenance,
   calibration report, and booting the learning loops (PR #1339).
 - **Ask the data in Command Center**: the deterministic ask-the-data engine is

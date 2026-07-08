@@ -105,7 +105,11 @@ export function getLiveDiagnosticsSnapshot(now: () => number = Date.now): LiveDi
   const feedSnapshots = [...feedSnapshotMap.values()].sort((a, b) =>
     a.feedId.localeCompare(b.feedId),
   );
-  const notificationSummary = getNotificationTraceRegistry().summary();
+  // Stamp the summary with the snapshot's own (injectable) clock — the whole
+  // snapshot is "as of generatedAt". The registry's summary() otherwise uses
+  // real Date.now(), which made two same-clock snapshots differ by ~1 ms and
+  // flaked the "deterministic given identical state" test on ms boundaries.
+  const notificationSummary = { ...getNotificationTraceRegistry().summary(), generatedAt };
   const recentEvents = getDiagnosticEventBus().query().slice(-50);
   return {
     generatedAt,

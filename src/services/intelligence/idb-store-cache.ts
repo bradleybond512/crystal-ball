@@ -193,10 +193,18 @@ export function preloadIdbBackedStores(): Promise<void> {
   if (preloaded) return Promise.resolve();
   preloadPromise ??= (async (): Promise<void> => {
     const ls = legacyLocalStorage();
+    const t0 = typeof performance === 'undefined' ? 0 : performance.now();
+    let bytes = 0;
     for (const key of IDB_BACKED_STORE_KEYS) {
       const value = await resolveStoreValue(key, ls);
-      if (value !== null) mirror.set(key, value);
+      if (value !== null) { mirror.set(key, value); bytes += value.length; }
+      // Yield a macrotask between keys so the renderer heartbeat + input events
+      // interleave with the (main-thread) IDB deserialize bursts rather than
+      // being starved through the whole boot materialization.
+      await new Promise<void>((r) => { setTimeout(r, 0); });
     }
+    // eslint-disable-next-line no-console
+    if (typeof performance !== 'undefined') console.warn(`[BOOT-TIMING] preloadIdbBackedStores: ${(performance.now() - t0).toFixed(0)}ms, ${(bytes / 1e6).toFixed(1)}MB mirror`);
     preloaded = true;
   })();
   return preloadPromise;

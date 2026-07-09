@@ -152,17 +152,38 @@ export function safeSetItem(key: string, value: string): boolean {
  *
  * Must be called once at boot (main.ts), before any data-loading begins.
  */
+/**
+ * Where to install the setItem patch. WKWebView's `localStorage` is an exotic
+ * platform object whose INSTANCE method assignment (`localStorage.setItem = fn`)
+ * is silently inert — the native method keeps running, so the patch never
+ * intercepts and the ~100 bare `setItem` callers get no eviction (the renderer
+ * then wedges on quota). Patching `Storage.prototype` DOES take effect. Fall
+ * back to the instance for a plain-object shim (unit tests / SSR).
+ */
+function storagePatchHost(ls: Storage): Storage {
+  const proto = Object.getPrototypeOf(ls) as Storage | null;
+  if (proto && proto !== Object.prototype && typeof proto.setItem === 'function') return proto;
+  return ls;
+}
+
 export function installLocalStoragePatch(): void {
   if (typeof localStorage === 'undefined') return;
   if ((globalThis as Record<string, unknown>).__lsPatchInstalled) return;
 
-  const nativeSetItem = localStorage.setItem.bind(localStorage);
+  const target = localStorage;
+  const host = storagePatchHost(target);
+  // Re-invoked with the real `this` via `.call(this, …)`; binding would pin the
+  // wrong receiver, so capture the raw method.
+  // eslint-disable-next-line @typescript-eslint/unbound-method
+  const nativeSetItem = host.setItem;
 
-  localStorage.setItem = (key: string, value: string): void => {
+  host.setItem = function (this: Storage, key: string, value: string): void {
     try {
-      nativeSetItem(key, value);
+      nativeSetItem.call(this, key, value);
     } catch (error) {
-      if (!isQuotaError(error)) throw error;
+      // Only reclaim localStorage space for the localStorage target — never
+      // evict on a sessionStorage quota error (different backing store).
+      if (!isQuotaError(error) || this !== target) throw error;
       const needed = key.length + value.length;
       const removed = evictLargestCache(needed);
       if (removed === 0) {
@@ -170,7 +191,7 @@ export function installLocalStoragePatch(): void {
         return; // swallow — nothing left to evict
       }
       try {
-        nativeSetItem(key, value);
+        nativeSetItem.call(this, key, value);
       } catch (retryError) {
         if (isQuotaError(retryError)) markStorageQuotaExceeded();
         // swallow — never throw QuotaExceededError to unsuspecting callers

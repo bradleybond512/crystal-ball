@@ -98,6 +98,43 @@ describe('installIdbStorageRouting', () => {
     localStorage.setItem(BACKED, 'X');
     assert.equal(localStorage.getItem(BACKED), 'X');
   });
+
+  it('patches Storage.prototype, not the instance, for a real Storage-like (WKWebView fix)', async () => {
+    // WKWebView's localStorage is an exotic object: `localStorage.setItem = fn`
+    // on the INSTANCE is silently inert, so routing must patch the prototype.
+    const backing = new Map<string, string>();
+    class FakeStorage {
+      getItem(k: string): string | null { return backing.has(k) ? backing.get(k)! : null; }
+      setItem(k: string, v: string): void { backing.set(k, v); }
+      removeItem(k: string): void { backing.delete(k); }
+    }
+    const proto = FakeStorage.prototype;
+    const origGet = proto.getItem, origSet = proto.setItem, origRemove = proto.removeItem;
+    const gt = globalThis as unknown as { localStorage: unknown };
+    const savedLs = gt.localStorage;
+    const fake = new FakeStorage();
+    gt.localStorage = fake;
+    try {
+      await preloadIdbBackedStores();
+      installIdbStorageRouting();
+
+      // The PROTOTYPE method is replaced; the instance gets no own shadow property.
+      assert.notEqual(proto.setItem, origSet, 'Storage.prototype.setItem must be patched');
+      assert.equal(Object.prototype.hasOwnProperty.call(fake, 'setItem'), false, 'instance patch would be inert on WKWebView');
+
+      // A routed-key write lands in the mirror, NOT the native backing store.
+      fake.setItem(BACKED, 'ROUTED');
+      assert.equal(backing.has(BACKED), false, 'routed write must not reach native storage');
+      assert.equal(_mirrorGetForTest(BACKED), 'ROUTED');
+
+      // A non-routed key falls through to the native backing store.
+      fake.setItem(PLAIN, 'native');
+      assert.equal(backing.get(PLAIN), 'native');
+    } finally {
+      proto.getItem = origGet; proto.setItem = origSet; proto.removeItem = origRemove;
+      gt.localStorage = savedLs;
+    }
+  });
 });
 
 describe('preloadIdbBackedStores — orphaned localStorage cleanup (quota drain)', () => {

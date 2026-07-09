@@ -69,6 +69,17 @@ const USER_LOCATION_KEY = 'crystalball-user-location';
 const MAX_ALERTS = 500;
 const PRUNE_AGE_MS = 48 * 60 * 60 * 1000; // 48 hours
 
+/**
+ * Throttle the subscriber fan-out. ~26 subscribers re-run on every notify (each
+ * getAll()s + reprocesses the whole set), and several re-ingest/re-acknowledge
+ * from their callback — a feedback loop that, unbounded, fires the fan-out every
+ * frame and drives the ingest-burst CPU/GC stall. Leading + trailing throttle
+ * caps it to ≤1 fan-out per interval while never dropping the final state.
+ */
+let notifyThrottleMs = 100;
+/** Test seam — override the notify throttle (0 = fire immediately, as before). */
+export function _setNotifyThrottleForTest(ms: number): void { notifyThrottleMs = ms; }
+
 // ── Haversine distance ──────────────────────────────────────────────────
 
 const EARTH_RADIUS_KM = 6371;
@@ -129,6 +140,10 @@ class UnifiedAlertStore {
   private flushDirty = false;
   /** Incoming alerts accumulated across a burst for ONE coalesced IDB archive write. */
   private pendingArchive: UnifiedAlert[] = [];
+  /** Throttled subscriber fan-out state (see notifyThrottleMs). */
+  private notifyTimer: ReturnType<typeof setTimeout> | null = null;
+  private notifyDirty = false;
+  private lastNotifyAt = 0;
 
   constructor() {
     this.loadFromStorage();
@@ -154,9 +169,8 @@ class UnifiedAlertStore {
     this.flushDirty = true;
     if (this.flushScheduled) return;
     this.flushScheduled = true;
-    // The scheduled callback is exactly flushNow(): clear the scheduled flag,
-    // then flush if still dirty.
-    const run = () => this.flushNow();
+    // Scheduled (non-unload) drain: throttle the subscriber fan-out.
+    const run = () => this.drainFlush(false);
     // rAF coalesces to one flush per painted frame — but it is PAUSED while the
     // document is hidden. This app ingests in the background, so fall back to a
     // timer when hidden (or when rAF is unavailable) so prune/persist/archive
@@ -177,10 +191,25 @@ class UnifiedAlertStore {
     // visibilitychange→hidden transition), the now-paused rAF no longer blocks
     // subsequent hidden ingests from re-arming the setTimeout fallback. A stale
     // rAF that later fires is a harmless no-op (guarded by flushDirty).
+    this.drainFlush(true);
+  }
+
+  /**
+   * Run the coalesced flush if dirty. `immediate` forces a synchronous notify
+   * (unload durability); otherwise the subscriber fan-out is throttled.
+   */
+  private drainFlush(immediate: boolean): void {
     this.flushScheduled = false;
-    if (!this.flushDirty) return;
-    this.flushDirty = false;
-    this.flush();
+    if (this.flushDirty) {
+      this.flushDirty = false;
+      this.flush(immediate);
+      return;
+    }
+    // Nothing to persist — but on unload a throttled notify may still be pending
+    // (the flush already ran, only its trailing fan-out is queued). Deliver it
+    // synchronously so subscribers never miss the final state on page close.
+    // Guard on notifyDirty so a bare unload with nothing pending is a no-op.
+    if (immediate && this.notifyDirty) this.deliverNotifyNow();
   }
 
   /**
@@ -188,14 +217,45 @@ class UnifiedAlertStore {
    * archive (one IDB putBatch) → notify. Doing prune + the IDB write here rather
    * than per-ingest collapses N ingests in a frame into ONE spread+sort, ONE
    * stringify and ONE structured clone — the serialization/GC churn behind the
-   * ingest-burst renderer stall.
+   * ingest-burst renderer stall. The subscriber fan-out is throttled separately
+   * (see scheduleNotify) so it cannot fire every frame.
    */
-  private flush(): void {
+  private flush(immediate: boolean): void {
     this.prune();
     this.persist();
     this.flushArchive();
+    // An immediate (unload) flush just changed state → deliver now; otherwise
+    // throttle the fan-out.
+    if (immediate) this.deliverNotifyNow();
+    else this.scheduleNotify();
+  }
+
+  /** Throttled subscriber fan-out: leading fire when idle, else a trailing fire. */
+  private scheduleNotify(): void {
+    this.notifyDirty = true;
+    if (this.notifyTimer !== null) return;
+    const elapsed = Date.now() - this.lastNotifyAt;
+    if (elapsed >= notifyThrottleMs) {
+      this.emitNotify();
+    } else {
+      this.notifyTimer = setTimeout(() => { this.notifyTimer = null; this.emitNotify(); }, notifyThrottleMs - elapsed);
+    }
+  }
+
+  private emitNotify(): void {
+    if (this.notifyDirty) this.deliverNotifyNow();
+  }
+
+  /** Fire the subscriber fan-out now: cancel any pending trailing timer, clear dirty, notify. */
+  private deliverNotifyNow(): void {
+    if (this.notifyTimer !== null) { clearTimeout(this.notifyTimer); this.notifyTimer = null; }
+    this.notifyDirty = false;
+    this.lastNotifyAt = Date.now();
     this.notify();
   }
+
+  /** Test seam — simulate the pagehide/unload synchronous flush. */
+  _flushNowForTest(): void { this.flushNow(); }
 
   /** Fire-and-forget: one structured-clone IDB write for the whole burst. */
   private flushArchive(): void {

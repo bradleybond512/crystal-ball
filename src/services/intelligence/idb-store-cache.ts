@@ -228,10 +228,28 @@ export function getIdbBackedStorage(): SyncStorageLike {
 const routedKeys = new Set(IDB_BACKED_STORE_KEYS);
 
 /**
+ * Pick where to install a localStorage method patch. WKWebView's `localStorage`
+ * is an exotic platform object: assigning to `localStorage.setItem` on the
+ * INSTANCE is silently inert (the native method keeps running), so an
+ * instance-level monkey-patch never intercepts. Patching `Storage.prototype`
+ * DOES take effect. Fall back to the instance for a plain-object shim (unit
+ * tests / SSR), whose prototype is `Object.prototype`.
+ */
+function storagePatchHost(ls: Storage): Storage {
+  const proto = Object.getPrototypeOf(ls) as Storage | null;
+  if (proto && proto !== Object.prototype && typeof proto.setItem === 'function') return proto;
+  return ls;
+}
+
+/**
  * Route the IDB-backed keys through the mirror at the `localStorage` layer, so
- * the ~16 reasoning stores that read/write `globalThis.localStorage` directly
+ * the ~19 reasoning stores that read/write `globalThis.localStorage` directly
  * transparently persist to IndexedDB instead — no per-store change. Every other
  * key falls through to the underlying (possibly eviction-patched) localStorage.
+ *
+ * Patches `Storage.prototype` (see `storagePatchHost` — instance patches are
+ * inert on WKWebView), guarding on `this === localStorage` so `sessionStorage`
+ * is untouched.
  *
  * Install AFTER `installLocalStoragePatch()` and AFTER `preloadIdbBackedStores()`
  * so migration reads/clears the legacy localStorage copies first, then routing
@@ -241,27 +259,39 @@ export function installIdbStorageRouting(): void {
   if (typeof localStorage === 'undefined') return;
   if ((globalThis as Record<string, unknown>).__idbStoreRoutingInstalled) return;
 
-  const underlyingGet = localStorage.getItem.bind(localStorage);
-  const underlyingSet = localStorage.setItem.bind(localStorage);
-  const underlyingRemove = localStorage.removeItem.bind(localStorage);
+  const target = localStorage;
+  const host = storagePatchHost(target);
+  // Capture the raw methods; they are re-invoked with the real `this` via
+  // `.call(this, …)`, so binding here would pin the wrong receiver.
+  /* eslint-disable @typescript-eslint/unbound-method */
+  const nativeGet = host.getItem;
+  const nativeSet = host.setItem;
+  const nativeRemove = host.removeItem;
+  /* eslint-enable @typescript-eslint/unbound-method */
 
-  localStorage.getItem = (key: string): string | null => {
-    if (!routedKeys.has(key)) return underlyingGet(key);
-    return mirror.has(key) ? mirror.get(key)! : null;
+  host.getItem = function (this: Storage, key: string): string | null {
+    if (this === target && routedKeys.has(key)) return mirror.has(key) ? mirror.get(key)! : null;
+    return nativeGet.call(this, key);
   };
 
-  localStorage.setItem = (key: string, value: string): void => {
-    if (!routedKeys.has(key)) { underlyingSet(key, value); return; }
-    mirror.set(key, value);
-    pending.set(key, value);
-    scheduleFlush();
+  host.setItem = function (this: Storage, key: string, value: string): void {
+    if (this === target && routedKeys.has(key)) {
+      mirror.set(key, value);
+      pending.set(key, value);
+      scheduleFlush();
+      return;
+    }
+    nativeSet.call(this, key, value);
   };
 
-  localStorage.removeItem = (key: string): void => {
-    if (!routedKeys.has(key)) { underlyingRemove(key); return; }
-    mirror.delete(key);
-    pending.set(key, null);
-    scheduleFlush();
+  host.removeItem = function (this: Storage, key: string): void {
+    if (this === target && routedKeys.has(key)) {
+      mirror.delete(key);
+      pending.set(key, null);
+      scheduleFlush();
+      return;
+    }
+    nativeRemove.call(this, key);
   };
 
   (globalThis as Record<string, unknown>).__idbStoreRoutingInstalled = true;

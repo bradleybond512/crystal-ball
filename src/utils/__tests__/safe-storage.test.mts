@@ -30,7 +30,7 @@ function totalBytes(skipKey?: string): number {
   get length() { return store.size; },
 } as Storage;
 
-const { safeSetItem, EVICTABLE_CACHE_PREFIXES, _resetQuotaLatchForTest } =
+const { safeSetItem, EVICTABLE_CACHE_PREFIXES, _resetQuotaLatchForTest, installLocalStoragePatch } =
   await import('../safe-storage.ts');
 
 const { isStorageQuotaExceeded, isIndexedDbQuotaExceeded } = await import('../storage-quota.ts');
@@ -217,5 +217,52 @@ describe('EVICTABLE_CACHE_PREFIXES', () => {
     assert.equal(localStorage.getItem('wm_saved_places_v1'), 'p'.repeat(200));
     assert.equal(localStorage.getItem('wm-basemap'), 'terrain');
     assert.equal(localStorage.getItem('wm_proximity_config'), 'c'.repeat(100));
+  });
+});
+
+describe('installLocalStoragePatch — prototype patching (WKWebView fix)', () => {
+  it('patches Storage.prototype so bare setItem callers get quota eviction', () => {
+    // WKWebView's localStorage is exotic: instance-level `setItem = fn` is inert,
+    // so the eviction net must be installed on Storage.prototype.
+    const backing = new Map<string, string>();
+    let localBudget = Infinity;
+    class FakeStorage {
+      getItem(k: string): string | null { return backing.has(k) ? backing.get(k)! : null; }
+      setItem(k: string, v: string): void {
+        let n = 0;
+        for (const [kk, vv] of backing) { if (kk === k) continue; n += kk.length + vv.length; }
+        if (n + k.length + v.length > localBudget) throw new DOMException('quota', 'QuotaExceededError');
+        backing.set(k, v);
+      }
+      removeItem(k: string): void { backing.delete(k); }
+      key(i: number): string | null { return [...backing.keys()][i] ?? null; }
+      get length(): number { return backing.size; }
+    }
+    const proto = FakeStorage.prototype;
+    const origSet = proto.setItem;
+    const gt = globalThis as unknown as { localStorage: unknown; __lsPatchInstalled?: unknown };
+    const savedLs = gt.localStorage;
+    delete gt.__lsPatchInstalled;
+    const fake = new FakeStorage();
+    gt.localStorage = fake;
+    try {
+      installLocalStoragePatch();
+
+      // Structural: the prototype is patched; the instance is NOT shadowed
+      // (an instance patch would be silently inert on WKWebView).
+      assert.notEqual(proto.setItem, origSet, 'Storage.prototype.setItem must be patched');
+      assert.equal(Object.prototype.hasOwnProperty.call(fake, 'setItem'), false, 'instance must not be patched');
+
+      // Behavioural: a bare instance write over quota evicts disposable cache and retries.
+      backing.set('crystalball-persistent-cache:x', 'y'.repeat(100));
+      localBudget = 130;
+      fake.setItem('wm-country-watchlist-v1', 'z'.repeat(40));
+      assert.equal(backing.has('crystalball-persistent-cache:x'), false, 'evicted disposable cache');
+      assert.equal(backing.get('wm-country-watchlist-v1'), 'z'.repeat(40), 'retried write succeeded');
+    } finally {
+      proto.setItem = origSet;
+      gt.localStorage = savedLs;
+      delete gt.__lsPatchInstalled;
+    }
   });
 });

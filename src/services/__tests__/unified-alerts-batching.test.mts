@@ -18,9 +18,14 @@ const mockLocalStorage = {
 };
 (globalThis as Record<string, unknown>).localStorage = mockLocalStorage;
 
-const { unifiedAlertStore, UnifiedAlertStore } = await import('../unified-alerts.ts');
+const { unifiedAlertStore, UnifiedAlertStore, _setNotifyThrottleForTest } = await import('../unified-alerts.ts');
 const { alertDB } = await import('../alert-store.ts');
 type UnifiedAlert = import('../unified-alerts.ts').UnifiedAlert;
+
+// Existing coalescing tests assert exact notify counts against a setTimeout(0)
+// flush; run them with the fan-out throttle disabled (fire immediately, the
+// pre-throttle behaviour). A dedicated test below exercises the throttle.
+_setNotifyThrottleForTest(0);
 
 function makeAlert(id: string): UnifiedAlert {
   return {
@@ -171,5 +176,48 @@ test('flushes via the timer fallback when the document is hidden (rAF is paused)
   } finally {
     g.requestAnimationFrame = savedRaf;
     g.document = savedDoc;
+  }
+});
+
+test('throttles the subscriber fan-out yet always delivers the final state', async () => {
+  _setNotifyThrottleForTest(60);
+  await new Promise((r) => setTimeout(r, 80)); // ensure the first fan-out is a leading fire
+  try {
+    let notifyCount = 0;
+    let lastObserved = 0; // count of thr-* alerts a SUBSCRIBER saw on its last fan-out
+    const unsub = unifiedAlertStore.subscribe(() => {
+      notifyCount += 1;
+      lastObserved = unifiedAlertStore.getAll().filter((a) => a.id.startsWith('thr-')).length;
+    });
+    // 5 separate flush cycles ~10 ms apart — all inside one 60 ms throttle window.
+    for (let i = 0; i < 5; i++) {
+      unifiedAlertStore.ingest([makeAlert(`thr-${i}`)]);
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    const during = notifyCount;
+    await new Promise((r) => setTimeout(r, 120)); // let the trailing fan-out fire
+    assert.ok(during < 5, `fan-out throttled: only ${during} notifies for 5 flush cycles`);
+    assert.ok(notifyCount >= 1, 'the final state is still delivered (trailing fire)');
+    assert.equal(lastObserved, 5, 'a subscriber observed the final state (all 5 alerts) via the trailing fan-out');
+    unsub();
+  } finally {
+    _setNotifyThrottleForTest(0);
+  }
+});
+
+test('unload delivers a pending throttled fan-out synchronously (no lost final state)', async () => {
+  _setNotifyThrottleForTest(60);
+  await new Promise((r) => setTimeout(r, 80)); // idle → next fan-out is a leading fire
+  try {
+    let count = 0;
+    const unsub = unifiedAlertStore.subscribe(() => { count += 1; });
+    unifiedAlertStore.ingest([makeAlert('u-a')]); await flush(); // leading fires
+    unifiedAlertStore.ingest([makeAlert('u-b')]); await flush(); // trailing pending, flushDirty=false
+    const beforeUnload = count;
+    (unifiedAlertStore as unknown as { _flushNowForTest: () => void })._flushNowForTest();
+    assert.ok(count > beforeUnload, 'a pending throttled fan-out is force-delivered on unload');
+    unsub();
+  } finally {
+    _setNotifyThrottleForTest(0);
   }
 });

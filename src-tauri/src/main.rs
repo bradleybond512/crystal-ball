@@ -3390,25 +3390,44 @@ fn append_watchdog_log(app: &AppHandle, level: &str, message: &str) {
 /// CPU snapshot of the WebContent processes so the hot renderer is still evident.
 fn spawn_stall_capture(app: AppHandle) {
  std::thread::spawn(move || {
+  // Snapshot WebContent CPU and pick the hottest one to sample. The renderer
+  // (WebContent) is where our JS burns during a stall; our own host process is
+  // just waiting, so sampling it is useless (all threads in cvwait). The XPC
+  // service can't be attributed with certainty, but our stalled renderer is
+  // reliably the busiest WebContent — and `-mayDie` + this detached thread keep
+  // a wedged `sample` from ever blocking recovery. Fall back to our own pid if
+  // no WebContent is meaningfully busy.
+  let mut hot_pid: Option<String> = None;
+  let mut hot_cpu: f32 = 0.0;
   if let Ok(ps) = Command::new("/bin/ps").args(["-axo", "pid,pcpu,pmem,comm"]).output() {
    let text = String::from_utf8_lossy(&ps.stdout);
    for line in text.lines().filter(|l| l.contains("WebKit.WebContent")) {
     append_watchdog_log(&app, "INFO", &format!("stall: WebContent {}", line.trim()));
+    let mut cols = line.split_whitespace();
+    if let (Some(pid), Some(cpu)) = (cols.next(), cols.next()) {
+     if let Ok(c) = cpu.parse::<f32>() {
+      if c > hot_cpu { hot_cpu = c; hot_pid = Some(pid.to_string()); }
+     }
+    }
    }
   }
   let Some(dir) = crystalball_log_dir(&app) else { return };
   let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
   let out = dir.join(format!("crystal-ball-sample-{secs}.txt"));
   let out_str = out.to_string_lossy().to_string();
+  let (target, label) = match hot_pid {
+   Some(ref p) if hot_cpu >= 5.0 => (p.clone(), "webcontent"),
+   _ => (std::process::id().to_string(), "app-process"),
+  };
   let ok = Command::new("/usr/bin/sample")
-   .args([&std::process::id().to_string(), "2", "-file", &out_str, "-mayDie"])
+   .args([&target, "2", "-file", &out_str, "-mayDie"])
    .output()
    .map(|o| o.status.success())
    .unwrap_or(false);
   if ok {
-   append_watchdog_log(&app, "INFO", &format!("stall: app-process sample captured: {out_str}"));
+   append_watchdog_log(&app, "INFO", &format!("stall: {label} sample captured (pid={target} cpu={hot_cpu:.0}%): {out_str}"));
   } else {
-   append_watchdog_log(&app, "WARN", "stall: app-process sample capture failed");
+   append_watchdog_log(&app, "WARN", &format!("stall: {label} sample capture failed (pid={target})"));
   }
  });
 }

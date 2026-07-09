@@ -392,13 +392,18 @@ export class App {
  // their in-memory mirror BEFORE panels/reasoning construct, so their sync
  // hydration reads warm data (and one-time-migrates any localStorage copy).
  // Fail-open: a preload error just leaves the stores to rebuild from live data.
+ const bootPreT = typeof performance === 'undefined' ? 0 : performance.now();
  try {
  await preloadIdbBackedStores();
  installIdbStorageRouting();
  } catch { /* non-fatal */ }
 
  // Phase 1: Layout (creates map + panels — they'll find hydrated data)
+ const bootLayoutT = typeof performance === 'undefined' ? 0 : performance.now();
  this.panelLayout.init();
+ if (bootLayoutT > 0) {
+ console.warn(`[BOOT-TIMING] preload+routing gated boot for ${(bootLayoutT - bootPreT).toFixed(0)}ms; panelLayout.init took ${(performance.now() - bootLayoutT).toFixed(0)}ms`);
+ }
 
  // Happy variant: pre-populate panels from persistent cache for instant render
  if (SITE_VARIANT === 'happy') {

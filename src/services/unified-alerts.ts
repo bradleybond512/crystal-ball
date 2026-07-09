@@ -262,8 +262,17 @@ class UnifiedAlertStore {
     if (this.pendingArchive.length === 0) return;
     const batch = this.pendingArchive;
     this.pendingArchive = [];
+    // Shed `raw` before the structured clone — the same multi-KB source
+    // payloads behind the persist rope storm show up here as
+    // globalFuncCloneObject/operationSpreadGeneric in hang samples, and they
+    // grew the archive store to 60 MB on disk. ThreatInboxPanel reads `raw`
+    // back for 'threat-reactor' rows (ReactorMeta), so keep it for that
+    // source only.
+    const slim = batch.map((a) =>
+      a.raw === undefined || (a.source as string) === 'threat-reactor' ? a : { ...a, raw: undefined },
+    );
     // Best-effort 30-day retention archive — never blocks the flush.
-    alertDB.putBatch(batch).catch(() => { /* silent — IDB persistence is best-effort */ });
+    alertDB.putBatch(slim).catch(() => { /* silent — IDB persistence is best-effort */ });
   }
 
   /** Add or update alerts. Deduplicates by id. Stamps distance, dispatches notifications for new alerts. */
@@ -416,12 +425,24 @@ class UnifiedAlertStore {
    */
   private entriesForPersist(): UnifiedAlert[] {
     const all = [...this.alerts.values()];
-    if (all.length <= MAX_ALERTS) return all;
-    const kept = all.filter((a) => a.pinned || !a.acknowledged);
-    const rest = all
-      .filter((a) => !a.pinned && a.acknowledged)
-      .sort((a, b) => b.timestamp - a.timestamp);
-    return [...kept, ...rest].slice(0, Math.max(MAX_ALERTS, kept.length));
+    let bounded: UnifiedAlert[];
+    if (all.length <= MAX_ALERTS) {
+      bounded = all;
+    } else {
+      const kept = all.filter((a) => a.pinned || !a.acknowledged);
+      const rest = all
+        .filter((a) => !a.pinned && a.acknowledged)
+        .sort((a, b) => b.timestamp - a.timestamp);
+      bounded = [...kept, ...rest].slice(0, Math.max(MAX_ALERTS, kept.length));
+    }
+    // Bound the BYTES, not just the count: `raw` carries the original source
+    // payload (NWS polygons, GDELT docs — tens of KB per alert), which made
+    // this blob multi-MB and each stringify a main-thread rope storm (live
+    // sample: JSRopeString::resolveToBuffer hot; on-disk localStorage WAL
+    // churning at 13 MB). Nothing reads `raw` back from the reloaded store —
+    // the only `raw` consumer (ThreatInboxPanel) reads alertDB rows, not this
+    // blob — so shed it at persist time. JSON.stringify drops undefined.
+    return bounded.map((a) => (a.raw === undefined ? a : { ...a, raw: undefined }));
   }
 
   private loadFromStorage(): void {

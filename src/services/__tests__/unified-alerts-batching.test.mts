@@ -18,7 +18,8 @@ const mockLocalStorage = {
 };
 (globalThis as Record<string, unknown>).localStorage = mockLocalStorage;
 
-const { unifiedAlertStore } = await import('../unified-alerts.ts');
+const { unifiedAlertStore, UnifiedAlertStore } = await import('../unified-alerts.ts');
+const { alertDB } = await import('../alert-store.ts');
 type UnifiedAlert = import('../unified-alerts.ts').UnifiedAlert;
 
 function makeAlert(id: string): UnifiedAlert {
@@ -105,4 +106,70 @@ test('a mutation during the flush callback schedules a fresh flush', async () =>
 
   assert.equal(notifyCount, 2, 'reentrant mutation produces a second flush');
   unsub();
+});
+
+test('coalesces the IDB archive write to ONE putBatch per burst (no per-ingest clone)', async () => {
+  const calls: number[] = [];
+  const orig = alertDB.putBatch;
+  (alertDB as unknown as { putBatch: (b: UnifiedAlert[]) => Promise<void> }).putBatch =
+    async (b: UnifiedAlert[]) => { calls.push(b.length); };
+  try {
+    unifiedAlertStore.ingest([makeAlert('burst-1')]);
+    unifiedAlertStore.ingest([makeAlert('burst-2')]);
+    unifiedAlertStore.ingest([makeAlert('burst-3')]);
+    await flush();
+    assert.equal(calls.length, 1, 'three ingests in one frame collapse to one putBatch');
+    assert.equal(calls[0], 3, 'the one putBatch carries every incoming alert');
+  } finally {
+    (alertDB as unknown as { putBatch: typeof orig }).putBatch = orig;
+  }
+});
+
+test('persist payload stays bounded to MAX_ALERTS and fast with 5,000 synthetic alerts', async () => {
+  const orig = alertDB.putBatch;
+  (alertDB as unknown as { putBatch: (b: UnifiedAlert[]) => Promise<void> }).putBatch = async () => {};
+  try {
+    const big = Array.from({ length: 5000 }, (_, i) => makeAlert(`big-${i}`));
+    const t0 = performance.now();
+    unifiedAlertStore.ingest(big);
+    await flush();
+    const dt = performance.now() - t0;
+
+    const raw = store.get('wm-unified-alerts-v1')!;
+    const persisted = JSON.parse(raw) as UnifiedAlert[];
+    assert.ok(persisted.length <= 500, `persisted payload capped at MAX_ALERTS, got ${persisted.length}`);
+    assert.ok(dt < 500, `ingest+flush of 5,000 alerts under budget, took ${dt.toFixed(0)}ms`);
+  } finally {
+    (alertDB as unknown as { putBatch: typeof orig }).putBatch = orig;
+  }
+});
+
+test('boot rehydrate performs ZERO persists before first paint', () => {
+  store.clear();
+  store.set('wm-unified-alerts-v1', JSON.stringify([makeAlert('boot-a'), makeAlert('boot-b')]));
+  const before = alertWrites;
+  const fresh = new UnifiedAlertStore(); // constructor rehydrates from localStorage
+  assert.equal(alertWrites - before, 0, 'rehydration must not write to localStorage before first paint');
+  assert.equal(fresh.getAll().length, 2, 'rehydrated both alerts into memory');
+});
+
+test('flushes via the timer fallback when the document is hidden (rAF is paused)', async () => {
+  const g = globalThis as unknown as {
+    requestAnimationFrame?: (cb: () => void) => number;
+    document?: { visibilityState: string };
+  };
+  const savedRaf = g.requestAnimationFrame;
+  const savedDoc = g.document;
+  // Backgrounded document: rAF is registered but (like a hidden tab) never fires.
+  g.requestAnimationFrame = () => 0;
+  g.document = { visibilityState: 'hidden' };
+  try {
+    const before = alertWrites;
+    unifiedAlertStore.ingest([makeAlert('hidden-1')]);
+    await flush();
+    assert.equal(alertWrites - before, 1, 'a hidden-tab ingest still persists via setTimeout, not a paused rAF');
+  } finally {
+    g.requestAnimationFrame = savedRaf;
+    g.document = savedDoc;
+  }
 });

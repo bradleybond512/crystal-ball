@@ -151,6 +151,26 @@ function installLongTaskObserver(): void {
   }
 }
 
+/**
+ * BOOT-TTI probe (permanent). Logs `[BOOT-TTI] <ms>` when the FIRST input event
+ * is dispatched after launch — `performance.now()` is relative to timeOrigin
+ * (≈ launch), so a main thread wedged through boot (input queues, dispatches
+ * late) shows up as a large TTI. One line per boot ⇒ the trend is trackable.
+ */
+function installBootTtiProbe(): void {
+  if (typeof document === 'undefined') return;
+  let logged = false;
+  const types = ['pointerdown', 'keydown', 'click'] as const;
+  const onFirstInput = (e: Event): void => {
+    if (logged) return;
+    logged = true;
+    const ms = typeof performance === 'undefined' ? 0 : Math.round(performance.now());
+    for (const t of types) document.removeEventListener(t, onFirstInput, true);
+    logToDesktop('INFO', `[BOOT-TTI] first input at ${ms}ms since launch (${e.type} on ${describeEventTarget(e.target)})`);
+  };
+  for (const t of types) document.addEventListener(t, onFirstInput, true);
+}
+
 const INPUT_LATENCY_THRESHOLD_MS = 500;
 let eventTimingObserver: PerformanceObserver | null = null;
 
@@ -491,6 +511,7 @@ export function installLogBridge(): void {
 
   installLongTaskObserver();
   installInputLatencyProbe();
+  installBootTtiProbe();
   installFrameStallDetector();
   installRendererHeartbeat();
   void checkWatchdogRecovery();

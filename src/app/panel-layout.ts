@@ -1198,15 +1198,20 @@ export class PanelLayoutManager implements AppModule {
  startBlackoutSignature();
  const digestOverlay = new DigestOverlay();
  digestOverlay.mount(document.body);
- // Proactive digest — once per 8h, after data has had a chance to load.
+ // Proactive digest — once per 8h. Dashboard is interactive first: defer to an
+ // idle callback (setTimeout fallback) so digest generation never competes with
+ // boot, and it simply appears when ready.
  if (shouldShowDigest()) {
- window.setTimeout(() => {
+ const runDigest = (): void => {
  void generateDigest().then(text => {
  if (!text) return;
  markDigestShown();
  digestOverlay.show(text);
  });
- }, 30_000);
+ };
+ const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
+ if (typeof ric === 'function') ric(runDigest, { timeout: 60_000 });
+ else window.setTimeout(runDigest, 30_000);
  }
  // On-demand digest (triggered from Cmd+K "brief").
  document.addEventListener('cb:show-digest', () => {

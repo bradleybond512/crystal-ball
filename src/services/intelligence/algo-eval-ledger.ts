@@ -25,10 +25,24 @@ export interface AlgorithmPrediction {
   predictedAt: Date;
   resolvedValue?: PredictionValue;
   resolvedAt?: Date;
+  /** Set when the outcome window elapsed with no trustworthy evidence (e.g. the
+   *  app was closed across it). Expired predictions are neither pending nor a
+   *  hit/miss — excluded from accuracy. */
+  expiredAt?: Date;
   /** |predicted - resolved| when both are numeric. */
   error?: number;
   /** Strict-equality match when both are strings. */
   correct?: boolean;
+}
+
+/** Lifetime aggregate per (algorithmId, domain) — survives the FIFO record cap
+ *  so accuracy doesn't reset when old resolved predictions are trimmed. */
+export interface RollupBucket {
+  resolved: number;
+  correct: number;
+  expired: number;
+  errorSum: number;
+  errorCount: number;
 }
 
 export type TrendDirection = 'improving' | 'stable' | 'degrading';
@@ -40,6 +54,8 @@ export interface AlgorithmStats {
   domain: string;
   totalPredictions: number;
   resolvedCount: number;
+  /** Predictions whose window elapsed with no trustworthy evidence. */
+  expiredCount: number;
   meanAbsoluteError?: number;
   accuracy?: number;
   trend: TrendDirection;
@@ -74,9 +90,10 @@ function safeStorage(): Storage | null {
 
 // ── Serialization ─────────────────────────────────────────────────────
 
-interface PersistedPrediction extends Omit<AlgorithmPrediction, 'predictedAt' | 'resolvedAt'> {
+interface PersistedPrediction extends Omit<AlgorithmPrediction, 'predictedAt' | 'resolvedAt' | 'expiredAt'> {
   predictedAt: number;
   resolvedAt?: number;
+  expiredAt?: number;
 }
 
 function serialize(records: readonly AlgorithmPrediction[]): PersistedPrediction[] {
@@ -84,6 +101,7 @@ function serialize(records: readonly AlgorithmPrediction[]): PersistedPrediction
     ...r,
     predictedAt: r.predictedAt.getTime(),
     resolvedAt: r.resolvedAt?.getTime(),
+    expiredAt: r.expiredAt?.getTime(),
   }));
 }
 
@@ -107,6 +125,7 @@ function deserializeEntry(entry: unknown): AlgorithmPrediction | undefined {
       ? e.resolvedValue
       : undefined,
     resolvedAt: typeof e.resolvedAt === 'number' ? new Date(e.resolvedAt) : undefined,
+    expiredAt: typeof e.expiredAt === 'number' ? new Date(e.expiredAt) : undefined,
     error: typeof e.error === 'number' ? e.error : undefined,
     correct: typeof e.correct === 'boolean' ? e.correct : undefined,
   };
@@ -192,11 +211,13 @@ function statsFor(
   now: number,
 ): AlgorithmStats {
   const resolved = records.filter((r) => r.resolvedAt instanceof Date);
+  const expiredCount = records.filter((r) => r.expiredAt instanceof Date && !r.resolvedAt).length;
   return {
     algorithmId,
     domain,
     totalPredictions: records.length,
     resolvedCount: resolved.length,
+    expiredCount,
     meanAbsoluteError: meanAbsoluteErrorOf(resolved),
     accuracy: accuracyOf(resolved),
     trend: trendOf(records),
@@ -213,10 +234,18 @@ export interface AlgoEvalLedgerOptions {
 
 export class AlgoEvalLedger {
   private records: AlgorithmPrediction[] = [];
+  private rollup = new Map<string, RollupBucket>();
   private listeners = new Set<AlgoEvalListener>();
   private hydrated = false;
   private idCounter = 0;
   private clock: () => number;
+
+  private rollupBucket(algorithmId: string, domain: string): RollupBucket {
+    const key = `${algorithmId}::${domain}`;
+    let b = this.rollup.get(key);
+    if (!b) { b = { resolved: 0, correct: 0, expired: 0, errorSum: 0, errorCount: 0 }; this.rollup.set(key, b); }
+    return b;
+  }
 
   constructor(options: AlgoEvalLedgerOptions = {}) {
     this.clock = options.clock ?? (() => Date.now());
@@ -231,9 +260,25 @@ export class AlgoEvalLedger {
     try { raw = store.getItem(STORAGE_KEY); } catch { return; }
     if (!raw) return;
     try {
-      this.records = deserialize(JSON.parse(raw));
+      const parsed: unknown = JSON.parse(raw);
+      // Legacy format was a bare records array; current format is
+      // { records, rollup } so lifetime accuracy survives the FIFO trim.
+      if (Array.isArray(parsed)) {
+        this.records = deserialize(parsed);
+      } else if (parsed && typeof parsed === 'object') {
+        const obj = parsed as { records?: unknown; rollup?: unknown };
+        this.records = deserialize(obj.records ?? []);
+        this.loadRollup(obj.rollup);
+      }
     } catch {
       // Corrupt blob — start clean.
+    }
+  }
+
+  private loadRollup(raw: unknown): void {
+    if (!raw || typeof raw !== 'object') return;
+    for (const [k, v] of Object.entries(raw as Record<string, RollupBucket>)) {
+      if (v && typeof v === 'object') this.rollup.set(k, { ...v });
     }
   }
 
@@ -241,7 +286,9 @@ export class AlgoEvalLedger {
     const store = safeStorage();
     if (!store) return;
     try {
-      store.setItem(STORAGE_KEY, JSON.stringify(serialize(this.records)));
+      const rollup: Record<string, RollupBucket> = {};
+      for (const [k, v] of this.rollup) rollup[k] = v;
+      store.setItem(STORAGE_KEY, JSON.stringify({ records: serialize(this.records), rollup }));
     } catch {
       // Quota or disabled — best-effort.
     }
@@ -281,10 +328,33 @@ export class AlgoEvalLedger {
   resolve(id: string, resolvedValue: PredictionValue): void {
     this.ensureHydrated();
     const match = this.records.find((r) => r.id === id);
-    if (!match || match.resolvedAt) return;
+    if (!match || match.resolvedAt || match.expiredAt) return;
     fillResolutionFields(match, resolvedValue, new Date(this.clock()));
+    const b = this.rollupBucket(match.algorithmId, match.domain);
+    b.resolved += 1;
+    if (match.correct === true) b.correct += 1;
+    if (typeof match.error === 'number') { b.errorSum += match.error; b.errorCount += 1; }
     this.persist();
     this.notify();
+  }
+
+  /** Mark a prediction whose outcome window elapsed without trustworthy
+   *  evidence. Excluded from accuracy; counted in the lifetime rollup. */
+  expire(id: string): void {
+    this.ensureHydrated();
+    const match = this.records.find((r) => r.id === id);
+    if (!match || match.resolvedAt || match.expiredAt) return;
+    match.expiredAt = new Date(this.clock());
+    this.rollupBucket(match.algorithmId, match.domain).expired += 1;
+    this.persist();
+    this.notify();
+  }
+
+  /** Lifetime rollup for an (algorithmId, domain), or `null` if none yet. */
+  getRollup(algorithmId: string, domain: string): RollupBucket | null {
+    this.ensureHydrated();
+    const b = this.rollup.get(`${algorithmId}::${domain}`);
+    return b ? { ...b } : null;
   }
 
   /** Resolve the OLDEST unresolved prediction matching the given
@@ -328,7 +398,7 @@ export class AlgoEvalLedger {
   getUnresolved(algorithmId?: string): AlgorithmPrediction[] {
     this.ensureHydrated();
     return this.records
-      .filter((r) => !r.resolvedAt && (algorithmId === undefined || r.algorithmId === algorithmId))
+      .filter((r) => !r.resolvedAt && !r.expiredAt && (algorithmId === undefined || r.algorithmId === algorithmId))
       .map((r) => clonePrediction(r));
   }
 
@@ -369,6 +439,7 @@ export class AlgoEvalLedger {
   /** Test seam — empties the ledger and the persisted blob. */
   resetForTesting(): void {
     this.records = [];
+    this.rollup.clear();
     this.listeners.clear();
     this.idCounter = 0;
     this.hydrated = true;
@@ -384,6 +455,7 @@ function clonePrediction(p: AlgorithmPrediction): AlgorithmPrediction {
     ...p,
     predictedAt: new Date(p.predictedAt),
     resolvedAt: p.resolvedAt ? new Date(p.resolvedAt) : undefined,
+    expiredAt: p.expiredAt ? new Date(p.expiredAt) : undefined,
   };
 }
 

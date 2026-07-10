@@ -50,6 +50,24 @@ test('resolve/expire are no-ops on an already-settled prediction', () => {
   assert.equal(l.getRollup('driver-scorer', 'weather')?.expired, 0);
 });
 
+test('resolveByInputHash feeds the rollup and skips already-expired predictions', () => {
+  let now = 1000;
+  const l = mkLedger(() => now);
+  l.record({ algorithmId: 'driver-scorer', domain: 'weather', inputHash: 'w:1', predictedValue: 'low', predictedAt: new Date(now) });
+  l.resolveByInputHash('driver-scorer', 'w:1', 'low'); // correct
+
+  const rollup = l.getRollup('driver-scorer', 'weather');
+  assert.deepEqual(rollup, { resolved: 1, correct: 1, expired: 0, errorSum: 0, errorCount: 0 });
+
+  // An expired prediction must not be re-resolved by a late hash match.
+  const b = l.record({ algorithmId: 'driver-scorer', domain: 'cyber', inputHash: 'c:9', predictedValue: 'low', predictedAt: new Date(now) });
+  l.expire(b.id);
+  l.resolveByInputHash('driver-scorer', 'c:9', 'high'); // must be a no-op
+  const cyber = l.getRollup('driver-scorer', 'cyber');
+  assert.equal(cyber?.resolved, 0, 'expired prediction not double-counted as resolved');
+  assert.equal(cyber?.expired, 1);
+});
+
 test('rollup survives a hydrate round-trip and legacy array blobs still load', () => {
   const STORAGE_KEY = 'wm-algo-eval-ledger';
   const store: Record<string, string> = {};

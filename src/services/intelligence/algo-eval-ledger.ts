@@ -323,12 +323,9 @@ export class AlgoEvalLedger {
     return clonePrediction(stamped);
   }
 
-  /** Fill in the actual outcome for a previously-recorded prediction.
-   *  No-op when the id is unknown or the prediction is already resolved. */
-  resolve(id: string, resolvedValue: PredictionValue): void {
-    this.ensureHydrated();
-    const match = this.records.find((r) => r.id === id);
-    if (!match || match.resolvedAt || match.expiredAt) return;
+  /** Fill resolution fields + update the lifetime rollup. Shared by resolve()
+   *  and resolveByInputHash() so both honor expiry + feed the rollup once. */
+  private applyResolution(match: AlgorithmPrediction, resolvedValue: PredictionValue): void {
     fillResolutionFields(match, resolvedValue, new Date(this.clock()));
     const b = this.rollupBucket(match.algorithmId, match.domain);
     b.resolved += 1;
@@ -336,6 +333,13 @@ export class AlgoEvalLedger {
     if (typeof match.error === 'number') { b.errorSum += match.error; b.errorCount += 1; }
     this.persist();
     this.notify();
+  }
+
+  resolve(id: string, resolvedValue: PredictionValue): void {
+    this.ensureHydrated();
+    const match = this.records.find((r) => r.id === id);
+    if (!match || match.resolvedAt || match.expiredAt) return;
+    this.applyResolution(match, resolvedValue);
   }
 
   /** Mark a prediction whose outcome window elapsed without trustworthy
@@ -368,12 +372,10 @@ export class AlgoEvalLedger {
   ): void {
     this.ensureHydrated();
     const match = this.records.find(
-      (r) => r.algorithmId === algorithmId && r.inputHash === inputHash && !r.resolvedAt,
+      (r) => r.algorithmId === algorithmId && r.inputHash === inputHash && !r.resolvedAt && !r.expiredAt,
     );
     if (!match) return;
-    fillResolutionFields(match, resolvedValue, new Date(this.clock()));
-    this.persist();
-    this.notify();
+    this.applyResolution(match, resolvedValue);
   }
 
   private enforceCapacity(): void {

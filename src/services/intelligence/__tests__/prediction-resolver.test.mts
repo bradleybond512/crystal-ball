@@ -69,8 +69,17 @@ test('alertSeverityObservable: peak severity in domain+window; quiet ⇒ low', (
   const obs = alertSeverityObservable(() => alerts, (s) => s);
   // window [NOW-24h, NOW-12h] over 'weather' → peak = high
   assert.equal(obs('weather', NOW - 24 * HOUR, NOW - 12 * HOUR), 'high');
-  // no cyber alerts → stayed low
+  // no cyber alerts but the window HAS alerts (coverage proven) → stayed low
   assert.equal(obs('cyber', NOW - 24 * HOUR, NOW - 12 * HOUR), 'low');
+});
+
+test('alertSeverityObservable: window with zero alerts ⇒ null (no coverage, not a false low)', () => {
+  const alerts = [
+    { source: 'weather', severity: 'high', timestamp: NOW - 2 * HOUR }, // outside the query window
+  ];
+  const obs = alertSeverityObservable(() => alerts, (s) => s);
+  // window [NOW-24h, NOW-12h] is empty of ALL alerts → cannot prove observation → null
+  assert.equal(obs('weather', NOW - 24 * HOUR, NOW - 12 * HOUR), null);
 });
 
 test('toLadderSeverity folds info/unknown onto low', () => {

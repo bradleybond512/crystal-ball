@@ -85,9 +85,13 @@ interface AlertLike { source: string; severity: string; timestamp: number }
 
 /**
  * Build a SeverityObservable from a snapshot of alerts. Peak severity of alerts
- * whose source maps to `domain` within the window; 'low' when the domain was
- * quiet across a window we have data for. `domainOfSource` folds an alert
- * source onto the driver-scorer domain vocabulary.
+ * whose source maps to `domain` within the window; 'low' only when the domain
+ * was quiet across a window we can prove we OBSERVED (≥1 alert of any domain in
+ * it); `null` when the window is empty of all alerts — we can't distinguish a
+ * genuinely quiet domain from an app that was closed, so the caller keeps the
+ * prediction pending and it expires past the horizon instead of scoring a false
+ * 'low'. `domainOfSource` folds an alert source onto the driver-scorer domain
+ * vocabulary.
  */
 export function alertSeverityObservable(
   getAlerts: () => readonly AlertLike[],
@@ -95,12 +99,15 @@ export function alertSeverityObservable(
 ): SeverityObservable {
   return (domain, fromMs, toMs) => {
     let peak = -1;
+    let observedWindow = false; // any alert (any domain) in the window ⇒ we were collecting
     for (const a of getAlerts()) {
       if (a.timestamp < fromMs || a.timestamp > toMs) continue;
+      observedWindow = true;
       if (domainOfSource(a.source) !== domain && a.source !== domain) continue;
       const r = SEVERITY_RANK[toLadderSeverity(a.severity)] ?? 0;
       if (r > peak) peak = r;
     }
-    return peak < 0 ? 'low' : (SEVERITY_LADDER[peak] ?? 'low');
+    if (peak >= 0) return SEVERITY_LADDER[peak] ?? 'low';
+    return observedWindow ? 'low' : null; // no coverage ⇒ unknown, leave pending
   };
 }

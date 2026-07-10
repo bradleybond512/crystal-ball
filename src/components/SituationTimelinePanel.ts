@@ -61,9 +61,15 @@ export class SituationTimelinePanel extends Panel {
   }
 
   private start(): void {
+    const svc = getSituationTimelineService();
+    svc.buildTimeline();                 // populate the cache once for first paint
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
-    this.unsub = getSituationTimelineService().subscribe(() => this.render());
+    // Periodic full rebuild keeps "active for Xm" durations fresh (its notify
+    // repaints via the subscription below). render() itself only READS the
+    // cache — calling buildTimeline in render re-entered the build on every
+    // store notify (the settle-tail storm).
+    this.refreshTimer = setInterval(() => svc.buildTimeline(), REFRESH_MS);
+    this.unsub = svc.subscribe(() => this.render());
   }
 
   public destroy(): void {
@@ -80,7 +86,7 @@ export class SituationTimelinePanel extends Panel {
 
   private render(): void {
     const svc = getSituationTimelineService();
-    const entries = svc.buildTimeline(this.state.filter);
+    const entries = svc.getFiltered(this.state.filter);
     const stats = svc.getStats();
     const breakdown = svc.getDomainBreakdown();
     this.setCount(stats.activeCount);

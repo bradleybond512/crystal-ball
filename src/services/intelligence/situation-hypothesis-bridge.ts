@@ -40,6 +40,8 @@ const SEVERITY_RANK: Record<string, number> = {
   INFO: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4,
 };
 
+const perfNow = (): number => (typeof performance === 'undefined' ? 0 : performance.now());
+
 function isSeverityDecreasing(prev: string, current: string): boolean {
   return (SEVERITY_RANK[prev] ?? 0) > (SEVERITY_RANK[current] ?? 0);
 }
@@ -266,6 +268,11 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
 
   const tracked = new Map<string, SituationTrackingState>();
 
+  // Per-settle phase timings → the file log (desktop.log). Aggregated across a
+  // drain batch and emitted when the queue empties, so the settle-tail cost is
+  // attributable (ingest fan-out vs the situation loop) in the field.
+  const stats = { events: 0, ingestMs: 0, loopMs: 0, seeded: 0, evidence: 0 };
+
   // Route each observation through the situation/hypothesis chain. Ingesting an
   // event runs the correlate engine + a full SituationStoreV2 notify fan-out
   // (meta-confidence, counterfactuals, bias, panels…), so this is expensive; a
@@ -273,8 +280,12 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
   // (renderer-watchdog reload loop). The queue below drives this one event per
   // `schedule()` tick so the work yields between events.
   const processEvent = (event: ObservationEvent): void => {
+    stats.events += 1;
+    const t0 = perfNow();
     const beforeIds = new Set(store.list().map((s) => s.id));
     store.ingest([event]);
+    const t1 = perfNow();
+    stats.ingestMs += t1 - t0;
     const now = clock();
 
     for (const sit of store.list()) {
@@ -283,11 +294,13 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
 
       if (isNew && !state) {
         seedSituation(engine, tracked, event, sit.id, sit.domain, sit.severity, now);
+        stats.seeded += 1;
         continue;
       }
 
       if (!isNew && state) {
         if (!sit.observations.some((o) => o.id === event.id)) continue;
+        stats.evidence += 1;
 
         const ctx: AlignmentContext = {
           seenSourceIds: new Set(state.seenSourceIds),
@@ -310,6 +323,16 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
         }
       }
     }
+    stats.loopMs += perfNow() - t1;
+  };
+
+  const logSettleStats = (): void => {
+    if (stats.events === 0) return;
+    // eslint-disable-next-line no-console
+    console.warn(`[SETTLE-TIMING] bridge drained ${stats.events} obs in ${Math.round(stats.ingestMs + stats.loopMs)}ms `
+      + `(ingest/notify ${Math.round(stats.ingestMs)}ms, situation-loop ${Math.round(stats.loopMs)}ms; `
+      + `seeded ${stats.seeded}, evidence ${stats.evidence})`);
+    stats.events = 0; stats.ingestMs = 0; stats.loopMs = 0; stats.seeded = 0; stats.evidence = 0;
   };
 
   // Drain queue: one event per `schedule()` tick. With the synchronous default
@@ -323,7 +346,7 @@ export function startSituationHypothesisBridge(options: BridgeOptions = {}): () 
   const drain = (): void => {
     if (stopped) { draining = false; return; }
     const event = queue.shift();
-    if (event === undefined) { draining = false; return; }
+    if (event === undefined) { draining = false; logSettleStats(); return; }
     try { processEvent(event); } finally { schedule(drain); }
   };
 

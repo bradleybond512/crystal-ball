@@ -1408,8 +1408,23 @@ fn get_native_location_impl() -> Result<(f64, f64), String> {
  let mgr = objc_msgSend(objc_msgSend(cls, alloc), init);
  if mgr.is_null() { return Err("Could not create CLLocationManager".into()); }
 
- // Authorization is requested once by the app-retained manager in setup();
- // re-requesting here spawns a second prompt on first run.
+ // Only proceed if the app is ALREADY authorized. Authorization is requested
+ // exactly once by the app-retained manager in setup(); calling
+ // startUpdatingLocation on an undetermined manager here spawns a SECOND
+ // prompt racing that request (the "double prompt on first run"). When not yet
+ // authorized, release + return so the caller falls back (IP geolocation)
+ // until the single prompt is answered; later calls then succeed silently.
+ let auth_sel = sel_registerName(b"authorizationStatus\0".as_ptr());
+ let auth_fn: unsafe extern "C" fn(*mut c_void, *mut c_void) -> i32 =
+  std::mem::transmute(objc_msgSend as *const ());
+ let status = auth_fn(mgr, auth_sel);
+ // CLAuthorizationStatus: 3 = authorizedAlways, 4 = authorizedWhenInUse.
+ if status != 3 && status != 4 {
+  let release = sel_registerName(b"release\0".as_ptr());
+  objc_msgSend(mgr, release);
+  return Err("Location not yet authorized — grant Location Services for Crystal Ball in System Settings, then retry".into());
+ }
+
  let start = sel_registerName(b"startUpdatingLocation\0".as_ptr());
  objc_msgSend(mgr, start);
 

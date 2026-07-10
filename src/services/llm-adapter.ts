@@ -161,9 +161,21 @@ async function tryCloudAgent(prompt: string, options: LlmOptions): Promise<LlmRe
   }
 }
 
+// The disclosure prompt is a one-shot per session: many cadences (auto-brief,
+// analyst-loop, skeptic, ensemble) call generateText, and firing the event on
+// every blocked call spammed the HUD (and, before this fix, re-opened it right
+// after the user closed it — Esc/X looked dead). Dispatch at most once.
+let egressDisclosureDispatched = false;
 function dispatchEgressDisclosureNeeded(): void {
+  if (egressDisclosureDispatched) return;
+  egressDisclosureDispatched = true;
   try { document.dispatchEvent(new CustomEvent('cb:llm-egress-disclosure-needed')); }
   catch { /* non-browser test environment */ }
+}
+
+/** Test seam — reset the one-shot dispatch guard. */
+export function _resetEgressDisclosureForTest(): void {
+  egressDisclosureDispatched = false;
 }
 
 const BLOCKED: LlmResult = { text: '', provider: 'none' };

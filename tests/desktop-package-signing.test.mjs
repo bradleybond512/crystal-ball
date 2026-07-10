@@ -89,3 +89,26 @@ test('macOS desktop packaging signs and verifies the app bundle before creating 
  'CLI help and validation should list the finance variant',
   );
 });
+
+test('local macOS packaging prefers a stable self-signed identity with hardened runtime', () => {
+  assert.match(
+ desktopPackageScript,
+ /DEFAULT_LOCAL_SIGN_IDENTITY = 'Crystal Ball Dev'/,
+ 'should default the local signing identity to "Crystal Ball Dev" (no env var required)',
+  );
+  assert.match(
+ desktopPackageScript,
+ /CRYSTALBALL_SIGN_IDENTITY/,
+ 'should allow overriding the local signing identity via CRYSTALBALL_SIGN_IDENTITY',
+  );
+  assert.match(
+ desktopPackageScript,
+ /codesign["']?,?\s*\[[^\]]*--force[^\]]*--deep[^\]]*--options[^\]]*runtime[^\]]*--sign[^\]]*stableIdentity/s,
+ 'stable-identity signing should use --force --deep --options runtime --sign <identity>',
+  );
+  assert.match(
+ desktopPackageScript,
+ /STABLE SIGNING FAILED — falling back to AD-HOC/,
+ 'should emit a loud warning when the stable identity is missing and it falls back to ad-hoc',
+  );
+});

@@ -353,8 +353,10 @@ export class App {
  // in every runtime. In desktop builds it also forwards to ~/Library/Logs via
  // Tauri; in web builds the invokeTauri calls no-op but the client-side
  // breadcrumb buffer remains available for diagnostics copy-outs.
- const { installLogBridge } = await import('@/services/log-bridge');
+ const { installLogBridge, bootTrace, resetBootTrace } = await import('@/services/log-bridge');
  installLogBridge();
+ resetBootTrace();
+ bootTrace('init:start');
  await initDB();
  await initI18n();
  cyberReactorUnsubscribe = startNotificationRouter();
@@ -393,14 +395,18 @@ export class App {
  // hydration reads warm data (and one-time-migrates any localStorage copy).
  // Fail-open: a preload error just leaves the stores to rebuild from live data.
  const bootPreT = typeof performance === 'undefined' ? 0 : performance.now();
+ bootTrace('preload:stores:start');
  try {
  await preloadIdbBackedStores();
  installIdbStorageRouting();
  } catch { /* non-fatal */ }
+ bootTrace('preload:stores:done');
 
  // Phase 1: Layout (creates map + panels — they'll find hydrated data)
  const bootLayoutT = typeof performance === 'undefined' ? 0 : performance.now();
+ bootTrace('panelLayout.init:start');
  this.panelLayout.init();
+ bootTrace('panelLayout.init:done');
  if (bootLayoutT > 0) {
  console.warn(`[BOOT-TIMING] preload+routing gated boot for ${(bootLayoutT - bootPreT).toFixed(0)}ms; panelLayout.init took ${(performance.now() - bootLayoutT).toFixed(0)}ms`);
  }
@@ -411,6 +417,7 @@ export class App {
  }
 
  // Phase 2: Shared UI components
+ bootTrace('phase2:shared-ui:start');
  this.state.signalModal = new SignalModal();
  this.state.signalModal.setLocationClickHandler((lat, lon) => {
  this.state.map?.setCenter(lat, lon, 4);
@@ -430,22 +437,27 @@ export class App {
  }
 
  if (!this.state.isMobile) {
+ bootTrace('phase2:breaking-news:start');
  initBreakingNewsAlerts();
  this.state.breakingBanner = new BreakingNewsBanner();
  }
 
  // Phase 3: UI setup methods
+ bootTrace('phase3:ui-setup:start');
  initSoundManager();
  this.eventHandlers.startHeaderClock();
  this.eventHandlers.setupMobileWarning();
  this.eventHandlers.setupPlaybackControl();
+ bootTrace('phase3:status-panel:start');
  this.eventHandlers.setupStatusPanel();
  this.eventHandlers.setupPizzIntIndicator();
  this.eventHandlers.setupExportPanel();
+ bootTrace('phase3:unified-settings:start');
  this.eventHandlers.setupUnifiedSettings();
  this.panelLayout.wirePlaceCallbacks();
 
  // Phase 4: SearchManager, MapLayerHandlers, CountryIntel
+ bootTrace('phase4:search-mapslayers-countryintel:start');
  this.searchManager.init();
  this.eventHandlers.setupMapLayerHandlers();
  this.countryIntel.init();
@@ -456,6 +468,7 @@ export class App {
  });
 
  // Phase 5: Event listeners + URL sync
+ bootTrace('phase5:events-urlsync:start');
  initAppActivity();
  this.eventHandlers.init();
  // Capture ?country= BEFORE URL sync overwrites it
@@ -466,10 +479,14 @@ export class App {
  // Phase 6: Data loading. Country geometry (a ~214 KB fetch + parse) is only
  // needed later by map hit-testing / the country layer, not by loadAllData —
  // so run both concurrently instead of gating the whole first data wave on it.
+ bootTrace('phase6:data-load:start');
  this.dataLoader.syncDataFreshnessWithLayers();
+ bootTrace('phase6:data-load:awaiting');
  await Promise.all([preloadCountryGeometry(), this.dataLoader.loadAllData()]);
+ bootTrace('phase6:data-load:done');
 
  startLearning();
+ bootTrace('startLearning:done');
 
  // Hide unconfigured layers after first data load
  if (!isAisConfigured()) {

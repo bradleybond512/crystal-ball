@@ -56,7 +56,7 @@ export class RegionalResiliencePanel extends Panel {
     const svc = getRegionalResilienceIndex();
     this.listener = () => this.render();
     svc.subscribe(this.listener);
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.render();
   }
 

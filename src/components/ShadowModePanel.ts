@@ -54,7 +54,7 @@ export class ShadowModePanel extends Panel {
         'Runs experimental scoring variants in parallel with production. Compares agreement rate + delta to decide whether to promote a variant. Never affects live alerts.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getShadowRunner().subscribe(() => this.render());
     this.attachHandlers();
   }

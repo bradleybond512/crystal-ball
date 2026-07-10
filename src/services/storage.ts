@@ -37,10 +37,16 @@ function attachConn(conn: IDBDatabase, resolve: (database: IDBDatabase) => void)
   resolve(conn);
 }
 
+/** Normalize an IDBRequest/transaction error (DOMException | null) to an Error
+ *  for Promise rejection. */
+function idbError(e: DOMException | null, context: string): Error {
+  return new Error(e?.message ?? context);
+}
+
 function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
  const request = indexedDB.open(DB_NAME, currentVersion + 1);
- request.onerror = () => reject(request.error);
+ request.addEventListener('error', () => reject(idbError(request.error, 'IndexedDB open failed')));
  request.onupgradeneeded = (event) => {
  createStores((event.target as IDBOpenDBRequest).result);
  };
@@ -59,7 +65,7 @@ export async function initDB(): Promise<IDBDatabase> {
  // broke every baseline/snapshot caller on boot.
  const probe = indexedDB.open(DB_NAME);
 
- probe.onerror = () => reject(probe.error);
+ probe.addEventListener('error', () => reject(idbError(probe.error, 'IndexedDB probe failed')));
 
  // Fires only when the DB does not exist yet (fresh DB created at v1) —
  // seed our stores immediately.
@@ -100,16 +106,17 @@ async function withTransaction<T>(
  const request = fn(store, tx);
  if (request && extractResult !== false) {
  request.onsuccess = () => resolve(request.result as T);
- request.onerror = () => reject(request.error);
+ request.addEventListener('error', () => reject(idbError(request.error, 'IndexedDB open failed')));
  } else {
  tx.oncomplete = () => resolve(undefined as T);
- tx.onerror = () => reject(tx.error);
+ tx.addEventListener('error', () => reject(idbError(tx.error, 'IndexedDB tx failed')));
  }
  });
  } catch (error: unknown) {
  if (error instanceof DOMException && error.name === 'InvalidStateError') {
  db = null;
  if (attempt === 0) continue;
+ // eslint-disable-next-line no-console
  console.warn('[Storage] IndexedDB connection closing after retry');
  if (mode === 'readwrite') throw new DOMException('IndexedDB write failed — connection closing', 'InvalidStateError');
  return undefined as T;
@@ -124,7 +131,7 @@ export async function getBaseline(key: string): Promise<BaselineEntry | null> {
   const result = await withTransaction<BaselineEntry | undefined>(
  'baselines', 'readonly', (store) => store.get(key), true,
   );
-  return result || null;
+  return result ?? null;
 }
 
 function mergeBaseline(existing: BaselineEntry | undefined, key: string, currentCount: number, now: number): BaselineEntry {
@@ -186,14 +193,15 @@ export async function updateBaseline(key: string, currentCount: number): Promise
  const entry = mergeBaseline(getReq.result as BaselineEntry | undefined, key, currentCount, now);
  const putReq = store.put(entry);
  putReq.onsuccess = () => resolve(entry);
- putReq.onerror = () => reject(putReq.error);
+ putReq.addEventListener('error', () => reject(idbError(putReq.error, 'IndexedDB put failed')));
  };
- getReq.onerror = () => reject(getReq.error);
+ getReq.addEventListener('error', () => reject(idbError(getReq.error, 'IndexedDB get failed')));
  });
  } catch (error: unknown) {
  if (error instanceof DOMException && error.name === 'InvalidStateError') {
  db = null;
  if (attempt === 0) continue;
+ // eslint-disable-next-line no-console
  console.warn('[Storage] IndexedDB connection closing after retry');
  throw new DOMException('IndexedDB write failed — connection closing', 'InvalidStateError');
  }
@@ -251,6 +259,10 @@ export interface DashboardSnapshot {
 
 const SNAPSHOT_RETENTION_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Hard count ceiling on top of the 7-day window. Each DashboardSnapshot is
+ *  ~0.3 MB, so this bounds the store at ~45 MB even if a boot loop or a busy
+ *  day saves far more than the usual ~25/day (the fastest-growing IDB store). */
+const MAX_SNAPSHOTS = 150;
 
 export async function saveSnapshot(snapshot: DashboardSnapshot): Promise<void> {
   await withTransaction<void>(
@@ -275,22 +287,41 @@ export async function getSnapshotAt(timestamp: number): Promise<DashboardSnapsho
 
   // Find closest snapshot to requested time
   return snapshots.reduce((closest, snap) =>
- Math.abs(snap.timestamp - timestamp) < Math.abs(closest.timestamp - timestamp) ? snap : closest
-  );
+ Math.abs(snap.timestamp - timestamp) < Math.abs(closest.timestamp - timestamp) ? snap : closest,
+  snapshots[0]!);
 }
 
 export async function cleanOldSnapshots(): Promise<void> {
   const cutoff = Date.now() - SNAPSHOT_RETENTION_DAYS * DAY_MS;
 
+  // 1. Time retention — drop anything older than the window.
   await withTransaction<void>(
  'snapshots', 'readwrite',
- (store, tx) => {
+ (store) => {
  const request = store.index('by_time').openCursor(IDBKeyRange.upperBound(cutoff));
  request.onsuccess = () => {
  const cursor = request.result;
  if (cursor) { cursor.delete(); cursor.continue(); }
  };
- void tx;
+ },
+ false,
+  );
+
+  // 2. Hard count cap — keep only the newest MAX_SNAPSHOTS (deletes oldest-first).
+  await withTransaction<void>(
+ 'snapshots', 'readwrite',
+ (store) => {
+ const countReq = store.count();
+ countReq.onsuccess = () => {
+ const excess = countReq.result - MAX_SNAPSHOTS;
+ if (excess <= 0) return;
+ let removed = 0;
+ const cursorReq = store.index('by_time').openCursor(); // ascending ⇒ oldest first
+ cursorReq.onsuccess = () => {
+ const cursor = cursorReq.result;
+ if (cursor && removed < excess) { cursor.delete(); removed += 1; cursor.continue(); }
+ };
+ };
  },
  false,
   );

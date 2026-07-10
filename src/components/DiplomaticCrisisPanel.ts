@@ -102,7 +102,7 @@ export class DiplomaticCrisisPanel extends Panel {
         'Composite heat index, ambassador expulsions, embassy closures, bilateral dispute ladder, UN Security Council emergency sessions, trade-war signals, treaty actions, and back-channel direction. Refreshes every 30 minutes.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public destroy(): void {

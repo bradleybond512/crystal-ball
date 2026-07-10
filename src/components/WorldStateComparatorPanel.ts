@@ -58,7 +58,7 @@ export class WorldStateComparatorPanel extends Panel {
         'Pick a past snapshot from the HistoricalPlaybackService and diff it against the current snapshot — domain severity Δ, escalations, scrubber.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public override destroy(): void {

@@ -44,7 +44,7 @@ export class SituationStorePanel extends Panel {
     });
     this.showLoading('Loading situations…');
     queueMicrotask(() => this.render());
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     if (typeof document !== 'undefined') {
       this.liveListener = (): void => this.render();
       document.addEventListener('wm:situation-created', this.liveListener);

@@ -8,8 +8,12 @@ on:
       - '**/*.yml'
       - '**/*.yaml'
       - '**/*.sh'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.css'
       - '.husky/**'
       - 'scripts/lint-*.mjs'
+      - 'scripts/lint-colors-baseline.json'
       - '.markdownlint-cli2.jsonc'
       - 'package.json'
       - 'package-lock.json'
@@ -32,6 +36,9 @@ jobs:
       - run: npm run lint:json
       - run: npm run lint:yaml
       - run: npm run lint:shell
+      # Hardcoded-color ratchet — counts can only go down. Gates the whole
+      # combined tree in the merge queue so the design-token debt can't grow.
+      - run: npm run lint:colors
       - name: Lint changed markdown files
         # base_ref is empty in a merge_group event; the static lints above
         # already cover the combined tree, so skip the PR-diff markdown pass.

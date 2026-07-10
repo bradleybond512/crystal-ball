@@ -68,7 +68,7 @@ export class GlobalHealthSecurityPanel extends Panel {
   private start(): void {
     this.render();
     if (typeof setInterval !== 'undefined') {
-      this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+      this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     }
   }
 

@@ -48,7 +48,7 @@ export class IcsOtDashboardPanel extends Panel {
 
   private start(): void {
  this.render();
- this.refreshTimer = setInterval(() => this.render(), 90 * 1000);
+ this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), 90 * 1000);
   }
 
   private render(): void {

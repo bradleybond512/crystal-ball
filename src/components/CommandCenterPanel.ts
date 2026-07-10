@@ -155,7 +155,7 @@ export class CommandCenterPanel extends Panel {
   private start(): void {
     this.refreshChangeTape();
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.tapeTimer = setInterval(() => this.refreshChangeTape(), TAPE_REFRESH_MS);
     this.attachInteractionListeners();
     this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'command-center');

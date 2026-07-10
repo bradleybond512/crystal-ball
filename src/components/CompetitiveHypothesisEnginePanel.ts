@@ -55,7 +55,7 @@ export class CompetitiveHypothesisEnginePanel extends Panel {
         'For each active Situation, generates a primary explanation plus an alternative and a devil’s-advocate framing. Evidence additions re-normalize confidences across the set; a consensus banner appears when the leader pulls clearly ahead.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getCompetitiveHypothesisEngine().subscribe(() => this.render());
     this.attachHandlers();
   }

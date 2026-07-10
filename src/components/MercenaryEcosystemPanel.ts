@@ -44,7 +44,7 @@ export class MercenaryEcosystemPanel extends Panel {
         'Tracks private military companies (PMCs) and mercenary groups worldwide. Shows threat scores, active theaters, human rights flags, and recent incidents. Data sourced from open intelligence.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public destroy(): void {

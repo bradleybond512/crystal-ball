@@ -28,7 +28,7 @@ const MAX_VISIBLE = 5;
 const PRESET_META: Record<AlertingPreset, { label: string; icon: IconName; desc: string }> = {
   loud:   { label: 'Loud',   icon: 'bell',       desc: 'Sound, banner flashes and notifications' },
   visual: { label: 'Visual', icon: 'eye',        desc: 'Flashes and notifications, no sound' },
-  silent: { label: 'Silent', icon: 'bell-slash', desc: 'Panel and map cues only' },
+  silent: { label: 'Silent', icon: 'bell-slash', desc: 'Panel and map cues only — also halves feed-poll frequency' },
 };
 const PRESET_ORDER: AlertingPreset[] = ['loud', 'visual', 'silent'];
 

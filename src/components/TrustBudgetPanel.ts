@@ -47,7 +47,7 @@ export class TrustBudgetPanel extends Panel {
         'Per-domain hourly alert quota that auto-tightens when false-positive rate is high and loosens when alerts are valuable. Each row shows used / current quota, exhausted state, and the most recent adjustment reason.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getTrustBudgetService().subscribe(() => this.render());
   }
 

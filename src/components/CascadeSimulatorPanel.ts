@@ -53,7 +53,7 @@ export class CascadeSimulatorPanel extends Panel {
 
   private start(): void {
  this.render();
- this.refreshTimer = setInterval(() => this.render(), 120_000);
+ this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), 120_000);
   }
 
   private render(): void {

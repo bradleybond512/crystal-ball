@@ -69,7 +69,7 @@ export class IntelligenceTimelinePanel extends Panel {
     });
     this.loadState();
     this.render();
-    this.timer = setInterval(() => this.render(), REFRESH_MS);
+    this.timer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.detachDisclosure = attachDisclosureClickDelegation(this.content, 'intelligence-timeline');
     this.unsubscribeDisclosure = disclosureService.subscribe('intelligence-timeline', () => this.render());
     this.detachLensBanner = mountLensBanner(this.content, 'intelligence-timeline');

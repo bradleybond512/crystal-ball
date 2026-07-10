@@ -33,7 +33,7 @@ export class SavedPlacesFilterPanel extends Panel {
         'Promotes a saved place to a first-class proximity filter. When active, panels see only observations within radiusKm of the saved place. Non-geolocated observations pass through.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getSavedPlacesFilterService().subscribe(() => this.render());
     this.attachHandlers();
   }

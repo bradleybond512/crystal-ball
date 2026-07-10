@@ -71,7 +71,7 @@ export class StateFragilityPanel extends Panel {
         'Fund-for-Peace-style fragile-states composite: governance, security apparatus, economic decline, displacement pressure, elite fracture, and legitimacy erosion. 1-hour refresh.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public override destroy(): void {

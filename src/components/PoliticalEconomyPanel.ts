@@ -89,7 +89,7 @@ export class PoliticalEconomyPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     if (typeof document !== 'undefined') {
       document.addEventListener('click', this.onCardToggle);
       document.addEventListener('keydown', this.onCardKey);
@@ -125,10 +125,10 @@ export class PoliticalEconomyPanel extends Panel {
       const data = buildRenderData();
       this.setCount(data.criticalCount + data.highCount);
       this.setContent(this.buildHtml(data));
-    } catch (err) {
+    } catch (error) {
       this.showError('Failed to render Political Economy data');
       // eslint-disable-next-line no-console
-      console.error('[PoliticalEconomyPanel] render error', err);
+      console.error('[PoliticalEconomyPanel] render error', error);
     }
   }
 

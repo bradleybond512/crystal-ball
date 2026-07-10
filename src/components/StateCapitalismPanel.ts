@@ -12,7 +12,7 @@ const REFRESH_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const RISK_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 
-const COUNTRY_INDEX: Array<[string, number]> = [
+const COUNTRY_INDEX: [string, number][] = [
   ['China', 92], ['Russia', 88], ['Saudi Arabia', 75], ['UAE', 65],
   ['France', 45], ['South Korea', 35], ['Germany', 25], ['USA', 20],
 ];
@@ -125,7 +125,7 @@ export class StateCapitalismPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {

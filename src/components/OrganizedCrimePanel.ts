@@ -96,7 +96,7 @@ export class OrganizedCrimePanel extends Panel {
       infoTooltip: 'Ranked criminal organizations by composite strength score — network type, state penetration, transnational reach, and estimated annual revenue. Territory conflict intensity and high-intensity active wars.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public destroy(): void {

@@ -66,7 +66,7 @@ export class MetaConfidencePanel extends Panel {
         'How reliable is each confidence value? Combines evidence breadth, consistency, temporal stability, and critical-assumption penalties into a 4-tier reliability band.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getMetaConfidenceService().subscribe(() => this.render());
     this.attachHandlers();
   }

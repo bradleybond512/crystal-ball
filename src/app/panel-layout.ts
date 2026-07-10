@@ -101,6 +101,8 @@ import { startLlmGradingCadence } from '@/services/algorithms/llm-grading-pass';
 import { startBiasScanCadence } from '@/services/intelligence/bias-scan-cadence';
 import { startLearnedCascadeCadence } from '@/services/intelligence/cascade-registration';
 import { startConsolidationCadence } from '@/services/cognition/consolidation-cadence';
+import { startPredictionResolutionCadence } from '@/services/intelligence/prediction-resolution-cadence';
+import { installBatteryMonitor } from '@/services/adaptive-cadence';
 import { startCognitionSelfTuningCadence } from '@/services/cognition/self-tuning';
 import { startRegimeMonitor } from '@/services/cognition/regime-monitor';
 import { startEpistemicCalibration } from '@/services/intelligence/epistemic-calibration';
@@ -1071,6 +1073,8 @@ export class PanelLayoutManager implements AppModule {
  startLearnedCascadeCadence();
  startConsolidationCadence();
  startCognitionSelfTuningCadence();
+ startPredictionResolutionCadence();
+ installBatteryMonitor();
  // BOCPD regime monitor — TriageBar chip reads the cache; the notify
  // callback shows a toast once per new detection (regime-monitor dedupes
  // by detectedAt, Toast dedupes identical on-screen copies).
@@ -1196,15 +1200,20 @@ export class PanelLayoutManager implements AppModule {
  startBlackoutSignature();
  const digestOverlay = new DigestOverlay();
  digestOverlay.mount(document.body);
- // Proactive digest — once per 8h, after data has had a chance to load.
+ // Proactive digest — once per 8h. Dashboard is interactive first: defer to an
+ // idle callback (setTimeout fallback) so digest generation never competes with
+ // boot, and it simply appears when ready.
  if (shouldShowDigest()) {
- window.setTimeout(() => {
+ const runDigest = (): void => {
  void generateDigest().then(text => {
  if (!text) return;
  markDigestShown();
  digestOverlay.show(text);
  });
- }, 30_000);
+ };
+ const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
+ if (typeof ric === 'function') ric(runDigest, { timeout: 60_000 });
+ else window.setTimeout(runDigest, 30_000);
  }
  // On-demand digest (triggered from Cmd+K "brief").
  document.addEventListener('cb:show-digest', () => {

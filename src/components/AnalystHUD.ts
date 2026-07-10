@@ -69,6 +69,17 @@ function ageLabel(ms: number): string {
   return formatDurationMinutes(mins);
 }
 
+/**
+ * Replay-scrubber label. When the snapshot is current, `ageLabel` returns
+ * "now" — appending " ago" produced the "now ago · 120/120" bug, so suppress
+ * the suffix for the live case. `ageMs === null` (no snapshot) is also "now".
+ */
+export function formatScrubberLabel(ageMs: number | null, oneBasedIdx: number, total: number): string {
+  const ago = ageMs === null ? 'now' : ageLabel(ageMs);
+  const rel = ago === 'now' ? 'now' : `${ago} ago`;
+  return `${rel} · ${oneBasedIdx}/${total}`;
+}
+
 function simButtonLabel(loading: boolean, cached: boolean, expanded: boolean): string {
   if (loading) return 'Projecting…';
   if (!cached) return '⟳ Project';
@@ -158,10 +169,12 @@ export class AnalystHUD {
   // When llm-adapter blocks a cloud call because disclosure hasn't been
   // acknowledged yet, show the disclosure banner in the HUD.
   private readonly onEgressDisclosure = (): void => {
-    // Surface the disclosure banner, but pass persist:false so an auto-open
-    // never makes a HUD the user had closed sticky across boots.
+    // NEVER force-open the HUD. auto-brief / analyst-loop call generateText on
+    // cadences, and every blocked cloud call (egress undisclosed) fires this;
+    // force-opening re-opened the HUD immediately after the user closed it, so
+    // Esc/X looked dead. The banner still renders (render() gates on
+    // isLlmEgressDisclosed) whenever the user opens the HUD via ⌘⇧A / toggle.
     if (this.visible) this.scheduleRender();
-    else this.show(false);
   };
 
   private persistOpenState(open: boolean): void {
@@ -867,8 +880,9 @@ export class AnalystHUD {
     const label = document.createElement('span');
     label.className = 'analyst-hud-scrubber-label';
     const snap = history[currentIdx];
-    const ago = snap ? ageLabel(Date.now() - snap.timestamp) : 'now';
-    label.textContent = `${ago} ago · ${currentIdx + 1}/${max + 1}`;
+    label.textContent = formatScrubberLabel(
+      snap ? Date.now() - snap.timestamp : null, currentIdx + 1, max + 1,
+    );
 
     wrap.append(slider, label, live);
     return wrap;

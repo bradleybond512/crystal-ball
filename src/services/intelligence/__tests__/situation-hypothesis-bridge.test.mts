@@ -422,3 +422,42 @@ test('unsubscribe stops further processing', () => {
   // Even if we could fire, store should remain unchanged.
   assert.equal(store.list().length, countBefore, 'no changes after unsubscribe');
 });
+
+// ── Yielding scheduler: a burst of observations must not be processed all
+//    synchronously on the ingest fire path (the boot-storm root cause). With
+//    an injected deferring scheduler, events queue and drain one at a time. ──
+
+test('deferring scheduler processes queued events off the synchronous fire path', () => {
+  __internals.reset();
+  const { store, opts, fireEvent } = makeDeps();
+  const scheduled: (() => void)[] = [];
+  const schedule = (cb: () => void): void => { scheduled.push(cb); };
+  startSituationHypothesisBridge({ ...opts, schedule });
+
+  fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'usgs-primary' }));
+  fireEvent(makeEvent({ id: 'eq-2', severity: 'HIGH', sourceId: 'emsc' }));
+
+  // Neither event has been processed yet — both are queued behind the scheduler,
+  // so the synchronous fire path (a feed's data-load) is never blocked by the
+  // situation/hypothesis pipeline.
+  assert.equal(store.list().length, 0, 'events must NOT be processed synchronously on fire');
+
+  // Drain the scheduler; each drain step processes exactly one queued event.
+  const runNext = (): void => { const cb = scheduled.shift(); if (cb) cb(); };
+  runNext();
+  assert.ok(store.list().length >= 1, 'first event processed after one drain step');
+
+  let guard = 0;
+  while (scheduled.length > 0 && guard++ < 50) runNext();
+  assert.ok(store.list().length >= 1, 'all queued events processed after full drain');
+});
+
+test('default (no scheduler) still processes synchronously — semantics preserved', () => {
+  __internals.reset();
+  const { store, opts, fireEvent } = makeDeps();
+  startSituationHypothesisBridge(opts);
+
+  fireEvent(makeEvent({ id: 'eq-1', severity: 'HIGH', sourceId: 'usgs-primary' }));
+  // No scheduler injected → synchronous default → processed immediately.
+  assert.ok(store.list().length >= 1, 'event processed synchronously with default scheduler');
+});

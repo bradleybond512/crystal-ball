@@ -193,18 +193,31 @@ export function preloadIdbBackedStores(): Promise<void> {
   if (preloaded) return Promise.resolve();
   preloadPromise ??= (async (): Promise<void> => {
     const ls = legacyLocalStorage();
-    const t0 = typeof performance === 'undefined' ? 0 : performance.now();
+    const now = (): number => (typeof performance === 'undefined' ? 0 : performance.now());
+    const t0 = now();
     let bytes = 0;
+    const perStore: string[] = [];
     for (const key of IDB_BACKED_STORE_KEYS) {
+      const ks = now();
       const value = await resolveStoreValue(key, ls);
+      const km = Math.round(now() - ks);
+      const kb = value === null ? 0 : Math.round(value.length / 1024);
       if (value !== null) { mirror.set(key, value); bytes += value.length; }
+      // Per-store materialization timing → the freeze-surviving boot trace + the
+      // desktop file log, so the whale store is named in evidence (largest first
+      // when the log is sorted). Only stores that actually cost time are noisy.
+      if (km >= 2 || kb >= 256) perStore.push(`${key}=${kb}KB/${km}ms`);
       // Yield a macrotask between keys so the renderer heartbeat + input events
       // interleave with the (main-thread) IDB deserialize bursts rather than
       // being starved through the whole boot materialization.
       await new Promise<void>((r) => { setTimeout(r, 0); });
     }
     // eslint-disable-next-line no-console
-    if (typeof performance !== 'undefined') console.warn(`[BOOT-TIMING] preloadIdbBackedStores: ${(performance.now() - t0).toFixed(0)}ms, ${(bytes / 1e6).toFixed(1)}MB mirror`);
+    if (typeof performance !== 'undefined') console.warn(`[BOOT-TIMING] preloadIdbBackedStores: ${(now() - t0).toFixed(0)}ms, ${(bytes / 1e6).toFixed(1)}MB mirror | ${perStore.join(', ')}`);
+    try {
+      const { bootTrace } = await import('@/services/log-bridge');
+      bootTrace(`preload:perstore ${perStore.join(', ')}`);
+    } catch { /* trace best-effort */ }
     preloaded = true;
   })();
   return preloadPromise;

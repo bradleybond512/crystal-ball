@@ -101,6 +101,11 @@ function shouldIgnoreKey(e: KeyboardEvent): boolean {
 
 export class AnalystHUD {
   private readonly root: HTMLElement;
+  /** localStorage key for remembering the HUD's open/closed state across boots
+   *  so it doesn't surprise-open — only user-initiated show/hide persist; the
+   *  egress-disclosure auto-show passes persist:false so it never sticks. */
+  private static readonly OPEN_STATE_KEY = 'cb:analyst-hud-open';
+
   private snapshot: AnalystSnapshot | null = null;
   private forecast: ForecastSnapshot | null = null;
   private briefs: Record<string, AutoBrief | undefined> = {};
@@ -153,9 +158,15 @@ export class AnalystHUD {
   // When llm-adapter blocks a cloud call because disclosure hasn't been
   // acknowledged yet, show the disclosure banner in the HUD.
   private readonly onEgressDisclosure = (): void => {
+    // Surface the disclosure banner, but pass persist:false so an auto-open
+    // never makes a HUD the user had closed sticky across boots.
     if (this.visible) this.scheduleRender();
-    else this.show();
+    else this.show(false);
   };
+
+  private persistOpenState(open: boolean): void {
+    try { localStorage.setItem(AnalystHUD.OPEN_STATE_KEY, open ? '1' : '0'); } catch { /* best effort */ }
+  }
 
   private readonly onToggle = (e: Event): void => {
     // Guard against double-fire re-open races: a second toggle landing
@@ -304,6 +315,13 @@ export class AnalystHUD {
       () => document.removeEventListener('cb:hypothesis-feedback', this.onFeedback),
       () => document.removeEventListener('keydown', this.onKeydown),
     );
+
+    // Remember last state: reopen only if the user had it open when they quit.
+    // A HUD they closed stays closed on boot (no surprise auto-open); the only
+    // thing that can still auto-show is a pending egress disclosure (persist:false).
+    let wasOpen = false;
+    try { wasOpen = localStorage.getItem(AnalystHUD.OPEN_STATE_KEY) === '1'; } catch { /* default closed */ }
+    if (wasOpen) this.show();
   }
 
   destroy(): void {
@@ -418,9 +436,10 @@ export class AnalystHUD {
     });
   }
 
-  show(): void {
+  show(persist = true): void {
     if (this.visible) return;
     this.visible = true;
+    if (persist) this.persistOpenState(true);
     this.lastVisibilityChangeAt = Date.now();
     this.previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     this.root.hidden = false;
@@ -431,9 +450,10 @@ export class AnalystHUD {
     document.dispatchEvent(new CustomEvent<{ visible: boolean }>('cb:analyst-hud-visibility', { detail: { visible: true } }));
   }
 
-  hide(): void {
+  hide(persist = true): void {
     if (!this.visible) return;
     this.visible = false;
+    if (persist) this.persistOpenState(false);
     this.lastVisibilityChangeAt = Date.now();
     this.root.hidden = true;
     document.dispatchEvent(new CustomEvent<{ visible: boolean }>('cb:analyst-hud-visibility', { detail: { visible: false } }));

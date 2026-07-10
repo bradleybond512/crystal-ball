@@ -1094,6 +1094,12 @@ export class PanelLayoutManager implements AppModule {
  onHypothesisRefuted: (event) => {
  try { contradictEpisodesForRefutation(event); } catch { /* hygiene is best-effort */ }
  },
+ // Yield the main thread between observation events. Ingesting an observation
+ // runs the correlate engine + a full situation-store notify fan-out; a boot
+ // burst (every feed's events at once) processed synchronously wedged the
+ // renderer for 30s+ → watchdog reload loop. Draining one event per macrotask
+ // keeps the heartbeat + input alive while the pipeline catches up.
+ schedule: (cb) => { setTimeout(cb, 0); },
  });
  startEpistemicBridge();
  startNotificationRouter();

@@ -39,6 +39,36 @@ export function getBreadcrumbs(): readonly Breadcrumb[] {
   return breadcrumbs;
 }
 
+// ─── Synchronous freeze-surviving boot trace ────────────────────────────────
+// The console→desktop.log bridge forwards over async IPC, so a mark emitted
+// right before a main-thread freeze never flushes before the watchdog reloads
+// the webview — the file log loses exactly the lines that bracket the stall.
+// localStorage.setItem is SYNCHRONOUS and durable, so a breadcrumb written just
+// before a heavy op survives even if the very next line wedges the thread, and
+// is readable after the reload. Keep it tiny (a short ring in one key) so it
+// never contributes to the localStorage-quota pressure it's diagnosing.
+const BOOT_TRACE_KEY = 'cb-boot-trace';
+const BOOT_TRACE_MAX = 60;
+const bootT0 = typeof performance === 'undefined' ? 0 : performance.now();
+
+export function bootTrace(label: string): void {
+  try {
+    const ls = (globalThis as { localStorage?: Storage }).localStorage;
+    if (!ls) return;
+    const ms = typeof performance === 'undefined' ? 0 : Math.round(performance.now() - bootT0);
+    const prev = ls.getItem(BOOT_TRACE_KEY) ?? '';
+    const lines = prev ? prev.split('\n') : [];
+    lines.push(`${ms}\t${label}`);
+    while (lines.length > BOOT_TRACE_MAX) lines.shift();
+    ls.setItem(BOOT_TRACE_KEY, lines.join('\n'));
+  } catch { /* trace must never throw into the boot path */ }
+}
+
+/** Clear the boot trace at the very start of a boot so each run is self-contained. */
+export function resetBootTrace(): void {
+  try { (globalThis as { localStorage?: Storage }).localStorage?.setItem(BOOT_TRACE_KEY, ''); } catch { /* ignore */ }
+}
+
 function fmtArg(a: unknown): string {
   if (a instanceof Error) return a.stack ?? a.message;
   if (a !== null && typeof a === 'object') {

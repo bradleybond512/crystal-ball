@@ -102,6 +102,7 @@ import { startBiasScanCadence } from '@/services/intelligence/bias-scan-cadence'
 import { startLearnedCascadeCadence } from '@/services/intelligence/cascade-registration';
 import { startConsolidationCadence } from '@/services/cognition/consolidation-cadence';
 import { startPredictionResolutionCadence } from '@/services/intelligence/prediction-resolution-cadence';
+import { installBatteryMonitor } from '@/services/adaptive-cadence';
 import { startCognitionSelfTuningCadence } from '@/services/cognition/self-tuning';
 import { startRegimeMonitor } from '@/services/cognition/regime-monitor';
 import { startEpistemicCalibration } from '@/services/intelligence/epistemic-calibration';
@@ -1073,6 +1074,7 @@ export class PanelLayoutManager implements AppModule {
  startConsolidationCadence();
  startCognitionSelfTuningCadence();
  startPredictionResolutionCadence();
+ installBatteryMonitor();
  // BOCPD regime monitor — TriageBar chip reads the cache; the notify
  // callback shows a toast once per new detection (regime-monitor dedupes
  // by detectedAt, Toast dedupes identical on-screen copies).

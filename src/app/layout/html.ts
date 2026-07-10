@@ -166,7 +166,7 @@ export function buildDesktopLayout(ctx: AppContext): string {
  <button class="mac-sidebar-footer-btn theme-toggle-btn" id="headerThemeToggle" title="${t('header.toggleTheme')}">
  ${buildThemeIcon()}
  </button>
- <button class="mac-sidebar-footer-btn" id="lowPowerBtn" title="Low Power Mode — disable animations and spatial audio">⚡</button>
+ <button class="mac-sidebar-footer-btn" id="lowPowerBtn" title="Low Power Mode — disable animations + spatial audio and quarter feed-poll frequency (Silent preset or on-battery halve it)">⚡</button>
  <span id="unifiedSettingsMount"></span>
  <span id="sidebarUpdateBtn">${buildSidebarUpdateBtnHtml(ctx)}</span>
  </div>

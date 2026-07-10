@@ -1,5 +1,6 @@
 import type { AppContext, AppModule } from '@/app/app-context';
 import { getGhostRefreshMultiplier } from '@/services/mode-manager';
+import { getContextCadenceMultiplier } from '@/services/adaptive-cadence';
 import { isAlwaysOn } from '@/services/always-on';
 
 /** Hidden-window slowdown factor. Always-on disables the slowdown entirely. */
@@ -66,7 +67,7 @@ export class RefreshScheduler implements AppModule {
 
  const computeDelay = (baseMs: number, isHidden: boolean) => {
  const ghostMultiplier = getGhostRefreshMultiplier();
- const adjusted = baseMs * ghostMultiplier * hiddenMultiplier(isHidden, isAlwaysOn());
+ const adjusted = baseMs * ghostMultiplier * getContextCadenceMultiplier() * hiddenMultiplier(isHidden, isAlwaysOn());
  const jitterRange = adjusted * JITTER_FRACTION;
  // eslint-disable-next-line sonarjs/pseudo-random
  const jittered = adjusted + (Math.random() * 2 - 1) * jitterRange;

@@ -50,7 +50,7 @@ export class CriticalMineralsPanel extends Panel {
         'Aggregates resource-domain observations + static USGS/IEA producer fact table.',
     });
     this.deps = { ...DEFAULT_DEPS, ...deps };
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.render();
   }
 

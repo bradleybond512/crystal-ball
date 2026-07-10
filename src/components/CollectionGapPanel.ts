@@ -49,7 +49,7 @@ export class CollectionGapPanel extends Panel {
         'Systematic observability audit. Surfaces stale data, missing feeds, low coverage regions, absent alerts, and single-source brittleness.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.attachHandlers();
   }
 

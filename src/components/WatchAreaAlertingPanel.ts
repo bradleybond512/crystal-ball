@@ -59,7 +59,7 @@ export class WatchAreaAlertingPanel extends Panel {
         'Define named circular geographic regions with per-domain severity thresholds. Observations or situations that land inside a region and meet the threshold fire a watch-area alert.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getWatchAreaAlertingService().subscribe(() => this.render());
     this.attachHandlers();
   }

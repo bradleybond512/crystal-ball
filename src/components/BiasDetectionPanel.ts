@@ -81,7 +81,7 @@ export class BiasDetectionPanel extends Panel {
         'Scans Crystal Ball\'s own output patterns for anchoring, availability, confirmation, recency drift, domain neglect, and overconfidence. Active signals come with a one-line recommendation and an acknowledge workflow.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getBiasDetectorService().subscribe(() => this.render());
     installEntityIdCopyHandler();
   }

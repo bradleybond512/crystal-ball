@@ -929,11 +929,37 @@ export class Panel {
  if (!entry) return;
  const wasHidden = !this.panelIntersecting;
  this.panelIntersecting = entry.isIntersecting;
- if (this.panelIntersecting && wasHidden) this.flushPendingIfVisible();
+ if (this.panelIntersecting && wasHidden) {
+ this.flushPendingIfVisible();
+ // Run the render that was skipped while off-screen (latest wins).
+ const pending = this.pendingVisibleRender;
+ this.pendingVisibleRender = null;
+ if (pending) { try { pending(); } catch { /* isolate */ } }
+ }
  },
  { rootMargin: '200px 0px' },
  );
  this.intersectionObserver.observe(this.element);
+  }
+
+  /** True when the panel is in (or near) the viewport AND the app is foregrounded. */
+  protected isPanelInView(): boolean {
+ return this.panelIntersecting && Panel.appVisible;
+  }
+
+  private pendingVisibleRender: (() => void) | null = null;
+
+  /**
+   * Gate render WORK on visibility. When the panel is on-screen, `render` runs
+   * now; when off-screen, it is skipped (data ingestion keeps flowing into the
+   * panel's state) and the LATEST render runs once when the panel scrolls back
+   * into view. Timer/interval-driven renders should route through this so a
+   * dashboard of ~185 panels doesn't rebuild HTML for panels nobody is looking
+   * at (the idle-CPU driver).
+   */
+  protected renderWhenVisible(render: () => void): void {
+ if (this.isPanelInView()) { render(); return; }
+ this.pendingVisibleRender = render;
   }
 
   /** Queue the debounce for any HTML that accumulated while the panel was

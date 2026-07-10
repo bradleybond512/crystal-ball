@@ -135,7 +135,7 @@ export class OperatorModePanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     if (typeof document !== 'undefined') {
       this.boundClickHandler = (ev) => this.onClick(ev);
       this.boundSubmitHandler = (ev) => this.onSubmit(ev);

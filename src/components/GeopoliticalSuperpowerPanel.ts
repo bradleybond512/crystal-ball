@@ -50,7 +50,7 @@ export class GeopoliticalSuperpowerPanel extends Panel {
         'Deep geopolitical intelligence view: Conflict Heat Index, Sanctions Radar, GDELT Event Stream, Alliance Stability, and Flashpoint Watch — aggregated from Situation Store, Entity Registry, and Event Calendar.',
     });
     this.deps = { ...DEFAULT_DEPS, ...deps };
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.render();
   }
 

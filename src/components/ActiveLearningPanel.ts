@@ -55,7 +55,7 @@ export class ActiveLearningPanel extends Panel {
         'Reviewing the highest-uncertainty observations is the highest-leverage way to improve the model. Confirmed/corrected reviews feed back into the outcome ledger.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getActiveLearningQueue().subscribe(() => this.render());
   }
 

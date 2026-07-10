@@ -76,7 +76,7 @@ export class InfrastructureSuperpowerPanel extends Panel {
         'Deep infrastructure intelligence: power grid status, water advisories, telecom anomalies, transportation disruptions, and a composite Critical Infrastructure Risk Index (energy 35 / water 25 / comms 20 / transport 20). 5-minute refresh.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public override destroy(): void {

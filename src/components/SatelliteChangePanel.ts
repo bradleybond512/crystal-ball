@@ -64,7 +64,7 @@ export class SatelliteChangePanel extends Panel {
 
   private start(): void {
  this.render();
- this.refreshTimer = setInterval(() => this.render(), 90_000);
+ this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), 90_000);
   }
 
   private render(): void {

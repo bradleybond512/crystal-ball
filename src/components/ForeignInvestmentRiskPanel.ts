@@ -27,7 +27,7 @@ export class ForeignInvestmentRiskPanel extends Panel {
         'CFIUS and allied-body FDI review outcomes (blocked / conditioned / approved), sector-level foreign ownership exposure, and high-risk deal tracking across semiconductors, AI, telecom, energy, and defense.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   public destroy(): void {

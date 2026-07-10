@@ -41,7 +41,7 @@ export class ShadowComparisonPanel extends Panel {
         'Generic A/B ledger: any caller can register a shadow algorithm and post (live, shadow) output pairs. The panel shows divergence rate per run and per-comparison diffs.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getShadowModeAlgorithmService().subscribe(() => this.render());
     this.attachHandlers();
   }

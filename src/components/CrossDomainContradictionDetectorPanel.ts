@@ -38,7 +38,7 @@ export class CrossDomainContradictionDetectorPanel extends Panel {
       infoTooltip:
         'Flags pairs of domains reporting conflicting severities for the same region within a 2-hour window.',
     });
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.render();
   }
 

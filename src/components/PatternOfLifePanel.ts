@@ -28,7 +28,7 @@ export class PatternOfLifePanel extends Panel {
   private start(): void {
  this.render();
  // Refresh every 5 minutes
- this.refreshTimer = setInterval(() => this.render(), 5 * 60 * 1000);
+ this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), 5 * 60 * 1000);
   }
 
   private render(): void {

@@ -41,7 +41,7 @@ export class SchedulerPanel extends Panel {
         'Autonomous loop that fires self-improvement tasks on per-task cadences: attention recalibration, trust budget recharge, safety evaluation, bias scan, repair recommendations, scorecard refresh.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getImprovementScheduler().subscribe(() => this.render());
   }
 

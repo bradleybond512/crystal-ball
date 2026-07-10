@@ -57,7 +57,7 @@ export class BacktestGatePanel extends Panel {
         'Pre-apply safety gate. Every proposed algorithm parameter change is run through BacktestEngine before it can be applied. Approves only when simulated accuracy clears the 50% floor with no significant regression.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getBacktestGate().subscribe(() => this.render());
     this.attachHandlers();
   }

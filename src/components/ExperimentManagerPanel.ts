@@ -60,7 +60,7 @@ export class ExperimentManagerPanel extends Panel {
     const svc = getExperimentManager();
     this.listener = () => this.render();
     svc.subscribe(this.listener);
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.render();
   }
 

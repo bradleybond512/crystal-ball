@@ -73,7 +73,7 @@ export class CognitiveBiasDetectorPanel extends Panel {
         'Flags intelligence outputs that look skewed by known cognitive biases — anchoring, availability, confirmation, recency, overconfidence, groupthink. Advisory only; never blocks the underlying claim.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getCognitiveBiasDetectorService().subscribe(() => {
       if (!this.bulkAcking) this.render();
     });

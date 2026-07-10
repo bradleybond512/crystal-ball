@@ -55,7 +55,7 @@ export class EmergencyBroadcastPanel extends Panel {
 
   private start(): void {
  this.render();
- this.refreshTimer = setInterval(() => this.render(), 30_000);
+ this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), 30_000);
   }
 
   private render(): void {

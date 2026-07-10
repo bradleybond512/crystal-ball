@@ -50,7 +50,7 @@ export class MissionLedgerBridgePanel extends Panel {
         'Closes the learning loop: every mission state transition is recorded as an OutcomeLedger entry so per-domain calibration learns from real-world outcomes.',
     });
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
     this.unsubscribe = getMissionLedgerBridge().subscribe(() => this.render());
   }
 

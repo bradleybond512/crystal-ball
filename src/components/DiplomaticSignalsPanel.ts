@@ -75,7 +75,7 @@ export class DiplomaticSignalsPanel extends Panel {
 
   private start(): void {
     this.render();
-    this.refreshTimer = setInterval(() => this.render(), REFRESH_MS);
+    this.refreshTimer = setInterval(() => this.renderWhenVisible(() => this.render()), REFRESH_MS);
   }
 
   private render(): void {
@@ -99,7 +99,7 @@ export class DiplomaticSignalsPanel extends Panel {
     );
     const signalRows = [...data.signals].sort((a, b) => {
       const r = INTENSITY_RANK[b.intensity] - INTENSITY_RANK[a.intensity];
-      return r !== 0 ? r : b.date.localeCompare(a.date);
+      return r === 0 ? b.date.localeCompare(a.date) : r;
     });
 
     replaceChildren(

@@ -151,6 +151,51 @@ function installLongTaskObserver(): void {
   }
 }
 
+const INPUT_LATENCY_THRESHOLD_MS = 500;
+let eventTimingObserver: PerformanceObserver | null = null;
+
+/** Short human descriptor of the interacted element, as a "what was slow" hint
+ *  (the Event Timing API exposes the target node, not the JS handler name). */
+function describeEventTarget(target: unknown): string {
+  const el = target as (Element & { dataset?: DOMStringMap }) | null;
+  if (!el || typeof el.tagName !== 'string') return 'unknown';
+  const tag = el.tagName.toLowerCase();
+  if (el.id) return `${tag}#${el.id}`;
+  const data = el.dataset ? Object.entries(el.dataset)[0] : undefined;
+  if (data) return `${tag}[data-${data[0]}=${String(data[1]).slice(0, 24)}]`;
+  const cls = typeof el.className === 'string' && el.className ? `.${el.className.split(/\s+/)[0]}` : '';
+  const text = (el.textContent ?? '').trim().slice(0, 24);
+  const textPart = text ? ` "${text}"` : '';
+  return `${tag}${cls}${textPart}`;
+}
+
+/**
+ * Input-latency probe (permanent). WebKit supports the Event Timing API, which
+ * reports input events whose dispatch→handlers-complete exceeded a threshold.
+ * Warns to the file log with the event type, latency, and target — so a slow
+ * interaction is named in evidence the day it regresses.
+ */
+function installInputLatencyProbe(): void {
+  if (typeof PerformanceObserver === 'undefined') return;
+  if (!PerformanceObserver.supportedEntryTypes?.includes('event')) return;
+  try {
+    eventTimingObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        const e = entry as PerformanceEntry & { processingStart?: number; processingEnd?: number; target?: unknown };
+        if (entry.duration < INPUT_LATENCY_THRESHOLD_MS) continue;
+        const handlerMs = (e.processingEnd ?? 0) - (e.processingStart ?? 0);
+        const where = describeEventTarget(e.target);
+        recordBreadcrumb('PERF', 'input-latency', `${entry.name} ${Math.round(entry.duration)}ms on ${where}`, {});
+        logToDesktop('WARN', `[INPUT-LATENCY] ${entry.name} ${Math.round(entry.duration)}ms (handlers ${Math.round(handlerMs)}ms) on ${where}`);
+      }
+    });
+    // durationThreshold floors at 16ms; the loop filters to >=500ms.
+    eventTimingObserver.observe({ type: 'event', durationThreshold: INPUT_LATENCY_THRESHOLD_MS, buffered: true } as PerformanceObserverInit);
+  } catch {
+    eventTimingObserver = null;
+  }
+}
+
 /**
  * Time an async operation and emit a breadcrumb/log if it exceeds the slow
  * threshold. Returns the operation's result or error unchanged.
@@ -445,6 +490,7 @@ export function installLogBridge(): void {
   };
 
   installLongTaskObserver();
+  installInputLatencyProbe();
   installFrameStallDetector();
   installRendererHeartbeat();
   void checkWatchdogRecovery();

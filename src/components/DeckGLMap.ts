@@ -571,6 +571,10 @@ export class DeckGLMap {
 
   private renderScheduled = false;
   private renderPaused = false;
+  // Temporary idle-repaint instrumentation counters (see installMapFpsDebug).
+  private _mapFpsRenderCount = 0;
+  private _mapFpsAppRepaintCount = 0;
+  private _mapFpsTimerId: number | null = null;
   private renderPending = false;
   private webglLost = false;
   private resizeObserver: ResizeObserver | null = null;
@@ -650,6 +654,7 @@ export class DeckGLMap {
  });
  this.rafUpdateLayers = () => {
  this.rafUpdateLayersPending = true;
+ this._mapFpsAppRepaintCount++;
  rafFn();
  };
 
@@ -677,6 +682,7 @@ export class DeckGLMap {
  this.loadCountryBoundaries();
  this.fetchServerBases();
  this.render();
+ this.installMapFpsDebug();
 
  this.applyDarkMapEnhancements();
 
@@ -703,6 +709,28 @@ export class DeckGLMap {
  if (this.state.layers.theaterPolygons) {
  this.startTheaterPolygons();
  }
+  }
+
+  /**
+   * TEMPORARY idle-repaint instrumentation, gated behind
+   * localStorage['cb-debug-map-fps']. Counts actual MapLibre GL frames ('render'
+   * event) + app-initiated deck repaints, and every 2s logs frames/sec alongside
+   * which standing requester is active — so we can confirm the map is repainting
+   * at idle and attribute it. Left behind the flag (off by default); enable with
+   *   localStorage.setItem('cb-debug-map-fps','1')
+   */
+  private installMapFpsDebug(): void {
+ let enabled = false;
+ try { enabled = localStorage.getItem('cb-debug-map-fps') === '1'; } catch { enabled = false; }
+ if (!enabled || !this.maplibreMap) return;
+ this.maplibreMap.on('render', () => { this._mapFpsRenderCount++; });
+ this._mapFpsTimerId = window.setInterval(() => {
+ const glfps = (this._mapFpsRenderCount / 2).toFixed(1);
+ const app = (this._mapFpsAppRepaintCount / 2).toFixed(1);
+ this._mapFpsRenderCount = 0;
+ this._mapFpsAppRepaintCount = 0;
+ console.warn(`[MAP-FPS] gl=${glfps}/s appRepaint=${app}/s alertPulses=${this.alertPulses.length} newsPulse=${this.newsPulseIntervalId !== null} cablePulse=${this.cablePulseIntervalId !== null} dayNight=${this.dayNightIntervalId !== null} paused=${this.renderPaused}`);
+ }, 2000) as unknown as number;
   }
 
   private startDayNightTimer(): void {
@@ -4654,6 +4682,7 @@ export class DeckGLMap {
  }
  if (this.renderScheduled) return;
  this.renderScheduled = true;
+ this._mapFpsAppRepaintCount++;
 
  requestAnimationFrame(() => {
  this.renderScheduled = false;
@@ -5954,6 +5983,10 @@ export class DeckGLMap {
   }
 
   public destroy(): void {
+ if (this._mapFpsTimerId !== null) {
+ clearInterval(this._mapFpsTimerId);
+ this._mapFpsTimerId = null;
+ }
  if (this.moveTimeoutId) {
  clearTimeout(this.moveTimeoutId);
  this.moveTimeoutId = null;

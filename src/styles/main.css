@@ -10052,17 +10052,21 @@ a.prediction-link:hover {
 }
 
 .virtual-item {
+  /* `contain: content` isolates layout/paint. No permanent `will-change:
+     transform` — it promoted every list item to its own layer at rest; WebKit
+     promotes on demand during an actual scroll/transform, which is all we need. */
   contain: content;
-  will-change: transform;
 }
 
 .virtual-spacer {
   pointer-events: none;
 }
 
-/* Performance hints for scrolling */
+/* Performance hints for scrolling. NOTE: no `will-change: scroll-position` —
+   it forced a permanent compositing layer on every one of the 50+ panels, which
+   inflated the RenderLayerCompositor overlap-map recompute on each render. Scroll
+   repainting is already browser-optimized; `contain` gives the isolation we need. */
 .panel-content {
-  will-change: scroll-position;
   contain: layout style;
 }
 

@@ -1,5 +1,6 @@
 /* eslint-disable unicorn/consistent-function-scoping, @typescript-eslint/no-empty-function, sonarjs/no-selector-parameter, sonarjs/cognitive-complexity, @typescript-eslint/no-floating-promises, sonarjs/no-try-promise, @typescript-eslint/no-unsafe-return, @typescript-eslint/prefer-nullish-coalescing */
 import { isDesktopRuntime, getApiBaseUrl } from '../services/runtime';
+import { isFeatureAvailable, type RuntimeFeatureId } from '../services/runtime-config';
 import { invokeTauri } from '../services/tauri-bridge';
 import { t } from '../services/i18n';
 import { h, replaceChildren, safeHtml } from '../utils/dom-utils';
@@ -12,6 +13,7 @@ import { trackPanelResized } from '@/services/analytics';
 // Vite's INEFFECTIVE_DYNAMIC_IMPORT warning without changing bundle behaviour.
 import { generateSummary } from '@/services/summarization';
 import { getPanelHealthRegistry } from '@/services/diagnostics/diagnostics-state';
+import { decideStalledResolution } from './panel-loading-budget';
 
 export interface PanelOptions {
   id: string;
@@ -222,6 +224,16 @@ export class Panel {
   private pendingOnRendered: (() => void) | null = null;
   private contentDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private freshFlashRafId: number | null = null;
+  // Loading-honesty budget: a spinner may only run while a request is genuinely
+  // in flight. showLoading()/showRetrying() start this timer; a resolving state
+  // (real content, error, config-error) clears it. On expiry with no data the
+  // panel resolves to a truthful, NON-ANIMATED state so a hung/failed source
+  // can't leave the radar spinning forever (the idle wall-of-spinners that pins
+  // the WebKit compositor). Override loadingBudgetMs to tune; set requiredFeature
+  // so a keyed source resolves to "waiting on API key" instead of "unreachable".
+  protected loadingBudgetMs = 30_000;
+  protected requiredFeature: RuntimeFeatureId | null = null;
+  private loadingBudgetTimer: ReturnType<typeof setTimeout> | null = null;
   // Cache the last HTML string we actually wrote to the DOM. Reading
   // `element.innerHTML` forces the browser to serialize the subtree, which is
   // expensive on panels with large or animated content. Keeping a cached copy
@@ -728,11 +740,19 @@ export class Panel {
  h('div', { className: 'panel-loading-text' }, message),
  ),
  );
+ // These state methods replace the DOM directly (bypassing setContent's HTML
+ // cache), so invalidate that cache — otherwise a later setContent() with the
+ // SAME html as before the spinner hits the no-op early-return, never renders,
+ // and never clears the loading budget → a resolved panel flips to unreachable.
+ this.invalidateContentCache();
+ this.startLoadingBudget();
   }
 
   public showError(message = t('common.failedToLoad')): void {
+ this.clearLoadingBudget();
  try { getPanelHealthRegistry().recordError(this.panelId, message); } catch { /* diagnostics optional */ }
  replaceChildren(this.content, h('div', { className: 'error-message' }, message));
+ this.invalidateContentCache();
   }
 
   public showRetrying(message = t('common.retrying')): void {
@@ -745,9 +765,75 @@ export class Panel {
  h('div', { className: 'panel-loading-text retrying' }, message),
  ),
  );
+ this.invalidateContentCache();
+ this.startLoadingBudget();
+  }
+
+  // ── Loading-honesty budget ────────────────────────────────────────────────
+
+  private startLoadingBudget(): void {
+ if (this.loadingBudgetTimer) clearTimeout(this.loadingBudgetTimer);
+ if (this.loadingBudgetMs <= 0) return;
+ this.loadingBudgetTimer = setTimeout(() => {
+ this.loadingBudgetTimer = null;
+ // Data arrived but rendering was deferred by the off-screen gate — not a
+ // stall; the flush will render it when the panel scrolls in.
+ if (this.pendingContentHtml !== null) return;
+ this.resolveStalledLoad();
+ }, this.loadingBudgetMs);
+  }
+
+  private clearLoadingBudget(): void {
+ if (this.loadingBudgetTimer) { clearTimeout(this.loadingBudgetTimer); this.loadingBudgetTimer = null; }
+  }
+
+  /**
+   * The spinner has run past its budget with no data. Resolve to a truthful,
+   * non-animated state: "waiting on API key" when this panel needs a key that is
+   * absent, otherwise "source unreachable" with a Retry affordance. Subclasses
+   * with a bespoke honest state may override.
+   */
+  protected resolveStalledLoad(): void {
+ let featureAvailable = true;
+ if (this.requiredFeature !== null) {
+ try { featureAvailable = isFeatureAvailable(this.requiredFeature); } catch { featureAvailable = true; }
+ }
+ const resolution = decideStalledResolution({
+ hasPendingContent: this.pendingContentHtml !== null,
+ requiresFeature: this.requiredFeature !== null,
+ featureAvailable,
+ });
+ if (resolution === 'waiting-on-key') { this.showConfigError(t('common.waitingOnKey')); return; }
+ if (resolution === 'unreachable') { this.showUnreachable(); }
+  }
+
+  /** Static "source unreachable" state with a Retry button — no animation. */
+  public showUnreachable(message = t('common.sourceUnreachable')): void {
+ this.clearLoadingBudget();
+ try { getPanelHealthRegistry().recordError(this.panelId, message); } catch { /* diagnostics optional */ }
+ replaceChildren(this.content,
+ h('div', { className: 'panel-state panel-state-unreachable' },
+ h('div', { className: 'panel-state-text' }, message),
+ h('button', {
+ type: 'button',
+ className: 'panel-state-retry',
+ onClick: () => this.retryLoad(),
+ }, t('common.retry')),
+ ),
+ );
+ this.invalidateContentCache();
+  }
+
+  /** Re-enter loading and ask the data layer to refetch this panel's source. */
+  protected retryLoad(): void {
+ this.showLoading();
+ try {
+ document.dispatchEvent(new CustomEvent('cb:panel-retry', { detail: { panelId: this.panelId } }));
+ } catch { /* dispatch is best-effort */ }
   }
 
   public showConfigError(message: string): void {
+ this.clearLoadingBudget();
  const msgEl = h('div', { className: 'config-error-message' }, message);
  if (isDesktopRuntime()) {
  msgEl.append(
@@ -759,6 +845,7 @@ export class Panel {
  );
  }
  replaceChildren(this.content, msgEl);
+ this.invalidateContentCache();
   }
 
   public setCount(count: number): void {
@@ -818,6 +905,8 @@ export class Panel {
  try {
  this.content.innerHTML = html;
  this.lastAppliedContentHtml = html;
+ // Real content rendered — the panel resolved out of any loading state.
+ this.clearLoadingBudget();
  this.markFresh();
  try { getPanelHealthRegistry().recordRender(this.panelId, { hadData: html.trim().length > 0 }); } catch { /* diagnostics optional */ }
  const cb = this.pendingOnRendered;
@@ -929,6 +1018,13 @@ export class Panel {
  if (!entry) return;
  const wasHidden = !this.panelIntersecting;
  this.panelIntersecting = entry.isIntersecting;
+ // Pause CSS animations (loading spinners, pulse dots) on off-screen panels.
+ // The render-gate already skips their JS re-renders, but WebKit keeps
+ // advancing their CSS animations and recomputing the compositing overlap
+ // map every frame — the dominant idle-CPU cost with ~185 panels. The class
+ // drives `animation-play-state: paused` in CSS; animations resume on
+ // scroll-in. See .panel-offscreen in main.css.
+ this.element.classList.toggle('panel-offscreen', !this.panelIntersecting);
  if (this.panelIntersecting && wasHidden) {
  this.flushPendingIfVisible();
  // Run the render that was skipped while off-screen (latest wins).
@@ -1317,6 +1413,7 @@ export class Panel {
  clearTimeout(this.contentDebounceTimer);
  this.contentDebounceTimer = null;
  }
+ this.clearLoadingBudget();
  this.pendingContentHtml = null;
  this.lastAppliedContentHtml = '';
 

@@ -8,6 +8,7 @@ import {
   getSecretState,
   isFeatureAvailable,
   isFeatureEnabled,
+  loadDesktopSecretsWhenReady,
   setFeatureToggle,
   setSecretValue,
   subscribeRuntimeConfig,
@@ -276,6 +277,7 @@ export class RuntimeConfigPanel extends Panel {
  <button type="button" class="runtime-open-settings-btn" data-open-settings>
  ${t('modals.runtimeConfig.openSettings')}
  </button>
+ ${this.renderReloadKeychainButton()}
  </section>
  `;
  this.attachListeners();
@@ -287,6 +289,7 @@ export class RuntimeConfigPanel extends Panel {
  ${desktop ? '' : this.renderWebVaultBanner()}
  <div class="runtime-config-summary">
  ${desktop ? t('modals.runtimeConfig.summary.desktop') : t('modals.runtimeConfig.summary.web')} · ${features.filter(f => isFeatureAvailable(f.id)).length}/${features.length} ${t('modals.runtimeConfig.summary.available')}
+ ${this.renderReloadKeychainButton()}
  </div>
  <div class="runtime-config-list" data-key-dashboard-mount></div>
  `;
@@ -313,6 +316,37 @@ export class RuntimeConfigPanel extends Panel {
  onClose: () => this.render(),
  });
  wizard.open();
+  }
+
+  /** Desktop-only: button to re-read the macOS keychain vault on demand. The
+   *  boot read fails fast (10s) so a not-yet-granted ACL can't stall startup; if
+   *  the "Always Allow" dialog never got answered in that window, keys stay
+   *  unloaded until relaunch. This lets the user force the read with the window
+   *  frontmost so the dialog reliably shows. */
+  private renderReloadKeychainButton(): string {
+ if (!isDesktopRuntime()) return '';
+ return `<button type="button" class="runtime-reload-keychain-btn" data-reload-keychain>${t('modals.runtimeConfig.reloadKeychain.button')}</button>`;
+  }
+
+  private async onReloadKeychain(btn: HTMLButtonElement): Promise<void> {
+ const original = btn.textContent;
+ btn.disabled = true;
+ btn.textContent = t('modals.runtimeConfig.reloadKeychain.reading');
+ try {
+ const count = await invokeTauri<number>('reload_secrets_from_keychain');
+ // Drop the nulls the renderer memoized while keys were missing, then
+ // re-read so feature availability + the key list reflect the new keys.
+ await loadDesktopSecretsWhenReady();
+ btn.textContent = count > 0
+ ? t('modals.runtimeConfig.reloadKeychain.loaded', { count })
+ : t('modals.runtimeConfig.reloadKeychain.none');
+ window.setTimeout(() => this.render(), 1400);
+ } catch (error) {
+ btn.disabled = false;
+ btn.textContent = original ?? t('modals.runtimeConfig.reloadKeychain.button');
+ // eslint-disable-next-line no-console -- user action failure diagnostics
+ console.warn('[runtime-config] keychain reload failed', error);
+ }
   }
 
   private renderWebVaultBanner(): string {
@@ -578,6 +612,13 @@ export class RuntimeConfigPanel extends Panel {
   }
 
   private attachListeners(): void {
+ // Reload-from-keychain button (desktop only) — wired first so it works in
+ // both the missing-keys alert view and the full settings view, ahead of the
+ // web-secret-editing gate and the alert-mode early return below.
+ this.content.querySelector<HTMLButtonElement>('[data-reload-keychain]')?.addEventListener('click', (e) => {
+ void this.onReloadKeychain(e.currentTarget as HTMLButtonElement);
+ });
+
  this.content.querySelectorAll<HTMLAnchorElement>('a[data-signup-url]').forEach((link) => {
  link.addEventListener('click', (e) => {
  e.preventDefault();

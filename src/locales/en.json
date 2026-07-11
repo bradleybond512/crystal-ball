@@ -378,6 +378,12 @@
  },
  "openSettings": "Open Settings",
  "skipSetup": "Skip the setup — configure individual API keys below for free access to all data sources.",
+ "reloadKeychain": {
+  "button": "Reload keys from Keychain",
+  "reading": "Reading Keychain…",
+  "loaded": "Loaded {{count}} keys",
+  "none": "No keys found in Keychain"
+ },
  "summary": {
  "desktop": "Desktop mode",
  "web": "Web mode (read-only, server-managed credentials)",

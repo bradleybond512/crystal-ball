@@ -205,6 +205,13 @@ const KEYCHAIN_PER_CALL_TIMEOUT: Duration = Duration::from_secs(3);
 /// returns cached secrets instantly so the sidecar boots with keys regardless.
 const KEYCHAIN_VAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Timeout for a USER-INITIATED vault read (the `reload_secrets_from_keychain`
+/// command). Much longer than the boot read: the user just clicked a button with
+/// the window frontmost, so the macOS "Always Allow" ACL dialog can present and
+/// be answered without the boot path's need to fail fast so the app isn't
+/// blocked. Nothing waits on this — it runs on a spawn_blocking worker.
+const KEYCHAIN_VAULT_INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Filename for the encrypted (AES-256-GCM) shadow copy of the secrets vault
 /// written to the app data directory (mode 0600). Read as a fallback when the
 /// keychain prompt is dismissed or times out. Written only when a machine-bound
@@ -261,8 +268,8 @@ impl SecretsCache {
  /// `AppHandle`. When provided, timeout warnings land in the
  /// desktop log so the operator can tell which keychain entries
  /// are blocked by an ACL prompt.
- fn populate_from_keychain(&self, app: Option<&AppHandle>) {
- let loaded = Self::read_keychain_blocking(app);
+ fn populate_from_keychain(&self, app: Option<&AppHandle>, vault_timeout: Duration) {
+ let loaded = Self::read_keychain_blocking(app, vault_timeout);
  if let Ok(mut guard) = self.secrets.lock() {
  // Preserve edits made concurrently with the (up to 120s) keychain
  // read — the UI is usable before boot finishes, so a Settings save
@@ -294,12 +301,12 @@ impl SecretsCache {
  /// warning and skip that key — features that need it will return
  /// the existing 503 + `keyMissing` error path until it's
  /// re-fetched on the next launch.
- fn read_keychain_blocking(app: Option<&AppHandle>) -> HashMap<String, String> {
+ fn read_keychain_blocking(app: Option<&AppHandle>, vault_timeout: Duration) -> HashMap<String, String> {
  // Try consolidated vault first — single keychain read.
  match read_keychain_entry_with_timeout(
  KEYRING_SERVICE,
  "secrets-vault".to_string(),
- KEYCHAIN_VAULT_TIMEOUT,
+ vault_timeout,
  ) {
  Ok(Some(json)) => {
  if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&json) {
@@ -323,7 +330,7 @@ impl SecretsCache {
      }
  }
  Err(()) => {
- log_keychain_timeout(app, "secrets-vault", KEYCHAIN_VAULT_TIMEOUT);
+ log_keychain_timeout(app, "secrets-vault", vault_timeout);
  // Keychain prompt dismissed or timed out — fall back to the
  // shadow file written on the last successful save/read.
  if let Some(secrets) = app.and_then(read_vault_shadow) {
@@ -411,7 +418,7 @@ impl SecretsCache {
  #[allow(dead_code)]
  fn load_from_keychain() -> Self {
  let cache = Self::empty();
- cache.populate_from_keychain(None);
+ cache.populate_from_keychain(None, KEYCHAIN_VAULT_TIMEOUT);
  cache
  }
 }
@@ -1073,6 +1080,42 @@ fn set_secret(
  touched.insert(key);
  }
  Ok(())
+}
+
+/// User-initiated re-read of the keychain vault. The boot read runs on a
+/// background worker with a fail-fast 10s timeout so a not-yet-granted ACL can't
+/// stall startup — which means if the macOS "Always Allow" dialog isn't answered
+/// in that window (e.g. it never surfaced because the app wasn't frontmost), the
+/// app falls back to the shadow vault and never retries until the next launch.
+/// This command lets the user force the read on demand from Settings: the window
+/// is frontmost and they just clicked, so the ACL dialog reliably presents, and
+/// a generous 60s timeout gives them time to answer. On success the freshly
+/// loaded keys are re-injected into the running sidecar so keyed feeds recover
+/// without a relaunch. Returns the number of keys now in the cache.
+#[tauri::command]
+async fn reload_secrets_from_keychain(webview: Webview) -> Result<usize, String> {
+ require_trusted_window(webview.label())?;
+ let app = webview.app_handle().clone();
+ let load_app = app.clone();
+ let secrets: Vec<(String, String)> = tauri::async_runtime::spawn_blocking(move || {
+ let cache = load_app.state::<SecretsCache>();
+ cache.populate_from_keychain(Some(&load_app), KEYCHAIN_VAULT_INTERACTIVE_TIMEOUT);
+ cache
+ .secrets
+ .lock()
+ .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+ .unwrap_or_default()
+ })
+ .await
+ .map_err(|e| format!("keychain reload task failed: {e}"))?;
+ let count = secrets.len();
+ inject_secrets_into_running_sidecar(&app, secrets).await;
+ append_desktop_log(
+ &app,
+ "INFO",
+ &format!("reload_secrets_from_keychain: loaded {count} keys, re-injected into sidecar"),
+ );
+ Ok(count)
 }
 
 #[tauri::command]
@@ -3920,6 +3963,7 @@ fn main() {
  get_always_on,
  set_secret,
  delete_secret,
+ reload_secrets_from_keychain,
  get_local_api_token,
  get_local_api_port,
  get_desktop_runtime_info,
@@ -4136,7 +4180,7 @@ fn main() {
  let load_handle = setup_handle.clone();
  let secrets: Vec<(String, String)> = tauri::async_runtime::spawn_blocking(move || {
  let cache = load_handle.state::<SecretsCache>();
- cache.populate_from_keychain(Some(&load_handle));
+ cache.populate_from_keychain(Some(&load_handle), KEYCHAIN_VAULT_TIMEOUT);
  cache
  .secrets
  .lock()

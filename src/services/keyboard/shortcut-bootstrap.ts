@@ -85,18 +85,34 @@ export function installShortcuts(): BootstrapHandles {
   // Re-paint badges when the sidebar re-renders. We watch for child additions
   // / removals on the sidebar panel list; debounce via rAF so a batch of
   // mutations only triggers one repaint.
+  //
+  // refreshPanelHints() → paintHintBadges() removes and re-appends badge <span>s
+  // INSIDE this observed subtree. With the observer still attached, those self-
+  // inflicted mutations retrigger onMutate → rAF → repaint → mutate … a runaway
+  // feedback loop that repainted the badges every frame and pinned the whole
+  // WebKit rendering pipeline at ~60fps on an idle dashboard. Disconnect while
+  // we mutate, then re-observe, so only genuine sidebar changes (panel add /
+  // remove / reorder) schedule a repaint.
+  const OBSERVE_OPTS: MutationObserverInit = { childList: true, subtree: true };
+  const observers: { obs: MutationObserver; target: Node }[] = [];
+  const observeAll = (): void => {
+    for (const { obs, target } of observers) obs.observe(target, OBSERVE_OPTS);
+  };
   let scheduled = false;
   const onMutate = () => {
     if (scheduled) return;
     scheduled = true;
-    requestAnimationFrame(() => { scheduled = false; refreshPanelHints(); });
+    requestAnimationFrame(() => {
+      scheduled = false;
+      for (const { obs } of observers) obs.disconnect();
+      refreshPanelHints();
+      observeAll();
+    });
   };
-  const observers: MutationObserver[] = [];
   for (const list of document.querySelectorAll('.mac-sidebar-panels, .mac-sidebar-panel-list, aside.mac-sidebar, #sidebar, .mac-sidebar')) {
-    const obs = new MutationObserver(onMutate);
-    obs.observe(list, { childList: true, subtree: true });
-    observers.push(obs);
+    observers.push({ obs: new MutationObserver(onMutate), target: list });
   }
+  observeAll();
 
   const listener = (e: KeyboardEvent) => {
     const matched = reg.dispatch({
@@ -117,7 +133,7 @@ export function installShortcuts(): BootstrapHandles {
     refreshPanelHints,
     destroy: () => {
       document.removeEventListener('keydown', listener);
-      for (const o of observers) o.disconnect();
+      for (const { obs } of observers) obs.disconnect();
       if (activeRegistry === reg) activeRegistry = null;
       if (activeListener === listener) activeListener = null;
     },

@@ -571,11 +571,12 @@ export class DeckGLMap {
 
   private renderScheduled = false;
   private renderPaused = false;
+  private _pausedByView = false;   // manual pause (country-detail overlay)
+  private _pausedByHidden = false; // window hidden
   // Temporary idle-repaint instrumentation counters (see installMapFpsDebug).
   private _mapFpsRenderCount = 0;
   private _mapFpsAppRepaintCount = 0;
   private _mapFpsTimerId: number | null = null;
-  private renderPending = false;
   private webglLost = false;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -634,6 +635,7 @@ export class DeckGLMap {
   private rafUpdateLayersPending = false;
   private moveTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private _themeChangedHandler: ((e: Event) => void) | null = null;
+  private _visibilityHandler: (() => void) | null = null;
   private mapEventHandlers: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
 
   constructor(container: HTMLElement, initialState: DeckMapState) {
@@ -672,6 +674,16 @@ export class DeckGLMap {
  }
  };
  window.addEventListener('theme-changed', this._themeChangedHandler);
+
+ // Suspend ALL map rendering (pulse/cable/day-night timers + the render loop)
+ // while the window is hidden — otherwise the 1s pulse setIntervals keep firing
+ // and each repaint commits the whole 185-panel + map layer tree to Core
+ // Animation, burning CPU/battery for a view nobody can see. setRenderPaused
+ // stops the timers; on unhide it resumes them and flushes any pending render.
+ this._visibilityHandler = () => {
+ this.setRenderPausedByHidden(document.visibilityState === 'hidden');
+ };
+ document.addEventListener('visibilitychange', this._visibilityHandler);
 
  this.initMapLibre();
 
@@ -1546,8 +1558,10 @@ export class DeckGLMap {
  },
  updateTriggers: { getRadius: t, getLineColor: t },
  }));
- // Throttled repaint — drives alert pulse at ~4fps instead of unbounded RAF loop
- if (!this.rafUpdateLayersPending) {
+ // Throttled repaint — drives alert pulse at ~4fps instead of unbounded RAF
+ // loop. Suppressed while paused/hidden so it can't keep rebuilding layers for
+ // a view nobody can see (the loop that spiked idle CPU when alerts were live).
+ if (!this.rafUpdateLayersPending && !this.renderPaused) {
  setTimeout(() => this.rafUpdateLayers(), 250);
  }
  }
@@ -4676,10 +4690,9 @@ export class DeckGLMap {
 
   // Public API methods (matching MapComponent interface)
   public render(): void {
- if (this.renderPaused) {
- this.renderPending = true;
- return;
- }
+ // Paused: skip. applyRenderPause() issues a fresh render() on resume, so a
+ // render requested while paused is never lost.
+ if (this.renderPaused) return;
  if (this.renderScheduled) return;
  this.renderScheduled = true;
  this._mapFpsAppRepaintCount++;
@@ -4690,12 +4703,31 @@ export class DeckGLMap {
  });
   }
 
+  /** External/manual pause (e.g. country-detail overlay covers the map). */
   public setRenderPaused(paused: boolean): void {
+ this._pausedByView = paused;
+ this.applyRenderPause();
+  }
+
+  /** Visibility pause — driven by the window hidden/visible state. */
+  private setRenderPausedByHidden(hidden: boolean): void {
+ this._pausedByHidden = hidden;
+ this.applyRenderPause();
+  }
+
+  /**
+   * Effective render-pause = paused by ANY reason (manual view OR window hidden),
+   * so the two callers can't fight over a single boolean: resuming requires every
+   * reason to clear. Only touches the timers when the effective state flips.
+   */
+  private applyRenderPause(): void {
+ const paused = this._pausedByView || this._pausedByHidden;
  if (this.renderPaused === paused) return;
  this.renderPaused = paused;
  if (paused) {
  this.stopPulseAnimation();
  this.stopDayNightTimer();
+ this.stopCablePulse();
  return;
  }
 
@@ -4703,10 +4735,12 @@ export class DeckGLMap {
  if (this.state.layers.dayNight) this.startDayNightTimer();
  if (this.state.layers.cables) this.startCablePulse();
  if (this.state.layers.theaterPolygons) this.startTheaterPolygons();
- if (!paused && this.renderPending) {
- this.renderPending = false;
+ // Always refresh once on resume. Besides flushing any render deferred while
+ // paused, this re-arms the alert-pulse loop: that loop is a self-scheduling
+ // setTimeout chain (not a named timer), so if the window hid mid-cycle its
+ // chain broke — a fresh render()→buildLayers() re-schedules it when alert
+ // pulses are still active.
  this.render();
- }
   }
 
   private updateLayers(): void {
@@ -6004,6 +6038,10 @@ export class DeckGLMap {
  if (this._themeChangedHandler) {
  window.removeEventListener('theme-changed', this._themeChangedHandler);
  this._themeChangedHandler = null;
+ }
+ if (this._visibilityHandler) {
+ document.removeEventListener('visibilitychange', this._visibilityHandler);
+ this._visibilityHandler = null;
  }
 
  // Remove all MapLibre event listeners to prevent leaks

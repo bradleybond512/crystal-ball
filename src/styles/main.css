@@ -6322,6 +6322,49 @@ a.prediction-link:hover {
   background: rgba(255, 210, 124, 0.2);
 }
 
+/* Off-screen panels: pause CSS animations so WebKit stops advancing them and
+   recomputing the compositing overlap map every frame — the dominant idle-CPU
+   cost across ~185 panels (many showing perpetual loading spinners). The
+   IntersectionObserver render-gate already skips their JS re-renders; this
+   covers the CSS-animation side. Animations resume on scroll-in when the
+   .panel-offscreen class is removed. */
+.panel-offscreen,
+.panel-offscreen * {
+  animation-play-state: paused !important;
+}
+
+/* Honest "source unreachable" state, shown when the loading budget expires with
+   no data. Deliberately static — no spinner. */
+.panel-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px;
+  text-align: center;
+}
+
+.panel-state-text {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.panel-state-retry {
+  padding: 3px 12px;
+  font-size: 11px;
+  color: var(--text-primary);
+  background: var(--panel-bg);
+  border: 1px solid var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.panel-state-retry:hover {
+  background: var(--surface-hover);
+}
+
 .api-key-gate {
   display: flex;
   flex-direction: column;

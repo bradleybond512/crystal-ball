@@ -66,6 +66,8 @@ export type { CountryBriefSignals } from '@/app/app-context';
 export class App {
   private state: AppContext;
   private pendingDeepLinkCountry: string | null = null;
+  private panelRetryTimer: number | null = null;
+  private onPanelRetry: (() => void) | null = null;
 
   private panelLayout: PanelLayoutManager;
   private dataLoader: DataLoaderManager;
@@ -467,6 +469,19 @@ export class App {
  this.toggleGodsVision().catch(() => {/* error handled in GodsVisionView */});
  });
 
+ // A panel whose loading budget expired shows a "Source unreachable — Retry"
+ // state; clicking Retry dispatches cb:panel-retry. Re-run the data wave so the
+ // panel gets a fresh fetch. Debounced so mashing Retry across several stalled
+ // panels coalesces into one refresh. Handler stored so destroy() can detach it.
+ this.onPanelRetry = () => {
+ if (this.panelRetryTimer !== null) return;
+ this.panelRetryTimer = window.setTimeout(() => {
+ this.panelRetryTimer = null;
+ this.dataLoader.loadAllData().catch(() => {/* per-source errors surface in-panel */});
+ }, 400);
+ };
+ document.addEventListener('cb:panel-retry', this.onPanelRetry);
+
  // Phase 5: Event listeners + URL sync
  bootTrace('phase5:events-urlsync:start');
  initAppActivity();
@@ -519,6 +534,15 @@ export class App {
 
   public destroy(): void {
  this.state.isDestroyed = true;
+
+ if (this.onPanelRetry) {
+ document.removeEventListener('cb:panel-retry', this.onPanelRetry);
+ this.onPanelRetry = null;
+ }
+ if (this.panelRetryTimer !== null) {
+ clearTimeout(this.panelRetryTimer);
+ this.panelRetryTimer = null;
+ }
 
  // Destroy all modules in reverse order
  for (let i = this.modules.length - 1; i >= 0; i--) {

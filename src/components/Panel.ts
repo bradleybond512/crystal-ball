@@ -779,6 +779,15 @@ export class Panel {
  // Data arrived but rendering was deferred by the off-screen gate — not a
  // stall; the flush will render it when the panel scrolls in.
  if (this.pendingContentHtml !== null) return;
+ // The spinner has already been replaced with real content. Many panels
+ // (e.g. the API-keys / settings RuntimeConfigPanel) render by writing
+ // this.content directly (replaceChildren / direct markup) rather than
+ // through setContent(), which is what clears the budget. If the loading
+ // radar is no longer in the DOM the panel is NOT stalled — only one still
+ // showing the spinner is genuinely stuck. Without this guard the budget
+ // wrongly overwrites a rendered panel (like Settings → API Keys) with
+ // "Source unreachable".
+ if (!this.content.querySelector('.panel-loading-radar')) return;
  this.resolveStalledLoad();
  }, this.loadingBudgetMs);
   }

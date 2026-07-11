@@ -288,43 +288,58 @@ function installMemoryWatchdog(): void {
   }, intervalMs + jitter);
 }
 
-// ─── Frame-stall detector (WebKit-viable long-task substitute) ──────────────
+// ─── Main-thread stall detector (WebKit-viable long-task substitute) ────────
 // WKWebView doesn't support the 'longtask' PerformanceObserver, so
-// installLongTaskObserver() no-ops on desktop. A requestAnimationFrame loop
-// works everywhere: an oversized gap between frames means the main thread was
-// blocked (a long task / stall). This won't fire DURING a total hang (rAF
-// stops too — that's the Rust renderer watchdog's job), but it leaves a
-// breadcrumb + log line for recoverable jank and the leading edge of a stall.
+// installLongTaskObserver() no-ops on desktop. A self-rescheduling timer works
+// everywhere: an oversized gap between fires means the main thread was blocked
+// (a long task / stall). This won't fire DURING a total hang (the timer stops
+// too — that's the Rust renderer watchdog's job), but it leaves a breadcrumb +
+// log line for recoverable jank and the leading edge of a stall.
+//
+// IMPORTANT: this uses setTimeout, NOT requestAnimationFrame. A rAF loop runs
+// the callback every frame (~60fps), and each serviced rAF forces WebKit to run
+// the WHOLE rendering-update pipeline (style/layout flush + compositing-overlap
+// recompute + event-region recompute + observer servicing) every frame — so the
+// detector meant to catch idle stalls was itself pinning the render pipeline at
+// 60fps and burning ~80% CPU on an idle dashboard. setTimeout is queued on the
+// main thread just like rAF (so a blocked thread delays it identically), but it
+// does NOT schedule a rendering update, so the pipeline stays quiet at idle.
 const FRAME_STALL_THRESHOLD_MS = 5000;
+// Poll once a second: fine-grained enough to catch the leading edge of a ≥5s
+// stall, coarse enough to cost nothing.
+const STALL_PROBE_INTERVAL_MS = 1000;
 
 function installFrameStallDetector(): void {
-  if (typeof requestAnimationFrame !== 'function') return;
+  if (typeof setTimeout !== 'function') return;
   let last = performance.now();
-  // rAF is throttled to ~0 while hidden, so the first frame after unhide shows
-  // a gap == the entire hidden duration. Skip that one frame to avoid a false
-  // "stall" on every resume.
-  // rAF is ALSO throttled while the window is merely unfocused (backgrounded but
-  // still visible), so a gap while blurred is a WebKit throttle artifact, not a
-  // main-thread stall. Rebaseline on both unhide and refocus, and only log when
-  // the window is visible AND focused.
+  // Timers keep firing (throttled to ≥1s) while hidden/blurred, and the gap
+  // then reflects throttling rather than a real stall. Rebaseline on unhide and
+  // refocus and only log when the window is visible AND focused, so a resume
+  // never reads as a stall.
   let skipNext = false;
   const rebaseline = (): void => { skipNext = true; last = performance.now(); };
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') rebaseline();
   });
   window.addEventListener('focus', rebaseline);
-  const tick = (): void => {
+  const probe = (): void => {
     const now = performance.now();
+    // Total time since the previous probe. Healthy ≈ STALL_PROBE_INTERVAL_MS; a
+    // blocked main thread delays this probe, inflating the gap. Threshold on the
+    // whole gap (NOT gap-minus-interval): a block that begins mid-interval hides
+    // up to one interval's worth of delay, so subtracting the interval could let
+    // a real ≥5s stall slip under the bar. Since the healthy gap (~1s) is far
+    // below the 5s threshold, thresholding the raw gap can't false-positive.
     const gap = now - last;
     last = now;
-    if (skipNext) { skipNext = false; requestAnimationFrame(tick); return; }
+    if (skipNext) { skipNext = false; setTimeout(probe, STALL_PROBE_INTERVAL_MS); return; }
     if (gap >= FRAME_STALL_THRESHOLD_MS && document.visibilityState === 'visible' && document.hasFocus()) {
       recordBreadcrumb('PERF', 'frame-stall', `${Math.round(gap)}ms main-thread stall`, {});
-      logToDesktop('WARN', `frame stall ${Math.round(gap)}ms — main thread blocked between frames`);
+      logToDesktop('WARN', `frame stall ${Math.round(gap)}ms — main thread blocked between probes`);
     }
-    requestAnimationFrame(tick);
+    setTimeout(probe, STALL_PROBE_INTERVAL_MS);
   };
-  requestAnimationFrame(tick);
+  setTimeout(probe, STALL_PROBE_INTERVAL_MS);
 }
 
 // ─── Renderer heartbeat (paired with the Rust-side renderer watchdog) ───────

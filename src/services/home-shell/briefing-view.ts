@@ -104,8 +104,12 @@ function buildPersonalBand(input: BriefingInput): BriefingBandView {
   return { kind: 'personal', label: 'PERSONAL', tone, headline, lines };
 }
 
+/** Personally-relevant: meaningful severity AND at least one real
+ *  exposure match. Impacts with zero exposures are upstream noise
+ *  (e.g. nationwide alerts miscategorized as immediate_risk) and must
+ *  not count toward the personal band. */
 function isActiveImpact(i: PersonalImpact): i is ActiveImpact {
-  return i.severity !== 'none' && i.severity !== 'low';
+  return i.severity !== 'none' && i.severity !== 'low' && i.exposures.length > 0;
 }
 
 function personalTone(active: readonly ActiveImpact[]): BandTone {

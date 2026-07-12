@@ -15,7 +15,7 @@ function impact(overrides: Partial<PersonalImpact> = {}): PersonalImpact {
     category: 'immediate_risk',
     severity: 'critical',
     description: 'Severe cell approaching HOME',
-    exposures: [],
+    exposures: [{ exposureId: 'home', label: 'HOME', reason: 'inside warning polygon' }],
     recommendedAction: 'Move to interior room',
     reason: 'polygon intersects saved place',
     ...overrides,
@@ -172,4 +172,15 @@ test('single sub-tone-floor event yields elevated critical band', () => {
     NOW,
   );
   assert.equal(view.bands.find((b) => b.kind === 'critical')!.tone, 'elevated');
+});
+
+test('critical impact with zero exposures is not counted as personal', () => {
+  const view = buildBriefingView(
+    { ...quiet(), personal: report([impact({ exposures: [] })]) },
+    NOW,
+  );
+  const personal = view.bands.find((b) => b.kind === 'personal')!;
+  assert.equal(personal.tone, 'clear');
+  assert.equal(personal.headline, 'All clear near your places');
+  assert.equal(view.allClear, true);
 });

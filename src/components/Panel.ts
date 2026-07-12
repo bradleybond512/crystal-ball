@@ -187,6 +187,12 @@ export class Panel {
 
   /** Returns the panel's content element for external mounting (e.g. embedding in settings modal). */
   public getContentElement(): HTMLElement { return this.content; }
+
+  /** Current one-line narrative text (set via setNarrative). Read by
+   *  the home-shell deck to enrich adapter cards. */
+  getNarrative(): string {
+    return this.narrativeEl?.textContent?.trim() ?? '';
+  }
   protected countEl: HTMLElement | null = null;
   protected statusBadgeEl: HTMLElement | null = null;
   protected newBadgeEl: HTMLElement | null = null;

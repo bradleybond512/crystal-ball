@@ -25,6 +25,15 @@ body.home-shell-active {
   height: 100%;
 }
 
+/* Backdrop mode: suppress the adopted map's own HUD (time chips, layer
+   toggles, legend, controls) while the shell owns the screen. */
+.home-shell-map .map-controls,
+.home-shell-map .time-slider,
+.home-shell-map .layer-toggles,
+.home-shell-map .map-legend {
+  display: none;
+}
+
 .home-shell-scroll {
   position: absolute;
   inset: 0;

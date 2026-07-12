@@ -4,6 +4,7 @@ import './styles/happy-theme.css';
 import './styles/gods-eye-4d.css';
 import './styles/modes.css';
 import './styles/window-chrome.css';
+import './styles/home-shell.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as Sentry from '@sentry/browser';
 import { inject } from '@vercel/analytics';
@@ -379,6 +380,20 @@ Object.defineProperty(window, 'beta', {
   set(v: boolean) {
  if (v) localStorage.setItem('crystalball-beta-mode', 'true');
  else localStorage.removeItem('crystalball-beta-mode');
+ location.reload();
+  },
+});
+
+// Home Shell (Phase 1 UI re-imagination): type `homeShell=true` / `homeShell=false` in console
+Object.defineProperty(window, 'homeShell', {
+  get() {
+ const on = localStorage.getItem('crystalball-home-shell') === '1';
+ console.log(`[HomeShell] ${on ? 'ON' : 'OFF'}`);
+ return on;
+  },
+  set(v: boolean) {
+ if (v) localStorage.setItem('crystalball-home-shell', '1');
+ else localStorage.removeItem('crystalball-home-shell');
  location.reload();
   },
 });

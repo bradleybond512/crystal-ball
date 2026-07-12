@@ -37,7 +37,7 @@ body.home-shell-active {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  pointer-events: none; /* let map interactions through the empty area */
+  pointer-events: none; /* backdrop-only in Phase 1: clicks on empty area land on the scroll container, not the map */
 }
 
 .home-shell-viewport > * {

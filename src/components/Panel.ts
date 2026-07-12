@@ -190,7 +190,7 @@ export class Panel {
 
   /** Current one-line narrative text (set via setNarrative). Read by
    *  the home-shell deck to enrich adapter cards. */
-  getNarrative(): string {
+  public getNarrative(): string {
     return this.narrativeEl?.textContent?.trim() ?? '';
   }
   protected countEl: HTMLElement | null = null;

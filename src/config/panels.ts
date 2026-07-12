@@ -1326,4 +1326,5 @@ export const STORAGE_KEYS = {
   monitors: 'crystalball-monitors',
   mapLayers: 'crystalball-layers',
   disabledFeeds: 'crystalball-disabled-feeds',
+  deckPins: 'crystalball-deck-pins',
 } as const;

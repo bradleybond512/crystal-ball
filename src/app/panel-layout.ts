@@ -81,6 +81,7 @@ import { startPanelNarrator } from '@/services/panel-narrator';
 import { TodayView } from '@/components/TodayView';
 import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalettePanel } from '@/components/CommandPalettePanel';
+import { HomeShellOverlay } from '@/components/HomeShellOverlay';
 import { getCommandRegistry } from '@/services/command-palette/command-registry';
 import { registerBuiltinCommands } from '@/services/command-palette/built-in-commands';
 import { HelpOverlay } from '@/components/HelpOverlay';
@@ -699,6 +700,7 @@ export class PanelLayoutManager implements AppModule {
   private unsubDcPlaces: (() => void) | null = null;
   private safetyCaseUnsub: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
+  private homeShell: HomeShellOverlay | null = null;
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
   private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
   private _onStatusOverlayKey: ((e: KeyboardEvent) => void) | null = null;
@@ -779,6 +781,7 @@ export class PanelLayoutManager implements AppModule {
  this.stalenessBanner = null;
  }
  if (this.analystHud) { this.analystHud.destroy(); this.analystHud = null; }
+ if (this.homeShell) { this.homeShell.destroy(); this.homeShell = null; }
  if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
  if (this._onBriefExportKey) { document.removeEventListener('keydown', this._onBriefExportKey); this._onBriefExportKey = null; }
  if (this._onStatusOverlayKey) { document.removeEventListener('keydown', this._onStatusOverlayKey); this._onStatusOverlayKey = null; }
@@ -1243,6 +1246,16 @@ export class PanelLayoutManager implements AppModule {
  const cmdk = new CommandPalettePanel();
  cmdk.mount(document.body);
  document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
+
+ // Home Shell (Phase 1 UI re-imagination) — feature-flagged opening surface.
+ if (localStorage.getItem('crystalball-home-shell') === '1') {
+ this.homeShell = new HomeShellOverlay({
+ getPanel: (id) => this.ctx.panels[id],
+ });
+ this.homeShell.mount(document.body);
+ document.addEventListener('cb:toggle-home-shell', () => this.homeShell?.toggle());
+ this.homeShell.show();
+ }
  document.addEventListener('cb:navigate-panel', (e) => {
    const detail = (e as CustomEvent<{ panelKey?: string }>).detail;
    const key = detail?.panelKey;

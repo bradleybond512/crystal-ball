@@ -1571,6 +1571,8 @@ First read the existing registrations in `src/services/keyboard/shortcut-bootstr
 
 If `parseChord` does NOT support Shift, follow the ad-hoc listener pattern from `panel-layout.ts:1165-1171` instead: register a `keydown` listener checking `(e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'h'` that calls `e.preventDefault()` and dispatches `cb:toggle-home-shell` (add it inside the Task 6 Step 3 block so it only exists when the flag is on).
 
+> **Amendment (review round 1):** ⌘⇧H was already bound to briefing-export (panel-layout.ts:1173); the shell toggle ships as ⌘⇧O instead.
+
 - [ ] **Step 5: Typecheck and commit**
 
 ```bash

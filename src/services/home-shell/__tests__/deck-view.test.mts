@@ -47,6 +47,10 @@ test('movePin reorders and clamps at edges', () => {
   assert.deepEqual(movePin(['a', 'b', 'c'], 'missing', 1), ['a', 'b', 'c']);
 });
 
+test('movePin clamps at the high edge', () => {
+  assert.deepEqual(movePin(['a', 'b', 'c'], 'c', 1), ['a', 'b', 'c']);
+});
+
 test('buildDeckCards maps health to tones and labels', () => {
   const cards = buildDeckCards(
     ['markets', 'nws-alerts', 'live-news'],
@@ -71,6 +75,24 @@ test('buildDeckCards maps health to tones and labels', () => {
   assert.ok(cards[1]!.statusLabel.includes('feed unreachable'));
   assert.equal(cards[2]!.title, 'live-news'); // no name entry → id fallback
   assert.equal(cards[2]!.statusLabel, 'not loaded');
+});
+
+test('unsafe status renders error tone', () => {
+  const cards = buildDeckCards(
+    ['markets'],
+    { names: {}, health: [health({ status: 'unsafe' })], narratives: {} },
+    NOW,
+  );
+  assert.equal(cards[0]!.tone, 'error');
+});
+
+test('failing status with no lastError falls back to age in the label', () => {
+  const cards = buildDeckCards(
+    ['markets'],
+    { names: {}, health: [health({ status: 'failing' })], narratives: {} },
+    NOW,
+  );
+  assert.equal(cards[0]!.statusLabel, 'error · 32s');
 });
 
 test('stale statuses render as stale tone with age', () => {

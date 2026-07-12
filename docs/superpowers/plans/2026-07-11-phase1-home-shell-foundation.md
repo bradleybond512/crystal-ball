@@ -1039,6 +1039,8 @@ body.home-shell-active {
 
 - [ ] **Step 3: Create the component**
 
+> **Amendment (review round 1):** the shell is a READ-ONLY consumer of the what-changed store — CommandCenterPanel is the single snapshot writer. recordChangeSnapshot was removed. Escape guards on defaultPrevented; deck re-render skips while focus is in the deck; loop priority is 'low'; releaseMap always clears the placeholder.
+
 Create `src/components/HomeShellOverlay.ts`:
 
 ```ts

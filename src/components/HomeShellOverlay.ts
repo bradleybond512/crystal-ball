@@ -16,12 +16,8 @@ import {
   getPersonalProfile,
   getRecentEvents,
 } from '@/services/insights/insights-state';
-import { getWhatChanged, recordSnapshot } from '@/services/command-center/what-changed';
-import type {
-  AlertSeverityLike,
-  ChangeDomain,
-  WhatChangedEvent,
-} from '@/services/command-center/what-changed';
+import { getWhatChanged } from '@/services/command-center/what-changed';
+import type { WhatChangedEvent } from '@/services/command-center/what-changed';
 import {
   getFeatureHealthRegistry,
   getPanelHealthRegistry,
@@ -47,9 +43,6 @@ import { safeSetItem } from '@/utils/safe-storage';
 const DECK_PINS_KEY = STORAGE_KEYS.deckPins;
 const CHANGED_WINDOW_MS = 60 * 60 * 1000;
 const REFRESH_MS = 10_000;
-const KNOWN_DOMAINS: readonly ChangeDomain[] = [
-  'weather', 'cyber', 'finance', 'conflict', 'seismic', 'energy', 'system',
-];
 
 interface NarrativeSource {
   getNarrative(): string;
@@ -74,7 +67,7 @@ export class HomeShellOverlay {
   private readonly getPanel: HomeShellOptions['getPanel'];
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape' && this.visible) this.hide();
+    if (e.key === 'Escape' && !e.defaultPrevented && this.visible) this.hide();
   };
 
   constructor(options: HomeShellOptions) {
@@ -126,7 +119,7 @@ export class HomeShellOverlay {
     document.addEventListener('keydown', this.onKeydown);
     this.adoptMap();
     this.loop = registerRecurringLoop('home-shell-refresh', () => this.refresh(), REFRESH_MS, {
-      priority: 'normal',
+      priority: 'low',
       runImmediately: true,
     });
   }
@@ -161,7 +154,6 @@ export class HomeShellOverlay {
 
   private refresh(): void {
     const now = Date.now();
-    this.recordChangeSnapshot(now);
 
     let personal;
     try {
@@ -197,23 +189,11 @@ export class HomeShellOverlay {
       now,
     );
     this.renderBriefing(briefing);
-    this.renderDeck(now);
+    // Skip the deck rebuild while focus is inside it — a 10 s re-render
+    // would yank an open pin <select> shut mid-pick. Direct calls from
+    // setPins still render unconditionally, which releases the guard.
+    if (!this.deckEl?.contains(document.activeElement)) this.renderDeck(now);
     this.renderRibbon(now);
-  }
-
-  private recordChangeSnapshot(now: number): void {
-    const situation = getActiveSituation();
-    recordSnapshot({
-      takenAt: now,
-      alerts: getRecentEvents().map((e) => ({
-        id: e.eventId,
-        domain: toChangeDomain(e.domain),
-        severity: toAlertSeverity(e.severity),
-        summary: e.description,
-      })),
-      situations: situation ? [{ id: situation.id, domain: 'other', title: situation.title }] : [],
-      feeds: [],
-    });
   }
 
   private renderBriefing(view: BriefingView): void {
@@ -358,9 +338,15 @@ export class HomeShellOverlay {
   }
 
   private releaseMap(): void {
+    if (!this.mapHome) return;
     const mapEl = document.getElementById('mapContainer');
-    if (!mapEl || !this.mapHome || !this.mapSlot?.contains(mapEl)) return;
-    this.mapHome.replaceWith(mapEl);
+    if (mapEl && this.mapSlot?.contains(mapEl)) {
+      this.mapHome.replaceWith(mapEl);
+    } else {
+      // Map vanished or was moved by someone else — still remove the
+      // placeholder so future adoptions aren't permanently blocked.
+      this.mapHome.remove();
+    }
     this.mapHome = null;
     window.dispatchEvent(new Event('resize'));
   }
@@ -413,16 +399,4 @@ function renderDeckCard(c: DeckCardView): HTMLElement {
   }
   card.append(actions);
   return card;
-}
-
-function toChangeDomain(domain: string): ChangeDomain {
-  return (KNOWN_DOMAINS as readonly string[]).includes(domain) ? (domain as ChangeDomain) : 'other';
-}
-
-function toAlertSeverity(severity: number): AlertSeverityLike {
-  if (severity >= 85) return 'CRITICAL';
-  if (severity >= 70) return 'HIGH';
-  if (severity >= 40) return 'MODERATE';
-  if (severity >= 15) return 'LOW';
-  return 'INFO';
 }

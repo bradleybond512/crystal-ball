@@ -70,6 +70,7 @@ test('critical personal impact drives band tone and lines', () => {
   const view = buildBriefingView({ ...quiet(), personal: report([impact()]) }, NOW);
   const personal = view.bands.find((b) => b.kind === 'personal')!;
   assert.equal(personal.tone, 'critical');
+  assert.equal(personal.headline, '1 personal impact near you');
   assert.ok(personal.lines[0]!.includes('Severe cell approaching HOME'));
   assert.equal(view.allClear, false);
 });
@@ -134,4 +135,41 @@ test('sub-floor events stay out of the critical band', () => {
     NOW,
   );
   assert.equal(view.bands.find((b) => b.kind === 'critical')!.tone, 'clear');
+});
+
+test('critical band dedupes the active situation from recent events', () => {
+  const view = buildBriefingView(
+    {
+      ...quiet(),
+      situation: sit(),
+      recentEvents: [{ eventId: 'sit-1', description: 'Black Sea corridor escalation', domain: 'conflict', severity: 90 }],
+    },
+    NOW,
+  );
+  const critical = view.bands.find((b) => b.kind === 'critical')!;
+  assert.equal(critical.lines.length, 1);
+  assert.equal(critical.headline, '1 situation worldwide');
+});
+
+test('no successful update yet renders the undefined-lastGood staleness line', () => {
+  const view = buildBriefingView({ changed: [], personal: undefined }, NOW);
+  const personal = view.bands.find((b) => b.kind === 'personal')!;
+  assert.equal(personal.staleness, 'unavailable · no successful update yet');
+});
+
+test('singular forms: one change and one place', () => {
+  const changedView = buildBriefingView({ ...quiet(), changed: [delta()] }, NOW);
+  const changed = changedView.bands.find((b) => b.kind === 'changed')!;
+  assert.ok(changed.headline.startsWith('1 change since'));
+
+  const placeView = buildBriefingView({ ...quiet(), monitoredPlacesCount: 1 }, NOW);
+  assert.ok(placeView.allClearText.includes('1 place monitored'));
+});
+
+test('single sub-tone-floor event yields elevated critical band', () => {
+  const view = buildBriefingView(
+    { ...quiet(), recentEvents: [{ eventId: 'e1', description: 'Border incident', domain: 'conflict', severity: 72 }] },
+    NOW,
+  );
+  assert.equal(view.bands.find((b) => b.kind === 'critical')!.tone, 'elevated');
 });

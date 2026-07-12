@@ -8,7 +8,7 @@
  * caller-supplied so this stays fixture-testable.
  */
 
-import type { PersonalImpact, PersonalImpactReport } from '../personal/personal-impact.ts';
+import type { ImpactSeverity, PersonalImpact, PersonalImpactReport } from '../personal/personal-impact.ts';
 import { formatDelta } from '../command-center/what-changed.ts';
 import type { WhatChangedEvent } from '../command-center/what-changed.ts';
 import type { SituationDescriptor } from '../insights/action-briefs.ts';
@@ -59,7 +59,10 @@ export const CRITICAL_EVENT_FLOOR = 70;
 export const CRITICAL_TONE_FLOOR = 85;
 const MAX_LINES = 4;
 
-const SEVERITY_GLYPH: Record<string, string> = {
+type ActiveSeverity = Exclude<ImpactSeverity, 'low' | 'none'>;
+type ActiveImpact = PersonalImpact & { severity: ActiveSeverity };
+
+const SEVERITY_GLYPH: Record<ActiveSeverity, string> = {
   critical: '●',
   elevated: '▲',
   watch: '○',
@@ -89,16 +92,23 @@ function buildPersonalBand(input: BriefingInput): BriefingBandView {
       staleness: staleLine(input.lastGoodPersonalAt),
     };
   }
-  const active = personal.impacts.filter((i) => i.severity !== 'none' && i.severity !== 'low');
+  const active = personal.impacts.filter((i): i is ActiveImpact => isActiveImpact(i));
   const tone = personalTone(active);
-  const headline = active.length === 0 ? 'All clear near your places' : personal.summary;
+  const impactWord = active.length === 1 ? 'impact' : 'impacts';
+  const headline = active.length === 0
+    ? 'All clear near your places'
+    : `${active.length} personal ${impactWord} near you`;
   const lines = active
     .slice(0, MAX_LINES)
-    .map((i) => `${SEVERITY_GLYPH[i.severity] ?? '○'} ${i.description} — ${i.recommendedAction}`);
+    .map((i) => `${SEVERITY_GLYPH[i.severity]} ${i.description} — ${i.recommendedAction}`);
   return { kind: 'personal', label: 'PERSONAL', tone, headline, lines };
 }
 
-function personalTone(active: readonly PersonalImpact[]): BandTone {
+function isActiveImpact(i: PersonalImpact): i is ActiveImpact {
+  return i.severity !== 'none' && i.severity !== 'low';
+}
+
+function personalTone(active: readonly ActiveImpact[]): BandTone {
   if (active.some((i) => i.severity === 'critical')) return 'critical';
   if (active.some((i) => i.severity === 'elevated')) return 'elevated';
   if (active.length > 0) return 'info';
@@ -135,8 +145,9 @@ function buildChangedBand(input: BriefingInput): BriefingBandView {
 }
 
 function buildCriticalBand(input: BriefingInput): BriefingBandView {
+  const situationId = input.situation?.id;
   const events = [...(input.recentEvents ?? [])]
-    .filter((e) => e.severity >= CRITICAL_EVENT_FLOOR)
+    .filter((e) => e.severity >= CRITICAL_EVENT_FLOOR && e.eventId !== situationId)
     .sort((a, b) => b.severity - a.severity);
   const lines: string[] = [];
   if (input.situation) {

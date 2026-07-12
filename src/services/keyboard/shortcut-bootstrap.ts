@@ -60,14 +60,17 @@ export function installShortcuts(): BootstrapHandles {
     chord: parseChord('Cmd+/'),
     run: () => document.dispatchEvent(new CustomEvent('cb:toggle-help')),
   });
-  reg.register({
-    id: 'cmd-shift-o',
-    label: 'Toggle Home Shell',
-    group: 'Navigation',
-    display: '⌘⇧O',
-    chord: parseChord('Cmd+Shift+O'),
-    run: () => document.dispatchEvent(new CustomEvent('cb:toggle-home-shell')),
-  });
+  // Feature-flagged: avoids swallowing Ctrl+Shift+O in web builds and a phantom help-overlay entry while the feature is flagged off.
+  if (localStorage.getItem('crystalball-home-shell') === '1') {
+    reg.register({
+      id: 'cmd-shift-o',
+      label: 'Toggle Home Shell',
+      group: 'Navigation',
+      display: '⌘⇧O',
+      chord: parseChord('Cmd+Shift+O'),
+      run: () => document.dispatchEvent(new CustomEvent('cb:toggle-home-shell')),
+    });
+  }
 
   // ⌘1…⌘9 — bound to the *current* sidebar order at registration time, and
   // re-bound whenever refreshPanelHints() runs (so reorders take effect).

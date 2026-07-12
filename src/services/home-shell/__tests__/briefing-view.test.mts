@@ -1,0 +1,137 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { buildBriefingView, CRITICAL_EVENT_FLOOR } from '../briefing-view.ts';
+import type { BriefingInput, HighSeverityEvent } from '../briefing-view.ts';
+import type { PersonalImpact, PersonalImpactReport } from '../../personal/personal-impact.ts';
+import type { WhatChangedEvent } from '../../command-center/what-changed.ts';
+import type { SituationDescriptor } from '../../insights/action-briefs.ts';
+
+const NOW = 1_752_000_000_000;
+
+function impact(overrides: Partial<PersonalImpact> = {}): PersonalImpact {
+  return {
+    eventId: 'evt-1',
+    category: 'immediate_risk',
+    severity: 'critical',
+    description: 'Severe cell approaching HOME',
+    exposures: [],
+    recommendedAction: 'Move to interior room',
+    reason: 'polygon intersects saved place',
+    ...overrides,
+  };
+}
+
+function report(impacts: PersonalImpact[] = []): PersonalImpactReport {
+  return {
+    generatedAt: NOW,
+    impacts,
+    summary: impacts.length === 0 ? 'No personal impacts' : `Personal impacts: ${impacts.length}`,
+    recommendations: impacts.map((i) => `${i.description}: ${i.recommendedAction}`),
+  };
+}
+
+function delta(overrides: Partial<WhatChangedEvent> = {}): WhatChangedEvent {
+  return {
+    id: 'chg-1',
+    timestamp: NOW - 60_000,
+    domain: 'weather',
+    type: 'new-alert',
+    summary: 'Severe Thunderstorm Warning',
+    ...overrides,
+  };
+}
+
+function sit(overrides: Partial<SituationDescriptor> = {}): SituationDescriptor {
+  return {
+    id: 'sit-1',
+    title: 'Black Sea corridor escalation',
+    category: 'conflict_escalation' as SituationDescriptor['category'],
+    severityScore: 90,
+    confidence: 'high',
+    ...overrides,
+  };
+}
+
+function quiet(): BriefingInput {
+  return { personal: report([]), changed: [], monitoredPlacesCount: 3 };
+}
+
+test('all quiet collapses to allClear with places count', () => {
+  const view = buildBriefingView(quiet(), NOW);
+  assert.equal(view.allClear, true);
+  assert.ok(view.allClearText.includes('3 places'));
+  assert.equal(view.bands.length, 3);
+  assert.ok(view.bands.every((b) => b.tone === 'clear'));
+  assert.equal(view.generatedAt, NOW);
+});
+
+test('critical personal impact drives band tone and lines', () => {
+  const view = buildBriefingView({ ...quiet(), personal: report([impact()]) }, NOW);
+  const personal = view.bands.find((b) => b.kind === 'personal')!;
+  assert.equal(personal.tone, 'critical');
+  assert.ok(personal.lines[0]!.includes('Severe cell approaching HOME'));
+  assert.equal(view.allClear, false);
+});
+
+test('low/none impacts do not break all-clear', () => {
+  const view = buildBriefingView(
+    { ...quiet(), personal: report([impact({ severity: 'low' }), impact({ severity: 'none' })]) },
+    NOW,
+  );
+  assert.equal(view.bands.find((b) => b.kind === 'personal')!.tone, 'clear');
+  assert.equal(view.allClear, true);
+});
+
+test('missing personal report renders honest staleness and blocks all-clear', () => {
+  const view = buildBriefingView(
+    { changed: [], personal: undefined, lastGoodPersonalAt: NOW - 3_600_000 },
+    NOW,
+  );
+  const personal = view.bands.find((b) => b.kind === 'personal')!;
+  assert.equal(personal.tone, 'info');
+  assert.ok(personal.staleness!.startsWith('unavailable · last good '));
+  assert.equal(view.allClear, false);
+});
+
+test('changed band counts events, formats lines, escalates tone', () => {
+  const view = buildBriefingView(
+    { ...quiet(), changed: [delta(), delta({ id: 'chg-2', type: 'escalated', summary: 'Wheat risk tier 2→3' })] },
+    NOW,
+  );
+  const changed = view.bands.find((b) => b.kind === 'changed')!;
+  assert.equal(changed.tone, 'elevated');
+  assert.ok(changed.headline.startsWith('2 changes'));
+  assert.equal(changed.lines.length, 2);
+  assert.ok(changed.lines.some((l) => l.includes('Wheat risk tier 2→3')));
+});
+
+test('undefined changed digest is stale, not empty', () => {
+  const view = buildBriefingView({ ...quiet(), changed: undefined }, NOW);
+  const changed = view.bands.find((b) => b.kind === 'changed')!;
+  assert.equal(changed.tone, 'info');
+  assert.ok(changed.staleness!.startsWith('unavailable'));
+});
+
+test('critical band ranks situation + high-severity events, caps at 4 lines', () => {
+  const events: HighSeverityEvent[] = [72, 88, 74, 71, 90].map((severity, i) => ({
+    eventId: `e${i}`,
+    description: `Event ${i}`,
+    domain: 'conflict',
+    severity,
+  }));
+  const view = buildBriefingView({ ...quiet(), situation: sit(), recentEvents: events }, NOW);
+  const critical = view.bands.find((b) => b.kind === 'critical')!;
+  assert.equal(critical.tone, 'critical');
+  assert.ok(critical.lines.length <= 4);
+  assert.ok(critical.lines[0]!.includes('Black Sea corridor escalation'));
+  assert.ok(critical.headline.includes('6 situations'));
+});
+
+test('sub-floor events stay out of the critical band', () => {
+  const view = buildBriefingView(
+    { ...quiet(), recentEvents: [{ eventId: 'e', description: 'Minor', domain: 'other', severity: CRITICAL_EVENT_FLOOR - 1 }] },
+    NOW,
+  );
+  assert.equal(view.bands.find((b) => b.kind === 'critical')!.tone, 'clear');
+});

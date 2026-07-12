@@ -102,6 +102,16 @@ Action Briefs (`reaction-playbooks.ts` + `action-briefs.ts`) are now rendered in
 - `src/services/diagnostics/pipeline-trace.ts` — fact lifecycle registry tracking each `traceId` through stages `ingested→scored→clustered→evaluated→routed|dropped`; `stalled()` surfaces entries stuck in mid-flight.
 - `src/services/diagnostics/degradation-alerts.ts` — pure detector: compares two `SystemHealthReport` snapshots, emits `DegradationAlert` for feature healthy→degraded/unsafe, panel →stale/failing, and unsafeSuppressions increase. Safety-critical alerts have `safetyCritical: true`.
 
+### Home Shell (Phase 1 of the UI re-imagination — see docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md)
+
+`src/components/HomeShellOverlay.ts` — feature-flagged (`localStorage crystalball-home-shell=1`,
+console: `homeShell=true`) full-screen opening surface: reparented map canvas + three briefing
+bands + pinned panel Deck + status ribbon. ⌘⇧O toggles (flag-gated); Esc exits to classic view.
+Read-only consumer of the what-changed store (CommandCenterPanel is the single snapshot writer).
+Pure view-models in `src/services/home-shell/` (`briefing-view`, `deck-view`, `status-ribbon-view`),
+tested via `npm run test:homeshell`. Deck pins persist at `crystalball-deck-pins`; narratives
+populate on the second 10s refresh tick.
+
 ## Foundation Intelligence Layers
 
 Four pure-deterministic, fixture-tested service layers. **No DOM, no fetch, no globals — input-output pure. 600+ unit tests.**

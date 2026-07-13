@@ -82,6 +82,7 @@ import { TodayView } from '@/components/TodayView';
 import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalettePanel } from '@/components/CommandPalettePanel';
 import { HomeShellOverlay } from '@/components/HomeShellOverlay';
+import { LibraryOverlay } from '@/components/LibraryOverlay';
 import { getCommandRegistry } from '@/services/command-palette/command-registry';
 import { registerBuiltinCommands } from '@/services/command-palette/built-in-commands';
 import { HelpOverlay } from '@/components/HelpOverlay';
@@ -702,6 +703,8 @@ export class PanelLayoutManager implements AppModule {
   private analystHud: AnalystHUD | null = null;
   private homeShell: HomeShellOverlay | null = null;
   private _onHomeShellToggle: (() => void) | null = null;
+  private libraryOverlay: LibraryOverlay | null = null;
+  private _onLibraryToggle: (() => void) | null = null;
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
   private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
   private _onStatusOverlayKey: ((e: KeyboardEvent) => void) | null = null;
@@ -784,6 +787,8 @@ export class PanelLayoutManager implements AppModule {
  if (this.analystHud) { this.analystHud.destroy(); this.analystHud = null; }
  if (this.homeShell) { this.homeShell.destroy(); this.homeShell = null; }
  if (this._onHomeShellToggle) { document.removeEventListener('cb:toggle-home-shell', this._onHomeShellToggle); this._onHomeShellToggle = null; }
+ if (this.libraryOverlay) { this.libraryOverlay.destroy(); this.libraryOverlay = null; }
+ if (this._onLibraryToggle) { document.removeEventListener('cb:toggle-library', this._onLibraryToggle); this._onLibraryToggle = null; }
  if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
  if (this._onBriefExportKey) { document.removeEventListener('keydown', this._onBriefExportKey); this._onBriefExportKey = null; }
  if (this._onStatusOverlayKey) { document.removeEventListener('keydown', this._onStatusOverlayKey); this._onStatusOverlayKey = null; }
@@ -1248,6 +1253,14 @@ export class PanelLayoutManager implements AppModule {
  const cmdk = new CommandPalettePanel();
  cmdk.mount(document.body);
  document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
+
+ // Library (Phase 2 UI re-imagination) — browsable panel catalog. Mounted
+ // unconditionally (before the Home Shell flag gate below) so classic-view
+ // users get it too, not just Home Shell users.
+ this.libraryOverlay = new LibraryOverlay();
+ this.libraryOverlay.mount(document.body);
+ this._onLibraryToggle = () => this.libraryOverlay?.toggle();
+ document.addEventListener('cb:toggle-library', this._onLibraryToggle);
 
  // Home Shell (Phase 1 UI re-imagination) — feature-flagged opening surface.
  if (localStorage.getItem('crystalball-home-shell') === '1') {

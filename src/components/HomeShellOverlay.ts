@@ -94,6 +94,7 @@ export class HomeShellOverlay {
       el('span', 'home-shell-brand', '🔮 Crystal Ball'),
       button('home-shell-cmdk', 'cmdk', '⌘K — panels, places, situations…'),
       el('span', 'home-shell-topbar-spacer'),
+      button('home-shell-library', 'library', '📚 Library'),
       button('home-shell-exit', 'exit', 'Classic view ⎋'),
     );
 
@@ -294,6 +295,10 @@ export class HomeShellOverlay {
     const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
     if (action === 'cmdk') {
       document.dispatchEvent(new CustomEvent('cb:toggle-cmdk'));
+      return;
+    }
+    if (action === 'library') {
+      document.dispatchEvent(new CustomEvent('cb:toggle-library'));
       return;
     }
     if (action === 'exit') {

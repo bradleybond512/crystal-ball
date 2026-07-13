@@ -408,3 +408,77 @@ body.home-shell-active {
 @media (prefers-reduced-motion: reduce) {
   .home-shell * { transition: none !important; }
 }
+
+/* ── Panel focus host (Phase 4) ─────────────────────────────────── */
+
+.hs-focus-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: rgba(var(--hs-base-rgb), 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.hs-focus-scrim--open { opacity: 1; pointer-events: auto; }
+
+.hs-focus {
+  position: absolute;
+  inset: 4vh 6vw;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  background: var(--hs-bg-ribbon);
+  border: 1px solid rgba(var(--hs-white-rgb), 0.12);
+  border-radius: 10px;
+  transform: translateY(12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 160ms ease, opacity 160ms ease;
+  font-family: ui-monospace, Menlo, Monaco, monospace;
+}
+
+.hs-focus--open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+
+.hs-focus-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(var(--hs-white-rgb), 0.08);
+}
+
+.hs-focus-title { font-size: 13px; font-weight: 600; color: var(--hs-fg); }
+.hs-focus-domain { font-size: 9px; letter-spacing: 0.08em; color: var(--hs-fg-dim); }
+.hs-focus-actions { margin-left: auto; display: flex; gap: 6px; }
+
+.hs-focus-actions button {
+  border: 1px solid rgba(var(--hs-white-rgb), 0.14);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--hs-fg-muted);
+  font: inherit;
+  font-size: 10px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.hs-focus-body {
+  flex: 1;
+  min-height: 0;
+  padding: 10px;
+  display: flex;
+}
+
+/* Neutralize grid sizing + harmonize the hosted panel with the shell.
+   The span-N rules use !important, so these must too. */
+.hs-focus-body .panel {
+  min-height: 0 !important;
+  height: 100%;
+  width: 100%;
+  cursor: default;
+  --surface: var(--hs-bg-card);
+  --border: rgba(var(--hs-white-rgb), 0.12);
+  --text: var(--hs-fg);
+}

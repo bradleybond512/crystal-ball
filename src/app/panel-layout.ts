@@ -2648,11 +2648,17 @@ export class PanelLayoutManager implements AppModule {
   }
 
   /** Mount a panel (if lazy/unbuilt) WITHOUT scrolling or flashing the
-   *  classic grid — the Home Shell focus host's entry point. Returns the
-   *  panel or null when the key is unknown/disabled-and-unmountable. */
+   *  classic grid — the Home Shell focus host's entry point. Returns
+   *  null when the key is unknown, the factory fails, or the panel is
+   *  disabled and not already mounted. (Already-mounted disabled panels
+   *  are returned as-is — hosts may still show them.) */
   public async ensurePanelMounted(key: string): Promise<Panel | null> {
  const existing = this.ctx.panels[key];
  if (existing) return existing;
+ // Mirror navigateToPanel's gate: don't construct a disabled panel just
+ // to focus it — constructing it starts its background work (e.g. a
+ // poll loop) that disabling the panel was meant to stop.
+ if (!(this.ctx.panelSettings[key]?.enabled ?? true)) return null;
  await this.mountLazyPanel(key);
  return this.ctx.panels[key] ?? null;
   }

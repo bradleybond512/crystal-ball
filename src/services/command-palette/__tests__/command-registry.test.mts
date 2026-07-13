@@ -208,3 +208,12 @@ test('search ranks navigation > panel when tied on raw match', () => {
   // navigation (2.5) beats panel (2) at equal raw match
   assert.equal(out[0]!.command.category, 'navigation');
 });
+
+test('negative weight demotes a command below an otherwise-equal match', () => {
+  const reg = createCommandRegistry();
+  reg.register({ id: 'panel:a', title: 'Alpha Feed', keywords: ['feed'], category: 'panel', action: () => {} });
+  reg.register({ id: 'panel:b', title: 'Alpha Feed Diagnostics', keywords: ['feed'], category: 'panel', weight: -1.5, action: () => {} });
+  const results = reg.search('feed', 8);
+  const ids = results.map((r) => r.command.id);
+  assert.ok(ids.indexOf('panel:a') < ids.indexOf('panel:b'), `expected a before b, got ${ids.join(',')}`);
+});

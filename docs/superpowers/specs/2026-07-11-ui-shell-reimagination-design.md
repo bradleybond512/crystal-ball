@@ -198,6 +198,7 @@ marker plotting. Bespoke M cards for top ~20 evidence panels.
 **Phase 4 — Full skin + retirement**
 Near-black tokens across all L views, bespoke S cards for deck defaults, God's Eye
 integration polish, mobile adaptation, reduced-motion + perf passes, old shell removed.
+**[PARTIALLY SHIPPED — focus view + skin harmonization via docs/superpowers/plans/2026-07-13-phase4-focus-view.md: deck/dossier/Library open real panels in-shell (PanelFocusHost reparenting + `ensurePanelMounted`), `--hs-*` variable overrides skin hosted panels. Deferred: classic retirement (pending Phases 1-3 soak), mobile adaptation, bespoke S-cards (no per-panel data getters; narrative path is LLM-dependent).]**
 
 ## Degradation & error handling
 

@@ -6,6 +6,14 @@ All notable changes to Crystal Ball are documented here.
 
 ### Added
 
+- **Home Shell UI re-imagination, Phases 3-4** (#1402 + follow-up): the
+  situation dossier drawer (`src/components/SituationDossier.ts`) — evidence
+  grid composed from `evidenceFor` panel metadata, honest "why this surfaced"
+  from pipeline/notification traces, action brief + timeline rail — and the
+  panel focus view (`src/components/PanelFocusHost.ts`) — deck cards, dossier
+  evidence tiles, and Library rows now open the real panel inside the shell
+  by reparenting it from the classic grid, with classic navigation as the
+  fallback for unknown/disabled panels.
 - **Source Confidence Panel (Redundancy + Prediction Enhancement Program,
   Phase 1 UI slice)**: a new dedicated diagnostics surface
   (`src/components/SourceConfidencePanel.ts`, panel id `source-confidence`)

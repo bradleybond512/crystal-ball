@@ -236,6 +236,18 @@ test('category follows the matched exposure, not raw event fields: route match +
   assert.equal(r.impacts[0]?.category, 'travel');
 });
 
+test('life/safety domain precedence: weather event with only a utility exposure → immediate_risk', () => {
+  const e = event({
+    description: 'Ice storm threatening the grid',
+    location: undefined,
+    severity: 70,
+    affectedUtilities: ['power'],
+  });
+  const r = mapEventsToPersonalImpact(profile(), [e], { now: () => NOW });
+  assert.equal(r.impacts[0]?.exposures[0]?.exposureId, 'utility:home-power');
+  assert.equal(r.impacts[0]?.category, 'immediate_risk');
+});
+
 test('category follows the matched exposure, not raw event fields: entity match + unmatched utilities → not utility', () => {
   const e = event({
     domain: 'cyber',

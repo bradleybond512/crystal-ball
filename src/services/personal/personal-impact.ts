@@ -325,6 +325,8 @@ function decideCategory(
   profile: PersonalProfile,
 ): ImpactCategory {
   if (exposures.length === 0) return 'dormant';
+  // Life/safety domains take precedence over the matched-exposure kind:
+  // a storm that touches any personal exposure is a safety impact first.
   if (event.domain === 'weather' || event.domain === 'safety' || event.domain === 'disaster') {
     return matchesHomeOrFamily(exposures, profile) ? 'family_place' : 'immediate_risk';
   }

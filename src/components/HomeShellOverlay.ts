@@ -20,6 +20,7 @@ import {
   getRecentEvents,
 } from '@/services/insights/insights-state';
 import type { SituationDescriptor } from '@/services/insights/action-briefs';
+import type { PlaybookCategory } from '@/services/insights/reaction-playbooks';
 import { getSnapshotCount, getWhatChanged } from '@/services/command-center/what-changed';
 import type { WhatChangedEvent } from '@/services/command-center/what-changed';
 import {
@@ -149,7 +150,7 @@ export class HomeShellOverlay {
     return {
       id: event.eventId,
       title: event.description,
-      category: event.domain === 'earthquake' ? 'earthquake' : 'severe_weather',
+      category: categoryForDomain(event.domain),
       severityScore: event.severity,
       confidence: 'medium',
     };
@@ -452,6 +453,34 @@ export class HomeShellOverlay {
 }
 
 // ── Module-private helpers ──────────────────────────────────────────
+
+/** Map an event's free-text domain to the playbook category whose evidence
+ *  and actions fit it. The live bridges emit only weather/earthquake today;
+ *  the other rows cover synthetic and future bridge domains. Unknown domains
+ *  fall back to severe_weather — its dossier renders honestly (evidence and
+ *  brief clearly weather-labeled) rather than pretending domain knowledge. */
+const DOMAIN_TO_CATEGORY: Readonly<Record<string, PlaybookCategory>> = {
+  weather: 'severe_weather',
+  earthquake: 'earthquake',
+  seismic: 'earthquake',
+  wildfire: 'wildfire',
+  conflict: 'conflict_escalation',
+  cyber: 'cyber_campaign',
+  health: 'disease_outbreak',
+  disease: 'disease_outbreak',
+  energy: 'grid_outage',
+  grid: 'grid_outage',
+  finance: 'banking_outage',
+  market: 'banking_outage',
+  travel: 'travel_disruption',
+  aviation: 'travel_disruption',
+  food: 'food_shortage',
+  fuel: 'oil_fuel_shortage',
+};
+
+function categoryForDomain(domain: string): PlaybookCategory {
+  return DOMAIN_TO_CATEGORY[domain] ?? 'severe_weather';
+}
 
 function el(tag: string, className?: string, text?: string): HTMLElement {
   const node = document.createElement(tag);

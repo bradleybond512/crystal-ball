@@ -142,7 +142,9 @@ function buildWhySurfaced(inputs: DossierInputs): string[] {
     if (e.kind && e.reason) lines.push(`${e.kind} — ${e.reason}`);
   }
   if (lines.length === 0) {
-    lines.push('no pipeline trace recorded for this situation — surfaced via the active-situation bridge');
+    // Honest gap statement only — do not assert HOW the situation surfaced;
+    // event-row and personal-row dossiers take other paths.
+    lines.push('no pipeline trace recorded for this situation');
   }
   return lines;
 }

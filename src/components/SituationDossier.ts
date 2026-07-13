@@ -18,6 +18,7 @@ import {
   getPanelHealthRegistry,
   getPipelineTraceRegistry,
 } from '@/services/diagnostics/diagnostics-state';
+import { buildActionBrief } from '@/services/insights/action-briefs';
 import type { ActionBrief, SituationDescriptor } from '@/services/insights/action-briefs';
 import { askLive } from '@/services/insights/ask-context';
 import { getActiveActionBrief, getRecentEvents } from '@/services/insights/insights-state';
@@ -144,7 +145,17 @@ export class SituationDossier {
       now,
     );
     this.renderHeader(this.view);
-    this.renderBody(this.view, getActiveActionBrief());
+    this.renderBody(this.view, this.briefForSubject());
+  }
+
+  /** The active brief belongs to the ACTIVE situation — only use it when the
+   *  drawer's subject IS that situation; otherwise build one for the subject
+   *  so an event-row dossier never shows another situation's actions. */
+  private briefForSubject(): ActionBrief | undefined {
+    if (!this.subject) return undefined;
+    const active = getActiveActionBrief();
+    if (active?.situationId === this.subject.id) return active;
+    return buildActionBrief(this.subject);
   }
 
   private renderHeader(view: DossierView): void {
@@ -256,7 +267,7 @@ export class SituationDossier {
     }
     if (action === 'more') {
       this.showAllRunnersUp = true;
-      if (this.view) this.renderBody(this.view, getActiveActionBrief());
+      if (this.view) this.renderBody(this.view, this.briefForSubject());
       return;
     }
     if (action === 'followup') {

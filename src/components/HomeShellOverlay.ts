@@ -11,6 +11,7 @@
  */
 
 import { DEFAULT_PANELS, STORAGE_KEYS } from '@/config/panels';
+import { PanelFocusHost } from '@/components/PanelFocusHost';
 import { SituationDossier } from '@/components/SituationDossier';
 import { getCommandRegistry } from '@/services/command-palette/command-registry';
 import {
@@ -72,10 +73,12 @@ export class HomeShellOverlay {
   private lastGoodPersonalAt: number | undefined;
   private lastGoodChangedAt: number | undefined;
   private dossier: SituationDossier | null = null;
+  private focusHost: PanelFocusHost | null = null;
   private _onOpenDossier: ((e: Event) => void) | null = null;
+  private _onOpenPanel: ((e: Event) => void) | null = null;
   private lastSituationCommandId: string | null = null;
   private readonly getPanel: HomeShellOptions['getPanel'];
-  // used by the focus host (Task 2)
+  // used by the focus host
   private readonly ensurePanel: HomeShellOptions['ensurePanel'];
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
@@ -85,7 +88,6 @@ export class HomeShellOverlay {
   constructor(options: HomeShellOptions) {
     this.getPanel = options.getPanel;
     this.ensurePanel = options.ensurePanel;
-    this.ensurePanel.bind(this); // read by the focus host (Task 3)
   }
 
   mount(parent: HTMLElement): void {
@@ -126,11 +128,20 @@ export class HomeShellOverlay {
         document.dispatchEvent(new CustomEvent('cb:map-focus', { detail: { lat, lon } }));
       },
       onOpenPanel: (panelId) => {
+        this.openInFocus(panelId);
+      },
+    });
+    this.dossier.mount(root);
+
+    this.focusHost = new PanelFocusHost({
+      ensurePanel: (id) => this.ensurePanel(id),
+      onOpenClassic: (panelId) => {
         this.hide();
         document.dispatchEvent(new CustomEvent('cb:navigate-panel', { detail: { panelKey: panelId } }));
       },
     });
-    this.dossier.mount(root);
+    this.focusHost.mount(root);
+
     this._onOpenDossier = (e: Event) => {
       const id = (e as CustomEvent<{ situationId?: string }>).detail?.situationId;
       const subject = this.resolveSituation(id);
@@ -140,6 +151,17 @@ export class HomeShellOverlay {
       }
     };
     document.addEventListener('cb:open-dossier', this._onOpenDossier);
+
+    this._onOpenPanel = (e: Event) => {
+      const panelKey = (e as CustomEvent<{ panelKey?: string }>).detail?.panelKey;
+      if (!panelKey) return;
+      if (this.visible) {
+        this.openInFocus(panelKey);
+      } else {
+        document.dispatchEvent(new CustomEvent('cb:navigate-panel', { detail: { panelKey } }));
+      }
+    };
+    document.addEventListener('cb:open-panel', this._onOpenPanel);
 
     root.addEventListener('click', (e) => this.onClick(e));
     root.addEventListener('change', (e) => this.onChange(e));
@@ -181,6 +203,8 @@ export class HomeShellOverlay {
     this.loop?.cancel();
     this.loop = null;
     document.removeEventListener('keydown', this.onKeydown);
+    this.focusHost?.close();
+    this.dossier?.close();
     this.releaseMap();
     this.root.hidden = true;
     document.body.classList.remove('home-shell-active');
@@ -201,6 +225,12 @@ export class HomeShellOverlay {
       document.removeEventListener('cb:open-dossier', this._onOpenDossier);
       this._onOpenDossier = null;
     }
+    if (this._onOpenPanel) {
+      document.removeEventListener('cb:open-panel', this._onOpenPanel);
+      this._onOpenPanel = null;
+    }
+    this.focusHost?.destroy();
+    this.focusHost = null;
     this.dossier?.destroy();
     this.dossier = null;
     if (this.lastSituationCommandId) {
@@ -372,6 +402,18 @@ export class HomeShellOverlay {
 
   // ── Interactions ──────────────────────────────────────────────────
 
+  /** Open a panel in the focus host; on failure (disabled/unknown panel)
+   *  fall back to the classic path so the user still sees its existing
+   *  disabled-panel toast instead of a silent no-op. */
+  private openInFocus(panelId: string): void {
+    void this.focusHost?.open(panelId).then((ok) => {
+      if (!ok) {
+        this.hide();
+        document.dispatchEvent(new CustomEvent('cb:navigate-panel', { detail: { panelKey: panelId } }));
+      }
+    });
+  }
+
   private onClick(e: MouseEvent): void {
     const target = e.target as HTMLElement;
     // Dossier containment: the drawer handles its own clicks; without this
@@ -414,9 +456,8 @@ export class HomeShellOverlay {
       this.setPins(movePin(this.pins, key, 1));
       return;
     }
-    // Plain card click → open the panel in the classic view.
-    this.hide();
-    document.dispatchEvent(new CustomEvent('cb:navigate-panel', { detail: { panelKey: key } }));
+    // Plain card click → open the panel in the focus host.
+    this.openInFocus(key);
   }
 
   private onChange(e: Event): void {

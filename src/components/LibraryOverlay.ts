@@ -197,7 +197,11 @@ export class LibraryOverlay {
     const panelKey = target.closest<HTMLElement>('[data-panel-key]')?.dataset.panelKey;
     if (panelKey) {
       this.hide();
-      document.dispatchEvent(new CustomEvent('cb:navigate-panel', { detail: { panelKey } }));
+      if (document.body.classList.contains('home-shell-active')) {
+        document.dispatchEvent(new CustomEvent('cb:open-panel', { detail: { panelKey } }));
+      } else {
+        document.dispatchEvent(new CustomEvent('cb:navigate-panel', { detail: { panelKey } }));
+      }
     }
   }
 }

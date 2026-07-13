@@ -11,12 +11,16 @@
  */
 
 import { DEFAULT_PANELS, STORAGE_KEYS } from '@/config/panels';
+import { SituationDossier } from '@/components/SituationDossier';
+import { getCommandRegistry } from '@/services/command-palette/command-registry';
 import {
   getActiveSituation,
   getPersonalImpactReport,
   getPersonalProfile,
   getRecentEvents,
 } from '@/services/insights/insights-state';
+import type { SituationDescriptor } from '@/services/insights/action-briefs';
+import type { PlaybookCategory } from '@/services/insights/reaction-playbooks';
 import { getSnapshotCount, getWhatChanged } from '@/services/command-center/what-changed';
 import type { WhatChangedEvent } from '@/services/command-center/what-changed';
 import {
@@ -65,6 +69,9 @@ export class HomeShellOverlay {
   private visible = false;
   private lastGoodPersonalAt: number | undefined;
   private lastGoodChangedAt: number | undefined;
+  private dossier: SituationDossier | null = null;
+  private _onOpenDossier: ((e: Event) => void) | null = null;
+  private lastSituationCommandId: string | null = null;
   private readonly getPanel: HomeShellOptions['getPanel'];
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
@@ -107,10 +114,46 @@ export class HomeShellOverlay {
     scroll.append(viewport, this.deckEl, this.ribbonEl);
     root.append(this.mapSlot, scroll);
 
+    this.dossier = new SituationDossier({
+      getNarrative: (id) => this.getPanel(id)?.getNarrative() ?? undefined,
+      onLocate: (lat, lon) => {
+        document.dispatchEvent(new CustomEvent('cb:map-focus', { detail: { lat, lon } }));
+      },
+      onOpenPanel: (panelId) => {
+        this.hide();
+        document.dispatchEvent(new CustomEvent('cb:navigate-panel', { detail: { panelKey: panelId } }));
+      },
+    });
+    this.dossier.mount(root);
+    this._onOpenDossier = (e: Event) => {
+      const id = (e as CustomEvent<{ situationId?: string }>).detail?.situationId;
+      const subject = this.resolveSituation(id);
+      if (subject) {
+        if (!this.visible) this.show();
+        this.dossier?.open(subject);
+      }
+    };
+    document.addEventListener('cb:open-dossier', this._onOpenDossier);
+
     root.addEventListener('click', (e) => this.onClick(e));
     root.addEventListener('change', (e) => this.onChange(e));
     parent.append(root);
     this.root = root;
+  }
+
+  private resolveSituation(id?: string): SituationDescriptor | undefined {
+    const active = getActiveSituation();
+    if (!id) return active;
+    if (active?.id === id) return active;
+    const event = getRecentEvents().find((e) => e.eventId === id);
+    if (!event) return active;
+    return {
+      id: event.eventId,
+      title: event.description,
+      category: categoryForDomain(event.domain),
+      severityScore: event.severity,
+      confidence: 'medium',
+    };
   }
 
   show(): void {
@@ -148,6 +191,16 @@ export class HomeShellOverlay {
 
   destroy(): void {
     this.hide();
+    if (this._onOpenDossier) {
+      document.removeEventListener('cb:open-dossier', this._onOpenDossier);
+      this._onOpenDossier = null;
+    }
+    this.dossier?.destroy();
+    this.dossier = null;
+    if (this.lastSituationCommandId) {
+      getCommandRegistry().unregister(this.lastSituationCommandId);
+      this.lastSituationCommandId = null;
+    }
     this.root?.remove();
     this.root = null;
   }
@@ -202,6 +255,28 @@ export class HomeShellOverlay {
     // setPins still render unconditionally, which releases the guard.
     if (!this.deckEl?.contains(document.activeElement)) this.renderDeck(now);
     this.renderRibbon(now);
+    this.syncSituationCommand(getActiveSituation());
+  }
+
+  private syncSituationCommand(active: SituationDescriptor | undefined): void {
+    const reg = getCommandRegistry();
+    if (this.lastSituationCommandId) {
+      reg.unregister(this.lastSituationCommandId);
+      this.lastSituationCommandId = null;
+    }
+    if (!active) return;
+    const id = 'situation:active';
+    reg.register({
+      id,
+      title: `Dossier: ${active.title}`,
+      subtitle: 'active situation',
+      keywords: ['situation', 'dossier', active.title.toLowerCase()],
+      category: 'navigation',
+      icon: '🗂️',
+      weight: 1,
+      action: () => document.dispatchEvent(new CustomEvent('cb:open-dossier', { detail: { situationId: active.id } })),
+    });
+    this.lastSituationCommandId = id;
   }
 
   private renderBriefing(view: BriefingView): void {
@@ -293,6 +368,11 @@ export class HomeShellOverlay {
 
   private onClick(e: MouseEvent): void {
     const target = e.target as HTMLElement;
+    // Dossier containment: the drawer handles its own clicks; without this
+    // guard its data-panel-key cards bubble into the branches below and
+    // double-dispatch. (stopPropagation in the dossier would instead starve
+    // the app's document-level outside-click closers — don't do that.)
+    if (target.closest('.hs-dossier, .hs-dossier-scrim')) return;
     const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
     if (action === 'cmdk') {
       document.dispatchEvent(new CustomEvent('cb:toggle-cmdk'));
@@ -304,6 +384,14 @@ export class HomeShellOverlay {
     }
     if (action === 'exit') {
       this.hide();
+      return;
+    }
+    const situationId = target.closest<HTMLElement>('[data-situation-id]')?.dataset.situationId;
+    if (situationId) {
+      this.dossier?.open(
+        this.resolveSituation(situationId) ??
+          { id: situationId, title: situationId, category: 'severe_weather', severityScore: 50, confidence: 'low' },
+      );
       return;
     }
     const key = target.closest<HTMLElement>('[data-panel-key]')?.dataset.panelKey;
@@ -366,6 +454,36 @@ export class HomeShellOverlay {
 
 // ── Module-private helpers ──────────────────────────────────────────
 
+/** Map an event's free-text domain to the playbook category whose evidence
+ *  and actions fit it. The live bridges emit only weather/earthquake today;
+ *  the other rows cover synthetic and future bridge domains. Unknown domains
+ *  fall back to severe_weather — its dossier renders honestly (evidence and
+ *  brief clearly weather-labeled) rather than pretending domain knowledge. */
+const DOMAIN_TO_CATEGORY: Readonly<Record<string, PlaybookCategory>> = {
+  weather: 'severe_weather',
+  earthquake: 'earthquake',
+  seismic: 'earthquake',
+  wildfire: 'wildfire',
+  conflict: 'conflict_escalation',
+  cyber: 'cyber_campaign',
+  health: 'disease_outbreak',
+  disease: 'disease_outbreak',
+  energy: 'grid_outage',
+  grid: 'grid_outage',
+  infrastructure: 'grid_outage',
+  utility: 'grid_outage',
+  finance: 'banking_outage',
+  market: 'banking_outage',
+  travel: 'travel_disruption',
+  aviation: 'travel_disruption',
+  food: 'food_shortage',
+  fuel: 'oil_fuel_shortage',
+};
+
+function categoryForDomain(domain: string): PlaybookCategory {
+  return DOMAIN_TO_CATEGORY[domain] ?? 'severe_weather';
+}
+
 function el(tag: string, className?: string, text?: string): HTMLElement {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -385,7 +503,18 @@ function button(className: string, action: string, label: string): HTMLButtonEle
 function renderBand(b: BriefingBandView): HTMLElement {
   const band = el('div', `hs-band hs-tone-${b.tone}`);
   band.append(el('div', 'hs-band-label', b.label), el('div', 'hs-band-headline', b.headline));
-  for (const line of b.lines) band.append(el('div', 'hs-band-line', line));
+  for (const entry of b.entries) {
+    if (entry.situationId) {
+      const line = document.createElement('button');
+      line.type = 'button';
+      line.className = 'hs-band-line hs-band-link';
+      line.textContent = entry.text;
+      line.dataset.situationId = entry.situationId;
+      band.append(line);
+    } else {
+      band.append(el('div', 'hs-band-line', entry.text));
+    }
+  }
   if (b.staleness) band.append(el('div', 'hs-band-stale', b.staleness));
   return band;
 }

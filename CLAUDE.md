@@ -102,7 +102,7 @@ Action Briefs (`reaction-playbooks.ts` + `action-briefs.ts`) are now rendered in
 - `src/services/diagnostics/pipeline-trace.ts` — fact lifecycle registry tracking each `traceId` through stages `ingested→scored→clustered→evaluated→routed|dropped`; `stalled()` surfaces entries stuck in mid-flight.
 - `src/services/diagnostics/degradation-alerts.ts` — pure detector: compares two `SystemHealthReport` snapshots, emits `DegradationAlert` for feature healthy→degraded/unsafe, panel →stale/failing, and unsafeSuppressions increase. Safety-critical alerts have `safetyCritical: true`.
 
-### Home Shell (Phases 1-2 of the UI re-imagination — see docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md)
+### Home Shell (Phases 1-3 of the UI re-imagination — see docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md)
 
 `src/components/HomeShellOverlay.ts` — the DEFAULT opening surface since Phase 2 for the full
 desktop variant: reparented map canvas + three briefing bands + pinned panel Deck + status
@@ -116,6 +116,10 @@ Library domains, seeded by `scripts/generate-panel-metadata.mjs`, hand-curated s
 `src/components/LibraryOverlay.ts` (`cb:toggle-library`, 📚 topbar button, available in classic
 too), and ⌘K v2 (metadata tags, weighted ranking, `place:<id>` commands via
 `src/services/command-palette/place-commands.ts`). Deck pins persist at `crystalball-deck-pins`.
+Phase 3 added the situation dossier (`src/components/SituationDossier.ts`, `cb:open-dossier`):
+evidence composed via `evidenceFor` metadata (PlaybookCategory-keyed), honest why-surfaced from
+pipeline/notification traces, action brief + timeline rail, context-free ask bar. Entry:
+critical-band briefing rows, ⌘K 'Dossier: <title>', map fly via `cb:map-focus`.
 
 ## Foundation Intelligence Layers
 

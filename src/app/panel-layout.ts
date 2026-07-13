@@ -709,6 +709,7 @@ export class PanelLayoutManager implements AppModule {
   private _onLibraryToggle: (() => void) | null = null;
   private _uninstallPlaceCommands: (() => void) | null = null;
   private _onFocusPlace: ((e: Event) => void) | null = null;
+  private _onMapFocus: ((e: Event) => void) | null = null;
   private cmdkPanel: CommandPalettePanel | null = null;
   private _onCmdkToggle: (() => void) | null = null;
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
@@ -797,6 +798,7 @@ export class PanelLayoutManager implements AppModule {
  if (this._onLibraryToggle) { document.removeEventListener('cb:toggle-library', this._onLibraryToggle); this._onLibraryToggle = null; }
  if (this._uninstallPlaceCommands) { this._uninstallPlaceCommands(); this._uninstallPlaceCommands = null; }
  if (this._onFocusPlace) { document.removeEventListener('cb:focus-place', this._onFocusPlace); this._onFocusPlace = null; }
+ if (this._onMapFocus) { document.removeEventListener('cb:map-focus', this._onMapFocus); this._onMapFocus = null; }
  if (this._onCmdkToggle) { document.removeEventListener('cb:toggle-cmdk', this._onCmdkToggle); this._onCmdkToggle = null; }
  this.cmdkPanel = null;
  if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
@@ -1276,6 +1278,14 @@ export class PanelLayoutManager implements AppModule {
    }
  };
  document.addEventListener('cb:focus-place', this._onFocusPlace);
+ this._onMapFocus = (e: Event) => {
+   const detail = (e as CustomEvent<{ lat?: number; lon?: number }>).detail;
+   if (detail?.lat !== undefined && detail?.lon !== undefined) {
+     this.ctx.map?.setCenter(detail.lat, detail.lon, 8);
+     this.ctx.map?.flashLocation(detail.lat, detail.lon, 3000);
+   }
+ };
+ document.addEventListener('cb:map-focus', this._onMapFocus);
  this.cmdkPanel = new CommandPalettePanel();
  this.cmdkPanel.mount(document.body);
  this._onCmdkToggle = () => this.cmdkPanel?.toggle();

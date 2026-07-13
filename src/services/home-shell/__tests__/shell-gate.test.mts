@@ -25,6 +25,11 @@ test('mobile viewport stays classic', () => {
   assert.equal(computeShellGate({ ...BASE, viewportWidth: 769 }), true);
 });
 
+test('unmeasurable viewport (width 0, window not laid out at boot) is not inferred as mobile', () => {
+  assert.equal(computeShellGate({ ...BASE, viewportWidth: 0 }), true);
+  assert.equal(computeShellGate({ ...BASE, viewportWidth: 0, classicFlag: '1' }), false);
+});
+
 test('legacy opt-in key is ignored when classic flag set (classic wins)', () => {
   assert.equal(computeShellGate({ ...BASE, legacyOptIn: '1', classicFlag: '1' }), false);
 });

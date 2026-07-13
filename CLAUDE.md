@@ -108,9 +108,13 @@ Action Briefs (`reaction-playbooks.ts` + `action-briefs.ts`) are now rendered in
 console: `homeShell=true`) full-screen opening surface: reparented map canvas + three briefing
 bands + pinned panel Deck + status ribbon. ⌘⇧O toggles (flag-gated); Esc exits to classic view.
 Read-only consumer of the what-changed store (CommandCenterPanel is the single snapshot writer).
-Pure view-models in `src/services/home-shell/` (`briefing-view`, `deck-view`, `status-ribbon-view`),
-tested via `npm run test:homeshell`. Deck pins persist at `crystalball-deck-pins`; narratives
-populate on the second 10s refresh tick.
+DEFAULT-ON since Phase 2 for the full desktop variant (gate: `src/services/home-shell/shell-gate.ts`;
+opt out with `classicView=true` in console → `crystalball-classic-view=1`; non-full variants and
+≤768px viewports always classic). Phase 2 added `src/config/panel-metadata.ts` (405 panels → 8
+Library domains, seeded by `scripts/generate-panel-metadata.mjs`, hand-curated since),
+`src/components/LibraryOverlay.ts` (`cb:toggle-library`, 📚 topbar button, available in classic
+too), and ⌘K v2 (metadata tags, weighted ranking, `place:<id>` commands via
+`src/services/command-palette/place-commands.ts`). Deck pins persist at `crystalball-deck-pins`.
 
 ## Foundation Intelligence Layers
 

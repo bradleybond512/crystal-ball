@@ -27,16 +27,15 @@ test('every entry has a known domain and lowercase non-empty tags', () => {
   }
 });
 
-test('system tier is populated and system panels are never featured', () => {
+test('system tier is populated and confined to the system-health domain', () => {
   const system = Object.entries(PANEL_METADATA).filter(([, m]) => m.tier === 'system');
   assert.ok(system.length >= 25, `expected >=25 system panels, got ${system.length}`);
   for (const [key, meta] of system) {
-    if (key === 'system-diagnostic' || meta.domain === 'system-health') continue;
     assert.equal(meta.domain, 'system-health', `${key}: system tier outside system-health domain`);
   }
 });
 
-test('every domain has at least 4 featured library-tier panels (system-health exempt from tier rule)', () => {
+test('every domain has at least 4 featured panels', () => {
   for (const domain of DOMAINS) {
     const featured = Object.entries(PANEL_METADATA).filter(
       ([, m]) => m.domain === domain && m.featured,

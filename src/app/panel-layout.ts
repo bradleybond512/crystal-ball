@@ -701,6 +701,7 @@ export class PanelLayoutManager implements AppModule {
   private safetyCaseUnsub: (() => void) | null = null;
   private analystHud: AnalystHUD | null = null;
   private homeShell: HomeShellOverlay | null = null;
+  private _onHomeShellToggle: (() => void) | null = null;
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
   private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
   private _onStatusOverlayKey: ((e: KeyboardEvent) => void) | null = null;
@@ -782,6 +783,7 @@ export class PanelLayoutManager implements AppModule {
  }
  if (this.analystHud) { this.analystHud.destroy(); this.analystHud = null; }
  if (this.homeShell) { this.homeShell.destroy(); this.homeShell = null; }
+ if (this._onHomeShellToggle) { document.removeEventListener('cb:toggle-home-shell', this._onHomeShellToggle); this._onHomeShellToggle = null; }
  if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
  if (this._onBriefExportKey) { document.removeEventListener('keydown', this._onBriefExportKey); this._onBriefExportKey = null; }
  if (this._onStatusOverlayKey) { document.removeEventListener('keydown', this._onStatusOverlayKey); this._onStatusOverlayKey = null; }
@@ -1253,7 +1255,8 @@ export class PanelLayoutManager implements AppModule {
  getPanel: (id) => this.ctx.panels[id],
  });
  this.homeShell.mount(document.body);
- document.addEventListener('cb:toggle-home-shell', () => this.homeShell?.toggle());
+ this._onHomeShellToggle = () => this.homeShell?.toggle();
+ document.addEventListener('cb:toggle-home-shell', this._onHomeShellToggle);
  this.homeShell.show();
  }
  document.addEventListener('cb:navigate-panel', (e) => {

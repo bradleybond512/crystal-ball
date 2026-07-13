@@ -25,6 +25,8 @@ export interface PaletteCommand {
   category: PaletteCategory;
   /** Optional emoji or unicode glyph rendered before the title. */
   icon?: string;
+  /** Additive rank bias. Negative demotes (e.g. system-tier panels). Default 0. */
+  weight?: number;
   /** Run when the user picks the command. */
   action: () => void;
 }
@@ -63,7 +65,7 @@ export function createCommandRegistry(): CommandRegistry {
 
   function rank(cmd: PaletteCommand, query: string): number {
     const q = query.trim();
-    if (!q) return CATEGORY_WEIGHT[cmd.category];
+    if (!q) return CATEGORY_WEIGHT[cmd.category] + (cmd.weight ?? 0);
     const titleScore = scoreMatch(cmd.title, q);
     const subtitleScore = cmd.subtitle ? scoreMatch(cmd.subtitle, q) : -Infinity;
     let keywordScore = -Infinity;
@@ -73,8 +75,9 @@ export function createCommandRegistry(): CommandRegistry {
     }
     const best = Math.max(titleScore, subtitleScore, keywordScore);
     if (best === -Infinity) return -Infinity;
-    // Bias by category so equally-ranked items prefer actions > navigation > panel > search.
-    return best + CATEGORY_WEIGHT[cmd.category];
+    // Bias by category so equally-ranked items prefer actions > navigation > panel > search,
+    // plus any per-command weight (e.g. system-tier panels demoted below library panels).
+    return best + CATEGORY_WEIGHT[cmd.category] + (cmd.weight ?? 0);
   }
 
   return {

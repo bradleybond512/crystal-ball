@@ -85,6 +85,7 @@ import { HomeShellOverlay } from '@/components/HomeShellOverlay';
 import { LibraryOverlay } from '@/components/LibraryOverlay';
 import { getCommandRegistry } from '@/services/command-palette/command-registry';
 import { registerBuiltinCommands } from '@/services/command-palette/built-in-commands';
+import { installPlaceCommands } from '@/services/command-palette/place-commands';
 import { HelpOverlay } from '@/components/HelpOverlay';
 import { installShortcuts } from '@/services/keyboard/shortcut-bootstrap';
 import { startDockBadge } from '@/services/native/dock-badge';
@@ -1249,6 +1250,21 @@ export class PanelLayoutManager implements AppModule {
    dispatch: (name, detail) => {
      document.dispatchEvent(new CustomEvent(name, detail === undefined ? undefined : { detail }));
    },
+ });
+ installPlaceCommands(getCommandRegistry(), {
+   getPlaces: () => getSavedPlaces().map((p) => ({ id: p.id, name: p.name, lat: p.lat, lon: p.lon, primary: p.primary })),
+   subscribe: (listener) => subscribeSavedPlaces(() => listener()),
+   dispatch: (name, detail) => {
+     document.dispatchEvent(new CustomEvent(name, detail === undefined ? undefined : { detail }));
+   },
+ });
+ document.addEventListener('cb:focus-place', (e) => {
+   const detail = (e as CustomEvent<{ lat?: number; lon?: number }>).detail;
+   void this.navigateToPanel('map');
+   if (detail?.lat !== undefined && detail?.lon !== undefined) {
+     this.ctx.map?.setCenter(detail.lat, detail.lon, 8);
+     this.ctx.map?.flashLocation(detail.lat, detail.lon, 3000);
+   }
  });
  const cmdk = new CommandPalettePanel();
  cmdk.mount(document.body);

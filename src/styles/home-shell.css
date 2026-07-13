@@ -94,10 +94,10 @@ body.home-shell-active {
 }
 
 .home-shell-library {
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(var(--hs-white-rgb), 0.14);
   border-radius: 6px;
   background: transparent;
-  color: #8b98a5;
+  color: var(--hs-fg-muted);
   font: inherit;
   font-size: 11px;
   padding: 5px 12px;

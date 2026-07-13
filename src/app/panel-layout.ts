@@ -1255,8 +1255,9 @@ export class PanelLayoutManager implements AppModule {
  document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
 
  // Library (Phase 2 UI re-imagination) — browsable panel catalog. Mounted
- // unconditionally (before the Home Shell flag gate below) so classic-view
- // users get it too, not just Home Shell users.
+ // unconditionally (before the Home Shell flag gate below); today only the
+ // Home Shell topbar button dispatches cb:toggle-library — the classic-view
+ // entry point is the ⌘K "Open Library" command (Task 5 wiring).
  this.libraryOverlay = new LibraryOverlay();
  this.libraryOverlay.mount(document.body);
  this._onLibraryToggle = () => this.libraryOverlay?.toggle();

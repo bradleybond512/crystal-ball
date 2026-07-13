@@ -25,6 +25,9 @@ export class LibraryOverlay {
   private expanded = new Set<LibraryDomain>();
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
+    // cmdk (z 10005) sits above the Library but handles Escape on its input
+    // in the target phase, after our capture handler — defer to it while open.
+    if (document.querySelector('.cmdk-v2-overlay:not([hidden])')) return;
     if (e.key === 'Escape' && !e.defaultPrevented && this.visible) {
       // preventDefault marks the Escape as consumed so the Home Shell's own
       // document-level handler doesn't also close the layer underneath.
@@ -70,6 +73,10 @@ export class LibraryOverlay {
     if (!this.root || this.visible) return;
     this.visible = true;
     this.root.hidden = false;
+    // Fresh filter on every open (house convention: cmdk clears its input on
+    // show). Domain selection and expanded long-tails persist deliberately.
+    this.query = '';
+    if (this.searchEl) this.searchEl.value = '';
     // Capture phase: the Home Shell's bubble-phase Escape handler was
     // registered first (at boot) and would otherwise run before ours and
     // close the layer underneath. Capture runs first regardless of order.

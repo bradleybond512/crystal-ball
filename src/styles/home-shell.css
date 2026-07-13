@@ -93,6 +93,17 @@ body.home-shell-active {
   cursor: pointer;
 }
 
+.home-shell-library {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: transparent;
+  color: #8b98a5;
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
 .home-shell-briefing {
   width: 340px;
   margin: 8px 16px;

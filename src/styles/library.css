@@ -1,0 +1,142 @@
+/* Library — Phase 2 of the UI shell re-imagination.
+   Browsable 8-domain panel catalog. Scoped under .library-overlay.
+   Palette: fixed-dark semantic tokens from tokens.css (--surface-*,
+   --text-*) plus the house color-mix(in srgb, var(--token) N%, transparent)
+   pattern (see panels.css / happy-theme.css / settings-window.css) for
+   translucent hover/active states — the plan's --hs-* prefix does not
+   exist anywhere in the codebase, verified via repo-wide grep. */
+
+.library-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001; /* above home shell (10000), below cmdk (10005) */
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font-family: ui-monospace, Menlo, Monaco, monospace;
+  display: flex;
+  flex-direction: column;
+}
+
+.library-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.library-title { font-size: 13px; font-weight: 600; }
+
+.library-search {
+  flex: 1;
+  max-width: 420px;
+  background: var(--surface-1);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 12px;
+}
+
+.library-close {
+  margin-left: auto;
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 10px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.library-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.library-nav {
+  width: 200px;
+  border-right: 1px solid var(--surface-border);
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.library-nav button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 11px;
+  padding: 6px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.library-nav button.active {
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  color: var(--text-primary);
+}
+
+.library-nav .lib-count { color: var(--text-tertiary); font-size: 10px; }
+
+.library-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.lib-section-label {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  margin: 10px 0 8px;
+}
+
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.lib-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-1);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 11px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.lib-card:hover { border-color: var(--surface-border-strong); }
+.lib-card .lib-icon { font-size: 13px; }
+.lib-card.lib-system { color: var(--text-tertiary); }
+
+.lib-more {
+  margin: 8px 0 4px;
+  background: transparent;
+  border: 1px dashed var(--surface-border-strong);
+  border-radius: 6px;
+  color: var(--text-disabled);
+  font: inherit;
+  font-size: 10px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.lib-empty { color: var(--text-tertiary); font-size: 11px; padding: 20px 0; }

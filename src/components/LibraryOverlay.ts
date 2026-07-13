@@ -25,7 +25,12 @@ export class LibraryOverlay {
   private expanded = new Set<LibraryDomain>();
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape' && !e.defaultPrevented && this.visible) this.hide();
+    if (e.key === 'Escape' && !e.defaultPrevented && this.visible) {
+      // preventDefault marks the Escape as consumed so the Home Shell's own
+      // document-level handler doesn't also close the layer underneath.
+      e.preventDefault();
+      this.hide();
+    }
   };
 
   mount(parent: HTMLElement): void {
@@ -65,7 +70,10 @@ export class LibraryOverlay {
     if (!this.root || this.visible) return;
     this.visible = true;
     this.root.hidden = false;
-    document.addEventListener('keydown', this.onKeydown);
+    // Capture phase: the Home Shell's bubble-phase Escape handler was
+    // registered first (at boot) and would otherwise run before ours and
+    // close the layer underneath. Capture runs first regardless of order.
+    document.addEventListener('keydown', this.onKeydown, true);
     this.render();
     this.searchEl?.focus();
   }
@@ -74,7 +82,7 @@ export class LibraryOverlay {
     if (!this.root || !this.visible) return;
     this.visible = false;
     this.root.hidden = true;
-    document.removeEventListener('keydown', this.onKeydown);
+    document.removeEventListener('keydown', this.onKeydown, true);
   }
 
   toggle(): void {

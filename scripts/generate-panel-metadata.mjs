@@ -10,6 +10,9 @@
  * skipped. The emitted file is HAND-CURATED after seeding — re-running
  * this script overwrites curation; do so only deliberately.
  *
+ * Re-seeding OVERWRITES hand-curation — diff against git before committing
+ * a re-seed.
+ *
  * Output: src/config/panel-metadata.ts
  * Run:    node scripts/generate-panel-metadata.mjs
  */
@@ -29,10 +32,22 @@ const projectRoot = path.resolve(__dirname, '..');
 
 const panelsSrc = fs.readFileSync(path.join(projectRoot, 'src/config/panels.ts'), 'utf8');
 
+/** Structural anchor lookup — throws with a clear message if panels.ts has drifted. */
+function requireIndex(src, marker) {
+  const idx = src.indexOf(marker);
+  if (idx === -1) {
+    throw new Error(
+      `[generate-panel-metadata] structural anchor '${marker}' not found in src/config/panels.ts — ` +
+        'the file has drifted from what this generator expects; update the generator before re-seeding.',
+    );
+  }
+  return idx;
+}
+
 // FULL_PANELS block: from "const FULL_PANELS" to the next top-level "const".
 const fullBlock = panelsSrc.slice(
-  panelsSrc.indexOf('const FULL_PANELS'),
-  panelsSrc.indexOf('const FULL_MAP_LAYERS'),
+  requireIndex(panelsSrc, 'const FULL_PANELS'),
+  requireIndex(panelsSrc, 'const FULL_MAP_LAYERS'),
 );
 const panelEntry = /(?:'([\w-]+)'|^\s{0,2}([\w$]+)):\s*\{\s*name:\s*'((?:[^'\\]|\\.)*)'/gmu;
 const fullPanels = new Map(); // key -> name
@@ -43,8 +58,8 @@ for (const m of fullBlock.matchAll(panelEntry)) {
 
 // Category → keys (full-variant categories only).
 const catBlock = panelsSrc.slice(
-  panelsSrc.indexOf('PANEL_CATEGORY_MAP'),
-  panelsSrc.indexOf('MONITOR_COLORS'),
+  requireIndex(panelsSrc, 'PANEL_CATEGORY_MAP'),
+  requireIndex(panelsSrc, 'MONITOR_COLORS'),
 );
 const FULL_VARIANT_CATS = ['core', 'intelligence', 'regionalNews', 'marketsFinance', 'topical', 'dataTracking', 'hazards', 'healthEnv'];
 
@@ -256,6 +271,13 @@ export const PANEL_METADATA: Record<string, PanelMeta> = {
 ${lines.join('\n')}
 };
 `;
+
+if (fullPanels.size < 350) {
+  throw new Error(
+    `[generate-panel-metadata] parsed only ${fullPanels.size} FULL_PANELS entries (expected >= 350) — ` +
+      'the panelEntry regex likely stopped matching against a changed panels.ts shape; refusing to write a truncated registry.',
+  );
+}
 
 fs.writeFileSync(path.join(projectRoot, 'src/config/panel-metadata.ts'), out);
 console.log(`[generate-panel-metadata] wrote ${fullPanels.size} entries (${phantoms.length} phantoms skipped)`);

@@ -1305,6 +1305,7 @@ export class PanelLayoutManager implements AppModule {
  if (isHomeShellDefaultOn()) {
  this.homeShell = new HomeShellOverlay({
  getPanel: (id) => this.ctx.panels[id],
+ ensurePanel: (id) => this.ensurePanelMounted(id),
  });
  this.homeShell.mount(document.body);
  this._onHomeShellToggle = () => this.homeShell?.toggle();
@@ -2644,6 +2645,16 @@ export class PanelLayoutManager implements AppModule {
  });
  flow.show();
  }).catch((error) => { console.error('[boot] WelcomeFlow failed to mount:', error); });
+  }
+
+  /** Mount a panel (if lazy/unbuilt) WITHOUT scrolling or flashing the
+   *  classic grid — the Home Shell focus host's entry point. Returns the
+   *  panel or null when the key is unknown/disabled-and-unmountable. */
+  public async ensurePanelMounted(key: string): Promise<Panel | null> {
+ const existing = this.ctx.panels[key];
+ if (existing) return existing;
+ await this.mountLazyPanel(key);
+ return this.ctx.panels[key] ?? null;
   }
 
   /**

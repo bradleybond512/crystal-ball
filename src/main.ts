@@ -165,6 +165,7 @@ window.addEventListener('unhandledrejection', (e) => {
 
 import { debugGetCells, getCellCount } from '@/services/geo-convergence';
 import { initMetaTags } from '@/services/meta-tags';
+import { isHomeShellDefaultOn } from '@/services/home-shell/shell-gate';
 import { installRuntimeFetchPatch, installWebApiRedirect, isDesktopRuntime } from '@/services/runtime';
 import { loadDesktopSecretsWhenReady } from '@/services/runtime-config';
 import { initAnalytics, isAnalyticsAllowed, migrateAnalyticsConsent, trackApiKeysSnapshot } from '@/services/analytics';
@@ -391,8 +392,10 @@ Object.defineProperty(window, 'beta', {
 Object.defineProperty(window, 'homeShell', {
   get() {
     const off = localStorage.getItem('crystalball-classic-view') === '1';
-    console.log(`[HomeShell] ${off ? 'OFF (classic view)' : 'ON (default)'}`);
-    return !off;
+    const on = isHomeShellDefaultOn();
+    const status = on ? 'ON (default)' : (off ? 'OFF (classic view)' : 'OFF (unavailable on this variant/viewport)');
+    console.log(`[HomeShell] ${status}`);
+    return on;
   },
   set(v: boolean) {
     if (v) localStorage.removeItem('crystalball-classic-view');

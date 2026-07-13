@@ -243,6 +243,156 @@ body.home-shell-active {
 .hs-ribbon-warn { background: var(--hs-warn); }
 .hs-ribbon-bad { background: var(--hs-bad); }
 
+/* ── Situation dossier drawer (Phase 3) ─────────────────────────── */
+
+.hs-dossier-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(var(--hs-base-rgb), 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.hs-dossier-scrim--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hs-dossier {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 60vw;
+  max-width: 960px;
+  min-width: 480px;
+  z-index: 2;
+  background: var(--hs-bg-ribbon);
+  border-left: 1px solid rgba(var(--hs-white-rgb), 0.1);
+  transform: translateX(100%);
+  transition: transform 180ms ease;
+  display: flex;
+  flex-direction: column;
+  font-family: ui-monospace, Menlo, Monaco, monospace;
+}
+
+.hs-dossier--open { transform: translateX(0); }
+
+.hs-dossier-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(var(--hs-white-rgb), 0.08);
+}
+
+.hs-dossier-title { font-size: 13px; font-weight: 600; color: var(--hs-fg); }
+
+.hs-dossier-badge {
+  font-size: 9px;
+  border-radius: 3px;
+  padding: 1px 6px;
+  letter-spacing: 0.05em;
+}
+
+.hs-dossier-badge--critical { color: var(--hs-bad); border: 1px solid rgba(var(--hs-bad-rgb), 0.45); background: rgba(var(--hs-bad-rgb), 0.15); }
+.hs-dossier-badge--elevated { color: var(--hs-warn); border: 1px solid rgba(var(--hs-warn-rgb), 0.45); background: rgba(var(--hs-warn-rgb), 0.15); }
+.hs-dossier-badge--info { color: var(--hs-fg-muted); border: 1px solid rgba(var(--hs-white-rgb), 0.2); background: rgba(var(--hs-white-rgb), 0.06); }
+
+.hs-dossier-subline { font-size: 10px; color: var(--hs-fg-dim); }
+
+.hs-dossier-actions { margin-left: auto; display: flex; gap: 6px; }
+
+.hs-dossier-actions button {
+  border: 1px solid rgba(var(--hs-white-rgb), 0.14);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--hs-fg-muted);
+  font: inherit;
+  font-size: 10px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.hs-dossier-body {
+  flex: 1;
+  display: flex;
+  gap: 14px;
+  padding: 12px 16px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.hs-dossier-main { flex: 1.6; min-width: 0; }
+.hs-dossier-rail { flex: 1; min-width: 0; }
+
+.hs-dossier-section-label {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--hs-fg-muted);
+  margin: 10px 0 6px;
+}
+
+.hs-dossier-why { font-size: 10px; color: var(--hs-fg-line); line-height: 1.6; }
+
+.hs-dossier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 7px;
+}
+
+.hs-dossier .hs-card-reason { font-size: 9px; color: var(--hs-fg-dim); margin-top: 3px; }
+
+.hs-dossier-more {
+  margin-top: 8px;
+  background: transparent;
+  border: 1px dashed rgba(var(--hs-white-rgb), 0.2);
+  border-radius: 6px;
+  color: var(--hs-fg-faint);
+  font: inherit;
+  font-size: 10px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.hs-dossier-brief { font-size: 10px; color: var(--hs-fg-line); line-height: 1.7; }
+.hs-dossier-brief .hs-brief-tier { color: var(--hs-warn); }
+.hs-dossier-memory { font-size: 9px; color: var(--hs-fg-dim); margin-top: 6px; }
+
+.hs-dossier-timeline { font-size: 9px; color: var(--hs-fg-dim); line-height: 1.8; }
+
+.hs-dossier-ask {
+  border-top: 1px solid rgba(var(--hs-white-rgb), 0.08);
+  padding: 10px 16px;
+}
+
+.hs-dossier-ask input {
+  width: 100%;
+  background: var(--hs-bg-card);
+  border: 1px solid rgba(var(--hs-white-rgb), 0.14);
+  border-radius: 8px;
+  color: var(--hs-fg);
+  font: inherit;
+  font-size: 11px;
+  padding: 6px 12px;
+}
+
+.hs-dossier-answer { font-size: 10px; color: var(--hs-fg-line); line-height: 1.6; margin-top: 8px; }
+.hs-dossier-followups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+.hs-dossier-followups button {
+  background: rgba(var(--hs-white-rgb), 0.06);
+  border: none;
+  border-radius: 10px;
+  color: var(--hs-fg-muted);
+  font: inherit;
+  font-size: 9px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .home-shell * { transition: none !important; }
 }

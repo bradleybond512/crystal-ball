@@ -14,6 +14,12 @@
 
 ## Verified codebase facts (do not re-derive)
 
+> **Correction (post-implementation):** FULL_PANELS has **406** keys and the phantom count is
+> **61** — `panels.ts:80` defines two panels on one physical line, which defeated the
+> line-anchored counting used at plan-authoring time. The 405/62 figures below are the
+> planning snapshot, preserved as-written; the shipped registry and its validation test use
+> the true 406.
+
 - **FULL_PANELS** (`src/config/panels.ts:9-423`) has **405 unique keys**; the 8 full-variant categories in `PANEL_CATEGORY_MAP` (`:1209+`) reference a union of 467 keys — **62 are phantoms** (in categories but not FULL_PANELS, mostly `intelligence`), **24 real keys appear in exactly 2 categories**, and **0 FULL_PANELS keys are uncategorized**. The registry covers the 405; the generator prints the 62 phantoms as warnings.
 - **Titles:** `FULL_PANELS[key].name` is authoritative (all 405 have one). The i18n `panels.*` catalog is partial (53/405, camelCase-keyed) — ignore it.
 - **Icon/keyword seed:** `src/config/commands.ts` has 96 `panel:<key>` entries with emoji `icon` + `keywords[]`; 49 match FULL_PANELS keys. Reuse those icons/keywords in generation.

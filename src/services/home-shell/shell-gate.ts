@@ -29,7 +29,10 @@ export interface ShellGateInputs {
 /** Pure decision core — fixture-testable. */
 export function computeShellGate(inputs: ShellGateInputs): boolean {
   if (inputs.variant !== 'full') return false;
-  if (inputs.viewportWidth <= MOBILE_BREAKPOINT_PX) return false;
+  // Width 0 means the window isn't laid out yet (hidden/restored/embedded
+  // at boot) — "cannot measure" must not be inferred as mobile. Real mobile
+  // devices always report a positive width.
+  if (inputs.viewportWidth > 0 && inputs.viewportWidth <= MOBILE_BREAKPOINT_PX) return false;
   if (inputs.classicFlag === '1') return false;
   return true;
 }

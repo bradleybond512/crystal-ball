@@ -193,6 +193,7 @@ pin/unpin persistence. ⌘K v1 over panel names. No behavior change for existing
 **Phase 3 — Situations**
 Dossier drawer, evidence composition, action brief + timeline + ask bar, map fly-to +
 marker plotting. Bespoke M cards for top ~20 evidence panels.
+**[SHIPPED — see docs/superpowers/plans/2026-07-13-phase3-situation-dossier.md; deferred: map-marker entry (shell map is a non-interactive backdrop), situation-scoped ask (AskContext has no situation slot), BigEvent trigger-rationale persistence, bespoke M-cards.]**
 
 **Phase 4 — Full skin + retirement**
 Near-black tokens across all L views, bespoke S cards for deck defaults, God's Eye

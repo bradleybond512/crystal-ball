@@ -86,7 +86,7 @@ test('weather event near Home matches Home + Mom (both within radius)', () => {
   assert.ok(impact.exposures.some((e) => e.exposureId === 'mom'));
 });
 
-test('event far from any saved place still surfaces with severity but no exposures', () => {
+test('event far from any saved place matches no exposures', () => {
   const r = mapEventsToPersonalImpact(profile({ savedPlaces: [FAR_PLACE] }), [event()], {
     now: () => NOW,
   });
@@ -162,6 +162,56 @@ test('event during travel window → travel category', () => {
   });
   const r = mapEventsToPersonalImpact(profile({ travelRoutes: [route] }), [e], { now: () => NOW });
   assert.equal(r.impacts[0]?.category, 'travel');
+});
+
+// ── Zero-exposure relevance (dormant contract) ────────────────────────
+
+test('high-severity weather event with zero exposures → dormant, not immediate_risk', () => {
+  const r = mapEventsToPersonalImpact(profile({ savedPlaces: [FAR_PLACE] }), [event({ severity: 90 })], {
+    now: () => NOW,
+  });
+  const impact = r.impacts[0]!;
+  assert.equal(impact.exposures.length, 0);
+  assert.equal(impact.category, 'dormant');
+});
+
+test('high-severity event with zero exposures → severity capped at low', () => {
+  const r = mapEventsToPersonalImpact(profile({ savedPlaces: [FAR_PLACE] }), [event({ severity: 90 })], {
+    now: () => NOW,
+  });
+  assert.equal(r.impacts[0]?.severity, 'low');
+});
+
+test('non-weather event with zero exposures → dormant category', () => {
+  const e = event({
+    domain: 'cyber',
+    description: 'Ransomware wave in unrelated sector',
+    location: undefined,
+    severity: 85,
+    affectedEntities: ['nobody-i-watch'],
+  });
+  const r = mapEventsToPersonalImpact(profile(), [e], { now: () => NOW });
+  assert.equal(r.impacts[0]?.category, 'dormant');
+  assert.equal(r.impacts[0]?.severity, 'low');
+});
+
+test('zero-exposure events are tallied as dormant and produce no recommendations', () => {
+  const events = [
+    event({ eventId: 'a', severity: 90 }),
+    event({ eventId: 'b', severity: 80 }),
+  ];
+  const r = mapEventsToPersonalImpact(profile({ savedPlaces: [FAR_PLACE] }), events, {
+    now: () => NOW,
+  });
+  assert.match(r.summary, /2 dormant/);
+  assert.ok(!r.summary.includes('critical'));
+  assert.equal(r.recommendations.length, 0);
+});
+
+test('event with real exposure keeps its non-dormant category and full severity', () => {
+  const r = mapEventsToPersonalImpact(profile(), [event({ severity: 90 })], { now: () => NOW });
+  assert.equal(r.impacts[0]?.category, 'family_place');
+  assert.equal(r.impacts[0]?.severity, 'critical');
 });
 
 // ── Severity ladder ────────────────────────────────────────────────────

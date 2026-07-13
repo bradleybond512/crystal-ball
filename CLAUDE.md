@@ -102,16 +102,17 @@ Action Briefs (`reaction-playbooks.ts` + `action-briefs.ts`) are now rendered in
 - `src/services/diagnostics/pipeline-trace.ts` — fact lifecycle registry tracking each `traceId` through stages `ingested→scored→clustered→evaluated→routed|dropped`; `stalled()` surfaces entries stuck in mid-flight.
 - `src/services/diagnostics/degradation-alerts.ts` — pure detector: compares two `SystemHealthReport` snapshots, emits `DegradationAlert` for feature healthy→degraded/unsafe, panel →stale/failing, and unsafeSuppressions increase. Safety-critical alerts have `safetyCritical: true`.
 
-### Home Shell (Phase 1 of the UI re-imagination — see docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md)
+### Home Shell (Phases 1-2 of the UI re-imagination — see docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md)
 
-`src/components/HomeShellOverlay.ts` — feature-flagged (`localStorage crystalball-home-shell=1`,
-console: `homeShell=true`) full-screen opening surface: reparented map canvas + three briefing
-bands + pinned panel Deck + status ribbon. ⌘⇧O toggles (flag-gated); Esc exits to classic view.
-Read-only consumer of the what-changed store (CommandCenterPanel is the single snapshot writer).
-DEFAULT-ON since Phase 2 for the full desktop variant (gate: `src/services/home-shell/shell-gate.ts`;
-opt out with `classicView=true` in console → `crystalball-classic-view=1`; non-full variants and
-≤768px viewports always classic). Phase 2 added `src/config/panel-metadata.ts` (405 panels → 8
-Library domains, seeded by `scripts/generate-panel-metadata.mjs`, hand-curated since),
+`src/components/HomeShellOverlay.ts` — the DEFAULT opening surface since Phase 2 for the full
+desktop variant: reparented map canvas + three briefing bands + pinned panel Deck + status
+ribbon. Gate: `src/services/home-shell/shell-gate.ts` (non-full variants and ≤768px viewports
+always classic; opt out with `classicView=true` in console → `crystalball-classic-view=1`; the
+Phase-1 key `crystalball-home-shell` is no longer consulted). ⌘⇧O toggles whenever the gate is
+on; Esc exits to classic view. Read-only consumer of the what-changed store (CommandCenterPanel
+is the single snapshot writer). Phase 2 added `src/config/panel-metadata.ts` (406 panels → 8
+Library domains, seeded by `scripts/generate-panel-metadata.mjs`, hand-curated since — note
+`panels.ts:80` defines two panels on one line, defeating line-anchored counting),
 `src/components/LibraryOverlay.ts` (`cb:toggle-library`, 📚 topbar button, available in classic
 too), and ⌘K v2 (metadata tags, weighted ranking, `place:<id>` commands via
 `src/services/command-palette/place-commands.ts`). Deck pins persist at `crystalball-deck-pins`.

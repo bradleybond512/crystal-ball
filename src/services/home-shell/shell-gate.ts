@@ -6,9 +6,10 @@
  *
  * Keys:
  *   crystalball-classic-view = '1'  → user opted back to the classic UI
- *   crystalball-home-shell   = '1'  → legacy Phase-1 opt-in (still honored
- *                                     as ON for full/desktop, but classic
- *                                     flag wins; ignored on other variants)
+ *   crystalball-home-shell   = '1'  → legacy Phase-1 opt-in; NO LONGER
+ *                                     CONSULTED (full/desktop is on by
+ *                                     default). Read into inputs only so
+ *                                     migrations can inspect it.
  */
 
 import { SITE_VARIANT } from '../../config/variant';

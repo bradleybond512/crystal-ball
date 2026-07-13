@@ -28,7 +28,7 @@ export type ImpactCategory =
   | 'travel'              // routes, airports, vessels you depend on
   | 'utility'             // power / fuel / water dependencies
   | 'family_place'        // saved places + people you care about
-  | 'dormant';            // below the relevance floor; surfaced on demand
+  | 'dormant';            // no personal exposure or below the relevance floor; surfaced on demand
 
 export type ImpactSeverity = 'critical' | 'elevated' | 'watch' | 'low' | 'none';
 
@@ -324,6 +324,7 @@ function decideCategory(
   exposures: readonly ImpactExposure[],
   profile: PersonalProfile,
 ): ImpactCategory {
+  if (exposures.length === 0) return 'dormant';
   if (event.domain === 'weather' || event.domain === 'safety' || event.domain === 'disaster') {
     return matchesHomeOrFamily(exposures, profile) ? 'family_place' : 'immediate_risk';
   }
@@ -352,7 +353,7 @@ function decideSeverity(
   exposures: readonly ImpactExposure[],
   dormantFloor: number,
 ): ImpactSeverity {
-  if (event.severity < dormantFloor && exposures.length === 0) return 'none';
+  if (exposures.length === 0) return event.severity < dormantFloor ? 'none' : 'low';
   if (event.severity < dormantFloor) return 'low';
   if (event.severity < 50) return 'watch';
   if (event.severity < 75) return 'elevated';
@@ -375,7 +376,6 @@ function pickRecommendedAction(
 ): string {
   if (severity === 'critical') return CRITICAL_ACTION_BY_CATEGORY[category];
   if (severity === 'elevated') {
-    if (exposures.length === 0) return 'Monitor closely; no immediate action needed.';
     const noun = exposures.length === 1 ? 'exposure' : 'exposures';
     return `Monitor closely — ${exposures.length} personal ${noun} touched.`;
   }

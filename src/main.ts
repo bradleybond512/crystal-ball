@@ -385,17 +385,29 @@ Object.defineProperty(window, 'beta', {
   },
 });
 
-// Home Shell (Phase 1 UI re-imagination): type `homeShell=true` / `homeShell=false` in console
+// Home Shell (default-on since Phase 2): `homeShell=false` opts back to the
+// classic UI (persisted); `homeShell=true` clears the opt-out. `classicView`
+// is the inverse alias.
 Object.defineProperty(window, 'homeShell', {
   get() {
- const on = localStorage.getItem('crystalball-home-shell') === '1';
- console.log(`[HomeShell] ${on ? 'ON' : 'OFF'}`);
- return on;
+    const off = localStorage.getItem('crystalball-classic-view') === '1';
+    console.log(`[HomeShell] ${off ? 'OFF (classic view)' : 'ON (default)'}`);
+    return !off;
   },
   set(v: boolean) {
- if (v) localStorage.setItem('crystalball-home-shell', '1');
- else localStorage.removeItem('crystalball-home-shell');
- location.reload();
+    if (v) localStorage.removeItem('crystalball-classic-view');
+    else localStorage.setItem('crystalball-classic-view', '1');
+    location.reload();
+  },
+});
+Object.defineProperty(window, 'classicView', {
+  get() {
+    return localStorage.getItem('crystalball-classic-view') === '1';
+  },
+  set(v: boolean) {
+    if (v) localStorage.setItem('crystalball-classic-view', '1');
+    else localStorage.removeItem('crystalball-classic-view');
+    location.reload();
   },
 });
 

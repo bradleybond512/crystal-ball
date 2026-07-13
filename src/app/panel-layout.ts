@@ -83,6 +83,7 @@ import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalettePanel } from '@/components/CommandPalettePanel';
 import { HomeShellOverlay } from '@/components/HomeShellOverlay';
 import { LibraryOverlay } from '@/components/LibraryOverlay';
+import { isHomeShellDefaultOn } from '@/services/home-shell/shell-gate';
 import { getCommandRegistry } from '@/services/command-palette/command-registry';
 import { registerBuiltinCommands } from '@/services/command-palette/built-in-commands';
 import { installPlaceCommands } from '@/services/command-palette/place-commands';
@@ -1279,8 +1280,9 @@ export class PanelLayoutManager implements AppModule {
  this._onLibraryToggle = () => this.libraryOverlay?.toggle();
  document.addEventListener('cb:toggle-library', this._onLibraryToggle);
 
- // Home Shell (Phase 1 UI re-imagination) — feature-flagged opening surface.
- if (localStorage.getItem('crystalball-home-shell') === '1') {
+ // Home Shell — default-on opening surface for the full desktop variant
+ // (Phase 2). See src/services/home-shell/shell-gate.ts for the decision core.
+ if (isHomeShellDefaultOn()) {
  this.homeShell = new HomeShellOverlay({
  getPanel: (id) => this.ctx.panels[id],
  });

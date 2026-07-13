@@ -17,6 +17,7 @@ import {
   buildPanelFocusBindings,
   type ShortcutRegistry,
 } from './shortcut-registry';
+import { isHomeShellDefaultOn } from '@/services/home-shell/shell-gate';
 
 const HINT_CLASS = 'mac-sidebar-panel-hint';
 const SIDEBAR_SELECTOR = '.mac-sidebar-panel-item[data-panel-key]';
@@ -60,8 +61,10 @@ export function installShortcuts(): BootstrapHandles {
     chord: parseChord('Cmd+/'),
     run: () => document.dispatchEvent(new CustomEvent('cb:toggle-help')),
   });
-  // Feature-flagged: avoids swallowing Ctrl+Shift+O in web builds and a phantom help-overlay entry while the feature is flagged off.
-  if (localStorage.getItem('crystalball-home-shell') === '1') {
+  // Registers whenever the shell can appear per the gate — avoids swallowing
+  // Ctrl+Shift+O in web builds and a phantom help-overlay entry on variants/
+  // viewports where the shell never boots (see shell-gate.ts).
+  if (isHomeShellDefaultOn()) {
     reg.register({
       id: 'cmd-shift-o',
       label: 'Toggle Home Shell',

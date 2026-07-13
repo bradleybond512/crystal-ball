@@ -12,6 +12,7 @@
  */
 
 import { SITE_VARIANT } from '../../config/variant';
+// concrete module, not the @/utils barrel — the barrel pulls in Vite-only import.meta.glob and breaks node:test
 import { MOBILE_BREAKPOINT_PX } from '../../utils/breakpoint';
 
 export const CLASSIC_VIEW_KEY = 'crystalball-classic-view';

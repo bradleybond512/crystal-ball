@@ -50,6 +50,7 @@ export class SituationDossier {
     // Defer to global overlays stacked above the shell.
     if (document.querySelector('.cmdk-v2-overlay:not([hidden])')) return;
     if (document.querySelector('.library-overlay:not([hidden])')) return;
+    if (document.querySelector('.hs-focus--open')) return;
     if (e.key === 'Escape' && !e.defaultPrevented && this.openState) {
       e.preventDefault();
       this.close();

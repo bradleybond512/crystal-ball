@@ -328,8 +328,8 @@ function decideCategory(
   if (event.domain === 'weather' || event.domain === 'safety' || event.domain === 'disaster') {
     return matchesHomeOrFamily(exposures, profile) ? 'family_place' : 'immediate_risk';
   }
-  if (event.affectedUtilities && event.affectedUtilities.length > 0) return 'utility';
-  if (event.affectedSymbols && event.affectedSymbols.length > 0) return 'financial';
+  if (exposures.some((e) => e.exposureId.startsWith('utility:'))) return 'utility';
+  if (exposures.some((e) => e.exposureId.startsWith('holding:'))) return 'financial';
   if (matchesTravelWindow(exposures)) return 'travel';
   return 'immediate_risk';
 }

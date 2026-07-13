@@ -214,6 +214,42 @@ test('event with real exposure keeps its non-dormant category and full severity'
   assert.equal(r.impacts[0]?.severity, 'critical');
 });
 
+test('zero-exposure event below the floor → dormant category AND none severity', () => {
+  const r = mapEventsToPersonalImpact(profile({ savedPlaces: [FAR_PLACE] }), [event({ severity: 10 })], {
+    now: () => NOW,
+  });
+  assert.equal(r.impacts[0]?.category, 'dormant');
+  assert.equal(r.impacts[0]?.severity, 'none');
+});
+
+test('category follows the matched exposure, not raw event fields: route match + unmatched symbols → travel', () => {
+  const route = { routeId: 'r1', description: 'ORD → DEN', startsAt: NOW - 60_000, endsAt: NOW + 60_000 };
+  const e = event({
+    domain: 'market',
+    description: 'TSLA halted',
+    location: undefined,
+    severity: 60,
+    affectedSymbols: ['TSLA'],
+  });
+  const r = mapEventsToPersonalImpact(profile({ travelRoutes: [route] }), [e], { now: () => NOW });
+  assert.equal(r.impacts[0]?.exposures.length, 1);
+  assert.equal(r.impacts[0]?.category, 'travel');
+});
+
+test('category follows the matched exposure, not raw event fields: entity match + unmatched utilities → not utility', () => {
+  const e = event({
+    domain: 'cyber',
+    description: 'Grid-sector CVE campaign',
+    location: undefined,
+    severity: 60,
+    affectedEntities: ['taiwan'],
+    affectedUtilities: ['water'],
+  });
+  const r = mapEventsToPersonalImpact(profile({ utilities: [] }), [e], { now: () => NOW });
+  assert.equal(r.impacts[0]?.exposures.length, 1);
+  assert.equal(r.impacts[0]?.category, 'immediate_risk');
+});
+
 // ── Severity ladder ────────────────────────────────────────────────────
 
 test('severity 80 → critical', () => {
@@ -229,6 +265,19 @@ test('severity 60 with exposures → elevated', () => {
 test('severity 30 with exposures → watch', () => {
   const r = mapEventsToPersonalImpact(profile(), [event({ severity: 30 })], { now: () => NOW });
   assert.equal(r.impacts[0]?.severity, 'watch');
+});
+
+test('severity exactly at the dormant floor with exposures → watch (floor is exclusive)', () => {
+  const r = mapEventsToPersonalImpact(profile(), [event({ severity: 25 })], { now: () => NOW });
+  assert.equal(r.impacts[0]?.severity, 'watch');
+});
+
+test('custom dormantSeverityFloor is honored for zero-exposure demotion', () => {
+  const r = mapEventsToPersonalImpact(profile({ savedPlaces: [FAR_PLACE] }), [event({ severity: 30 })], {
+    now: () => NOW,
+    dormantSeverityFloor: 40,
+  });
+  assert.equal(r.impacts[0]?.severity, 'none');
 });
 
 test('severity 10 with no exposures → none (suppressed)', () => {
@@ -270,6 +319,20 @@ test('summary tallies and recommendations follow severity', () => {
   assert.match(r.summary, /1 elevated/);
   assert.match(r.summary, /dormant/);
   assert.ok(r.recommendations.length >= 1);
+});
+
+test('summary dormant tally counts surfacing tier (low/none severity), not the dormant category', () => {
+  // A sub-floor event WITH a real exposure keeps its category but is
+  // tallied dormant — "dormant" in the summary means "not surfaced".
+  const events = [
+    event({ eventId: 'exposed-subfloor', severity: 10 }),
+    event({ eventId: 'no-exposure', severity: 80, location: { latitude: 0, longitude: 0 } }),
+  ];
+  const r = mapEventsToPersonalImpact(profile(), events, { now: () => NOW });
+  const exposed = r.impacts.find((i) => i.eventId === 'exposed-subfloor')!;
+  assert.equal(exposed.category, 'family_place');
+  assert.equal(exposed.severity, 'low');
+  assert.match(r.summary, /2 dormant/);
 });
 
 test('recommendations capped at 6', () => {

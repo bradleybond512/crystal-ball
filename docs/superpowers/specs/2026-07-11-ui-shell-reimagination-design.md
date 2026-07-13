@@ -188,6 +188,7 @@ pin/unpin persistence. ⌘K v1 over panel names. No behavior change for existing
 **Phase 2 — Metadata + Library** (flip default to new shell)
 `panel-metadata.ts` registry (generated + curated), 8-domain Library, ⌘K v2
 (tags/places/entities), System-tier separation. Old sidebar becomes the fallback flag.
+**[SHIPPED — see docs/superpowers/plans/2026-07-13-phase2-library-metadata.md; ⌘K entities deferred to Phase 3 (entity dossiers own that surface).]**
 
 **Phase 3 — Situations**
 Dossier drawer, evidence composition, action brief + timeline + ask bar, map fly-to +

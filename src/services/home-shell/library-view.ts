@@ -29,7 +29,11 @@ export interface LibraryView {
 
 export interface LibraryInputs {
   metadata: Readonly<Record<string, PanelMeta>>;
-  /** DEFAULT_PANELS-shaped name lookup. */
+  /**
+   * DEFAULT_PANELS-shaped name lookup. Also the variant gate: metadata
+   * covers every panel across all variants, so a panel with no entry here
+   * is not part of the active variant and is excluded entirely.
+   */
   names: Readonly<Record<string, { name: string } | undefined>>;
   domainLabels: Readonly<Record<LibraryDomain, string>>;
 }
@@ -53,11 +57,12 @@ export function buildLibraryView(inputs: LibraryInputs, query: string): LibraryV
 
   let matchCount = 0;
   for (const [panelId, meta] of Object.entries(inputs.metadata)) {
-    const title = inputs.names[panelId]?.name ?? panelId;
+    const title = inputs.names[panelId]?.name;
+    if (title === undefined) continue;
     if (q && !matches(q, title, panelId, meta)) continue;
-    matchCount += 1;
     const bucket = byDomain.get(meta.domain);
     if (!bucket) continue;
+    matchCount += 1;
     const view: LibraryPanelView = { panelId, title, icon: meta.icon, tier: meta.tier };
     if (meta.featured) bucket.featured.push(view);
     else bucket.rest.push(view);

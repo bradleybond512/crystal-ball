@@ -79,3 +79,27 @@ test('panels sort alphabetically by title within featured and rest', () => {
   const hazards = buildLibraryView(two, '').domains.find((d) => d.domain === 'hazards-weather')!;
   assert.deepEqual(hazards.rest.map((p) => p.title), ['Alpha Weather', 'Earthquakes', 'Zeta Weather']);
 });
+
+test('query matches on panelId even when title and tags do not', () => {
+  const view = buildLibraryView(inputs(), 'severe-w');
+  assert.equal(view.matchCount, 1);
+  const hazards = view.domains.find((d) => d.domain === 'hazards-weather')!;
+  assert.deepEqual(hazards.featured.map((p) => p.panelId), ['severe-weather']);
+});
+
+test('featured placement is retained under a matching query', () => {
+  const view = buildLibraryView(inputs(), 'severe');
+  const hazards = view.domains.find((d) => d.domain === 'hazards-weather')!;
+  assert.deepEqual(hazards.featured.map((p) => p.panelId), ['severe-weather']);
+  assert.equal(hazards.rest.length, 0);
+});
+
+test('metadata entries absent from names are skipped (not in this variant)', () => {
+  const variant = inputs();
+  variant.metadata['full-only-panel'] = meta();
+  const view = buildLibraryView(variant, '');
+  assert.equal(view.matchCount, 4);
+  const hazards = view.domains.find((d) => d.domain === 'hazards-weather')!;
+  assert.deepEqual(hazards.rest.map((p) => p.panelId), ['earthquakes']);
+  assert.ok(!hazards.rest.some((p) => p.panelId === 'full-only-panel'));
+});

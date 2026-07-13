@@ -210,10 +210,16 @@ test('search ranks navigation > panel when tied on raw match', () => {
 });
 
 test('negative weight demotes a command below an otherwise-equal match', () => {
+  // Discriminating fixture: identical titles-modulo-alphabet with the DEMOTED
+  // command alphabetically FIRST — the alphabetical tie-break alone would rank
+  // it on top, so only the weight mechanism can produce the asserted order.
   const reg = createCommandRegistry();
-  reg.register({ id: 'panel:a', title: 'Alpha Feed', keywords: ['feed'], category: 'panel', action: () => {} });
-  reg.register({ id: 'panel:b', title: 'Alpha Feed Diagnostics', keywords: ['feed'], category: 'panel', weight: -1.5, action: () => {} });
+  reg.register({ id: 'panel:demoted', title: 'Aardvark Feed', keywords: ['feed'], category: 'panel', weight: -1.5, action: () => {} });
+  reg.register({ id: 'panel:normal', title: 'Zebra Feed', keywords: ['feed'], category: 'panel', action: () => {} });
   const results = reg.search('feed', 8);
   const ids = results.map((r) => r.command.id);
-  assert.ok(ids.indexOf('panel:a') < ids.indexOf('panel:b'), `expected a before b, got ${ids.join(',')}`);
+  assert.ok(
+    ids.indexOf('panel:normal') < ids.indexOf('panel:demoted'),
+    `expected normal before demoted, got ${ids.join(',')}`,
+  );
 });

@@ -30,6 +30,7 @@ export class PanelFocusHost {
   private panelId: string | null = null;
   private openState = false;
   private openEpoch = 0;
+  private strippedClasses: string[] = [];
   private readonly opts: PanelFocusHostOptions;
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
@@ -77,6 +78,11 @@ export class PanelFocusHost {
     this.renderHeader(panelId);
     this.panelHome = document.createComment(`hs-focus-home:${panelId}`);
     panelEl.before(this.panelHome);
+    // Grid sizing classes carry !important min-heights inside @layer base,
+    // which outranks this host's unlayered !important neutralization —
+    // strip them while hosted, restore with the panel.
+    this.strippedClasses = [...panelEl.classList].filter((c) => /^(?:col-)?span-\d+$/.test(c));
+    panelEl.classList.remove(...this.strippedClasses);
     this.bodyEl.replaceChildren(panelEl);
 
     this.openState = true;
@@ -113,6 +119,8 @@ export class PanelFocusHost {
 
   private restorePanel(): void {
     const panelEl = this.hostedElInBody();
+    if (panelEl && this.strippedClasses.length) panelEl.classList.add(...this.strippedClasses);
+    this.strippedClasses = [];
     if (this.panelHome) {
       if (panelEl) this.panelHome.replaceWith(panelEl);
       else this.panelHome.remove();

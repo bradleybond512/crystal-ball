@@ -397,6 +397,8 @@ Object.defineProperty(window, 'homeShell', {
   set(v: boolean) {
     if (v) localStorage.removeItem('crystalball-classic-view');
     else localStorage.setItem('crystalball-classic-view', '1');
+    // Drive-by: clear the Phase-1 opt-in key so residue doesn't linger.
+    localStorage.removeItem('crystalball-home-shell');
     location.reload();
   },
 });

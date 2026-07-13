@@ -3,9 +3,10 @@
  * (docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md).
  *
  * Full-screen overlay: map canvas backdrop + three briefing bands +
- * pinned panel deck + status ribbon. Feature-flagged via localStorage
- * 'crystalball-home-shell'. Composition logic lives in the pure
- * view-models under src/services/home-shell/. All DOM is built with
+ * pinned panel deck + status ribbon. Default-on since Phase 2 for the
+ * full desktop variant — see src/services/home-shell/shell-gate.ts for
+ * the gate and the classic-view opt-out. Composition logic lives in the
+ * pure view-models under src/services/home-shell/. All DOM is built with
  * createElement/textContent — no HTML-string sinks.
  */
 

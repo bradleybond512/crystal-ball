@@ -57,3 +57,29 @@ test('deck defaults are covered by the registry', () => {
     assert.ok(PANEL_METADATA[pin], `deck default '${pin}' missing from registry`);
   }
 });
+
+const PLAYBOOK_CATEGORIES = [
+  'severe_weather', 'wildfire', 'oil_fuel_shortage', 'food_shortage',
+  'cyber_campaign', 'banking_outage', 'conflict_escalation',
+  'travel_disruption', 'grid_outage', 'disease_outbreak', 'earthquake',
+] as const;
+
+test('evidenceFor values are known playbook categories', () => {
+  for (const [key, meta] of Object.entries(PANEL_METADATA)) {
+    for (const cat of meta.evidenceFor ?? []) {
+      assert.ok(
+        (PLAYBOOK_CATEGORIES as readonly string[]).includes(cat),
+        `${key}: unknown evidenceFor category '${cat}'`,
+      );
+    }
+  }
+});
+
+test('every playbook category has at least 6 evidence panels', () => {
+  for (const cat of PLAYBOOK_CATEGORIES) {
+    const count = Object.values(PANEL_METADATA).filter(
+      (m) => m.evidenceFor?.includes(cat),
+    ).length;
+    assert.ok(count >= 6, `${cat}: only ${count} evidence panels`);
+  }
+});

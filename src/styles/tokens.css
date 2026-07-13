@@ -84,3 +84,35 @@
    * --accent-muted derives from it for secondary emphasis. */
   --accent-muted: color-mix(in srgb, var(--accent, #fff) 55%, transparent);
 }
+
+/* ── Home Shell palette (Phase 1 UI re-imagination) ─────────────
+ * Near-black professional skin for HomeShellOverlay. Scoped on
+ * :root so future phases (Library, situation dossier, full skin)
+ * reuse the same tokens. RGB triplets exist for rgba() composition
+ * (hairlines and tone washes at varying alphas). */
+:root {
+  --hs-bg-base:   #05070a;
+  --hs-bg-card:   #0b0f14;
+  --hs-bg-deck:   #0d141c;
+  --hs-bg-ribbon: #090d12;
+  --hs-map-glow:  #16222e;
+  --hs-map-edge:  #0a1017;
+
+  --hs-fg:       #e8eef4;
+  --hs-fg-line:  #aeb9c4;
+  --hs-fg-hint:  #9fb0c0;
+  --hs-fg-muted: #8b98a5;
+  --hs-fg-faint: #7a8a99;
+  --hs-fg-dim:   #5c6873;
+
+  --hs-ok:   #4caf7d;
+  --hs-warn: #d0a03c;
+  --hs-bad:  #d05a5a;
+
+  --hs-white-rgb:   255, 255, 255;
+  --hs-base-rgb:    5, 7, 10;
+  --hs-surface-rgb: 11, 15, 20;
+  --hs-ok-rgb:      76, 175, 125;
+  --hs-warn-rgb:    208, 160, 60;
+  --hs-bad-rgb:     208, 90, 90;
+}

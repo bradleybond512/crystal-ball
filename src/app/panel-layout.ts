@@ -709,6 +709,8 @@ export class PanelLayoutManager implements AppModule {
   private _onLibraryToggle: (() => void) | null = null;
   private _uninstallPlaceCommands: (() => void) | null = null;
   private _onFocusPlace: ((e: Event) => void) | null = null;
+  private cmdkPanel: CommandPalettePanel | null = null;
+  private _onCmdkToggle: (() => void) | null = null;
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
   private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
   private _onStatusOverlayKey: ((e: KeyboardEvent) => void) | null = null;
@@ -795,6 +797,8 @@ export class PanelLayoutManager implements AppModule {
  if (this._onLibraryToggle) { document.removeEventListener('cb:toggle-library', this._onLibraryToggle); this._onLibraryToggle = null; }
  if (this._uninstallPlaceCommands) { this._uninstallPlaceCommands(); this._uninstallPlaceCommands = null; }
  if (this._onFocusPlace) { document.removeEventListener('cb:focus-place', this._onFocusPlace); this._onFocusPlace = null; }
+ if (this._onCmdkToggle) { document.removeEventListener('cb:toggle-cmdk', this._onCmdkToggle); this._onCmdkToggle = null; }
+ this.cmdkPanel = null;
  if (this._onAnalystHudKey) { document.removeEventListener('keydown', this._onAnalystHudKey); this._onAnalystHudKey = null; }
  if (this._onBriefExportKey) { document.removeEventListener('keydown', this._onBriefExportKey); this._onBriefExportKey = null; }
  if (this._onStatusOverlayKey) { document.removeEventListener('keydown', this._onStatusOverlayKey); this._onStatusOverlayKey = null; }
@@ -1272,9 +1276,10 @@ export class PanelLayoutManager implements AppModule {
    }
  };
  document.addEventListener('cb:focus-place', this._onFocusPlace);
- const cmdk = new CommandPalettePanel();
- cmdk.mount(document.body);
- document.addEventListener('cb:toggle-cmdk', () => cmdk.toggle());
+ this.cmdkPanel = new CommandPalettePanel();
+ this.cmdkPanel.mount(document.body);
+ this._onCmdkToggle = () => this.cmdkPanel?.toggle();
+ document.addEventListener('cb:toggle-cmdk', this._onCmdkToggle);
 
  // Library (Phase 2 UI re-imagination) — browsable panel catalog. Mounted
  // unconditionally (before the Home Shell flag gate below); today only the

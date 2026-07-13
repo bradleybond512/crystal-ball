@@ -102,7 +102,7 @@ Action Briefs (`reaction-playbooks.ts` + `action-briefs.ts`) are now rendered in
 - `src/services/diagnostics/pipeline-trace.ts` — fact lifecycle registry tracking each `traceId` through stages `ingested→scored→clustered→evaluated→routed|dropped`; `stalled()` surfaces entries stuck in mid-flight.
 - `src/services/diagnostics/degradation-alerts.ts` — pure detector: compares two `SystemHealthReport` snapshots, emits `DegradationAlert` for feature healthy→degraded/unsafe, panel →stale/failing, and unsafeSuppressions increase. Safety-critical alerts have `safetyCritical: true`.
 
-### Home Shell (Phases 1-3 of the UI re-imagination — see docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md)
+### Home Shell (Phases 1-4 of the UI re-imagination — see docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md)
 
 `src/components/HomeShellOverlay.ts` — the DEFAULT opening surface since Phase 2 for the full
 desktop variant: reparented map canvas + three briefing bands + pinned panel Deck + status
@@ -120,6 +120,13 @@ Phase 3 added the situation dossier (`src/components/SituationDossier.ts`, `cb:o
 evidence composed via `evidenceFor` metadata (PlaybookCategory-keyed), honest why-surfaced from
 pipeline/notification traces, action brief + timeline rail, context-free ask bar. Entry:
 critical-band briefing rows, ⌘K 'Dossier: <title>', map fly via `cb:map-focus`.
+Phase 4 added the focus view (`src/components/PanelFocusHost.ts`): deck cards, dossier evidence
+tiles, and Library rows open the real panel inside the shell by REPARENTING it out of
+`#panelsGrid` (comment placeholder marks its home; restore on close + `resize` dispatch).
+`panel-layout.ts` exposes `ensurePanelMounted(key)` — lazy-mounts without classic scroll, null
+for unknown/failed/disabled panels → callers fall back to classic navigation (toast). Esc
+layering: cmdk > Library > focus host > dossier > shell. Classic view remains the fallback
+surface — full retirement deferred pending soak; mobile + bespoke S-cards also deferred.
 
 ## Foundation Intelligence Layers
 

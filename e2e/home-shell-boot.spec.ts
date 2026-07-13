@@ -54,4 +54,23 @@ test.describe('home shell default boot', () => {
     await expect(page.locator('.home-shell')).toBeVisible();
     await expect(page.locator('body')).toHaveClass(/home-shell-active/);
   });
+
+  test('deck card opens the panel in the focus host and Escape restores it', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('.home-shell')).toBeVisible({ timeout: 30_000 });
+    // Scroll the deck into view and open the first pinned card.
+    const firstCard = page.locator('.hs-deck-grid .hs-card').first();
+    await firstCard.scrollIntoViewIfNeeded();
+    const panelKey = await firstCard.getAttribute('data-panel-key');
+    await firstCard.click();
+    const focus = page.locator('.hs-focus');
+    await expect(focus).toHaveClass(/hs-focus--open/, { timeout: 10_000 });
+    // The REAL panel element is inside the host.
+    await expect(page.locator(`.hs-focus-body [data-panel="${panelKey}"]`)).toBeVisible({ timeout: 15_000 });
+    await page.keyboard.press('Escape');
+    await expect(focus).not.toHaveClass(/hs-focus--open/);
+    // Panel returned to the classic grid.
+    await expect(page.locator(`#panelsGrid [data-panel="${panelKey}"]`)).toHaveCount(1);
+    await expect(page.locator('.home-shell')).toBeVisible();
+  });
 });

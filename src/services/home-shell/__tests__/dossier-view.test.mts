@@ -78,6 +78,7 @@ test('evidence composes only matching category, system tier excluded from top, c
   assert.ok(view.runnersUp.length <= 4);
   const all = [...view.evidence, ...view.runnersUp].map((c) => c.panelId);
   assert.ok(!all.includes('earthquakes'), 'wrong-category panel leaked in');
+  assert.ok(!view.evidence.map((c) => c.panelId).includes('self-test'), 'system-tier panel leaked into top evidence');
   assert.equal(view.evidence[0]!.panelId, 'nws-alerts', 'featured+healthy ranks first');
   assert.ok(view.evidence[0]!.reason.length > 0);
 });

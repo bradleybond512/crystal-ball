@@ -6,15 +6,19 @@
  * full remediation pass (TODO-019 Phase 2).
  *
  * To regenerate the baseline after a panel change:
- *   UPDATE_A11Y_BASELINE=1 npm run test:e2e:runtime -- a11y-baseline
+ *   UPDATE_A11Y_BASELINE=1 VITE_VARIANT=full npx playwright test e2e/a11y-baseline.spec.ts
  */
 
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const BASELINE_PATH = join(__dirname, 'a11y-baseline.json');
+// __dirname does not exist in ES-module scope; without this shim the spec
+// throws at collection time, which silently aborts every Playwright batch
+// that includes this file.
+const BASELINE_PATH = join(dirname(fileURLToPath(import.meta.url)), 'a11y-baseline.json');
 
 interface BaselineEntry {
   panel: string;
@@ -32,6 +36,14 @@ function saveBaseline(baseline: Record<string, BaselineEntry>): void {
   writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2));
 }
 
+// The baseline is recorded against the full variant. The tech/finance e2e
+// sweeps run every spec in e2e/, but their panel sets lack several scan
+// targets — the fast-fail below would fail those runs, not skip them.
+// Unset VITE_VARIANT resolves to 'full', mirroring src/services/runtime.ts.
+test.skip((process.env.VITE_VARIANT ?? 'full') !== 'full', 'a11y baseline is recorded against the full variant');
+
+// Panel ids must exist in FULL_PANELS (src/config/panels.ts) and be reachable
+// via cb:navigate-panel. 'dashboard-root' scans the whole page instead.
 const PANELS_TO_SCAN = [
   'dashboard-root',
   'insights',
@@ -43,16 +55,41 @@ const PANELS_TO_SCAN = [
   'live-news',
 ];
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    // Skip the first-run WelcomeFlow modal — its backdrop would sit on top of
+    // every panel and pollute the scans.
+    localStorage.setItem('cb:onboarding-complete', 'true');
+  });
+});
+
 for (const panelId of PANELS_TO_SCAN) {
   test(`a11y baseline: ${panelId}`, async ({ page }) => {
     await page.goto('/');
-    // Wait for app to bootstrap
-    await page.waitForSelector('body', { timeout: 10_000 });
-    await page.waitForTimeout(1500);
+    // Boot is far enough along once the grid holds a mounted panel — the
+    // cb:navigate-panel listener registers earlier in the same createPanels()
+    // pass, so dispatching after this point cannot race it.
+    await page.waitForSelector('#panelsGrid > [data-panel]', { timeout: 60_000 });
 
-    const builder = panelId === 'dashboard-root'
-      ? new AxeBuilder({ page })
-      : new AxeBuilder({ page }).include(`[data-panel-id="${panelId}"], #${panelId}, .panel-${panelId}`);
+    let builder: AxeBuilder;
+    if (panelId === 'dashboard-root') {
+      await page.waitForTimeout(1500);
+      builder = new AxeBuilder({ page });
+    } else {
+      // Panels lazy-mount: navigate first (mounts + scrolls into view), then
+      // fail fast if the panel never appears — axe's include() would
+      // otherwise poll an empty selector for the full 90s test timeout.
+      await page.evaluate((key) => {
+        document.dispatchEvent(new CustomEvent('cb:navigate-panel', { detail: { panelKey: key } }));
+      }, panelId);
+      const panelSelector = `#panelsGrid > [data-panel="${panelId}"]`;
+      await expect(
+        page.locator(panelSelector),
+        `panel '${panelId}' never mounted — removed from this variant, renamed, or disabled?`,
+      ).toBeVisible({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+      builder = new AxeBuilder({ page }).include(panelSelector);
+    }
 
     const results = await builder.analyze();
     const violationIds = results.violations.map(v => v.id).sort();

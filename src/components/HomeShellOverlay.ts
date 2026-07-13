@@ -16,7 +16,7 @@ import {
   getPersonalProfile,
   getRecentEvents,
 } from '@/services/insights/insights-state';
-import { getWhatChanged } from '@/services/command-center/what-changed';
+import { getSnapshotCount, getWhatChanged } from '@/services/command-center/what-changed';
 import type { WhatChangedEvent } from '@/services/command-center/what-changed';
 import {
   getFeatureHealthRegistry,
@@ -163,10 +163,16 @@ export class HomeShellOverlay {
       personal = undefined;
     }
 
+    // getWhatChanged returns [] when the shared store holds fewer than 2
+    // snapshots (cold boot, or the single writer — CommandCenterPanel — not
+    // recording yet). That is "can't answer", not "nothing changed": leave
+    // the digest undefined so the band renders its honest staleness line.
     let changed: WhatChangedEvent[] | undefined;
     try {
-      changed = getWhatChanged(now - CHANGED_WINDOW_MS);
-      this.lastGoodChangedAt = now;
+      if (getSnapshotCount() >= 2) {
+        changed = getWhatChanged(now - CHANGED_WINDOW_MS);
+        this.lastGoodChangedAt = now;
+      }
     } catch {
       changed = undefined;
     }

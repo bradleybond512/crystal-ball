@@ -71,7 +71,7 @@ test('critical personal impact drives band tone and lines', () => {
   const personal = view.bands.find((b) => b.kind === 'personal')!;
   assert.equal(personal.tone, 'critical');
   assert.equal(personal.headline, '1 personal impact near you');
-  assert.ok(personal.lines[0]!.includes('Severe cell approaching HOME'));
+  assert.ok(personal.entries[0]!.text.includes('Severe cell approaching HOME'));
   assert.equal(view.allClear, false);
 });
 
@@ -103,8 +103,8 @@ test('changed band counts events, formats lines, escalates tone', () => {
   const changed = view.bands.find((b) => b.kind === 'changed')!;
   assert.equal(changed.tone, 'elevated');
   assert.ok(changed.headline.startsWith('2 changes'));
-  assert.equal(changed.lines.length, 2);
-  assert.ok(changed.lines.some((l) => l.includes('Wheat risk tier 2→3')));
+  assert.equal(changed.entries.length, 2);
+  assert.ok(changed.entries.some((l) => l.text.includes('Wheat risk tier 2→3')));
 });
 
 test('undefined changed digest is stale, not empty', () => {
@@ -124,8 +124,8 @@ test('critical band ranks situation + high-severity events, caps at 4 lines', ()
   const view = buildBriefingView({ ...quiet(), situation: sit(), recentEvents: events }, NOW);
   const critical = view.bands.find((b) => b.kind === 'critical')!;
   assert.equal(critical.tone, 'critical');
-  assert.ok(critical.lines.length <= 4);
-  assert.ok(critical.lines[0]!.includes('Black Sea corridor escalation'));
+  assert.ok(critical.entries.length <= 4);
+  assert.ok(critical.entries[0]!.text.includes('Black Sea corridor escalation'));
   assert.ok(critical.headline.includes('6 situations'));
 });
 
@@ -147,7 +147,7 @@ test('critical band dedupes the active situation from recent events', () => {
     NOW,
   );
   const critical = view.bands.find((b) => b.kind === 'critical')!;
-  assert.equal(critical.lines.length, 1);
+  assert.equal(critical.entries.length, 1);
   assert.equal(critical.headline, '1 situation worldwide');
 });
 
@@ -183,4 +183,19 @@ test('critical impact with zero exposures is not counted as personal', () => {
   assert.equal(personal.tone, 'clear');
   assert.equal(personal.headline, 'All clear near your places');
   assert.equal(view.allClear, true);
+});
+
+test('critical entries carry situation/event ids for dossier entry', () => {
+  const view = buildBriefingView({ ...quiet(), situation: sit(), recentEvents: [
+    { eventId: 'e9', description: 'High-sev event', domain: 'conflict', severity: 88 },
+  ] }, NOW);
+  const critical = view.bands.find((b) => b.kind === 'critical')!;
+  assert.equal(critical.entries[0]!.situationId, 'sit-1');
+  assert.equal(critical.entries[1]!.situationId, 'e9');
+});
+
+test('personal entries carry no ids', () => {
+  const view = buildBriefingView({ ...quiet(), personal: report([impact()]) }, NOW);
+  const personal = view.bands.find((b) => b.kind === 'personal')!;
+  assert.equal(personal.entries[0]!.situationId, undefined);
 });

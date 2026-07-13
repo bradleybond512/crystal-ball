@@ -385,7 +385,11 @@ function button(className: string, action: string, label: string): HTMLButtonEle
 function renderBand(b: BriefingBandView): HTMLElement {
   const band = el('div', `hs-band hs-tone-${b.tone}`);
   band.append(el('div', 'hs-band-label', b.label), el('div', 'hs-band-headline', b.headline));
-  for (const line of b.lines) band.append(el('div', 'hs-band-line', line));
+  for (const entry of b.entries) {
+    const line = el('div', entry.situationId ? 'hs-band-line hs-band-link' : 'hs-band-line', entry.text);
+    if (entry.situationId) line.dataset.situationId = entry.situationId;
+    band.append(line);
+  }
   if (b.staleness) band.append(el('div', 'hs-band-stale', b.staleness));
   return band;
 }

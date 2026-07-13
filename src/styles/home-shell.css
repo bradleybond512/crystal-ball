@@ -137,6 +137,7 @@ body.home-shell-active {
 
 .hs-band-headline { font-size: 12px; margin-bottom: 4px; }
 .hs-band-line { font-size: 10px; color: var(--hs-fg-line); line-height: 1.6; }
+.hs-band-link { cursor: pointer; text-decoration: underline dotted; }
 .hs-band-stale { font-size: 9px; color: var(--hs-warn); margin-top: 4px; }
 
 .home-shell-deck-hint {

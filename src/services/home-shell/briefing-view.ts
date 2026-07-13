@@ -15,13 +15,19 @@ import type { SituationDescriptor } from '../insights/action-briefs.ts';
 
 export type BandTone = 'clear' | 'info' | 'elevated' | 'critical';
 
+export interface BriefingLineView {
+  text: string;
+  /** Present on critical-band rows — opens the situation dossier. */
+  situationId?: string;
+}
+
 export interface BriefingBandView {
   kind: 'personal' | 'changed' | 'critical';
   label: string;
   tone: BandTone;
   headline: string;
-  /** ≤ 4 short lines below the headline. */
-  lines: readonly string[];
+  /** ≤ 4 short entries below the headline. */
+  entries: readonly BriefingLineView[];
   /** Honest-staleness line, e.g. "unavailable · last good 14:20". */
   staleness?: string;
 }
@@ -88,7 +94,7 @@ function buildPersonalBand(input: BriefingInput): BriefingBandView {
       label: 'PERSONAL',
       tone: 'info',
       headline: 'Personal status unavailable',
-      lines: [],
+      entries: [],
       staleness: staleLine(input.lastGoodPersonalAt),
     };
   }
@@ -98,10 +104,10 @@ function buildPersonalBand(input: BriefingInput): BriefingBandView {
   const headline = active.length === 0
     ? 'All clear near your places'
     : `${active.length} personal ${impactWord} near you`;
-  const lines = active
+  const entries = active
     .slice(0, MAX_LINES)
-    .map((i) => `${SEVERITY_GLYPH[i.severity]} ${i.description} — ${i.recommendedAction}`);
-  return { kind: 'personal', label: 'PERSONAL', tone, headline, lines };
+    .map((i) => ({ text: `${SEVERITY_GLYPH[i.severity]} ${i.description} — ${i.recommendedAction}` }));
+  return { kind: 'personal', label: 'PERSONAL', tone, headline, entries };
 }
 
 /** Personally-relevant: meaningful severity AND at least one real
@@ -127,7 +133,7 @@ function buildChangedBand(input: BriefingInput): BriefingBandView {
       label: 'WHAT CHANGED',
       tone: 'info',
       headline: 'Change digest unavailable',
-      lines: [],
+      entries: [],
       staleness: staleLine(input.lastGoodChangedAt),
     };
   }
@@ -137,15 +143,15 @@ function buildChangedBand(input: BriefingInput): BriefingBandView {
       label: 'WHAT CHANGED',
       tone: 'clear',
       headline: 'Nothing changed recently',
-      lines: [],
+      entries: [],
     };
   }
   const tone: BandTone = changed.some((e) => e.type === 'escalated' || e.type === 'feed-degraded')
     ? 'elevated'
     : 'info';
   const headline = `${changed.length} change${changed.length === 1 ? '' : 's'} since last check`;
-  const lines = changed.slice(0, MAX_LINES).map((e) => formatDelta(e));
-  return { kind: 'changed', label: 'WHAT CHANGED', tone, headline, lines };
+  const entries = changed.slice(0, MAX_LINES).map((e) => ({ text: formatDelta(e) }));
+  return { kind: 'changed', label: 'WHAT CHANGED', tone, headline, entries };
 }
 
 function buildCriticalBand(input: BriefingInput): BriefingBandView {
@@ -153,20 +159,26 @@ function buildCriticalBand(input: BriefingInput): BriefingBandView {
   const events = [...(input.recentEvents ?? [])]
     .filter((e) => e.severity >= CRITICAL_EVENT_FLOOR && e.eventId !== situationId)
     .sort((a, b) => b.severity - a.severity);
-  const lines: string[] = [];
+  const entries: BriefingLineView[] = [];
   if (input.situation) {
-    lines.push(`● ${input.situation.title} (${input.situation.severityScore})`);
+    entries.push({
+      text: `● ${input.situation.title} (${input.situation.severityScore})`,
+      situationId: input.situation.id,
+    });
   }
   for (const e of events) {
-    if (lines.length >= MAX_LINES) break;
-    lines.push(`${e.severity >= CRITICAL_TONE_FLOOR ? '●' : '▲'} ${e.description} (${e.severity})`);
+    if (entries.length >= MAX_LINES) break;
+    entries.push({
+      text: `${e.severity >= CRITICAL_TONE_FLOOR ? '●' : '▲'} ${e.description} (${e.severity})`,
+      situationId: e.eventId,
+    });
   }
   const worst = Math.max(input.situation?.severityScore ?? 0, events[0]?.severity ?? 0);
-  const tone = criticalTone(lines.length > 0, worst);
+  const tone = criticalTone(entries.length > 0, worst);
   const count = (input.situation ? 1 : 0) + events.length;
   const situationWord = count === 1 ? 'situation' : 'situations';
   const headline = count === 0 ? 'Nothing critical worldwide' : `${count} ${situationWord} worldwide`;
-  return { kind: 'critical', label: 'CRITICAL WORLDWIDE', tone, headline, lines };
+  return { kind: 'critical', label: 'CRITICAL WORLDWIDE', tone, headline, entries };
 }
 
 function criticalTone(hasLines: boolean, worstSeverity: number): BandTone {

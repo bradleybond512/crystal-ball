@@ -194,8 +194,8 @@ test('critical entries carry situation/event ids for dossier entry', () => {
   assert.equal(critical.entries[1]!.situationId, 'e9');
 });
 
-test('personal entries carry no ids', () => {
+test('personal entries carry event ids for dossier entry', () => {
   const view = buildBriefingView({ ...quiet(), personal: report([impact()]) }, NOW);
   const personal = view.bands.find((b) => b.kind === 'personal')!;
-  assert.equal(personal.entries[0]!.situationId, undefined);
+  assert.equal(personal.entries[0]!.situationId, 'evt-1');
 });

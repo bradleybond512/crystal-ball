@@ -17,7 +17,7 @@ export type BandTone = 'clear' | 'info' | 'elevated' | 'critical';
 
 export interface BriefingLineView {
   text: string;
-  /** Present on critical-band rows — opens the situation dossier. */
+  /** Present on personal- and critical-band rows — opens the situation dossier. */
   situationId?: string;
 }
 
@@ -106,7 +106,7 @@ function buildPersonalBand(input: BriefingInput): BriefingBandView {
     : `${active.length} personal ${impactWord} near you`;
   const entries = active
     .slice(0, MAX_LINES)
-    .map((i) => ({ text: `${SEVERITY_GLYPH[i.severity]} ${i.description} — ${i.recommendedAction}` }));
+    .map((i) => ({ text: `${SEVERITY_GLYPH[i.severity]} ${i.description} — ${i.recommendedAction}`, situationId: i.eventId }));
   return { kind: 'personal', label: 'PERSONAL', tone, headline, entries };
 }
 

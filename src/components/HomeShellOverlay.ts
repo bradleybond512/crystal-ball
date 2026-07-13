@@ -470,6 +470,8 @@ const DOMAIN_TO_CATEGORY: Readonly<Record<string, PlaybookCategory>> = {
   disease: 'disease_outbreak',
   energy: 'grid_outage',
   grid: 'grid_outage',
+  infrastructure: 'grid_outage',
+  utility: 'grid_outage',
   finance: 'banking_outage',
   market: 'banking_outage',
   travel: 'travel_disruption',

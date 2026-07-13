@@ -1,28 +1,29 @@
 /* Library — Phase 2 of the UI shell re-imagination.
    Browsable 8-domain panel catalog. Scoped under .library-overlay.
-   Palette: fixed-dark semantic tokens from tokens.css (--surface-*,
-   --text-*) plus the house color-mix(in srgb, var(--token) N%, transparent)
-   pattern (see panels.css / happy-theme.css / settings-window.css) for
-   translucent hover/active states — the plan's --hs-* prefix does not
-   exist anywhere in the codebase, verified via repo-wide grep. */
+   Palette: --hs-* tokens (tokens.css, Home Shell section) — the Library
+   sits visually inside the Home Shell world. */
 
 .library-overlay {
   position: fixed;
   inset: 0;
   z-index: 10001; /* above home shell (10000), below cmdk (10005) */
-  background: var(--surface-0);
-  color: var(--text-primary);
+  background: var(--hs-bg-base);
+  color: var(--hs-fg);
   font-family: ui-monospace, Menlo, Monaco, monospace;
   display: flex;
   flex-direction: column;
 }
+
+/* display: flex above beats the UA's [hidden] { display: none } — restate
+   it so the mounted-but-closed overlay doesn't cover the app at boot. */
+.library-overlay[hidden] { display: none; }
 
 .library-topbar {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--surface-border);
+  border-bottom: 1px solid rgba(var(--hs-white-rgb), 0.08);
 }
 
 .library-title { font-size: 13px; font-weight: 600; }
@@ -30,10 +31,10 @@
 .library-search {
   flex: 1;
   max-width: 420px;
-  background: var(--surface-1);
-  border: 1px solid var(--surface-border);
+  background: var(--hs-bg-card);
+  border: 1px solid rgba(var(--hs-white-rgb), 0.14);
   border-radius: 8px;
-  color: var(--text-primary);
+  color: var(--hs-fg);
   font: inherit;
   font-size: 11px;
   padding: 5px 12px;
@@ -41,10 +42,10 @@
 
 .library-close {
   margin-left: auto;
-  border: 1px solid var(--surface-border);
+  border: 1px solid rgba(var(--hs-white-rgb), 0.14);
   border-radius: 6px;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--hs-fg-muted);
   font: inherit;
   font-size: 10px;
   padding: 4px 10px;
@@ -59,7 +60,7 @@
 
 .library-nav {
   width: 200px;
-  border-right: 1px solid var(--surface-border);
+  border-right: 1px solid rgba(var(--hs-white-rgb), 0.08);
   padding: 10px 8px;
   display: flex;
   flex-direction: column;
@@ -74,7 +75,7 @@
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: var(--text-tertiary);
+  color: var(--hs-fg-muted);
   font: inherit;
   font-size: 11px;
   padding: 6px 10px;
@@ -83,11 +84,11 @@
 }
 
 .library-nav button.active {
-  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
-  color: var(--text-primary);
+  background: rgba(var(--hs-white-rgb), 0.08);
+  color: var(--hs-fg);
 }
 
-.library-nav .lib-count { color: var(--text-tertiary); font-size: 10px; }
+.library-nav .lib-count { color: var(--hs-fg-dim); font-size: 10px; }
 
 .library-content {
   flex: 1;
@@ -98,7 +99,7 @@
 .lib-section-label {
   font-size: 9px;
   letter-spacing: 0.1em;
-  color: var(--text-tertiary);
+  color: var(--hs-fg-muted);
   margin: 10px 0 8px;
 }
 
@@ -112,31 +113,31 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--surface-1);
-  border: 1px solid var(--surface-border);
+  background: var(--hs-bg-card);
+  border: 1px solid rgba(var(--hs-white-rgb), 0.09);
   border-radius: 8px;
   padding: 9px 11px;
   font-size: 11px;
-  color: var(--text-primary);
+  color: var(--hs-fg);
   cursor: pointer;
   text-align: left;
   font-family: inherit;
 }
 
-.lib-card:hover { border-color: var(--surface-border-strong); }
+.lib-card:hover { border-color: rgba(var(--hs-white-rgb), 0.25); }
 .lib-card .lib-icon { font-size: 13px; }
-.lib-card.lib-system { color: var(--text-tertiary); }
+.lib-card.lib-system { color: var(--hs-fg-muted); }
 
 .lib-more {
   margin: 8px 0 4px;
   background: transparent;
-  border: 1px dashed var(--surface-border-strong);
+  border: 1px dashed rgba(var(--hs-white-rgb), 0.2);
   border-radius: 6px;
-  color: var(--text-disabled);
+  color: var(--hs-fg-faint);
   font: inherit;
   font-size: 10px;
   padding: 5px 10px;
   cursor: pointer;
 }
 
-.lib-empty { color: var(--text-tertiary); font-size: 11px; padding: 20px 0; }
+.lib-empty { color: var(--hs-fg-dim); font-size: 11px; padding: 20px 0; }

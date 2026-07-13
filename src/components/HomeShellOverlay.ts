@@ -367,6 +367,11 @@ export class HomeShellOverlay {
 
   private onClick(e: MouseEvent): void {
     const target = e.target as HTMLElement;
+    // Dossier containment: the drawer handles its own clicks; without this
+    // guard its data-panel-key cards bubble into the branches below and
+    // double-dispatch. (stopPropagation in the dossier would instead starve
+    // the app's document-level outside-click closers — don't do that.)
+    if (target.closest('.hs-dossier, .hs-dossier-scrim')) return;
     const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
     if (action === 'cmdk') {
       document.dispatchEvent(new CustomEvent('cb:toggle-cmdk'));

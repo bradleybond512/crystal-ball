@@ -70,6 +70,7 @@ Work in `/Users/bradleybond/Developer/crystalball/.worktrees/ui-shell-phase2` on
 ### Task 1: Generator script + seeded `panel-metadata.ts`
 
 **Files:**
+
 - Create: `scripts/generate-panel-metadata.mjs`
 - Create: `src/config/panel-metadata.ts` (by running the script)
 
@@ -320,6 +321,7 @@ console.log(`[generate-panel-metadata] wrote ${fullPanels.size} entries (${phant
 ```bash
 cd /Users/bradleybond/Developer/crystalball/.worktrees/ui-shell-phase2 && node scripts/generate-panel-metadata.mjs
 ```
+
 Expected: `wrote 405 entries (62 phantoms skipped)` plus warnings listing phantoms and any dropped featured keys. If a FEATURED key was dropped, replace it in the script with a real key from the same domain (search FULL_PANELS by name) and re-run until each domain has ≥4 surviving featured keys.
 
 - [ ] **Step 3: Typecheck the generated file**
@@ -327,6 +329,7 @@ Expected: `wrote 405 entries (62 phantoms skipped)` plus warnings listing phanto
 ```bash
 cd /Users/bradleybond/Developer/crystalball/.worktrees/ui-shell-phase2 && npm run typecheck
 ```
+
 Expected: zero errors. If the regex scrape produced a malformed entry (unescaped quote etc.), fix the generator, not the output, and re-run.
 
 - [ ] **Step 4: Commit**
@@ -345,6 +348,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ### Task 2: Registry validation test
 
 **Files:**
+
 - Test: `src/config/__tests__/panel-metadata.test.mts`
 
 - [ ] **Step 1: Write the test**
@@ -419,6 +423,7 @@ test('deck defaults are covered by the registry', () => {
 ```bash
 cd /Users/bradleybond/Developer/crystalball/.worktrees/ui-shell-phase2 && npx tsx --test src/config/__tests__/panel-metadata.test.mts
 ```
+
 Expected: PASS (6 tests). Failures here mean the generator seeds need adjusting (e.g. a domain short on featured entries, or a system key landing outside system-health). Fix by hand-editing `src/config/panel-metadata.ts` (that IS the workflow — it's hand-curated now) OR adjusting the generator + re-running; keep the test green either way.
 
 - [ ] **Step 3: Commit**
@@ -428,6 +433,7 @@ cd /Users/bradleybond/Developer/crystalball/.worktrees/ui-shell-phase2 && git ad
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ```
+
 (Include the registry/generator in the add in case Step 2 required curation.)
 
 ---
@@ -435,6 +441,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ### Task 3: `library-view.ts` — pure view-model
 
 **Files:**
+
 - Create: `src/services/home-shell/library-view.ts`
 - Test: `src/services/home-shell/__tests__/library-view.test.mts`
 
@@ -644,6 +651,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ### Task 4: `LibraryOverlay` component + stylesheet + wiring
 
 **Files:**
+
 - Create: `src/components/LibraryOverlay.ts`
 - Create: `src/styles/library.css`
 - Modify: `src/main.ts` (css import block)
@@ -1011,23 +1019,30 @@ function grid(panels: readonly LibraryPanelView[]): HTMLElement {
 
 1. `src/main.ts` CSS block (lines 2-7): add `import './styles/library.css';`
 2. `src/components/HomeShellOverlay.ts` topbar (`:92-98`): add a Library button between the spacer and the exit button:
+
 ```ts
       button('home-shell-library', 'library', '📚 Library'),
 ```
+
    and in `onClick`, after the `cmdk` branch:
+
 ```ts
     if (action === 'library') {
       document.dispatchEvent(new CustomEvent('cb:toggle-library'));
       return;
     }
 ```
+
    Add a `.home-shell-library` rule to `src/styles/home-shell.css` cloned from `.home-shell-exit` (same border/color/font, `font-size: 11px; padding: 5px 12px;`).
 3. `src/app/panel-layout.ts`: import `LibraryOverlay`; add fields
+
 ```ts
   private libraryOverlay: LibraryOverlay | null = null;
   private _onLibraryToggle: (() => void) | null = null;
 ```
+
    directly after the cmdk wiring block (~`:1249`, BEFORE the home-shell gate — the Library must exist for classic users too):
+
 ```ts
     // Library (Phase 2 UI re-imagination) — browsable panel catalog.
     this.libraryOverlay = new LibraryOverlay();
@@ -1035,7 +1050,9 @@ function grid(panels: readonly LibraryPanelView[]): HTMLElement {
     this._onLibraryToggle = () => this.libraryOverlay?.toggle();
     document.addEventListener('cb:toggle-library', this._onLibraryToggle);
 ```
+
    and in `destroy()` next to the home-shell teardown (`:784-786` area):
+
 ```ts
  if (this.libraryOverlay) { this.libraryOverlay.destroy(); this.libraryOverlay = null; }
  if (this._onLibraryToggle) { document.removeEventListener('cb:toggle-library', this._onLibraryToggle); this._onLibraryToggle = null; }
@@ -1048,6 +1065,7 @@ cd /Users/bradleybond/Developer/crystalball/.worktrees/ui-shell-phase2 && npm ru
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ```
+
 Expected: zero type errors, lint:colors 0 offenders, 28 home-shell tests pass.
 
 ---
@@ -1055,6 +1073,7 @@ Expected: zero type errors, lint:colors 0 offenders, 28 home-shell tests pass.
 ### Task 5: ⌘K v2 — weight in ranking, metadata tags, place commands
 
 **Files:**
+
 - Modify: `src/services/command-palette/command-registry.ts` (add `weight?`)
 - Modify: `src/services/command-palette/built-in-commands.ts` (tags + system weight + Library command)
 - Create: `src/services/command-palette/place-commands.ts`
@@ -1081,11 +1100,14 @@ test('negative weight demotes a command below an otherwise-equal match', () => {
 Run it: FAIL (weight not a known property / ordering wrong).
 
 Then in `command-registry.ts`:
+
 - Add to `PaletteCommand`:
+
 ```ts
   /** Additive rank bias. Negative demotes (e.g. system-tier panels). Default 0. */
   weight?: number;
 ```
+
 - In `rank()` (both the empty-query and scored paths), add `+ (cmd.weight ?? 0)` to the returned score.
 
 Run the test again: PASS. Run the whole existing registry test file: all pass.
@@ -1275,6 +1297,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ### Task 6: `shell-gate.ts` — the single default-on gate
 
 **Files:**
+
 - Create: `src/services/home-shell/shell-gate.ts`
 - Test: `src/services/home-shell/__tests__/shell-gate.test.mts`
 
@@ -1384,6 +1407,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 This is the LAST behavioral commit — independently revertable.
 
 **Files:**
+
 - Modify: `src/app/panel-layout.ts:1253` (gate swap)
 - Modify: `src/services/keyboard/shortcut-bootstrap.ts:64` (gate swap)
 - Modify: `src/main.ts:388-399` (console setters)
@@ -1498,6 +1522,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ### Task 8: Finalize — test scripts, docs, smoke, PR
 
 **Files:**
+
 - Modify: `package.json` (`test:homeshell` — add library-view, shell-gate, panel-metadata, place-commands test files)
 - Modify: `CLAUDE.md` (Home Shell section)
 - Modify: `docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md` (Phase 2 status note)
@@ -1535,6 +1560,7 @@ In the spec's Phasing section, change the Phase 2 line to append: `**[SHIPPED �
 ```bash
 cd /Users/bradleybond/Developer/crystalball/.worktrees/ui-shell-phase2 && npm run test:homeshell && npm run typecheck:all && node scripts/lint-colors.mjs && npm run smoke:offline
 ```
+
 All green. Manual browser smoke (coordinator runs this via the preview tools): flag-less boot → shell appears; 📚 button opens Library; domain nav + featured grids + "all N" expansion + search filter; card click lands on the classic panel; ⌘K shows tags/places and system panels rank below content panels; `classicView=true` → classic boot, Library still reachable? (No — Library button lives in the shell; classic users reach it via ⌘K "Open Library". Verify that path.)
 
 - [ ] **Step 5: Commit, push, PR**

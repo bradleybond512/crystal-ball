@@ -20,7 +20,7 @@ let cursor = 0;
 const lastByPanel = new Map<string, { text: string; at: number }>();
 
 function buildQueue(): void {
-  const tiles = [...document.querySelectorAll<HTMLElement>('#panelsGrid [data-panel]')];
+  const tiles = [...document.querySelectorAll<HTMLElement>('#panelsGrid [data-panel], .hs-focus-body [data-panel]')];
   queue = tiles
     .map(t => t.dataset.panel!)
     .filter(id => !SKIP_PANELS.has(id));

@@ -55,6 +55,8 @@ interface NarrativeSource {
 
 export interface HomeShellOptions {
   getPanel: (panelId: string) => NarrativeSource | undefined;
+  /** Mounts a lazy panel without touching the classic grid's scroll. */
+  ensurePanel: (panelId: string) => Promise<unknown>;
 }
 
 export class HomeShellOverlay {
@@ -73,6 +75,8 @@ export class HomeShellOverlay {
   private _onOpenDossier: ((e: Event) => void) | null = null;
   private lastSituationCommandId: string | null = null;
   private readonly getPanel: HomeShellOptions['getPanel'];
+  // used by the focus host (Task 2)
+  private readonly ensurePanel: HomeShellOptions['ensurePanel'];
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && !e.defaultPrevented && this.visible) this.hide();
@@ -80,6 +84,8 @@ export class HomeShellOverlay {
 
   constructor(options: HomeShellOptions) {
     this.getPanel = options.getPanel;
+    this.ensurePanel = options.ensurePanel;
+    this.ensurePanel.bind(this); // read by the focus host (Task 3)
   }
 
   mount(parent: HTMLElement): void {

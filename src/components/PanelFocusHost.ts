@@ -29,6 +29,7 @@ export class PanelFocusHost {
   private panelHome: Comment | null = null;
   private panelId: string | null = null;
   private openState = false;
+  private openEpoch = 0;
   private readonly opts: PanelFocusHostOptions;
 
   private readonly onKeydown = (e: KeyboardEvent): void => {
@@ -62,9 +63,15 @@ export class PanelFocusHost {
   async open(panelId: string): Promise<boolean> {
     if (!this.frame || !this.scrim || !this.bodyEl) return false;
     if (this.openState) this.close();
+    // Epoch guard: a second open() or a close() during the lazy-mount await
+    // supersedes this call — bail instead of clobbering the newer state.
+    const epoch = ++this.openEpoch;
     const panel = (await this.opts.ensurePanel(panelId)) as FocusablePanel | null;
+    if (epoch !== this.openEpoch) return true;
     const panelEl = panel && typeof panel.getElement === 'function' ? panel.getElement() : null;
-    if (!panelEl) return false;
+    // A constructed-but-disabled panel keeps .hidden (display:none) — hosting
+    // it would show an empty frame, so report failure for the classic fallback.
+    if (!panelEl || panelEl.classList.contains('hidden')) return false;
 
     this.panelId = panelId;
     this.renderHeader(panelId);
@@ -81,6 +88,7 @@ export class PanelFocusHost {
   }
 
   close(): void {
+    this.openEpoch++;
     if (!this.openState) return;
     this.openState = false;
     this.restorePanel();

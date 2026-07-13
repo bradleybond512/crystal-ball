@@ -12,6 +12,8 @@ test.describe('theme toggle (happy variant)', () => {
  // Set variant to happy, clear theme preference ONLY on first load
  // (addInitScript runs on every navigation, so we use a flag)
  await page.addInitScript(() => {
+ // This spec exercises the classic UI — opt out of the default-on Home Shell.
+ localStorage.setItem('crystalball-classic-view', '1');
  if (!sessionStorage.getItem('__test_init_done')) {
  localStorage.removeItem('crystalball-theme');
  localStorage.removeItem('crystalball-variant');

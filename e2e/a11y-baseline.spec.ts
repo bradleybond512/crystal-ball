@@ -60,6 +60,8 @@ test.beforeEach(async ({ page }) => {
     // Skip the first-run WelcomeFlow modal — its backdrop would sit on top of
     // every panel and pollute the scans.
     localStorage.setItem('cb:onboarding-complete', 'true');
+    // This spec exercises the classic UI — opt out of the default-on Home Shell.
+    localStorage.setItem('crystalball-classic-view', '1');
   });
 });
 

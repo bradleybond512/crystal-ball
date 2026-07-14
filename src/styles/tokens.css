@@ -147,6 +147,7 @@
   --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --edge-hairline: inset 0 0 0 0.5px rgba(255, 255, 255, 0.11);
   --elevation-2: var(--e-2); /* legacy alias, referenced-but-undefined today */
+  --elevation-3: var(--e-3); /* same class of alias — Toast.ts shadow was computing to none */
 
   /* Materials */
   --mat-chrome-bg: rgba(24, 28, 36, 0.55);

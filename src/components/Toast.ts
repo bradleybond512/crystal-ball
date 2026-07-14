@@ -95,7 +95,7 @@ export class Toast {
       background: 'rgba(28, 28, 30, 0.92)',
       backdropFilter: 'blur(20px) saturate(1.4)',
       WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-      borderRadius: 'var(--radius-lg, 12px)',
+      borderRadius: 'var(--r-md, 12px)',
       boxShadow: 'var(--elevation-3)',
       borderLeft: `3px solid ${color}`,
       minWidth: '280px',

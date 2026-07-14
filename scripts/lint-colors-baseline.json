@@ -42,7 +42,7 @@
     "src/components/CognitiveBiasDetectorPanel.ts": 10,
     "src/components/CollectionGapPanel.ts": 8,
     "src/components/CommandCenterPanel.ts": 21,
-    "src/components/CommandPalettePanel.ts": 12,
+    "src/components/CommandPalettePanel.ts": 6,
     "src/components/CommsHealthPanel.ts": 10,
     "src/components/CompetitiveHypothesisEnginePanel.ts": 9,
     "src/components/CompoundEventDetectorPanel.ts": 7,

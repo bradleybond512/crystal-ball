@@ -208,8 +208,16 @@ The map, God's Eye, chart/data visualizations, mono data columns.
   finding: ~40 components hardcode `#d50000`/`#f44336`, and `--semantic-critical` in
   main.css is a fourth red `#ff4444` — migrate all to the softened tokens so the old
   saturated reds stop sitting next to the new `#ff453a`).
+  **[SHIPPED — docs/superpowers/plans/2026-07-14-apple-restyle-phase-b.md: mac/aid token
+  dialects re-pointed at DL tokens (converges desktop panels/sidebar/toolbar without
+  touching consumers), panel chrome radius+elevation, Title-Case panel headers, pill
+  counts, rounded modal, Graphite sidebar selection, 343 red-hue sites → 0, 2-4px
+  micro-radii → --r-xs. Deferred to C: --mac-accent button flip (17 consumers need a
+  per-site contrast audit), remaining aid micro-label caps, settings deep-pass.]**
 - **Phase C — Polish:** motion pass, God's Eye/HUD harmonization, edge cases
-  (toasts/menus/modals), screenshot baseline set, idle-CPU verification on the built app.
+  (toasts/menus/modals), screenshot baseline set, idle-CPU verification on the built app;
+  `--mac-accent` Graphite flip after per-consumer contrast audit; remaining
+  `text-transform: uppercase` micro-labels (aid event cards, mode chips, setup wizard).
 
 Each phase: own implementation plan + PR(s) via subagent-driven development with
 two-stage review, Codex cross-agent review, standard gates.

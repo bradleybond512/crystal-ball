@@ -131,8 +131,12 @@ The 2026-07 Apple design-language restyle (Cupertino Glass + Graphite; spec
 docs/superpowers/specs/2026-07-13-apple-design-language-design.md) landed Phase A: DL tokens
 in tokens.css (--r-*/--e-*/--mat-*/--font-ui/--dur-*), SF body font, glass scoped to
 body.is-desktop-macos on the six-surface budget (bands/ribbon/dossier/focus/Library/⌘K —
-never per-card), sentence-cased shell labels at the TS source. Phase B (classic chrome +
-red-hue literal migration) and Phase C (motion/polish) are specced but not started.
+never per-card), sentence-cased shell labels at the TS source. Phase B landed classic chrome: the --mac-*/
+--aid-* token dialects in macos-native.css now re-point at the DL tokens (desktop panels/
+sidebar/toolbar converge without touching consumers), .panel gained radius+elevation,
+panel headers are Title Case, and ALL critical-red literals were swept onto systemRed
+(#ff453a; CSS → var(--sev-critical)/rgba(var(--sev-critical-rgb),a), TS → literal hue).
+Phase C (motion/polish + --mac-accent Graphite flip after contrast audit) remains.
 
 ## Foundation Intelligence Layers
 

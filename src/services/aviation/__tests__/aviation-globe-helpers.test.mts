@@ -37,7 +37,7 @@ const baseNotam: AviationNotam = {
 describe('notamStyle', () => {
   it('non-presidential TFR is red outline only', () => {
     const s = notamStyle(baseNotam);
-    assert.equal(s.outlineHex, '#ff453a');
+    assert.equal(s.outlineHex, '#ef4444');
     assert.equal(s.fillAlpha, 0);
   });
 

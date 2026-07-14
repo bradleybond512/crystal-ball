@@ -3102,7 +3102,7 @@ body.panel-resize-active iframe {
 
 .country-intel-share-btn {
   background: none;
-  border: 1px solid var(--sev-critical)40;
+  border: 1px solid rgba(var(--sev-critical-rgb), 0.25);
   color: var(--semantic-critical);
   font-size: 16px;
   cursor: pointer;

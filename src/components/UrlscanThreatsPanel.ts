@@ -101,7 +101,7 @@ export class UrlscanThreatsPanel extends Panel {
     if (env) this.setCount(env.threats.length);
 
     const banner = env?.degraded
-      ? `<div style="padding:4px 6px;background:rgba(255, 69, 58,0.10);border-left:3px solid #ff453a;margin-bottom:6px;font-size:11px;">
+      ? `<div style="padding:4px 6px;background:rgba(239, 68, 68, 0.10);border-left:3px solid #ef4444;margin-bottom:6px;font-size:11px;">
            Degraded: ${escapeHtml(env.reason ?? 'unknown')} (source: ${escapeHtml(env.source)})
          </div>`
       : '';

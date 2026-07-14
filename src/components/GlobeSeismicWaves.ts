@@ -24,6 +24,7 @@ import {
   CustomDataSource,
   type Entity,
   HeightReference,
+  JulianDate,
   NearFarScalar,
   type Viewer,
 } from 'cesium';
@@ -77,6 +78,28 @@ export function setSeismicWavesEnabled(value: boolean): void {
   try {
     localStorage.setItem(ENABLED_KEY, value ? '1' : '0');
   } catch { /* localStorage may be unavailable */ }
+}
+
+/**
+ * CallbackProperty whose value is computed once per clock tick.
+ *
+ * Cesium evaluates an ellipse's semiMajorAxis and semiMinorAxis as two
+ * separate getValue() calls even when they share one property instance. A
+ * radius computed from Date.now()/live state can GROW between those calls,
+ * making semiMinor > semiMajor and throwing DeveloperError — which halts the
+ * entire Cesium render loop (observed live 2026-07-14). Caching by the
+ * evaluation time guarantees both axes see the identical value.
+ */
+function timeCoherentRadius(compute: () => number): CallbackProperty {
+  let lastKey = Number.NaN;
+  let lastValue = 0;
+  return new CallbackProperty((time?: JulianDate) => {
+    const key = time === undefined ? Number.NaN : JulianDate.toDate(time).getTime();
+    if (!Number.isNaN(key) && key === lastKey) return lastValue;
+    lastKey = key;
+    lastValue = compute();
+    return lastValue;
+  }, false);
 }
 
 // ── Component ──────────────────────────────────────────────────────────
@@ -195,10 +218,10 @@ export class GlobeSeismicWaves {
     const color = Color.fromCssColorString(colorForMagnitude(overlay.magnitude).hex);
 
     // Epicenter dot — pulses on wall-clock time, doesn't need overlay state.
-    const pulse = new CallbackProperty(() => {
+    const pulse = timeCoherentRadius(() => {
       const t = (Date.now() % PULSE_PERIOD_MS) / PULSE_PERIOD_MS;
       return t * EPICENTER_PULSE_MAX_M;
-    }, false);
+    });
     const epicenter = this.dataSource.entities.add({
       id: entityKey(overlay.eventId, ENTITY_KEYS.epicenter),
       position: Cartesian3.fromDegrees(overlay.lon, overlay.lat),
@@ -225,7 +248,7 @@ export class GlobeSeismicWaves {
     this.entitiesByKey.set(entityKey(overlay.eventId, ENTITY_KEYS.epicenter), epicenter);
 
     // P-wave ring — radius/opacity read live from this.currentOverlays.
-    const pRingRadius = new CallbackProperty(() => this.currentRadiusKm(overlay.eventId, 'p') * 1000, false);
+    const pRingRadius = timeCoherentRadius(() => this.currentRadiusKm(overlay.eventId, 'p') * 1000);
     const pRingColor = new CallbackProperty(
       () => Color.fromCssColorString('#5599ff').withAlpha(this.currentOpacity(overlay.eventId, 'p')),
       false,
@@ -246,7 +269,7 @@ export class GlobeSeismicWaves {
     this.entitiesByKey.set(entityKey(overlay.eventId, ENTITY_KEYS.pWave), pRing);
 
     // S-wave ring — slightly thicker outline, red.
-    const sRingRadius = new CallbackProperty(() => this.currentRadiusKm(overlay.eventId, 's') * 1000, false);
+    const sRingRadius = timeCoherentRadius(() => this.currentRadiusKm(overlay.eventId, 's') * 1000);
     const sRingColor = new CallbackProperty(
       () => Color.fromCssColorString('#ff3344').withAlpha(this.currentOpacity(overlay.eventId, 's')),
       false,

@@ -11,6 +11,7 @@
 **Worktree:** `/Users/bradleybond/Developer/crystalball/.worktrees/apple-restyle`, branch `claude/apple-design-language` (from origin/main `eafddda0`). Every command below runs from the worktree root — `cd` in the SAME shell command (cwd resets between turns).
 
 **Non-negotiable invariants (from spec §3):**
+
 - Blur ONLY on: topbar buttons row surfaces, briefing bands, status ribbon, dossier, Library, focus frame, ⌘K. Never on `.hs-card` deck cards (dozens alive).
 - No new `infinite` animations. Transitions animate `transform`/`opacity` only.
 - Class names are load-bearing (e2e + JS span-strip) — restyle values, never rename selectors.
@@ -22,6 +23,7 @@
 ### Task 1: Token foundation + app-wide SF flip + shimmer guard
 
 **Files:**
+
 - Modify: `src/styles/tokens.css` (append new block; edit 4 existing values)
 - Modify: `src/styles/main.css:66-67` (`--font-body` flip; `--font-ui` fallback source)
 - Modify: `index.html` (~line 122, reduced-motion guard for `.skeleton-line`)
@@ -98,31 +100,38 @@ Add at end of file:
 - [ ] **Step 2: Soften four existing token values in `tokens.css`**
 
 In the Wave-4 block:
+
 - `--sev-critical: #d50000;` → `--sev-critical: #ff453a;`
 - `--sev-critical-bg: rgba(213, 0, 0, 0.12);` → `--sev-critical-bg: rgba(255, 69, 58, 0.12);`
 - `--status-error: #f44336;` → `--status-error: #ff453a;`
 - `--text-primary:  #ffffff;` → `--text-primary:  #f2f3f5;`
 
 In the Home Shell block:
+
 - `--hs-bg-base:   #05070a;` → `--hs-bg-base:   #0b0d12;`
 - `--hs-base-rgb:    5, 7, 10;` → `--hs-base-rgb:    11, 13, 18;`
 
 - [ ] **Step 3: Flip the app body font in `src/styles/main.css`**
 
 Find (lines ~66-67):
+
 ```css
   --font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', 'DejaVu Sans Mono', 'Liberation Mono', monospace;
   --font-body: var(--font-mono);
 ```
+
 Replace the second line ONLY:
+
 ```css
   --font-body: var(--font-ui, -apple-system, system-ui, sans-serif);
 ```
+
 Do NOT change `body { font-size: 12px }` — classic layout metrics stay put until Phase B.
 
 - [ ] **Step 4: Guard the skeleton shimmer in `index.html`**
 
 Immediately after the `@keyframes skel-shimmer{...}` line (~122), add inside the same `<style>`:
+
 ```css
  @media (prefers-reduced-motion: reduce){.skeleton-line{animation:none}}
 ```
@@ -145,6 +154,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ### Task 2: Home Shell surface restyle (home-shell.css)
 
 **Files:**
+
 - Modify: `src/styles/home-shell.css` (full-file replacement below)
 
 Every selector name is IDENTICAL to today's file — only declarations change. The replacement keeps: the `.hs-focus-body .panel` `!important` neutralization block verbatim (layered-`!important` fight), the map-HUD suppression block, z-index layering, and the `[hidden]`-style guards.
@@ -719,6 +729,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ### Task 3: De-uppercase program (TypeScript sources)
 
 **Files:**
+
 - Modify: `src/services/home-shell/briefing-view.ts:94,110,133,143,154,181`
 - Modify: `src/components/HomeShellOverlay.ts:344`
 - Modify: `src/components/SituationDossier.ts:184,189,202,213,215`
@@ -729,6 +740,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 - [ ] **Step 1: briefing-view.ts — sentence-case the three band labels**
 
 Replace every occurrence (six sites):
+
 - `label: 'PERSONAL'` → `label: 'Personal'` (2 sites)
 - `label: 'WHAT CHANGED'` → `label: 'What changed'` (3 sites)
 - `label: 'CRITICAL WORLDWIDE'` → `label: 'Critical worldwide'` (1 site)
@@ -772,6 +784,7 @@ cd /Users/bradleybond/Developer/crystalball/.worktrees/apple-restyle && git add 
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ```
+
 (Include the test file in `git add` if Step 7 required expectation updates.)
 
 ---
@@ -779,6 +792,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ### Task 4: Library + ⌘K restyle
 
 **Files:**
+
 - Modify: `src/styles/library.css` (full-file replacement below)
 - Modify: `src/components/CommandPalettePanel.ts:24-40` (STYLE template replacement below)
 
@@ -991,6 +1005,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ### Task 5: e2e + live browser verification
 
 **Files:**
+
 - Modify (canonical, NOT worktree, gitignored): `/Users/bradleybond/Developer/crystalball/.claude/launch.json` — add an entry:
 
 ```json
@@ -1028,6 +1043,7 @@ cd /Users/bradleybond/Developer/crystalball/.worktrees/apple-restyle && git add 
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ```
+
 (Skip if no fixes were needed. `git add -u` is acceptable here because the only tracked changes possible at this point are smoke fixes; verify with `git status` first.)
 
 ---
@@ -1036,7 +1052,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Spec status note**
 
-In `docs/superpowers/specs/2026-07-13-apple-design-language-design.md`, under `## §4 Phasing`, append to the Phase A bullet: ` **[SHIPPED — this plan.]**`
+In `docs/superpowers/specs/2026-07-13-apple-design-language-design.md`, under `## §4 Phasing`, append to the Phase A bullet: `**[SHIPPED — this plan.]**`
 
 - [ ] **Step 2: CLAUDE.md**
 
@@ -1055,6 +1071,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>" && git fetch origin &
 ```bash
 cd /Users/bradleybond/Developer/crystalball/.worktrees/apple-restyle && git diff origin/main...HEAD > /tmp/apple-a.diff && codex exec --sandbox read-only "Cross-agent review of a Claude-authored restyle PR (diff on stdin, base origin/main). Focus: CSS-variable misuse, lint:colors violations (raw hex outside tokens.css), @layer !important conflicts, backdrop-filter outside the six-surface budget or missing -webkit- prefix, perf (new infinite animations, transitions on box-shadow/backdrop-filter), and TS label changes breaking tests. End with exactly 'VERDICT: PASS' or 'VERDICT: FAIL' plus numbered findings (P0-P3)." < /tmp/apple-a.diff
 ```
+
 Fix findings, re-run until PASS. Never fabricate the marker.
 
 - [ ] **Step 5: PR**

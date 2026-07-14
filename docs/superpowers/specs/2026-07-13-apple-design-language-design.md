@@ -223,9 +223,9 @@ The map, God's Eye, chart/data visualizations, mono data columns.
   survives only as the setup-wizard signup link (deliberate link affordance) and semantic
   info/mode blues; final caps removed; 23 transitions tokenized; God's Eye micro-radii.
   Screenshot baseline consciously dropped (no CI e2e runner — would rot unexercised);
-  idle-CPU verified post-merge on the built app. Known follow-up: --text-primary is not
-  theme-aware, so selection-wash text (bias chips, sidebar active) is faint in light
-  theme — pre-existing idiom, needs a --text-on-selection companion token.]**
+  idle-CPU verified post-merge on the built app. Selection-wash text is theme-aware via
+  the --text-on-selection companion token (dark #f2f3f5, light rgba(0,0,0,.9)) — sidebar
+  active rows and bias chips read correctly on both themes.]**
 
 Each phase: own implementation plan + PR(s) via subagent-driven development with
 two-stage review, Codex cross-agent review, standard gates.

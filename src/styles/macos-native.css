@@ -73,6 +73,7 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *) {
      vanish, so light theme gets dark-alpha equivalents. */
   --accent-fill: rgba(0, 0, 0, 0.85);
   --accent-selection: rgba(0, 0, 0, 0.1);
+  --text-on-selection: rgba(0, 0, 0, 0.9);
 }
 
 /* ── Root layout ────────────────────────────────────────────── */
@@ -179,7 +180,7 @@ body.has-staleness-banner .mac-sidebar-nav {
 
 .mac-sidebar-item.active {
   background: var(--accent-selection);
-  color: var(--text-primary);
+  color: var(--text-on-selection);
 }
 
 .mac-sidebar-item-icon {

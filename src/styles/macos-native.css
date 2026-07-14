@@ -144,8 +144,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   font-size: 11px;
   font-weight: 600;
   color: var(--mac-secondary-label);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: normal;
   padding: 0 12px 3px;
   display: block;
 }
@@ -1118,8 +1117,7 @@ body.is-desktop-macos .panels-grid .panel-header .panel-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--mac-secondary-label);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: normal;
 }
 
 /* ── Global typography overrides ────────────────────────────── */

@@ -1,5 +1,4 @@
 import {
-  CallbackProperty,
   Cartesian2,
   Cartesian3,
   Color,
@@ -12,6 +11,7 @@ import {
   NearFarScalar,
   type Viewer,
 } from 'cesium';
+import { timeCoherentRadius } from '@/services/globe/time-coherent-radius';
 
 type Severity = 'critical' | 'high' | 'medium' | 'low';
 
@@ -113,7 +113,9 @@ export class GlobeReactorBeacons {
 
  const color = severityColor(severity);
 
- const radiusCb = new CallbackProperty(pulseRadius, false);
+ // Time-coherent so both ellipse axes read one radius per frame (a growing
+ // pulse otherwise throws "semiMajorAxis must be >= semiMinorAxis").
+ const radiusCb = timeCoherentRadius(pulseRadius);
  const entity = this.dataSource.entities.add({
  position: Cartesian3.fromDegrees(lon, lat),
  point: {

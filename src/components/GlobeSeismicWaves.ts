@@ -24,10 +24,10 @@ import {
   CustomDataSource,
   type Entity,
   HeightReference,
-  JulianDate,
   NearFarScalar,
   type Viewer,
 } from 'cesium';
+import { timeCoherentRadius } from '@/services/globe/time-coherent-radius';
 
 import {
   type GlobeSeismicOverlay,
@@ -78,28 +78,6 @@ export function setSeismicWavesEnabled(value: boolean): void {
   try {
     localStorage.setItem(ENABLED_KEY, value ? '1' : '0');
   } catch { /* localStorage may be unavailable */ }
-}
-
-/**
- * CallbackProperty whose value is computed once per clock tick.
- *
- * Cesium evaluates an ellipse's semiMajorAxis and semiMinorAxis as two
- * separate getValue() calls even when they share one property instance. A
- * radius computed from Date.now()/live state can GROW between those calls,
- * making semiMinor > semiMajor and throwing DeveloperError — which halts the
- * entire Cesium render loop (observed live 2026-07-14). Caching by the
- * evaluation time guarantees both axes see the identical value.
- */
-function timeCoherentRadius(compute: () => number): CallbackProperty {
-  let lastKey = Number.NaN;
-  let lastValue = 0;
-  return new CallbackProperty((time?: JulianDate) => {
-    const key = time === undefined ? Number.NaN : JulianDate.toDate(time).getTime();
-    if (!Number.isNaN(key) && key === lastKey) return lastValue;
-    lastKey = key;
-    lastValue = compute();
-    return lastValue;
-  }, false);
 }
 
 // ── Component ──────────────────────────────────────────────────────────

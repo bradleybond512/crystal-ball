@@ -14,13 +14,13 @@
  */
 
 import {
-  CallbackProperty,
   Cartesian3,
   Color,
   ColorMaterialProperty,
   type CustomDataSource,
   HeightReference,
 } from 'cesium';
+import { timeCoherentRadius } from '@/services/globe/time-coherent-radius';
 
 import {
   
@@ -91,9 +91,11 @@ export function renderSpaceWeatherDescriptor(
   if (descriptor.flarePulse) {
     const pulse = descriptor.flarePulse;
     const startMs = nowFn();
-    const radiusCallback = new CallbackProperty(
+    // Time-coherent so both ellipse axes read one radius per frame; a raw
+    // CallbackProperty can grow between the semiMajor/semiMinor reads and throw
+    // "semiMajorAxis must be >= semiMinorAxis", halting the Cesium render loop.
+    const radiusCallback = timeCoherentRadius(
       () => flarePulseRadiusAt(nowFn() - startMs, pulse),
-      false,
     );
     const fill = Color.fromCssColorString(FLARE_PULSE_COLOR).withAlpha(0.35);
     const outline = Color.fromCssColorString(FLARE_PULSE_COLOR);

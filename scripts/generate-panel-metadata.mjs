@@ -24,6 +24,20 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 
+// GUARD: the emitted registry has been hand-curated since seeding (evidenceFor
+// on 88 entries, the 2026-07-14 twelve-domain split, featured picks). This
+// script still seeds the ORIGINAL eight domains — re-running it destroys all
+// of that. Refuse unless the caller explicitly opts in.
+if (!process.argv.includes('--force-overwrite-curation')) {
+  console.error(
+    '[generate-panel-metadata] REFUSING to run: src/config/panel-metadata.ts is hand-curated\n' +
+    '(12-domain split, evidenceFor, featured picks) and this seeder would overwrite it with\n' +
+    'the original 8-domain seed. If you really mean to re-seed, pass --force-overwrite-curation\n' +
+    'and diff against git before committing.',
+  );
+  process.exit(1);
+}
+
 // ---------------------------------------------------------------------------
 // Parse panels.ts (regex extraction — the file is data-shaped; a TS import
 // would drag in the vite alias graph, so we scrape like check-docs-freshness

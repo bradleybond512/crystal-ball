@@ -91,7 +91,7 @@ function buildPersonalBand(input: BriefingInput): BriefingBandView {
   if (!personal) {
     return {
       kind: 'personal',
-      label: 'PERSONAL',
+      label: 'Personal',
       tone: 'info',
       headline: 'Personal status unavailable',
       entries: [],
@@ -107,7 +107,7 @@ function buildPersonalBand(input: BriefingInput): BriefingBandView {
   const entries = active
     .slice(0, MAX_LINES)
     .map((i) => ({ text: `${SEVERITY_GLYPH[i.severity]} ${i.description} — ${i.recommendedAction}`, situationId: i.eventId }));
-  return { kind: 'personal', label: 'PERSONAL', tone, headline, entries };
+  return { kind: 'personal', label: 'Personal', tone, headline, entries };
 }
 
 /** Personally-relevant: meaningful severity AND at least one real
@@ -130,7 +130,7 @@ function buildChangedBand(input: BriefingInput): BriefingBandView {
   if (!changed) {
     return {
       kind: 'changed',
-      label: 'WHAT CHANGED',
+      label: 'What changed',
       tone: 'info',
       headline: 'Change digest unavailable',
       entries: [],
@@ -140,7 +140,7 @@ function buildChangedBand(input: BriefingInput): BriefingBandView {
   if (changed.length === 0) {
     return {
       kind: 'changed',
-      label: 'WHAT CHANGED',
+      label: 'What changed',
       tone: 'clear',
       headline: 'Nothing changed recently',
       entries: [],
@@ -151,7 +151,7 @@ function buildChangedBand(input: BriefingInput): BriefingBandView {
     : 'info';
   const headline = `${changed.length} change${changed.length === 1 ? '' : 's'} since last check`;
   const entries = changed.slice(0, MAX_LINES).map((e) => ({ text: formatDelta(e) }));
-  return { kind: 'changed', label: 'WHAT CHANGED', tone, headline, entries };
+  return { kind: 'changed', label: 'What changed', tone, headline, entries };
 }
 
 function buildCriticalBand(input: BriefingInput): BriefingBandView {
@@ -178,7 +178,7 @@ function buildCriticalBand(input: BriefingInput): BriefingBandView {
   const count = (input.situation ? 1 : 0) + events.length;
   const situationWord = count === 1 ? 'situation' : 'situations';
   const headline = count === 0 ? 'Nothing critical worldwide' : `${count} ${situationWord} worldwide`;
-  return { kind: 'critical', label: 'CRITICAL WORLDWIDE', tone, headline, entries };
+  return { kind: 'critical', label: 'Critical worldwide', tone, headline, entries };
 }
 
 function criticalTone(hasLines: boolean, worstSeverity: number): BandTone {

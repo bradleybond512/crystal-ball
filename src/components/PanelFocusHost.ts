@@ -143,7 +143,7 @@ export class PanelFocusHost {
     const actions = el('div', 'hs-focus-actions');
     actions.append(button('classic', 'Open in classic'), button('close', 'Close ⎋'));
     const titleEl = el('span', 'hs-focus-title', meta?.icon ? `${meta.icon} ${title}` : title);
-    this.headerEl.replaceChildren(titleEl, el('span', 'hs-focus-domain', domainLabel.toUpperCase()), actions);
+    this.headerEl.replaceChildren(titleEl, el('span', 'hs-focus-domain', domainLabel), actions);
   }
 
   private onClick(e: MouseEvent): void {

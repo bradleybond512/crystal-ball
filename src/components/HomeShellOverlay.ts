@@ -341,7 +341,7 @@ export class HomeShellOverlay {
 
     const header = el('div', 'hs-deck-header');
     header.append(
-      el('span', undefined, 'THE DECK'),
+      el('span', undefined, 'Your Deck'),
       el('span', 'hs-deck-sub', `${cards.length} pinned · click a card to open`),
       this.buildPinSelect(),
     );

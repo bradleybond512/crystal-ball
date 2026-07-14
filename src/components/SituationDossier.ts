@@ -181,12 +181,12 @@ export class SituationDossier {
 
   private renderMainColumn(view: DossierView): HTMLElement {
     const main = el('div', 'hs-dossier-main');
-    main.append(el('div', 'hs-dossier-section-label', 'WHY THIS SURFACED'));
+    main.append(el('div', 'hs-dossier-section-label', 'Why this surfaced'));
     const why = el('div', 'hs-dossier-why');
     for (const line of view.whySurfaced) why.append(el('div', undefined, line));
     main.append(why);
 
-    main.append(el('div', 'hs-dossier-section-label', `EVIDENCE · ${view.evidence.length} PANELS`));
+    main.append(el('div', 'hs-dossier-section-label', `Evidence · ${view.evidence.length} panels`));
     if (view.evidence.length === 0) {
       main.append(el('div', 'hs-dossier-why', 'no evidence panels are mapped for this situation category in this variant'));
     } else {
@@ -199,7 +199,7 @@ export class SituationDossier {
   private appendRunnersUp(main: HTMLElement, view: DossierView): void {
     if (view.runnersUp.length === 0) return;
     if (this.showAllRunnersUp) {
-      main.append(el('div', 'hs-dossier-section-label', `MORE (${view.runnersUp.length})`));
+      main.append(el('div', 'hs-dossier-section-label', `More (${view.runnersUp.length})`));
       main.append(grid(view.runnersUp));
       return;
     }
@@ -210,9 +210,9 @@ export class SituationDossier {
 
   private renderRailColumn(view: DossierView, brief: ActionBrief | undefined): HTMLElement {
     const rail = el('div', 'hs-dossier-rail');
-    rail.append(el('div', 'hs-dossier-section-label', brief ? `ACTION BRIEF · ${brief.tier.toUpperCase()}` : 'ACTION BRIEF'));
+    rail.append(el('div', 'hs-dossier-section-label', brief ? `Action brief · ${brief.tier.replace('_', ' ')}` : 'Action brief'));
     rail.append(this.renderActionBrief(brief));
-    rail.append(el('div', 'hs-dossier-section-label', 'TIMELINE'));
+    rail.append(el('div', 'hs-dossier-section-label', 'Timeline'));
     rail.append(renderTimeline(view));
     return rail;
   }

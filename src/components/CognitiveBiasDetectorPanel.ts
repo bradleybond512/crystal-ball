@@ -182,8 +182,8 @@ export class CognitiveBiasDetectorPanel extends Panel {
 
   private renderFilterChip(value: BiasType | 'all', label: string): string {
     const active = this.filterBiasType === value;
-    const bg = active ? 'var(--mac-accent,#4a9eff)' : 'rgba(255,255,255,0.04)';
-    const fg = active ? '#fff' : 'var(--text-secondary,#aaa)';
+    const bg = active ? 'var(--accent-selection,rgba(255,255,255,0.16))' : 'rgba(255,255,255,0.04)';
+    const fg = active ? 'var(--text-primary,#f2f3f5)' : 'var(--text-secondary,#aaa)';
     return `<button class="bias-filter" data-value="${escapeHtml(value)}" style="padding:3px 8px;font-size:11px;border:1px solid var(--border-subtle,#333);background:${bg};color:${fg};border-radius:3px;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">${escapeHtml(label)}</button>`;
   }
 

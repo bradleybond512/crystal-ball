@@ -69,6 +69,10 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *) {
   --mac-card-bg: #ffffff;
   --mac-card-border: rgba(0, 0, 0, 0.08);
   --mac-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  /* Graphite accent inverts on light surfaces — near-white fills would
+     vanish, so light theme gets dark-alpha equivalents. */
+  --accent-fill: rgba(0, 0, 0, 0.85);
+  --accent-selection: rgba(0, 0, 0, 0.1);
 }
 
 /* ── Root layout ────────────────────────────────────────────── */
@@ -702,8 +706,8 @@ button.mac-sidebar-version {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 10px;
-  background: var(--mac-accent);
-  color: var(--text-primary);
+  background: var(--accent-fill);
+  color: var(--mac-window-bg);
   border: none;
   cursor: pointer;
   font-variant-numeric: tabular-nums;
@@ -827,12 +831,12 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar-collapse-tab {
 }
 
 body.is-desktop-macos.sidebar-collapsed .mac-sidebar-toggle-btn {
-  color: var(--mac-accent);
-  background: rgba(10, 132, 255, 0.1);
+  color: var(--mac-label);
+  background: var(--accent-selection);
 }
 
 body.is-desktop-macos.sidebar-collapsed .mac-sidebar-toggle-btn:hover {
-  background: rgba(10, 132, 255, 0.18);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 /* When sidebar is collapsed, mac-content fills full window width.
@@ -994,7 +998,7 @@ body.is-desktop-macos[data-theme="light"] .mac-content-toolbar {
 }
 
 .mac-content-toolbar .region-select:focus {
-  border-color: var(--mac-accent);
+  border-color: var(--accent-fill);
 }
 
 /* Clock in toolbar — override main.css absolute positioning so it's a normal flex child */
@@ -1188,9 +1192,9 @@ body.is-desktop-macos [data-theme="light"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.50);
 }
 
-/* ── Focus rings — macOS blue outline ───────────────────────── */
+/* ── Focus rings — Graphite outline ─────────────────────────── */
 body.is-desktop-macos *:focus-visible {
-  outline: 2px solid var(--mac-accent);
+  outline: 2px solid var(--accent-fill);
   outline-offset: 1px;
 }
 
@@ -1269,7 +1273,7 @@ body.is-desktop-macos #unifiedSettingsMount {
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--mac-accent);
+  background: var(--accent-fill);
   transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -1517,7 +1521,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .key-dashboard { display: flex; flex-direction: column; gap: 12px; }
 .key-dashboard-header { display: flex; justify-content: space-between; align-items: center; }
 .key-dashboard-progress { width: 100%; height: 6px; background: var(--mac-control-bg, #e5e5ea); border-radius: 3px; overflow: hidden; }
-.key-dashboard-progress-bar { height: 100%; background: var(--mac-accent, #007aff); transition: width .3s; }
+.key-dashboard-progress-bar { height: 100%; background: var(--accent-fill); transition: width .3s; }
 .key-dashboard-run-wizard { padding: 6px 14px; font-weight: 500; }
 
 .key-tier { border: 1px solid var(--mac-divider, #d8d8db); border-radius: 8px; padding: 8px 12px; }
@@ -1603,6 +1607,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .setup-wizard-signup {
   display: inline-block;
   margin-bottom: 14px;
+  /* deliberate: link affordance — white link would vanish into body text */
   color: var(--mac-accent, #0a84ff);
   font-size: 13px;
   text-decoration: none;
@@ -1621,8 +1626,8 @@ body.is-desktop-macos #unifiedSettingsMount {
   transition: border-color 120ms, box-shadow 120ms;
 }
 .setup-wizard-input:focus {
-  border-color: var(--mac-accent, #0a84ff);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+  border-color: var(--accent-fill);
+  box-shadow: 0 0 0 3px var(--accent-selection);
 }
 .setup-wizard-feedback {
   margin: 10px 0 4px; min-height: 1.2em;
@@ -1651,13 +1656,14 @@ body.is-desktop-macos #unifiedSettingsMount {
   border-color: rgba(255, 255, 255, 0.18);
 }
 .setup-wizard-footer button.primary {
-  background: var(--mac-accent, #0a84ff);
-  border-color: var(--mac-accent, #0a84ff);
-  color: var(--text-primary);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--mac-window-bg);
 }
 .setup-wizard-footer button.primary:hover {
-  background: var(--mac-accent-hover, #409cff);
-  border-color: var(--mac-accent-hover, #409cff);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  opacity: 0.85;
 }
 
 /* ============================================================
@@ -1740,14 +1746,15 @@ body.is-desktop-macos .syd-self-test:not([disabled]):hover {
 }
 
 body.is-desktop-macos .syd-self-test:not([disabled]) {
-  background: var(--mac-accent) !important;
-  border-color: var(--mac-accent) !important;
-  color: var(--text-primary) !important;
+  background: var(--accent-fill) !important;
+  border-color: var(--accent-fill) !important;
+  color: var(--mac-window-bg) !important;
 }
 
 body.is-desktop-macos .syd-self-test:not([disabled]):hover {
-  background: var(--mac-accent-hover) !important;
-  border-color: var(--mac-accent-hover) !important;
+  background: var(--accent-fill) !important;
+  border-color: var(--accent-fill) !important;
+  opacity: 0.85 !important;
 }
 
 /* Inspector-drawer feel for the per-row panel rows. */

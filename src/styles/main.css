@@ -2874,7 +2874,6 @@ body.panel-resize-active iframe {
   font-size: 8px;
   font-weight: bold;
   animation: pulse-alert 1s infinite;
-  will-change: transform;
 }
 
 .lang-badge {
@@ -18910,7 +18909,10 @@ body:has(.replay-scrubber:not([hidden])) .community-widget {
   background: #4ade80;
   box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
   animation: panel-hb-pulse 2.4s ease-in-out infinite;
-  will-change: opacity;
+  /* No will-change: one dot per mounted panel (~185) — a permanent hint here
+     means ~185 always-on compositing layers inflating every CA commit (see
+     the RenderLayerCompositor note above the .panel-content contain rules).
+     WebKit promotes on demand while the opacity animation runs. */
 }
 .panel-heartbeat.stale .panel-heartbeat-dot { background: var(--mac-orange, #ff9f0a); box-shadow: 0 0 6px rgba(251, 191, 36, 0.6); }
 .panel-heartbeat.very-stale .panel-heartbeat-dot { background: var(--mac-red, #ff453a); box-shadow: 0 0 6px rgba(239, 68, 68, 0.6); animation: none; }

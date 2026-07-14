@@ -2,7 +2,7 @@
  * Library — Phase 2 of the UI shell re-imagination
  * (docs/superpowers/specs/2026-07-11-ui-shell-reimagination-design.md).
  *
- * Browsable catalog of every panel, grouped into 8 domains with curated
+ * Browsable catalog of every panel, grouped into 12 domains with curated
  * featured rows and a collapsed long tail. Composition logic lives in the
  * pure view-model src/services/home-shell/library-view.ts. All DOM built
  * with createElement/textContent — no HTML-string sinks.

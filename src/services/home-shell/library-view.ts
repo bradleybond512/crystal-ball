@@ -1,5 +1,5 @@
 /**
- * Library view-model — groups the panel-metadata registry into the 8
+ * Library view-model — groups the panel-metadata registry into the 12
  * Library domains with featured-first ordering and query filtering.
  *
  * Pure deterministic: no DOM, no fetch, no globals.

@@ -218,6 +218,14 @@ The map, God's Eye, chart/data visualizations, mono data columns.
   (toasts/menus/modals), screenshot baseline set, idle-CPU verification on the built app;
   `--mac-accent` Graphite flip after per-consumer contrast audit; remaining
   `text-transform: uppercase` micro-labels (aid event cards, mode chips, setup wizard).
+  **[SHIPPED — docs/superpowers/plans/2026-07-14-apple-restyle-phase-c.md: Graphite flip
+  landed on all 11 audited sites + light-theme dark-alpha accent overrides; System Blue
+  survives only as the setup-wizard signup link (deliberate link affordance) and semantic
+  info/mode blues; final caps removed; 23 transitions tokenized; God's Eye micro-radii.
+  Screenshot baseline consciously dropped (no CI e2e runner — would rot unexercised);
+  idle-CPU verified post-merge on the built app. Known follow-up: --text-primary is not
+  theme-aware, so selection-wash text (bias chips, sidebar active) is faint in light
+  theme — pre-existing idiom, needs a --text-on-selection companion token.]**
 
 Each phase: own implementation plan + PR(s) via subagent-driven development with
 two-stage review, Codex cross-agent review, standard gates.

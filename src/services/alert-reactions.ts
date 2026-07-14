@@ -26,7 +26,15 @@ function panelEl(panelId: string): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-panel="${panelId}"]`);
 }
 
+function shellActive(): boolean {
+  return document.body.classList.contains('home-shell-active');
+}
+
 export function flashPanel(panelId: string): void {
+  // Under the Home Shell the classic grid is content-visibility: hidden —
+  // flashing it is invisible, and jumpToPanel already routes the panel into
+  // the focus view, which IS the visual feedback.
+  if (shellActive()) return;
   const el = panelEl(panelId);
   if (!el) return;
   el.classList.remove(FLASH_CLASS);
@@ -37,6 +45,13 @@ export function flashPanel(panelId: string): void {
 }
 
 export function jumpToPanel(panelId: string): void {
+  if (shellActive()) {
+    // Scrolling the hidden grid is a silent no-op. Route through the shell:
+    // it opens the panel in the focus view, or falls back to classic
+    // navigation itself when the panel can't be hosted.
+    document.dispatchEvent(new CustomEvent('cb:open-panel', { detail: { panelKey: panelId } }));
+    return;
+  }
   const el = panelEl(panelId);
   if (!el) return;
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });

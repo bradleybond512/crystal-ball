@@ -18,6 +18,19 @@ body.home-shell-active {
   overflow: hidden;
 }
 
+/* Without this, the classic grid keeps painting, animating, and compositing
+   underneath the opaque shell — a viewport's worth of panels doing invisible
+   work, plus the whole grid subtree riding along in every CA commit.
+   content-visibility (NOT display:none): DOM stays queryable, layout state is
+   cached for shell exit, navigateToPanel's offsetParent check still works once
+   the shell hides, and the panels' IntersectionObservers flip to
+   non-intersecting so the JS render gate defers their renders too. Panels
+   hosted by the focus view are reparented OUT of the grid and are unaffected.
+   Unlayered on purpose — must beat @layer base without !important. */
+body.home-shell-active #panelsGrid {
+  content-visibility: hidden;
+}
+
 .home-shell-map {
   position: absolute;
   inset: 0;

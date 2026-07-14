@@ -104,7 +104,7 @@
  ============================================================ */
 :root {
   /* Severity levels */
-  --semantic-critical: #ff4444;
+  --semantic-critical: #ff453a;
   --semantic-high: #ff8800;
   --semantic-elevated: #ffaa00;
   --semantic-normal: #44aa44;
@@ -1145,6 +1145,8 @@ canvas,
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--e-1), var(--edge-highlight);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1344,10 +1346,9 @@ body.panel-resize-active iframe {
 }
 
 .panel-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: normal;
   color: var(--text);
 }
 
@@ -1355,8 +1356,8 @@ body.panel-resize-active iframe {
   font-size: 11px;
   color: var(--text-dim);
   background: var(--border);
-  padding: 2px 6px;
-  border-radius: 2px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
 }
 
 
@@ -6557,6 +6558,8 @@ a.prediction-link:hover {
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--e-4);
   padding: 20px;
   max-width: 500px;
   width: 90%;

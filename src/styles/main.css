@@ -18705,14 +18705,13 @@ body:has(.replay-scrubber:not([hidden])) .community-widget {
 .spm-btn--sm { padding: 4px 10px; font-size: 11px; }
 
 .spm-btn--primary {
-  background: var(--mac-accent, #0a84ff);
-  color: var(--text-primary);
-  border-color: var(--mac-accent, #0a84ff);
+  background: var(--accent-fill);
+  color: var(--hs-bg-base);
+  border-color: var(--accent-fill);
 }
 .spm-btn--primary:hover {
-  background: var(--mac-accent-hover, #409cff);
-  border-color: var(--mac-accent-hover, #409cff);
-  opacity: 1;
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
 }
 
 .spm-btn--ghost {

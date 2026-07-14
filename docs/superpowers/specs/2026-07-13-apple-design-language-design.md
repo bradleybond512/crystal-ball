@@ -129,7 +129,8 @@ focus rings white.
 --ease-spring: cubic-bezier(0.32, 1.4, 0.42, 1);   /* overlay entrances ONLY */
 ```
 
-Transitions animate `transform`/`opacity` only. Zero new `infinite` animations.
+Transitions animate `transform`/`opacity` (plus `background` on hover micro-elements —
+cheap, no layout) only. Zero new `infinite` animations.
 `prefers-reduced-motion` gets designed opacity-only alternates (not blanket kills); the
 unguarded `index.html` skeleton shimmer gets a guard.
 
@@ -200,9 +201,13 @@ The map, God's Eye, chart/data visualizations, mono data columns.
 - **Phase A — Tokens + Home Shell:** token foundation in tokens.css (incl. defining the
   missing legacy tokens), `--font-body` flip to SF, shell surfaces (bands/deck/ribbon/
   Library/dossier/focus/⌘K) restyled, de-uppercase TS program, skeleton-shimmer guard.
+  **[SHIPPED — docs/superpowers/plans/2026-07-13-apple-restyle-phase-a.md.]**
 - **Phase B — Classic chrome:** panel frames + interiors, sidebar source-list, topbar,
   chips/buttons/badges/tables/scrollbars, settings; supersede the macos-native parallel
-  dialect; inline-style booby-trap cleanup.
+  dialect; inline-style booby-trap cleanup; **red-hue literal migration** (Phase A review
+  finding: ~40 components hardcode `#d50000`/`#f44336`, and `--semantic-critical` in
+  main.css is a fourth red `#ff4444` — migrate all to the softened tokens so the old
+  saturated reds stop sitting next to the new `#ff453a`).
 - **Phase C — Polish:** motion pass, God's Eye/HUD harmonization, edge cases
   (toasts/menus/modals), screenshot baseline set, idle-CPU verification on the built app.
 

@@ -202,7 +202,10 @@ describe('interestMultiplier — bounded ±20%', () => {
       recordEngagement({ kind: 'pin', text: 'weather storm hurricane flood surge', domain: 'disaster' });
     }
     const m = interestMultiplier('weather storm hurricane flood surge');
-    assert.equal(m, 1.2, `Expected 1.2, got ${m}`);
+    // Not assert.equal: recordEngagement stamps lastReinforced=Date.now() and
+    // interestScore decays to a FRESH Date.now() — one elapsed millisecond on
+    // a slow CI runner decays the weight by ~1e-9 and breaks exact equality.
+    assert.ok(Math.abs(m - 1.2) < 1e-6, `Expected ~1.2, got ${m}`);
   });
 
   it('multiplier is always in [0.8, 1.2] — property across many inputs', () => {

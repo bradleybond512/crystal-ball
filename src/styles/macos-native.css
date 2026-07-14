@@ -166,7 +166,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   color: var(--mac-label);
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.1s ease, color 0.1s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   -webkit-app-region: no-drag;
   white-space: nowrap;
   overflow: hidden;
@@ -222,7 +222,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   font-family: var(--mac-font);
   cursor: pointer;
   text-align: center;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
   white-space: nowrap;
   position: relative;
 }
@@ -304,7 +304,7 @@ body.has-staleness-banner .mac-sidebar-nav {
   font-family: var(--mac-font);
   cursor: pointer;
   text-align: center;
-  transition: background 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .mac-alert-family-btn:hover {
@@ -565,7 +565,7 @@ body.is-desktop-macos[data-app-mode="peace"] .mac-toolbar-title {
   font-family: var(--mac-font);
   cursor: pointer;
   text-align: center;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 .mac-ghost-mode-btn:hover {
@@ -652,7 +652,7 @@ body.is-desktop-macos[data-app-mode="ghost"] .mac-mode-section {
   color: var(--mac-secondary-label);
   cursor: pointer;
   padding: 0;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   font-family: var(--mac-font);
 }
 
@@ -712,7 +712,7 @@ button.mac-sidebar-version {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   font-family: var(--mac-font);
-  transition: opacity 0.12s ease;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 .mac-sidebar-update-btn:hover {
@@ -735,8 +735,8 @@ button.mac-sidebar-version {
 
 /* ── Sidebar collapse ───────────────────────────────────────── */
 body.is-desktop-macos .mac-sidebar {
-  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
- border-right-color 0.22s ease;
+  transition: width var(--dur-base) var(--ease-out),
+ border-right-color var(--dur-base) var(--ease-out);
 }
 
 body.is-desktop-macos.sidebar-collapsed .mac-sidebar {
@@ -766,7 +766,7 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar {
   font-size: 11px;
   align-items: center;
   justify-content: center;
-  transition: background 0.12s ease, color 0.12s ease, width 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), width var(--dur-fast) var(--ease-out);
   -webkit-app-region: no-drag;
 }
 
@@ -794,7 +794,7 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar-collapse-tab {
   cursor: pointer;
   padding: 0;
   margin-left: auto;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   font-size: 13px;
   flex-shrink: 0;
   -webkit-app-region: no-drag;
@@ -819,7 +819,7 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar-collapse-tab {
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
   -webkit-app-region: no-drag;
 }
 
@@ -884,7 +884,7 @@ body.is-desktop-macos.sidebar-collapsed .mac-toolbar-sidebar-overflow {
   font-size: 12px;
   font-family: var(--mac-font);
   white-space: nowrap;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   -webkit-app-region: no-drag;
 }
 
@@ -1028,7 +1028,7 @@ body.is-desktop-macos[data-theme="light"] .mac-content-toolbar {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 .mac-content-toolbar .search-btn:hover {
@@ -1100,7 +1100,7 @@ body.is-desktop-macos .panels-grid > * {
   border: 1px solid var(--mac-card-border);
   box-shadow: var(--mac-card-shadow);
   overflow: hidden;
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
 }
 
 body.is-desktop-macos .panels-grid > *:hover {
@@ -1259,7 +1259,7 @@ body.is-desktop-macos #unifiedSettingsMount {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background 0.1s ease;
+  transition: background var(--dur-fast) var(--ease-out);
   -webkit-app-region: no-drag;
 }
 
@@ -1273,7 +1273,7 @@ body.is-desktop-macos #unifiedSettingsMount {
   border-radius: 50%;
   flex-shrink: 0;
   background: var(--accent-fill);
-  transition: background 0.15s ease, box-shadow 0.15s ease;
+  transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
 /* Disabled panel: dimmed row, hollow dot */
@@ -1388,7 +1388,7 @@ body.is-desktop-macos #unifiedSettingsMount {
   border-radius: 8px;
   font: inherit;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .godsvision-time-machine .gtm-btn:hover,
 .godsvision-time-machine .gtm-pill:hover {
@@ -1520,7 +1520,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .key-dashboard { display: flex; flex-direction: column; gap: 12px; }
 .key-dashboard-header { display: flex; justify-content: space-between; align-items: center; }
 .key-dashboard-progress { width: 100%; height: 6px; background: var(--mac-control-bg, #e5e5ea); border-radius: 3px; overflow: hidden; }
-.key-dashboard-progress-bar { height: 100%; background: var(--accent-fill); transition: width .3s; }
+.key-dashboard-progress-bar { height: 100%; background: var(--accent-fill); transition: width var(--dur-base) var(--ease-out); }
 .key-dashboard-run-wizard { padding: 6px 14px; font-weight: 500; }
 
 .key-tier { border: 1px solid var(--mac-divider, #d8d8db); border-radius: 8px; padding: 8px 12px; }
@@ -1621,7 +1621,7 @@ body.is-desktop-macos #unifiedSettingsMount {
   border-radius: 8px;
   color: var(--mac-text-primary, #f5f5f7);
   outline: none;
-  transition: border-color 120ms, box-shadow 120ms;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 .setup-wizard-input:focus {
   border-color: var(--accent-fill);
@@ -1647,7 +1647,7 @@ body.is-desktop-macos #unifiedSettingsMount {
   background: rgba(255, 255, 255, 0.06);
   color: var(--mac-text-primary, #f5f5f7);
   cursor: pointer;
-  transition: background 120ms, border-color 120ms;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .setup-wizard-footer button:hover {
   background: rgba(255, 255, 255, 0.10);
@@ -1709,7 +1709,7 @@ body.is-desktop-macos .syd-tabs .syd-tab {
   background: transparent !important;
   color: var(--mac-secondary-label) !important;
   font-weight: 500;
-  transition: background 140ms ease, color 140ms ease;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
 body.is-desktop-macos .syd-tabs .syd-tab[style*="border-bottom"] {
@@ -1735,7 +1735,7 @@ body.is-desktop-macos .syd-self-test {
   border: 0.5px solid var(--mac-card-border) !important;
   background: var(--mac-fill) !important;
   color: var(--mac-label) !important;
-  transition: background 140ms ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 body.is-desktop-macos .syd-refresh:hover,
@@ -1762,7 +1762,7 @@ body.is-desktop-macos .panel[data-panel-id="shortage-radar"] .panel-content > di
   background: var(--mac-surface) !important;
   border-color: var(--mac-card-border) !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
-  transition: background 140ms ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 body.is-desktop-macos .panel[data-panel-id="system-diagnostic"] .panel-content > div > div[style*="border:1px solid"]:hover,

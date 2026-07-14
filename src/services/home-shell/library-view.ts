@@ -41,7 +41,11 @@ export interface LibraryInputs {
 /** Nav-rail order; system-health always last. */
 const DOMAIN_ORDER: readonly LibraryDomain[] = [
   'personal-safety',
+  'analysis-situations',
+  'conflict-military',
   'global-intel',
+  'security-crime',
+  'news-osint',
   'markets-economy',
   'hazards-weather',
   'cyber-infrastructure',

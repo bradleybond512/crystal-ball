@@ -152,12 +152,12 @@ export class LibraryOverlay {
   private renderDomain(d: LibraryDomainView): HTMLElement[] {
     const out: HTMLElement[] = [];
     if (d.featured.length > 0) {
-      out.push(el('div', 'lib-section-label', 'FEATURED'), grid(d.featured));
+      out.push(el('div', 'lib-section-label', 'Featured'), grid(d.featured));
     }
     if (d.rest.length > 0) {
       const showAll = this.expanded.has(d.domain) || this.query.trim().length > 0 || d.featured.length === 0;
       if (showAll) {
-        out.push(el('div', 'lib-section-label', `MORE (${d.rest.length})`), grid(d.rest));
+        out.push(el('div', 'lib-section-label', `More (${d.rest.length})`), grid(d.rest));
       } else {
         const more = document.createElement('button');
         more.type = 'button';

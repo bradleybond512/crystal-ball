@@ -136,7 +136,10 @@ never per-card), sentence-cased shell labels at the TS source. Phase B landed cl
 sidebar/toolbar converge without touching consumers), .panel gained radius+elevation,
 panel headers are Title Case, and ALL critical-red literals were swept onto systemRed
 (#ff453a; CSS → var(--sev-critical)/rgba(var(--sev-critical-rgb),a), TS → literal hue).
-Phase C (motion/polish + --mac-accent Graphite flip after contrast audit) remains.
+Phase C completed the program: Graphite accent flip (System Blue survives only as the
+setup-wizard signup link + semantic info blues), light-theme dark-alpha accent overrides,
+final micro-label caps removed, all macos-native transitions on the --dur-*/--ease-out
+tokens, God's Eye chrome micro-radii. Restyle Phases A-C are COMPLETE.
 
 ## Foundation Intelligence Layers
 

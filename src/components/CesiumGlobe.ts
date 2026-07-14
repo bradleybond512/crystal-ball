@@ -23,6 +23,11 @@ export interface CesiumGlobeOptions {
   ionToken?: string;
 }
 
+/** DataSource names whose entities are intentionally above the ellipsoid, so the
+ *  floating-entity auditor must not flag them. Flights/aircraft/satellites carry
+ *  real altitude; arc and 4d-* layers are trajectory curves through the air. */
+const ALTITUDE_EXPECTED_SOURCE = /flight|aircraft|satellite|orbit|reentry|arcs?|^4d-|trajector/i;
+
 export class CesiumGlobe {
   private viewer: Viewer | null = null;
   private container: HTMLElement;
@@ -265,6 +270,12 @@ export class CesiumGlobe {
 
  for (let ds = 0; ds < viewer.dataSources.length; ds++) {
  const source = viewer.dataSources.get(ds);
+ // Skip layers whose entities are INTENTIONALLY airborne — flights, aircraft
+ // and satellites carry real altitude (fromDegrees(lon,lat,altMeters)), and
+ // 4d/arc trajectories arc through the air by design. The auditor exists to
+ // catch ground-clamped regressions (cables, markers floating off terrain),
+ // so flagging cruising aircraft at h=4846m was a false-positive ERROR spam.
+ if (ALTITUDE_EXPECTED_SOURCE.test(source.name ?? '')) continue;
  for (const entity of source.entities.values) {
  this.auditPoint(entity, source.name, now, stats);
  this.auditPolyline(entity, source.name, now, stats);

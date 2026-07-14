@@ -23,7 +23,7 @@ const REFRESH_MS = 3_600_000; // 1 hour
 // ── Colour palette ─────────────────────────────────────────────────────────
 
 const TIER_COLOR: Record<RiskTier, string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high:     '#ff9800',
   elevated: '#ffeb3b',
   moderate: '#4caf50',
@@ -150,7 +150,7 @@ export class PoliticalEconomyPanel extends Panel {
     const bits: string[] = [];
     if (data.criticalCount > 0) bits.push(`${data.criticalCount} CRITICAL`);
     if (data.highCount > 0) bits.push(`${data.highCount} HIGH`);
-    return `<div style="padding:6px 12px;background:rgba(213,0,0,0.12);border-bottom:1px solid rgba(213,0,0,0.3);font-size:11px;font-weight:700;color:#d50000;letter-spacing:0.04em;">
+    return `<div style="padding:6px 12px;background:rgba(255, 69, 58,0.12);border-bottom:1px solid rgba(255, 69, 58,0.3);font-size:11px;font-weight:700;color:#ff453a;letter-spacing:0.04em;">
       ⚠ KLEPTOCRACY ALERTS: ${bits.join(' · ')}
     </div>`;
   }

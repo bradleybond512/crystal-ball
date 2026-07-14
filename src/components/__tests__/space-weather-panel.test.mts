@@ -68,7 +68,7 @@ test('formatArrivalCountdown handles non-finite arrival', () => {
 });
 
 test('xrayBadgeColor maps the leading class char to a colour', () => {
-  assert.equal(xrayBadgeColor('X1.2'), '#d50000');
+  assert.equal(xrayBadgeColor('X1.2'), '#ff453a');
   assert.equal(xrayBadgeColor('M5.0'), '#ff5722');
   assert.equal(xrayBadgeColor('C3.1'), '#ffeb3b');
   assert.equal(xrayBadgeColor('B7.0'), '#4caf50');

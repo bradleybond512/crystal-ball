@@ -17,7 +17,7 @@ function safeHtml(t: string): string {
 }
 
 const TIER_COLOR: Record<ThreatTier, string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high: '#ff5722',
   medium: '#ff9800',
   low: '#4caf50',

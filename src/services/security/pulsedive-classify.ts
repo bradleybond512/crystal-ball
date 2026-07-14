@@ -164,7 +164,7 @@ const RISK_HEX: Record<PulsediveRisk, string> = {
   low: '#8bc34a',
   medium: '#ffeb3b',
   high: '#ff9800',
-  critical: '#d50000',
+  critical: '#ff453a',
 };
 
 export function riskColor(risk: PulsediveRisk): string {

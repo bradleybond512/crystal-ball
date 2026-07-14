@@ -12,7 +12,7 @@ import {
 const REFRESH_MS = 60 * 60 * 1000; // 1 hour — static data
 
 const INTENSITY_COLOR: Record<IntensityLevel, string> = {
-  extreme: '#d50000',
+  extreme: '#ff453a',
   high:    '#ff9800',
   moderate:'#ffeb3b',
   low:     '#9e9e9e',
@@ -66,7 +66,7 @@ export class GrayZoneConflictPanel extends Panel {
   private renderSummary(data: ReturnType<typeof buildRenderData>): string {
     let gziColor: string;
     if (data.globalGrayZoneIndex >= 70) {
-      gziColor = '#d50000';
+      gziColor = '#ff453a';
     } else if (data.globalGrayZoneIndex >= 50) {
       gziColor = '#ff9800';
     } else if (data.globalGrayZoneIndex >= 30) {
@@ -148,7 +148,7 @@ export class GrayZoneConflictPanel extends Panel {
   private renderIncidentRow(i: GrayIncident): string {
     let deltaColor: string;
     if (i.escalationDelta >= 7) {
-      deltaColor = '#d50000';
+      deltaColor = '#ff453a';
     } else if (i.escalationDelta >= 5) {
       deltaColor = '#ff9800';
     } else if (i.escalationDelta >= 3) {

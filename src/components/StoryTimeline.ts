@@ -10,7 +10,7 @@ import type { UnifiedAlert } from '@/services/unified-alerts';
 import { getLifecyclePhase, type LifecyclePhase } from '@/services/alert-lifecycle';
 
 const PHASE_COLOR: Record<LifecyclePhase, string> = {
-  rising: '#ff4444',
+  rising: '#ff453a',
   peaked: '#ff8800',
   cooling: '#88cc44',
   resolved: '#666',

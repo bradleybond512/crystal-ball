@@ -371,7 +371,7 @@ describe('flightStyle / flightCategoryColor', () => {
   it('emergency flights render red regardless of category', () => {
     const f: LiveFlight = { ...makeFlight('commercial'), emergency: true, emergencySquawk: '7500' };
     const style = flightStyle(f);
-    assert.equal(style.hex, '#d50000');
+    assert.equal(style.hex, '#ff453a');
     assert.equal(style.emergency, true);
     assert.ok(style.pixelSize >= 10);
   });

@@ -256,7 +256,7 @@ ${tabs.map(tab => {
  const summary = `<div style="display:flex;gap:14px;font-size:11px;padding:6px 10px;border-bottom:1px solid var(--border-subtle,#222);">
  <div><span style="color:#aaa;">Week ending</span> <strong>${escapeHtml(this.ari.weekEnd ?? '—')}</strong></div>
  <div><span style="color:#aaa;">Reporting</span> <strong>${this.ari.reportingStates}</strong></div>
- <div><span style="color:#aaa;">Hot</span> <strong style="color:#d50000;">${this.ari.hotStates}</strong></div>
+ <div><span style="color:#aaa;">Hot</span> <strong style="color:#ff453a;">${this.ari.hotStates}</strong></div>
  </div>`;
  const rows = this.ari.rows.map((r) => {
  const color = colorForLevel(r.level);

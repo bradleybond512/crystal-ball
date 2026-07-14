@@ -33,7 +33,7 @@ const VESSEL_CATEGORY_COLOR: Record<VesselCategory, string> = {
   tanker: '#ff5722',
   bulk_carrier: '#ffeb3b',
   container: '#2196f3',
-  military: '#d50000',
+  military: '#ff453a',
   other: '#9e9e9e',
 };
 
@@ -121,21 +121,21 @@ const DAY_MS = 24 * HOUR_MS;
 type ThreatLevel = 'green' | 'yellow' | 'orange' | 'red';
 
 function riskScoreColor(score: number): string {
-  if (score >= 75) return '#d50000';
+  if (score >= 75) return '#ff453a';
   if (score >= 50) return '#ff9800';
   if (score >= 25) return '#ffeb3b';
   return '#9e9e9e';
 }
 
 function threatRowColor(t: MaritimeIncident): string {
-  if (t.fatalities >= 5) return '#d50000';
+  if (t.fatalities >= 5) return '#ff453a';
   if (t.fatalities >= 1) return '#ff9800';
   if (t.warRiskZones.length > 0) return '#ffeb3b';
   return '#9e9e9e';
 }
 
 function warZoneCategoryColor(category: 'piracy' | 'state_conflict' | 'missile_drone' | 'mixed'): string {
-  if (category === 'state_conflict' || category === 'missile_drone') return '#d50000';
+  if (category === 'state_conflict' || category === 'missile_drone') return '#ff453a';
   if (category === 'piracy') return '#ff9800';
   return '#ffeb3b';
 }
@@ -151,14 +151,14 @@ const THREAT_COLOR: Record<ThreatLevel, string> = {
   green: '#4caf50',
   yellow: '#ffeb3b',
   orange: '#ff9800',
-  red: '#d50000',
+  red: '#ff453a',
 };
 
 const STRESS_COLOR: Record<FreightStressComponent['stressLevel'], string> = {
   low: '#4caf50',
   medium: '#ffeb3b',
   high: '#ff9800',
-  critical: '#d50000',
+  critical: '#ff453a',
 };
 
 export class MaritimeIntelPanel extends Panel {

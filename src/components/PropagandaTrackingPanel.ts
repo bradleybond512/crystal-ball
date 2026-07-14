@@ -73,7 +73,7 @@ export class PropagandaTrackingPanel extends Panel {
   ): string {
     let indexColor: string;
     if (globalInfoWarIndex >= 60) {
-      indexColor = '#d50000';
+      indexColor = '#ff453a';
     } else if (globalInfoWarIndex >= 40) {
       indexColor = '#ff9800';
     } else {
@@ -87,7 +87,7 @@ export class PropagandaTrackingPanel extends Panel {
       </div>
       <div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Active Campaigns</div>
-        <div style="font-size:18px;font-weight:700;color:#d50000;">${activeCampaignCount}</div>
+        <div style="font-size:18px;font-weight:700;color:#ff453a;">${activeCampaignCount}</div>
       </div>
       <div style="border:1px solid var(--border-subtle,#333);border-radius:4px;padding:8px 10px;">
         <div style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);margin-bottom:4px;">Total Outlet Reach</div>
@@ -113,7 +113,7 @@ export class PropagandaTrackingPanel extends Panel {
     const statusCls = statusClass(c.status);
     let sevColor: string;
     if (sevClass === 'sev-critical') {
-      sevColor = '#d50000';
+      sevColor = '#ff453a';
     } else if (sevClass === 'sev-high') {
       sevColor = '#ff9800';
     } else if (sevClass === 'sev-medium') {
@@ -161,7 +161,7 @@ export class PropagandaTrackingPanel extends Panel {
   private renderOutletRow(o: StateMediaOutlet): string {
     let fcColor: string;
     if (o.factCheckScore < 30) {
-      fcColor = '#d50000';
+      fcColor = '#ff453a';
     } else if (o.factCheckScore < 50) {
       fcColor = '#ff9800';
     } else {

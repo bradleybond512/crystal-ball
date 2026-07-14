@@ -116,7 +116,7 @@ function renderList(records: readonly ProvenanceRecord[], expandedId: string | n
 }
 
 function severityColor(score: number, threshold: number): string {
-  if (score >= threshold + 0.2) return '#f44336';
+  if (score >= threshold + 0.2) return '#ff453a';
   if (score >= threshold) return '#ffb74d';
   return '#4caf50';
 }

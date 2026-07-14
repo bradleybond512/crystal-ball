@@ -6,7 +6,7 @@
 import type { Situation, SituationSeverity } from '@/types/intelligence';
 
 export const SEVERITY_BADGE: Record<SituationSeverity, { color: string; label: string }> = {
-  critical: { color: '#d50000', label: 'CRITICAL' },
+  critical: { color: '#ff453a', label: 'CRITICAL' },
   high:     { color: '#ff5722', label: 'HIGH' },
   moderate: { color: '#ff9800', label: 'MODERATE' },
   low:      { color: '#ffeb3b', label: 'LOW' },

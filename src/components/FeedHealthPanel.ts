@@ -37,7 +37,7 @@ const REFRESH_MS = 30_000;
 const STATUS_BADGE: Record<FeedHealth, { icon: string; color: string; label: string }> = {
   fresh: { icon: '🟢', color: '#4caf50', label: 'fresh' },
   stale: { icon: '🟡', color: '#ffeb3b', label: 'stale' },
-  error: { icon: '🔴', color: '#d50000', label: 'error' },
+  error: { icon: '🔴', color: '#ff453a', label: 'error' },
   never: { icon: '⚪', color: '#9e9e9e', label: 'never' },
 };
 

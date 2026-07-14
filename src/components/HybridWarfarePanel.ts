@@ -55,7 +55,7 @@ export class HybridWarfarePanel extends Panel {
 
     let indexColor: string;
     if (globalHybridIndex >= 70) {
-      indexColor = '#d50000';
+      indexColor = '#ff453a';
     } else if (globalHybridIndex >= 50) {
       indexColor = '#ff9800';
     } else {
@@ -77,7 +77,7 @@ export class HybridWarfarePanel extends Panel {
       </div>
       <div style="display:flex;flex-direction:column;align-items:center;min-width:60px;">
         <span style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);">Critical</span>
-        <span style="font-size:16px;font-weight:700;color:#d50000;">${criticalCount}</span>
+        <span style="font-size:16px;font-weight:700;color:#ff453a;">${criticalCount}</span>
       </div>
       <div style="display:flex;flex-direction:column;flex:1;min-width:120px;">
         <span style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);">Top Actors</span>
@@ -139,7 +139,7 @@ export class HybridWarfarePanel extends Panel {
 }
 
 function severityClassToColor(s: string): string {
-  if (s === 'Critical') return '#d50000';
+  if (s === 'Critical') return '#ff453a';
   if (s === 'High') return '#ff9800';
   if (s === 'Medium') return '#ffeb3b';
   return '#9e9e9e';

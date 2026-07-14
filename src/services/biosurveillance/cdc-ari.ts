@@ -141,7 +141,7 @@ export function buildAriSnapshot(rows: readonly AriRowRaw[]): AriSnapshot {
 export function colorForLevel(level: AriLevel): string {
   switch (level) {
     case 'Very High': {
-      return '#d50000';
+      return '#ff453a';
     }
     case 'High': {
       return '#ff5722';

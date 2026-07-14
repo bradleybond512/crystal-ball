@@ -126,7 +126,7 @@ const C = {
   airstrike: Color.fromCssColorString('#ff3333'),
   // Nuclear
   nuclear: Color.YELLOW,
-  nuclearWeapons: Color.fromCssColorString('#ff4444'),
+  nuclearWeapons: Color.fromCssColorString('#ff453a'),
   // Cables
   cable: Color.fromCssColorString('#60a5fa').withAlpha(0.4),
   cableMajor: Color.fromCssColorString('#60a5fa').withAlpha(0.7),
@@ -157,7 +157,7 @@ const C = {
   cycloneCat1: Color.fromCssColorString('#ffcc00'),
   cycloneStorm: Color.fromCssColorString('#00ccff'),
   // Fires
-  fireHigh: Color.fromCssColorString('#ff4444'),
+  fireHigh: Color.fromCssColorString('#ff453a'),
   fireNominal: Color.fromCssColorString('#ff8c00'),
   fireLow: Color.fromCssColorString('#ffa500').withAlpha(0.6),
   // Protests
@@ -461,7 +461,7 @@ function commercialFlightDescriptionHtml(
     flight.velocityKts === null ? '' : `<div>Speed: ${flight.velocityKts} kt</div>`,
     flight.headingDeg === null ? '' : `<div>Heading: ${Math.round(flight.headingDeg)}°</div>`,
     flight.emergency
-      ? `<strong style="color:#d50000;">EMERGENCY squawk ${escapeHtml(flight.squawk ?? '')}</strong>`
+      ? `<strong style="color:#ff453a;">EMERGENCY squawk ${escapeHtml(flight.squawk ?? '')}</strong>`
       : '',
   ];
   return lines.filter(Boolean).join('\n');

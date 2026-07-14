@@ -54,7 +54,7 @@ const STRESS_COLOR: Record<FreightStressComponent['stressLevel'], string> = {
   low: '#4caf50',
   medium: '#ffeb3b',
   high: '#ff9800',
-  critical: '#d50000',
+  critical: '#ff453a',
 };
 
 // ── Exported pure helpers (tested without DOM) ────────────────────────────────

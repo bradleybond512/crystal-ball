@@ -57,8 +57,8 @@ export class UrbanInstabilityPanel extends Panel {
       const html = this.buildHtml(results);
       this.setContent(html);
       this.markFresh();
-    } catch (err) {
-      this.setContent('<div style="padding:12px;color:#f44336;font-size:12px;">Urban instability data unavailable.</div>');
+    } catch {
+      this.setContent('<div style="padding:12px;color:#ff453a;font-size:12px;">Urban instability data unavailable.</div>');
     }
   }
 
@@ -82,7 +82,7 @@ export class UrbanInstabilityPanel extends Panel {
     if (criticalCount > 0) bits.push(`${criticalCount} CRITICAL`);
     if (severeCount > 0)   bits.push(`${severeCount} SEVERE`);
     const text = bits.join(' · ');
-    return `<div style="padding:6px 12px;background:rgba(213,0,0,0.12);border-bottom:1px solid rgba(213,0,0,0.3);font-size:11px;font-weight:700;color:#d50000;letter-spacing:0.04em;">
+    return `<div style="padding:6px 12px;background:rgba(255, 69, 58,0.12);border-bottom:1px solid rgba(255, 69, 58,0.3);font-size:11px;font-weight:700;color:#ff453a;letter-spacing:0.04em;">
       &#9888; URBAN INSTABILITY: ${text}
     </div>`;
   }

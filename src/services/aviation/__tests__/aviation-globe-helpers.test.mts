@@ -37,13 +37,13 @@ const baseNotam: AviationNotam = {
 describe('notamStyle', () => {
   it('non-presidential TFR is red outline only', () => {
     const s = notamStyle(baseNotam);
-    assert.equal(s.outlineHex, '#f44336');
+    assert.equal(s.outlineHex, '#ff453a');
     assert.equal(s.fillAlpha, 0);
   });
 
   it('presidential TFR has dark-red 20% fill', () => {
     const s = notamStyle({ ...baseNotam, presidential: true });
-    assert.equal(s.outlineHex, '#d50000');
+    assert.equal(s.outlineHex, '#ff453a');
     assert.equal(s.fillAlpha, 0.20);
   });
 });
@@ -118,7 +118,7 @@ describe('aircraftStyle', () => {
       emergency: true,
     };
     const s = aircraftStyle(ac);
-    assert.equal(s.hex, '#d50000');
+    assert.equal(s.hex, '#ff453a');
     assert.equal(s.emergency, true);
   });
 

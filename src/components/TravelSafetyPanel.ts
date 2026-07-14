@@ -37,7 +37,7 @@ function renderAdvisoryRow(a: CountryAdvisory): string {
   let evacuBadge = '';
   if (a.evacuationStatus !== 'none') {
     const evacuText = a.evacuationStatus === 'ordered' ? 'EVAC' : 'vol. evac';
-    evacuBadge = `<span style="margin-left:4px;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800;background:rgba(213,0,0,0.2);color:#d50000;">${evacuText}</span>`;
+    evacuBadge = `<span style="margin-left:4px;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:800;background:rgba(255, 69, 58,0.2);color:#ff453a;">${evacuText}</span>`;
   }
   const restrBadge = a.entryRestrictions
     ? `<span style="margin-left:4px;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(255,152,0,0.2);color:#ff9800;">Entry restricted</span>`
@@ -51,7 +51,7 @@ function renderAdvisoryRow(a: CountryAdvisory): string {
 }
 
 function renderAlert(al: SafetyAlert): string {
-  const severityColor = al.severity === 'critical' ? '#d50000' : '#ff9800';
+  const severityColor = al.severity === 'critical' ? '#ff453a' : '#ff9800';
   return `<div style="padding:5px 12px;border-bottom:1px solid var(--border-subtle,#1a1a1a);border-left:3px solid ${severityColor};">
     <span style="font-size:10px;font-weight:700;color:${severityColor};margin-right:6px;">${safeText(al.country)}</span>
     <span style="font-size:11px;color:#bbb;">${safeText(al.title)}</span>
@@ -76,7 +76,7 @@ function renderHtml(params: ReturnType<typeof buildRenderData>): string {
     .join(', ');
 
   const evacBanner = params.evacuationCountries.length > 0
-    ? `<div style="padding:5px 12px;background:rgba(213,0,0,0.12);border-bottom:1px solid rgba(213,0,0,0.3);font-size:11px;font-weight:700;color:#d50000;">
+    ? `<div style="padding:5px 12px;background:rgba(255, 69, 58,0.12);border-bottom:1px solid rgba(255, 69, 58,0.3);font-size:11px;font-weight:700;color:#ff453a;">
         &#9888; Evacuation advisories: ${safeText(evacList)}
       </div>`
     : '';

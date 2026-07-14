@@ -17,11 +17,11 @@ export const SEVERITY_COLOR: Record<SituationSeverity, string> = {
   low: '#9e9e9e',
   medium: '#4a9eff',
   high: '#ffb74d',
-  critical: '#f44336',
+  critical: '#ff453a',
 };
 
 export const STATUS_COLOR: Record<TimelineEntry['status'], string> = {
-  active: '#f44336',
+  active: '#ff453a',
   resolved: '#4caf50',
 };
 
@@ -56,7 +56,7 @@ export function renderStatsRow(stats: TimelineStats): string {
     : '—';
   return `<div style="display:flex;gap:18px;font-size:12px;font-family:ui-monospace,monospace;flex-wrap:wrap;">
     <span><strong>${stats.totalSituations}</strong> total</span>
-    <span><strong style="color:#f44336;">${stats.activeCount}</strong> active</span>
+    <span><strong style="color:#ff453a;">${stats.activeCount}</strong> active</span>
     <span>avg <strong>${stats.avgDurationHours.toFixed(1)} h</strong></span>
     <span>most active: <strong>${escapeHtml(stats.mostActiveDomain ?? '—')}</strong></span>
     <span style="color:var(--text-secondary,#aaa);">longest active: ${longestText}</span>

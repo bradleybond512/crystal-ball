@@ -97,7 +97,7 @@ function donutGaugeSvg(value: number | null, size = 48): string {
   const r = (size - 6) / 2;
   const circumference = 2 * Math.PI * r;
   const offset = circumference - (v / 100) * circumference;
-  let color = '#f44336';
+  let color = '#ff453a';
   if (v >= 75) color = '#4caf50';
   else if (v >= 50) color = '#ff9800';
   else if (v >= 25) color = '#ff5722';

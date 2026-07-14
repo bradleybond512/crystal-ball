@@ -32,7 +32,7 @@ import { groupAlertsByCategory, formatRelativeExpires } from './weather-hazard-h
 type TabId = 'alerts' | 'tropical' | 'drought' | 'climate';
 
 function trendColorFor(anomaly: number): string {
-  if (anomaly < 0) return '#d50000';
+  if (anomaly < 0) return '#ff453a';
   if (anomaly > 0) return '#26a69a';
   return '#aaa';
 }
@@ -57,7 +57,7 @@ const STORM_CATEGORY_BADGE: Record<string, { color: string; label: string }> = {
   HU1: { color: '#ffd54f', label: 'CAT 1' },
   HU2: { color: '#ff9800', label: 'CAT 2' },
   HU3: { color: '#f4511e', label: 'CAT 3' },
-  HU4: { color: '#d50000', label: 'CAT 4' },
+  HU4: { color: '#ff453a', label: 'CAT 4' },
   HU5: { color: '#6a1b9a', label: 'CAT 5' },
   PT: { color: '#9e9e9e', label: 'PT' },
   unknown: { color: '#616161', label: '?' },
@@ -265,7 +265,7 @@ export class WeatherHazardPanel extends Panel {
     const movement = s.movement
       ? `${s.movement.headingDeg.toFixed(0)}° at ${s.movement.speedMph.toFixed(0)} mph`
       : '—';
-    const surge = s.intensityMph >= 96 ? `<span style="color:#d50000;font-weight:700;">Storm-surge threat</span>` : '';
+    const surge = s.intensityMph >= 96 ? `<span style="color:#ff453a;font-weight:700;">Storm-surge threat</span>` : '';
     return `<div style="border:1px solid var(--border-subtle,#333);border-left:4px solid ${cat.color};border-radius:3px;padding:10px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <span style="font-weight:700;font-size:14px;">${escapeHtml(s.name)}</span>
@@ -327,7 +327,7 @@ export class WeatherHazardPanel extends Panel {
     const trendColor = trendColorFor(anomaly);
     const arrow = trendArrowFor(anomaly);
     const recordBadge = ice.isRecordLow
-      ? `<span style="background:#d50000;color:#fff;font-size:10px;font-weight:700;border-radius:3px;padding:2px 8px;letter-spacing:0.05em;">RECORD LOW</span>`
+      ? `<span style="background:#ff453a;color:#fff;font-size:10px;font-weight:700;border-radius:3px;padding:2px 8px;letter-spacing:0.05em;">RECORD LOW</span>`
       : '';
     return `<div style="display:flex;flex-direction:column;gap:14px;">
       <div style="font-size:11px;color:var(--text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.04em;">

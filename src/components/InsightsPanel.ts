@@ -635,7 +635,7 @@ export class InsightsPanel extends Panel {
   }
 
   private static scoreToColor(score: number): string {
- if (score >= 75) return '#f44336';
+ if (score >= 75) return '#ff453a';
  if (score >= 50) return '#ff9800';
  return '#ffeb3b';
   }

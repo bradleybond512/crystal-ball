@@ -298,7 +298,7 @@ test('severityColor returns orange for severity 3', () => {
 });
 
 test('severityColor returns red for severity 4', () => {
-  assert.equal(severityColor(4), '#d50000');
+  assert.equal(severityColor(4), '#ff453a');
 });
 
 // ── formatFragments ─────────────────────────────────────────────────────────

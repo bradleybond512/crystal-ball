@@ -17,7 +17,7 @@ function escHtml(s: string): string {
 }
 
 function escalationColor(risk: number): string {
-  if (risk >= 75) return '#d50000';
+  if (risk >= 75) return '#ff453a';
   if (risk >= 55) return '#ff9800';
   if (risk >= 35) return '#ffeb3b';
   return '#4caf50';
@@ -27,17 +27,17 @@ function stabilityColor(score: number): string {
   if (score >= 75) return '#4caf50';
   if (score >= 50) return '#ffeb3b';
   if (score >= 30) return '#ff9800';
-  return '#d50000';
+  return '#ff453a';
 }
 
 function treatyStatusColor(status: NuclearTreaty['status']): string {
   if (status === 'in-force') return '#4caf50';
   if (status === 'suspended' || status === 'negotiating') return '#ff9800';
-  return '#d50000';
+  return '#ff453a';
 }
 
 function alertLevelColor(level: NuclearPosture['alertLevel']): string {
-  if (level === 'DEFCON-1' || level === 'DEFCON-2') return '#d50000';
+  if (level === 'DEFCON-1' || level === 'DEFCON-2') return '#ff453a';
   if (level === 'DEFCON-3' || level === 'elevated') return '#ff9800';
   if (level === 'DEFCON-4') return '#ffeb3b';
   return '#9e9e9e';
@@ -100,7 +100,7 @@ function renderPostures(postures: NuclearPosture[]): string {
 function renderEvent(ev: DeterrenceEvent): string {
   let color: string;
   if (ev.escalationImpact >= 7) {
-    color = '#d50000';
+    color = '#ff453a';
   } else if (ev.escalationImpact >= 4) {
     color = '#ff9800';
   } else {
@@ -155,7 +155,7 @@ function renderTreaties(treaties: NuclearTreaty[], health: { active: number; deg
         <span style="margin:0 4px;color:var(--text-secondary,#aaa);">·</span>
         <span style="color:#ff9800;">${health.degraded} degraded</span>
         <span style="margin:0 4px;color:var(--text-secondary,#aaa);">·</span>
-        <span style="color:#d50000;">${health.collapsed} collapsed</span>
+        <span style="color:#ff453a;">${health.collapsed} collapsed</span>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px;">${rows}</div>

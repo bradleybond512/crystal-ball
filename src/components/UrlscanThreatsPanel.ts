@@ -101,7 +101,7 @@ export class UrlscanThreatsPanel extends Panel {
     if (env) this.setCount(env.threats.length);
 
     const banner = env?.degraded
-      ? `<div style="padding:4px 6px;background:rgba(244,67,54,0.10);border-left:3px solid #f44336;margin-bottom:6px;font-size:11px;">
+      ? `<div style="padding:4px 6px;background:rgba(255, 69, 58,0.10);border-left:3px solid #ff453a;margin-bottom:6px;font-size:11px;">
            Degraded: ${escapeHtml(env.reason ?? 'unknown')} (source: ${escapeHtml(env.source)})
          </div>`
       : '';
@@ -163,7 +163,7 @@ export class UrlscanThreatsPanel extends Panel {
     const cats = t.categories.length === 0 ? '' :
       t.categories.slice(0, 4).map((c) => `<span style="padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.08);font-size:10px;margin-right:3px;">${escapeHtml(c)}</span>`).join('');
     const brands = t.brands.length === 0 ? '' :
-      t.brands.slice(0, 3).map((b) => `<span style="padding:1px 5px;border-radius:3px;background:rgba(244,67,54,0.12);font-size:10px;margin-right:3px;color:${color};">${escapeHtml(b)}</span>`).join('');
+      t.brands.slice(0, 3).map((b) => `<span style="padding:1px 5px;border-radius:3px;background:rgba(255, 69, 58,0.12);font-size:10px;margin-right:3px;color:${color};">${escapeHtml(b)}</span>`).join('');
     const date = new Date(t.scannedAt).toISOString().slice(0, 16).replace('T', ' ');
     const reportLink = t.reportUrl
       ? `<a href="${escapeHtml(t.reportUrl)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">report</a>`
@@ -231,7 +231,7 @@ export class UrlscanThreatsPanel extends Panel {
 }
 
 function submitStateColor(state: SubmitStatus['state']): string {
-  if (state === 'error') return '#d50000';
+  if (state === 'error') return '#ff453a';
   if (state === 'ok') return '#4caf50';
   if (state === 'submitting') return '#ffeb3b';
   return 'rgba(255,255,255,0.5)';

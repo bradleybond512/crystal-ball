@@ -74,11 +74,11 @@ const STATUS_COLOR_TOKEN: Record<StatusBarState['color'], string> = {
   yellow: 'var(--sev-moderate, #facc15)',
   orange: 'var(--sev-elevated, #fb923c)',
   red: 'var(--sev-high, #ef4444)',
-  crimson: 'var(--sev-critical, #d50000)',
+  crimson: 'var(--sev-critical, #ff453a)',
 };
 
 const ALERT_SEV_TOKEN: Partial<Record<AlertSeverity, string>> = {
-  critical: 'var(--sev-critical, #d50000)',
+  critical: 'var(--sev-critical, #ff453a)',
   high: 'var(--sev-high, #ef4444)',
   medium: 'var(--sev-moderate, #facc15)',
 };

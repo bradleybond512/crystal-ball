@@ -11,7 +11,7 @@ import {
 const REFRESH_MS = 300_000;
 
 const NETWORK_TYPE_COLOR: Record<NetworkType, string> = {
-  cartel: '#d50000',
+  cartel: '#ff453a',
   mafia: '#e65100',
   triad: '#1565c0',
   gang: '#4a148c',
@@ -27,7 +27,7 @@ const NETWORK_TYPE_LABEL: Record<NetworkType, string> = {
 };
 
 const PENETRATION_COLOR: Record<ReturnType<typeof assessStatePenetration>, string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high: '#ff5722',
   medium: '#ff9800',
   low: '#4caf50',
@@ -68,7 +68,7 @@ function renderOrgRow(org: CriminalOrg): string {
 }
 
 function intensityColor(intensity: TerritoryConflict['intensity']): string {
-  if (intensity === 'high') return '#d50000';
+  if (intensity === 'high') return '#ff453a';
   if (intensity === 'medium') return '#ff9800';
   return '#4caf50';
 }

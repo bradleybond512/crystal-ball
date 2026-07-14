@@ -22,13 +22,13 @@ const SPARKLINE_LIMIT = 10;
 const STATUS_COLOR: Record<SystemStatus, string> = {
   ok: '#4caf50',
   degraded: '#ffb74d',
-  error: '#f44336',
+  error: '#ff453a',
 };
 
 const COMPONENT_STATUS_COLOR: Record<ComponentStatus, string> = {
   ok: '#4caf50',
   degraded: '#ffb74d',
-  error: '#f44336',
+  error: '#ff453a',
   unknown: '#9e9e9e',
 };
 

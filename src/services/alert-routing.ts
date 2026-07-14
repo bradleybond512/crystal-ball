@@ -73,12 +73,15 @@ const PROXIMITY_KM = 250;
 const WATCHLIST_MULT = 2;
 
 // ─── Source → panel routing ──────────────────────────────────────────────
-const SOURCE_TO_PANEL: Record<UnifiedAlert['source'], string> = {
+// Every value MUST be a real FULL_PANELS key (asserted by
+// src/services/__tests__/alert-routing.test.mts) — nine of these were
+// phantom ids for months, silently no-opping alert clicks.
+export const SOURCE_TO_PANEL: Record<UnifiedAlert['source'], string> = {
   'breaking-news': 'live-news',
   'nws': 'unified-alert-inbox',
-  'gdacs': 'gdacs',
-  'tsunami': 'tsunami',
-  'volcano': 'volcanoes',
+  'gdacs': 'gdacs-alerts',
+  'tsunami': 'tsunami-alerts',
+  'volcano': 'volcano-alerts',
   'oref': 'unified-alert-inbox',
   'hazard': 'situation-awareness',
   'correlation': 'situation-awareness',
@@ -91,13 +94,15 @@ const SOURCE_TO_PANEL: Record<UnifiedAlert['source'], string> = {
   'power-grid': 'unified-alert-inbox',
   'comms-health': 'comms-health',
   'space-weather': 'space-weather',
-  'spc': 'spc-outlook',
-  'disease': 'disease-outbreak',
-  'maritime': 'maritime-safety',
-  'travel-advisory': 'travel-warnings',
-  'radiation': 'radiation-monitoring',
+  'spc': 'spc-mesoscale',
+  'disease': 'disease-outbreaks',
+  'maritime': 'maritime-superpower',
+  'travel-advisory': 'travel-safety',
+  // No radiation monitoring panel exists (radiation-decay is a calculator) —
+  // route to the inbox like the other feed-less alert sources.
+  'radiation': 'unified-alert-inbox',
   'air-quality': 'air-quality',
-  'aviation-hazard': 'aviation-hazards',
+  'aviation-hazard': 'aviation-intel',
 };
 
 export function panelForAlert(a: UnifiedAlert): string {

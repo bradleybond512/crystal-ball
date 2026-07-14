@@ -212,7 +212,7 @@ export function trendArrow(trend: string): string {
 }
 
 export function trendColor(trend: string): string {
-  if (trend === 'rising')  return '#ff453a';
+  if (trend === 'rising')  return '#ef4444';
   if (trend === 'falling') return '#4caf50';
   return '#9e9e9e';
 }

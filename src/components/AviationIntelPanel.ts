@@ -63,7 +63,7 @@ const HAZARD_COLOR: Record<AviationSigmet['hazard'], string> = {
   volcanic_ash: '#ff9800',
   turbulence: '#ffeb3b',
   icing: '#4a9eff',
-  thunderstorm: '#ff453a',
+  thunderstorm: '#ef4444',
   mountain_obscuration: '#9e9e9e',
   ifr: '#9c27b0',
   other: '#607d8b',
@@ -73,7 +73,7 @@ const SEVERITY_COLOR: Record<AviationSigmet['severity'], string> = {
   light: '#4caf50',
   moderate: '#ffeb3b',
   severe: '#ff9800',
-  extreme: '#ff453a',
+  extreme: '#ef4444',
 };
 
 const MILITARY_TYPE_LABEL: Record<MilitaryAircraft['type'], string> = {
@@ -220,7 +220,7 @@ export class AviationIntelPanel extends Panel {
     const envelope = this.envelopeFor(this.activeTab);
     if (envelope === null) return `<div style="opacity:0.6;">No data yet.</div>`;
     const banner = envelope.degraded
-      ? `<div style="padding:4px 6px;background:rgba(255, 69, 58,0.10);border-left:3px solid #ff453a;margin-bottom:6px;font-size:11px;">
+      ? `<div style="padding:4px 6px;background:rgba(239, 68, 68, 0.10);border-left:3px solid #ef4444;margin-bottom:6px;font-size:11px;">
            Degraded: ${escapeHtml(envelope.reason ?? 'unknown')} (source: ${escapeHtml(envelope.source)})
          </div>`
       : '';
@@ -264,7 +264,7 @@ export class AviationIntelPanel extends Panel {
   }
 
   private renderNotamCard(n: AviationNotam, isTfr: boolean): string {
-    const tfrAccent = isTfr ? '#ff453a' : '#4a9eff';
+    const tfrAccent = isTfr ? '#ef4444' : '#4a9eff';
     const accent = n.presidential ? '#ff453a' : tfrAccent;
     const altLabel = n.altitudeFt
       ? `${n.altitudeFt.min ?? 'SFC'}–${n.altitudeFt.max ?? 'unlimited'} ft`

@@ -179,8 +179,8 @@ export class ShortageDetailPanel extends Panel {
     const history = getHistory(this.commodity);
     const sparkline = buildSparkline(history, color);
     const freshness = freshnessLabel(forecast.lastUpdated);
-    const CONF_COLORS: Record<string, string> = { high: '#4caf50', medium: '#ff9800', low: '#ff453a' };
-    const confColor = CONF_COLORS[forecast.confidence] ?? '#ff453a';
+    const CONF_COLORS: Record<string, string> = { high: '#4caf50', medium: '#ff9800', low: '#ef4444' };
+    const confColor = CONF_COLORS[forecast.confidence] ?? '#ef4444';
 
     const topDrivers = [...forecast.drivers]
       .sort((a, b) => b.score - a.score)

@@ -29,7 +29,7 @@ function ctTrendArrow(trend: RegionRisk['trend']): string {
 }
 
 function ctTrendColor(trend: RegionRisk['trend']): string {
-  if (trend === 'increasing') return '#ff453a';
+  if (trend === 'increasing') return '#ef4444';
   if (trend === 'decreasing') return '#4caf50';
   return '#9e9e9e';
 }

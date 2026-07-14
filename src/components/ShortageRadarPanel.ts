@@ -51,7 +51,7 @@ const RISK_COLOR: Record<RiskLevel, string> = {
 };
 
 const TREND_COLOR: Record<OverviewRow['trendArrow'], string> = {
-  '↑': '#ff453a',
+  '↑': '#ef4444',
   '↓': '#4caf50',
   '→': '#9e9e9e',
 };

@@ -39,7 +39,7 @@ const REFRESH_MS = 15_000;
 const STATUS_COLOR: Record<AlgorithmHealthStatus, string> = {
   healthy: '#4caf50',
   degraded: '#ffeb3b',
-  failing: '#ff453a',
+  failing: '#ef4444',
   unsafe: '#ff453a',
   unknown: '#9e9e9e',
 };

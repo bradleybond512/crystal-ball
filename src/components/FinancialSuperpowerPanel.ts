@@ -100,7 +100,7 @@ function safe<T>(fn: () => T): T | undefined {
 const RISK_COLOR: Record<string, string> = {
   low:      '#4caf50',
   medium:   '#ff9800',
-  high:     '#ff453a',
+  high:     '#ef4444',
   critical: '#b71c1c',
 };
 

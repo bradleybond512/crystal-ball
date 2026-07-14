@@ -127,6 +127,12 @@ tiles, and Library rows open the real panel inside the shell by REPARENTING it o
 for unknown/failed/disabled panels → callers fall back to classic navigation (toast). Esc
 layering: cmdk > Library > focus host > dossier > shell. Classic view remains the fallback
 surface — full retirement deferred pending soak; mobile + bespoke S-cards also deferred.
+The 2026-07 Apple design-language restyle (Cupertino Glass + Graphite; spec
+docs/superpowers/specs/2026-07-13-apple-design-language-design.md) landed Phase A: DL tokens
+in tokens.css (--r-*/--e-*/--mat-*/--font-ui/--dur-*), SF body font, glass scoped to
+body.is-desktop-macos on the six-surface budget (bands/ribbon/dossier/focus/Library/⌘K —
+never per-card), sentence-cased shell labels at the TS source. Phase B (classic chrome +
+red-hue literal migration) and Phase C (motion/polish) are specced but not started.
 
 ## Foundation Intelligence Layers
 

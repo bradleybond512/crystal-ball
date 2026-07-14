@@ -18706,7 +18706,8 @@ body:has(.replay-scrubber:not([hidden])) .community-widget {
 
 .spm-btn--primary {
   background: var(--accent-fill);
-  color: var(--hs-bg-base);
+  /* --mac-window-bg theme-flips with --accent-fill; --hs-bg-base is dark-fixed */
+  color: var(--mac-window-bg, var(--hs-bg-base));
   border-color: var(--accent-fill);
 }
 .spm-btn--primary:hover {

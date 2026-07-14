@@ -39,7 +39,7 @@ Hover idiom for near-white primary buttons: keep `background: var(--accent-fill)
 8. `macos-native.css:1624-1625` wizard input focus → `border-color: var(--accent-fill); box-shadow: 0 0 0 3px var(--accent-selection);`
 9. `macos-native.css:1654-1660` wizard primary button → `background/border-color: var(--accent-fill); color: var(--mac-window-bg);` hover → keep fill + `opacity: 0.85`.
 10. `macos-native.css:1743-1750` `.syd-self-test` → same treatment with the existing `!important`s retained; hover `opacity: 0.85 !important` (do not reorder the :1737 vs :1748 cascade).
-11. `main.css:18708-18715` `.spm-btn--primary` → `background/border-color: var(--accent-fill); color: var(--hs-bg-base);` hover → keep fill, `opacity: 0.85` (drop the `opacity: 1` reset).
+11. `main.css:18708-18715` `.spm-btn--primary` → `background/border-color: var(--accent-fill); color: var(--mac-window-bg, var(--hs-bg-base));` hover → keep fill, `opacity: 0.85` (drop the `opacity: 1` reset).
 12. `CognitiveBiasDetectorPanel.ts:185-186` active chip → bg `'var(--accent-selection,rgba(255,255,255,0.16))'`, fg `'var(--text-primary,#f2f3f5)'`.
 
 - [ ] **Step 3:** grep `var(--mac-accent-hover` → must return ONLY the token definition (:40); grep `var(--mac-accent` consumers → only :1606 (the KEEP) remains. Gates (`lint:colors`, `typecheck:all`, `test:homeshell`), commit `feat(restyle): Graphite accent flip per contrast audit`.

@@ -838,6 +838,10 @@ body.is-desktop-macos.sidebar-collapsed .mac-sidebar-toggle-btn:hover {
   background: rgba(255, 255, 255, 0.22);
 }
 
+body.is-desktop-macos.sidebar-collapsed:where([data-theme="light"], [data-theme="light"] *) .mac-sidebar-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.15);
+}
+
 /* When sidebar is collapsed, mac-content fills full window width.
  The macOS traffic-light buttons (close/min/zoom) sit at x≈8-72 of the window
  and physically cover the toolbar's left edge. Push the toolbar content past
@@ -1519,7 +1523,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 
 .key-dashboard { display: flex; flex-direction: column; gap: 12px; }
 .key-dashboard-header { display: flex; justify-content: space-between; align-items: center; }
-.key-dashboard-progress { width: 100%; height: 6px; background: var(--mac-control-bg, #e5e5ea); border-radius: 3px; overflow: hidden; }
+.key-dashboard-progress { width: 100%; height: 6px; background: var(--mac-fill, #e5e5ea); border-radius: 3px; overflow: hidden; }
 .key-dashboard-progress-bar { height: 100%; background: var(--accent-fill); transition: width var(--dur-base) var(--ease-out); }
 .key-dashboard-run-wizard { padding: 6px 14px; font-weight: 500; }
 

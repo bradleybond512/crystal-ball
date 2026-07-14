@@ -41,7 +41,7 @@
   align-items: center;
   gap: 4px;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   background: rgba(140, 90, 255, 0.18);
   color: rgba(220, 200, 255, 0.95);
   font: 500 11px/1.2 "SF Mono", ui-monospace, monospace;
@@ -118,7 +118,7 @@ body.gods-eye-4d-active .gods-eye-time-machine {
   display: inline-flex;
   gap: 3px;
   padding: 2px;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: rgba(20, 20, 30, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -128,7 +128,7 @@ body.gods-eye-4d-active .gods-eye-time-machine {
   background: transparent;
   border: none;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   font: 500 11px/1.4 "SF Mono", ui-monospace, monospace;
   color: rgba(200, 200, 220, 0.65);
   cursor: pointer;
@@ -180,7 +180,7 @@ body.gods-eye-4d-active .gods-eye-time-machine {
   flex: 1;
   height: 18px;
   background: rgba(255, 255, 255, 0.03);
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   overflow: hidden;
 }
 
@@ -191,7 +191,7 @@ body.gods-eye-4d-active .gods-eye-time-machine {
   top: 2px;
   bottom: 2px;
   background: var(--ge-lane-color, #888);
-  border-radius: 2px;
+  border-radius: var(--r-xs);
   cursor: pointer;
   transition: transform 0.12s ease, filter 0.12s ease;
 }
@@ -250,7 +250,7 @@ body.gods-eye-4d-active .gods-eye-time-machine {
   padding: 1px 6px;
   background: rgba(0, 229, 255, 0.95);
   color: #001018;
-  border-radius: 3px;
+  border-radius: var(--r-xs);
   font: 700 11px/1 "SF Mono", ui-monospace, monospace;
   letter-spacing: 0.1em;
   white-space: nowrap;
@@ -265,7 +265,7 @@ body.gods-eye-4d-active .gods-eye-time-machine {
   padding: 6px 10px;
   background: rgba(8, 10, 14, 0.97);
   border: 1px solid rgba(140, 90, 255, 0.45);
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   font: 500 11px/1.4 "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
   color: #fff;
   z-index: 100;

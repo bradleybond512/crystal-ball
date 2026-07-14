@@ -956,7 +956,7 @@ const STYLE = `
 .cmdk-v2-overlay[hidden] { display: none; }
 .cmdk-v2-panel { width: ${PANEL_WIDTH_PX}px; max-width: 94vw; background: var(--mat-solid-3, rgba(28,28,32,0.98)); color: var(--text-primary, #f5f5f7); border: none; border-radius: var(--r-xl, 16px); box-shadow: var(--e-4, 0 24px 64px rgba(0,0,0,0.6)), var(--edge-hairline, inset 0 0 0 0.5px rgba(255,255,255,0.11)); overflow: hidden; font: 13px/1.3 -apple-system, system-ui, sans-serif; }
 body.is-desktop-macos .cmdk-v2-panel { background: var(--mat-raised-bg, rgba(28,28,32,0.9)); -webkit-backdrop-filter: var(--mat-blur-raised, blur(24px)); backdrop-filter: var(--mat-blur-raised, blur(24px)); }
-.cmdk-v2-input { width: 100%; box-sizing: border-box; background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.08); color: var(--text-primary, #f5f5f7); padding: 14px 18px; font: 15px/1.2 -apple-system, system-ui, sans-serif; outline: none; }
+.cmdk-v2-input { width: 100%; box-sizing: border-box; background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-primary, #f5f5f7); padding: 14px 18px; font: 15px/1.2 -apple-system, system-ui, sans-serif; outline: none; }
 .cmdk-v2-list { max-height: 56vh; overflow-y: auto; padding: 6px; }
 .cmdk-v2-section { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.4); padding: 10px 12px 4px; }
 .cmdk-v2-section:first-child { padding-top: 6px; }

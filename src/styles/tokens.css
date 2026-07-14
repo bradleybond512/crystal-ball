@@ -180,4 +180,8 @@
   /* Graphite accent */
   --accent-fill: rgba(255, 255, 255, 0.92);
   --accent-selection: rgba(255, 255, 255, 0.16);
+  /* Text sitting ON an --accent-selection wash. Theme-flipped alongside the
+     accent tokens (macos-native.css light block); dark-fixed shell surfaces
+     can keep using --hs-fg/--text-primary directly. */
+  --text-on-selection: #f2f3f5;
 }

@@ -39,7 +39,7 @@ function ageColor(lastUpdate?: number): string {
   const ageH = ageMs / 3_600_000;
   if (ageH < 1) return '#4caf50'; // green  < 1h
   if (ageH < 6) return '#ff9800'; // yellow 1-6h
-  return '#f44336'; // red > 6h
+  return '#ff453a'; // red > 6h
 }
 
 function timeAgo(ts?: number): string {

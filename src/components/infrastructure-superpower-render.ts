@@ -136,20 +136,20 @@ export const TIER_COLOR: Record<SectorTier, string> = {
   operational: '#4caf50',
   degraded: '#ffc107',
   stressed: '#ff9800',
-  critical: '#f44336',
+  critical: '#ff453a',
 };
 
 const ADVISORY_COLOR: Record<WaterAdvisoryLevel, string> = {
   advisory: '#ffc107',
   warning: '#ff9800',
-  emergency: '#f44336',
+  emergency: '#ff453a',
 };
 
 const CDN_COLOR: Record<CdnPerformance, string> = {
   healthy: '#4caf50',
   degraded: '#ffc107',
   'partial-outage': '#ff9800',
-  'major-outage': '#f44336',
+  'major-outage': '#ff453a',
 };
 
 // ── Pure helpers ────────────────────────────────────────────────────
@@ -321,7 +321,7 @@ export function renderPowerSection(state: PowerSectorState): string {
   }
   const rows = state.outages.slice(0, 8).map((o) => {
     const isCritical = o.customersAffected >= CRITICAL_OUTAGE_CUSTOMERS;
-    const accent = isCritical ? '#f44336' : '#ffc107';
+    const accent = isCritical ? '#ff453a' : '#ffc107';
     return `<div style="padding:6px 10px;border-radius:4px;background:${accent}11;border-left:3px solid ${accent};margin-bottom:5px">
       <div style="display:flex;justify-content:space-between;align-items:baseline">
         <span style="font-size:12px;font-weight:600">${escapeHtml(o.region)}</span>

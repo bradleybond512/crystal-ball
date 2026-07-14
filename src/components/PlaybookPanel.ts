@@ -29,7 +29,7 @@ const CATEGORY_COLOR: Record<PlaybookStep['category'], string> = {
   monitor: '#4a9eff',
   notify: '#ffb74d',
   prepare: '#81c784',
-  act: '#f44336',
+  act: '#ff453a',
   verify: '#9c27b0',
 };
 

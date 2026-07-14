@@ -49,7 +49,7 @@ export class IntelligenceCooperationPanel extends Panel {
 
   private buildHtml(data: ReturnType<typeof buildRenderData>): string {
     const { partners, events, globalCoopIndex, tier1Count, tier2Count, strainedCount, suspendedCount, averageTrustScore } = data;
-    let coopColor = '#f44336';
+    let coopColor = '#ff453a';
     if (globalCoopIndex >= 70) { coopColor = '#4caf50'; }
     else if (globalCoopIndex >= 50) { coopColor = '#ffeb3b'; }
     const sorted = [...partners].sort((a, b) => {
@@ -102,9 +102,9 @@ export class IntelligenceCooperationPanel extends Panel {
         <span style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);">Strained</span>
         <span style="font-size:16px;font-weight:700;color:#ff9800;">${strainedCount}</span>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:center;padding:6px 12px;border:1px solid #f44336;border-radius:4px;">
+      <div style="display:flex;flex-direction:column;align-items:center;padding:6px 12px;border:1px solid #ff453a;border-radius:4px;">
         <span style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);">Suspended</span>
-        <span style="font-size:16px;font-weight:700;color:#f44336;">${suspendedCount}</span>
+        <span style="font-size:16px;font-weight:700;color:#ff453a;">${suspendedCount}</span>
       </div>
       <div style="display:flex;flex-direction:column;align-items:center;padding:6px 12px;border:1px solid var(--border-subtle,#333);border-radius:4px;">
         <span style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);">Avg Trust</span>
@@ -130,8 +130,8 @@ export class IntelligenceCooperationPanel extends Panel {
     let healthColor = '#2196f3';
     if (hClass === 'health-strong') { healthColor = '#4caf50'; }
     else if (hClass === 'health-strained') { healthColor = '#ff9800'; }
-    else if (hClass === 'health-suspended') { healthColor = '#f44336'; }
-    let tierColor = '#f44336';
+    else if (hClass === 'health-suspended') { healthColor = '#ff453a'; }
+    let tierColor = '#ff453a';
     if (tClass === 'tier-1') { tierColor = '#2196f3'; }
     else if (tClass === 'tier-2') { tierColor = '#9c27b0'; }
     else if (tClass === 'tier-3') { tierColor = '#607d8b'; }
@@ -172,9 +172,9 @@ export class IntelligenceCooperationPanel extends Panel {
 
   private renderEventRow(ev: IntelSharingEvent): string {
     let sigColor = '#9e9e9e';
-    if (ev.significance === 'Critical') { sigColor = '#f44336'; }
+    if (ev.significance === 'Critical') { sigColor = '#ff453a'; }
     else if (ev.significance === 'Notable') { sigColor = '#ff9800'; }
-    const frictionColor = ev.positive ? '#4caf50' : '#f44336';
+    const frictionColor = ev.positive ? '#4caf50' : '#ff453a';
     const sentiment = ev.positive ? 'Cooperation' : 'Friction';
     return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${sigColor};border-radius:3px;padding:6px 8px;font-size:11px;">
       <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:4px;">

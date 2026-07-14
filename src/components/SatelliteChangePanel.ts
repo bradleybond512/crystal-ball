@@ -41,7 +41,7 @@ const CHANGE_LABELS: Record<ChangeType, string> = {
 };
 
 const SEV_COLORS: Record<string, string> = {
-  critical: '#f44336',
+  critical: '#ff453a',
   high: '#ff9800',
   medium: '#ffc107',
   low: '#4caf50',

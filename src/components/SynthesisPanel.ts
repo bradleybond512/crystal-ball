@@ -74,7 +74,7 @@ function createEmptySignalResult(keyword: string, error: string): SignalWatchRes
 }
 
 function surgeColor(level: SurgeLevel): string {
-  if (level === 'spike') return '#d50000';
+  if (level === 'spike') return '#ff453a';
   if (level === 'surge') return '#ff5722';
   if (level === 'elevated') return '#ff9800';
   return '#4caf50';

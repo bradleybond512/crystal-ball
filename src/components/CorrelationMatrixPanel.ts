@@ -53,14 +53,14 @@ const TREND_ICONS: Record<string, string> = {
 };
 
 function getCellColor(score: number): string {
-  if (score >= 75) return '#f44336';
+  if (score >= 75) return '#ff453a';
   if (score >= 50) return '#ff9800';
   if (score >= 25) return '#ffeb3b';
   return '#4caf50';
 }
 
 function getCellBg(score: number): string {
-  if (score >= 75) return 'rgba(244,67,54,0.2)';
+  if (score >= 75) return 'rgba(255, 69, 58,0.2)';
   if (score >= 50) return 'rgba(255,152,0,0.15)';
   if (score >= 25) return 'rgba(255,235,59,0.1)';
   return 'rgba(76,175,80,0.08)';
@@ -120,7 +120,7 @@ export class CorrelationMatrixPanel extends Panel {
  const regionLabel = REGION_LABELS[row.region] ?? escapeHtml(row.region);
  const trend = trends.get(row.region) ?? 'stable';
  const trendIcon = TREND_ICONS[trend] ?? '\u2192';
- const trendCol = trend === 'rising' ? '#f44336' : trend === 'falling' ? '#4caf50' : '#888';
+ const trendCol = trend === 'rising' ? '#ff453a' : trend === 'falling' ? '#4caf50' : '#888';
 
  const cellMap = new Map<MatrixDomain, MatrixCell>();
  for (const cell of row.cells) cellMap.set(cell.domain, cell);
@@ -171,7 +171,7 @@ export class CorrelationMatrixPanel extends Panel {
  const trend = cell?.trend ?? 'stable';
  const eventCount = cell?.eventCount ?? 0;
  const lastUpdated = cell?.lastUpdated ? formatTime(new Date(cell.lastUpdated)) : 'N/A';
- const trendColor = trend === 'rising' ? '#f44336' : trend === 'falling' ? '#4caf50' : '#888';
+ const trendColor = trend === 'rising' ? '#ff453a' : trend === 'falling' ? '#4caf50' : '#888';
  const trendIcon = TREND_ICONS[trend] ?? '\u2192';
 
  drillDownHtml = `<div style="margin-top:10px;padding:10px;background:var(--surface-raised,#1a1a2e);border-radius:6px;border:1px solid var(--border-subtle,#333);">

@@ -191,7 +191,7 @@ export class GDACSAlertsPanel extends Panel {
     const reason = this.rssData.reason;
 
     const banner = degraded
-      ? `<div style="padding:4px 6px;background:rgba(244,67,54,0.10);border-left:3px solid #f44336;margin-bottom:6px;font-size:11px;">Degraded: ${escapeHtml(reason ?? 'upstream')}</div>`
+      ? `<div style="padding:4px 6px;background:rgba(255, 69, 58,0.10);border-left:3px solid #ff453a;margin-bottom:6px;font-size:11px;">Degraded: ${escapeHtml(reason ?? 'upstream')}</div>`
       : '';
 
     if (events.length === 0) return `${banner}<div style="opacity:0.6;">No active GDACS events.</div>`;

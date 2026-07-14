@@ -149,7 +149,7 @@ export function gaugeTier(score: number): GaugeTier {
 
 export function gaugeColor(tier: GaugeTier): string {
   const MAP: Record<GaugeTier, string> = {
-    calm: '#4caf50', normal: '#9e9e9e', elevated: '#ff9800', severe: '#d50000',
+    calm: '#4caf50', normal: '#9e9e9e', elevated: '#ff9800', severe: '#ff453a',
   };
   return MAP[tier];
 }
@@ -170,7 +170,7 @@ export function phaseLabel(phase: DrawdownPhase): string {
 }
 
 export function phaseColor(phase: DrawdownPhase): string {
-  if (phase === 'deepening')  return '#d50000';
+  if (phase === 'deepening')  return '#ff453a';
   if (phase === 'plateauing') return '#ff9800';
   return '#4caf50';
 }
@@ -184,7 +184,7 @@ export function trajectoryLabel(trajectory: CurrencyWatch['trajectory']): string
 }
 
 export function trajectoryColor(trajectory: CurrencyWatch['trajectory']): string {
-  if (trajectory === 'worsening')   return '#d50000';
+  if (trajectory === 'worsening')   return '#ff453a';
   if (trajectory === 'stabilizing') return '#ff9800';
   return '#9e9e9e';
 }
@@ -192,7 +192,7 @@ export function trajectoryColor(trajectory: CurrencyWatch['trajectory']): string
 // ── Systemic helpers ─────────────────────────────────────────────────
 
 export function systemicColor(severity: SystemicSeverity): string {
-  if (severity === 'severe')   return '#d50000';
+  if (severity === 'severe')   return '#ff453a';
   if (severity === 'elevated') return '#ff9800';
   return '#4caf50';
 }
@@ -212,7 +212,7 @@ export function trendArrow(trend: string): string {
 }
 
 export function trendColor(trend: string): string {
-  if (trend === 'rising')  return '#f44336';
+  if (trend === 'rising')  return '#ff453a';
   if (trend === 'falling') return '#4caf50';
   return '#9e9e9e';
 }

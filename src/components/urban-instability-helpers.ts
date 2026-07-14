@@ -50,12 +50,18 @@ export function classifyInstabilityTier(compositeRisk: number): InstabilityTier 
 
 export function tierToLabel(tier: InstabilityTier): string {
   switch (tier) {
-    case 'critical':  return 'Critical';
-    case 'severe':    return 'Severe';
-    case 'high':      return 'High';
-    case 'elevated':  return 'Elevated';
-    case 'moderate':  return 'Moderate';
-    case 'low':       return 'Low';
+    case 'critical': {  return 'Critical';
+    }
+    case 'severe': {    return 'Severe';
+    }
+    case 'high': {      return 'High';
+    }
+    case 'elevated': {  return 'Elevated';
+    }
+    case 'moderate': {  return 'Moderate';
+    }
+    case 'low': {       return 'Low';
+    }
   }
 }
 
@@ -89,8 +95,8 @@ export function computeCompositeRisk(city: CityRawData): number {
   const raw =
     protestScore * 0.25 +
     city.riotFrequency * 0.15 +
-    city.gangControlPercent * 0.20 +
-    city.vigilanteActivity * 0.10 +
+    city.gangControlPercent * 0.2 +
+    city.vigilanteActivity * 0.1 +
     responseScore * 0.15 +
     displacementScore * 0.15;
 
@@ -100,7 +106,7 @@ export function computeCompositeRisk(city: CityRawData): number {
 // ── Dominant driver identification ────────────────────────────────────────
 
 export function identifyDominantDriver(city: CityRawData): string {
-  const factors: Array<{ label: string; value: number }> = [
+  const factors: { label: string; value: number }[] = [
     { label: 'Protest Intensity', value: city.protestIntensity },
     { label: 'Riot Frequency', value: city.riotFrequency },
     { label: 'Gang Territorial Control', value: city.gangControlPercent },
@@ -285,19 +291,19 @@ export function getMockCityData(): CityRawData[] {
 // ── Pipeline entry point ──────────────────────────────────────────────────
 
 export function buildPanelRenderData(cities: CityRawData[]): CityInstabilityResult[] {
-  return sortCitiesByRisk(cities.map(buildCityResult));
+  return sortCitiesByRisk(cities.map((city) => buildCityResult(city)));
 }
 
 // ── Tier color palette ────────────────────────────────────────────────────
 
 export function tierToColor(tier: InstabilityTier): string {
   switch (tier) {
-    case 'critical':  return '#d50000';
-    case 'severe':    return '#e64a19';
-    case 'high':      return '#ff9800';
-    case 'elevated':  return '#fbc02d';
-    case 'moderate':  return '#aed581';
-    case 'low':       return '#4caf50';
+    case 'critical': { return '#ff453a'; }
+    case 'severe': { return '#e64a19'; }
+    case 'high': { return '#ff9800'; }
+    case 'elevated': { return '#fbc02d'; }
+    case 'moderate': { return '#aed581'; }
+    case 'low': { return '#4caf50'; }
   }
 }
 
@@ -324,5 +330,5 @@ export function renderCitiesSection(results: CityInstabilityResult[]): string {
   if (results.length === 0) {
     return '<div style="padding:12px;color:var(--text-secondary,#777);font-size:12px;">No city data available.</div>';
   }
-  return results.map(renderCityCard).join('');
+  return results.map((result) => renderCityCard(result)).join('');
 }

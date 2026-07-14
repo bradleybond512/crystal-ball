@@ -30,7 +30,7 @@ const REC_LABEL: Record<BacktestRecommendation, string> = {
 const REC_COLOR: Record<BacktestRecommendation, string> = {
   apply: '#4caf50',
   review: '#ffb74d',
-  reject: '#f44336',
+  reject: '#ff453a',
 };
 
 interface RunFormState {
@@ -124,7 +124,7 @@ export class BacktestPanel extends Panel {
 
   private renderRunSection(): string {
     const errorBlock = this.form.lastError
-      ? `<div style="color:#f44336;font-size:11px;margin-top:6px;">${escapeHtml(this.form.lastError)}</div>`
+      ? `<div style="color:#ff453a;font-size:11px;margin-top:6px;">${escapeHtml(this.form.lastError)}</div>`
       : '';
     const minPct = (this.form.minAccuracyDelta * 100).toFixed(1);
     const jsonError = overridesJsonError(this.form.parameterChangesText);
@@ -265,7 +265,7 @@ function renderLatestResult(result: BacktestResult): string {
 function renderScenarioRow(s: ScenarioOutcome): string {
   const delta = s.proposedAccuracy - s.baselineAccuracy;
   const deltaStr = (delta >= 0 ? '+' : '') + (delta * 100).toFixed(1) + '%';
-  const passColor = s.passed ? '#4caf50' : '#f44336';
+  const passColor = s.passed ? '#4caf50' : '#ff453a';
   const passLabel = s.passed ? 'pass' : 'fail';
   return `<tr>
     <td style="padding:4px 8px;">${escapeHtml(s.scenarioName)}</td>

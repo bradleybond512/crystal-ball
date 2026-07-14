@@ -14,14 +14,14 @@ import {
 const REFRESH_MS = 60 * 60 * 1000;
 
 function scoreColor(score: number): string {
-  if (score < 0.3) return '#d50000';
+  if (score < 0.3) return '#ff453a';
   if (score < 0.5) return '#ff9800';
   if (score < 0.7) return '#ffeb3b';
   return '#4caf50';
 }
 
 function deltaColor(delta: number): string {
-  return delta < 0 ? 'var(--sev-high,#d50000)' : 'var(--sev-ok,#4caf50)';
+  return delta < 0 ? 'var(--sev-high,#ff453a)' : 'var(--sev-ok,#4caf50)';
 }
 
 export class DemocraticBackslidingPanel extends Panel {
@@ -104,11 +104,11 @@ export class DemocraticBackslidingPanel extends Panel {
       </div>
       <div style="display:flex;flex-direction:column;align-items:center;min-width:60px;">
         <span style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);">Eroding</span>
-        <span style="font-size:14px;font-weight:700;color:#d50000;">${data.erodingCount}</span>
+        <span style="font-size:14px;font-weight:700;color:#ff453a;">${data.erodingCount}</span>
       </div>
       <div style="display:flex;flex-direction:column;align-items:center;min-width:80px;">
         <span style="font-size:10px;text-transform:uppercase;color:var(--text-secondary,#aaa);">Pop. Under Autoc.</span>
-        <span style="font-size:14px;font-weight:700;color:#d50000;">${data.populationUnderAutocracy}M</span>
+        <span style="font-size:14px;font-weight:700;color:#ff453a;">${data.populationUnderAutocracy}M</span>
       </div>
     </div>`;
   }
@@ -129,7 +129,7 @@ export class DemocraticBackslidingPanel extends Panel {
     const color = scoreColor(c.vdemScore);
     const dColor = deltaColor(c.trendDeltaYr);
     const deltaStr = `${c.trendDeltaYr >= 0 ? '+' : ''}${(c.trendDeltaYr * 100).toFixed(1)}pts/3yr`;
-    let borderColor = '#d50000';
+    let borderColor = '#ff453a';
     if (rClass === 'regime-liberal') borderColor = '#4caf50';
     else if (rClass === 'regime-electoral') borderColor = '#ffeb3b';
     else if (rClass === 'regime-autoc') borderColor = '#ff9800';
@@ -162,10 +162,10 @@ export class DemocraticBackslidingPanel extends Panel {
 
   private renderEventRow(ev: BackslidingEvent): string {
     let sevColor = '#ffeb3b';
-    if (ev.severity >= 8) sevColor = '#d50000';
+    if (ev.severity >= 8) sevColor = '#ff453a';
     else if (ev.severity >= 5) sevColor = '#ff9800';
     const ongoingBadge = ev.ongoing
-      ? `<span style="font-size:9px;font-weight:700;color:#d50000;border:1px solid #d50000;border-radius:3px;padding:0 4px;margin-left:6px;">ONGOING</span>`
+      ? `<span style="font-size:9px;font-weight:700;color:#ff453a;border:1px solid #ff453a;border-radius:3px;padding:0 4px;margin-left:6px;">ONGOING</span>`
       : '';
     return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${sevColor};border-radius:3px;padding:6px 8px;font-size:11px;">
       <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:4px;">

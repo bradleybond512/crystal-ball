@@ -162,7 +162,7 @@ const STORM_CATEGORY_COLOR: Record<NhcStorm['category'], string> = {
   HU1: '#ffd54f',
   HU2: '#ff9800',
   HU3: '#f4511e',
-  HU4: '#d50000',
+  HU4: '#ff453a',
   HU5: '#6a1b9a',
   PT: '#9e9e9e',
   unknown: '#616161',

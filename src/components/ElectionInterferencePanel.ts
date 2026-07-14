@@ -19,7 +19,7 @@ import {
 const REFRESH_MS = 30 * 60 * 1000;
 
 const THREAT_COLOR: Record<'critical' | 'high' | 'medium' | 'low', string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high: '#ff9800',
   medium: '#ffeb3b',
   low: '#9e9e9e',

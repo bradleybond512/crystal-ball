@@ -27,7 +27,7 @@ import {
 const REFRESH_MS = 24 * 60 * 60 * 1000; // 24h
 
 const THREAT_COLOR: Record<ExtremistGroup['threatLevel'], string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high: '#ff5722',
   medium: '#ff9800',
   low: '#4caf50',
@@ -41,7 +41,7 @@ const THREAT_RANK: Record<ExtremistGroup['threatLevel'], number> = {
 };
 
 const TREND_COLOR: Record<ExtremistGroup['trend'], string> = {
-  growing: '#d50000',
+  growing: '#ff453a',
   stable: '#ffeb3b',
   declining: '#4caf50',
 };
@@ -149,7 +149,9 @@ export class ExtremismTrackingPanel extends Panel {
     growingCount: number,
     majorCount: number,
   ): string {
-    const idxColor = index >= 70 ? THREAT_COLOR.critical : index >= 50 ? THREAT_COLOR.high : THREAT_COLOR.medium;
+    let idxColor = THREAT_COLOR.medium;
+    if (index >= 70) idxColor = THREAT_COLOR.critical;
+    else if (index >= 50) idxColor = THREAT_COLOR.high;
     const metric = (label: string, value: string, color: string): string =>
       h(
         'div',

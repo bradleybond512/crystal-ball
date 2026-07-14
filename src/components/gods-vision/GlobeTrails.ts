@@ -37,7 +37,7 @@ interface TrailConfig {
 const TRAIL_CONFIGS: readonly TrailConfig[] = [
   { layerName: 'flights',     windowMs:  6 * 3_600_000, color: Color.fromCssColorString('#00c8ff'), width: 2 },
   { layerName: 'vessels',     windowMs: 12 * 3_600_000, color: Color.fromCssColorString('#4488ff'), width: 1.5 },
-  { layerName: 'darkVessels', windowMs: 12 * 3_600_000, color: Color.fromCssColorString('#ff4444'), width: 1.5 },
+  { layerName: 'darkVessels', windowMs: 12 * 3_600_000, color: Color.fromCssColorString('#ff453a'), width: 1.5 },
   { layerName: 'cyclones',    windowMs:  7 * 86_400_000, color: Color.fromCssColorString('#ffa500'), width: 3 },
 ];
 

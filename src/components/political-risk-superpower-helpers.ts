@@ -248,7 +248,7 @@ export const GOVERNANCE_INDEX: GovernanceRegion[] = [
 const SEVERITY_COLOR: Record<PoliticalSeverity, string> = {
   low:      '#4caf50',
   medium:   '#ff9800',
-  high:     '#f44336',
+  high:     '#ff453a',
   critical: '#b71c1c',
 };
 
@@ -292,7 +292,7 @@ export function responseLabel(response: GovernmentResponse): string {
 const RESPONSE_COLOR: Record<GovernmentResponse, string> = {
   peaceful:     '#4caf50',
   dispersal:    '#ff9800',
-  crackdown:    '#f44336',
+  crackdown:    '#ff453a',
   lethal_force: '#b71c1c',
 };
 
@@ -317,7 +317,7 @@ const GOVERNANCE_COLOR = [
   'var(--severity-ok, #4caf50)',       // 0 — stable
   'var(--severity-info, #9e9e9e)',     // 1 — watch
   'var(--severity-medium, #ff9800)',   // 2 — elevated
-  'var(--severity-high, #f44336)',     // 3 — high
+  'var(--severity-high, #ff453a)',     // 3 — high
   'var(--severity-critical, #b71c1c)', // 4 — critical
 ] as const;
 

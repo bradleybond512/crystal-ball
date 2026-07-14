@@ -36,7 +36,7 @@ const ACTION_COLORS: Record<OutcomeAction, string> = {
   escalated: '#ff9800',
   'de-escalated': '#4a9eff',
   'confirmed-real': '#4caf50',
-  'marked-false-positive': '#f44336',
+  'marked-false-positive': '#ff453a',
 };
 
 export class OutcomeLedgerPanel extends Panel {
@@ -174,13 +174,13 @@ function recommendationArrow(delta: number): string {
 
 function recommendationColor(delta: number): string {
   if (delta > 0) return '#4caf50';
-  if (delta < 0) return '#f44336';
+  if (delta < 0) return '#ff453a';
   return '#9e9e9e';
 }
 
 function allocationBarColor(mult: number): string {
   if (mult > 1) return '#4caf50';
-  if (mult < 1) return '#f44336';
+  if (mult < 1) return '#ff453a';
   return '#9e9e9e';
 }
 

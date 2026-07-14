@@ -9,7 +9,7 @@ import {
 } from './psychological-operations-helpers';
 
 const ACTOR_COLOR: Record<ThreatActor, string> = {
-  Russia: '#d50000',
+  Russia: '#ff453a',
   China: '#ff5722',
   Iran: '#ff9800',
   'North Korea': '#ffeb3b',
@@ -17,7 +17,7 @@ const ACTOR_COLOR: Record<ThreatActor, string> = {
 };
 
 const PHASE_COLOR: Record<PsyopPhase, string> = {
-  active: '#d50000',
+  active: '#ff453a',
   exploitation: '#ff5722',
   preparation: '#ffeb3b',
   consolidation: '#ff9800',
@@ -25,7 +25,7 @@ const PHASE_COLOR: Record<PsyopPhase, string> = {
 };
 
 function threatColor(score: number): string {
-  if (score >= 75) return '#d50000';
+  if (score >= 75) return '#ff453a';
   if (score >= 50) return '#ff9800';
   if (score >= 25) return '#ffeb3b';
   return '#4caf50';

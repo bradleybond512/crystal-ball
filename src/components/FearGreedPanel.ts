@@ -13,7 +13,7 @@ interface FearGreedResponse {
 }
 
 function scoreColor(score: number): string {
-  if (score < 25) return '#f44336';
+  if (score < 25) return '#ff453a';
   if (score < 45) return '#ff9800';
   if (score < 56) return '#ffd700';
   if (score < 75) return '#8bc34a';

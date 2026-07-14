@@ -13,14 +13,14 @@ import {
 const REFRESH_MS = 24 * 60 * 60 * 1000; // 24h
 
 const RISK_COLOR: Record<CoupRiskCountry['riskLevel'], string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high: '#ff5722',
   medium: '#ff9800',
   low: '#4caf50',
 };
 
 const TREND_COLOR: Record<CoupRiskCountry['trend'], string> = {
-  rising: '#d50000',
+  rising: '#ff453a',
   stable: '#ffeb3b',
   falling: '#4caf50',
 };
@@ -102,7 +102,9 @@ export class CoupRiskPanel extends Panel {
   }
 
   private renderHeader(index: number, criticalCount: number, coupCount: number, risingCount: number): string {
-    const idxColor = index >= 70 ? RISK_COLOR.critical : index >= 50 ? RISK_COLOR.high : RISK_COLOR.medium;
+    let idxColor = RISK_COLOR.medium;
+    if (index >= 70) idxColor = RISK_COLOR.critical;
+    else if (index >= 50) idxColor = RISK_COLOR.high;
     const metric = (label: string, value: string, color: string): string =>
       h(
         'div',

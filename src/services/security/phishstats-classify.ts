@@ -152,7 +152,7 @@ const SEVERITY_HEX: Record<PhishSeverity, string> = {
   low: '#9e9e9e',
   medium: '#ffeb3b',
   high: '#ff9800',
-  critical: '#d50000',
+  critical: '#ff453a',
 };
 
 export function severityColor(severity: PhishSeverity): string {

@@ -34,7 +34,7 @@ const AQI_BADGE_COLORS: Record<AqiCategory, string> = {
   good: '#4caf50',
   moderate: '#ffeb3b',
   sensitive: '#ff9800',
-  unhealthy: '#f44336',
+  unhealthy: '#ff453a',
   very_unhealthy: '#9c27b0',
   hazardous: '#7e0023',
   unknown: '#616161',

@@ -23,7 +23,7 @@ import { escapeHtml } from '@/utils/sanitize';
 const REFRESH_MS = 30_000;
 
 const TYPE_COLOR: Record<DependencyType, string> = {
-  cascade: '#f44336',
+  cascade: '#ff453a',
   amplification: '#ffb74d',
   inhibition: '#4a9eff',
   correlation: '#9e9e9e',
@@ -152,7 +152,7 @@ function renderActiveRisks(risks: readonly CascadeRisk[]): string {
 
 function renderRiskRow(r: CascadeRisk): string {
   const chips = r.affectedDomains.slice(0, 8).map((d) =>
-    `<span style="font-size:10px;padding:2px 6px;border-radius:3px;background:#f4433626;color:#f44336;">${escapeHtml(d)}</span>`,
+    `<span style="font-size:10px;padding:2px 6px;border-radius:3px;background:#ff453a26;color:#ff453a;">${escapeHtml(d)}</span>`,
   ).join(' ');
   const overflow = r.affectedDomains.length > 8 ? ` +${r.affectedDomains.length - 8}` : '';
   return `<div style="border:1px solid var(--border-subtle,#333);border-radius:3px;padding:8px 10px;background:var(--surface-2,#1a1a1a);">

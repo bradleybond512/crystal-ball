@@ -40,7 +40,7 @@ const PERSPECTIVE_LABEL: Record<AgentPerspective, string> = {
 };
 
 const AGREE_COLOR = '#4caf50';
-const DISAGREE_COLOR = '#f44336';
+const DISAGREE_COLOR = '#ff453a';
 
 export class MultiAgentReviewPanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;

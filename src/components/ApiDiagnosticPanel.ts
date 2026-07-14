@@ -25,7 +25,7 @@ const REFRESH_MS = 10_000;
 const STATUS_COLOR: Record<HealthStatus, string> = {
   healthy: '#4caf50',
   degraded: '#ffeb3b',
-  failing: '#f44336',
+  failing: '#ff453a',
   silent: '#9e9e9e',
   unknown: '#607d8b',
 };
@@ -67,7 +67,7 @@ export class ApiDiagnosticPanel extends Panel {
 
   private buildHtml(report: DiagnosticReport): string {
     const now = new Date(report.generatedAt);
-    const overallColor = report.failing > 0 ? '#f44336'
+    const overallColor = report.failing > 0 ? '#ff453a'
       : report.degraded > 0 ? '#ff9800'
       : report.silent > 0 ? '#9e9e9e' : '#4caf50';
 
@@ -84,10 +84,10 @@ export class ApiDiagnosticPanel extends Panel {
       <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px;color:var(--text-secondary,#aaa);">
         <span style="color:#4caf50;">${report.healthy} healthy</span>
         <span style="color:#ffeb3b;">${report.degraded} degraded</span>
-        <span style="color:#f44336;">${report.failing} failing</span>
+        <span style="color:#ff453a;">${report.failing} failing</span>
         <span style="color:#9e9e9e;">${report.silent} silent</span>
       </div>
-      ${report.trippedBreakers.length > 0 ? `<div style="margin-top:4px;font-size:10px;color:#f44336;">Tripped breakers: ${escapeHtml(report.trippedBreakers.slice(0, 5).join(', '))}</div>` : ''}
+      ${report.trippedBreakers.length > 0 ? `<div style="margin-top:4px;font-size:10px;color:#ff453a;">Tripped breakers: ${escapeHtml(report.trippedBreakers.slice(0, 5).join(', '))}</div>` : ''}
       ${report.recommendations.length > 0 ? `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,152,0,0.08);border-left:3px solid #ff9800;border-radius:2px;">
         ${report.recommendations.map(r => `<div style="font-size:10px;color:var(--text-secondary,#ccc);margin-bottom:2px;">${escapeHtml(r)}</div>`).join('')}
       </div>` : ''}
@@ -118,7 +118,7 @@ export class ApiDiagnosticPanel extends Panel {
     const ping = this.pingResults.get(s.id);
     const pingHtml = ping
       ? `<div style="margin-top:4px;padding:4px 6px;background:rgba(255,255,255,0.03);border-radius:3px;font-size:10px;">
-          Probe: ${ping.ok ? `<span style="color:#4caf50;">${ping.status} in ${ping.latencyMs}ms</span>` : `<span style="color:#f44336;">${escapeHtml(ping.error || 'failed')}</span>`}
+          Probe: ${ping.ok ? `<span style="color:#4caf50;">${ping.status} in ${ping.latencyMs}ms</span>` : `<span style="color:#ff453a;">${escapeHtml(ping.error || 'failed')}</span>`}
         </div>`
       : '';
 

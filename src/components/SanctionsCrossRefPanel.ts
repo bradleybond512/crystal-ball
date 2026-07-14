@@ -86,7 +86,7 @@ export class SanctionsCrossRefPanel extends Panel {
  const confidence = m.matchScore;
  const confColor =
  confidence >= 90
- ? 'var(--semantic-critical, #f44336)'
+ ? 'var(--semantic-critical, #ff453a)'
  : confidence >= 70
  ? 'var(--semantic-high, #ff9800)'
  : 'var(--semantic-elevated, #ffeb3b)';

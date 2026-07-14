@@ -37,7 +37,7 @@ const REFRESH_MS = 15_000;
 const TONE_COLOR: Record<RedundancyTone, string> = {
   good: 'var(--severity-ok, #4caf50)',
   warn: 'var(--severity-medium, #ff9800)',
-  bad: 'var(--severity-high, #f44336)',
+  bad: 'var(--severity-high, #ff453a)',
   neutral: 'var(--text-secondary, #9e9e9e)',
 };
 
@@ -106,7 +106,7 @@ export class SourceConfidencePanel extends Panel {
       view = buildSourceConfidenceView(report, timelines);
     } catch (error) {
       this.setContent(
-        `<div style="padding:12px;color:var(--severity-high,#f44336);">Source confidence report unavailable: ${escapeHtml(
+        `<div style="padding:12px;color:var(--severity-high,#ff453a);">Source confidence report unavailable: ${escapeHtml(
           error instanceof Error ? error.message : String(error),
         )}</div>`,
       );
@@ -188,11 +188,11 @@ export class SourceConfidencePanel extends Panel {
       ? `<span style="font-size:9px;font-weight:700;color:var(--text-secondary,#888);letter-spacing:0.04em;">PRIMARY</span>`
       : '';
     const disagreeTag = p.disagreeing
-      ? `<span style="font-size:9px;font-weight:700;padding:1px 4px;border-radius:2px;background:rgba(244,67,54,0.15);color:var(--severity-high,#f44336);">DISAGREES</span>`
+      ? `<span style="font-size:9px;font-weight:700;padding:1px 4px;border-radius:2px;background:rgba(255, 69, 58,0.15);color:var(--severity-high,#ff453a);">DISAGREES</span>`
       : '';
     const successRate = p.successRatePct === undefined ? '—' : `${p.successRatePct}%`;
     const lastSuccess = p.lastSuccessAt === undefined ? 'never' : timeAgo(p.lastSuccessAt);
-    const fingerprintColor = p.disagreeing ? 'var(--severity-high,#f44336)' : 'var(--text-secondary,#888)';
+    const fingerprintColor = p.disagreeing ? 'var(--severity-high,#ff453a)' : 'var(--text-secondary,#888)';
     const fingerprint = p.fingerprint
       ? `<span style="font-family:ui-monospace,monospace;font-size:10px;color:${fingerprintColor};">fp:${escapeHtml(p.fingerprint)}</span>`
       : '';
@@ -236,7 +236,7 @@ function buildTimelineDots(timeline: NonNullable<ProviderRowView['timeline']>): 
   }
   const dots = timeline.points
     .map((pt) => {
-      const dotColor = pt.ok ? 'var(--severity-ok,#4caf50)' : 'var(--severity-high,#f44336)';
+      const dotColor = pt.ok ? 'var(--severity-ok,#4caf50)' : 'var(--severity-high,#ff453a)';
       const title = `${pt.ok ? 'ok' : 'fail'} · ${new Date(pt.at).toLocaleTimeString()}${pt.httpStatus ? ` · HTTP ${pt.httpStatus}` : ''}`;
       return `<span title="${escapeHtml(title)}" style="width:6px;height:6px;border-radius:1px;background:${dotColor};display:inline-block;"></span>`;
     })

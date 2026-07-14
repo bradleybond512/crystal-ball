@@ -139,7 +139,7 @@ export class S2UndergroundPanel extends Panel {
       this.oauthWindow = window.open(j.url, 'patreon-oauth', 'width=600,height=800');
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      this.setContent(`<div style="padding:12px;font-size:12px;color:#f44336">Could not start Patreon connect: ${msg}</div>`);
+      this.setContent(`<div style="padding:12px;font-size:12px;color:#ff453a">Could not start Patreon connect: ${msg}</div>`);
     }
   }
 

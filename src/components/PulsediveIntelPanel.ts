@@ -132,7 +132,7 @@ export class PulsediveIntelPanel extends Panel {
     const env = this.explore;
     if (!env) return `<div style="opacity:0.6;">Loading indicators…</div>`;
     const banner = env.degraded
-      ? `<div style="padding:4px 6px;background:rgba(244,67,54,0.10);border-left:3px solid #f44336;margin-bottom:6px;font-size:11px;">Degraded: ${escapeHtml(env.reason ?? 'unknown')}</div>`
+      ? `<div style="padding:4px 6px;background:rgba(255, 69, 58,0.10);border-left:3px solid #ff453a;margin-bottom:6px;font-size:11px;">Degraded: ${escapeHtml(env.reason ?? 'unknown')}</div>`
       : '';
     if (env.indicators.length === 0) {
       return `${banner}<div style="opacity:0.6;">No indicators in the high-risk feed.</div>`;
@@ -165,7 +165,7 @@ export class PulsediveIntelPanel extends Panel {
       return `${inputHtml}<div style="margin-top:8px;opacity:0.6;">Looking up <code>${escapeHtml(this.lookupQuery)}</code>…</div>`;
     }
     if (env.degraded) {
-      return `${inputHtml}<div style="margin-top:8px;padding:4px 6px;background:rgba(244,67,54,0.10);border-left:3px solid #f44336;font-size:11px;">Lookup failed: ${escapeHtml(env.reason ?? 'unknown')}</div>`;
+      return `${inputHtml}<div style="margin-top:8px;padding:4px 6px;background:rgba(255, 69, 58,0.10);border-left:3px solid #ff453a;font-size:11px;">Lookup failed: ${escapeHtml(env.reason ?? 'unknown')}</div>`;
     }
     if (env.indicators.length === 0) {
       return `${inputHtml}<div style="margin-top:8px;opacity:0.6;">No record for <code>${escapeHtml(this.lookupQuery)}</code>.</div>`;
@@ -173,7 +173,7 @@ export class PulsediveIntelPanel extends Panel {
     const ind = env.indicators[0]!;
     const color = riskColor(ind.risk);
     const threats = ind.threats.length === 0 ? '<span style="opacity:0.6;">none</span>'
-      : ind.threats.map((t) => `<span style="padding:1px 5px;border-radius:3px;background:rgba(244,67,54,0.12);font-size:10px;margin-right:3px;color:${color};">${escapeHtml(t)}</span>`).join('');
+      : ind.threats.map((t) => `<span style="padding:1px 5px;border-radius:3px;background:rgba(255, 69, 58,0.12);font-size:10px;margin-right:3px;color:${color};">${escapeHtml(t)}</span>`).join('');
     const feeds = ind.feeds.length === 0 ? '<span style="opacity:0.6;">none</span>'
       : ind.feeds.slice(0, 12).map((f) => `<span style="padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.08);font-size:10px;margin-right:3px;">${escapeHtml(f)}</span>`).join('');
     return `${inputHtml}

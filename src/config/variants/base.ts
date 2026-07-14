@@ -22,7 +22,7 @@ export const MONITOR_COLORS = [
   '#4488ff',
   '#ff44ff',
   '#ffff44',
-  '#ff4444',
+  '#ff453a',
   '#44ffff',
   '#88ff44',
   '#ff88ff',

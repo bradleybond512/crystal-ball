@@ -7,7 +7,7 @@ const REFRESH_MS = 300_000;
 type AbuseTier = 'critical' | 'high' | 'medium' | 'low';
 
 const TIER_COLOR: Record<AbuseTier, string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high:     '#ff5722',
   medium:   '#ff9800',
   low:      '#4caf50',
@@ -98,7 +98,7 @@ export class HumanRightsAbusesPanel extends Panel {
     const arrow = trendArrow(p.trend);
     const impunityPct = Math.round(p.impunityIndex * 100);
     let trendColor: string;
-    if (p.trend === 'worsening') { trendColor = '#d50000'; }
+    if (p.trend === 'worsening') { trendColor = '#ff453a'; }
     else if (p.trend === 'improving') { trendColor = '#4caf50'; }
     else { trendColor = 'var(--text-secondary,#aaa)'; }
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border:1px solid var(--border-subtle,#333);border-left:3px solid ${color};border-radius:3px;font-size:11px;gap:8px;">

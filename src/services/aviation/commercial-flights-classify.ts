@@ -557,6 +557,6 @@ export function flightStyle(flight: LiveFlight): {
   emergency: boolean;
   pixelSize: number;
 } {
-  if (flight.emergency) return { hex: '#d50000', emergency: true, pixelSize: 11 };
+  if (flight.emergency) return { hex: '#ff453a', emergency: true, pixelSize: 11 };
   return { hex: CATEGORY_HEX[flight.category], emergency: false, pixelSize: 5 };
 }

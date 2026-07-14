@@ -120,7 +120,7 @@ export const THREAT_TIER_THRESHOLDS: Record<ThreatTier, number> = {
 };
 
 export const TIER_COLORS: Record<ThreatTier, string> = {
-  critical: '#d50000',
+  critical: '#ff453a',
   high: '#ff6d00',
   elevated: '#ffd600',
   guarded: '#2979ff',
@@ -498,7 +498,7 @@ function trendArrowFor(trend: TrendDirection): string {
 }
 
 function trendColorFor(trend: TrendDirection): string {
-  if (trend === 'increasing') return '#f44336';
+  if (trend === 'increasing') return '#ff453a';
   if (trend === 'decreasing') return '#4caf50';
   return '#9e9e9e';
 }

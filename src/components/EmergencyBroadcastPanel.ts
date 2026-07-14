@@ -32,7 +32,7 @@ const CATEGORY_ICONS: Record<BroadcastCategory, string> = {
 
 const SEVERITY_COLORS: Record<string, string> = {
   extreme: '#b71c1c',
-  severe: '#f44336',
+  severe: '#ff453a',
   moderate: '#ff9800',
   minor: '#ffc107',
   unknown: '#9e9e9e',

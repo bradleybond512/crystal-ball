@@ -92,14 +92,14 @@ export const SEVERITY_COLOR: Record<WeatherSeverity, string> = {
   1: '#4caf50',
   2: '#ffc107',
   3: '#ff9800',
-  4: '#f44336',
+  4: '#ff453a',
 };
 
 export const GAUGE_COLOR: Record<RiverGaugeLevel, string> = {
   normal: '#4caf50',
   action: '#ffc107',
   flood:  '#ff9800',
-  major:  '#f44336',
+  major:  '#ff453a',
 };
 
 export const HAZARD_LABEL: Record<AtmHazardKind, string> = {

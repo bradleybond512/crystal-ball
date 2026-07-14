@@ -252,7 +252,7 @@ export const REGIONAL_DISPLACEMENT_INDEX: RegionalDisplacementScore[] = [
 const SEVERITY_COLOR: Record<MigrationSeverity, string> = {
   low:      '#4caf50',
   medium:   '#ff9800',
-  high:     '#f44336',
+  high:     '#ff453a',
   critical: '#b71c1c',
 };
 
@@ -289,7 +289,7 @@ export function trendArrow(trend: DisplacementTrend): string {
 }
 
 export function trendColor(trend: DisplacementTrend): string {
-  if (trend === 'increasing') return '#f44336';
+  if (trend === 'increasing') return '#ff453a';
   if (trend === 'decreasing') return '#4caf50';
   return '#9e9e9e';
 }
@@ -299,7 +299,7 @@ const TENSION_COLOR = [
   'var(--severity-ok, #4caf50)',        // 0 — normal
   'var(--severity-info, #9e9e9e)',      // 1 — watch
   'var(--severity-medium, #ff9800)',    // 2 — elevated
-  'var(--severity-high, #f44336)',      // 3 — high
+  'var(--severity-high, #ff453a)',      // 3 — high
   'var(--severity-critical, #b71c1c)', // 4 — critical
 ] as const;
 
@@ -327,7 +327,7 @@ export function capacityStatusLabel(status: BorderCapacityStatus): string {
 const CAPACITY_STATUS_COLOR: Record<BorderCapacityStatus, string> = {
   normal:      '#4caf50',
   stressed:    '#ff9800',
-  overwhelmed: '#f44336',
+  overwhelmed: '#ff453a',
   closed:      '#9e9e9e',
 };
 
@@ -337,7 +337,7 @@ export function capacityStatusColor(status: BorderCapacityStatus): string {
 
 export function campCapacityColor(pct: number): string {
   if (pct > 120) return '#b71c1c';
-  if (pct > 100) return '#f44336';
+  if (pct > 100) return '#ff453a';
   if (pct > 80)  return '#ff9800';
   return '#4caf50';
 }
@@ -355,7 +355,7 @@ export function programStatusLabel(status: ProgramStatus): string {
 
 const PROGRAM_STATUS_COLOR: Record<ProgramStatus, string> = {
   active:    '#4caf50',
-  suspended: '#f44336',
+  suspended: '#ff453a',
   planned:   '#ff9800',
   completed: '#9e9e9e',
 };

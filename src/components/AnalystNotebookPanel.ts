@@ -24,7 +24,7 @@ const BODY_PREVIEW_CHARS = 120;
 const CATEGORY_COLOR: Record<NoteCategory, string> = {
   observation: '#4a9eff',
   hypothesis: '#ffb74d',
-  assessment: '#f44336',
+  assessment: '#ff453a',
   action: '#4caf50',
   general: '#9e9e9e',
 };
@@ -167,7 +167,7 @@ export class AnalystNotebookPanel extends Panel {
       <input data-an-situations type="text" value="${escapeHtml(n.linkedSituationIds.join(', '))}" placeholder="linked situation IDs (comma-separated)" style="padding:5px 8px;background:var(--surface-3,#222);color:inherit;border:1px solid var(--border-subtle,#333);border-radius:3px;font-size:12px;" />
       <div style="display:flex;gap:8px;">
         <button data-an-save="${escapeHtml(n.id)}" style="padding:4px 12px;font-size:11px;background:#4caf5026;color:#4caf50;border:1px solid #4caf5055;border-radius:3px;cursor:pointer;">Save</button>
-        <button data-an-delete="${escapeHtml(n.id)}" style="padding:4px 12px;font-size:11px;background:#f4433626;color:#f44336;border:1px solid #f4433655;border-radius:3px;cursor:pointer;">Delete</button>
+        <button data-an-delete="${escapeHtml(n.id)}" style="padding:4px 12px;font-size:11px;background:#ff453a26;color:#ff453a;border:1px solid #ff453a55;border-radius:3px;cursor:pointer;">Delete</button>
       </div>
     </div>`;
   }

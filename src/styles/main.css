@@ -64,7 +64,7 @@
 
   /* Font stack */
   --font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', 'DejaVu Sans Mono', 'Liberation Mono', monospace;
-  --font-body: var(--font-mono);
+  --font-body: var(--font-ui, -apple-system, system-ui, sans-serif);
 
   /* Header height tokens — single source of truth for the top-bar stack.
      --eew-bar-h matches the min-height set on .eew-status-bar below. */

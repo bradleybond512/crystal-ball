@@ -25,7 +25,11 @@ function inputs(): LibraryInputs {
     },
     domainLabels: {
       'personal-safety': 'Personal Safety',
-      'global-intel': 'Global Intel',
+      'analysis-situations': 'Analysis & Situations',
+      'conflict-military': 'Conflict & Military',
+      'global-intel': 'Geopolitics & Statecraft',
+      'security-crime': 'Security & Crime',
+      'news-osint': 'News & OSINT',
       'markets-economy': 'Markets & Economy',
       'hazards-weather': 'Hazards & Weather',
       'cyber-infrastructure': 'Cyber & Infrastructure',
@@ -36,9 +40,9 @@ function inputs(): LibraryInputs {
   };
 }
 
-test('groups panels into 8 domains with featured first and counts', () => {
+test('groups panels into 12 domains with featured first and counts', () => {
   const view = buildLibraryView(inputs(), '');
-  assert.equal(view.domains.length, 8);
+  assert.equal(view.domains.length, 12);
   const hazards = view.domains.find((d) => d.domain === 'hazards-weather')!;
   assert.equal(hazards.label, 'Hazards & Weather');
   assert.equal(hazards.totalCount, 2);
@@ -65,7 +69,7 @@ test('query filters by name and tags across all domains, case-insensitive', () =
 
 test('empty domains are kept (with zero counts) so the nav rail is stable', () => {
   const view = buildLibraryView(inputs(), 'zzz-no-match');
-  assert.equal(view.domains.length, 8);
+  assert.equal(view.domains.length, 12);
   assert.equal(view.matchCount, 0);
   assert.ok(view.domains.every((d) => d.featured.length === 0 && d.rest.length === 0));
 });

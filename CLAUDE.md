@@ -110,8 +110,10 @@ ribbon. Gate: `src/services/home-shell/shell-gate.ts` (non-full variants and ≤
 always classic; opt out with `classicView=true` in console → `crystalball-classic-view=1`; the
 Phase-1 key `crystalball-home-shell` is no longer consulted). ⌘⇧O toggles whenever the gate is
 on; Esc exits to classic view. Read-only consumer of the what-changed store (CommandCenterPanel
-is the single snapshot writer). Phase 2 added `src/config/panel-metadata.ts` (406 panels → 8
-Library domains, seeded by `scripts/generate-panel-metadata.mjs`, hand-curated since — note
+is the single snapshot writer). Phase 2 added `src/config/panel-metadata.ts` (406 panels → 12 Library domains
+(global-intel split 2026-07-14: conflict-military / security-crime / news-osint /
+analysis-situations carved out; label now 'Geopolitics & Statecraft'),
+seeded by `scripts/generate-panel-metadata.mjs`, hand-curated since — note
 `panels.ts:80` defines two panels on one line, defeating line-anchored counting),
 `src/components/LibraryOverlay.ts` (`cb:toggle-library`, 📚 topbar button, available in classic
 too), and ⌘K v2 (metadata tags, weighted ranking, `place:<id>` commands via

@@ -54,6 +54,7 @@
   --sev-elevated-bg: rgba(251, 146, 60, 0.15);
   --sev-high-bg:     rgba(239, 68, 68, 0.12);
   --sev-critical-bg: rgba(255, 69, 58, 0.12);
+  --sev-critical-rgb: 255, 69, 58; /* rgba() composition twin for --sev-critical */
 
   /* ── Surface tiers (window → overlay) ───────────────────────
    * Dark-first fixed values matching the de-facto literals. */

@@ -200,9 +200,8 @@ body.has-staleness-banner .mac-sidebar-nav {
 .mac-mode-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: normal;
   color: var(--mac-tertiary-label);
-  text-transform: uppercase;
   margin-bottom: 4px;
 }
 
@@ -1587,8 +1586,7 @@ body.is-desktop-macos #unifiedSettingsMount {
 .setup-wizard-tier {
   font-size: 11px;
   color: var(--mac-text-secondary, rgba(235, 235, 245, 0.6));
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: normal;
   font-weight: 600;
 }
 .setup-wizard-step {
@@ -1887,8 +1885,7 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
   font-family: var(--aid-font);
   font-size: var(--aid-text-size-xs);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: normal;
   line-height: 1.4;
   background: rgba(255, 255, 255, 0.08);
   color: var(--aid-text-secondary);
@@ -2003,8 +2000,7 @@ body.is-desktop-macos:where([data-theme="light"], [data-theme="light"] *),
 .mac-event-card__meta-label {
   font-size: var(--aid-text-size-xs);
   font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: normal;
   color: var(--aid-text-tertiary);
 }
 .mac-event-card__meta-value {

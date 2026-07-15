@@ -25,8 +25,11 @@ export interface CesiumGlobeOptions {
 
 /** DataSource names whose entities are intentionally above the ellipsoid, so the
  *  floating-entity auditor must not flag them. Flights/aircraft/satellites carry
- *  real altitude; arc and 4d-* layers are trajectory curves through the air. */
-const ALTITUDE_EXPECTED_SOURCE = /flight|aircraft|satellite|orbit|reentry|arcs?|^4d-|trajector/i;
+ *  real altitude; arc and 4d-* layers are trajectory curves through the air. The
+ *  military-flight layer's dataSource is named `aviationIntel` (GlobeDataManager
+ *  registerLayer id), so `aviation` must be in the allowlist too — `aircraft`
+ *  alone does not match it. */
+const ALTITUDE_EXPECTED_SOURCE = /flight|aircraft|aviation|satellite|orbit|reentry|arcs?|^4d-|trajector/i;
 
 export class CesiumGlobe {
   private viewer: Viewer | null = null;

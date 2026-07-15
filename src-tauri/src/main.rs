@@ -212,6 +212,14 @@ const KEYCHAIN_VAULT_TIMEOUT: Duration = Duration::from_secs(10);
 /// blocked. Nothing waits on this — it runs on a spawn_blocking worker.
 const KEYCHAIN_VAULT_INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Timeout for the automatic background retry fired when the boot vault read
+/// times out. The macOS keychain often answers seconds after the 10s boot
+/// deadline (the boot read fails fast so the app isn't blocked, then orphans
+/// the worker and discards its late answer). This retry re-reads the vault with
+/// a long deadline and, on success, re-injects into the running sidecar — so a
+/// slow keychain self-heals within the session without a relaunch or prompt.
+const KEYCHAIN_VAULT_RETRY_TIMEOUT: Duration = Duration::from_secs(120);
+
 /// Filename for the encrypted (AES-256-GCM) shadow copy of the secrets vault
 /// written to the app data directory (mode 0600). Read as a fallback when the
 /// keychain prompt is dismissed or times out. Written only when a machine-bound
@@ -268,8 +276,8 @@ impl SecretsCache {
  /// `AppHandle`. When provided, timeout warnings land in the
  /// desktop log so the operator can tell which keychain entries
  /// are blocked by an ACL prompt.
- fn populate_from_keychain(&self, app: Option<&AppHandle>, vault_timeout: Duration) {
- let loaded = Self::read_keychain_blocking(app, vault_timeout);
+ fn populate_from_keychain(&self, app: Option<&AppHandle>, vault_timeout: Duration) -> bool {
+ let (loaded, vault_timed_out) = Self::read_keychain_blocking(app, vault_timeout);
  if let Ok(mut guard) = self.secrets.lock() {
  // Preserve edits made concurrently with the (up to 120s) keychain
  // read — the UI is usable before boot finishes, so a Settings save
@@ -289,6 +297,49 @@ impl SecretsCache {
  // populated as it will get this launch, and the renderer should stop
  // waiting and reload from whatever loaded.
  self.loaded.store(true, Ordering::SeqCst);
+ vault_timed_out
+ }
+
+ /// Vault-ONLY re-read for the boot self-heal retry. Reads solely the
+ /// consolidated `secrets-vault` entry and NEVER the legacy per-key
+ /// migration scan — that scan issues a keychain call (and a delete) per
+ /// supported key, which we must not do from a background retry (per-key
+ /// ACL prompts + the delete path that caused a past key-loss incident).
+ /// On a successful vault read the recovered keys are merged into the cache
+ /// (respecting concurrent user edits, never clobbering held keys) and the
+ /// shadow file is refreshed. Returns true only when the vault read
+ /// succeeded; a timeout or absent entry returns false and touches nothing.
+ fn repopulate_vault_only(&self, app: &AppHandle, timeout: Duration) -> bool {
+ let json = match read_keychain_entry_with_timeout(
+ KEYRING_SERVICE,
+ "secrets-vault".to_string(),
+ timeout,
+ ) {
+ Ok(Some(json)) => json,
+ // Err(()) = timed out again, Ok(None) = entry absent. Either way do
+ // NOT fall through to migration — just leave the shadow in place.
+ _ => return false,
+ };
+ let Ok(map) = serde_json::from_str::<HashMap<String, String>>(&json) else {
+ return false;
+ };
+ let secrets: HashMap<String, String> = map
+ .into_iter()
+ .filter(|(k, v)| SUPPORTED_SECRET_KEYS.contains(&k.as_str()) && !v.trim().is_empty())
+ .map(|(k, v)| (k, v.trim().to_string()))
+ .collect();
+ if let Ok(mut guard) = self.secrets.lock() {
+ let touched = self.user_mutated.lock().ok();
+ for (key, value) in secrets.iter() {
+ if touched.as_ref().is_some_and(|t| t.contains(key)) {
+ continue;
+ }
+ guard.entry(key.clone()).or_insert_with(|| value.clone());
+ }
+ }
+ // Refresh the shadow so the next launch's timeout fallback is current.
+ write_vault_shadow(app, &secrets);
+ true
  }
 
  /// Pulled out so callers can run the load on whichever thread they
@@ -301,7 +352,11 @@ impl SecretsCache {
  /// warning and skip that key — features that need it will return
  /// the existing 503 + `keyMissing` error path until it's
  /// re-fetched on the next launch.
- fn read_keychain_blocking(app: Option<&AppHandle>, vault_timeout: Duration) -> HashMap<String, String> {
+ fn read_keychain_blocking(app: Option<&AppHandle>, vault_timeout: Duration) -> (HashMap<String, String>, bool) {
+ // `vault_timed_out` tells the caller the consolidated read hit its deadline
+ // (as opposed to the entry being absent) — the boot path uses it to fire a
+ // longer background retry that captures the keychain's late answer.
+ let mut vault_timed_out = false;
  // Try consolidated vault first — single keychain read.
  match read_keychain_entry_with_timeout(
  KEYRING_SERVICE,
@@ -319,17 +374,18 @@ impl SecretsCache {
  .collect();
  // Update the shadow file so the next timeout-fallback is fresh.
  if let Some(a) = app { write_vault_shadow(a, &secrets); }
- return secrets;
+ return (secrets, vault_timed_out);
  }
  }
  Ok(None) => {
      // No vault entry. If migration was already attempted, there is nothing to
      // migrate — skip the 73-key scan to avoid one macOS ACL prompt per key.
      if app.is_some_and(|a| migration_done(a)) {
-         return HashMap::new();
+         return (HashMap::new(), vault_timed_out);
      }
  }
  Err(()) => {
+ vault_timed_out = true;
  log_keychain_timeout(app, "secrets-vault", vault_timeout);
  // Keychain prompt dismissed or timed out — fall back to the
  // shadow file written on the last successful save/read.
@@ -340,7 +396,7 @@ impl SecretsCache {
              secrets.len(),
          ));
      }
-     return secrets;
+     return (secrets, vault_timed_out);
  }
  }
  }
@@ -408,7 +464,7 @@ impl SecretsCache {
  if let Some(app) = app { mark_migration_done(app); }
  }
 
- secrets
+ (secrets, vault_timed_out)
  }
 
  /// Convenience constructor — synchronous load for tests + any
@@ -4178,14 +4234,15 @@ fn main() {
  //    timeouts (≤120s for the consolidated vault), but the UI and
  //    sidecar are already live so this no longer blocks startup.
  let load_handle = setup_handle.clone();
- let secrets: Vec<(String, String)> = tauri::async_runtime::spawn_blocking(move || {
+ let (secrets, vault_timed_out): (Vec<(String, String)>, bool) = tauri::async_runtime::spawn_blocking(move || {
  let cache = load_handle.state::<SecretsCache>();
- cache.populate_from_keychain(Some(&load_handle), KEYCHAIN_VAULT_TIMEOUT);
- cache
+ let timed_out = cache.populate_from_keychain(Some(&load_handle), KEYCHAIN_VAULT_TIMEOUT);
+ let snapshot: Vec<(String, String)> = cache
  .secrets
  .lock()
  .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
- .unwrap_or_default()
+ .unwrap_or_default();
+ (snapshot, timed_out)
  })
  .await
  .unwrap_or_default();
@@ -4202,8 +4259,51 @@ fn main() {
  //    restart. Until this completes, key-dependent routes return
  //    503 + `keyMissing`, exactly as on a cold cache. Skipped when the
  //    sidecar never started — the renderer already has the secrets.
+ let initial_count = secrets.len();
  if sidecar_ok {
  inject_secrets_into_running_sidecar(&setup_handle, secrets).await;
+ }
+
+ // 4. Self-heal: if the boot vault read TIMED OUT (not merely empty), we
+ //    are running on the possibly-stale shadow copy. The macOS keychain
+ //    frequently answers a few seconds after the 10s boot cutoff, but the
+ //    boot path orphans that worker and discards the late answer. Fire ONE
+ //    detached retry with a long deadline; on success re-inject the
+ //    recovered keys so the session heals with no relaunch or ACL prompt.
+ if vault_timed_out {
+ let retry_handle = setup_handle.clone();
+ tauri::async_runtime::spawn(async move {
+ let blocking_handle = retry_handle.clone();
+ let recovered: Vec<(String, String)> = tauri::async_runtime::spawn_blocking(move || {
+ let cache = blocking_handle.state::<SecretsCache>();
+ // Vault-ONLY read — must never reach the per-key migration/delete path.
+ if cache.repopulate_vault_only(&blocking_handle, KEYCHAIN_VAULT_RETRY_TIMEOUT) {
+ cache
+ .secrets
+ .lock()
+ .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+ .unwrap_or_default()
+ } else {
+ Vec::new()
+ }
+ })
+ .await
+ .unwrap_or_default();
+ if recovered.len() > initial_count {
+ append_desktop_log(
+ &retry_handle,
+ "INFO",
+ &format!(
+ "secrets-cache: background retry recovered {} keys (boot read had {})",
+ recovered.len(),
+ initial_count,
+ ),
+ );
+ if sidecar_ok {
+ inject_secrets_into_running_sidecar(&retry_handle, recovered).await;
+ }
+ }
+ });
  }
  });
 

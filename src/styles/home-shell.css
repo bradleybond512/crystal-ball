@@ -56,6 +56,11 @@ body.home-shell-active #panelsGrid {
   inset: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Let empty backdrop areas fall through to the map so it can be
+     scroll-zoomed and dragged. The real UI (bands, deck, ribbon, topbar)
+     re-enables pointer-events; the deck stays reachable via the "Your Deck"
+     button and by wheeling over the bands. */
+  pointer-events: none;
 }
 
 .home-shell-viewport {
@@ -116,7 +121,7 @@ body.home-shell-active #panelsGrid {
 .home-shell-library:hover { color: var(--hs-fg); background: var(--accent-selection); }
 
 .home-shell-briefing {
-  width: 360px;
+  width: 300px;
   margin: 8px 18px;
   display: flex;
   flex-direction: column;
@@ -179,13 +184,17 @@ body.is-desktop-macos .hs-tone-clear { background: linear-gradient(180deg, rgba(
 
 .home-shell-deck-hint {
   margin: auto auto 12px;
+  font: inherit;
   font-size: var(--text-sm);
   color: var(--hs-fg-hint);
   background: var(--mat-thin);
   border: none;
   border-radius: var(--r-pill);
   padding: 5px 16px;
+  cursor: pointer;
 }
+
+.home-shell-deck-hint:hover { color: var(--hs-fg); background: var(--accent-selection); }
 
 .home-shell-deck {
   position: relative;
@@ -193,6 +202,7 @@ body.is-desktop-macos .hs-tone-clear { background: linear-gradient(180deg, rgba(
   border-top: 1px solid rgba(var(--hs-white-rgb), 0.06);
   padding: 16px 18px 22px;
   min-height: 40vh;
+  pointer-events: auto; /* re-enable inside the pointer-events:none scroll */
 }
 
 .hs-deck-header {
@@ -277,6 +287,7 @@ body.is-desktop-macos .hs-tone-clear { background: linear-gradient(180deg, rgba(
   color: var(--hs-fg-faint);
   background: var(--mat-solid-1);
   border-top: 1px solid rgba(var(--hs-white-rgb), 0.05);
+  pointer-events: auto; /* re-enable inside the pointer-events:none scroll */
 }
 
 body.is-desktop-macos .home-shell-ribbon {

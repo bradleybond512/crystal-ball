@@ -1359,7 +1359,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.map = new MapContainer(mapContainer, {
  zoom: this.ctx.isMobile ? 2.5 : 1,
  pan: { x: 0, y: 0 },
- view: this.ctx.isMobile ? this.ctx.resolvedLocation : 'global',
+ view: this.ctx.isMobile ? this.ctx.resolvedLocation : 'america',
  layers: this.ctx.mapLayers,
  timeRange: '7d',
  });

@@ -115,7 +115,14 @@ export class HomeShellOverlay {
     );
 
     this.briefingEl = el('div', 'home-shell-briefing');
-    viewport.append(topbar, this.briefingEl, el('div', 'home-shell-deck-hint', '▼ Your Deck'));
+    // The map backdrop now owns wheel/drag (scroll-zoom + pan), so wheeling
+    // over empty areas zooms the map instead of scrolling to the deck — make
+    // the hint an explicit scroll-to-deck button.
+    const deckHint = el('button', 'home-shell-deck-hint', '▼ Your Deck');
+    deckHint.addEventListener('click', () => {
+      this.deckEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    viewport.append(topbar, this.briefingEl, deckHint);
 
     this.deckEl = el('section', 'home-shell-deck');
     this.ribbonEl = el('footer', 'home-shell-ribbon');

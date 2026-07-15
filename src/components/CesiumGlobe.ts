@@ -17,6 +17,7 @@ import {
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { initCesium } from '@/config/cesium-init';
+import { ensureFrameCoherence } from '@/services/globe/time-coherent-radius';
 
 export interface CesiumGlobeOptions {
   container: HTMLElement;
@@ -82,6 +83,12 @@ export class CesiumGlobe {
 
  const scene = this.viewer.scene;
  const globe = scene.globe;
+
+ // Drive the shared per-frame counter that timeCoherentRadius keys on, so the
+ // pulsing ellipses in every God's Eye layer (pulses, alert clusters, reactor
+ // beacons, space-weather flares, seismic waves) animate even though the Cesium
+ // clock is frozen (shouldAnimate=false at rest). One scene, one registration.
+ ensureFrameCoherence(scene);
 
  // ── Resolution ──────────────────────────────────────
  this.viewer.resolutionScale = Math.min(window.devicePixelRatio, 2);

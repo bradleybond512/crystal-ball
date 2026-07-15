@@ -16119,7 +16119,10 @@ async function dispatch(requestUrl, req, routes, context) {
  const baseUrl = `http://127.0.0.1:${port}`;
  const results = await Promise.allSettled(targets.map(async (sub) => {
  try {
- const r = await fetchWithTimeout(`${baseUrl}${sub.path}`, { headers: { Accept: 'application/json' } }, 20000);
+ // These sub-endpoints sit behind the LOCAL_API_TOKEN auth gate, so the
+ // internal self-call must carry the sidecar's own token — without it every
+ // source (even keyless ones) 401s and the catalog comes back empty.
+ const r = await fetchWithTimeout(`${baseUrl}${sub.path}`, { headers: { Accept: 'application/json', Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20000);
  let data = null;
  try { data = await r.json(); } catch { data = null; }
  // Surface the failure as a rejection so deriveWebcamSourceHealth can classify

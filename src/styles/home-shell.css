@@ -86,6 +86,14 @@ body.home-shell-active #panelsGrid {
   background: linear-gradient(rgba(var(--hs-base-rgb), 0.9), transparent);
 }
 
+/* In the desktop app the macOS traffic-light buttons (close/min/zoom) float over
+   the webview at x≈8-72, physically overlapping the brand logo + title. Reserve
+   left space so the brand clears them — matches the 80px classic chrome uses.
+   The web build has no traffic lights, so its 18px default stays. */
+body.is-desktop-macos .home-shell-topbar {
+  padding-left: 80px;
+}
+
 .home-shell-brand {
   font-size: var(--text-base);
   font-weight: 600;

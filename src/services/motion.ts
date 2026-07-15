@@ -10,6 +10,39 @@ export function prefersReducedMotion(): boolean {
   );
 }
 
+/**
+ * Resolve when the element's CSS animation ends — but NEVER hang. If no
+ * animation is actually running on the element (missing keyframes, a class
+ * that resolves to `animation: none`, or a zero duration), there will be no
+ * `animationend` event, so we settle on the next frame instead. A duration-
+ * derived timeout is the final backstop for a dropped event. Without this, a
+ * caller like Toast.dismiss() (`animateOut().then(() => el.remove())`) waits
+ * on an event that never comes and the element leaks into the DOM forever —
+ * e.g. a toast whose × was clicked but which never disappears.
+ */
+function whenAnimationSettles(el: HTMLElement): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      el.removeEventListener('animationend', finish);
+      resolve();
+    };
+    el.addEventListener('animationend', finish);
+    const cs = getComputedStyle(el);
+    const durationMs = Number.parseFloat(cs.animationDuration) * 1000;
+    // No animation actually running (missing keyframes, `animation: none`, a
+    // zero/NaN duration) → no animationend will fire, so settle next frame.
+    if (cs.animationName === 'none' || !Number.isFinite(durationMs) || durationMs <= 0) {
+      requestAnimationFrame(finish);
+      return;
+    }
+    const capMs = durationMs + Number.parseFloat(cs.animationDelay || '0') * 1000 + 120;
+    setTimeout(finish, Number.isFinite(capMs) && capMs > 0 ? capMs : 600);
+  });
+}
+
 export function staggerIn(
   container: Element,
   selector: string,
@@ -81,13 +114,9 @@ export function animateIn(
     'scale': 'cb-animate-scale-in',
     'slide-right': 'cb-animate-slide-in-right',
   };
-  return new Promise((resolve) => {
-    el.classList.add(classMap[animation]);
-    el.addEventListener('animationend', () => {
-      el.classList.remove(classMap[animation]);
-      resolve();
-    }, { once: true });
-  });
+  const cls = classMap[animation];
+  el.classList.add(cls);
+  return whenAnimationSettles(el).then(() => { el.classList.remove(cls); });
 }
 
 export function animateOut(
@@ -101,13 +130,9 @@ export function animateOut(
     'fade': 'cb-animate-fade-out',
     'scale-down': 'cb-animate-scale-out',
   };
-  return new Promise((resolve) => {
-    el.classList.add(classMap[animation]);
-    el.addEventListener('animationend', () => {
-      el.classList.remove(classMap[animation]);
-      resolve();
-    }, { once: true });
-  });
+  const cls = classMap[animation];
+  el.classList.add(cls);
+  return whenAnimationSettles(el).then(() => { el.classList.remove(cls); });
 }
 
 export function revealContent(skeleton: HTMLElement, content: HTMLElement): Promise<void> {

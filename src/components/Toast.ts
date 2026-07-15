@@ -42,7 +42,11 @@ function getContainer(): HTMLElement {
       position: 'fixed',
       top: 'calc(env(safe-area-inset-top, 0px) + 52px)',
       right: '16px',
-      zIndex: '9500', // --z-toast
+      // Above the Home Shell overlay (10000) + its Library/digest/corr layers
+      // (10001-10003), below ⌘K (10005). Alert toasts are safety chrome — at
+      // the old 9500 they rendered BEHIND the shell, so the map swallowed every
+      // click and the × was unreachable (toasts you couldn't dismiss).
+      zIndex: '10004', // --z-toast
       display: 'flex',
       flexDirection: 'column',
       gap: '8px',

@@ -37,12 +37,33 @@ export function computeShellGate(inputs: ShellGateInputs): boolean {
   return true;
 }
 
+/**
+ * Can the Home Shell mount at all on this build/viewport, IGNORING the classic
+ * opt-out? Same as the gate minus the classicFlag check. Used to decide whether
+ * to offer the ⌘⇧O shortcut and the classic "New view" button — otherwise
+ * opting into classic once removes every way back, stranding the user in
+ * classic with no affordance to return.
+ */
+export function computeShellAvailable(inputs: ShellGateInputs): boolean {
+  return computeShellGate({ ...inputs, classicFlag: null });
+}
+
 /** Environment reader used at boot. */
 export function isHomeShellDefaultOn(): boolean {
   return computeShellGate({
     variant: SITE_VARIANT,
     viewportWidth: window.innerWidth,
     classicFlag: localStorage.getItem(CLASSIC_VIEW_KEY),
+    legacyOptIn: localStorage.getItem(LEGACY_OPT_IN_KEY),
+  });
+}
+
+/** Environment reader: shell can mount here (independent of the classic opt-out). */
+export function isHomeShellAvailable(): boolean {
+  return computeShellAvailable({
+    variant: SITE_VARIANT,
+    viewportWidth: window.innerWidth,
+    classicFlag: null,
     legacyOptIn: localStorage.getItem(LEGACY_OPT_IN_KEY),
   });
 }

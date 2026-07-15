@@ -16,6 +16,7 @@ import { getMode } from '@/services/mode-manager';
 import { getCurrentTheme } from '@/utils/theme-manager';
 import { escapeHtml } from '@/utils/sanitize';
 import { icon } from '@/components/ui/icons';
+import { isHomeShellAvailable } from '@/services/home-shell/shell-gate';
 
 function getMapLabel(): string {
   if (SITE_VARIANT === 'tech') return t('panels.techMap');
@@ -106,6 +107,10 @@ const TOOLBAR_TITLES: Record<string, string> = {
 export function buildDesktopLayout(ctx: AppContext): string {
   const toolbarTitle = TOOLBAR_TITLES[SITE_VARIANT] ?? 'Crystal Ball';
   const ghostActive = getMode() === 'ghost' ? ' mac-ghost-mode-active' : '';
+  // Visible re-entry to the Home Shell — only where the shell can mount.
+  const newViewBtn = isHomeShellAvailable()
+    ? `<button class="mac-ghost-mode-btn" id="homeShellReturnBtn" title="Return to the new Home view (⌘⇧O)">${icon('eye', { size: 14 })} New view</button>`
+    : '';
   return String.raw`
  <!-- Original header kept for compatibility; hidden via CSS on desktop -->
  <div class="header" aria-hidden="true" style="display:none">
@@ -143,6 +148,7 @@ export function buildDesktopLayout(ctx: AppContext): string {
 
  <!-- Mode Selector: Ghost + God's Vision only -->
  ${SITE_VARIANT === 'happy' ? '' : `<div class="mac-mode-section" id="modeSelectorSection">
+ ${newViewBtn}
  <button class="mac-alert-family-btn" id="alertFamilyBtn">${icon('alert-triangle', { size: 14 })} Alert Family</button>
  <button class="mac-ghost-mode-btn${ghostActive}" id="ghostModeBtn" title="Ghost Mode — Reduce polling, suppress notifications (⌘⇧G)">${icon('ghost', { size: 14 })} Ghost Mode</button>
  <button class="mac-ghost-mode-btn" id="godsVisionBtn" title="God's Vision — 3D globe view (G)">${icon('globe', { size: 14 })} God's Vision</button>

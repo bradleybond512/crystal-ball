@@ -18,7 +18,38 @@ const stubWindow = { matchMedia: () => stubMql };
   return 0;
 }) as typeof requestAnimationFrame;
 
-const { prefersReducedMotion, animateNumber } = await import('../motion');
+(globalThis as unknown as { getComputedStyle: () => unknown }).getComputedStyle = () => ({
+  // Simulate the real bug: the cb-animate-* classes have no keyframes defined,
+  // so no animation runs and `animationend` never fires.
+  animationName: 'none',
+  animationDuration: '0s',
+  animationDelay: '0s',
+});
+(globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout = ((cb: () => void) => { cb(); return 0; }) as unknown as typeof setTimeout;
+
+class AnimStubElement {
+  classList = { add() {}, remove() {}, contains: () => false };
+  style: Record<string, string> = {};
+  addEventListener() {}
+  removeEventListener() {}
+}
+
+const { prefersReducedMotion, animateNumber, animateOut, animateIn } = await import('../motion');
+
+test('animateOut resolves even when no CSS animation runs (missing keyframes must not hang)', async () => {
+  stubMql.matches = false;
+  const el = new AnimStubElement();
+  // Would hang forever on a never-firing animationend before the fix.
+  await animateOut(el as unknown as HTMLElement, 'fade');
+  assert.ok(true, 'animateOut settled');
+});
+
+test('animateIn resolves even when no CSS animation runs', async () => {
+  stubMql.matches = false;
+  const el = new AnimStubElement();
+  await animateIn(el as unknown as HTMLElement, 'slide-right');
+  assert.ok(true, 'animateIn settled');
+});
 
 test('prefersReducedMotion returns false when neither media query nor body class indicates reduced motion', () => {
   stubMql.matches = false;

@@ -83,7 +83,7 @@ import { WatchlistEditor } from '@/components/WatchlistEditor';
 import { CommandPalettePanel } from '@/components/CommandPalettePanel';
 import { HomeShellOverlay } from '@/components/HomeShellOverlay';
 import { LibraryOverlay } from '@/components/LibraryOverlay';
-import { isHomeShellDefaultOn } from '@/services/home-shell/shell-gate';
+import { isHomeShellDefaultOn, isHomeShellAvailable, CLASSIC_VIEW_KEY } from '@/services/home-shell/shell-gate';
 import { getCommandRegistry } from '@/services/command-palette/command-registry';
 import { registerBuiltinCommands } from '@/services/command-palette/built-in-commands';
 import { installPlaceCommands } from '@/services/command-palette/place-commands';
@@ -1302,15 +1302,20 @@ export class PanelLayoutManager implements AppModule {
 
  // Home Shell — default-on opening surface for the full desktop variant
  // (Phase 2). See src/services/home-shell/shell-gate.ts for the decision core.
- if (isHomeShellDefaultOn()) {
- this.homeShell = new HomeShellOverlay({
- getPanel: (id) => this.ctx.panels[id],
- ensurePanel: (id) => this.ensurePanelMounted(id),
- });
- this.homeShell.mount(document.body);
- this._onHomeShellToggle = () => this.homeShell?.toggle();
+ // Wire the toggle whenever the shell CAN mount (not only when it's the
+ // default), so ⌘⇧O and the classic "New view" button always bring it back —
+ // otherwise opting into classic once strands the user with no way back.
+ if (isHomeShellAvailable()) {
+ this._onHomeShellToggle = () => {
+ const shell = this.ensureHomeShell();
+ if (shell.isVisible()) { shell.hide(); return; }
+ // Returning to the shell clears the persisted classic opt-out so the
+ // choice sticks across relaunches.
+ try { localStorage.removeItem(CLASSIC_VIEW_KEY); } catch { /* ignore */ }
+ shell.show();
+ };
  document.addEventListener('cb:toggle-home-shell', this._onHomeShellToggle);
- this.homeShell.show();
+ if (isHomeShellDefaultOn()) this.ensureHomeShell().show();
  }
  document.addEventListener('cb:navigate-panel', (e) => {
    const detail = (e as CustomEvent<{ panelKey?: string }>).detail;
@@ -2652,6 +2657,20 @@ export class PanelLayoutManager implements AppModule {
    *  null when the key is unknown, the factory fails, or the panel is
    *  disabled and not already mounted. (Already-mounted disabled panels
    *  are returned as-is — hosts may still show them.) */
+  /** Lazily construct + mount the Home Shell overlay (once). Lets the toggle
+   *  bring it back even from a classic-opted-out boot without paying the mount
+   *  cost up front. */
+  private ensureHomeShell(): HomeShellOverlay {
+ if (!this.homeShell) {
+ this.homeShell = new HomeShellOverlay({
+ getPanel: (id) => this.ctx.panels[id],
+ ensurePanel: (id) => this.ensurePanelMounted(id),
+ });
+ this.homeShell.mount(document.body);
+ }
+ return this.homeShell;
+  }
+
   public async ensurePanelMounted(key: string): Promise<Panel | null> {
  const existing = this.ctx.panels[key];
  if (existing) return existing;
@@ -2774,6 +2793,12 @@ export class PanelLayoutManager implements AppModule {
  btn.textContent = '✓ Copied to clipboard';
  setTimeout(() => { btn.textContent = orig; }, 2000);
  }
+ });
+
+ // "New view" — return to the Home Shell from classic. The only other way
+ // back is the ⌘⇧O shortcut, which is undiscoverable; this makes it visible.
+ document.getElementById('homeShellReturnBtn')?.addEventListener('click', () => {
+ document.dispatchEvent(new CustomEvent('cb:toggle-home-shell'));
  });
 
  // Ghost Mode button + Tauri menu event

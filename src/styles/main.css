@@ -82,7 +82,9 @@
   --z-strip-raised: 1050;
   --z-shift-overlay: 1200;
   --z-status-bar: 9000;
-  --z-toast: 9500;
+  /* Alert toasts are safety chrome and must sit ABOVE the Home Shell overlay
+     (10000) and its layers so they stay visible + dismissable — see Toast.ts. */
+  --z-toast: 10004;
   --z-modal: 10000;
   --z-modal-raised: 10001;
   --z-modal-top: 10002;

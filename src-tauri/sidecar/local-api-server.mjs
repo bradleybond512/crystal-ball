@@ -3016,7 +3016,10 @@ async function probeSelfTestTarget(port, target) {
     try {
       const resp = await fetch(url, {
         method: target.method,
-        headers: { Accept: 'application/json' },
+        // Self-test probes hit auth-gated /api routes, so authenticate as a real
+        // internal client — without the token every non-exempt target 401s and
+        // the Self-Test tab reports the whole sidecar as failing.
+        headers: { Accept: 'application/json', Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` },
         signal: ac.signal,
       });
       status = resp.status;

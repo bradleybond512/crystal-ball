@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { computeShellGate } from '../shell-gate.ts';
+import { computeShellGate, computeShellAvailable } from '../shell-gate.ts';
 
 const BASE = { variant: 'full', viewportWidth: 1280, classicFlag: null as string | null, legacyOptIn: null as string | null };
 
@@ -32,4 +32,18 @@ test('unmeasurable viewport (width 0, window not laid out at boot) is not inferr
 
 test('legacy opt-in key is ignored when classic flag set (classic wins)', () => {
   assert.equal(computeShellGate({ ...BASE, legacyOptIn: '1', classicFlag: '1' }), false);
+});
+
+test('computeShellAvailable ignores the classic opt-out (shell can still be toggled back)', () => {
+  // Available whenever the shell CAN mount, regardless of the classic flag —
+  // this is what keeps ⌘⇧O and the "New view" button working after opting out.
+  assert.equal(computeShellAvailable({ ...BASE, classicFlag: '1' }), true);
+  assert.equal(computeShellAvailable(BASE), true);
+});
+
+test('computeShellAvailable still false for non-full variants and mobile widths', () => {
+  assert.equal(computeShellAvailable({ ...BASE, variant: 'tech' }), false);
+  assert.equal(computeShellAvailable({ ...BASE, variant: 'happy', classicFlag: '1' }), false);
+  assert.equal(computeShellAvailable({ ...BASE, viewportWidth: 768 }), false);
+  assert.equal(computeShellAvailable({ ...BASE, viewportWidth: 769 }), true);
 });

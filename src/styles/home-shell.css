@@ -59,7 +59,10 @@ body.home-shell-active #panelsGrid {
   /* Let empty backdrop areas fall through to the map so it can be
      scroll-zoomed and dragged. The real UI (bands, deck, ribbon, topbar)
      re-enables pointer-events; the deck stays reachable via the "Your Deck"
-     button and by wheeling over the bands. */
+     button and by wheeling over the bands.
+     Deliberate tradeoff: this makes the scroller non-hit-testable, so its
+     scrollbar THUMB can't be grabbed directly — negligible on macOS overlay
+     scrollbars, and wheel + the deck button cover scrolling. */
   pointer-events: none;
 }
 

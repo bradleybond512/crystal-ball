@@ -16697,7 +16697,8 @@ async function dispatch(requestUrl, req, routes, context) {
  }
  const port = process.env.SIDECAR_PORT ?? '46123';
  try {
- const r = await fetchWithTimeout(`http://127.0.0.1:${port}/api/webcams`, { headers: { Accept: 'application/json' } }, 20000);
+ // Same LOCAL_API_TOKEN gate as the master aggregator — forward the token.
+ const r = await fetchWithTimeout(`http://127.0.0.1:${port}/api/webcams`, { headers: { Accept: 'application/json', Authorization: `Bearer ${process.env.LOCAL_API_TOKEN ?? ''}` } }, 20000);
  if (!r.ok) return json({ feeds: [], error: `master HTTP ${r.status}` }, 502);
  const data = await r.json();
  const all = Array.isArray(data?.feeds) ? data.feeds : [];

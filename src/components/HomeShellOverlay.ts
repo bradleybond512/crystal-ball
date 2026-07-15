@@ -24,6 +24,7 @@ import type { SituationDescriptor } from '@/services/insights/action-briefs';
 import type { PlaybookCategory } from '@/services/insights/reaction-playbooks';
 import { getSnapshotCount, getWhatChanged } from '@/services/command-center/what-changed';
 import type { WhatChangedEvent } from '@/services/command-center/what-changed';
+import { tryInvokeTauri } from '@/services/tauri-bridge';
 import {
   getFeatureHealthRegistry,
   getPanelHealthRegistry,
@@ -113,6 +114,16 @@ export class HomeShellOverlay {
       button('home-shell-library', 'library', '📚 Library'),
       button('home-shell-exit', 'exit', 'Classic view ⎋'),
     );
+    // Drag the window by its top bar. The shell has no classic toolbar, so
+    // without this the window can't be moved (WKWebView ignores app-region;
+    // must go mousedown → start_dragging). Interactive children are excluded.
+    topbar.addEventListener('mousedown', (ev) => {
+      const e = ev as MouseEvent;
+      if (e.button !== 0) return;
+      if ((e.target as Element | null)?.closest('button, input, select, a, [role="button"]')) return;
+      e.preventDefault();
+      void tryInvokeTauri('plugin:window|start_dragging').catch(() => {/* web build / silent */});
+    });
 
     this.briefingEl = el('div', 'home-shell-briefing');
     // The map backdrop now owns wheel/drag (scroll-zoom + pan), so wheeling

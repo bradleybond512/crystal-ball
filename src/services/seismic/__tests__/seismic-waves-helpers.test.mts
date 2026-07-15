@@ -115,6 +115,22 @@ test('diff: one added, one removed', () => {
   assert.deepEqual(d.removedIds, ['b']);
 });
 
+test('diff: a duplicate eventId within next is emitted ONCE (feed-dedup)', () => {
+  // A live feed (e.g. GeoNet) can list the same event twice. Without dedup both
+  // copies land in `added`, so the SECOND entities.add() throws "An entity with
+  // id ... already exists", halting that overlay render. Dedup by eventId.
+  const d = diffOverlays([], [overlay('dup'), overlay('dup')]);
+  assert.equal(d.added.length, 1);
+  assert.deepEqual(d.added.map((o) => o.eventId), ['dup']);
+});
+
+test('diff: a duplicate eventId already present in prev stays single in updated', () => {
+  const d = diffOverlays([overlay('a')], [overlay('a'), overlay('a')]);
+  assert.equal(d.updated.length, 1);
+  assert.equal(d.added.length, 0);
+  assert.equal(d.removedIds.length, 0);
+});
+
 test('diff: updated overlays carry the latest radii (next, not prev)', () => {
   const prev = [{ ...overlay('a'), pWaveRadiusKm: 100 }];
   const next = [{ ...overlay('a'), pWaveRadiusKm: 600 }];

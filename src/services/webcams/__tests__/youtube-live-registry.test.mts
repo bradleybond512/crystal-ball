@@ -41,3 +41,11 @@ test('every entry has a non-empty fallbackVideoId', () => {
     );
   }
 });
+
+test('every entry has valid coordinates for the map view', () => {
+  for (const f of YOUTUBE_LIVE_FEEDS) {
+    assert.ok(Number.isFinite(f.lat) && f.lat >= -90 && f.lat <= 90, `${f.id} lat out of range: ${f.lat}`);
+    assert.ok(Number.isFinite(f.lon) && f.lon >= -180 && f.lon <= 180, `${f.id} lon out of range: ${f.lon}`);
+    assert.ok(f.lat !== 0 || f.lon !== 0, `${f.id} has null-island (0,0) coords`);
+  }
+});

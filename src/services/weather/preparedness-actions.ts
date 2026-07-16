@@ -118,6 +118,14 @@ const FIRE_WEATHER_ACTIONS: PreparednessAction[] = [
   { id: 'fire-clear-vents', label: 'Close windows + outside vents to limit smoke entry', priority: 2, estimatedMinutes: 10 },
 ];
 
+const WILDFIRE_SMOKE_ACTIONS: PreparednessAction[] = [
+  { id: 'smoke-stay-in', label: 'Stay indoors; close windows + outside air vents', priority: 1, estimatedMinutes: 5 },
+  { id: 'smoke-recirc', label: 'Run HVAC/AC on recirculate, not fresh-air intake', priority: 1, estimatedMinutes: 3 },
+  { id: 'smoke-purifier', label: 'Run an air purifier / box-fan filter in your main room', rationale: 'A HEPA or MERV-13 filter cuts indoor smoke particulates fast.', priority: 2, estimatedMinutes: 10 },
+  { id: 'smoke-mask', label: 'Wear an N95/KN95 if you must go outside', priority: 2, estimatedMinutes: 0 },
+  { id: 'smoke-sensitive', label: 'Limit outdoor exertion — esp. kids, elderly, heart/lung conditions', priority: 2, estimatedMinutes: 0 },
+];
+
 const POWER_OUTAGE_ACTIONS: PreparednessAction[] = [
   { id: 'outage-charge', label: 'Charge phone + battery packs', priority: 1, estimatedMinutes: 5 },
   { id: 'outage-fridge', label: 'Avoid opening the refrigerator', rationale: 'A closed fridge keeps food cold for 4+ hours; an opened one drops fast.', priority: 2, estimatedMinutes: 0 },
@@ -142,6 +150,7 @@ const ACTIONS_BY_HAZARD: Record<WeatherHazardKind, PreparednessAction[]> = {
   extreme_heat: HEAT_ACTIONS,
   extreme_cold: COLD_ACTIONS,
   fire_weather: FIRE_WEATHER_ACTIONS,
+  wildfire_smoke: WILDFIRE_SMOKE_ACTIONS,
   tropical: TROPICAL_ACTIONS,
   storm_surge: STORM_SURGE_ACTIONS,
   special_marine: SEVERE_TS_ACTIONS,

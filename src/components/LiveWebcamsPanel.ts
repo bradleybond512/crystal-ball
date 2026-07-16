@@ -37,6 +37,13 @@ export class LiveWebcamsPanel extends Panel {
   private readonly IDLE_PAUSE_MS = 60 * 60 * 1000; // 60 minutes
   private isIdle = false;
   private _boundYtMsg!: (e: MessageEvent) => void;
+  // Per-iframe "did it ever start playing?" watchdog. Live-stream IDs go stale
+  // (the broadcast ends), and an ended stream shows YouTube's own "recording not
+  // available" screen WITHOUT firing the IFrame API onError — so the only
+  // reliable signal is: muted-autoplay never reached a playing state. If so, we
+  // swap the dead player for a "Watch live on YouTube" fallback card.
+  private _startWatchdogs = new Map<HTMLIFrameElement, ReturnType<typeof setTimeout>>();
+  private readonly NO_START_MS = 9000;
 
   constructor() {
  super({ id: 'live-webcams', title: t('panels.liveWebcams'), className: 'panel-wide' });
@@ -168,11 +175,22 @@ export class LiveWebcamsPanel extends Panel {
  iframe.title = `${feed.city} live webcam`;
  iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
  iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+ // Carry the source info so the offline fallback can link to the channel's
+ // live page (its current stream) when this frozen video id is dead.
+ iframe.dataset.city = feed.city;
+ iframe.dataset.channelHandle = feed.channelHandle;
  if (!isDesktopRuntime()) {
  iframe.allowFullscreen = true;
  iframe.setAttribute('loading', 'lazy');
  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
  }
+ // If muted autoplay never reaches a playing state, the stream is offline.
+ this._startWatchdogs.set(iframe, setTimeout(() => {
+ this._startWatchdogs.delete(iframe);
+ if (!iframe.isConnected) return;
+ const cell = iframe.closest<HTMLElement>('.webcam-cell, .webcam-single');
+ if (cell) this._showOfflineFallback(cell, iframe);
+ }, this.NO_START_MS));
  return iframe;
   }
 
@@ -377,6 +395,8 @@ export class LiveWebcamsPanel extends Panel {
   }
 
   private destroyIframes(): void {
+ for (const t of this._startWatchdogs.values()) clearTimeout(t);
+ this._startWatchdogs.clear();
  this.iframes.forEach(iframe => {
  iframe.src = 'about:blank';
  iframe.remove();
@@ -387,7 +407,7 @@ export class LiveWebcamsPanel extends Panel {
   /** Listen for postMessage events from the sidecar YouTube embed and display errors. */
   private _setupYtMessageListener(): void {
  this._boundYtMsg = (e: MessageEvent) => {
- const data = e.data as { type?: string; code?: number } | null;
+ const data = e.data as { type?: string; code?: number; state?: number } | null;
  if (!data?.type?.startsWith('yt-')) return;
 
  const iframe = this.iframes.find(f => f.contentWindow === e.source);
@@ -395,34 +415,65 @@ export class LiveWebcamsPanel extends Panel {
  const cell = iframe.closest<HTMLElement>('.webcam-cell, .webcam-single');
  if (!cell) return;
 
+ // Reached a playing/buffering state → the stream is live. Cancel the
+ // offline watchdog and clear any fallback that may already be showing.
+ if (data.type === 'yt-state' && (data.state === 1 || data.state === 3)) {
+ const t = this._startWatchdogs.get(iframe);
+ if (t) { clearTimeout(t); this._startWatchdogs.delete(iframe); }
+ cell.querySelector('.webcam-err-overlay')?.remove();
+ return;
+ }
+
+ // A hard player error (bad id / unavailable / embed blocked) → offline
+ // fallback immediately; the video id is dead.
  if (data.type === 'yt-error') {
- const c = data.code;
- let msg = `YT error ${c}`;
- if (c === 2) msg = 'Bad video ID (2)';
- else if (c === 5) msg = 'HTML5 error (5)';
- else if (c === 100)  msg = 'Video unavailable (100)';
- else if (c === 101 || c === 150) msg = 'Embed blocked (150)';
- this._showCellError(cell, msg);
- } else if (data.type === 'yt-autoplay-failed') {
- this._showCellError(cell, 'Autoplay blocked — click to play');
+ const t = this._startWatchdogs.get(iframe);
+ if (t) { clearTimeout(t); this._startWatchdogs.delete(iframe); }
+ this._showOfflineFallback(cell, iframe);
  }
  };
  window.addEventListener('message', this._boundYtMsg);
   }
 
-  private _showCellError(cell: HTMLElement, msg: string): void {
- let overlay = cell.querySelector<HTMLElement>('.webcam-err-overlay');
- if (!overlay) {
- overlay = document.createElement('div');
+  /** Replace a dead/offline player with a card that links to the channel's
+   *  current live stream on YouTube — so a stale video id never leaves a black
+   *  box, and the user is one click from the actual live feed. */
+  private _showOfflineFallback(cell: HTMLElement, iframe: HTMLIFrameElement): void {
+ if (cell.querySelector('.webcam-err-overlay')) return;
+ const city = iframe.dataset.city ?? 'This camera';
+ const handle = iframe.dataset.channelHandle ?? '';
+ // Channel handles are '@name' from our static registry — /live shows the
+ // channel's current live broadcast (or its live tab if none).
+ const liveUrl = handle ? `https://www.youtube.com/${encodeURIComponent(handle)}/live` : 'https://www.youtube.com';
+
+ const overlay = document.createElement('div');
  overlay.className = 'webcam-err-overlay';
  overlay.style.cssText =
- 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
- 'background:rgba(0,0,0,0.72);color:#ff6b6b;font-size:11px;font-family:monospace;' +
- 'pointer-events:none;z-index:6;padding:8px;text-align:center;';
+ 'position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;' +
+ 'background:rgba(10,12,16,0.92);color:#e8eef5;font-size:12px;' +
+ 'font-family:-apple-system,system-ui,sans-serif;z-index:6;padding:10px;text-align:center;';
+
+ const title = document.createElement('div');
+ title.textContent = `${city} — stream offline`;
+ title.style.cssText = 'font-weight:600;opacity:0.85;';
+
+ const link = document.createElement('a');
+ link.href = liveUrl;
+ link.target = '_blank';
+ link.rel = 'noopener noreferrer';
+ link.textContent = '🔴 Watch live on YouTube →';
+ link.style.cssText =
+ 'color:#fff;background:#c4302b;padding:6px 12px;border-radius:6px;text-decoration:none;font-weight:600;';
+
+ const retry = document.createElement('button');
+ retry.textContent = 'Retry';
+ retry.style.cssText =
+ 'background:transparent;border:1px solid rgba(255,255,255,0.25);color:#cfd8e3;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;';
+ retry.addEventListener('click', () => this.render());
+
+ overlay.append(title, link, retry);
  cell.style.position = 'relative';
  cell.append(overlay);
- }
- overlay.textContent = msg;
   }
 
   private setupIntersectionObserver(): void {

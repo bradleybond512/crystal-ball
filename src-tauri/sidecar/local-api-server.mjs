@@ -12992,10 +12992,15 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── NIFC active fire perimeters (free public ArcGIS REST) ────────────────
   if (requestUrl.pathname === '/api/wildfire/perimeters') {
  try {
+ // outFields=* — the WFIGS layer prefixes every field (poly_IncidentName,
+ // attr_PercentContained, …). The old explicit list used unprefixed names
+ // (IncidentName, GISAcres, POOState, ModifiedOnDateTime_dt) — ALL invalid on
+ // this layer, so ArcGIS returned a 400-shaped error body and the handler saw
+ // zero features even though ~150 fires are active. '*' is robust to the
+ // prefixing; the frontend picks the prefixed keys it needs.
  const url = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/'
  + 'WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query'
- + '?where=1%3D1&outFields=IrwinID,IncidentName,GISAcres,PercentContained,POOState,'
- + 'ModifiedOnDateTime_dt&f=geojson&resultRecordCount=500';
+ + '?where=1%3D1&outFields=*&f=geojson&resultRecordCount=500';
  const resp = await fetchWithTimeout(url, {
  headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
  }, 20_000);

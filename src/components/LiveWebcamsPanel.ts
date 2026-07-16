@@ -20,7 +20,7 @@ const WEBCAM_FEEDS: WebcamFeed[] = YOUTUBE_LIVE_FEEDS;
 
 const MAX_GRID_CELLS = 4;
 
-type ViewMode = 'grid' | 'single';
+type ViewMode = 'grid' | 'single' | 'map';
 type RegionFilter = 'all' | WebcamRegion;
 
 export class LiveWebcamsPanel extends Panel {
@@ -107,8 +107,17 @@ export class LiveWebcamsPanel extends Panel {
  singleBtn.setAttribute('aria-label', 'Single view');
  singleBtn.addEventListener('click', () => this.setViewMode('single'));
 
+ const mapBtn = document.createElement('button');
+ mapBtn.className = `webcam-view-btn${this.viewMode === 'map' ? ' active' : ''}`;
+ mapBtn.dataset.mode = 'map';
+ mapBtn.textContent = '📍';
+ mapBtn.title = 'Map view — click a location to watch its live stream';
+ mapBtn.setAttribute('aria-label', 'Map view');
+ mapBtn.addEventListener('click', () => this.setViewMode('map'));
+
  viewGroup.append(gridBtn);
  viewGroup.append(singleBtn);
+ viewGroup.append(mapBtn);
 
  this.toolbar.append(regionGroup);
  this.toolbar.append(viewGroup);
@@ -177,9 +186,94 @@ export class LiveWebcamsPanel extends Panel {
 
  if (this.viewMode === 'grid') {
  this.renderGrid();
+ } else if (this.viewMode === 'map') {
+ this.renderMap();
  } else {
  this.renderSingle();
  }
+  }
+
+  /** Map view: plot each live-video stream at its city on an equirectangular
+   *  world map. Click a pin → play that stream in single view. This is the
+   *  "click a spot and see video" surface. */
+  private renderMap(): void {
+ this.content.innerHTML = '';
+ this.content.className = 'panel-content webcam-content';
+
+ const feeds = this.filteredFeeds.filter((f) => f.lat !== 0 || f.lon !== 0);
+ const wrap = document.createElement('div');
+ wrap.className = 'webcam-map';
+
+ const W = 760, H = 380;
+ const SVG_NS = 'http://www.w3.org/2000/svg';
+ const svg = document.createElementNS(SVG_NS, 'svg');
+ svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+ svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+ // Explicit width + aspect-ratio — without a height an inline SVG defaults to
+ // ~150px tall instead of scaling to the viewBox ratio.
+ svg.style.width = '100%';
+ svg.style.height = 'auto';
+ svg.style.aspectRatio = `${W} / ${H}`;
+ svg.style.maxHeight = '70vh';
+ svg.style.display = 'block';
+ svg.style.background = 'linear-gradient(180deg,#0b1a2b,#0a1420)';
+ svg.style.borderRadius = '6px';
+
+ // Graticule every 30° for orientation (no coastline data needed).
+ for (let lon = -150; lon <= 150; lon += 30) {
+ const x = ((lon + 180) / 360) * W;
+ const line = document.createElementNS(SVG_NS, 'line');
+ line.setAttribute('x1', String(x)); line.setAttribute('y1', '0');
+ line.setAttribute('x2', String(x)); line.setAttribute('y2', String(H));
+ line.setAttribute('stroke', 'rgba(255,255,255,0.06)'); line.setAttribute('stroke-width', '1');
+ svg.append(line);
+ }
+ for (let lat = -60; lat <= 60; lat += 30) {
+ const y = ((90 - lat) / 180) * H;
+ const line = document.createElementNS(SVG_NS, 'line');
+ line.setAttribute('x1', '0'); line.setAttribute('y1', String(y));
+ line.setAttribute('x2', String(W)); line.setAttribute('y2', String(y));
+ line.setAttribute('stroke', 'rgba(255,255,255,0.06)'); line.setAttribute('stroke-width', '1');
+ svg.append(line);
+ }
+
+ for (const feed of feeds) {
+ const x = ((feed.lon + 180) / 360) * W;
+ const y = ((90 - feed.lat) / 180) * H;
+ const g = document.createElementNS(SVG_NS, 'g');
+ g.style.cursor = 'pointer';
+ g.addEventListener('click', () => {
+ trackWebcamSelected(feed.id, feed.city, 'map');
+ this.activeFeed = feed;
+ this.setViewMode('single');
+ });
+
+ const halo = document.createElementNS(SVG_NS, 'circle');
+ halo.setAttribute('cx', String(x)); halo.setAttribute('cy', String(y));
+ halo.setAttribute('r', '7'); halo.setAttribute('fill', 'rgba(255,59,48,0.25)');
+ const dot = document.createElementNS(SVG_NS, 'circle');
+ dot.setAttribute('cx', String(x)); dot.setAttribute('cy', String(y));
+ dot.setAttribute('r', '4'); dot.setAttribute('fill', '#ff3b30');
+ dot.setAttribute('stroke', '#fff'); dot.setAttribute('stroke-width', '1');
+ const label = document.createElementNS(SVG_NS, 'text');
+ label.setAttribute('x', String(x + 8)); label.setAttribute('y', String(y + 3));
+ label.setAttribute('fill', '#e8eef5'); label.setAttribute('font-size', '10');
+ label.setAttribute('font-family', 'sans-serif');
+ label.textContent = feed.city;
+ const title = document.createElementNS(SVG_NS, 'title');
+ title.textContent = `${feed.city}, ${feed.country} — click to watch live`;
+ g.append(title, halo, dot, label);
+ svg.append(g);
+ }
+
+ wrap.append(svg);
+ if (feeds.length === 0) {
+ const empty = document.createElement('p');
+ empty.className = 'webcam-placeholder';
+ empty.textContent = 'No located streams in this region.';
+ wrap.append(empty);
+ }
+ this.content.append(wrap);
   }
 
   private renderGrid(): void {
@@ -229,7 +323,9 @@ export class LiveWebcamsPanel extends Panel {
  if (desktop && i > 0) {
  // Stagger iframe creation on desktop — WKWebView throttles concurrent autoplay.
  setTimeout(() => {
- if (!this.isVisible || this.isIdle) return;
+ // Bail if we left grid view before this fired — otherwise a staggered
+ // iframe loads onto a detached/other view (e.g. after switching to map).
+ if (!this.isVisible || this.isIdle || this.viewMode !== 'grid' || !cell.isConnected) return;
  const iframe = this.createIframe(feed);
  label.before(iframe);
  this.iframes.push(iframe);

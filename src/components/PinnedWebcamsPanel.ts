@@ -3,6 +3,7 @@ import { Panel } from './Panel';
 import { fetchUnifiedWebcams } from '@/services/webcams/fetcher';
 import { getPinnedIds, unpinFeed, onPinnedChange } from '@/services/webcams/pinned-store';
 import type { WebcamFeed } from '@/services/webcams/webcam-types';
+import { resolveFrameUrl } from '@/services/webcams/frame-resolver';
 
 export class PinnedWebcamsPanel extends Panel {
   private feeds: WebcamFeed[] = [];
@@ -95,7 +96,12 @@ export class PinnedWebcamsPanel extends Panel {
     card.style.position = 'relative';
 
     const img = document.createElement('img');
-    img.src = f.snapshotUrl;
+    // FAA feeds carry a /api/ resolver URL that returns JSON, not image bytes —
+    // resolve to the real https image before setting src (see frame-resolver).
+    void resolveFrameUrl(f.snapshotUrl).then((url) => {
+      if (url) img.src = url;
+      else { img.style.opacity = '0.3'; img.style.background = '#222'; }
+    });
     img.alt = f.name;
     img.loading = 'lazy';
     img.style.width = '100%';

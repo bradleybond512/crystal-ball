@@ -15,6 +15,7 @@ import {
 import { runSmokeDetection, type SmokeAnalysis } from '@/services/webcams/smoke-detector';
 import { healthSummary } from '@/services/webcams/health-view';
 import { nextProbeDelay } from '@/services/webcams/probe-backoff';
+import { resolveFrameUrl } from '@/services/webcams/frame-resolver';
 import type { WebcamCategory, WebcamFeed, WebcamSource, WebcamSourceHealth } from '@/services/webcams/webcam-types';
 
 const SMOKE_DETECT_INTERVAL_MS = 10 * 60 * 1000;
@@ -66,6 +67,10 @@ export class UnifiedWebcamPanel extends Panel {
   private smokeDetectEnabled = true;
   private toastEl: HTMLElement | null = null;
   private unsubscribePinned: (() => void) | null = null;
+  // Lazily resolves + loads each card's frame as it scrolls into view, so we
+  // don't fire hundreds of FAA JSON-resolve lookups at once on panel open.
+  private frameObserver: IntersectionObserver | null = null;
+  private frameEpoch = 0;
 
   constructor() {
     super({ id: 'unified-webcams', title: 'Webcams', className: 'panel-wide' });
@@ -89,6 +94,8 @@ export class UnifiedWebcamPanel extends Panel {
     }
     this.unsubscribePinned?.();
     this.unsubscribePinned = null;
+    this.frameObserver?.disconnect();
+    this.frameObserver = null;
     window.removeEventListener('webcam:select', this.handleGlobeSelect as EventListener);
     super.destroy();
   }
@@ -154,6 +161,7 @@ export class UnifiedWebcamPanel extends Panel {
     const el = this.getContentElement();
     while (el.firstChild) el.firstChild.remove();
     el.className = 'panel-content unified-webcams-content';
+    this.resetFrameObserver();
 
     el.append(this.buildToolbar());
     el.append(this.buildSourceChips());
@@ -411,6 +419,37 @@ export class UnifiedWebcamPanel extends Panel {
     return grid;
   }
 
+  /** Disconnect any prior observer (render() rebuilds the card DOM). Bumps the
+   *  render epoch so in-flight loadFrame() calls from a prior render bail out
+   *  instead of writing src onto a detached <img>. */
+  private resetFrameObserver(): void {
+    this.frameObserver?.disconnect();
+    this.frameEpoch += 1;
+    const epoch = this.frameEpoch;
+    this.frameObserver = new IntersectionObserver((entries, obs) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const img = entry.target as HTMLImageElement;
+        obs.unobserve(img);
+        void this.loadFrame(img, img.dataset.snapshotUrl, false, epoch);
+      }
+    }, { rootMargin: '200px' });
+  }
+
+  /** Resolve a feed's frame URL (FAA needs a JSON lookup) and set it on the
+   *  <img>. Dims the tile on failure — matches the old error handler. */
+  private async loadFrame(img: HTMLImageElement, snapshotUrl: string | undefined, cacheBust = false, epoch = this.frameEpoch): Promise<void> {
+    const resolved = await resolveFrameUrl(snapshotUrl);
+    if (epoch !== this.frameEpoch) return; // superseded by a re-render — don't touch a stale img
+    if (!resolved) {
+      img.style.opacity = '0.3';
+      img.style.background = '#222';
+      return;
+    }
+    const sep = resolved.includes('?') ? '&' : '?';
+    img.src = cacheBust ? `${resolved}${sep}t=${Date.now()}` : resolved;
+  }
+
   private buildCard(f: WebcamFeed): HTMLElement {
     const card = document.createElement('div');
     card.className = 'webcam-card';
@@ -421,13 +460,16 @@ export class UnifiedWebcamPanel extends Panel {
     card.style.position = 'relative';
 
     const img = document.createElement('img');
-    img.src = f.snapshotUrl;
+    // Frame is resolved + loaded lazily when the card scrolls into view (FAA
+    // feeds need a JSON lookup first — see resolveFrameUrl / frameObserver).
+    img.dataset.snapshotUrl = f.snapshotUrl;
     img.alt = f.name;
     img.loading = 'lazy';
     img.style.width = '100%';
     img.style.aspectRatio = '16 / 9';
     img.style.objectFit = 'cover';
     img.style.background = '#111';
+    this.frameObserver?.observe(img);
     img.addEventListener('error', () => {
       img.style.opacity = '0.3';
       img.style.background = '#222';
@@ -679,7 +721,8 @@ export class UnifiedWebcamPanel extends Panel {
     div.append(header);
 
     const img = document.createElement('img');
-    img.src = `${f.snapshotUrl}${f.snapshotUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    // The enlarged viewer resolves immediately (single image, user is looking).
+    void this.loadFrame(img, f.snapshotUrl, true);
     img.alt = f.name;
     img.style.width = '100%';
     img.style.maxWidth = '900px';

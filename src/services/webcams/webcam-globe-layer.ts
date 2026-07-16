@@ -2,6 +2,7 @@ import {
   Cartesian2,
   Cartesian3,
   Color,
+  ConstantProperty,
   CustomDataSource,
   DistanceDisplayCondition,
   Entity,
@@ -12,6 +13,7 @@ import {
   type Viewer,
 } from 'cesium';
 import type { WebcamFeed } from './webcam-types';
+import { resolveFrameUrl, needsFrameResolve } from './frame-resolver';
 
 const HIGH_SALIENCE_CATEGORIES = ['fire', 'volcano', 'coastal'] as const;
 
@@ -127,6 +129,15 @@ export class GlobeWebcamLayer {
       });
       this.dataSource.entities.add(entity);
       this.entities.set(feed.id, entity);
+      // FAA feeds carry a /api/ resolver URL (JSON, not an image) — resolve it
+      // and swap the real https image into the info box once available.
+      if (needsFrameResolve(feed.snapshotUrl)) {
+        void resolveFrameUrl(feed.snapshotUrl).then((url) => {
+          if (url && this.entities.get(feed.id) === entity) {
+            entity.description = new ConstantProperty(this.buildDescription(feed, url));
+          }
+        });
+      }
     }
   }
 
@@ -135,11 +146,17 @@ export class GlobeWebcamLayer {
     void this.refresh();
   }
 
-  private buildDescription(feed: WebcamFeed): string {
+  private buildDescription(feed: WebcamFeed, imageUrl: string = feed.snapshotUrl): string {
+    // Only embed an <img> for a directly-loadable URL — a /api/ resolver path
+    // would render as a broken image (it returns JSON, not bytes). FAA feeds get
+    // their real image swapped in asynchronously after resolveFrameUrl().
+    const imgTag = imageUrl && !needsFrameResolve(imageUrl)
+      ? `<img src="${imageUrl}" style="max-width:200px;margin-top:4px;border-radius:3px;"/>`
+      : '';
     return `<div style="font-family:sans-serif;padding:6px;">
       <strong>${feed.name}</strong><br/>
       <small>${feed.source} · ${feed.category}</small><br/>
-      <img src="${feed.snapshotUrl}" style="max-width:200px;margin-top:4px;border-radius:3px;"/>
+      ${imgTag}
     </div>`;
   }
 

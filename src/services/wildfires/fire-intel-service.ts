@@ -70,15 +70,47 @@ export interface FireIntelSnapshot {
 
 interface SidecarPerimeterFeature {
   type: 'Feature';
-  properties: {
-    IrwinID?: string;
-    IncidentName?: string;
-    GISAcres?: number;
-    PercentContained?: number;
-    POOState?: string;
-    ModifiedOnDateTime_dt?: string;
-  };
+  // The WFIGS ArcGIS layer prefixes every field (poly_IncidentName,
+  // attr_PercentContained, …). Keep this open and pick keys defensively below.
+  properties: Record<string, string | number | null | undefined>;
   geometry: GeoJsonPolygonLike | { type: 'Point'; coordinates: [number, number] } | null;
+}
+
+/** First defined value among the given property keys. */
+function pickProp(props: Record<string, unknown>, ...keys: string[]): unknown {
+  for (const k of keys) {
+    const v = props[k];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return undefined;
+}
+
+/** Map one WFIGS geojson feature → ActiveFirePerimeter (null if unlocatable). */
+function parsePerimeterFeature(feat: SidecarPerimeterFeature): ActiveFirePerimeter | null {
+  const props = feat.properties ?? {};
+  const geom = feat.geometry;
+  const centroid = geometryCentroid(geom);
+  if (!centroid) return null;
+  const name = pickProp(props, 'attr_IncidentName', 'poly_IncidentName', 'IncidentName');
+  const acresRaw = pickProp(props, 'poly_GISAcres', 'attr_CalculatedAcres', 'attr_IncidentSize', 'GISAcres');
+  const containRaw = pickProp(props, 'attr_PercentContained', 'PercentContained');
+  const irwin = pickProp(props, 'poly_IRWINID', 'attr_IrwinID', 'IrwinID');
+  const state = pickProp(props, 'attr_POOState', 'attr_POOProtectingAgency', 'POOState');
+  const updated = pickProp(props, 'poly_DateCurrent', 'attr_ModifiedOnDateTime', 'ModifiedOnDateTime_dt');
+  return {
+    irwinId: typeof irwin === 'string' ? irwin : `${centroid.lat.toFixed(3)},${centroid.lon.toFixed(3)}`,
+    name: typeof name === 'string' ? name : 'Unknown incident',
+    acres: typeof acresRaw === 'number' ? acresRaw : null,
+    containmentPct: typeof containRaw === 'number' ? containRaw : null,
+    state: typeof state === 'string' ? state : null,
+    lat: centroid.lat,
+    lon: centroid.lon,
+    geometry:
+      geom && (geom.type === 'Polygon' || geom.type === 'MultiPolygon')
+        ? (geom as GeoJsonPolygonLike)
+        : null,
+    updatedAt: typeof updated === 'string' ? updated : null,
+  };
 }
 
 interface SidecarPerimetersResponse {
@@ -112,29 +144,9 @@ export async function fetchActivePerimeters(): Promise<ActiveFirePerimeter[]> {
     const resp = await fetch(`${getApiBaseUrl()}/api/wildfire/perimeters`);
     if (!resp.ok) return _perimeterCache?.perimeters ?? [];
     const data = (await resp.json()) as SidecarPerimetersResponse;
-    const features = data.features ?? [];
-    const perimeters: ActiveFirePerimeter[] = [];
-    for (const feat of features) {
-      const props = feat.properties ?? {};
-      const geom = feat.geometry;
-      const centroid = geometryCentroid(geom);
-      if (!centroid) continue;
-      perimeters.push({
-        irwinId: props.IrwinID ?? `${centroid.lat.toFixed(3)},${centroid.lon.toFixed(3)}`,
-        name: props.IncidentName ?? 'Unknown incident',
-        acres: typeof props.GISAcres === 'number' ? props.GISAcres : null,
-        containmentPct:
-          typeof props.PercentContained === 'number' ? props.PercentContained : null,
-        state: props.POOState ?? null,
-        lat: centroid.lat,
-        lon: centroid.lon,
-        geometry:
-          geom && (geom.type === 'Polygon' || geom.type === 'MultiPolygon')
-            ? (geom as GeoJsonPolygonLike)
-            : null,
-        updatedAt: props.ModifiedOnDateTime_dt ?? null,
-      });
-    }
+    const perimeters = (data.features ?? [])
+      .map((feat) => parsePerimeterFeature(feat))
+      .filter((p): p is ActiveFirePerimeter => p !== null);
     _perimeterCache = { perimeters, ts: Date.now() };
     return perimeters;
   } catch {

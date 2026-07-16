@@ -208,8 +208,14 @@ export class LiveWebcamsPanel extends Panel {
  const SVG_NS = 'http://www.w3.org/2000/svg';
  const svg = document.createElementNS(SVG_NS, 'svg');
  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
- svg.setAttribute('width', '100%');
  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+ // Explicit width + aspect-ratio — without a height an inline SVG defaults to
+ // ~150px tall instead of scaling to the viewBox ratio.
+ svg.style.width = '100%';
+ svg.style.height = 'auto';
+ svg.style.aspectRatio = `${W} / ${H}`;
+ svg.style.maxHeight = '70vh';
+ svg.style.display = 'block';
  svg.style.background = 'linear-gradient(180deg,#0b1a2b,#0a1420)';
  svg.style.borderRadius = '6px';
 
@@ -317,7 +323,9 @@ export class LiveWebcamsPanel extends Panel {
  if (desktop && i > 0) {
  // Stagger iframe creation on desktop — WKWebView throttles concurrent autoplay.
  setTimeout(() => {
- if (!this.isVisible || this.isIdle) return;
+ // Bail if we left grid view before this fired — otherwise a staggered
+ // iframe loads onto a detached/other view (e.g. after switching to map).
+ if (!this.isVisible || this.isIdle || this.viewMode !== 'grid' || !cell.isConnected) return;
  const iframe = this.createIframe(feed);
  label.before(iframe);
  this.iframes.push(iframe);

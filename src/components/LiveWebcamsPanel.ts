@@ -43,7 +43,9 @@ export class LiveWebcamsPanel extends Panel {
   // reliable signal is: muted-autoplay never reached a playing state. If so, we
   // swap the dead player for a "Watch live on YouTube" fallback card.
   private _startWatchdogs = new Map<HTMLIFrameElement, ReturnType<typeof setTimeout>>();
-  private readonly NO_START_MS = 9000;
+  // Generous, so a genuinely-live-but-slow stream isn't briefly mislabelled;
+  // a later yt-state playing message clears the fallback anyway if it does show.
+  private readonly NO_START_MS = 14_000;
 
   constructor() {
  super({ id: 'live-webcams', title: t('panels.liveWebcams'), className: 'panel-wide' });
@@ -184,6 +186,11 @@ export class LiveWebcamsPanel extends Panel {
  iframe.setAttribute('loading', 'lazy');
  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
  }
+ // Offline detection relies on the sidecar embed's yt-state/yt-error
+ // postMessages, which only the desktop path emits. A direct
+ // youtube-nocookie iframe (web) never reports state, so a watchdog there
+ // would false-fire on every stream — only arm it on desktop.
+ if (isDesktopRuntime()) {
  // If muted autoplay never reaches a playing state, the stream is offline.
  this._startWatchdogs.set(iframe, setTimeout(() => {
  this._startWatchdogs.delete(iframe);
@@ -191,6 +198,7 @@ export class LiveWebcamsPanel extends Panel {
  const cell = iframe.closest<HTMLElement>('.webcam-cell, .webcam-single');
  if (cell) this._showOfflineFallback(cell, iframe);
  }, this.NO_START_MS));
+ }
  return iframe;
   }
 

@@ -28,7 +28,8 @@ export type WeatherHazardKind =
   | 'ice_storm'
   | 'extreme_heat'
   | 'extreme_cold'
-  | 'fire_weather'
+  | 'fire_weather'            // Red Flag / Fire Weather — conditions favor fire
+  | 'wildfire_smoke'          // Air Quality / Dense Smoke — smoke from active fires
   | 'tropical'                // hurricane / tropical storm warning
   | 'storm_surge'
   | 'special_marine'
@@ -155,22 +156,32 @@ export interface PolygonMatchResult {
  *  and "Severe Thunderstorm Watch" both resolve to severe_thunderstorm.
  *  Returns 'other' for unknown events so the rest of the pipeline
  *  doesn't crash on a new product type. */
+// Order matters — first match wins (e.g. "flash flood" before "flood").
+// wildfire_smoke: NWS issues Air Quality Alerts + (dense) smoke advisories,
+// often from fires hundreds of miles away.
+const HAZARD_RULES: readonly (readonly [WeatherHazardKind, readonly string[]])[] = [
+  ['tornado', ['tornado']],
+  ['flash_flood', ['flash flood']],
+  ['flood', ['flood']],
+  ['severe_thunderstorm', ['severe thunderstorm']],
+  ['high_wind', ['high wind', 'wind advisory', 'damaging wind']],
+  ['blizzard', ['blizzard']],
+  ['ice_storm', ['ice storm']],
+  ['winter_storm', ['winter storm', 'winter weather']],
+  ['extreme_heat', ['excessive heat', 'heat advisory', 'heat warning']],
+  ['extreme_cold', ['extreme cold', 'wind chill']],
+  ['fire_weather', ['red flag', 'fire weather']],
+  ['wildfire_smoke', ['air quality', 'smoke']],
+  ['tropical', ['hurricane', 'tropical storm']],
+  ['storm_surge', ['storm surge']],
+  ['special_marine', ['special marine']],
+  ['dust_storm', ['dust storm']],
+];
+
 export function classifyHazard(event: string): WeatherHazardKind {
   const e = event.toLowerCase();
-  if (e.includes('tornado')) return 'tornado';
-  if (e.includes('flash flood')) return 'flash_flood';
-  if (e.includes('flood')) return 'flood';
-  if (e.includes('severe thunderstorm')) return 'severe_thunderstorm';
-  if (e.includes('high wind') || e.includes('wind advisory') || e.includes('damaging wind')) return 'high_wind';
-  if (e.includes('blizzard')) return 'blizzard';
-  if (e.includes('ice storm')) return 'ice_storm';
-  if (e.includes('winter storm') || e.includes('winter weather')) return 'winter_storm';
-  if (e.includes('excessive heat') || e.includes('heat advisory') || e.includes('heat warning')) return 'extreme_heat';
-  if (e.includes('extreme cold') || e.includes('wind chill')) return 'extreme_cold';
-  if (e.includes('red flag') || e.includes('fire weather')) return 'fire_weather';
-  if (e.includes('hurricane') || e.includes('tropical storm')) return 'tropical';
-  if (e.includes('storm surge')) return 'storm_surge';
-  if (e.includes('special marine')) return 'special_marine';
-  if (e.includes('dust storm')) return 'dust_storm';
+  for (const [kind, needles] of HAZARD_RULES) {
+    if (needles.some((n) => e.includes(n))) return kind;
+  }
   return 'other';
 }

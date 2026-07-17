@@ -48,12 +48,12 @@ function isValidAlertRule(r: unknown): r is AlertRule {
   if (!r || typeof r !== 'object' || Array.isArray(r)) return false;
   const rule = r as Record<string, unknown>;
   return (
-    typeof rule['id'] === 'string' && rule['id'].length > 0 &&
-    typeof rule['name'] === 'string' &&
-    typeof rule['enabled'] === 'boolean' &&
-    Array.isArray(rule['conditions']) &&
-    typeof rule['action'] === 'string' &&
-    typeof rule['priority'] === 'number'
+    typeof rule.id === 'string' && rule.id.length > 0 &&
+    typeof rule.name === 'string' &&
+    typeof rule.enabled === 'boolean' &&
+    Array.isArray(rule.conditions) &&
+    typeof rule.action === 'string' &&
+    typeof rule.priority === 'number'
   );
 }
 
@@ -64,7 +64,7 @@ export function getAlertRules(): AlertRule[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isValidAlertRule);
+    return parsed.filter((r) => isValidAlertRule(r));
   } catch {
     return [];
   }

@@ -1816,6 +1816,29 @@ class RequestBodyTooLargeError extends Error {
   }
 }
 
+// Recursively copy a value, dropping prototype-chain keys at EVERY depth so a
+// renderer-supplied free-form object can't inject __proto__/constructor/
+// prototype into stored state (and thence into later MCP/API responses).
+// Primitives pass through; recursion is depth-bounded against adversarial nesting.
+const PROTO_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+function sanitizeDeep(value, depth = 0) {
+  if (depth > 8) return Array.isArray(value) ? [] : (value && typeof value === 'object' ? {} : value);
+  if (Array.isArray(value)) return value.map((v) => sanitizeDeep(v, depth + 1));
+  if (!value || typeof value !== 'object') return value;
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (PROTO_POLLUTION_KEYS.has(k)) continue;
+    out[k] = sanitizeDeep(v, depth + 1);
+  }
+  return out;
+}
+// Entry for free-form object fields: non-objects collapse to {} (matching the
+// prior `typeof x === 'object' ? x : {}` default), objects are deep-sanitized.
+function stripProtoKeys(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+  return sanitizeDeep(obj);
+}
+
 async function readBody(req) {
   if (Object.prototype.hasOwnProperty.call(req, REQUEST_BODY_CACHE)) {
     return req[REQUEST_BODY_CACHE];
@@ -5959,7 +5982,7 @@ async function dispatch(requestUrl, req, routes, context) {
         const forecast = rawForecast ? {
           timestamp: typeof rawForecast.timestamp === 'number' ? rawForecast.timestamp : Date.now(),
           advisories: Array.isArray(rawForecast.advisories) ? rawForecast.advisories.slice(0, 20) : [],
-          pressure: rawForecast.pressure && typeof rawForecast.pressure === 'object' ? rawForecast.pressure : {},
+          pressure: stripProtoKeys(rawForecast.pressure),
         } : null;
         const safe = {
           timestamp: typeof body.timestamp === 'number' ? body.timestamp : Date.now(),
@@ -5971,8 +5994,8 @@ async function dispatch(requestUrl, req, routes, context) {
           entityCount: typeof body.entityCount === 'number' ? body.entityCount : 0,
           ghostMode: !!body.ghostMode,
           debugLog: Array.isArray(body.debugLog) ? body.debugLog.slice(-100) : [],
-          debugErrorCounts: body.debugErrorCounts && typeof body.debugErrorCounts === 'object' ? body.debugErrorCounts : {},
-          metrics: body.metrics && typeof body.metrics === 'object' ? body.metrics : null,
+          debugErrorCounts: stripProtoKeys(body.debugErrorCounts),
+          metrics: body.metrics && typeof body.metrics === 'object' ? stripProtoKeys(body.metrics) : null,
         };
         context._analystState = safe;
         return json({ ok: true });
@@ -6175,12 +6198,10 @@ async function dispatch(requestUrl, req, routes, context) {
         const raw = await readBody(req);
         const body = raw ? JSON.parse(raw.toString()) : null;
         if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'invalid body' }, 400);
-        // Allowlist spread: exclude __proto__, constructor, prototype and any
-        // other prototype-chain keys to prevent accidental property injection.
-        const PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-        const safeBody = Object.fromEntries(
-          Object.entries(body).filter(([k]) => !PROTO_KEYS.has(k))
-        );
+        // Exclude __proto__/constructor/prototype at every depth (not just the
+        // top level) to prevent prototype-chain injection from nested free-form
+        // objects in the pushed algorithm state.
+        const safeBody = sanitizeDeep(body);
         context._algorithmState[bucket] = { ...safeBody, _pushedAt: Date.now() };
         return json({ ok: true });
       } catch (error) {

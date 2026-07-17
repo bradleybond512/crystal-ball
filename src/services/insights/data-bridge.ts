@@ -88,7 +88,14 @@ export function bridgeWeatherAlertsToInsights(
   const log = options.log ?? _noop;
   const places = options.savedPlaces ?? getPersonalProfile().savedPlaces;
   const events: IncomingEvent[] = alerts.map((a) => alertToEvent(a));
-  setRecentEvents(events);
+  // Replace only the weather-alert slice — mirror the earthquake bridge.
+  // Events published by other bridges (earthquakes, the smoke callout's
+  // `smoke-*` event which also carries domain 'weather') must survive a
+  // weather refresh or they flicker out between their own refresh ticks.
+  const preserved = getRecentEvents().filter(
+    (e) => e.domain !== 'weather' || e.eventId.startsWith('smoke-'),
+  );
+  setRecentEvents([...preserved, ...events]);
 
   const situation = pickActiveSituation(alerts, places);
   setActiveSituation(situation);

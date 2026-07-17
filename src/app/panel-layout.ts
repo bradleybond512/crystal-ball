@@ -87,6 +87,7 @@ import { isHomeShellDefaultOn, isHomeShellAvailable, CLASSIC_VIEW_KEY } from '@/
 import { getCommandRegistry } from '@/services/command-palette/command-registry';
 import { registerBuiltinCommands } from '@/services/command-palette/built-in-commands';
 import { installPlaceCommands } from '@/services/command-palette/place-commands';
+import { installGuideCommands } from '@/services/command-palette/guide-commands';
 import { HelpOverlay } from '@/components/HelpOverlay';
 import { installShortcuts } from '@/services/keyboard/shortcut-bootstrap';
 import { startDockBadge } from '@/services/native/dock-badge';
@@ -1272,6 +1273,9 @@ export class PanelLayoutManager implements AppModule {
      document.dispatchEvent(new CustomEvent(name, detail === undefined ? undefined : { detail }));
    },
  });
+ installGuideCommands(getCommandRegistry(), (name, detail) =>
+   document.dispatchEvent(new CustomEvent(name, { detail })),
+ );
  this._onFocusPlace = (e: Event) => {
    const detail = (e as CustomEvent<{ lat?: number; lon?: number }>).detail;
    void this.navigateToPanel('map');

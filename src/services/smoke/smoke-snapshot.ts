@@ -8,7 +8,7 @@ import { categorizeUsAqi } from './aqi-category';
 import { computeSafeWindows, computeDaySummaries } from './safe-windows';
 import { rankCompass } from './clean-air-compass';
 import { adviseActivities } from './activity-guidance';
-import { avgNext6h, type ParsedAq } from './smoke-parse';
+import { avgNext6h, hasAqData, type ParsedAq } from './smoke-parse';
 
 export interface BuildInputs {
   place: { id: string; name: string; lat: number; lon: number };
@@ -42,13 +42,18 @@ export function buildSnapshot(inputs: BuildInputs): SmokeSnapshot {
     days: computeDaySummaries(home.hourly),
     compass: rankCompass(compassSamples, home.current.usAqi),
     activities: adviseActivities(category, sensitiveGroup),
-    sources: [{
-      id: 'smoke_forecast',
-      label: 'Open-Meteo air quality (satellite/model)',
-      ok: home.hourly.length > 0,
-      detail: home.hourly.length > 0 ? null : 'No forecast data returned',
-      updatedAt: now,
-    }],
+    sources: [(() => {
+      // Same rule as the fetcher: rows whose AQI values are all null are
+      // structure without data — the source must not read as OK.
+      const ok = hasAqData(home);
+      return {
+        id: 'smoke_forecast' as const,
+        label: 'Open-Meteo air quality (satellite/model)',
+        ok,
+        detail: ok ? null : 'No forecast data returned',
+        updatedAt: now,
+      };
+    })()],
     generatedAt: now,
   };
 }

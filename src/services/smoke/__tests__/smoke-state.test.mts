@@ -48,3 +48,16 @@ test('empty forecast → source not ok, honest detail', () => {
   assert.equal(snap.sources[0]!.ok, false);
   assert.match(snap.sources[0]!.detail ?? '', /no forecast/i);
 });
+
+test('all-null forecast rows → source not ok (matches fetcher fail-closed rule)', () => {
+  const snap = buildSnapshot({
+    place: { id: 'home', name: 'Home', lat: 41.6, lon: -86.7 },
+    home: { current: { usAqi: null, pm25: null }, hourly: [{ time: 't1', usAqi: null, pm25: null }, { time: 't2', usAqi: null, pm25: null }] },
+    compassParsed: [],
+    doneChecklistIds: [],
+    sensitiveGroup: false,
+    now: 0,
+  });
+  assert.equal(snap.sources[0]!.ok, false);
+  assert.match(snap.sources[0]!.detail ?? '', /no forecast/i);
+});

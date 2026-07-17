@@ -51,6 +51,7 @@ function el(tag: string, style?: string, text?: string): HTMLElement {
 
 export class AirSmokePanel extends Panel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private destroyed = false;
   private unsubscribe: (() => void) | null = null;
   private smokeAlerts: WeatherAlert[] = [];
 
@@ -74,6 +75,7 @@ export class AirSmokePanel extends Panel {
   }
 
   public override destroy(): void {
+    this.destroyed = true;
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
@@ -91,11 +93,14 @@ export class AirSmokePanel extends Panel {
     } catch {
       this.smokeAlerts = [];
     }
+    // refreshSmokeConditions() notifies our smoke subscription, which
+    // renders — no second explicit render (Codex P3: double work). The
+    // alerts-only case is covered because the subscriber fires every refresh.
     await refreshSmokeConditions();
-    this.render();
   }
 
   private render(): void {
+    if (this.destroyed) return; // late async resolutions must not touch the DOM
     const root = this.getContentElement();
     root.textContent = '';
     root.style.cssText = 'display:flex;flex-direction:column;gap:14px;padding:12px;';

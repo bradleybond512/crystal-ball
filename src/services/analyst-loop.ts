@@ -327,11 +327,20 @@ function persist(snapshot: AnalystSnapshot): void {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch { /* quota */ }
 }
 
+/** Minimal structural guard for a deserialized AnalystSnapshot. */
+function isValidAnalystSnapshot(v: unknown): v is AnalystSnapshot {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const s = v as Record<string, unknown>;
+  return typeof s['timestamp'] === 'number' && Array.isArray(s['hypotheses']);
+}
+
 /** Retrieve the last persisted snapshot, if any. */
 export function getAnalystSnapshot(): AnalystSnapshot | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) as AnalystSnapshot : null;
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isValidAnalystSnapshot(parsed) ? parsed : null;
   } catch { return null; }
 }
 

@@ -56,6 +56,10 @@ function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
  reject(upgrade.error ?? new Error('[alert-store] Upgrade open failed'));
  });
 
+ upgrade.addEventListener('blocked', () => {
+ reject(new Error('[alert-store] DB upgrade blocked by another open connection'));
+ });
+
  upgrade.addEventListener('upgradeneeded', (event) => {
  const db = (event.target as IDBOpenDBRequest).result;
 
@@ -280,11 +284,23 @@ class AlertDB {
 
  let all: UnifiedAlert[] | undefined;
  try {
+ if (opts?.since != null) {
+ // Use the 'timestamp' index + lowerBound to avoid a full table scan.
+ // Only rows with timestamp >= since are returned by IDB, cutting
+ // deserialization cost from the entire 30-day store to the query window.
+ const since = opts.since;
+ all = await withStore<UnifiedAlert[]>(
+ 'readonly',
+ (store) => store.index('timestamp').getAll(IDBKeyRange.lowerBound(since)),
+ true,
+ );
+ } else {
  all = await withStore<UnifiedAlert[]>(
  'readonly',
  (store) => store.getAll(),
  true,
  );
+ }
  } catch (error) {
  if (isUnavailableError(error)) return [];
  throw error;
@@ -292,9 +308,6 @@ class AlertDB {
 
  let results = all ?? [];
 
- if (opts?.since != null) {
- results = results.filter((a) => a.timestamp >= opts.since!);
- }
  if (opts?.source != null) {
  results = results.filter((a) => a.source === opts.source);
  }
@@ -480,9 +493,17 @@ export async function getAlertTrendStats(windowMs: number = SEVEN_DAYS_MS): Prom
   const currentSince = now - windowMs;
   const previousSince = now - 2 * windowMs;
 
+  // Two targeted index-range queries instead of two full table scans.
   const current = await alertDB.getAll({ since: currentSince });
-  const previousAll = await alertDB.getAll({ since: previousSince });
-  const previous = previousAll.filter((a) => a.timestamp < currentSince);
+  // Previous window: [previousSince, currentSince) — bounded index range
+  // avoids fetching current-window rows a second time.
+  const previous = await withStore<UnifiedAlert[]>(
+    'readonly',
+    (store) => store
+      .index('timestamp')
+      .getAll(IDBKeyRange.bound(previousSince, currentSince, false, true)),
+    true,
+  ).catch(() => [] as UnifiedAlert[]);
 
   const bySeverity: Record<AlertSeverity, number> = {
     critical: 0, high: 0, medium: 0, low: 0, info: 0,

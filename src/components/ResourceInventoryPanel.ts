@@ -27,7 +27,6 @@ import { isDesktopRuntime } from '@/services/runtime';
 
 const DB_NAME = 'crystalball-resources';
 const STORE_NAME = 'items';
-const DB_VERSION = 1;
 
 /** Single consumption event logged when user clicks "Use" or "Resupply". */
 export interface ConsumptionEvent {
@@ -54,15 +53,50 @@ export interface ResourceItem {
 
 let _db: IDBDatabase | null = null;
 
+function attachConn(conn: IDBDatabase, resolve: (db: IDBDatabase) => void): void {
+  _db = conn;
+  conn.addEventListener('close', () => { _db = null; });
+  // Another opener fires versionchange first — close so the upgrade is not blocked.
+  conn.addEventListener('versionchange', () => { conn.close(); _db = null; });
+  resolve(conn);
+}
+
+function openWithUpgradeRI(currentVersion: number): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, currentVersion + 1);
+    req.addEventListener('error', () => reject(req.error ?? new Error('[resource-db] upgrade failed')));
+    req.addEventListener('blocked', () => reject(new Error('[resource-db] upgrade blocked')));
+    req.addEventListener('upgradeneeded', () => {
+      if (!req.result.objectStoreNames.contains(STORE_NAME)) {
+        req.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    });
+    req.addEventListener('success', () => attachConn(req.result, resolve));
+  });
+}
+
 async function openDB(): Promise<IDBDatabase> {
   if (_db) return _db;
   return new Promise((resolve, reject) => {
- const req = indexedDB.open(DB_NAME, DB_VERSION);
- req.onupgradeneeded = () => {
- req.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
- };
- req.onsuccess = () => { _db = req.result; resolve(req.result); };
- req.onerror = () => reject(req.error);
+    // Open without a version first — never request a version lower than what
+    // survival-advisor may have already bumped crystalball-resources to.
+    const probe = indexedDB.open(DB_NAME);
+    probe.addEventListener('error', () => reject(probe.error ?? new Error('[resource-db] probe failed')));
+    probe.addEventListener('upgradeneeded', () => {
+      if (!probe.result.objectStoreNames.contains(STORE_NAME)) {
+        probe.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    });
+    probe.addEventListener('success', () => {
+      const conn = probe.result;
+      if (conn.objectStoreNames.contains(STORE_NAME)) {
+        attachConn(conn, resolve);
+        return;
+      }
+      const version = conn.version;
+      conn.close();
+      openWithUpgradeRI(version).then(resolve, reject);
+    });
   });
 }
 

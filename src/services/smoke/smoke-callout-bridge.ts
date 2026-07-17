@@ -69,32 +69,56 @@ export function mergeSmokeEvent(
   return { events: [...withoutSmoke, event], headlineSeverity: headline.severity, category: headline.category };
 }
 
+function fireNotification(body: string, sev: 'high' | 'critical'): void {
+  new Notification('Air quality — wildfire smoke', {
+    body,
+    tag: 'cb-smoke-callout',
+    requireInteraction: sev === 'critical',
+  });
+}
+
+let permissionRequested = false;
+
 function publishSmokeCallout(snapshots: readonly SmokeSnapshot[]): void {
   const snap = snapshots[0];
   const merged = mergeSmokeEvent(getRecentEvents(), snap, activeSmokeAlertCount, Date.now());
   setRecentEvents(merged.events);
 
-  // Edge-triggered native notification: fire only when the category rank
-  // worsens past what we last notified for; reset when below the floor.
+  // Edge memory tracks the DELIVERED rank (not merely observed) so a
+  // worsening blocked by quiet hours / thresholds retries on the next
+  // refresh once the gate opens, instead of being silently consumed.
   if (merged.headlineSeverity === null || merged.category === null) {
-    writeEdge(0);
+    writeEdge(0); // episode over — the next one notifies again
     return;
   }
   const rank = CATEGORY_RANK[merged.category];
   if (rank <= readEdge()) return;
   const sev = notifySeverity(merged.headlineSeverity);
-  if (!shouldNotify('wildfire', sev)) { writeEdge(rank); return; }
+  if (!shouldNotify('wildfire', sev)) return; // retry after quiet hours / settings change
+  const body =
+    merged.events.find((e) => e.eventId.startsWith('smoke-'))?.description ??
+    'Smoke conditions have worsened near your saved place.';
   try {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      const smoke = merged.events.find((e) => e.eventId.startsWith('smoke-'));
-      new Notification('Air quality — wildfire smoke', {
-        body: smoke?.description ?? 'Smoke conditions have worsened near your saved place.',
-        tag: 'cb-smoke-callout',
-        requireInteraction: sev === 'critical',
-      });
+    if (typeof Notification === 'undefined') { writeEdge(rank); return; } // never deliverable here
+    if (Notification.permission === 'granted') {
+      fireNotification(body, sev);
+      writeEdge(rank);
+      return;
     }
-  } catch { /* notifications unavailable in this environment */ }
-  writeEdge(rank);
+    if (Notification.permission === 'denied') { writeEdge(rank); return; } // user opted out
+    // permission === 'default': ask once per session; deliver on grant.
+    if (permissionRequested) return; // await the earlier prompt's outcome via a later refresh
+    permissionRequested = true;
+    Notification.requestPermission()
+      .then((perm) => {
+        if (perm === 'granted') fireNotification(body, sev);
+        // Granted → delivered; denied/dismissed → don't re-prompt this episode.
+        writeEdge(rank);
+      })
+      .catch(() => writeEdge(rank));
+  } catch {
+    writeEdge(rank); // notification API broken in this environment — don't loop
+  }
 }
 
 let started = false;

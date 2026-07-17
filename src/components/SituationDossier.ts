@@ -93,10 +93,17 @@ export class SituationDossier {
     this.subject = subject;
     this.showAllRunnersUp = false;
     this.refresh();
-    this.openState = true;
-    this.drawer.classList.add('hs-dossier--open');
-    this.scrim.classList.add('hs-dossier-scrim--open');
-    document.addEventListener('keydown', this.onKeydown, true);
+    // Only register the keydown listener and apply CSS classes the first time.
+    // If open() is called while already open (e.g. user taps a different
+    // briefing row), subject + content update above but we must not add a
+    // second capture-phase listener — close() only removes one, leaving
+    // orphaned listeners on every subsequent open/close cycle.
+    if (!this.openState) {
+      this.openState = true;
+      this.drawer.classList.add('hs-dossier--open');
+      this.scrim.classList.add('hs-dossier-scrim--open');
+      document.addEventListener('keydown', this.onKeydown, true);
+    }
 
     const location = getRecentEvents().find((e) => e.eventId === subject.id)?.location;
     if (location && this.opts.onLocate) this.opts.onLocate(location.latitude, location.longitude);

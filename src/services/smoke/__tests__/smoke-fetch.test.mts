@@ -31,3 +31,11 @@ test('avgNext6h averages available leading samples, null when none', () => {
   assert.equal(avgNext6h([{ time: 't', usAqi: 100, pm25: null }, { time: 't', usAqi: 200, pm25: null }]), 150);
   assert.equal(avgNext6h([{ time: 't', usAqi: null, pm25: null }]), null);
 });
+
+test('hasAqData: all-null rows are structure without data (fail-closed)', async () => {
+  const { hasAqData } = await import('../smoke-parse.ts');
+  assert.equal(hasAqData(parseOpenMeteoAq({ hourly: { time: ['t'], us_aqi: [null] } })), false);
+  assert.equal(hasAqData(parseOpenMeteoAq({})), false);
+  assert.equal(hasAqData(parseOpenMeteoAq(FIXTURE)), true);
+  assert.equal(hasAqData(parseOpenMeteoAq({ current: { us_aqi: 42 } })), true);
+});

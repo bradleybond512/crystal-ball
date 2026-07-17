@@ -32,6 +32,12 @@ export function parseOpenMeteoAq(raw: unknown): ParsedAq {
   };
 }
 
+/** True when the payload carries at least one real AQI value — rows whose
+ *  us_aqi are all null are structure without data and must not read as fresh. */
+export function hasAqData(parsed: ParsedAq): boolean {
+  return parsed.hourly.some((s) => s.usAqi !== null) || parsed.current.usAqi !== null;
+}
+
 /** Mean us_aqi of the first ≤6 samples with data; null if none have data. */
 export function avgNext6h(hourly: AqiSample[]): number | null {
   const vals = hourly.slice(0, 6).map((s) => s.usAqi).filter((v): v is number => v !== null);

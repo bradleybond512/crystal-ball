@@ -6,7 +6,7 @@
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';
 import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer } from '@deck.gl/layers';
-import { getSmokeSnapshots } from '@/services/smoke/smoke-state';
+import { getSmokeSnapshots, subscribeSmoke } from '@/services/smoke/smoke-state';
 import { categorizeUsAqi } from '@/services/smoke/aqi-category';
 import type { AqiCategory } from '@/services/smoke/smoke-types';
 
@@ -539,7 +539,9 @@ export class DeckGLMap {
   // lazily on first toggle (service-level caches handle refresh).
   private smokeOverlayPerimeters: import('@/services/wildfires/fire-intel-service').ActiveFirePerimeter[] = [];
   private smokeOverlayPlumes: import('@/services/wildfire-smoke').SmokePolygon[] = [];
-  private smokeOverlayLoadKicked = false;
+  private smokeOverlayLoadedAt = 0;
+  private smokeOverlayLoading = false;
+  private smokeOverlayUnsub: (() => void) | null = null;
   private techEvents: TechEventMarker[] = [];
   private flightDelays: AirportDelayAlert[] = [];
   private faaCameras: ScoredFAACamera[] = [];
@@ -2355,8 +2357,14 @@ export class DeckGLMap {
   }
 
   private ensureSmokeOverlayData(): void {
- if (this.smokeOverlayLoadKicked) return;
- this.smokeOverlayLoadKicked = true;
+ // AQI dots track the smoke engine — re-render whenever it refreshes.
+ this.smokeOverlayUnsub ??= subscribeSmoke(() => this.updateLayers());
+ // Re-read plume + perimeters when our copy is older than the service
+ // cache windows; a failed load leaves the timestamp unset so the next
+ // layer build retries instead of sticking stale-forever.
+ const RELOAD_MS = 10 * 60 * 1000;
+ if (this.smokeOverlayLoading || Date.now() - this.smokeOverlayLoadedAt < RELOAD_MS) return;
+ this.smokeOverlayLoading = true;
  void Promise.all([
  import('@/services/wildfires/fire-intel-service').then((m) => m.fetchActivePerimeters()),
  import('@/services/wildfire-smoke').then((m) => m.fetchWildfireSmoke()),
@@ -2364,9 +2372,11 @@ export class DeckGLMap {
  .then(([perimeters, smoke]) => {
  this.smokeOverlayPerimeters = perimeters;
  this.smokeOverlayPlumes = smoke.polygons ?? [];
+ this.smokeOverlayLoadedAt = Date.now();
  this.updateLayers();
  })
- .catch(() => { /* service caches surface errors via data-freshness */ });
+ .catch(() => { /* retry on a later layer build; freshness feed records the error */ })
+ .finally(() => { this.smokeOverlayLoading = false; });
   }
 
   private createAirSmokeLayers(): (ScatterplotLayer | PolygonLayer)[] {
@@ -6121,6 +6131,8 @@ export class DeckGLMap {
   }
 
   public destroy(): void {
+ this.smokeOverlayUnsub?.();
+ this.smokeOverlayUnsub = null;
  if (this._mapFpsTimerId !== null) {
  clearInterval(this._mapFpsTimerId);
  this._mapFpsTimerId = null;

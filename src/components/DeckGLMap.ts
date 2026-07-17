@@ -2372,7 +2372,13 @@ export class DeckGLMap {
  .then(([perimeters, smoke]) => {
  this.smokeOverlayPerimeters = perimeters;
  this.smokeOverlayPlumes = smoke.polygons ?? [];
+ // The services fail SOFT (resolve empty on upstream errors), so a
+ // both-empty result is treated as not-loaded and retried on the next
+ // build — ~150 fires are always active nationally, so genuinely-empty
+ // is implausible and the cost of re-asking the cached services is nil.
+ if (perimeters.length > 0 || this.smokeOverlayPlumes.length > 0) {
  this.smokeOverlayLoadedAt = Date.now();
+ }
  this.updateLayers();
  })
  .catch(() => { /* retry on a later layer build; freshness feed records the error */ })

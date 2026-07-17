@@ -110,7 +110,11 @@ export function routeBigEventToLadder(
   const at = now();
   const candidateId = options.candidateId ?? `bigEvent-${at}-${nextAutoId++}`;
   const urgency = mapTierToUrgency(result.tier);
-  const safetyCritical = result.tier === 'emergency' || result.tier === 'critical';
+  // Use a Set so adding a new SituationTier that warrants safety-critical
+  // treatment requires an explicit update here rather than silently passing
+  // through a two-term OR and inheriting non-critical behaviour.
+  const SAFETY_CRITICAL_TIERS = new Set<SituationTier>(['emergency', 'critical']);
+  const safetyCritical = SAFETY_CRITICAL_TIERS.has(result.tier);
 
   registry.register({
     candidateId,
@@ -230,7 +234,11 @@ function maybeDeferForAttention(
   if (nextWindow === undefined) return null; // No active window in 24h — dispatch now.
 
   // Defer: record as silent now; host is responsible for re-routing at nextWindow.
-  registry.suppress(candidateId, 'quiet-hours-no-bypass', at);
+  // Use 'attention-deferred' not 'quiet-hours-no-bypass': the suppression is
+  // due to low operator-model attention weight, not quiet-hours policy.
+  // Using the wrong code was making the diagnostics trace blame quiet hours
+  // for suppressions that had nothing to do with quiet-hours settings.
+  registry.suppress(candidateId, 'attention-deferred', at);
   return {
     candidateId,
     rung: 'silent',

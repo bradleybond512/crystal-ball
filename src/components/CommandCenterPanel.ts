@@ -25,6 +25,7 @@ import { getLiveDiagnosticsSnapshot } from '@/services/diagnostics/live-diagnost
 import { auditFeeds } from '@/services/diagnostics/sentinel-feed-audit';
 import {
   getActiveActionBrief,
+  getActiveSituation,
   getPersonalImpactReport,
   getProviderRedundancyReport,
   getRecentEvents,
@@ -78,6 +79,10 @@ import { mountLensBanner } from '@/services/intelligence/panel-lens-adapter';
 import { getLensContextService } from '@/services/intelligence/lens-context';
 import { buildShareBriefing, type ShareBriefingInput } from './share-briefing';
 import { buildSharePacket, selectFormat } from '@/services/insights/share-packet';
+import { allGuides, getGuide } from '@/services/survival-guide/guide-library';
+import { getCheckedIds, subscribe as subscribeChecklist } from '@/services/survival-guide/checklist-store';
+import { computeOverallReadiness } from '@/services/survival-guide/readiness-score';
+import { guidesForPlaybookCategory } from '@/services/survival-guide/guide-links';
 
 const REFRESH_MS = 10_000;
 
@@ -134,6 +139,7 @@ export class CommandCenterPanel extends Panel {
   private unsubscribeDisclosure: (() => void) | null = null;
   private detachLensBanner: (() => void) | null = null;
   private unsubscribeLens: (() => void) | null = null;
+  private unsubscribeChecklist: (() => void) | null = null;
   // Ask-the-data state lives in class fields so the 10 s re-render
   // doesn't wipe the typed question or the last answer.
   private askDraft = '';
@@ -162,6 +168,7 @@ export class CommandCenterPanel extends Panel {
     this.unsubscribeDisclosure = disclosureService.subscribe('command-center', () => this.render());
     this.detachLensBanner = mountLensBanner(this.content, 'command-center');
     this.unsubscribeLens = getLensContextService().subscribe(() => this.render());
+    this.unsubscribeChecklist = subscribeChecklist(() => this.render());
   }
 
   public override destroy(): void {
@@ -182,6 +189,8 @@ export class CommandCenterPanel extends Panel {
     this.detachLensBanner = null;
     this.unsubscribeLens?.();
     this.unsubscribeLens = null;
+    this.unsubscribeChecklist?.();
+    this.unsubscribeChecklist = null;
     super.destroy();
   }
 
@@ -270,6 +279,7 @@ export class CommandCenterPanel extends Panel {
         ${switcherRow}
         ${this.renderRiskHeadline(report.status, report.summary)}
         ${this.renderTopThings(concerning.slice(0, 3))}
+        ${this.renderReadinessRow()}
       </div>`;
     }
 
@@ -285,6 +295,7 @@ export class CommandCenterPanel extends Panel {
         ${this.renderActionBrief(actionBrief)}
         ${this.renderPersonalImpact(personalImpact.impacts)}
         ${this.renderTopThings(concerning)}
+        ${this.renderReadinessRow()}
         ${this.renderProviderRedundancy(redundancy)}
         ${this.renderWatchNext(feedAudit.entries.length, feedAudit.entries.filter((e) => e.level !== 'fresh' && e.level !== 'unknown').length)}
         ${this.renderRecommendations(report.recommendations)}
@@ -516,6 +527,17 @@ export class CommandCenterPanel extends Panel {
     </div>`;
   }
 
+  private renderReadinessRow(): string {
+    const overall = computeOverallReadiness(allGuides(), getCheckedIds());
+    const weak = overall.weakest ? getGuide(overall.weakest) : null;
+    const target = overall.weakest ?? '';
+    const weakText = weak ? ` · weakest: ${escapeHtml(weak.title)}` : '';
+    return `<button type="button" data-cc-open-guide="${target}" style="display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 12px;border:1px solid var(--border-subtle,#333);border-radius:8px;background:rgba(255,255,255,0.02);color:inherit;cursor:pointer;">
+      <span style="font-size:13px;">Preparedness ${overall.percent}%${weakText}</span>
+      <span style="opacity:0.6;font-size:12px;">Survival guide ›</span>
+    </button>`;
+  }
+
   private renderActionBrief(brief: ActionBrief | undefined): string {
     if (!brief) return '';
     const tierColor = ACTION_TIER_COLOR[brief.tier];
@@ -529,6 +551,12 @@ export class CommandCenterPanel extends Panel {
       : `<div style="font-size:11px;color:var(--text-secondary,#aaa);margin-top:6px;">
           <span style="text-transform:uppercase;letter-spacing:0.05em;">Watch next</span> · ${escapeHtml(brief.confirmingSources.slice(0, 4).join(', '))}
         </div>`;
+    const situationCat = getActiveSituation()?.category;
+    const briefGuideId = situationCat ? guidesForPlaybookCategory(situationCat)[0] : undefined;
+    const briefGuide = briefGuideId ? getGuide(briefGuideId) : undefined;
+    const guideLink = briefGuide
+      ? `<button type="button" data-cc-open-guide="${briefGuide.id}" style="margin-top:8px;font-size:12px;background:transparent;border:none;color:var(--accent,#4a9eff);cursor:pointer;padding:2px 0;">Full guide: ${escapeHtml(briefGuide.title)} →</button>`
+      : '';
     return `<div style="border:1px solid var(--border-subtle,#333);border-left:3px solid ${tierColor};border-radius:4px;padding:10px 12px;background:rgba(255,255,255,0.02);">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <span style="font-weight:700;font-size:13px;">${escapeHtml(brief.headline)}</span>
@@ -536,6 +564,7 @@ export class CommandCenterPanel extends Panel {
       </div>
       ${actions}
       ${watch}
+      ${guideLink}
     </div>`;
   }
 
@@ -792,6 +821,12 @@ export class CommandCenterPanel extends Panel {
     const target = e.target as HTMLElement;
     if (target.closest<HTMLElement>('[data-cc-action="copy-briefing"]')) {
       this._copyBriefing();
+      return;
+    }
+    const guideRow = target.closest<HTMLElement>('[data-cc-open-guide]');
+    if (guideRow) {
+      const guideId = guideRow.getAttribute('data-cc-open-guide') ?? undefined;
+      document.dispatchEvent(new CustomEvent('cb:open-survival-guide', { detail: { guideId } }));
       return;
     }
     if (target.closest<HTMLElement>('[data-action="add-place"]')) {

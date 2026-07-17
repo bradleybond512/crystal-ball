@@ -129,6 +129,7 @@ export function clearDismissed(): void {
 // ── Command application ─────────────────────────────────────────────────────
 
 let latestSnapshot: AnalystSnapshot | null = null;
+let _snapshotListener: ((e: Event) => void) | null = null;
 
 function findHypothesis(cmd: AnalystCommand): Hypothesis | null {
   if (!latestSnapshot) return null;
@@ -220,10 +221,11 @@ export function startAnalystCommandListener(): void {
   if (started) return;
   started = true;
   loadDismissed();
-  document.addEventListener('cb:analyst-hypotheses', (e: Event) => {
+  _snapshotListener = (e: Event) => {
     const ce = e as CustomEvent<AnalystSnapshot>;
     latestSnapshot = ce.detail;
-  });
+  };
+  document.addEventListener('cb:analyst-hypotheses', _snapshotListener);
   if (!isDesktopRuntime()) return;
   scheduleNext();
 }
@@ -233,5 +235,9 @@ export function stopAnalystCommandListener(): void {
   if (timer !== null) {
     clearTimeout(timer);
     timer = null;
+  }
+  if (_snapshotListener !== null) {
+    document.removeEventListener('cb:analyst-hypotheses', _snapshotListener);
+    _snapshotListener = null;
   }
 }

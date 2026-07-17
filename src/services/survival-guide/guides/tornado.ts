@@ -25,7 +25,7 @@ export const TORNADO_GUIDE: SurvivalGuide = {
     { label: 'Get to your safe room immediately', detail: 'Do not wait to see it. Put as many walls between you and the outside as possible.' },
     { label: 'Cover your head and neck', detail: 'Get under a sturdy table; cover with a mattress, blankets, or your arms.' },
     { label: 'If in a mobile home, get out', detail: 'Mobile homes offer almost no protection — go to a sturdy building or a designated shelter now.' },
-    { label: 'If caught driving, do not shelter under an overpass', detail: 'Overpasses accelerate wind. Either drive at right angles away from the tornado, or leave the car for a low-lying ditch and cover your head.' },
+    { label: 'If caught driving, get to a sturdy building — never shelter under an overpass', detail: 'Overpasses accelerate wind and offer no protection. Drive to the nearest sturdy shelter if you safely can. If you cannot, pull over, keep your seatbelt on, get your head down below the windows, and cover it — or, only if you can get noticeably lower than the roadway, leave the car and lie in that low spot covering your head.' },
   ],
   after: [
     { label: 'Stay put until the warning is lifted', detail: 'A second tornado can follow the first.' },

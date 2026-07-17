@@ -528,9 +528,12 @@ export class CommandCenterPanel extends Panel {
   }
 
   private renderReadinessRow(): string {
+    const started = getCheckedIds().size > 0;
     const overall = computeOverallReadiness(allGuides(), getCheckedIds());
-    const weak = overall.weakest ? getGuide(overall.weakest) : null;
-    const target = overall.weakest ?? '';
+    // Before any item is ticked every guide is 0% and `weakest` is just the
+    // first guide — link to the index in that case, not an arbitrary guide.
+    const weak = started && overall.weakest ? getGuide(overall.weakest) : null;
+    const target = weak ? weak.id : '';
     const weakText = weak ? ` · weakest: ${escapeHtml(weak.title)}` : '';
     return `<button type="button" data-cc-open-guide="${target}" style="display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 12px;border:1px solid var(--border-subtle,#333);border-radius:8px;background:rgba(255,255,255,0.02);color:inherit;cursor:pointer;">
       <span style="font-size:13px;">Preparedness ${overall.percent}%${weakText}</span>

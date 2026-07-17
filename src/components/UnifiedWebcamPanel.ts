@@ -767,7 +767,7 @@ export class UnifiedWebcamPanel extends Panel {
     caption.style.fontSize = '12px';
     caption.style.marginTop = '6px';
     caption.style.fontWeight = '600';
-    caption.style.color = media.playingInline ? '#3fb950' : '#8b949e';
+    caption.style.color = media.playingInline ? 'var(--sev-low, #3fb950)' : 'var(--text-tertiary, #8b949e)';
     caption.textContent = media.label;
     div.append(caption);
 
@@ -819,7 +819,7 @@ export class UnifiedWebcamPanel extends Panel {
     const btn = document.createElement('button');
     btn.textContent = label;
     btn.style.padding = '4px 10px';
-    btn.style.background = '#1f6feb';
+    btn.style.background = 'var(--accent, #1f6feb)';
     btn.style.color = '#fff';
     btn.style.border = 'none';
     btn.style.borderRadius = '3px';
@@ -845,7 +845,7 @@ export class UnifiedWebcamPanel extends Panel {
       m.style.width = '100%';
       m.style.maxWidth = '900px';
       m.style.borderRadius = '4px';
-      m.style.background = '#111';
+      m.style.background = 'var(--surface-1, #111)';
       m.style.aspectRatio = '16 / 9';
       m.style.objectFit = 'contain';
     };

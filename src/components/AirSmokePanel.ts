@@ -21,6 +21,7 @@ import {
   setSensitiveGroup,
 } from '@/services/smoke/smoke-state';
 import { fetchWeatherAlerts, type WeatherAlert } from '@/services/weather';
+import { setActiveSmokeAlertCount } from '@/services/smoke/smoke-callout-bridge';
 import { classifyHazard } from '@/services/weather/weather-threat-types';
 
 const REFRESH_MS = 30 * 60 * 1000;
@@ -93,6 +94,7 @@ export class AirSmokePanel extends Panel {
     } catch {
       this.smokeAlerts = [];
     }
+    setActiveSmokeAlertCount(this.smokeAlerts.length);
     // refreshSmokeConditions() notifies our smoke subscription, which
     // renders — no second explicit render (Codex P3: double work). The
     // alerts-only case is covered because the subscriber fires every refresh.

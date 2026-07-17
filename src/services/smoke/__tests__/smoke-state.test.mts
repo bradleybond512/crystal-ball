@@ -33,6 +33,8 @@ test('buildSnapshot composes current, windows, days, compass, activities', () =>
   assert.equal(snap.compass.at(-1)!.avgAqi6h, null);
   assert.equal(snap.activities.length, 6);
   assert.equal(snap.sources[0]!.id, 'smoke_forecast');
+  assert.equal(snap.checklist.find((i) => i.id === 'hvac-recirculate')!.done, true);
+  assert.ok(snap.cleanRoomScore.score0to100 > 0 && snap.cleanRoomScore.score0to100 < 100);
 });
 
 test('empty forecast → source not ok, honest detail', () => {

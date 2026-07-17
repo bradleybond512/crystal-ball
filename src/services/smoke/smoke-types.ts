@@ -106,6 +106,8 @@ export interface SmokeSnapshot {
   days: DaySummary[];
   compass: CompassSample[];
   activities: ActivityAdvice[];
+  checklist: ChecklistItem[];
+  cleanRoomScore: CleanRoomScore;
   sources: SmokeSourceStatus[];
   generatedAt: number;
 }

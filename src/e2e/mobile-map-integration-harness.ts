@@ -108,6 +108,7 @@ const layers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   ucdpEvents: false,
   displacement: false,
   climate: false,

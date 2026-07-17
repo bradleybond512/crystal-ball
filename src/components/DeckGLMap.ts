@@ -6,6 +6,20 @@
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Layer, LayersList, PickingInfo } from '@deck.gl/core';
 import { GeoJsonLayer, ScatterplotLayer, PathLayer, IconLayer, TextLayer, PolygonLayer } from '@deck.gl/layers';
+import { getSmokeSnapshots } from '@/services/smoke/smoke-state';
+import { categorizeUsAqi } from '@/services/smoke/aqi-category';
+import type { AqiCategory } from '@/services/smoke/smoke-types';
+
+/** EPA category colors as deck.gl RGBA — mirrors AirSmokePanel's palette. */
+const AQI_MAP_COLOR: Record<AqiCategory, [number, number, number, number]> = {
+  good: [63, 185, 80, 200],
+  moderate: [212, 167, 44, 200],
+  usg: [240, 136, 62, 210],
+  unhealthy: [255, 69, 58, 220],
+  very_unhealthy: [143, 63, 151, 220],
+  hazardous: [126, 0, 35, 230],
+  unknown: [139, 148, 158, 150],
+};
 import maplibregl from 'maplibre-gl';
 import Supercluster from 'supercluster';
 import type {
@@ -520,6 +534,12 @@ export class DeckGLMap {
   private serverBasesLoaded = false;
   private naturalEvents: NaturalEvent[] = [];
   private firmsFireData: { lat: number; lon: number; brightness: number; frp: number; confidence: number; region: string; acq_date: string; daynight: string }[] = [];
+  // Smoke & Air overlay (PR 4 of the smoke program): AQI sample dots come
+  // synchronously from the smoke engine snapshot; perimeters + HMS plume load
+  // lazily on first toggle (service-level caches handle refresh).
+  private smokeOverlayPerimeters: import('@/services/wildfires/fire-intel-service').ActiveFirePerimeter[] = [];
+  private smokeOverlayPlumes: import('@/services/wildfire-smoke').SmokePolygon[] = [];
+  private smokeOverlayLoadKicked = false;
   private techEvents: TechEventMarker[] = [];
   private flightDelays: AirportDelayAlert[] = [];
   private faaCameras: ScoredFAACamera[] = [];
@@ -1489,6 +1509,12 @@ export class DeckGLMap {
  layers.push(this.createFiresLayer());
  }
 
+ // Smoke & Air overlay — AQI field + HMS plume + NIFC fire perimeters
+ if (mapLayers.airSmoke) {
+ this.ensureSmokeOverlayData();
+ layers.push(...this.createAirSmokeLayers());
+ }
+
  // Iran events layer
  if (mapLayers.iranAttacks && this.iranEvents.length > 0) {
  layers.push(this.createIranEventsLayer());
@@ -2326,6 +2352,82 @@ export class DeckGLMap {
  },
  pickable: true,
  });
+  }
+
+  private ensureSmokeOverlayData(): void {
+ if (this.smokeOverlayLoadKicked) return;
+ this.smokeOverlayLoadKicked = true;
+ void Promise.all([
+ import('@/services/wildfires/fire-intel-service').then((m) => m.fetchActivePerimeters()),
+ import('@/services/wildfire-smoke').then((m) => m.fetchWildfireSmoke()),
+ ])
+ .then(([perimeters, smoke]) => {
+ this.smokeOverlayPerimeters = perimeters;
+ this.smokeOverlayPlumes = smoke.polygons ?? [];
+ this.updateLayers();
+ })
+ .catch(() => { /* service caches surface errors via data-freshness */ });
+  }
+
+  private createAirSmokeLayers(): (ScatterplotLayer | PolygonLayer)[] {
+ const layers: (ScatterplotLayer | PolygonLayer)[] = [];
+
+ // HMS smoke plume polygons — density-shaded gray.
+ if (this.smokeOverlayPlumes.length > 0) {
+ layers.push(new PolygonLayer({
+ id: 'air-smoke-plume-layer',
+ data: this.smokeOverlayPlumes,
+ getPolygon: (d: (typeof this.smokeOverlayPlumes)[0]) => d.coordinates,
+ getFillColor: (d: (typeof this.smokeOverlayPlumes)[0]) => {
+ if (d.density === 'Heavy') return [90, 90, 100, 110] as [number, number, number, number];
+ if (d.density === 'Medium') return [120, 120, 130, 80] as [number, number, number, number];
+ return [150, 150, 160, 55] as [number, number, number, number];
+ },
+ stroked: false,
+ pickable: true,
+ }));
+ }
+
+ // NIFC active fire perimeter centroids — sized by acreage.
+ if (this.smokeOverlayPerimeters.length > 0) {
+ layers.push(new ScatterplotLayer({
+ id: 'air-smoke-perimeter-layer',
+ data: this.smokeOverlayPerimeters,
+ getPosition: (d: (typeof this.smokeOverlayPerimeters)[0]) => [d.lon, d.lat],
+ getRadius: (d: (typeof this.smokeOverlayPerimeters)[0]) => 4000 + Math.min((d.acres ?? 0) * 2, 60_000),
+ getFillColor: [255, 69, 58, 170] as [number, number, number, number],
+ getLineColor: [255, 255, 255, 200] as [number, number, number, number],
+ lineWidthMinPixels: 1,
+ stroked: true,
+ radiusMinPixels: 4,
+ radiusMaxPixels: 26,
+ pickable: true,
+ }));
+ }
+
+ // AQI sample dots (home + cleaner-air compass ring), EPA category colors.
+ const snap = getSmokeSnapshots()[0];
+ if (snap) {
+ const samples: { lat: number; lon: number; aqi: number | null; label: string }[] = [
+ { lat: snap.lat, lon: snap.lon, aqi: snap.current.usAqi, label: snap.placeName },
+ ...snap.compass.map((c) => ({ lat: c.lat, lon: c.lon, aqi: c.avgAqi6h, label: `${c.direction} ${c.radiusMi} mi` })),
+ ];
+ layers.push(new ScatterplotLayer({
+ id: 'air-smoke-aqi-layer',
+ data: samples,
+ getPosition: (d: (typeof samples)[0]) => [d.lon, d.lat],
+ getRadius: 6000,
+ radiusMinPixels: 5,
+ radiusMaxPixels: 14,
+ getFillColor: (d: (typeof samples)[0]) => AQI_MAP_COLOR[categorizeUsAqi(d.aqi)],
+ getLineColor: [255, 255, 255, 220] as [number, number, number, number],
+ lineWidthMinPixels: 1,
+ stroked: true,
+ pickable: true,
+ }));
+ }
+
+ return layers;
   }
 
   private createIranEventsLayer(): ScatterplotLayer {
@@ -4283,6 +4385,7 @@ export class DeckGLMap {
  { key: 'techEvents', label: t('components.deckgl.layers.techEvents'), icon: '&#128197;' },
  { key: 'natural', label: t('components.deckgl.layers.naturalEvents'), icon: '&#127755;' },
  { key: 'fires', label: t('components.deckgl.layers.fires'), icon: '&#128293;' },
+ { key: 'airSmoke', label: 'Air & Smoke', icon: '&#128168;' },
  { key: 'dayNight', label: t('components.deckgl.layers.dayNight'), icon: '&#127763;' },
  ]
  : SITE_VARIANT === 'finance'
@@ -4352,6 +4455,7 @@ export class DeckGLMap {
  { key: 'cyberThreats', label: t('components.deckgl.layers.cyberThreats'), icon: '&#128737;' },
  { key: 'natural', label: t('components.deckgl.layers.naturalEvents'), icon: '&#127755;' },
  { key: 'fires', label: t('components.deckgl.layers.fires'), icon: '&#128293;' },
+ { key: 'airSmoke', label: 'Air & Smoke', icon: '&#128168;' },
  { key: 'waterways', label: t('components.deckgl.layers.strategicWaterways'), icon: '&#9875;' },
  { key: 'economic', label: t('components.deckgl.layers.economicCenters'), icon: '&#128176;' },
  { key: 'minerals', label: t('components.deckgl.layers.criticalMinerals'), icon: '&#128142;' },

@@ -583,6 +583,8 @@ export interface MapLayers {
   dayNight: boolean;
   // FAA Weather Cameras layer
   faaWeatherCams: boolean;
+  // Smoke & Air overlay (AQI field + HMS plume + NIFC perimeters)
+  airSmoke: boolean;
   // ADS-B live aircraft tracking layer
   adsb: boolean;
   // OSINT layers

@@ -108,6 +108,10 @@ export const FEED_CATALOG: FeedDefinition[] = [
   { id: 'ais', name: 'AISStream Vessels', category: 'maritime',
     endpoint: 'wss://stream.aisstream.io/v0/stream',
     pollIntervalMs: 30 * 1000, sourceId: 'ais', sidecarKey: 'ais' },
+  // ── Appended feeds (order-pinned above; append-only below) ────────────
+  { id: 'smoke-forecast', name: 'Smoke Forecast (Open-Meteo AQ)', category: 'air',
+    endpoint: 'https://air-quality-api.open-meteo.com/v1/air-quality',
+    pollIntervalMs: 30 * MIN, sourceId: 'smoke_forecast' },
 ];
 
 /** Spec-mandated minimum count — the panel wires up at least this many feeds. */

@@ -27,6 +27,7 @@
 
 import { h, replaceChildren } from '../utils/dom-utils';
 import type { WeatherDispatchDecision } from '../services/weather/weather-warning-router';
+import { guideForWeatherHazard } from '../services/survival-guide/guide-links';
 import {
   STORM_MODE_UI_STORAGE_KEY,
   ackRecordFor,
@@ -233,7 +234,7 @@ export class PersonalStormMode {
       decision.urgency?.watchWindow && decision.urgency.watchWindow.confirming.length > 0
         ? this.renderWatchWindow(decision.urgency.watchWindow)
         : null,
-      h('div', { className: 'cb-storm-mode__footer' }, whyLink),
+      h('div', { className: 'cb-storm-mode__footer' }, whyLink, this.renderFullGuideLink(decision)),
     );
   }
 
@@ -286,6 +287,21 @@ export class PersonalStormMode {
     }, 'Why did I get this?');
     btn.addEventListener('click', () => {
       this.callbacks.onShowDiagnostic?.(decision.alertId);
+    });
+    return btn;
+  }
+
+  private renderFullGuideLink(decision: WeatherDispatchDecision): HTMLElement | null {
+    const hazard = decision.payload?.primaryHazard;
+    const guideId = hazard ? guideForWeatherHazard(hazard) : undefined;
+    if (!guideId) return null;
+    const btn = h('button', {
+      className: 'cb-storm-mode__guide',
+      type: 'button',
+      'aria-label': 'Open the full survival guide for this hazard',
+    }, 'Full guide →');
+    btn.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('cb:open-survival-guide', { detail: { guideId } }));
     });
     return btn;
   }

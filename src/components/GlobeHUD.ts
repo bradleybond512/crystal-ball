@@ -795,6 +795,11 @@ export class GlobeHUD {
  }
   }
 
+  // Pre-measured constants eliminate forced layout reads after DOM writes
+  // in the Cesium MOUSE_MOVE hot path (up to 60 Hz).
+  private static readonly TOOLTIP_W = 220;
+  private static readonly TOOLTIP_H = 80;
+
   showTooltip(x: number, y: number, title: string, body: string): void {
  if (!this.tooltipEl) return;
  this.tooltipEl.replaceChildren();
@@ -806,8 +811,8 @@ export class GlobeHUD {
  bodyEl.textContent = body;
  this.tooltipEl.append(titleEl, bodyEl);
  const pad = 12;
- const w = this.tooltipEl.offsetWidth || 220;
- const h = this.tooltipEl.offsetHeight || 80;
+ const w = GlobeHUD.TOOLTIP_W;   // no forced layout read after DOM write
+ const h = GlobeHUD.TOOLTIP_H;
  const left = Math.min(x + 16, window.innerWidth - w - pad);
  const top = Math.min(y + 16, window.innerHeight - h - pad);
  this.tooltipEl.style.left = `${left}px`;

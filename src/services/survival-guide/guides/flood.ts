@@ -6,8 +6,8 @@ export const FLOOD_GUIDE: SurvivalGuide = {
   title: 'Flood',
   summary:
     'Rising or fast-moving water from heavy rain, storm surge, snowmelt, or a dam or ' +
-    'levee failure. Floods are the deadliest weather hazard in the US, and most flood ' +
-    'deaths happen in vehicles. Just 6 inches of moving water can knock an adult down; ' +
+    'levee failure. Flooding is among the most common and deadly weather hazards in the US, ' +
+    'and most flood deaths happen in vehicles. Just 6 inches of moving water can knock an adult down; ' +
     '12 inches can float and carry away a car. "Turn Around, Don\'t Drown."',
   signs: [
     'NWS Flood Watch (possible) or Flood/Flash Flood Warning (happening or imminent) for your area',

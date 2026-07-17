@@ -318,7 +318,11 @@ function pointToSegmentKm(p: Coord, a: Coord, b: Coord): number {
 
 function parseTimestamp(iso: string): number {
   const t = Date.parse(iso);
-  return Number.isFinite(t) ? t : 0;
+  // Return Infinity (never-expires sentinel) for empty/invalid ISO strings.
+  // Returning 0 caused msUntilExpires = 0 - now ≈ -1.7 trillion ms,
+  // misleadingly indicating the alert expired ~55 years ago and confusing
+  // any downstream consumer that gates on msUntilExpires < 0 for expiry.
+  return Number.isFinite(t) ? t : Infinity;
 }
 
 function finalize(partial: Omit<PolygonMatchResult, 'threatLevel'>): PolygonMatchResult {

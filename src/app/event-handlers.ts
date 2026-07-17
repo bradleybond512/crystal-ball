@@ -906,7 +906,7 @@ export class EventHandlerManager implements AppModule {
  liquidity: 0,
  }));
  this.ctx.latestPredictions = predictions;
- (this.ctx.panels.polymarket as PredictionPanel).renderPredictions(predictions);
+ (this.ctx.panels.polymarket as PredictionPanel)?.renderPredictions(predictions);
 
  this.ctx.map?.setHotspotLevels(snapshot.hotspotLevels);
   }

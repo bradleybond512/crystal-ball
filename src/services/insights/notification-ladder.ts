@@ -110,7 +110,11 @@ export function routeBigEventToLadder(
   const at = now();
   const candidateId = options.candidateId ?? `bigEvent-${at}-${nextAutoId++}`;
   const urgency = mapTierToUrgency(result.tier);
-  const safetyCritical = result.tier === 'emergency' || result.tier === 'critical';
+  // Use a Set so adding a new SituationTier that warrants safety-critical
+  // treatment requires an explicit update here rather than silently passing
+  // through a two-term OR and inheriting non-critical behaviour.
+  const SAFETY_CRITICAL_TIERS = new Set<SituationTier>(['emergency', 'critical']);
+  const safetyCritical = SAFETY_CRITICAL_TIERS.has(result.tier);
 
   registry.register({
     candidateId,

@@ -4401,7 +4401,7 @@ export class DeckGLMap {
  { key: 'techEvents', label: t('components.deckgl.layers.techEvents'), icon: '&#128197;' },
  { key: 'natural', label: t('components.deckgl.layers.naturalEvents'), icon: '&#127755;' },
  { key: 'fires', label: t('components.deckgl.layers.fires'), icon: '&#128293;' },
- { key: 'airSmoke', label: 'Air & Smoke', icon: '&#128168;' },
+ { key: 'airSmoke', label: 'Air & Smoke', icon: '💨' },
  { key: 'dayNight', label: t('components.deckgl.layers.dayNight'), icon: '&#127763;' },
  ]
  : SITE_VARIANT === 'finance'
@@ -4471,7 +4471,7 @@ export class DeckGLMap {
  { key: 'cyberThreats', label: t('components.deckgl.layers.cyberThreats'), icon: '&#128737;' },
  { key: 'natural', label: t('components.deckgl.layers.naturalEvents'), icon: '&#127755;' },
  { key: 'fires', label: t('components.deckgl.layers.fires'), icon: '&#128293;' },
- { key: 'airSmoke', label: 'Air & Smoke', icon: '&#128168;' },
+ { key: 'airSmoke', label: 'Air & Smoke', icon: '💨' },
  { key: 'waterways', label: t('components.deckgl.layers.strategicWaterways'), icon: '&#9875;' },
  { key: 'economic', label: t('components.deckgl.layers.economicCenters'), icon: '&#128176;' },
  { key: 'minerals', label: t('components.deckgl.layers.criticalMinerals'), icon: '&#128142;' },

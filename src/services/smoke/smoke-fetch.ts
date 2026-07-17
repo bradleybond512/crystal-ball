@@ -20,7 +20,13 @@ export async function fetchAqForPoint(lat: number, lon: number, forecastDays = 3
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) throw new Error(`open-meteo AQ ${res.status}`);
     const parsed = parseOpenMeteoAq(await res.json());
-    dataFreshness.recordUpdate('smoke_forecast', parsed.hourly.length > 0 ? 1 : 0);
+    // Fail-closed: an empty/malformed 200 must NOT clear errors or read as
+    // fresh — no data is never good data.
+    if (parsed.hourly.length === 0) {
+      dataFreshness.recordError('smoke_forecast', 'empty AQ payload');
+    } else {
+      dataFreshness.recordUpdate('smoke_forecast', parsed.hourly.length);
+    }
     return parsed;
   } catch (error) {
     dataFreshness.recordError('smoke_forecast', String(error));
@@ -45,7 +51,10 @@ export async function fetchAqForPoints(points: { lat: number; lon: number }[]): 
     const body: unknown = await res.json();
     const arr = Array.isArray(body) ? body : [body];
     const out = points.map((_, i) => (arr[i] ? parseOpenMeteoAq(arr[i]) : null));
-    dataFreshness.recordUpdate('smoke_forecast', out.filter(Boolean).length);
+    const withData = out.filter((p) => p !== null && p.hourly.length > 0).length;
+    // Fail-closed: a batch where nothing parsed to data is an error, not fresh.
+    if (withData === 0) dataFreshness.recordError('smoke_forecast', 'empty AQ batch payload');
+    else dataFreshness.recordUpdate('smoke_forecast', withData);
     return out;
   } catch (error) {
     dataFreshness.recordError('smoke_forecast', String(error));

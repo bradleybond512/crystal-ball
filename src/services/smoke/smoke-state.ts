@@ -56,6 +56,9 @@ let lastFetch: {
   home: ParsedAq;
   compass: { point: CompassPoint; parsed: ParsedAq | null }[];
   placeId: string;
+  /** When the data was actually fetched — snapshots generated from a cached
+   *  fetch keep this timestamp so staleness is never masked as fresh. */
+  fetchedAt: number;
 } | null = null;
 
 /** Refresh snapshots. withNetwork=false recomputes from cached fetches
@@ -80,11 +83,14 @@ export async function refreshSmokeConditions(withNetwork = true): Promise<void> 
         home,
         compass: points.map((point, i) => ({ point, parsed: ring[i] ?? null })),
         placeId: primary.id,
+        fetchedAt: Date.now(),
       };
     } catch {
-      // Keep the last snapshot — staleness shows via generatedAt + the
-      // smoke_forecast freshness feed (recorded inside the fetcher).
-      if (!lastFetch) return;
+      // Fetch failed. Only fall back to the cached fetch when it belongs to
+      // THIS place — never attach another place's air data to this one. With
+      // no usable cache, keep whatever snapshot is already displayed (its
+      // generatedAt + the smoke_forecast freshness feed surface the outage).
+      if (lastFetch?.placeId !== primary.id) return;
     }
   }
 
@@ -94,7 +100,8 @@ export async function refreshSmokeConditions(withNetwork = true): Promise<void> 
     compassParsed: lastFetch.compass,
     doneChecklistIds: getDoneChecklistIds(),
     sensitiveGroup: getSensitiveGroup(),
-    now: Date.now(),
+    // Data age, not render time — a rebuild from cache must read as stale.
+    now: lastFetch.fetchedAt,
   })];
   for (const l of listeners) l(snapshots);
 }

@@ -47,6 +47,7 @@ function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
  const request = indexedDB.open(DB_NAME, currentVersion + 1);
  request.addEventListener('error', () => reject(idbError(request.error, 'IndexedDB open failed')));
+ request.addEventListener('blocked', () => reject(new Error('[storage] DB upgrade blocked by another open connection')));
  request.onupgradeneeded = (event) => {
  createStores((event.target as IDBOpenDBRequest).result);
  };

@@ -86,19 +86,55 @@ interface ResourceItem {
 
 const DB_NAME = 'crystalball-resources';
 const STORE_NAME = 'items';
-const DB_VERSION = 1;
 const MAX_ITEMS = 5000;
 
-async function openResourceDB(): Promise<IDBDatabase> {
+let _resourceDb: IDBDatabase | null = null;
+
+function attachResourceConn(conn: IDBDatabase, resolve: (db: IDBDatabase) => void): void {
+  _resourceDb = conn;
+  conn.addEventListener('close', () => { _resourceDb = null; });
+  // ResourceInventoryPanel also holds a connection — close here on versionchange
+  // so we do not block the other opener's upgrade.
+  conn.addEventListener('versionchange', () => { conn.close(); _resourceDb = null; });
+  resolve(conn);
+}
+
+function openResourceDbWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
- const req = indexedDB.open(DB_NAME, DB_VERSION);
- req.onupgradeneeded = () => {
- if (!req.result.objectStoreNames.contains(STORE_NAME)) {
- req.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
- }
- };
- req.onsuccess = () => resolve(req.result);
- req.onerror = () => reject(req.error);
+    const req = indexedDB.open(DB_NAME, currentVersion + 1);
+    req.addEventListener('error', () => reject(req.error ?? new Error('[survival-advisor] DB upgrade failed')));
+    req.addEventListener('blocked', () => reject(new Error('[survival-advisor] DB upgrade blocked')));
+    req.addEventListener('upgradeneeded', () => {
+      if (!req.result.objectStoreNames.contains(STORE_NAME)) {
+        req.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    });
+    req.addEventListener('success', () => attachResourceConn(req.result, resolve));
+  });
+}
+
+async function openResourceDB(): Promise<IDBDatabase> {
+  if (_resourceDb) return _resourceDb;
+  return new Promise((resolve, reject) => {
+    // Open without a version first — never request a version lower than what
+    // ResourceInventoryPanel may have already bumped crystalball-resources to.
+    const probe = indexedDB.open(DB_NAME);
+    probe.addEventListener('error', () => reject(probe.error ?? new Error('[survival-advisor] DB probe failed')));
+    probe.addEventListener('upgradeneeded', () => {
+      if (!probe.result.objectStoreNames.contains(STORE_NAME)) {
+        probe.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    });
+    probe.addEventListener('success', () => {
+      const conn = probe.result;
+      if (conn.objectStoreNames.contains(STORE_NAME)) {
+        attachResourceConn(conn, resolve);
+        return;
+      }
+      const version = conn.version;
+      conn.close();
+      openResourceDbWithUpgrade(version).then(resolve, reject);
+    });
   });
 }
 

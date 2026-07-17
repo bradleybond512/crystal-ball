@@ -54,9 +54,16 @@ function getCacheDb(): Promise<IDBDatabase> {
       }
     });
 
+    request.addEventListener('blocked', () => {
+      cacheDbPromise = null;
+      reject(new Error('[persistent-cache] DB open blocked by another open connection'));
+    });
+
     request.addEventListener('success', () => {
       const db = request.result;
       db.addEventListener('close', () => { cacheDbPromise = null; });
+      // Close when a higher-version open arrives so the upgrade is not blocked.
+      db.addEventListener('versionchange', () => { db.close(); cacheDbPromise = null; });
       resolve(db);
     });
   });

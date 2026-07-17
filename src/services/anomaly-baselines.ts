@@ -8,6 +8,7 @@
  */
 
 import { unifiedAlertStore, type AlertSource, type UnifiedAlert } from './unified-alerts';
+import { debounce } from '../utils';
 
 const STORAGE_KEY = 'crystalball-anomaly-baselines-v1';
 const HOURS = 24 * 7; // 168 hour ring
@@ -117,7 +118,11 @@ export function startAnomalyBaselines(): void {
   load();
   // Seed with what's already in the store.
   observe(unifiedAlertStore.getAll());
-  unifiedAlertStore.subscribe(() => observe(unifiedAlertStore.getAll()));
+  const _debouncedObserve = debounce(
+    (() => observe(unifiedAlertStore.getAll())) as (...args: unknown[]) => void,
+    300,
+  );
+  unifiedAlertStore.subscribe(_debouncedObserve);
   // Periodic prune of seen-ids set to bound memory.
   window.setInterval(() => {
     if (seenIds.size > 5000) seenIds.clear();

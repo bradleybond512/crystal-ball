@@ -53,9 +53,11 @@ export function makeGranularTools(client) {
   }
 
   async function lookup_ip({ ip }) {
-    const greynoise = await client.get('/api/greynoise-lookup', { ip });
-    const abuseipdb = await client.get('/api/abuseipdb-reports', { ip });
-    const ipinfo = await client.get('/api/ipinfo-lookup', { ip });
+    const [greynoise, abuseipdb, ipinfo] = await Promise.all([
+      client.get('/api/greynoise-lookup', { ip }),
+      client.get('/api/abuseipdb-reports', { ip }),
+      client.get('/api/ipinfo-lookup', { ip }),
+    ]);
 
     const warnings = [];
     if (greynoise?.error) warnings.push(`greynoise: ${greynoise.error}`);

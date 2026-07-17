@@ -7607,22 +7607,19 @@ async function dispatch(requestUrl, req, routes, context) {
     const freightCacheKey = `freight-stress:${seriesParam.join(',')}`;
     const freightCached = getCached(freightCacheKey, FRED_TTL);
     if (freightCached) return json(freightCached);
-    const components = [];
-    for (const series of seriesParam) {
+    // Parallel FRED fetches — was: up to 5x12s=60s serial worst-case.
+    const components = await Promise.all(seriesParam.map(async (series) => {
       try {
         const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}`;
         const resp = await fetchWithTimeout(url, { headers: { Accept: 'text/csv' } }, 12_000);
-        if (!resp.ok) {
-          components.push({ series, error: `FRED ${resp.status}`, stressScore: 0, stressLevel: 'low' });
-          continue;
-        }
+        if (!resp.ok) return { series, error: `FRED ${resp.status}`, stressScore: 0, stressLevel: 'low' };
         const csv = await resp.text();
         const observations = parseFredCsvSidecar(csv);
-        components.push(computeFreightStressSidecar(series, observations));
+        return computeFreightStressSidecar(series, observations);
       } catch (error) {
-        components.push({ series, error: String(error?.message ?? error), stressScore: 0, stressLevel: 'low' });
+        return { series, error: String(error?.message ?? error), stressScore: 0, stressLevel: 'low' };
       }
-    }
+    }));
     let overallScore = 0;
     let asOf = null;
     for (const c of components) {
@@ -8128,6 +8125,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── OpenPhish phishing URL feed ──────────────────────────────────────────
   if (requestUrl.pathname === '/api/openphish-feed') {
+ const _opCached = getCached('openphish-feed', 15 * 60 * 1000);
+ if (_opCached) return json(_opCached);
  try {
  const resp = await fetchWithTimeout('https://openphish.com/feed.txt', {
  headers: { 'User-Agent': CHROME_UA },
@@ -8150,6 +8149,7 @@ async function dispatch(requestUrl, req, routes, context) {
  firstSeen: new Date().toISOString(),
  lastSeen: new Date().toISOString(),
  }));
+ setCached('openphish-feed', threats, 15 * 60 * 1000);
  return json(threats);
  } catch {
  return json([], 200);
@@ -8158,6 +8158,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Spamhaus DROP + EDROP blocklist ─────────────────────────────────────
   if (requestUrl.pathname === '/api/spamhaus-drop') {
+ const _spCached = getCached('spamhaus-drop', 60 * 60 * 1000);
+ if (_spCached) return json(_spCached);
  try {
  const [dropResp, edropResp] = await Promise.all([
  fetchWithTimeout('https://www.spamhaus.org/drop/drop.txt', { headers: { 'User-Agent': CHROME_UA } }, 12_000),
@@ -8186,6 +8188,7 @@ async function dispatch(requestUrl, req, routes, context) {
  lastSeen: '',
  };
  });
+ setCached('spamhaus-drop', threats, 60 * 60 * 1000);
  return json(threats);
  } catch {
  return json([], 200);
@@ -8194,6 +8197,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── CISA Known Exploited Vulnerabilities ─────────────────────────────────
   if (requestUrl.pathname === '/api/cisa-kev') {
+ const _kevCached = getCached('cisa-kev', 4 * 60 * 60 * 1000);
+ if (_kevCached) return json(_kevCached);
  try {
  const resp = await fetchWithTimeout(
  'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json',
@@ -8221,6 +8226,7 @@ async function dispatch(requestUrl, req, routes, context) {
  firstSeen: v.dateAdded ?? '',
  lastSeen: v.dueDate ?? v.dateAdded ?? '',
  }));
+ setCached('cisa-kev', threats, 4 * 60 * 60 * 1000);
  return json(threats);
  } catch {
  return json([], 200);
@@ -8299,6 +8305,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── PhishStats phishing database ─────────────────────────────────────────
   if (requestUrl.pathname === '/api/phishstats-feed') {
+ const _psCached = getCached('phishstats-feed', 30 * 60 * 1000);
+ if (_psCached) return json(_psCached);
  try {
  const resp = await fetchWithTimeout(
  'https://phishstats.info:2096/api/phishing?_sort=-date&_size=50',
@@ -8323,6 +8331,7 @@ async function dispatch(requestUrl, req, routes, context) {
  firstSeen: r.date ?? new Date().toISOString(),
  lastSeen: r.date ?? new Date().toISOString(),
  }));
+ setCached('phishstats-feed', threats, 30 * 60 * 1000);
  return json(threats);
  } catch {
  return json([], 200);

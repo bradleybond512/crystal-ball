@@ -280,11 +280,21 @@ class AlertDB {
 
  let all: UnifiedAlert[] | undefined;
  try {
+ if (opts?.since != null) {
+ // Use timestamp index + lowerBound to avoid full table scan.
+ const since = opts.since;
+ all = await withStore<UnifiedAlert[]>(
+ 'readonly',
+ (store) => store.index('timestamp').getAll(IDBKeyRange.lowerBound(since)),
+ true,
+ );
+ } else {
  all = await withStore<UnifiedAlert[]>(
  'readonly',
  (store) => store.getAll(),
  true,
  );
+ }
  } catch (error) {
  if (isUnavailableError(error)) return [];
  throw error;
@@ -292,9 +302,6 @@ class AlertDB {
 
  let results = all ?? [];
 
- if (opts?.since != null) {
- results = results.filter((a) => a.timestamp >= opts.since!);
- }
  if (opts?.source != null) {
  results = results.filter((a) => a.source === opts.source);
  }
@@ -481,8 +488,14 @@ export async function getAlertTrendStats(windowMs: number = SEVEN_DAYS_MS): Prom
   const previousSince = now - 2 * windowMs;
 
   const current = await alertDB.getAll({ since: currentSince });
-  const previousAll = await alertDB.getAll({ since: previousSince });
-  const previous = previousAll.filter((a) => a.timestamp < currentSince);
+  // Bounded range query for previous window avoids a second full scan.
+  const previous = await withStore<UnifiedAlert[]>(
+    'readonly',
+    (store) => store
+      .index('timestamp')
+      .getAll(IDBKeyRange.bound(previousSince, currentSince, false, true)),
+    true,
+  ).catch(() => [] as UnifiedAlert[]);
 
   const bySeverity: Record<AlertSeverity, number> = {
     critical: 0, high: 0, medium: 0, low: 0, info: 0,

@@ -447,6 +447,7 @@ const FULL_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: true,
   airstrikes: true,
@@ -531,6 +532,7 @@ const FULL_MOBILE_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -653,6 +655,7 @@ const TECH_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -735,6 +738,7 @@ const TECH_MOBILE_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -854,6 +858,7 @@ const FINANCE_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -936,6 +941,7 @@ const FINANCE_MOBILE_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -1034,6 +1040,7 @@ const HAPPY_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -1116,6 +1123,7 @@ const HAPPY_MOBILE_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   airstrikes: false,
@@ -1193,6 +1201,7 @@ export const LAYER_TO_SOURCE: Partial<Record<keyof MapLayers, DataSourceId[]>> =
   ucdpEvents: ['ucdp_events'],
   displacement: ['unhcr'],
   climate: ['climate'],
+  airSmoke: ['smoke_forecast'],
   faaWeatherCams: ['faa_weather_cams'],
   adsb: ['adsb'],
   acledEvents: ['acled'],

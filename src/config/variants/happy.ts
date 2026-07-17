@@ -43,6 +43,7 @@ export const DEFAULT_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   displacement: false,
@@ -126,6 +127,7 @@ export const MOBILE_DEFAULT_MAP_LAYERS: MapLayers = {
   spaceports: false,
   minerals: false,
   fires: false,
+  airSmoke: false,
   // Data source layers
   ucdpEvents: false,
   displacement: false,

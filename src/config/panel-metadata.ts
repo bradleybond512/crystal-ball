@@ -315,6 +315,7 @@ export const PANEL_METADATA: Record<string, PanelMeta> = {
   'pattern-of-life': { domain: 'analysis-situations', tags: ['life', 'pattern'], tier: 'library' },
   'personal-relevance': { domain: 'personal-safety', tags: ['personal', 'relevance'], tier: 'library' },
   'personal-resilience': { domain: 'personal-safety', tags: ['personal', 'resilience'], tier: 'library' },
+  'survival-guide': { domain: 'personal-safety', tags: ['survival', 'guide', 'preparedness', 'emergency', 'checklist', 'shelter', 'evacuation'], tier: 'library', featured: true, icon: '🧭', evidenceFor: ['severe_weather', 'wildfire', 'earthquake', 'conflict_escalation', 'grid_outage', 'disease_outbreak'] },
   'phishstats-feed': { domain: 'cyber-infrastructure', tags: ['feed', 'phishstats'], tier: 'library' },
   'pinned-webcams': { domain: 'news-osint', tags: ['pinned', 'webcams'], tier: 'library' },
   'playbook': { domain: 'analysis-situations', tags: ['playbook', 'playbooks', 'response'], tier: 'library' },

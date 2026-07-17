@@ -679,15 +679,6 @@ fn schedule_cache_flush(app: &AppHandle) {
  });
 }
 
-#[derive(Serialize)]
-struct DesktopRuntimeInfo {
- os: String,
- arch: String,
- local_api_port: Option<u16>,
- username: Option<String>,
- display_name: Option<String>,
-}
-
 fn humanize_user_name(value: &str) -> Option<String> {
  let mut parts = Vec::new();
  for raw in value.split(|c: char| c == '.' || c == '_' || c == '-' || c.is_whitespace()) {
@@ -998,7 +989,7 @@ fn end_activity_macos(_token: usize) {}
 
 #[tauri::command]
 fn set_always_on(state: tauri::State<AlwaysOnGuard>, enabled: bool) -> bool {
-    let mut held = state.0.lock().unwrap();
+    let mut held = state.0.lock().unwrap_or_else(|e| e.into_inner());
     if enabled && held.is_none() {
         *held = begin_activity_macos();
     } else if !enabled {
@@ -1007,26 +998,6 @@ fn set_always_on(state: tauri::State<AlwaysOnGuard>, enabled: bool) -> bool {
         }
     }
     held.is_some()
-}
-
-#[tauri::command]
-fn get_always_on(state: tauri::State<AlwaysOnGuard>) -> bool {
-    state.0.lock().unwrap().is_some()
-}
-
-#[tauri::command]
-fn get_desktop_runtime_info(webview: Webview, state: tauri::State<'_, LocalApiState>) -> Result<DesktopRuntimeInfo, String> {
- require_trusted_window(webview.label())?;
- let port = state.port.lock().ok().and_then(|g| *g);
- let username = resolve_runtime_user_name();
- let display_name = resolve_runtime_display_name(username.as_ref());
- Ok(DesktopRuntimeInfo {
- os: env::consts::OS.to_string(),
- arch: env::consts::ARCH.to_string(),
- local_api_port: port,
- username,
- display_name,
- })
 }
 
 #[tauri::command]
@@ -1619,34 +1590,6 @@ fn close_settings_window(app: AppHandle) -> Result<(), String> {
  window
  .close()
  .map_err(|e| format!("Failed to close settings window: {e}"))?;
- }
- Ok(())
-}
-
-#[tauri::command]
-async fn open_live_channels_window_command(
- webview: Webview,
- app: AppHandle,
- base_url: Option<String>,
-) -> Result<(), String> {
- require_trusted_window(webview.label())?;
- // The live-channels window loads `base_url` directly. Only permit the local
- // sidecar origin so a compromised renderer cannot point this trusted window at
- // an attacker-controlled host. Absent/empty falls through to bundled app content.
- if let Some(ref origin) = base_url {
- if !origin.is_empty() && !origin.starts_with("http://127.0.0.1:46123/") {
- return Err("Refusing live-channels base URL outside the local sidecar origin".to_string());
- }
- }
- open_live_channels_window(&app, base_url)
-}
-
-#[tauri::command]
-fn close_live_channels_window(app: AppHandle) -> Result<(), String> {
- if let Some(window) = app.get_webview_window("live-channels") {
- window
- .close()
- .map_err(|e| format!("Failed to close live channels window: {e}"))?;
  }
  Ok(())
 }
@@ -4016,13 +3959,11 @@ fn main() {
  get_secret,
  secrets_ready,
  set_always_on,
- get_always_on,
  set_secret,
  delete_secret,
  reload_secrets_from_keychain,
  get_local_api_token,
  get_local_api_port,
- get_desktop_runtime_info,
  read_cache_entry,
  write_cache_entry,
  delete_cache_entry,
@@ -4035,8 +3976,6 @@ fn main() {
  copy_diagnostics,
  open_settings_window_command,
  close_settings_window,
- open_live_channels_window_command,
- close_live_channels_window,
  open_url,
  open_system_prefs_location,
  get_native_location,
@@ -4144,7 +4083,7 @@ fn main() {
    .title_bar_style(TitleBarStyle::Overlay)
    .hidden_title(true);
  }
- main_builder.build().expect("failed to create main window");
+ main_builder.build().map_err(|e| format!("failed to create main window: {e}"))?;
 
  // Apply native macOS vibrancy (HudWindow material, 12pt rounded corners).
  // Pairs with `transparent: true` + `macOSPrivateApi: true` in tauri.conf.json

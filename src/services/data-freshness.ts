@@ -33,6 +33,7 @@ export type DataSourceId =
   | 'ucdp_events' // UCDP georeferenced conflict events
   | 'unhcr' // UNHCR displacement data
   | 'climate' // Climate anomaly data (Open-Meteo)
+  | 'smoke_forecast' // Open-Meteo air-quality forecast (smoke engine)
   | 'worldpop' // WorldPop population exposure
   | 'giving' // Global giving activity data
   | 'bis' // BIS central bank data
@@ -207,6 +208,7 @@ const SOURCE_METADATA: Record<DataSourceId, { name: string; requiredForRisk: boo
   ucdp_events: { name: 'UCDP Conflict Events', requiredForRisk: false, panelId: 'ucdp-events' },
   unhcr: { name: 'UNHCR Displacement', requiredForRisk: false, panelId: 'displacement' },
   climate: { name: 'Climate Anomalies', requiredForRisk: false, panelId: 'climate' },
+  smoke_forecast: { name: 'Smoke Forecast (Open-Meteo AQ)', requiredForRisk: false, panelId: 'air-smoke' },
   worldpop: { name: 'Population Exposure', requiredForRisk: false, panelId: 'population-exposure' },
   giving: { name: 'Global Giving Activity', requiredForRisk: false, panelId: 'giving' },
   bis: { name: 'BIS Central Banks', requiredForRisk: false, panelId: 'economic' },
@@ -603,6 +605,7 @@ const INTELLIGENCE_GAP_MESSAGES: Record<DataSourceId, string> = {
   ucdp_events: 'UCDP event-level conflict data unavailable',
   unhcr: 'UNHCR displacement data unavailable—refugee flows unknown',
   climate: 'Climate anomaly data unavailable—extreme weather patterns undetected',
+  smoke_forecast: 'Air-quality forecast unavailable—wildfire smoke conditions and safe windows unknown',
   worldpop: 'Population exposure data unavailable—affected population unknown',
   giving: 'Global giving activity data unavailable',
   bis: 'Central bank policy data may be stale—BIS feed unavailable',

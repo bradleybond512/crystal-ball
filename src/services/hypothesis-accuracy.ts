@@ -298,16 +298,18 @@ export function getKindAccuracy(): ReadonlyMap<Hypothesis['kind'], AccuracyStats
 
 let started = false;
 let graderTimer: ReturnType<typeof setInterval> | null = null;
+let _stampListener: ((e: Event) => void) | null = null;
 
 export function startHypothesisAccuracy(): void {
   if (started) return;
   started = true;
   load();
 
-  document.addEventListener('cb:analyst-hypotheses', (e: Event) => {
+  _stampListener = (e: Event) => {
     const ce = e as CustomEvent<AnalystSnapshot>;
     stamp(ce.detail);
-  });
+  };
+  document.addEventListener('cb:analyst-hypotheses', _stampListener);
 
   // Grade pending hypotheses every 10 minutes.
   graderTimer = setInterval(() => { gradeDue(); }, 10 * 60 * 1000);
@@ -319,5 +321,9 @@ export function stopHypothesisAccuracy(): void {
   if (graderTimer !== null) {
     clearInterval(graderTimer);
     graderTimer = null;
+  }
+  if (_stampListener !== null) {
+    document.removeEventListener('cb:analyst-hypotheses', _stampListener);
+    _stampListener = null;
   }
 }

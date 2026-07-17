@@ -232,7 +232,9 @@ export class EventHandlerManager implements AppModule {
  this.ctx.panelSettings = JSON.parse(e.newValue) as Record<string, PanelConfig>;
  this.applyPanelSettings();
  this.ctx.unifiedSettings?.refreshPanelToggles();
- } catch {}
+ } catch (err) {
+ console.warn('[event-handlers] panel settings parse failed — keeping prior state', err); // eslint-disable-line no-console
+ }
  }
  if (e.key === STORAGE_KEYS.liveChannels && e.newValue) {
  const panel = this.ctx.panels['live-news'];

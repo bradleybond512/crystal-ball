@@ -433,6 +433,9 @@ function cachedFetch(key, ttlMs, fetcher) {
       }
     }
     return data;
+  }).catch(err => {
+    _inflight.delete(key);
+    throw err;
   }).finally(() => _inflight.delete(key));
   _inflight.set(key, promise);
   return promise;
@@ -4319,6 +4322,7 @@ function dedupeInflight(key, fetcher) {
   if (existing) return existing;
   const promise = Promise.resolve()
     .then(() => fetcher())
+    .catch(err => { _sidecarInflight.delete(key); throw err; })
     .finally(() => { _sidecarInflight.delete(key); });
   _sidecarInflight.set(key, promise);
   return promise;
@@ -18333,7 +18337,12 @@ export async function createLocalApiServer(options = {}) {
         return;
       }
       const raw = await readBody(req);
-      const body = raw ? JSON.parse(raw.toString()) : null;
+      let body;
+      try {
+        body = raw ? JSON.parse(raw.toString()) : null;
+      } catch {
+        return sendJson({ error: 'invalid JSON body' }, 400);
+      }
       if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
       const created = createWatchboard(body);
       return sendJson({ watchboard: created }, 201);
@@ -18359,7 +18368,12 @@ export async function createLocalApiServer(options = {}) {
         return;
       }
       const raw = await readBody(req);
-      const body = raw ? JSON.parse(raw.toString()) : null;
+      let body;
+      try {
+        body = raw ? JSON.parse(raw.toString()) : null;
+      } catch {
+        return sendJson({ error: 'invalid JSON body' }, 400);
+      }
       if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
       const updated = updateWatchboard(wbId, body);
       if (!updated) return sendJson({ error: 'not found' }, 404);

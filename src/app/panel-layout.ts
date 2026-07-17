@@ -1235,6 +1235,9 @@ export class PanelLayoutManager implements AppModule {
  if (!text) return;
  markDigestShown();
  digestOverlay.show(text);
+ }).catch((err: unknown) => {
+ console.warn('[digest] proactive brief generation failed:', err); // eslint-disable-line no-console
+ digestOverlay.show('Brief unavailable.');
  });
  };
  const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
@@ -1247,6 +1250,9 @@ export class PanelLayoutManager implements AppModule {
    void generateDigest().then(text => {
      if (text) { markDigestShown(); digestOverlay.show(text); }
      else digestOverlay.show('No recent activity to summarize.');
+   }).catch((err: unknown) => {
+     console.warn('[digest] on-demand brief generation failed:', err); // eslint-disable-line no-console
+     digestOverlay.show('Brief unavailable — try again shortly.');
    });
  });
 

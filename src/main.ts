@@ -327,14 +327,18 @@ if (urlParams.get('settings') === '1') {
  await i18n.initI18n();
  m.initSettingsWindow();
  }
-  );
+  ).catch((err: unknown) => {
+ console.error('[boot] settings-window init failed:', err);
+  });
 } else if (urlParams.get('live-channels') === '1') {
   void Promise.all([import('./services/i18n'), import('./live-channels-window')]).then(
  async ([i18n, m]) => {
  await i18n.initI18n();
  m.initLiveChannelsWindow();
  }
-  );
+  ).catch((err: unknown) => {
+ console.error('[boot] live-channels-window init failed:', err);
+  });
 } else {
   const boot = async () => {
  const desktopRuntime = await waitForDesktopRuntimeSnapshot();

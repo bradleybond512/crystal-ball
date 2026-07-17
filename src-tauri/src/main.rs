@@ -998,7 +998,7 @@ fn end_activity_macos(_token: usize) {}
 
 #[tauri::command]
 fn set_always_on(state: tauri::State<AlwaysOnGuard>, enabled: bool) -> bool {
-    let mut held = state.0.lock().unwrap();
+    let mut held = state.0.lock().unwrap_or_else(|e| e.into_inner());
     if enabled && held.is_none() {
         *held = begin_activity_macos();
     } else if !enabled {
@@ -4144,7 +4144,7 @@ fn main() {
    .title_bar_style(TitleBarStyle::Overlay)
    .hidden_title(true);
  }
- main_builder.build().expect("failed to create main window");
+ main_builder.build().map_err(|e| format!("failed to create main window: {e}"))?;
 
  // Apply native macOS vibrancy (HudWindow material, 12pt rounded corners).
  // Pairs with `transparent: true` + `macOSPrivateApi: true` in tauri.conf.json

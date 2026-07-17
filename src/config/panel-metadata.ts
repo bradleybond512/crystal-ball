@@ -400,6 +400,7 @@ export const PANEL_METADATA: Record<string, PanelMeta> = {
   'stix-taxii': { domain: 'cyber-infrastructure', tags: ['feeds', 'stix', 'taxii'], tier: 'library', evidenceFor: ['cyber_campaign'] },
   'stoic-reflections': { domain: 'health-environment', tags: ['reflections', 'stoic'], tier: 'library' },
   'storm-posture': { domain: 'hazards-weather', tags: ['posture', 'storm'], tier: 'library', evidenceFor: ['severe_weather'] },
+  'air-smoke': { domain: 'hazards-weather', tags: ['air quality', 'aqi', 'smoke', 'wildfire'], tier: 'library', featured: true, evidenceFor: ['wildfire'] },
   'strategic-deception': { domain: 'security-crime', tags: ['deception', 'strategic', 'tracker'], tier: 'library' },
   'strategic-posture': { domain: 'analysis-situations', tags: ['ai', 'ai posture', 'posture', 'posture assessment', 'strategic', 'strategic posture'], tier: 'library', featured: true, icon: '\u{1F3AF}' },
   'strategic-risk': { domain: 'analysis-situations', tags: ['overview', 'risk', 'strategic', 'strategic risk', 'threat level'], tier: 'library', icon: '\u26A0\uFE0F' },

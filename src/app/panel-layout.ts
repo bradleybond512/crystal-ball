@@ -279,6 +279,7 @@ import { WaterQualityPanel } from '@/components/WaterQualityPanel';
 import { NuclearMonitorPanel } from '@/components/NuclearMonitorPanel';
 import { NotificationDigestPanel } from '@/components/NotificationDigestPanel';
 import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel';
+import { AirSmokePanel } from '@/components/AirSmokePanel';
 import { NotificationAuditPanel } from '@/components/NotificationAuditPanel';
 import { NotificationProvenancePanel } from '@/components/NotificationProvenancePanel';
 import { TrustBudgetPanel } from '@/components/TrustBudgetPanel';
@@ -1865,6 +1866,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['nuclear-monitor'] = new NuclearMonitorPanel();
  this.ctx.panels['notification-digest'] = new NotificationDigestPanel();
  this.ctx.panels['notification-history'] = new NotificationHistoryPanel();
+ this.ctx.panels['air-smoke'] = new AirSmokePanel();
  this.ctx.panels['notification-audit'] = new NotificationAuditPanel();
  this.ctx.panels['notification-provenance'] = new NotificationProvenancePanel();
  this.ctx.panels['trust-budget'] = new TrustBudgetPanel();

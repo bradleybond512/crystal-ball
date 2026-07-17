@@ -5788,6 +5788,10 @@ async function dispatch(requestUrl, req, routes, context) {
       heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
       ais_connected: aisState.socket?.readyState === 1,
       ais_vessels: aisState.vessels.size,
+      // keys_configured / keys_total provided as a count only — key names
+      // are intentionally omitted from the pre-auth response.
+      // keys_missing (the list of unconfigured key names) is only available
+      // via the authenticated /api/diagnostics endpoint.
       keys_configured: EXPECTED_API_KEYS.length - missing.length,
       keys_total: EXPECTED_API_KEYS.length,
       keys_missing_count: missing.length,
@@ -5943,10 +5947,24 @@ async function dispatch(requestUrl, req, routes, context) {
         if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
         if (!context._analystState) context._analystState = {};
         // Cap payload size defensively (drop unknown deeply-nested fields).
+        // analyst / forecast are validated to their known top-level shapes so
+        // arbitrary renderer-supplied keys don't propagate into MCP responses.
+        const rawAnalyst = body.analyst && typeof body.analyst === 'object' ? body.analyst : null;
+        const analyst = rawAnalyst ? {
+          timestamp: typeof rawAnalyst.timestamp === 'number' ? rawAnalyst.timestamp : Date.now(),
+          hypotheses: Array.isArray(rawAnalyst.hypotheses) ? rawAnalyst.hypotheses.slice(0, 20) : [],
+          aiEnriched: !!rawAnalyst.aiEnriched,
+        } : null;
+        const rawForecast = body.forecast && typeof body.forecast === 'object' ? body.forecast : null;
+        const forecast = rawForecast ? {
+          timestamp: typeof rawForecast.timestamp === 'number' ? rawForecast.timestamp : Date.now(),
+          advisories: Array.isArray(rawForecast.advisories) ? rawForecast.advisories.slice(0, 20) : [],
+          pressure: rawForecast.pressure && typeof rawForecast.pressure === 'object' ? rawForecast.pressure : {},
+        } : null;
         const safe = {
           timestamp: typeof body.timestamp === 'number' ? body.timestamp : Date.now(),
-          analyst: body.analyst ?? null,
-          forecast: body.forecast ?? null,
+          analyst,
+          forecast,
           accuracy: Array.isArray(body.accuracy) ? body.accuracy.slice(0, 20) : [],
           threads: Array.isArray(body.threads) ? body.threads.slice(0, 30) : [],
           hotEntities: Array.isArray(body.hotEntities) ? body.hotEntities.slice(0, 20) : [],
@@ -6156,8 +6174,14 @@ async function dispatch(requestUrl, req, routes, context) {
       try {
         const raw = await readBody(req);
         const body = raw ? JSON.parse(raw.toString()) : null;
-        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
-        context._algorithmState[bucket] = { ...body, _pushedAt: Date.now() };
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'invalid body' }, 400);
+        // Allowlist spread: exclude __proto__, constructor, prototype and any
+        // other prototype-chain keys to prevent accidental property injection.
+        const PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+        const safeBody = Object.fromEntries(
+          Object.entries(body).filter(([k]) => !PROTO_KEYS.has(k))
+        );
+        context._algorithmState[bucket] = { ...safeBody, _pushedAt: Date.now() };
         return json({ ok: true });
       } catch (error) {
         return json({ error: String(error?.message || error) }, 400);

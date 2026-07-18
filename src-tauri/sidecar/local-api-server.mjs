@@ -433,6 +433,9 @@ function cachedFetch(key, ttlMs, fetcher) {
       }
     }
     return data;
+  }).catch(err => {
+    _inflight.delete(key);
+    throw err;
   }).finally(() => _inflight.delete(key));
   _inflight.set(key, promise);
   return promise;
@@ -847,7 +850,8 @@ async function enrichFaaCamerasWithMetar(cameras) {
 const AISSTREAM_WS_URL = 'wss://stream.aisstream.io/v0/stream';
 const AIS_VESSEL_TTL_MS = 30 * 60 * 1000;
 const AIS_MAX_VESSELS = 20_000;
-const AIS_RECONNECT_DELAY_MS = 5_000;
+const AIS_RECONNECT_BASE_MS = 5_000;
+const AIS_RECONNECT_MAX_MS = 5 * 60_000; // cap at 5 minutes
 const AIS_NAVAL_PREFIX_RE = /^(USS|USNS|HMS|HMAS|HMCS|INS|JS|ROKS|TCG|FS|BNS|RFS|PLAN|PLA|CGC|PNS|KRI|ITS|SNS)/i;
 
 const aisState = {
@@ -858,6 +862,7 @@ const aisState = {
   // TTL so /api/dark-vessels can find vessels that have been silent 6-24h.
   darkHistory: new Map(),
   reconnectTimer: null,
+  reconnectAttempts: 0, // exponential-backoff counter; reset on successful open
   messageCount: 0,
   sequence: 0,
   lastSnapshotAt: 0,
@@ -960,6 +965,7 @@ function aisConnect(apiKey) {
   aisState.socket = socket;
 
   socket.onopen = () => {
+ aisState.reconnectAttempts = 0; // reset backoff on successful connection
  socket.send(JSON.stringify({
  APIKey: apiKey,
  BoundingBoxes: [[[-90, -180], [90, 180]]],
@@ -977,7 +983,14 @@ function aisConnect(apiKey) {
  aisState.socket = null;
  const currentKey = process.env.AISSTREAM_API_KEY;
  if (currentKey && currentKey === aisState.activeKey) {
- aisState.reconnectTimer = setTimeout(() => aisConnect(currentKey), AIS_RECONNECT_DELAY_MS);
+   // Exponential backoff with a 5-minute ceiling so a down server doesn't
+   // get hammered: 5s, 10s, 20s, 40s … 300s.
+   const delay = Math.min(
+     AIS_RECONNECT_BASE_MS * Math.pow(2, aisState.reconnectAttempts),
+     AIS_RECONNECT_MAX_MS,
+   );
+   aisState.reconnectAttempts++;
+   aisState.reconnectTimer = setTimeout(() => aisConnect(currentKey), delay);
  }
  }
   };
@@ -2277,11 +2290,11 @@ export const patreonStateStore = (() => {
 })();
 
 async function patreonTokenExchange(params) {
-  const res = await fetch('https://www.patreon.com/api/oauth2/token', {
+  const res = await fetchWithTimeout('https://www.patreon.com/api/oauth2/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams(params).toString(),
-  });
+  }, 15_000);
   if (!res.ok) throw new Error(`token HTTP ${res.status}`);
   return res.json();
 }
@@ -4319,6 +4332,7 @@ function dedupeInflight(key, fetcher) {
   if (existing) return existing;
   const promise = Promise.resolve()
     .then(() => fetcher())
+    .catch(err => { _sidecarInflight.delete(key); throw err; })
     .finally(() => { _sidecarInflight.delete(key); });
   _sidecarInflight.set(key, promise);
   return promise;
@@ -5809,9 +5823,9 @@ async function dispatch(requestUrl, req, routes, context) {
       return json({ error: 'Invalid channelId' }, 400, makeCorsHeaders(req));
     }
     try {
-      const up = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
+      const up = await fetchWithTimeout(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
         headers: { 'User-Agent': 'CrystalBall/1.0' },
-      });
+      }, 15_000);
       if (!up.ok) throw new Error(`HTTP ${up.status}`);
       const items = sidecarParseYoutubeChannelFeed(await up.text());
       recordFeedSuccess('s2-youtube');
@@ -5826,7 +5840,7 @@ async function dispatch(requestUrl, req, routes, context) {
     const rssUrl = process.env.PATREON_AUDIO_RSS_URL || '';
     if (!rssUrl) return json({ episodes: [], configured: false }, 200, makeCorsHeaders(req));
     try {
-      const up = await fetch(rssUrl, { headers: { 'User-Agent': 'CrystalBall/1.0' } });
+      const up = await fetchWithTimeout(rssUrl, { headers: { 'User-Agent': 'CrystalBall/1.0' } }, 15_000);
       if (!up.ok) throw new Error(`HTTP ${up.status}`);
       const episodes = sidecarParsePatreonAudioRss(await up.text());
       recordFeedSuccess('s2-patreon-audio');
@@ -5844,7 +5858,7 @@ async function dispatch(requestUrl, req, routes, context) {
     try {
       const url = 'https://www.patreon.com/api/oauth2/v2/identity?include=memberships'
         + '&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents';
-      const up = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const up = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, 12_000);
       if (up.status === 401) return json({ active: false, expired: true }, 200, makeCorsHeaders(req));
       if (!up.ok) throw new Error(`HTTP ${up.status}`);
       return json({ identity: await up.json(), campaignId, configured: true }, 200, makeCorsHeaders(req));
@@ -7322,6 +7336,7 @@ async function dispatch(requestUrl, req, routes, context) {
  },
  15_000,
  );
+ if (!resp.ok) return json({ error: `NewsAPI registration returned HTTP ${resp.status}` }, 502);
  const data = await resp.json();
  return json({ apiKey: data.apiKey ?? null, status: data.status, message: data.message });
  } catch {
@@ -7343,6 +7358,7 @@ async function dispatch(requestUrl, req, routes, context) {
  },
  15_000,
  );
+ if (!resp.ok) return json({ error: `NewsData registration returned HTTP ${resp.status}` }, 502);
  const data = await resp.json().catch(() => ({}));
  return json({ apiKey: data.apikey ?? data.api_key ?? null, message: data.message ?? '' });
  } catch {
@@ -7607,22 +7623,19 @@ async function dispatch(requestUrl, req, routes, context) {
     const freightCacheKey = `freight-stress:${seriesParam.join(',')}`;
     const freightCached = getCached(freightCacheKey, FRED_TTL);
     if (freightCached) return json(freightCached);
-    const components = [];
-    for (const series of seriesParam) {
+    // Parallel FRED fetches — was: up to 5x12s=60s serial worst-case.
+    const components = await Promise.all(seriesParam.map(async (series) => {
       try {
         const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}`;
         const resp = await fetchWithTimeout(url, { headers: { Accept: 'text/csv' } }, 12_000);
-        if (!resp.ok) {
-          components.push({ series, error: `FRED ${resp.status}`, stressScore: 0, stressLevel: 'low' });
-          continue;
-        }
+        if (!resp.ok) return { series, error: `FRED ${resp.status}`, stressScore: 0, stressLevel: 'low' };
         const csv = await resp.text();
         const observations = parseFredCsvSidecar(csv);
-        components.push(computeFreightStressSidecar(series, observations));
+        return computeFreightStressSidecar(series, observations);
       } catch (error) {
-        components.push({ series, error: String(error?.message ?? error), stressScore: 0, stressLevel: 'low' });
+        return { series, error: String(error?.message ?? error), stressScore: 0, stressLevel: 'low' };
       }
-    }
+    }));
     let overallScore = 0;
     let asOf = null;
     for (const c of components) {
@@ -8128,6 +8141,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── OpenPhish phishing URL feed ──────────────────────────────────────────
   if (requestUrl.pathname === '/api/openphish-feed') {
+ const _opCached = getCached('openphish-feed', 15 * 60 * 1000);
+ if (_opCached) return json(_opCached);
  try {
  const resp = await fetchWithTimeout('https://openphish.com/feed.txt', {
  headers: { 'User-Agent': CHROME_UA },
@@ -8150,6 +8165,7 @@ async function dispatch(requestUrl, req, routes, context) {
  firstSeen: new Date().toISOString(),
  lastSeen: new Date().toISOString(),
  }));
+ setCached('openphish-feed', threats, 15 * 60 * 1000);
  return json(threats);
  } catch {
  return json([], 200);
@@ -8158,6 +8174,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Spamhaus DROP + EDROP blocklist ─────────────────────────────────────
   if (requestUrl.pathname === '/api/spamhaus-drop') {
+ const _spCached = getCached('spamhaus-drop', 60 * 60 * 1000);
+ if (_spCached) return json(_spCached);
  try {
  const [dropResp, edropResp] = await Promise.all([
  fetchWithTimeout('https://www.spamhaus.org/drop/drop.txt', { headers: { 'User-Agent': CHROME_UA } }, 12_000),
@@ -8186,6 +8204,7 @@ async function dispatch(requestUrl, req, routes, context) {
  lastSeen: '',
  };
  });
+ setCached('spamhaus-drop', threats, 60 * 60 * 1000);
  return json(threats);
  } catch {
  return json([], 200);
@@ -8194,6 +8213,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── CISA Known Exploited Vulnerabilities ─────────────────────────────────
   if (requestUrl.pathname === '/api/cisa-kev') {
+ const _kevCached = getCached('cisa-kev', 4 * 60 * 60 * 1000);
+ if (_kevCached) return json(_kevCached);
  try {
  const resp = await fetchWithTimeout(
  'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json',
@@ -8221,6 +8242,7 @@ async function dispatch(requestUrl, req, routes, context) {
  firstSeen: v.dateAdded ?? '',
  lastSeen: v.dueDate ?? v.dateAdded ?? '',
  }));
+ setCached('cisa-kev', threats, 4 * 60 * 60 * 1000);
  return json(threats);
  } catch {
  return json([], 200);
@@ -8299,6 +8321,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── PhishStats phishing database ─────────────────────────────────────────
   if (requestUrl.pathname === '/api/phishstats-feed') {
+ const _psCached = getCached('phishstats-feed', 30 * 60 * 1000);
+ if (_psCached) return json(_psCached);
  try {
  const resp = await fetchWithTimeout(
  'https://phishstats.info:2096/api/phishing?_sort=-date&_size=50',
@@ -8323,6 +8347,7 @@ async function dispatch(requestUrl, req, routes, context) {
  firstSeen: r.date ?? new Date().toISOString(),
  lastSeen: r.date ?? new Date().toISOString(),
  }));
+ setCached('phishstats-feed', threats, 30 * 60 * 1000);
  return json(threats);
  } catch {
  return json([], 200);
@@ -8604,6 +8629,9 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!apiKey) return json({ error: 'NEWSAPI_KEY not configured' }, 503);
  const q = requestUrl.searchParams.get('q') ?? 'geopolitics';
  const pageSize = Math.min(20, parseInt(requestUrl.searchParams.get('pageSize') ?? '10', 10));
+ const _newsCacheKey = `newsapi:${q}:${pageSize}`;
+ const _newsCached = getCached(_newsCacheKey, 10 * 60 * 1000);
+ if (_newsCached) return json(_newsCached);
  try {
  const params = new URLSearchParams({ q, pageSize: String(pageSize), language: 'en', sortBy: 'publishedAt', apiKey });
  const resp = await fetchWithTimeout(
@@ -8623,6 +8651,7 @@ async function dispatch(requestUrl, req, routes, context) {
  description: a.description ?? '',
  imageUrl: a.urlToImage ?? undefined,
  }));
+ setCached(_newsCacheKey, items, 10 * 60 * 1000);
  return json(items);
  } catch {
  return json([], 200);
@@ -8634,6 +8663,9 @@ async function dispatch(requestUrl, req, routes, context) {
  const apiKey = process.env.NEWSDATA_API_KEY;
  if (!apiKey) return json({ error: 'NEWSDATA_API_KEY not configured' }, 503);
  const q = requestUrl.searchParams.get('q') ?? 'world news';
+ const _ndCacheKey = `newsdata:${q}`;
+ const _ndCached = getCached(_ndCacheKey, 10 * 60 * 1000);
+ if (_ndCached) return json(_ndCached);
  try {
  const params = new URLSearchParams({ apikey: apiKey, q, language: 'en' });
  const resp = await fetchWithTimeout(
@@ -8653,6 +8685,7 @@ async function dispatch(requestUrl, req, routes, context) {
  description: a.description ?? '',
  imageUrl: a.image_url ?? undefined,
  }));
+ setCached(_ndCacheKey, items, 10 * 60 * 1000);
  return json(items);
  } catch {
  return json([], 200);
@@ -8661,6 +8694,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── USGS Volcano Hazards Program alerts ─────────────────────────────────
   if (requestUrl.pathname === '/api/volcano-alerts') {
+ const _volcCached = getCached('volcano-alerts', 30 * 60 * 1000);
+ if (_volcCached) return json(_volcCached);
  try {
  const resp = await fetchWithTimeout(
  'https://volcanoes.usgs.gov/vsc/api/volcanoApi/volcanoesGet',
@@ -8688,6 +8723,7 @@ async function dispatch(requestUrl, req, routes, context) {
  updatedAt: v.activityChangedDate ?? v.updatedAt ?? '',
  observatory: v.observatoryName ?? v.observatory ?? '',
  }));
+ setCached('volcano-alerts', alerts, 30 * 60 * 1000);
  return json(alerts);
  } catch {
  return json([], 200);
@@ -8944,6 +8980,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Weather hazards: severity-filtered NWS alerts (PR 1) ─────────────────
   if (requestUrl.pathname === '/api/weather/alerts') {
+    const _waCached = getCached('weather-alerts-hazards', 60 * 1000);
+    if (_waCached) return json(_waCached);
     try {
       const resp = await fetchWithTimeout(
         'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update',
@@ -8981,6 +9019,7 @@ async function dispatch(requestUrl, req, routes, context) {
           category: alertCategoryFor(ev),
         });
       }
+      setCached('weather-alerts-hazards', out, 60 * 1000);
       return json(out);
     } catch {
       return json([], 200);
@@ -9922,6 +9961,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Space Weather proxy (NOAA SWPC, no API key) ───────────────────────────
   if (requestUrl.pathname === '/api/space-weather-feeds') {
+ const _swCached = getCached('space-weather-feeds', 5 * 60 * 1000);
+ if (_swCached) return json(_swCached);
  const SW_URLS = {
  kp: 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json',
  mag: 'https://services.swpc.noaa.gov/products/solar-wind/mag-5-minute.json',
@@ -9940,6 +9981,7 @@ async function dispatch(requestUrl, req, routes, context) {
  result[key] = (r.status === 'fulfilled' && r.value.ok) ? await r.value.json() : null;
  }
  trackSuccess('swpc', 'primary');
+ setCached('space-weather-feeds', result, 5 * 60 * 1000);
  return json(result);
  } catch (error) {
  trackFailure('swpc', error);
@@ -9949,6 +9991,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── NASA DONKI space weather events ─────────────────────────────────────
   if (requestUrl.pathname === '/api/donki-events') {
+ const _donkiCached = getCached('donki-events', 15 * 60 * 1000);
+ if (_donkiCached) return json(_donkiCached);
  const apiKey = process.env.NASA_API_KEY ?? 'DEMO_KEY';
  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
  const today = new Date().toISOString().slice(0, 10);
@@ -10019,7 +10063,9 @@ async function dispatch(requestUrl, req, routes, context) {
  }
  }
  events.sort((a, b) => new Date(b.startTime ?? 0).getTime() - new Date(a.startTime ?? 0).getTime());
- return json(events.slice(0, 30));
+ const _donkiResult = events.slice(0, 30);
+ setCached('donki-events', _donkiResult, 15 * 60 * 1000);
+ return json(_donkiResult);
  } catch {
  return json([], 200);
  }
@@ -10546,6 +10592,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Macro signals (Market Radar) via alternative.me + Stooq ─────────────
   if (requestUrl.pathname === '/api/macro-signals') {
+ const _msCached = getCached('macro-signals', 5 * 60 * 1000);
+ if (_msCached) return json(_msCached);
  try {
  // Fetch Fear & Greed (alternative.me) + market prices (Stooq) in parallel
  const [fngResp, pricesResp] = await Promise.allSettled([
@@ -10590,14 +10638,16 @@ async function dispatch(requestUrl, req, routes, context) {
  const totalCount = Object.values(signals).filter(s => s !== null).length;
  const verdict = bullishCount / totalCount > 0.6 ? 'BULLISH' : (bullishCount / totalCount < 0.4 ? 'BEARISH' : 'NEUTRAL');
 
- return json({
+ const _msResult = {
  timestamp: new Date().toISOString(),
  verdict,
  bullishCount,
  totalCount,
  unavailable: false,
  signals,
- });
+ };
+ setCached('macro-signals', _msResult, 5 * 60 * 1000);
+ return json(_msResult);
  } catch (error) {
  return json({ timestamp: new Date().toISOString(), verdict: 'UNAVAILABLE', bullishCount: 0, totalCount: 0, unavailable: true, signals: null, error: String(error.message ?? error) });
  }
@@ -10607,6 +10657,9 @@ async function dispatch(requestUrl, req, routes, context) {
   if (requestUrl.pathname === '/api/market-quotes') {
  const symbols = (requestUrl.searchParams.get('symbols') || '').split(',').map(s => s.trim()).filter(Boolean);
  if (symbols.length === 0) return json({ quotes: [] });
+ const _mqCacheKey = `market-quotes:${[...symbols].sort().join(',')}`;
+ const _mqCached = getCached(_mqCacheKey, 60 * 1000);
+ if (_mqCached) return json(_mqCached);
 
  // Try Finnhub first if key is set (higher precision, real-time)
  const finnhubKey = process.env.FINNHUB_API_KEY;
@@ -10626,7 +10679,11 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch { return { symbol: sym, price: null, change: null }; }
  }));
  const valid = quotes.filter(q => q.price !== null);
- if (valid.length > 0) return json({ quotes, source: 'finnhub' });
+ if (valid.length > 0) {
+   const _mqFinnhubResult = { quotes, source: 'finnhub' };
+   setCached(_mqCacheKey, _mqFinnhubResult, 60 * 1000);
+   return json(_mqFinnhubResult);
+ }
  } catch { /* fall through to Stooq */ }
  }
 
@@ -10669,7 +10726,9 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch { /* leave VIX null */ }
  }
 
- return json({ quotes, source: 'stooq' });
+ const _mqStooqResult = { quotes, source: 'stooq' };
+ setCached(_mqCacheKey, _mqStooqResult, 60 * 1000);
+ return json(_mqStooqResult);
  } catch (error) {
  return json({ quotes: symbols.map(sym => ({ symbol: sym, price: null, change: null })), error: String(error.message ?? error) });
  }
@@ -10677,6 +10736,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Stock fusion source A: Finnhub (keyed; proven in the market panel) ────
   if (requestUrl.pathname === '/api/stocks-finnhub') {
+ const _sfCached = getCached('stocks-finnhub', 60 * 1000);
+ if (_sfCached) return json(_sfCached);
  const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
  const finnhubKey = process.env.FINNHUB_API_KEY;
  if (!finnhubKey) return json({ quotes: [], degraded: true, error: 'no Finnhub key' });
@@ -10695,7 +10756,9 @@ async function dispatch(requestUrl, req, routes, context) {
  if (Number.isFinite(price) && price > 0) quotes.push({ symbol: sym, price });
  }
  if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'no Finnhub prices' });
- return json({ quotes });
+ const _sfResult = { quotes };
+ setCached('stocks-finnhub', _sfResult, 60 * 1000);
+ return json(_sfResult);
  } catch (error) {
  return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
  }
@@ -10703,6 +10766,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── Stock fusion source B: Yahoo Finance chart (no key) ──────────────────
   if (requestUrl.pathname === '/api/stocks-yahoo') {
+ const _syCached = getCached('stocks-yahoo', 60 * 1000);
+ if (_syCached) return json(_syCached);
  const SYMS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'SPY'];
  try {
  const results = await Promise.allSettled(SYMS.map((s) =>
@@ -10719,7 +10784,9 @@ async function dispatch(requestUrl, req, routes, context) {
  if (Number.isFinite(price) && price > 0) quotes.push({ symbol: sym, price });
  }
  if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'no Yahoo prices' });
- return json({ quotes });
+ const _syResult = { quotes };
+ setCached('stocks-yahoo', _syResult, 60 * 1000);
+ return json(_syResult);
  } catch (error) {
  return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
  }
@@ -10728,6 +10795,9 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── Crypto quotes via CoinGecko ───────────────────────────────────────────
   if (requestUrl.pathname === '/api/crypto-quotes') {
  const ids = (requestUrl.searchParams.get('ids') || 'bitcoin,ethereum,solana,ripple');
+ const _cqCacheKey = `crypto-quotes:${ids}`;
+ const _cqCached = getCached(_cqCacheKey, 60 * 1000);
+ if (_cqCached) return json(_cqCached);
  try {
  const r = await fetchWithTimeout(
  `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=usd&include_24hr_change=true`,
@@ -10744,7 +10814,9 @@ async function dispatch(requestUrl, req, routes, context) {
  change: d?.usd_24h_change == undefined ? null : Number.parseFloat(d.usd_24h_change.toFixed(2)),
  };
  });
- return json({ quotes });
+ const _cqResult = { quotes };
+ setCached(_cqCacheKey, _cqResult, 60 * 1000);
+ return json(_cqResult);
  } catch (error) {
  return json({ quotes: [], error: String(error.message ?? error) });
  }
@@ -10754,6 +10826,8 @@ async function dispatch(requestUrl, req, routes, context) {
   // Coinbase (not Binance global, which returns HTTP 451 in the US) so the
   // corroboration works from US/restricted regions. ───────────────────────
   if (requestUrl.pathname === '/api/crypto-quotes-coinbase') {
+ const _cbCached = getCached('crypto-quotes-coinbase', 60 * 1000);
+ if (_cbCached) return json(_cbCached);
  const PAIRS = [['BTC', 'BTC-USD'], ['ETH', 'ETH-USD'], ['SOL', 'SOL-USD'], ['XRP', 'XRP-USD']];
  try {
  const results = await Promise.allSettled(PAIRS.map(([, pair]) =>
@@ -10771,7 +10845,9 @@ async function dispatch(requestUrl, req, routes, context) {
  if (Number.isFinite(amount)) quotes.push({ symbol: PAIR[0], price: amount });
  }
  if (quotes.length === 0) return json({ quotes: [], degraded: true, error: 'all Coinbase requests failed' });
- return json({ quotes });
+ const _cbResult = { quotes };
+ setCached('crypto-quotes-coinbase', _cbResult, 60 * 1000);
+ return json(_cbResult);
  } catch (error) {
  return json({ quotes: [], degraded: true, error: String(error.message ?? error) });
  }
@@ -10783,6 +10859,9 @@ async function dispatch(requestUrl, req, routes, context) {
  const apiKey = process.env.FRED_API_KEY;
  if (!apiKey) return json({ series: [], error: 'FRED_API_KEY not configured' }, 503);
  const ids = (requestUrl.searchParams.get('ids') || 'WALCL,FEDFUNDS,T10Y2Y,UNRATE,CPIAUCSL,DGS10,VIXCLS').split(',').map(s => s.trim()).filter(Boolean);
+ const _fredCacheKey = `fred-series:${[...ids].sort().join(',')}`;
+ const _fredCached = getCached(_fredCacheKey, 6 * 60 * 60 * 1000);
+ if (_fredCached) return json(_fredCached);
  try {
  const results = await Promise.all(ids.map(async id => {
  try {
@@ -10800,7 +10879,9 @@ async function dispatch(requestUrl, req, routes, context) {
  return { id, observations: [], error: String(error.message ?? error) };
  }
  }));
- return json({ series: results });
+ const _fredResult = { series: results };
+ setCached(_fredCacheKey, _fredResult, 6 * 60 * 60 * 1000);
+ return json(_fredResult);
  } catch (error) {
  return json({ series: [], error: String(error.message ?? error) }, 500);
  }
@@ -10809,6 +10890,8 @@ async function dispatch(requestUrl, req, routes, context) {
   // ── FRED fallback — free public data sources, no key required ────────────
   // Combines Yahoo Finance (VIX, yields), US Treasury yield curve, BLS (UNRATE/CPI)
   if (requestUrl.pathname === '/api/fred-fallback') {
+ const _fbCached = getCached('fred-fallback', 6 * 60 * 60 * 1000);
+ if (_fbCached) return json(_fbCached);
  try {
  // FRED CSV replaces Yahoo Finance for VIX and Fed Funds — free, no auth, no Cloudflare block.
  // Treasury XML (DGS10, T10Y2Y) and BLS (UNRATE, CPIAUCSL) are already free — kept as-is.
@@ -10897,7 +10980,9 @@ async function dispatch(requestUrl, req, routes, context) {
  })();
  if (blsCpiObs?.length) series.push({ id: 'CPIAUCSL', observations: blsCpiObs });
 
- return json({ series, source: 'free-fallback' });
+ const _fbResult = { series, source: 'free-fallback' };
+ setCached('fred-fallback', _fbResult, 6 * 60 * 60 * 1000);
+ return json(_fbResult);
  } catch (error) {
  return json({ series: [], error: String(error.message ?? error) }, 500);
  }
@@ -12994,6 +13079,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // ── NIFC active fire perimeters (free public ArcGIS REST) ────────────────
   if (requestUrl.pathname === '/api/wildfire/perimeters') {
+ const _wfCached = getCached('wildfire-perimeters', 5 * 60 * 1000);
+ if (_wfCached) return json(_wfCached);
  try {
  // outFields=* — the WFIGS layer prefixes every field (poly_IncidentName,
  // attr_PercentContained, …). The old explicit list used unprefixed names
@@ -13010,7 +13097,9 @@ async function dispatch(requestUrl, req, routes, context) {
  if (!resp.ok) return json({ features: [], error: `nifc upstream ${resp.status}` }, 502);
  const data = await resp.json();
  const features = Array.isArray(data?.features) ? data.features : [];
- return json({ features, count: features.length });
+ const _wfResult = { features, count: features.length };
+ setCached('wildfire-perimeters', _wfResult, 5 * 60 * 1000);
+ return json(_wfResult);
  } catch (error) {
  return json({ features: [], error: String(error.message ?? error) }, 500);
  }
@@ -18324,7 +18413,12 @@ export async function createLocalApiServer(options = {}) {
         return;
       }
       const raw = await readBody(req);
-      const body = raw ? JSON.parse(raw.toString()) : null;
+      let body;
+      try {
+        body = raw ? JSON.parse(raw.toString()) : null;
+      } catch {
+        return sendJson({ error: 'invalid JSON body' }, 400);
+      }
       if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
       const created = createWatchboard(body);
       return sendJson({ watchboard: created }, 201);
@@ -18350,7 +18444,12 @@ export async function createLocalApiServer(options = {}) {
         return;
       }
       const raw = await readBody(req);
-      const body = raw ? JSON.parse(raw.toString()) : null;
+      let body;
+      try {
+        body = raw ? JSON.parse(raw.toString()) : null;
+      } catch {
+        return sendJson({ error: 'invalid JSON body' }, 400);
+      }
       if (!body || typeof body !== 'object') return sendJson({ error: 'invalid body' }, 400);
       const updated = updateWatchboard(wbId, body);
       if (!updated) return sendJson({ error: 'not found' }, 404);

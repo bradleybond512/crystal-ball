@@ -23,13 +23,39 @@
  */
 
 import { getDefaultDiagnosticBus } from '../diagnostics/diagnostic-events';
-import { getAlgorithmEvaluationLedger } from './algorithms-state';
+// NOTE: Do NOT import getAlgorithmEvaluationLedger at module scope here —
+// algorithms-state also imports from this file (resetAlgorithmLedgerPersistence),
+// creating a real runtime circular dependency. The lazy getter below breaks the
+// cycle while preserving the default-dep convenience. (arch-audit 2026-07-17)
 import type {
   AlgorithmDomain,
   AlgorithmEvaluationLedger,
   EvaluationOutcome,
   EvaluationRecord,
 } from './algorithm-evaluation-ledger';
+
+// Lazy getter to break the algorithms-state ↔ algorithm-ledger-persistence cycle.
+// algorithms-state calls resetAlgorithmLedgerPersistence (this file); this file
+// needs getAlgorithmEvaluationLedger (algorithms-state) only as a default
+// fallback when callers don't inject deps.ledger. Rather than import
+// algorithms-state back (a cycle) or `require()` it (which is undefined in the
+// Vite/browser ESM runtime), algorithms-state registers its getter here at load
+// via setDefaultLedgerProvider — breaking the static edge while keeping this
+// synchronous and browser-safe.
+let _defaultLedgerProvider: (() => AlgorithmEvaluationLedger) | null = null;
+
+/** Registered by algorithms-state at module load so getDefaultLedger stays
+ *  synchronous without importing algorithms-state back. */
+export function setDefaultLedgerProvider(provider: () => AlgorithmEvaluationLedger): void {
+  _defaultLedgerProvider = provider;
+}
+
+function getDefaultLedger(): AlgorithmEvaluationLedger {
+  if (!_defaultLedgerProvider) {
+    throw new Error('[algorithm-ledger-persistence] default ledger provider not registered — import algorithms-state or pass deps.ledger');
+  }
+  return _defaultLedgerProvider();
+}
 
 // `persistent-cache.ts` pulls Vite's `import.meta.glob` transitively
 // through the runtime/tauri-bridge/i18n chain, which makes a top-level
@@ -123,7 +149,7 @@ export function resetAlgorithmLedgerPersistence(): void {
 export async function hydrateAlgorithmLedger(
   deps: AlgorithmLedgerPersistenceDeps = {},
 ): Promise<AlgorithmLedgerPersistenceStatus> {
-  const ledger = deps.ledger ?? getAlgorithmEvaluationLedger();
+  const ledger = deps.ledger ?? getDefaultLedger();
   const read = deps.read ?? defaultRead;
   const emit = deps.emitDiagnostic ?? defaultEmit;
   const now = deps.now ?? Date.now;
@@ -180,7 +206,7 @@ export async function hydrateAlgorithmLedger(
 export async function persistAlgorithmLedger(
   deps: AlgorithmLedgerPersistenceDeps = {},
 ): Promise<AlgorithmLedgerPersistenceStatus> {
-  const ledger = deps.ledger ?? getAlgorithmEvaluationLedger();
+  const ledger = deps.ledger ?? getDefaultLedger();
   const write = deps.write ?? defaultWrite;
   const emit = deps.emitDiagnostic ?? defaultEmit;
   const now = deps.now ?? Date.now;
@@ -207,7 +233,7 @@ export async function trimAndPersistAlgorithmLedger(
   options: TrimAndPersistOptions = {},
   deps: AlgorithmLedgerPersistenceDeps = {},
 ): Promise<AlgorithmLedgerPersistenceStatus> {
-  const ledger = deps.ledger ?? getAlgorithmEvaluationLedger();
+  const ledger = deps.ledger ?? getDefaultLedger();
   const now = deps.now ?? Date.now;
   const maxRecords = options.maxRecords ?? DEFAULT_MAX_RECORDS;
   const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;

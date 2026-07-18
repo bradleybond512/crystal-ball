@@ -17,7 +17,7 @@ import {
 } from './algorithm-evaluation-ledger';
 import type { AlgorithmDefinition as HealthDefinition } from './algorithm-health';
 import { listAlgorithms, type AlgorithmDefinition as RegistryDefinition } from './algorithm-registry';
-import { resetAlgorithmLedgerPersistence } from './algorithm-ledger-persistence';
+import { resetAlgorithmLedgerPersistence, setDefaultLedgerProvider } from './algorithm-ledger-persistence';
 
 let ledger: AlgorithmEvaluationLedger | undefined;
 let definitions: HealthDefinition[] | undefined;
@@ -26,6 +26,10 @@ export function getAlgorithmEvaluationLedger(): AlgorithmEvaluationLedger {
   ledger ??= createAlgorithmEvaluationLedger();
   return ledger;
 }
+
+// Register the default-ledger fallback so algorithm-ledger-persistence can reach
+// it without importing this module back (breaks the runtime cycle browser-safely).
+setDefaultLedgerProvider(getAlgorithmEvaluationLedger);
 
 export function getAlgorithmDefinitions(): readonly HealthDefinition[] {
   definitions ??= deriveDefinitionsFromRegistry();

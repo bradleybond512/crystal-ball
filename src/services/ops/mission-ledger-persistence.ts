@@ -18,7 +18,9 @@
  */
 
 import { getDefaultDiagnosticBus } from '../diagnostics/diagnostic-events';
-import { getMissionLedger } from './mission-state';
+// NOTE: Do NOT import getMissionLedger at module scope — mission-state also
+// imports resetMissionLedgerPersistence from this file, creating a real runtime
+// circular dependency. The lazy getter below breaks the cycle. (arch-audit 2026-07-17)
 import type {
   MissionDomain,
   MissionEvent,
@@ -27,6 +29,23 @@ import type {
   MissionStatus,
 } from './mission-types';
 import type { MissionLedger } from './mission-ledger';
+
+// mission-state registers its getter here at load (see arch-audit note above)
+// so this file needs no back-import of mission-state — breaking the static
+// cycle while staying synchronous and browser-safe (require() is undefined in
+// the Vite/browser ESM runtime).
+let _defaultMissionLedgerProvider: (() => MissionLedger) | null = null;
+
+export function setDefaultMissionLedgerProvider(provider: () => MissionLedger): void {
+  _defaultMissionLedgerProvider = provider;
+}
+
+function getDefaultMissionLedger(): MissionLedger {
+  if (!_defaultMissionLedgerProvider) {
+    throw new Error('[mission-ledger-persistence] default mission ledger provider not registered — import mission-state or pass an explicit ledger');
+  }
+  return _defaultMissionLedgerProvider();
+}
 
 // `persistent-cache.ts` pulls Vite's `import.meta.glob` transitively
 // through the runtime/tauri-bridge/i18n chain, which makes a top-level
@@ -117,7 +136,7 @@ export function resetMissionLedgerPersistence(): void {
 export async function hydrateMissionLedger(
   deps: MissionLedgerPersistenceDeps = {},
 ): Promise<MissionLedgerPersistenceStatus> {
-  const ledger = deps.ledger ?? getMissionLedger();
+  const ledger = deps.ledger ?? getDefaultMissionLedger();
   const read = deps.read ?? defaultRead;
   const emit = deps.emitDiagnostic ?? defaultEmit;
   const now = deps.now ?? Date.now;
@@ -172,7 +191,7 @@ export async function hydrateMissionLedger(
 export async function persistMissionLedger(
   deps: MissionLedgerPersistenceDeps = {},
 ): Promise<MissionLedgerPersistenceStatus> {
-  const ledger = deps.ledger ?? getMissionLedger();
+  const ledger = deps.ledger ?? getDefaultMissionLedger();
   const write = deps.write ?? defaultWrite;
   const emit = deps.emitDiagnostic ?? defaultEmit;
   const now = deps.now ?? Date.now;
@@ -199,7 +218,7 @@ export async function trimAndPersistMissionLedger(
   options: MissionTrimAndPersistOptions = {},
   deps: MissionLedgerPersistenceDeps = {},
 ): Promise<MissionLedgerPersistenceStatus> {
-  const ledger = deps.ledger ?? getMissionLedger();
+  const ledger = deps.ledger ?? getDefaultMissionLedger();
   const now = deps.now ?? Date.now;
   const maxMissions = options.maxMissions ?? DEFAULT_MAX_MISSIONS;
   const maxCompletedAgeMs = options.maxCompletedAgeMs ?? DEFAULT_MAX_COMPLETED_AGE_MS;

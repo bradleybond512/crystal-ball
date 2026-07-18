@@ -13,8 +13,9 @@
  * This is the foundational probability type (AI-2 of the v3.0 architectural
  * imperatives). Everything epistemic — competitive hypotheses, assumption
  * tracking, calibration curves — is meant to build on it. Keep it a plain
- * data shape: all behaviour lives in `src/components/belief-helpers.ts` so
- * the type stays import-cheap and free of runtime dependencies.
+ * data shape: all behaviour lives in `src/services/intelligence/belief-helpers.ts`
+ * so the type stays import-cheap and free of runtime dependencies.
+ * (The old `src/components/belief-helpers.ts` path is now a re-export shim.)
  */
 export interface BeliefValue {
   /** Best-guess probability, [0, 1]. */

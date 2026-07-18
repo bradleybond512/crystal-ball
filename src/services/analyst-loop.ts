@@ -331,7 +331,7 @@ function persist(snapshot: AnalystSnapshot): void {
 function isValidAnalystSnapshot(v: unknown): v is AnalystSnapshot {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
   const s = v as Record<string, unknown>;
-  return typeof s['timestamp'] === 'number' && Array.isArray(s['hypotheses']);
+  return typeof s.timestamp === 'number' && Array.isArray(s.hypotheses);
 }
 
 /** Retrieve the last persisted snapshot, if any. */
@@ -346,6 +346,12 @@ export function getAnalystSnapshot(): AnalystSnapshot | null {
 
 // ── Main cycle ────────────────────────────────────────────────────────────────
 
+/** Guard a hypothesis builder: one failing builder (e.g. bad Situation shape,
+ *  corrupt localStorage) returns [] instead of killing the whole cycle output. */
+function safeBuilder<T>(fn: () => T[]): T[] {
+  try { return fn(); } catch { return []; }
+}
+
 export function runAnalystCycle(): AnalystSnapshot {
   const t0 = performance.now();
   const cached = getCachedSynthesis();
@@ -355,11 +361,11 @@ export function runAnalystCycle(): AnalystSnapshot {
   const alerts = unifiedAlertStore.getAll();
 
   const raw = [
-    ...fromClusters(clusters),
-    ...fromAnomalies(anomalies),
-    ...fromAlertBurst(alerts),
-    ...fromSituations(situations),
-    ...getWatchlistHypotheses(),
+    ...safeBuilder(() => fromClusters(clusters)),
+    ...safeBuilder(() => fromAnomalies(anomalies)),
+    ...safeBuilder(() => fromAlertBurst(alerts)),
+    ...safeBuilder(() => fromSituations(situations)),
+    ...safeBuilder(() => getWatchlistHypotheses()),
   ];
   const hypotheses = rank(raw);
 
@@ -402,8 +408,11 @@ export function runAnalystCycle(): AnalystSnapshot {
           return match ? signatureFor(match) : h.id;
         },
       );
-    } catch {
+    } catch (error) {
       // Never let episodic memory errors crash the analyst loop.
+      logDebug({ level: 'warn', category: 'hypothesis', source: 'analyst-loop',
+        message: 'episodic memory error',
+        data: { error: error instanceof Error ? error.message : String(error) } });
     }
   })();
 
@@ -412,8 +421,11 @@ export function runAnalystCycle(): AnalystSnapshot {
   // Fire-and-forget: never block the sync cycle on dossier ingestion.
   try {
     ingestFromHypotheses(hypothesisSnapshot);
-  } catch {
+  } catch (error) {
     // Never let entity-dossier errors crash the analyst loop.
+    logDebug({ level: 'warn', category: 'hypothesis', source: 'analyst-loop',
+      message: 'entity-dossier ingest error',
+      data: { error: error instanceof Error ? error.message : String(error) } });
   }
 
   logDebug({ level: 'info', category: 'hypothesis', source: 'analyst-loop',
@@ -441,7 +453,12 @@ function scheduleNext(): void {
   const interval = BASE_INTERVAL_MS * (isGhostMode() ? getGhostRefreshMultiplier() : 1);
   timerId = setTimeout(() => {
     if (!started) return;
-    try { runAnalystCycle(); } catch { /* swallow — loop keeps going */ }
+    try { runAnalystCycle(); } catch (error) {
+      incrementCounter('analyst-cycle.errors');
+      logDebug({ level: 'error', category: 'hypothesis', source: 'analyst-loop',
+        message: 'recurring cycle error',
+        data: { error: error instanceof Error ? error.message : String(error) } });
+    }
     scheduleNext();
   }, interval);
 }

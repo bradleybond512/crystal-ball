@@ -243,8 +243,10 @@ export async function generateText(prompt: string, options: LlmOptions = {}): Pr
   const blocked = cloudEgressBlocked();
   if (blocked) return blocked;
   // Atomically reserve a cloud-call slot before issuing the request.
-  // If reserveCloudCall returns false, the cap is already hit; fail soft.
-  if (!reserveCloudCall('cloud-agent')) return { text: '', provider: 'none' };
+  // If reserveCloudCall returns false (cap hit) or throws (IDB/LS error), fail soft.
+  let budgetGranted = false;
+  try { budgetGranted = reserveCloudCall('cloud-agent'); } catch { budgetGranted = false; }
+  if (!budgetGranted) return { text: '', provider: 'none' };
   let cloud: LlmResult | null = null;
   try {
     cloud = await tryCloudAgent(prompt, options);
@@ -253,8 +255,9 @@ export async function generateText(prompt: string, options: LlmOptions = {}): Pr
   } finally {
     // The call never produced a usable result, so the reserved slot was
     // never actually spent — release it so a failed attempt doesn't
-    // permanently burn budget.
-    if (!cloud) refundCloudCall('cloud-agent');
+    // permanently burn budget. Refund is best-effort: an IDB/LS failure here
+    // must not reject generateText() after an already-failed cloud attempt.
+    if (!cloud) { try { refundCloudCall('cloud-agent'); } catch { /* refund best-effort */ } }
   }
 }
 
@@ -333,8 +336,20 @@ async function tryLocalDirect(prompt: string, options: LlmOptions): Promise<LlmR
 function combineSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
   if (a.aborted) return a;
   if (b.aborted) return b;
+  // AbortSignal.any() (Node 20 / Chrome 116+) handles internal cleanup
+  // automatically so listeners don't accumulate on long-lived signals when
+  // the call completes without either signal firing.
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any([a, b]);
+  }
+  // Fallback for older runtimes: remove both listeners once either fires so
+  // they don't accumulate on the parent signal across many LLM calls.
   const controller = new AbortController();
-  const forward = (): void => controller.abort();
+  const forward = (): void => {
+    controller.abort();
+    a.removeEventListener('abort', forward);
+    b.removeEventListener('abort', forward);
+  };
   a.addEventListener('abort', forward, { once: true });
   b.addEventListener('abort', forward, { once: true });
   return controller.signal;

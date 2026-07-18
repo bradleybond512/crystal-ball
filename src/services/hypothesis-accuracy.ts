@@ -12,6 +12,7 @@
  */
 
 import type { Hypothesis, AnalystSnapshot } from './analyst-loop';
+import { logDebug } from './reasoning-debug';
 import { situationEngine } from './situation-engine';
 import { unifiedAlertStore } from './unified-alerts';
 import { scoreAlert } from './alert-routing';
@@ -105,7 +106,7 @@ function load(): void {
   void getMemory<Persisted>(STORAGE_KEY).then(value => {
     if (writtenSinceLoad) return;
     if (value) hydrate(value);
-  });
+  }).catch(() => { /* IDB unavailable; localStorage bootstrap still valid */ });
 }
 
 function save(): void {
@@ -116,7 +117,7 @@ function save(): void {
     byKind: Object.fromEntries(byKind),
   };
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(out)); } catch { /* quota */ }
-  void putMemory(STORAGE_KEY, out);
+  void putMemory(STORAGE_KEY, out).catch(() => { /* IDB write failed */ });
 }
 
 // ── Stamping ─────────────────────────────────────────────────────────────────
@@ -298,20 +299,32 @@ export function getKindAccuracy(): ReadonlyMap<Hypothesis['kind'], AccuracyStats
 
 let started = false;
 let graderTimer: ReturnType<typeof setInterval> | null = null;
+let _stampListener: ((e: Event) => void) | null = null;
 
 export function startHypothesisAccuracy(): void {
   if (started) return;
   started = true;
   load();
 
-  document.addEventListener('cb:analyst-hypotheses', (e: Event) => {
+  _stampListener = (e: Event) => {
     const ce = e as CustomEvent<AnalystSnapshot>;
     stamp(ce.detail);
-  });
+  };
+  document.addEventListener('cb:analyst-hypotheses', _stampListener);
 
   // Grade pending hypotheses every 10 minutes.
-  graderTimer = setInterval(() => { gradeDue(); }, 10 * 60 * 1000);
-  gradeDue();
+  graderTimer = setInterval(() => {
+    try { gradeDue(); } catch (error) {
+      logDebug({ level: 'warn', category: 'hypothesis', source: 'hypothesis-accuracy',
+        message: 'gradeDue error',
+        data: { error: error instanceof Error ? error.message : String(error) } });
+    }
+  }, 10 * 60 * 1000);
+  try { gradeDue(); } catch (error) {
+    logDebug({ level: 'warn', category: 'hypothesis', source: 'hypothesis-accuracy',
+      message: 'initial gradeDue error',
+      data: { error: error instanceof Error ? error.message : String(error) } });
+  }
 }
 
 export function stopHypothesisAccuracy(): void {
@@ -319,5 +332,9 @@ export function stopHypothesisAccuracy(): void {
   if (graderTimer !== null) {
     clearInterval(graderTimer);
     graderTimer = null;
+  }
+  if (_stampListener !== null) {
+    document.removeEventListener('cb:analyst-hypotheses', _stampListener);
+    _stampListener = null;
   }
 }

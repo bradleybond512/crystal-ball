@@ -82,7 +82,7 @@ function load(): void {
   void getMemory<[string, EnsembleResult][]>(STORAGE_KEY).then(arr => {
     if (writtenSinceLoad) return;
     applyLoaded(arr);
-  });
+  }).catch(() => { /* IDB unavailable; localStorage bootstrap still valid */ });
 }
 
 function save(): void {
@@ -95,7 +95,7 @@ function save(): void {
     for (const [k, v] of entries) cache.set(k, v);
   }
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch { /* quota */ }
-  void putMemory(STORAGE_KEY, entries);
+  void putMemory(STORAGE_KEY, entries).catch(() => { /* IDB write failed */ });
 }
 
 // ── Prompt ────────────────────────────────────────────────────────────────────

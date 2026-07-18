@@ -13,6 +13,7 @@
  */
 
 import { notificationDispatcher } from './notification-dispatcher';
+import { logDebug } from './reasoning-debug';
 import type { UnifiedAlert } from './unified-alerts';
 import type { AnalystSnapshot, Hypothesis } from './analyst-loop';
 import { signatureFor } from './hypothesis-feedback';
@@ -80,6 +81,10 @@ export function startHypothesisNotifier(): void {
   });
   document.addEventListener('cb:analyst-hypotheses', (e: Event) => {
     const ce = e as CustomEvent<AnalystSnapshot>;
-    handleSnapshot(ce.detail);
+    try { handleSnapshot(ce.detail); } catch (error) {
+      logDebug({ level: 'warn', category: 'hypothesis', source: 'hypothesis-notifier',
+        message: 'handleSnapshot error',
+        data: { error: error instanceof Error ? error.message : String(error) } });
+    }
   });
 }

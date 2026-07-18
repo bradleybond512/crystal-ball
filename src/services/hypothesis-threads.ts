@@ -91,14 +91,14 @@ function load(): void {
     if (arr.length === 0) return;
     threads.clear();
     for (const t of arr) threads.set(t.signature, t);
-  });
+  }).catch(() => { /* IDB unavailable; localStorage bootstrap still valid */ });
 }
 
 function save(): void {
   writtenSinceLoad = true;
   const arr = [...threads.values()];
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); } catch { /* quota */ }
-  void putMemory(STORAGE_KEY, arr);
+  void putMemory(STORAGE_KEY, arr).catch(() => { /* IDB write failed; localStorage copy is authoritative */ });
 }
 
 // ── Thread update ────────────────────────────────────────────────────────────

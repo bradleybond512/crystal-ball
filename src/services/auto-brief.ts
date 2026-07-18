@@ -13,6 +13,7 @@
  */
 
 import { generateText } from './llm-adapter';
+import { logDebug } from './reasoning-debug';
 import { isGhostMode } from './mode-manager';
 import { isFeatureAvailable } from './runtime-config';
 import type { ForecastSnapshot, ForecastDomain, ModeAdvisory } from './mode-forecast';
@@ -165,8 +166,11 @@ async function runBrief(domain: ForecastDomain, pressure: number): Promise<void>
     lastBriefAt[domain] = Date.now();
     saveCooldowns();
     document.dispatchEvent(new CustomEvent<AutoBrief>(EVENT_NAME, { detail: brief }));
-  } catch {
+  } catch (error) {
     // Swallow; next crossing retries since cooldown wasn't set.
+    logDebug({ level: 'warn', category: 'hypothesis', source: 'auto-brief',
+      message: 'runBrief threw',
+      data: { error: error instanceof Error ? error.message : String(error) } });
   } finally {
     inFlight.delete(domain);
   }

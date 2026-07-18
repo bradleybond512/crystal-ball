@@ -6,6 +6,7 @@
  */
 
 import { unifiedAlertStore } from './unified-alerts';
+import { logDebug } from './reasoning-debug';
 
 const SCAN_INTERVAL = 90_000;
 const MAX_CHAIN_AGE_MS = 4 * 60 * 60_000;
@@ -93,6 +94,12 @@ function detectCascades(): CascadeChain[] {
   return chains;
 }
 
+function safeScan(): void {
+  try { scan(); } catch (error) {
+    logDebug({ level: 'warn', category: 'other', source: 'proximity-cascade', message: 'scan error', data: { error: error instanceof Error ? error.message : String(error) } });
+  }
+}
+
 function scan(): void {
   const cascades = detectCascades();
   if (cascades.length > 0) {
@@ -106,6 +113,6 @@ let started = false;
 export function startProximityCascade(): void {
   if (started) return;
   started = true;
-  window.setInterval(scan, SCAN_INTERVAL);
-  window.setTimeout(scan, 20_000);
+  window.setInterval(safeScan, SCAN_INTERVAL);
+  window.setTimeout(safeScan, 20_000);
 }

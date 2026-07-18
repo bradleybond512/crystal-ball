@@ -4,6 +4,7 @@
  */
 
 import { unifiedAlertStore, type AlertSource } from './unified-alerts';
+import { logDebug } from './reasoning-debug';
 
 const STORAGE_KEY = 'crystalball-periodicity-v1';
 const SCAN_INTERVAL = 5 * 60_000;
@@ -121,11 +122,17 @@ function scan(): void {
   checkForMissedBeats();
 }
 
+function safeScan(): void {
+  try { scan(); } catch (error) {
+    logDebug({ level: 'warn', category: 'other', source: 'periodicity-detector', message: 'scan error', data: { error: error instanceof Error ? error.message : String(error) } });
+  }
+}
+
 let started = false;
 export function startPeriodicityDetector(): void {
   if (started) return;
   started = true;
   load();
-  window.setInterval(scan, SCAN_INTERVAL);
-  window.setTimeout(scan, 30_000);
+  window.setInterval(safeScan, SCAN_INTERVAL);
+  window.setTimeout(safeScan, 30_000);
 }

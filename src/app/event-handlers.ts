@@ -229,10 +229,18 @@ export class EventHandlerManager implements AppModule {
  window.addEventListener('storage', (e) => {
  if (e.key === STORAGE_KEYS.panels && e.newValue) {
  try {
- this.ctx.panelSettings = JSON.parse(e.newValue) as Record<string, PanelConfig>;
+ // `storage` events are cross-tab: cast to `unknown` first and validate
+ // shape before assigning. An attacker-controlled or schema-drifted value
+ // here would corrupt panelSettings and crash applyPanelSettings().
+ const parsed = JSON.parse(e.newValue) as unknown;
+ if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+ this.ctx.panelSettings = parsed as Record<string, PanelConfig>;
  this.applyPanelSettings();
  this.ctx.unifiedSettings?.refreshPanelToggles();
- } catch {}
+ }
+ } catch (error) {
+ console.warn('[event-handlers] panel settings parse failed — keeping prior state', error);  
+ }
  }
  if (e.key === STORAGE_KEYS.liveChannels && e.newValue) {
  const panel = this.ctx.panels['live-news'];

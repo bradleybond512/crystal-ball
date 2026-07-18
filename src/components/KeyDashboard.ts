@@ -207,8 +207,8 @@ export class KeyDashboard {
     if (!value) { this.setFeedback(key, 'Empty value — nothing saved', 'err'); return; }
     try {
       await setSecretValue(key, value);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
       this.setFeedback(key, `Save failed: ${msg}`, 'err');
       return;
     }
@@ -255,8 +255,8 @@ export class KeyDashboard {
     if (!confirm('Clear ' + label + '? This cannot be undone.')) return;
     try {
       await setSecretValue(key, '');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
       this.setFeedback(key, `Clear failed: ${msg}`, 'err');
       return;
     }

@@ -79,6 +79,7 @@ export class EventHandlerManager implements AppModule {
   private boundFocusSituationHandler: ((e: Event) => void) | null = null;
   private _mapResizeMouseMove: ((e: MouseEvent) => void) | null = null;
   private _mapResizeMouseUp: (() => void) | null = null;
+  private _panelViewObserver: IntersectionObserver | null = null;
   private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private snapshotIntervalId: ReturnType<typeof setInterval> | null = null;
   private clockIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -187,6 +188,10 @@ export class EventHandlerManager implements AppModule {
  }
  this._unsubActivity?.();
  this._unsubActivity = null;
+ if (this._panelViewObserver) {
+ this._panelViewObserver.disconnect();
+ this._panelViewObserver = null;
+ }
  if (this.boundKeydownHandler) {
  document.removeEventListener('keydown', this.boundKeydownHandler);
  this.boundKeydownHandler = null;
@@ -952,8 +957,14 @@ export class EventHandlerManager implements AppModule {
   }
 
   setupPanelViewTracking(): void {
+ // Store the observer so it can be disconnected in destroy() — an unrooted
+ // IntersectionObserver permanently retains all observed panel DOM nodes.
+ if (this._panelViewObserver) {
+   this._panelViewObserver.disconnect();
+   this._panelViewObserver = null;
+ }
  const viewedPanels = new Set<string>();
- const observer = new IntersectionObserver((entries) => {
+ this._panelViewObserver = new IntersectionObserver((entries) => {
  for (const entry of entries) {
  if (entry.isIntersecting && entry.intersectionRatio >= 0.3) {
  const id = (entry.target as HTMLElement).dataset.panel;
@@ -969,7 +980,7 @@ export class EventHandlerManager implements AppModule {
  if (grid) {
  for (const child of grid.children) {
  if ((child as HTMLElement).dataset.panel) {
- observer.observe(child);
+ this._panelViewObserver.observe(child);
  }
  }
  }

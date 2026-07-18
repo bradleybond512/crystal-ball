@@ -719,6 +719,7 @@ export class PanelLayoutManager implements AppModule {
   private _onAnalystHudKey: ((e: KeyboardEvent) => void) | null = null;
   private _onBriefExportKey: ((e: KeyboardEvent) => void) | null = null;
   private _onStatusOverlayKey: ((e: KeyboardEvent) => void) | null = null;
+  private _lastViewedObserver: IntersectionObserver | null = null;
   private readonly applyTimeRangeFilterDebounced: () => void;
   private readonly _onUpdateState = () => { this.renderSidebarUpdateBtn(); };
 
@@ -830,6 +831,10 @@ export class PanelLayoutManager implements AppModule {
  if (this.expirePredictionsTimer) {
  clearInterval(this.expirePredictionsTimer);
  this.expirePredictionsTimer = null;
+ }
+ if (this._lastViewedObserver) {
+ this._lastViewedObserver.disconnect();
+ this._lastViewedObserver = null;
  }
   }
 
@@ -1235,8 +1240,8 @@ export class PanelLayoutManager implements AppModule {
  if (!text) return;
  markDigestShown();
  digestOverlay.show(text);
- }).catch((err: unknown) => {
- console.warn('[digest] proactive brief generation failed:', err); // eslint-disable-line no-console
+ }).catch((error: unknown) => {
+ console.warn('[digest] proactive brief generation failed:', error);  
  digestOverlay.show('Brief unavailable.');
  });
  };
@@ -1250,8 +1255,8 @@ export class PanelLayoutManager implements AppModule {
    void generateDigest().then(text => {
      if (text) { markDigestShown(); digestOverlay.show(text); }
      else digestOverlay.show('No recent activity to summarize.');
-   }).catch((err: unknown) => {
-     console.warn('[digest] on-demand brief generation failed:', err); // eslint-disable-line no-console
+   }).catch((error: unknown) => {
+     console.warn('[digest] on-demand brief generation failed:', error);  
      digestOverlay.show('Brief unavailable — try again shortly.');
    });
  });
@@ -2781,7 +2786,10 @@ export class PanelLayoutManager implements AppModule {
   private startLastViewedTracker(): void {
  const panelsGrid = document.getElementById('panelsGrid');
  if (!panelsGrid || typeof IntersectionObserver === 'undefined') return;
- const observer = new IntersectionObserver(
+ // Disconnect any previous observer (e.g. called again after a layout rebuild)
+ // to avoid the unrooted observer permanently retaining all panel nodes.
+ this._lastViewedObserver?.disconnect();
+ this._lastViewedObserver = new IntersectionObserver(
  (entries) => {
  const visible = entries.find((e) => e.isIntersecting && e.intersectionRatio >= 0.5);
  if (visible) {
@@ -2792,7 +2800,7 @@ export class PanelLayoutManager implements AppModule {
  { threshold: 0.5 },
  );
  for (const child of panelsGrid.children) {
- observer.observe(child);
+ this._lastViewedObserver.observe(child);
  }
   }
 

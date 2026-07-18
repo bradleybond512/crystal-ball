@@ -42,7 +42,7 @@ function load(): void {
   void getMemory<AutoBrief[]>(STORAGE_KEY).then(arr => {
     if (writtenSinceLoad) return;
     applyLoaded(arr);
-  });
+  }).catch(() => { /* IDB unavailable; localStorage bootstrap still valid */ });
 }
 
 function save(): void {
@@ -51,7 +51,7 @@ function save(): void {
   // full archive also lives in IDB which has more headroom.
   const tail = archive.slice(-MAX_BRIEFS);
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tail)); } catch { /* quota */ }
-  void putMemory(STORAGE_KEY, tail);
+  void putMemory(STORAGE_KEY, tail).catch(() => { /* IDB write failed */ });
 }
 
 // ── Write API ────────────────────────────────────────────────────────────────

@@ -64,7 +64,7 @@ function load(): void {
   void getMemory<[string, HypothesisProjection][]>(STORAGE_KEY).then(arr => {
     if (writtenSinceLoad) return;
     applyLoaded(arr);
-  });
+  }).catch(() => { /* IDB unavailable; localStorage bootstrap still valid */ });
 }
 
 function save(): void {
@@ -77,7 +77,7 @@ function save(): void {
     for (const [k, v] of entries) cache.set(k, v);
   }
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch { /* quota */ }
-  void putMemory(STORAGE_KEY, entries);
+  void putMemory(STORAGE_KEY, entries).catch(() => { /* IDB write failed */ });
 }
 
 // ── Cascade lookup ───────────────────────────────────────────────────────────
@@ -139,7 +139,8 @@ export async function projectHypothesis(h: Hypothesis): Promise<HypothesisProjec
   // Reuse cached result if less than 15 minutes old.
   if (existing && Date.now() - existing.generatedAt < 15 * 60 * 1000) return existing;
 
-  const cascadeNodeId = findMatchingCascadeNodeId(h);
+  let cascadeNodeId: string | null = null;
+  try { cascadeNodeId = findMatchingCascadeNodeId(h); } catch { cascadeNodeId = null; }
   let cascade: CascadeSimResult | null = null;
   if (cascadeNodeId) {
     try { cascade = simulateCascade(cascadeNodeId); }

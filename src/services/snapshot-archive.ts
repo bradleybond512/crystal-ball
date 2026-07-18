@@ -44,14 +44,14 @@ function load(): void {
   void getMemory<AnalystSnapshot[]>(STORAGE_KEY).then(arr => {
     if (writtenSinceLoad) return;
     applyLoaded(arr);
-  });
+  }).catch(() => { /* IDB unavailable; localStorage bootstrap still valid */ });
 }
 
 function save(): void {
   writtenSinceLoad = true;
   const tail = archive.slice(-MAX_SNAPSHOTS);
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tail)); } catch { /* quota */ }
-  void putMemory(STORAGE_KEY, tail);
+  void putMemory(STORAGE_KEY, tail).catch(() => { /* IDB write failed */ });
 }
 
 // ── Ingestion ────────────────────────────────────────────────────────────────

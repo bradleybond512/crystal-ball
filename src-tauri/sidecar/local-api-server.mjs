@@ -255,8 +255,8 @@ function isValidToken(authHeader) {
 // evil.com whose DNS is rebound to 127.0.0.1 would issue same-origin requests
 // (bypassing CORS) carrying a `Host: evil.com:<port>` header. Requiring the
 // Host to name loopback on our own port rejects those before any routing —
-// including the deliberately unauthenticated loopback-only routes (analyst
-// state/commands, shortage/seismic mirrors). Legitimate callers (renderer, MCP
+// All routes below require a valid LOCAL_API_TOKEN bearer token.
+// (analyst-state, analyst-commands, and shortage/seismic mirrors are all gated.) Legitimate callers (renderer, MCP
 // server, curl) always target 127.0.0.1/localhost on the sidecar port.
 function isAllowedHost(hostHeader, port) {
   if (!hostHeader) return false;
@@ -5790,7 +5790,7 @@ async function dispatch(requestUrl, req, routes, context) {
       ais_vessels: aisState.vessels.size,
       keys_configured: EXPECTED_API_KEYS.length - missing.length,
       keys_total: EXPECTED_API_KEYS.length,
-      keys_missing: missing,
+      keys_missing_count: missing.length,
       feeds: getFeedSnapshots(),
     }, { status: 200, headers: { 'content-type': 'application/json', ...makeCorsHeaders(req) } });
   }

@@ -9,6 +9,7 @@
  */
 
 import { forecastRegions } from './ema-forecast';
+import { logDebug } from './reasoning-debug';
 import { unifiedAlertStore } from './unified-alerts';
 
 const STORAGE_KEY = 'crystalball-forecast-accuracy-v1';
@@ -119,10 +120,16 @@ export function getForecastAccuracy(): ForecastAccuracy {
 }
 
 let started = false;
+function runChecks(): void {
+  try { logPredictions(); checkPredictions(); } catch (error) {
+    logDebug({ level: 'warn', category: 'other', source: 'forecast-accuracy', message: 'error', data: { error: error instanceof Error ? error.message : String(error) } });
+  }
+}
+
 export function startForecastAccuracy(): void {
   if (started) return;
   started = true;
   load();
-  window.setTimeout(() => { logPredictions(); checkPredictions(); }, 30_000);
-  window.setInterval(() => { logPredictions(); checkPredictions(); }, CHECK_MS);
+  window.setTimeout(runChecks, 30_000);
+  window.setInterval(runChecks, CHECK_MS);
 }

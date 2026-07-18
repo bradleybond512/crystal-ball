@@ -12,6 +12,8 @@ export function openMeteoAqToObservations(readings: readonly AirQualityReading[]
   const out: DomainObservation[] = [];
   for (const r of readings) {
     if (!Number.isFinite(r.aqi) || !Number.isFinite(r.lat) || !Number.isFinite(r.lon)) continue;
+    // Guard against null/invalid updatedAt — mirrors the observedAt check in openaqToObservations.
+    if (!r.updatedAt || Number.isNaN(r.updatedAt.getTime())) continue;
     out.push({
       providerId: 'open-meteo-aqi',
       value: r.aqi,

@@ -23,6 +23,8 @@ async function fetchStockRoute(path: string): Promise<StockFetchResult> {
     const prices = data.quotes.filter(
       (q): q is ExchangePrice => !!q && typeof q.symbol === 'string' && Number.isFinite(q.price),
     );
+    // A live 200 with all-null quotes is a soft failure — treat as provider down.
+    if (prices.length === 0) return { ok: false, prices: [] };
     return { ok: true, prices };
   } catch {
     return { ok: false, prices: [] };

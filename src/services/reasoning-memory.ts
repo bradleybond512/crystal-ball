@@ -16,7 +16,12 @@
  * is unavailable (private browsing, quota, etc).
  */
 
-import { logDebug } from './reasoning-debug';
+// NOTE: Do NOT import from ./reasoning-debug here. reasoning-memory is a
+// low-level IDB primitive consumed by reasoning-debug; importing back would
+// create a real runtime circular dependency (arch-audit 2026-07-17). Because
+// logDebug is therefore off-limits here, IDB blocked/error paths log via
+// console — hence the file-scoped no-console exemption below.
+/* eslint-disable no-console -- see layering note above: logDebug would re-create the reasoning-debug cycle */
 import { recordLatency, incrementCounter } from './reasoning-metrics';
 
 const DB_NAME = 'crystalball_db';
@@ -73,9 +78,7 @@ function openWithUpgrade(currentVersion: number): Promise<IDBDatabase> {
       reject(upgrade.error ?? new Error('[reasoning-memory] upgrade failed'));
     });
     upgrade.addEventListener('blocked', () => {
-      logDebug({ level: 'error', category: 'idb', source: 'reasoning-memory',
-        message: 'upgrade blocked by another connection',
-        data: { currentVersion } });
+      console.error('[reasoning-memory] upgrade blocked by another connection', { currentVersion });
       incrementCounter('idb.upgrade.blocked');
       reject(new Error('[reasoning-memory] upgrade blocked by another connection'));
     });
@@ -104,8 +107,7 @@ function openDB(): Promise<IDBDatabase> {
       reject(probe.error ?? new Error('[reasoning-memory] probe failed'));
     });
     probe.addEventListener('blocked', () => {
-      logDebug({ level: 'error', category: 'idb', source: 'reasoning-memory',
-        message: 'probe blocked' });
+      console.error('[reasoning-memory] probe blocked');
       incrementCounter('idb.probe.blocked');
       reject(new Error('[reasoning-memory] probe blocked'));
     });
@@ -154,9 +156,10 @@ export async function putMemory<T>(key: string, value: T): Promise<void> {
   } catch (error) {
     recordLatency('idb.put', performance.now() - t0);
     incrementCounter('idb.put.error');
-    logDebug({ level: 'error', category: 'idb', source: 'reasoning-memory',
-      message: `put ${key} failed`, latencyMs: performance.now() - t0,
-      data: { error: error instanceof Error ? error.message : String(error), key } });
+    console.error('[reasoning-memory] put failed', {
+      key, latencyMs: performance.now() - t0,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -180,9 +183,10 @@ export async function getMemory<T>(key: string): Promise<T | null> {
   } catch (error) {
     recordLatency('idb.get', performance.now() - t0);
     incrementCounter('idb.get.error');
-    logDebug({ level: 'error', category: 'idb', source: 'reasoning-memory',
-      message: `get ${key} failed`, latencyMs: performance.now() - t0,
-      data: { error: error instanceof Error ? error.message : String(error), key } });
+    console.error('[reasoning-memory] get failed', {
+      key, latencyMs: performance.now() - t0,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }

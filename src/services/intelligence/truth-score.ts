@@ -27,7 +27,7 @@ import type {
   TruthLabel,
   LocationPrecision,
 } from './types';
-import { createBelief } from '@/components/belief-helpers';
+import { createBelief } from './belief-helpers';
 
 // ── Inputs the caller supplies (decoupled from runtime services) ──────────
 

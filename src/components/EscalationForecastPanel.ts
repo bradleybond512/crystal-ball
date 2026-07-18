@@ -206,7 +206,11 @@ export class EscalationForecastPanel extends Panel {
  ? '<span class="esc-days esc-days-stable">Stable</span>'
  : `<span class="esc-days" style="color:${this.scoreColor(forecast.score)}">~${forecast.estimatedDays}d</span>`;
 
- const topFactor = forecast.factors.reduce((best, f) => f.contribution > best.contribution ? f : best, forecast.factors[0]!);
+ // Guard: factors may be empty for newly-created theaters. `[0]!` would
+ // throw at runtime because `EscalationForecast.factors` has no minLength.
+ const topFactor = forecast.factors.length > 0
+ ? forecast.factors.reduce((best, f) => f.contribution > best.contribution ? f : best, forecast.factors[0]!)
+ : undefined;
 
  const history = getTheaterHistory(forecast.theaterId);
 
@@ -237,7 +241,7 @@ export class EscalationForecastPanel extends Panel {
  <span class="esc-level-badge" style="background:${this.scoreColor(forecast.score)}20;color:${this.scoreColor(forecast.score)}">
  ${this.scoreLabel(forecast.score)}
  </span>
- <span class="esc-top-factor">${escapeHtml(topFactor.name)}: ${Math.round(topFactor.rawValue)}</span>
+ ${topFactor ? `<span class="esc-top-factor">${escapeHtml(topFactor.name)}: ${Math.round(topFactor.rawValue)}</span>` : ''}
  </div>
  ${expandedContent}
  </div>

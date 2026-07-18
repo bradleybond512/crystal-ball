@@ -2902,7 +2902,7 @@ export class PanelLayoutManager implements AppModule {
  widget.innerHTML = regions.slice(0, 4).map(r =>
  `<span style="display:inline-block;margin-right:8px">` +
  `<span style="color:${riskColor(r.risk24h)}">${trendIcon(r.trending)}</span> ` +
- `${r.region} <span style="color:${riskColor(r.risk24h)};font-weight:600">${r.risk24h}%</span>` +
+ `${escapeHtml(r.region)} <span style="color:${riskColor(r.risk24h)};font-weight:600">${r.risk24h}%</span>` +
  `</span>`
  ).join('');
  }) as EventListener);

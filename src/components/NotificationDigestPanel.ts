@@ -153,7 +153,7 @@ export class NotificationDigestPanel extends Panel {
  <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
  <span style="font-size:10px;background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;color:var(--text-tertiary);">${digest.totalAlerts} alert${digest.totalAlerts !== 1 ? 's' : ''}</span>
  <span style="font-size:10px;background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;color:var(--text-tertiary);">${digest.groups.length} group${digest.groups.length !== 1 ? 's' : ''}</span>
- <span style="font-size:10px;background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;color:var(--text-tertiary);">via ${digest.provider}</span>
+ <span style="font-size:10px;background:var(--bg-tertiary);padding:1px 6px;border-radius:3px;color:var(--text-tertiary);">via ${this.esc(digest.provider)}</span>
  </div>
  ${digest.groups.map(g => this.renderGroup(g)).join('')}
  </div>

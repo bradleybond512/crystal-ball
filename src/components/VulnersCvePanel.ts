@@ -7,7 +7,7 @@
 
 import { Panel } from './Panel';
 import { fetchVulnersCves, type VulnersRecord } from '@/services/security/vulners-service';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import {
   EPSS_TIER_BADGE,
   SEVERITY_COLOR,
@@ -144,7 +144,7 @@ export class VulnersCvePanel extends Panel {
       </div>
       <div class="vulners-detail-desc">${escapeHtml(r.description)}</div>
       <div class="vulners-detail-link">
-        <a href="${escapeHtml(r.nvdUrl)}" target="_blank" rel="noopener noreferrer">View on nvd.nist.gov →</a>
+        <a href="${sanitizeUrl(r.nvdUrl)}" target="_blank" rel="noopener noreferrer">View on nvd.nist.gov →</a>
       </div>`;
   }
 

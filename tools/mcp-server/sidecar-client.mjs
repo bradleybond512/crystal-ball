@@ -111,12 +111,14 @@ export function createSidecarClient(dataDir = DEFAULT_DATA_DIR) {
   }
 
   async function post(route, body) {
-    const port = discoverPort();
     let token = discoverToken();
-    if (!port || !token) {
+    if (!token) {
       return { error: 'Crystal Ball is not running. Launch the app to enable data access.', healthy: false };
     }
-    const url = `http://127.0.0.1:${port}${route}`;
+    const url = buildUrl(route);
+    if (!url) {
+      return { error: 'Crystal Ball is not running. Launch the app to enable data access.', healthy: false };
+    }
     const buildInit = (tok) => ({
       method: 'POST',
       headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },

@@ -9,6 +9,7 @@
  */
 
 import { dataFreshness } from './data-freshness';
+import { getApiBaseUrl } from './runtime';
 
 export interface IodaOutage {
   id: string;
@@ -26,103 +27,135 @@ export interface IodaOutage {
   severity: 'critical' | 'high' | 'medium' | 'low';
 }
 
-interface IodaAlert {
-  entity: {
- type: string;
- name: string;
- code: string;
-  };
-  overallScore: number;
-  bgpScore?: number;
-  activeScore?: number;
-  darknetsScore?: number;
-  from: number; // unix timestamp
-  until?: number; // unix timestamp
+/** Shape of one alert as projected by the sidecar's `parseIodaAlerts`
+ * (`/api/internet-outages`). The renderer used to hit IODA directly with a
+ * mismatched parser; routing through the sidecar (which handles CORS + the real
+ * IODA v2 field names) is the only path that actually returns data. */
+interface SidecarIodaAlert {
+  entityType: string | null;
+  entityCode: string | null;
+  entityName: string | null;
+  datasource: string | null;
+  score: number | null;
+  historyValue: number | null;
+  from: number | null;
+  until: number | null;
+  level: string | null; // IODA severity band: 'normal' | 'warning' | 'critical'
+  condition: string | null;
+  method: string | null;
 }
 
-interface IodaResponse {
-  data?: IodaAlert[];
-  alerts?: IodaAlert[];
+interface SidecarIodaResponse {
+  alerts?: SidecarIodaAlert[];
+  degraded?: boolean;
 }
 
-const IODA_API = 'https://ioda.inetintel.cc.gatech.edu/api/v2/outages/alerts';
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 let cache: { outages: IodaOutage[]; fetchedAt: number } | null = null;
 
-function scoreToSeverity(score: number): IodaOutage['severity'] {
-  if (score >= 0.8) return 'critical';
-  if (score >= 0.5) return 'high';
-  if (score >= 0.2) return 'medium';
-  return 'low';
+/** IODA reports a categorical `level`, not a normalized 0–1 score. Map it to the
+ * IodaOutage severity + a level-derived score proxy (the sidecar projection
+ * doesn't expose the raw sub-signal scores, so `score` here is categorical). */
+function levelToSeverity(level: string | null): { severity: IodaOutage['severity']; score: number } {
+  switch (level) {
+    case 'critical': { return { severity: 'critical', score: 0.9 }; }
+    case 'warning': { return { severity: 'high', score: 0.6 }; }
+    default: { return { severity: 'low', score: 0.2 }; }
+  }
 }
 
+function mapSidecarAlert(a: SidecarIodaAlert, i: number): IodaOutage {
+  const { severity, score } = levelToSeverity(a.level);
+  let entityType: IodaOutage['entityType'];
+  if (a.entityType === 'country') entityType = 'country';
+  else if (a.entityType === 'asn') entityType = 'asn';
+  else entityType = 'region';
+  return {
+    id: `ioda-${a.entityCode ?? i}-${a.from ?? i}`,
+    entityType,
+    entityName: a.entityName ?? 'Unknown',
+    entityCode: a.entityCode ?? '',
+    score,
+    overallScore: score,
+    // The sidecar projection carries a single `datasource` per alert, not the
+    // separate BGP/active/darknet sub-scores, so per-signal corroboration isn't
+    // available here — comms confidence lands at 'medium' (see comms-contributor).
+    bgpScore: null,
+    activeScore: null,
+    darknetsScore: null,
+    startTime: a.from === null ? new Date() : new Date(a.from * 1000),
+    endTime: null,
+    // A warning/critical IODA alert is an active outage; 'normal' is not.
+    isOngoing: a.level === 'critical' || a.level === 'warning',
+    severity,
+  };
+}
+
+/** Pure projection of the sidecar's alert array into sorted `IodaOutage[]`:
+ * keep only real outages (warning/critical), map each, sort ongoing-first then by
+ * level-derived score, cap at 50. Exported for testing without the fetch/cache. */
+export function parseSidecarOutages(alerts: readonly SidecarIodaAlert[]): IodaOutage[] {
+  const outages = alerts
+    .filter((a) => a.level === 'warning' || a.level === 'critical')
+    .map((a, i) => mapSidecarAlert(a, i));
+  outages.sort((a, b) => {
+    if (a.isOngoing !== b.isOngoing) return a.isOngoing ? -1 : 1;
+    return b.score - a.score;
+  });
+  return outages.slice(0, 50);
+}
+
+/**
+ * Fetch current internet outages via the sidecar `/api/internet-outages`
+ * endpoint (keyless, CORS-safe, TTL-cached upstream). Warms a module cache read
+ * synchronously by `getCachedIodaOutages`. A fetch failure keeps the prior cache
+ * (fail-closed) rather than clearing it.
+ */
 export async function fetchIodaOutages(): Promise<IodaOutage[]> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.outages;
 
   try {
- // Request alerts from last 24 hours
- const from = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
- const until = Math.floor(Date.now() / 1000);
- const url = `${IODA_API}?from=${from}&until=${until}&limit=50&page=1`;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const from = nowSec - 24 * 60 * 60;
+    const base = getApiBaseUrl();
+    const url = `${base}/api/internet-outages?from=${from}&until=${nowSec}&limit=50`;
 
- const res = await fetch(url, {
- signal: AbortSignal.timeout(12_000),
- headers: { Accept: 'application/json' },
- });
- if (!res.ok) {
- dataFreshness.recordError('internet-outages', `HTTP ${res.status}`);
- return cache?.outages ?? [];
- }
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(12_000),
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) {
+      dataFreshness.recordError('internet-outages', `HTTP ${res.status}`);
+      return cache?.outages ?? [];
+    }
 
- const data = await res.json() as IodaResponse;
- if (!data || typeof data !== 'object') {
- dataFreshness.recordError('internet-outages', 'malformed response');
- return cache?.outages ?? [];
- }
- const alerts: IodaAlert[] = data.data ?? data.alerts ?? [];
+    const data = await res.json() as SidecarIodaResponse;
+    if (!data || typeof data !== 'object') {
+      dataFreshness.recordError('internet-outages', 'malformed response');
+      return cache?.outages ?? [];
+    }
+    const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+    const outages = parseSidecarOutages(alerts);
 
- const outages: IodaOutage[] = alerts
- .filter(a => a.overallScore >= 0.1) // filter trivial noise
- .map((a, i) => {
- const score = Math.min(1, a.overallScore);
- const startTime = new Date(a.from * 1000);
- const endTime = a.until ? new Date(a.until * 1000) : null;
- const isOngoing = !endTime || endTime.getTime() > Date.now();
- let entityType: IodaOutage['entityType'];
- if (a.entity?.type === 'country') entityType = 'country';
- else if (a.entity?.type === 'asn') entityType = 'asn';
- else entityType = 'region';
-
- return {
- id: `ioda-${a.entity?.code ?? i}-${a.from}`,
- entityType,
- entityName: a.entity?.name ?? 'Unknown',
- entityCode: a.entity?.code ?? '',
- score,
- overallScore: a.overallScore,
- bgpScore: a.bgpScore ?? null,
- activeScore: a.activeScore ?? null,
- darknetsScore: a.darknetsScore ?? null,
- startTime,
- endTime,
- isOngoing,
- severity: scoreToSeverity(score),
- };
- });
-
- // Sort: ongoing first, then by score
- outages.sort((a, b) => {
- if (a.isOngoing !== b.isOngoing) return a.isOngoing ? -1 : 1;
- return b.score - a.score;
- });
-
- cache = { outages: outages.slice(0, 50), fetchedAt: Date.now() };
- dataFreshness.recordUpdate('internet-outages', cache.outages.length);
- return cache.outages;
+    cache = { outages, fetchedAt: Date.now() };
+    dataFreshness.recordUpdate('internet-outages', cache.outages.length);
+    return cache.outages;
   } catch (error) {
- dataFreshness.recordError('internet-outages', String(error));
- return cache?.outages ?? [];
+    dataFreshness.recordError('internet-outages', String(error));
+    return cache?.outages ?? [];
   }
+}
+
+/**
+ * Synchronous read of the last-fetched outages, or `[]` if nothing has been
+ * fetched yet OR the cache has aged past `CACHE_TTL_MS`. Lets the survival
+ * comms axis read the warm cache without awaiting a fetch; honors the same
+ * freshness window as `fetchIodaOutages` so a sustained loader outage can't keep
+ * asserting stale outages forever. `now` is injectable for determinism.
+ */
+export function getCachedIodaOutages(now = Date.now()): IodaOutage[] {
+  if (!cache || now - cache.fetchedAt >= CACHE_TTL_MS) return [];
+  return cache.outages;
 }
 
 export function outageEntityLabel(outage: IodaOutage): string {

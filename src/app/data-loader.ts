@@ -142,6 +142,7 @@ import { CyberThreatPanel } from '@/components/CyberThreatPanel';
 import { AlertCenterPanel } from '@/components/AlertCenterPanel';
 import { InfrastructurePanel } from '@/components/InfrastructurePanel';
 import { fetchNearbyInfrastructure } from '@/services/infrastructure/hifld';
+import { fetchIodaOutages } from '@/services/internet-outages';
 import { AirstrikesPanel } from '@/components/AirstrikesPanel';
 import { fetchAirstrikes } from '@/services/airstrikes';
 import { updateFromFlights } from '@/services/strike-packages';
@@ -687,6 +688,7 @@ export class DataLoaderManager implements AppModule {
  if (SITE_VARIANT === 'full') tasks.push({ name: 'openSanctions', task: () => runGuarded('openSanctions', () => this.loadOpenSanctions()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'edgarFilings', task: () => runGuarded('edgarFilings', () => this.loadEdgarFilings()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'infrastructure', task: () => runGuarded('infrastructure', () => this.loadInfrastructure()) });
+ if (SITE_VARIANT === 'full') tasks.push({ name: 'internetOutages', task: () => runGuarded('internetOutages', () => this.loadInternetOutages()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'iswReports', task: () => runGuarded('iswReports', () => this.loadIswReports()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'natoNews', task: () => runGuarded('natoNews', () => this.loadNatoNews()) });
  if (SITE_VARIANT === 'full') tasks.push({ name: 'dodNews', task: () => runGuarded('dodNews', () => this.loadDodNews()) });
@@ -3723,6 +3725,17 @@ export class DataLoaderManager implements AppModule {
  console.warn('[infrastructure] fetch failed', error);
  (this.ctx.panels['infrastructure'] as InfrastructurePanel | undefined)?.update([]);
  }
+  }
+
+  // Warms the internet-outages cache (via the sidecar) so the survival comms
+  // axis reads live IODA data through getCachedIodaOutages. No panel consumes it;
+  // fetchIodaOutages is fail-closed (never throws, keeps prior cache on error).
+  // Eventual-consistency by design: the comms axis picks up this data on the next
+  // storm-posture refresh (weather cadence) — the same pattern the health axis
+  // (loadDiseaseIntel) and financial/security axes (getForecastSnapshot) use,
+  // rather than coupling this loader back into refreshStormPosture (re-entrancy).
+  async loadInternetOutages(): Promise<void> {
+ await fetchIodaOutages();
   }
 
   async loadIswReports(): Promise<void> {

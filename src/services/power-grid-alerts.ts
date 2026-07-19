@@ -126,6 +126,19 @@ async function fetchRssFeed(feedUrl: string, source: PowerGridAlert['source']): 
   }
 }
 
+/**
+ * Synchronous read of the last-fetched grid alerts, or `[]` if nothing has been
+ * fetched yet OR the cache has aged past `CACHE_TTL_MS`. Lets consumers that must
+ * stay synchronous (e.g. the survival energy_water axis) read the warm cache
+ * without awaiting a fetch; honors the same freshness window as
+ * `fetchPowerGridAlerts` so a sustained loader outage can't assert stale alerts
+ * forever. `now` is injectable for determinism.
+ */
+export function getCachedPowerGridAlerts(now = Date.now()): PowerGridAlert[] {
+  if (!cache || now - cache.fetchedAt >= CACHE_TTL_MS) return [];
+  return cache.alerts;
+}
+
 export async function fetchPowerGridAlerts(): Promise<PowerGridAlert[]> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.alerts;
 

@@ -4,11 +4,13 @@
  * posture contributor on the `energy_water` axis. Pure: no fetch/DOM/state.
  * Reuses the datacenter power-posture level helpers so thresholds stay DRY.
  *
- * HANDOFF — Live wiring deferred: to make this axis live, mirror `supply`'s
- * pattern in storm-posture-state.ts — add a `getGridInput()` loader (TTL cache +
- * fail-closed per-feed status like `getSupplyEntries`) feeding `PowerPostureInput`
- * from the grid feeds (power-grid + grid-alerts + outages), then add
- * `makeEnergyWaterContributor(input)` as a third contributor in `withSupplyPosture`.
+ * LIVE (partial): wired in `storm-posture-state.withSupplyPosture` via
+ * `grid-energy-adapter.ts` reading `power-grid-alerts.getCachedPowerGridAlerts`
+ * (kept warm by the shortage supply loader). Only the grid-alert input has a
+ * sync-readable live source; grid utilization % and nearby-outage count have no
+ * live feed today, so they stay `null` (→ 'normal' → no threat). Grid alerts are
+ * the acute energy signal, so the axis surfaces real threats; adding a utilization
+ * or outage-count feed later only needs the adapter to populate those fields.
  */
 import type { PowerPostureInput } from '../datacenter/power-posture.ts';
 import { levelForUtil, levelForOutage, levelForAlert } from '../datacenter/power-posture.ts';

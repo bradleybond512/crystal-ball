@@ -20,10 +20,13 @@ import { makeHealthContributor } from './health-contributor.ts';
 import { makeCommsContributor } from './comms-contributor.ts';
 import { makeMobilityContributor } from './mobility-contributor.ts';
 import { adaptChokepointInfoToStatus } from './chokepoint-mobility-adapter.ts';
+import { makeEnergyWaterContributor } from './energy-water-contributor.ts';
+import { adaptPowerGridAlertsToInput } from './grid-energy-adapter.ts';
 import { getForecastSnapshot } from '../mode-forecast';
 import { getCachedDiseaseIntel } from '../disease-intel';
 import { getCachedIodaOutages } from '../internet-outages';
 import { getCachedChokepointInfo } from '../supply-chain/chokepoint-cache';
+import { getCachedPowerGridAlerts } from '../power-grid-alerts';
 import { availableMovesFrom } from './survival-moves.ts';
 import { makeWeatherMoveProvider } from './weather-move-provider.ts';
 import { makeSupplyMoveProvider } from './supply-move-provider.ts';
@@ -171,6 +174,11 @@ function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyBase: Wor
       // the sidecar throughput model is adapted to the contributor's closure-risk
       // model. Empty/stale cache → no mobility threats, fail-safe.
       makeMobilityContributor(adaptChokepointInfoToStatus(getCachedChokepointInfo(now))),
+      // Energy/water axis reads the warm power-grid alert cache synchronously
+      // (kept warm by the shortage supply loader). Grid utilization + nearby-outage
+      // count have no live source (→ null → no threat); grid alerts drive the axis.
+      // Empty/stale cache → no energy_water threats, fail-safe.
+      makeEnergyWaterContributor(adaptPowerGridAlertsToInput(getCachedPowerGridAlerts(now))),
     ],
     freshness: snapshot.freshness,
     capturedAtMs: snapshot.capturedAtMs,

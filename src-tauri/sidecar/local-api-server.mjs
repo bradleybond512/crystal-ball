@@ -33,6 +33,8 @@ import {
   ACLED_REFRESH_TOKEN_WARN_DAYS,
 } from './acled-token-helpers.mjs';
 import { fetchWithFallback } from './feed-resilience.mjs';
+import { fetchEnviroflashCap, alertMatchesArea } from './enviroflash-cap.mjs';
+import { normalizeAirnowForecast, peakForecastAqi } from './airnow-forecast.mjs';
 import { trackSuccess, trackFailure, getAllFeedStatuses, getFeedStatus } from './feed-health-tracker.mjs';
 import { fetchAllTfrs, tfrColor } from './faa-tfrs.mjs';
 import { fetchGdacsRss, groupByType, alertLevelRgba } from './gdacs-rss.mjs';
@@ -433,9 +435,9 @@ function cachedFetch(key, ttlMs, fetcher) {
       }
     }
     return data;
-  }).catch(err => {
+  }).catch(error => {
     _inflight.delete(key);
-    throw err;
+    throw error;
   }).finally(() => _inflight.delete(key));
   _inflight.set(key, promise);
   return promise;
@@ -4355,7 +4357,7 @@ function dedupeInflight(key, fetcher) {
   if (existing) return existing;
   const promise = Promise.resolve()
     .then(() => fetcher())
-    .catch(err => { _sidecarInflight.delete(key); throw err; })
+    .catch(error => { _sidecarInflight.delete(key); throw error; })
     .finally(() => { _sidecarInflight.delete(key); });
   _sidecarInflight.set(key, promise);
   return promise;
@@ -13190,6 +13192,104 @@ async function dispatch(requestUrl, req, routes, context) {
  } catch (error) {
  return json({ observations: [], error: String(error.message ?? error) }, 500);
  }
+  }
+
+  // ── EPA AirNow forecast + Air Quality Action Day, keyless EnviroFlash fallback ──
+  // Primary: keyed AirNow aq/forecast (lat/lon or ZIP) — carries the agency
+  // ActionDay flag. Fallback (no key OR AirNow down): the keyless EnviroFlash
+  // national CAP aggregate, filtered by ?area. 30-min TTL (forecasts are issued
+  // ~daily but action days are same-day time-sensitive). Total failure is NOT
+  // cached (a transient outage must not stick for the TTL).
+  if (requestUrl.pathname === '/api/airnow/forecast') {
+    const FORECAST_TTL = 30 * 60 * 1000;
+    const lat = Number.parseFloat(requestUrl.searchParams.get('lat') || '');
+    const lon = Number.parseFloat(requestUrl.searchParams.get('lon') || '');
+    const zip = (requestUrl.searchParams.get('zip') || '').trim();
+    const date = (requestUrl.searchParams.get('date') || '').trim(); // optional YYYY-MM-DD
+    const area = (requestUrl.searchParams.get('area') || '').trim();  // EnviroFlash CAP filter
+    const hasLatLon = Number.isFinite(lat) && Number.isFinite(lon);
+    if (!hasLatLon && !zip) {
+      return json({ forecasts: [], actionDay: false, error: 'lat+lon or zip required' }, 400);
+    }
+    // Cache key includes EVERY upstream input (lat/lon or zip, plus date + area).
+    // Each component is encoded so a comma/pipe inside one field can't collide
+    // with a different field split (e.g. zip="a,b" vs date="b").
+    const keyLoc = hasLatLon ? `ll:${lat.toFixed(3)},${lon.toFixed(3)}` : `zip:${zip}`;
+    const cacheKey = 'airnow-forecast:' + [keyLoc, date || 'today', area || '*']
+      .map((p) => encodeURIComponent(p)).join('|');
+    const cached = getCached(cacheKey, FORECAST_TTL);
+    if (cached) return json(cached);
+
+    const apiKey = process.env.AIRNOW_API_KEY;
+    let result = null;
+
+    // Primary: keyed AirNow forecast.
+    if (apiKey) {
+      try {
+        const base = hasLatLon
+          ? `https://www.airnowapi.org/aq/forecast/latLong/?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}`
+          : `https://www.airnowapi.org/aq/forecast/zipCode/?zipCode=${encodeURIComponent(zip)}`;
+        const url = `${base}${date ? `&date=${encodeURIComponent(date)}` : ''}`
+          + `&distance=25&format=application/json&API_KEY=${encodeURIComponent(apiKey)}`;
+        const resp = await fetchWithTimeout(url, {
+          headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
+        }, 15_000);
+        if (resp.ok) {
+          const raw = await resp.json();
+          // AirNow returns a JSON array on success; a 200 with a non-array
+          // (e.g. a WebServiceError object) is a failure — fall back rather
+          // than cache an empty "airnow" result for 30 min.
+          if (Array.isArray(raw)) {
+            const norm = normalizeAirnowForecast(raw);
+            result = {
+              ...norm,
+              peakAqi: peakForecastAqi(norm.forecasts),
+              source: 'airnow',
+              degraded: false,
+              fetchedAt: Date.now(),
+            };
+            trackSuccess('airnow-forecast', 'primary');
+            recordFeedSuccess('airnow-forecast');
+          }
+        }
+        // non-ok / non-array → fall through to the keyless fallback below
+      } catch { /* fall through to fallback */ }
+    }
+
+    // Fallback: keyless EnviroFlash CAP aggregate (no key, or AirNow failed).
+    if (!result) {
+      try {
+        const alerts = await fetchEnviroflashCap(fetchWithTimeout);
+        const matched = area ? alerts.filter((a) => alertMatchesArea(a, area)) : alerts;
+        const actionDayAlerts = matched.filter((a) => a.actionDay);
+        result = {
+          forecasts: [],
+          capAlerts: matched.slice(0, 50),
+          actionDay: actionDayAlerts.length > 0,
+          peakAqi: matched.reduce((m, a) => (typeof a.aqi === 'number' ? Math.max(m, a.aqi) : m), 0) || null,
+          reportingArea: area,
+          discussion: actionDayAlerts[0]?.headline ?? '',
+          source: 'enviroflash-cap',
+          degraded: true,
+          fetchedAt: Date.now(),
+        };
+        trackSuccess('airnow-forecast', 'fallback');
+        recordFeedSuccess('airnow-forecast');
+      } catch (error) {
+        trackFailure('airnow-forecast', error);
+        recordFeedFailure('airnow-forecast', error);
+        const stale = getCachedStale(cacheKey);
+        if (stale) return json({ ...stale, degraded: true, source: 'cached', reason: 'airnow + enviroflash unavailable' });
+        // Total failure — do NOT cache.
+        return json({
+          forecasts: [], actionDay: false, source: 'unavailable', degraded: true,
+          fetchedAt: Date.now(), error: 'airnow forecast and enviroflash fallback both failed',
+        }, 502);
+      }
+    }
+
+    setCached(cacheKey, result, FORECAST_TTL);
+    return json(result);
   }
 
   // ── INPE Queimadas — Brazil wildfire hotspots (last 48h) ─────────────────

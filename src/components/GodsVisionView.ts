@@ -18,6 +18,10 @@ import { GlobeReactorBeacons } from '@/components/GlobeReactorBeacons';
 import { GlobeSeismicWaves } from '@/components/GlobeSeismicWaves';
 import { GlobeWebcamLayer } from '@/services/webcams/webcam-globe-layer';
 import { fetchUnifiedWebcams } from '@/services/webcams/fetcher';
+import { buildSnapshotViewerCard, type SnapshotViewerHandle } from '@/services/webcams/webcam-viewer';
+import { resolveFrameUrl, needsFrameResolve } from '@/services/webcams/frame-resolver';
+import type { WebcamFeed } from '@/services/webcams/webcam-types';
+import { openExternalSafe } from '@/utils/safe-open';
 import { FlyModeController } from '@/components/gods-vision/FlyMode/FlyModeController';
 import { BuildingTileManager } from '@/services/building-tiles';
 import type { FlySubMode } from '@/components/gods-vision/FlyMode/flyModeKeybinds';
@@ -81,6 +85,8 @@ export class GodsVisionView {
   private reactorBeacons: GlobeReactorBeacons | null = null;
   private seismicWaves: GlobeSeismicWaves | null = null;
   private webcamLayer: GlobeWebcamLayer | null = null;
+  private webcamViewer: SnapshotViewerHandle | null = null;
+  private webcamViewerHost: HTMLElement | null = null;
   private globePulse: GlobePulse | null = null;
   private globeArcs: GlobeArcs | null = null;
   private globeHeatmap: GlobeHeatmap | null = null;
@@ -189,6 +195,20 @@ export class GodsVisionView {
  });
  void this.webcamLayer.mount();
  this.cleanupHandlers.push(() => { this.webcamLayer?.destroy(); this.webcamLayer = null; });
+ // The Webcams panel isn't visible over the fullscreen globe, so clicking a
+ // cam here must surface its viewer IN this view — otherwise the click only
+ // reads as a zoom. Listen for the layer's webcam:select and open an overlay.
+ const onWebcamSelect = (e: Event): void => {
+ const feed = (e as CustomEvent<{ feed?: WebcamFeed }>).detail?.feed;
+ if (feed) this.openWebcamViewer(feed);
+ };
+ window.addEventListener('webcam:select', onWebcamSelect as EventListener);
+ this.cleanupHandlers.push(() => {
+ window.removeEventListener('webcam:select', onWebcamSelect as EventListener);
+ this.closeWebcamViewer();
+ this.webcamViewerHost?.remove();
+ this.webcamViewerHost = null;
+ });
  }
 
  // Auto-follow engine
@@ -534,6 +554,33 @@ export class GodsVisionView {
  // AutoFollow no longer reprioritizes by mode — single-mode design.
  // Mode here drives theming and audio cues only.
  this.applyModeTheme(detail.mode);
+  }
+
+  /** Open (or replace) the in-view webcam snapshot viewer for a clicked cam. */
+  private openWebcamViewer(feed: WebcamFeed): void {
+ this.closeWebcamViewer();
+ if (!this.webcamViewerHost) {
+ const host = document.createElement('div');
+ host.className = 'gods-vision-webcam-viewer';
+ this.container.append(host);
+ this.webcamViewerHost = host;
+ }
+ this.webcamViewer = buildSnapshotViewerCard(feed, {
+ onClose: () => this.closeWebcamViewer(),
+ openExternal: (url) => openExternalSafe(url),
+ // FAA and similar feeds carry a /api/ resolver URL; resolve it to a real
+ // image so their globe click-through shows a frame, not an empty overlay.
+ resolveFrame: (url) => (needsFrameResolve(url) ? resolveFrameUrl(url) : Promise.resolve(url)),
+ });
+ this.webcamViewerHost.append(this.webcamViewer.el);
+  }
+
+  private closeWebcamViewer(): void {
+ if (this.webcamViewer) {
+ this.webcamViewer.destroy();
+ this.webcamViewer.el.remove();
+ this.webcamViewer = null;
+ }
   }
 
   private applyModeTheme(mode: AppMode | null): void {

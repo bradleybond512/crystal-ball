@@ -1,5 +1,5 @@
 import type { BeliefValue } from '@/types/belief';
-import { createBelief } from '@/components/belief-helpers';
+import { createBelief } from '@/services/intelligence/belief-helpers';
 
 export const EVENT_TAXONOMY = [
   'conflict',

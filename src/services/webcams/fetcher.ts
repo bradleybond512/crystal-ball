@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from '@/services/runtime';
 import type { WebcamCatalog, WebcamFeed, WebcamSource, WebcamSourceHealth } from './webcam-types';
+import { annotateVisibility } from './airnow-visibility-catalog';
 
 const FAVORITES_KEY = 'crystalball-webcam-favorites';
 const CATALOG_TTL_MS = 5 * 60 * 1000;
@@ -18,7 +19,9 @@ export function catalogFromResponse(data: {
   sourceHealth?: WebcamSourceHealth[];
   updatedAt?: number;
 }): WebcamCatalog {
-  const feeds = Array.isArray(data.feeds) ? data.feeds : [];
+  // Tag the AirNow visibility cams (NPS haze webcams) so surfaces can filter
+  // them and the smoke trigger can find them — pure, no new feeds.
+  const feeds = annotateVisibility(Array.isArray(data.feeds) ? data.feeds : []);
   const bySource = feeds.reduce<Record<WebcamSource, WebcamFeed[]>>(
     (acc, feed) => {
       if (!acc[feed.source]) acc[feed.source] = [];

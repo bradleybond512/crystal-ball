@@ -609,12 +609,27 @@ function decayAcked(): void {
 }
 
 let started = false;
+let _scanTimer: number | null = null;
+let _pruneTimer: number | null = null;
+let _initialScanTimer: number | null = null;
+let _unsubStore: (() => void) | null = null;
+
 export function startAlertCorrelator(): void {
   if (started) return;
   started = true;
   loadNegEvidence();
-  window.setInterval(scan, SCAN_INTERVAL_MS);
-  window.setInterval(pruneSynth, PRUNE_INTERVAL_MS);
-  unifiedAlertStore.subscribe(decayAcked);
-  window.setTimeout(scan, 5000);
+  _scanTimer = window.setInterval(scan, SCAN_INTERVAL_MS);
+  _pruneTimer = window.setInterval(pruneSynth, PRUNE_INTERVAL_MS);
+  _unsubStore = unifiedAlertStore.subscribe(decayAcked);
+  _initialScanTimer = window.setTimeout(scan, 5000);
+}
+
+export function stopAlertCorrelator(): void {
+  if (_scanTimer !== null) { clearInterval(_scanTimer); _scanTimer = null; }
+  if (_pruneTimer !== null) { clearInterval(_pruneTimer); _pruneTimer = null; }
+  if (_initialScanTimer !== null) { clearTimeout(_initialScanTimer); _initialScanTimer = null; }
+  // Drop the store subscription so stop/start doesn't stack decayAcked subscribers.
+  _unsubStore?.();
+  _unsubStore = null;
+  started = false;
 }

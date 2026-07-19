@@ -111,7 +111,12 @@ export function bridgeWeatherAlertsToInsights(
 }
 
 function alertToEvent(alert: WeatherAlertLike): IncomingEvent {
-  const at = typeof alert.onset === 'string' ? Date.parse(alert.onset) : alert.onset.getTime();
+  // alert.onset is typed Date|string but runtime casts may produce other values.
+  // Guard so a non-Date non-string falls through to the NaN default.
+  let at: number;
+  if (typeof alert.onset === 'string') at = Date.parse(alert.onset);
+  else if (alert.onset instanceof Date) at = alert.onset.getTime();
+  else at = Number.NaN;
   const [lng, lat] = alert.centroid ?? [0, 0];
   return {
     eventId: alert.id,

@@ -53,9 +53,11 @@ export function makeGranularTools(client) {
   }
 
   async function lookup_ip({ ip }) {
-    const greynoise = await client.get('/api/greynoise-lookup', { ip });
-    const abuseipdb = await client.get('/api/abuseipdb-reports', { ip });
-    const ipinfo = await client.get('/api/ipinfo-lookup', { ip });
+    const [greynoise, abuseipdb, ipinfo] = await Promise.all([
+      client.get('/api/greynoise-lookup', { ip }),
+      client.get('/api/abuseipdb-reports', { ip }),
+      client.get('/api/ipinfo-lookup', { ip }),
+    ]);
 
     const warnings = [];
     if (greynoise?.error) warnings.push(`greynoise: ${greynoise.error}`);
@@ -241,9 +243,9 @@ export function makeGranularTools(client) {
 
     const sidecarOk = health && !health.error;
     const keyInfo = sidecarOk ? `${health.keys_configured}/${health.keys_total} API keys configured` : 'unknown';
-    const missingKeys = sidecarOk && health.keys_missing?.length ? health.keys_missing : [];
+    const missingKeyCount = sidecarOk && health.keys_missing_count ? health.keys_missing_count : 0;
 
-    const summary = `Sidecar ${sidecarOk ? 'up' : 'DOWN'}. Feeds: ${healthy} healthy, ${degraded} degraded out of ${probeRoutes.length}. Keys: ${keyInfo}.${missingKeys.length ? ` Missing: ${missingKeys.join(', ')}.` : ''}`;
+    const summary = `Sidecar ${sidecarOk ? 'up' : 'DOWN'}. Feeds: ${healthy} healthy, ${degraded} degraded out of ${probeRoutes.length}. Keys: ${keyInfo}.${missingKeyCount ? ` Missing keys: ${missingKeyCount}.` : ''}`;
 
     return makeResponse(summary, {
       sidecar: sidecarOk ? {
@@ -254,7 +256,7 @@ export function makeGranularTools(client) {
         ais_vessels: health.ais_vessels,
         keys_configured: health.keys_configured,
         keys_total: health.keys_total,
-        keys_missing: missingKeys,
+        keys_missing_count: missingKeyCount,
       } : { error: health?.error || 'unreachable' },
       serviceStatus: status || {},
       feeds,

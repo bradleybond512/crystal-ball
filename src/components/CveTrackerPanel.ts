@@ -13,7 +13,7 @@
 
 import { Panel } from './Panel';
 import { applyCveQuery, fetchCves, searchCves, type CveRecord } from '@/services/security/cve-service';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { SEVERITY_COLOR, formatScore, severityMatchesTab, timeAgo } from './cve-panel-helpers';
 
 type Tab = 'critical' | 'high' | 'search';
@@ -123,7 +123,7 @@ export class CveTrackerPanel extends Panel {
         : r.affectedProducts.slice(0, 3).map((p) => `<span class="cve-product">${escapeHtml(p)}</span>`).join('');
       return `<tr class="cve-row cve-${r.severity}">
         <td class="cve-id">
-          <a href="${escapeHtml(r.nvdUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.id)}</a>
+          <a href="${sanitizeUrl(r.nvdUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.id)}</a>
         </td>
         <td class="cve-score" style="color:${color};">
           <span class="cve-score-badge">${escapeHtml(formatScore(r.cvssScore))}</span>

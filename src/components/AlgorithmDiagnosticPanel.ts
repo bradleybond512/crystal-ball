@@ -99,11 +99,16 @@ export class AlgorithmDiagnosticPanel extends Panel {
   }
 
   public destroy(): void {
-    super.destroy();
+    // Clear timer BEFORE super.destroy() — the interval callback calls
+    // renderWhenVisible() which writes to the panel's content element;
+    // super.destroy() disconnects the IntersectionObserver and aborts the
+    // AbortController, so a timer firing in that window would operate on a
+    // partially-torn-down panel.  Every other subclass follows this order.
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    super.destroy();
   }
 
   private render(): void {

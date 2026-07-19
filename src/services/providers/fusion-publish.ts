@@ -20,6 +20,7 @@ import { ingestDomain, type DomainObservation, type IngestResult } from './fusio
 import { recordProviderFetchOutcome, getProviderHealthState } from './providers-state.ts';
 import { snapshotsFromRegistry } from './provider-bridge.ts';
 import { FUSION_DOMAINS } from './provider-domain-map.ts';
+import { logDebug } from '../reasoning-debug.ts';
 
 let latestByProvider: Record<string, DomainObservation[]> = {};
 /** Current fingerprint per provider, across all fused domains. */
@@ -49,7 +50,14 @@ export function recordDomainObservations(
   if (!key) return; // provider isn't part of any fused domain — nothing to recompute
   const cfg = FUSION_DOMAINS[key as keyof typeof FUSION_DOMAINS];
   const all = cfg.providerIds.flatMap((id) => latestByProvider[id] ?? []);
-  const { providerFingerprints } = ingestDomain(key, all, getProviderHealthState(), now);
+  let providerFingerprints: Record<string, unknown>;
+  try {
+    ({ providerFingerprints } = ingestDomain(key, all, getProviderHealthState(), now));
+  } catch (error) {
+    logDebug({ level: 'warn', category: 'other', source: 'fusion-publish',
+      message: 'ingestDomain failed', data: { domain: key, error: error instanceof Error ? error.message : String(error) } });
+    return; // Keep stale fingerprints; don't abort the caller's refresh tick.
+  }
   // Replace this domain's providers' fingerprints (clear stale, set fresh).
   for (const id of cfg.providerIds) delete fingerprintsByProvider[id];
   Object.assign(fingerprintsByProvider, providerFingerprints);

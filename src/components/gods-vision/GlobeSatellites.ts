@@ -3,11 +3,12 @@ import {
   PointGraphics, ConstantProperty, ConstantPositionProperty, LabelGraphics,
   Cartesian2, type Viewer,
 } from 'cesium';
-import * as satellite from 'satellite.js';
+import { twoline2satrec, propagate, gstime, eciToGeodetic, degreesLat, degreesLong } from 'satellite.js';
 import { getApiBaseUrl } from '@/services/runtime';
 import { isAppActive, onActivityChange } from '@/services/app-activity';
 
-interface TleEntry { name: string; line1: string; line2: string }
+/** TLE entry with pre-parsed satrec so twoline2satrec() is never called per-frame. */
+interface TleEntry { name: string; line1: string; line2: string; satrec: ReturnType<typeof twoline2satrec> }
 
 function parseTles(text: string): TleEntry[] {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -16,7 +17,11 @@ function parseTles(text: string): TleEntry[] {
  const name = lines[i] ?? '';
  const line1 = lines[i + 1] ?? '';
  const line2 = lines[i + 2] ?? '';
- result.push({ name, line1, line2 });
+ try {
+   // Parse satrec once here — never again per animation frame.
+   const satrec = twoline2satrec(line1, line2);
+   result.push({ name, line1, line2, satrec });
+ } catch { /* skip malformed TLE */ }
   }
   return result;
 }
@@ -102,21 +107,22 @@ export class GlobeSatellites {
 
   private propagate(): void {
  const now = new Date();
+ // gstime computed once per frame — shared across all satellites.
+ const gmst = gstime(now);
  for (const tle of this.tles) {
  try {
- const satrec = satellite.twoline2satrec(tle.line1, tle.line2);
- const posVel = satellite.propagate(satrec, now);
+ // satrec was pre-parsed in parseTles() — no per-frame twoline2satrec() call.
+ const posVel = propagate(tle.satrec, now);
  if (!posVel?.position) continue;
- const gmst = satellite.gstime(now);
- const geo = satellite.eciToGeodetic(posVel.position as satellite.EciVec3<number>, gmst);
- const lat = satellite.degreesLat(geo.latitude);
- const lon = satellite.degreesLong(geo.longitude);
+ const geo = eciToGeodetic(posVel.position as { x: number; y: number; z: number }, gmst);
+ const lat = degreesLat(geo.latitude);
+ const lon = degreesLong(geo.longitude);
  const alt = geo.height * 1000;
  const entity = this.source.entities.getById(tle.name);
  if (entity) {
  entity.position = new ConstantPositionProperty(Cartesian3.fromDegrees(lon, lat, alt));
  }
- } catch { /* bad TLE */ }
+ } catch { /* skip bad TLE on this frame */ }
  }
   }
 }

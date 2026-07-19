@@ -988,7 +988,8 @@ fn begin_activity_macos() -> Option<usize> {
 fn end_activity_macos(_token: usize) {}
 
 #[tauri::command]
-fn set_always_on(state: tauri::State<AlwaysOnGuard>, enabled: bool) -> bool {
+fn set_always_on(webview: Webview, state: tauri::State<AlwaysOnGuard>, enabled: bool) -> Result<bool, String> {
+    require_trusted_window(webview.label())?;
     let mut held = state.0.lock().unwrap_or_else(|e| e.into_inner());
     if enabled && held.is_none() {
         *held = begin_activity_macos();
@@ -997,7 +998,7 @@ fn set_always_on(state: tauri::State<AlwaysOnGuard>, enabled: bool) -> bool {
             end_activity_macos(token);
         }
     }
-    held.is_some()
+    Ok(held.is_some())
 }
 
 #[tauri::command]
@@ -1441,7 +1442,8 @@ fn open_url(webview: Webview, url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_system_prefs_location() -> Result<(), String> {
+fn open_system_prefs_location(webview: Webview) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  open_in_shell("x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
 }
 
@@ -1577,7 +1579,8 @@ fn open_sidecar_log_file(webview: Webview, app: AppHandle) -> Result<String, Str
 }
 
 #[tauri::command]
-async fn open_settings_window_command(app: AppHandle) -> Result<(), String> {
+async fn open_settings_window_command(webview: Webview, app: AppHandle) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  if let Some(win) = app.get_webview_window("main") {
  let _ = win.eval("document.dispatchEvent(new CustomEvent('wm:open-settings'))");
  }
@@ -1585,7 +1588,8 @@ async fn open_settings_window_command(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn close_settings_window(app: AppHandle) -> Result<(), String> {
+fn close_settings_window(webview: Webview, app: AppHandle) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  if let Some(window) = app.get_webview_window("settings") {
  window
  .close()
@@ -2225,12 +2229,14 @@ fn open_youtube_login_window(app: &AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn open_youtube_login(app: AppHandle) -> Result<(), String> {
+async fn open_youtube_login(webview: Webview, app: AppHandle) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  open_youtube_login_window(&app)
 }
 
 #[tauri::command]
-async fn open_youtube_logout(app: AppHandle) -> Result<(), String> {
+async fn open_youtube_logout(webview: Webview, app: AppHandle) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  if let Some(main_win) = app.get_webview_window("main") {
  let _ = main_win.eval(
  "document.dispatchEvent(new CustomEvent('wm:youtube-signed-out'))"
@@ -2246,7 +2252,8 @@ async fn open_youtube_logout(app: AppHandle) -> Result<(), String> {
 /// matches the pattern already used for `CLLocationManager` initialization.
 /// No-op on non-macOS platforms.
 #[tauri::command]
-fn set_dock_badge(count: u32) -> Result<(), String> {
+fn set_dock_badge(webview: Webview, count: u32) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  #[cfg(target_os = "macos")]
  {
   use std::ffi::{c_char, c_void, CString};
@@ -2300,7 +2307,8 @@ fn set_dock_badge(count: u32) -> Result<(), String> {
 /// the first time this command runs, and intentionally leaked so it survives
 /// for the process lifetime (NSStatusBar will release it otherwise).
 #[tauri::command]
-fn set_menubar_status(level: String) -> Result<(), String> {
+fn set_menubar_status(webview: Webview, level: String) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  #[cfg(target_os = "macos")]
  {
   let icon = match level.as_str() {
@@ -2373,7 +2381,8 @@ unsafe fn ensure_menubar_status_item(title: &str) {
 }
 
 #[tauri::command]
-fn update_mode_label(app: AppHandle, mode: String) -> Result<(), String> {
+fn update_mode_label(webview: Webview, app: AppHandle, mode: String) -> Result<(), String> {
+ require_trusted_window(webview.label())?;
  let label = match mode.as_str() {
  "peace" => "Mode: \u{1F54A} Peace",
  "finance" => "Mode: \u{1F4B0} Finance",

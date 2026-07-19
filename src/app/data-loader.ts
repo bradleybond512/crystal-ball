@@ -1482,7 +1482,9 @@ export class DataLoaderManager implements AppModule {
  if (!data.success) throw new Error(data.error || 'Unknown error');
 
  const now = new Date();
- const mapEvents = data.events.map((e: any) => ({
+ // data.events is typed as TechEvent[] by the generated client — drop the
+ // `any` annotation so schema drift is caught at compile time.
+ const mapEvents = data.events.map((e) => ({
  id: e.id,
  title: e.title,
  location: e.location,

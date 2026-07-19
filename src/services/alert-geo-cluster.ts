@@ -11,10 +11,10 @@
  */
 
 import { unifiedAlertStore, type UnifiedAlert, computeDistanceKm } from './unified-alerts';
+import { debounce } from '../utils';
 
 const CELL_DEG = 2;
 const MERGE_RADIUS_KM = 300;
-const REFRESH_MS = 30_000;
 
 export interface AlertCluster {
   id: string;
@@ -101,11 +101,14 @@ function publish(): void {
   document.dispatchEvent(new CustomEvent('cb:alert-clusters', { detail: { clusters } }));
 }
 
+// Debounced so burst ingests coalesce into one cluster pass.
+const _debouncedPublish = debounce(publish as (...args: unknown[]) => void, 500);
+
 let started = false;
 export function startAlertGeoClustering(): void {
   if (started) return;
   started = true;
   window.setTimeout(publish, 5000);
-  window.setInterval(publish, REFRESH_MS);
-  unifiedAlertStore.subscribe(publish);
+  // subscribe handles reactivity; redundant 30 s setInterval removed.
+  unifiedAlertStore.subscribe(_debouncedPublish);
 }

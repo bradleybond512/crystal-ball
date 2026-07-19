@@ -60,7 +60,13 @@ function toResponse(payload: CachedResponsePayload): Response {
 }
 
 async function fetchAndPersist(url: string): Promise<Response> {
-  const response = await fetch(proxyUrl(url));
+  let response: Response;
+  try {
+    response = await fetch(proxyUrl(url));
+  } catch (error) {
+    console.warn('[proxy] fetch failed for', url, error); // eslint-disable-line no-console
+    throw error;
+  }
   if (response.ok && shouldPersistResponse(url)) {
  try {
  const body = await response.clone().text();
@@ -74,7 +80,12 @@ async function fetchAndPersist(url: string): Promise<Response> {
 
 export async function fetchWithProxy(url: string): Promise<Response> {
   if (!shouldPersistResponse(url)) {
- return fetch(proxyUrl(url));
+    try {
+      return await fetch(proxyUrl(url));
+    } catch (error) {
+      console.warn('[proxy] fetch failed for', url, error); // eslint-disable-line no-console
+      throw error;
+    }
   }
 
   const cacheKey = buildResponseCacheKey(url);

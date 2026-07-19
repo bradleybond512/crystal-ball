@@ -80,7 +80,24 @@ class LocationService {
 
   private async fetchLocation(timeoutMs: number): Promise<LocationFix> {
     if (hasTauriInvokeBridge()) {
-      const [lat, lon] = await invokeTauri<[number, number]>('get_native_location');
+      // Cast to `unknown` first — Rust can return null or an unexpected shape
+      // during early boot before CLLocationManager is ready. Destructuring an
+      // undefined tuple would silently inject NaN into every geo calculation.
+      const result = await invokeTauri<unknown>('get_native_location');
+      if (
+        !Array.isArray(result) ||
+        result.length < 2 ||
+        // Number.isFinite rejects NaN/Infinity (which typeof 'number' accepts)
+        // and the range check rejects impossible coordinates before they reach
+        // any geo calculation.
+        !Number.isFinite(result[0]) ||
+        !Number.isFinite(result[1]) ||
+        (result[0] as number) < -90 || (result[0] as number) > 90 ||
+        (result[1] as number) < -180 || (result[1] as number) > 180
+      ) {
+        throw new Error(`get_native_location: unexpected response shape — got ${JSON.stringify(result)}`);
+      }
+      const [lat, lon] = result as [number, number];
       return { lat, lon, timestamp: Date.now(), source: 'native' };
     }
 

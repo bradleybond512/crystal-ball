@@ -25,6 +25,8 @@ export async function fetchCoinbasePrices(): Promise<CoinbaseFetchResult> {
     const prices = data.quotes.filter(
       (q): q is ExchangePrice => !!q && typeof q.symbol === 'string' && Number.isFinite(q.price),
     );
+    // A live 200 with all-null prices is a soft failure — matches coingecko-fetch behaviour.
+    if (prices.length === 0) return { ok: false, prices: [] };
     return { ok: true, prices };
   } catch {
     return { ok: false, prices: [] };

@@ -149,6 +149,8 @@ export function freshnessFor(
 ): number {
   if (!input) return 0;
   const age = Math.max(0, now - input.observedAt);
+  // A NaN observedAt (corrupt timestamp) must not pass as fresh; treat as worst-case.
+  if (!Number.isFinite(age)) return 0;
   if (age <= 0) return 1;
   if (age >= 2 * expectedRefreshMs) return 0;
   return clamp(0, 1, 1 - age / (2 * expectedRefreshMs));
@@ -170,9 +172,15 @@ export interface BuildDriverArgs {
 }
 
 export function buildDriver(args: BuildDriverArgs): ShortageDriver {
+  // A non-finite value (NaN from a failed parse) would propagate through toRisk →
+  // Math.round → clamp and corrupt the weighted average. Treat as zero risk
+  // instead — and re-check the computed risk too, since toRisk() can itself
+  // return non-finite (e.g. a divide-by-bad-data) even for a finite input.
+  const risk = Number.isFinite(args.value) ? args.toRisk(args.value) : 0;
+  const rawScore = Number.isFinite(risk) ? risk : 0;
   return {
     kind: args.kind,
-    score: clamp(0, 100, Math.round(args.toRisk(args.value))),
+    score: clamp(0, 100, Math.round(rawScore)),
     label: args.label,
     sources: args.source ? [args.source] : undefined,
     polarity: args.polarity,

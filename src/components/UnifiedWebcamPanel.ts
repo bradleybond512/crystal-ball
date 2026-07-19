@@ -18,28 +18,18 @@ import { nextProbeDelay } from '@/services/webcams/probe-backoff';
 import { resolveFrameUrl } from '@/services/webcams/frame-resolver';
 import { openExternalSafe } from '@/utils/safe-open';
 import { isVisibilityCam, AIRNOW_VISIBILITY_PROGRAMS } from '@/services/webcams/airnow-visibility-catalog';
+import {
+  WEBCAM_SOURCE_LABELS as SOURCE_LABELS,
+  formatRefreshCadence,
+  formatDataAsOf,
+  cacheBustedUrl,
+  isDirectlyViewable,
+} from '@/services/webcams/webcam-viewer';
 import type { WebcamCategory, WebcamFeed, WebcamSource, WebcamSourceHealth } from '@/services/webcams/webcam-types';
 
 const SMOKE_DETECT_INTERVAL_MS = 10 * 60 * 1000;
 
 type ViewMode = 'grid' | 'list' | 'map';
-
-const SOURCE_LABELS: Record<WebcamSource, string> = {
-  FAA: 'FAA',
-  DOT511: 'Traffic',
-  USGS_VOLCANO: 'Volcano',
-  NPS: 'Parks',
-  ALERTWILDFIRE: 'Fire',
-  WINDY: 'Windy',
-  USFS: 'USFS',
-  USGS_STREAM: 'Stream',
-  NOAA_COASTAL: 'Coastal',
-  CALTRANS: 'Caltrans',
-  TFL: 'TfL',
-  SINGAPORE: 'Singapore',
-  GEONET: 'GeoNet',
-  HAZECAM: 'Visibility',
-};
 
 const CATEGORY_COLORS: Record<WebcamCategory, string> = {
   fire: '#f85149',
@@ -829,6 +819,32 @@ export class UnifiedWebcamPanel extends Panel {
     caption.textContent = media.label;
     div.append(caption);
 
+    // Honest cadence + a live "Updated …" stamp for snapshot feeds, so a still
+    // image never reads as a stalled video. The stamp ticks each time a frame
+    // actually loads (auto-refresh or the manual Refresh button below).
+    const captureImg = media.capture instanceof HTMLImageElement ? media.capture : null;
+    if (!media.playingInline) {
+      const cadence = document.createElement('div');
+      cadence.style.fontSize = '11px';
+      cadence.style.opacity = '0.8';
+      cadence.style.marginTop = '4px';
+      cadence.textContent = `📷 Static snapshot · ${formatRefreshCadence(f.refreshIntervalSec)}`;
+      div.append(cadence);
+
+      if (captureImg) {
+        let loadedAt: number | null = null;
+        const asOf = document.createElement('div');
+        asOf.style.fontSize = '11px';
+        asOf.style.opacity = '0.65';
+        asOf.textContent = formatDataAsOf(loadedAt, Date.now());
+        captureImg.addEventListener('load', () => {
+          loadedAt = Date.now();
+          asOf.textContent = formatDataAsOf(loadedAt, Date.now());
+        });
+        div.append(asOf);
+      }
+    }
+
     const meta = document.createElement('div');
     meta.style.fontSize = '12px';
     meta.style.marginTop = '8px';
@@ -849,6 +865,20 @@ export class UnifiedWebcamPanel extends Panel {
     actions.style.display = 'flex';
     actions.style.gap = '8px';
     actions.style.marginTop = '8px';
+
+    // Manual refresh for directly-viewable snapshot feeds — a still image won't
+    // auto-play, so give the user an explicit way to pull the latest frame now.
+    // Skipped for resolver feeds (e.g. FAA /api/), whose real image URL is
+    // resolved asynchronously and isn't `f.snapshotUrl`.
+    if (captureImg && isDirectlyViewable(f.snapshotUrl)) {
+      let manualTick = 0;
+      const refreshBtn = this.viewerButton('🔄 Refresh');
+      refreshBtn.addEventListener('click', () => {
+        manualTick += 1;
+        captureImg.src = cacheBustedUrl(f.snapshotUrl, Date.now() + manualTick);
+      });
+      actions.append(refreshBtn);
+    }
 
     if (media.capture) {
       const capture = media.capture;

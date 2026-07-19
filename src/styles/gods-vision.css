@@ -792,3 +792,78 @@ body.gods-vision-lock {
   }
 }
 
+
+/* ── Webcam snapshot viewer (God's Vision click-through + shared card) ── */
+.gods-vision-webcam-viewer {
+  position: absolute;
+  top: 64px;
+  right: 16px;
+  z-index: 30;
+  max-width: 340px;
+  pointer-events: auto;
+}
+.webcam-snapshot-viewer {
+  background: rgba(10, 25, 41, 0.94);
+  border: 1px solid #1f6feb;
+  border-radius: 8px;
+  padding: 10px;
+  color: #e6edf3;
+  font-family: var(--font-ui, sans-serif);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+}
+.webcam-snapshot-viewer__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.webcam-snapshot-viewer__close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+}
+.webcam-snapshot-viewer__img {
+  display: block;
+  width: 100%;
+  border-radius: 4px;
+  background: #0a1929;
+  min-height: 40px;
+}
+.webcam-snapshot-viewer__controls {
+  margin-top: 6px;
+}
+.webcam-snapshot-viewer__controls button,
+.webcam-snapshot-viewer__note + button {
+  padding: 3px 10px;
+  font-size: 12px;
+  background: var(--accent, #1f6feb);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.webcam-snapshot-viewer__cadence {
+  font-size: 11px;
+  opacity: 0.85;
+  margin-top: 8px;
+}
+.webcam-snapshot-viewer__asof {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+.webcam-snapshot-viewer__meta {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 6px;
+}
+.webcam-snapshot-viewer__note {
+  font-size: 12px;
+  opacity: 0.85;
+  margin: 6px 0;
+}

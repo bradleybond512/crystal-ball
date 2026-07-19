@@ -17,6 +17,7 @@ import {
 import { escapeHtml } from '@/utils/sanitize';
 import type { WebcamFeed } from './webcam-types';
 import { resolveFrameUrl, needsFrameResolve } from './frame-resolver';
+import { resolveWebcamPick } from './webcam-pick';
 
 const HIGH_SALIENCE_CATEGORIES = ['fire', 'volcano', 'coastal'] as const;
 
@@ -94,16 +95,12 @@ export class GlobeWebcamLayer {
       const picked: unknown = this.viewer.scene.pick(event.position);
       if (!picked || typeof picked !== 'object') return;
       const entityId = (picked as { id?: unknown }).id;
-      // A clustered pin picks as an array of its entities — zoom in to expand it
-      // instead of dead-clicking, so the individual cams become reachable.
-      if (Array.isArray(entityId)) {
-        this.zoomToCluster(entityId);
-        return;
-      }
-      if (entityId instanceof Entity && typeof entityId.id === 'string') {
-        const feed = this.feedById.get(entityId.id);
-        if (feed) this.dispatchSelect(feed);
-      }
+      // Route the pick: a clustered pin (array of entities) zooms in to expand
+      // so the individual cams become reachable; an individual pin opens its
+      // viewer. resolveWebcamPick keeps this decision unit-testable.
+      const result = resolveWebcamPick(entityId, this.feedById);
+      if (result?.kind === 'cluster') this.zoomToCluster(result.entities);
+      else if (result?.kind === 'feed') this.dispatchSelect(result.feed);
     }, ScreenSpaceEventType.LEFT_CLICK);
 
     await this.refresh();

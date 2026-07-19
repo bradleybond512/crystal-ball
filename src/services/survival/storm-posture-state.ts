@@ -16,7 +16,9 @@ import { makeWeatherContributor } from './weather-contributor.ts';
 import { makeSupplyContributor } from './supply-contributor.ts';
 import { makeFinancialContributor } from './financial-contributor.ts';
 import { makeSecurityContributor } from './security-contributor.ts';
+import { makeHealthContributor } from './health-contributor.ts';
 import { getForecastSnapshot } from '../mode-forecast';
+import { getCachedDiseaseIntel } from '../disease-intel';
 import { availableMovesFrom } from './survival-moves.ts';
 import { makeWeatherMoveProvider } from './weather-move-provider.ts';
 import { makeSupplyMoveProvider } from './supply-move-provider.ts';
@@ -150,6 +152,11 @@ function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyBase: Wor
       makeWeatherContributor(snapshot.weatherAlerts, snapshot.savedPlaces),
       supplyContributorForBase(supplyBase),
       ...(forecast ? [makeFinancialContributor(forecast), makeSecurityContributor(forecast)] : []),
+      // Health axis reads the warm disease-intel cache synchronously (kept warm
+      // by the scheduled loadDiseaseIntel loader on the full build); a null/stale
+      // cache → no health threats, fail-safe. Uses the same injected clock so the
+      // TTL check is deterministic. See health-contributor.ts.
+      makeHealthContributor(getCachedDiseaseIntel(now)),
     ],
     freshness: snapshot.freshness,
     capturedAtMs: snapshot.capturedAtMs,

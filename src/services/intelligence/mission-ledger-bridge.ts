@@ -24,6 +24,7 @@ import {
   type OutcomeRecord,
   type PredictedSeverity,
 } from './outcome-ledger';
+import { logDebug } from '../reasoning-debug';
 import { getMissionLedger } from '../ops/mission-state';
 import type { MissionLedger } from '../ops/mission-ledger';
 import type {
@@ -130,7 +131,9 @@ export class MissionLedgerBridge {
     this.ensureHydrated();
     if (this.timer) return;
     this.poll();
-    this.timer = setInterval(() => this.poll(), this.opts.intervalMs);
+    this.timer = setInterval(() => {
+      try { this.poll(); } catch (error) { logDebug({ level: 'warn', category: 'other', source: 'mission-ledger-bridge', message: 'poll error', data: { error: error instanceof Error ? error.message : String(error) } }); }
+    }, this.opts.intervalMs);
   }
 
   /** Stop the polling timer. Safe to call when not connected. */

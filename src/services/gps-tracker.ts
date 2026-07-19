@@ -30,6 +30,7 @@ export class GpsTracker {
   private _currentTier: GpsTier | null = null;
   private _lastPosition: GpsPosition | null = null;
   private _active = false;
+  private _starting: Promise<void> | null = null;
   private _watchId: number | null = null;
   private _pollId: ReturnType<typeof setInterval> | null = null;
   private _listeners = new Set<GpsListener>();
@@ -37,10 +38,14 @@ export class GpsTracker {
   get currentTier(): GpsTier | null { return this._currentTier; }
   get tierName(): string {
     switch (this._currentTier) {
-      case 1: return 'CoreLocation';
-      case 2: return 'Browser';
-      case 3: return 'External GPS';
-      default: return 'None';
+      case 1: { return 'CoreLocation';
+      }
+      case 2: { return 'Browser';
+      }
+      case 3: { return 'External GPS';
+      }
+      default: { return 'None';
+      }
     }
   }
   get lastPosition(): GpsPosition | null { return this._lastPosition; }
@@ -58,21 +63,30 @@ export class GpsTracker {
 
   async start(): Promise<void> {
     if (this._active) return;
+    // Concurrent callers await the SAME startup attempt via the _starting latch,
+    // so they never each spin up a poll interval AND never get a false "success"
+    // resolve before the real attempt finishes. _active only flips true on a tier
+    // that actually connected.
+    if (this._starting) return this._starting;
+    this._starting = this._startInner();
+    try {
+      await this._starting;
+    } finally {
+      this._starting = null;
+    }
+  }
 
-    if (await this._tryTier1()) {
-      this._currentTier = 1;
-      this._active = true;
-      return;
-    }
-    if (await this._tryTier2()) {
-      this._currentTier = 2;
-      this._active = true;
-      return;
-    }
-    if (await this._tryTier3()) {
-      this._currentTier = 3;
-      this._active = true;
-      return;
+  private async _startInner(): Promise<void> {
+    if (await this._tryTier1()) { this._currentTier = 1; this._active = true; return; }
+    if (await this._tryTier2()) { this._currentTier = 2; this._active = true; return; }
+    if (await this._tryTier3()) { this._currentTier = 3; this._active = true; }
+    // If no tier connected, _active stays false so start() can be retried.
+  }
+
+  private _clearBrowserWatch(): void {
+    if (this._watchId !== null) {
+      navigator.geolocation.clearWatch(this._watchId);
+      this._watchId = null;
     }
   }
 
@@ -109,19 +123,22 @@ export class GpsTracker {
       source: 'corelocation',
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- async poll body is self-contained (own try/catch); nothing awaits the interval
     this._pollId = setInterval(async () => {
-      const r = await tryInvokeTauri<CoreLocationResult>('plugin:corelocation|get_location');
-      if (!r) return;
-      this.emit({
-        lat: r.latitude,
-        lon: r.longitude,
-        altitude: r.altitude ?? null,
-        speed: r.speed ?? null,
-        heading: r.course ?? null,
-        accuracy: r.horizontalAccuracy ?? null,
-        timestamp: Date.now(),
-        source: 'corelocation',
-      });
+      try {
+        const r = await tryInvokeTauri<CoreLocationResult>('plugin:corelocation|get_location');
+        if (!r) return;
+        this.emit({
+          lat: r.latitude,
+          lon: r.longitude,
+          altitude: r.altitude ?? null,
+          speed: r.speed ?? null,
+          heading: r.course ?? null,
+          accuracy: r.horizontalAccuracy ?? null,
+          timestamp: Date.now(),
+          source: 'corelocation',
+        });
+      } catch { /* GPS unavailable; keep trying next tick */ }
     }, 1000);
 
     return true;
@@ -138,10 +155,14 @@ export class GpsTracker {
       const timeout = setTimeout(() => {
         if (!resolved) {
           resolved = true;
+          // Tier 2 timed out — tear down the watch so it can't keep emitting
+          // 'browser' fixes alongside a later tier.
+          this._clearBrowserWatch();
           resolve(false);
         }
-      }, 10000);
+      }, 10_000);
 
+      // eslint-disable-next-line sonarjs/no-intrusive-permissions -- geolocation is the core purpose of the GPS tracker; consent is handled by the OS/browser prompt
       this._watchId = navigator.geolocation.watchPosition(
         (pos) => {
           if (!resolved) {
@@ -164,10 +185,11 @@ export class GpsTracker {
           if (!resolved) {
             resolved = true;
             clearTimeout(timeout);
+            this._clearBrowserWatch();
             resolve(false);
           }
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+        { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 },
       );
     });
   }
@@ -195,7 +217,7 @@ export class GpsTracker {
         if (res.status !== 401) break;
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
-      if (!res || !res.ok) return false;
+      if (!res?.ok) return false;
       const text = await res.text();
       const pos = parseNmea(text.trim());
       if (!pos || pos.latitude === 0 || pos.longitude === 0) return false;
@@ -211,6 +233,7 @@ export class GpsTracker {
         source: 'external',
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises -- async poll body is self-contained (own try/catch); nothing awaits the interval
       this._pollId = setInterval(async () => {
         try {
           const r = await fetch(`${base}/gps/nmea`, {

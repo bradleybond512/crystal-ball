@@ -57,7 +57,7 @@ export interface ForecastSnapshot {
 
 const BASE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 const EWMA_ALPHA = 0.3;                  // responsiveness; higher = snappier
-const ADVISORY_THRESHOLD = 0.5;          // emit once pressure exceeds this
+export const ADVISORY_THRESHOLD = 0.5;   // emit once pressure exceeds this
 const CLEAR_THRESHOLD = 0.35;            // hysteresis — don't flap at boundary
 const STORAGE_KEY = 'crystalball-mode-forecast-v1';
 const EVENT_NAME = 'cb:mode-advisory';

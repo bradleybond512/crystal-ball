@@ -4,6 +4,7 @@
  */
 
 import { unifiedAlertStore } from './unified-alerts';
+import { logDebug } from './reasoning-debug';
 
 const STORAGE_KEY = 'crystalball-geofences-v1';
 const SCAN_INTERVAL = 60_000;
@@ -43,27 +44,29 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 }
 
 function scan(): void {
-  const alerts = unifiedAlertStore.getAll().filter(a => !a.acknowledged && a.location);
-  for (const fence of fences) {
-    if (!fence.enabled) continue;
-    for (const alert of alerts) {
-      const key = `${fence.id}:${alert.id}`;
-      if (notifiedPairs.has(key)) continue;
-      const dist = haversineKm(fence.lat, fence.lon, alert.location!.lat, alert.location!.lon);
-      if (dist <= fence.radiusKm) {
-        notifiedPairs.add(key);
-        document.dispatchEvent(new CustomEvent('cb:geofence-hit', {
-          detail: {
-            fenceId: fence.id,
-            fenceLabel: fence.label,
-            alertId: alert.id,
-            alertTitle: alert.title,
-            distanceKm: Math.round(dist),
-          },
-        }));
+  try {
+    const alerts = unifiedAlertStore.getAll().filter(a => !a.acknowledged && a.location);
+    for (const fence of fences) {
+      if (!fence.enabled) continue;
+      for (const alert of alerts) {
+        const key = `${fence.id}:${alert.id}`;
+        if (notifiedPairs.has(key)) continue;
+        const dist = haversineKm(fence.lat, fence.lon, alert.location!.lat, alert.location!.lon);
+        if (dist <= fence.radiusKm) {
+          notifiedPairs.add(key);
+          document.dispatchEvent(new CustomEvent('cb:geofence-hit', {
+            detail: {
+              fenceId: fence.id,
+              fenceLabel: fence.label,
+              alertId: alert.id,
+              alertTitle: alert.title,
+              distanceKm: Math.round(dist),
+            },
+          }));
+        }
       }
     }
-  }
+  } catch (error) { logDebug({ level: 'warn', category: 'other', source: 'geofence-alerts', message: 'scan error', data: { error: error instanceof Error ? error.message : String(error) } }); }
 }
 
 export function getGeofences(): Geofence[] {

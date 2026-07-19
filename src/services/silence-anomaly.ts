@@ -5,6 +5,7 @@
  */
 
 import { unifiedAlertStore } from './unified-alerts';
+import { logDebug } from './reasoning-debug';
 
 const SCAN_INTERVAL = 3 * 60_000;
 const BASELINE_WINDOW_MS = 24 * 60 * 60_000;
@@ -14,6 +15,12 @@ const COOLDOWN_MS = 30 * 60_000;
 
 let lastAnomalyTs = 0;
 const rateSamples: { ts: number; rate: number }[] = [];
+
+function safeScan(): void {
+  try { scan(); } catch (error) {
+    logDebug({ level: 'warn', category: 'other', source: 'silence-anomaly', message: 'scan error', data: { error: error instanceof Error ? error.message : String(error) } });
+  }
+}
 
 function scan(): void {
   const now = Date.now();
@@ -71,6 +78,6 @@ let started = false;
 export function startSilenceAnomaly(): void {
   if (started) return;
   started = true;
-  window.setInterval(scan, SCAN_INTERVAL);
-  window.setTimeout(scan, 15_000);
+  window.setInterval(safeScan, SCAN_INTERVAL);
+  window.setTimeout(safeScan, 15_000);
 }

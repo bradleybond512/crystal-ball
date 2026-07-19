@@ -6,6 +6,7 @@
  */
 
 import { unifiedAlertStore } from './unified-alerts';
+import { logDebug } from './reasoning-debug';
 
 const STORAGE_KEY = 'crystalball-alert-fatigue-v1';
 const CHECK_MS = 60_000;
@@ -97,5 +98,5 @@ export function startAlertFatigue(): void {
     prevAckSet = currentAcked;
   });
 
-  window.setInterval(checkFatigue, CHECK_MS);
+  window.setInterval(() => { try { checkFatigue(); } catch (error) { logDebug({ level: 'warn', category: 'other', source: 'alert-fatigue', message: 'checkFatigue error', data: { error: error instanceof Error ? error.message : String(error) } }); } }, CHECK_MS);
 }

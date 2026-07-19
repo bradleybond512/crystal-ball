@@ -13,14 +13,15 @@
  * short of that stays at `warning` because the model scores closure RISK, not
  * confirmed closure.
  *
- * HANDOFF — Live wiring deferred: to make this axis live, mirror `supply`'s
- * pattern in storm-posture-state.ts — add a `getChokepointStatuses()` loader
- * (TTL cache + fail-closed per feed, per feedback_feed_fidelity_failclosed) that
- * assembles `AggregateInput` from the GDACS/ACLED/AIS feeds (see
- * `maritime/chokepoint-aggregator.ts` `aggregateChokepointStatus`), then add
- * `makeMobilityContributor(statuses)` as a contributor in `withSupplyPosture`.
- * The `fetchChokepointStatus()` path already exists in `app/data-loader.ts`;
- * live wiring only needs a synchronous cached snapshot exposed from there.
+ * LIVE: wired in `storm-posture-state.withSupplyPosture`. The intended
+ * incident + military `aggregateChokepointStatus` model has no sync-readable live
+ * source (its GDACS/ACLED/AIS feeds aren't cached synchronously), so the live
+ * path adapts the sidecar's throughput chokepoint feed via
+ * `chokepoint-mobility-adapter.ts` (`disruptionScore → closureRisk`) read through
+ * `supply-chain.getCachedChokepointInfo`, kept warm by the shortage supply loader.
+ * Because that source has no incident history, live mobility threats land at
+ * 'medium' confidence. This contributor still accepts a full `ChokepointStatus[]`,
+ * so a future incident-driven source can feed it directly with no changes here.
  */
 import type { ChokepointStatus } from '../maritime/chokepoint-monitor.ts';
 import type { ThreatLevel } from '../weather/weather-threat-types.ts';

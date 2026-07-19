@@ -6,6 +6,7 @@
  */
 
 import type { SatelliteTLE } from '@/services/satellite-catalog';
+import { logDebug } from './reasoning-debug';
 
 export interface SatellitePosition {
   noradId: number;
@@ -42,8 +43,13 @@ class SatellitePropagator {
   private orbitPathListeners: OrbitPathListener[] = [];
   private passListeners: PassListener[] = [];
   private latestPositions: SatellitePosition[] = [];
+  private _lastCatalog: SatelliteTLE[] | null = null;
+  private _restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private _restartCount = 0;
+  private static readonly MAX_RESTARTS = 5;
 
   start(catalog: SatelliteTLE[]): void {
+ this._lastCatalog = catalog;
  this.stop();
 
  this.worker = new Worker(
@@ -51,10 +57,32 @@ class SatellitePropagator {
  { type: 'module' },
  );
 
+ // If the worker crashes (malformed TLE, satellite.js exception), terminate it
+ // immediately — so it can't post stale results during the gap — then restart
+ // after 5s, capped so a deterministically-crashing catalog can't loop forever.
+ this.worker.addEventListener('error', (e: ErrorEvent) => {
+   if (this.worker) { this.worker.terminate(); this.worker = null; }
+   if (this._restartTimer) { clearTimeout(this._restartTimer); this._restartTimer = null; }
+   if (this._restartCount >= SatellitePropagator.MAX_RESTARTS) {
+     logDebug({ level: 'error', category: 'other', source: 'satellite-propagator',
+       message: 'worker crashed too many times — giving up restarts',
+       data: { error: e.message, restarts: this._restartCount } });
+     return;
+   }
+   this._restartCount += 1;
+   logDebug({ level: 'error', category: 'other', source: 'satellite-propagator',
+     message: 'worker error — restarting in 5s', data: { error: e.message, attempt: this._restartCount } });
+   this._restartTimer = setTimeout(() => {
+     this._restartTimer = null;
+     if (this._lastCatalog) this.start(this._lastCatalog);
+   }, 5000);
+ });
+
  this.worker.addEventListener('message', (e: MessageEvent) => {
  const msg = e.data as { type: string; positions?: SatellitePosition[]; noradId?: number; points?: [number, number, number][]; passes?: SatellitePass[] };
 
  if (msg.type === 'positions' && msg.positions) {
+ this._restartCount = 0; // worker is producing output again — clear the crash budget
  this.latestPositions = msg.positions;
  for (const listener of this.positionListeners) {
  listener(msg.positions);
@@ -87,6 +115,7 @@ class SatellitePropagator {
   }
 
   stop(): void {
+ if (this._restartTimer) { clearTimeout(this._restartTimer); this._restartTimer = null; }
  if (this.worker) {
  this.worker.postMessage({ type: 'stop' });
  this.worker.terminate();

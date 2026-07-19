@@ -18,6 +18,11 @@ import {
   earthquakesToObservations,
 } from './adapters/earthquake-adapter';
 import {
+  airQualityToObservation,
+  airQualityToObservations,
+  type AirQualitySample,
+} from './adapters/air-quality-adapter';
+import {
   wildfireToObservation,
   wildifiresToObservations,
 } from './adapters/wildfire-adapter';
@@ -71,6 +76,13 @@ export const EarthquakeAdapter: ObservationAdapter<EarthquakeRaw> = {
   domain: 'weather',
   adaptOne: (raw) => earthquakeToObservation(raw as never),
   adaptMany: (raws) => earthquakesToObservations(raws as never[]),
+};
+
+export const AirQualityAdapter: ObservationAdapter<AirQualitySample> = {
+  sourceId: 'airnow',
+  domain: 'weather',
+  adaptOne: (raw) => airQualityToObservation(raw),
+  adaptMany: (raws) => airQualityToObservations(raws),
 };
 
 // ── Built-in adapter: NWS weather alerts ─────────────────────────────────
@@ -453,6 +465,7 @@ export class GenericAdapter implements ObservationAdapter<GenericInput> {
 export function createDefaultRegistry(): AdapterRegistry {
   const reg = new AdapterRegistry();
   reg.register(EarthquakeAdapter);
+  reg.register(AirQualityAdapter);
   reg.register(WeatherAdapter);
   reg.register(AviationAdapter);
   reg.register(MaritimeAdapter);

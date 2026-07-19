@@ -30,6 +30,7 @@ const ALL_SOURCES: WebcamSource[] = [
   'CALTRANS',
   'TFL',
   'SINGAPORE',
+  'HAZECAM',
 ];
 
 function normalizeName(name: string): string {

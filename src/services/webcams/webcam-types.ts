@@ -11,7 +11,8 @@ export type WebcamSource =
   | 'CALTRANS'
   | 'TFL'
   | 'SINGAPORE'
-  | 'GEONET';
+  | 'GEONET'
+  | 'HAZECAM';
 
 export type WebcamCategory =
   | 'weather'

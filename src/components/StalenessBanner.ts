@@ -36,6 +36,9 @@ export class StalenessBanner {
   private dismissedAt: number | null = null;
   private dismissedLevel: BannerLevel = 'hidden';
   private currentLevel: BannerLevel = 'hidden';
+  // Named bound references so they can be removed in destroy().
+  private readonly _onOnline = (): void => { this.evaluate(); };
+  private readonly _onOffline = (): void => { this.evaluate(); };
 
   private constructor(parent: HTMLElement = document.body) {
  this.el = document.createElement('div');
@@ -62,9 +65,9 @@ export class StalenessBanner {
  parent.append(this.el);
  parent.append(this.detailsEl);
 
- // Listen for online/offline
- window.addEventListener('online', () => this.evaluate());
- window.addEventListener('offline', () => this.evaluate());
+ // Named handlers stored on instance so destroy() can remove them.
+ window.addEventListener('online', this._onOnline);
+ window.addEventListener('offline', this._onOffline);
 
  // Subscribe to freshness changes (immediate re-evaluation)
  this.unsubscribe = dataFreshness.subscribe(() => this.evaluate());
@@ -84,6 +87,8 @@ export class StalenessBanner {
   destroy(): void {
  if (this.intervalId) clearInterval(this.intervalId);
  if (this.unsubscribe) this.unsubscribe();
+ window.removeEventListener('online', this._onOnline);
+ window.removeEventListener('offline', this._onOffline);
  this.el.remove();
  this.detailsEl.remove();
  instance = null;

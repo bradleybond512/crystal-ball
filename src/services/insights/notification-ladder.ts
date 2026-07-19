@@ -234,7 +234,11 @@ function maybeDeferForAttention(
   if (nextWindow === undefined) return null; // No active window in 24h — dispatch now.
 
   // Defer: record as silent now; host is responsible for re-routing at nextWindow.
-  registry.suppress(candidateId, 'quiet-hours-no-bypass', at);
+  // Use 'attention-deferred' not 'quiet-hours-no-bypass': the suppression is
+  // due to low operator-model attention weight, not quiet-hours policy.
+  // Using the wrong code was making the diagnostics trace blame quiet hours
+  // for suppressions that had nothing to do with quiet-hours settings.
+  registry.suppress(candidateId, 'attention-deferred', at);
   return {
     candidateId,
     rung: 'silent',

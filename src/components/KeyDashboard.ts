@@ -205,7 +205,13 @@ export class KeyDashboard {
   private async handleSave(key: RuntimeSecretKey): Promise<void> {
     const value = this.getInput(key)?.value.trim();
     if (!value) { this.setFeedback(key, 'Empty value — nothing saved', 'err'); return; }
-    await setSecretValue(key, value);
+    try {
+      await setSecretValue(key, value);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.setFeedback(key, `Save failed: ${msg}`, 'err');
+      return;
+    }
     setKeyStatus(key, { state: 'unvalidated', lastChecked: Date.now() });
     this.setFeedback(key, 'Saved (untested) — click Test to verify', 'info');
     this.render();
@@ -247,7 +253,13 @@ export class KeyDashboard {
   private async handleClear(key: RuntimeSecretKey): Promise<void> {
     const label = HUMAN_LABELS[key] ?? key;
     if (!confirm('Clear ' + label + '? This cannot be undone.')) return;
-    await setSecretValue(key, '');
+    try {
+      await setSecretValue(key, '');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.setFeedback(key, `Clear failed: ${msg}`, 'err');
+      return;
+    }
     setKeyStatus(key, { state: 'unset' });
     this.render();
   }

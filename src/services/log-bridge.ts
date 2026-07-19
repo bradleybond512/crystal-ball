@@ -353,10 +353,16 @@ function beatRendererHeartbeat(): void {
   }).catch(noop);
 }
 
+let _heartbeatTimer: number | null = null;
+
 function installRendererHeartbeat(): void {
   if (!isDesktopRuntime()) return;
   beatRendererHeartbeat();
-  setInterval(beatRendererHeartbeat, 3000);
+  _heartbeatTimer = window.setInterval(beatRendererHeartbeat, 3000);
+}
+
+export function stopRendererHeartbeat(): void {
+  if (_heartbeatTimer !== null) { clearInterval(_heartbeatTimer); _heartbeatTimer = null; }
 }
 
 // After a watchdog reload the renderer boots fresh; ask the Rust side once

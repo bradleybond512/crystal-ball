@@ -13,6 +13,7 @@ import { LIBRARY_DOMAIN_LABELS, PANEL_METADATA } from '@/config/panel-metadata';
 import type { LibraryDomain } from '@/config/panel-metadata';
 import { buildLibraryView } from '@/services/home-shell/library-view';
 import type { LibraryDomainView, LibraryPanelView } from '@/services/home-shell/library-view';
+import { debounce } from '@/utils';
 
 export class LibraryOverlay {
   private root: HTMLElement | null = null;
@@ -61,10 +62,10 @@ export class LibraryOverlay {
     root.append(topbar, body);
 
     root.addEventListener('click', (e) => this.onClick(e));
-    search.addEventListener('input', () => {
-      this.query = search.value;
-      this.render();
-    });
+    // Debounce: a fast typist fires 8+ input events/s, each causing a full
+    // 406-panel DOM rebuild. 80 ms coalesces bursts without feeling laggy.
+    const debouncedFilter = debounce(() => { this.query = search.value; this.render(); }, 80);
+    search.addEventListener('input', debouncedFilter);
     parent.append(root);
     this.root = root;
   }

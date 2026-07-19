@@ -183,6 +183,8 @@ export class Panel {
   private static instances = new Set<Panel>();
   private static tickerStarted = false;
   private static heartbeatTickerId: ReturnType<typeof setInterval> | null = null;
+  private static _visibilityHandler: (() => void) | null = null;
+  private static _narrativeHandler: ((ev: Event) => void) | null = null;
   public getPanelId(): string { return this.panelId; }
 
   /** Returns the panel's content element for external mounting (e.g. embedding in settings modal). */
@@ -1092,7 +1094,7 @@ export class Panel {
  }, 5000) as unknown as ReturnType<typeof setInterval>;
  // Pause DOM writes when the whole app is backgrounded; flush when it returns.
  if (typeof document !== 'undefined') {
- document.addEventListener('visibilitychange', () => {
+ Panel._visibilityHandler = () => {
  Panel.appVisible = document.visibilityState !== 'hidden';
  if (Panel.appVisible) {
  // Flush panels that are currently on-screen immediately.
@@ -1114,15 +1116,17 @@ export class Panel {
  }
  }
  }
- });
- }
- document.addEventListener('cb:panel-narrative', (ev: Event) => {
+ };
+ document.addEventListener('visibilitychange', Panel._visibilityHandler);
+ Panel._narrativeHandler = (ev: Event) => {
  const detail = (ev as CustomEvent<{ panelId: string; text: string }>).detail;
  if (!detail) return;
  for (const p of Panel.instances) {
  if (p.panelId === detail.panelId) p.setNarrative(detail.text);
  }
- });
+ };
+ document.addEventListener('cb:panel-narrative', Panel._narrativeHandler);
+ }
   }
 
   public static stopHeartbeatTicker(): void {
@@ -1130,6 +1134,14 @@ export class Panel {
  clearInterval(Panel.heartbeatTickerId);
  Panel.heartbeatTickerId = null;
  Panel.tickerStarted = false;
+ }
+ if (Panel._visibilityHandler) {
+ document.removeEventListener('visibilitychange', Panel._visibilityHandler);
+ Panel._visibilityHandler = null;
+ }
+ if (Panel._narrativeHandler) {
+ document.removeEventListener('cb:panel-narrative', Panel._narrativeHandler);
+ Panel._narrativeHandler = null;
  }
   }
 

@@ -102,6 +102,24 @@ export const weatherWildfireRule: CorrelationRule = {
   },
 };
 
+// ── 3b. Air quality (AirNow) → wildfire (FIRMS) — visual smoke confirmation ──
+
+export const airQualityWildfireRule: CorrelationRule = {
+  id: 'airquality-wildfire',
+  name: 'Unhealthy air ↔ nearby wildfire',
+  description: 'AirNow Unhealthy AQI / Action Day within 150km of an active FIRMS/NIFC fire — a fire likely explains the smoke.',
+  domains: ['weather'],
+  timeWindowMs: 24 * 60 * 60 * 1000,
+  edgeType: 'causal-candidate',
+  matchFn: (a, b) => {
+    const aSmokeRelevant = fromSource(a, 'airnow') && hasTag(a, 'smoke-relevant');
+    const bWildfire = hasTag(b, 'wildfire') || fromSource(b, 'inciweb-wildfire');
+    if (!aSmokeRelevant || !bWildfire) return false;
+    // Air quality ↔ fire is spatial (smoke drifts), not entity-shared.
+    return withinDistance(a, b, 150);
+  },
+};
+
 // ── 4. Biosurveillance → Aviation traffic ────────────────────────────
 
 export const biosurvAviationRule: CorrelationRule = {
@@ -192,6 +210,7 @@ export const builtInCorrelationRules: readonly CorrelationRule[] = [
   earthquakeTsunamiRule,
   earthquakeInfrastructureRule,
   weatherWildfireRule,
+  airQualityWildfireRule,
   biosurvAviationRule,
   sanctionsMaritimeRule,
   spaceWeatherInfrastructureRule,

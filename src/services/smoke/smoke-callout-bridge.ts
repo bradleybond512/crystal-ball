@@ -21,9 +21,15 @@ import type { SmokeSnapshot, AqiCategory } from './smoke-types';
 import { buildSmokeHeadline } from './smoke-headline';
 import { subscribeSmoke, getSmokeSnapshots } from './smoke-state';
 
-const EDGE_KEY = 'cb-smoke-notified-category';
+/** Edge-memory localStorage key. Exported so the AirNow Action-Day producer can
+ *  read the last DELIVERED smoke rank and avoid firing a duplicate "air is bad"
+ *  native notification for the same episode (unified air-quality dedupe). */
+export const SMOKE_NOTIFIED_EDGE_KEY = 'cb-smoke-notified-category';
+const EDGE_KEY = SMOKE_NOTIFIED_EDGE_KEY;
 
-/** Category rank for edge-triggering — notify only when this worsens. */
+/** Category rank for edge-triggering — notify only when this worsens.
+ *  Rank ≥ 3 means the smoke callout has surfaced Unhealthy-or-worse. */
+export const SMOKE_UNHEALTHY_RANK = 3;
 const CATEGORY_RANK: Record<AqiCategory, number> = {
   good: 0, moderate: 1, unknown: 1, usg: 2, unhealthy: 3, very_unhealthy: 4, hazardous: 5,
 };

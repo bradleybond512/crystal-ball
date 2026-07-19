@@ -282,6 +282,7 @@ import { NotificationDigestPanel } from '@/components/NotificationDigestPanel';
 import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel';
 import { AirSmokePanel } from '@/components/AirSmokePanel';
 import { startSmokeCalloutBridge } from '@/services/smoke/smoke-callout-bridge';
+import { startAirQualityActionDayMonitor } from '@/services/airquality/airnow-forecast-service';
 import { NotificationAuditPanel } from '@/components/NotificationAuditPanel';
 import { NotificationProvenancePanel } from '@/components/NotificationProvenancePanel';
 import { TrustBudgetPanel } from '@/components/TrustBudgetPanel';
@@ -1885,6 +1886,7 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['notification-history'] = new NotificationHistoryPanel();
  this.ctx.panels['air-smoke'] = new AirSmokePanel();
  startSmokeCalloutBridge();
+ startAirQualityActionDayMonitor();
  this.ctx.panels['notification-audit'] = new NotificationAuditPanel();
  this.ctx.panels['notification-provenance'] = new NotificationProvenancePanel();
  this.ctx.panels['trust-budget'] = new TrustBudgetPanel();

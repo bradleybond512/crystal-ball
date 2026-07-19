@@ -11,7 +11,7 @@
  */
 
 import { createMissionLedger, type MissionLedger } from './mission-ledger';
-import { resetMissionLedgerPersistence } from './mission-ledger-persistence';
+import { resetMissionLedgerPersistence, setDefaultMissionLedgerProvider } from './mission-ledger-persistence';
 
 let ledger: MissionLedger | undefined;
 
@@ -19,6 +19,10 @@ export function getMissionLedger(): MissionLedger {
   ledger ??= createMissionLedger();
   return ledger;
 }
+
+// Register the default-ledger fallback so mission-ledger-persistence can reach
+// it without importing this module back (breaks the runtime cycle browser-safely).
+setDefaultMissionLedgerProvider(getMissionLedger);
 
 export function resetMissionState(): void {
   ledger = undefined;

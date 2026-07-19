@@ -15,7 +15,7 @@ import type { EvidenceEdge, Situation } from './situation-store-v2';
 import { getAttentionAllocator } from './attention-allocator';
 import { buildInputHash, getAlgoEvalLedger } from './algo-eval-ledger';
 import type { BeliefValue } from '@/types/belief';
-import { createBelief } from '@/components/belief-helpers';
+import { createBelief } from './belief-helpers';
 
 // ── Public types ──────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-/* eslint-disable sonarjs/no-duplicated-branches, no-console, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/slow-regex, sonarjs/anchor-precedence, sonarjs/regex-complexity, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-empty-function, @typescript-eslint/no-floating-promises, unicorn/prefer-top-level-await */
+/* eslint-disable no-console, @typescript-eslint/prefer-nullish-coalescing, sonarjs/no-nested-conditional, sonarjs/slow-regex, sonarjs/anchor-precedence, sonarjs/regex-complexity, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-empty-function, unicorn/prefer-top-level-await */
 import './styles/base-layer.css';
 import './styles/happy-theme.css';
 import './styles/gods-eye-4d.css';
@@ -253,6 +253,7 @@ function showDesktopRuntimeDebugNotice(snapshot: DesktopRuntimeSnapshot): void {
 // Initialize Vercel Analytics on web only. beforeSend gates every event at
 // send-time so consent revocation mid-session takes effect immediately without
 // a reload (inject() itself has no shutdown path).
+// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return -- @vercel/analytics inject()/beforeSend are untyped (any) in the published types
 if (!isDesktopRuntime()) inject({ beforeSend: (e) => isAnalyticsAllowed() ? e : null });
 
 // Migrate pre-consent-gate installs once, then surface a first-run opt-in banner
@@ -327,14 +328,18 @@ if (urlParams.get('settings') === '1') {
  await i18n.initI18n();
  m.initSettingsWindow();
  }
-  );
+  ).catch((error: unknown) => {
+ console.error('[boot] settings-window init failed:', error);
+  });
 } else if (urlParams.get('live-channels') === '1') {
   void Promise.all([import('./services/i18n'), import('./live-channels-window')]).then(
  async ([i18n, m]) => {
  await i18n.initI18n();
  m.initLiveChannelsWindow();
  }
-  );
+  ).catch((error: unknown) => {
+ console.error('[boot] live-channels-window init failed:', error);
+  });
 } else {
   const boot = async () => {
  const desktopRuntime = await waitForDesktopRuntimeSnapshot();

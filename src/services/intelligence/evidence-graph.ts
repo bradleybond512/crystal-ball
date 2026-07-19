@@ -350,7 +350,8 @@ function relatePair(
 
 function sharesLocationOrEntity(a: NormalizedFact, b: NormalizedFact): boolean {
   const sharesLocation = a.lat !== undefined && b.lat !== undefined &&
-    Math.abs(a.lat - b.lat) < 0.5 && Math.abs((a.lon ?? 0) - (b.lon ?? 0)) < 0.5;
+    a.lon !== undefined && b.lon !== undefined &&
+    Math.abs(a.lat - b.lat) < 0.5 && Math.abs(a.lon - b.lon) < 0.5;
   const sharesEntity = a.entities.some((e) => b.entities.includes(e));
   return sharesLocation || sharesEntity;
 }

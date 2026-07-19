@@ -274,6 +274,7 @@ interface PostHogInstance {
 
 let posthogInstance: PostHogInstance | null = null;
 let initPromise: Promise<void> | null = null;
+let _onlineListenerAdded = false;
 
 /** Inject a fake PostHog instance for unit tests only. */
 export function _setPosthogForTest(instance: PostHogInstance | null): void {
@@ -328,8 +329,11 @@ export async function initAnalytics(): Promise<void> {
  // Flush any events queued while offline (desktop)
  flushOfflineQueue();
 
- // Re-flush when coming back online
- if (isDesktopRuntime()) {
+ // Re-flush when coming back online.  Guard with a flag so that
+ // consent-revoke → re-grant cycles (which null initPromise and re-run
+ // this IIFE) don't stack duplicate 'online' listeners.
+ if (isDesktopRuntime() && !_onlineListenerAdded) {
+ _onlineListenerAdded = true;
  window.addEventListener('online', () => flushOfflineQueue());
  }
  } catch (error) {

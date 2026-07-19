@@ -991,7 +991,10 @@ export default defineConfig({
  if (id.includes('/@sentry/')) {
  return 'sentry';
  }
- if (id.includes('/cesium/')) {
+         if (id.includes('/three/')) {
+        return 'three';
+        }
+        if (id.includes('/cesium/')) {
  return 'cesium';
  }
  }

@@ -74,12 +74,21 @@ async function narrateDailyRollup(): Promise<void> {
   } catch { /* noop */ }
 }
 
+let _narrateTimer: number | null = null;
+let _rollupTimer: number | null = null;
+
 export function startPanelNarrator(): void {
   if (started) return;
   started = true;
   window.setTimeout(() => { void narrateNext(); }, 15_000);
-  window.setInterval(() => { void narrateNext(); }, CYCLE_MS);
+  _narrateTimer = window.setInterval(() => { void narrateNext(); }, CYCLE_MS);
   // Daily rollup every 15 minutes
   window.setTimeout(() => { void narrateDailyRollup(); }, 45_000);
-  window.setInterval(() => { void narrateDailyRollup(); }, 15 * 60_000);
+  _rollupTimer = window.setInterval(() => { void narrateDailyRollup(); }, 15 * 60_000);
+}
+
+export function stopPanelNarrator(): void {
+  if (_narrateTimer !== null) { clearInterval(_narrateTimer); _narrateTimer = null; }
+  if (_rollupTimer !== null) { clearInterval(_rollupTimer); _rollupTimer = null; }
+  started = false;
 }

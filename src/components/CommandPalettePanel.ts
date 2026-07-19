@@ -16,6 +16,7 @@ import {
   type PaletteCategory,
   type PaletteCommand,
 } from '@/services/command-palette/command-registry';
+import { debounce } from '@/utils';
 
 const MAX_VISIBLE = 8;
 const PANEL_WIDTH_PX = 400;
@@ -91,7 +92,9 @@ export class CommandPalettePanel {
     this.input.className = 'cmdk-v2-input';
     this.input.placeholder = 'Search commands…';
     this.input.setAttribute('aria-label', 'Command palette search');
-    this.input.addEventListener('input', () => { this.cursor = 0; this.refilter(); });
+    // Debounce: 420+ commands × 5 keyword fields = ~189 k char comparisons per
+    // keystroke. 50 ms coalesces fast typing without perceptible lag.
+    this.input.addEventListener('input', debounce(() => { this.cursor = 0; this.refilter(); }, 50));
     this.input.addEventListener('keydown', e => this.onKeyDown(e));
 
     this.list = document.createElement('div');

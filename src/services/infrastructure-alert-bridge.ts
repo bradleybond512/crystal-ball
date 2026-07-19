@@ -97,11 +97,20 @@ async function pollCommsHealth(): Promise<void> {
 }
 
 let started = false;
+let _powerTimer: number | null = null;
+let _commsTimer: number | null = null;
+
 export function startInfrastructureAlertBridge(): void {
   if (started) return;
   started = true;
   void pollPowerGrid();
   void pollCommsHealth();
-  window.setInterval(() => void pollPowerGrid(), POWER_POLL_MS);
-  window.setInterval(() => void pollCommsHealth(), COMMS_POLL_MS);
+  _powerTimer = window.setInterval(() => void pollPowerGrid(), POWER_POLL_MS);
+  _commsTimer = window.setInterval(() => void pollCommsHealth(), COMMS_POLL_MS);
+}
+
+export function stopInfrastructureAlertBridge(): void {
+  if (_powerTimer !== null) { clearInterval(_powerTimer); _powerTimer = null; }
+  if (_commsTimer !== null) { clearInterval(_commsTimer); _commsTimer = null; }
+  started = false;
 }

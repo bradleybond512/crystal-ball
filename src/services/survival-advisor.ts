@@ -537,7 +537,14 @@ function loadCache(): SurvivalAdvice | null {
   try {
  const raw = localStorage.getItem(CACHE_KEY);
  if (!raw) return null;
- const cached = JSON.parse(raw) as SurvivalAdvice;
+ // Validate the deserialized shape before trusting the cast — tampered/
+ // schema-drifted localStorage must not propagate as a typed SurvivalAdvice.
+ const parsed = JSON.parse(raw) as unknown;
+ if (!parsed || typeof parsed !== 'object'
+   || typeof (parsed as Record<string, unknown>)['generatedAt'] !== 'number') {
+   return null;
+ }
+ const cached = parsed as SurvivalAdvice;
  if (Date.now() - cached.generatedAt > CACHE_TTL_MS) return null;
  return cached;
   } catch {

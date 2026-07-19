@@ -73,6 +73,8 @@ export class ReasoningDebugOverlay {
   private filterLevel: DebugLevel = 'info';
   private filterCategory: DebugCategory | '*' = '*';
   private refreshTimer: number | null = null;
+  private _unsubDebug: (() => void) | null = null;
+  private _onKeydown: ((e: KeyboardEvent) => void) | null = null;
 
   constructor() {
     this.root = document.createElement('div');
@@ -85,21 +87,27 @@ export class ReasoningDebugOverlay {
 
   mount(parent: HTMLElement): void {
     parent.append(this.root);
-    subscribeDebug(() => {
+    // Store unsubscribe so destroy() can clean it up.
+    this._unsubDebug = subscribeDebug(() => {
       if (this.visible && this.tab === 'events') this.render();
     });
-    document.addEventListener('keydown', (e: KeyboardEvent) => {
+    // Store bound handler so it can be removed in destroy().
+    this._onKeydown = (e: KeyboardEvent) => {
       if (this.visible && e.key === 'Escape') { this.hide(); e.preventDefault(); return; }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
         e.preventDefault();
         this.toggle();
       }
-    });
+    };
+    document.addEventListener('keydown', this._onKeydown);
   }
 
   toggle(): void { if (this.visible) this.hide(); else this.show(); }
 
   show(): void {
+    // Guard: calling show() while already visible would start a second
+    // setInterval and lose the old handle, leaking a timer.
+    if (this.visible) return;
     this.visible = true;
     this.root.hidden = false;
     this.render();
@@ -113,6 +121,19 @@ export class ReasoningDebugOverlay {
     this.visible = false;
     this.root.hidden = true;
     if (this.refreshTimer !== null) { clearInterval(this.refreshTimer); this.refreshTimer = null; }
+  }
+
+  destroy(): void {
+    this.hide();
+    if (this._onKeydown) {
+      document.removeEventListener('keydown', this._onKeydown);
+      this._onKeydown = null;
+    }
+    if (this._unsubDebug) {
+      this._unsubDebug();
+      this._unsubDebug = null;
+    }
+    this.root.remove();
   }
 
   // ── Render ──────────────────────────────────────────────────────────────

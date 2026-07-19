@@ -16961,7 +16961,9 @@ async function dispatch(requestUrl, req, routes, context) {
  const from = requestUrl.searchParams.get('from') || String(nowSec - 86400);
  const until = requestUrl.searchParams.get('until') || String(nowSec);
  const limit = requestUrl.searchParams.get('limit') || '50';
- const cacheKey = `ioda-outages:${from}:${until}`;
+ // limit is part of the upstream query, so it must be part of the cache key —
+ // otherwise a request with a different limit gets the first caller's payload.
+ const cacheKey = `ioda-outages:${from}:${until}:${limit}`;
  const cached = getCached(cacheKey, IODA_TTL);
  if (cached) return json(cached);
  const upstreamUrl = `https://api.ioda.inetintel.cc.gatech.edu/v2/outages/alerts?from=${encodeURIComponent(from)}&until=${encodeURIComponent(until)}&limit=${encodeURIComponent(limit)}`;
@@ -17097,9 +17099,14 @@ async function dispatch(requestUrl, req, routes, context) {
  const solarRaw = solarRes.status === 'fulfilled' && solarRes.value.ok ? await solarRes.value.json() : null;
  const aurora = parseSwpcAurora(auroraRaw);
  const solarRegions = parseSwpcSolarRegions(solarRaw);
- const degraded = !auroraRaw && !solarRaw;
+ // A missing source yields an empty parse indistinguishable from "quiet", so
+ // any missing source is degraded. Only a total failure (both down) is not
+ // cached — otherwise a transient outage sticks for the full 15-min TTL;
+ // a partial result is still cacheable (flagged degraded).
+ const degraded = !auroraRaw || !solarRaw;
+ const allFailed = !auroraRaw && !solarRaw;
  const result = { aurora, solarRegions, solarRegionCount: solarRegions.length, fetchedAt: Date.now(), degraded };
- setCached('spaceweather-extra', result, SW_TTL);
+ if (!allFailed) setCached('spaceweather-extra', result, SW_TTL);
  return json(result);
   }
 
@@ -17113,16 +17120,24 @@ async function dispatch(requestUrl, req, routes, context) {
    fetchWithTimeout('https://aviationweather.gov/api/data/airsigmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
    fetchWithTimeout('https://aviationweather.gov/api/data/gairmet?format=json', { headers: { Accept: 'application/json', 'User-Agent': CHROME_UA } }, 15_000),
  ]);
- const isigmetRaw = isigmetRes.status === 'fulfilled' && isigmetRes.value.ok ? await isigmetRes.value.json() : [];
- const airsigmetRaw = airsigmetRes.status === 'fulfilled' && airsigmetRes.value.ok ? await airsigmetRes.value.json() : [];
- const gairmetRaw = gairmetRes.status === 'fulfilled' && gairmetRes.value.ok ? await gairmetRes.value.json() : [];
+ const isigmetOk = isigmetRes.status === 'fulfilled' && isigmetRes.value.ok;
+ const airsigmetOk = airsigmetRes.status === 'fulfilled' && airsigmetRes.value.ok;
+ const gairmetOk = gairmetRes.status === 'fulfilled' && gairmetRes.value.ok;
+ const isigmetRaw = isigmetOk ? await isigmetRes.value.json() : [];
+ const airsigmetRaw = airsigmetOk ? await airsigmetRes.value.json() : [];
+ const gairmetRaw = gairmetOk ? await gairmetRes.value.json() : [];
  const hazards = [
    ...parseAviationHazards(isigmetRaw, 'isigmet'),
    ...parseAviationHazards(airsigmetRaw, 'airsigmet'),
    ...parseAviationHazards(gairmetRaw, 'gairmet'),
  ];
- const result = { hazards, count: hazards.length, fetchedAt: Date.now(), degraded: false };
- setCached('aviation-hazards', result, AVHAZ_TTL);
+ // A failed source yields [] indistinguishable from "no hazards", so reflect
+ // real degradation: degraded when any source failed. Don't cache a total
+ // failure (all three down) — an empty payload must not stick for the TTL.
+ const degraded = !isigmetOk || !airsigmetOk || !gairmetOk;
+ const allFailed = !isigmetOk && !airsigmetOk && !gairmetOk;
+ const result = { hazards, count: hazards.length, fetchedAt: Date.now(), degraded };
+ if (!allFailed) setCached('aviation-hazards', result, AVHAZ_TTL);
  return json(result);
   }
 

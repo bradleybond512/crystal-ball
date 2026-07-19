@@ -38,6 +38,7 @@ const SOURCE_LABELS: Record<WebcamSource, string> = {
   TFL: 'TfL',
   SINGAPORE: 'Singapore',
   GEONET: 'GeoNet',
+  HAZECAM: 'Visibility',
 };
 
 const CATEGORY_COLORS: Record<WebcamCategory, string> = {
@@ -355,6 +356,7 @@ export class UnifiedWebcamPanel extends Panel {
       'USGS_VOLCANO',
       'NPS',
       'NOAA_COASTAL',
+      'HAZECAM',
       'USGS_STREAM',
       'WINDY',
     ];

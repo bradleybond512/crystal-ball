@@ -16335,6 +16335,41 @@ async function dispatch(requestUrl, req, routes, context) {
  return json({ feeds, updatedAt: Math.floor(Date.now() / 1000) });
   }
 
+  // ── CAMNET / hazecam.net visibility cams (NESCAUM public network, no-auth) ──
+  // validateWebcamCatalog HEAD-checks each snapshotUrl and drops dead ones, so a
+  // retired site degrades to absent rather than a broken tile. Tagged
+  // visibility='true' so the renderer's smoke trigger + Visibility filter match.
+  if (requestUrl.pathname === '/api/webcams/hazecam') {
+ const HAZECAM_SITES = [
+ { site: 'acadia', name: 'Acadia National Park, ME', lat: 44.377, lon: -68.261, region: 'Northeast' },
+ { site: 'baltimore', name: 'Baltimore, MD', lat: 39.29, lon: -76.612, region: 'Mid-Atlantic' },
+ { site: 'bluehill', name: 'Blue Hill Observatory, MA', lat: 42.212, lon: -71.114, region: 'Northeast' },
+ { site: 'boston', name: 'Boston, MA', lat: 42.36, lon: -71.058, region: 'Northeast' },
+ { site: 'brigantine', name: 'Brigantine (Forsythe NWR), NJ', lat: 39.464, lon: -74.448, region: 'Mid-Atlantic' },
+ { site: 'burlington', name: 'Burlington, VT', lat: 44.476, lon: -73.212, region: 'Northeast' },
+ { site: 'frostburg', name: 'Frostburg, MD', lat: 39.658, lon: -78.928, region: 'Mid-Atlantic' },
+ { site: 'mtwash', name: 'Mount Washington, NH', lat: 44.27, lon: -71.303, region: 'Northeast' },
+ { site: 'nyc', name: 'New York City, NY', lat: 40.713, lon: -74.006, region: 'Mid-Atlantic' },
+ ];
+ const cams = HAZECAM_SITES.map(s => ({
+ site: s.site, name: s.name, lat: s.lat, lon: s.lon, region: s.region,
+ snapshotUrl: `https://hazecam.net/images/large/${s.site}_left.jpg`,
+ }));
+ const valid = await validateWebcamCatalog(cams, 'webcams:hazecam:valid', 30 * 60 * 1000);
+ const feeds = valid.map(r => ({
+ id: `HAZECAM:${r.site}`,
+ source: 'HAZECAM',
+ name: `${r.name} — visibility (CAMNET)`,
+ lat: r.lat,
+ lon: r.lon,
+ snapshotUrl: r.snapshotUrl,
+ refreshIntervalSec: 600,
+ category: 'nature',
+ metadata: { visibility: 'true', program: 'camnet', attribution: 'CAMNET / hazecam.net (NESCAUM)', region: r.region, pageUrl: `https://hazecam.net/camsite.aspx?site=${r.site}` },
+ }));
+ return json({ feeds, updatedAt: Math.floor(Date.now() / 1000) });
+  }
+
   // ── Master webcam aggregator (calls all sub-routes, dedupes, filters) ──
   if (requestUrl.pathname === '/api/webcams') {
  const sourceFilter = (requestUrl.searchParams.get('source') ?? '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
@@ -16358,6 +16393,7 @@ async function dispatch(requestUrl, req, routes, context) {
  { source: 'TFL', path: '/api/webcams/tfl', shape: 'feeds' },
  { source: 'SINGAPORE', path: '/api/webcams/singapore', shape: 'feeds' },
  { source: 'GEONET', path: '/api/webcams/geonet', shape: 'feeds' },
+ { source: 'HAZECAM', path: '/api/webcams/hazecam', shape: 'feeds' },
  ];
  const targets = sourceFilter.length > 0 ? subroutes.filter(s => sourceFilter.includes(s.source)) : subroutes;
  const port = process.env.SIDECAR_PORT ?? '46123';

@@ -16,11 +16,12 @@
  * internet shutdown is a comms emergency; an AS/region-level critical outage is
  * narrower and stays at `warning`.
  *
- * HANDOFF — Live wiring: `internet-outages.fetchIodaOutages()` populates a module
- * cache but is not currently called anywhere, so live wiring must both expose a
- * synchronous `getCachedIodaOutages()` getter AND trigger the fetch (e.g. from the
- * storm-posture refresh), then add `makeCommsContributor(getCachedIodaOutages())`
- * in `storm-posture-state.withSupplyPosture`.
+ * LIVE: wired in `storm-posture-state.withSupplyPosture` via the synchronous
+ * `internet-outages.getCachedIodaOutages(now)` getter. `fetchIodaOutages` now
+ * routes through the sidecar `/api/internet-outages` endpoint and is warmed by
+ * the scheduled `loadInternetOutages` loader (full build). Because that sidecar
+ * projection carries a single `datasource` per alert rather than the split
+ * BGP/active/darknet sub-scores, comms confidence lands at 'medium' in practice.
  */
 import type { IodaOutage } from '../internet-outages.ts';
 import type { ThreatLevel } from '../weather/weather-threat-types.ts';

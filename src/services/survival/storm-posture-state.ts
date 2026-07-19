@@ -17,8 +17,10 @@ import { makeSupplyContributor } from './supply-contributor.ts';
 import { makeFinancialContributor } from './financial-contributor.ts';
 import { makeSecurityContributor } from './security-contributor.ts';
 import { makeHealthContributor } from './health-contributor.ts';
+import { makeCommsContributor } from './comms-contributor.ts';
 import { getForecastSnapshot } from '../mode-forecast';
 import { getCachedDiseaseIntel } from '../disease-intel';
+import { getCachedIodaOutages } from '../internet-outages';
 import { availableMovesFrom } from './survival-moves.ts';
 import { makeWeatherMoveProvider } from './weather-move-provider.ts';
 import { makeSupplyMoveProvider } from './supply-move-provider.ts';
@@ -157,6 +159,10 @@ function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyBase: Wor
       // cache → no health threats, fail-safe. Uses the same injected clock so the
       // TTL check is deterministic. See health-contributor.ts.
       makeHealthContributor(getCachedDiseaseIntel(now)),
+      // Comms axis reads the warm IODA outage cache synchronously (kept warm by
+      // the scheduled loadInternetOutages loader, which routes through the sidecar
+      // /api/internet-outages endpoint); an empty/stale cache → no comms threats.
+      makeCommsContributor(getCachedIodaOutages(now)),
     ],
     freshness: snapshot.freshness,
     capturedAtMs: snapshot.capturedAtMs,

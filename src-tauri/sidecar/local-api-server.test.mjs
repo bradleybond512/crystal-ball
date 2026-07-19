@@ -2258,3 +2258,70 @@ test('osm-power relay rejects a non-Overpass body with 400', async () => {
     await localApi.cleanup();
   }
 });
+
+// ── /api/airnow/forecast — AirNow forecast + Action Day, EnviroFlash fallback ──
+
+const AIRNOW_FORECAST_BODY = JSON.stringify([
+  { DateForecast: '2026-07-19', ReportingArea: 'Northwest Indiana', StateCode: 'IN', ParameterName: 'PM2.5', AQI: 151, Category: { Number: 3, Name: 'Unhealthy for Sensitive Groups' }, ActionDay: true, Discussion: 'Wildfire smoke.' },
+]);
+
+const ENVIROFLASH_CAP_BODY = `<alerts><alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+  <identifier>EF-IN-1</identifier><sent>2026-07-19T06:00:00-05:00</sent>
+  <info><event>Air Quality Action Day</event><severity>Moderate</severity>
+  <headline>Air Quality Action Day for Northwest Indiana</headline>
+  <parameter><valueName>AQI</valueName><value>151</value></parameter>
+  <area><areaDesc>Northwest Indiana</areaDesc></area></info></alert></alerts>`;
+
+test('/api/airnow/forecast: 400 when no lat/lon or zip', async () => {
+  const app = await createLocalApiServer({ port: 0, logger: { log() {}, warn() {}, error() {} } });
+  const { port } = await app.start();
+  try {
+    const res = await authFetch(`http://127.0.0.1:${port}/api/airnow/forecast`);
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.match(body.error, /lat.*lon.*zip/i);
+  } finally { await app.close(); }
+});
+
+test('/api/airnow/forecast: no key falls back to keyless EnviroFlash CAP', async () => {
+  const prev = process.env.AIRNOW_API_KEY;
+  delete process.env.AIRNOW_API_KEY;
+  const restoreHttps = mockHttpsRequestOnce({ statusCode: 200, headers: { 'content-type': 'application/xml' }, body: ENVIROFLASH_CAP_BODY });
+  const app = await createLocalApiServer({ port: 0, logger: { log() {}, warn() {}, error() {} } });
+  const { port } = await app.start();
+  try {
+    const res = await authFetch(`http://127.0.0.1:${port}/api/airnow/forecast?lat=41.6&lon=-87.3&area=Indiana`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.source, 'enviroflash-cap');
+    assert.equal(body.degraded, true);
+    assert.equal(body.actionDay, true);
+    assert.equal(body.capAlerts.length, 1);
+  } finally {
+    restoreHttps();
+    await app.close();
+    if (prev === undefined) delete process.env.AIRNOW_API_KEY; else process.env.AIRNOW_API_KEY = prev;
+  }
+});
+
+test('/api/airnow/forecast: keyed AirNow primary carries the ActionDay flag', async () => {
+  const prev = process.env.AIRNOW_API_KEY;
+  process.env.AIRNOW_API_KEY = 'test-airnow-key';
+  const restoreHttps = mockHttpsRequestOnce({ statusCode: 200, headers: { 'content-type': 'application/json' }, body: AIRNOW_FORECAST_BODY });
+  const app = await createLocalApiServer({ port: 0, logger: { log() {}, warn() {}, error() {} } });
+  const { port } = await app.start();
+  try {
+    const res = await authFetch(`http://127.0.0.1:${port}/api/airnow/forecast?lat=41.6&lon=-87.3`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.source, 'airnow');
+    assert.equal(body.degraded, false);
+    assert.equal(body.actionDay, true);
+    assert.equal(body.peakAqi, 151);
+    assert.equal(body.forecasts[0].reportingArea, 'Northwest Indiana');
+  } finally {
+    restoreHttps();
+    await app.close();
+    if (prev === undefined) delete process.env.AIRNOW_API_KEY; else process.env.AIRNOW_API_KEY = prev;
+  }
+});

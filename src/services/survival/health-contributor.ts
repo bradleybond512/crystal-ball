@@ -21,11 +21,10 @@
  * health-axis drivers; a covid-surge signal can be added later with a clear
  * daily-change threshold.
  *
- * HANDOFF — Live wiring: `disease-intel.fetchDiseaseIntel()` is already called in
- * the app (disease loader + globe), so its module cache is warm. Live wiring only
- * needs a synchronous `getCachedDiseaseIntel()` getter, then add
- * `makeHealthContributor(getCachedDiseaseIntel())` in
- * `storm-posture-state.withSupplyPosture`.
+ * LIVE: wired in `storm-posture-state.withSupplyPosture` via the synchronous
+ * `disease-intel.getCachedDiseaseIntel()` getter — the module cache is kept warm
+ * by the scheduled `loadDiseaseIntel` loader (full build). A null cache yields no
+ * health threats (fail-safe) until the first fetch resolves.
  */
 import type { DiseaseIntelData, WhoDonAlert, EpidemicEvent } from '../disease-intel.ts';
 import type { ThreatLevel } from '../weather/weather-threat-types.ts';

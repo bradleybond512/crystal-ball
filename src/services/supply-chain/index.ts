@@ -8,6 +8,7 @@ import type {
   GetChokepointStatusResponse,
   GetCriticalMineralsResponse,
 } from '@/generated/client/crystalball/supply_chain/v1/service_client';
+import { rememberChokepoints } from './chokepoint-cache';
 
 export type {
   ShippingIndex,
@@ -73,6 +74,21 @@ export async function fetchShippingRates(): Promise<GetShippingRatesResponse> {
   }
 }
 
+// Remember only real (non-unavailable) payloads for the survival mobility axis.
+// The cache/getter live in ./chokepoint-cache (glob-free) so consumers don't drag
+// this module's Vite import.meta.glob dependency into node/tsx tests.
+//
+// Timestamp the mobility cache from the payload's authoritative `fetchedAt` (the
+// sidecar sets it to an ISO string at fetch time), NOT Date.now(): the circuit
+// breaker can serve a cached/stale response, and stamping that "now" would let
+// genuinely-stale data look fresh within the mobility TTL. An unparseable
+// timestamp fails closed (not remembered).
+function rememberChokepointResponse(resp: GetChokepointStatusResponse): void {
+  if (resp.upstreamUnavailable) return;
+  const fetchedAtMs = Date.parse(resp.fetchedAt);
+  if (Number.isFinite(fetchedAtMs)) rememberChokepoints(resp.chokepoints, fetchedAtMs);
+}
+
 export async function fetchChokepointStatus(): Promise<GetChokepointStatusResponse> {
   const hydrated = getHydratedData('chokepoints') as GetChokepointStatusResponse | undefined;
   if (hydrated) {
@@ -84,6 +100,7 @@ export async function fetchChokepointStatus(): Promise<GetChokepointStatusRespon
     } else {
       dataFreshness.recordUpdate('chokepoint-status', hydrated.chokepoints.length);
     }
+    rememberChokepointResponse(hydrated);
     return hydrated;
   }
 
@@ -112,6 +129,7 @@ export async function fetchChokepointStatus(): Promise<GetChokepointStatusRespon
     } else {
       dataFreshness.recordUpdate('chokepoint-status', result.chokepoints.length);
     }
+    rememberChokepointResponse(result);
     return result;
   } catch {
     dataFreshness.recordError('chokepoint-status', 'fetch threw');

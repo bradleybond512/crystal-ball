@@ -18,9 +18,12 @@ import { makeFinancialContributor } from './financial-contributor.ts';
 import { makeSecurityContributor } from './security-contributor.ts';
 import { makeHealthContributor } from './health-contributor.ts';
 import { makeCommsContributor } from './comms-contributor.ts';
+import { makeMobilityContributor } from './mobility-contributor.ts';
+import { adaptChokepointInfoToStatus } from './chokepoint-mobility-adapter.ts';
 import { getForecastSnapshot } from '../mode-forecast';
 import { getCachedDiseaseIntel } from '../disease-intel';
 import { getCachedIodaOutages } from '../internet-outages';
+import { getCachedChokepointInfo } from '../supply-chain/chokepoint-cache';
 import { availableMovesFrom } from './survival-moves.ts';
 import { makeWeatherMoveProvider } from './weather-move-provider.ts';
 import { makeSupplyMoveProvider } from './supply-move-provider.ts';
@@ -163,6 +166,11 @@ function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyBase: Wor
       // the scheduled loadInternetOutages loader, which routes through the sidecar
       // /api/internet-outages endpoint); an empty/stale cache → no comms threats.
       makeCommsContributor(getCachedIodaOutages(now)),
+      // Mobility axis reads the warm chokepoint feed synchronously (kept warm by
+      // the shortage supply loader, which fetches chokepoint status every ~5 min);
+      // the sidecar throughput model is adapted to the contributor's closure-risk
+      // model. Empty/stale cache → no mobility threats, fail-safe.
+      makeMobilityContributor(adaptChokepointInfoToStatus(getCachedChokepointInfo(now))),
     ],
     freshness: snapshot.freshness,
     capturedAtMs: snapshot.capturedAtMs,

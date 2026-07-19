@@ -1278,7 +1278,14 @@ fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, P
 #[tauri::command]
 fn save_brief(webview: Webview, filename: String, bytes: Vec<u8>) -> Result<String, String> {
  require_trusted_window(webview.label())?;
- if filename.is_empty() || filename.contains('/') || filename.contains('\\') {
+ // Whitelist: alphanumeric + hyphen/underscore/dot/space.
+ // Also reject "." / ".." and null bytes to prevent path confusion.
+ let filename_valid = !filename.is_empty()
+  && filename != "."
+  && filename != ".."
+  && !filename.contains('\0')
+  && filename.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ' '));
+ if !filename_valid {
   return Err("Invalid filename".into());
  }
  if bytes.len() > 64 * 1024 * 1024 {
@@ -1409,6 +1416,26 @@ fn open_path_in_shell(path: &Path) -> Result<(), String> {
  open_in_shell(&path.to_string_lossy())
 }
 
+/// Returns true for hosts in 172.16.0.0/12 (172.16â72.31.x.x).
+fn is_172_16_range(host: &str) -> bool {
+ if let Some(rest) = host.strip_prefix("172.") {
+  if let Some(s) = rest.split('.').next() {
+   if let Ok(n) = s.parse::<u8>() { return n >= 16 && n <= 31; }
+  }
+ }
+ false
+}
+
+/// Returns true for hosts in CGNAT 100.64.0.0/10 (100.64â100.127.x.x).
+fn is_cgnat_range(host: &str) -> bool {
+ if let Some(rest) = host.strip_prefix("100.") {
+  if let Some(s) = rest.split('.').next() {
+   if let Ok(n) = s.parse::<u8>() { return n >= 64 && n <= 127; }
+  }
+ }
+ false
+}
+
 #[tauri::command]
 fn open_url(webview: Webview, url: String) -> Result<(), String> {
  require_trusted_window(webview.label())?;
@@ -1424,11 +1451,22 @@ fn open_url(webview: Webview, url: String) -> Result<(), String> {
  // Block loopback, link-local, and private network hosts even over HTTPS
  let host = parsed.host_str().unwrap_or("");
  let blocked = host == "localhost"
- || host == "127.0.0.1"
+ || host.starts_with("127.") // loopback 127.0.0.0/8
+ || host == "0.0.0.0"
  || host == "::1"
+ || host == "[::1]"
  || host.starts_with("192.168.")
  || host.starts_with("10.")
- || host.ends_with(".local");
+ || host.ends_with(".local")
+ // RFC 1918 172.16.0.0/12
+ || is_172_16_range(host)
+ // Link-local: 169.254.0.0/16 and IPv6 fe80::/10
+ || host.starts_with("169.254.")
+ || host.to_ascii_lowercase().starts_with("fe80")
+ // CGNAT 100.64.0.0/10
+ || is_cgnat_range(host)
+ // IPv6 ULA fc00::/7
+ || { let h = host.to_ascii_lowercase(); h.starts_with("fc") || h.starts_with("fd") };
  if blocked {
  return Err("Internal/private addresses may not be opened via open_url".to_string());
  }

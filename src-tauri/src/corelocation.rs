@@ -11,8 +11,16 @@ pub struct LocationResult {
     pub horizontal_accuracy: f64,
 }
 
+const TRUSTED_WINDOWS: &[&str] = &["main", "settings", "live-channels"];
+
 #[command]
-pub async fn get_location() -> Result<LocationResult, String> {
+pub async fn get_location<R: tauri::Runtime>(webview: tauri::Webview<R>) -> Result<LocationResult, String> {
+    if !TRUSTED_WINDOWS.contains(&webview.label()) {
+        return Err(format!(
+            "get_location may only be called from a trusted window (got '{}')",
+            webview.label()
+        ));
+    }
     get_location_impl()
 }
 

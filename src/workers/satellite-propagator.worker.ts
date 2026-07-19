@@ -4,6 +4,7 @@
  * Receives TLE data, propagates all satellite positions at 1Hz,
  * and posts position arrays back to the main thread.
  */
+/* eslint-disable no-console -- worker thread has no localStorage, so logDebug is unavailable; console is the only diagnostic sink here */
 
 import {
   twoline2satrec,
@@ -52,8 +53,11 @@ type WorkerMessage =
 
 let tles: TLEInput[] = [];
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let consecutivePropagateFailures = 0;
+const MAX_PROPAGATE_FAILURES = 5;
 
 function propagateAll(): void {
+  try {
   const now = new Date();
   const gmst = gstime(now);
   const positions: SatellitePosition[] = [];
@@ -88,9 +92,23 @@ function propagateAll(): void {
   }
 
   self.postMessage({ type: 'positions', positions });
+  consecutivePropagateFailures = 0;
+  } catch (error) {
+    consecutivePropagateFailures += 1;
+    console.warn('[satellite-worker] propagateAll error', error);
+    // Per-satellite errors are already skipped above, so a throw here is a
+    // systemic failure. After repeated failures, rethrow so it surfaces as an
+    // uncaught worker error and the main thread restarts us instead of this
+    // 1Hz loop logging forever.
+    if (consecutivePropagateFailures >= MAX_PROPAGATE_FAILURES) {
+      if (intervalId) { clearInterval(intervalId); intervalId = null; }
+      throw error;
+    }
+  }
 }
 
 function computeOrbitPath(req: OrbitPathRequest): void {
+  try {
   const satrec = twoline2satrec(req.line1, req.line2);
   const points: [number, number, number][] = [];
   const now = Date.now();
@@ -110,6 +128,10 @@ function computeOrbitPath(req: OrbitPathRequest): void {
   }
 
   self.postMessage({ type: 'orbitPath', noradId: req.noradId, points });
+  } catch (error) {
+    console.warn('[satellite-worker] computeOrbitPath failed for noradId', req.noradId, error);
+    self.postMessage({ type: 'orbitPath', noradId: req.noradId, points: [] });
+  }
 }
 
 interface PassRecord {
@@ -229,7 +251,7 @@ async function computePasses(
 self.addEventListener('message', (e: MessageEvent<WorkerMessage>) => {
   // Workers receive messages only from their owning page; origin is always empty string.
   if (e.origin !== '' && e.origin !== self.location.origin) return;
-
+  try {
   const msg = e.data;
 
   if (msg.type === 'loadTLEs') {
@@ -251,5 +273,13 @@ self.addEventListener('message', (e: MessageEvent<WorkerMessage>) => {
  if (intervalId != null) clearInterval(intervalId);
  intervalId = null;
  tles = [];
+  }
+  } catch (error) {
+    // Per-request errors are caught inside computeOrbitPath/computePasses, so a
+    // throw reaching here is systemic. Log then rethrow so it surfaces as an
+    // uncaught worker error and the main thread restarts us, rather than
+    // silently continuing in a broken state.
+    console.error('[satellite-worker] unhandled message error', error);
+    throw error;
   }
 });

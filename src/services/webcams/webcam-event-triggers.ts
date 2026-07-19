@@ -1,7 +1,8 @@
 import { WebcamSpatialIndex, haversineKm } from './webcam-spatial.ts';
 import type { WebcamFeed } from './webcam-types';
+import { isVisibilityCam, AIRNOW_VISIBILITY_PROGRAMS, type AirnowVisibilityProgram } from './airnow-visibility-catalog.ts';
 
-export type WebcamTriggerKind = 'seismic_volcano' | 'fire' | 'flood';
+export type WebcamTriggerKind = 'seismic_volcano' | 'fire' | 'flood' | 'smoke';
 
 export interface SeismicEventInput {
   id: string;
@@ -137,6 +138,61 @@ export function evaluateFloodTrigger(
     affectedCamIds: [nearest.id],
     reason: `Stream gauge ${gauge.siteNo} at ${gauge.stageLabel} stage`,
     metadata: { siteNo: gauge.siteNo, stage: gauge.stageLabel, distanceKm: Number(nearestKm.toFixed(2)) },
+  };
+}
+
+// ── Smoke / Air quality → visibility camera ──────────────────────────────
+
+/** Smoke drifts far, so a wider radius than the fire-cam trigger. */
+export const SMOKE_VISIBILITY_RADIUS_KM = 150;
+/** AQI at/above which an air-quality event is worth a "check the camera" nudge.
+ *  Deliberately USG (101), matching the `smoke-relevant` threshold the AirNow
+ *  air-quality observation adapter uses (air-quality-adapter.ts) — a visibility
+ *  camera is worth surfacing as soon as the air is unhealthy for sensitive
+ *  groups, not only at full Unhealthy (151). */
+export const SMOKE_MIN_AQI = 101;
+
+export interface SmokeEventInput {
+  id: string;
+  lat: number;
+  lon: number;
+  /** Peak AQI, if this is an air-quality event; null/omitted for a raw smoke/fire plume. */
+  aqi?: number | null;
+  observedAt: number;
+}
+
+/**
+ * A visibility camera near an active smoke / Unhealthy-AQI event lets the user
+ * *see* the haze — the visual confirmation of the AirNow↔FIRMS correlation.
+ * Considers both AirNow-tagged visibility webcams (image feeds) and the non-NPS
+ * partner programs (link-outs) by location.
+ */
+export function evaluateSmokeTrigger(
+  event: SmokeEventInput,
+  visibilityFeeds: readonly WebcamFeed[],
+  now: number = Date.now(),
+  programs: readonly AirnowVisibilityProgram[] = AIRNOW_VISIBILITY_PROGRAMS,
+): WebcamTriggerEvent | null {
+  if (event.aqi != null && Number.isFinite(event.aqi) && event.aqi < SMOKE_MIN_AQI) return null;
+  const nearFeeds = visibilityFeeds
+    .filter((f) => isVisibilityCam(f))
+    .filter((f) => haversineKm(event.lat, event.lon, f.lat, f.lon) <= SMOKE_VISIBILITY_RADIUS_KM);
+  const nearPrograms = programs.filter(
+    (p) => haversineKm(event.lat, event.lon, p.lat, p.lon) <= SMOKE_VISIBILITY_RADIUS_KM,
+  );
+  if (nearFeeds.length === 0 && nearPrograms.length === 0) return null;
+  const aqiPart = event.aqi != null && Number.isFinite(event.aqi) ? ` (AQI ${event.aqi})` : '';
+  return {
+    kind: 'smoke',
+    triggeredAt: now,
+    affectedCamIds: nearFeeds.map((c) => c.id),
+    reason: `Smoke / unhealthy air${aqiPart} within ${SMOKE_VISIBILITY_RADIUS_KM}km of a visibility camera`,
+    metadata: {
+      eventId: event.id,
+      ...(event.aqi != null && Number.isFinite(event.aqi) ? { aqi: event.aqi } : {}),
+      programIds: nearPrograms.map((p) => p.id).join(','),
+      programCount: nearPrograms.length,
+    },
   };
 }
 

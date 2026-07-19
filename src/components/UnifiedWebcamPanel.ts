@@ -17,6 +17,7 @@ import { healthSummary } from '@/services/webcams/health-view';
 import { nextProbeDelay } from '@/services/webcams/probe-backoff';
 import { resolveFrameUrl } from '@/services/webcams/frame-resolver';
 import { openExternalSafe } from '@/utils/safe-open';
+import { isVisibilityCam, AIRNOW_VISIBILITY_PROGRAMS } from '@/services/webcams/airnow-visibility-catalog';
 import type { WebcamCategory, WebcamFeed, WebcamSource, WebcamSourceHealth } from '@/services/webcams/webcam-types';
 
 const SMOKE_DETECT_INTERVAL_MS = 10 * 60 * 1000;
@@ -55,6 +56,7 @@ export class UnifiedWebcamPanel extends Panel {
   private viewMode: ViewMode = 'grid';
   private sourceFilter: WebcamSource | 'ALL' | 'FAVORITES' = 'ALL';
   private categoryFilter: WebcamCategory | 'ALL' = 'ALL';
+  private visibilityOnly = false;
   private searchQuery = '';
   private selectedFeed: WebcamFeed | null = null;
   private favorites = new Set<string>(getFavoriteIds());
@@ -158,6 +160,9 @@ export class UnifiedWebcamPanel extends Panel {
     if (this.categoryFilter !== 'ALL') {
       list = list.filter((f) => f.category === this.categoryFilter);
     }
+    if (this.visibilityOnly) {
+      list = list.filter((f) => isVisibilityCam(f));
+    }
     if (this.searchQuery) {
       const q = this.searchQuery.toLowerCase();
       list = list.filter(
@@ -178,6 +183,7 @@ export class UnifiedWebcamPanel extends Panel {
     el.append(this.buildToolbar());
     el.append(this.buildSourceChips());
     el.append(this.buildCategoryChips());
+    if (this.visibilityOnly) el.append(this.buildVisibilityProgramsRow());
     const strip = this.buildHealthStrip();
     if (strip) el.append(strip);
 
@@ -408,6 +414,56 @@ export class UnifiedWebcamPanel extends Panel {
         this.render();
       });
       wrap.append(chip);
+    }
+    // AirNow visibility (haze) cameras — a metadata tag, not a category, so it
+    // gets its own toggle chip alongside the category row.
+    const visChip = document.createElement('button');
+    visChip.textContent = '🌫 Visibility';
+    visChip.title = 'AirNow haze / visibility cameras';
+    visChip.style.fontSize = '11px';
+    visChip.style.padding = '3px 8px';
+    visChip.style.border = '1px solid #444';
+    visChip.style.borderRadius = '12px';
+    visChip.style.cursor = 'pointer';
+    visChip.style.background = this.visibilityOnly ? '#8a6d3b' : 'transparent';
+    visChip.style.color = this.visibilityOnly ? '#fff' : 'inherit';
+    visChip.addEventListener('click', () => {
+      this.visibilityOnly = !this.visibilityOnly;
+      this.render();
+    });
+    wrap.append(visChip);
+    return wrap;
+  }
+
+  /** Link-out chips for the non-NPS partner visibility programs (HTML galleries
+   *  with no direct-snapshot URL) — shown only while the Visibility filter is on. */
+  private buildVisibilityProgramsRow(): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'webcams-visibility-programs';
+    wrap.style.display = 'flex';
+    wrap.style.gap = '6px';
+    wrap.style.flexWrap = 'wrap';
+    wrap.style.alignItems = 'center';
+    wrap.style.padding = '2px 8px 6px';
+    const label = document.createElement('span');
+    label.textContent = 'Partner programs:';
+    label.style.fontSize = '11px';
+    label.style.opacity = '0.7';
+    wrap.append(label);
+    for (const p of AIRNOW_VISIBILITY_PROGRAMS) {
+      const link = document.createElement('button');
+      link.textContent = `${p.name} ↗`;
+      const regionSuffix = p.region ? ` — ${p.region}` : '';
+      link.title = `${p.agency}${regionSuffix}`;
+      link.style.fontSize = '11px';
+      link.style.padding = '3px 8px';
+      link.style.border = '1px solid #444';
+      link.style.borderRadius = '12px';
+      link.style.cursor = 'pointer';
+      link.style.background = 'transparent';
+      link.style.color = 'inherit';
+      link.addEventListener('click', () => openExternalSafe(p.pageUrl));
+      wrap.append(link);
     }
     return wrap;
   }

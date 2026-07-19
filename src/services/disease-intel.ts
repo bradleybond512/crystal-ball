@@ -90,6 +90,21 @@ export interface DiseaseIntelData {
 const CACHE_TTL_MS = 30 * 60 * 1000;
 let _cache: { data: DiseaseIntelData; ts: number } | null = null;
 
+/**
+ * Synchronous read of the last-fetched disease intel, or null if nothing has
+ * been fetched yet OR the cache has aged past `CACHE_TTL_MS`. Lets consumers that
+ * must stay synchronous (e.g. the survival posture engine's health axis) read the
+ * warm cache without awaiting a fetch. Honors the SAME freshness window as
+ * `fetchDiseaseIntel` so a sustained loader outage can't keep asserting stale
+ * outbreak intel forever — past the TTL it returns null (fail-safe: no health
+ * threats) rather than surfacing data the fetch path would already refetch.
+ * `now` is injectable for determinism.
+ */
+export function getCachedDiseaseIntel(now = Date.now()): DiseaseIntelData | null {
+  if (!_cache || now - _cache.ts >= CACHE_TTL_MS) return null;
+  return _cache.data;
+}
+
 export async function fetchDiseaseIntel(): Promise<DiseaseIntelData> {
   if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS) return _cache.data;
 

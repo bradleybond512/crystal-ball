@@ -1816,6 +1816,29 @@ class RequestBodyTooLargeError extends Error {
   }
 }
 
+// Recursively copy a value, dropping prototype-chain keys at EVERY depth so a
+// renderer-supplied free-form object can't inject __proto__/constructor/
+// prototype into stored state (and thence into later MCP/API responses).
+// Primitives pass through; recursion is depth-bounded against adversarial nesting.
+const PROTO_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+function sanitizeDeep(value, depth = 0) {
+  if (depth > 8) return Array.isArray(value) ? [] : (value && typeof value === 'object' ? {} : value);
+  if (Array.isArray(value)) return value.map((v) => sanitizeDeep(v, depth + 1));
+  if (!value || typeof value !== 'object') return value;
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (PROTO_POLLUTION_KEYS.has(k)) continue;
+    out[k] = sanitizeDeep(v, depth + 1);
+  }
+  return out;
+}
+// Entry for free-form object fields: non-objects collapse to {} (matching the
+// prior `typeof x === 'object' ? x : {}` default), objects are deep-sanitized.
+function stripProtoKeys(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+  return sanitizeDeep(obj);
+}
+
 async function readBody(req) {
   if (Object.prototype.hasOwnProperty.call(req, REQUEST_BODY_CACHE)) {
     return req[REQUEST_BODY_CACHE];
@@ -5788,6 +5811,10 @@ async function dispatch(requestUrl, req, routes, context) {
       heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
       ais_connected: aisState.socket?.readyState === 1,
       ais_vessels: aisState.vessels.size,
+      // keys_configured / keys_total provided as a count only — key names
+      // are intentionally omitted from the pre-auth response.
+      // keys_missing (the list of unconfigured key names) is only available
+      // via the authenticated /api/diagnostics endpoint.
       keys_configured: EXPECTED_API_KEYS.length - missing.length,
       keys_total: EXPECTED_API_KEYS.length,
       keys_missing_count: missing.length,
@@ -5943,18 +5970,32 @@ async function dispatch(requestUrl, req, routes, context) {
         if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
         if (!context._analystState) context._analystState = {};
         // Cap payload size defensively (drop unknown deeply-nested fields).
+        // analyst / forecast are validated to their known top-level shapes so
+        // arbitrary renderer-supplied keys don't propagate into MCP responses.
+        const rawAnalyst = body.analyst && typeof body.analyst === 'object' ? body.analyst : null;
+        const analyst = rawAnalyst ? {
+          timestamp: typeof rawAnalyst.timestamp === 'number' ? rawAnalyst.timestamp : Date.now(),
+          hypotheses: Array.isArray(rawAnalyst.hypotheses) ? rawAnalyst.hypotheses.slice(0, 20) : [],
+          aiEnriched: !!rawAnalyst.aiEnriched,
+        } : null;
+        const rawForecast = body.forecast && typeof body.forecast === 'object' ? body.forecast : null;
+        const forecast = rawForecast ? {
+          timestamp: typeof rawForecast.timestamp === 'number' ? rawForecast.timestamp : Date.now(),
+          advisories: Array.isArray(rawForecast.advisories) ? rawForecast.advisories.slice(0, 20) : [],
+          pressure: stripProtoKeys(rawForecast.pressure),
+        } : null;
         const safe = {
           timestamp: typeof body.timestamp === 'number' ? body.timestamp : Date.now(),
-          analyst: body.analyst ?? null,
-          forecast: body.forecast ?? null,
+          analyst,
+          forecast,
           accuracy: Array.isArray(body.accuracy) ? body.accuracy.slice(0, 20) : [],
           threads: Array.isArray(body.threads) ? body.threads.slice(0, 30) : [],
           hotEntities: Array.isArray(body.hotEntities) ? body.hotEntities.slice(0, 20) : [],
           entityCount: typeof body.entityCount === 'number' ? body.entityCount : 0,
           ghostMode: !!body.ghostMode,
           debugLog: Array.isArray(body.debugLog) ? body.debugLog.slice(-100) : [],
-          debugErrorCounts: body.debugErrorCounts && typeof body.debugErrorCounts === 'object' ? body.debugErrorCounts : {},
-          metrics: body.metrics && typeof body.metrics === 'object' ? body.metrics : null,
+          debugErrorCounts: stripProtoKeys(body.debugErrorCounts),
+          metrics: body.metrics && typeof body.metrics === 'object' ? stripProtoKeys(body.metrics) : null,
         };
         context._analystState = safe;
         return json({ ok: true });
@@ -6156,8 +6197,12 @@ async function dispatch(requestUrl, req, routes, context) {
       try {
         const raw = await readBody(req);
         const body = raw ? JSON.parse(raw.toString()) : null;
-        if (!body || typeof body !== 'object') return json({ error: 'invalid body' }, 400);
-        context._algorithmState[bucket] = { ...body, _pushedAt: Date.now() };
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'invalid body' }, 400);
+        // Exclude __proto__/constructor/prototype at every depth (not just the
+        // top level) to prevent prototype-chain injection from nested free-form
+        // objects in the pushed algorithm state.
+        const safeBody = sanitizeDeep(body);
+        context._algorithmState[bucket] = { ...safeBody, _pushedAt: Date.now() };
         return json({ ok: true });
       } catch (error) {
         return json({ error: String(error?.message || error) }, 400);

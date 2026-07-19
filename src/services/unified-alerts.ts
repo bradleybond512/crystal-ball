@@ -64,6 +64,27 @@ export interface UnifiedAlert {
   explanation?: AlertExplanation;
 }
 
+const VALID_SEVERITIES = new Set<string>(['critical', 'high', 'medium', 'low', 'info']);
+
+/**
+ * Runtime structural guard for localStorage-hydrated alert entries.
+ * Rejects anything that doesn't have the minimum required shape so a
+ * corrupted or tampered store can't populate the live alert registry
+ * with untyped objects.
+ */
+function isValidUnifiedAlertEntry(e: unknown): e is UnifiedAlert {
+  if (!e || typeof e !== 'object' || Array.isArray(e)) return false;
+  const a = e as Record<string, unknown>;
+  return (
+    typeof a['id'] === 'string' && a['id'].length > 0 &&
+    typeof a['source'] === 'string' &&
+    typeof a['severity'] === 'string' && VALID_SEVERITIES.has(a['severity']) &&
+    typeof a['title'] === 'string' &&
+    typeof a['body'] === 'string' &&
+    typeof a['timestamp'] === 'number'
+  );
+}
+
 const STORAGE_KEY = 'wm-unified-alerts-v1';
 const USER_LOCATION_KEY = 'crystalball-user-location';
 const MAX_ALERTS = 500;
@@ -449,10 +470,12 @@ class UnifiedAlertStore {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
-      const entries = JSON.parse(raw) as UnifiedAlert[];
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return; // corrupted — start fresh
       const now = Date.now();
       const loaded: UnifiedAlert[] = [];
-      for (const entry of entries) {
+      for (const entry of parsed) {
+        if (!isValidUnifiedAlertEntry(entry)) continue; // skip malformed entries
         if (entry.pinned || now - entry.timestamp <= PRUNE_AGE_MS) {
           this.alerts.set(entry.id, entry);
           loaded.push(entry);

@@ -16,19 +16,29 @@ import {
   type RegimeContext,
 } from './regime-coupling';
 
-const CONTEXT_TTL_MS = 60_000;
+let cached: { signature: string; ctx: RegimeContext } | null = null;
 
-let cached: { at: number; ctx: RegimeContext } | null = null;
-
+/** Re-reads the shift cache on EVERY call (it is a cheap map read that
+ *  honors the bocpd kill-switch — disabling must take effect
+ *  immediately, never after a TTL) and only memoizes the projection
+ *  math, keyed by the shift set's identity. */
 function currentContext(now: number): RegimeContext {
-  if (!cached || now - cached.at > CONTEXT_TTL_MS) {
-    try {
-      cached = { at: now, ctx: buildRegimeContext(getActiveRegimeShifts(), now) };
-    } catch {
-      cached = { at: now, ctx: emptyRegimeContext() };
+  try {
+    const shifts = getActiveRegimeShifts();
+    // Minute bucket in the key so the 6h staleness cutoff inside
+    // buildRegimeContext re-evaluates even when the shift set is static.
+    if (Object.keys(shifts).length === 0) return emptyRegimeContext();
+    const bucket = Math.floor(now / 60_000);
+    const parts = Object.entries(shifts).map(([d, s]) => `${d}:${s?.detectedAt ?? 0}`);
+    parts.sort((x, y) => x.localeCompare(y));
+    const signature = `${bucket}|${parts.join(',')}`;
+    if (cached?.signature !== signature) {
+      cached = { signature, ctx: buildRegimeContext(shifts, now) };
     }
+    return cached.ctx;
+  } catch {
+    return emptyRegimeContext();
   }
-  return cached.ctx;
 }
 
 /** Test hook. */

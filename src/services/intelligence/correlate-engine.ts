@@ -140,13 +140,24 @@ function applyRule(
 }
 
 /** Regime coupling can widen a rule's window; a broken provider must
- *  never shrink or explode it — clamp [1, 2], non-finite → neutral. */
+ *  never shrink or explode it — clamp [1, 2]; non-finite or throwing
+ *  providers are neutral. */
 function effectiveWindowFor(rule: CorrelationRule, options: CorrelateEngineOptions): number {
-  const raw = options.windowMultiplierFor?.(rule);
+  const raw = safeProviderValue(() => options.windowMultiplierFor?.(rule));
   const mult = raw !== undefined && Number.isFinite(raw)
     ? Math.max(1, Math.min(2, raw))
     : 1;
   return rule.timeWindowMs * mult;
+}
+
+/** Injected providers must never break correlate() — a throw degrades
+ *  to neutral (undefined), same as an absent provider. */
+function safeProviderValue(call: () => number | undefined): number | undefined {
+  try {
+    return call();
+  } catch {
+    return undefined;
+  }
 }
 
 function evaluatePair(
@@ -173,8 +184,8 @@ function evaluatePair(
     baseConfidence: rule.baseConfidence,
     distanceKm: pairDistanceKm(a, b),
     sharedEntityCount: sharedEntityCount(a.entityIds, b.entityIds),
-    reliability: options.reliabilityFor?.(rule.id),
-    regimeFactor: options.regimeFactorFor?.(a, b),
+    reliability: safeProviderValue(() => options.reliabilityFor?.(rule.id)),
+    regimeFactor: safeProviderValue(() => options.regimeFactorFor?.(a, b)),
   });
   return {
     ruleId: rule.id,

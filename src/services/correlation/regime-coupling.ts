@@ -16,11 +16,15 @@ import type { RegimeShift } from '../cognition/regime-detection';
 import type { ForecastDomain } from '../mode-forecast';
 
 /** Pressure-forecast domains → the observation-domain strings they
- *  govern. Observation domains outside this map never couple to regimes. */
+ *  govern. Observation domains outside this map never couple to regimes
+ *  (silent no-op, by design). Covers every domain the live adapters emit
+ *  today — weather, aviation, maritime, space, humanitarian, infra,
+ *  macro (earthquake/wildfire/flood adapters all emit 'weather') — plus
+ *  forward-looking strings future adapters are likely to use. */
 export const FORECAST_TO_OBSERVATION_DOMAINS: Record<ForecastDomain, readonly string[]> = {
-  finance: ['markets', 'macro', 'finance', 'crypto', 'stocks'],
-  security: ['conflict', 'military', 'security', 'sanctions'],
-  disaster: ['weather', 'humanitarian', 'seismic', 'wildfire', 'flood'],
+  finance: ['markets', 'macro', 'finance', 'crypto', 'stocks', 'economic'],
+  security: ['conflict', 'military', 'security', 'sanctions', 'aviation', 'maritime', 'civil_unrest'],
+  disaster: ['weather', 'humanitarian', 'seismic', 'earthquake', 'wildfire', 'flood', 'space', 'natural_hazard'],
   cyber: ['cyber', 'infrastructure', 'infra'],
 };
 

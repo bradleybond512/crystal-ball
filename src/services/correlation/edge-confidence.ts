@@ -33,8 +33,9 @@ export interface EdgeConfidenceInput {
   /** Per-rule learned reliability multiplier (correlation outcome ledger).
    *  Neutral 1.0 when absent. Clamped to [0.5, 1.5]. */
   reliability?: number;
-  /** Regime-coupling factor (BOCPD). Neutral 1.0 when absent.
-   *  Clamped to [0.8, 1.15]. */
+  /** Regime-coupling factor (BOCPD). Boost-only by design: neutral 1.0
+   *  when absent, clamped to [1, 1.15] — a broken/disabled provider can
+   *  never silently penalize. */
   regimeFactor?: number;
 }
 
@@ -64,13 +65,20 @@ const ENTITY_BOOST_MAX_SHARED = 2;
 const VALUE_FLOOR = 0.2;
 
 export function computeEdgeConfidence(input: EdgeConfidenceInput): EdgeConfidence {
+  // Injected providers (reliability, regime) and upstream data (distance,
+  // baseConfidence) can be malformed; non-finite values fall back to
+  // neutral so a broken provider can never produce NaN confidence.
   const factors: EdgeConfidenceFactors = {
-    base: clamp(input.baseConfidence ?? 1, 0, 1),
+    base: clamp(finiteOr(input.baseConfidence, 1), 0, 1),
     temporal: temporalFactor(input),
-    spatial: spatialFactor(input.distanceKm),
-    entity: entityFactor(input.sharedEntityCount),
-    reliability: clamp(input.reliability ?? 1, 0.5, 1.5),
-    regime: clamp(input.regimeFactor ?? 1, 0.8, 1.15),
+    spatial: spatialFactor(
+      input.distanceKm !== undefined && Number.isFinite(input.distanceKm)
+        ? input.distanceKm
+        : undefined,
+    ),
+    entity: entityFactor(finiteOr(input.sharedEntityCount, 0)),
+    reliability: clamp(finiteOr(input.reliability, 1), 0.5, 1.5),
+    regime: clamp(finiteOr(input.regimeFactor, 1), 1, 1.15),
   };
   const product =
     factors.base * factors.temporal * factors.spatial *
@@ -82,8 +90,9 @@ export function computeEdgeConfidence(input: EdgeConfidenceInput): EdgeConfidenc
 /** Exponential half-life kernel: 1.0 at gap 0, 0.5 at half the window,
  *  ≈0.25 at the full window. Forced to 1.0 under a baseConfidence rule. */
 function temporalFactor(input: EdgeConfidenceInput): number {
-  if (input.baseConfidence !== undefined) return 1;
-  if (input.timeWindowMs <= 0) return 1;
+  if (input.baseConfidence !== undefined && Number.isFinite(input.baseConfidence)) return 1;
+  if (!Number.isFinite(input.timeWindowMs) || input.timeWindowMs <= 0) return 1;
+  if (!Number.isFinite(input.gapMs)) return 1;
   const halfLife = input.timeWindowMs / 2;
   return Math.exp(-Math.LN2 * (Math.max(0, input.gapMs) / halfLife));
 }
@@ -151,6 +160,10 @@ function hours(ms: number): string {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+function finiteOr(v: number | undefined, fallback: number): number {
+  return v !== undefined && Number.isFinite(v) ? v : fallback;
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {

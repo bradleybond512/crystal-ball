@@ -21,6 +21,8 @@ import { makeCommsContributor } from './comms-contributor.ts';
 import { makeMobilityContributor } from './mobility-contributor.ts';
 import { adaptChokepointInfoToStatus } from './chokepoint-mobility-adapter.ts';
 import { makeEnergyWaterContributor } from './energy-water-contributor.ts';
+import { makeCorrelationContributor } from './correlation-contributor.ts';
+import { latestCompoundRisk } from '@/services/correlation/compound-risk-cadence';
 import { adaptPowerGridAlertsToInput } from './grid-energy-adapter.ts';
 import { getForecastSnapshot } from '../mode-forecast';
 import { getCachedDiseaseIntel } from '../disease-intel';
@@ -179,6 +181,10 @@ function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyBase: Wor
       // count have no live source (→ null → no threat); grid alerts drive the axis.
       // Empty/stale cache → no energy_water threats, fail-safe.
       makeEnergyWaterContributor(adaptPowerGridAlertsToInput(getCachedPowerGridAlerts(now))),
+      // Correlation axis-heat: cross-domain compound-risk clusters (kept warm
+      // by startCompoundRiskCadence) warm the affected axes. Inference-capped
+      // severity; empty/cold snapshot → no threats, fail-safe.
+      makeCorrelationContributor(latestCompoundRisk()?.results),
     ],
     freshness: snapshot.freshness,
     capturedAtMs: snapshot.capturedAtMs,

@@ -162,6 +162,31 @@ test('store seam: setRegimeProvider drives the default engine', () => {
   store.setRegimeProvider();
 });
 
+test('engine: throwing providers degrade to neutral instead of breaking correlate', () => {
+  const engine = new CorrelateEngine({
+    reliabilityFor: () => { throw new Error('boom'); },
+    regimeFactorFor: () => { throw new Error('boom'); },
+    windowMultiplierFor: () => { throw new Error('boom'); },
+  });
+  engine.registerRule(anyRule);
+  const result = engine.correlate(
+    [obs('a', 'cyber', T0), obs('b', 'infrastructure', T0 + HOUR)],
+    new Date(T0 + HOUR),
+  );
+  assert.equal(result.pairs.length, 1);
+  const pair = result.pairs[0]!;
+  assert.equal(pair.confidenceDetail!.factors.reliability, 1);
+  assert.equal(pair.confidenceDetail!.factors.regime, 1);
+});
+
+test('extended domain map covers every live adapter domain somewhere', () => {
+  const liveDomains = ['weather', 'aviation', 'maritime', 'space', 'humanitarian', 'infra', 'macro'];
+  const mapped = new Set(Object.values(FORECAST_TO_OBSERVATION_DOMAINS).flat());
+  for (const d of liveDomains) {
+    assert.ok(mapped.has(d), `live adapter domain '${d}' must be regime-mappable`);
+  }
+});
+
 test('deterministic: same shifts + now produce identical contexts', () => {
   const a = buildRegimeContext({ finance: shift(T0) }, T0 + HOUR);
   const b = buildRegimeContext({ finance: shift(T0) }, T0 + HOUR);

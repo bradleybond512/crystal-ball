@@ -11,6 +11,12 @@
  */
 
 import type { ObservationEvent } from './observation-adapters';
+import {
+  computeEdgeConfidence,
+  pairDistanceKm,
+  sharedEntityCount,
+  type EdgeConfidence,
+} from '../correlation/edge-confidence';
 
 export type EdgeType = 'co-located' | 'temporally-adjacent' | 'causal-candidate' | 'contradicts';
 
@@ -27,8 +33,9 @@ export interface CorrelationRule {
   timeWindowMs: number;
   matchFn: (a: ObservationEvent, b: ObservationEvent) => boolean;
   edgeType: EdgeType;
-  /** Override the computed confidence with a fixed value. Useful for
-   *  high-conviction rules where temporal decay is misleading. */
+  /** Rule conviction: disables temporal decay and becomes the base
+   *  factor of the kernel score. Spatial / entity / learned-reliability
+   *  factors still modulate the result. */
   baseConfidence?: number;
 }
 
@@ -37,9 +44,20 @@ export interface CorrelatedPair {
   edgeType: EdgeType;
   eventA: ObservationEvent;
   eventB: ObservationEvent;
-  /** 0..1 — combines temporal proximity with the rule's override. */
+  /** 0..1 — multi-factor kernel score; equals confidenceDetail.value. */
   confidence: number;
+  /** Factor breakdown + explanation for the score above. */
+  confidenceDetail?: EdgeConfidence;
   detectedAt: Date;
+}
+
+export interface CorrelateEngineOptions {
+  /** Per-rule learned reliability multiplier (correlation outcome ledger).
+   *  Return 1 for neutral. Clamped downstream to [0.5, 1.5]. */
+  reliabilityFor?: (ruleId: string) => number;
+  /** Regime-coupling factor for a candidate pair (BOCPD integration).
+   *  Return 1 for neutral. Clamped downstream to [0.8, 1.15]. */
+  regimeFactorFor?: (a: ObservationEvent, b: ObservationEvent) => number;
 }
 
 export interface CorrelationResult {
@@ -51,6 +69,11 @@ export interface CorrelationResult {
 
 export class CorrelateEngine {
   private readonly rules = new Map<string, CorrelationRule>();
+  private readonly options: CorrelateEngineOptions;
+
+  constructor(options: CorrelateEngineOptions = {}) {
+    this.options = options;
+  }
 
   registerRule(rule: CorrelationRule): void {
     this.rules.set(rule.id, rule);
@@ -70,7 +93,7 @@ export class CorrelateEngine {
     const seen = new Set<string>();
 
     for (const rule of this.rules.values()) {
-      applyRule(rule, observations, now, seen, pairs);
+      applyRule(rule, observations, now, seen, pairs, this.options);
     }
 
     return {
@@ -88,6 +111,7 @@ function applyRule(
   now: Date,
   seen: Set<string>,
   pairs: CorrelatedPair[],
+  options: CorrelateEngineOptions,
 ): void {
   const domainSet = new Set(rule.domains);
   for (let i = 0; i < observations.length; i++) {
@@ -96,7 +120,7 @@ function applyRule(
     for (let j = i + 1; j < observations.length; j++) {
       const b = observations[j];
       if (!b) continue;
-      const pair = evaluatePair(rule, domainSet, a, b, seen);
+      const pair = evaluatePair(rule, domainSet, a, b, seen, options);
       if (pair) {
         pairs.push({ ...pair, detectedAt: now });
       }
@@ -110,6 +134,7 @@ function evaluatePair(
   a: ObservationEvent,
   b: ObservationEvent,
   seen: Set<string>,
+  options: CorrelateEngineOptions,
 ): Omit<CorrelatedPair, 'detectedAt'> | undefined {
   if (!domainMatches(domainSet, a, b)) return undefined;
   if (Math.abs(a.timestamp - b.timestamp) > rule.timeWindowMs) return undefined;
@@ -120,12 +145,22 @@ function evaluatePair(
   const key = pairKey(rule.id, a.id, b.id);
   if (seen.has(key)) return undefined;
   seen.add(key);
+  const detail = computeEdgeConfidence({
+    gapMs: Math.abs(a.timestamp - b.timestamp),
+    timeWindowMs: rule.timeWindowMs,
+    baseConfidence: rule.baseConfidence,
+    distanceKm: pairDistanceKm(a, b),
+    sharedEntityCount: sharedEntityCount(a.entityIds, b.entityIds),
+    reliability: options.reliabilityFor?.(rule.id),
+    regimeFactor: options.regimeFactorFor?.(a, b),
+  });
   return {
     ruleId: rule.id,
     edgeType: rule.edgeType,
     eventA: a,
     eventB: b,
-    confidence: computeConfidence(rule, a, b),
+    confidence: detail.value,
+    confidenceDetail: detail,
   };
 }
 
@@ -149,19 +184,6 @@ function domainMatches(
 function pairKey(ruleId: string, aId: string, bId: string): string {
   const [first, second] = aId < bId ? [aId, bId] : [bId, aId];
   return `${ruleId}|${first}|${second}`;
-}
-
-function computeConfidence(
-  rule: CorrelationRule,
-  a: ObservationEvent,
-  b: ObservationEvent,
-): number {
-  if (rule.baseConfidence !== undefined) return rule.baseConfidence;
-  const gap = Math.abs(a.timestamp - b.timestamp);
-  const ratio = rule.timeWindowMs > 0 ? gap / rule.timeWindowMs : 0;
-  // Linear decay: 1.0 at gap=0, 0.3 at gap=timeWindowMs.
-  const value = 1 - 0.7 * ratio;
-  return Math.max(0.3, Math.min(1, Number(value.toFixed(4))));
 }
 
 function nowMs(): number {

@@ -53,6 +53,7 @@ Integrity is verified BEFORE any keychain writes:
 - **Insights/notifications plan**: `docs/INSIGHTS_NOTIFICATIONS_PRESENTATION_PLAN.md` — implemented 4-PR stack under `src/services/insights/` (Big Event Detector + Confidence/Urgency Matrix, What Changed Digest, Action Briefs + Reaction Playbooks, Presentation Export). PRs 4 (notification ladder wiring) + 5 (UI) deferred.
 - **Shortage forecast plan**: `docs/SHORTAGE_AND_COMMODITY_FORECAST_PLAN.md` — implemented 4 batches under `src/services/shortage/` covering 8 commodities (wheat, corn, rice, soybeans on the food side; diesel, gasoline, natural gas, jet fuel on the energy side).
 - **Cognitive enhancement plan**: `docs/COGNITIVE_ENHANCEMENT_PLAN.md` — **ACTIVE** 16-PR stack for `src/services/cognition/` (episodic memory, closed calibration loop, superforecaster pipeline, operator model, entity dossiers, conformal intervals, consolidation, EVOI planner, self-tuning + benchmark). The doc contains its own Progress Tracker + Session Protocol — implementing sessions must read it first and update the tracker in the same commit.
+- **Correlation next-gen plan**: `docs/CORRELATION_NEXTGEN_PLAN.md` — **COMPLETE** 6-PR stack under `src/services/correlation/` (calibrated multi-factor edge confidence, correlation outcome ledger → per-rule Brier reliability, statistical lead-lag mining with Bonferroni-corrected significance → capped `learned:*` rules, BOCPD regime coupling, pair persistence + live compound-risk cadence + survival-axis contributor, dead correlator v1/v2 retirement). The live path is `observation-store` → `CorrelateEngine` (kernel scoring + injected reliability/regime providers) → `SituationStoreV2`; the dead `correlator.ts`/`correlator-v2.ts` are deleted — `causal-chain.ts` is the live chain system.
 - **API expansion plan**: `docs/API_SOURCE_EXPANSION_FREE_OPTIONS.md` — free/free-tier API redundancy list + Claude-ready prompts.
 - **Current remaining gaps**: `docs/ELITE_REMAINING_GAPS_FOR_CLAUDE.md` — latest Claude handoff for what is still missing after the recent service-layer PR wave: Command Center, diagnostics UI, notification wiring, native macOS finish, replay, and PR queue cleanup.
 - **Security scan findings**: `docs/SECURITY_SCAN_FINDINGS_FOR_CLAUDE.md` — current highest-standard cyber security hardening list: secret IPC minimization, CSP tightening, HTML sink governance, origin allowlist unification, proxy URL hardening, local token handling, and clipboard audit.
@@ -284,7 +285,17 @@ src/                        # TypeScript frontend (Vite)
     intelligence/forecast-calibration.ts     # Brier scoring + per-domain accuracy + per-source multipliers
     intelligence/watchlist-relevance.ts      # "Should I care?" filter + feedback-adjusted thresholds
     intelligence/momentum.ts                 # rate-of-change / slope / volatility — fast shock scores higher than slow climb
-    intelligence/learned-cascades.ts         # mine (domainA→domainB, lag) from event history; registerLearnedCascadePairs() augments compound-risk
+    intelligence/learned-cascades.ts         # legacy naive miner (kept for its DomainEvent type); live mining is correlation/lead-lag.ts
+    # ── Correlation next-gen (see docs/CORRELATION_NEXTGEN_PLAN.md) ──
+    correlation/edge-confidence.ts           # multi-factor kernel: temporal × spatial × entity × reliability × regime, explained
+    correlation/correlation-outcomes.ts      # pairs-as-predictions + baseline-relative accretion outcomes (pure)
+    correlation/correlation-calibration.ts   # dedicated ledger + per-rule Brier reliability → engine via SituationStoreV2 seams
+    correlation/lead-lag.ts                  # multi-window Poisson base-rate miner, de-clustered trials, Bonferroni-corrected z
+    correlation/learned-rules.ts             # significant edges → capped learned:* CorrelationRules synced into the live engine
+    correlation/regime-coupling.ts           # BOCPD shifts → boost-only pair factors + 1.5× rule windows (bridge respects kill-switch)
+    correlation/compound-risk-cadence.ts     # situations → live trackedComputeCompoundRisk, warm TTL'd snapshot
+    correlation/pair-persistence.ts          # live pairs → correlation-store (crisis-signature reads the real pairs)
+    survival/correlation-contributor.ts      # compound clusters (≥2 members) → survival axis heat, inference-capped below direct obs
     intelligence/proxy-outcomes.ts           # infer resolved_true/false from downstream proxy signals → resolve calibration where ground truth is scarce
     intelligence/ood-decay.ts                # out-of-distribution confidence decay (distance-from-training + sparse-coverage penalty)
     shortage/cross-domain-coupling.ts        # active intelligence cascades → shortage cross_domain drivers (war→port-closure boosts grain export risk)

@@ -38,7 +38,19 @@ import {
   getPanelHealthRegistry,
 } from './diagnostics-state';
 import { getAll as getAllSituations } from '@/services/intelligence/situation-store';
-import { getActiveChains } from '@/services/intelligence/correlator-v2';
+import { getCausalChainBuilder, type CausalChain } from '@/services/intelligence/causal-chain';
+
+/** Pure mapping: live CausalChain → the export bundle's chain summary. */
+export function causalChainToCorrelationSummary(c: CausalChain): CorrelationSummary {
+  return {
+    id: c.id,
+    chainType: 'causal',
+    title: `${c.rootCause.title} → ${c.leafEffects.length} downstream effect${c.leafEffects.length === 1 ? '' : 's'}`,
+    confidence: c.overallConfidence,
+    detectedAt: c.builtAt,
+    eventIds: [...new Set(c.links.flatMap((l) => [l.causeId, l.effectId]))],
+  };
+}
 import { summarizeScenarioCoverage } from '@/services/scenarios/scenario-library';
 import { getActiveQualityDebt } from '@/services/quality/quality-debt-state';
 import { getMissionStateDetail } from './mission-state-service';
@@ -186,15 +198,11 @@ export function composeFrontendDiagnosticsExport(
       })),
   );
 
+  // Chains come from the LIVE causal-chain builder (the panelized system)
+  // — the dead correlator-v2 singleton was never started and always
+  // exported an empty list here.
   const correlations = safe((): CorrelationSummary[] =>
-    getActiveChains().map((c) => ({
-      id: c.id,
-      chainType: c.chainType,
-      title: c.title,
-      confidence: c.confidence,
-      detectedAt: c.detectedAt,
-      eventIds: c.events.map((e) => e.id),
-    })),
+    getCausalChainBuilder().getChains().map((c) => causalChainToCorrelationSummary(c)),
   );
 
   const algorithmTrace = safe((): AlgorithmTraceEntry[] => {

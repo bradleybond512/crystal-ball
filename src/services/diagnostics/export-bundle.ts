@@ -172,7 +172,7 @@ export interface SituationSummary {
   summary?: string;
 }
 
-/** Correlation chain summary from correlator-v2. Confidence + chainType
+/** Correlation chain summary from the live causal-chain builder. Confidence + chainType
  *  let a triager see "is the engine actually finding cross-domain
  *  links?" at a glance. */
 export interface CorrelationSummary {
@@ -268,7 +268,7 @@ export interface DiagnosticsExportBundle {
   panelHealthSummary?: PanelHealthSummary;
   /** Phase 2: active situations with evidence cross-references. */
   situations?: readonly SituationSummary[];
-  /** Phase 2: active correlation chains from correlator-v2. */
+  /** Phase 2: active causal chains from the live causal-chain builder. */
   correlations?: readonly CorrelationSummary[];
   /** Phase 2: per-situation algorithm trace + evidence chain. */
   algorithmTrace?: readonly AlgorithmTraceEntry[];

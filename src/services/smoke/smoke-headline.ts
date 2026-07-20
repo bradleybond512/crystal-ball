@@ -34,9 +34,11 @@ const CATEGORY_PHRASE: Partial<Record<AqiCategory, string>> = {
 };
 
 /**
- * Null below the callout floor (AQI < 101 and no active smoke alerts).
- * With an active smoke alert but sub-USG AQI, emits an advisory-grade
- * headline at the band floor so the alert itself is still surfaced.
+ * Null below the callout floor (AQI < 101, no active smoke alerts, and no
+ * confident incoming-smoke estimate). With an active smoke alert but sub-USG
+ * AQI, emits an advisory-grade headline at the band floor so the alert
+ * itself is still surfaced; likewise for a medium/high-confidence
+ * wind-advection arrival estimate ("smoke may reach you tonight").
  */
 export function buildSmokeHeadline(
   snap: SmokeSnapshot,
@@ -62,6 +64,20 @@ export function buildSmokeHeadline(
     return {
       eventId: `smoke-${snap.placeId}`,
       description: `Wildfire smoke ${plural} active near ${snap.placeName}${aqiTxt}`,
+      severity: 70,
+      category: snap.current.category,
+    };
+  }
+
+  // Predictive advisory: air is still fine but the wind-advection estimator
+  // sees smoke coming. Low-confidence estimates never make a headline.
+  const arrival = snap.arrivals?.find((a) => a.status === 'incoming' && a.confidence !== 'low');
+  if (arrival?.etaLabel) {
+    return {
+      eventId: `smoke-${snap.placeId}`,
+      description:
+        `Wildfire smoke may reach ${snap.placeName} ${arrival.etaLabel} — ` +
+        `${arrival.label} ${arrival.distanceMi} mi ${arrival.direction}`,
       severity: 70,
       category: snap.current.category,
     };

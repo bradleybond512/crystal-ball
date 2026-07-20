@@ -8,7 +8,7 @@
  * honest per-source footer. All rendering is safe-DOM (no HTML-string sinks).
  */
 import { Panel } from './Panel';
-import type { SmokeSnapshot, AqiCategory, CompassSample } from '@/services/smoke/smoke-types';
+import type { SmokeSnapshot, SmokeArrivalEstimate, AqiCategory, CompassSample } from '@/services/smoke/smoke-types';
 import { AQI_CATEGORY_LABEL, categorizeUsAqi } from '@/services/smoke/aqi-category';
 import { describeCompass } from '@/services/smoke/clean-air-compass';
 import {
@@ -117,6 +117,7 @@ export class AirSmokePanel extends Panel {
     root.append(this.buildDays(snap));
     root.append(this.buildHourlyStrip(snap));
     root.append(this.buildWindows(snap));
+    if (snap.arrivals && snap.arrivals.length > 0) root.append(this.buildArrivals(snap.arrivals));
     root.append(this.buildCompass(snap));
     root.append(this.buildActivities(snap));
     root.append(this.buildChecklist(snap));
@@ -216,6 +217,34 @@ export class AirSmokePanel extends Panel {
     if (snap.worstWindow) {
       wrap.append(el('div', 'color:#ff453a;', `✗ Avoid ${snap.worstWindow.label} (peaks at AQI ${snap.worstWindow.peakAqi})`));
     }
+    return wrap;
+  }
+
+  private buildArrivals(arrivals: SmokeArrivalEstimate[]): HTMLElement {
+    const wrap = el('div', 'display:flex;flex-direction:column;gap:4px;font-size:12px;');
+    wrap.append(el('div', 'font-size:11px;font-weight:600;opacity:0.7;', 'Incoming smoke (wind-based estimate)'));
+    const GLYPH: Record<SmokeArrivalEstimate['status'], string> = {
+      overhead: '🌫️',
+      incoming: '⏱',
+      not_expected: '↗',
+    };
+    const STATUS_COLOR: Record<SmokeArrivalEstimate['status'], string> = {
+      overhead: '#ff453a',
+      incoming: '#f0883e',
+      not_expected: '#8b949e',
+    };
+    for (const a of arrivals) {
+      const row = el('div', 'display:flex;align-items:baseline;gap:8px;');
+      row.append(
+        el('span', undefined, GLYPH[a.status]),
+        el('span', `color:${STATUS_COLOR[a.status]};`, a.summary),
+      );
+      if (a.status === 'incoming') {
+        row.append(el('span', 'font-size:10px;opacity:0.6;', `${a.confidence} confidence`));
+      }
+      wrap.append(row);
+    }
+    wrap.append(el('div', 'font-size:10px;opacity:0.55;', 'Straight-line wind advection from satellite plumes and active fires — a possibility window, not a dispersion model.'));
     return wrap;
   }
 

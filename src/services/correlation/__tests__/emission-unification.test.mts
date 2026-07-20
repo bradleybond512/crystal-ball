@@ -59,7 +59,7 @@ test('recomputeCompoundRisk stores a snapshot and notifies subscribers', () => {
   const unsub = subscribeCompoundRisk(() => { notified += 1; });
   const snap = recomputeCompoundRisk([situation({ id: 's1' })], T0);
   assert.equal(snap.computedAt, T0);
-  assert.equal(latestCompoundRisk(), snap);
+  assert.equal(latestCompoundRisk(T0), snap);
   assert.equal(notified, 1);
   unsub();
 });
@@ -128,7 +128,7 @@ test('contributor maps affected domains to axes with capped severity', () => {
   const threats = makeCorrelationContributor([compound({ score: 97 })]).contribute(T0);
   assert.ok(threats.length >= 2, 'one threat per affected axis');
   for (const t of threats) {
-    assert.equal(t.severity, 85, 'severity capped at the inference ceiling');
+    assert.equal(t.severity, 70, 'severity capped at the inference ceiling');
     assert.equal(t.hazardKind, 'other');
     assert.ok(t.why.includes('storm → grid stress'));
     assert.notEqual(t.confidenceLabel, 'high');
@@ -142,6 +142,42 @@ test('contributor drops sub-threshold and malformed scores', () => {
   assert.equal(makeCorrelationContributor([]).contribute(T0).length, 0);
 });
 
+test('REGRESSION: singleton clusters are not correlations and emit nothing', () => {
+  const single = compound({ memberIds: ['s1'], score: 90 });
+  assert.equal(makeCorrelationContributor([single]).contribute(T0).length, 0);
+});
+
+test('REGRESSION: inference severity stays below a direct warning on the same axis', () => {
+  const threats = makeCorrelationContributor([compound({ score: 97 })]).contribute(T0);
+  for (const t of threats) {
+    assert.ok(t.severity < 75, `inference severity ${t.severity} must stay below direct warning (75)`);
+  }
+  // Composed: a direct 75 threat + correlation heat on the same axis — the
+  // direct observation wins the axis level.
+  const direct = {
+    id: 'direct',
+    contribute: () => [{
+      sourceEventId: 'obs-1', axis: threats[0]!.axis, severity: 75,
+      threatLevel: 'warning', hazardKind: 'other', hazardLabel: 'Direct alert',
+      timeToImpactMins: null, arrivalLabel: null, why: 'observed',
+      confidenceLabel: 'high',
+    }] as never,
+  };
+  const posture = computeMultiAxisPosture({
+    contributors: [direct, makeCorrelationContributor([compound({ score: 97 })])],
+    freshness: [],
+    capturedAtMs: T0,
+  }, { now: T0 });
+  const axis = posture.axes.find((a) => a.axis === threats[0]!.axis)!;
+  assert.equal(axis.level, 75, 'direct observation sets the axis level');
+});
+
+test('REGRESSION: stale snapshot reads null so a wedged cadence sheds its heat', () => {
+  recomputeCompoundRisk([situation({ id: 's1' })], T0);
+  assert.ok(latestCompoundRisk(T0 + 60_000) !== null);
+  assert.equal(latestCompoundRisk(T0 + 2 * 3_600_000), null);
+});
+
 test('contributor threats raise the axis level through the real posture engine', () => {
   const posture = computeMultiAxisPosture({
     contributors: [makeCorrelationContributor([compound({ score: 80 })])],
@@ -150,7 +186,7 @@ test('contributor threats raise the axis level through the real posture engine',
   }, { now: T0 });
   const warmed = posture.axes.filter((a) => a.level > 0);
   assert.ok(warmed.length >= 1, 'at least one axis warmed by correlation');
-  assert.ok(warmed.every((a) => a.level <= 85));
+  assert.ok(warmed.every((a) => a.level <= 70));
 });
 
 test('deduplicated axes: two domains mapping to one axis yield one threat', () => {

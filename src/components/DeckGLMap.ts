@@ -542,6 +542,14 @@ export class DeckGLMap {
   private smokeOverlayLoadedAt = 0;
   private smokeOverlayLoading = false;
   private smokeOverlayUnsub: (() => void) | null = null;
+  // Forecast smoke field (grid-sampled AQI forecast) + its time scrubber.
+  private smokeForecastField: import('@/services/smoke/forecast-field').SmokeForecastField | null = null;
+  private smokeForecastCenter: string | null = null;
+  private smokeForecastLoading = false;
+  private smokeForecastHourIdx = 0;
+  private smokeScrubberEl: HTMLElement | null = null;
+  private smokeScrubberInput: HTMLInputElement | null = null;
+  private smokeScrubberLabel: HTMLElement | null = null;
   private techEvents: TechEventMarker[] = [];
   private flightDelays: AirportDelayAlert[] = [];
   private faaCameras: ScoredFAACamera[] = [];
@@ -1516,6 +1524,7 @@ export class DeckGLMap {
  this.ensureSmokeOverlayData();
  layers.push(...this.createAirSmokeLayers());
  }
+ this.syncSmokeScrubber(mapLayers.airSmoke);
 
  // Iran events layer
  if (mapLayers.iranAttacks && this.iranEvents.length > 0) {
@@ -2359,6 +2368,8 @@ export class DeckGLMap {
   private ensureSmokeOverlayData(): void {
  // AQI dots track the smoke engine — re-render whenever it refreshes.
  this.smokeOverlayUnsub ??= subscribeSmoke(() => this.updateLayers());
+ // Forecast field loads independently — its absence never blocks the dots.
+ void this.ensureSmokeForecastField();
  // Re-read plume + perimeters when our copy is older than the service
  // cache windows; a failed load leaves the timestamp unset so the next
  // layer build retries instead of sticking stale-forever.
@@ -2385,8 +2396,61 @@ export class DeckGLMap {
  .finally(() => { this.smokeOverlayLoading = false; });
   }
 
+  /** 30-min reload of the grid-sampled AQI forecast that powers the map's
+   *  time scrubber. Keyed to the primary place; failures degrade silently
+   *  (the observational layers still render; freshness records the error). */
+  private async ensureSmokeForecastField(): Promise<void> {
+ const snap = getSmokeSnapshots()[0];
+ if (!snap || this.smokeForecastLoading) return;
+ const FIELD_RELOAD_MS = 30 * 60 * 1000;
+ if (
+ this.smokeForecastField &&
+ this.smokeForecastCenter === snap.placeId &&
+ Date.now() - this.smokeForecastField.generatedAt < FIELD_RELOAD_MS
+ ) return;
+ this.smokeForecastLoading = true;
+ try {
+ const [{ forecastGridPoints, assembleForecastField }, { fetchAqGrid }] = await Promise.all([
+ import('@/services/smoke/forecast-field'),
+ import('@/services/smoke/smoke-fetch'),
+ ]);
+ const points = forecastGridPoints(snap.lat, snap.lon);
+ const field = assembleForecastField(points, await fetchAqGrid(points), Date.now());
+ if (field) {
+ this.smokeForecastField = field;
+ this.smokeForecastCenter = snap.placeId;
+ this.smokeForecastHourIdx = Math.min(this.smokeForecastHourIdx, field.hoursMs.length - 1);
+ this.updateLayers();
+ }
+ } catch { /* enhancement layer — dots/plume still render */ }
+ finally { this.smokeForecastLoading = false; }
+  }
+
   private createAirSmokeLayers(): (ScatterplotLayer | PolygonLayer)[] {
  const layers: (ScatterplotLayer | PolygonLayer)[] = [];
+
+ // Forecast AQI field for the scrubber's selected hour — rendered UNDER
+ // the observational layers (plume/fires/dots stay legible on top).
+ const field = this.smokeForecastField;
+ if (field && field.cells.length > 0) {
+ const hourIdx = Math.min(this.smokeForecastHourIdx, field.hoursMs.length - 1);
+ layers.push(new ScatterplotLayer({
+ id: 'air-smoke-forecast-layer',
+ data: field.cells,
+ getPosition: (d: (typeof field.cells)[0]) => [d.lon, d.lat],
+ getRadius: 34_000,
+ radiusMaxPixels: 72,
+ stroked: false,
+ getFillColor: (d: (typeof field.cells)[0]) => {
+ const aqi = d.aqiByHour[hourIdx] ?? null;
+ if (aqi === null) return [0, 0, 0, 0] as [number, number, number, number];
+ const c = AQI_MAP_COLOR[categorizeUsAqi(aqi)];
+ return [c[0], c[1], c[2], 70] as [number, number, number, number];
+ },
+ pickable: true,
+ updateTriggers: { getFillColor: [hourIdx] },
+ }));
+ }
 
  // HMS smoke plume polygons — density-shaded gray.
  if (this.smokeOverlayPlumes.length > 0) {
@@ -2444,6 +2508,62 @@ export class DeckGLMap {
  }
 
  return layers;
+  }
+
+  /** Show/hide + sync the forecast time scrubber pinned to the map. All
+   *  content is set via textContent/attributes — no HTML-string sinks. */
+  private syncSmokeScrubber(show: boolean): void {
+ const field = this.smokeForecastField;
+ if (!show || !field || field.hoursMs.length === 0) {
+ this.smokeScrubberEl?.remove();
+ this.smokeScrubberEl = null;
+ this.smokeScrubberInput = null;
+ this.smokeScrubberLabel = null;
+ return;
+ }
+ if (!this.smokeScrubberEl) {
+ const wrap = document.createElement('div');
+ wrap.className = 'smoke-forecast-scrubber';
+ wrap.style.cssText = 'position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:8px;background:rgba(15,17,22,0.82);border:1px solid rgba(255,255,255,0.14);font-size:11px;color:#e6e8ec;backdrop-filter:blur(4px);';
+ const title = document.createElement('span');
+ title.textContent = '💨 Forecast';
+ title.style.cssText = 'font-weight:600;opacity:0.85;white-space:nowrap;';
+ const input = document.createElement('input');
+ input.type = 'range';
+ input.min = '0';
+ input.step = '1';
+ input.style.width = '180px';
+ input.addEventListener('input', () => {
+ this.smokeForecastHourIdx = Number.parseInt(input.value, 10) || 0;
+ this.updateSmokeScrubberLabel();
+ this.updateLayers();
+ });
+ const label = document.createElement('span');
+ label.style.cssText = 'min-width:110px;opacity:0.9;white-space:nowrap;';
+ wrap.append(title, input, label);
+ // The control must not zoom/pan the map underneath it.
+ wrap.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+ wrap.addEventListener('pointerdown', (e) => e.stopPropagation());
+ wrap.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
+ this.container.append(wrap);
+ this.smokeScrubberEl = wrap;
+ this.smokeScrubberInput = input;
+ this.smokeScrubberLabel = label;
+ }
+ if (this.smokeScrubberInput) {
+ this.smokeScrubberInput.max = String(field.hoursMs.length - 1);
+ this.smokeScrubberInput.value = String(Math.min(this.smokeForecastHourIdx, field.hoursMs.length - 1));
+ }
+ this.updateSmokeScrubberLabel();
+  }
+
+  private updateSmokeScrubberLabel(): void {
+ const field = this.smokeForecastField;
+ if (!field || !this.smokeScrubberLabel) return;
+ const idx = Math.min(this.smokeForecastHourIdx, field.hoursMs.length - 1);
+ this.smokeScrubberLabel.textContent = idx === 0
+ ? 'Now'
+ : `+${idx}h · ${new Date(field.hoursMs[idx]!).toLocaleString([], { weekday: 'short', hour: 'numeric' })}`;
   }
 
   private createIranEventsLayer(): ScatterplotLayer {
@@ -3791,6 +3911,25 @@ export class DeckGLMap {
  return { html: `<div class="deckgl-tooltip"><strong>${text(dc?.name || '')}</strong><br/>${text(dc?.owner || '')}</div>` };
  }
  return { html: `<div class="deckgl-tooltip"><strong>${t('components.deckgl.tooltip.dataCentersCount', { count: String(obj.count) })}</strong><br/>${text(obj.country)}</div>` };
+ }
+ case 'air-smoke-plume-layer': {
+ return { html: `<div class="deckgl-tooltip"><strong>${text(obj.density)} smoke plume</strong><br/>NOAA HMS satellite analysis ${text(obj.date)}</div>` };
+ }
+ case 'air-smoke-perimeter-layer': {
+ const acres = typeof obj.acres === 'number' ? `${Math.round(obj.acres).toLocaleString()} acres` : 'size unknown';
+ const contained = typeof obj.containmentPct === 'number' ? ` · ${obj.containmentPct}% contained` : '';
+ return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name || 'Active fire')}</strong><br/>${acres}${contained}</div>` };
+ }
+ case 'air-smoke-aqi-layer': {
+ return { html: `<div class="deckgl-tooltip"><strong>AQI ${obj.aqi === null ? 'n/a' : Math.round(obj.aqi)}</strong><br/>${text(obj.label)}</div>` };
+ }
+ case 'air-smoke-forecast-layer': {
+ const field = this.smokeForecastField;
+ if (!field) return null;
+ const idx = Math.min(this.smokeForecastHourIdx, field.hoursMs.length - 1);
+ const aqi = (obj.aqiByHour?.[idx] ?? null) as number | null;
+ const when = new Date(field.hoursMs[idx]!).toLocaleString([], { weekday: 'short', hour: 'numeric' });
+ return { html: `<div class="deckgl-tooltip"><strong>Forecast AQI ${aqi === null ? 'n/a' : Math.round(aqi)}</strong><br/>${text(when)}</div>` };
  }
  case 'bases-layer': {
  return { html: `<div class="deckgl-tooltip"><strong>${text(obj.name)}</strong><br/>${text(obj.country)}${obj.kind ? ` · ${text(obj.kind)}` : ''}</div>` };
@@ -6139,6 +6278,10 @@ export class DeckGLMap {
   public destroy(): void {
  this.smokeOverlayUnsub?.();
  this.smokeOverlayUnsub = null;
+ this.smokeScrubberEl?.remove();
+ this.smokeScrubberEl = null;
+ this.smokeScrubberInput = null;
+ this.smokeScrubberLabel = null;
  if (this._mapFpsTimerId !== null) {
  clearInterval(this._mapFpsTimerId);
  this._mapFpsTimerId = null;

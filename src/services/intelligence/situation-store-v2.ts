@@ -520,6 +520,12 @@ export class SituationStoreV2 {
     this.reliabilityProvider = provider;
   }
 
+  /** The live engine — used by the learned-rule cadence to sync mined
+   *  `learned:*` rules. Built-in rules are managed here, not by callers. */
+  getEngine(): CorrelateEngine {
+    return this.engine;
+  }
+
   private ensureHydrated(): void {
     if (this.hydrated) return;
     this.hydrated = true;

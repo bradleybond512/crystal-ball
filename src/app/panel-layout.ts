@@ -107,6 +107,8 @@ import { startBiasScanCadence } from '@/services/intelligence/bias-scan-cadence'
 import { startLearnedCascadeCadence } from '@/services/intelligence/cascade-registration';
 import { startCorrelationCalibration } from '@/services/correlation/correlation-calibration';
 import { startRegimeCoupling } from '@/services/correlation/regime-coupling-bridge';
+import { startPairPersistence } from '@/services/correlation/pair-persistence';
+import { startCompoundRiskCadence } from '@/services/correlation/compound-risk-cadence';
 import { startConsolidationCadence } from '@/services/cognition/consolidation-cadence';
 import { startPredictionResolutionCadence } from '@/services/intelligence/prediction-resolution-cadence';
 import { installBatteryMonitor } from '@/services/adaptive-cadence';
@@ -1108,6 +1110,8 @@ export class PanelLayoutManager implements AppModule {
  startLearnedCascadeCadence();
  startCorrelationCalibration();
  startRegimeCoupling();
+ startPairPersistence();
+ startCompoundRiskCadence();
  startConsolidationCadence();
  startCognitionSelfTuningCadence();
  startPredictionResolutionCadence();

@@ -497,6 +497,7 @@ export class SituationStoreV2 {
   private clock: () => number;
   private idCounter = 0;
   private pairListener?: (pairs: readonly CorrelatedPair[]) => void;
+  private readonly pairListeners = new Set<(pairs: readonly CorrelatedPair[]) => void>();
   private reliabilityProvider?: (ruleId: string) => number;
   private regimeProvider?: SituationRegimeProvider;
 
@@ -521,9 +522,17 @@ export class SituationStoreV2 {
 
   /** Observe every CorrelatedPair batch the engine emits during ingest —
    *  the correlation calibration loop records them as predictions.
-   *  Listener errors are isolated. */
+   *  Single-slot setter (undefined clears); for additional consumers use
+   *  addPairListener. Listener errors are isolated. */
   setPairListener(listener?: (pairs: readonly CorrelatedPair[]) => void): void {
     this.pairListener = listener;
+  }
+
+  /** Multi-consumer pair observation (e.g. pair persistence). Returns an
+   *  unsubscribe function. */
+  addPairListener(listener: (pairs: readonly CorrelatedPair[]) => void): () => void {
+    this.pairListeners.add(listener);
+    return () => this.pairListeners.delete(listener);
   }
 
   /** Install the per-rule learned reliability multiplier consulted by the
@@ -603,8 +612,13 @@ export class SituationStoreV2 {
       return;
     }
     const result = this.engine.correlate(observations, new Date(this.clock()));
-    if (result.pairs.length > 0 && this.pairListener) {
-      try { this.pairListener(result.pairs); } catch { /* listener crash isolation */ }
+    if (result.pairs.length > 0) {
+      for (const listener of this.pairListeners) {
+        try { listener(result.pairs); } catch { /* listener crash isolation */ }
+      }
+      if (this.pairListener) {
+        try { this.pairListener(result.pairs); } catch { /* listener crash isolation */ }
+      }
     }
     const drafts = groupPairsByConnectivity(observations, result.pairs);
     for (const draft of drafts) this.mergeOrCreate(draft);

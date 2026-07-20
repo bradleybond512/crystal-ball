@@ -184,7 +184,7 @@ function withSupplyPosture(snapshot: WorldSnapshot, now: number, supplyBase: Wor
       // Correlation axis-heat: cross-domain compound-risk clusters (kept warm
       // by startCompoundRiskCadence) warm the affected axes. Inference-capped
       // severity; empty/cold snapshot → no threats, fail-safe.
-      makeCorrelationContributor(latestCompoundRisk()?.results),
+      makeCorrelationContributor(latestCompoundRisk(now)?.results),
     ],
     freshness: snapshot.freshness,
     capturedAtMs: snapshot.capturedAtMs,

@@ -52,10 +52,18 @@ const listeners = new Set<SnapshotListener>();
 let timerId: ReturnType<typeof setInterval> | null = null;
 
 const DEFAULT_INTERVAL_MS = 15 * 60_000;
+/** A snapshot older than this is stale — a wedged/crashed cadence must
+ *  not leave old correlation heat on the posture board forever. */
+export const SNAPSHOT_STALE_AFTER_MS = 3 * DEFAULT_INTERVAL_MS;
 
 /** Warm synchronous read for contributors/panels. Null until the first
- *  cadence tick. */
-export function latestCompoundRisk(): CompoundRiskSnapshot | null {
+ *  cadence tick, and null again once the snapshot goes stale. */
+export function latestCompoundRisk(
+  now: number = Date.now(),
+  maxAgeMs: number = SNAPSHOT_STALE_AFTER_MS,
+): CompoundRiskSnapshot | null {
+  if (!latest) return null;
+  if (now - latest.computedAt > maxAgeMs) return null;
   return latest;
 }
 

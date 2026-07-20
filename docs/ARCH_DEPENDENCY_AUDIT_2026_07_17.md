@@ -1,4 +1,5 @@
 # Crystal Ball — Architecture & Dependency Audit
+
 **Date:** 2026-07-17  
 **Branch:** `claude/arch-dependency-audit`  
 **Auditor:** Claude Sonnet 4.6
@@ -30,18 +31,21 @@
 
 ### 1a. Confirmed Runtime Cycles (Fixed)
 
-**`reasoning-memory` ↔ `reasoning-debug`** *(FIXED)*  
+**`reasoning-memory` ↔ `reasoning-debug`** *(FIXED)*
+
 - `reasoning-memory.ts:19` imported `logDebug` from `reasoning-debug.ts`  
 - `reasoning-debug.ts:18` imports `getMemory`/`putMemory` from `reasoning-memory.ts`  
 - **Root cause:** `reasoning-memory` is a low-level IDB primitive; it should never depend on its own consumer.  
 - **Fix:** Replaced the 4 `logDebug(...)` calls in `reasoning-memory.ts` with `console.error(...)`. Added a guard comment.
 
-**`algorithm-ledger-persistence` ↔ `algorithms-state`** *(FIXED)*  
+**`algorithm-ledger-persistence` ↔ `algorithms-state`** *(FIXED)*
+
 - `algorithm-ledger-persistence.ts:26` imported `getAlgorithmEvaluationLedger` as a top-level import  
 - `algorithms-state.ts:20` imports `resetAlgorithmLedgerPersistence` from the persistence file  
 - **Fix:** Removed the top-level import; added a `getDefaultLedger()` lazy-require that defers to `require('./algorithms-state')` at call time, breaking the startup cycle without touching the public API. All existing DI injection (`deps.ledger`) continues to work.
 
-**`mission-ledger-persistence` ↔ `mission-state`** *(FIXED)*  
+**`mission-ledger-persistence` ↔ `mission-state`** *(FIXED)*
+
 - Same pattern as the algorithm cycle above.  
 - **Fix:** Same lazy-require pattern with `getDefaultMissionLedger()`.
 
@@ -66,7 +70,8 @@ These were detected by the Tarjan SCC scan but all cross-edges use `import type`
 
 ### 2a. Services importing from `components/` (Fixed)
 
-**`services/intelligence/belief-helpers` location** *(FIXED)*  
+**`services/intelligence/belief-helpers` location** *(FIXED)*
+
 - `belief-helpers.ts` is pure Bayesian math (no DOM, no fetch, no globals) but lived in `src/components/`.
 - Two service files imported it across the layer boundary:
   - `services/intelligence/truth-score.ts:30`
@@ -222,6 +227,7 @@ The CSP in `tauri.conf.json` is well-structured. Items noted:
 ## 9. `.gitignore`
 
 Complete and correct. Key patterns verified:
+
 - `dist/`, `src-tauri/target/` — excluded ✅
 - `.env`, `.env.local`, `.env.vercel-*` — excluded ✅
 - Build artifacts (`*.bundle.mjs`, sidecar outputs) — excluded ✅  

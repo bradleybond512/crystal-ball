@@ -34,7 +34,8 @@ import type {
   SurvivalPosture,
   WorldSnapshot,
 } from '@/services/survival/survival-types.ts';
-import { axisLabel } from '@/services/survival/survival-types.ts';
+import { axisLabel, SURVIVAL_AXES, type SurvivalAxis } from '@/services/survival/survival-types.ts';
+import { survivalMapModes } from '@/services/survival/survival-map-modes.ts';
 import { selectPostureCards } from './storm-posture-view.ts';
 import { escapeHtml } from '@/utils/sanitize.ts';
 
@@ -72,6 +73,7 @@ export class StormPosturePanel extends Panel {
 
     this.unsubscribe = subscribeStormPosture(() => this.render());
     document.addEventListener('click', this.onCommitClick);
+    document.addEventListener('click', this.onModeClick);
     this.start();
   }
 
@@ -87,6 +89,7 @@ export class StormPosturePanel extends Panel {
       this.refreshTimer = null;
     }
     document.removeEventListener('click', this.onCommitClick);
+    document.removeEventListener('click', this.onModeClick);
     this.unsubscribe();
     super.destroy();
   }
@@ -114,10 +117,11 @@ export class StormPosturePanel extends Panel {
     weatherAgeMs: number,
   ): string {
     const banner = isStale ? this.buildStaleBanner(weatherAgeMs) : '';
+    const modeChips = this.buildMapModeChips();
     const overall = this.buildOverallCard(posture);
     const cards = selectPostureCards(posture).map((a) => this.buildAxisCard(a)).join('');
     const movesCard = this.buildMovesCard(snap, moves);
-    return `${banner}${overall}${cards}${movesCard}`;
+    return `${banner}${modeChips}${overall}${cards}${movesCard}`;
   }
 
   private buildStaleBanner(weatherAgeMs: number): string {
@@ -214,5 +218,35 @@ export class StormPosturePanel extends Panel {
     const move = moves.find((m) => m.id === moveId);
     if (!move) return;
     commitStormMove(move);
+  };
+
+  /** Map-mode chips: focus the map on one survival axis' layers (E4 glue). */
+  private buildMapModeChips(): string {
+    const modes = survivalMapModes();
+    const active = new Set(modes?.active());
+    const chipBase = 'font-size:11px;padding:3px 9px;border-radius:12px;cursor:pointer;border:1px solid #444;';
+    const chips = SURVIVAL_AXES.map((axis) => {
+      const on = active.has(axis);
+      const style = `${chipBase}background:${on ? '#1f6feb' : 'transparent'};color:${on ? '#fff' : 'inherit'};`;
+      return `<button type="button" data-map-mode="${axis}" aria-pressed="${on}" style="${style}">`
+        + `${escapeHtml(axisLabel(axis))}</button>`;
+    }).join('');
+    const clear = active.size > 0
+      ? `<button type="button" data-map-mode="__clear" style="${chipBase}background:transparent;color:inherit;opacity:0.75;">Clear</button>`
+      : '';
+    return `<div role="group" aria-label="Focus map on a survival axis" `
+      + `style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 4px;">`
+      + `<span style="font-size:11px;opacity:0.6;">Map focus</span>${chips}${clear}</div>`;
+  }
+
+  private readonly onModeClick = (ev: Event): void => {
+    const btn = (ev.target as Element | null)?.closest('[data-map-mode]');
+    if (!btn || !this.getContentElement().contains(btn)) return;
+    const modes = survivalMapModes();
+    if (!modes) return; // map not mounted yet — no-op
+    const axis = btn.getAttribute('data-map-mode');
+    if (axis === '__clear') modes.clear();
+    else if (axis) modes.toggle(axis as SurvivalAxis);
+    this.render();
   };
 }

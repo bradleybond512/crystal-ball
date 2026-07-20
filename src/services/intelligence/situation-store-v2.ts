@@ -476,6 +476,13 @@ function deserialize(raw: unknown): Situation[] {
 
 // ── Store ─────────────────────────────────────────────────────────────
 
+export interface SituationRegimeProvider {
+  /** Confidence factor for a domain pair; 1 = neutral, boost-only. */
+  factorFor(domainA: string, domainB: string): number;
+  /** Time-window multiplier for a rule's domains; 1 = neutral. */
+  windowMultiplierFor(ruleDomains: readonly string[]): number;
+}
+
 export interface SituationStoreV2Options {
   engine?: CorrelateEngine;
   /** Override Date.now() — useful for deterministic tests. */
@@ -491,6 +498,7 @@ export class SituationStoreV2 {
   private idCounter = 0;
   private pairListener?: (pairs: readonly CorrelatedPair[]) => void;
   private reliabilityProvider?: (ruleId: string) => number;
+  private regimeProvider?: SituationRegimeProvider;
 
   constructor(options: SituationStoreV2Options = {}) {
     this.engine = options.engine ?? this.defaultEngine();
@@ -498,10 +506,14 @@ export class SituationStoreV2 {
   }
 
   private defaultEngine(): CorrelateEngine {
-    // Late-bound provider so the calibration loop can be wired after
-    // construction (bootstrap order independence).
+    // Late-bound providers so the calibration + regime loops can be
+    // wired after construction (bootstrap order independence).
     const engine = new CorrelateEngine({
       reliabilityFor: (ruleId) => this.reliabilityProvider?.(ruleId) ?? 1,
+      regimeFactorFor: (a, b) =>
+        this.regimeProvider?.factorFor(a.domain, b.domain) ?? 1,
+      windowMultiplierFor: (rule) =>
+        this.regimeProvider?.windowMultiplierFor(rule.domains) ?? 1,
     });
     for (const rule of builtInCorrelationRules) engine.registerRule(rule);
     return engine;
@@ -518,6 +530,12 @@ export class SituationStoreV2 {
    *  default engine's confidence model. Undefined → neutral. */
   setReliabilityProvider(provider?: (ruleId: string) => number): void {
     this.reliabilityProvider = provider;
+  }
+
+  /** Install the BOCPD regime-coupling provider (confidence factor per
+   *  domain pair + window multiplier per rule). Undefined → neutral. */
+  setRegimeProvider(provider?: SituationRegimeProvider): void {
+    this.regimeProvider = provider;
   }
 
   /** The live engine — used by the learned-rule cadence to sync mined

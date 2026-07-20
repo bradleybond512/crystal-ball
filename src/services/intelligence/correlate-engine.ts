@@ -58,6 +58,11 @@ export interface CorrelateEngineOptions {
   /** Regime-coupling factor for a candidate pair (BOCPD integration).
    *  Return 1 for neutral. Boost-only: clamped downstream to [1, 1.15]. */
   regimeFactorFor?: (a: ObservationEvent, b: ObservationEvent) => number;
+  /** Time-window multiplier per rule (regime coupling widens the search
+   *  while a regime is moving). Return 1 for neutral; clamped to [1, 2].
+   *  The widened window also drives the temporal kernel, so admitted
+   *  far-gap pairs are scored on the window that admitted them. */
+  windowMultiplierFor?: (rule: CorrelationRule) => number;
   /** Monotonic timer used only for the diagnostic `processingMs` field.
    *  Inject a fake in tests to make the whole CorrelationResult
    *  deterministic. Defaults to performance.now / Date.now. */
@@ -119,18 +124,29 @@ function applyRule(
   options: CorrelateEngineOptions,
 ): void {
   const domainSet = new Set(rule.domains);
+  const effectiveWindowMs = effectiveWindowFor(rule, options);
   for (let i = 0; i < observations.length; i++) {
     const a = observations[i];
     if (!a) continue;
     for (let j = i + 1; j < observations.length; j++) {
       const b = observations[j];
       if (!b) continue;
-      const pair = evaluatePair(rule, domainSet, a, b, seen, options);
+      const pair = evaluatePair(rule, domainSet, a, b, seen, options, effectiveWindowMs);
       if (pair) {
         pairs.push({ ...pair, detectedAt: now });
       }
     }
   }
+}
+
+/** Regime coupling can widen a rule's window; a broken provider must
+ *  never shrink or explode it — clamp [1, 2], non-finite → neutral. */
+function effectiveWindowFor(rule: CorrelationRule, options: CorrelateEngineOptions): number {
+  const raw = options.windowMultiplierFor?.(rule);
+  const mult = raw !== undefined && Number.isFinite(raw)
+    ? Math.max(1, Math.min(2, raw))
+    : 1;
+  return rule.timeWindowMs * mult;
 }
 
 function evaluatePair(
@@ -140,9 +156,10 @@ function evaluatePair(
   b: ObservationEvent,
   seen: Set<string>,
   options: CorrelateEngineOptions,
+  effectiveWindowMs: number,
 ): Omit<CorrelatedPair, 'detectedAt'> | undefined {
   if (!domainMatches(domainSet, a, b)) return undefined;
-  if (Math.abs(a.timestamp - b.timestamp) > rule.timeWindowMs) return undefined;
+  if (Math.abs(a.timestamp - b.timestamp) > effectiveWindowMs) return undefined;
   // Run the symmetric matcher in both directions so rule authors can
   // write asymmetric checks (e.g. "earthquake first, infra after")
   // without worrying about which side is `a`.
@@ -152,7 +169,7 @@ function evaluatePair(
   seen.add(key);
   const detail = computeEdgeConfidence({
     gapMs: Math.abs(a.timestamp - b.timestamp),
-    timeWindowMs: rule.timeWindowMs,
+    timeWindowMs: effectiveWindowMs,
     baseConfidence: rule.baseConfidence,
     distanceKm: pairDistanceKm(a, b),
     sharedEntityCount: sharedEntityCount(a.entityIds, b.entityIds),

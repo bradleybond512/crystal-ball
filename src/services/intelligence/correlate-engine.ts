@@ -56,8 +56,12 @@ export interface CorrelateEngineOptions {
    *  Return 1 for neutral. Clamped downstream to [0.5, 1.5]. */
   reliabilityFor?: (ruleId: string) => number;
   /** Regime-coupling factor for a candidate pair (BOCPD integration).
-   *  Return 1 for neutral. Clamped downstream to [0.8, 1.15]. */
+   *  Return 1 for neutral. Boost-only: clamped downstream to [1, 1.15]. */
   regimeFactorFor?: (a: ObservationEvent, b: ObservationEvent) => number;
+  /** Monotonic timer used only for the diagnostic `processingMs` field.
+   *  Inject a fake in tests to make the whole CorrelationResult
+   *  deterministic. Defaults to performance.now / Date.now. */
+  timer?: () => number;
 }
 
 export interface CorrelationResult {
@@ -88,7 +92,8 @@ export class CorrelateEngine {
   }
 
   correlate(observations: readonly ObservationEvent[], now: Date = new Date()): CorrelationResult {
-    const start = nowMs();
+    const timer = this.options.timer ?? nowMs;
+    const start = timer();
     const pairs: CorrelatedPair[] = [];
     const seen = new Set<string>();
 
@@ -98,7 +103,7 @@ export class CorrelateEngine {
 
     return {
       pairs,
-      processingMs: Math.max(0, nowMs() - start),
+      processingMs: Math.max(0, timer() - start),
       rulesApplied: this.rules.size,
       observationsConsidered: observations.length,
     };

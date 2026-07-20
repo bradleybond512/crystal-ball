@@ -88,10 +88,34 @@ test('reliability multiplier applies and clamps to [0.5, 1.5]', () => {
   assert.equal(base({ reliability: undefined }).factors.reliability, 1);
 });
 
-test('regime factor applies and clamps to [0.8, 1.15]', () => {
+test('regime factor is boost-only: clamps to [1, 1.15]', () => {
   assert.equal(base({ regimeFactor: 1.15 }).factors.regime, 1.15);
   assert.equal(base({ regimeFactor: 2 }).factors.regime, 1.15);
-  assert.equal(base({ regimeFactor: 0.1 }).factors.regime, 0.8);
+  assert.equal(base({ regimeFactor: 0.1 }).factors.regime, 1);
+  assert.equal(base({ regimeFactor: 0 }).factors.regime, 1);
+});
+
+test('non-finite provider values fall back to neutral, never NaN', () => {
+  const r = base({
+    reliability: Number.NaN,
+    regimeFactor: Number.POSITIVE_INFINITY,
+    distanceKm: Number.NaN,
+    baseConfidence: Number.NaN,
+    gapMs: Number.NaN,
+    sharedEntityCount: Number.NaN,
+  });
+  assert.equal(r.factors.reliability, 1);
+  assert.ok(r.factors.regime <= 1.15 && Number.isFinite(r.factors.regime));
+  assert.equal(r.factors.spatial, 1);
+  assert.equal(r.factors.entity, 1);
+  assert.ok(Number.isFinite(r.value));
+  assert.equal(r.value, 1);
+});
+
+test('negative-infinity reliability stays within clamp', () => {
+  const r = base({ reliability: Number.NEGATIVE_INFINITY });
+  assert.equal(r.factors.reliability, 1);
+  assert.ok(Number.isFinite(r.value));
 });
 
 test('reliability below 1 lowers an otherwise-perfect pair', () => {

@@ -165,6 +165,41 @@ test('no-options engine behaves neutrally (back-compat construction)', () => {
   assert.equal(pair.confidence, 1);
 });
 
+test('injected timer makes the full CorrelationResult deterministic', () => {
+  const makeEngine = () => {
+    const engine = new CorrelateEngine({ timer: () => 0 });
+    engine.registerRule(anyPairRule);
+    return engine;
+  };
+  const input = [obs({ id: 'a' }), obs({ id: 'b', timestamp: T0 + HOUR })];
+  const r1 = makeEngine().correlate(input, new Date(T0 + 2 * HOUR));
+  const r2 = makeEngine().correlate(input, new Date(T0 + 2 * HOUR));
+  assert.deepEqual(r1, r2);
+  assert.equal(r1.processingMs, 0);
+});
+
+test('a regime provider returning 0 is neutralized, not a penalty', () => {
+  const engine = new CorrelateEngine({ regimeFactorFor: () => 0 });
+  engine.registerRule(anyPairRule);
+  const pair = engine.correlate(
+    [obs({ id: 'a' }), obs({ id: 'b' })],
+    new Date(T0),
+  ).pairs[0]!;
+  assert.equal(pair.confidenceDetail!.factors.regime, 1);
+  assert.equal(pair.confidence, 1);
+});
+
+test('a reliability provider returning NaN is neutralized end-to-end', () => {
+  const engine = new CorrelateEngine({ reliabilityFor: () => Number.NaN });
+  engine.registerRule(anyPairRule);
+  const pair = engine.correlate(
+    [obs({ id: 'a' }), obs({ id: 'b' })],
+    new Date(T0),
+  ).pairs[0]!;
+  assert.equal(pair.confidenceDetail!.factors.reliability, 1);
+  assert.ok(Number.isFinite(pair.confidence));
+});
+
 test('dedup: the same pair is not emitted twice across rules with same id', () => {
   const engine = new CorrelateEngine();
   engine.registerRule(anyPairRule);

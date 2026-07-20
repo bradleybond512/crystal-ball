@@ -283,6 +283,7 @@ import { NotificationHistoryPanel } from '@/components/NotificationHistoryPanel'
 import { AirSmokePanel } from '@/components/AirSmokePanel';
 import { startSmokeCalloutBridge } from '@/services/smoke/smoke-callout-bridge';
 import { startAirQualityActionDayMonitor } from '@/services/airquality/airnow-forecast-service';
+import { setMapModeHost } from '@/services/survival/survival-map-modes';
 import { NotificationAuditPanel } from '@/components/NotificationAuditPanel';
 import { NotificationProvenancePanel } from '@/components/NotificationProvenancePanel';
 import { TrustBudgetPanel } from '@/components/TrustBudgetPanel';
@@ -1887,6 +1888,18 @@ export class PanelLayoutManager implements AppModule {
  this.ctx.panels['air-smoke'] = new AirSmokePanel();
  startSmokeCalloutBridge();
  startAirQualityActionDayMonitor();
+ // E4 glue: survival map-modes drive the DeckGL layer toggles. The controller
+ // snapshots the user's layers on first engage and restores them on clear.
+ setMapModeHost({
+ getLayers: () => this.ctx.mapLayers,
+ setLayers: (next, persist) => {
+ this.ctx.mapLayers = next;
+ // A mode's filtered view is transient — only clear/restore persists, so a
+ // reload while a mode is active still boots the user's real saved layers.
+ if (persist) saveToStorage(STORAGE_KEYS.mapLayers, this.ctx.mapLayers);
+ this.ctx.map?.setLayers(this.ctx.mapLayers);
+ },
+ });
  this.ctx.panels['notification-audit'] = new NotificationAuditPanel();
  this.ctx.panels['notification-provenance'] = new NotificationProvenancePanel();
  this.ctx.panels['trust-budget'] = new TrustBudgetPanel();

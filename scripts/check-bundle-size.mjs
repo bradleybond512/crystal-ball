@@ -21,8 +21,9 @@
  * Main-entry budget history: raised 350 → 460 KB (2026-07-20) after the app
  * grew a correlation engine, an 8-axis survival OS, air-quality + webcam
  * layers, and a cognition stack. Sourcemap attribution of the main chunk shows
- * it is dominated by BOOT-CRITICAL orchestration that is irreducibly eager —
- * data-loader.ts (~173 KB src), panel-layout.ts (~164 KB), Map.ts/MapPopup.ts
+ * it is dominated by BOOT-CRITICAL orchestration that is eager today (would
+ * need architectural refactoring to split) — data-loader.ts (~173 KB src),
+ * panel-layout.ts (~164 KB), Map.ts/MapPopup.ts
  * (~219 KB), event-handlers.ts (~39 KB). The on-demand surfaces that could be
  * lazy-split (UnifiedSettings, AnalystHUD, CountryBriefPage, sound-manager,
  * canvas-confetti, tech-geo config) total only ~40 KB gzipped — splitting ALL
